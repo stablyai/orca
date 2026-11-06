@@ -10,6 +10,7 @@ import {
 } from '../persistence/persistence-test-harness'
 import type { AutomationService } from '../automations/service'
 import { orcadAutomationsKeepHostBusy, startOrcadAutomations } from './orcad-automations'
+import { runNowSettled } from '../automations/automation-run-now-settled.test-fixture'
 
 vi.mock('electron', () => ({ app: { getPath: () => testState.dir } }))
 
@@ -60,7 +61,7 @@ describe('orcad automations', () => {
     startOrcadAutomations(runtime as never, store, (cleanup) => cleanups.push(cleanup))
     try {
       expect(runtime.setAutomationService).toHaveBeenCalledOnce()
-      const run = await service()!.runNow(automation.id)
+      const run = await runNowSettled(service()!, store, automation.id)
       expect(runtime.createManagedWorktree).toHaveBeenCalledOnce()
       expect(run.status).toBe('dispatched')
       expect(orcadAutomationsKeepHostBusy(store)).toBe(true)

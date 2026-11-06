@@ -13,10 +13,8 @@ vi.mock('@/hooks/agent-hook-completion-notifications', () => ({
 }))
 
 import { useAppStore } from '@/store'
-import {
-  createAgentCompletionCoordinator,
-  resetAgentCompletionCoordinatorIdentitiesForTest
-} from '@/components/terminal-pane/agent-completion-coordinator'
+import { createAgentCompletionCoordinator } from '@/components/terminal-pane/agent-completion/agent-completion-coordinator'
+import { resetAgentCompletionCoordinatorIdentitiesForTest } from '@/components/terminal-pane/agent-completion/agent-completion-identity-store'
 import { dispatchTerminalNotification } from '@/components/terminal-pane/use-notification-dispatch'
 import {
   markRendererOwnedAgentStatusWrite,

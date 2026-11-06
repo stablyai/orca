@@ -43,7 +43,7 @@ const describeIfBuilt = existsSync(CLI_PATH) ? describe : describe.skip
 function loadRuntimeModules() {
   return Promise.all([
     import('./orca-runtime'),
-    import('./orchestration/db'),
+    import('./orchestration/db/orchestration-db'),
     import('./rpc/server/runtime-rpc')
   ])
 }

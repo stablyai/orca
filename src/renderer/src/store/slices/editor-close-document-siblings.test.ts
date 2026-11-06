@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import type { OpenFile } from './editor'
 import { createEditorTabsStore } from './editor-slice-test-harness'
-import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
+import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
 import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 

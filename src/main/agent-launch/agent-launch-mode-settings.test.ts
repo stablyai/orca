@@ -1,4 +1,4 @@
-import { requireStructuredCreateSupportAdmission } from '../runtime/rpc/methods/structured-agent-session-gate'
+import { requireStructuredCreateSupportAdmission } from '../runtime/rpc/methods/structured-sessions/creation/structured-agent-session-gate'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/agent-session/agent-session-runtime-capabilities'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'

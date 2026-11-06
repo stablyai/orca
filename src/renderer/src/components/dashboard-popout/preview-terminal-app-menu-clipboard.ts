@@ -5,7 +5,7 @@ import {
   APP_MENU_SELECTION_ACTION_EVENT,
   type AppMenuSelectionAction
 } from '@/lib/app-menu-selection-actions'
-import { copyTerminalSelection } from '@/components/terminal-pane/terminal-selection-copy'
+import { copyTerminalSelection } from '@/components/terminal-pane/clipboard/terminal-selection-copy'
 import type { PreviewTerminalPasteSource } from './preview-terminal-paste'
 
 type PreviewTerminalSelection = Pick<Terminal, 'getSelection' | 'selectAll' | 'clearSelection'>

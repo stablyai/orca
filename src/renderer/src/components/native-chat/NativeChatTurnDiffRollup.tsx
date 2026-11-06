@@ -1,14 +1,12 @@
 import { ChevronRight, EyeOff } from 'lucide-react'
-import { Trans } from 'react-i18next'
-import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { i18n, translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
 import { NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID } from '../settings/chat/native-chat-turn-diff-setting-target'
 import { DiffLineCounts } from '../right-sidebar/source-control/listing/diff-line-counts'
 import { NativeChatDiffCard } from './NativeChatDiffCard'
 import { NativeChatExpandable } from './NativeChatExpandable'
+import { hideNativeChatCardKind } from './native-chat-card-kind-hidden-toast'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { nativeChatEditFileBaseName } from '../../../../shared/native-chat/tools/native-chat-edit-model'
 import {
@@ -65,53 +63,12 @@ function TurnDiffFileRow({ file }: { file: NativeChatTurnDiffFile }): React.JSX.
   )
 }
 
-function openTurnDiffSetting(): void {
-  const { openSettingsPage, openSettingsTarget } = useAppStore.getState()
-  openSettingsPage()
-  openSettingsTarget({
-    pane: 'chat',
-    repoId: null,
-    sectionId: NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID
-  })
-}
-
-function HiddenToastDescription(): React.JSX.Element {
-  return (
-    <Trans
-      i18n={i18n}
-      defaults={translate(
-        'components.native-chat.turnDiff.hiddenDescription',
-        'You can change this anytime in <settings>Settings › Chat UI</settings>'
-      )}
-      components={{
-        settings: (
-          <button
-            type="button"
-            className="rounded-sm font-medium underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            onClick={openTurnDiffSetting}
-          />
-        )
-      }}
-    />
+function hideTurnDiffs(): Promise<void> {
+  return hideNativeChatCardKind(
+    { nativeChatTurnDiffSummary: false },
+    NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID,
+    translate('components.native-chat.turnDiff.hidden', "Orca won't show turn diffs anymore")
   )
-}
-
-/** Hiding turns the global setting off, so every chat drops the card; confirm only a saved change. */
-async function hideTurnDiffSummaries(): Promise<void> {
-  try {
-    await useAppStore.getState().updateSettingsOrThrow({ nativeChatTurnDiffSummary: false })
-  } catch {
-    toast.error(
-      translate(
-        'components.native-chat.turnDiff.hideFailed',
-        "Couldn't hide changed files. Try again, or turn off Changed files summary in Settings › Chat UI."
-      )
-    )
-    return
-  }
-  toast(translate('components.native-chat.turnDiff.hidden', 'Hidden'), {
-    description: <HiddenToastDescription />
-  })
 }
 
 export function NativeChatTurnDiffRollup({
@@ -147,7 +104,7 @@ export function NativeChatTurnDiffRollup({
                 variant="ghost"
                 size="icon-xs"
                 aria-label={translate('components.native-chat.turnDiff.hide', 'Hide')}
-                onClick={() => void hideTurnDiffSummaries()}
+                onClick={() => void hideTurnDiffs()}
               >
                 <EyeOff aria-hidden className="size-3.5" />
               </Button>

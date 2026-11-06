@@ -15,7 +15,7 @@ import {
   resolveSourceControlDisplayedBaseRef,
   type SourceControlBranchContextStat
 } from './branch-context-stats'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 function BaseRefButton({
   baseRef,

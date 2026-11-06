@@ -38,7 +38,7 @@ const closeTerminalTab = vi.hoisted(() =>
   })
 )
 vi.mock('../terminal/terminal-tab-actions', () => ({ closeTerminalTab }))
-vi.mock('./terminal-parked-tab-watchers', () => ({
+vi.mock('./parking/output-watchers/terminal-parked-tab-watchers', () => ({
   shouldDeferParkedPtyExitTabClose: () => false
 }))
 

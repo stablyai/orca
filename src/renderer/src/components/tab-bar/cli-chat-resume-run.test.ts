@@ -75,8 +75,8 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
-import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
-import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
+import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import {
   getStructuredAgentSessionLaunchLifecycle,
@@ -95,7 +95,7 @@ import {
   stopStructuredLaunchSlotTracking
 } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { applyStructuredSessionTabSnapshots } from '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
-import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
 import { buildHydratedTabState } from '@/store/slices/tabs-hydration'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
@@ -103,7 +103,7 @@ import { useAppStore } from '@/store'
 
 import { runCliChatResume } from './cli-chat-resume-run'
 
-import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/empty-workspace-default-surface-claims'
+import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/workspace/activation/initial-surface/empty-workspace-default-surface-claims'
 import {
   clearWebSessionFocusIntent,
   peekWebSessionFocusIntent

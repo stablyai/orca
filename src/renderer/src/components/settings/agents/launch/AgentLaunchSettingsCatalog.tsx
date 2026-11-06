@@ -53,7 +53,10 @@ import type { AgentCatalogRowProps } from './AgentCatalogRow'
 import { HostAgentEnvironmentEditor } from './HostAgentEnvironmentEditor'
 import { buildCodexSessionSourceHomeControl } from '../../../agent/launch-settings/codex-session-source-home-control'
 import { buildAgentOpensAs } from '../../../../lib/agent-session/launch/native-chat-provider-choice'
-import { AgentChatRuntimeArea } from '../../../agent/launch-settings/AgentChatChoiceControls'
+import {
+  AgentChatRuntimeArea,
+  chatUnavailableOnThisDesktop
+} from '../../../agent/launch-settings/AgentChatChoiceControls'
 import { chatProviderAgents, useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
 import { readHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
@@ -305,7 +308,7 @@ export function AgentLaunchSettingsCatalog({
         : undefined,
       chatRuntime:
         chatAgents.includes(agent.id) &&
-        managedChatAgents.has(agent.id) &&
+        (managedChatAgents.has(agent.id) || chatUnavailableOnThisDesktop(agent.id)) &&
         isTuiAgentEnabled(agent.id, settings.disabledTuiAgents) ? (
           <AgentChatRuntimeArea agent={agent.id} label={agent.label} />
         ) : undefined

@@ -125,7 +125,8 @@ export async function announceMainDrop(
   reason: PtyModelRestoreReason = 'hidden-drop',
   ptyId = PTY_ID
 ): Promise<void> {
-  const { _dispatchPtyModelRestoreNeededForTest } = await import('./pty-model-restore-channel')
+  const { _dispatchPtyModelRestoreNeededForTest } =
+    await import('./pty-transport/delivery/pty-model-restore-channel')
   _dispatchPtyModelRestoreNeededForTest({
     id: ptyId,
     reason,

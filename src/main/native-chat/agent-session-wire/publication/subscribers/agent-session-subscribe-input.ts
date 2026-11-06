@@ -1,5 +1,5 @@
 import type { CurrentRequestsSubscriber } from '../../observations/agent-session-current-requests'
-import type { ForkMarker } from '../../agent-session-fork-marker'
+import type { ForkMarker } from '../history/agent-session-fork-marker'
 import type { HistoryReader } from '../history/agent-session-history-page-bounds'
 import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionSubscribeEvent } from '../../../../../shared/agent-session/agent-session-wire'

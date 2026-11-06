@@ -1,6 +1,6 @@
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { getPtyExecutionHost } from '../../shared/terminal/pty/lifecycle/terminal-execution-host'
-import type { LegacyWorkerTerminalRecoveryPlan } from './orchestration/orchestration-legacy-worker-terminal-recovery'
+import type { LegacyWorkerTerminalRecoveryPlan } from './orchestration/terminal-authority/release/orchestration-legacy-worker-terminal-recovery'
 import { runLegacyWorkerTerminalRecovery } from './runtime-legacy-worker-terminal-recovery-runner'
 import type {
   LegacyWorkerRecoveryOptions,

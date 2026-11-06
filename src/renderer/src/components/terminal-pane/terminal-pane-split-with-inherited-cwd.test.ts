@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport-types'
+import type { PtyTransport } from './pty-transport/pty-transport-types'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import { createDeferred } from './pty-connection-test-async'

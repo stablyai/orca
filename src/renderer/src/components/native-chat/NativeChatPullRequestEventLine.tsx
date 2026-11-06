@@ -2,7 +2,6 @@ import { CircleCheck, CircleX } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { EyeOffDismissButton } from '@/components/dismiss/EyeOffDismissButton'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { NativeChatTextBlock } from '../../../../shared/native-chat/native-chat-types'
 import {
   parsePullRequestEventItemId,
@@ -11,30 +10,6 @@ import {
 import { NATIVE_CHAT_CI_RESULT_LINES_SETTING_SECTION_ID } from '../settings/chat/native-chat-ci-result-lines-setting-target'
 import { hideNativeChatCardKind } from './native-chat-card-kind-hidden-toast'
 import { useNativeChatLinkClick } from './native-chat-link-click-context'
-
-// Mirrors the shared card hide control's API (`updates`, `settingSectionId`, `failedMessage`), so
-// swapping in that component is an import change.
-function NativeChatCardHideButton({
-  label,
-  updates,
-  settingSectionId,
-  failedMessage,
-  className
-}: {
-  label: string
-  updates: Partial<GlobalSettings>
-  settingSectionId: string
-  failedMessage: string
-  className?: string
-}): React.JSX.Element {
-  return (
-    <EyeOffDismissButton
-      label={label}
-      onClick={() => hideNativeChatCardKind(updates, settingSectionId, failedMessage)}
-      className={className}
-    />
-  )
-}
 
 function LineLink({ href, children }: { href: string; children: string }): React.JSX.Element {
   const onLinkClick = useNativeChatLinkClick()
@@ -84,14 +59,18 @@ export function NativeChatPullRequestEventLine({
       ) : (
         <span className="min-w-0 truncate">{block.text}</span>
       )}
-      <NativeChatCardHideButton
+      <EyeOffDismissButton
         label={translate('components.native-chat.ciResultLine.hide', "Don't show CI result lines")}
-        updates={{ nativeChatCiResultLines: false }}
-        settingSectionId={NATIVE_CHAT_CI_RESULT_LINES_SETTING_SECTION_ID}
-        failedMessage={translate(
-          'components.native-chat.ciResultLine.hideFailed',
-          "Couldn't hide CI result lines. Try again, or turn off CI result lines in Settings › Chat UI."
-        )}
+        onClick={() =>
+          void hideNativeChatCardKind(
+            { nativeChatCiResultLines: false },
+            NATIVE_CHAT_CI_RESULT_LINES_SETTING_SECTION_ID,
+            translate(
+              'components.native-chat.ciResultLine.hidden',
+              "Orca won't show CI result lines anymore"
+            )
+          )
+        }
         className="opacity-0 focus-visible:opacity-100 group-focus-within/ci-line:opacity-100 group-hover/ci-line:opacity-100"
       />
     </div>

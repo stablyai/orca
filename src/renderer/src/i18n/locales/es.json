@@ -409,7 +409,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}} siguen como chats, como lo configuraste.",
       "defaultSurfaceSetAllChat": "Poner todos en Chat",
       "defaultSurfaceSetAllTerminal": "Poner todos en Terminal",
-      "sameAsChoice": "Igual que {{agent}} · {{choice}}"
+      "sameAsChoice": "Igual que {{agent}} · {{choice}}",
+      "chatUnavailableOnWindows": "{{value0}} Chat aún no está disponible en Windows, así que {{value0}} se abre en una terminal en este host. Los chats en un host macOS o Linux siguen funcionando."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "enlace simbólico",
@@ -505,7 +506,7 @@
         "parakeetV2": "Solo inglés. Más rápido que v3 con una precisión similar. Puntuación y mayúsculas y minúsculas.",
         "zipformerBilingual": "Chino + inglés con alternancia de idiomas. Streaming en tiempo real de baja latencia.",
         "paraformerBilingual": "Chino (mandarín + dialectos) + inglés. Buen rendimiento con acentos y variantes regionales del chino.",
-        "zipformerStreamingEn": "Solo inglés. Modelo ligero de 20 millones de parámetros, con buen equilibrio entre velocidad y tamaño.",
+        "zipformerStreamingEnRetired": "Ya no se ofrece: omite el comienzo de las frases. Elimínalo para liberar espacio.",
         "zipformerStreamingZh": "Solo chino. Modelo ultraligero de 14 millones de parámetros, ideal para dispositivos con pocos recursos.",
         "zipformerStreamingKo": "Solo coreano. Streaming en tiempo real de baja latencia.",
         "parakeetJa": "Solo japonés. Entrenado con más de 35 000 horas de habla natural. Incluye puntuación.",
@@ -1889,6 +1890,7 @@
         "cb55b0390f": "Gestionar",
         "4f9313984d": "Revisores",
         "02cbe2de44": "Pipeline",
+        "itemLoadFailed": "No se pudo cargar este elemento. Actualiza para volver a intentarlo.",
         "be3d291837": "Archivos",
         "c996e2962c": "Conversación",
         "b3c156dd51": "Actualizar",
@@ -3801,7 +3803,8 @@
             "cliTag": "(CLI)",
             "agentsLoading": "Cargando agentes",
             "terminalListNeedsServerUpdate": "Actualiza Orca en este servidor para ver los agentes de terminal",
-            "terminalListFailed": "No se pudieron listar los agentes de terminal de este espacio de trabajo"
+            "terminalListFailed": "No se pudieron listar los agentes de terminal de este espacio de trabajo",
+            "chatNotOnWindows": "Chat aún no disponible en Windows"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Cambiar pestaña",
@@ -7904,7 +7907,6 @@
         "MobileEmulatorSettingsPane": {
           "19d39113b6": "Permite que los agentes de codificación controlen el emulador móvil activo con comandos de la CLI de Orca.",
           "f2f8d97bb6": "Control del emulador móvil para agentes",
-          "143961d031": "Dispositivo predeterminado",
           "8aec2f99a0": "Actualizar la disponibilidad del emulador",
           "ae1612c58c": "Disponibilidad",
           "f9af91ea26": "Muestra la acción Nuevo emulador móvil y permite que los agentes se conecten al emulador activo.",
@@ -7917,9 +7919,7 @@
           "d704fb5023": "Necesita configuración",
           "06b06429c6": "Comprobando la compatibilidad con el SDK de Android y el simulador de iOS.",
           "6d1483d4a0": "1 dispositivo emulador detectado.",
-          "0a452d4d3b": "{{value0}} dispositivos emuladores detectados.",
-          "f62a1bb759": "Orca seleccionará automáticamente un dispositivo emulador después de que se detecten los dispositivos.",
-          "b2fd62ea75": "Dispositivo predeterminado para nuevas pestañas del emulador y comandos de conexión de agentes. La selección automática prefiere un dispositivo que ya esté en ejecución."
+          "0a452d4d3b": "{{value0}} dispositivos emuladores detectados."
         },
         "MobileNetworkInterfaceSection": {
           "b2c384cfd6": "No se encontraron interfaces"
@@ -15630,7 +15630,6 @@
                 "06e10d7356": "Apagar el emulador",
                 "e7a0d1897e": "Inicio",
                 "6bd8dff42a": "Girar",
-                "3d836b879c": "Elegir emulador",
                 "81b3571a07": "Conectar",
                 "868c0f2938": "Procesando…"
               }
@@ -17394,6 +17393,8 @@
           "noRunUsageYet": "Aún no hay uso de ejecución",
           "noWorkspace": "Sin espacio de trabajo",
           "latestSavedOutput": "Última salida guardada",
+          "fullOutputUnavailable": "No se pudo cargar la salida completa.",
+          "retryFullOutput": "Reintentar",
           "backToList": "Todas las automatizaciones",
           "tableName": "Nombre",
           "tableProject": "Proyecto",
@@ -19064,6 +19065,7 @@
         "notDoneGoalChangeIncomplete": "No se pudo terminar de cambiar el objetivo. Revisa el chat."
       },
       "composer": {
+        "planMode": "Planificar",
         "imageUnavailable": "Vista previa no disponible",
         "send": "Enviar",
         "alternateSteerHint": "{{shortcut}} para enviar ahora",
@@ -19900,7 +19902,8 @@
         "folder": "Carpeta",
         "mainCheckout": "Checkout principal",
         "worktree": "Worktree"
-      }
+      },
+      "explicitChatWindows": "El chat de este agente aún no está disponible en Windows. Ábralo en una terminal."
     },
     "tab": {
       "bar": {

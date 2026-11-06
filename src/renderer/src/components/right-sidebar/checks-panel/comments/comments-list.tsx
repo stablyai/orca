@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils'
 import {
   getPRCommentAudienceEmptyLabel,
   getPrCommentAudienceFilters
-} from '@/lib/pr-comment-audience-labels'
+} from '@/lib/source-control/review/comments/pr-comment-audience-labels'
 import { translate } from '@/i18n/i18n'
 import { ResolvedCommentGroupsSection } from './comment-group'
 import {

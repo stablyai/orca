@@ -10,7 +10,7 @@ import { buildAppFontFamily } from '@/lib/app-font-family'
 import { resolveEditorFontStack } from '@/lib/editor-typography'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import { isTerminalBackgroundLight } from '../../../../shared/terminal-themes/terminal-title-contrast'
-import { useSystemPrefersDark } from '../terminal-pane/use-system-prefers-dark'
+import { useSystemPrefersDark } from '../../hooks/theme/use-system-prefers-dark'
 
 export const NATIVE_CHAT_APPEARANCE_ROOT_CLASS = 'native-chat-appearance bg-chat-canvas'
 // Bottom padding clears 20px control overhang; rail padding also covers its 34px overlay on macOS without scrollbar gutters.

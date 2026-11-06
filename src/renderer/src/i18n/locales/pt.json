@@ -1595,7 +1595,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}} continuam como chats, como você definiu.",
       "defaultSurfaceSetAllChat": "Definir todos como Chat",
       "defaultSurfaceSetAllTerminal": "Definir todos como Terminal",
-      "sameAsChoice": "Igual a {{agent}} · {{choice}}"
+      "sameAsChoice": "Igual a {{agent}} · {{choice}}",
+      "chatUnavailableOnWindows": "O {{value0}} Chat ainda não está disponível no Windows, então o {{value0}} abre em um terminal neste host. Chats em um host macOS ou Linux continuam funcionando."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "link simbólico",
@@ -1691,7 +1692,7 @@
         "parakeetV2": "Somente inglês. Mais rápido que v3 com precisão semelhante. Pontuação e maiúsculas e minúsculas.",
         "zipformerBilingual": "Chinês + inglês com alternância de idiomas. Streaming em tempo real com baixa latência.",
         "paraformerBilingual": "Chinês (mandarim + dialetos) + inglês. Bom desempenho com sotaques e variantes regionais do chinês.",
-        "zipformerStreamingEn": "Somente inglês. Modelo leve de 20 milhões de parâmetros, com bom equilíbrio entre velocidade e tamanho.",
+        "zipformerStreamingEnRetired": "Não é mais oferecido: ele perde o início das frases. Exclua-o para liberar espaço.",
         "zipformerStreamingZh": "Somente chinês. Modelo ultraleve de 14 milhões de parâmetros, ideal para dispositivos com poucos recursos.",
         "zipformerStreamingKo": "Somente coreano. Streaming em tempo real com baixa latência.",
         "parakeetJa": "Somente japonês. Treinado com mais de 35 mil horas de fala natural. Inclui pontuação.",
@@ -7317,7 +7318,6 @@
         "MobileEmulatorSettingsPane": {
           "19d39113b6": "Permita que agentes de código controlem o emulador mobile ativo com comandos da CLI do Orca.",
           "f2f8d97bb6": "Controle do Emulador Mobile por Agente",
-          "143961d031": "Dispositivo Padrão",
           "8aec2f99a0": "Atualizar disponibilidade do emulador",
           "ae1612c58c": "Disponibilidade",
           "f9af91ea26": "Mostra a ação Novo Emulador Mobile e permite que agentes se conectem ao emulador ativo.",
@@ -7330,9 +7330,7 @@
           "d704fb5023": "Precisa de configuração",
           "06b06429c6": "Verificando o suporte do Android SDK e do Simulador iOS.",
           "6d1483d4a0": "1 dispositivo de emulador detectado.",
-          "0a452d4d3b": "{{value0}} dispositivos de emulador detectados.",
-          "f62a1bb759": "O Orca vai selecionar automaticamente um dispositivo de emulador após os dispositivos serem detectados.",
-          "b2fd62ea75": "Dispositivo padrão para novas abas de emulador e comandos de conexão de agente. A seleção automática prefere um dispositivo já em execução."
+          "0a452d4d3b": "{{value0}} dispositivos de emulador detectados."
         },
         "SettingsFormControls": {
           "42a4d15a30": "Nenhuma fonte correspondente.",
@@ -14185,6 +14183,8 @@
           "noRunUsageYet": "Ainda sem uso de execução",
           "noWorkspace": "Nenhum espaço de trabalho",
           "latestSavedOutput": "Última saída salva",
+          "fullOutputUnavailable": "Não foi possível carregar a saída completa.",
+          "retryFullOutput": "Tentar novamente",
           "backToList": "Todas as automações",
           "tableName": "Nome",
           "tableProject": "Projeto",
@@ -17130,7 +17130,8 @@
             "cliTag": "(CLI)",
             "agentsLoading": "Carregando agentes",
             "terminalListNeedsServerUpdate": "Atualize o Orca neste servidor para listar os agentes de terminal",
-            "terminalListFailed": "Não foi possível listar os agentes de terminal deste espaço de trabalho"
+            "terminalListFailed": "Não foi possível listar os agentes de terminal deste espaço de trabalho",
+            "chatNotOnWindows": "Ainda sem chat no Windows"
           },
           "TabWorkspaceLayoutMenuSection": {
             "right": "Direita",
@@ -17862,6 +17863,7 @@
         "cb55b0390f": "Gerenciar",
         "4f9313984d": "Revisores",
         "02cbe2de44": "Pipeline",
+        "itemLoadFailed": "Não foi possível carregar este item. Atualize para tentar novamente.",
         "be3d291837": "Arquivos",
         "c996e2962c": "Conversa",
         "b3c156dd51": "Atualizar",
@@ -18111,7 +18113,6 @@
                 "06e10d7356": "Encerrar emulador",
                 "e7a0d1897e": "Início",
                 "6bd8dff42a": "Girar",
-                "3d836b879c": "Escolher emulador",
                 "81b3571a07": "Conectar",
                 "868c0f2938": "Processando…"
               }
@@ -20079,6 +20080,7 @@
         "truncatedResponse": "Resposta do provedor truncada (tamanho original: {{bytes}} bytes)."
       },
       "composer": {
+        "planMode": "Planejar",
         "send": "Enviar",
         "alternateSteerHint": "{{shortcut}} para orientar",
         "previewQueue": "Colocar na fila",
@@ -21047,7 +21049,8 @@
         "folder": "Pasta",
         "mainCheckout": "Checkout principal",
         "worktree": "Worktree"
-      }
+      },
+      "explicitChatWindows": "O chat deste agente ainda não está disponível no Windows. Abra-o em um terminal."
     },
     "tab": {
       "bar": {

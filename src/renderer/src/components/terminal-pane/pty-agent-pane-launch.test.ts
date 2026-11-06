@@ -19,6 +19,7 @@ import {
 import { acquireWatcherRemovalGate } from '../../../../main/workspaces/removal/watcher-removal-gate'
 import { planQueuedPaneAgentLaunch } from '../../../../main/ipc/pty/pane-agent-launch.test-fixture'
 import { tokenizeStartupCommand } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import type * as LaunchAgentKindModule from '../../../../shared/agent-kind'
 
 const renderer = vi.hoisted(() => {
   const ptyIdsByTabId: Record<string, string[]> = {}
@@ -46,8 +47,10 @@ vi.mock('@/store', () => ({
     }
   }
 }))
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({ ensurePtyDispatcher: () => {} }))
-vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({
+  ensurePtyDispatcher: () => {}
+}))
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-data-sidecar-subscriptions', () => ({
   subscribeToPtyData: (id: string, listener: (data: string) => void) => {
     renderer.watchers.set(id, listener)
     return () => renderer.watchers.delete(id)
@@ -61,7 +64,13 @@ vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
 }))
 vi.mock('@/runtime/runtime-terminal-stream', () => ({ subscribeToRuntimeTerminalData: vi.fn() }))
 vi.mock('@/lib/agent-ready-wait', () => ({ waitForAgentReady: async () => ({ ready: false }) }))
-vi.mock('@/lib/telemetry', () => ({ track: vi.fn(), tuiAgentToAgentKind: () => 'claude' }))
+vi.mock('@/lib/telemetry', () => ({ track: vi.fn(), tuiAgentToAgentKind: mockLaunchAgentKind }))
+const mockLaunchAgentKind = vi.hoisted(() => () => 'claude')
+vi.mock('../../../../shared/agent-kind', async (importOriginal) => ({
+  ...(await importOriginal<typeof LaunchAgentKindModule>()),
+  tuiAgentToAgentKind: mockLaunchAgentKind
+}))
+
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), message: vi.fn() } }))
 
 vi.mock('electron', () =>
@@ -502,11 +511,14 @@ describe('a pane that starts its own agent launch', () => {
   ] as const)(
     'settles %s from actual main spawn through renderer connect and owned prompt delivery',
     async (scenario) => {
-      const { connectIpcPty } = await import('@/components/terminal-pane/ipc-pty-connect')
-      const { awaitAgentLaunchPaneStart } = await import('@/lib/agent-launch-pane-start')
-      const { noteAgentLaunchPaneClosedByUser } = await import('@/lib/agent-launch-pane-closes')
+      const { connectIpcPty } =
+        await import('@/components/terminal-pane/pty-transport/ipc/ipc-pty-connect')
+      const { awaitAgentLaunchPaneStart } =
+        await import('@/lib/agent-session/launch/pane/agent-launch-pane-start')
+      const { noteAgentLaunchPaneClosedByUser } =
+        await import('@/lib/agent-session/launch/pane/agent-launch-pane-closes')
       const { pasteAgentLaunchPromptOnceReady } =
-        await import('@/lib/launch-agent-tab-prompt-paste')
+        await import('@/lib/agent-session/launch/prompt/launch-agent-tab-prompt-paste')
       let release!: () => void
       const pending = new Promise<void>((resolve) => {
         release = resolve

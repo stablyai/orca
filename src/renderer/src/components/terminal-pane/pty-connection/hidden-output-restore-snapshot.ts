@@ -21,7 +21,7 @@ import {
   hasPositiveTerminalDimensions,
   readProposedTerminalCols,
   shouldSkipAltFrameForWidthMismatch
-} from '../terminal-snapshot-replay-paint'
+} from '../snapshots/terminal-snapshot-replay-paint'
 
 import { HIDDEN_OUTPUT_RESTORE_UNAVAILABLE_WARNING } from './hidden-output-restore-limits'
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'

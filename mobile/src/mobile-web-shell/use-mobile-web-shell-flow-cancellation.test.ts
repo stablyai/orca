@@ -23,6 +23,7 @@ vi.mock('expo-crypto', async () => {
   }
 })
 vi.mock('expo-file-system', () => ({ Directory: class {}, File: class {}, Paths: { cache: '' } }))
+vi.mock('react-native', () => ({ AppState: {} }))
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: async () => null, setItem: async () => undefined }
 }))
@@ -180,7 +181,7 @@ it.each([8, 80])(
       createStore: () => store,
       mintSessionId: () => 'flow-session',
       now: () => 0,
-      setTimer: () => () => {}
+      setForegroundTimer: () => () => {}
     }
     function Probe() {
       latest = useMobileWebShellSession({

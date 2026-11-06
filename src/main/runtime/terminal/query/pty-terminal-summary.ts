@@ -2,7 +2,7 @@ import {
   TerminalIdentityRawInputs,
   TerminalIdentityReadContext
 } from './terminal-identity-read-context'
-import { OrcaRuntimeWithMailboxTerminalIdentity } from '../../orchestration/mailbox-terminal-identity'
+import { OrcaRuntimeWithMailboxTerminalIdentity } from '../../orchestration/mailbox/routing/mailbox-terminal-identity'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
