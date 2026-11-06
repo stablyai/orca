@@ -8,7 +8,7 @@ const schema = buildSchema(`
     id: String, identifier: String, title: String, url: String, description: String,
     priority: Int, estimate: Float, dueDate: String, branchName: String,
     createdAt: String, updatedAt: String, state: Named, team: Named, project: Named,
-    cycle: Named, assignee: User, labels(first: Int): Labels,
+    cycle: Named, assignee: User, creator: User, labels(first: Int): Labels,
     children(first: Int, after: String): Issues
   }
   type Named { id: String, name: String, type: String, color: String, key: String, url: String }
@@ -26,10 +26,12 @@ const issue = {
   team: { id: 'team', color: 'blue' },
   project: { id: 'project', url: 'https://linear.app/project' },
   cycle: { id: 'cycle', name: 'Sprint' },
+  creator: { id: 'user', displayName: 'Ada', avatarUrl: null },
   labels: { nodes: [{ id: 'label', name: 'Bug', color: 'red' }], pageInfo: { hasNextPage: false } }
 }
 const agentProjection = {
   createdAt: issue.createdAt,
+  creator: issue.creator,
   state: { id: 'state' },
   team: { color: 'blue' },
   cycle: issue.cycle,
