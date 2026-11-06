@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import { RelayCellAdmissionSelector } from './cell-admission-selector.js'
 import { openRelayDatabase, type RelayDatabase } from './database.js'
-import { EDGE_CELL_ID, EdgeAssignments, EdgeMoveBusyError } from './edge-relay.js'
+import { EDGE_CELL_ID, EdgeAssignments, EdgeMoveBusyError, EdgeMoveDeferredError } from './edge-relay.js'
 import type { EdgeAssignBody, EdgeDeviceRow } from './edge-admin-client.js'
 
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
@@ -80,7 +80,7 @@ describePostgres('relay edge on PostgreSQL', () => {
     expect(inspected.selector.membership.existingOnly).toContain(EDGE_CELL_ID)
 
     const placed = await director.assign(hosts[0]!)
-    await expect(edge.moveToEdge(hosts[0]!, 0)).rejects.toBeInstanceOf(EdgeMoveBusyError)
+    await expect(edge.moveToEdge(hosts[0]!, 0)).rejects.toBeInstanceOf(EdgeMoveDeferredError)
     await database.query(
       `UPDATE relay_assignments SET reserved_controls = 0 WHERE user_id = ? AND relay_host_id = ?`,
       [hosts[0]!.userId, hosts[0]!.relayHostId]

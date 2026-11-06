@@ -14,7 +14,7 @@ import { openInMemoryRelayDatabase, type RelayDatabase } from './database.js'
 import {
   EDGE_CELL_ID,
   EdgeAssignments,
-  EdgeMoveBusyError,
+  EdgeMoveBusyError, EdgeMoveDeferredError,
   edgeCohortBucket,
   inEdgeCohort,
   mapEpochFloor,
@@ -185,7 +185,7 @@ describe('edge move', () => {
     await edge.ensureEdgeCell()
     const placed = await store.assign(IDENTITY)
     expect(placed.cellId).toBe(GCE_CELL.id)
-    await expect(edge.moveToEdge(IDENTITY, 0)).rejects.toBeInstanceOf(EdgeMoveBusyError)
+    await expect(edge.moveToEdge(IDENTITY, 0)).rejects.toBeInstanceOf(EdgeMoveDeferredError)
     await settle(database)
     const lowFloor = await edge.moveToEdge({ ...IDENTITY, userId: 'user-2' }, 0)
     expect(lowFloor.assignmentEpoch).toBe(1)
@@ -193,7 +193,7 @@ describe('edge move', () => {
     expect(moved.assignmentEpoch).toBe(placed.assignmentEpoch + 4)
   })
 
-  it('refuses to move while the host still holds units on its old cell', async () => {
+  it('defers the move while the host still holds units on its old cell', async () => {
     const { database, store, edge } = await setup({ requireLiveCells: true })
     await edge.ensureEdgeCell()
     await store.assign(IDENTITY)
@@ -201,7 +201,7 @@ describe('edge move', () => {
       `UPDATE relay_assignments SET reserved_splices = 1 WHERE user_id = ? AND relay_host_id = ?`,
       [IDENTITY.userId, IDENTITY.relayHostId]
     )
-    await expect(edge.moveToEdge(IDENTITY, 0)).rejects.toBeInstanceOf(EdgeMoveBusyError)
+    await expect(edge.moveToEdge(IDENTITY, 0)).rejects.toBeInstanceOf(EdgeMoveDeferredError)
     const [row] = await database.query(`SELECT cell_id FROM relay_assignments WHERE user_id = ?`, [IDENTITY.userId])
     expect(row).toMatchObject({ cell_id: GCE_CELL.id })
   })
