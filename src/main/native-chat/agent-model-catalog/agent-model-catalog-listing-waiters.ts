@@ -124,10 +124,17 @@ export function runAgentModelCatalogOperation(
     .finally(() => {
       settled = true
     })
-  return withTimeout(operation, remaining, undefined).finally(() => {
-    if (!settled) {
-      controller.abort()
+  // Cancelling the operation ends its wait at once, whatever its resolver is still doing.
+  const cancelled = Promise.withResolvers<void>()
+  const cancel = (): void => cancelled.resolve()
+  controller.signal.addEventListener('abort', cancel, { once: true })
+  return withTimeout(Promise.race([operation, cancelled.promise]), remaining, undefined).finally(
+    () => {
+      controller.signal.removeEventListener('abort', cancel)
+      if (!settled) {
+        controller.abort()
+      }
+      finished()
     }
-    finished()
-  })
+  )
 }

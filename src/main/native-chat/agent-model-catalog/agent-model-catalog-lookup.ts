@@ -1,4 +1,3 @@
-import { seedAccountList } from './agent-model-catalog-account-list'
 import type { PrioritySemaphore } from '../../../shared/priority-semaphore'
 import type {
   AgentModelCatalogReadParams,
@@ -6,7 +5,8 @@ import type {
 } from './agent-model-catalog-service-contract'
 import type { AgentModelCatalogReadOperation } from './agent-model-catalog-operation'
 import { scopedAgentModelCatalogLister } from './agent-model-catalog-lister'
-import { createAgentModelCatalogSetups } from './agent-model-catalog-setup'
+import type { createAgentModelCatalogSetups } from './agent-model-catalog-setup'
+import { agentModelCatalogReadRecords } from './agent-model-catalog-read-scope'
 import { projectAgentModelCatalogDefault } from './agent-model-catalog-workspace'
 import {
   independentAgentModelCatalog,
@@ -44,9 +44,9 @@ export function createAgentModelCatalogLookup(
   requestKey: (params: AgentModelCatalogReadParams) => string,
   capture: (params: AgentModelCatalogReadParams) => string,
   captureRead: (params: AgentModelCatalogReadParams) => AgentModelCatalogReadOperation,
-  tasks: Set<Promise<unknown>>
+  tasks: Set<Promise<unknown>>,
+  setups: ReturnType<typeof createAgentModelCatalogSetups>
 ) {
-  const setups = createAgentModelCatalogSetups(deps, lifetime.signal)
   return (params: AgentModelCatalogReadParams): AgentModelCatalogClaim | undefined => {
     const operation = params.operation ?? captureRead(params)
     const deadline = operation.deadline ?? Date.now() + AGENT_MODEL_CATALOG_PICKER_WAIT_MS
@@ -77,8 +77,11 @@ export function createAgentModelCatalogLookup(
     const current = (): boolean => valid() && readers.has(claim)
     const signal = AbortSignal.any([lifetime.signal, controller.signal, operation.signal])
     const run = async (): Promise<void> => {
-      // A setup that ran out of its own budget leaves a reader with time left to start another.
-      const share = () => setups(`${key}\n${identity}`, params, deadline)
+      // This reader's own chat decides whether it may list; only same-request readers that agree
+      // on that share a setup. One that ran out of its budget leaves a reader time to start another.
+      const records = agentModelCatalogReadRecords(deps, params)
+      const own = records?.record
+      const share = () => setups(`${key}\n${identity}\n${records?.savedOnly}`, params, deadline)
       let setup = share()
       let facts = await setup.account
       if (!facts && current() && setup.lapsed()) {
@@ -136,7 +139,8 @@ export function createAgentModelCatalogLookup(
         params.agent,
         bound,
         setup.defaults,
-        () => valid() && bindings.get(bindingKey) === bound
+        // The folder's settings are the binding's, whichever reader is still waiting for them.
+        () => bound.current() && bindings.get(bindingKey) === bound
       )
       if (savedOnly) {
         await bound.projecting
@@ -150,7 +154,7 @@ export function createAgentModelCatalogLookup(
         legacy: params.legacy,
         operation: { deadline, current, signal },
         // A chat's deletion doesn't stop a listing other chats or folders share.
-        canList: () => resolved !== undefined || !record || !!deps.getRecord(record.sessionId),
+        canList: () => resolved !== undefined || !own || !!deps.getRecord(own.sessionId),
         admission,
         signal: lifetime.signal,
         resolved,
@@ -186,7 +190,7 @@ export function createAgentModelCatalogLookup(
         await pending
       }
       if (current()) {
-        seedAccountList(deps, scope, params.agent)
+        setup.seed(params.agent, scope)
       }
     }
     const claim: AgentModelCatalogClaim = {

@@ -15,6 +15,7 @@ import {
 } from './agent-model-catalog-workspace'
 import { resolveAgentModelCatalogScope } from './agent-model-catalog-scope'
 import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from './agent-model-catalog-listing-waiters'
+import { seedAccountList } from './agent-model-catalog-account-list'
 
 type Records = NonNullable<ReturnType<typeof agentModelCatalogReadRecords>>
 
@@ -39,18 +40,27 @@ export type AgentModelCatalogSetup = {
   account: Promise<AgentModelCatalogAccountFacts | null>
   scope: Promise<AgentModelCatalogScopeFacts | null>
   defaults: Promise<AgentModelCatalogListedDefaults | null>
+  /** Seeds the account's own list from this scope's listing, once per setup, not per reader. */
+  seed: (agent: string, facts: AgentModelCatalogScopeFacts) => void
 }
 
-type Held = AgentModelCatalogSetup & { fingerprint?: string; settled?: boolean }
+type Held = AgentModelCatalogSetup & {
+  fingerprint?: string
+  settled?: boolean
+  workspaceId?: string
+  end: () => void
+}
 
 const MAX_SETUP_MS = AGENT_MODEL_CATALOG_PICKER_WAIT_MS
 
 /** Readers of the same request share one setup (account, folder, CLI and scope resolution, and
  *  the folder's own default settings). It belongs to no reader: its budget is fixed when it starts
  *  (the starting reader's deadline, which later readers never extend) and it also ends with the
- *  service or the agent's retirement, so a reader leaving or its chat closing never ends it for
- *  another. Readers each check their own operation before using it. It is reused while it runs and
- *  while the listing it found is still running, then dropped, so nothing is cached past that. */
+ *  service, the agent's retirement or its workspace's, so a reader leaving or its chat closing
+ *  never ends it for another. When it ends its answers settle as nothing at once, whatever I/O is
+ *  still running, and a reader with time left starts a fresh one. Readers each check their own
+ *  operation before using it. It is reused while it runs and while the listing it found is still
+ *  running, then dropped, so nothing is cached past that. */
 export function createAgentModelCatalogSetups(
   deps: AgentModelCatalogServiceDeps,
   lifetime: AbortSignal
@@ -60,7 +70,7 @@ export function createAgentModelCatalogSetups(
     !!held &&
     !held.lapsed() &&
     (!held.settled || (held.fingerprint !== undefined && deps.store.isListing(held.fingerprint)))
-  return (
+  const share = (
     key: string,
     params: AgentModelCatalogReadParams,
     readerDeadline: number
@@ -71,44 +81,80 @@ export function createAgentModelCatalogSetups(
     }
     const retirement = deps.store.retirementRevision(params.agent)
     const deadline = Math.min(readerDeadline, Date.now() + MAX_SETUP_MS)
-    const expired = new AbortController()
-    const timer = setTimeout(() => expired.abort(), Math.max(0, deadline - Date.now()))
-    timer.unref?.()
+    const ended = new AbortController()
+    const signal = AbortSignal.any([lifetime, ended.signal])
     const current = (): boolean =>
-      !lifetime.aborted &&
-      !expired.signal.aborted &&
+      !signal.aborted &&
+      Date.now() < deadline &&
       deps.store.retirementRevision(params.agent) === retirement
-    const operation = { deadline, current, signal: AbortSignal.any([lifetime, expired.signal]) }
-    const account = resolveAccount(deps, params, current)
-    const scope = account.then((facts) =>
-      facts && current()
-        ? resolveAgentModelCatalogScope(
-            deps,
-            { ...params, workspacePath: facts.workspacePath, savedOnly: facts.savedOnly },
-            facts.scoped,
-            facts.base,
-            facts.probeHome,
-            current,
-            operation
-          ).catch(() => null)
-        : null
+    const drop = (): void => {
+      if (setups.get(key) === held) {
+        setups.delete(key)
+      }
+    }
+    const end = (): void => {
+      ended.abort()
+      drop()
+    }
+    const timer = setTimeout(end, Math.max(0, deadline - Date.now()))
+    timer.unref?.()
+    const gone = new Promise<null>((resolve) => {
+      if (signal.aborted) {
+        resolve(null)
+      }
+      signal.addEventListener('abort', () => resolve(null), { once: true })
+    })
+    const bounded = <T>(work: Promise<T | null>): Promise<T | null> =>
+      Promise.race([work.then((value) => (current() ? value : null)), gone])
+    const operation = { deadline, current, signal }
+    const account = bounded(resolveAccount(deps, params, current))
+    const scope = bounded(
+      account.then((facts) =>
+        facts && current()
+          ? resolveAgentModelCatalogScope(
+              deps,
+              { ...params, workspacePath: facts.workspacePath, savedOnly: facts.savedOnly },
+              facts.scoped,
+              facts.base,
+              facts.probeHome,
+              current,
+              operation
+            ).catch(() => null)
+          : null
+      )
     )
-    const defaults = account.then((facts) =>
-      facts && current()
-        ? agentModelCatalogListedDefaults(deps, params.agent, facts.workspacePath, facts.probeHome)
-        : null
+    const defaults = bounded(
+      account.then((facts) =>
+        facts && current()
+          ? agentModelCatalogListedDefaults(
+              deps,
+              params.agent,
+              facts.workspacePath,
+              facts.probeHome
+            )
+          : null
+      )
     )
-    const held: Held = { lapsed: () => expired.signal.aborted, account, scope, defaults }
+    let seeded = false
+    const held: Held = {
+      seed: (agent, facts) => {
+        if (!seeded) {
+          seeded = true
+          seedAccountList(deps, facts, agent)
+        }
+      },
+      lapsed: () => !current(),
+      end,
+      account,
+      scope,
+      defaults,
+      workspaceId: agentModelCatalogReadRecords(deps, params)?.record?.location.workspaceId
+    }
     setups.set(key, held)
     void scope.then((facts) => {
       clearTimeout(timer)
       held.settled = true
       held.fingerprint = current() ? facts?.fingerprint : undefined
-      const drop = (): void => {
-        if (setups.get(key) === held) {
-          setups.delete(key)
-        }
-      }
       // Its readers start the listing it found as soon as it settles; it stays shared while that
       // listing runs and is dropped when it ends.
       setTimeout(() => {
@@ -124,6 +170,16 @@ export function createAgentModelCatalogSetups(
     })
     return held
   }
+  return Object.assign(share, {
+    /** A workspace's folder or command context changed: its setups (all, without one) end. */
+    retire(workspaceId?: string): void {
+      for (const held of setups.values()) {
+        if (workspaceId === undefined || held.workspaceId === workspaceId) {
+          held.end()
+        }
+      }
+    }
+  })
 }
 
 async function resolveAccount(

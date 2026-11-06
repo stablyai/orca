@@ -7,6 +7,7 @@ import {
   createAgentModelCatalogLookup,
   type AgentModelCatalogClaims
 } from './agent-model-catalog-lookup'
+import { createAgentModelCatalogSetups } from './agent-model-catalog-setup'
 import { createAgentModelCatalogLiveListings } from './agent-model-catalog-live-listings'
 import { prewarmAgentModelCatalog } from './agent-model-catalog-prewarm'
 import { agentModelCatalogSessionPeek } from './agent-model-catalog-session-peek'
@@ -41,6 +42,7 @@ export function createAgentModelCatalogService(
 
   const bindings = new Map<string, AgentModelCatalogBinding>()
   const claims: AgentModelCatalogClaims = new Map()
+  const setups = createAgentModelCatalogSetups(deps, lifetime.signal)
   const requestKey = agentModelCatalogRequestKey.bind(null, deps)
   const capture = agentModelCatalogScopeIdentity.bind(null, deps)
   const retireContext = (workspaceId?: string, sources = true): void => {
@@ -48,6 +50,7 @@ export function createAgentModelCatalogService(
       live.retireContext(workspaceId)
     }
     retireAgentModelCatalogRequests(deps, bindings, claims, workspaceId)
+    setups.retire(workspaceId)
   }
   const live = createAgentModelCatalogLiveListings(deps, lifetime.signal)
   const unbindRetirement = onAtRestCommandContextRetired((workspaceId) =>
@@ -82,7 +85,8 @@ export function createAgentModelCatalogService(
     requestKey,
     capture,
     captureRead,
-    tasks
+    tasks,
+    setups
   )
   return {
     captureRead,
