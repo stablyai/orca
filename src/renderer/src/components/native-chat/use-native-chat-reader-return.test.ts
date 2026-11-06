@@ -58,5 +58,14 @@ it('rebases a continuing reader gesture across compensation without crediting a 
   following.current = true
   expect(observe(1600, 2200)).toBe(true)
   expect(observe(1600, 2200)).toBe(false)
+
+  // A smaller measured row is a known compensation, not an ambiguous browser clamp.
+  following.current = false
+  view.result.current.recordReaderScroll()
+  expect(observe(1380, 2000)).toBe(false)
+  expect(observe(1260, 1880, true)).toBe(false)
+  expect(observe(1270, 1880)).toBe(false)
+  following.current = true
+  expect(observe(1280, 1880)).toBe(true)
   view.unmount()
 })

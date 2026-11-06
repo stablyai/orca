@@ -20,16 +20,20 @@ export function useNativeChatReaderReturn(
     if (!start) {
       return false
     }
-    if (
-      geometry.clientHeight !== start.clientHeight ||
-      geometry.scrollHeight < start.scrollHeight
-    ) {
+    if (geometry.clientHeight !== start.clientHeight) {
       input.current = null
       return false
     }
     // Keep reader evidence in the coordinate frame produced by measurements and earlier movement.
     input.current = geometry
-    if (programmatic || !followingRef.current || geometry.scrollTop <= start.scrollTop) {
+    if (programmatic) {
+      return false
+    }
+    if (geometry.scrollHeight < start.scrollHeight) {
+      input.current = null
+      return false
+    }
+    if (!followingRef.current || geometry.scrollTop <= start.scrollTop) {
       return false
     }
     input.current = null
