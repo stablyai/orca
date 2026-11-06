@@ -31,6 +31,10 @@ export function SequencerRecoveryControls({
     context.activeRepoTarget,
     context.activeRepoExecutionHostId ?? undefined
   )
+  const operationLabel =
+    operation === 'revert'
+      ? translate('gitGraph.revert', 'Revert')
+      : translate('gitGraph.cherryPick', 'Cherry-pick')
   const confirm = useConfirmationDialog()
   const [busy, setBusy] = useState(false)
   const run = async (action: 'abort' | 'continue') => {
@@ -42,12 +46,16 @@ export function SequencerRecoveryControls({
     if (
       action === 'abort' &&
       !(await confirm({
-        title: translate('gitGraph.abortOperationTitle', 'Abort {{operation}}?', { operation }),
+        title: translate('gitGraph.abortOperationTitle', 'Abort {{operation}}?', {
+          operation: operationLabel
+        }),
         description: translate(
           'gitGraph.abortOperationDescription',
           'This cancels the operation in progress and can discard conflict resolutions made during it.'
         ),
-        confirmLabel: translate('gitGraph.abortOperation', 'Abort {{operation}}', { operation }),
+        confirmLabel: translate('gitGraph.abortOperation', 'Abort {{operation}}', {
+          operation: operationLabel
+        }),
         confirmVariant: 'destructive'
       }))
     ) {
@@ -100,7 +108,9 @@ export function SequencerRecoveryControls({
         disabled={!supported || disabled || busy}
         onClick={() => void run('continue')}
       >
-        {translate('gitGraph.continueOperation', 'Continue {{operation}}', { operation })}
+        {translate('gitGraph.continueOperation', 'Continue {{operation}}', {
+          operation: operationLabel
+        })}
       </Button>
       <Button
         className="h-7 w-full text-xs"
@@ -109,7 +119,7 @@ export function SequencerRecoveryControls({
         disabled={!supported || disabled || busy}
         onClick={() => void run('abort')}
       >
-        {translate('gitGraph.abortOperation', 'Abort {{operation}}', { operation })}
+        {translate('gitGraph.abortOperation', 'Abort {{operation}}', { operation: operationLabel })}
       </Button>
     </div>
   )

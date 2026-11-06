@@ -1,6 +1,10 @@
 import { GIT_REVERT_CONFLICT_CLIENT_CAPABILITY } from '../../../../shared/git/commands/git-commit-action'
 import type { GitConflictOperation } from '../../../../shared/git/status/git-status-types'
-import { GitStatusParams, WorktreeSelector } from '../../../../shared/rpc-contract/git-params'
+import {
+  GitStatusParams,
+  GitSubmoduleStatus,
+  WorktreeSelector
+} from '../../../../shared/rpc-contract/git-params'
 import { defineMethod } from '../core'
 
 function projectConflictOperation(
@@ -13,6 +17,22 @@ function projectConflictOperation(
 }
 
 export const GIT_STATUS_METHODS = [
+  defineMethod({
+    name: 'git.submoduleStatus',
+    permission: 'workspace',
+    params: GitSubmoduleStatus,
+    handler: async (params, { runtime, clientCapabilities }) => {
+      const status = await runtime.getRuntimeGitSubmoduleStatus(
+        params.worktree,
+        params.submodulePath,
+        params.area
+      )
+      return {
+        ...status,
+        conflictOperation: projectConflictOperation(status.conflictOperation, clientCapabilities)
+      }
+    }
+  }),
   defineMethod({
     name: 'git.status',
     permission: 'workspace',

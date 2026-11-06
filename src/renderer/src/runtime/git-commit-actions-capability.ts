@@ -30,7 +30,10 @@ export function useGitCommitActionsSupport(target: RuntimeClientTarget | null, h
     reason:
       state === 'unsupported'
         ? translate('gitGraph.updateActionsHost', 'Update Orca on {{host}} to act on commits', {
-            host: environmentName ?? hostName ?? translate('gitGraph.thisHost', 'this host')
+            host:
+              environmentName ??
+              (hostName === 'local' ? undefined : hostName) ??
+              translate('gitGraph.thisHost', 'this host')
           })
         : undefined
   }

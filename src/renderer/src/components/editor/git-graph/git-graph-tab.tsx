@@ -1,3 +1,8 @@
+import { useGitCommitActionsSupport } from '@/runtime/git-commit-actions-capability'
+import {
+  GitGraphCommitActionControls,
+  GitGraphCommitConfirmStrip
+} from './git-graph-commit-action-controls'
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -25,6 +30,10 @@ const sameGroup = () => undefined
 export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
   const history = useGitGraphHistory(worktreeId)
   const { result, scope, selectedId, revealId, controller } = history
+  const commitActionSupport = useGitCommitActionsSupport(
+    scope?.target ?? null,
+    scope?.route.executionHostId ?? undefined
+  )
   const workspaces = useGitGraphWorkspaces(scope)
   const rows = useMemo(
     () =>
@@ -234,10 +243,14 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
                         </span>
                       </div>
                     </ContextMenuTrigger>
-                    <GitHistoryCommitContextMenu
-                      item={item}
-                      onAction={actions.handleCommitAction}
-                    />
+                    <GitHistoryCommitContextMenu item={item} onAction={actions.handleCommitAction}>
+                      <GitGraphCommitActionControls
+                        item={item}
+                        controller={controller.actions}
+                        support={commitActionSupport}
+                        menu
+                      />
+                    </GitHistoryCommitContextMenu>
                   </ContextMenu>
                 )
               })}
@@ -261,10 +274,18 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
           </div>
         </div>
         <aside className="w-80 min-w-64 shrink-0 overflow-y-auto border-l border-border scrollbar-sleek">
+          <GitGraphCommitConfirmStrip controller={controller.actions} />
           {selected && (
             <GitGraphDetails
               key={selected.id}
               item={selected}
+              commitActions={
+                <GitGraphCommitActionControls
+                  item={selected}
+                  controller={controller.actions}
+                  support={commitActionSupport}
+                />
+              }
               actions={actions}
               onParent={(id) => void history.reveal(id)}
             />

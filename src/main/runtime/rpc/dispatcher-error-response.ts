@@ -1,3 +1,4 @@
+import { BranchSwitchLandedWithWarningError } from '../../git/branch-switch'
 import { mapBrowserError } from './browser-error-response'
 import { InvalidArgumentError, ZodError, formatZodError } from './core'
 import type { RpcEnvelopeMeta, RpcRequest, RpcResponse } from './core'
@@ -23,6 +24,11 @@ export function mapDispatcherError(
   meta: RpcEnvelopeMeta,
   error: unknown
 ): RpcResponse {
+  if (request.method === 'git.checkout' && error instanceof BranchSwitchLandedWithWarningError) {
+    return errorResponse(request.id, meta, 'runtime_error', error.message, {
+      outcome: 'landed-with-warning'
+    })
+  }
   if (error instanceof ZodError) {
     return invalidArgumentResponse(request, meta, formatZodError(error))
   }

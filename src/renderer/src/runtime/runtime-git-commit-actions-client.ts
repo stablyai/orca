@@ -8,9 +8,11 @@ import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
 export async function cherryPickRuntimeGit(
   context: RuntimeGitContext,
-  commitId: string
+  commitId: string,
+  beforeSend?: () => void
 ): Promise<GitCommitActionResult> {
   if (context.target.kind === 'local' || !context.worktreeId) {
+    beforeSend?.()
     return window.api.git.cherryPick({
       worktreePath: resolveLocalWorktreePath(context),
       connectionId: context.connectionId,
@@ -21,15 +23,17 @@ export async function cherryPickRuntimeGit(
     context.target,
     'git.cherryPick',
     { worktree: toRuntimeWorktreeSelector(context.worktreeId), commitId },
-    { timeoutMs: 30_000 }
+    { timeoutMs: 30_000, beforeSend }
   )
 }
 
 export async function revertRuntimeGit(
   context: RuntimeGitContext,
-  commitId: string
+  commitId: string,
+  beforeSend?: () => void
 ): Promise<GitCommitActionResult> {
   if (context.target.kind === 'local' || !context.worktreeId) {
+    beforeSend?.()
     return window.api.git.revert({
       worktreePath: resolveLocalWorktreePath(context),
       connectionId: context.connectionId,
@@ -40,7 +44,7 @@ export async function revertRuntimeGit(
     context.target,
     'git.revert',
     { worktree: toRuntimeWorktreeSelector(context.worktreeId), commitId },
-    { timeoutMs: 30_000 }
+    { timeoutMs: 30_000, beforeSend }
   )
 }
 

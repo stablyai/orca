@@ -15,6 +15,8 @@ export function conflictOperationLabel(operation: GitConflictOperation): string 
         'auto.components.sidebar.WorktreeCardHelpers.conflictCherryPicking',
         'Cherry-picking'
       )
+    case 'revert':
+      return translate('gitGraph.reverting', 'Reverting')
     case 'unknown':
       return ''
   }
