@@ -170,7 +170,7 @@ export function* codexRolloutItemWork(value: unknown): TranscriptWork<CodexThrea
     const paths = yield* sortTranscriptWork(Object.keys(changes), (a, b) =>
       a < b ? -1 : a > b ? 1 : 0
     )
-    const projected = []
+    const projected: Record<string, unknown>[] = []
     for (const path of paths) {
       yield 1
       const change = readRecord(changes[path])
