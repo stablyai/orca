@@ -9,6 +9,14 @@ const parseApp = (value: unknown) => () =>
   parsePluginAppThemeArtifact(JSON.stringify(value), 'strict')
 
 describe('plugin app theme artifacts', () => {
+  it('delivers a custom selected host badge border from an author theme', () => {
+    const theme = parsePluginAppThemeArtifact(
+      '{"base":"dark","tokens":{"--background":"#000000","--foreground":"#ffffff","--host-badge-border":"#777777"}}',
+      'strict'
+    )
+    expect(theme.tokens['--host-badge-border']).toBe('#777777')
+  })
+
   it.each([
     ['a private token', { base: 'dark', tokens: { '--internal-gap': '#000' } }],
     ['a URL', { base: 'dark', tokens: { '--background': 'url(x)' } }],

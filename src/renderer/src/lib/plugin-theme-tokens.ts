@@ -102,11 +102,12 @@ const CONTRAST_RULES = CONTRAST_RULE_DEFINITIONS.map((rule) => ({
   dropped: rule.drop ?? [rule.surface, rule.text]
 }))
 // Why 2:1, not WCAG's 3:1: Orca's own light ring is 2.6:1; the goal is a ring that never vanishes.
-const RINGS: readonly (readonly [string, string])[] = [
+const RINGS: readonly (readonly [string, string, string?])[] = [
   ['--ring', '--background'],
   ['--sidebar-ring', '--sidebar'],
   ['--worktree-sidebar-ring', '--worktree-sidebar'],
-  ['--tab-active-indicator', '--tab-active']
+  ['--tab-active-indicator', '--tab-active'],
+  ['--host-badge-border', '--worktree-sidebar-active', '--worktree-sidebar']
 ]
 const MIN_RING_CONTRAST = 2
 // Why a floor, not opaque: Orca's own dark borders are 7% white; 0 or near-0 alpha hides them.
@@ -222,12 +223,14 @@ export function safePluginThemeTokens(
         changed = drop(...dropped) || changed
       }
     }
-    for (const [ring, surface] of RINGS) {
+    for (const [ring, surface, surfaceOver] of RINGS) {
       const ringColor = accepted.get(ring)
       if (!ringColor) {
         continue
       }
-      const surfaceColor = effective(surface)
+      const ownSurface = effective(surface)
+      const beneath = surfaceOver ? effective(surfaceOver) : null
+      const surfaceColor = ownSurface && beneath?.[3] === 1 ? over(ownSurface, beneath) : ownSurface
       if (
         surfaceColor &&
         contrastRatio(over(ringColor, surfaceColor), surfaceColor) < MIN_RING_CONTRAST

@@ -43,10 +43,11 @@ Every key an app theme may set in `tokens` (see [plugin themes](plugin-themes.md
 | `--worktree-sidebar-accent-foreground` | Text on `--worktree-sidebar-accent` | no | same as `--sidebar-accent-foreground` |
 | `--worktree-sidebar-border` | Workspace sidebar borders | no | same as `--sidebar-border` |
 | `--worktree-sidebar-ring` | Focus rings in the workspace sidebar | no | same as `--sidebar-ring` |
-| `--worktree-sidebar-active` | The current workspace row; may be translucent, it paints over `--worktree-sidebar` | no | a translucent wash of `--worktree-sidebar-foreground` |
+| `--worktree-sidebar-active` | The current workspace row; may be translucent, it paints over `--worktree-sidebar` | no | light: `--worktree-sidebar-foreground` at 8% opacity; dark: `--worktree-sidebar-foreground` at 10% opacity |
 | `--worktree-sidebar-active-border` | Border of the current workspace row | no | a mix of `--worktree-sidebar-border` |
 | `--host-badge` | Execution-host badge on workspaces (for example `Local`, an SSH host) | no | light: same as `--accent`; dark: `--accent` at 80% opacity |
 | `--host-badge-foreground` | Text on `--host-badge` | no | same as `--muted-foreground` |
+| `--host-badge-border` | Host badge outline on the current workspace row (minimum 2:1 contrast) | no | `--worktree-sidebar-foreground` at 80% opacity |
 | `--tab-bar` | Strip behind tabs, including the title bar when tabs sit in it | no | same as `--card` |
 | `--tab-active` | Active tab | no | light: same as `--tab-bar`; dark: `--foreground` mixed 6% into `--tab-bar` |
 | `--tab-active-foreground` | Active tab text, and inactive tab text on hover | no | same as `--foreground` |

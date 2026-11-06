@@ -51,6 +51,7 @@ export const PLUGIN_APP_THEME_TOKENS = [
   '--worktree-sidebar-active-border',
   '--host-badge',
   '--host-badge-foreground',
+  '--host-badge-border',
   '--tab-bar',
   '--tab-active',
   '--tab-active-foreground',
