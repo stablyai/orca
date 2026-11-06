@@ -100,7 +100,7 @@ function wakeSwitchedWorkspace(
   const state = useAppStore.getState()
   state.setActiveWorktree(worktreeId, executionHostId)
   const environmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
-  if (isWorktree && isWebRuntimeSessionActive(environmentId)) {
+  if (isWorktree && environmentId && isWebRuntimeSessionActive(environmentId)) {
     void activateWebRuntimeSessionWorktreeOnEnvironment({ worktreeId, environmentId })
   }
   wakeWorkspaceAgents(worktreeId, {
