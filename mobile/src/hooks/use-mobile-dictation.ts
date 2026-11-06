@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useDictationCapture } from '../platform/dictation-capture'
-import type { RpcClient } from '../transport/rpc-client'
 import { dictationSessionErrorMessage } from '../dictation/mobile-dictation-setup'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileDictationMeter } from './mobile-dictation-meter'
@@ -19,10 +18,10 @@ import {
 import {
   cancelDesktopDictation,
   finishDesktopDictation,
+  settledDesktopDictationWork,
   startMobileDictationDesktopSession
 } from './mobile-dictation-desktop-start'
 import { rpcPayloadMember } from '../transport/rpc-reader-payload'
-import { probeLivenessWhileWaiting } from '../transport/rpc-liveness-probe-while-waiting'
 import type {
   DictationStatus,
   UseMobileDictationOptions,
@@ -52,16 +51,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
   const startBufferRef = useRef(new MobileDictationStartBuffer())
   const sendHeldAudioRef = useRef(() => {})
   const stopWhenStartedRef = useRef(false)
-  const hostSettledRef = useRef<Promise<unknown>>(Promise.resolve())
   const generationRef = useRef(0)
-
-  // The host refuses a phone's second start while its last one is still starting or closing, so each start waits for that work to settle.
-  const settleOnHost = (work: Promise<unknown>): Promise<unknown> => {
-    hostSettledRef.current = Promise.allSettled([hostSettledRef.current, work])
-    return work
-  }
-  const cancelOnHost = (client: RpcClient, dictationId: string) =>
-    settleOnHost(cancelDesktopDictation(client, dictationId))
 
   useLayoutEffect(() => {
     // Native audio events can arrive before passive Effects flush, but refs
@@ -111,7 +101,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       activeIdRef.current = null
       closeDictationAudio()
       if (client && dictationId) {
-        void cancelOnHost(client, dictationId)
+        void cancelDesktopDictation(client, dictationId)
       }
       const kept = keptTranscript.take(dictationId)
       if (kept) {
@@ -225,38 +215,36 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     }
     const dictationId = createMobileDictationId()
     activeIdRef.current = dictationId
-    await probeLivenessWhileWaiting(client, hostSettledRef.current)
+    await settledDesktopDictationWork(client)
     if (!isCurrentGeneration()) {
       return
     }
 
-    await settleOnHost(
-      startMobileDictationDesktopSession({
-        client,
-        dictationId,
-        generation,
-        getCurrentGeneration: () => generationRef.current,
-        getEnabled: () => enabledRef.current,
-        getActiveId: () => activeIdRef.current,
-        clearActiveId: (id) => {
-          if (activeIdRef.current === id) {
-            activeIdRef.current = null
-          }
-        },
-        setIdle: () => applyStatus('idle'),
-        commitRecordingStart: (hostDedupesResends) => {
-          audioPhaseRef.current = 'sending'
-          pendingChunksRef.current.clear()
-          pendingAudioBudgetRef.current.reset(hostDedupesResends)
-          applyStatus('recording')
-          sendHeldAudioRef.current()
-          if (stopWhenStartedRef.current) {
-            void finishDictation(dictationSessionErrorMessage('no-speech'))
-          }
-        },
-        rollbackRecordingStart: closeDictationAudio
-      })
-    )
+    await startMobileDictationDesktopSession({
+      client,
+      dictationId,
+      generation,
+      getCurrentGeneration: () => generationRef.current,
+      getEnabled: () => enabledRef.current,
+      getActiveId: () => activeIdRef.current,
+      clearActiveId: (id) => {
+        if (activeIdRef.current === id) {
+          activeIdRef.current = null
+        }
+      },
+      setIdle: () => applyStatus('idle'),
+      commitRecordingStart: (hostDedupesResends) => {
+        audioPhaseRef.current = 'sending'
+        pendingChunksRef.current.clear()
+        pendingAudioBudgetRef.current.reset(hostDedupesResends)
+        applyStatus('recording')
+        sendHeldAudioRef.current()
+        if (stopWhenStartedRef.current) {
+          void finishDictation(dictationSessionErrorMessage('no-speech'))
+        }
+      },
+      rollbackRecordingStart: closeDictationAudio
+    })
   }, [applyStatus, capture, closeDictationAudio, finishDictation])
 
   // Only the user’s own cancel (reason:null) ends silently; other interruptions call onError so the tap has a visible outcome.
@@ -276,7 +264,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
         setError(null)
       }
       if (client && dictationId) {
-        await cancelOnHost(client, dictationId)
+        await cancelDesktopDictation(client, dictationId)
       }
     },
     [applyStatus, closeDictationAudio, reportError]
@@ -310,7 +298,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       closeDictationAudio()
       capture.release()
       if (clientRef.current && dictationId) {
-        void cancelOnHost(clientRef.current, dictationId)
+        void cancelDesktopDictation(clientRef.current, dictationId)
       }
     }
   }, [capture, closeDictationAudio])

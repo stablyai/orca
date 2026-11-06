@@ -27,17 +27,34 @@ type StartMobileDictationDesktopSessionOptions = {
   rollbackRecordingStart: () => void
 }
 
-// Offline there is nothing to cancel against; the host drops a session its phone stops reaching, so never wait for a reconnect.
-export function cancelDesktopDictation(client: RpcClient, dictationId: string): Promise<void> {
-  return dictationSessionCancel
-    .request(client, { dictationId }, { failWhenDisconnected: true })
-    .then(
-      () => undefined,
-      () => undefined
-    )
+// The host refuses a phone's second start while its last one is still starting or closing; keyed by client so a start on any screen waits that out.
+const hostWork = new WeakMap<RpcClient, Promise<void>>()
+
+function trackHostWork(client: RpcClient, work: Promise<unknown>): void {
+  hostWork.set(
+    client,
+    Promise.allSettled([hostWork.get(client), work]).then(() => undefined)
+  )
 }
 
-// Returns the raw reply payload: the caller reads its text only after its staleness guard.
+export function settledDesktopDictationWork(client: RpcClient): Promise<void> {
+  return hostWork.get(client) ?? Promise.resolve()
+}
+
+// Offline there is nothing to cancel against; the host drops a session its phone stops reaching, so never wait for a reconnect.
+export function cancelDesktopDictation(client: RpcClient, dictationId: string): Promise<void> {
+  const cancelled = probeLivenessWhileWaiting(
+    client,
+    dictationSessionCancel.request(client, { dictationId }, { failWhenDisconnected: true })
+  ).then(
+    () => undefined,
+    () => undefined
+  )
+  trackHostWork(client, cancelled)
+  return cancelled
+}
+
+// Returns the interpreted reply: the caller reads its text only after its staleness guard.
 export async function finishDesktopDictation(
   client: RpcClient,
   dictationId: string
@@ -80,9 +97,15 @@ async function cancelStaleStart(options: StartMobileDictationDesktopSessionOptio
   await cancelDesktopDictation(client, dictationId)
 }
 
-export async function startMobileDictationDesktopSession(
+export function startMobileDictationDesktopSession(
   options: StartMobileDictationDesktopSessionOptions
 ): Promise<boolean> {
+  const started = startOnHost(options)
+  trackHostWork(options.client, started)
+  return started
+}
+
+async function startOnHost(options: StartMobileDictationDesktopSessionOptions): Promise<boolean> {
   const { client, dictationId } = options
   let hostDedupesResends = false
 
