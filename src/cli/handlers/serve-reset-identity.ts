@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs'
 import type { CommandHandler } from '../dispatch'
 import { RuntimeClientError } from '../runtime/types'
 import { resolveLaunchUserDataPath } from '../runtime/launch-user-data-path'
@@ -8,34 +7,19 @@ const RESET_WARNING =
   "This gives this machine's Orca server a new pairing key and installation id and removes every " +
   'paired device. Desktops and phones paired with it must pair again.'
 
-/** Holds the profile lock so no running Orca reads or rewrites the files mid-rotation. */
 export async function resetServeHostIdentity(userDataPath: string): Promise<void> {
-  if (!existsSync(userDataPath)) {
+  // Lazy: only this command needs orcad's lock code.
+  const { resetHostIdentityUnderLock } =
+    await import('../../main/orcad/orcad-host-identity-reset.js')
+  const result = resetHostIdentityUnderLock(userDataPath)
+  if (result.status === 'missing') {
     throw new RuntimeClientError('not_found', `No Orca data at ${userDataPath}; nothing to reset.`)
   }
-  // Lazy: only this command needs orcad's lock code.
-  const [{ acquireOrcadInstanceLock }, { OrcadInstanceLockError }, { rotateHostIdentity }] =
-    await Promise.all([
-      import('../../main/orcad/orcad-instance-lock.js'),
-      import('../../main/orcad/orcad-data-root-privacy.js'),
-      import('../../main/runtime/host-instance-identity.js')
-    ])
-  let lock
-  try {
-    lock = acquireOrcadInstanceLock(userDataPath)
-  } catch (error) {
-    if (error instanceof OrcadInstanceLockError) {
-      throw new RuntimeClientError(
-        'runtime_running',
-        `Stop Orca (the desktop app or \`orca serve\`) for ${userDataPath} first. ${error.message}`
-      )
-    }
-    throw error
-  }
-  try {
-    rotateHostIdentity(userDataPath)
-  } finally {
-    lock.release()
+  if (result.status === 'running') {
+    throw new RuntimeClientError(
+      'runtime_running',
+      `Stop Orca (the desktop app or \`orca serve\`) for ${userDataPath} first. ${result.message}`
+    )
   }
 }
 
