@@ -1,9 +1,17 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { getDefaultVoiceSettings } from '../../../../../shared/constants'
+import {
+  DICTATION_LANGUAGES,
+  SENSE_VOICE_DICTATION_LANGUAGES
+} from '../../../../../shared/dictation-language'
 import type { SpeechModelManifest, SpeechModelType } from '../../../../../shared/speech-types'
 import { VoiceDictationLanguageSetting } from './VoiceDictationLanguageSetting'
 
-function model(label: string, type: SpeechModelType): SpeechModelManifest {
+function model(
+  label: string,
+  type: SpeechModelType,
+  dictationLanguages?: readonly string[]
+): SpeechModelManifest {
   return {
     id: label,
     label,
@@ -12,7 +20,8 @@ function model(label: string, type: SpeechModelType): SpeechModelManifest {
     provider: 'local',
     language: 'multilingual',
     sampleRate: 16000,
-    streaming: false
+    streaming: false,
+    dictationLanguages
   }
 }
 
@@ -31,7 +40,7 @@ function render(
 
 export const whisperKorean = defineFixture({
   width: 640,
-  render: render('ko', model('Whisper Tiny', 'whisper'))
+  render: render('ko', model('Whisper Tiny', 'whisper', DICTATION_LANGUAGES))
 })
 
 export const whisperMenu = defineFixture({
@@ -43,7 +52,7 @@ export const whisperMenu = defineFixture({
 
 export const senseVoiceFrench = defineFixture({
   width: 640,
-  render: render('fr', model('SenseVoice', 'senseVoice'))
+  render: render('fr', model('SenseVoice', 'senseVoice', SENSE_VOICE_DICTATION_LANGUAGES))
 })
 
 export const parakeetIgnores = defineFixture({

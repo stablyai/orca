@@ -32,6 +32,8 @@ export type SpeechModelManifest = {
   recommended?: boolean
   /** Retired: never offered for selection, and a saved selection moves to this model on load. */
   replacedBy?: string
+  /** Codes the engine accepts (others crash or fail to load it); absent when it ignores the setting. */
+  dictationLanguages?: readonly string[]
 }
 
 export type SpeechModelStatus = 'not-downloaded' | 'downloading' | 'extracting' | 'ready' | 'error'

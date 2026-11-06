@@ -3,12 +3,12 @@ import type { SpeechModelManifest, VoiceSettings } from '../../../../../shared/s
 import {
   DICTATION_LANGUAGE_AUTO,
   DICTATION_LANGUAGES,
-  dictationLanguagesFor
+  engineDictationLanguage
 } from '../../../../../shared/dictation-language'
 import { translate } from '@/i18n/i18n'
 import { languageDisplayName, uiCollator } from '@/i18n/ui-intl-formatters'
-import { Label } from '../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
+import { SettingsRow } from '../form-controls/SettingsFormControls'
 
 // Intl formatter caches key on option identity, so this must be a module constant.
 const NAME_COLLATOR: Intl.CollatorOptions = { sensitivity: 'base' }
@@ -16,16 +16,16 @@ const NAME_COLLATOR: Intl.CollatorOptions = { sensitivity: 'base' }
 function describeLanguageSetting(
   model: SpeechModelManifest | undefined,
   language: string,
-  modelLanguages: readonly string[] | null
+  modelIgnoresLanguage: boolean
 ): string {
-  if (model && !modelLanguages) {
+  if (model && modelIgnoresLanguage) {
     return translate(
       'components.settings.voice.dictationLanguage.ignored',
       '{{model}} only transcribes the languages it was built for, so it ignores this setting.',
       { model: model.label }
     )
   }
-  if (model && language !== DICTATION_LANGUAGE_AUTO && !modelLanguages?.includes(language)) {
+  if (model && language !== DICTATION_LANGUAGE_AUTO && !engineDictationLanguage(model, language)) {
     return translate(
       'components.settings.voice.dictationLanguage.unsupported',
       "{{model}} doesn't support {{language}}, so it detects the language itself.",
@@ -50,9 +50,9 @@ export function VoiceDictationLanguageSetting({
   onUpdateVoiceSettings
 }: VoiceDictationLanguageSettingProps): React.JSX.Element {
   const labelId = useId()
+  const modelIgnoresLanguage = selectedModel !== undefined && !selectedModel.dictationLanguages
   const language = voiceSettings.dictationLanguage || DICTATION_LANGUAGE_AUTO
-  const modelLanguages = selectedModel ? dictationLanguagesFor(selectedModel.type) : null
-  const choices = modelLanguages ?? DICTATION_LANGUAGES
+  const choices = selectedModel?.dictationLanguages ?? DICTATION_LANGUAGES
   // Keep a choice the model lacks selectable rather than showing a blank trigger.
   const codes =
     language === DICTATION_LANGUAGE_AUTO || choices.includes(language)
@@ -64,34 +64,31 @@ export function VoiceDictationLanguageSetting({
     .sort((a, b) => collator.compare(a.name, b.name))
 
   return (
-    <div className="flex items-center justify-between gap-4 py-2">
-      <div className="space-y-0.5">
-        <Label id={labelId}>
-          {translate('components.settings.voice.dictationLanguage.title', 'Dictation Language')}
-        </Label>
-        <p className="text-xs text-muted-foreground">
-          {describeLanguageSetting(selectedModel, language, modelLanguages)}
-        </p>
-      </div>
-      <Select
-        value={language}
-        disabled={!voiceSettings.enabled || (selectedModel !== undefined && !modelLanguages)}
-        onValueChange={(value) => onUpdateVoiceSettings({ dictationLanguage: value })}
-      >
-        <SelectTrigger size="sm" className="min-w-32 shrink-0" aria-labelledby={labelId}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={DICTATION_LANGUAGE_AUTO}>
-            {translate('components.settings.voice.dictationLanguage.auto', 'Auto-detect')}
-          </SelectItem>
-          {options.map(({ code, name }) => (
-            <SelectItem key={code} value={code}>
-              {name}
+    <SettingsRow
+      label={translate('components.settings.voice.dictationLanguage.title', 'Dictation Language')}
+      description={describeLanguageSetting(selectedModel, language, modelIgnoresLanguage)}
+      labelId={labelId}
+      control={
+        <Select
+          value={language}
+          disabled={!voiceSettings.enabled || modelIgnoresLanguage}
+          onValueChange={(value) => onUpdateVoiceSettings({ dictationLanguage: value })}
+        >
+          <SelectTrigger size="sm" className="min-w-32" aria-labelledby={labelId}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={DICTATION_LANGUAGE_AUTO}>
+              {translate('components.settings.voice.dictationLanguage.auto', 'Auto-detect')}
             </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
+            {options.map(({ code, name }) => (
+              <SelectItem key={code} value={code}>
+                {name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      }
+    />
   )
 }

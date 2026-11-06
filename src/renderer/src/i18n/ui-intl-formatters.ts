@@ -2,11 +2,17 @@ import { getIntlLocale } from './i18n'
 import { supportedIntlLocale } from './intl-locale-support'
 
 type CachedFormatter<T> = { locale: string; formatter: T }
-type FormatterOptions = Intl.DateTimeFormatOptions | Intl.NumberFormatOptions | Intl.CollatorOptions
+type FormatterOptions =
+  | Intl.DateTimeFormatOptions
+  | Intl.NumberFormatOptions
+  | Intl.CollatorOptions
+  | Intl.DisplayNamesOptions
 
 const dateTimeFormats = new WeakMap<FormatterOptions, CachedFormatter<Intl.DateTimeFormat>>()
 const numberFormats = new WeakMap<FormatterOptions, CachedFormatter<Intl.NumberFormat>>()
 const collators = new WeakMap<FormatterOptions, CachedFormatter<Intl.Collator>>()
+const displayNames = new WeakMap<FormatterOptions, CachedFormatter<Intl.DisplayNames>>()
+const LANGUAGE_NAMES: Intl.DisplayNamesOptions = { type: 'language' }
 
 // Module-level formatters would freeze the language active at import; key by options object and rebuild on switches.
 function cachedFormatter<T>(
@@ -55,7 +61,14 @@ export function uiCollator(options: Intl.CollatorOptions): Intl.Collator {
 
 export function languageDisplayName(locale: string): string {
   try {
-    return new Intl.DisplayNames(getIntlLocale(), { type: 'language' }).of(locale) ?? locale
+    return (
+      cachedFormatter(
+        displayNames,
+        LANGUAGE_NAMES,
+        Intl.DisplayNames,
+        (uiLocale) => new Intl.DisplayNames(uiLocale, LANGUAGE_NAMES)
+      ).of(locale) ?? locale
+    )
   } catch {
     return locale
   }

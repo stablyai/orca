@@ -145,7 +145,8 @@ vi.mock('./model-catalog', () => ({
             provider: 'local',
             streaming: false,
             sampleRate: 16000,
-            files: ['encoder.onnx', 'decoder.onnx', 'tokens.txt']
+            files: ['encoder.onnx', 'decoder.onnx', 'tokens.txt'],
+            dictationLanguages: ['ja', 'ko']
           }
         : {
             id: 'model-a',

@@ -28,7 +28,6 @@ export async function stopSttDictation(
       state.cloudStopInFlight = null
       state.activeModelId = null
       state.activeHotwordsFilePath = undefined
-      state.activeLanguage = undefined
       state.activeOwner = null
       state.eventSink = null
       state.stopping = false

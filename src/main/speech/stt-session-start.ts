@@ -73,7 +73,7 @@ async function startSttSession(
   if (!manifest) {
     throw new Error(`Unknown model: ${modelId}`)
   }
-  const engineLanguage = engineDictationLanguage(manifest.type, language)
+  const engineLanguage = engineDictationLanguage(manifest, language)
 
   if (manifest.provider === 'openai') {
     if (state.worker) {
@@ -92,7 +92,6 @@ async function startSttSession(
     )
     state.activeModelId = modelId
     state.activeHotwordsFilePath = undefined
-    state.activeLanguage = engineLanguage
     state.eventSink = sink
     sink({ type: 'ready' })
     return
