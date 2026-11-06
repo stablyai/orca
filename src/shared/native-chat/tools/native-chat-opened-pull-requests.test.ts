@@ -291,11 +291,42 @@ describe('PowerShell create commands', () => {
     expect(
       opened('powershell.exe -ExecutionPolicy "Bypass" -Command \'gh pr create --fill\'')
     ).toEqual([38712])
-    // A launch inside a command list, and cmd as Codex's argv join writes it.
-    expect(opened("pwsh -Command 'gh pr create --fill' && echo done")).toEqual([38712])
+    // Only a whole line is unwrapped: a launch inside a command list stays text, so it is missed
+    // rather than rebuilt from comments or heredocs that only mention it.
+    expect(opened("pwsh -Command 'gh pr create --fill' && echo done")).toEqual([])
+    // cmd as Codex's argv join writes it.
     expect(opened(String.raw`"C:\\Windows\\System32\\cmd.exe" /c 'gh pr create --fill'`)).toEqual([
       38712
     ])
+  })
+
+  it('never takes a launch that a comment or heredoc only mentions, nor drops a real create', () => {
+    for (const command of [
+      "# example; pwsh -Command 'gh pr create --fill'\ncat pr-url.txt",
+      "ls # note; pwsh -Command 'gh pr create --fill'",
+      "cat <<'EOF'\npwsh -Command 'gh pr create --fill'\nEOF",
+      'C:\\Windows\\System32\\cmd.exe /d /s /c "echo done" && echo "gh pr create"'
+    ]) {
+      expect(opened(command)).toEqual([])
+    }
+    expect(opened('pwsh -File build.ps1 && gh pr create --fill')).toEqual([38712])
+    expect(
+      openedIn({
+        id: 'm1',
+        role: 'assistant',
+        timestamp: 1,
+        source: 'transcript',
+        blocks: [
+          {
+            type: 'tool-call',
+            name: 'PowerShell',
+            input: { command: 'pwsh -File build.ps1; gh pr create --fill' },
+            callId: 'c1'
+          },
+          { type: 'tool-result', output: GH_CREATE_OUTPUT, callId: 'c1' }
+        ]
+      })
+    ).toEqual([38712])
   })
 
   it('keeps the evidence that disqualifies a create, and reads nothing it cannot lex', () => {

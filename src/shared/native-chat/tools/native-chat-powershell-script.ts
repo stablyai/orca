@@ -11,6 +11,8 @@ const POWERSHELL_OPTIONS_WITH_VALUE = new Set([
   '-windowstyle',
   '-workingdirectory'
 ])
+// Bare characters that join, pipe, redirect or group commands.
+const POWERSHELL_COMMAND_SYNTAX = /[;|&<>(){}]/u
 // Characters that open or close text in POSIX analysis; they never survive inside a literal.
 const QUOTE_CHARACTERS = /['"`]/gu
 
@@ -136,7 +138,7 @@ export function powershellInvocationScript(argv: readonly string[]): string | nu
 }
 
 /** A PowerShell command line's words: `'…'` (with `''`), `"…"` (with `""` or a backtick escape), and
- *  a bare backtick escape. */
+ *  a bare backtick escape. Null when the line is more than one command, as `a; b` is. */
 export function powershellWords(command: string): string[] | null {
   const words: string[] = []
   let word: string | null = null
@@ -175,6 +177,8 @@ export function powershellWords(command: string): string[] | null {
     } else if (char === '`' && index + 1 < command.length) {
       word += command[index + 1]
       index += 2
+    } else if (POWERSHELL_COMMAND_SYNTAX.test(char)) {
+      return null
     } else {
       word += char
       index += 1

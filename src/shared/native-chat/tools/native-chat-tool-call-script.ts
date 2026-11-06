@@ -6,16 +6,17 @@ import {
 } from './native-chat-powershell-script'
 import { posixShellWords } from './native-chat-tool-preview-prefix'
 
-// Decodes the script a shell tool call ran into POSIX-readable text for command analysis, reading each
-// launch line in the quoting of what ran it.
+// Decodes the script a shell tool call ran into POSIX-readable text for command analysis. A line that
+// is one PowerShell or cmd launch, read in the quoting of what ran it, gives the script it runs.
 
 const SHELL_PROGRAM = /^(?:ba|z|k|da|fi)?sh(?:\.exe)?$/iu
 const SHELL_SCRIPT_FLAG = /^-[a-zA-Z]*c$/u
 const POWERSHELL_PROGRAM = /^(?:pwsh|powershell)(?:\.exe)?$/iu
 const CMD_PROGRAM = /^cmd(?:\.exe)?$/iu
 const CMD_FLAG = /^\/[ds]$/iu
-// Node's Windows shell form, in cmd's own quoting: `C:\Windows\System32\cmd.exe /d /s /c "script"`.
-const CMD_WRAPPER = /^(?:\/d\s+)?(?:\/s\s+)?\/c\s+([\s\S]+)$/iu
+// Node's Windows shell form, in cmd's own quoting: `C:\Windows\System32\cmd.exe /d /s /c "script"`,
+// the whole line, its script one quoted string.
+const CMD_WRAPPER = /^(?:\/d\s+)?(?:\/s\s+)?\/c\s+"([\s\S]*)"$/iu
 
 function programName(path: string): string {
   return path.split(/[\\/]/).at(-1) ?? ''
@@ -42,44 +43,6 @@ function argvCommand(input: unknown): readonly string[] | null {
   return Array.isArray(argv) && argv.every((part) => typeof part === 'string') ? argv : null
 }
 
-/** A script split at command separators that sit outside quotes. */
-export function shellSegments(script: string): string[] {
-  const segments: string[] = []
-  let current = ''
-  let quote: string | null = null
-  for (let index = 0; index < script.length; index++) {
-    const char = script[index]
-    if (quote !== null) {
-      current += char
-      if (char === '\\' && quote === '"') {
-        current += script[++index] ?? ''
-      } else if (char === quote) {
-        quote = null
-      }
-      continue
-    }
-    if (char === "'" || char === '"') {
-      quote = char
-    }
-    if (char === '\\') {
-      current += char + (script[++index] ?? '')
-      continue
-    }
-    const pair = script.slice(index, index + 2)
-    if (pair === '&&' || pair === '||' || char === ';' || char === '|' || char === '\n') {
-      segments.push(current)
-      current = ''
-      if (pair === '&&' || pair === '||') {
-        index++
-      }
-      continue
-    }
-    current += char
-  }
-  segments.push(current)
-  return segments
-}
-
 /** The script a decoded launch line runs, PowerShell's or cmd's: null when it can't be read whole,
  *  undefined when the line launches neither. */
 function launchedScript(words: readonly string[]): string | null | undefined {
@@ -99,38 +62,15 @@ function launchedScript(words: readonly string[]): string | null | undefined {
   return undefined
 }
 
-/** A POSIX command list with each PowerShell or cmd launch in it read as the script it runs, as in
- *  `pwsh -Command 'gh pr create --fill' && echo done`. Each command's words are undone as POSIX
- *  quoting, which Codex also joins argv in (`"C:\\…\\pwsh.exe" -Command 'script'` on Windows). */
-function posixCommandListScript(command: string): string | null {
-  let launches = false
-  const commands: string[] = []
-  for (const segment of shellSegments(command)) {
-    const words = posixShellWords(segment.trim())
-    const script = words ? launchedScript(words) : undefined
-    if (script === null) {
-      return null
-    }
-    launches ||= script !== undefined
-    commands.push(script ?? segment)
-  }
-  return launches ? commands.join('\n') : command
-}
-
-/** The script of Node's Windows shell form, which a bare Windows path can't be read as POSIX for. */
+/** The script of Node's Windows shell form as a whole line, which a bare Windows path can't be read
+ *  as POSIX for. */
 function cmdShellFormScript(command: string): string | null {
   const first = /^\s*(?:"([^"]+)"|(\S+))/u.exec(command)
   if (!first || !CMD_PROGRAM.test(programName(first[1] ?? first[2] ?? ''))) {
     return null
   }
-  const wrapped = CMD_WRAPPER.exec(command.slice(first.index + first[0].length).trim())
-  const script = wrapped?.[1]?.trim()
-  if (!script) {
-    return null
-  }
-  return script.length >= 2 && script.startsWith('"') && script.endsWith('"')
-    ? script.slice(1, -1)
-    : script
+  const script = CMD_WRAPPER.exec(command.slice(first.index + first[0].length).trim())?.[1]
+  return script?.trim() ? script : null
 }
 
 /** The script a shell tool call ran, as POSIX-readable text; null when there is none to read.
@@ -156,8 +96,11 @@ export function nativeChatToolCallScript(name: string, input: unknown): string |
     return null
   }
   if (name.trim().toLowerCase() !== 'powershell') {
-    const script = posixCommandListScript(command)
-    return script === command ? (cmdShellFormScript(command) ?? command) : script
+    // Only a whole line is unwrapped, as the common pattern does: a launch inside a command list
+    // stays text, never rebuilt into commands its comments or heredocs only mention.
+    const words = posixShellWords(command)
+    const launched = words ? launchedScript(words) : undefined
+    return launched !== undefined ? launched : (cmdShellFormScript(command) ?? command)
   }
   // A tool that is PowerShell itself reads its line in PowerShell's quoting, and runs any command
   // that launches nothing as a PowerShell script.
