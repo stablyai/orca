@@ -44,7 +44,7 @@ export type InFlightListing = {
   targets: Set<string>
   /** Readers share one listing; it lives while any of them still wants it, queued or running. */
   current: () => boolean
-  join: (demand: ListingDemand) => void
+  join: (demand: ListingDemand | undefined) => void
   promise: Promise<AgentModelCatalogEntry | null>
   finish: (entry: AgentModelCatalogEntry | null) => void
   cleanup: () => void
@@ -111,9 +111,26 @@ export function refreshAgentModelCatalogListing(input: {
   const flight: InFlightListing = {
     agent,
     targets: new Set(input.selectedModel ? [input.selectedModel] : []),
-    current: () => [...demands.keys()].some(wanted),
+    current: () => {
+      // Readers leave on their own deadline or abort, so the first live one answers.
+      for (const entry of demands.keys()) {
+        if (wanted(entry)) {
+          return true
+        }
+      }
+      return false
+    },
     join: (entry) => {
+      if (!entry || demands.has(entry)) {
+        return
+      }
+      // A reader whose deadline passes stops wanting the listing even if nothing aborts it.
+      const expiry =
+        entry.deadline === undefined
+          ? undefined
+          : setTimeout(() => leave(), Math.max(0, entry.deadline - Date.now()))
       const leave = (): void => {
+        clearTimeout(expiry)
         entry.signal?.removeEventListener('abort', leave)
         demands.delete(entry)
         if (!flight.current()) {
@@ -129,27 +146,21 @@ export function refreshAgentModelCatalogListing(input: {
     promise: result.promise,
     finish: result.resolve,
     cleanup: () => {
-      for (const [entry, leave] of demands) {
-        entry.signal?.removeEventListener('abort', leave)
-      }
+      const leaving = [...demands.values()]
       demands.clear()
+      // Each leave only clears its own timer and listener now that no demand is left.
+      for (const leave of leaving) {
+        leave()
+      }
       stopped.abort()
     }
   }
   const retire = (): void =>
     retireAgentModelCatalogListing(input.refreshes, input.listingWaiters, fingerprint, flight)
   const current = (): boolean => input.refreshes.get(fingerprint) === flight && flight.current()
-  // Its own operation: current while any reader wants it, until the last wanting reader's deadline.
-  const owner: StructuredAgentResolutionOperation = {
-    current,
-    signal: stopped.signal,
-    get deadline() {
-      const live = [...demands.keys()].filter(wanted)
-      return live.some((entry) => entry.deadline === undefined)
-        ? undefined
-        : Math.max(...live.map((entry) => entry.deadline ?? 0))
-    }
-  }
+  // Its own operation: current while any reader wants it. It carries no reader's deadline, so a
+  // request sent for one reader can't time out under another; the provider's timeout bounds it.
+  const owner: StructuredAgentResolutionOperation = { current, signal: stopped.signal }
   input.refreshes.set(fingerprint, flight)
   flight.join(demand)
   const span = startSpan('agentModelCatalog.discovery', { attributes: { agent, lister: 'probe' } })

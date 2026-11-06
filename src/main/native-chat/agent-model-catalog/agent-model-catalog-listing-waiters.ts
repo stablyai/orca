@@ -111,7 +111,7 @@ export async function waitForAgentModelCatalogRead(input: {
 /** The operation owns its original budget even while a resolver cannot be cancelled. */
 export function runAgentModelCatalogOperation(
   run: () => Promise<void>,
-  remaining: number,
+  remaining: number | (() => number),
   controller: AbortController,
   finished: () => void
 ): Promise<void> {
@@ -122,7 +122,15 @@ export function runAgentModelCatalogOperation(
     .finally(() => {
       settled = true
     })
-  return withTimeout(operation, remaining, undefined).finally(() => {
+  // A budget a later reader extends is rechecked when the earlier one runs out.
+  const end = Date.now() + (typeof remaining === 'number' ? remaining : 0)
+  const left = typeof remaining === 'number' ? () => end - Date.now() : remaining
+  const bounded = async (): Promise<void> => {
+    for (let wait = left(); !settled && wait > 0; wait = left()) {
+      await withTimeout(operation, wait, undefined)
+    }
+  }
+  return bounded().finally(() => {
     if (!settled) {
       controller.abort()
     }

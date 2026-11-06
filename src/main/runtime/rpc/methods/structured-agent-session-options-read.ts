@@ -123,23 +123,24 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
                     : await withTimeout(resolving, Math.max(0, deadline - Date.now()), null)
                 })
         }
-        if (later && resolving && !params.savedOnly) {
-          // The listing for the folder it resolves to starts once it does, within the picker's wait.
-          void withTimeout(resolving, AGENT_MODEL_CATALOG_PICKER_WAIT_MS, null).then(
+        const follows = later && resolving && !params.savedOnly
+        if (follows) {
+          // The listing for the folder it resolves to starts once it does, inside this read's own
+          // budget and retirement; the answer says so, so the picker follows with a waiting read.
+          const operation = catalog.captureRead({ ...request, deadline })
+          void withTimeout(resolving, Math.max(0, deadline - Date.now()), null).then(
             (workspacePath) => {
-              if (workspacePath) {
-                void catalog.demand({ ...request, workspacePath })
+              if (workspacePath && operation.current()) {
+                void catalog.demand({ ...request, workspacePath, deadline, operation })
               }
             }
           )
         }
-        if (host) {
-          return host.readModelCatalog(request)
-        }
-        if (!params.savedOnly) {
+        if (!host && !params.savedOnly) {
           void catalog.demand(request)
         }
-        return catalog.read(request)
+        const result = host ? await host.readModelCatalog(request) : await catalog.read(request)
+        return follows ? { ...result, listingInProgress: true } : result
       }
       const listing = await read()
       const own = record?.provider === params.agent ? record : null

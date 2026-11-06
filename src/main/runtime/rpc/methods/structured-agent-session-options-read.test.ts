@@ -58,16 +58,20 @@ function catalogHost() {
 describe('agentSession.modelCatalog', () => {
   const read = vi.fn(async () => ({ origin: 'unknown' as const }))
   const demand = vi.fn(async () => {})
+  let readCurrent = true
+  const captureRead = vi.fn(() => ({ current: () => readCurrent }))
   let record: AgentSessionRecord | null = null
 
   beforeEach(() => {
     read.mockClear()
     demand.mockClear()
+    captureRead.mockClear()
+    readCurrent = true
     record = null
     setStructuredAgentSessionHost(
       Object.assign(catalogHost(), {
         deps: {
-          modelCatalog: { read, demand },
+          modelCatalog: { read, demand, captureRead },
           store: {
             getRecord: () => record,
             getConversation: () => (record ? agentSessionConversationView(record) : null),
@@ -208,12 +212,14 @@ describe('agentSession.modelCatalog', () => {
     const folder = Promise.withResolvers<string>()
     const resolver = { resolveStructuredAgentCatalogWorkspacePath: () => folder.promise }
     const floating = `id:${FLOATING_TERMINAL_WORKTREE_ID}`
-    await call(
+    const first = await call(
       'agentSession.modelCatalog',
       { agent: 'codex', worktree: floating },
       STRUCTURED_CLIENT,
       resolver
     )
+    // The picker follows with a waiting read, which answers for the resolved folder.
+    expect(first).toMatchObject({ result: { listingInProgress: true } })
     await call(
       'agentSession.modelCatalog',
       { agent: 'codex', worktree: floating, savedOnly: true },
@@ -226,11 +232,32 @@ describe('agentSession.modelCatalog', () => {
     ])
     expect(demand).not.toHaveBeenCalledWith(expect.objectContaining({ workspacePath: '/float' }))
     folder.resolve('/float')
+    // The listing it starts keeps the read's own deadline and retirement.
     await vi.waitFor(() =>
-      expect(demand).toHaveBeenCalledWith({ agent: 'codex', workspacePath: '/float' })
+      expect(demand).toHaveBeenCalledWith({
+        agent: 'codex',
+        workspacePath: '/float',
+        deadline: expect.any(Number),
+        operation: captureRead.mock.results[0]?.value
+      })
     )
     // The passive saved-only read never starts a listing.
     expect(demand).not.toHaveBeenCalledWith(expect.objectContaining({ savedOnly: true }))
+  })
+
+  it('starts no listing for a floating folder that resolves after its read was retired', async () => {
+    const folder = Promise.withResolvers<string>()
+    await call(
+      'agentSession.modelCatalog',
+      { agent: 'codex', worktree: `id:${FLOATING_TERMINAL_WORKTREE_ID}` },
+      STRUCTURED_CLIENT,
+      { resolveStructuredAgentCatalogWorkspacePath: () => folder.promise }
+    )
+    // The account or CLI changed while the folder was resolving.
+    readCurrent = false
+    folder.resolve('/float')
+    await new Promise((settled) => setTimeout(settled, 0))
+    expect(demand).not.toHaveBeenCalledWith(expect.objectContaining({ workspacePath: '/float' }))
   })
 
   it("waits for a floating folder within the read's own budget, which the catalog keeps", async () => {

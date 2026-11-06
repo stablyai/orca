@@ -96,7 +96,6 @@ describe('model catalog prewarm', () => {
         signal: expect.any(AbortSignal),
         operation: expect.objectContaining({
           current: expect.any(Function),
-          deadline: expect.any(Number),
           signal: expect.any(AbortSignal)
         })
       })
@@ -253,7 +252,6 @@ describe('model catalog prewarm', () => {
         workspacePath: '/work/project',
         operation: expect.objectContaining({
           current: expect.any(Function),
-          deadline: expect.any(Number),
           signal: expect.any(AbortSignal)
         })
       })
@@ -526,7 +524,6 @@ describe('one account, one catalog key', () => {
           workspacePath: resolveHiddenProbeCwd(),
           operation: expect.objectContaining({
             current: expect.any(Function),
-            deadline: expect.any(Number),
             signal: expect.any(AbortSignal)
           })
         })

@@ -283,8 +283,10 @@ export class AgentModelCatalogStore {
     })
   }
 
-  isListing(fingerprint: string): boolean {
+  /** `joining` is another reader that wants the listing still running here. */
+  isListing(fingerprint: string, joining?: AgentModelCatalogListingDemand): boolean {
     const flight = this.refreshes.get(fingerprint)
+    flight?.join(joining)
     if (flight && !flight.current()) {
       retireAgentModelCatalogListing(this.refreshes, this.listingWaiters, fingerprint, flight)
     }
