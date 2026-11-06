@@ -225,10 +225,22 @@
       "clipboardRejected": "Metin panoya kopyalanamadı.",
       "copyFailed": "Kopyalanamadı",
       "copyMessage": "Mesajı kopyala",
-      "selectText": "Metni seç"
+      "selectText": "Metni seç",
+      "rewind": "Buraya geri dön"
     },
     "nativeChatImageViewer": {
-      "closeImage": "Görseli kapat"
+      "closeImage": "Görseli kapat",
+      "imageActions": "Görsel işlemleri",
+      "copyImage": "Görseli kopyala",
+      "saveImage": "Görseli kaydet",
+      "share": "Paylaş…",
+      "imageCopied": "Görsel kopyalandı",
+      "imageSaved": "Görsel kaydedildi",
+      "copyFailed": "Görsel kopyalanamadı",
+      "saveFailed": "Görsel kaydedilemedi",
+      "shareFailed": "Görsel paylaşılamadı",
+      "photosAccessDenied": "Ayarlar'da Orca'nın fotoğraf eklemesine izin verin",
+      "imageTooLarge": "Bu görsel çok büyük"
     },
     "nativeChatProse": {
       "attachedImage": "Ekli görsel",
@@ -287,7 +299,9 @@
       "permissionDenied": "{{agent}} izin vermedi. Ayrıntıları görüntüleyin.",
       "safetyReview": "{{agent}} bir güvenlik incelemesi uyarısı bildirdi. Ayrıntıları görüntüleyin.",
       "truncatedResponse": "Sağlayıcı yanıtı kısaltıldı (özgün boyut: {{bytes}} bayt).",
-      "modelFallback": "Claude model değiştirdi: {{from}} → {{to}}."
+      "modelFallback": "Claude model değiştirdi: {{from}} → {{to}}.",
+      "signIn": "Oturum aç",
+      "signInHint": "Bu sohbeti çalıştıran bilgisayarda bir terminal açar"
     },
     "orcaStop": {
       "canContinue": "Bu konuşmada devam edebilirsiniz.",
@@ -296,6 +310,13 @@
       "remote": "Bu yanıt hazırlanırken {{machine}} üzerindeki Orca durdu.",
       "unnamedServer": "uzak sunucu",
       "update": "Bu yanıt hazırlanırken {{machine}} üzerindeki Orca bir güncelleme için yeniden başlatıldı."
+    },
+    "interruptedContinue": {
+      "failed": "Bu sohbete devam edilemedi. Yeniden deneyin veya bir mesaj gönderin.",
+      "explanation": "Devam ettiğinizde ajan önce son adımının tamamlanıp tamamlanmadığını kontrol eder."
+    },
+    "sendError": {
+      "dismiss": "Kapat"
     },
     "permission": {
       "needsAccessTo": "Erişim gereken konum: ",
@@ -556,6 +577,47 @@
       "byteSize": "{{size}} bayt",
       "saveUpdate": "Kaydetme özelliği bir telefon güncellemesiyle kullanılabilecek.",
       "fullCopySaveUpdate": "Bu ek için Tümünü Kopyala ve Kaydet özellikleri bir telefon güncellemesiyle kullanılabilecek."
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}} yeniden bağlanıyor…",
+      "stopped": "{{hostName}} durduruldu. Bilgisayarınızda başlatın.",
+      "server": "Sunucu",
+      "unavailable": "{{hostName}} telefonunuzdan kullanılamıyor. Bilgisayarınızda projelerinden birini açın."
+    },
+    "goal": {
+      "chip": "Hedef",
+      "exitMode": "Hedef modundan çık",
+      "placeholder": "Hedefinizi açıklayın; en iyi sonuçlar için ölçülebilir sonuçlar tanımlayın",
+      "pursuing": "Hedef üzerinde çalışılıyor",
+      "set": "Hedef belirlendi",
+      "paused": "Hedef duraklatıldı",
+      "blocked": "Hedef engellendi",
+      "limited": "Hedef sınırına ulaşıldı",
+      "clear": "Hedefi temizle",
+      "expand": "Hedefin tamamını göster",
+      "collapse": "Hedefin tamamını gizle",
+      "attachmentsUnsupported": "Hedef belirlemeden önce ekleri kaldırın.",
+      "pause": "Duraklat",
+      "resume": "Devam et"
+    },
+    "rewind": {
+      "title": "Buraya geri dönülsün mü?",
+      "confirmation": "Bu mesaj ve sonrasındaki her şey silinsin mi? Mesaj, düzenleyip yeniden gönderebilmeniz için yazma kutusuna geri getirilir. Diskteki dosya değişiklikleri korunur.",
+      "confirm": "Geri dön",
+      "unsupported": "Bu sohbette önceki bir mesaja dönülemiyor.",
+      "historyNotPaginated": "Bu eski Codex sohbetinde önceki bir mesaja dönülemiyor. Buraya geri dön özelliğini kullanmak için yeni bir sohbet başlatın.",
+      "busy": "Ajan boşta olduğunda ve sohbette sizden yanıt bekleyen bir işlem kalmadığında kullanılabilir.",
+      "staleEpoch": "Sohbet değişti. Son mesajları inceleyip yeniden deneyin.",
+      "invalidTarget": "Sohbette bu mesaja dönülemiyor. Hiçbir şey değiştirilmedi.",
+      "historyLimit": "Bu sohbet geri dönülemeyecek kadar uzun. Hiçbir şey değiştirilmedi.",
+      "providerRefused": "Ajan bu mesaja dönemedi.",
+      "proofMismatch": "Ajanın geçmişi bu sohbetle eşleşmedi. Devam etmeden önce sohbeti kontrol edin.",
+      "outcomeUnknown": "Orca, sohbette önceki bir mesaja dönülüp dönülmediğini doğrulayamadı. Bir sonraki mesajınız gönderilmeden önce kontrol edecek.",
+      "refused": "Orca bu mesaja dönemedi. Devam etmeden önce sohbeti kontrol edin.",
+      "unavailable": "Sohbet bağlantısının tamamlanmasını bekleyin.",
+      "outcomeUnknownReturned": "Orca, sohbette bu mesaja dönülüp dönülmediğini doğrulayamadı. Mesajınız yazma kutusuna geri getirildi. Orca, bir sonraki mesajınız gönderilmeden önce sohbeti kontrol edecek.",
+      "timeout": "Bu mesaja dönüldükten sonra sohbet güncellenmedi. Son durumu görmek için sohbeti yeniden açın.",
+      "pending": "Sohbetin önceki mesaja dönmesini bekleyin."
     }
   },
   "common": {

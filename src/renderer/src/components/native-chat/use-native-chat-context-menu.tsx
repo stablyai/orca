@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { flushSync } from 'react-dom'
 import { chatMathSelectionText } from '../sidebar/chat-markdown-math-selection'
-import { Clipboard, Copy, GitFork, SquareTerminal } from 'lucide-react'
+import { Clipboard, Copy, SquareTerminal } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -98,7 +98,6 @@ export type NativeChatContextMenuActions = {
   onToggleExpand: () => void
   canContinueAgentSessionInNewSession: boolean
   onContinueAgentSessionInNewSession: () => void
-  onForkAgentSession: () => void
   onCopyAgentSessionContext: () => void
   onSetTitle: () => void
   canClearPaneTitle: boolean
@@ -121,7 +120,6 @@ export const emptyNativeChatContextMenuActions: Omit<NativeChatContextMenuAction
   onToggleExpand: () => {},
   canContinueAgentSessionInNewSession: false,
   onContinueAgentSessionInNewSession: () => {},
-  onForkAgentSession: () => {},
   onCopyAgentSessionContext: () => {},
   onSetTitle: () => {},
   canClearPaneTitle: false,
@@ -332,13 +330,6 @@ export function useNativeChatContextMenu({
                   onSelect={actions.onContinueAgentSessionInNewSession}
                 />
               ) : null}
-              <DropdownMenuItem onSelect={actions.onForkAgentSession}>
-                <GitFork />
-                {translate(
-                  'auto.components.terminal.pane.TerminalContextMenu.8a7ddb8b8a',
-                  'Fork Agent Session…'
-                )}
-              </DropdownMenuItem>
               <AgentSessionContextCopyMenuItem onSelect={actions.onCopyAgentSessionContext} />
             </>
           ) : null}

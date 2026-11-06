@@ -225,10 +225,22 @@
       "clipboardRejected": "クリップボードがテキストを受け付けませんでした。",
       "copyFailed": "コピーに失敗しました",
       "copyMessage": "メッセージをコピーする",
-      "selectText": "テキストを選択"
+      "selectText": "テキストを選択",
+      "rewind": "ここに巻き戻す"
     },
     "nativeChatImageViewer": {
-      "closeImage": "画像を閉じる"
+      "closeImage": "画像を閉じる",
+      "imageActions": "画像の操作",
+      "copyImage": "画像をコピー",
+      "saveImage": "画像を保存",
+      "share": "共有…",
+      "imageCopied": "画像をコピーしました",
+      "imageSaved": "画像を保存しました",
+      "copyFailed": "画像をコピーできませんでした",
+      "saveFailed": "画像を保存できませんでした",
+      "shareFailed": "画像を共有できませんでした",
+      "photosAccessDenied": "設定で Orca に写真の追加を許可してください",
+      "imageTooLarge": "この画像は大きすぎます"
     },
     "nativeChatProse": {
       "attachedImage": "添付画像",
@@ -287,7 +299,9 @@
       "permissionDenied": "{{agent}} が権限を拒否しました。詳細を表示。",
       "safetyReview": "{{agent}} が安全性レビューの警告を報告しました。詳細を表示。",
       "truncatedResponse": "プロバイダーの応答は切り詰められています（元のサイズ：{{bytes}} バイト）。",
-      "modelFallback": "Claudeがモデルを切り替えました: {{from}} → {{to}}。"
+      "modelFallback": "Claudeがモデルを切り替えました: {{from}} → {{to}}。",
+      "signIn": "サインイン",
+      "signInHint": "このチャットを実行しているコンピューターでターミナルを開きます"
     },
     "orcaStop": {
       "canContinue": "この会話で続行できます。",
@@ -296,6 +310,13 @@
       "remote": "この応答の途中で、{{machine}} の Orca が停止しました。",
       "unnamedServer": "リモートサーバー",
       "update": "この応答の途中で、{{machine}} の Orca がアップデートのため再起動しました。"
+    },
+    "interruptedContinue": {
+      "failed": "このチャットを続行できませんでした。もう一度試すか、メッセージを送信してください。",
+      "explanation": "続行すると、Agent はまず最後の手順が完了したかどうかを確認します。"
+    },
+    "sendError": {
+      "dismiss": "閉じる"
     },
     "permission": {
       "needsAccessTo": "アクセスが必要なパス: ",
@@ -552,6 +573,47 @@
       "byteSize": "{{size}} バイト",
       "saveUpdate": "保存はスマートフォンのアップデートで利用可能になります。",
       "fullCopySaveUpdate": "この添付ファイルの全内容のコピーと保存は、スマートフォンのアップデートで利用可能になります。"
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}} に再接続しています…",
+      "stopped": "{{hostName}} は停止しています。コンピューターで起動してください。",
+      "server": "サーバー",
+      "unavailable": "{{hostName}} はスマートフォンから利用できません。コンピューターでそのプロジェクトのいずれかを開いてください。"
+    },
+    "goal": {
+      "chip": "ゴール",
+      "exitMode": "ゴールモードを終了する",
+      "placeholder": "目標を説明し、最良の結果を得るために測定可能な結果を定義する",
+      "pursuing": "目標を追求中",
+      "set": "目標を設定済み",
+      "paused": "一時停止されたゴール",
+      "blocked": "ゴール阻止",
+      "limited": "目標が限定されている",
+      "clear": "目標を削除",
+      "expand": "完全な目標を表示",
+      "collapse": "完全な目標を非表示にする",
+      "attachmentsUnsupported": "目標を設定する前に添付ファイルを削除してください。",
+      "pause": "一時停止",
+      "resume": "再開"
+    },
+    "rewind": {
+      "title": "ここに巻き戻しますか?",
+      "confirmation": "このメッセージとそれ以降をすべて破棄しますか? メッセージは入力欄に戻り、編集して再送信できます。ディスク上のファイルの変更は保持されます。",
+      "confirm": "巻き戻す",
+      "unsupported": "このチャットは以前のメッセージに戻れません。",
+      "historyNotPaginated": "この古い Codex チャットは以前のメッセージに戻れません。「ここに巻き戻す」を使用するには、新規チャットを開始してください。",
+      "busy": "Agent がアイドル状態になり、このチャットであなたの対応を待つものがなくなると利用できます。",
+      "staleEpoch": "会話が変更されました。最新のメッセージを確認して、もう一度お試しください。",
+      "invalidTarget": "会話をこのメッセージに戻すことはできません。何も変更されていません。",
+      "historyLimit": "この会話は長すぎて巻き戻せません。何も変更されていません。",
+      "providerRefused": "Agent はこのメッセージに戻れませんでした。",
+      "proofMismatch": "Agent の履歴がこのチャットと一致しませんでした。続行する前に会話を確認してください。",
+      "outcomeUnknown": "Orca は会話が以前のメッセージに戻ったかどうかを確認できませんでした。次のメッセージが送信される前に確認します。",
+      "refused": "Orca はこのメッセージに戻れませんでした。続行する前に会話を確認してください。",
+      "unavailable": "チャットの接続が完了するまでお待ちください。",
+      "outcomeUnknownReturned": "Orca は会話がこのメッセージに戻ったかどうかを確認できませんでした。メッセージは入力欄に戻っており、次のメッセージが送信される前に Orca が会話を確認します。",
+      "timeout": "このメッセージに戻った後、チャットが更新されませんでした。最新の内容を確認するには、開き直してください。",
+      "pending": "会話が以前のメッセージに戻るまでお待ちください。"
     }
   },
   "common": {
