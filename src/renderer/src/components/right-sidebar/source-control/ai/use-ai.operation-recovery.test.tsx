@@ -3,7 +3,11 @@ import { sourceControlActionRecipeEntry } from '../../../../../../shared/source-
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
 
-import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import {
+  makeFolderWorkspace,
+  makeWorktree,
+  TEST_REPO
+} from '@/store/slices/worktrees-slice-test-fixtures'
 import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import {
   launchSourceControlRecoveryAgentWithDefault,
@@ -45,8 +49,13 @@ describe('AI operation recovery composer', () => {
     setLocalRuntimeCapabilitiesForTests([])
     useAppStore.setState({
       isRemoteOperationActive: false,
+      folderWorkspaces: [makeFolderWorkspace({ id: 'feature', executionHostId: 'local' })],
       repos: [TEST_REPO],
-      worktreesByRepo: { [TEST_REPO.id]: [makeWorktree({ id: 'wt-1', repoId: TEST_REPO.id })] },
+      worktreesByRepo: {
+        [TEST_REPO.id]: [
+          makeWorktree({ id: 'repo1::/tmp/wt', repoId: TEST_REPO.id, hostId: 'local' })
+        ]
+      },
       ensureDetectedAgents: async () => {
         const ids: TuiAgent[] = await detectAgents()
         useAppStore.setState({ localDetectedAgentIdsByContext: { host: ids } })
@@ -75,7 +84,7 @@ describe('AI operation recovery composer', () => {
     })
     await expect(
       launchSourceControlRecoveryAgentWithDefault({
-        activeWorktreeId: 'wt-1',
+        activeWorktreeId: 'repo1::/tmp/wt',
         activeGroupId: 'folder-group',
         activeSourceControlLaunchPlatform: 'linux',
         sourceRepoConnectionId: null,
@@ -102,6 +111,38 @@ describe('AI operation recovery composer', () => {
     expect(detectAgents).toHaveBeenCalledOnce()
   })
 
+  it('uses the child workspace for cross-host recovery without applying its cwd to the folder', async () => {
+    useAppStore.setState({
+      settings: { ...getDefaultSettings(path.resolve('tmp')), defaultTuiAgent: 'codex' },
+      folderWorkspaces: [makeFolderWorkspace({ id: 'feature', executionHostId: 'ssh:other' })],
+      activeGroupIdByWorktree: { 'repo1::/tmp/wt': 'child-group' }
+    })
+    await expect(
+      launchSourceControlRecoveryAgentWithDefault({
+        activeWorktreeId: 'repo1::/tmp/wt',
+        activeGroupId: 'folder-group',
+        activeSourceControlLaunchPlatform: 'linux',
+        sourceRepoConnectionId: null,
+        placementWorkspaceId: 'folder:feature',
+        initialCwd: '/child',
+        executionHostId: 'local',
+        actionId: 'fixCommitFailure',
+        basePrompt: 'fix this commit',
+        getLaunchActionRecipe: () => sourceControlActionRecipeEntry({ agentId: 'codex' }),
+        getStoreState: useAppStore.getState,
+        copy: getDefaultSourceControlRecoveryLaunchCopy('commit')
+      })
+    ).resolves.toBe(true)
+    expect(launchAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeId: 'repo1::/tmp/wt',
+        groupId: 'child-group',
+        selectedExecutionHostId: 'local'
+      })
+    )
+    expect(launchAgent.mock.calls[0]?.[0]).not.toHaveProperty('initialCwd')
+  })
+
   it('claims recovery success only after the terminal and task handoff settle', async () => {
     vi.mocked(toast.success).mockClear()
     const completed = Promise.withResolvers<{
@@ -120,7 +161,7 @@ describe('AI operation recovery composer', () => {
     })
     const run = () =>
       launchSourceControlRecoveryAgentWithDefault({
-        activeWorktreeId: 'wt-1',
+        activeWorktreeId: 'repo1::/tmp/wt',
         activeGroupId: null,
         activeSourceControlLaunchPlatform: 'linux',
         sourceRepoConnectionId: null,

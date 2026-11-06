@@ -1,3 +1,4 @@
+import { canLaunchSourceControlSectionAgentInPlace } from './section-agent-placement'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { SelectedSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
@@ -164,9 +165,16 @@ export async function launchSourceControlRecoveryAgentWithDefault({
     return false
   }
 
+  const liveStore = useAppStore.getState()
+  const inPlace =
+    placementWorkspaceId &&
+    canLaunchSourceControlSectionAgentInPlace(liveStore, activeWorktreeId, placementWorkspaceId)
+      ? placementWorkspaceId
+      : undefined
+
   // A saved or default agent may open as a chat without its CLI.
   const opensAsChat = (agent: TuiAgent): boolean =>
-    !placementWorkspaceId &&
+    !inPlace &&
     agentChoiceMayOpenAsChat(
       useAppStore.getState(),
       agent,
@@ -205,12 +213,15 @@ export async function launchSourceControlRecoveryAgentWithDefault({
   const result = launchAgentInNewTab({
     requestId: newAgentLaunchRequestId(),
     agent,
-    worktreeId: placementWorkspaceId ?? activeWorktreeId,
-    groupId: activeGroupId ?? placementWorkspaceId ?? activeWorktreeId,
-    ...(initialCwd ? { initialCwd } : {}),
+    worktreeId: inPlace ?? activeWorktreeId,
+    groupId:
+      placementWorkspaceId && !inPlace
+        ? (liveStore.activeGroupIdByWorktree[activeWorktreeId] ?? activeWorktreeId)
+        : (activeGroupId ?? placementWorkspaceId ?? activeWorktreeId),
+    ...((!placementWorkspaceId || inPlace) && initialCwd ? { initialCwd } : {}),
     prompt: commandInput,
     ...projection,
-    ...(placementWorkspaceId ? { requestedSurface: 'terminal' as const } : {}),
+    ...(inPlace ? { requestedSurface: 'terminal' as const } : {}),
     ...(executionHostId ? { selectedExecutionHostId: executionHostId } : {}),
     promptDelivery: 'submit-after-ready',
     launchPlatform: activeSourceControlLaunchPlatform,

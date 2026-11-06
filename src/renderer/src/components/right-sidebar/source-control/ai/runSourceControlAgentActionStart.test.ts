@@ -1,7 +1,13 @@
 import { sourceControlActionRecipeEntry } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import type { SourceControlActionRecipe } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type * as RuntimeGitStatusClientModule from '@/runtime/runtime-git-status-client'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
+import {
+  makeFolderWorkspace,
+  makeWorktree,
+  TEST_REPO
+} from '@/store/slices/worktrees-slice-test-fixtures'
 
 const mocks = vi.hoisted(() => ({
   focusTerminalTabSurface: vi.fn(),
@@ -66,9 +72,19 @@ function buildArgs(
   }
 }
 
+const initialState = useAppStore.getState()
+afterEach(() => useAppStore.setState(initialState, true))
+
 describe('runSourceControlAgentActionStart', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    useAppStore.setState({
+      repos: [{ ...TEST_REPO, connectionId: 'box' }],
+      worktreesByRepo: {
+        [TEST_REPO.id]: [makeWorktree({ id: 'child', repoId: TEST_REPO.id, hostId: 'ssh:box' })]
+      },
+      folderWorkspaces: [makeFolderWorkspace({ id: 'feature', executionHostId: 'ssh:box' })]
+    })
     mocks.mutationInFlight.mockResolvedValue({ inFlight: false })
   })
 
@@ -116,6 +132,40 @@ describe('runSourceControlAgentActionStart', () => {
       expect(mocks.mutationInFlight).toHaveBeenCalledWith(recoveryContext)
     }
   )
+
+  it('keeps a cross-host section launch child-owned instead of executing its path in the folder', async () => {
+    useAppStore.setState({
+      folderWorkspaces: [makeFolderWorkspace({ id: 'feature', executionHostId: 'local' })],
+      activeGroupIdByWorktree: { child: 'child-group' }
+    })
+    mocks.launchAgentInNewTab.mockReturnValue({ surface: { kind: 'host-published' } })
+    await expect(
+      runSourceControlAgentActionStart(
+        buildArgs({
+          worktreeId: 'child',
+          placementWorkspaceId: 'folder:feature',
+          groupId: 'folder-group',
+          initialCwd: '/remote/path',
+          recipe: { agentId: 'codex', surface: 'chat' },
+          launchChoice: {
+            agent: 'codex',
+            route: 'structured-native-chat',
+            requestedSurface: 'chat',
+            executionHostId: 'ssh:box'
+          }
+        })
+      )
+    ).resolves.toBe(true)
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeId: 'child',
+        groupId: 'child-group',
+        requestedSurface: 'chat',
+        selectedExecutionHostId: 'ssh:box'
+      })
+    )
+    expect(mocks.launchAgentInNewTab.mock.calls[0]?.[0]).not.toHaveProperty('initialCwd')
+  })
 
   it('notifies onLaunchAccepted as soon as the agent tab is created, before prompt delivery', async () => {
     let resolveDelivery: (value: {

@@ -1,3 +1,5 @@
+import { useAppStore } from '@/store'
+import { canLaunchSourceControlSectionAgentInPlace } from './section-agent-placement'
 import type { DirectWorkItemLaunchResult } from '@/lib/direct-work-item-setup'
 import {
   sourceControlActionRecipeEntry,
@@ -142,11 +144,18 @@ export async function runSourceControlAgentActionStart({
       ) ?? recipe
     launchRecipe = sourceControlActionRecipeEntry(recipeToSave)
   }
+  const store = useAppStore.getState()
+  const inPlace =
+    placementWorkspaceId &&
+    worktreeId &&
+    canLaunchSourceControlSectionAgentInPlace(store, worktreeId, placementWorkspaceId)
+      ? placementWorkspaceId
+      : undefined
   const projection = projectSelectedSourceControlActionLaunch(
     launchRecipe,
     selectedAgent,
     { renderedPrompt: trimmedCommandInput, settings },
-    placementWorkspaceId ? { ...launchChoice, requestedSurface: 'terminal' } : launchChoice
+    inPlace ? { ...launchChoice, requestedSurface: 'terminal' } : launchChoice
   )
   const {
     commandInput: _prompt,
@@ -216,9 +225,12 @@ export async function runSourceControlAgentActionStart({
     const result = launchAgentInNewTab({
       requestId: newAgentLaunchRequestId(),
       agent: selectedAgent,
-      worktreeId: placementWorkspaceId ?? worktreeId,
-      groupId: groupId ?? placementWorkspaceId ?? worktreeId,
-      ...(initialCwd ? { initialCwd } : {}),
+      worktreeId: inPlace ?? worktreeId,
+      groupId:
+        placementWorkspaceId && !inPlace
+          ? (store.activeGroupIdByWorktree[worktreeId] ?? worktreeId)
+          : (groupId ?? placementWorkspaceId ?? worktreeId),
+      ...((!placementWorkspaceId || inPlace) && initialCwd ? { initialCwd } : {}),
       prompt: trimmedCommandInput,
       agentArgs: launchAgentArgs,
       ...launchOptions,
