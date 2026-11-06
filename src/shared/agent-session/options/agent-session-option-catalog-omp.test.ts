@@ -3,6 +3,7 @@ import './agent-session-option-catalog-omp'
 import './agent-session-option-launch'
 import '../../native-chat/input/native-chat-session-option-commands'
 import { parseOmpModelList } from '../../omp-model-list-probe'
+import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
 
 const LISTING = JSON.stringify({
   models: [
@@ -67,4 +68,16 @@ describe('omp model list probe', () => {
       expect(parseOmpModelList(value)).toEqual([])
     }
   })
+})
+
+describe('omp thinking', () => {
+  it.each(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'auto'])(
+    'launches OMP with every level its --thinking takes (%s)',
+    (effort) => {
+      expect(resolveAgentSessionOptionLaunch('omp', { effort }, [], false).args).toEqual([
+        '--thinking',
+        effort
+      ])
+    }
+  )
 })
