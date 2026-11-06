@@ -1,10 +1,10 @@
+import { frameAgentStatus } from './frame-agent-status'
 import {
   normalizeCompatibleAgentStatusEntryForOwner,
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
 } from '../../../../shared/agent-status/title/agent-title-owner'
 import { resolvePaneAgentOwnerRecord } from '../../../../shared/agent-status/identity/pane-agent-owner'
-import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { RuntimeMobileSessionClientTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type {
@@ -268,11 +268,10 @@ export function projectRuntimeMobileSessionTabs(
         retainedAgentStatus,
         getHookRowsForPane
       )
-    const projectedStatusEntry = projectedAgentStatus.agentStatus as
-      | (AgentStatusEntry & { turnCompletedAt?: number })
-      | undefined
-    const { turnCompletedAt: projectedTurnCompletedAt, ...clientStatusFields } =
-      projectedStatusEntry ?? {}
+    const { projectedTurnCompletedAt, ...clientAgentStatus } = frameAgentStatus(
+      projectedAgentStatus.agentStatus,
+      snapshot.worktree
+    )
     const rawTurnCompletedAt =
       hookAgentStatus?.live?.payload.turnCompletedAt ??
       selectRuntimeHookAgentRowForPane(getHookRowsForPane(paneKey)).live?.payload.turnCompletedAt ??
@@ -281,16 +280,6 @@ export function projectRuntimeMobileSessionTabs(
       typeof rawTurnCompletedAt === 'number' && Number.isFinite(rawTurnCompletedAt)
         ? rawTurnCompletedAt
         : undefined
-    // Why: the pane is this worktree's; a restored row without a live PTY names none, and clients
-    // decide row ownership (and retraction) by worktree.
-    const clientAgentStatus: { agentStatus?: AgentStatusEntry } = projectedStatusEntry
-      ? {
-          agentStatus: {
-            ...(clientStatusFields as AgentStatusEntry),
-            worktreeId: snapshot.worktree
-          }
-        }
-      : {}
     tabs.push({
       type: 'terminal',
       id: tab.id,
