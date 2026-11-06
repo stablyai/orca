@@ -2,7 +2,7 @@ import { MobileQueuedMessageComposerContext } from '../mobile-queued-message-com
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
-import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
+import { useMobileNativeChatProjection } from './transcript/use-mobile-native-chat-projection'
 import { nativeChatDockedTaskList } from '../../../../src/shared/native-chat/input/native-chat-task-list-state'
 import type { MobileNativeChatImageAttachments } from './composer/use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
@@ -99,10 +99,12 @@ export function MobileNativeChatOverlay({
     session.messages,
     controller.nativeChatItemSource
   )
-  const folded = useMemo(
-    () => foldMobileNativeChatMessages(fullContent.messages, agent),
-    [fullContent.messages, agent]
-  )
+  const folded = useMobileNativeChatProjection(fullContent.messages, agent, [
+    sendSurfaceId,
+    sessionId,
+    controller.nativeChatItemSource?.client,
+    controller.nativeChatItemSource?.sessionId
+  ])
   const taskList = useMemo(() => nativeChatDockedTaskList(folded), [folded])
   const streaming = controller.nativeChatStreamingText ?? null
   const queued = controller.nativeChatQueued
