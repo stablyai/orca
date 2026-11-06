@@ -214,7 +214,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
               aria-describedby={launchBlocked ? reasonId : undefined}
             >
               <AgentIcon agent={entry.agent} size={14} />
-              <span className="min-w-0 flex-1 truncate">{label}</span>
+              <span className="min-w-0 flex-1 truncate text-left">{label}</span>
               {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
               {launchBlocked ? (
                 <span
