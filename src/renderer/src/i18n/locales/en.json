@@ -22189,6 +22189,8 @@
       "projectPlaceholder": "my-project-id",
       "locationPlaceholder": "us-central1",
       "signInAgainWith": "Sign in again to use {{method}}.",
+      "settingsLoadFailed": "Orca couldn't load your Antigravity sign-in settings. Try again.",
+      "settingsSaveFailed": "Orca couldn't save your Antigravity sign-in settings. Try again.",
       "signInWith": "Signs in with {{method}} on {{host}}."
     },
     "claude": {

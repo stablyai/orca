@@ -1,5 +1,6 @@
 import {
   AntigravityChatAuthConfigError,
+  AntigravityChatAuthUnconfirmedError,
   type AntigravityChatAuthConfig
 } from '../../shared/antigravity-chat-auth-config'
 
@@ -7,11 +8,12 @@ const publications = new WeakMap<object, 'saving' | 'unconfirmed'>()
 
 export function assertAntigravityChatAuthPublished(value: unknown): void {
   const state = value !== null && typeof value === 'object' ? publications.get(value) : undefined
-  if (state) {
+  if (state === 'unconfirmed') {
+    throw new AntigravityChatAuthUnconfirmedError()
+  }
+  if (state === 'saving') {
     throw new AntigravityChatAuthConfigError(
-      state === 'saving'
-        ? 'Antigravity account settings are being saved on this host. Try again after it finishes.'
-        : 'Antigravity account settings could not be confirmed on this host. Restart Orca on this host, then try again.'
+      'Antigravity account settings are being saved on this host. Try again after it finishes.'
     )
   }
 }

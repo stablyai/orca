@@ -64,9 +64,11 @@ async function launchFrom(store: Profile['store']) {
 it('refuses an uncertain Store candidate through retries and host launch until loading committed state anew', async () => {
   const { store, authority, readState } = await fixture()
   const stopped = vi.fn(async () => {})
-  const error = failWriteIndeterminately(authority)
+  failWriteIndeterminately(authority)
   try {
-    await expect(applyAntigravityChatAuthConfig(store, enterprise, stopped)).rejects.toBe(error)
+    await expect(applyAntigravityChatAuthConfig(store, enterprise, stopped)).rejects.toMatchObject({
+      code: 'antigravity_account_settings_unconfirmed'
+    })
     expect(store.getSettings().antigravityChatAuth).toEqual(enterprise)
     expect(readState().settings.antigravityChatAuth).toBeUndefined()
     stopped.mockClear()
@@ -92,7 +94,7 @@ it('refuses an uncertain Store candidate through retries and host launch until l
     })
     const failure = await launchFrom(store).catch((cause: unknown) => cause)
     expect(antigravitySignInFailure(failure)).toBe(
-      'Antigravity account settings could not be confirmed on this host. Restart Orca on this host, then try again.'
+      "Orca couldn't finish saving your Antigravity sign-in settings. Restart Orca on this host, then try again."
     )
   } finally {
     vi.restoreAllMocks()
@@ -128,6 +130,33 @@ it('keeps confirmed auth usable through unrelated active or faulted writes and r
     await withReopenedProfileStore(readState(), 'confirmed-auth.json', async (reopened) => {
       expect(readAntigravityChatAuthConfig(reopened)).toEqual(enterprise)
     })
+  } finally {
+    vi.restoreAllMocks()
+  }
+})
+
+it('keeps a rolled-back save retryable and publishes the next successful attempt', async () => {
+  const { store, authority } = await fixture()
+  const failure = new ProfileStateWriterError(
+    'profile-state-write-failed',
+    'Disk full',
+    'known-failure'
+  )
+  vi.spyOn(authority, 'writeSerializedDomains').mockRejectedValueOnce(failure)
+  vi.spyOn(authority, 'writeCompleteSerializedDomains').mockRejectedValueOnce(failure)
+  try {
+    await expect(applyAntigravityChatAuthConfig(store, enterprise, async () => {})).rejects.toBe(
+      failure
+    )
+    expect(readAntigravityChatAuthConfig(store)).toEqual({ method: 'oauth-personal' })
+    await expect(launchFrom(store)).resolves.toMatchObject({
+      antigravityChatAuth: { method: 'oauth-personal' }
+    })
+    vi.restoreAllMocks()
+    await expect(
+      applyAntigravityChatAuthConfig(store, enterprise, async () => {})
+    ).resolves.toEqual(enterprise)
+    expect(readAntigravityChatAuthConfig(store)).toEqual(enterprise)
   } finally {
     vi.restoreAllMocks()
   }

@@ -278,14 +278,14 @@ export function AntigravityChatSignInRow(props: {
     }),
     disabled: props.disabled
   })
-  const { line, alert, copy, copyLabel, url } = signIn
+  const { line, copy, copyLabel, url } = signIn
   return (
     <div className="space-y-2">
       <AntigravityChatAuthForm
         owner={props.owner}
         disabled={props.disabled || signIn.ownFlow}
         onSignIn={signIn.start}
-        actionError={signIn.alert}
+        signInError={signIn.alert}
         hostLabel={props.label}
         heading={
           <div>
@@ -303,11 +303,11 @@ export function AntigravityChatSignInRow(props: {
             <div className="min-w-0 flex-1">
               {/* Reserve line height so the host’s answer cannot shift layout. */}
               <p role="status" className="mt-1 min-h-4 break-words text-xs text-muted-foreground">
-                {!alert ? signIn.lineForAuth(auth) : line}
-                {line && alert ? ' ' : null}
-                {alert && (
+                {!auth.alert ? signIn.lineForAuth(auth) : line}
+                {line && auth.alert ? ' ' : null}
+                {auth.alert && (
                   <span role="alert" className="text-destructive">
-                    {alert}
+                    {auth.alert}
                   </span>
                 )}
               </p>

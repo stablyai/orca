@@ -43,16 +43,14 @@ export function AntigravityProviderSignInArea(props: {
     ),
     disabled: antigravityChatSignInBlocked(props.install)
   })
-  const { alert, copy, copyLabel, ownFlow, url } = signIn
-  // A settled failure says only why; a running sign-in keeps its step beside a copy failure.
-  const line = alert && !ownFlow ? null : signIn.line
+  const { copy, copyLabel, ownFlow, url } = signIn
   return (
     <div className="space-y-2">
       <AntigravityChatAuthForm
         owner={props.owner}
         disabled={antigravityChatSignInBlocked(props.install) || signIn.ownFlow}
         onSignIn={signIn.start}
-        actionError={signIn.alert}
+        signInError={signIn.alert}
         hostLabel={props.label}
         heading={
           <div>
@@ -78,11 +76,11 @@ export function AntigravityProviderSignInArea(props: {
               >
                 {ownFlow ? <LoadingSpinner className="size-3 shrink-0" /> : null}
                 <span className="min-w-0 break-words">
-                  {!alert ? signIn.lineForAuth(auth) : line}
-                  {line && alert ? ' ' : null}
-                  {alert && (
+                  {!auth.alert ? signIn.lineForAuth(auth) : ownFlow ? signIn.line : null}
+                  {ownFlow && signIn.line && auth.alert ? ' ' : null}
+                  {auth.alert && (
                     <span role="alert" className="text-destructive">
-                      {alert}
+                      {auth.alert}
                     </span>
                   )}
                 </span>

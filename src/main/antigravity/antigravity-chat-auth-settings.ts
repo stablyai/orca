@@ -57,6 +57,9 @@ export function applyAntigravityChatAuthConfig(
       antigravityChatSignIn.set({ auth: 'unknown', flow: null })
       agentModelCatalogStore.expireAgent('antigravity')
       return next
+    }).catch((error: unknown) => {
+      assertAntigravityChatAuthPublished(store.getSettings().antigravityChatAuth)
+      throw error
     })
   )
 }

@@ -1,4 +1,5 @@
 import {
+  antigravityChatSignInRunning,
   readAntigravityChatSignInSnapshot,
   subscribeAntigravityChatSignIns
 } from '@/runtime/antigravity-chat-sign-in-status'
@@ -9,6 +10,7 @@ import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/structur
 import { ANTIGRAVITY_CHAT_AUTH_CONFIG_RUNTIME_CAPABILITY } from '../../../../shared/account-runtime-capabilities'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
+  isAntigravityChatAuthUnconfirmed,
   resolveAntigravityChatAuthConfig,
   type AntigravityChatAuthConfig
 } from '../../../../shared/antigravity-chat-auth-config'
@@ -17,14 +19,20 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 
-type AuthAction = { disabled: boolean; start: () => void; hint: string | null; reauth: boolean }
+type AuthAction = {
+  disabled: boolean
+  start: () => void
+  hint: string | null
+  reauth: boolean
+  alert: string | null
+}
 type AuthFormProps = {
   owner: RuntimeClientTarget
   disabled: boolean
   onSignIn: () => void
   heading: ReactNode
   hostLabel: string
-  actionError?: string | null
+  signInError?: string | null
   children: (action: AuthAction) => ReactNode
 }
 
@@ -34,7 +42,7 @@ export function AntigravityChatAuthForm({
   onSignIn,
   heading,
   hostLabel,
-  actionError,
+  signInError,
   children
 }: AuthFormProps): React.JSX.Element | null {
   const capability = useStructuredAgentSessionHostCapabilityState(
@@ -45,7 +53,13 @@ export function AntigravityChatAuthForm({
     return (
       <>
         {heading}
-        {children({ disabled: false, start: onSignIn, hint: null, reauth: false })}
+        {children({
+          disabled: false,
+          start: onSignIn,
+          hint: null,
+          reauth: false,
+          alert: signInError ?? null
+        })}
       </>
     )
   }
@@ -59,7 +73,7 @@ export function AntigravityChatAuthForm({
       onSignIn={onSignIn}
       heading={heading}
       hostLabel={hostLabel}
-      actionError={actionError}
+      signInError={signInError}
     >
       {children}
     </AuthForm>
@@ -73,7 +87,7 @@ function AuthForm({
   onSignIn,
   heading,
   hostLabel,
-  actionError,
+  signInError,
   children
 }: AuthFormProps & { supported: boolean }): React.JSX.Element {
   const id = useId()
@@ -98,7 +112,14 @@ function AuthForm({
   const [project, setProject] = useState('')
   const [location, setLocation] = useState('')
   const [pending, setPending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<{
+    message: string
+    recovery: 'reload' | 'restart' | null
+  } | null>(null)
+  const [loading, setLoading] = useState(false)
+  const active =
+    observation.kind === 'known' && antigravityChatSignInRunning(observation.state.flow)
+  const unavailable = error?.recovery === 'reload' || error?.recovery === 'restart'
   const [attempt, setAttempt] = useState(0)
   const environmentId = owner.kind === 'environment' ? owner.environmentId : null
   useEffect(() => {
@@ -106,12 +127,14 @@ function AuthForm({
       return
     }
     let current = true
+    setLoading(true)
     const read = reads.current
     const target: RuntimeClientTarget =
       environmentId === null ? { kind: 'local' } : { kind: 'environment', environmentId }
     void callAntigravityChatAuthConfig(target).then(
       (config) => {
         if (current && read === reads.current) {
+          setLoading(false)
           setLoaded(true)
           if (!edited.current) {
             if (observation.kind === 'known' && observation.state.auth === 'signedIn') {
@@ -124,17 +147,27 @@ function AuthForm({
           setError(
             config
               ? null
-              : 'Choose an Antigravity account type and enter its Google Cloud project and location.'
+              : {
+                  message:
+                    'Choose an Antigravity account type and enter its Google Cloud project and location.',
+                  recovery: null
+                }
           )
         }
       },
       (cause: unknown) => {
         if (current && read === reads.current) {
-          setError(
-            cause instanceof Error
-              ? cause.message
-              : 'Antigravity account settings could not be loaded.'
-          )
+          setLoading(false)
+          setError({
+            message:
+              isAntigravityChatAuthUnconfirmed(cause) && cause instanceof Error
+                ? cause.message
+                : translate(
+                    'accounts.antigravity.settingsLoadFailed',
+                    "Orca couldn't load your Antigravity sign-in settings. Try again."
+                  ),
+            recovery: isAntigravityChatAuthUnconfirmed(cause) ? 'restart' : 'reload'
+          })
         }
       }
     )
@@ -154,15 +187,17 @@ function AuthForm({
   } catch {
     // Incomplete Enterprise fields remain editable without changing the host's saved method.
   }
-  const blocked = disabled || pending || preparing || !loaded
+  const blocked = disabled || pending || preparing || !loaded || unavailable
   function save(value: unknown): Promise<boolean> {
     let config: AntigravityChatAuthConfig
     try {
       config = resolveAntigravityChatAuthConfig(value)
     } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : 'Enter a Google Cloud project and location.'
-      )
+      setError({
+        message:
+          cause instanceof Error ? cause.message : 'Enter a Google Cloud project and location.',
+        recovery: null
+      })
       return Promise.resolve(false)
     }
     const key = JSON.stringify(config)
@@ -187,11 +222,16 @@ function AuthForm({
       })
       .catch((cause: unknown) => {
         if (mounted.current) {
-          setError(
-            cause instanceof Error
-              ? cause.message
-              : 'Antigravity account settings could not be saved.'
-          )
+          setError({
+            message:
+              isAntigravityChatAuthUnconfirmed(cause) && cause instanceof Error
+                ? cause.message
+                : translate(
+                    'accounts.antigravity.settingsSaveFailed',
+                    "Orca couldn't save your Antigravity sign-in settings. Try again."
+                  ),
+            recovery: isAntigravityChatAuthUnconfirmed(cause) ? 'restart' : null
+          })
         }
         return false
       })
@@ -205,7 +245,7 @@ function AuthForm({
     return result
   }
   function start(): void {
-    if (starting.current || disabled || !loaded) {
+    if (starting.current || disabled || !loaded || unavailable) {
       return
     }
     starting.current = true
@@ -224,7 +264,7 @@ function AuthForm({
       })
   }
   const commitText = () => {
-    if (edited.current) {
+    if (edited.current && !blocked) {
       void save(draft())
     }
   }
@@ -306,47 +346,54 @@ function AuthForm({
             </div>
           </div>
         )}
-        {error && error !== actionError && (
+        {error && !active && (
           <p role="alert" className="text-xs text-destructive">
-            {error}
+            {error.message}
           </p>
         )}
-        {error && !loaded && (
-          <Button size="xs" variant="outline" onClick={() => setAttempt((value) => value + 1)}>
+        {error?.recovery === 'reload' && !active && (
+          <Button
+            size="xs"
+            variant="outline"
+            disabled={loading}
+            onClick={() => setAttempt((value) => value + 1)}
+          >
             {translate('common.retry', 'Retry')}
           </Button>
         )}
       </div>
-      {children({
-        disabled: disabled || !loaded || !valid || preparing,
-        start,
-        reauth: authenticatedMethod !== null && authenticatedMethod !== method,
-        hint:
-          !loaded || (method !== 'oauth-business' && method !== 'oauth-personal')
-            ? null
-            : authenticatedMethod !== null && authenticatedMethod !== method
-              ? translate(
-                  'accounts.antigravity.signInAgainWith',
-                  'Sign in again to use {{method}}.',
-                  {
-                    method:
-                      method === 'oauth-business'
-                        ? translate('accounts.antigravity.enterprise', 'Gemini Enterprise')
-                        : translate('accounts.antigravity.personal', 'Google account')
-                  }
-                )
-              : translate(
-                  'accounts.antigravity.signInWith',
-                  'Signs in with {{method}} on {{host}}.',
-                  {
-                    host: hostLabel,
-                    method:
-                      method === 'oauth-business'
-                        ? translate('accounts.antigravity.enterprise', 'Gemini Enterprise')
-                        : translate('accounts.antigravity.personal', 'Google account')
-                  }
-                )
-      })}
+      {(!unavailable || active) &&
+        children({
+          alert: error && !active ? null : (signInError ?? null),
+          disabled: disabled || !loaded || !valid || preparing || unavailable,
+          start,
+          reauth: authenticatedMethod !== null && authenticatedMethod !== method,
+          hint:
+            !loaded || (method !== 'oauth-business' && method !== 'oauth-personal')
+              ? null
+              : authenticatedMethod !== null && authenticatedMethod !== method
+                ? translate(
+                    'accounts.antigravity.signInAgainWith',
+                    'Sign in again to use {{method}}.',
+                    {
+                      method:
+                        method === 'oauth-business'
+                          ? translate('accounts.antigravity.enterprise', 'Gemini Enterprise')
+                          : translate('accounts.antigravity.personal', 'Google account')
+                    }
+                  )
+                : translate(
+                    'accounts.antigravity.signInWith',
+                    'Signs in with {{method}} on {{host}}.',
+                    {
+                      host: hostLabel,
+                      method:
+                        method === 'oauth-business'
+                          ? translate('accounts.antigravity.enterprise', 'Gemini Enterprise')
+                          : translate('accounts.antigravity.personal', 'Google account')
+                    }
+                  )
+        })}
     </>
   )
 }
