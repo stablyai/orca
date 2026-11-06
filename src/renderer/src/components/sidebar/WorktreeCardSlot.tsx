@@ -5,7 +5,9 @@ import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
 import { translate } from '@/i18n/i18n'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
 import { cn } from '@/lib/utils'
-import type { SlotSignal } from './worktree-card-slot-signal'
+import type { SlotException, SlotSignal } from './worktree-card-slot-signal'
+import type { SlotTarget } from './worktree-card-slot-targets'
+import { SlotJumpTrigger, SlotKindGlyph } from './worktree-card-slot-jump'
 
 function formatSlotTime(at: number | null, now: number): string {
   return at === null ? '' : formatShortTimeAgo(at, now)
@@ -38,14 +40,14 @@ export function WorktreeCardSlot({
   signal,
   now,
   stale = false,
-  compact = false
+  timeTone
 }: {
   signal: SlotSignal
   now: number
   /** The host is offline: show what was last seen, never a live state. */
   stale?: boolean
-  /** Title row: needs/failed as a glyph so long names keep their width; the clickable parent labels it. */
-  compact?: boolean
+  /** A plain time beside an unread or working glyph reads like that state's own time. */
+  timeTone?: 'unread' | 'working'
 }): React.JSX.Element | null {
   if (signal.kind === 'quiet') {
     return null
@@ -53,18 +55,7 @@ export function WorktreeCardSlot({
   const base =
     'inline-flex min-w-[22px] shrink-0 items-center justify-end gap-1 whitespace-nowrap text-3xs leading-none tabular-nums'
   const label = slotLabel(signal)
-  // A compact exception sits inside a labelled button; offline and times keep their tooltip.
-  const labelledByParent =
-    compact &&
-    !stale &&
-    (signal.kind === 'needs' ||
-      signal.kind === 'failed' ||
-      signal.kind === 'unread' ||
-      signal.kind === 'working')
-  const slotProps = {
-    'data-worktree-card-slot': signal.kind,
-    title: labelledByParent ? undefined : label
-  }
+  const slotProps = { 'data-worktree-card-slot': signal.kind, title: label }
 
   if (stale || signal.kind === 'offline') {
     return (
@@ -80,14 +71,6 @@ export function WorktreeCardSlot({
 
   switch (signal.kind) {
     case 'needs':
-      if (compact) {
-        return (
-          <span {...slotProps} className={cn(base, 'font-semibold text-agent-question-text')}>
-            <AgentQuestionIcon className="size-2.5 shrink-0" />
-            {signal.count > 1 ? signal.count : null}
-          </span>
-        )
-      }
       return (
         <span
           {...slotProps}
@@ -106,13 +89,6 @@ export function WorktreeCardSlot({
         </span>
       )
     case 'failed':
-      if (compact) {
-        return (
-          <span {...slotProps} className={cn(base, 'text-destructive')}>
-            <CircleX className="size-2.5 shrink-0" aria-hidden="true" />
-          </span>
-        )
-      }
       return (
         <span {...slotProps} className={cn(base, 'font-semibold text-destructive')}>
           {/* A crossed circle, not a red dot, so failed never reads like the blue unread dot. */}
@@ -140,9 +116,65 @@ export function WorktreeCardSlot({
       )
     case 'time':
       return (
-        <span {...slotProps} className={cn(base, 'text-muted-foreground/70')}>
+        <span
+          {...slotProps}
+          className={cn(
+            base,
+            timeTone === 'unread'
+              ? 'font-medium text-foreground'
+              : timeTone === 'working'
+                ? 'text-muted-foreground'
+                : 'text-muted-foreground/70'
+          )}
+        >
           {formatSlotTime(signal.at, now)}
         </span>
       )
   }
+}
+
+function titleTimeTone(exceptions: readonly SlotException[]): 'unread' | 'working' | undefined {
+  if (exceptions.some((exception) => exception.kind === 'unread')) {
+    return 'unread'
+  }
+  return exceptions.some((exception) => exception.kind === 'working') ? 'working' : undefined
+}
+
+/** Title row: a glyph per exception, most urgent first, then the time; each glyph opens its sources. */
+export function WorktreeCardTitleSlot({
+  exceptions,
+  at,
+  now,
+  resolveTargets
+}: {
+  exceptions: readonly SlotException[]
+  at: number | null
+  now: number
+  resolveTargets: (kind: SlotException['kind']) => SlotTarget[]
+}): React.JSX.Element {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-0.5">
+      {exceptions.map((exception) => (
+        <SlotJumpTrigger
+          key={exception.kind}
+          label={slotLabel(exception) ?? ''}
+          resolveTargets={() => resolveTargets(exception.kind)}
+          className="-my-0.5 inline-flex h-4 min-w-3.5 items-center justify-center px-0.5"
+        >
+          <span data-worktree-card-slot={exception.kind} className="inline-flex">
+            <SlotKindGlyph
+              kind={exception.kind}
+              monitoring={exception.kind === 'working' && exception.monitoring === true}
+              spinnerClassName="size-[9px]"
+            />
+          </span>
+        </SlotJumpTrigger>
+      ))}
+      <WorktreeCardSlot
+        signal={{ kind: 'time', at }}
+        now={now}
+        timeTone={titleTimeTone(exceptions)}
+      />
+    </span>
+  )
 }

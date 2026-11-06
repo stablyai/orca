@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -18,7 +18,12 @@ import {
   selectRetainedAgentEntriesForWorktree
 } from './workspace-card/activity/worktree-agent-row-selectors'
 import { projectSlotAgentLine } from './worktree-card-slot-agent-signals'
-import { slotExceptionFor, type SlotSignal } from './worktree-card-slot-signal'
+import {
+  slotExceptionFor,
+  slotExceptionsFor,
+  type SlotException,
+  type SlotSignal
+} from './worktree-card-slot-signal'
 import {
   slotTargetsOfKind,
   workspaceUnreadTarget,
@@ -121,15 +126,84 @@ function splitIdentities(key: string): HostScopedWorktreeKey[] {
   return key ? (key.split('\n') as HostScopedWorktreeKey[]) : []
 }
 
-export function useCollapsedLineageSlot(
+/** Flat so `useShallow` can compare it across store updates; one field per exception. */
+type LineageSlotRecord = {
+  needs: number
+  failed: boolean
+  unread: boolean
+  unreadAt: number | null
+  working: boolean
+  workingAt: number | null
+  monitoring: boolean
+}
+
+function toLineageSlotRecord(exceptions: readonly SlotException[]): LineageSlotRecord {
+  const record: LineageSlotRecord = {
+    needs: 0,
+    failed: false,
+    unread: false,
+    unreadAt: null,
+    working: false,
+    workingAt: null,
+    monitoring: false
+  }
+  for (const exception of exceptions) {
+    switch (exception.kind) {
+      case 'needs':
+        record.needs = exception.count
+        break
+      case 'failed':
+        record.failed = true
+        break
+      case 'unread':
+        record.unread = true
+        record.unreadAt = exception.at
+        break
+      case 'working':
+        record.working = true
+        record.workingAt = exception.at
+        record.monitoring = exception.monitoring === true
+        break
+    }
+  }
+  return record
+}
+
+function fromLineageSlotRecord(record: LineageSlotRecord): SlotException[] {
+  const exceptions: SlotException[] = []
+  if (record.needs > 0) {
+    exceptions.push({ kind: 'needs', count: record.needs })
+  }
+  if (record.failed) {
+    exceptions.push({ kind: 'failed' })
+  }
+  if (record.unread) {
+    exceptions.push({ kind: 'unread', at: record.unreadAt, manual: false })
+  }
+  if (record.working) {
+    exceptions.push({ kind: 'working', at: record.workingAt, monitoring: record.monitoring })
+  }
+  return exceptions
+}
+
+const EMPTY_LINEAGE_SLOT_RECORD = toLineageSlotRecord([])
+
+/** Every exception inside collapsed child workspaces, most urgent first. */
+export function useCollapsedLineageSlots(
   descendants: readonly HostScopedWorktreeKey[]
-): SlotSignal | null {
+): SlotException[] {
   const descendantKey = descendants.join('\n')
   const selector = useCallback(
-    (state: AppState) => selectCollapsedLineageSlot(state, splitIdentities(descendantKey)),
+    (state: AppState) =>
+      descendantKey
+        ? toLineageSlotRecord(
+            slotExceptionsFor(collectLineageSlotTargets(state, splitIdentities(descendantKey)))
+          )
+        : EMPTY_LINEAGE_SLOT_RECORD,
     [descendantKey]
   )
-  return useAppStore(useShallow(selector))
+  const record = useAppStore(useShallow(selector))
+  return useMemo(() => fromLineageSlotRecord(record), [record])
 }
 
 /** The most recent activity among child workspaces, so a parent never looks older than its children. */

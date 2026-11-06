@@ -249,6 +249,18 @@ function worktreesFor(seeds: readonly WorkspaceSeed[], now: number): Map<string,
   return new Map(seeds.map((seed) => [seed.id, makeWorktree(seed, now)]))
 }
 
+function seedOpenCards(ids: readonly string[]): void {
+  const none = new Set<string>()
+  ids.forEach((id) =>
+    agentExpansion.seedWorktreeAgentExpansionStateForTests(id, {
+      expandedLineageParents: none,
+      expandedIdleChildGroups: none,
+      compactRootListExpanded: false,
+      cardOpen: true
+    })
+  )
+}
+
 const now = Date.now()
 const flatWorktrees = worktreesFor(FLAT, now)
 const nestedWorktrees = worktreesFor(NESTED, now)
@@ -272,13 +284,19 @@ function FlatList(): React.JSX.Element {
 
 export const exceptions = defineFixture({
   width: SIDEBAR_WIDTH,
-  setup: () => seedWorkspaces(FLAT, now),
+  setup: () => {
+    seedWorkspaces(FLAT, now)
+    seedOpenCards(['wt-needs'])
+  },
   render: () => <FlatList />
 })
 
 export const nesting = defineFixture({
   width: SIDEBAR_WIDTH,
-  setup: () => seedWorkspaces(NESTED, now),
+  setup: () => {
+    seedWorkspaces(NESTED, now)
+    seedOpenCards(['wt-parent', 'wt-child'])
+  },
   render: () => (
     <SidebarFrame>
       <Card
@@ -313,7 +331,8 @@ export const agentsExpanded = defineFixture({
     const state = {
       expandedLineageParents: none,
       expandedIdleChildGroups: none,
-      compactRootListExpanded: true
+      compactRootListExpanded: true,
+      cardOpen: true
     }
     FLAT.forEach((seed) => agentExpansion.seedWorktreeAgentExpansionStateForTests(seed.id, state))
   },

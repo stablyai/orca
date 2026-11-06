@@ -1,9 +1,11 @@
 import React, { useCallback, useMemo } from 'react'
+import { ChevronRight } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import type { HostScopedWorktreeKey } from '../../../../shared/worktree/host-qualified-identity'
 import { useNow } from '@/hooks/use-now'
+import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { canConnectSshStatus, isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 import { useAppStore } from '@/store'
@@ -24,10 +26,10 @@ import type { WorktreeCardPresentation } from './workspace-card/surface/worktree
 import { WorktreeCardSecondaryRows } from './workspace-card/surface/worktree-card-secondary-rows'
 import {
   collectLineageSlotTargets,
-  useCollapsedLineageSlot,
+  useCollapsedLineageSlots,
   useLineageLatestAt
 } from './worktree-card-slot-rollup'
-import { titleRowSlot } from './worktree-card-slot-signal'
+import { titleRowSlot, type SlotException } from './worktree-card-slot-signal'
 import { buildSlotAgentSignals, type SlotAgentSignals } from './worktree-card-slot-agent-signals'
 import {
   WorktreeCardDeleteQuickAction,
@@ -35,10 +37,8 @@ import {
 } from './worktree-card-title-actions'
 import { getWorktreeCardHost, WorktreeCardHostName } from './worktree-card-host-name'
 import { WorktreeCardChildrenChip } from './worktree-card-children-chip'
-import { slotLabel, WorktreeCardSlot } from './WorktreeCardSlot'
-import { SlotJumpTrigger } from './worktree-card-slot-jump'
+import { WorktreeCardSlot, WorktreeCardTitleSlot } from './WorktreeCardSlot'
 import {
-  slotTargetKind,
   slotTargetsFromAgentLines,
   slotTargetsOfKind,
   workspaceUnreadTarget
@@ -97,10 +97,14 @@ function SshHostSlot({
 /** Experimental 2.0 card: name and one right-hand slot, then one line per agent. */
 export function WorktreeCardSlotContent({
   card,
-  presentation
+  presentation,
+  open: openRequested,
+  onToggleOpen
 }: {
   card: WorktreeCardController
   presentation: WorktreeCardPresentation
+  open: boolean
+  onToggleOpen: () => void
 }): React.JSX.Element {
   const {
     worktree,
@@ -136,8 +140,11 @@ export function WorktreeCardSlotContent({
   const pickingSendTarget = useAppStore(
     (s) => selectSendTargetControlInputs(s, worktree.id).targetMode !== null
   )
+  const open = openRequested || pickingSendTarget
   const descendants = lineageDescendantIdentities ?? NO_DESCENDANTS
-  const collapsedLineage = useCollapsedLineageSlot(lineageCollapsed ? descendants : NO_DESCENDANTS)
+  // A closed card hides its children too, so the title slot speaks for them.
+  const lineageHidden = lineageCollapsed || !open
+  const collapsedLineage = useCollapsedLineageSlots(lineageHidden ? descendants : NO_DESCENDANTS)
   const lineageLatestAt = useLineageLatestAt(descendants)
   // Several agents fold into the 1.0 summary row; the title slot speaks for them until expanded.
   const { compactRootListExpanded: agentsExpanded, toggleCompactRootList } =
@@ -146,7 +153,9 @@ export function WorktreeCardSlotContent({
     dispatchSuppressScrollAdjustment()
     toggleCompactRootList()
   }, [toggleCompactRootList])
-  const showLines = showInlineAgentList && lines.length > 0
+  const hasLines = showInlineAgentList && lines.length > 0
+  const canOpen = hasLines || showLineageChildChip
+  const showLines = open && hasLines
   const foldsAgents = showLines && lines.length > 1 && !pickingSendTarget
   const ownLinesShown = showLines && (!foldsAgents || agentsExpanded)
   const agentUnread = signals.allSignals.some((signal) => signal.kind === 'unread')
@@ -162,35 +171,31 @@ export function WorktreeCardSlotContent({
     lastActivityAt: worktree.lastActivityAt > 0 ? worktree.lastActivityAt : null,
     lineageLatestAt
   })
-  const titleTargetKind = offline ? null : slotTargetKind(titleSlot)
   const worktreeLastActivityAt = worktree.lastActivityAt > 0 ? worktree.lastActivityAt : null
   // Only what the title row speaks for: hidden agent lines, collapsed children, the workspace's own mark.
   const workspaceUnreadShown = workspaceUnread !== null
-  const resolveTitleTargets = useCallback(() => {
-    if (!titleTargetKind) {
-      return []
-    }
-    return slotTargetsOfKind(
-      [
-        ...(ownLinesShown ? [] : slotTargetsFromAgentLines(worktree.id, signals)),
-        ...(lineageCollapsed ? collectLineageSlotTargets(useAppStore.getState(), descendants) : []),
-        ...(workspaceUnreadShown
-          ? [workspaceUnreadTarget(worktree.id, worktreeLastActivityAt)]
-          : [])
-      ],
-      titleTargetKind
-    )
-  }, [
-    descendants,
-    lineageCollapsed,
-    ownLinesShown,
-    signals,
-    titleTargetKind,
-    workspaceUnreadShown,
-    worktree.id,
-    worktreeLastActivityAt
-  ])
-  const titleSlotElement = <WorktreeCardSlot signal={titleSlot} now={now} compact />
+  const resolveTitleTargets = useCallback(
+    (kind: SlotException['kind']) =>
+      slotTargetsOfKind(
+        [
+          ...(ownLinesShown ? [] : slotTargetsFromAgentLines(worktree.id, signals)),
+          ...(lineageHidden ? collectLineageSlotTargets(useAppStore.getState(), descendants) : []),
+          ...(workspaceUnreadShown
+            ? [workspaceUnreadTarget(worktree.id, worktreeLastActivityAt)]
+            : [])
+        ],
+        kind
+      ),
+    [
+      descendants,
+      lineageHidden,
+      ownLinesShown,
+      signals,
+      workspaceUnreadShown,
+      worktree.id,
+      worktreeLastActivityAt
+    ]
+  )
   const showDetailsRow =
     settings?.worktreeCardDetailsRow === true &&
     (presentation.hasMetaRow || presentation.detailsAndPorts !== null)
@@ -234,7 +239,7 @@ export function WorktreeCardSlotContent({
       ) : (
         agentLines
       )}
-      {showLineageChildChip ? (
+      {open && showLineageChildChip ? (
         <div className="mt-[3px] flex min-w-0 pr-1.5 pl-3.5">
           <WorktreeCardChildrenChip
             childIdentities={lineageChildIdentities}
@@ -248,9 +253,19 @@ export function WorktreeCardSlotContent({
     </>
   )
 
+  const openToggleLabel = open
+    ? translate('sidebar.cardSlot.closeCard', 'Hide workspace activity')
+    : translate('sidebar.cardSlot.openCard', 'Show workspace activity')
+  // The line ties everything below the title to this card; a lone title row has nothing to tie.
+  const showThread = showDetailsRow || (open && canOpen)
+
   return (
     <div
-      className="flex w-full min-w-0 flex-col overflow-hidden"
+      className={cn(
+        'flex w-full min-w-0 flex-col overflow-hidden',
+        showThread && 'worktree-card-slot-thread'
+      )}
+      data-worktree-card-open={open || undefined}
       data-worktree-card-parent-content=""
       data-worktree-card-style="experimental-2"
     >
@@ -284,17 +299,44 @@ export function WorktreeCardSlotContent({
               {showDeleteQuickAction ? <WorktreeCardDeleteQuickAction card={card} /> : null}
               {sshDown && host ? (
                 <SshHostSlot card={card} label={host.label} />
-              ) : titleTargetKind ? (
-                <SlotJumpTrigger
-                  resolveTargets={resolveTitleTargets}
-                  label={slotLabel(titleSlot) ?? ''}
-                  className="-mx-1 -my-0.5 px-1 py-0.5"
-                >
-                  {titleSlotElement}
-                </SlotJumpTrigger>
+              ) : titleSlot.kind === 'offline' ? (
+                <WorktreeCardSlot signal={titleSlot} now={now} />
               ) : (
-                titleSlotElement
+                <WorktreeCardTitleSlot
+                  exceptions={titleSlot.exceptions}
+                  at={titleSlot.at}
+                  now={now}
+                  resolveTargets={resolveTitleTargets}
+                />
               )}
+              {canOpen ? (
+                <button
+                  type="button"
+                  className={cn(
+                    '-mr-0.5 inline-flex size-3.5 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-opacity hover:text-foreground focus-visible:opacity-100 disabled:pointer-events-none',
+                    open
+                      ? 'opacity-100'
+                      : 'opacity-0 can-hover:group-hover/worktree-card:opacity-100'
+                  )}
+                  aria-label={openToggleLabel}
+                  aria-expanded={open}
+                  disabled={pickingSendTarget}
+                  onPointerDown={card.stopQuickActionPointerPropagation}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    dispatchSuppressScrollAdjustment()
+                    onToggleOpen()
+                  }}
+                >
+                  <ChevronRight
+                    className={cn(
+                      'size-3 transition-transform motion-reduce:transition-none',
+                      open && 'rotate-90'
+                    )}
+                    aria-hidden
+                  />
+                </button>
+              ) : null}
             </span>
           </div>
           {showDetailsRow ? (

@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react'
-import { CircleX } from 'lucide-react'
+import { Activity, CircleX } from 'lucide-react'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
 import {
@@ -20,14 +20,27 @@ import type { SlotLineKind } from './worktree-card-slot-signal'
 import { openSlotTarget, type SlotTarget } from './worktree-card-slot-targets'
 
 /** The slot's glyphs, so a count or menu item reads the same as the row it stands for. */
-export function SlotKindGlyph({ kind }: { kind: SlotLineKind }): React.JSX.Element | null {
+export function SlotKindGlyph({
+  kind,
+  monitoring = false,
+  spinnerClassName = 'size-2'
+}: {
+  kind: SlotLineKind
+  /** Working, but watching rather than taking turns. */
+  monitoring?: boolean
+  spinnerClassName?: string
+}): React.JSX.Element | null {
   switch (kind) {
     case 'needs':
       return <AgentQuestionIcon className="size-2.5 shrink-0" />
     case 'failed':
       return <CircleX className="size-2.5 shrink-0 text-destructive" aria-hidden />
     case 'working':
-      return <AgentWorkingSpinner className="size-2 border-[1.5px]" />
+      return monitoring ? (
+        <Activity className="size-2.5 shrink-0 text-agent-working" aria-hidden />
+      ) : (
+        <AgentWorkingSpinner className={cn(spinnerClassName, 'border-[1.5px]')} />
+      )
     case 'unread':
       return <span className="size-1.5 shrink-0 rounded-full bg-unread" />
     case 'seen':

@@ -5,6 +5,8 @@ export type WorktreeAgentExpansionState = {
   expandedLineageParents: ReadonlySet<string>
   expandedIdleChildGroups: ReadonlySet<string>
   compactRootListExpanded: boolean
+  // 2.0 cards fold to their title (and details) row until opened.
+  cardOpen: boolean
 }
 
 const EMPTY_PANE_KEYS: ReadonlySet<string> = new Set()
@@ -12,7 +14,8 @@ const EMPTY_PANE_KEYS: ReadonlySet<string> = new Set()
 const DEFAULT_EXPANSION_STATE: WorktreeAgentExpansionState = {
   expandedLineageParents: EMPTY_PANE_KEYS,
   expandedIdleChildGroups: EMPTY_PANE_KEYS,
-  compactRootListExpanded: false
+  compactRootListExpanded: false,
+  cardOpen: false
 }
 
 // Retain disclosures across virtualizer/lineage remounts in a bounded renderer-session cache; reload resets them.
@@ -38,6 +41,7 @@ function persistExpansionState(worktreeId: string, state: WorktreeAgentExpansion
   expansionByWorktreeId.delete(worktreeId)
   if (
     state.compactRootListExpanded ||
+    state.cardOpen ||
     state.expandedLineageParents.size > 0 ||
     state.expandedIdleChildGroups.size > 0
   ) {
@@ -51,10 +55,14 @@ const expansionListeners = new Map<string, Set<() => void>>()
 /** Unfold a card's agent list from outside the card, e.g. when a rolled-up slot opens one of its agents. */
 export function expandWorktreeAgentList(worktreeId: string): void {
   const base = readExpansionState(worktreeId)
-  if (base.compactRootListExpanded) {
+  if (base.compactRootListExpanded && base.cardOpen) {
     return
   }
-  persistExpansionState(worktreeId, { ...base, compactRootListExpanded: true })
+  persistExpansionState(worktreeId, { ...base, compactRootListExpanded: true, cardOpen: true })
+  notifyExpansion(worktreeId)
+}
+
+function notifyExpansion(worktreeId: string): void {
   for (const listener of expansionListeners.get(worktreeId) ?? []) {
     listener()
   }
@@ -87,9 +95,11 @@ export type WorktreeAgentExpansionControls = {
   expandedLineageParents: ReadonlySet<string>
   expandedIdleChildGroups: ReadonlySet<string>
   compactRootListExpanded: boolean
+  cardOpen: boolean
   toggleLineageParent: (paneKey: string) => void
   toggleIdleChildGroup: (parentPaneKey: string) => void
   toggleCompactRootList: () => void
+  toggleCardOpen: () => void
 }
 
 /** Restore each worktree’s disclosures across virtualizer and sibling-lineage remounts. */
@@ -107,6 +117,8 @@ export function useWorktreeAgentExpansionState(worktreeId: string): WorktreeAgen
     (next: WorktreeAgentExpansionState) => {
       persistExpansionState(worktreeId, next)
       setRendered({ worktreeId, state: next })
+      // The surface and its content both read this state; keep every mounted reader in step.
+      notifyExpansion(worktreeId)
     },
     [worktreeId]
   )
@@ -144,13 +156,20 @@ export function useWorktreeAgentExpansionState(worktreeId: string): WorktreeAgen
     commit({ ...base, compactRootListExpanded: !base.compactRootListExpanded })
   }, [commit, worktreeId])
 
+  const toggleCardOpen = useCallback(() => {
+    const base = readExpansionState(worktreeId)
+    commit({ ...base, cardOpen: !base.cardOpen })
+  }, [commit, worktreeId])
+
   return {
     expandedLineageParents: current.expandedLineageParents,
     expandedIdleChildGroups: current.expandedIdleChildGroups,
     compactRootListExpanded: current.compactRootListExpanded,
+    cardOpen: current.cardOpen,
     toggleLineageParent,
     toggleIdleChildGroup,
-    toggleCompactRootList
+    toggleCompactRootList,
+    toggleCardOpen
   }
 }
 

@@ -155,14 +155,12 @@ export const SlotAgentLineRow = React.memo(function SlotAgentLineRow({
       <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" />
     ) : null
   ) : onDismiss ? (
-    // Time and dismiss share the slot; hover or focus swaps in the dismiss control.
-    <span className="group/dismiss grid shrink-0 items-center justify-items-end [&>*]:col-start-1 [&>*]:row-start-1">
-      <span className="transition-opacity can-hover:group-hover/slot-line:opacity-0 group-has-[:focus-visible]/dismiss:opacity-0">
-        <WorktreeCardSlot signal={slotForLine(displaySignal)} now={now} stale={offline} />
-      </span>
+    // Time and dismiss share the slot; hover or keyboard focus swaps in the dismiss control.
+    // Button comes first so the time can follow it as a `peer` without :has(); z-10 keeps it on top.
+    <span className="grid shrink-0 items-center justify-items-end [&>*]:col-start-1 [&>*]:row-start-1">
       <button
         type="button"
-        className="inline-flex items-center justify-center text-muted-foreground/70 opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 can-hover:group-hover/slot-line:opacity-100"
+        className="peer z-10 inline-flex items-center justify-center text-muted-foreground/70 opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 can-hover:group-hover/slot-line:opacity-100"
         aria-label={translate(
           'auto.components.dashboard.DashboardAgentRow.b06e13fcf7',
           'Dismiss agent'
@@ -174,6 +172,9 @@ export const SlotAgentLineRow = React.memo(function SlotAgentLineRow({
       >
         <X className="size-3" />
       </button>
+      <span className="transition-opacity peer-focus-visible:opacity-0 can-hover:group-hover/slot-line:opacity-0">
+        <WorktreeCardSlot signal={slotForLine(displaySignal)} now={now} stale={offline} />
+      </span>
     </span>
   ) : (
     <WorktreeCardSlot signal={slotForLine(displaySignal)} now={now} stale={offline} />

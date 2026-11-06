@@ -79,45 +79,53 @@ function latest(lines: readonly SlotLineSignal[]): number | null {
   return at
 }
 
-/** The exception a set of lines reports, or null when every line is quiet. */
-export function slotExceptionFor(lines: readonly SlotLineSignal[]): SlotSignal | null {
+export type SlotException = Extract<
+  SlotSignal,
+  { kind: 'needs' } | { kind: 'failed' } | { kind: 'unread' } | { kind: 'working' }
+>
+
+const SLOT_EXCEPTION_ORDER: readonly SlotException['kind'][] = [
+  'needs',
+  'failed',
+  'unread',
+  'working'
+]
+
+/** Every exception a set of lines reports, one per kind, most urgent first. */
+export function slotExceptionsFor(lines: readonly SlotLineSignal[]): SlotException[] {
+  const exceptions: SlotException[] = []
   const needs = lines.filter((line) => line.kind === 'needs').length
   if (needs > 0) {
-    return { kind: 'needs', count: needs }
+    exceptions.push({ kind: 'needs', count: needs })
   }
   if (lines.some((line) => line.kind === 'failed')) {
-    return { kind: 'failed' }
+    exceptions.push({ kind: 'failed' })
   }
   const unread = lines.filter((line) => line.kind === 'unread')
   if (unread.length > 0) {
-    return { kind: 'unread', at: latest(unread), manual: false }
+    exceptions.push({ kind: 'unread', at: latest(unread), manual: false })
   }
   const working = lines.filter((line) => line.kind === 'working')
   if (working.length > 0) {
-    return {
+    exceptions.push({
       kind: 'working',
       at: latest(working),
       monitoring: working.every((line) => line.monitoring === true)
-    }
+    })
   }
-  return null
+  return exceptions
+}
+
+/** The most urgent exception a set of lines reports, or null when every line is quiet. */
+export function slotExceptionFor(lines: readonly SlotLineSignal[]): SlotSignal | null {
+  return slotExceptionsFor(lines)[0] ?? null
 }
 
 export function slotForLine(line: SlotLineSignal): SlotSignal {
   return slotExceptionFor([line]) ?? { kind: 'time', at: line.at }
 }
 
-const SLOT_EXCEPTION_RANK: Partial<Record<SlotSignal['kind'], number>> = {
-  needs: 0,
-  failed: 1,
-  unread: 2,
-  working: 3
-}
-
-export function mergeSlotExceptions(a: SlotSignal | null, b: SlotSignal | null): SlotSignal | null {
-  if (!a || !b) {
-    return a ?? b
-  }
+function mergeSameKind(a: SlotException, b: SlotException): SlotException {
   if (a.kind === 'needs' && b.kind === 'needs') {
     return { kind: 'needs', count: a.count + b.count }
   }
@@ -127,41 +135,62 @@ export function mergeSlotExceptions(a: SlotSignal | null, b: SlotSignal | null):
   ) {
     return (b.at ?? 0) > (a.at ?? 0) ? b : a
   }
-  return (SLOT_EXCEPTION_RANK[a.kind] ?? 9) <= (SLOT_EXCEPTION_RANK[b.kind] ?? 9) ? a : b
+  return a
 }
+
+/** One exception per kind across several sources, most urgent first. */
+export function mergeSlotExceptions(
+  ...lists: readonly (readonly SlotException[])[]
+): SlotException[] {
+  const byKind = new Map<SlotException['kind'], SlotException>()
+  for (const exception of lists.flat()) {
+    const previous = byKind.get(exception.kind)
+    byKind.set(exception.kind, previous ? mergeSameKind(previous, exception) : exception)
+  }
+  return SLOT_EXCEPTION_ORDER.flatMap((kind) => byKind.get(kind) ?? [])
+}
+
+/** The title row: offline, or every exception it speaks for followed by a time. */
+export type TitleRowSlot =
+  | { kind: 'offline' }
+  | { kind: 'status'; exceptions: SlotException[]; at: number | null }
 
 /**
  * The title row speaks for exceptions the user can't see (hidden agents, collapsed children,
- * the workspace's own unread mark); otherwise it always shows the time so expanding doesn't jump.
+ * the workspace's own unread mark), and always shows the time so expanding doesn't jump.
  */
 export function titleRowSlot(args: {
   offline: boolean
   lines: readonly SlotLineSignal[]
-  collapsedLineage: SlotSignal | null
+  collapsedLineage: readonly SlotException[]
   /** Set while the workspace is unread and no visible agent line already shows it; manual = the user marked it. */
   workspaceUnread: { manual: boolean } | null
   ownLinesShown: boolean
   lastActivityAt: number | null
   lineageLatestAt?: number | null
-}): SlotSignal {
+}): TitleRowSlot {
   if (args.offline) {
     return { kind: 'offline' }
   }
-  const workspaceSignal: SlotSignal | null = args.workspaceUnread
-    ? { kind: 'unread', at: args.lastActivityAt, manual: args.workspaceUnread.manual }
-    : null
-  const hiddenLines = args.ownLinesShown ? [] : args.lines
-  const exception = mergeSlotExceptions(
-    mergeSlotExceptions(slotExceptionFor(hiddenLines), args.collapsedLineage),
+  const workspaceSignal: SlotException[] = args.workspaceUnread
+    ? [{ kind: 'unread', at: args.lastActivityAt, manual: args.workspaceUnread.manual }]
+    : []
+  const exceptions = mergeSlotExceptions(
+    slotExceptionsFor(args.ownLinesShown ? [] : args.lines),
+    args.collapsedLineage,
     workspaceSignal
   )
-  if (exception) {
-    return exception
+  // Unread and working keep their own time (when it landed, how long it has run).
+  for (const exception of exceptions) {
+    if ((exception.kind === 'unread' || exception.kind === 'working') && exception.at !== null) {
+      return { kind: 'status', exceptions, at: exception.at }
+    }
   }
   const ownAt = latest(args.lines) ?? args.lastActivityAt
   const lineageAt = args.lineageLatestAt ?? null
   return {
-    kind: 'time',
+    kind: 'status',
+    exceptions,
     at: ownAt === null || (lineageAt !== null && lineageAt > ownAt) ? lineageAt : ownAt
   }
 }
