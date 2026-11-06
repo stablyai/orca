@@ -53,6 +53,7 @@ vi.mock('../runtime/orca-runtime', () => ({
     rehydrateClientHostedBrowserPages() {}
     setAgentBrowserBridge() {}
     setEmulatorBridge() {}
+    setRecipeWorkspaceRemoval() {}
     setArtifactService() {}
     setSkillCloudService() {}
     setAccountServices() {}

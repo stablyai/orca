@@ -7,6 +7,9 @@ import {
 import type { EphemeralVmRuntimeRecord } from './ephemeral-vm-runtimes'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from './execution-host'
 
+/** Removal waits on Git deletion and the recipe's destroy script, which outlast a short RPC. */
+export const RECIPE_REMOVAL_REQUEST_TIMEOUT_MS = 600_000
+
 /** A workspace id alone can name unrelated checkouts on different hosts. */
 export function findEphemeralVmWorkspaceOwner(
   runtimes: readonly EphemeralVmRuntimeRecord[],

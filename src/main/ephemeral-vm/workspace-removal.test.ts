@@ -7,6 +7,7 @@ import {
   listEphemeralVmRuntimes
 } from '../../shared/ephemeral-vm-runtime-store'
 import {
+  assertRecipeRemovalConfirmed,
   ownsRecipeWorkspaceRemoval,
   removeRecipeWorkspace,
   type RecipeWorkspaceRemoveParams
@@ -32,7 +33,8 @@ function seed(
   mode: 'provisioned-root' | 'orca-worktree' = 'orca-worktree',
   environmentId = 'env-a',
   id = 'vm-a',
-  attached = true
+  attached = true,
+  state: Partial<{ status: 'cleanup_failed'; cleanupStatus: 'failed' }> = {}
 ) {
   upsertEphemeralVmRuntime(root, {
     id,
@@ -42,6 +44,7 @@ function seed(
     runtimeEnvironmentId: environmentId,
     status: 'running',
     cleanupStatus: 'not_started',
+    ...state,
     createdAt: 1,
     updatedAt: 1,
     recipeResult: {
@@ -77,7 +80,11 @@ describe('recipe workspace removal on the provisioning host', () => {
   it('removes the checkout on its execution host before destroying the machine', async () => {
     seed()
     await expect(removeRecipeWorkspace(root, params, ports)).resolves.toEqual({ removed: true })
-    expect(ports.call).toHaveBeenCalledWith('env-a', 'worktree.rm', { ...params, hostId: 'local' })
+    expect(ports.call).toHaveBeenCalledWith('env-a', 'worktree.rm', {
+      ...params,
+      hostId: 'local',
+      waitForBackgroundRemoval: true
+    })
     expect(ports.cleanup.mock.invocationCallOrder[0]).toBeGreaterThan(
       ports.call.mock.invocationCallOrder[0]
     )
@@ -117,7 +124,7 @@ describe('recipe workspace removal on the provisioning host', () => {
       call: vi.fn(async () => ({
         id: 'req',
         ok: true as const,
-        result: { removed: true, removing: true },
+        result: { removed: false, removing: true },
         _meta: { runtimeId: 'host' }
       }))
     }
@@ -125,6 +132,44 @@ describe('recipe workspace removal on the provisioning host', () => {
       'still being removed'
     )
     expect(ports.cleanup).not.toHaveBeenCalled()
+  })
+  it('retries only the destroy when a failed destroy already removed the checkout', async () => {
+    seed('orca-worktree', 'env-a', 'vm-a', true, {
+      status: 'cleanup_failed',
+      cleanupStatus: 'failed'
+    })
+    await expect(removeRecipeWorkspace(root, params, ports)).resolves.toEqual({ removed: true })
+    expect(ports.call).not.toHaveBeenCalled()
+    expect(ports.cleanup).toHaveBeenCalledWith('vm-a')
+  })
+  it('leaves SSH-only recipe workspaces to the ordinary removal path', () => {
+    upsertEphemeralVmRuntime(root, {
+      id: 'vm-ssh',
+      recipeId: 'sandbox',
+      repoId: 'source',
+      workspaceId,
+      sshTargetId: 'target-1',
+      status: 'running',
+      cleanupStatus: 'not_started',
+      createdAt: 1,
+      updatedAt: 1,
+      recipeResult: {
+        schemaVersion: 1,
+        connection: {
+          type: 'ssh',
+          projectRoot: '/checkout',
+          target: { host: 'host', label: 'VM', port: 22, username: 'orca' }
+        }
+      }
+    })
+    expect(ownsRecipeWorkspaceRemoval(root, { ...params, hostId: 'ssh:target-1' })).toBe(false)
+  })
+  it('refuses to destroy a provisioned-root VM unless removal is forced', () => {
+    seed('provisioned-root')
+    expect(() => assertRecipeRemovalConfirmed(root, { ...params, force: false })).toThrow(
+      /vm-a.*--force/
+    )
+    expect(() => assertRecipeRemovalConfirmed(root, params)).not.toThrow()
   })
   it('surfaces destroy failure and keeps ownership available for a retry', async () => {
     seed('provisioned-root')

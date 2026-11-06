@@ -54,8 +54,22 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
         ...(typeof request.params === 'object' && request.params !== null ? request.params : {}),
         hostId: target.id
       })
-      if (params.success && this.runtime.ownsRecipeWorkspaceRemoval?.(params.data)) {
-        return { ...request, params: params.data }
+      try {
+        if (params.success && this.runtime.ownsRecipeWorkspaceRemoval?.(params.data)) {
+          return { ...request, params: params.data }
+        }
+      } catch (error) {
+        // Ambiguous ownership must answer the phone instead of leaving it waiting.
+        reply(
+          JSON.stringify(
+            this.buildError(
+              request.id,
+              'invalid_argument',
+              error instanceof Error ? error.message : String(error)
+            )
+          )
+        )
+        return null
       }
     }
     // Phone workspace tags cannot choose routing; only this Mac's table does.
