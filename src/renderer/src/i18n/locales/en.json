@@ -667,7 +667,8 @@
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
         "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
         "cursorToggleDescription": "Show Cursor plan usage when signed in through cursor-agent or Cursor IDE.",
-        "zcodeToggleDescription": "Show ZCode Coding Plan quota usage."
+        "zcodeToggleDescription": "Show ZCode Coding Plan quota usage.",
+        "museToggleDescription": "Show Muse subscription quota from the Muse CLI."
       },
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
@@ -4845,7 +4846,8 @@
             "signedOutAccounts": "Signed out",
             "addAnotherAccount": "Add another account…",
             "staleCodexSessions_one": "{{count}} Codex session is still on the old account.",
-            "staleCodexSessions_other": "{{count}} Codex sessions are still on the old account."
+            "staleCodexSessions_other": "{{count}} Codex sessions are still on the old account.",
+            "museUsageMenu": "Muse Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -10138,7 +10140,11 @@
                 "cursor": "cursor"
               }
             },
-            "matchTerminal": "match terminal"
+            "matchTerminal": "match terminal",
+            "museUsageTitle": "Muse Usage",
+            "museUsageDescription": "Show Muse subscription quota in the status bar.",
+            "muse": "muse",
+            "meta": "meta"
           }
         },
         "auto": {

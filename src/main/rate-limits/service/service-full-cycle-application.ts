@@ -54,7 +54,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       grokResultPromise,
       cursorResultPromise,
       zcodeResultPromise,
-      antigravityResultPromise
+      antigravityResultPromise,
+      museResultPromise
     } = prepared
     if (signal.aborted) {
       return
@@ -263,6 +264,18 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : hasKnownProvenanceChange(previousState.antigravity, antigravity)
           ? antigravity
           : this.applyStalePolicy(antigravity, previousState.antigravity)
+    })
+
+    // Published separately so a slow Muse CLI never delays the sibling batch above.
+    const museSettled = await museResultPromise
+    if (signal.aborted) {
+      return
+    }
+    const muse = settleSiblingProviderResult('muse', museSettled)
+    this.trackActiveFailureStreak('muse', muse)
+    this.updateState({
+      ...this.state,
+      muse: this.applyStalePolicy(muse, previousState.muse)
     })
   }
 }
