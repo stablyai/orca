@@ -29,6 +29,7 @@ export { readConversationHistory, readConversationTabs } from './conversation-re
 export type { ConversationHistory, ConversationTab } from './conversation-records'
 import type { ConversationHistory, ConversationTab } from './conversation-records'
 import type { ConversationProject } from './conversation-project'
+import { folderOnlyConversationRepoKeys } from './conversation-project'
 export { projectConversationTarget } from './conversation-project'
 export type { ConversationRow, ConversationProject } from './conversation-project'
 
@@ -81,8 +82,12 @@ export function buildProjectConversations(args: {
     workspace.workspaceKind === 'folder-workspace'
       ? `${hostOf(workspace)}\0${workspace.worktreeId}`
       : projectKey(hostOf(workspace), workspace.repoId)
+  const folderOnlyRepos = folderOnlyConversationRepoKeys(workspaces, hostOf)
   for (const repo of repos) {
     const hostId = getRepoExecutionHostId(repo)
+    if (folderOnlyRepos.has(`${hostId}\0${repo.id}`)) {
+      continue
+    }
     const key = projectKey(hostId, repo.id)
     const ownerKey = `${hostId}\0${toAiVaultProjectKey(groupingFor(hostId, repo.id).projectId, repo.id)}`
     const previous = ownerKeys.get(ownerKey)

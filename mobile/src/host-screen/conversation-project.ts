@@ -40,3 +40,20 @@ export function projectConversationTarget(project: ConversationProject): Worktre
     ) ?? (project.workspaces.length === 1 ? project.workspaces[0] : null)
   )
 }
+
+export function folderOnlyConversationRepoKeys(
+  workspaces: readonly Worktree[],
+  hostOf: (workspace: Worktree) => ExecutionHostId
+): ReadonlySet<string> {
+  const folders = new Set(
+    workspaces
+      .filter((workspace) => workspace.workspaceKind === 'folder-workspace')
+      .map((workspace) => `${hostOf(workspace)}\0${workspace.repoId}`)
+  )
+  for (const workspace of workspaces) {
+    if (workspace.workspaceKind !== 'folder-workspace') {
+      folders.delete(`${hostOf(workspace)}\0${workspace.repoId}`)
+    }
+  }
+  return folders
+}
