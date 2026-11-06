@@ -22,6 +22,7 @@ export function getComposerEligibleRepos(repos: readonly Repo[]): Repo[] {
   return getNewWorkspaceDialogEligibleRepos(repos)
 }
 
+/** Per-workspace runtimes come in two kinds: runtime-owned SSH targets and ephemeral-VM Orca servers. */
 function isPerWorkspaceRuntimeRepo(
   repo: Repo,
   runtimeEnvironments: readonly RuntimeEnvironmentSource[]
