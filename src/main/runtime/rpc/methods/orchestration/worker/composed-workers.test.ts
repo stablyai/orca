@@ -378,7 +378,8 @@ describe('orchestration RPC methods', () => {
       mockCurrentWorkerStart()
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the double implements getSettings, the only member the mode decision reads from the store.
       vi.spyOn(runtime, 'requireStore').mockReturnValue({
-        getSettings: () => ({ experimentalNativeChat: true })
+        // Keyed by agent on purpose: judging the bare flags looks up `undefined` and misses this.
+        getSettings: () => ({ nativeChatProviders: { claude: true } })
       } as never)
       vi.spyOn(runtime, 'getOrchestrationWorkerLaunchDefaults').mockReturnValue({
         agent: 'claude',

@@ -35,7 +35,7 @@ describe('orchestration worker model settings', () => {
         aider: 'high',
         grok: 'high'
       })
-    ).toEqual({ codex: 'max' })
+    ).toEqual({ codex: 'max', grok: 'high' })
   })
 
   it('validates an effort against its stored model when one is available', () => {
