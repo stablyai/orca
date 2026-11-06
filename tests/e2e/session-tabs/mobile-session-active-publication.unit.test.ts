@@ -608,12 +608,27 @@ describe('host active-tab publication', () => {
         created.tab.leafId,
         { navigation: 'host' }
       )
-      const another = await runtime.createMobileSessionTerminal(`id:${WT}`, { activate: true })
+      const another = await runtime.createMobileSessionTerminal(`id:${WT}`, {
+        activate: true,
+        targetGroupId: 'right'
+      })
       const result = await list(runtime)
       expect(result.activeTabId).toBe(another.tab.id)
       expect(result.activeGroupId).toBe(
         result.tabGroups?.find((group) => group.tabOrder.includes(another.tab.parentTabId))?.id
       )
+      expect(result.activeGroupId).toBe('right')
+      const reloaded = new OrcaRuntimeService(runtimeStore)
+      reloaded.setPtyController(controller)
+      const afterCreateReload = await list(reloaded)
+      expect(afterCreateReload.activeGroupId).toBe('right')
+      expect(afterCreateReload.activeTabId).toBe(another.tab.id)
+      expect(getSession().tabGroups![WT]!.find((group) => group.id === 'right')?.tabOrder).toEqual([
+        created.tab.parentTabId,
+        'chat-window',
+        'sim-window',
+        another.tab.parentTabId
+      ])
     }
   )
 
