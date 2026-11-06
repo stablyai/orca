@@ -1,10 +1,19 @@
 import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentation/agent-type-label'
-import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
-import type { ConnectionState } from '../transport/types'
-import { agentDotState, agentRowTimeAt, type AgentDotState } from '../worktree/agent-row-display'
-import { flattenAgentRowLineage, type AgentRowNode } from '../worktree/agent-row-lineage'
-import type { HomeAgentEntry, HostWorktreeInfo } from '../worktree/home-worktree-info'
 import { agentListEntryMatches } from './agent-list-row-text'
+import {
+  agentStatusGroup,
+  asTopLevel,
+  byStatusThenRecent,
+  everyRow,
+  hostAgents,
+  listedAgentVerdict,
+  newestFirst,
+  rowNeedsYou,
+  type AgentListInput,
+  type AgentListRow,
+  type AgentStatusGroup,
+  type HostAgents
+} from './agent-list-rows'
 
 export const AGENT_LIST_GROUP_BY_CHOICES = [
   'status',
@@ -16,45 +25,17 @@ export const AGENT_LIST_GROUP_BY_CHOICES = [
 
 export type AgentListGroupBy = (typeof AGENT_LIST_GROUP_BY_CHOICES)[number]
 
-export type AgentListView = Readonly<{ groupBy: AgentListGroupBy; showWorkers: boolean }>
-
-export const DEFAULT_AGENT_LIST_VIEW: AgentListView = { groupBy: 'status', showWorkers: true }
-
-export type AgentStatusGroup = 'needs-you' | 'working' | 'done' | 'idle'
-
-export function agentStatusGroup(state: AgentDotState): AgentStatusGroup {
-  switch (state) {
-    case 'blocked':
-    case 'waiting':
-    case 'failed':
-      return 'needs-you'
-    case 'working':
-    case 'monitoring':
-      return 'working'
-    case 'done':
-    case 'interrupted':
-    case 'unconfirmed':
-      return 'done'
-    case 'idle':
-    case 'unverifiable':
-      return 'idle'
-  }
-}
-
-export type AgentListRow = Readonly<{
-  key: string
-  hostId: string
-  entry: HomeAgentEntry
-  dotState: AgentDotState
-  timeAt: number
-  /** A copy from a read the desktop no longer backs: it claims no state. */
-  stale: boolean
-  /** Its desktop isn't connected, so the row can't open. */
-  offline: boolean
-  depth: number
-  /** Nested workers in tree order; empty when workers are hidden. */
-  workers: readonly AgentListRow[]
+export type AgentListView = Readonly<{
+  groupBy: AgentListGroupBy
+  showWorkers: boolean
+  unreadOnly: boolean
 }>
+
+export const DEFAULT_AGENT_LIST_VIEW: AgentListView = {
+  groupBy: 'status',
+  showWorkers: true,
+  unreadOnly: false
+}
 
 export type AgentListSectionKind = AgentStatusGroup | 'workspace' | 'project' | 'agent' | 'desktop'
 
@@ -73,112 +54,6 @@ export type AgentListSection = Readonly<{
   footer: 'workspace' | 'agent'
   nameDesktop: boolean
 }>
-
-export type AgentListInput = Readonly<{
-  /** Paired desktops in Home's order. */
-  hosts: readonly { id: string }[]
-  hostStates: Readonly<Record<string, ConnectionState>>
-  worktreeInfo: Readonly<Record<string, HostWorktreeInfo>>
-  now: number
-}>
-
-type HostAgents = {
-  hostId: string
-  roots: AgentListRow[]
-  live: boolean
-  offline: boolean
-  seenAt?: number
-}
-
-function hostAgents(input: AgentListInput, hostId: string): HostAgents {
-  const info = input.worktreeInfo[hostId]
-  const connected = input.hostStates[hostId] === 'connected'
-  // Only this connection's own read may show states; anything else is what the agents last were.
-  const liveAgents = connected && !info?.catalogUnavailable ? info?.agents : undefined
-  const live = liveAgents !== undefined
-  const entries = liveAgents ?? info?.lastSeenAgents ?? info?.agents ?? []
-  const entryByAgent = new Map<RuntimeWorktreeAgentRow, HomeAgentEntry>(
-    entries.map((entry) => [entry.agent, entry])
-  )
-  const toRow = (node: AgentRowNode, depth: number): AgentListRow | null => {
-    const entry = entryByAgent.get(node.row)
-    if (!entry) {
-      return null
-    }
-    return {
-      key: `${hostId}:${node.row.paneKey}`,
-      hostId,
-      entry,
-      dotState: live ? agentDotState(node.row, input.now) : 'idle',
-      timeAt: agentRowTimeAt(node.row),
-      stale: !live,
-      offline: !connected,
-      depth,
-      workers: node.children.flatMap((child) => descendants(child, depth + 1))
-    }
-  }
-  const descendants = (node: AgentRowNode, depth: number): AgentListRow[] => {
-    const row = toRow(node, depth)
-    return row ? [{ ...row, workers: [] }, ...row.workers] : []
-  }
-  // Lineage spans the desktop: a coordinator's workers often run in other workspaces.
-  const roots = flattenAgentRowLineage(entries.map((entry) => entry.agent))
-    .filter((node) => node.depth === 0)
-    .map((node) => toRow(node, 0))
-    .filter((row): row is AgentListRow => row !== null)
-  return { hostId, roots, live, offline: !connected, seenAt: info?.countsProvenAt }
-}
-
-function everyRow(roots: readonly AgentListRow[]): AgentListRow[] {
-  return roots.flatMap((row) => [row, ...row.workers])
-}
-
-const asTopLevel = (row: AgentListRow): AgentListRow => ({ ...row, depth: 0, workers: [] })
-
-const newestFirst = (a: AgentListRow, b: AgentListRow): number => b.timeAt - a.timeAt
-
-function needsYou(row: AgentListRow): boolean {
-  return !row.stale && agentStatusGroup(row.dotState) === 'needs-you'
-}
-
-/** Live agents that need the user, workers included: Feed's rows and both badge counts. */
-export function selectAgentsNeedingYou(input: AgentListInput): AgentListRow[] {
-  return input.hosts
-    .flatMap((host) => everyRow(hostAgents(input, host.id).roots))
-    .filter(needsYou)
-    .map(asTopLevel)
-    .sort(newestFirst)
-}
-
-export function countAgentsNeedingYouByHost(
-  rows: readonly AgentListRow[]
-): Readonly<Record<string, number>> {
-  const counts: Record<string, number> = {}
-  for (const row of rows) {
-    counts[row.hostId] = (counts[row.hostId] ?? 0) + 1
-  }
-  return counts
-}
-
-export type AgentListHostSummary = Readonly<{
-  hostId: string
-  agents: number
-  needsYou: number
-  offline: boolean
-}>
-
-export function summarizeAgentListHosts(input: AgentListInput): AgentListHostSummary[] {
-  return input.hosts.map((host) => {
-    const agents = hostAgents(input, host.id)
-    const rows = everyRow(agents.roots)
-    return {
-      hostId: host.id,
-      agents: rows.length,
-      needsYou: rows.filter(needsYou).length,
-      offline: agents.offline
-    }
-  })
-}
 
 type GroupDraft = { key: string; title?: string; hostId?: string; rows: AgentListRow[] }
 
@@ -201,7 +76,7 @@ function groupRows(
 
 // Groups with something that needs the user lead, then the most recently active.
 function byUrgencyThenRecent(a: GroupDraft, b: GroupDraft): number {
-  const urgent = (group: GroupDraft) => (group.rows.some(needsYou) ? 0 : 1)
+  const urgent = (group: GroupDraft) => (group.rows.some(rowNeedsYou) ? 0 : 1)
   const latest = (group: GroupDraft) => Math.max(...group.rows.map((row) => row.timeAt))
   return urgent(a) - urgent(b) || latest(b) - latest(a)
 }
@@ -215,37 +90,57 @@ const STATUS_SECTIONS: readonly Exclude<AgentStatusGroup, 'idle'>[] = [
 export function buildAgentList(
   input: AgentListInput,
   options: Readonly<{ view: AgentListView; hostFilter: string | null; query: string }>
-): { sections: AgentListSection[]; total: number } {
+): { sections: AgentListSection[]; anyLive: boolean } {
   const { view } = options
   const hosts = input.hosts
     .filter((host) => options.hostFilter === null || host.id === options.hostFilter)
     .map((host) => hostAgents(input, host.id))
-  const total = hosts.reduce((sum, host) => sum + everyRow(host.roots).length, 0)
+  // With no desktop read this session, an empty list says nothing about running agents.
+  const anyLive = hosts.some((host) => host.live)
   const nameDesktop = input.hosts.length > 1 && options.hostFilter === null
   const query = options.query.trim().toLowerCase()
 
+  // Unread is the desktop's verdict alone. Rows it gave none stay: hiding them would claim they
+  // were read. A coordinator stays for its unread worker.
+  const shown = (row: AgentListRow) =>
+    !view.unreadOnly ||
+    row.unread === true ||
+    (row.unread === undefined && !listedAgentVerdict(row.entry.agent)) ||
+    row.workers.some((worker) => worker.unread)
   const topLevel = (host: HostAgents): AgentListRow[] => {
     if (query) {
       // A match is shown on its own; its coordinator may not match.
       return everyRow(host.roots)
         .filter((row) => agentListEntryMatches(row.entry, query))
         .map(asTopLevel)
+        .filter(shown)
     }
-    const roots = view.showWorkers ? host.roots : host.roots.map(asTopLevel)
+    if (!view.showWorkers) {
+      // Desktop hides a finished worker and lists a live one on its own; without its verdict, only
+      // a worker that needs the user shows.
+      return everyRow(host.roots)
+        .filter((row) => {
+          const verdict = listedAgentVerdict(row.entry.agent)
+          return verdict ? !verdict.foldedChild : row.depth === 0 || rowNeedsYou(row)
+        })
+        .map(asTopLevel)
+        .filter(shown)
+    }
     // A worker that needs the user can't hide inside a folded coordinator.
-    const surfaced = host.roots.flatMap((root) => root.workers.filter(needsYou).map(asTopLevel))
-    return [...roots, ...surfaced]
+    const surfaced = host.roots.flatMap((root) => root.workers.filter(rowNeedsYou).map(asTopLevel))
+    return [...host.roots, ...surfaced].filter(shown)
   }
 
   const section = (
     draft: GroupDraft,
     kind: AgentListSectionKind,
     footer: AgentListSection['footer'],
-    names: boolean
+    names: boolean,
+    order = newestFirst
   ): AgentListSection => ({
     ...draft,
     kind,
-    rows: [...draft.rows].sort(newestFirst),
+    rows: [...draft.rows].sort(order),
     footer,
     nameDesktop: names
   })
@@ -269,7 +164,7 @@ export function buildAgentList(
         }
       ]
     })
-    return { sections, total }
+    return { sections, anyLive }
   }
 
   if (view.groupBy === 'status') {
@@ -279,7 +174,8 @@ export function buildAgentList(
         { key: kind, rows: live.filter((row) => agentStatusGroup(row.dotState) === kind) },
         kind,
         'workspace',
-        nameDesktop
+        nameDesktop,
+        byStatusThenRecent
       )
     ).filter((entry) => entry.rows.length > 0)
     const idleRows = live.filter((row) => agentStatusGroup(row.dotState) === 'idle')
@@ -310,7 +206,7 @@ export function buildAgentList(
         })
       }
     }
-    return { sections, total }
+    return { sections, anyLive }
   }
 
   const rows = hosts.flatMap(topLevel)
@@ -339,5 +235,16 @@ export function buildAgentList(
         ? section(draft, kind, 'workspace', nameDesktop)
         : section(draft, kind, kind === 'workspace' ? 'agent' : 'workspace', false)
     )
-  return { sections, total }
+  return { sections, anyLive }
+}
+
+/** Every row the list holds, folded ones included, once each: what "Mark all read" and "Clear finished" act on. */
+export function agentListRowsIn(sections: readonly AgentListSection[]): AgentListRow[] {
+  const rows = new Map<string, AgentListRow>()
+  for (const section of sections) {
+    for (const row of everyRow([...section.rows, ...(section.idleRows ?? [])])) {
+      rows.set(row.key, row)
+    }
+  }
+  return [...rows.values()]
 }

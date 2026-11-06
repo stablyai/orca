@@ -57,8 +57,7 @@ export function MobileHomeFeedTab(props: {
           rows={data.agentsNeedingYou}
           hosts={data.sortedHosts}
           now={data.agentList.now}
-          onOpen={props.agentHandlers.onOpen}
-          onLongPress={props.agentHandlers.onLongPress}
+          handlers={props.agentHandlers}
           onSeeAll={props.onSeeAllAgents}
         />
         <MobileHomeHostList

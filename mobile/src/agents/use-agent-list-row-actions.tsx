@@ -1,17 +1,28 @@
-import { ArrowUpRight, Copy, Folder } from 'lucide-react-native'
+import { ArrowUpRight, Copy, Eye, EyeOff, Folder, X } from 'lucide-react-native'
 import { useCallback, useMemo, useState } from 'react'
 import { Alert } from 'react-native'
-import { ActionSheetModal } from '../components/ActionSheetModal'
+import { ActionSheetModal, type ActionSheetAction } from '../components/ActionSheetModal'
 import { TransientToast, useTransientToast } from '../components/TransientToast'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useClipboardWriter } from '../platform/clipboard'
 import { useOpenMobileSession } from '../session/use-open-mobile-session'
-import type { AgentListRow } from './agent-list-model'
-import { agentListTitle } from './agent-list-row-text'
+import type { HostProfile } from '../transport/types'
+import type { AgentActivityChange, AgentListRow } from './agent-list-rows'
 import type { AgentListRowHandlers } from './MobileAgentListRows'
+import type { AgentActivityFailure } from './use-agent-activity-writes'
 
-/** Tap opens the agent's tab; long-press offers it, its workspace and its title. Shared by Feed and Agents. */
-export function useAgentListRowActions(toastBottomInset: number) {
+/**
+ * Tap opens the agent's tab and marks it read; long-press offers it, its workspace, its title and
+ * the desktop's read and clear. Shared by Feed and Agents.
+ */
+export function useAgentListRowActions(
+  toastBottomInset: number,
+  hosts: readonly HostProfile[],
+  applyActivity: (
+    rows: readonly AgentListRow[],
+    change: AgentActivityChange
+  ) => Promise<AgentActivityFailure[]>
+) {
   const t = useMobileTranslation()
   const openMobileSession = useOpenMobileSession()
   const clipboard = useClipboardWriter()
@@ -28,57 +39,118 @@ export function useAgentListRowActions(toastBottomInset: number) {
       }),
     [openMobileSession]
   )
+  const change = useCallback(
+    (rows: readonly AgentListRow[], next: AgentActivityChange) => {
+      if (rows.length === 0) {
+        return
+      }
+      void applyActivity(rows, next).then((failures) => {
+        const failure = failures[0]
+        if (!failure) {
+          return
+        }
+        const desktop = hosts.find((host) => host.id === failure.hostId)?.name
+        showToast(
+          failure.needsDesktopWindow && desktop
+            ? t('agents.activity.needsWindow', 'Couldn’t update. Open Orca on {{desktop}}.', {
+                desktop
+              })
+            : t('agents.activity.failed', 'Couldn’t update the agent list.')
+        )
+      })
+    },
+    [applyActivity, hosts, showToast, t]
+  )
   const handlers = useMemo<AgentListRowHandlers>(
-    () => ({ onOpen: (row) => open(row, true), onLongPress: setTarget }),
-    [open]
+    () => ({
+      onOpen: (row) => {
+        // Like desktop opening a pane; a refusal here isn't worth interrupting the open.
+        if (row.unread) {
+          void applyActivity([row], { unread: false })
+        }
+        open(row, true)
+      },
+      onLongPress: setTarget,
+      // Only rows the desktop gave a verdict for; the phone never invents read state.
+      onSetRead: (rows, read) =>
+        change(
+          rows.filter((row) => row.unread !== undefined),
+          { unread: !read }
+        ),
+      onClear: (rows) =>
+        change(
+          rows.filter((row) => row.clearable),
+          { cleared: true }
+        )
+    }),
+    [applyActivity, change, open]
   )
 
-  const title = target ? agentListTitle(target.entry.agent) : undefined
+  const title = target?.title
   const offlineHint = target?.offline
     ? t('agents.actions.offlineHint', 'Its desktop is offline.')
     : undefined
+  const actions = (row: AgentListRow): ActionSheetAction[] => [
+    {
+      id: 'open',
+      label: t('agents.actions.open', 'Open'),
+      icon: ArrowUpRight,
+      disabled: row.offline,
+      hint: offlineHint,
+      closeBeforePress: true,
+      onPress: () => handlers.onOpen(row)
+    },
+    {
+      id: 'workspace',
+      label: t('agents.actions.goToWorkspace', 'Go to workspace'),
+      icon: Folder,
+      disabled: row.offline,
+      hint: offlineHint,
+      closeBeforePress: true,
+      onPress: () => open(row, false)
+    },
+    ...(row.unread === undefined
+      ? []
+      : [
+          {
+            id: 'read',
+            label: row.unread
+              ? t('agents.actions.markRead', 'Mark as read')
+              : t('agents.actions.markUnread', 'Mark as unread'),
+            icon: row.unread ? Eye : EyeOff,
+            onPress: () => handlers.onSetRead([row], row.unread === true)
+          }
+        ]),
+    {
+      id: 'copy-title',
+      label: t('agents.actions.copyTitle', 'Copy title'),
+      icon: Copy,
+      closeBeforePress: true,
+      onPress: () => {
+        void clipboard.writeText(title ?? '').then(
+          () => showToast(t('agents.actions.copied', 'Copied')),
+          () => Alert.alert(t('agents.actions.copyFailed', 'Couldn’t copy the title'))
+        )
+      }
+    },
+    ...(row.clearable
+      ? [
+          {
+            id: 'clear',
+            label: t('agents.actions.clear', 'Clear from list'),
+            icon: X,
+            onPress: () => handlers.onClear([row])
+          }
+        ]
+      : [])
+  ]
   const sheet = (
     <>
       <ActionSheetModal
         visible={target !== null}
         title={title}
         message={target?.entry.workspaceName}
-        actions={
-          target
-            ? [
-                {
-                  id: 'open',
-                  label: t('agents.actions.open', 'Open'),
-                  icon: ArrowUpRight,
-                  disabled: target.offline,
-                  hint: offlineHint,
-                  closeBeforePress: true,
-                  onPress: () => open(target, true)
-                },
-                {
-                  id: 'workspace',
-                  label: t('agents.actions.goToWorkspace', 'Go to workspace'),
-                  icon: Folder,
-                  disabled: target.offline,
-                  hint: offlineHint,
-                  closeBeforePress: true,
-                  onPress: () => open(target, false)
-                },
-                {
-                  id: 'copy-title',
-                  label: t('agents.actions.copyTitle', 'Copy title'),
-                  icon: Copy,
-                  closeBeforePress: true,
-                  onPress: () => {
-                    void clipboard.writeText(title ?? '').then(
-                      () => showToast(t('agents.actions.copied', 'Copied')),
-                      () => Alert.alert(t('agents.actions.copyFailed', 'Couldn’t copy the title'))
-                    )
-                  }
-                }
-              ]
-            : []
-        }
+        actions={target ? actions(target) : []}
         onClose={() => setTarget(null)}
       />
       <TransientToast message={message} bottomInset={toastBottomInset} />

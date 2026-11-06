@@ -4,7 +4,8 @@ import {
   countAgentsNeedingYouByHost,
   selectAgentsNeedingYou,
   type AgentListInput
-} from '../agents/agent-list-model'
+} from '../agents/agent-list-rows'
+import { useAgentActivityWrites } from '../agents/use-agent-activity-writes'
 import { loadHomeSnapshot, saveHomeSnapshot } from '../cache/home-snapshot-cache'
 import type { AccountsSnapshot } from '../components/AccountUsage'
 import { setCachedWorktrees } from '../cache/worktree-cache'
@@ -44,6 +45,8 @@ export function useMobileHomeData() {
   const hydratedRef = useRef(false)
   const focusedRef = useRef(false)
   const isHomeFocused = useCallback(() => focusedRef.current, [])
+  // Drives the agent clock; Home stays mounted under other screens.
+  const [homeFocused, setHomeFocused] = useState(false)
   const hosts = useMemo(() => selectConnectableHostProfiles(hostCatalog), [hostCatalog])
   const connections = useMobileHomeHostConnections(hosts, hostCatalog, hostSetters, isHomeFocused)
   const allClientsRef = useRef(connections.allClients)
@@ -96,6 +99,7 @@ export function useMobileHomeData() {
     useCallback(() => {
       let stale = false
       focusedRef.current = true
+      setHomeFocused(true)
       void loadHostCatalog()
         // A failed read proves nothing about the desktops; keep the ones already shown.
         .catch((): HostCatalogEntry[] | null => null)
@@ -126,6 +130,7 @@ export function useMobileHomeData() {
       return () => {
         stale = true
         focusedRef.current = false
+        setHomeFocused(false)
       }
     }, [router])
   )
@@ -133,10 +138,24 @@ export function useMobileHomeData() {
   const sortedHosts = useMemo(() => sortHostsByLastConnected(hosts), [hosts])
   const sortedHostCatalog = useMemo(() => sortHostsByLastConnected(hostCatalog), [hostCatalog])
   // One clock for every agent count, so Feed, the Agents badge and each desktop agree.
-  const now = useNow(30_000)
+  const now = useNow(30_000, homeFocused)
+  const refetchHostAgents = useCallback((hostId: string) => {
+    const entry = allClientsRef.current.find((candidate) => candidate.hostId === hostId)
+    return entry?.client.getState() === 'connected'
+      ? fetchHomeHostWorktreeInfo(entry.client, hostId, setWorktreeInfo, () => false)
+      : Promise.resolve()
+  }, [])
+  const agentActivity = useAgentActivityWrites(connections.allClients, refetchHostAgents)
+  const { pendingActivity } = agentActivity
   const agentList = useMemo<AgentListInput>(
-    () => ({ hosts: sortedHosts, hostStates: connections.hostStates, worktreeInfo, now }),
-    [sortedHosts, connections.hostStates, worktreeInfo, now]
+    () => ({
+      hosts: sortedHosts,
+      hostStates: connections.hostStates,
+      worktreeInfo,
+      now,
+      pendingActivity
+    }),
+    [sortedHosts, connections.hostStates, worktreeInfo, now, pendingActivity]
   )
   const agentsNeedingYou = useMemo(() => selectAgentsNeedingYou(agentList), [agentList])
   const needsYouByHost = useMemo(
@@ -162,6 +181,7 @@ export function useMobileHomeData() {
   return {
     ...connections,
     accountsByHost,
+    applyAgentActivity: agentActivity.apply,
     agentList,
     agentsNeedingYou,
     connectedHosts,

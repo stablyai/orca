@@ -26,7 +26,9 @@ const HOME_WORKTREE_REFRESH_MIN_INTERVAL_MS = 3000
 const WORKTREE_CHANGE_EVENTS: ReadonlySet<string> = new Set([
   'sidebarInputsChanged',
   'worktreesChanged',
-  'reposChanged'
+  'reposChanged',
+  // The desktop Agents list changed; worktree.ps carries its verdicts.
+  'agentListChanged'
 ])
 
 export type HomeAccountsSetter = (

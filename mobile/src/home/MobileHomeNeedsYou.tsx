@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import type { AgentListRow } from '../agents/agent-list-model'
+import type { AgentListRow } from '../agents/agent-list-rows'
 import { MobileAgentListRows, type AgentListRowHandlers } from '../agents/MobileAgentListRows'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { HostProfile } from '../transport/types'
@@ -10,14 +10,13 @@ import { MobileHomeSectionHeading } from './MobileHomeSectionHeading'
 const NEEDS_YOU_ROWS_SHOWN = 3
 
 /** Feed's short list of agents waiting on the user; hidden when none are. */
-export const MobileHomeNeedsYou = memo(function MobileHomeNeedsYou(
-  props: AgentListRowHandlers & {
-    rows: readonly AgentListRow[]
-    hosts: readonly HostProfile[]
-    now: number
-    onSeeAll: () => void
-  }
-) {
+export const MobileHomeNeedsYou = memo(function MobileHomeNeedsYou(props: {
+  handlers: AgentListRowHandlers
+  rows: readonly AgentListRow[]
+  hosts: readonly HostProfile[]
+  now: number
+  onSeeAll: () => void
+}) {
   const t = useMobileTranslation()
   if (props.rows.length === 0) {
     return null
@@ -37,8 +36,7 @@ export const MobileHomeNeedsYou = memo(function MobileHomeNeedsYou(
         nameDesktop={props.hosts.length > 1}
         hosts={props.hosts}
         now={props.now}
-        onOpen={props.onOpen}
-        onLongPress={props.onLongPress}
+        handlers={props.handlers}
       />
     </>
   )
