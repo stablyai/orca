@@ -86,9 +86,6 @@ export function useMobileNewTabAgentOptions(args: {
       if (stale) {
         return
       }
-      if (refresh) {
-        refreshed.delete(target)
-      }
       const otherRuntime = error instanceof MobileWorkspaceOnOtherRuntimeError
       if (otherRuntime) {
         deleteCachedNewTabAgentInventory(hostId, workspaceKey)
