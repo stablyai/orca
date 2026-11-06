@@ -1,7 +1,12 @@
-import { isCurrentMobileDictationStart } from './mobile-dictation-session-state'
+import {
+  DICTATION_FINISH_TIMEOUT_MS,
+  isCurrentMobileDictationStart
+} from './mobile-dictation-session-state'
+import { sendAcrossConnectionMove } from './mobile-dictation-audio-chunk'
 import { dictationSessionLostMessage } from '../dictation/mobile-dictation-setup'
 import {
   dictationSessionCancel,
+  dictationSessionFinish,
   dictationSessionStart
 } from '../dictation/mobile-dictation-operations'
 import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../src/shared/rpc-contract/speech-params'
@@ -30,6 +35,22 @@ export function cancelDesktopDictation(client: RpcClient, dictationId: string): 
       () => undefined,
       () => undefined
     )
+}
+
+// Returns the raw reply payload: the caller reads its text only after its staleness guard.
+export async function finishDesktopDictation(
+  client: RpcClient,
+  dictationId: string
+): Promise<unknown> {
+  return dictationSessionFinish.interpret(
+    await sendAcrossConnectionMove(client, () =>
+      dictationSessionFinish.request(
+        client,
+        { dictationId },
+        { timeoutMs: DICTATION_FINISH_TIMEOUT_MS }
+      )
+    )
+  )
 }
 
 function isCurrentStart(options: StartMobileDictationDesktopSessionOptions): boolean {

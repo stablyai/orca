@@ -207,9 +207,9 @@ export function useMobileSessionNativeChatDictation(
   }, [dictation])
 
   const handleDictationToggle = useCallback(() => {
-    if (dictation.isStarting || dictation.isProcessing) {
-      // Ignore toggles until start or finish settles; a tap must not discard what was said.
-    } else if (dictation.isRecording) {
+    if (dictation.isProcessing) {
+      // Ignore toggles until finish settles; a tap must not discard what was said.
+    } else if (dictation.isStarting || dictation.isRecording) {
       stopDictation()
     } else {
       startDictation()
