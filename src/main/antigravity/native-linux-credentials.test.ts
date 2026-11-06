@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
+import type { ProcessResult } from '@orca/process-host/process-spec'
 import {
   readAntigravityLinuxCredential,
   writeAntigravityLinuxCredential
@@ -67,20 +67,22 @@ describe('Antigravity Linux keyring access', () => {
       .mockResolvedValueOnce(ok())
       .mockResolvedValueOnce(ok(contents))
     await writeAntigravityLinuxCredential(contents)
-    const store = vi.mocked(runProcess).mock.calls[2][0] as ProcessSpec
-    expect(store).toMatchObject({
-      program: 'secret-tool',
-      args: [
-        'store',
-        '--collection=/org/freedesktop/secrets/collection/login',
-        "--label=Password for 'antigravity' on 'gemini'",
-        'service',
-        'gemini',
-        'username',
-        'antigravity'
-      ],
-      input: contents
-    })
+    expect(runProcess).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        program: 'secret-tool',
+        args: [
+          'store',
+          '--collection=/org/freedesktop/secrets/collection/login',
+          "--label=Password for 'antigravity' on 'gemini'",
+          'service',
+          'gemini',
+          'username',
+          'antigravity'
+        ],
+        input: contents
+      })
+    )
 
     vi.mocked(runProcess)
       .mockResolvedValueOnce(ok("(<[objectpath '/org/freedesktop/secrets/collection/kdbx']>,)\n"))
@@ -88,8 +90,11 @@ describe('Antigravity Linux keyring access', () => {
       .mockResolvedValueOnce(ok())
       .mockResolvedValueOnce(ok(contents.replace('synthetic', 'another')))
     await expect(writeAntigravityLinuxCredential(contents)).rejects.toThrow('could not be verified')
-    expect((vi.mocked(runProcess).mock.calls[6][0] as ProcessSpec).args?.[1]).toBe(
-      '--collection=/org/freedesktop/secrets/aliases/default'
+    expect(runProcess).toHaveBeenNthCalledWith(
+      7,
+      expect.objectContaining({
+        args: expect.arrayContaining(['--collection=/org/freedesktop/secrets/aliases/default'])
+      })
     )
   })
 
