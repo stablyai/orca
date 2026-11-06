@@ -60,10 +60,13 @@ export async function fetchAllGitLabPages<T>(
     } else if (
       // GitLab ends with an empty header; otherwise probe after full pages.
       nextPageHeader === '' ||
-      pageItems.length < PAGE_SIZE ||
-      probedPages >= MAX_PROBED_PAGES
+      pageItems.length < PAGE_SIZE
     ) {
       page = undefined
+    } else if (probedPages >= MAX_PROBED_PAGES) {
+      throw new GitLabIncompletePaginationError(
+        `GitLab list still full after ${page} guessed pages`
+      )
     } else {
       probedPages += 1
       page += 1

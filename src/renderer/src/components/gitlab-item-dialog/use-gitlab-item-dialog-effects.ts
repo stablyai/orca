@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
 import { useEffect } from 'react'
 import type { GitLabWorkItem, GitLabWorkItemDetails } from '../../../../shared/gitlab-types'
@@ -29,7 +30,12 @@ export function useGitLabItemDetailsEffect(
         }
         if (!data) {
           // Main returns null for any failed read, not only a missing item.
-          setError('Could not load this item. Refresh to try again.')
+          setError(
+            translate(
+              'auto.components.GitLabItemDialog.abf2bade22',
+              'Could not load this item. Refresh to try again.'
+            )
+          )
           return
         }
         setDetails(data as GitLabWorkItemDetails)
