@@ -49,7 +49,7 @@ function receipt(runtime: OrcaRuntimeService, result: AgentLaunchResult): Follow
         : {
             surface: 'terminal',
             terminalHandle: outcome.handle,
-            paneKey: outcome.paneKey,
+            paneKey: outcome.paneKey ?? runtime.getTerminalPaneKey(outcome.handle) ?? undefined,
             terminalPtyId: runtime.getTerminalPtyIdForHandle(outcome.handle) ?? undefined,
             promptUnconfirmed
           }

@@ -4,6 +4,7 @@ import type { AgentSessionOperationOutcome } from '../../shared/agent-session/li
 import { getDefaultSettings } from '../../shared/constants'
 import type { Repo } from '../../shared/repo-types'
 import type { FollowUpObservation, FollowUpTarget } from '../../shared/pr-follow-ups/contracts'
+import { harness } from './engine.test-fixture'
 import { prepareFollowUpLaunch, recoverFollowUpLaunch } from './launch'
 
 vi.mock('../runtime/rpc/methods/agent-launch', () => ({ launchAgentOnHost: vi.fn() }))
@@ -13,32 +14,32 @@ function runtime(outcome?: AgentSessionOperationOutcome): OrcaRuntimeService {
     openAgentSessionRecordStore: async () => ({
       getOperationRow: () => (outcome ? { outcome } : null)
     }),
+    getTerminalPaneKey: () => 'tab:leaf',
     getTerminalPtyIdForHandle: () => 'pty-1'
   } as unknown as OrcaRuntimeService
 }
 
 describe('follow-up launch receipts', () => {
   it('preserves terminal identity and an uncertain prompt after durable acceptance', async () => {
-    expect(
-      await recoverFollowUpLaunch(
-        runtime({
-          status: 'succeeded',
-          sessionId: '',
-          launch: {
-            outcome: { kind: 'terminal', handle: 'terminal-1', paneKey: 'tab:leaf' },
-            worktreeId: 'workspace-1',
-            receipt: {
-              mode: 'terminal',
-              preferred: 'terminal',
-              reason: 'requested',
-              detail: 'Terminal'
-            },
-            prompt: { delivery: 'submit', outcome: 'unconfirmed' }
-          }
-        }),
-        { operationId: 'operation-1', agent: 'codex' }
-      )
-    ).toEqual({
+    const recovered = await recoverFollowUpLaunch(
+      runtime({
+        status: 'succeeded',
+        sessionId: '',
+        launch: {
+          outcome: { kind: 'terminal', handle: 'terminal-1' },
+          worktreeId: 'workspace-1',
+          receipt: {
+            mode: 'terminal',
+            preferred: 'terminal',
+            reason: 'requested',
+            detail: 'Terminal'
+          },
+          prompt: { delivery: 'submit', outcome: 'unconfirmed' }
+        }
+      }),
+      { operationId: 'operation-1', agent: 'codex' }
+    )
+    expect(recovered).toEqual({
       status: 'accepted',
       identity: {
         surface: 'terminal',
@@ -48,6 +49,12 @@ describe('follow-up launch receipts', () => {
         promptUnconfirmed: true
       }
     })
+    const h = harness()
+    h.launch.mockResolvedValue(recovered)
+    await h.observe([])
+    await h.observe(['unit'])
+    h.engine.activityObserved('w1', 'tab:leaf', false, h.now + 1)
+    expect(h.store.workingOverlap(h.target.prKey, h.now + 2, h.now + 3)).toBe(false)
   })
 
   it('distinguishes an effect-free refusal, a user-closed tab, and missing or expired proof', async () => {
