@@ -169,9 +169,5 @@ export function clientLayoutCommand(
     case 'setDefaultTabsApplied':
     case 'applyDefaultTabs':
       return command
-    default: {
-      const exhaustive: never = command
-      return exhaustive
-    }
   }
 }
