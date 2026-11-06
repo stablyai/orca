@@ -147,6 +147,7 @@ it('projects transmitted mode admission to the optimistic exit control and recov
     })
   })
   const { mutate } = mutateWith(async (_method, _fingerprint, fields) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the option writer sends the fixture its key/value fields.
     const pick = fields as { key: string; value: string }
     return pick.key === 'interactionMode' ? reply.promise : { key: pick.key, value: pick.value }
   })
