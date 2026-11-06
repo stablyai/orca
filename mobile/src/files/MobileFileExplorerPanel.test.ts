@@ -1,4 +1,4 @@
-import { createElement, type ReactNode } from 'react'
+import { createElement, type ReactElement, type ReactNode } from 'react'
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -6,6 +6,7 @@ import { MobileFileExplorerPanel } from './MobileFileExplorerPanel'
 import type { MobileDirEntry } from './file-tree'
 import { createOrcaQueryClient } from '../query/orca-query-client'
 import { settleQueryNotifications } from '../test-support/rpc-recording/hook-mount'
+import type { RpcClient } from '../transport/rpc-client'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
 import type { ConnectionState, RpcResponse } from '../transport/types'
 
@@ -133,12 +134,18 @@ function ok(result: unknown): RpcResponse {
 }
 
 type Reply = RpcResponse | Promise<RpcResponse>
+type Answer = (method: string, relativePath: string) => Reply
+type Host = {
+  answer: Answer
+  client: RpcClient
+  setState: (renderer: ReactTestRenderer, next: ConnectionState) => Promise<void>
+}
 
 // One logical client for the whole test, as on a phone: the socket comes and goes, the client stays.
-function createHost(answer: (method: string, relativePath: string) => Reply) {
+function createHost(answer: Answer): Host {
   let state: ConnectionState = 'connected'
   const listeners = new Set<(state: ConnectionState) => void>()
-  const host = {
+  const host: Host = {
     answer,
     client: stubRpcClient({
       getState: () => state,
@@ -147,7 +154,7 @@ function createHost(answer: (method: string, relativePath: string) => Reply) {
         return () => listeners.delete(listener)
       },
       // The transport's failWhenDisconnected contract: refuse at once while down.
-      sendRequest: async (method, params, options) => {
+      sendRequest: async (method, params, options): Promise<RpcResponse> => {
         if (options?.failWhenDisconnected && state !== 'connected') {
           throw new Error(`Not connected: ${method}`)
         }
@@ -185,7 +192,7 @@ function deferred() {
 
 let queryClient: QueryClient = createOrcaQueryClient()
 
-function explorer(): ReactNode {
+function explorer(): ReactElement {
   return createElement(
     QueryClientProvider,
     { client: queryClient },
