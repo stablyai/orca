@@ -1,5 +1,5 @@
 import { CLAUDE_STRUCTURED_AGENT } from '../../claude/structured/claude-structured-agent-definition'
-import { CODEX_STRUCTURED_AGENT } from '../../codex/codex-structured-agent-definition'
+import { CODEX_STRUCTURED_AGENT } from '../../codex/structured/launch/codex-structured-agent-definition'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionAdapterRouter } from './structured-agent-session-adapter-router'
 import type { StructuredAgentDefinition } from './structured-agent-definition'
@@ -67,7 +67,8 @@ export function claudeAndCodexDeclared(): StructuredAgentRegistry {
     compact: unused,
     changeThreadGoal: unused,
     rewind: unused,
-    recoverRewind: unused
+    recoverRewind: unused,
+    copyConversation: unused
   })
 }
 
@@ -87,6 +88,7 @@ function implementedBy(
     ...definition,
     capabilities: {
       ...declared,
+      fork: adapter.copyConversation ? declared.fork : undefined,
       compact: declared.compact && Boolean(adapter.compact),
       threadGoal: declared.threadGoal && Boolean(adapter.changeThreadGoal),
       rewind:

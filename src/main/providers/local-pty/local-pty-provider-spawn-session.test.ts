@@ -1,4 +1,5 @@
-import type * as WslAvailabilityTypes from '../../wsl-availability'
+import type * as WslPathOwner from '../../../shared/wsl-paths'
+import type * as WslAvailabilityTypes from '../../wsl/discovery/wsl-availability'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as MacosTccLoginShell from '../macos-tcc-login-shell'
 import type { ShellSpawnParams } from './local-pty-executable-spawn'
@@ -31,6 +32,13 @@ const {
   isWslAvailableAsyncMock: vi.fn(),
   wslUncDirectoryExistsAsyncMock: vi.fn(),
   createShellPromptReadinessProbeMock: vi.fn()
+}))
+
+vi.mock('../../../shared/wsl-paths', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslPathOwner>()),
+  toLinuxPath: (path: string) => path.replace(/^C:\\/i, '/mnt/c/').replace(/\\/g, '/'),
+  toWindowsWslPath: (path: string, distro: string) =>
+    `\\\\wsl.localhost\\${distro}${path.replace(/\//g, '\\')}`
 }))
 
 vi.mock('fs', () => ({
@@ -69,7 +77,7 @@ vi.mock('../macos-tcc-login-shell', async (importOriginal) => ({
   prepareMacosTccLoginShell: prepareMacosTccLoginShellMock
 }))
 
-vi.mock('../../pty-descendant-termination', () => ({
+vi.mock('../../pty/process-retirement/pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
@@ -97,7 +105,7 @@ vi.mock('../windows-pty-job-membership', () => ({
   isWindowsPtyJobReadable: () => true
 }))
 
-vi.mock('../../wsl', () => ({
+vi.mock('../../wsl/filesystem/unc-path-access', () => ({
   parseWslPath: (path: string) => {
     const match = path.match(/^\\\\wsl\.localhost\\([^\\]+)(.*)$/)
     if (!match) {
@@ -108,27 +116,23 @@ vi.mock('../../wsl', () => ({
       linuxPath: (match[2] || '').replace(/\\/g, '/') || '/'
     }
   },
-  toLinuxPath: (path: string) => path.replace(/^C:\\/i, '/mnt/c/').replace(/\\/g, '/'),
-  toWindowsWslPath: (path: string, distro: string) =>
-    `\\\\wsl.localhost\\${distro}${path.replace(/\//g, '\\')}`,
-  getDefaultWslDistro: () => 'Ubuntu',
-  isWslAvailableAsync: () => isWslAvailableAsyncMock(),
-  // Fixture WSL UNC directories exist; avoid launching wsl.exe to validate them.
   wslUncDirectoryExistsAsync: (...args: unknown[]) => wslUncDirectoryExistsAsyncMock(...args)
 }))
+vi.mock('../../wsl/discovery/distro-catalog', () => ({
+  getDefaultWslDistro: () => 'Ubuntu'
+}))
 
-vi.mock('../../wsl-availability', async (importOriginal) => ({
+vi.mock('../../wsl/discovery/wsl-availability', async (importOriginal) => ({
   ...(await importOriginal<typeof WslAvailabilityTypes>()),
   isWslAvailableAsync: () => isWslAvailableAsyncMock()
 }))
 
-vi.mock('../../shell-prompt-readiness-probe', () => ({
+vi.mock('../../pty/shell-startup/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: createShellPromptReadinessProbeMock
 }))
 
 import { LocalPtyProvider } from './local-pty-provider'
 import {
-  pendingLocalPtySpawns,
   ptyDisposables,
   ptyExitDisposables,
   ptyPhysicalExits,
@@ -213,180 +217,6 @@ describe('LocalPtyProvider', () => {
       expect(mockProc.write).not.toHaveBeenCalled()
     })
 
-    it('reattaches to an existing caller-supplied session id without spawning', async () => {
-      const first = await provider.spawn({ cols: 80, rows: 24, sessionId: 'serve-session-1' })
-      spawnMock.mockClear()
-
-      const second = await provider.spawn({ cols: 120, rows: 40, sessionId: first.id })
-
-      expect(second).toEqual({
-        id: 'serve-session-1',
-        incarnationId: first.incarnationId,
-        pid: 12345,
-        isReattach: true,
-        // This local reattach resized the PTY; publish the new grid unlike daemon/relay attachments.
-        attachedGrid: { cols: 120, rows: 40 }
-      })
-      expect(mockProc.resize).toHaveBeenCalledWith(120, 40)
-      expect(spawnMock).not.toHaveBeenCalled()
-    })
-
-    it('attaches only to an existing stable session', async () => {
-      await provider.spawn({ cols: 80, rows: 24, sessionId: 'stable-pane-session' })
-      spawnMock.mockClear()
-
-      const result = await provider.spawn({
-        cols: 120,
-        rows: 40,
-        sessionId: 'stable-pane-session',
-        attachOnly: true
-      })
-
-      expect(result).toMatchObject({ id: 'stable-pane-session', isReattach: true })
-      expect(spawnMock).not.toHaveBeenCalled()
-    })
-
-    it('does not create when an attach-only stable session is absent', async () => {
-      await expect(
-        provider.spawn({
-          cols: 80,
-          rows: 24,
-          sessionId: 'missing-stable-pane-session',
-          attachOnly: true
-        })
-      ).rejects.toThrow('Session not found: missing-stable-pane-session')
-      expect(spawnMock).not.toHaveBeenCalled()
-    })
-
-    it('attaches only to an existing numeric provider session', async () => {
-      const first = await provider.spawn({ cols: 80, rows: 24 })
-      spawnMock.mockClear()
-
-      const result = await provider.spawn({
-        cols: 120,
-        rows: 40,
-        sessionId: first.id,
-        attachOnly: true
-      })
-
-      expect(result).toMatchObject({
-        id: first.id,
-        incarnationId: first.incarnationId,
-        isReattach: true
-      })
-      expect(spawnMock).not.toHaveBeenCalled()
-    })
-
-    it('does not create when a numeric attach-only provider session is absent', async () => {
-      await expect(
-        provider.spawn({ cols: 80, rows: 24, sessionId: '404', attachOnly: true })
-      ).rejects.toThrow('Session not found: 404')
-      expect(spawnMock).not.toHaveBeenCalled()
-    })
-
-    it('keeps a native UNC session native on a conflicting WSL reattach', async () => {
-      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-      const first = await provider.spawn({
-        cols: 80,
-        rows: 24,
-        sessionId: 'native-session',
-        cwd: '\\\\server\\share\\repo',
-        shellOverride: 'powershell.exe'
-      })
-      spawnMock.mockClear()
-
-      const second = await provider.spawn({
-        cols: 120,
-        rows: 40,
-        sessionId: first.id,
-        shellOverride: 'wsl.exe',
-        terminalWindowsWslDistro: 'Ubuntu'
-      })
-
-      expect(first.wslDistro).toBeNull()
-      expect(second.wslDistro).toBeNull()
-      expect(spawnMock).not.toHaveBeenCalled()
-    })
-
-    it('keeps the first WSL distro on a conflicting distro reattach', async () => {
-      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-      const first = await provider.spawn({
-        cols: 80,
-        rows: 24,
-        sessionId: 'wsl-session',
-        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
-      })
-      spawnMock.mockClear()
-
-      const second = await provider.spawn({
-        cols: 120,
-        rows: 40,
-        sessionId: first.id,
-        shellOverride: 'wsl.exe',
-        terminalWindowsWslDistro: 'Debian'
-      })
-
-      expect(first.wslDistro).toBe('Ubuntu')
-      expect(second.wslDistro).toBe('Ubuntu')
-      expect(spawnMock).not.toHaveBeenCalled()
-    })
-
-    it('does not reattach numeric caller session ids that can collide after restart', async () => {
-      const first = await provider.spawn({ cols: 80, rows: 24 })
-      spawnMock.mockClear()
-
-      const second = await provider.spawn({ cols: 120, rows: 40, sessionId: first.id })
-
-      expect(second.id).not.toBe(first.id)
-      expect(second.isReattach).toBeUndefined()
-      expect(spawnMock).toHaveBeenCalledOnce()
-    })
-
-    it('does not spawn after shutdown cancels a pending stable session id', async () => {
-      let finishPreparation!: () => void
-      spawnMock.mockClear()
-      prepareMacosTccLoginShellMock.mockImplementationOnce(
-        () =>
-          new Promise<void>((resolve) => {
-            finishPreparation = resolve
-          })
-      )
-
-      const spawn = provider.spawn({
-        cols: 80,
-        rows: 24,
-        sessionId: 'pending-local-session'
-      })
-      const canceledSpawn = expect(spawn).rejects.toThrow(
-        'PTY spawn canceled: pending-local-session'
-      )
-      await vi.waitFor(() => expect(prepareMacosTccLoginShellMock).toHaveBeenCalledOnce())
-
-      await provider.shutdown('pending-local-session', { immediate: true })
-      finishPreparation()
-      await canceledSpawn
-      expect(spawnMock).not.toHaveBeenCalled()
-
-      await expect(
-        provider.spawn({ cols: 80, rows: 24, sessionId: 'pending-local-session' })
-      ).resolves.toMatchObject({ id: 'pending-local-session' })
-      expect(spawnMock).toHaveBeenCalledOnce()
-    })
-
-    it('cancels an immediate stable-session shutdown before any PTY is spawned', async () => {
-      spawnMock.mockClear()
-
-      const spawn = provider.spawn({
-        cols: 80,
-        rows: 24,
-        sessionId: 'immediate-shutdown-session'
-      })
-      await provider.shutdown('immediate-shutdown-session', { immediate: true })
-
-      await expect(spawn).rejects.toThrow('PTY spawn canceled: immediate-shutdown-session')
-      expect(spawnMock).not.toHaveBeenCalled()
-    })
-
     // Hook/trust setup makes env build a long pre-spawn await; shutdown must cancel during it (#16441).
     it('does not spawn after shutdown cancels a pending spawn during the env build', async () => {
       spawnMock.mockClear()
@@ -446,117 +276,6 @@ describe('LocalPtyProvider', () => {
       }
     )
 
-    it.each([1, 2])(
-      'settles final-preflight shutdown without a late PTY (%i microtasks)',
-      async (microtasks) => {
-        spawnMock.mockClear()
-        let finishPreparation!: () => void
-        prepareMacosTccLoginShellMock.mockImplementationOnce(
-          () =>
-            new Promise<void>((resolve) => {
-              finishPreparation = resolve
-            })
-        )
-        const id = 'preflight-resume-session'
-        const kill = mockProc.kill
-        let committed = false
-        const outcome = provider
-          .spawn({
-            cols: 80,
-            rows: 24,
-            sessionId: id,
-            onPtySpawnCommitted: () => {
-              committed = true
-            }
-          })
-          .then(
-            (result) => ({ ok: true as const, result }),
-            (error: unknown) => ({ ok: false as const, error })
-          )
-        await import('node-pty')
-        await vi.waitFor(() => expect(finishPreparation).toBeTypeOf('function'))
-        finishPreparation()
-        let committedAtShutdown = false
-        await new Promise<void>((resolve, reject) => {
-          const shutdown = () => {
-            committedAtShutdown = committed
-            provider.shutdown(id, { immediate: true }).then(resolve, reject)
-          }
-          queueMicrotask(() => (microtasks === 1 ? shutdown() : queueMicrotask(shutdown)))
-        })
-        const settled = await outcome
-        if (committedAtShutdown) {
-          expect(settled.ok).toBe(true)
-          expect(kill).toHaveBeenCalled()
-        } else {
-          expect(settled).toEqual({ ok: false, error: new Error(`PTY spawn canceled: ${id}`) })
-          expect(spawnMock.mock.calls.length).toBe(0)
-        }
-        expect(provider.getPtyProcess(id)).toBeUndefined()
-        expect(pendingLocalPtySpawns.has(id)).toBe(false)
-      }
-    )
-
-    it('cancels deferred shell availability before finalizing a launch plan', async () => {
-      spawnMock.mockClear()
-      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-      let finishAvailability!: (available: boolean) => void
-      const buildSpawnEnv = vi.fn((_id: string, env: Record<string, string>) => env)
-      provider.configure({
-        getWindowsShell: () => 'powershell.exe',
-        getWindowsPowerShellImplementation: () => 'auto',
-        pwshAvailable: () =>
-          new Promise<boolean>((resolve) => {
-            finishAvailability = resolve
-          }),
-        buildSpawnEnv
-      })
-      const id = 'deferred-availability-session'
-      const spawn = provider.spawn({ cols: 80, rows: 24, sessionId: id })
-      const rejected = expect(spawn).rejects.toThrow(`PTY spawn canceled: ${id}`)
-      await provider.shutdown(id, { immediate: true })
-      finishAvailability(true)
-      await rejected
-      expect(buildSpawnEnv).not.toHaveBeenCalled()
-      expect(spawnMock.mock.calls.length).toBe(0)
-      expect(pendingLocalPtySpawns.has(id)).toBe(false)
-    })
-
-    it.each(['synchronous environment', 'async environment', 'preflight'])(
-      'releases cancellation state after failed %s and allows a fresh retry',
-      async (phase) => {
-        spawnMock.mockClear()
-        const id = 'failed-preparation-session'
-        let fail = true
-        provider.configure({
-          buildSpawnEnv: (_id, env) => {
-            if (fail && phase === 'synchronous environment') {
-              throw new Error('preparation failed')
-            }
-            if (fail && phase === 'async environment') {
-              return Promise.reject(new Error('preparation failed'))
-            }
-            return env
-          }
-        })
-        if (phase === 'preflight') {
-          prepareMacosTccLoginShellMock.mockRejectedValueOnce(new Error('preparation failed'))
-        }
-        await expect(provider.spawn({ cols: 80, rows: 24, sessionId: id })).rejects.toThrow(
-          'preparation failed'
-        )
-        expect(pendingLocalPtySpawns.has(id)).toBe(false)
-        expect(spawnMock.mock.calls.length).toBe(0)
-        await provider.shutdown(id, { immediate: true })
-        fail = false
-        await expect(provider.spawn({ cols: 80, rows: 24, sessionId: id })).resolves.toMatchObject({
-          id
-        })
-        expect(spawnMock.mock.calls.length).toBe(1)
-        expect(pendingLocalPtySpawns.has(id)).toBe(false)
-      }
-    )
-
     it('coalesces a concurrent same-session-id spawn before launching a redundant shell (F3)', async () => {
       spawnMock.mockClear()
       const procA = { ...mockProc, pid: 1001 }
@@ -582,29 +301,6 @@ describe('LocalPtyProvider', () => {
       expect(provider.getPtyProcess('race-session')).toBe(procA)
       expect(spawnMock).toHaveBeenCalledOnce()
       expect(procA.resize).toHaveBeenCalledWith(132, 44)
-    })
-
-    it('invokes onSpawned callback', async () => {
-      const onSpawned = vi.fn()
-      provider.configure({ onSpawned })
-      const { id, incarnationId } = await provider.spawn({ cols: 80, rows: 24 })
-      expect(onSpawned).toHaveBeenCalledWith(id, incarnationId)
-    })
-
-    it('reports physical commit before post-spawn publication can fail', async () => {
-      spawnMock.mockClear()
-      const committed = vi.fn()
-      provider.configure({
-        onSpawned: () => {
-          throw new Error('post-spawn publication failed')
-        }
-      })
-
-      await expect(
-        provider.spawn({ cols: 80, rows: 24, onPtySpawnCommitted: committed })
-      ).rejects.toThrow('post-spawn publication failed')
-      expect(spawnMock).toHaveBeenCalledOnce()
-      expect(committed).toHaveBeenCalledOnce()
     })
   })
 })

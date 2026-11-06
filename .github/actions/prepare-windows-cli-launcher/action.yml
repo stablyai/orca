@@ -13,7 +13,7 @@ runs:
       id: rust-scope
       if: runner.os == 'Windows'
       shell: bash
-      run: node config/scripts/windows-rust-build-scope.mjs >> "$GITHUB_OUTPUT"
+      run: node config/scripts/native-build/windows/windows-rust-build-scope.mjs >> "$GITHUB_OUTPUT"
 
     # Source globs, not crate/**: target/ and .build/ can already exist when this key is computed.
     # Real inputs only: older restores are safe because the build re-checks each exe's fingerprint.
@@ -25,7 +25,7 @@ runs:
           .build/windows-cli-launcher
           native/windows-cli-launcher/target
           ~/.cargo/registry
-        key: orcad-windows-cli-launcher-v2-${{ runner.arch }}-${{ inputs.arches }}-${{ steps.rust-scope.outputs.toolchain }}-${{ steps.rust-scope.outputs.app-version }}-${{ hashFiles('native/windows-cli-launcher/src/**', 'native/windows-cli-launcher/build.rs', 'native/windows-cli-launcher/Cargo.toml', 'native/windows-cli-launcher/Cargo.lock', 'native/windows-cli-launcher/app.manifest', 'native/windows-cli-launcher/.cargo/**', 'config/scripts/build-windows-cli-launcher.mjs', 'config/scripts/windows-rust-executable-build.mjs', 'config/scripts/windows-pe-imports.mjs', 'resources/build/icon.ico') }}
+        key: orcad-windows-cli-launcher-v2-${{ runner.arch }}-${{ inputs.arches }}-${{ steps.rust-scope.outputs.toolchain }}-${{ steps.rust-scope.outputs.app-version }}-${{ hashFiles('native/windows-cli-launcher/src/**', 'native/windows-cli-launcher/build.rs', 'native/windows-cli-launcher/Cargo.toml', 'native/windows-cli-launcher/Cargo.lock', 'native/windows-cli-launcher/app.manifest', 'native/windows-cli-launcher/.cargo/**', 'config/scripts/native-build/windows/build-windows-cli-launcher.mjs', 'config/scripts/native-build/windows/windows-rust-executable-build.mjs', 'config/scripts/native-build/windows/windows-pe-imports.mjs', 'resources/build/icon.ico') }}
         restore-keys: |
           orcad-windows-cli-launcher-v2-${{ runner.arch }}-${{ inputs.arches }}-${{ steps.rust-scope.outputs.toolchain }}-
 
@@ -39,6 +39,6 @@ runs:
         foreach ($arch in ($env:ARCHES -split ' ' | Where-Object { $_ })) {
           rustup target add $triples[$arch]
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node config/scripts/build-windows-cli-launcher.mjs --arch $arch --output ".build/windows-cli-launcher/$arch/orca.exe"
+          node config/scripts/native-build/windows/build-windows-cli-launcher.mjs --arch $arch --output ".build/windows-cli-launcher/$arch/orca.exe"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         }

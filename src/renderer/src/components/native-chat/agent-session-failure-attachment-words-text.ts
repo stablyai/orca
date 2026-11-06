@@ -47,6 +47,12 @@ export const ATTACHMENT_FAILURE_PIECES = {
     translate('components.native-chat.failureWords.attachmentNoSource', COPY.attachmentNoSource),
   attachmentInvalid: () =>
     translate('components.native-chat.failureWords.attachmentInvalid', COPY.attachmentInvalid),
+  attachmentsExpired: (values) =>
+    translate(
+      'components.native-chat.failureWords.attachmentsExpired',
+      COPY.attachmentsExpired,
+      values
+    ),
   attachmentUnreadable: () =>
     translate('components.native-chat.failureWords.attachmentUnreadable', COPY.attachmentUnreadable)
 } satisfies Partial<

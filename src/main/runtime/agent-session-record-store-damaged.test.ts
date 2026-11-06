@@ -1,4 +1,4 @@
-import { nextStructuredQueuedMessage } from '../native-chat/agent-session-wire/structured-agent-session-queued-messages'
+import { nextStructuredQueuedMessage } from '../native-chat/agent-session-wire/structured-agent-session-queued-gate'
 import { heldStructuredAgentSessionCurrentWork } from '../native-chat/agent-session-wire/structured-agent-session-host-current-work'
 import { AgentSessionSubscribers } from '../native-chat/agent-session-wire/structured-agent-session-subscribers'
 import { openStructuredAgentSessionConversationJournal } from '../native-chat/agent-session-wire/structured-agent-session-conversation-open'

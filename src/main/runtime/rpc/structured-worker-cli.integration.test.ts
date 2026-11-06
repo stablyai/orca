@@ -7,23 +7,26 @@ import { activeProviderContext } from '../../../shared/agent-session/agent-sessi
 import { isOrcaSessionId } from '../../../shared/orca-session-address'
 import { getRuntimeMetadataPath } from '../../../shared/runtime-bootstrap'
 import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
-import * as versionProbe from '../../agent-cli-version-probe'
+import * as versionProbe from '../../agent-launch/preflight/agent-cli-version-probe'
 import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
 import { CODEX_MINIMUM_SUPPORTED_VERSION } from '../../../shared/codex-cli-installation'
 import { OrchestrationDb } from '../orchestration/db'
-import { storeRepo } from '../runtime-store-partial-fixture'
-import { scriptedCodexTransport } from '../scripted-codex-transport.test-fixture'
-import { chatTabCommandsSettled } from '../session-layout-apply.test-fixture'
+import { storeRepo } from '../orca-runtime-tests/runtime-store-partial-fixture'
+import { scriptedCodexTransport } from '../orca-runtime-tests/scripted-codex-transport.test-fixture'
+import { chatTabCommandsSettled } from '../orca-runtime-tests/session-layout-apply.test-fixture'
 import {
   AuthorityRuntime,
   authorityProfile,
   root,
   savedIds
-} from '../structured-agent-session-tab-authority.test-support'
+} from '../agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
 import { ensureStructuredAgentSessionHost } from '../agent-session/structured-agent-session-runtime'
-import { fakeCodex, resetProviderFaults } from '../structured-chat-coordinator-fake-codex-fixture'
-import { structuredWorkerIdentities } from '../structured-worker-identity'
+import {
+  fakeCodex,
+  resetProviderFaults
+} from '../orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-fake-codex-fixture'
+import { structuredWorkerIdentities } from '../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { releaseStructuredWorkerSession } from './methods/orchestration-structured-worker-session'
 import { AGENT_LAUNCH_METHODS } from './methods/agent-launch'
 import { ORCHESTRATION_METHODS } from './methods/orchestration'
@@ -495,10 +498,12 @@ it.each(['worker-stop', 'worker-release'] as const)(
 type ParkedMailRegistry = ReadonlyMap<unknown, unknown>
 
 function observeParkedMail(value: unknown): ParkedMailRegistry {
-  if (!isRecord(value) || !(value.parkedUntilJournalEdge instanceof Map)) {
+  const parking = isRecord(value) ? value.parking : undefined
+  if (!isRecord(parking) || !(parking.sessionOf instanceof Map)) {
     throw new Error('expected actual parked mail registry')
   }
-  return value.parkedUntilJournalEdge
+  // Parked mailboxes, each with the session whose journal edge it waits on.
+  return parking.sessionOf
 }
 
 it('worker-abandon settles and fences consumption, releases the existing binding and retains the child', async () => {
@@ -541,7 +546,8 @@ it('worker-abandon settles and fences consumption, releases the existing binding
   const delivery = runtime.pointerDelivery()
   const parked = observeParkedMail(delivery)
   runtime.deliverPendingMessagesForHandle(mailbox)
-  expect(parked.has(mailbox)).toBe(true)
+  // Queued behind the running turn, its card is followed on the session's next journal edge.
+  await vi.waitFor(() => expect(parked.has(mailbox)).toBe(true))
   const originalForget = delivery.forgetSession.bind(delivery)
   const releasedEntries: boolean[] = []
   const forget = vi.spyOn(delivery, 'forgetSession').mockImplementation((sessionId) => {

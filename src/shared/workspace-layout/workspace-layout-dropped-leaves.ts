@@ -1,5 +1,5 @@
 // Every owner-build commit handles dropped panes centrally so phone/CLI/window/headless closes share retirement semantics.
-import { recordClosedTerminalPanes, type ClosedTerminalPane } from '../closed-terminal-panes'
+import { recordClosedTerminalPanes, type ClosedTerminalPane } from './closed-terminal-panes'
 import type { ExecutionHostId } from '../execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import type { DroppedLeafReason } from './workspace-layout-command-types'

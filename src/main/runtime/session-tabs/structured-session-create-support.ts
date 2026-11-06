@@ -1,3 +1,4 @@
+import { resolveStructuredAgentSessionForkIntent } from '../../native-chat/structured-agent-session-fork'
 import {
   captureStructuredAgentCliSource,
   structuredAgentCliSourceFromEvidence
@@ -17,9 +18,9 @@ import type { AgentSessionAttachParams } from '../../native-chat/agent-session-w
 import {
   resolveHostStructuredAgentCreateSupport,
   resolveHostStructuredAgentLaunchEnvironment
-} from '../structured-agent-launch-support'
-import { structuredAgentRuntimeMetadata } from '../structured-agent-runtime-metadata'
-import { structuredAgentChatProgramNeedsInstall } from '../structured-agent-availability'
+} from '../agent-session/launch/structured-agent-launch-support'
+import { structuredAgentRuntimeMetadata } from '../agent-session/installation/structured-agent-runtime-metadata'
+import { structuredAgentChatProgramNeedsInstall } from '../agent-session/launch/structured-agent-availability'
 import { structuredLaunchSeedOptions } from '../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentSessionStoreOnDisk } from '../agent-session/records/agent-session-record-store-slot'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../agent-session/structured-agent-session-host-refusal'
@@ -27,6 +28,7 @@ import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-path
 import { isFloatingWorkspaceSelector } from '../../../shared/floating-workspace-worktree'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { StructuredAgentCreateSupportReply } from '../../../shared/agent-session/structured-agent-create-support-reply'
 
 export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends StructuredSessionWorkspaceScope {
   protected abstract restoreStructuredAgentSessionTabsOnce(
@@ -42,7 +44,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     worktreeSelector: string,
     agent: StructuredAgentId,
     options?: { requireInstalledChatProgram?: boolean }
-  ): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' | 'chat-program' }> {
+  ): Promise<StructuredAgentCreateSupportReply> {
     const support = await resolveHostStructuredAgentCreateSupport({
       agent,
       worktreeSelector,
@@ -107,6 +109,15 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     const hostLaunchDirectory = isFloatingWorkspaceSelector(input.worktree)
       ? (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path
       : undefined
+    if (input.forkFrom) {
+      const resolved = await resolveStructuredAgentSessionForkIntent({
+        ...input,
+        forkFrom: input.forkFrom,
+        host: getStructuredAgentSessionHost(),
+        location: await this.resolveStructuredAgentSessionLocation(input.worktree)
+      })
+      return hostLaunchDirectory ? { ...resolved, hostLaunchDirectory } : resolved
+    }
     const resolveAccountHome = this.structuredAgentAccountHomeResolver(
       input.agent,
       input.worktree,
@@ -244,7 +255,8 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
                 : {}),
               transcriptPath: adoption.transcriptPath,
               providerSessionId: input.resumeFrom.providerSessionId,
-              workspaceCwd
+              workspaceCwd,
+              conversationName: adoption.conversationName
             })
           }
         : {}),

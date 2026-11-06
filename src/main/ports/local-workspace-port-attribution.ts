@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { realpath } from 'node:fs/promises'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
-import { blockedWslDistroForPath } from '../wsl/wsl-unc-access-gate'
+import { blockedWslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 import { PrioritySemaphore } from '../../shared/priority-semaphore'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import type {

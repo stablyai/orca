@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import type { IDisposable } from '@xterm/xterm'
-import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
+import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
 import { applyTerminalAppearance } from './terminal-appearance'
 import { useThemeBackgroundStore } from '@/store/theme-background'
 import { installMouseHideWhileTyping } from './mouse-hide-while-typing'

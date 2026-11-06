@@ -10,7 +10,7 @@ import { relayFailureAllowsGraceRetry } from './relay-credential-eligibility'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
-import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
+import type { MobileRelayEndpoint } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { RELAY_HOST_CLOSE_REASON } from '../../../src/shared/relay-host-close-reason'
 
 type EstablishResult = { ok: true } | { ok: false; error: Error }

@@ -1,12 +1,14 @@
 import {
   type AgentStatus,
-  clearWorkingIndicators,
+  isCursorNativeAgentTitle,
+  shouldSuppressCursorNativeTitle
+} from '../../../../shared/agent-status/title/agent-title-core'
+import {
   createAgentStatusTracker,
   detectAgentStatusFromTitle,
-  isCursorNativeAgentTitle,
-  normalizeTerminalTitle,
-  shouldSuppressCursorNativeTitle
-} from '../../../../shared/agent-detection'
+  normalizeTerminalTitle
+} from '../../../../shared/agent-status/title/agent-title-status'
+import { clearWorkingIndicators } from '../../../../shared/agent-status/title/agent-title-working-indicators'
 import type { IpcPtyTransportOptions } from './pty-transport-types'
 import type { PendingPtySideEffect } from './pty-output-side-effect-queue'
 

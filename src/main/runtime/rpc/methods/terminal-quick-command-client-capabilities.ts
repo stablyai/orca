@@ -1,14 +1,14 @@
-import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
+import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import {
   applyTerminalQuickCommandMutation,
   type TerminalQuickCommandMutation
-} from '../../../../shared/terminal-quick-commands'
-import { isLegacyReadableTerminalQuickCommand } from '../../../../shared/terminal-quick-command-prompt-limit'
+} from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
+import { isLegacyReadableTerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import {
   LEGACY_MAX_QUICK_COMMANDS,
   TERMINAL_QUICK_COMMAND_LARGE_LISTS_RUNTIME_CAPABILITY,
   TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY
-} from '../../../../shared/terminal-quick-command-capabilities'
+} from '../../../../shared/terminal/quick-commands/terminal-quick-command-capabilities'
 import { InvalidArgumentError, type RpcContext } from '../core'
 
 type QuickCommandReader = Pick<RpcContext, 'clientKind' | 'clientCapabilities'>

@@ -90,6 +90,8 @@ export type ProvisionalLaunchArgs = {
   declinedTerminal?: DeclinedStructuredLaunchTerminalOptions
   /** `onHostDeclined` opens a surface of the caller's own (a shell) rather than the agent's CLI. */
   declinedOpensCallerSurface?: true
+  /** The caller already asked the host whether another terminal runs the resumed conversation. */
+  resumeWritersChecked?: true
 }
 
 export function beginStructuredAgentSessionProvisionalLaunch(
@@ -178,7 +180,8 @@ export function beginStructuredAgentSessionProvisionalLaunch(
           })
         ),
       onHostDeclined: (target) => openDeclinedTerminal(args, worktreeId, target),
-      ...(args.declinedOpensCallerSurface ? { declinedOpensCallerSurface: true as const } : {})
+      ...(args.declinedOpensCallerSurface ? { declinedOpensCallerSurface: true as const } : {}),
+      ...(args.resumeWritersChecked ? { resumeWritersChecked: true as const } : {})
     })
     void launch.settlement.then(settleWithoutTab, settleWithoutTab)
     return launch
@@ -248,8 +251,8 @@ function beginDeferredPublication(
   args: ProvisionalLaunchArgs
 ): (StructuredAgentLaunchHandle & { tab: null }) | null {
   const worktreeId = args.target?.worktreeId ?? args.plan.worktreeId
-  if (!worktreeId || !args.plan.resumeFrom || args.plan.prompt) {
-    throw new Error('Deferred publication requires an identity-only resume.')
+  if (!worktreeId || (!args.plan.resumeFrom && !args.plan.forkFrom) || args.plan.prompt) {
+    throw new Error('Deferred publication requires an identity-only resume or fork.')
   }
   const releaseHold = holdEmptyWorkspaceDefaultSurfaceForLaunch(worktreeId)
   let handle: StructuredAgentLaunchHandle | null

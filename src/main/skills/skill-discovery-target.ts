@@ -4,7 +4,9 @@ import {
 } from './skill-discovery-wsl-observation'
 import type { Repo } from '../../shared/repo-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../../shared/skills'
-import { getDefaultWslDistro, getWslHomeAsync, parseWslPath, toLinuxPath } from '../wsl'
+import { getDefaultWslDistro, getWslHomeAsync } from '../wsl/discovery/distro-catalog'
+import { parseWslPath } from '../wsl/filesystem/unc-path-access'
+import { toLinuxPath } from '../../shared/wsl-paths'
 import { clearSkillRootScanCache, discoverSkills } from './discovery'
 import { discoverSkillObservationInWsl } from './skill-discovery-wsl'
 import type { SkillProviderRootOverrides } from './skill-provider-destinations'
@@ -12,7 +14,7 @@ import { stablePathId } from './skill-discovery-sources'
 import { skillScanSourceKinds } from './skill-discovery-source-filter'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { isSkillRootUnavailableError, SkillScanCoalescer } from './skill-scan-coalescer'
-import { assertWslUncPathRunning } from '../wsl/wsl-unc-access-gate'
+import { assertWslUncPathRunning } from '../wsl/filesystem/wsl-unc-access-gate'
 import {
   stoppedWslRootsReadScopeKey,
   type StoppedWslRootsReadScope

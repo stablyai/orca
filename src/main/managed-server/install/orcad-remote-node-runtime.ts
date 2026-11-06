@@ -15,7 +15,7 @@ import {
   orcadNodeRuntimeExecutable
 } from '../../../shared/orcad-artifacts'
 import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {
   execCommand,
   isUnconfirmedSshCommandTermination

@@ -1,6 +1,6 @@
 import type { AppState } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 

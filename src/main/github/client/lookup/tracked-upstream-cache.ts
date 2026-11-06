@@ -1,4 +1,4 @@
-import { splitRemoteBranchName } from '../../../../shared/git-effective-upstream'
+import { splitRemoteBranchName } from '../../../../shared/git/remotes/git-remote-branch-name'
 import type { OwnerRepo } from '../../gh-utils'
 import { readLocalGitConfigSignature } from '../../local-git-config-signature'
 import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'

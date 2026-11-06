@@ -61,7 +61,7 @@ export const OPENCODE_TRANSCRIPT_IMPORT: StructuredAgentTranscriptImport = {
       throw error
     }
     const { readOpenCodeTranscriptSignalViaWorker } =
-      await import('../ai-vault/session-scanner-opencode-sqlite-worker-spawn')
+      await import('../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn')
     const signal = await readOpenCodeTranscriptSignalViaWorker({
       dbPath,
       sessionId: providerSessionId

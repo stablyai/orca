@@ -12,7 +12,7 @@ import {
   agentSessionFailureWords,
   type AgentJournalDispatchRejection
 } from '../../../shared/agent-session/failures/agent-session-failure-words'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../../shared/tui-agent-display-names'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { claudeRecord } from './journal/claude-structured-item-translation'
 
 export class ClaudeDispatchContentError extends Error {

@@ -61,7 +61,7 @@ export function openAgentSessionRecordStoreOnce(
       (opened) => {
         slot.store = opened.store
         if (opening === slot) {
-          sessionCrewChanges.notify()
+          sessionCrewChanges.notify(new Set(['topology', 'records']))
         }
         return opened
       },
@@ -107,7 +107,7 @@ export async function releaseAgentSessionRecordStore(): Promise<OpenedAgentSessi
   const released = opening
   opening = null
   if (released) {
-    sessionCrewChanges.notify()
+    sessionCrewChanges.notify(new Set(['topology', 'records']))
   }
   return released ? released.opened.catch(() => null) : null
 }

@@ -7,7 +7,7 @@
  * the claimed handle (as a Dispatch assignee or a Run coordinator). It then reaches only its own
  * mailboxes, its own Dispatch or Run, and the other party of that same orchestration.
  */
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { OrchestrationDb } from '../../runtime/orchestration/db'
 import { isEquivalentPaneKey } from '../../runtime/orchestration/db/pane-key-match'

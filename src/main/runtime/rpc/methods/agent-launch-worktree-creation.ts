@@ -2,8 +2,9 @@ import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-
 /** Terminal launches create agent-first worktrees; structured launches create the workspace without an agent and add chat afterwards.
  * The executor chooses; setup, default tabs, provenance and lineage use the normal create path. */
 
+import { callerLaunchSource } from '../../../agent-launch/agent-started-telemetry'
 import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
   finishAutomationWorkspaceProvenanceRequest,
@@ -16,7 +17,7 @@ import { combineLaunchWarnings } from '../../../agent-launch/agent-launch-warnin
 import type { RpcContext } from '../core'
 import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
 import { buildManagedWorktreeCreateArgs, worktreeCreateRepoSelector } from './worktree-create-args'
-import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-preferences'
+import { toAgentLaunchPreferences } from '../../../../shared/agent-launch/choices/agent-launch-preferences'
 import type { AgentLaunchParams } from '../../../../shared/rpc-contract/agent-launch-params'
 import { agentLaunchFolderWorkspaceCreator } from './agent-launch-folder-workspace-creation'
 import { agentLaunchMovesHostWindow } from './agent-launch-tab-publication'
@@ -102,7 +103,9 @@ export function agentLaunchWorkspaceFactory(
               }
             : {}),
           ...(cwd ? { startupCwd: cwd } : {}),
-          ...(launchSource ? { startupLaunchSource: launchSource } : {}),
+          ...(launchSource
+            ? { startupLaunchSource: callerLaunchSource(context, launchSource) }
+            : {}),
           ...(paneKey ? { startupPaneKey: paneKey } : {}),
           ...(startupLaunchPreferences ? { startupLaunchPreferences } : {}),
           ...(accountEnv ? { startupAccountEnv: { ...accountEnv } } : {}),

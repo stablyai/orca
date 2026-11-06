@@ -1,6 +1,6 @@
 import { escapeRegex } from '../../../shared/string-utils'
 import { findStartupDialogBlockedSignals } from '../startup-dialog-blocked-signals'
-import { startOfLastNonBlankLines } from '../terminal-wait-tail-window'
+import { startOfLastNonBlankLines } from '../terminal/wait/terminal-wait-tail-window'
 import { compiledFromActiveAgentStateRules } from './active-agent-state-rules'
 import {
   blockedAnchorLiterals,

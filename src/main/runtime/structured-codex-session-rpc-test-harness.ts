@@ -9,7 +9,7 @@ import type {
   CodexAppServerConnectionHandlers
 } from '../codex/app-server/codex-app-server-connection-types'
 import type { openCodexAppServerConnection } from '../codex/app-server/codex-app-server-connection'
-import { refuseUnroutedSteer } from '../codex/codex-structured-dispatch-test-support'
+import { refuseUnroutedSteer } from '../codex/structured/turns/codex-structured-dispatch-test-support'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
@@ -26,7 +26,7 @@ import {
   stopStructuredAgentSessionRuntime
 } from './agent-session/structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import { scriptedCodexTransport } from './scripted-codex-transport.test-fixture'
+import { scriptedCodexTransport } from './orca-runtime-tests/scripted-codex-transport.test-fixture'
 
 export const SESSION = 'session-integration-1'
 export const THREAD = 'thread-integration'

@@ -108,6 +108,10 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
         // Before the session read: a moved project's local rows must leave before the host's merge in.
         // Started before the repo list too; this startup load does not prune, so it need not wait.
         const wslMovedProjectsPromise = useAppStore.getState().fetchWslMovedProjects()
+        // Desktop-only read; must land before the first live host catalog so that answer can drop deleted projects.
+        const hostCatalogSeedPromise = timeRendererStartupStep('seed-host-repo-catalogs', () =>
+          useAppStore.getState().seedReposFromHostCatalogSnapshots()
+        )
         // Skip remote catalogs for first paint; saved runtimes may wait a full connect timeout.
         await timeRendererStartupStep('fetch-repos-local', () =>
           actions.fetchReposForAllHosts({ remoteHosts: 'skip' })
@@ -124,18 +128,21 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
             actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
           )
         })()
-        const sessionReadPromise = Promise.all([runtimeHostsPromise, wslMovedProjectsPromise]).then(
-          ([startupRuntimeHosts]) =>
-            // Restore cached runtime-host partitions without network waits; skip unreadable ones.
-            timeRendererStartupStep('session-get', () =>
-              fetchWorkspaceSessionWithRuntimeHostOwners(
-                // A moved workspace's retained rows share tab ids with its host's live ones.
-                wslMovedSessionReadApi(useAppStore.getState().wslMovedProjects),
-                useAppStore.getState().repos,
-                startupRuntimeHosts.hostIds,
-                startupRuntimeHosts.sshHostIdByRuntimeHostId
-              )
+        const sessionReadPromise = Promise.all([
+          runtimeHostsPromise,
+          wslMovedProjectsPromise,
+          hostCatalogSeedPromise
+        ]).then(([startupRuntimeHosts]) =>
+          // Restore cached runtime-host partitions without network waits; skip unreadable ones.
+          timeRendererStartupStep('session-get', () =>
+            fetchWorkspaceSessionWithRuntimeHostOwners(
+              // A moved workspace's retained rows share tab ids with its host's live ones.
+              wslMovedSessionReadApi(useAppStore.getState().wslMovedProjects),
+              useAppStore.getState().repos,
+              startupRuntimeHosts.hostIds,
+              startupRuntimeHosts.sshHostIdByRuntimeHostId
             )
+          )
         )
         const hydrationSessionChain = sessionReadPromise.then(async (sessionRead) => {
           const hydrationRepoIds = collectWorktreeHydrationRepoIdsFromSession(

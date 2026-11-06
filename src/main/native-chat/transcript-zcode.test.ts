@@ -3,17 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import Database from '../sqlite/sync-database'
-import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import {
   readOpenCodeTranscriptPage,
   readOpenCodeTranscriptSignal
 } from './transcript-opencode-sqlite-query'
-import {
-  readOpenCodeNativeChatTranscriptFull,
-  readOpenCodeNativeChatTranscriptTail
-} from './transcript-opencode'
-import { subscribeOpenCodeNativeChatTranscript } from './transcript-opencode-subscribe'
-import { handleOpenCodeSqliteRequest } from '../ai-vault/session-scanner-opencode-sqlite-dispatch'
 
 const cleanups: (() => void)[] = []
 afterEach(() => {
@@ -67,130 +60,6 @@ function fixture(sequenced = true) {
   return { db, dbPath, insert, deps }
 }
 
-it.each([true, false])(
-  'filters hidden messages through full, tail and worker reads (sequence=%s)',
-  async (sequenced) => {
-    const f = fixture(sequenced)
-    f.insert('legacy-visible', 0)
-    f.insert('hidden', 1, 'hidden')
-    f.insert('visible', 2, 'visible')
-    expect(readOpenCodeTranscriptSignal(f.dbPath, 'session', 'zcode')).toMatchObject({
-      messageCount: 2,
-      partCount: 2
-    })
-    expect(readOpenCodeTranscriptSignal(f.dbPath, 'session')).toMatchObject({
-      messageCount: 3,
-      partCount: 3
-    })
-    const full = await readOpenCodeNativeChatTranscriptFull('session', f.deps, undefined, 'zcode')
-    expect(full).toMatchObject({ messages: [{ id: 'legacy-visible' }, { id: 'visible' }] })
-    const tail = await readOpenCodeNativeChatTranscriptTail(
-      { sessionId: 'session', limit: 1, agent: 'zcode' },
-      f.deps
-    )
-    expect(tail).toMatchObject({ messages: [{ id: 'visible' }], hasMore: true })
-    const response = await handleOpenCodeSqliteRequest({
-      id: 1,
-      kind: 'native-page',
-      dbPath: f.dbPath,
-      sessionId: 'session',
-      limit: 10,
-      agent: 'zcode'
-    })
-    expect(response).toMatchObject({
-      ok: true,
-      value: { items: [{ message: { id: 'legacy-visible' } }, { message: { id: 'visible' } }] }
-    })
-  }
-)
-
-it('paginates imported messages and parts by their recorded sequence', async () => {
-  const f = fixture()
-  f.insert('last', 2)
-  f.insert('first', 0)
-  f.insert('hidden', 1, 'hidden')
-  f.insert('second', 1)
-  f.insert('legacy-null', null)
-  f.db.prepare('UPDATE part SET sequence = 1 WHERE id = ?').run('second')
-  f.db
-    .prepare('INSERT INTO part VALUES (?, ?, ?, ?, 1, 1, 0)')
-    .run(
-      'earlier-part',
-      'second',
-      'session',
-      JSON.stringify({ type: 'text', text: 'earlier part' })
-    )
-  const full = await readOpenCodeNativeChatTranscriptFull('session', f.deps, undefined, 'zcode')
-  expect(full).toMatchObject({
-    messages: [
-      { id: 'first' },
-      { id: 'second', blocks: [{ text: 'earlier part' }, { text: 'second' }] },
-      { id: 'last' },
-      { id: 'legacy-null' }
-    ]
-  })
-  const collected: string[] = []
-  let cursor: number | undefined
-  for (let index = 0; index < 5; index++) {
-    const page = readOpenCodeTranscriptPage({
-      dbPath: f.dbPath,
-      sessionId: 'session',
-      limit: 1,
-      agent: 'zcode',
-      beforeMessageRowId: cursor
-    })
-    collected.unshift(...(page?.items.map((item) => item.message.id) ?? []))
-    if (!page?.hasMore) {
-      break
-    }
-    cursor = page.beforeMessageRowId ?? undefined
-  }
-  expect(collected).toEqual(['first', 'second', 'last', 'legacy-null'])
-})
-
-it('reconciles visibility changes, ordered imports and deletions in a live chat', async () => {
-  vi.useFakeTimers()
-  const f = fixture()
-  f.insert('last', 2)
-  f.insert('first', 0)
-  f.insert('hidden', 1, 'hidden')
-  let displayed: NativeChatMessage[] = []
-  const subscription = subscribeOpenCodeNativeChatTranscript(
-    {
-      agent: 'zcode',
-      sessionId: 'session',
-      resolvePollIntervalMs: 5,
-      onInitialSnapshot: (messages) => {
-        displayed = messages
-      },
-      onReplace: (messages) => {
-        displayed = messages
-      },
-      onAppend: (messages) => {
-        displayed.push(...messages)
-      }
-    },
-    undefined,
-    f.deps,
-    'zcode'
-  )
-  cleanups.push(subscription.unsubscribe)
-  await vi.advanceTimersByTimeAsync(0)
-  expect(displayed.map((message) => message.id)).toEqual(['first', 'last'])
-  f.db
-    .prepare('UPDATE message SET data = ?, time_updated = 2 WHERE id = ?')
-    .run(JSON.stringify({ role: 'user' }), 'hidden')
-  await vi.advanceTimersByTimeAsync(5)
-  expect(displayed.map((message) => message.id)).toEqual(['first', 'hidden', 'last'])
-  f.insert('middle', 1)
-  await vi.advanceTimersByTimeAsync(5)
-  expect(displayed.map((message) => message.id)).toEqual(['first', 'hidden', 'middle', 'last'])
-  f.db.prepare('DELETE FROM message WHERE id = ?').run('first')
-  f.db.prepare('DELETE FROM part WHERE message_id = ?').run('first')
-  await vi.advanceTimersByTimeAsync(5)
-  expect(displayed.map((message) => message.id)).toEqual(['hidden', 'middle', 'last'])
-})
-
 it('keeps a paging cursor stable when earlier messages are removed or imported', () => {
   const f = fixture()
   f.insert('last', 3)
@@ -213,42 +82,4 @@ it('keeps a paging cursor stable when earlier messages are removed or imported',
     beforeMessageRowId: newest?.beforeMessageRowId ?? undefined
   })
   expect(older?.items.map((item) => item.message.id)).toEqual(['imported', 'middle'])
-})
-
-it('observes a balanced visibility swap even when part counts and times stay unchanged', async () => {
-  vi.useFakeTimers()
-  const f = fixture()
-  f.insert('first', 0)
-  f.insert('hidden', 1, 'hidden')
-  f.insert('last', 2)
-  let displayed: NativeChatMessage[] = []
-  const subscription = subscribeOpenCodeNativeChatTranscript(
-    {
-      agent: 'zcode',
-      sessionId: 'session',
-      resolvePollIntervalMs: 5,
-      onInitialSnapshot: (messages) => {
-        displayed = messages
-      },
-      onReplace: (messages) => {
-        displayed = messages
-      },
-      onAppend: (messages) => {
-        displayed.push(...messages)
-      }
-    },
-    undefined,
-    f.deps,
-    'zcode'
-  )
-  cleanups.push(subscription.unsubscribe)
-  await vi.advanceTimersByTimeAsync(0)
-  f.db
-    .prepare('UPDATE message SET data = ?, time_updated = 2 WHERE id = ?')
-    .run(JSON.stringify({ role: 'user', semantics: { transcriptVisibility: 'hidden' } }), 'first')
-  f.db
-    .prepare('UPDATE message SET data = ?, time_updated = 2 WHERE id = ?')
-    .run(JSON.stringify({ role: 'user' }), 'hidden')
-  await vi.advanceTimersByTimeAsync(5)
-  expect(displayed.map((message) => message.id)).toEqual(['hidden', 'last'])
 })

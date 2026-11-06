@@ -1,16 +1,16 @@
 import { useAppStore } from '@/store'
-import { createAgentStatusOscProcessor } from '../../../shared/agent-status-osc'
-import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
+import { createAgentStatusOscProcessor } from '../../../shared/agent-status/transport/agent-status-osc'
+import type { ParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
   resolveLiveAgentStatusConnectionRouting,
   type AgentStatusConnectionRouting
 } from './agent-status-connection-ownership'
 import { rendererAgentStatusObservations } from './renderer-agent-status-observations'
-import type { AgentStatusObservation } from '../../../shared/agent-status-observation'
+import type { AgentStatusObservation } from '../../../shared/agent-status/contracts/agent-status-observation'
 
 export function createBackgroundAgentStatusConsumer(args: {
   paneKey: string
-  launchToken: string
+  launchToken?: string
   mainOwnsAgentStatusWrites: boolean
   expectedConnectionId: string | null | undefined
   runtimeEnvironmentId: string | null

@@ -4,13 +4,20 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../../shared/runtime-types'
 import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
-import { getHeadlessMobileSessionGroupId } from '../mobile-session-layout-projection'
+import { getHeadlessMobileSessionGroupId } from '../terminal/surface/mobile-session-layout-projection'
 import type { StructuredSessionSurface } from '../agent-session/structured-agent-session-close'
 import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { chatTabId } from '../agent-session/agent-session-tab-layout'
+import { insertTabIdIntoOrder } from '../../../shared/workspace-layout/tab-order'
+import {
+  chatTabId,
+  resolveChatTabPlacement,
+  type ChatTabPlacement
+} from '../agent-session/agent-session-tab-layout'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { mobileChatTabId, newReopenedChatTabId } from '../agent-session/agent-session-tab-identity'
 import { isReopenedChatTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
+import type { MainSessionTabRows } from './main-session-tab-rows'
+import { withMainTabOrder } from './main-session-tab-order'
 
 export type StructuredSessionTabPublicationInput = {
   workspaceId: string
@@ -113,8 +120,15 @@ export async function admitStructuredSessionTabPublication(
 
 export type StructuredSessionRawPublicationInput = Pick<
   StructuredSessionTabPublicationInput,
-  'workspaceId' | 'sessionId' | 'agent' | 'activate' | 'notify' | 'tabId'
-> & { eligible?: () => boolean }
+  | 'workspaceId'
+  | 'sessionId'
+  | 'agent'
+  | 'activate'
+  | 'notify'
+  | 'tabId'
+  | 'placement'
+  | 'placedByWindow'
+> & { eligible?: () => boolean; savedOrder?: MainSessionTabRows }
 
 export function projectStructuredSessionTab(
   runtime: Pick<OrcaRuntimeService, 'mobileSessionTabsByWorktree' | 'storeMobileSessionSnapshot'>,
@@ -180,20 +194,33 @@ export function projectStructuredSessionTab(
   ]
   // Why: the window can list the chat before main restores its row; keep the place it gave it.
   const listingGroupId = priorGroups.find((group) => group.tabOrder.includes(id))?.id
+  // Saved owners supply their applied order; only window owners decide placement here.
+  const placement: ChatTabPlacement = input.savedOrder
+    ? {
+        groupId: input.savedOrder.tabGroups?.find((group) => group.tabOrder.includes(id))?.id
+      }
+    : resolveChatTabPlacement(
+        priorGroups,
+        existing?.activeGroupId ?? undefined,
+        input.placement,
+        existing?.tabs.flatMap((row) => (row.type === 'agent-session' ? [row] : []))
+      )
   const groupId =
-    listingGroupId ??
-    (priorGroups.some((group) => group.id === existing?.activeGroupId)
-      ? existing!.activeGroupId!
-      : priorGroups[0]!.id)
-  const tabGroups = priorGroups.map((group) =>
-    group.id === groupId
-      ? {
-          ...group,
-          activeTabId: input.activate ? id : group.activeTabId,
-          tabOrder: listingGroupId ? group.tabOrder : [...group.tabOrder, id]
-        }
-      : group
-  )
+    (input.savedOrder ? placement.groupId : (listingGroupId ?? placement.groupId)) ??
+    priorGroups[0]!.id
+  const tabGroups =
+    input.savedOrder?.tabGroups ??
+    priorGroups.map((group) =>
+      group.id === groupId
+        ? {
+            ...group,
+            activeTabId: input.activate ? id : group.activeTabId,
+            tabOrder: listingGroupId
+              ? group.tabOrder
+              : insertTabIdIntoOrder(group.tabOrder, tabs, id, false, placement.afterTabId)
+          }
+        : group
+    )
   const snapshot: RuntimeMobileSessionTabsSnapshot = {
     worktree: input.workspaceId,
     publicationEpoch: existing?.publicationEpoch ?? `structured:${Date.now().toString(36)}`,
@@ -208,7 +235,10 @@ export function projectStructuredSessionTab(
   if (input.eligible?.() === false) {
     throw new Error('Chat tab publication was superseded')
   }
-  const stored = runtime.storeMobileSessionSnapshot(input.workspaceId, snapshot)
+  const stored = runtime.storeMobileSessionSnapshot(
+    input.workspaceId,
+    input.savedOrder ? withMainTabOrder(snapshot, input.savedOrder) : snapshot
+  )
   if (input.notify !== false) {
     emit(stored)
   }

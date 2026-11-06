@@ -1,11 +1,11 @@
 import {
   TerminalStreamOpcode,
   encodeTerminalStreamJson
-} from '../../../../../shared/terminal-stream-protocol'
+} from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import { recordYieldedTerminalQueries } from './terminal-multiplex-yielded-queries'
-import { EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE } from '../../../../../shared/terminal-reply-query-scan'
+import { EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE } from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-scan'
 import { iterateTerminalOutputFrameChunks } from '../../terminal-output-frame-chunks'
-import { TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES } from '../../../../../shared/terminal-multiplex-flow-control'
+import { TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { createTerminalOutputBatcher } from './terminal-output-batcher'
 import { appendPendingMultiplexOutput } from './terminal-stream-replay'
 import { updateViewportForClient } from './terminal-viewport-update'
@@ -109,7 +109,8 @@ export async function initializeMultiplexStream(
   const releaseViewSubscriber = runtime.registerRemoteTerminalViewSubscriber(
     ptyId,
     () => stream.outputPaused,
-    isMobile ? request.client?.id : undefined
+    isMobile ? request.client?.id : undefined,
+    stream.supportsOutputPause && request.capabilities?.paneVisibility === 1
   )
   // Report daemon death now, before the next refused keystroke.
   const unsubscribeEndpointLoss = stream.supportsEndpointLossNotice

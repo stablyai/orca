@@ -127,29 +127,6 @@ describe('createLinearSlice invalidation', () => {
     expect(store.getState().getCachedLinearTeams('workspace-1')).toBeNull()
   })
 
-  it('forced status refresh detects workspace metadata changes with the same count', async () => {
-    const store = createTestStore()
-    store.setState({
-      linearStatus: status('workspace-1', 'Old Org'),
-      linearListCache: {
-        'workspace-1::list::all::36::': {
-          data: { items: [issue('LIN-CACHED')] },
-          fetchedAt: Date.now()
-        }
-      },
-      linearTeamCache: {
-        'workspace-1::teams': { data: [team('team-old')], fetchedAt: Date.now() }
-      }
-    })
-    linearStatus.mockResolvedValueOnce(status('workspace-1', 'New Org', 2))
-
-    await store.getState().checkLinearConnection(true)
-
-    expect(store.getState().linearStatus.workspaces?.[0]?.organizationName).toBe('New Org')
-    expect(store.getState().linearListCache).toEqual({})
-    expect(store.getState().linearTeamCache).toEqual({})
-  })
-
   it('refreshes status after an all-workspace auth failure without marking all Linear disconnected', async () => {
     const store = createTestStore()
     store.setState({

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { isTerminalLeafId } from '../stable-pane-id'
+import { isTerminalLeafId } from '../workspace-layout/stable-pane-id'
 import { SleepCommand, StartPaneCommand, WakeCommand } from './workspace-layout-sleep-wake-params'
 import { RenameTabsCommand } from './workspace-layout-rename-tabs-params'
 import { EditorFileRecord, EditorViewRecord } from './workspace-layout-editor-file-params'
@@ -135,7 +135,8 @@ const MovePaneToNewTabCommand = z.object({
 const AiVaultTitle = z.object({
   agent: z.enum(['claude', 'codex']),
   sessionId: z.string(),
-  title: z.string()
+  title: z.string(),
+  kind: z.enum(['named', 'fallback']).optional().catch(undefined)
 })
 
 /** A tab's rename: a title as the window stores it today; null clears it. */

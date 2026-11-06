@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { isBehindOnlyUpstream } from '../../../../../../shared/git-upstream-status'
+import { isBehindOnlyUpstream } from '../../../../../../shared/git/remotes/git-upstream-status'
 import { readCommitDraftForWorktree, writeCommitDraftForWorktree } from '../commit/commit-drafts'
 import {
   getCreatePrIntentCommitFailureNoticeMessage,

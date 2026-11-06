@@ -4,14 +4,14 @@ import { joinPath } from '@/lib/path'
 import {
   getOpenFilesForExternalFileChange,
   notifyEditorExternalFileChange
-} from '@/components/editor/editor-autosave'
-import { markFileChangedOnDisk } from '@/components/editor/editor-changed-on-disk-mark'
+} from '@/components/editor/autosave/editor-autosave'
+import { markFileChangedOnDisk } from '@/components/editor/external-changes/editor-changed-on-disk-mark'
 import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
 import {
   clearSelfWrite,
   getRecentSelfWrite,
   type RecentSelfWrite
-} from '@/components/editor/editor-self-write-registry'
+} from '@/components/editor/external-changes/editor-self-write-registry'
 import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
 import type { EditorExternalWatchTarget } from './editor-external-watch-targets'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'

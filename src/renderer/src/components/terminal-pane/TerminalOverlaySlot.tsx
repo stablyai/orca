@@ -1,7 +1,7 @@
-import { memo, useLayoutEffect, useState } from 'react'
+import { memo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '../../store'
-import { isProvenProcessExit } from '../../../../shared/terminal-exit-cause'
+import { isProvenProcessExit } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
 import type { ActivityTerminalPortalTarget } from '../activity/activity-terminal-portal'
 import TerminalPane from './TerminalPane'
@@ -50,11 +50,9 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   const [shouldMeasureHiddenStartup, setShouldMeasureHiddenStartup] = useState(
     () => useAppStore.getState().pendingStartupByTabId[terminalTabId] !== undefined
   )
-  useLayoutEffect(() => {
-    if (isVisible && shouldMeasureHiddenStartup) {
-      setShouldMeasureHiddenStartup(false)
-    }
-  }, [isVisible, shouldMeasureHiddenStartup])
+  if (isVisible && shouldMeasureHiddenStartup) {
+    setShouldMeasureHiddenStartup(false)
+  }
 
   // Drop with the reveal in one render, or a later lease release re-runs resume and steals focus.
   const prewarm = isVisible || activityTerminalPortal !== null ? null : hiddenPrewarm
@@ -90,9 +88,9 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
           onClosed: captureEmptiedReaction()
         })
       }}
-      onCloseTab={() => {
+      onCloseTab={(reason) => {
         // Use the guarded close path so pinned terminals still require confirmation.
-        closeTerminalTab(terminalTabId, { onClosed: captureEmptiedReaction() })
+        closeTerminalTab(terminalTabId, { reason, onClosed: captureEmptiedReaction() })
       }}
     />
   )

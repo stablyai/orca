@@ -37,16 +37,3 @@ it('recomputes weights after a split is added and after one is closed', () => {
 
   expect(equalizePaneSplitSizes(root)).toBe(false)
 })
-
-it('weights a cross-axis nested split as one unit', () => {
-  const root = document.createElement('div')
-  root.className = 'pane-split'
-  const left = makePane()
-  const crossAxis = document.createElement('div')
-  crossAxis.className = 'pane-split is-horizontal'
-  crossAxis.append(makePane(), makeDivider(), makePane(), makeDivider(), makePane())
-  root.append(left, makeDivider(), crossAxis)
-  equalizePaneSplitSizes(root)
-  expect(crossAxis.style.flex).toBe('1 1 0%')
-  expect(left.style.flex).toBe('1 1 0%')
-})

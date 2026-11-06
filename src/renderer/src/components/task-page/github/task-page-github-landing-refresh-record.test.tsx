@@ -144,7 +144,7 @@ function Harness() {
 const ref = <T,>(current: T) => ({ current })
 const noop = () => {}
 /** A non-forced landing refresh with the Tasks page's own setters, refs and store actions. */
-async function landingRefresh() {
+async function landingRefresh(knownCount: number | null = null) {
   const state = mocks.store!.getState()
   const model: TaskPageGitHubLandingRefreshModel = {
     fetchWorkItemsAcrossRepos: state.fetchWorkItemsAcrossRepos,
@@ -153,6 +153,7 @@ async function landingRefresh() {
     countWorkItemsAcrossRepos: state.countWorkItemsAcrossRepos,
     workItemsInvalidationNonce: 0,
     selectedRepos: [repo],
+    selectedReposKey: 'landing',
     taskSource: 'github',
     taskResumeApplied: true,
     githubMode: 'items',
@@ -168,7 +169,7 @@ async function landingRefresh() {
     githubResumeConsumedRef: ref(true),
     githubResumeContextRef: ref('landing'),
     pendingGithubScrollRestoreRef: ref<number | null>(null),
-    countedTotalPagesRef: ref<number | null>(null),
+    countedTotalPagesRef: ref<number | null>(knownCount),
     hardRefreshEpochRef: ref(0),
     currentPageRef: ref(0),
     pagesRef,
@@ -176,6 +177,7 @@ async function landingRefresh() {
     retryingSourceKeys: new Set<string>(),
     githubWorkItemMutationQueryKey: 'landing',
     setTasksLoading: noop,
+    setLandingRequestKey: noop,
     setTasksRefreshing: noop,
     setTasksFiltering: noop,
     setTasksError: noop,
@@ -194,6 +196,7 @@ async function landingRefresh() {
       await Promise.resolve()
     }
   })
+  return model
 }
 const stored = () =>
   Object.values(mocks.store!.getState().workItemsCache).flatMap((entry) => entry.data ?? [])

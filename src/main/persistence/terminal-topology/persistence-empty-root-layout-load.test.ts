@@ -9,10 +9,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import { isTerminalLeafId } from '../../../shared/stable-pane-id'
+import { isTerminalLeafId } from '../../../shared/workspace-layout/stable-pane-id'
 import { makeTerminalTab, TEST_LEAF_1 } from '../persistence-session-fixtures'
 
 vi.mock('electron', () => ({

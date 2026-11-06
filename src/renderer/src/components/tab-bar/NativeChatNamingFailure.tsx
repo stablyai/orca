@@ -2,7 +2,7 @@ import { AlertCircle, RefreshCw, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { isWebClientLocation } from '@/lib/web-client-location'
-import { NameGenerationFailedDialog } from '../sidebar/AutoRenameFailedDialog'
+import { NameGenerationFailedDialog } from '../sidebar/workspace-card/identity/AutoRenameFailedDialog'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatNamingFailureControls } from './use-native-chat-naming-failure'
 

@@ -1,12 +1,7 @@
+import { mapBrowserError } from './browser-error-response'
 import { InvalidArgumentError, ZodError, formatZodError } from './core'
 import type { RpcEnvelopeMeta, RpcRequest, RpcResponse } from './core'
-import {
-  computerErrorData,
-  errorResponse,
-  mapBrowserError,
-  mapEmulatorError,
-  mapRuntimeError
-} from './errors'
+import { computerErrorData, errorResponse, mapEmulatorError, mapRuntimeError } from './errors'
 import { PluginHookDeniedError } from '../../plugins/hooks/plugin-hook-dispatch'
 
 export function invalidArgumentResponse(

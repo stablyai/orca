@@ -13,6 +13,7 @@ import {
 } from './agent-browser-batch-command'
 import { AgentBrowserBridgeTabs } from './agent-browser-bridge-tabs'
 import { assertRemoteCliBrowserAccess } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
+import { assertExpectedPageUrlForStep } from '../cdp/input/browser-expected-page-url'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
 import { canSkipAgentBrowserSessionReset } from './agent-browser-session-reset'
 import {
@@ -43,6 +44,13 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
       throw this.createPageUnavailableError(`${ORCA_TAB_SESSION_PREFIX}${target.browserPageId}`)
     }
     return wc
+  }
+
+  /** The committed URL, then the target of a main-frame navigation that will replace its document. */
+  protected livePageUrls(target: ResolvedBrowserCommandTarget): string[] {
+    const wc = this.requireTargetWebContents(target)
+    const inFlightUrl = this.browserManager.getInFlightNavigationUrl(wc)
+    return inFlightUrl === null ? [wc.getURL()] : [wc.getURL(), inFlightUrl]
   }
 
   /** Idle retirement loses daemon routes and the delta baseline; restore routes when its replacement connects. */
@@ -81,6 +89,7 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
 
     // Recheck revocation before each helper spawn within a command.
     assertRemoteCliBrowserAccess(session.webContentsId)
+    assertExpectedPageUrlForStep()
     this.reinitializeIfDaemonIdledOut(sessionName, session)
     session.lastCommandAt = Date.now()
 

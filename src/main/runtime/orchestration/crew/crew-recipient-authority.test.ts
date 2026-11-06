@@ -169,7 +169,7 @@ it('matches actual sender Dispatch R1 before coordinator R2 and never uses sende
       senderRunId: ordinary.run!.id
     })
   ).toMatchObject({ ok: true, to: `run:${f.run.id}` })
-  f.db.insertMessage({ from: peer, to: caller.address, subject: 'history' })
+  f.db.insertMessage({ from: peer, to: caller.address, subject: 'history', body: 'history' })
   expect(
     new CrewReadModel(() => f.deps, f.db.crewChanges.subscribe).read(caller.address).sections
       .talkingWith[0].sendAddress

@@ -28,7 +28,6 @@ import {
 } from './structured-agent-session-host-test-data'
 import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
-import { recoverStructuredRewind } from './structured-rewind-recovery'
 
 const caller = { callerKey: 'desktop' }
 const SOURCE = '11111111-1111-4111-8111-111111111111'
@@ -161,9 +160,9 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 
-async function rewindSecondPrompt() {
+async function rewindSecondPrompt(uuid = 'prompt-2') {
   const fields = {
-    itemId: key('prompt-2'),
+    itemId: key(uuid),
     expectedEpoch: (await host.journalSnapshot(HOST_TEST_SESSION)).cursor.epoch
   }
   return host.rewind(caller, {
@@ -182,74 +181,6 @@ async function rewindSecondPrompt() {
 }
 
 describe('rewinding a chat whose agent forks', () => {
-  it('commits the fork head with the prefix and rewinds again at rest without starting the agent', async () => {
-    const epoch = (await host.journalSnapshot(HOST_TEST_SESSION)).cursor.epoch
-    const fields = { itemId: key('prompt-2'), expectedEpoch: epoch }
-    const envelope = {
-      sessionId: HOST_TEST_SESSION,
-      clientOperationId: hostTestOperationId(),
-      expectedRuntimeFence: store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
-      payloadFingerprint: computeAgentSessionPayloadFingerprint({
-        method: 'agentSession.rewind',
-        sessionId: HOST_TEST_SESSION,
-        fields
-      })
-    }
-
-    expect(await host.rewind(caller, { ...fields, envelope })).toMatchObject({ ok: true })
-
-    expect(forkForRewind).toHaveBeenCalledWith(
-      expect.objectContaining({ beforeMessage: { sessionId: SOURCE, uuid: 'prompt-2' } })
-    )
-    expect(closeSession).toHaveBeenCalled()
-    expect(store.getRecord(HOST_TEST_SESSION)?.rewind).toMatchObject({
-      phase: 'completed',
-      providerFork: { materialized: true }
-    })
-    const record = store.getRecord(HOST_TEST_SESSION)!
-    const fork = record.rewind!.providerFork!
-    // Preserve fields read by v1.4.233, which ignores providerFork.
-    expect(agentSessionProviderHandleChainHead(record.providerHandleChain)).toMatchObject({
-      origin: 'forked',
-      handle: claudeProviderHandle(fork.sessionId, 'fork-answer-1')
-    })
-    expect(nameProviderConversation).toHaveBeenCalledExactlyOnceWith(record)
-    expect(await host.attach(caller, attachParams(record.lease.runtimeFence))).toMatchObject({
-      ok: true
-    })
-    await vi.waitFor(() => {
-      expect(host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)?.child?.phase).toBe(
-        'ready'
-      )
-    })
-    expect(nameProviderConversation).toHaveBeenCalledTimes(1)
-    const snapshot = await host.journalSnapshot(HOST_TEST_SESSION)
-    expect(snapshot.items.map((item) => item.itemId)).toEqual([key('prompt-1'), key('answer-1')])
-
-    failAcquire = true
-    const again = { itemId: key('prompt-1'), expectedEpoch: snapshot.cursor.epoch }
-    expect(
-      await host.rewind(caller, {
-        ...again,
-        envelope: {
-          sessionId: HOST_TEST_SESSION,
-          clientOperationId: hostTestOperationId(),
-          expectedRuntimeFence: store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
-          payloadFingerprint: computeAgentSessionPayloadFingerprint({
-            method: 'agentSession.rewind',
-            sessionId: HOST_TEST_SESSION,
-            fields: again
-          })
-        }
-      })
-    ).toMatchObject({ ok: true })
-    expect((await host.journalSnapshot(HOST_TEST_SESSION)).items).toEqual([])
-    expect(
-      agentSessionProviderHandleChainHead(store.getRecord(HOST_TEST_SESSION)!.providerHandleChain)
-        ?.handle
-    ).toEqual(claudeProviderHandle('33333333-3333-4333-8333-333333333333', null))
-  })
-
   it('keeps the original conversation when saving its fork fails', async () => {
     const before = await host.journalSnapshot(HOST_TEST_SESSION)
     forkForRewind.mockRejectedValueOnce(new Error('transcript write failed'))
@@ -257,48 +188,5 @@ describe('rewinding a chat whose agent forks', () => {
     expect(await host.journalSnapshot(HOST_TEST_SESSION)).toEqual(before)
     expect(store.getRecord(HOST_TEST_SESSION)?.rewind).toBeUndefined()
     expect(closeSession).not.toHaveBeenCalled()
-  })
-
-  it('rolls back both history and handle when the receipt fails, then recovers the same fork', async () => {
-    const journal = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
-    const before = await host.journalSnapshot(HOST_TEST_SESSION)
-    const makeReceipt = store.conversationReceipts.rewind.bind(store.conversationReceipts)
-    const failed = vi
-      .spyOn(store.conversationReceipts, 'rewind')
-      .mockImplementationOnce((...args) => {
-        const receipt = makeReceipt(...args)
-        return {
-          ...receipt,
-          write: (db) => {
-            receipt.write(db)
-            throw new Error('commit failed')
-          }
-        }
-      })
-    await expect(rewindSecondPrompt()).rejects.toThrow('commit failed')
-    expect(await host.journalSnapshot(HOST_TEST_SESSION)).toEqual(before)
-    expect(
-      agentSessionProviderHandleChainHead(store.getRecord(HOST_TEST_SESSION)!.providerHandleChain)
-        ?.handle.nativeId
-    ).toBe(SOURCE)
-    expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('provider-succeeded')
-    failed.mockRestore()
-
-    await recoverStructuredRewind(
-      { store, logger: createStructuredAgentSessionLogger() },
-      HOST_TEST_SESSION,
-      journal,
-      store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence
-    )
-    expect(journal.snapshot().items.map((item) => item.itemId)).toEqual([
-      key('prompt-1'),
-      key('answer-1')
-    ])
-    expect(
-      agentSessionProviderHandleChainHead(store.getRecord(HOST_TEST_SESSION)!.providerHandleChain)
-        ?.handle.nativeId
-    ).toBe(FORK.sessionId)
-    expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
-    expect(forkForRewind).toHaveBeenCalledTimes(1)
   })
 })

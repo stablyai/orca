@@ -2,10 +2,13 @@ import { NativeChatThreadGoalBanner } from './NativeChatThreadGoalBanner'
 import { NativeChatStructuredWorkerLifetimeStrip } from './NativeChatStructuredWorkerLifetimeStrip'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { StructuredAgentSessionThreadGoal } from './use-structured-agent-session-thread-goal'
+import type { NativeChatImageRuntimeContext } from './native-chat-image-runtime-context'
+import { NativeChatTextAttachments } from './NativeChatTextAttachments'
 
 /** The strips on the composer's top edge: the thread goal, then a temporary worker's lifetime. */
 export function NativeChatStructuredComposerTabStrips(props: {
   tabId: string
+  runtimeContext: NativeChatImageRuntimeContext
   threadGoal: StructuredAgentSessionThreadGoal | null | undefined
   transport: NativeChatStructuredComposerTransport
   isWorking: boolean
@@ -27,6 +30,7 @@ export function NativeChatStructuredComposerTabStrips(props: {
 
 function NativeChatStructuredGoalStrip(props: {
   sessionId: string
+  runtimeContext: NativeChatImageRuntimeContext
   threadGoal: StructuredAgentSessionThreadGoal | null | undefined
   transport: NativeChatStructuredComposerTransport
   isWorking: boolean
@@ -44,6 +48,14 @@ function NativeChatStructuredGoalStrip(props: {
     <NativeChatThreadGoalBanner
       key={props.sessionId}
       goal={threadGoal.goal}
+      objectiveContent={
+        <NativeChatTextAttachments
+          content={threadGoal.goal.objective}
+          structured
+          runtimeContext={props.runtimeContext}
+          renderText={(text) => text}
+        />
+      }
       pending={threadGoal.pending}
       hostChanges={threadGoal.hostChanges}
       sendUnavailable={transport.sendOut === true || props.isWorking}

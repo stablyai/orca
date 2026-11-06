@@ -23,7 +23,8 @@ import {
   BridgeClientNotReadyError,
   BridgeRequestOversizedError,
   BridgeSendFailedError,
-  BridgeShellReplacedError
+  BridgeShellReplacedError,
+  throwIfBridgeSignalAborted
 } from './bridge-client-errors'
 import type { BridgeHapticsKind } from './bridge-haptics-notify'
 import { createBridgeInboundFrameReader } from './bridge-client-inbound-frames'
@@ -103,9 +104,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
   let closed = false
   let idCounter = 0
 
-  function report(diagnostic: BridgeRpcClientDiagnostic): void {
-    options.onDiagnostic?.(diagnostic)
-  }
+  const report = (diagnostic: BridgeRpcClientDiagnostic) => options.onDiagnostic?.(diagnostic)
 
   // Never throw: serialization/transport failure must return control to request-id cleanup. Keep JSON.stringify inside try for cycles, BigInt and throwing toJSON.
   // Refuse oversize using the shell’s exact predicate before posting, or the receiver drops it and leaves the caller waiting forever.
@@ -136,7 +135,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
   }
 
   const subscriptions = new BridgeClientSubscriptions({
-    send: (frame) => posted(frame),
+    send: posted,
     onDroppedBinaryFrame: () => report({ kind: 'binary-frame-dropped' })
   })
 
@@ -160,9 +159,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       requests.closeAll(replaced)
       subscriptions.failAll(replaced.message)
     },
-    prime: (connection) => {
-      cache.prime(connection)
-    }
+    prime: (connection) => cache.prime(connection)
   })
 
   function acceptState(outcome: BridgeSnapshotOutcome): void {
@@ -221,9 +218,11 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     if (requests.size >= cap) {
       return Promise.reject(new BridgeClientCapExceededError(`over ${cap} requests in flight`))
     }
-    return new Promise<RpcResponse>((resolve, reject) => {
+    throwIfBridgeSignalAborted(requestOptions?.signal)
+    requestOptions?.beforeSend?.()
+    const id = nextId()
+    const response = new Promise<RpcResponse>((resolve, reject) => {
       const frameOptions = readBridgeRequestFrameOptions(requestOptions, hasGrant)
-      const id = nextId()
       requests.open(id, { resolve, reject })
       const outcome = sendFrame({
         v: BRIDGE_PROTOCOL_VERSION,
@@ -241,6 +240,9 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
           outcome === 'oversized' ? new BridgeRequestOversizedError() : new BridgeSendFailedError()
         )
       }
+    })
+    return requests.wait(id, response, requestOptions, () => {
+      sendFrame({ v: BRIDGE_PROTOCOL_VERSION, type: 'cancel', id, target: 'request' })
     })
   }
 

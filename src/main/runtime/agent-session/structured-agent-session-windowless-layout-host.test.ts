@@ -1,13 +1,15 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as chatTabLayout from './agent-session-tab-layout'
+import * as sessionTabsProjection from '../../../shared/workspace-layout/old-client/old-client-session-tabs-projection'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { normalizeExecutionHostId } from '../../../shared/execution-host'
 import { closeTestJournalHostDatabases } from '../../native-chat/agent-session-journal/journal-host-database-test-support'
@@ -22,12 +24,12 @@ import { withChatTabChanges } from './agent-session-tab-layout'
 import {
   chatTabCommandsSettled as settled,
   layoutApplyOn
-} from '../session-layout-apply.test-fixture'
+} from '../orca-runtime-tests/session-layout-apply.test-fixture'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
-import { partialRuntimeStore } from '../runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../orca-runtime-tests/runtime-store-partial-fixture'
 
 const WT = 'workspace-1'
 // Session ids are 8 to 128 characters; a shorter one is not a readable record.
@@ -164,6 +166,30 @@ function savedChatIds(state: { session: WorkspaceSessionState }): string[] {
 }
 
 describe('a windowless chat tab against the chat host', () => {
+  it.each([10, 100])(
+    'loads and projects saved order once per worktree for %i restored chats',
+    async (count) => {
+      const ids = Array.from({ length: count }, (_, index) => `restored-chat-${index}`)
+      await seedTestAgentSessionRecordStore(root, {
+        records: ids.map(released),
+        sessionTabs: shown(...ids)
+      })
+      const { runtime } = await runtimeWithSavedChats(ids)
+      restoringRuntime(runtime)
+      const load = vi.spyOn(chatTabLayout, 'loadChatTabLayout')
+      const project = vi.spyOn(sessionTabsProjection, 'projectSessionTabs')
+      try {
+        await runtime.restoreStructuredAgentSessionTabs()
+        expect(runtime.mobileSessionTabsByWorktree.get(WT)?.tabs).toHaveLength(count)
+        expect(load.mock.calls.filter((call) => call[2] === WT)).toHaveLength(1)
+        expect(project.mock.calls.filter((call) => call[0] === WT)).toHaveLength(1)
+      } finally {
+        load.mockRestore()
+        project.mockRestore()
+      }
+    }
+  )
+
   it('leaves the layout when the host hides the chat', async () => {
     await seedTestAgentSessionRecordStore(root, {
       records: [released(CHAT_A), released(CHAT_B)],

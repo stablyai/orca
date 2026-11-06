@@ -1,6 +1,6 @@
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
-import type { TERMINAL_SCROLLBACK_SESSION_HOMES } from '../../../../shared/workspace-session-terminal-buffers'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import type { TERMINAL_SCROLLBACK_SESSION_HOMES } from '../../../../shared/workspace-session/workspace-session-terminal-buffers'
 
 /** Track every persisted scrollback home; adding one must also extend this resolver. */
 export type TerminalScrollbackSessionHomes = Pick<

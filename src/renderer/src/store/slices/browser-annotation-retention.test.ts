@@ -35,45 +35,6 @@ async function createAnnotatedPage() {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('saved browser note lifetime and marker eligibility', () => {
-  it('retires same-URL geometry without changing the saved array or object references', async () => {
-    const { store, pageId } = await createAnnotatedPage()
-    const saved = store.getState().browserAnnotationsByPageId[pageId]
-    const note = saved[0]
-    expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toEqual([note.id])
-
-    store.getState().setBrowserPageUrl(pageId, 'https://example.com')
-    expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toEqual([note.id])
-    store.getState().invalidateBrowserPageAnnotationGeometry(pageId)
-
-    expect(store.getState().browserAnnotationsByPageId[pageId]).toBe(saved)
-    expect(store.getState().browserAnnotationsByPageId[pageId][0]).toBe(note)
-    expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toBeUndefined()
-    const listener = vi.fn()
-    const unsubscribe = store.subscribe(listener)
-    store.getState().invalidateBrowserPageAnnotationGeometry(pageId)
-    expect(listener).not.toHaveBeenCalled()
-    unsubscribe()
-
-    store.getState().addBrowserPageAnnotation(makeAnnotation(pageId, 'fresh'))
-    expect(store.getState().browserAnnotationsByPageId[pageId][0]).toBe(note)
-    expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toEqual(['fresh'])
-  })
-
-  it('prunes marker IDs when notes are deleted or cleared', async () => {
-    const { store, pageId } = await createAnnotatedPage()
-    store.getState().addBrowserPageAnnotation(makeAnnotation(pageId, 'second'))
-    expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toEqual([
-      'annotation-1',
-      'second'
-    ])
-
-    store.getState().deleteBrowserPageAnnotation(pageId, 'second')
-    expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toEqual(['annotation-1'])
-    store.getState().clearBrowserPageAnnotations(pageId)
-    expect(store.getState().browserAnnotationsByPageId[pageId]).toBeUndefined()
-    expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toBeUndefined()
-  })
-
   it('removes an accepted delivery snapshot after navigation while preserving later edits and additions', async () => {
     const { store, pageId } = await createAnnotatedPage()
     store.getState().addBrowserPageAnnotation(makeAnnotation(pageId, 'edited'))

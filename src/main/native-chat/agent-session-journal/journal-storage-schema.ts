@@ -56,6 +56,7 @@ const refusalDetails = z.object({
   codexInstallation: z
     .object({ installedVersion: z.string().nullable(), minimumVersion: z.string() })
     .optional(),
+  expiredAttachments: z.array(z.object({ uploadId: z.string(), name: z.string() })).optional(),
   currentFence: count,
   currentRevision: count,
   resolution: AgentJournalKnownSchemas.resolution.optional(),
@@ -92,7 +93,17 @@ const orchestration = z.discriminatedUnion('message', [
     mailbox: salvaged,
     dispatchId: salvaged,
     messages: z
-      .array(z.object({ messageId: salvaged, runId: salvaged, from: salvaged }))
+      .array(
+        z.object({
+          messageId: salvaged,
+          runId: salvaged,
+          from: salvaged,
+          content: z
+            .object({ subject: salvaged, body: salvaged, payload: salvaged })
+            .nullable()
+            .optional()
+        })
+      )
       .nullable()
       .optional()
   }),
@@ -111,7 +122,8 @@ const block = z.discriminatedUnion('type', [
       .optional(),
     failure: storedFailureFact.optional(),
     orcaStop: z.object({ cause: z.string(), turnItemId: text }).optional(),
-    usageLimitTurnItemId: text
+    usageLimitTurnItemId: text,
+    forkedFrom: z.object({ sessionId: z.string() }).optional()
   }),
   toolCallBlock.extend({ state: text, endedAs: text }),
   toolResultBlock.extend({

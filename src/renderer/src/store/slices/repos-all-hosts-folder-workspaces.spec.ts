@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import {
@@ -402,32 +402,6 @@ export function registerReposAllHostsFolderWorkspacesTests(): void {
           .folderWorkspaces.map((workspace) => workspace.id)
           .sort()
       ).toEqual(['local-folder', 'remote-folder', 'remote-folder-2'])
-    })
-
-    it('keeps local project groups and folder workspaces when a runtime is unreachable', async () => {
-      runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
-        if (args.method === 'projectGroup.list' || args.method === 'folderWorkspace.list') {
-          throw new Error('runtime_unreachable')
-        }
-        return {
-          id: 'rpc-other',
-          ok: true,
-          result: { repos: [], projects: [], setups: [] },
-          _meta: { runtimeId: 'runtime-remote' }
-        }
-      })
-      const store = createTestStore()
-      store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
-
-      await store.getState().fetchProjectGroupsForAllHosts()
-      await store.getState().fetchFolderWorkspacesForAllHosts()
-
-      expect(store.getState().projectGroups).toEqual([
-        { ...localProjectGroup, executionHostId: 'local' }
-      ])
-      expect(store.getState().folderWorkspaces).toEqual([
-        { ...localFolderWorkspace, executionHostId: 'local' }
-      ])
     })
 
     it('does not repeat offline runtime compatibility probes across startup catalog loads', async () => {

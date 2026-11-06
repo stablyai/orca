@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import {
   AI_VAULT_SCAN_CANCELLED_MESSAGE,
   type AiVaultListResult
-} from '../../shared/ai-vault-types'
+} from '../../shared/ai-vault/contracts/ai-vault-types'
 
 // Match the renderer throttle: forced requests share this window before they can preempt a hung scan.
 const FORCED_SCAN_PREEMPT_AFTER_MS = 5_000

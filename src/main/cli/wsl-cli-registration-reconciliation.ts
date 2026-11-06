@@ -1,10 +1,10 @@
 import type { CliInstallState, CliInstallStatus } from '../../shared/cli-install-types'
-import { listWslDistrosAsync } from '../wsl'
+import { listWslDistrosAsync } from '../wsl/discovery/distro-catalog'
 import {
   deferUntilWslDistroRunning,
   isWslDistroRunning,
   listConfirmedRunningWslDistros
-} from '../wsl-background-distro-gate'
+} from '../wsl/discovery/wsl-background-distro-gate'
 import { CliInstaller } from './cli-installer'
 import {
   getWslCliRegistrationCandidates,
@@ -13,7 +13,7 @@ import {
 } from './wsl-cli-registration-registry'
 import { WslCliInstaller } from './wsl-cli-installer'
 import { runSerializedWslCliRegistrationOperation } from './wsl-cli-registration-operation'
-import { readWslHostDeployments } from '../../shared/wsl-host-deployment-store'
+import { readWslHostDeployments } from '../../shared/remote-runtime/host-store/wsl-host-deployment-store'
 
 // Why: each repair spawns a guest shell; a small cap bounds the startup fan-out.
 const MAX_CONCURRENT_DISTRO_REPAIRS = 2

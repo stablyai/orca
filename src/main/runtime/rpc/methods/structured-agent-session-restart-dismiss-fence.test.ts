@@ -11,7 +11,7 @@ import {
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../ipc/desktop-renderer-runtime-capabilities'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { CLAUDE_STRUCTURED_AGENT } from '../../../claude/structured/claude-structured-agent-definition'
-import { CODEX_STRUCTURED_AGENT } from '../../../codex/codex-structured-agent-definition'
+import { CODEX_STRUCTURED_AGENT } from '../../../codex/structured/launch/codex-structured-agent-definition'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { StructuredAgentRegistry } from '../../../native-chat/agent-session-wire/structured-agent-registry'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -41,7 +41,13 @@ const NO_METHODS = {} as StructuredAgentSessionAdapter
 const declaring = (definition: typeof CLAUDE_STRUCTURED_AGENT) => ({
   definition: {
     ...definition,
-    capabilities: { ...definition.capabilities, compact: false, threadGoal: false, rewind: false }
+    capabilities: {
+      ...definition.capabilities,
+      compact: false,
+      threadGoal: false,
+      rewind: false,
+      fork: undefined
+    }
   },
   adapter: NO_METHODS
 })

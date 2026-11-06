@@ -21,6 +21,7 @@ import { PLUGIN_DECLARATIVE_FORM_CATALOG } from './plugin-declarative-form-props
 import { PLUGIN_DECLARATIVE_LAYOUT_CATALOG } from './plugin-declarative-layout-props'
 import { PLUGIN_DECLARATIVE_DATA_CATALOG } from './plugin-declarative-data-props'
 import { PLUGIN_DECLARATIVE_CONTENT_CATALOG } from './plugin-declarative-content-props'
+import { PLUGIN_DECLARATIVE_BOX_CATALOG } from './plugin-declarative-box-props'
 
 export {
   PLUGIN_DECLARATIVE_CALLBACK_ID,
@@ -179,7 +180,8 @@ export const PLUGIN_DECLARATIVE_CATALOG = {
   ...PLUGIN_DECLARATIVE_FORM_CATALOG,
   ...PLUGIN_DECLARATIVE_LAYOUT_CATALOG,
   ...PLUGIN_DECLARATIVE_DATA_CATALOG,
-  ...PLUGIN_DECLARATIVE_CONTENT_CATALOG
+  ...PLUGIN_DECLARATIVE_CONTENT_CATALOG,
+  ...PLUGIN_DECLARATIVE_BOX_CATALOG
 } as const
 
 export type PluginDeclarativeComponentName = keyof typeof PLUGIN_DECLARATIVE_CATALOG

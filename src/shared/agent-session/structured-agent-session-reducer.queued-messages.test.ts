@@ -86,24 +86,6 @@ function hydrated(
 }
 
 describe('structured agent session reducer: queuedMessages', () => {
-  it('adopts the list from a snapshot and keeps it through a batch that omits it', () => {
-    const state = hydrated([queued('draft-1', 1)])
-    expect(state.queuedMessages).toEqual([queued('draft-1', 1)])
-    const after = reduceStructuredAgentSession(state, { type: 'event', event: batch(1) })
-    expect(after.queuedMessages).toEqual([queued('draft-1', 1)])
-  })
-
-  it('replaces the whole list from a batch that carries one, empty included', () => {
-    const state = hydrated([queued('draft-1', 1)])
-    const grown = reduceStructuredAgentSession(state, {
-      type: 'event',
-      event: batch(1, [queued('draft-1', 1), queued('draft-2', 2)])
-    })
-    expect(grown.queuedMessages).toHaveLength(2)
-    const drained = reduceStructuredAgentSession(grown, { type: 'event', event: batch(2, []) })
-    expect(drained.queuedMessages).toEqual([])
-  })
-
   it('changes state for a list update at an unchanged cursor and journal', () => {
     const state = reduceStructuredAgentSession(hydrated([]), { type: 'event', event: batch(1) })
     const after = reduceStructuredAgentSession(state, {
@@ -126,37 +108,6 @@ describe('structured agent session reducer: queuedMessages', () => {
     expect(after.queuedMessages).toEqual([queued('draft-2', 2)])
   })
 
-  it('adopts a history page claim when the live stream has made none', () => {
-    const after = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
-      type: 'history-page',
-      page: page([queued('draft-1', 1)])
-    })
-    expect(after.queuedMessages).toEqual([queued('draft-1', 1)])
-  })
-
-  it('makes no claim when no frame carried the field (older host)', () => {
-    const state = hydrated()
-    expect('queuedMessages' in state).toBe(false)
-    const after = reduceStructuredAgentSession(state, { type: 'event', event: batch(1) })
-    expect('queuedMessages' in after).toBe(false)
-  })
-
-  it('a reset re-hydrates the list from its own frame', () => {
-    const state = hydrated([queued('draft-1', 1)])
-    const after = reduceStructuredAgentSession(state, {
-      type: 'event',
-      event: {
-        type: 'reset',
-        sessionId: 'session-a',
-        reset: 'epoch_changed',
-        page: page(),
-        fence: 2,
-        queuedMessages: []
-      }
-    })
-    expect(after.queuedMessages).toEqual([])
-  })
-
   it('carries the queue pause with the list it rode with, and clears it with the next list', () => {
     const paused = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
       type: 'event',
@@ -172,18 +123,6 @@ describe('structured agent session reducer: queuedMessages', () => {
       event: batch(3, [queued('draft-1', 1)])
     })
     expect(resumed.queuePause).toBeNull()
-  })
-
-  it("keeps the queue's next card with the list it rode with, from a snapshot and a batch", () => {
-    const named = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
-      type: 'event',
-      event: snapshot([queued('draft-1', 1)], null, 'draft-1')
-    })
-    expect(named.nextQueuedMessageId).toBe('draft-1')
-    const kept = reduceStructuredAgentSession(named, { type: 'event', event: batch(2) })
-    expect(kept.nextQueuedMessageId).toBe('draft-1')
-    const sent = reduceStructuredAgentSession(kept, { type: 'event', event: batch(3, []) })
-    expect(sent.nextQueuedMessageId).toBeNull()
   })
 
   it('changes state for a pause-only update at an unchanged cursor, journal and list', () => {

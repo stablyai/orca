@@ -1,9 +1,9 @@
 import { resolveConfiguredRemoteBranchName } from './repo-base-ref-search'
 import { gitExecOptions, type LocalGitExecOptions } from './repo-default-base-ref'
 import { gitExecFileAsync } from './runner'
-import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
+import { isSafeGitRefName } from '../../shared/git/status/git-status-upstream-ref'
+import { isShowRefNoMatchError } from '../../shared/git/refs/git-show-ref-no-match'
 import {
-  isShowRefNoMatchError,
   probeAnyExactRef,
   probeAnyExactRefBatched,
   type ExactRefProbeExec,

@@ -17,7 +17,11 @@ import {
   createPane,
   createManager
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import type { ConnectCallbacks, MockTransport } from './pty-connection-test-pane-fixtures'
@@ -65,6 +69,8 @@ export function registerPtyConnectionHibernationWakeTests(): void {
     it('disarms input modes and resumes a hibernated agent session on visibility reveal', async () => {
       // Regression: hibernation suppresses its kill's PTY exit while hidden; before the wake fix onExit permanently latched handledExitPtyId, leaving a frozen inert ghost pane on reveal.
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(1)
@@ -95,7 +101,9 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       }
       mockStoreState.suppressedPtyExitIds['tab-pty'] = true
 
-      const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+      const binding = connectPanePty(
+        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks))
+      )
       await flushAsyncTicks()
 
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
@@ -145,6 +153,8 @@ export function registerPtyConnectionHibernationWakeTests(): void {
     // A suppressed exit over a finished turn’s live anchor still arms reveal resume despite its worktree-sleep note (#16308).
     it('arms an in-place resume from a finished turn idle anchor on a suppressed exit', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const deps = createDeps({
@@ -173,6 +183,8 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       }
       mockStoreState.suppressedPtyExitIds['tab-pty'] = true
       const args = mockPanePtyArgs(pane, createManager(1), deps)
+      bindPaneAgentTitleMocks(args[2], agentTitleMocks2)
+
       const binding = connectPanePty(...args)
       await flushAsyncTicks()
       const onPtyExit = createdTransportOptions[0]?.onPtyExit
@@ -202,6 +214,8 @@ export function registerPtyConnectionHibernationWakeTests(): void {
     it('resumes a hibernated agent from a navigation-free wake without a visibility reveal', async () => {
       // Mobile wakes hidden panes without visibility changes; duplicate wake events must resume exactly once (INV-1).
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(1)
@@ -231,7 +245,9 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       }
       mockStoreState.suppressedPtyExitIds['tab-pty'] = true
 
-      const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+      const binding = connectPanePty(
+        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks3))
+      )
       await flushAsyncTicks()
 
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
@@ -278,6 +294,8 @@ export function registerPtyConnectionHibernationWakeTests(): void {
 
     it('names the replaced PTY on the restart spawn only, never on a later wake of the same pane', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-restarted')
       transportFactoryQueue.push(transport)
       const deps = createDeps({
@@ -289,6 +307,8 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       })
       const pane = createPane(2)
       const args = mockPanePtyArgs(pane, createManager(1), deps)
+      bindPaneAgentTitleMocks(args[2], agentTitleMocks4)
+
       const binding = connectPanePty(...args)
       await flushAsyncTicks()
 
@@ -354,6 +374,8 @@ export function registerPtyConnectionHibernationWakeTests(): void {
 
     it('keeps an established split pane mounted when main labels its exit as a restart replacement', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks5 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { deliverPtyExitToHandlers } = await import('./pty-exit-delivery')
       let onData: ((data: string) => void) | undefined
       const transport = createMockTransport('pty-pane-2')
@@ -370,6 +392,8 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
       })
       const args = mockPanePtyArgs(createPane(2), manager, deps)
+      bindPaneAgentTitleMocks(args[2], agentTitleMocks5)
+
       connectPanePty(...args)
       const onPtyExit = createdTransportOptions[0]?.onPtyExit
       expect(onPtyExit).toBeTypeOf('function')
@@ -394,6 +418,8 @@ export function registerPtyConnectionHibernationWakeTests(): void {
 
     it('stops the replaced PTY itself when the pane is disposed before a spawn carried the stop', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks6 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       transportFactoryQueue.push(createMockTransport('pty-restarted'))
       const deps = createDeps({
         tabId: 'tab-restart-closed',
@@ -401,6 +427,8 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         replacesPtyId: 'pty-replaced'
       })
       const args = mockPanePtyArgs(createPane(2), createManager(1), deps)
+      bindPaneAgentTitleMocks(args[2], agentTitleMocks6)
+
       // Closing the tab (or parking it) disposes the pane before its deferred connect runs.
       connectPanePty(...args).dispose()
       await flushAsyncTicks()
@@ -411,6 +439,8 @@ export function registerPtyConnectionHibernationWakeTests(): void {
     it('latches a navigation-free wake that lands before the hibernation kill arms the pane', async () => {
       // Latch wake events between recording sleep and arming the kill’s PTY ID, or the frozen pane remains stranded (#7906).
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks7 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(1)
@@ -440,7 +470,9 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       }
       mockStoreState.suppressedPtyExitIds['tab-pty'] = true
 
-      const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+      const binding = connectPanePty(
+        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks7))
+      )
       await flushAsyncTicks()
       expect((transport.getPtyId as unknown as () => string | null)()).toBe('tab-pty')
 
@@ -476,6 +508,8 @@ export function registerPtyConnectionHibernationWakeTests(): void {
 
     it('keeps an in-place provider claim until the replacement PTY spawn settles', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks8 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const deps = createDeps({
@@ -495,7 +529,13 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         updatedAt: 1,
         origin: 'worktree-sleep'
       }
-      const binding = connectPanePty(...mockPanePtyArgs(createPane(2), createManager(1), deps))
+      const binding = connectPanePty(
+        ...mockPanePtyArgs(
+          createPane(2),
+          createManager(1),
+          bindPaneAgentTitleMocks(deps, agentTitleMocks8)
+        )
+      )
       await flushAsyncTicks()
 
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
@@ -530,11 +570,17 @@ export function registerPtyConnectionHibernationWakeTests(): void {
 
       deferredSpawn.resolve('pty-resumed')
       await flushAsyncTicks()
-      expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+      expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
+        paneKey,
+        origin: 'quit',
+        restoreOnTabOpenOnly: true
+      })
     })
 
     it('re-arms the exact hibernation target after a replacement spawn fails', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks9 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const paneKey = `tab-1:${leafIdForPane(2)}`
@@ -554,10 +600,13 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         ...mockPanePtyArgs(
           createPane(2),
           createManager(1),
-          createDeps({
-            consumeSuppressedPtyExit: vi.fn(() => true),
-            isVisibleRef: { current: false }
-          })
+          bindPaneAgentTitleMocks(
+            createDeps({
+              consumeSuppressedPtyExit: vi.fn(() => true),
+              isVisibleRef: { current: false }
+            }),
+            agentTitleMocks9
+          )
         )
       )
       await flushAsyncTicks()
@@ -594,6 +643,8 @@ export function registerPtyConnectionHibernationWakeTests(): void {
 
     it('does not latch a stale sleeping record beside an unsuppressed live PTY', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks10 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const paneKey = `tab-1:${leafIdForPane(2)}`
@@ -613,7 +664,10 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         ...mockPanePtyArgs(
           createPane(2),
           createManager(1),
-          createDeps({ isVisibleRef: { current: false } })
+          bindPaneAgentTitleMocks(
+            createDeps({ isVisibleRef: { current: false } }),
+            agentTitleMocks10
+          )
         )
       )
       await flushAsyncTicks()
@@ -624,6 +678,8 @@ export function registerPtyConnectionHibernationWakeTests(): void {
     it('auto-resumes a hibernated pane when its kill lands after the pane is already revealed', async () => {
       // If reveal precedes wake arming, the arm-time visibility check must resume the pane immediately.
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks11 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(1)
@@ -652,7 +708,9 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         origin: 'worktree-sleep'
       }
 
-      const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+      const binding = connectPanePty(
+        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks11))
+      )
       await flushAsyncTicks()
 
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
@@ -691,6 +749,8 @@ export function registerPtyConnectionHibernationWakeTests(): void {
     it('invalidates the hibernation wake when another flow rebinds the pane before reveal', async () => {
       // A hidden restart’s rebind permanently invalidates the old armed wake, including after a later PTY death.
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks12 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(1)
@@ -713,7 +773,9 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         origin: 'worktree-sleep'
       }
 
-      const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+      const binding = connectPanePty(
+        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks12))
+      )
       await flushAsyncTicks()
 
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
@@ -742,6 +804,8 @@ export function registerPtyConnectionHibernationWakeTests(): void {
     it('records hibernation activity from the core user-input signal, not synthetic onData replies', async () => {
       // Regression: xterm auto-replies share the onData stream with typing; recording them as input made the planner see "input after done" and never hibernate.
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks13 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(1)
@@ -757,7 +821,9 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         }
       }
 
-      const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+      const binding = connectPanePty(
+        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks13))
+      )
       await flushAsyncTicks()
       expect(userInputListeners.size).toBeGreaterThan(0)
       ;(mockStoreState.recordTerminalInput as ReturnType<typeof vi.fn>).mockClear()
@@ -785,13 +851,17 @@ export function registerPtyConnectionHibernationWakeTests(): void {
     it('falls back to onData hibernation recording when the core user-input signal is unavailable', async () => {
       // If an xterm upgrade removes the internal signal, activity recording must degrade to the historical onData behavior — never to no tracking at all.
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks14 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(1)
       const deps = createDeps()
       const pane = createPane(2)
 
-      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+      connectPanePty(
+        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks14))
+      )
       await flushAsyncTicks()
       ;(mockStoreState.recordTerminalInput as ReturnType<typeof vi.fn>).mockClear()
 

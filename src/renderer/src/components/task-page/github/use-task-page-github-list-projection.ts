@@ -1,32 +1,20 @@
+import { useCallback, useMemo } from 'react'
 import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
 import type { TaskPageJiraCreationMetadataModel } from '../jira/use-task-page-jira-creation-metadata'
-import { getWorkItemRepo } from '@/lib/work-item-repo-row'
-import { useCallback, useMemo, useEffect } from 'react'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { taskPageGitHubItemKey } from '@/components/task-page/github/task-page-github-work-item-mutation-keys'
-import { deriveTaskPagePRCheckSummary } from '../task-page-pr-check-summary'
 import { deriveAdvertisedTotalPages } from '../../../../../shared/work-item-empty-page'
-import {
-  GITHUB_PR_TASK_GRID_CLASS,
-  GITHUB_TASK_GRID_CLASS,
-  PR_CHECKS_EAGER_PREFETCH_LIMIT,
-  getTaskPageRepoSourceContext
-} from '../task-page-source-context'
-import { sameOptionalGitHubOwnerRepo } from './task-page-github-review-model'
+import { GITHUB_PR_TASK_GRID_CLASS, GITHUB_TASK_GRID_CLASS } from '../task-page-source-context'
+import { useTaskPageGitHubListPending } from './use-task-page-github-list-pending'
+import { useTaskPagePRCheckHydration } from './use-task-page-pr-check-hydration'
 export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetadataModel) {
   const {
-    repos,
-    fetchPRChecks,
-    taskSource,
-    githubMode,
-    tasksLoading,
     tasksFiltering,
     githubPageSize,
     pages,
     currentPage,
     countedTotalPages,
     provenPageLimit,
-    patchTaskPageWorkItemRows,
     perRepoSourceState,
     activeGithubTaskKind,
     githubWorkItemMutation
@@ -61,7 +49,9 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
     () => typeFilteredCurrentPageItems.length - filteredWorkItems.length,
     [filteredWorkItems.length, typeFilteredCurrentPageItems.length]
   )
-  const showGitHubTaskSkeletons = tasksFiltering || (tasksLoading && filteredWorkItems.length === 0)
+  const githubListPending = useTaskPageGitHubListPending(model)
+  const showGitHubTaskSkeletons =
+    tasksFiltering || (githubListPending && filteredWorkItems.length === 0)
   const loadedGitHubAuthorLogins = useMemo(() => {
     const seen = new Set<string>()
     const logins: string[] = []
@@ -99,53 +89,11 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
   const githubTaskGridClass = showPRManagementColumns
     ? GITHUB_PR_TASK_GRID_CLASS
     : GITHUB_TASK_GRID_CLASS
-  const ensurePRChecksLoaded = useCallback(
-    (item: GitHubWorkItem): void => {
-      if (item.type !== 'pr' || item.checksSummary) {
-        return
-      }
-      const repo = getWorkItemRepo(repos, item)
-      if (!repo) {
-        return
-      }
-      const requestedHeadSha = item.headSha
-      const requestedPRRepo = item.prRepo ?? null
-      void fetchPRChecks(
-        repo.path,
-        item.number,
-        item.branchName,
-        item.headSha,
-        item.prRepo ?? null,
-        {
-          repoId: repo.id,
-          sourceContext: getTaskPageRepoSourceContext(repo, 'github')
-        }
-      ).then((checks) => {
-        patchTaskPageWorkItemRows(
-          {
-            id: item.id,
-            repoId: item.repoId
-          },
-          {
-            checksSummary: deriveTaskPagePRCheckSummary(checks)
-          },
-          (currentItem) =>
-            currentItem.type === 'pr' &&
-            currentItem.headSha === requestedHeadSha &&
-            sameOptionalGitHubOwnerRepo(currentItem.prRepo, requestedPRRepo)
-        )
-      })
-    },
-    [fetchPRChecks, patchTaskPageWorkItemRows, repos]
+  const ensurePRChecksLoaded = useTaskPagePRCheckHydration(
+    model,
+    filteredWorkItems,
+    showPRManagementColumns
   )
-  useEffect(() => {
-    if (taskSource !== 'github' || githubMode !== 'items' || !showPRManagementColumns) {
-      return
-    }
-    for (const item of filteredWorkItems.slice(0, PR_CHECKS_EAGER_PREFETCH_LIMIT)) {
-      ensurePRChecksLoaded(item)
-    }
-  }, [ensurePRChecksLoaded, filteredWorkItems, githubMode, showPRManagementColumns, taskSource])
   let lastLoadedPageIndex = 0
   for (let index = 0; index < pages.length; index += 1) {
     if (pages[index] !== null) {
@@ -166,38 +114,23 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
   })
 
   // Why: load only the clicked page so a high-page jump doesn't exhaust GitHub's Search API rate bucket.
-  const nextModel = model as typeof model & {
-    applyTypeFilter: typeof applyTypeFilter
-    currentPageItems: typeof currentPageItems
-    typeFilteredCurrentPageItems: typeof typeFilteredCurrentPageItems
-    filteredWorkItems: typeof filteredWorkItems
-    softHiddenVisibleCount: typeof softHiddenVisibleCount
-    showGitHubTaskSkeletons: typeof showGitHubTaskSkeletons
-    loadedGitHubAuthorLogins: typeof loadedGitHubAuthorLogins
-    primaryGithubFilterSlug: typeof primaryGithubFilterSlug
-    showPRManagementColumns: typeof showPRManagementColumns
-    githubTaskGridClass: typeof githubTaskGridClass
-    ensurePRChecksLoaded: typeof ensurePRChecksLoaded
-    lastLoadedPageIndex: typeof lastLoadedPageIndex
-    lastLoadedPageFull: typeof lastLoadedPageFull
-    fallbackTotalPages: typeof fallbackTotalPages
-    totalPages: typeof totalPages
-  }
-  nextModel.applyTypeFilter = applyTypeFilter
-  nextModel.currentPageItems = currentPageItems
-  nextModel.typeFilteredCurrentPageItems = typeFilteredCurrentPageItems
-  nextModel.filteredWorkItems = filteredWorkItems
-  nextModel.softHiddenVisibleCount = softHiddenVisibleCount
-  nextModel.showGitHubTaskSkeletons = showGitHubTaskSkeletons
-  nextModel.loadedGitHubAuthorLogins = loadedGitHubAuthorLogins
-  nextModel.primaryGithubFilterSlug = primaryGithubFilterSlug
-  nextModel.showPRManagementColumns = showPRManagementColumns
-  nextModel.githubTaskGridClass = githubTaskGridClass
-  nextModel.ensurePRChecksLoaded = ensurePRChecksLoaded
-  nextModel.lastLoadedPageIndex = lastLoadedPageIndex
-  nextModel.lastLoadedPageFull = lastLoadedPageFull
-  nextModel.fallbackTotalPages = fallbackTotalPages
-  nextModel.totalPages = totalPages
-  return nextModel
+  return Object.assign(model, {
+    applyTypeFilter,
+    currentPageItems,
+    typeFilteredCurrentPageItems,
+    filteredWorkItems,
+    softHiddenVisibleCount,
+    githubListPending,
+    showGitHubTaskSkeletons,
+    loadedGitHubAuthorLogins,
+    primaryGithubFilterSlug,
+    showPRManagementColumns,
+    githubTaskGridClass,
+    ensurePRChecksLoaded,
+    lastLoadedPageIndex,
+    lastLoadedPageFull,
+    fallbackTotalPages,
+    totalPages
+  })
 }
 export type TaskPageGitHubListProjectionModel = ReturnType<typeof useTaskPageGitHubListProjection>

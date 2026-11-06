@@ -1,4 +1,4 @@
-import type { AgentStartupShell } from './tui-agent-startup-shell'
+import type { AgentStartupShell } from './agent-launch/startup/tui-agent-startup-shell'
 
 export const WINDOWS_GIT_BASH_SHELL = 'git-bash'
 

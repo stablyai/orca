@@ -9,10 +9,10 @@ import { createEmptyRateLimitState } from '../../../../shared/rate-limit-state-f
 import { translate } from '@/i18n/i18n'
 import {
   createPendingProviderSnapshot,
-  hasUsageData,
   hasUsageProviderSettingsForProvider,
   isProviderConfigured
 } from './status-bar-provider-visibility'
+import { hasUsageData } from '../../../../shared/usage-provider-windows'
 import { describeOwnerNotSetUp } from './owner-not-set-up-copy'
 
 /** Whose usage the status bar shows: this device, or the remote host that owns the accounts. */

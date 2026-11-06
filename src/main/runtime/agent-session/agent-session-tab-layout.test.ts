@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Tab } from '../../../shared/tab-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { withChatTabChanges, type ChatTabChange } from './agent-session-tab-layout'
 
 // rollback build (switch-off) — delete with the switch-off code post-flip
@@ -88,6 +88,64 @@ describe('a windowless host’s chat tab saves', () => {
         'group-2',
         ['structured-agent-session-c', 'structured-agent-session-d', 'structured-agent-session-b']
       ]
+    ])
+  })
+
+  it('save a fork right after its source, in the source group, from a place naming only the source', () => {
+    const tab = (sessionId: string, groupId: string): Tab => ({
+      id: `structured-agent-session-${sessionId}`,
+      entityId: sessionId,
+      groupId,
+      worktreeId: WT,
+      contentType: 'agent-session',
+      label: 'Chat',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1
+    })
+    const session: WorkspaceSessionState = {
+      ...EMPTY,
+      unifiedTabs: { [WT]: [tab('source', 'group-1'), tab('b', 'group-1'), tab('c', 'group-2')] },
+      tabGroups: {
+        [WT]: [
+          {
+            id: 'group-1',
+            worktreeId: WT,
+            activeTabId: null,
+            tabOrder: ['structured-agent-session-source', 'structured-agent-session-b']
+          },
+          {
+            id: 'group-2',
+            worktreeId: WT,
+            activeTabId: null,
+            tabOrder: ['structured-agent-session-c']
+          }
+        ]
+      },
+      activeGroupIdByWorktree: { [WT]: 'group-2' }
+    }
+    const fork: ChatTabChange = {
+      open: {
+        sessionId: 'child',
+        agent: 'codex',
+        tabId: 'structured-agent-session-child',
+        placement: { afterTabId: 'structured-agent-session-source' }
+      }
+    }
+
+    const saved = change(session, [fork])
+
+    expect(saved.tabGroups?.[WT]?.map((group) => [group.id, group.tabOrder])).toEqual([
+      [
+        'group-1',
+        [
+          'structured-agent-session-source',
+          'structured-agent-session-child',
+          'structured-agent-session-b'
+        ]
+      ],
+      ['group-2', ['structured-agent-session-c']]
     ])
   })
 

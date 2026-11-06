@@ -9,7 +9,7 @@ import type {
   WslMoveRecordStoreRewrittenRequest,
   WslMoveRecordStoreRewrittenResult
 } from '../../../shared/wsl-move/wsl-move-renderer-rewrite-types'
-import { wslHostsServing } from '../../wsl/wsl-host-gate'
+import { wslHostsServing } from '../../wsl/host-lifecycle/wsl-host-gate'
 import { listWslMoveCutovers, writeWslMoveCutover } from './wsl-move-cutover-journal'
 import {
   isWslMoveDesktopRewriteRegistryComplete,

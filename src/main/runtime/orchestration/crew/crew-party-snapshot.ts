@@ -1,5 +1,4 @@
 import { crewRecipientAvailability, type CrewActionCandidate } from './crew-recipient-availability'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-freshness'
 import {
   emptyCrew,
   type OrchestrationCrewSnapshot,
@@ -9,12 +8,7 @@ import { parseOrcaSessionAddress } from '../../../../shared/orca-session-address
 import { isPublicOrchestrationAddress } from '../../../../shared/orchestration-agent-reference'
 import { createLineageRunningSessionResolver } from '../structured-session-lineage'
 import { crewDisplayName, crewTaskDisplay } from './crew-rules'
-import {
-  readCrewOwnedRunAddresses,
-  readCrewQuestions,
-  readCrewTraffic,
-  type CrewAssignmentRow
-} from './crew-query'
+import type { CrewAssignmentRow } from './crew-query'
 
 import type { Party } from './crew-parties'
 import { crewParentRelations } from './crew-parent-relations'
@@ -28,7 +22,8 @@ import type { CrewReadDependencies } from './crew-read-dependencies'
 export type { CrewReadDependencies, CrewIdentityRead } from './crew-read-dependencies'
 
 function preview(body: string): string {
-  const bytes = Buffer.from(body)
+  // One extra UTF-16 unit distinguishes a full ASCII preview from a longer body.
+  const bytes = Buffer.from(body.slice(0, 1025))
   return bytes.length <= 1024
     ? body
     : `${bytes
@@ -48,7 +43,6 @@ export function buildCrewSnapshot(
     return emptyCrew(deps.retainedDbExists ? 'unknown' : 'ok')
   }
   const now = deps.now ?? Date.now()
-  const cutoff = new Date(now - AGENT_STATUS_STALE_AFTER_MS).toISOString()
   const identity = deps.openIdentityRead?.()
   if (identity) {
     deps = { ...deps, ...identity }
@@ -100,7 +94,7 @@ export function buildCrewSnapshot(
           remoteAttachment.process === deps.processForHandle?.(self.terminalHandle)
         )
       }))
-  const ownedRunAddresses = readCrewOwnedRunAddresses(db, self, host.sourceInputs.legacyOwner)
+  const ownedRunAddresses = host.sourceInputs.ownedRuns(self)
   for (const current of host.sourceInputs.runInputs(ownedRunAddresses)) {
     const coordinator = party(current.session, current.handle, current.pane, `run:${current.id}`)
     if (coordinator) {
@@ -108,8 +102,8 @@ export function buildCrewSnapshot(
     }
   }
   const selfAliases = () => aliasesFor(self.address)
-  const traffic = readCrewTraffic(db, selfAliases(), cutoff)
-  const questions = readCrewQuestions(db, selfAliases())
+  const traffic = host.sourceInputs.traffic(selfAliases(), now)
+  const questions = host.sourceInputs.questions(selfAliases())
   hydrate([
     ...new Set([
       ...traffic.map((message) => message.peer),

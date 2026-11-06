@@ -24,9 +24,13 @@ import {
   HostAccountSignInCodeParams
 } from '../../../../shared/rpc-contract/accounts-params'
 import { HostAccountLaunchEnvParams } from '../../../../shared/host-account-launch-env'
+import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 
 // Use a per-process counter: same-millisecond subscriptions must not evict each other's cleanup.
 let accountsSubscriptionSeq = 0
+
+// Why 10s: well under the CLI's 60s request timeout even when several Codex homes probe slowly.
+const STALE_USAGE_WAIT_MS = 10_000
 
 const hostSignIns = new WeakMap<OrcaRuntimeService, HostAccountSignInFlows>()
 function hostSignInFlows(runtime: OrcaRuntimeService): HostAccountSignInFlows {
@@ -136,6 +140,13 @@ const ACCOUNT_METHOD_DEFINITIONS = [
       // Refresh before replying: unfocused desktop polling and unopened account caches can leave mobile usage stale.
       if (params.refreshUsage) {
         await runtime.refreshAccountsForMobile()
+      } else if (params.refreshStaleUsage) {
+        // Slow inactive-account probes keep running; the caller gets what settled in time.
+        await withTimeout(
+          runtime.refreshAccountsForMobileSubscriber(),
+          STALE_USAGE_WAIT_MS,
+          undefined
+        )
       }
       return runtime.getAccountsSnapshot()
     }
@@ -240,7 +251,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
     name: 'accounts.subscribe',
     permission: 'workspace',
     params: null,
-    handler: async (_params, { runtime, connectionId, signal }, emit) => {
+    handler: async (_params, { runtime, connectionId, signal, caller }, emit) => {
       if (signal?.aborted) {
         return
       }
@@ -248,6 +259,11 @@ const ACCOUNT_METHOD_DEFINITIONS = [
       const unsubscribe = runtime.onAccountsChanged((snapshot) => {
         emit({ type: 'snapshot', snapshot })
       })
+      // A paired client watching keeps polls running without a window; the host's own renderer follows window focus.
+      const releaseUsageViewer =
+        caller?.kind === 'paired-device'
+          ? runtime.getUsageRateLimits()?.addUsageViewer()
+          : undefined
 
       // Key cleanup by socket plus sequence so sibling sockets and concurrent subscribes cannot evict each other.
       const seq = ++accountsSubscriptionSeq
@@ -258,6 +274,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
         () => {
           signal?.removeEventListener('abort', release)
           unsubscribe()
+          releaseUsageViewer?.()
           stopped.resolve()
         },
         connectionId

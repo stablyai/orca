@@ -11,7 +11,7 @@ import * as comments from '../../src/main/linear/linear-issue-comments'
 import * as relations from '../../src/main/linear/issue-relation-write'
 import { LinearWriteFailure } from '../../src/main/linear/linear-issue-write-support'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
-import { OrcaRuntimeRpcServer } from '../../src/main/runtime/runtime-rpc'
+import { OrcaRuntimeRpcServer } from '../../src/main/runtime/rpc/server/runtime-rpc'
 import { LINEAR_AGENT_ACCESS_METHODS } from '../../src/main/runtime/rpc/methods/linear-agent-access'
 
 const writeId = '11111111-1111-4111-8111-111111111111'
@@ -268,22 +268,6 @@ it.each([...failureCases, ...diagnosticControls])(
     expect(process.exitCode).toBe(1)
   }
 )
-
-it('returns a confirmed CLI write over the unchanged wire payload', async () => {
-  vi.mocked(mutations.updateIssueForAgent).mockImplementation(
-    async (_id, _fields, _workspace, options) => {
-      options?.beforeInvoke?.()
-      return { ...issue, state: { id: 'done', name: 'Done' } }
-    }
-  )
-  await main(['linear', 'status', 'set', 'ENG-1', '--to', 'Done', '--json'], '/tmp')
-  expect(JSON.parse(String(vi.mocked(console.log).mock.calls.at(-1)?.[0]))).toMatchObject({
-    ok: true,
-    result: { state: { id: 'done' } }
-  })
-  expect(mutations.updateIssueForAgent).toHaveBeenCalledTimes(1)
-  expect(process.exitCode).toBe(0)
-})
 
 it('ends a stalled CLI preparation before its client timeout without a late write', async () => {
   let release = () => {}

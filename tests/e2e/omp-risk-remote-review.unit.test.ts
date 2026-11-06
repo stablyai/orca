@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../src/shared/stable-pane-id'
-import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
+import { makePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
+import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
 import {
   applyWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshots

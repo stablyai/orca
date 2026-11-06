@@ -9,7 +9,7 @@ import { structuredAgentSessionSendQueues } from './structured-agent-session-que
 import {
   nativeChatQueueFollowUps,
   nativeChatSendFollowUp
-} from '../../../../shared/native-chat-follow-up-behavior'
+} from '../../../../shared/native-chat/input/native-chat-follow-up-behavior'
 import type { AgentSessionCancelResult } from '../../../../shared/agent-session/agent-session-wire'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { useStructuredLegacyLaunchStop } from '@/lib/agent-session/launch/structured-agent-session-legacy-launch-stop'
@@ -84,15 +84,18 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
   const journalItems = transportState.journalItems
   const {
     conversationCommands,
+    compactInstructions,
     optionSnapshot,
     optionSurface,
     setStructuredOption,
     sendSource,
     unavailable,
+    accountUsage,
     threadGoal: threadGoalSupport,
     reportedThreadGoal,
     contextUsage: usageSupport,
     rewind: rewindSupport,
+    forkSupport,
     sessionSupport
   } = useStructuredAgentSessionOptions({
     agent,
@@ -106,6 +109,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     ...(args.hostOptionStamp ? { hostOptionStamp: args.hostOptionStamp } : {}),
     fence: state.fence,
     turnId: transportState.turnId,
+    hasTurn: transportState.latestTurn != null || transportState.submissions.length > 0,
     unloadedTurnRevisions: state.unloadedTurnRevisions,
     mutate,
     capturePresentation,
@@ -226,6 +230,8 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     readCurrent: transportEnabled && readCurrent,
     rewind,
     conversationCommands,
+    accountUsage,
+    compactInstructions,
     ...structuredConversationCommandRunner({
       agentName,
       pending: commandPending,
@@ -240,6 +246,10 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
       send: commandWrite
     }),
     journalItems: transcriptItems,
+    /** The host's latest `/clear`, which may sit past the loaded rows. */
+    contextFloor,
+    /** The options read's word on whether this chat's agent forks; absent until it answers. */
+    forkSupport: transportEnabled ? forkSupport : undefined,
     /** The host's newest turn record, which places a live turn whose record is not loaded. */
     latestTurn: transportState.latestTurn,
     /** The host's prompts still waiting on the person and its working answer. */

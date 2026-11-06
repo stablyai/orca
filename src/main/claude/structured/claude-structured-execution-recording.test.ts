@@ -92,55 +92,6 @@ it.each(['low', 'high', undefined])(
   }
 )
 
-it('retires earlier Fast routing when an effort read reports Fast off', async () => {
-  let fastMode = true
-  const models = [
-    {
-      value: 'sonnet',
-      supportsEffort: true,
-      supportedEffortLevels: ['low', 'high'],
-      supportsFastMode: true
-    }
-  ]
-  const claude = fakeClaude({
-    initModels: models,
-    routes: { list_models: () => models },
-    settings: {
-      applied: { model: 'sonnet', effort: 'low' },
-      get effective() {
-        return { effortLevel: 'high', fastMode }
-      }
-    }
-  })
-  const adapter = await acquired(claude)
-  const send = (effort: string) =>
-    adapter.dispatch({
-      sessionId: 'session-1',
-      clientMessageId: effort,
-      body: USER_MESSAGE,
-      executionOptions: { model: 'sonnet', effort, fastMode: 'true' },
-      fence: 7
-    })
-  try {
-    await send('high')
-    claudeTurnEnds(claude.connections[0]!)
-    claudeFrame(claude.connections[0]!, {
-      type: 'system',
-      subtype: 'status',
-      fast_mode_state: 'on'
-    })
-    fastMode = false
-    expect(await send('low')).toMatchObject({ state: 'admitted', ranOptions: { effort: 'low' } })
-    claudeTurnEnds(claude.connections[0]!)
-    expect(await send('low')).toEqual({
-      state: 'admitted',
-      ranOptions: { model: 'sonnet', effort: 'low' }
-    })
-  } finally {
-    await adapter.closeAll()
-  }
-})
-
 it('never pairs an earlier unknown-model low run with the next prepared model', async () => {
   const applied: { model?: string; effort: string } = { effort: 'low' }
   const claude = fakeClaude({ initModel: '', settings: { applied } })

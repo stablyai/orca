@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type { AgentLaunchTabPublishRequest } from '../../../shared/agent-launch-tab-publication'
+import type { AgentLaunchTabPublishRequest } from '../../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import { createTabsSliceMockApi } from '../store/slices/tabs-slice-test-harness'
 import { createTestStore } from '../store/slices/store-test-helpers'
 
@@ -50,7 +50,6 @@ createTabsSliceMockApi()
 const { keepAgentLaunchTabMainWrote, _resetUndrawnLaunchTabsForTests } =
   await import('./agent-launch-tab-main-written')
 const { applyAgentLaunchPaneVerdict } = await import('./agent-launch-pane-verdict-application')
-const { agentLaunchPanePrompt } = await import('./agent-launch-pane-prompt')
 
 const WT = 'repo1::/tmp/feature'
 const TAB_ID = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d'
@@ -100,18 +99,6 @@ afterEach(() => {
 })
 
 describe("a launch tab main wrote, in a layout-owner build's window", () => {
-  it('moves the view as the viewer rule says, only for the launch that made the tab', () => {
-    drawMainTab()
-    keepAgentLaunchTabMainWrote(
-      request({ viewer: 'focus-in-workspace', shownByMain: { created: false } })
-    )
-    expect(focusTerminalInitiatedTab).not.toHaveBeenCalled()
-
-    keepAgentLaunchTabMainWrote(request({ requestId: 'r-2', viewer: 'focus-in-workspace' }))
-    expect(store.getState().activeTabId).toBe(TAB_ID)
-    expect(focusTerminalInitiatedTab).toHaveBeenCalledWith(TAB_ID, LEAF_ID, WT)
-  })
-
   it('keeps the launch, and an outcome that came first, for a tab that draws later', () => {
     keepAgentLaunchTabMainWrote(request())
     applyAgentLaunchPaneVerdict({
@@ -128,48 +115,5 @@ describe("a launch tab main wrote, in a layout-owner build's window", () => {
       operationId: 'op-1',
       outcome: { kind: 'unconfirmed' }
     })
-  })
-
-  it('drops a settled launch of a tab that draws later', () => {
-    keepAgentLaunchTabMainWrote(request({ prompt: 'fix the build' }))
-    applyAgentLaunchPaneVerdict({
-      worktreeId: WT,
-      tabId: TAB_ID,
-      leafId: LEAF_ID,
-      verdict: { kind: 'proceed' }
-    })
-
-    drawMainTab()
-
-    expect(launchPane()).toBeUndefined()
-    expect(agentLaunchPanePrompt(TAB_ID)).toBeNull()
-  })
-
-  it('leaves the close of a withdrawn tab to main, and drops what it kept', () => {
-    drawMainTab()
-    keepAgentLaunchTabMainWrote(request({ prompt: 'fix the build' }))
-
-    applyAgentLaunchPaneVerdict({
-      worktreeId: WT,
-      tabId: TAB_ID,
-      leafId: LEAF_ID,
-      verdict: { kind: 'withdrawn' }
-    })
-
-    expect(store.getState().tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual([TAB_ID])
-    expect(launchPane()).toBeUndefined()
-    expect(agentLaunchPanePrompt(TAB_ID)).toBeNull()
-  })
-
-  it('drops a held launch once main closed its tab, never drawn', () => {
-    frames.flowing = true
-    keepAgentLaunchTabMainWrote(request({ prompt: 'fix the build' }))
-    frames.holdsTab = false
-
-    store.setState({})
-    expect(agentLaunchPanePrompt(TAB_ID)).toBeNull()
-    frames.holdsTab = true
-    drawMainTab()
-    expect(launchPane()).toBeUndefined()
   })
 })

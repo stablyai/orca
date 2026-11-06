@@ -7,6 +7,7 @@ import type { PaletteSearchResult } from '@/lib/worktree-palette-search'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { splitPathHeadForElision } from '@/lib/path-head-elision'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
+import { useWslHostDistro, WslHostMark } from '@/components/wsl-host-mark/WslHostMark'
 import { cn } from '@/lib/utils'
 
 const NO_SECONDARY_MATCHES: readonly { text: string; ranges: readonly MatchRange[] }[] = []
@@ -296,8 +297,12 @@ export function PaletteHostBadgeChip({
 }: {
   badge: PaletteHostBadge | null
 }): React.JSX.Element | null {
+  const wslDistro = useWslHostDistro(badge?.hostId)
   if (!badge) {
     return null
+  }
+  if (wslDistro) {
+    return <WslHostMark distro={wslDistro} />
   }
   return (
     <span

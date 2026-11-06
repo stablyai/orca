@@ -65,16 +65,17 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
     const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const result = await client.call<{
       run: { id: string; objective: string } | null
+      next?: string
     }>('orchestration.runCurrent', { from })
     if (!flags.has('full')) {
       printOrchestrationResult(result, json, {
-        fields: (r) => (r.run ? runFields(r.run) : { runId: null })
+        fields: (r) => (r.run ? { ...runFields(r.run), next: r.next } : { runId: null })
       })
       return
     }
     printResult(result, json, (r) =>
       r.run
-        ? `${r.run.id} ${r.run.objective}`
+        ? withReceiptNext(`${r.run.id} ${r.run.objective}`, r)
         : `No Run is bound to this ${from === undefined ? 'session' : 'terminal'}.`
     )
   },

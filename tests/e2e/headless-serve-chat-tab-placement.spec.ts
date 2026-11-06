@@ -8,7 +8,7 @@ import {
   structuredAgentSessionCreateParams
 } from '../../src/shared/agent-session/structured-agent-session-create'
 import { structuredAgentSessionTabId } from '../../src/shared/agent-session/view/structured-agent-session-projection'
-import { HOST_TERMINAL_SURFACE_SEPARATOR } from '../../src/shared/terminal-surface-id'
+import { HOST_TERMINAL_SURFACE_SEPARATOR } from '../../src/shared/workspace-layout/terminal-surface-id'
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
 import { readServerLayout } from './helpers/paired-desktop-server-layout'

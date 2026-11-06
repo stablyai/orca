@@ -9,7 +9,9 @@ export const CLAUDE_STRUCTURED_AGENT: DirectoryAccountAgentDefinition = {
   accountHomeVariable: 'CLAUDE_CONFIG_DIR',
   capabilities: {
     rewind: true,
+    fork: 'checkpoint',
     compact: true,
+    compactInstructions: true,
     threadGoal: false,
     contextUsage: true,
     imagePrompts: true,

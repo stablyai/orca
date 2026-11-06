@@ -1,6 +1,9 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import type { PtyListedSession, PtySessionListScope } from '../../../shared/pty-listed-session'
+import type {
+  PtyListedSession,
+  PtySessionListScope
+} from '../../../shared/terminal/pty/lifecycle/pty-listed-session'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from './worktree-runtime-owner'
 import {

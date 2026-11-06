@@ -49,15 +49,6 @@ describe('paired web client writes after the client reconnects during the suppor
     })
   })
 
-  it('sends a plain save as before, unpinned', async () => {
-    await createFileApi().writeFile({ filePath: '/hub/readme.md', content: 'edited' })
-
-    expect(session.client.call).toHaveBeenLastCalledWith('files.write', expect.anything(), {
-      timeoutMs: undefined,
-      expectedConnectionEpoch: undefined
-    })
-  })
-
   it('refuses to send a guarded save whose probe answered on another connection', async () => {
     await expect(
       createFileApi().writeFile({

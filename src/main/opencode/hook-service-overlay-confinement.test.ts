@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { setAppEnvironment } from '../../shared/app-environment'
-import { safeRemoveTree } from '../pty/overlay-mirror'
+import { safeRemoveTree } from '../pty/scrollback/overlay-mirror'
 import { OpenCodeHookService } from './hook-service'
 import { OPENCODE_OVERLAY_MANIFEST_FILE } from './opencode-overlay-manifest'
 

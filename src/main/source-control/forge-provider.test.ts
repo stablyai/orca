@@ -1,4 +1,4 @@
-import { supportsHostedReviewCreation } from '../../shared/hosted-review-creation-providers'
+import { supportsHostedReviewCreation } from '../../shared/source-control/hosted-review/hosted-review-creation-providers'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -86,12 +86,11 @@ vi.mock('../gitea/pull-request-creation', () => ({
   createGiteaPullRequest: createGiteaPullRequestMock
 }))
 
+import { FORGE_PROVIDERS, getForgeProviderById } from './forge-provider'
 import {
-  FORGE_PROVIDERS,
   detectHostedReviewProvider,
-  getForgeProviderById,
   getForgeProviderForRepository
-} from './forge-provider'
+} from './forge-provider-detection'
 
 import { _resetOriginGitHubApiRepositoryCache } from '../github/github-api-repository'
 

@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { constants, readFileSync, rmSync, statSync } from 'node:fs'
 import { cp, mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
-import { cloneMacTree } from '../../main/macos-tree-clone'
+import { cloneMacTree } from '../../main/filesystem/macos-tree-clone'
 import { isProcessAlive } from '../../shared/serve-bundle-coordination'
 
 /** Relocated supervisors can no longer derive the app root from __dirname. */

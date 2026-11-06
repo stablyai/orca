@@ -10,7 +10,7 @@ import {
   encodeModifyOtherKeysEnter,
   encodeTerminalShiftEnter,
   TERMINAL_CTRL_BACKSPACE_INPUT
-} from '../../../../shared/terminal-modified-enter-encoding'
+} from '../../../../shared/terminal/protocol/input-modes/terminal-modified-enter-encoding'
 import type { WindowsShiftEnterEncoding } from './terminal-windows-shift-enter'
 import {
   resolveTerminalOptionShortcutAction,

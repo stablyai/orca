@@ -1,4 +1,7 @@
-import { isAiVaultAgent, type AiVaultAgent } from '../../../shared/ai-vault-types'
+import {
+  isAiVaultAgent,
+  type AiVaultAgent
+} from '../../../shared/ai-vault/contracts/ai-vault-types'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { measureClipboardTextByteLength } from '../../../shared/clipboard-text'
 import { normalizeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'

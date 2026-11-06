@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import type { BrowserExtensionInstallPromptRequest } from '../../../shared/browser-extension-webstore'
+import type { BrowserExtensionInstallPromptRequest } from '../../../shared/browser/extensions/browser-extension-webstore'
 import {
   describeBrowserExtensionAccess,
   describeUnsupportedBrowserExtensionFeatures

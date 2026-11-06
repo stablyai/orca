@@ -184,12 +184,14 @@ export async function rewindStructuredAgentSession(
             journal,
             fence,
             undefined,
-            (rewind, currentFence, cursor) => {
+            (rewind, currentFence, cursor, cancel, childBoundary) => {
               completionReceipt = store.conversationReceipts.rewind(
                 sessionId,
                 currentFence,
                 rewind,
-                cursor
+                cursor,
+                cancel,
+                childBoundary
               )
               return ctx.operationReceipt!
             }

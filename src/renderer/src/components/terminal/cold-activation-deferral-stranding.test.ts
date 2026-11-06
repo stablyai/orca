@@ -18,7 +18,7 @@ import {
   captureParkedTerminalPaneCandidates
 } from '../terminal-pane/terminal-parked-tab-watchers'
 import { capturedPanesByTabId } from '../terminal-pane/terminal-parked-watcher-registry'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalParkingFoundation } from '../use-terminal-parking-foundation'
 import type { StartupTerminalTabHold } from './startup-terminal-tab-hold'
 
@@ -136,7 +136,7 @@ describe('cold-activation deferral stranding', () => {
     useAppStore.setState(initialState, true)
   })
 
-  it('precondition: both seeded tabs are deferrable under the real coverage predicate', async () => {
+  it('drains a plan installed by the gate-open pass without the active worktree changing', async () => {
     await seedDeferrableWorktree()
     const [first, second] = useAppStore.getState().tabsByWorktree[WORKTREE_ID]!
     expect(
@@ -153,10 +153,6 @@ describe('cold-activation deferral stranding', () => {
         terminalProviderHasAuthoritativeSnapshot
       )
     ).toBe(true)
-  })
-
-  it('drains a plan installed by the gate-open pass without the active worktree changing', async () => {
-    await seedDeferrableWorktree()
     vi.useFakeTimers()
     const { result, rerender } = renderHook((props: HarnessProps) => useStrandingHarness(props), {
       initialProps: { worktreeId: WORKTREE_ID, gateOpen: false }

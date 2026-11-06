@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
 import { useAppStore } from '@/store'
@@ -20,6 +20,7 @@ import { BrowserToolbarProfileDialogs } from './browser-toolbar-profile-dialogs'
 import { translate } from '@/i18n/i18n'
 import type { BrowserChromeOverflowMenuProps } from './browser-chrome-folded-tools'
 import { browserCookieImportFailureText } from '@/lib/browser-cookie-import-error-copy'
+import { setBrowserPageAgentViewportSize } from '../host-guest/browser-page-viewport'
 
 type BrowserToolbarMenuProps = {
   currentProfileId: string | null
@@ -65,6 +66,8 @@ export function BrowserToolbarMenu({
   const shouldForceMenuOpen = browserCookieTourStepActive && isActive && !importHintVisible
 
   const applyViewportPreset = (nextId: BrowserViewportPresetId | null): void => {
+    // The user's pick replaces an agent's viewport, in the box and in the page.
+    setBrowserPageAgentViewportSize(browserPageId, null)
     setBrowserPageViewportPreset(browserPageId, nextId)
     const preset = getBrowserViewportPreset(nextId)
     const override = preset ? browserViewportPresetToOverride(preset) : null
@@ -77,7 +80,13 @@ export function BrowserToolbarMenu({
   const [pendingSwitchProfileId, setPendingSwitchProfileId] = useState<string | null | undefined>(
     undefined
   )
-  const [menuOpen, setMenuOpen] = useState(false)
+  // Only expose the hidden Import Cookies row when the tour reaches its fallback step.
+  const [menuOpen, setMenuOpen] = useState(shouldForceMenuOpen)
+  const [prevShouldForceMenuOpen, setPrevShouldForceMenuOpen] = useState(shouldForceMenuOpen)
+  if (prevShouldForceMenuOpen !== shouldForceMenuOpen) {
+    setPrevShouldForceMenuOpen(shouldForceMenuOpen)
+    setMenuOpen(shouldForceMenuOpen)
+  }
   const [siteDisplay, setSiteDisplay] = useState<BrowserPageSiteDisplay | null>(null)
   const mountedRef = useMountedRef()
 
@@ -108,11 +117,6 @@ export function BrowserToolbarMenu({
       }
     })
   }, [browserPageId, menuOpen, mountedRef])
-
-  useLayoutEffect(() => {
-    // Only expose the hidden Import Cookies row when the tour reaches its fallback step.
-    setMenuOpen(shouldForceMenuOpen)
-  }, [shouldForceMenuOpen])
 
   const handleMenuOpenChange = (open: boolean): void => {
     if (shouldForceMenuOpen && !open) {

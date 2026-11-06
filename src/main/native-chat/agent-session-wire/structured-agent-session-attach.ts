@@ -49,6 +49,7 @@ export type AgentSessionAttachParams = {
   /** Retain native in params because fingerprints include it. */
   runtimeKind: 'native'
   /** Host-only create defaults; remote schemas reject these. */
+  fork?: { sessionId: string; itemId: string; revalidate: () => Promise<void> }
   options?: Readonly<Record<string, string>>
   /** Exclude tab placement from conversation identity/fingerprints. */
   surfaceTabId?: string
@@ -61,6 +62,8 @@ export type AgentSessionAttachParams = {
     /** Omit only for exact replay of an already-imported journal. */
     transcriptPath?: string
     source?: AdoptedTranscriptSource
+    /** The source conversation's title; derived, so not part of the attach fingerprint. */
+    conversationName?: string
   }
 }
 
@@ -163,10 +166,7 @@ export async function attachJournal(input: {
   const journal = await input.openConversation(input.record)
   return {
     journal,
-    unconfirmedClientMessageIds: journal
-      .submissions()
-      .filter((entry) => entry.dispatchState === 'unknown' && entry.recovered === true)
-      .map((entry) => entry.clientMessageId)
+    unconfirmedClientMessageIds: journal.inputOrder.recoveredUnknownIds()
   }
 }
 
@@ -217,6 +217,7 @@ export function reserveRequestFor(input: {
           adoptedHandleLink: adoptedProviderHandleLink(params.adopt.providerHandle, input.now)
         }
       : {}),
+    conversationName: params.adopt?.conversationName,
     expectedFence: params.envelope.expectedRuntimeFence,
     spawnToken: authority.spawnToken,
     claimKeyId: authority.claimKeyId,

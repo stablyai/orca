@@ -79,7 +79,10 @@ describeOnWindows('a secure store that exists but cannot be read', () => {
 
   it('does not regenerate the E2EE keypair, which would un-pair every device', async () => {
     const { loadOrCreateE2EEKeypair } = await import('./e2ee-keypair')
-    const { E2EE_KEYPAIR_FILENAME } = await import('./mobile-pairing-files')
+    const [, { E2EE_KEYPAIR_FILENAME }] = await Promise.all([
+      import('./rpc/server/pairing/mobile-pairing-files'),
+      import('../../shared/remote-runtime/host-store/runtime-e2ee-keypair-file')
+    ])
     const dir = join(root, 'e2ee')
     mkdirSync(dir, { recursive: true })
     const filePath = join(dir, E2EE_KEYPAIR_FILENAME)
@@ -98,8 +101,8 @@ describeOnWindows('a secure store that exists but cannot be read', () => {
   })
 
   it('does not erase the device registry, which would revoke every paired token', async () => {
-    const { DeviceRegistry } = await import('./device-registry')
-    const { DEVICE_REGISTRY_FILENAME } = await import('./mobile-pairing-files')
+    const { DeviceRegistry } = await import('./rpc/server/pairing/device-registry')
+    const { DEVICE_REGISTRY_FILENAME } = await import('./rpc/server/pairing/mobile-pairing-files')
     const dir = join(root, 'devices')
     mkdirSync(dir, { recursive: true })
     const filePath = join(dir, DEVICE_REGISTRY_FILENAME)
