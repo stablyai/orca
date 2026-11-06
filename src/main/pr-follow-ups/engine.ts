@@ -229,16 +229,16 @@ export class FollowUpEngine {
             changed = this.activity(action, working, at) || changed
           }
         }
-        if (!this.inventory.byWorkspace.has(worktreeId)) {
-          await this.reconcileNow([key])
-        } else if (changed) {
-          this.publish([key])
-        }
       } finally {
         const activity = this.projection.activityStates.get(identity)
         if (activity) {
           activity.queued--
         }
+      }
+      if (!this.inventory.byWorkspace.has(worktreeId)) {
+        await this.reconcileNow([key])
+      } else if (changed) {
+        this.publish([key])
       }
     })
   }
