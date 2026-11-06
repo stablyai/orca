@@ -32,7 +32,8 @@ export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES = 3 * 1024 * 1024
 
 // Our own fence on the page's code, well inside the phone contract (32 MiB total, 10 MiB per asset in
 // manifest-contract.ts); it fails the build before the code weighs more than any one asset may.
-export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 9.5 * 1024 * 1024
+// The extra 64 KiB covers the page's query layer (TanStack Query, about 37 KB minified).
+export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = (9.5 * 1024 + 64) * 1024
 
 // Only this licensed desktop-identical asset has its own allowance; other fonts (KaTeX's) and code count.
 export const MOBILE_WEB_APP_TERMINAL_FONT_MAX_BYTES = 1200 * 1024
