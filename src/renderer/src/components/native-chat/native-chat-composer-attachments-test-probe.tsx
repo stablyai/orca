@@ -30,7 +30,6 @@ function Probe({
   const api = useNativeChatComposerAttachments({
     attachmentScopeKey: scopeKey,
     allowWithoutTarget: structured,
-    imageReferences: structured,
     caret,
     disabled,
     isComposing,

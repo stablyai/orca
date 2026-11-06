@@ -3,6 +3,7 @@
 import type { JSONContent } from '@tiptap/react'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { createIndexedDbNativeChatComposerDraftStorage } from './native-chat-composer-draft-indexeddb'
+import { nativeChatDraftWithoutLegacyImages } from './native-chat-composer-legacy-images'
 
 export type NativeChatComposerDraftImage = {
   id: string
@@ -28,6 +29,8 @@ export type NativeChatComposerDraftOwner = {
 }
 
 export type StoredNativeChatComposerDraft = NativeChatComposerDraft & {
+  /** Unmarked documentless drafts may still contain automatic legacy image tokens. */
+  readonly textFormat?: 'literal'
   readonly savedAt: number
   readonly owner?: NativeChatComposerDraftOwner
 }
@@ -108,9 +111,46 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/** Only the editor's own root node is restored; anything else falls back to the plain text. */
+function isEditorNode(value: unknown, depth: number): value is JSONContent {
+  // Bound recursion before legacy cleanup or the editor traverses damaged/cyclic stored content.
+  if (depth > 100 || !isRecord(value) || typeof value.type !== 'string') {
+    return false
+  }
+  const { text, attrs, marks, content } = value
+  if (text !== undefined && typeof text !== 'string') {
+    return false
+  }
+  if (attrs !== undefined) {
+    if (!isRecord(attrs)) {
+      return false
+    }
+    for (const key of ['token', 'path']) {
+      if (attrs[key] != null && typeof attrs[key] !== 'string') {
+        return false
+      }
+    }
+  }
+  if (
+    marks !== undefined &&
+    (!Array.isArray(marks) ||
+      !marks.every(
+        (mark) =>
+          isRecord(mark) &&
+          typeof mark.type === 'string' &&
+          (mark.attrs === undefined || isRecord(mark.attrs))
+      ))
+  ) {
+    return false
+  }
+  return (
+    content === undefined ||
+    (Array.isArray(content) && content.every((child) => isEditorNode(child, depth + 1)))
+  )
+}
+
+/** Unsafe documents fall back to the saved text without losing the rest of the draft. */
 function isEditorDocument(value: unknown): value is JSONContent {
-  return isRecord(value) && value.type === 'doc'
+  return isEditorNode(value, 0) && value.type === 'doc'
 }
 
 function parseImage(value: unknown): NativeChatComposerDraftImage | null {
@@ -165,10 +205,15 @@ export function parseStoredNativeChatComposerDraft(
       )
     : undefined
   const owner = parseOwner(value.owner)
+  const editorDocument = isEditorDocument(document) ? document : undefined
   return {
-    text,
+    ...nativeChatDraftWithoutLegacyImages(
+      text,
+      editorDocument,
+      value.textFormat === 'literal' ? 'literal' : undefined
+    ),
+    textFormat: 'literal',
     ...(pastedTextFiles ? { pastedTextFiles } : {}),
-    ...(isEditorDocument(document) ? { document } : {}),
     images: images.flatMap((image) => parseImage(image) ?? []),
     savedAt,
     ...(owner ? { owner } : {})

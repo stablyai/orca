@@ -2,7 +2,7 @@ import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import { notifyNativeChatComposerState } from './native-chat-composer-mount'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
-import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import type { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { cn } from '@/lib/utils'
@@ -48,7 +48,7 @@ export type NativeChatComposerFieldProps = {
   activeSuggestion: number
   notices: readonly NativeChatComposerNotice[]
   imageAttachments: readonly NativeChatComposerImageAttachment[]
-  /** A structured chat numbers its images, as its chips in the prompt read. */
+  /** Ordered image labels match the provider attachment order. */
   numberImages?: boolean
   /** The paired server a structured chat runs on, which reads back files stored there. */
   attachmentEnvironmentId?: string
@@ -188,7 +188,6 @@ export function NativeChatComposerField({
         : 0
   // Value the IME started from, and whether a programmatic clear was dropped on top of it.
   const compositionBaseRef = useRef('')
-  const imageRow = useMemo(() => imageAttachments.map(({ id }) => id), [imageAttachments])
   const droppedDraftClearRef = useRef(false)
   // Remember the editor’s last draft because chip node views can flushSync a render before its onChange publishes.
   const editorDraftRef = useRef<string | null>(null)
@@ -337,7 +336,6 @@ export function NativeChatComposerField({
               key={draftScopeKey}
               scopeKey={draftScopeKey}
               positionTarget={positionTarget}
-              imageRow={imageRow}
               inputRef={textareaRef}
               isComposing={imeEnterGesture.isComposing}
               initialValue={draft}

@@ -20,7 +20,10 @@ const THIS_RUN = `${Date.now()}-${Math.random()}`
 
 type EntryBase = { readonly scopeKey: string; readonly at: number; readonly run?: string }
 type DraftEntry = EntryBase & { readonly draft: StoredNativeChatComposerDraft | null }
-type AdditionEntry = EntryBase & { readonly addition: NativeChatComposerDraftAddition }
+type AdditionEntry = EntryBase & {
+  readonly addition: NativeChatComposerDraftAddition
+  readonly textFormat?: 'literal'
+}
 type JournalEntry = DraftEntry | AdditionEntry
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -41,12 +44,14 @@ function parseEntry(entry: unknown): JournalEntry[] {
   }
   const run = typeof entry.run === 'string' ? entry.run : undefined
   if (!isRecord(addition)) {
-    return [{ scopeKey, draft: parseStoredNativeChatComposerDraft(draft), at, run }]
+    const parsed = parseStoredNativeChatComposerDraft(draft)
+    return draft === null || parsed ? [{ scopeKey, draft: parsed, at, run }] : []
   }
   const parsed = parseStoredNativeChatComposerDraft({
     text: typeof addition.text === 'string' ? addition.text : '',
     document: addition.document,
     pastedTextFiles: addition.pastedTextFiles,
+    textFormat: entry.textFormat,
     images: Array.isArray(addition.images) ? addition.images : [],
     savedAt: at
   })
@@ -56,6 +61,7 @@ function parseEntry(entry: unknown): JournalEntry[] {
           scopeKey,
           at,
           run,
+          textFormat: 'literal',
           addition: {
             text: parsed.text,
             images: parsed.images,
@@ -73,13 +79,14 @@ function parseEntry(entry: unknown): JournalEntry[] {
 }
 
 function readEntries(): JournalEntry[] {
+  let entries: unknown
   try {
     const raw = localStorage.getItem(JOURNAL_KEY)
-    const entries: unknown = raw === null ? [] : JSON.parse(raw)
-    return Array.isArray(entries) ? entries.flatMap(parseEntry) : []
+    entries = raw === null ? [] : JSON.parse(raw)
   } catch {
     return []
   }
+  return Array.isArray(entries) ? entries.flatMap(parseEntry) : []
 }
 
 function writeEntries(entries: readonly JournalEntry[]): boolean {
@@ -137,6 +144,7 @@ export function replayNativeChatComposerDraftJournal(
     drafts.set(scopeKey, {
       ...from,
       ...next,
+      textFormat: 'literal',
       savedAt: at
     })
     changed.add(scopeKey)
@@ -180,7 +188,10 @@ export function journalNativeChatComposerDraftAddition(
   addition: NativeChatComposerDraftAddition,
   at: number
 ): boolean {
-  const entries: JournalEntry[] = [...readEntries(), { scopeKey, at, run: THIS_RUN, addition }]
+  const entries: JournalEntry[] = [
+    ...readEntries(),
+    { scopeKey, at, run: THIS_RUN, addition, textFormat: 'literal' }
+  ]
   const additions = JSON.stringify(entries.filter(isAddition)).length
   return additions <= MAX_JOURNAL_ADDITIONS_CHARS && writeEntries(entries)
 }
