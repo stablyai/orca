@@ -111,6 +111,34 @@ describe('components panel lifecycle', () => {
     runtime.dispose()
   })
 
+  it('posts an edit made just before a workspace switch with its own workspace’s hydration', () => {
+    vi.useFakeTimers()
+    const { runtime, posted, host } = booted()
+    const draft = atom('lifecycle.switchDraft', '', { persist: 'workspace' })
+    host.send('ui.hydrate', { hydration: 1, workspace: {} })
+    set(draft, 'typed in A')
+    vi.advanceTimersByTime(200)
+    host.send('ui.hydrate', {
+      hydration: 2,
+      workspace: { 'lifecycle.switchDraft': { version: 1, value: 'B saved' } }
+    })
+    vi.advanceTimersByTime(500)
+    expect(read(draft)).toBe('B saved')
+    expect(posted.filter((entry) => entry.event === 'ui.persist')).toEqual([
+      {
+        event: 'ui.persist',
+        payload: {
+          document: runtime.document,
+          hydration: 1,
+          entries: [
+            { scope: 'workspace', key: 'lifecycle.switchDraft', version: 1, value: 'typed in A' }
+          ]
+        }
+      }
+    ])
+    runtime.dispose()
+  })
+
   it('runs setup with its context and cleans everything up on dispose', async () => {
     const { runtime, host } = booted()
     const disposed = vi.fn()
