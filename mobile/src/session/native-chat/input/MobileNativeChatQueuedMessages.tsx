@@ -1,3 +1,4 @@
+import { MobileNativeChatQueueFrame } from './MobileNativeChatQueueFrame'
 import { DragReorderList } from '../../../components/DragReorderList'
 import type { DragReorderMove } from '../../../components/drag-reorder-positions'
 import { useLayoutEffect, useRef, useState } from 'react'
@@ -139,9 +140,9 @@ export function MobileNativeChatQueuedMessages({
   const attentionCaption = !expanded ? cards.find((card) => card.needsAttention)?.caption : null
   const headerCountStyle = [styles.headerCount, attentionCaption && styles.captionReturned]
   return (
-    <View style={[styles.list, editor && styles.inlineList]}>
+    <MobileNativeChatQueueFrame editing={editor !== undefined}>
       {}
-      <View style={[styles.box, editor && styles.inlineBox]} testID="queued-box">
+      <MobileNativeChatQueueFrame box editing={editor !== undefined}>
         {/* A polite region, as the app's other notices: React Native has no status role. */}
         <View
           testID="queued-header"
@@ -228,7 +229,7 @@ export function MobileNativeChatQueuedMessages({
             }}
           </MobileQueuedMessageScrollList>
         ) : null}
-      </View>
+      </MobileNativeChatQueueFrame>
       <ActionSheetModal
         visible={menuCard !== undefined}
         title={menuCard?.line}
@@ -248,6 +249,6 @@ export function MobileNativeChatQueuedMessages({
         ]}
         onClose={() => setMenuFor(null)}
       />
-    </View>
+    </MobileNativeChatQueueFrame>
   )
 }

@@ -417,7 +417,9 @@ export function MobileNativeChatView({
             />
           </GestureHandlerRootView>
         )}
-        <MobileNativeChatLowerRegion>{lowerContent}</MobileNativeChatLowerRegion>
+        <MobileNativeChatLowerRegion key={sendSurfaceId} composerPresent={!promptOwnsInput}>
+          {lowerContent}
+        </MobileNativeChatLowerRegion>
       </View>
     </MobileNativeChatOpenFileContext>
   )

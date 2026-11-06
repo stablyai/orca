@@ -9,12 +9,14 @@ let anchor: HTMLParagraphElement
 let field: HTMLTextAreaElement
 let group: HTMLDivElement
 let addedAbove: number
+let addedBeforeField: number
 let connection: ReturnType<typeof connectMobileNativeChatLowerScroll> | undefined
 
 const painted = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
 
 beforeEach(() => {
   addedAbove = 0
+  addedBeforeField = 0
   root = document.createElement('div')
   root.dataset.testid = 'native-chat-view'
   viewport = document.createElement('div')
@@ -34,19 +36,19 @@ beforeEach(() => {
   Object.defineProperties(viewport, {
     clientHeight: { value: 100 },
     clientWidth: { value: 300 },
-    scrollHeight: { get: () => 350 + addedAbove }
+    scrollHeight: { get: () => 350 + addedAbove + addedBeforeField }
   })
   vi.spyOn(content, 'getBoundingClientRect').mockImplementation(
-    () => new DOMRect(0, -viewport.scrollTop, 300, 350 + addedAbove)
+    () => new DOMRect(0, -viewport.scrollTop, 300, 350 + addedAbove + addedBeforeField)
   )
   vi.spyOn(anchor, 'getBoundingClientRect').mockImplementation(
     () => new DOMRect(0, 200 + addedAbove - viewport.scrollTop, 300, 20)
   )
   vi.spyOn(group, 'getBoundingClientRect').mockImplementation(
-    () => new DOMRect(0, 220 + addedAbove - viewport.scrollTop, 300, 130)
+    () => new DOMRect(0, 220 + addedAbove + addedBeforeField - viewport.scrollTop, 300, 130)
   )
   vi.spyOn(field, 'getBoundingClientRect').mockImplementation(
-    () => new DOMRect(0, 260 + addedAbove - viewport.scrollTop, 300, 30)
+    () => new DOMRect(0, 260 + addedAbove + addedBeforeField - viewport.scrollTop, 300, 30)
   )
   vi.spyOn(document, 'elementFromPoint').mockImplementation(() => anchor)
 })
@@ -84,10 +86,14 @@ it('reveals the focused editor after an inline menu appears without another focu
   field.focus()
   await painted()
   expect(viewport.scrollTop).toBe(190)
+  addedBeforeField = 20
+  lower.layoutChanged()
+  await painted()
+  expect(viewport.scrollTop).toBe(210)
   addedAbove = 80
   lower.layoutChanged()
   await painted()
-  expect(viewport.scrollTop).toBe(270)
+  expect(viewport.scrollTop).toBe(290)
   expect(document.activeElement).toBe(field)
   expect(field.value).toBe('A separate retained draft')
 })
@@ -120,4 +126,34 @@ it('lets deliberate scrolling cancel a pending field reveal across an unrelated 
   await painted()
   expect(viewport.scrollTop).toBe(130)
   expect(document.activeElement).toBe(field)
+})
+
+it('defers anchor correction through canceled touch pointers until every contact ends', async () => {
+  const lower = connect()
+  field.focus()
+  await painted()
+  userScroll(140)
+  await painted()
+  const touch = (type: string, count: number) => {
+    const event = new Event(type, { bubbles: true })
+    Object.defineProperty(event, 'touches', { value: Array.from({ length: count }) })
+    viewport.dispatchEvent(event)
+  }
+  touch('touchstart', 2)
+  const canceled = new Event('pointercancel', { bubbles: true })
+  Object.defineProperty(canceled, 'pointerType', { value: 'touch' })
+  viewport.dispatchEvent(canceled)
+  addedAbove = 80
+  lower.layoutChanged()
+  await new Promise((resolve) => setTimeout(resolve, 180))
+  await painted()
+  expect(viewport.scrollTop).toBe(140)
+  touch('touchend', 1)
+  await new Promise((resolve) => setTimeout(resolve, 180))
+  await painted()
+  expect(viewport.scrollTop).toBe(140)
+  touch('touchend', 0)
+  await new Promise((resolve) => setTimeout(resolve, 180))
+  await painted()
+  expect(viewport.scrollTop).toBe(220)
 })

@@ -1,9 +1,19 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ScrollView, View } from 'react-native'
-import { MobileNativeChatLowerRegionContext } from './mobile-native-chat-lower-region-context'
+import {
+  MobileNativeChatLowerRegionContext,
+  MobileNativeChatLowerGeometryContext,
+  MobileNativeChatComposerPresenceContext
+} from './mobile-native-chat-lower-region-context'
 import { connectMobileNativeChatLowerScroll } from './mobile-native-chat-lower-scroll'
 
-export function MobileNativeChatLowerRegion({ children }: { children: ReactNode }) {
+export function MobileNativeChatLowerRegion({
+  children,
+  composerPresent = true
+}: {
+  children: ReactNode
+  composerPresent?: boolean
+}) {
   const scrollRef = useRef<ScrollView>(null)
   const contentRef = useRef<View>(null)
   const coordinator = useRef<ReturnType<typeof connectMobileNativeChatLowerScroll> | null>(null)
@@ -19,8 +29,8 @@ export function MobileNativeChatLowerRegion({ children }: { children: ReactNode 
   const reveal = useCallback((group?: unknown) => coordinator.current?.reveal(group), [])
   const layoutChanged = useCallback(() => coordinator.current?.layoutChanged(), [])
   const value = useMemo(
-    () => ({ ...geometry, getViewport, getContent, getRoot, reveal, layoutChanged }),
-    [geometry, getViewport, getContent, getRoot, reveal, layoutChanged]
+    () => ({ getViewport, getContent, getRoot, reveal, layoutChanged }),
+    [getViewport, getContent, getRoot, reveal, layoutChanged]
   )
   useLayoutEffect(() => {
     const viewport = getViewport()
@@ -48,16 +58,20 @@ export function MobileNativeChatLowerRegion({ children }: { children: ReactNode 
   useLayoutEffect(layoutChanged)
   return (
     <MobileNativeChatLowerRegionContext value={value}>
-      <ScrollView
-        ref={scrollRef}
-        testID="native-chat-lower-scroll"
-        style={{ flexGrow: 0, flexShrink: 1, minHeight: 0 }}
-        contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}
-        keyboardShouldPersistTaps="always"
-        nestedScrollEnabled
-      >
-        <View ref={contentRef}>{children}</View>
-      </ScrollView>
+      <MobileNativeChatLowerGeometryContext value={geometry}>
+        <MobileNativeChatComposerPresenceContext value={composerPresent}>
+          <ScrollView
+            ref={scrollRef}
+            testID="native-chat-lower-scroll"
+            style={{ flexGrow: 0, flexShrink: 1, minHeight: 0 }}
+            contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}
+            keyboardShouldPersistTaps="always"
+            nestedScrollEnabled
+          >
+            <View ref={contentRef}>{children}</View>
+          </ScrollView>
+        </MobileNativeChatComposerPresenceContext>
+      </MobileNativeChatLowerGeometryContext>
     </MobileNativeChatLowerRegionContext>
   )
 }

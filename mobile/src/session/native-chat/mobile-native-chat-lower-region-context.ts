@@ -1,8 +1,6 @@
 import { createContext, useContext } from 'react'
 
 export type MobileNativeChatLowerRegion = {
-  viewportHeight: number
-  allocationHeight: number
   getViewport: () => unknown
   getContent: () => unknown
   getRoot: () => unknown
@@ -16,4 +14,15 @@ export const MobileNativeChatLowerRegionContext = createContext<MobileNativeChat
 
 export function useMobileNativeChatLowerRegion(): MobileNativeChatLowerRegion | null {
   return useContext(MobileNativeChatLowerRegionContext)
+}
+
+export const MobileNativeChatLowerGeometryContext = createContext({
+  viewportHeight: 0,
+  allocationHeight: 0
+})
+
+export const MobileNativeChatComposerPresenceContext = createContext(true)
+
+export function useMobileNativeChatLowerGeometry() {
+  return useContext(MobileNativeChatLowerGeometryContext)
 }

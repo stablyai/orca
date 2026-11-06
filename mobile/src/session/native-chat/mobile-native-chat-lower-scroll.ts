@@ -1,41 +1,7 @@
+import { externalAllowance, visible } from './mobile-native-chat-lower-geometry'
+
 const BOTTOM_TOLERANCE = 4
 const SCROLL_SETTLE_MS = 150
-
-function externalAllowance(root: HTMLElement | null): number {
-  if (!root || !visible(root)) {
-    return 0
-  }
-  const rect = root.getBoundingClientRect()
-  const style = getComputedStyle(root)
-  const viewport = window.visualViewport
-  let top = Math.max(
-    rect.top +
-      (Number.parseFloat(style.borderTopWidth) || 0) +
-      (Number.parseFloat(style.paddingTop) || 0),
-    viewport?.offsetTop ?? 0
-  )
-  let bottom = Math.min(
-    rect.bottom -
-      (Number.parseFloat(style.borderBottomWidth) || 0) -
-      (Number.parseFloat(style.paddingBottom) || 0),
-    window.innerHeight,
-    viewport ? viewport.offsetTop + viewport.height : window.innerHeight
-  )
-  for (let parent = root.parentElement; parent; parent = parent.parentElement) {
-    const computed = getComputedStyle(parent)
-    if (/(auto|scroll|hidden|clip)/.test(computed.overflowY || computed.overflow)) {
-      const bounds = parent.getBoundingClientRect()
-      top = Math.max(top, bounds.top)
-      bottom = Math.min(bottom, bounds.bottom)
-    }
-  }
-  return Math.max(0, bottom - top)
-}
-
-function visible(element: HTMLElement): boolean {
-  const rect = element.getBoundingClientRect()
-  return element.isConnected && rect.width > 0 && rect.height > 0
-}
 
 function groupOf(target: HTMLElement): HTMLElement {
   return (
@@ -53,11 +19,13 @@ export function connectMobileNativeChatLowerScroll(
   let attached = true
   let hold: { element: HTMLElement; offset: number } | null = null
   let lastScroll = viewport.scrollTop
-  let active: { element: HTMLElement; visible: boolean } | null = null
+  let active: { element: HTMLElement; visible: boolean; clipped: number } | null = null
   let pending: HTMLElement | null | undefined
   let frame: number | null = null
   let settle: ReturnType<typeof setTimeout> | null = null
-  let touching = false
+  let touchContacts = 0
+  const pointers = new Set<number>()
+  const touching = () => touchContacts > 0 || pointers.size > 0
   let settling = false
   let disposed = false
   let viewportHeight = viewport.clientHeight
@@ -81,9 +49,16 @@ export function connectMobileNativeChatLowerScroll(
     const bounds = viewport.getBoundingClientRect()
     return rect.bottom > bounds.top && rect.top < bounds.bottom
   }
+  const clipping = (target: HTMLElement) => {
+    const rect = target.getBoundingClientRect()
+    const bounds = viewport.getBoundingClientRect()
+    return Math.max(0, bounds.top - rect.top) + Math.max(0, rect.bottom - bounds.bottom)
+  }
   const recordActive = () => {
     const element = focused()
-    active = element ? { element, visible: intersectsViewport(element) } : null
+    active = element
+      ? { element, visible: intersectsViewport(element), clipped: clipping(element) }
+      : null
   }
   const capture = () => {
     const rect = viewport.getBoundingClientRect()
@@ -120,7 +95,7 @@ export function connectMobileNativeChatLowerScroll(
   }
   const reconcile = () => {
     frame = null
-    if (disposed || touching || settling) {
+    if (disposed || touching() || settling) {
       return
     }
     onGeometry(viewport.clientHeight, externalAllowance(root))
@@ -139,13 +114,18 @@ export function connectMobileNativeChatLowerScroll(
         }
       }
       const group =
-        requested && requested.contains(target) && visible(requested) ? requested : groupOf(target)
+        target.closest<HTMLElement>('[data-testid="queued-card-editor"]') ??
+        (requested && requested.contains(target) && visible(requested)
+          ? requested
+          : groupOf(target))
       expose(
         viewport,
         group.getBoundingClientRect().height <= viewport.clientHeight ? group : target
       )
       attached = atBottom()
-      capture()
+      if (!attached) {
+        capture()
+      }
     } else {
       pending = undefined
       if (attached) {
@@ -159,7 +139,9 @@ export function connectMobileNativeChatLowerScroll(
       } else {
         write(viewport, viewport.scrollTop)
       }
-      capture()
+      if (!attached) {
+        capture()
+      }
     }
     recordActive()
   }
@@ -180,7 +162,8 @@ export function connectMobileNativeChatLowerScroll(
     viewportWidth = viewport.clientWidth
     if (
       target &&
-      (resized || (active?.element === target && active.visible && !intersectsViewport(target)))
+      (resized ||
+        (active?.element === target && active.visible && clipping(target) > active.clipped + 0.5))
     ) {
       pending = groupOf(target)
     }
@@ -216,21 +199,33 @@ export function connectMobileNativeChatLowerScroll(
       lastScroll = node.scrollTop
       attached = atBottom()
     } else {
-      capture()
+      if (!attached) {
+        capture()
+      }
     }
     recordActive()
     settleLater()
   }
-  const onStart = () => {
-    touching = true
+  const onPointerStart = (event: PointerEvent) => {
+    if (event.pointerType !== 'touch') {
+      pointers.add(event.pointerId)
+      pending = undefined
+    }
+  }
+  const onPointerEnd = (event: PointerEvent) => {
+    if (pointers.delete(event.pointerId) && !touching()) {
+      settleLater()
+    }
+  }
+  const onTouchStart = (event: TouchEvent) => {
+    touchContacts = event.touches.length
     pending = undefined
   }
-  const onEnd = () => {
-    if (!touching) {
-      return
+  const onTouchEnd = (event: TouchEvent) => {
+    touchContacts = event.touches.length
+    if (!touching()) {
+      settleLater()
     }
-    touching = false
-    settleLater()
   }
   const onScrollEnd = () => {
     if (settle !== null) {
@@ -248,7 +243,10 @@ export function connectMobileNativeChatLowerScroll(
     observer.observe(parent)
   }
   const onPageScroll = (event: Event) => {
-    if (!(event.target instanceof Node) || !viewport.contains(event.target)) {
+    if (
+      event.target === document ||
+      (event.target instanceof Node && event.target !== viewport && event.target.contains(viewport))
+    ) {
       layoutChanged()
     }
   }
@@ -259,12 +257,12 @@ export function connectMobileNativeChatLowerScroll(
   viewport.addEventListener('focusin', onFocus)
   viewport.addEventListener('scroll', onScroll, true)
   viewport.addEventListener('scrollend', onScrollEnd)
-  viewport.addEventListener('pointerdown', onStart, { passive: true })
-  viewport.addEventListener('touchstart', onStart, { passive: true })
-  document.addEventListener('pointerup', onEnd, { passive: true })
-  document.addEventListener('pointercancel', onEnd, { passive: true })
-  document.addEventListener('touchend', onEnd, { passive: true })
-  document.addEventListener('touchcancel', onEnd, { passive: true })
+  viewport.addEventListener('pointerdown', onPointerStart, { passive: true })
+  viewport.addEventListener('touchstart', onTouchStart, { passive: true })
+  document.addEventListener('pointerup', onPointerEnd, { passive: true })
+  document.addEventListener('pointercancel', onPointerEnd, { passive: true })
+  document.addEventListener('touchend', onTouchEnd, { passive: true })
+  document.addEventListener('touchcancel', onTouchEnd, { passive: true })
   if (focused()) {
     reveal()
   } else {
@@ -284,12 +282,12 @@ export function connectMobileNativeChatLowerScroll(
       viewport.removeEventListener('focusin', onFocus)
       viewport.removeEventListener('scroll', onScroll, true)
       viewport.removeEventListener('scrollend', onScrollEnd)
-      viewport.removeEventListener('pointerdown', onStart)
-      viewport.removeEventListener('touchstart', onStart)
-      document.removeEventListener('pointerup', onEnd)
-      document.removeEventListener('pointercancel', onEnd)
-      document.removeEventListener('touchend', onEnd)
-      document.removeEventListener('touchcancel', onEnd)
+      viewport.removeEventListener('pointerdown', onPointerStart)
+      viewport.removeEventListener('touchstart', onTouchStart)
+      document.removeEventListener('pointerup', onPointerEnd)
+      document.removeEventListener('pointercancel', onPointerEnd)
+      document.removeEventListener('touchend', onTouchEnd)
+      document.removeEventListener('touchcancel', onTouchEnd)
       if (frame !== null) {
         cancelAnimationFrame(frame)
       }
