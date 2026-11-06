@@ -16,7 +16,7 @@ export function isAcpStructuredOptionKey(key: string): boolean {
 }
 
 export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAgentDefinition {
-  const { managedRuntime } = spec
+  const { managedRuntime, hostBackend } = spec
   return {
     agent: spec.agent,
     handleTransport: ACP_HANDLE_TRANSPORT,
@@ -38,6 +38,7 @@ export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAge
       approvalEnforcement: 'orca'
     },
     ...(managedRuntime && { managedRuntime: () => managedRuntime.pin() !== null }),
+    ...(hostBackend && { runsHostProgram: (home) => hostBackend.pins(home) }),
     restingOptions: {
       acceptsKey: isAcpStructuredOptionKey,
       // Populate catalogs from live agents.
