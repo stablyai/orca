@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import type { RuntimeNotifier } from '../runtime/runtime-notifier-contract'
 
 vi.mock('electron', () => ({ ipcMain: { on: vi.fn(), removeListener: vi.fn() } }))
@@ -28,7 +29,13 @@ function attachNotifier() {
     on: vi.fn(),
     webContents: { isDestroyed: () => false, send, on: vi.fn() }
   }
+  let onEvent!: (event: RuntimeClientEvent) => void
+  const onClientEvent = vi.fn((listener: typeof onEvent, _options: unknown) => {
+    onEvent = listener
+    return vi.fn()
+  })
   const runtime = {
+    onClientEvent,
     attachWindow: vi.fn(),
     markGraphReloadFailed,
     setNotifier: (next: RuntimeNotifier | null) => {
@@ -44,7 +51,14 @@ function attachNotifier() {
   if (!attached.notifier?.setPaneTitle) {
     throw new Error('pane-title notifier was not attached')
   }
-  return { setPaneTitle: attached.notifier.setPaneTitle, send, windowState, markGraphReloadFailed }
+  return {
+    setPaneTitle: attached.notifier.setPaneTitle,
+    send,
+    windowState,
+    markGraphReloadFailed,
+    onEvent: (event: RuntimeClientEvent) => onEvent(event),
+    onClientEvent
+  }
 }
 
 describe('pane title renderer emission receipts', () => {
@@ -65,4 +79,15 @@ describe('pane title renderer emission receipts', () => {
     expect(send).toHaveBeenCalledTimes(1)
     expect(markGraphReloadFailed).toHaveBeenCalledExactlyOnceWith(1, 'renderer-frame-unavailable')
   })
+})
+
+it('forwards follow-up installation notices without subscribing to terminal side effects', () => {
+  const { onClientEvent, onEvent, send } = attachNotifier()
+  expect(onClientEvent).toHaveBeenCalledWith(expect.any(Function), {
+    consumesTerminalSideEffects: false
+  })
+  onEvent({ type: 'terminalSideEffects' } as never)
+  expect(send).not.toHaveBeenCalled()
+  onEvent({ type: 'prFollowUpsChanged' })
+  expect(send).toHaveBeenCalledExactlyOnceWith('runtime:prFollowUpsChanged')
 })

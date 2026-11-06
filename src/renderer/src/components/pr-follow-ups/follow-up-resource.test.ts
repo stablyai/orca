@@ -15,18 +15,28 @@ afterEach(cleanup)
 it('streams nothing while hidden and preserves workspace and availability subscriptions across unrelated updates', async () => {
   let next: FollowUpSnapshot = { available: false, workspaces: {} }
   call.mockImplementation(async () => structuredClone(next))
-  let changed: (response: { ok: true; result: { type: string } }) => void = () => undefined
+  let installed: () => void = () => undefined
   const unsubscribe = vi.fn()
-  const subscribe = vi.fn(async (_request, onEvent) => {
-    changed = onEvent
+  const subscribe = vi.fn(async () => {
     return { unsubscribe }
   })
-  Object.defineProperty(window, 'api', { configurable: true, value: { runtime: { subscribe } } })
+  const releaseNotices = vi.fn()
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      runtime: {
+        subscribe,
+        onPrFollowUpsChanged: (listener: () => void) => {
+          installed = listener
+          return releaseNotices
+        }
+      }
+    }
+  })
   const hidden = renderHook(() => usePrFollowUpsAvailable())
   await act(async () => undefined)
   expect(hidden.result.current).toBe(false)
   expect(subscribe).not.toHaveBeenCalled()
-  hidden.unmount()
 
   next = {
     available: true,
@@ -43,6 +53,10 @@ it('streams nothing while hidden and preserves workspace and availability subscr
       }
     }
   }
+  await act(async () => installed())
+  expect(hidden.result.current).toBe(true)
+  expect(subscribe).not.toHaveBeenCalled()
+  hidden.unmount()
   let badgeRenders = 0
   let rowRenders = 0
   let availabilityRenders = 0
@@ -59,16 +73,12 @@ it('streams nothing while hidden and preserves workspace and availability subscr
     return usePrFollowUpsAvailable()
   })
   await act(async () => undefined)
-  expect(subscribe).toHaveBeenCalledWith(
-    { method: 'runtime.clientEvents.subscribe', params: { prFollowUpsOnly: true } },
-    expect.any(Function)
-  )
   const before = { badgeRenders, rowRenders, availabilityRenders }
   next.workspaces.w2!.fixing = true
-  await act(async () => changed({ ok: true, result: { type: 'prFollowUpsChanged' } }))
+  await act(async () => installed())
   expect({ badgeRenders, rowRenders, availabilityRenders }).toEqual(before)
   next.workspaces.w1!.fixing = true
-  await act(async () => changed({ ok: true, result: { type: 'prFollowUpsChanged' } }))
+  await act(async () => installed())
   expect(badge.result.current).toBe(true)
   expect(badgeRenders).toBeGreaterThan(before.badgeRenders)
   expect(rowRenders).toBeGreaterThan(before.rowRenders)
@@ -76,5 +86,6 @@ it('streams nothing while hidden and preserves workspace and availability subscr
   badge.unmount()
   row.unmount()
   settings.unmount()
-  expect(unsubscribe).toHaveBeenCalledOnce()
+  expect(unsubscribe).not.toHaveBeenCalled()
+  expect(releaseNotices).toHaveBeenCalledTimes(2)
 })

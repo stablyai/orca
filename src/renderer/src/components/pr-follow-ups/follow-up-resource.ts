@@ -5,6 +5,7 @@ import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 let snapshot: FollowUpSnapshot = { available: false, workspaces: {} }
 const listeners = new Set<() => void>()
 let release: (() => void) | undefined
+let releaseNotices: (() => void) | undefined
 let generation = 0
 let subscribing: number | undefined
 let reading = false
@@ -51,7 +52,13 @@ async function refresh(): Promise<void> {
 }
 
 function subscribeChanges(): void {
-  if (release || subscribing === generation || !listeners.size || !window.api?.runtime?.subscribe) {
+  if (
+    releaseNotices ||
+    release ||
+    subscribing === generation ||
+    !listeners.size ||
+    !window.api?.runtime?.subscribe
+  ) {
     return
   }
   const mine = generation
@@ -88,6 +95,10 @@ function subscribe(listener: () => void): () => void {
   listeners.add(listener)
   if (listeners.size === 1) {
     generation += 1
+    // Passive window delivery also observes source installation without a client-event stream.
+    releaseNotices = window.api?.runtime?.onPrFollowUpsChanged?.(() => {
+      void refresh()
+    })
     void refresh()
   }
   return () => {
@@ -96,6 +107,8 @@ function subscribe(listener: () => void): () => void {
       generation += 1
       release?.()
       release = undefined
+      releaseNotices?.()
+      releaseNotices = undefined
     }
   }
 }
