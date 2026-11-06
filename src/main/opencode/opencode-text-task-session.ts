@@ -1,5 +1,8 @@
 import { openCodeTextTaskEvents } from './opencode-text-task-events'
-import { prepareOpenCodeTextTaskPolicy } from './opencode-text-task-policy'
+import {
+  OPEN_CODE_LEGACY_TEXT_TASK_TOOLS,
+  prepareOpenCodeTextTaskPolicy
+} from './opencode-text-task-policy'
 import { randomBytes } from 'node:crypto'
 import { openCodeTextTaskTarget } from './opencode-text-task-target'
 import type { TextGenerationOperation } from '../text-generation/source-control-text-generation-types'
@@ -10,6 +13,7 @@ import type { OpenCodeTextTaskInput } from './opencode-text-task-input'
 
 export type OpenCodeTextTaskSession = {
   version: 'v1' | 'v2'
+  v1SessionPolicyFiltersTools: boolean
   url: string
   password?: string
   username?: string
@@ -138,7 +142,8 @@ export async function runOpenCodeTextTaskSession(input: OpenCodeTextTaskSession)
     directory = target.directory
     owned = target.owned
     activeSignal.throwIfAborted()
-    if (!v2 && owned && actualSubtask) {
+    const legacyPolicy = !v2 && owned && !target.policyAcknowledged
+    if (!v2 && owned && (actualSubtask || legacyPolicy || !input.v1SessionPolicyFiltersTools)) {
       await events.subscribe()
     }
     if (input.share) {
@@ -235,7 +240,10 @@ export async function runOpenCodeTextTaskSession(input: OpenCodeTextTaskSession)
             ...(input.variant ? { variant: input.variant } : {}),
             ...(input.command
               ? { command: input.command, arguments: input.prompt }
-              : { parts: [...(input.v1Files ?? []), { type: 'text', text: input.prompt }] })
+              : {
+                  parts: [...(input.v1Files ?? []), { type: 'text', text: input.prompt }],
+                  ...(legacyPolicy ? { tools: OPEN_CODE_LEGACY_TEXT_TASK_TOOLS } : {})
+                })
           },
           activeSignal
         )

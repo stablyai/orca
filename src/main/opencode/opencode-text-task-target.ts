@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { acknowledgesOpenCodeV1Policy } from './opencode-text-task-policy'
 import type { OpenCodeTextTaskInput } from './opencode-text-task-input'
 import type { createOpenCodeTextTaskHttp } from './opencode-text-task-http'
 
@@ -29,7 +30,7 @@ export async function openCodeTextTaskTarget(input: {
     directory: string
   ) => Promise<{ createBody: Record<string, unknown>; policy: Record<string, unknown> }>
   allocated: (id: string, directory: string) => void
-}): Promise<{ id: string; directory: string; owned: boolean }> {
+}): Promise<{ id: string; directory: string; owned: boolean; policyAcknowledged: boolean }> {
   const v2 = input.version === 'v2'
   const base = v2 ? '/api/session' : '/session'
   let directory = input.task.external ? input.task.externalDirectory : input.directory
@@ -98,7 +99,7 @@ export async function openCodeTextTaskTarget(input: {
   }
   const prepared = await input.prepare(directory)
   if (selected && !input.task.fork) {
-    return { id: selected.id, directory, owned: false }
+    return { id: selected.id, directory, owned: false, policyAcknowledged: false }
   }
   // Do not lose a late allocation ID on local cancellation; cleanup is registered before any await.
   const created = session.parse(
@@ -114,13 +115,19 @@ export async function openCodeTextTaskTarget(input: {
   directory = created.location?.directory ?? created.directory ?? directory
   input.allocated(created.id, directory)
   input.signal.throwIfAborted()
+  let applied: unknown = created
   if (selected) {
-    await input.http.request(
+    applied = await input.http.request(
       'PATCH',
       `${base}/${encodeURIComponent(created.id)}${v2 ? '' : query(directory)}`,
       prepared.policy,
       input.signal
     )
+    if (!v2 && session.parse(applied).id !== created.id) {
+      throw new Error('OpenCode returned a different text task session')
+    }
   }
-  return { id: created.id, directory, owned: true }
+  const policyAcknowledged =
+    v2 || acknowledgesOpenCodeV1Policy(applied, prepared.policy, !!selected)
+  return { id: created.id, directory, owned: true, policyAcknowledged }
 }

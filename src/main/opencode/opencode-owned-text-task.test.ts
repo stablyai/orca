@@ -1,5 +1,5 @@
 import { ChildProcess } from 'node:child_process'
-import { createServer } from 'node:http'
+import { createServer, type ServerResponse } from 'node:http'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import type {
@@ -148,52 +148,113 @@ describe('runOwnedOpenCodeTextTask', () => {
     expect(error).toMatchObject({ stage: 'startup' })
     expect(cli.children.map((child) => child.input.args)).toEqual([['--print-logs', '--version']])
   })
-  it('authenticates its v1 client even when the account environment sets a server username', async () => {
-    vi.mocked(runOpenCodeTextTaskSession).mockImplementationOnce(actual.runOpenCodeTextTaskSession)
-    const cli = fakeOpenCode('1.18.31')
-    const spawn = vi.fn((input: SourceControlAgentSpawnInput) => {
-      if (!input.args.includes('serve')) {
-        return cli.spawn(input)
-      }
-      const child = fakeChild(input)
-      // As the v1 server does: the configured username (default opencode) and password must both match.
-      const credential = `${input.env?.OPENCODE_SERVER_USERNAME ?? 'opencode'}:${input.env?.OPENCODE_SERVER_PASSWORD}`
-      const server = createServer((request, response) => {
-        if (
-          request.headers.authorization !== `Basic ${Buffer.from(credential).toString('base64')}`
-        ) {
-          response.writeHead(401).end()
-          return
+  it.each([
+    ['1.2.27', 'conversation-name', true],
+    ['1.3.0-beta.1', 'commit-message', true],
+    ['1.3.0+build.7', 'commit-message', false],
+    ['1.18.31', 'conversation-name', false]
+  ] as const)(
+    'authenticates V1 %s and preserves its acknowledged policy for %s',
+    async (version, operation, rejectsPermission) => {
+      vi.mocked(runOpenCodeTextTaskSession).mockImplementationOnce(
+        actual.runOpenCodeTextTaskSession
+      )
+      const cli = fakeOpenCode(version)
+      let rejected = false
+      let events: ServerResponse | undefined
+      let completion: ServerResponse | undefined
+      const spawn = vi.fn((input: SourceControlAgentSpawnInput) => {
+        if (!input.args.includes('serve')) {
+          return cli.spawn(input)
         }
-        request.resume()
-        request.on('end', () => {
+        const child = fakeChild(input)
+        // As the native server does: the configured username and password must both match.
+        const credential = `${input.env?.OPENCODE_SERVER_USERNAME ?? 'opencode'}:${input.env?.OPENCODE_SERVER_PASSWORD}`
+        const finish = () => {
+          completion!
+            .writeHead(200, { 'content-type': 'application/json' })
+            .end(JSON.stringify({ info: {}, parts: [{ type: 'text', text: 'Harbor Lantern' }] }))
+        }
+        const server = createServer(async (request, response) => {
+          if (
+            request.headers.authorization !== `Basic ${Buffer.from(credential).toString('base64')}`
+          ) {
+            response.writeHead(401).end()
+            return
+          }
+          const chunks: Buffer[] = []
+          for await (const chunk of request) {
+            chunks.push(Buffer.from(chunk))
+          }
+          const content = Buffer.concat(chunks).toString('utf8')
+          const body = content ? JSON.parse(content) : undefined
           const path = request.url?.split('?')[0]
-          const body =
-            request.method === 'POST' && path === '/session'
-              ? { id: 'ses_1' }
-              : path === '/agent'
-                ? [{ name: 'title', mode: 'primary' }]
-                : path === '/session/ses_1/message'
-                  ? { info: {}, parts: [{ type: 'text', text: 'Harbor Lantern' }] }
-                  : {}
-          response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(body))
+          let result: unknown = {}
+          if (request.method === 'POST' && path === '/session') {
+            result = {
+              id: 'ses_1',
+              permission: [
+                { permission: '*', pattern: '*', action: 'deny' },
+                { permission: 'read', pattern: '*', action: 'allow' },
+                { permission: 'grep', pattern: '*', action: 'allow' },
+                { permission: 'glob', pattern: '*', action: 'allow' },
+                { permission: 'external_directory', pattern: '*', action: 'allow' },
+                { permission: 'read', pattern: 'mcp:*', action: 'deny' }
+              ]
+            }
+          } else if (path === '/agent') {
+            result = [{ name: 'title', mode: 'primary' }]
+          } else if (path === '/event') {
+            events = response
+            response.writeHead(200, { 'content-type': 'text/event-stream' })
+            response.flushHeaders()
+            return
+          } else if (path === '/session/ses_1/message') {
+            expect(body).toMatchObject({
+              agent: 'title',
+              parts: [{ type: 'text', text: 'Name this chat' }]
+            })
+            expect(body).not.toHaveProperty('tools')
+            completion = response
+            if (rejectsPermission) {
+              for (const sessionID of ['foreign', 'ses_1']) {
+                events!.write(
+                  `data: ${JSON.stringify({ type: 'permission.updated', properties: { sessionID, id: 'per_write' } })}\n\n`
+                )
+              }
+            } else {
+              expect(events).toBeUndefined()
+              finish()
+            }
+            return
+          } else if (path === '/session/ses_1/permissions/per_write') {
+            expect(body).toEqual({ response: 'reject' })
+            rejected = true
+            finish()
+          } else if (path === '/session/foreign/permissions/per_write') {
+            throw new Error('Borrowed permission must not be answered')
+          }
+          response
+            .writeHead(200, { 'content-type': 'application/json' })
+            .end(JSON.stringify(result))
         })
+        server.listen(0, '127.0.0.1', () => {
+          const address = server.address()
+          const port = address && typeof address === 'object' ? address.port : 0
+          child.stdout.write(`opencode server listening on http://127.0.0.1:${port}\n`)
+        })
+        child.once('close', () => server.close())
+        return child
       })
-      server.listen(0, '127.0.0.1', () => {
-        const address = server.address()
-        const port = address && typeof address === 'object' ? address.port : 0
-        child.stdout.write(`opencode server listening on http://127.0.0.1:${port}\n`)
-      })
-      child.once('close', () => server.close())
-      return child
-    })
-    const input = {
-      ...task({ ...cli, spawn }),
-      env: { PATH: '/usr/bin', OPENCODE_SERVER_USERNAME: 'custom' }
+      const input = {
+        ...task({ ...cli, spawn }),
+        operation,
+        env: { PATH: '/usr/bin', OPENCODE_SERVER_USERNAME: 'custom' }
+      }
+      await expect(runOwnedOpenCodeTextTask(input)).resolves.toBe('Harbor Lantern')
+      expect(rejected).toBe(rejectsPermission)
     }
-
-    await expect(runOwnedOpenCodeTextTask(input)).resolves.toBe('Harbor Lantern')
-  })
+  )
 })
 
 it.each(['v1', 'v2'] as const)(
@@ -206,7 +267,7 @@ it.each(['v1', 'v2'] as const)(
       response.setHeader('content-type', 'application/json')
       response.end(
         JSON.stringify({
-          version: version === 'v1' ? '1.18.31' : '2.0.14',
+          version: version === 'v1' ? '1.2.27' : '2.0.14',
           pid: 23,
           urls: [],
           paths: { tmp: '/tmp' }
@@ -246,7 +307,8 @@ it.each(['v1', 'v2'] as const)(
         sessionId: 'saved',
         model: { providerID: 'provider', modelID: 'model' },
         variant: 'high',
-        exclusiveServer: false
+        exclusiveServer: false,
+        v1SessionPolicyFiltersTools: false
       })
       if (version === 'v2') {
         await expect(

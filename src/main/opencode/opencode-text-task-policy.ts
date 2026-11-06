@@ -11,6 +11,57 @@ const RULES = [
   ['external_directory', '*', 'allow'],
   ['read', 'mcp:*', 'deny']
 ] as const
+
+const v1PolicyRules = z.array(
+  z.object({
+    permission: z.string(),
+    pattern: z.string(),
+    action: z.enum(['allow', 'deny', 'ask'])
+  })
+)
+
+export function acknowledgesOpenCodeV1Policy(
+  response: unknown,
+  policy: Record<string, unknown>,
+  fork: boolean
+): boolean {
+  const actual = z.looseObject({ permission: v1PolicyRules.optional() }).parse(response).permission
+  if (!actual?.length) {
+    return false
+  }
+  const expected = v1PolicyRules.nonempty().parse(policy.permission)
+  const tail = actual.slice(-expected.length)
+  if (
+    (fork || actual.length === expected.length) &&
+    tail.length === expected.length &&
+    tail.every(
+      (rule, index) =>
+        rule.permission === expected[index].permission &&
+        rule.pattern === expected[index].pattern &&
+        rule.action === expected[index].action
+    )
+  ) {
+    return true
+  }
+  throw new Error('OpenCode did not apply the requested text task policy')
+}
+
+export const OPEN_CODE_LEGACY_TEXT_TASK_TOOLS = {
+  '*': false,
+  read: true,
+  grep: true,
+  glob: true,
+  external_directory: true,
+  bash: false,
+  edit: false,
+  write: false,
+  patch: false,
+  apply_patch: false,
+  multiedit: false,
+  task: false,
+  todowrite: false
+} as const
+
 export async function prepareOpenCodeTextTaskPolicy(
   input: OpenCodeTextTaskSession,
   http: ReturnType<typeof createOpenCodeTextTaskHttp>,

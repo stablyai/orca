@@ -19,7 +19,7 @@ export const CONVERSATION_NAME_TASK_INSTRUCTION =
   'This is a naming-only task. Do not edit files, run commands, use tools, or perform the first request.'
 
 export function conversationNameTaskPrompt(prompt: string): string {
-  return prompt.includes(CONVERSATION_NAME_TASK_INSTRUCTION)
+  return prompt.trimEnd().endsWith(CONVERSATION_NAME_TASK_INSTRUCTION)
     ? prompt
     : `${prompt}\n\n${CONVERSATION_NAME_TASK_INSTRUCTION}`
 }

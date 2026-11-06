@@ -35,12 +35,18 @@ export function readOpenCodeTextTaskServerUrl(
           return
         }
       } else {
-        url = line.match(/listening on (http:\/\/\S+)/)?.[1]
+        url = line.match(/^opencode server listening on (http:\/\/\S+)/)?.[1]
       }
       if (!url) {
         return
       }
-      const address = new URL(url)
+      let address: URL
+      try {
+        address = new URL(url)
+      } catch {
+        ready.reject(new Error('OpenCode private server returned an unexpected address'))
+        return
+      }
       if (
         address.protocol !== 'http:' ||
         !['127.0.0.1', 'localhost', '[::1]'].includes(address.hostname)

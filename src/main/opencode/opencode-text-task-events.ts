@@ -45,6 +45,15 @@ export function openCodeTextTaskEvents(input: {
     const raw = z
       .looseObject({ type: z.string(), properties: z.unknown().optional() })
       .safeParse(value)
+    if (!v2 && owned && sessionID && raw.success && raw.data.type === 'session.created') {
+      const child = z
+        .looseObject({ info: z.looseObject({ id: z.string(), parentID: z.string().optional() }) })
+        .safeParse(raw.data.properties)
+      if (child.success && child.data.info.parentID && ownedTree.has(child.data.info.parentID)) {
+        ownedTree.add(child.data.info.id)
+      }
+      return
+    }
     const parsed = event.safeParse(
       !v2 && raw.success ? { type: raw.data.type, data: raw.data.properties } : value
     )
@@ -52,26 +61,22 @@ export function openCodeTextTaskEvents(input: {
       return
     }
     const { type, data } = parsed.data
-    if (!v2 && owned && type === 'session.created') {
-      const child = z
-        .looseObject({ info: z.looseObject({ id: z.string(), parentID: z.string().optional() }) })
-        .parse(data).info
-      if (child.parentID && ownedTree.has(child.parentID)) {
-        ownedTree.add(child.id)
-      }
-    }
-    if (type === 'permission.asked') {
+    if (type === 'permission.asked' || (!v2 && type === 'permission.updated')) {
       // Native rejection fans out within a session: borrowed history cannot safely answer it.
       if (ownedTree.has(data.sessionID)) {
         const permission = permissionEvent.parse(data)
         await request(
           'POST',
-          v2
-            ? `${base}/${encodeURIComponent(data.sessionID)}/permission/${encodeURIComponent(permission.id)}/reply`
-            : `/permission/${encodeURIComponent(permission.id)}/reply`,
-          v2
-            ? { decision: 'reject', message: 'Tools are unavailable for this text task.' }
-            : { reply: 'reject', message: 'Tools are unavailable for this text task.' },
+          type === 'permission.updated'
+            ? `${base}/${encodeURIComponent(data.sessionID)}/permissions/${encodeURIComponent(permission.id)}`
+            : v2
+              ? `${base}/${encodeURIComponent(data.sessionID)}/permission/${encodeURIComponent(permission.id)}/reply`
+              : `/permission/${encodeURIComponent(permission.id)}/reply`,
+          type === 'permission.updated'
+            ? { response: 'reject' }
+            : v2
+              ? { decision: 'reject', message: 'Tools are unavailable for this text task.' }
+              : { reply: 'reject', message: 'Tools are unavailable for this text task.' },
           streamSignal
         )
       }

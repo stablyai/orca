@@ -52,6 +52,7 @@ describe('execution-host OpenCode model startup', () => {
     vi.mocked(probeOpenCodeLaunchCapabilities).mockResolvedValue({
       version: '2.0.16',
       pluginApi: 'v2',
+      v1SessionPolicyFiltersTools: false,
       promptMode: 'prefill'
     })
     vi.mocked(probeOpenCodeLaunchModelContext).mockResolvedValue({ primaryAgent: 'reviewer' })
@@ -73,6 +74,7 @@ describe('execution-host OpenCode model startup', () => {
       vi.mocked(probeOpenCodeLaunchCapabilities).mockResolvedValue({
         version,
         pluginApi: 'v2',
+        v1SessionPolicyFiltersTools: false,
         promptMode: 'prefill'
       })
       const options = scope()
@@ -116,6 +118,7 @@ describe('execution-host OpenCode model startup', () => {
       vi.mocked(probeOpenCodeLaunchCapabilities).mockResolvedValue({
         version,
         pluginApi: 'v1',
+        v1SessionPolicyFiltersTools: true,
         promptMode: 'submit'
       })
       expect((await buildExecutionHostAgentStartupPlan(scope()))?.launchCommand).toContain(
@@ -186,6 +189,7 @@ describe('execution-host OpenCode model startup', () => {
     vi.mocked(probeOpenCodeLaunchCapabilities).mockResolvedValue({
       version,
       pluginApi: 'v2',
+      v1SessionPolicyFiltersTools: false,
       promptMode: 'prefill'
     })
     await expect(buildExecutionHostAgentStartupPlan(scope())).rejects.toMatchObject({

@@ -150,6 +150,24 @@ it('reads a fragmented readiness line once at N and 10N and preserves Unicode bo
   }
 })
 
+it('accepts only native V1 readiness output and rejects malformed native addresses', async () => {
+  const child = fakeServer()
+  const ready = readOpenCodeTextTaskServerUrl(child, false, new AbortController().signal)
+  child.stdout.write('MCP listening on http://localhost:undefined\n')
+  child.stdout.write('dev server listening on http://localhost:3000\n')
+  child.stdout.write('opencode server listening on http://127.0.0.1:4096\n')
+  await expect(ready).resolves.toBe('http://127.0.0.1:4096')
+  child.stdout.destroy()
+  child.stderr.destroy()
+
+  const malformed = fakeServer()
+  const rejected = readOpenCodeTextTaskServerUrl(malformed, false, new AbortController().signal)
+  expect(() => malformed.stdout.write('opencode server listening on http://[bad\n')).not.toThrow()
+  await expect(rejected).rejects.toThrow('OpenCode private server returned an unexpected address')
+  malformed.stdout.destroy()
+  malformed.stderr.destroy()
+})
+
 it('rejects oversized streams and releases their reader; readiness also honors cancellation and size', async () => {
   const canceled = eventStream(Buffer.alloc(4 * 1024 * 1024 + 1, 65))
   const events = openCodeTextTaskEvents({

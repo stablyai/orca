@@ -5,6 +5,14 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { runOpenCodeTextTaskSession } from './opencode-text-task-session'
 
 const servers: ReturnType<typeof createServer>[] = []
+const appliedV1Policy = [
+  { permission: '*', pattern: '*', action: 'deny' },
+  { permission: 'read', pattern: '*', action: 'allow' },
+  { permission: 'grep', pattern: '*', action: 'allow' },
+  { permission: 'glob', pattern: '*', action: 'allow' },
+  { permission: 'external_directory', pattern: '*', action: 'allow' },
+  { permission: 'read', pattern: 'mcp:*', action: 'deny' }
+]
 afterEach(async () => {
   await Promise.all(
     servers.splice(0).map(async (server) => {
@@ -47,7 +55,7 @@ it('v1 applies ordered session authority and preserves the selected native promp
     if (path.startsWith('GET /agent?')) {
       json(response, [{ name: 'configured-agent', mode: 'primary' }])
     } else if (path.startsWith('POST /session?')) {
-      json(response, { id: 'ses_v1' })
+      json(response, { id: 'ses_v1', permission: appliedV1Policy })
     } else if (path.startsWith('POST /session/ses_v1/message?')) {
       json(response, {
         info: {},
@@ -63,6 +71,7 @@ it('v1 applies ordered session authority and preserves the selected native promp
   await expect(
     runOpenCodeTextTaskSession({
       version: 'v1',
+      v1SessionPolicyFiltersTools: true,
       url,
       password: 'test',
       directory: '/workspace with spaces',
@@ -137,6 +146,7 @@ it('v2 rejects an unexpected permission and reads final text across fragmented C
   await expect(
     runOpenCodeTextTaskSession({
       version: 'v2',
+      v1SessionPolicyFiltersTools: false,
       url,
       password: 'test',
       directory: '/workspace',
@@ -184,6 +194,7 @@ it('recovers and deletes an owned session when cancelled during creation without
   await expect(
     runOpenCodeTextTaskSession({
       version: 'v2',
+      v1SessionPolicyFiltersTools: false,
       url,
       password: 'test',
       directory: '/workspace',
@@ -201,7 +212,7 @@ it('uses the native v1 command endpoint with its arguments and selected model', 
   const url = await fixture((path, body, response) => {
     requests.set(path, body)
     if (path.startsWith('POST /session?')) {
-      json(response, { id: 'ses_command' })
+      json(response, { id: 'ses_command', permission: appliedV1Policy })
     } else if (path.startsWith('GET /command?')) {
       json(response, [{ name: 'review', agent: 'reviewer' }])
     } else if (path.startsWith('GET /agent?')) {
@@ -221,6 +232,7 @@ it('uses the native v1 command endpoint with its arguments and selected model', 
   await expect(
     runOpenCodeTextTaskSession({
       version: 'v1',
+      v1SessionPolicyFiltersTools: true,
       url,
       password: 'test',
       directory: '/workspace',
@@ -248,7 +260,7 @@ it('preserves a completed title when deleting its session fails', async () => {
   const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
   const url = await fixture((path, _body, response) => {
     if (path.startsWith('POST /session?')) {
-      json(response, { id: 'ses_cleanup' })
+      json(response, { id: 'ses_cleanup', permission: appliedV1Policy })
     } else if (path.startsWith('POST /session/ses_cleanup/message?')) {
       json(response, { info: {}, parts: [{ type: 'text', text: 'Harbor Lantern' }] })
     } else {
@@ -259,6 +271,7 @@ it('preserves a completed title when deleting its session fails', async () => {
     await expect(
       runOpenCodeTextTaskSession({
         version: 'v1',
+        v1SessionPolicyFiltersTools: true,
         url,
         password: 'test',
         directory: '/workspace',
@@ -284,7 +297,7 @@ it.each(['', 'missing', 'explore'])(
       } else if (path.startsWith('GET /command?')) {
         json(response, [{ name: 'review' }])
       } else if (path.startsWith('POST /session?')) {
-        json(response, { id: 'ses_default' })
+        json(response, { id: 'ses_default', permission: appliedV1Policy })
       } else if (path.startsWith('POST /session/ses_default/command?')) {
         submitted = body
         json(response, { info: {}, parts: [{ type: 'text', text: 'Harbor Lantern' }] })
@@ -295,6 +308,7 @@ it.each(['', 'missing', 'explore'])(
     await expect(
       runOpenCodeTextTaskSession({
         version: 'v1',
+        v1SessionPolicyFiltersTools: true,
         url,
         password: 'test',
         directory: '/workspace',
@@ -309,62 +323,6 @@ it.each(['', 'missing', 'explore'])(
       arguments: 'input',
       messageID: expect.stringMatching(/^msg_[0-9a-f]{12}[0-9A-Za-z]{14}$/)
     })
-  }
-)
-
-it.each([false, true])(
-  'forks only the selected source and requires policy acknowledgement (reject=%s)',
-  async (rejectPolicy) => {
-    const requests: string[] = []
-    let policy: unknown
-    const url = await fixture((path, body, response) => {
-      requests.push(path)
-      if (path.startsWith('GET /session/saved?')) {
-        json(response, { id: 'saved', directory: '/workspace' })
-      } else if (path.startsWith('POST /session/saved/fork?')) {
-        json(response, { id: 'forked' })
-      } else if (path.startsWith('PATCH /session/forked?')) {
-        policy = body
-        if (rejectPolicy) {
-          response.statusCode = 400
-        }
-        json(response, rejectPolicy ? {} : { id: 'forked' })
-      } else if (path.startsWith('POST /session/forked/message?')) {
-        json(response, { info: {}, parts: [{ type: 'text', text: 'Harbor Lantern' }] })
-      } else {
-        json(response, true)
-      }
-    })
-    const result = runOpenCodeTextTaskSession({
-      version: 'v1',
-      url,
-      directory: '/workspace',
-      prompt: 'Name only',
-      operation: 'conversation-name',
-      sessionId: 'saved',
-      fork: true,
-      signal: new AbortController().signal
-    })
-    await (rejectPolicy
-      ? expect(result).rejects.toThrow('rejected')
-      : expect(result).resolves.toBe('Harbor Lantern'))
-    expect(policy).toMatchObject({
-      permission: [
-        { permission: '*', pattern: '*', action: 'deny' },
-        { permission: 'read', pattern: '*', action: 'allow' },
-        { permission: 'grep', pattern: '*', action: 'allow' },
-        { permission: 'glob', pattern: '*', action: 'allow' },
-        { permission: 'external_directory', pattern: '*', action: 'allow' },
-        { permission: 'read', pattern: 'mcp:*', action: 'deny' }
-      ]
-    })
-    expect(requests.some((path) => path.startsWith('POST /session/forked/message?'))).toBe(
-      !rejectPolicy
-    )
-    expect(requests).toContain('DELETE /session/forked?directory=%2Fworkspace')
-    expect(
-      requests.some((path) => /(?:PATCH|DELETE|POST) \/session\/saved\?(?:.*)/.test(path))
-    ).toBe(false)
   }
 )
 
@@ -419,6 +377,7 @@ it.each([
     await expect(
       runOpenCodeTextTaskSession({
         version: 'v1',
+        v1SessionPolicyFiltersTools: true,
         url: `${url}/prefix/`,
         directory: '/workspace',
         externalDirectory: '/requested',
@@ -464,6 +423,7 @@ it('discards a cancelled borrowed v1 response without aborting or deleting its s
   })
   const result = runOpenCodeTextTaskSession({
     version: 'v1',
+    v1SessionPolicyFiltersTools: true,
     url,
     directory: '/workspace',
     external: { url },
@@ -538,6 +498,7 @@ it.each([false, true])(
     })
     const result = runOpenCodeTextTaskSession({
       version: 'v2',
+      v1SessionPolicyFiltersTools: false,
       url,
       directory: '/client',
       external: { url },
@@ -580,6 +541,7 @@ it('cancels only its still-queued borrowed v2 input after a late admission respo
   await expect(
     runOpenCodeTextTaskSession({
       version: 'v2',
+      v1SessionPolicyFiltersTools: false,
       url,
       directory: '/client',
       external: { url },
@@ -603,7 +565,7 @@ it('retains explicitly shared native history even when publication fails ambiguo
   const url = await fixture((path, _body, response) => {
     requests.push(path)
     if (path.startsWith('POST /session?')) {
-      json(response, { id: 'retained' })
+      json(response, { id: 'retained', permission: appliedV1Policy })
     } else if (path.startsWith('POST /session/retained/share?')) {
       response.statusCode = 500
       json(response, {})
@@ -616,6 +578,7 @@ it('retains explicitly shared native history even when publication fails ambiguo
   await expect(
     runOpenCodeTextTaskSession({
       version: 'v1',
+      v1SessionPolicyFiltersTools: true,
       url,
       directory: '/workspace',
       prompt: 'Name only',
@@ -689,6 +652,7 @@ it('selects the newest matching root with one filtered request at N and 10N hist
     await expect(
       runOpenCodeTextTaskSession({
         version: 'v2',
+        v1SessionPolicyFiltersTools: false,
         url,
         directory: '/workspace',
         continue: true,
@@ -702,76 +666,102 @@ it('selects the newest matching root with one filtered request at N and 10N hist
   }
 })
 
-it('preserves the actual subtask command and read-compatible child policy before prompting', async () => {
-  let events: ServerResponse | undefined
-  let readAllowed = false
-  let deniedChild = false
-  let commandResponse: ServerResponse | undefined
-  const url = await fixture((path, body, response) => {
-    if (path.startsWith('GET /agent?')) {
-      json(response, [{ name: 'reader', mode: 'subagent' }])
-    } else if (path.startsWith('GET /command?')) {
-      json(response, [
-        { name: 'inspect', agent: 'reader', subtask: true, model: 'configured/command-model' }
-      ])
-    } else if (path.startsWith('POST /session?')) {
-      const rules = z
-        .object({
-          permission: z.array(
-            z.object({ permission: z.string(), pattern: z.string(), action: z.string() })
-          )
+it.each([false, true])(
+  'rejects owned subtask asks with session routing field: %s',
+  async (routing) => {
+    let events: ServerResponse | undefined
+    let readAllowed = false
+    let deniedChild = false
+    let deniedForeign = false
+    let commandResponse: ServerResponse | undefined
+    const url = await fixture((path, body, response) => {
+      if (path.startsWith('GET /agent?')) {
+        json(response, [{ name: 'reader', mode: 'subagent' }])
+      } else if (path.startsWith('GET /command?')) {
+        json(response, [
+          { name: 'inspect', agent: 'reader', subtask: true, model: 'configured/command-model' }
+        ])
+      } else if (path.startsWith('POST /session?')) {
+        const rules = z
+          .object({
+            permission: z.array(
+              z.object({ permission: z.string(), pattern: z.string(), action: z.string() })
+            )
+          })
+          .parse(body).permission
+        // The native child retains denies and drops ordinary parent read allows.
+        const childDenies = rules
+          .filter((rule) => rule.action === 'deny')
+          .map((rule) => rule.permission)
+        expect(childDenies).toEqual(['read', 'bash', 'edit', 'todowrite'])
+        readAllowed = !rules.some(
+          (rule) =>
+            rule.action === 'deny' &&
+            rule.pattern === '*' &&
+            ['*', 'read'].includes(rule.permission)
+        )
+        json(response, {
+          id: 'root',
+          permission: [
+            { permission: '*', pattern: '*', action: 'ask' },
+            ...appliedV1Policy.slice(1),
+            { permission: 'bash', pattern: '*', action: 'deny' },
+            { permission: 'edit', pattern: '*', action: 'deny' },
+            { permission: 'todowrite', pattern: '*', action: 'deny' }
+          ]
         })
-        .parse(body).permission
-      // The native child retains denies and drops ordinary parent read allows.
-      const childDenies = rules
-        .filter((rule) => rule.action === 'deny')
-        .map((rule) => rule.permission)
-      expect(childDenies).toEqual(['read', 'bash', 'edit', 'todowrite'])
-      readAllowed = !rules.some(
-        (rule) =>
-          rule.action === 'deny' && rule.pattern === '*' && ['*', 'read'].includes(rule.permission)
-      )
-      json(response, { id: 'root' })
-    } else if (path.startsWith('GET /event?')) {
-      events = response
-      response.writeHead(200, { 'content-type': 'text/event-stream' })
-      response.flushHeaders()
-    } else if (path.startsWith('POST /session/root/command?')) {
-      expect(body).toMatchObject({
-        command: 'inspect',
-        arguments: 'Name from the recorded request',
-        model: 'selected/model'
-      })
-      events!.write(
-        `data: ${JSON.stringify({ type: 'session.created', properties: { sessionID: 'child', info: { id: 'child', parentID: 'root' } } })}\n\n`
-      )
-      events!.write(
-        `data: ${JSON.stringify({ type: 'permission.asked', properties: { sessionID: 'child', id: 'per_child_shell' } })}\n\n`
-      )
-      commandResponse = response
-    } else if (path.startsWith('POST /permission/per_child_shell/reply?')) {
-      expect(body).toMatchObject({ reply: 'reject' })
-      deniedChild = true
-      json(response, true)
-      json(commandResponse!, {
-        info: {},
-        parts: [{ type: 'text', text: readAllowed ? 'Harbor Lantern' : 'Child read was denied' }]
-      })
-    } else {
-      json(response, true)
-    }
-  })
-  await expect(
-    runOpenCodeTextTaskSession({
-      version: 'v1',
-      url,
-      directory: '/workspace',
-      command: 'inspect',
-      model: { providerID: 'selected', modelID: 'model' },
-      prompt: 'Name from the recorded request',
-      operation: 'conversation-name',
-      signal: new AbortController().signal
+      } else if (path.startsWith('GET /event?')) {
+        events = response
+        response.writeHead(200, { 'content-type': 'text/event-stream' })
+        response.flushHeaders()
+      } else if (path.startsWith('POST /session/root/command?')) {
+        expect(body).toMatchObject({
+          command: 'inspect',
+          arguments: 'Name from the recorded request',
+          model: 'selected/model'
+        })
+        events!.write(
+          `data: ${JSON.stringify({ type: 'session.created', properties: { info: { id: 'foreign_child', parentID: 'foreign_root' } } })}\n\n`
+        )
+        events!.write(
+          `data: ${JSON.stringify({ type: 'permission.asked', properties: { sessionID: 'foreign_child', id: 'per_foreign' } })}\n\n`
+        )
+        events!.write(
+          `data: ${JSON.stringify({ type: 'session.created', properties: { ...(routing ? { sessionID: 'child' } : {}), info: { id: 'child', parentID: 'root' } } })}\n\n`
+        )
+        events!.write(
+          `data: ${JSON.stringify({ type: 'permission.asked', properties: { sessionID: 'child', id: 'per_child_shell' } })}\n\n`
+        )
+        commandResponse = response
+      } else if (path.startsWith('POST /permission/per_foreign/reply?')) {
+        deniedForeign = true
+        json(response, true)
+      } else if (path.startsWith('POST /permission/per_child_shell/reply?')) {
+        expect(body).toMatchObject({ reply: 'reject' })
+        deniedChild = true
+        json(response, true)
+        json(commandResponse!, {
+          info: {},
+          parts: [{ type: 'text', text: readAllowed ? 'Harbor Lantern' : 'Child read was denied' }]
+        })
+      } else {
+        json(response, true)
+      }
     })
-  ).resolves.toBe('Harbor Lantern')
-  expect(deniedChild).toBe(true)
-})
+    await expect(
+      runOpenCodeTextTaskSession({
+        version: 'v1',
+        v1SessionPolicyFiltersTools: true,
+        url,
+        directory: '/workspace',
+        command: 'inspect',
+        model: { providerID: 'selected', modelID: 'model' },
+        prompt: 'Name from the recorded request',
+        operation: 'conversation-name',
+        signal: new AbortController().signal
+      })
+    ).resolves.toBe('Harbor Lantern')
+    expect(deniedChild).toBe(true)
+    expect(deniedForeign).toBe(false)
+  }
+)
