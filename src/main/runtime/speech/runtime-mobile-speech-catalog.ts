@@ -7,9 +7,9 @@ import { getDefaultVoiceSettings } from '../../../shared/constants'
 import {
   getCatalogModel,
   isLocalSpeechModel,
-  isOfferedSpeechModel,
   SPEECH_MODEL_CATALOG
 } from '../../speech/model-catalog'
+import { isOfferedSpeechModel } from '../../../shared/speech-model-retirement'
 import { getSpeechModelManager, getSpeechSttService } from '../../speech/speech-runtime-service'
 import { hasLocalSpeechRecognizer } from '../../speech/stt-worker-paths'
 import {

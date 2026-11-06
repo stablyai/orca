@@ -56,7 +56,7 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
   {
     id: 'zipformer-streaming-en-20m',
     label: 'Zipformer Streaming EN',
-    description: 'No longer offered: it drops the start of sentences. Delete it to free up space.',
+    description: 'English only. Lightweight 20M-param model, good balance of speed and size.',
     type: 'transducer',
     provider: 'local',
     language: 'en',
@@ -154,10 +154,6 @@ export function getCatalogModel(id: string): SpeechModelManifest | undefined {
 
 export function isLocalSpeechModel(manifest: SpeechModelManifest): boolean {
   return manifest.provider === 'local'
-}
-
-export function isOfferedSpeechModel(manifest: SpeechModelManifest): boolean {
-  return manifest.replacedBy === undefined
 }
 
 export function replaceRetiredSpeechModelId(id: string): string {

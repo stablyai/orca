@@ -16,6 +16,7 @@ import {
 import { Cloud, Download, Trash2, Loader2, ChevronDown, Check } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { speechModelDescription } from './speech-model-description'
+import { isOfferedSpeechModel } from '../../../../../shared/speech-model-retirement'
 
 function describeSpeechModelDownloadError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
@@ -81,8 +82,9 @@ export function VoiceSpeechModelSection({
           {catalog.map((manifest) => {
             const mState = getModelState(manifest.id)
             const isReady = mState?.status === 'ready'
+            const isRetired = !isOfferedSpeechModel(manifest)
             // Retired models stay listed only while downloaded, so their files can be deleted.
-            if (manifest.replacedBy && !isReady) {
+            if (isRetired && !isReady) {
               return null
             }
             const isDownloading =
@@ -97,7 +99,7 @@ export function VoiceSpeechModelSection({
                 key={manifest.id}
                 disabled={isDownloading}
                 onSelect={(event) => {
-                  if (manifest.replacedBy) {
+                  if (isRetired) {
                     event.preventDefault()
                   } else if (isReady) {
                     onUpdateVoiceSettings({ sttModel: manifest.id })
@@ -119,9 +121,7 @@ export function VoiceSpeechModelSection({
                   }
                 }}
                 className={`group flex items-center gap-2.5 py-2.5 ${
-                  manifest.replacedBy || (!isCloud && !isReady && !isDownloading)
-                    ? 'opacity-50'
-                    : ''
+                  isRetired || (!isCloud && !isReady && !isDownloading) ? 'opacity-50' : ''
                 }`}
               >
                 <span className="flex size-4 shrink-0 items-center justify-center">
