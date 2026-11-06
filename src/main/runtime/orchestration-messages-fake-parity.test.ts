@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { InMemoryOrchestrationMessages } from './orca-runtime-test-orchestration-messages.spec'
-import { OrchestrationDb } from './orchestration/db'
-import type { MessageType } from './orchestration/types'
+import { OrchestrationDb } from './orchestration/db/orchestration-db'
+import './orchestration/db/contract-constants'
+import './orchestration/db/messages/mailbox-routing-page'
+import './orchestration/db/dispatch-row-writer'
+import './orchestration/db/attempt-outcome-projection'
+import type { MessageType } from './orchestration/db/orchestration-records'
 
 type PointerTarget = { ptyId: string; processIncarnation: string }
 

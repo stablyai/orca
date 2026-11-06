@@ -4,7 +4,7 @@ import { resolveWorktreeHostRouting } from '../catalog/worktree-launch-host-repo
 import { resolveHostStructuredAgentLaunchEnvironment } from '../../agent-session/launch/structured-agent-launch-support'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
-import { RuntimeChatWorkerEvents } from '../../orchestration/chat-worker-runtime-events'
+import { RuntimeChatWorkerEvents } from '../../orchestration/workers/turn-stops/chat-worker-runtime-events'
 
 import type { RuntimeWorktreePsResult } from '../../../../shared/runtime-worktree-contracts'
 import type { ResolvedWorktreeSnapshot } from '../catalog/runtime-resolved-worktree-cache'
@@ -40,7 +40,7 @@ import { createStructuredChatNamingHandler } from '../../../native-chat/structur
 import { structuredChatNamingDeps } from '../../agent-session/naming/structured-chat-naming-runtime'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { chatWorkerTurnStopReporter } from '../../orchestration/chat-worker-turn-stops'
+import { chatWorkerTurnStopReporter } from '../../orchestration/workers/turn-stops/chat-worker-turn-stops'
 import { buildWorktreeListingPage } from '../catalog/worktree-listing-host-scope'
 import {
   structuredWorkerOpenTaskTitle,
@@ -56,7 +56,7 @@ import {
   withoutHiddenHosts
 } from '../catalog/runtime-visible-catalog'
 import { isWorkspaceNotificationMuted } from '../../push/notifications/workspace-notification-mute'
-import { WorkerAutoReleaseActivity } from '../../orchestration/worker-auto-release-activity'
+import { WorkerAutoReleaseActivity } from '../../orchestration/terminal-authority/release/worker-auto-release-activity'
 import { nativeChatIdleStopMs } from '../../../../shared/native-chat/native-chat-idle-stop'
 const DEFAULT_WORKTREE_PS_LIMIT = 200
 

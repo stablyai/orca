@@ -165,7 +165,7 @@ async function loadWorkingTreeBuild(): Promise<AgentSessionWireBuild> {
   const [protocol, dispatcher, methodRegistry] = await Promise.all([
     import('../../../src/shared/protocol-version'),
     import('../../../src/main/runtime/rpc/dispatcher'),
-    import('../../../src/main/runtime/rpc/methods')
+    import('../../../src/main/runtime/rpc/methods/rpc-method-registry')
   ])
   const module = dispatcher as unknown as DispatcherModule
   const methods = methodRegistry.ALL_RPC_METHODS as unknown[]
@@ -207,7 +207,7 @@ async function loadReleaseBuild(checkout: ReleaseCheckout): Promise<AgentSession
   const [protocol, dispatcher, methodRegistry] = await Promise.all([
     importReleaseCheckoutModule(checkout, '/src/shared/protocol-version.ts'),
     importReleaseCheckoutModule(checkout, '/src/main/runtime/rpc/dispatcher.ts'),
-    importReleaseCheckoutModule(checkout, '/src/main/runtime/rpc/methods/index.ts')
+    importReleaseCheckoutModule(checkout, '/src/main/runtime/rpc/methods/rpc-method-registry.ts')
   ])
   const module = dispatcher as unknown as DispatcherModule
   const methods = methodRegistry.ALL_RPC_METHODS as unknown[]

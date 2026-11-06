@@ -28,18 +28,19 @@ const {
   resolveStructuredWorkerIdentityForSession
 } = await import('./structured-worker-authority')
 const { structuredSessionMailTarget, structuredSessionOwnedMailboxes } =
-  await import('../../structured-session-mail-target')
-const { structuredSessionMailReach } = await import('../../structured-session-mail-address')
+  await import('../../mailbox/routing/structured-session-mail-target')
+const { structuredSessionMailReach } =
+  await import('../../mailbox/routing/structured-session-mail-address')
 const { stopStructuredWorker, readStructuredWorkerJournal, captureStructuredWorkerArchive } =
-  await import('../../../rpc/methods/orchestration-structured-worker-lifecycle')
+  await import('../../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-lifecycle')
 const { releaseStructuredWorkerSession } =
-  await import('../../../rpc/methods/orchestration-structured-worker-session')
+  await import('../../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-session')
 const { inspectWorkerTerminal } =
   await import('../../../rpc/methods/orchestration/worker/worker-observation')
 const { listAddressableStructuredWorkers } =
-  await import('../../structured-worker-group-addressing')
+  await import('../../addressing/groups/structured-worker-group-addressing')
 const { readStructuredLineageJournalPage, STRUCTURED_JOURNAL_PAGE_LIMIT } =
-  await import('../../structured-worker-journal-page')
+  await import('../../workers/archives/structured-worker-journal-page')
 const { sealedChildEnv } =
   await import('../../../agent-session/environment/structured-session-child-env.test-support')
 const { foundAgentSessionRecord } =
@@ -49,7 +50,7 @@ const { applyAgentSessionRestartAdjudication } =
 const { openTestAgentSessionRecordStore } =
   await import('../../../agent-session/records/agent-session-record-store-test-harness')
 const { OrcaRuntimeService } = await import('../../../orca-runtime')
-const { OrchestrationDb } = await import('../../db')
+const { OrchestrationDb } = await import('../../db/orchestration-db')
 const { rpcRuntime } = await import('./structured-worker-rpc.test-support')
 const { structuredWorkerOwesWork } = await import('./structured-worker-custody')
 await import('../../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-admission')

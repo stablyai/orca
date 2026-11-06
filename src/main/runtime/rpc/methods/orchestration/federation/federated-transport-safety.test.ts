@@ -6,13 +6,13 @@ import {
   ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY
 } from '../../../../../../shared/protocol-version'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import type { FederatedDispatchRow } from '../../../../orchestration/types'
-import type { OrchestrationEnvironmentSendOptions } from '../../../../orchestration/environment-transport'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import type { FederatedDispatchRow } from '../../../../orchestration/db/orchestration-records'
+import type { OrchestrationEnvironmentSendOptions } from '../../../../orchestration/federation/environment-transport'
 import { readFederatedWorkerOutput } from './federated-worker-read'
 import { parseRemoteReleaseReceipt, releaseFederatedWorker } from './federated-worker-release'
 import { callFederatedWorkerShow } from '../worker/worker-observation'
-import { syncFederatedDispatch } from '../../../../orchestration/federation-sync'
+import { syncFederatedDispatch } from '../../../../orchestration/federation/synchronization/federation-sync'
 import { ORCHESTRATION_WORKER_STOP_METHODS } from '../worker/worker-stop'
 
 const server = {

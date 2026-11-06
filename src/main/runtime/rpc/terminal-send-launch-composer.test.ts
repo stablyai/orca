@@ -8,7 +8,7 @@ import { OrcaRuntimeService } from '../orca-runtime'
 import { makeStore } from './server/runtime-rpc-worktree-store-fixtures'
 import { AGENT_PROMPT_TEST_WORKTREE_PATH } from '../terminal/input/agent-prompt-submission-runtime-test-fixture'
 import { RpcDispatcher } from './dispatcher'
-import { TERMINAL_METHODS } from './methods/terminal'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
 
 vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   const facade = getWorktreeListingMocks()

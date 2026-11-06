@@ -17,10 +17,10 @@ import {
   makeRepo,
   testState
 } from '../../../../persistence/persistence-test-harness'
-import '../../db'
 import { OrchestrationDb } from '../../db/orchestration-db'
+
 import { RpcDispatcher } from '../../../rpc/dispatcher'
-import { ORCHESTRATION_METHODS } from '../../../rpc/methods/orchestration'
+import { ORCHESTRATION_METHODS } from '../../../rpc/methods/orchestration/orchestration'
 import { idOf, isRecord, resultOf } from '../../../rpc/orchestration-session-caller-test-fixture'
 import {
   ensureStructuredAgentSessionHost,

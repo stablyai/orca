@@ -4,8 +4,8 @@ import { PROVIDER_SESSION, waitFor } from './acp-structured-adapter.test-support
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { createStructuredMailboxPointerHost } from '../runtime/orchestration/structured-mailbox-pointer-host'
-import { mintAgentSessionOperationId } from '../runtime/orchestration/structured-pointer-operation-id'
+import { createStructuredMailboxPointerHost } from '../runtime/orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host'
+import { mintAgentSessionOperationId } from '../runtime/orchestration/mailbox/structured-pointer/structured-pointer-operation-id'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 
 afterEach(async () => {
