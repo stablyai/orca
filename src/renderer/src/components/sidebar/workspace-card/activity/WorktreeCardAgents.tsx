@@ -32,6 +32,13 @@ import {
 } from './worktree-card-idle-child-agents'
 import { recomputeOn } from '@/lib/recompute-on'
 
+export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
+  'orca-suppress-worktree-list-scroll-adjustment'
+
+export const dispatchSuppressScrollAdjustment = () => {
+  window.dispatchEvent(new CustomEvent(SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT))
+}
+
 type Props = {
   worktreeId: string
   agents?: DashboardAgentRowData[]

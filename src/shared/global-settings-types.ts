@@ -473,8 +473,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   experimentalNewWorktreeCardStyle?: boolean
   /** Plugin frames as isolated guests (default on); main-only kill switch, see plugin-frame-isolation.ts. */
   experimentalPluginIsolatedFrames?: boolean
-  /** Which worktree card the sidebar draws; `experimentalNewWorktreeCardStyle` stays in step for older clients. */
-  worktreeCardStyle?: 'classic' | 'experimental-1' | 'experimental-2'
   /** Experimental: per-workspace on-demand environment recipes and setup surface. */
   experimentalEphemeralVms?: boolean
   /** Experimental (Windows): add WSL distros as hosts, each running its own Orca server. */

@@ -37,8 +37,8 @@ export type WorktreeCardProps = {
   lineageChildCount?: number
   lineageChildWorktreeIds?: readonly string[]
   lineageCollapsed?: boolean
-  /** Workspaces folded under a collapsed parent; the 2.0 card reports their exceptions. */
-  lineageHiddenDescendantIds?: readonly string[]
+  /** Workspaces nested under this one; the 2.0 card rolls up their latest time and, when collapsed, their exceptions. */
+  lineageDescendantIds?: readonly string[]
   lineageChildren?: React.ReactNode
   lineageChildrenStyle?: React.CSSProperties
   onLineageToggle?: (event: React.MouseEvent<HTMLButtonElement>) => void

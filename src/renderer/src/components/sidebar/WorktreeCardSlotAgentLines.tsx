@@ -1,4 +1,5 @@
 import React, { useCallback } from 'react'
+import { ChevronDown } from 'lucide-react'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
 import { translate } from '@/i18n/i18n'
@@ -103,6 +104,46 @@ const SlotAgentLineRow = React.memo(function SlotAgentLineRow({
   )
 })
 
+/** Expanded agents' header: the label sits in the icon column and the chevron in the slot column. */
+export function SlotAgentLinesHeader({
+  label,
+  onCollapse
+}: {
+  label: string
+  onCollapse: () => void
+}): React.JSX.Element {
+  const handleClick = useCallback(
+    (event: React.MouseEvent) => {
+      event.stopPropagation()
+      onCollapse()
+    },
+    [onCollapse]
+  )
+  return (
+    <button
+      type="button"
+      draggable={false}
+      className="worktree-agent-row-hover mt-[3px] flex h-[19px] w-full min-w-0 items-center gap-1.5 rounded-sm pr-2 text-left text-2xs leading-none font-medium text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
+      aria-expanded={true}
+      aria-label={translate(
+        'auto.components.sidebar.worktree.card.compact.agents.0c1debfe84',
+        'Collapse {{value0}}',
+        { value0: label }
+      )}
+      onClick={handleClick}
+      onMouseDown={stopPropagation}
+      onPointerDown={stopPropagation}
+    >
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <ChevronDown className="size-3 shrink-0" aria-hidden />
+    </button>
+  )
+}
+
+function stopPropagation(event: React.SyntheticEvent): void {
+  event.stopPropagation()
+}
+
 /** Experimental 2.0 agent lines: icon, what it's doing or said, and the line's own slot. */
 export function WorktreeCardSlotAgentLines({
   worktreeId,
@@ -138,7 +179,7 @@ export function WorktreeCardSlotAgentLines({
   }
   return (
     <div
-      className="mt-px flex flex-col gap-px pl-3.5"
+      className="mt-px flex flex-col gap-px"
       role="group"
       aria-label={translate('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents')}
       onDoubleClick={stopBubble}

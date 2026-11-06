@@ -73,3 +73,33 @@ export function useCollapsedLineageSlot(descendantIds: readonly string[]): SlotS
   )
   return useAppStore(useShallow(selector))
 }
+
+/** The most recent activity among child workspaces, so a parent never looks older than its children. */
+export function selectLineageLatestAt(
+  state: AppState,
+  descendantIds: readonly string[]
+): number | null {
+  let at = 0
+  const worktreeMap = getWorktreeMapFromState(state)
+  for (const worktreeId of descendantIds) {
+    at = Math.max(at, worktreeMap.get(worktreeId)?.lastActivityAt ?? 0)
+    for (const entry of selectLiveAgentStatusEntriesForWorktree(state, worktreeId)) {
+      at = Math.max(at, entry.stateStartedAt)
+    }
+    for (const retained of selectRetainedAgentEntriesForWorktree(state, worktreeId)) {
+      at = Math.max(at, retained.entry.stateStartedAt)
+    }
+  }
+  return at > 0 ? at : null
+}
+
+export function useLineageLatestAt(descendantIds: readonly string[]): number | null {
+  const descendantKey = descendantIds.join('\n')
+  return useAppStore(
+    useCallback(
+      (state: AppState) =>
+        selectLineageLatestAt(state, descendantKey ? descendantKey.split('\n') : []),
+      [descendantKey]
+    )
+  )
+}
