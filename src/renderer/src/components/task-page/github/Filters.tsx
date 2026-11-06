@@ -123,41 +123,46 @@ export function TaskPageGitHubFilters({
       data-contextual-tour-target="tasks-search-presets"
     >
       {activeGithubTaskKind === 'prs' ? (
+        // Why: each group wraps as one unit so the divider always separates state from who.
         <div className="flex flex-wrap items-center gap-1.5">
-          {getGitHubPRStateChips().map(({ id, label }) => (
-            <PresetChip
-              key={id}
-              label={label}
-              active={prStateChip === id}
-              onSelect={() => {
-                // Why: re-applying a lit chip would only rewrite the query and refetch the same rows.
-                if (prStateChip !== id) {
-                  applyPRFilterChange({ state: id })
-                }
-              }}
-              // Why: keeps main's right-click on Open, which saved the open-PRs preset.
-              onSetDefault={id === 'open' ? () => handleSetDefaultTaskPreset('prs') : undefined}
-            />
-          ))}
+          <div className="flex flex-wrap gap-1.5">
+            {getGitHubPRStateChips().map(({ id, label }) => (
+              <PresetChip
+                key={id}
+                label={label}
+                active={prStateChip === id}
+                onSelect={() => {
+                  // Why: re-applying a lit chip would only rewrite the query and refetch the same rows.
+                  if (prStateChip !== id) {
+                    applyPRFilterChange({ state: id })
+                  }
+                }}
+                // Why: keeps main's right-click on Open, which saved the open-PRs preset.
+                onSetDefault={id === 'open' ? () => handleSetDefaultTaskPreset('prs') : undefined}
+              />
+            ))}
+          </div>
           <span aria-hidden className="mx-0.5 h-4 w-px bg-border/60" />
-          {getGitHubPRWhoChips().map(({ id, label }) => (
-            <PresetChip
-              key={id}
-              label={label}
-              active={prWhoChip === id}
-              onSelect={() => {
-                if (prWhoChip !== id) {
-                  applyPRFilterChange(gitHubPRWhoChange(id))
+          <div className="flex flex-wrap gap-1.5">
+            {getGitHubPRWhoChips().map(({ id, label }) => (
+              <PresetChip
+                key={id}
+                label={label}
+                active={prWhoChip === id}
+                onSelect={() => {
+                  if (prWhoChip !== id) {
+                    applyPRFilterChange(gitHubPRWhoChange(id))
+                  }
+                }}
+                // Why: the default view is a saved preset, and only the open-state combinations are presets.
+                onSetDefault={
+                  prStateChip === 'open'
+                    ? () => handleSetDefaultTaskPreset(gitHubPRWhoPreset(id))
+                    : undefined
                 }
-              }}
-              // Why: the default view is a saved preset, and only the open-state combinations are presets.
-              onSetDefault={
-                prStateChip === 'open'
-                  ? () => handleSetDefaultTaskPreset(gitHubPRWhoPreset(id))
-                  : undefined
-              }
-            />
-          ))}
+              />
+            ))}
+          </div>
         </div>
       ) : (
         <div className="flex flex-wrap gap-1.5">
