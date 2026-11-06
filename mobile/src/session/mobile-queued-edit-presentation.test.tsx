@@ -178,6 +178,7 @@ describe('phone inline editor presentation', () => {
         ...drafts,
         agent: 'codex',
         sendStructured: session.sendWithOutcome,
+        holdUnconfirmed: session.holdUnconfirmed,
         onSendError: error
       })
       const text = useMobileNativeChatDraft(scope)

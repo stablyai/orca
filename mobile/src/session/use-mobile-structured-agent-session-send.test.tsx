@@ -137,6 +137,7 @@ describe('mobile structured send actions', () => {
       agent: 'codex',
       sessionCommands,
       sendStructured: (...args) => hook!.sendWithOutcome(...args),
+      holdUnconfirmed: (...args) => hook!.holdUnconfirmed(...args),
       onSendError
     })
     return createElement(Harness)
