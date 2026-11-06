@@ -13,7 +13,7 @@ const MAX_HELPER_OUTPUT_BYTES = 64 * 1024
 let cachedHelperPath: string | null | undefined
 let readInFlight: Promise<KeyboardLayoutSnapshot | null> | null = null
 
-function resolveHelperPath(): string | null {
+export function resolveMacKeyboardHelperPath(): string | null {
   if (cachedHelperPath !== undefined) {
     return cachedHelperPath
   }
@@ -63,7 +63,7 @@ export function parseKeyboardLayoutSnapshot(stdout: string): KeyboardLayoutSnaps
 }
 
 export function readMacKeyboardLayoutSnapshot(): Promise<KeyboardLayoutSnapshot | null> {
-  const helperPath = resolveHelperPath()
+  const helperPath = resolveMacKeyboardHelperPath()
   if (!helperPath) {
     return Promise.resolve(null)
   }
