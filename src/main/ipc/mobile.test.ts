@@ -67,11 +67,14 @@ describe('registerMobileHandlers', () => {
       deviceId: 'runtime-1',
       offerExpiresAt: 2_000
     })
-    registerMobileHandlers({
-      createMobilePairingOffer,
-      createPairingOffer,
-      ensureNetworkExposure: vi.fn().mockResolvedValue(undefined)
-    } as never)
+    registerMobileHandlers(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these handlers only call the three stubbed server members.
+      {
+        createMobilePairingOffer,
+        createPairingOffer,
+        ensureNetworkExposure: vi.fn().mockResolvedValue(undefined)
+      } as never
+    )
 
     await expect(
       handlers.get('mobile:getPairingQR')?.(null, { address: '192.168.1.24' })
