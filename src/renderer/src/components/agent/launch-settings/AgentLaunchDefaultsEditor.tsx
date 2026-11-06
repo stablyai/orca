@@ -59,7 +59,8 @@ export function AgentCommandOverrideInput({
           }}
           placeholder={defaultCmd}
           spellCheck={false}
-          className="h-7 flex-1 font-mono text-xs"
+          variant="code"
+          className="h-7 flex-1"
         />
         {cmdOverride && (
           <Button
@@ -346,7 +347,8 @@ export function AgentDefaultEnvInput({
           spellCheck={false}
           aria-invalid={envDraftError ? true : undefined}
           aria-describedby={envDraftError ? envDraftErrorId : undefined}
-          className="h-7 flex-1 font-mono text-xs"
+          variant="code"
+          className="h-7 flex-1"
         />
         {(draftSeed !== defaultEnvText || envDraft !== defaultEnvText) && (
           <Button
