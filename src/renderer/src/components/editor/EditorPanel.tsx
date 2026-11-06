@@ -1,11 +1,9 @@
-import { editorViewPlacement } from '@/store/slices/editor/tabs/editor-view-placement'
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
 import { getOpenFileRevealOwner } from '@/lib/reveal-in-file-manager'
-import { detectLanguage } from '@/lib/language-detect'
-import { canShowWorkspaceFileBrowserAction, openFilePreviewToSide } from '@/lib/file-preview'
+import { canShowWorkspaceFileBrowserAction } from '@/lib/file-preview'
 import { getEditorHeaderCopyState } from './editor-header'
 import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { exportActiveMarkdownToPdf } from './export-active-markdown'
@@ -34,6 +32,7 @@ import { useEditorPanelSave } from './save/commands/useEditorPanelSave'
 import { isMarkdownReviewNotesEnabled } from '@/lib/markdown-review-notes-setting'
 import { useFileCustomEditors } from '@/store/plugin-custom-editors'
 import { applyCustomEditorToggle } from './view-mode/custom-editor-toggle'
+import { editorPanelFileActions } from './editor-panel-file-actions'
 import { runAfterEditorFramesFlush } from './save/flush/editor-pending-flush'
 
 function EditorPanelInner({
@@ -77,7 +76,6 @@ function EditorPanelInner({
   )
   const editorViewMode = useAppStore((s) => s.editorViewMode)
   const setEditorViewMode = useAppStore((s) => s.setEditorViewMode)
-  const openFile = useAppStore((s) => s.openFile)
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const markdownFrontmatterVisible = useAppStore((s) => s.markdownFrontmatterVisible)
   const setMarkdownFrontmatterVisible = useAppStore((s) => s.setMarkdownFrontmatterVisible)
@@ -242,37 +240,8 @@ function EditorPanelInner({
     ...customEditors
   })
 
-  const handleOpenPreviewToSide = (): void => {
-    const state = useAppStore.getState()
-    const placement = editorViewPlacement(state, activeFile, activeViewStateId)
-    openFilePreviewToSide({
-      language: model.resolvedLanguage,
-      filePath: activeFile.filePath,
-      worktreeId: activeFile.worktreeId,
-      placementWorkspaceId: placement.placementWorkspaceId,
-      sourceGroupId: placement.targetGroupId ?? null
-    })
-  }
-  const handleOpenDiffTargetFile = (preferredMarkdownViewMode?: 'rich'): void => {
-    if (!model.openFileState.canOpen) {
-      return
-    }
-    const openedFileId = openFile(
-      {
-        filePath: activeFile.filePath,
-        relativePath: activeFile.relativePath,
-        worktreeId: activeFile.worktreeId,
-        runtimeEnvironmentId: activeFile.runtimeEnvironmentId,
-        language: detectLanguage(activeFile.relativePath),
-        mode: 'edit'
-      },
-      editorViewPlacement(useAppStore.getState(), activeFile, activeViewStateId)
-    )
-    if (preferredMarkdownViewMode) {
-      setEditorViewMode(openedFileId, 'edit')
-      setMarkdownViewMode(openedFileId, preferredMarkdownViewMode)
-    }
-  }
+  const { handleOpenPreviewToSide, handleOpenDiffTargetFile, handleOpenMarkdownPreview } =
+    editorPanelFileActions(activeFile, activeViewStateId, model)
   const handleEditorToggleChange = (next: EditorToggleValue): void => {
     // Why: leaving a custom editor unmounts its frame, which may still hold debounced edits.
     runAfterEditorFramesFlush(useAppStore.getState(), [activeFile.id], () =>
@@ -294,21 +263,6 @@ function EditorPanelInner({
     if (markdownMode) {
       setMarkdownViewMode(fileId, markdownMode)
     }
-  }
-  const handleOpenMarkdownPreview = (): void => {
-    openMarkdownPreview(
-      {
-        filePath: activeFile.filePath,
-        relativePath: activeFile.relativePath,
-        worktreeId: activeFile.worktreeId,
-        runtimeEnvironmentId: activeFile.runtimeEnvironmentId,
-        language: model.resolvedLanguage
-      },
-      {
-        sourceFileId: activeFile.id,
-        ...editorViewPlacement(useAppStore.getState(), activeFile, activeViewStateId)
-      }
-    )
   }
   const disableRenameBrowse = Boolean(
     renameDialogFileOffClient ||
