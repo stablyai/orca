@@ -30,7 +30,7 @@ function batch(sequence: number, items: AgentJournalRenderItem[]): AgentSessionS
 }
 
 describe('structured agent session live read with text appends', () => {
-  it('drops a stream whose append does not match and resumes on a new one', async () => {
+  it('drops a stream whose append does not match and resumes without appends', async () => {
     const opened: { params: unknown; emit: (event: AgentSessionSubscribeEvent) => void }[] = []
     const unsubscribed: number[] = []
     const subscribe: StructuredAgentSessionLiveSubscribe = async (params, onEvent) => {
@@ -60,6 +60,10 @@ describe('structured agent session live read with text appends', () => {
     opened[0]?.emit(batch(5, [appended(2, 7, 'lo')]))
 
     await vi.waitFor(() => expect(opened).toHaveLength(2))
+    expect(opened[1]?.params).toEqual({
+      sessionId: 'session-1',
+      cursor: { epoch: 'epoch-1', sequence: 4 }
+    })
     expect(unsubscribed).toEqual([0])
     expect(applied).toEqual([batch(4, [reply('Hel', 1)])])
     read.dispose()

@@ -82,6 +82,8 @@ export function startStructuredAgentSessionLiveRead(args: {
   let readTextAppends: ReturnType<typeof createAgentSessionTextAppendReader> | null = null
   /** An open whose stream must not be applied further; the next open replaces it. */
   let replacedOpenGeneration = 0
+  // A refused append means the two sides disagree; later streams take whole items so it cannot loop.
+  let appendsRefused = false
   let shouldStopCoalescedEvent = (): boolean => true
   const coalescer = createStructuredAgentSessionEventCoalescer((event) => {
     if (!shouldStopCoalescedEvent()) {
@@ -145,6 +147,7 @@ export function startStructuredAgentSessionLiveRead(args: {
   /** Resume from the last applied cursor on a new stream, which starts with whole items. */
   const replaceStream = (eventOpenGeneration: number): void => {
     replacedOpenGeneration = eventOpenGeneration
+    appendsRefused = true
     if (!connected) {
       // Still opening: retry later; the open drops its handle when it lands.
       loseContact()
@@ -227,7 +230,7 @@ export function startStructuredAgentSessionLiveRead(args: {
     unsubscribe = (): void => {}
     try {
       // Desktop passes none, so its subscribe still goes out in the same turn.
-      const textAppend = args.textAppend ? await args.textAppend : false
+      const textAppend = args.textAppend && !appendsRefused ? await args.textAppend : false
       if (!isCurrentOpenGeneration(currentOpenGeneration)) {
         return
       }
