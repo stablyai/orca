@@ -292,21 +292,21 @@ describe('Antigravity account attribution', () => {
 
   it('names the saved account a reading belongs to and lists every saved account', async () => {
     const service = new RateLimitService()
+    service.setAntigravityFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    const begin = vi.fn(async () => ({ login, accounts: saved(null) }))
     const finish = vi.fn(async (_target: unknown, _login: unknown, limits: ProviderRateLimits) => ({
       switched: false as const,
       account: { id: 'a', email: 'a@example.invalid' },
       accounts: saved(limits)
     }))
-    service.setAntigravityAccountUsageRecorder({
-      begin: async () => ({ login, accounts: saved(null) }),
-      finish
-    })
+    service.setAntigravityAccountUsageRecorder({ begin, finish })
 
     await service.refresh()
 
     const state = service.getState()
+    expect(begin).toHaveBeenCalledWith({ runtime: 'wsl', wslDistro: 'Ubuntu' })
     expect(finish).toHaveBeenCalledWith(
-      { runtime: 'host', wslDistro: null },
+      { runtime: 'wsl', wslDistro: 'Ubuntu' },
       login,
       expect.anything()
     )
