@@ -1,3 +1,4 @@
+import { AGENT_SESSION_DEFAULT_MODEL_CAPABILITY } from '../agent-session-default-model'
 import { AGENT_SESSION_ATTENTION_RUNTIME_CAPABILITIES } from './agent-session-attention-capabilities'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from './agent-session-background-task-child-views-capability'
 import {
@@ -117,6 +118,7 @@ export const AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY =
 // Individual client flags must not retain the unused host capability aggregate.
 export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
   [
+    AGENT_SESSION_DEFAULT_MODEL_CAPABILITY,
     AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY,
     ...AGENT_SESSION_STOP_RUNTIME_CAPABILITIES,
     ...AGENT_SESSION_CREATE_RUNTIME_CAPABILITIES,

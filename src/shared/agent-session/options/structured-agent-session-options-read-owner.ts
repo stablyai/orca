@@ -1,3 +1,4 @@
+import { applyKeepingIdentity } from './structured-agent-session-option-state-identity'
 import type { AgentSessionOptionCatalog } from './agent-session-option-catalog-types'
 import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
 import type { AgentSessionOptionsResult } from './agent-session-options-result'
@@ -11,6 +12,10 @@ import {
   type StructuredAgentSessionOptionState
 } from './structured-agent-session-options'
 import type { StructuredSessionSelectionController } from './structured-agent-session-selection-operations'
+import {
+  createStructuredOptionPickBook,
+  resetStructuredOptionPickBook
+} from './structured-agent-session-option-pick-book'
 
 type ReadContext = {
   owner: readonly unknown[]
@@ -40,16 +45,6 @@ type ReadSnapshot = {
 }
 const same = (left: readonly unknown[], right: readonly unknown[]) =>
   left.length === right.length && left.every((value, index) => Object.is(value, right[index]))
-// Answers fill the record in place, so comparing starts before applying; JSON skips the catalog's fresh closures.
-const applyKeepingIdentity = (
-  current: StructuredAgentSessionOptionState,
-  apply: (current: StructuredAgentSessionOptionState) => StructuredAgentSessionOptionState
-) => {
-  const before = JSON.stringify(current)
-  const next = apply(current)
-  return JSON.stringify(next) === before ? current : next
-}
-
 /** One live scope owns capture, accepted publication and causal retirement on either surface. */
 export function createStructuredAgentSessionOptionsReadOwner(
   seed: StructuredAgentSessionOptionState
@@ -66,6 +61,8 @@ export function createStructuredAgentSessionOptionsReadOwner(
     clearTimeout(retryTimer)
     retryTimer = undefined
   }
+  const optionPicks = { current: createStructuredOptionPickBook() }
+  const writes = { current: { count: 0, readback: false } }
   const listeners = new Set<() => void>()
   const notify = () => listeners.forEach((listener) => listener())
   const run = createCoalescingKeyedRunner<void>()
@@ -86,6 +83,10 @@ export function createStructuredAgentSessionOptionsReadOwner(
     // Coalesce within a lease; a new lease reads at once and the old lease's reply stays inert.
     void run(attached.key, 'latest', async () => {
       if (lease !== attached || !dirty || !attached.isCurrent()) {
+        return
+      }
+      if (writes.current.count > 0) {
+        writes.current.readback = true
         return
       }
       dirty = false
@@ -152,6 +153,7 @@ export function createStructuredAgentSessionOptionsReadOwner(
         snapshot = { optionState, support }
       }
       attached.accepted?.()
+      attached.controller.setModelDefault(result.current.modelDefault === true)
       attached.controller.retire(completed)
       if (snapshot !== before) {
         notify()
@@ -186,6 +188,26 @@ export function createStructuredAgentSessionOptionsReadOwner(
       }
     },
     updateOptionState,
+    optionPicks,
+    writes,
+    beginOptionWrite(_id: string) {
+      const pending = writes.current
+      pending.count += 1
+      version++
+      dirty = true
+      let finished = false
+      return (readback: boolean) => {
+        if (finished || writes.current !== pending) {
+          return
+        }
+        finished = true
+        pending.count -= 1
+        pending.readback ||= readback
+        if (pending.count === 0 && (pending.readback || dirty)) {
+          invalidate()
+        }
+      }
+    },
     invalidate,
     /** Its view moved to another chat: the answer stays to show on return, but the process may restart
      * and the options move meanwhile, so its reports and accepted inputs wait for the next answer. */
@@ -227,6 +249,8 @@ export function createStructuredAgentSessionOptionsReadOwner(
           ...snapshot,
           optionState: sameOwner ? { ...kept, permissionMode: current.permissionMode } : kept
         }
+        writes.current = { count: 0, readback: false }
+        resetStructuredOptionPickBook(optionPicks.current)
         notify()
       }
       previous = context

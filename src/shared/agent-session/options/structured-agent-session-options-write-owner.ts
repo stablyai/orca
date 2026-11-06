@@ -134,7 +134,8 @@ export function createStructuredAgentSessionOptionsWriteOwner(read: () => WriteC
       const pick = structuredAgentSessionOptionPicks(
         view,
         { [id]: encoded },
-        context.existingChat
+        context.existingChat,
+        id
       )[0]
       const operation = controller.issue(
         id,

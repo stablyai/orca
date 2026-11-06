@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { effectiveAgentSessionOptions } from '../../../shared/agent-session-default-model'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
@@ -16,7 +17,7 @@ export function mintStructuredAgentSessionStartupAttempt(input: {
   attemptId?: string
 }): StructuredAgentSessionStartupAttempt {
   const { record } = input
-  const selected = input.startupOptions ?? record.options
+  const selected = input.startupOptions ?? effectiveAgentSessionOptions(record)
   const options = record.provider === 'claude' ? { fastMode: 'false', ...selected } : selected
   return {
     attemptId: input.attemptId ?? randomUUID(),

@@ -105,7 +105,7 @@ describe('options at rest', () => {
       permissionMode: 'ask',
       acceptedInputSources: {}
     })
-    expect(read).toHaveBeenCalledTimes(2)
+    expect(read).toHaveBeenCalledTimes(3)
     const older = await readStructuredAgentSessionOptions(context, SESSION, {
       readsWithoutModel: false
     })
