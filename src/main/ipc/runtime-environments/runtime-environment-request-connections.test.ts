@@ -159,9 +159,7 @@ describe('runtime environment shared-control connection cache', () => {
       const response = await sendRemoteRuntimeSharedControlRequestOnRuntime(
         ENVIRONMENT_ID,
         server.pairing,
-        'files.write',
-        { relativePath: 'a.ts' },
-        1000,
+        { method: 'files.write', params: { relativePath: 'a.ts' }, timeoutMs: 1000 },
         'runtime-a'
       )
 
@@ -169,6 +167,29 @@ describe('runtime environment shared-control connection cache', () => {
       expect(server.requests.some((request) => request.method === 'files.write')).toBe(sent)
     }
   )
+
+  it('sends the prepared request on the runtime-pinned shared socket', async () => {
+    const server = await createSharedControlTestServer({
+      resultForRequest: (method) => (method === 'status.get' ? { runtimeId: 'runtime-a' } : {})
+    })
+
+    await sendRemoteRuntimeSharedControlRequestOnRuntime(
+      ENVIRONMENT_ID,
+      server.pairing,
+      {
+        method: 'orchestration.federationImport',
+        params: { items: [1, 2, 3] },
+        timeoutMs: 1000,
+        prepareRequest: ({ envelope }) => ({ params: { items: [1] }, envelope })
+      },
+      'runtime-a'
+    )
+
+    expect(server.requests.at(-1)).toMatchObject({
+      method: 'orchestration.federationImport',
+      params: { items: [1] }
+    })
+  })
 })
 
 async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<void> {

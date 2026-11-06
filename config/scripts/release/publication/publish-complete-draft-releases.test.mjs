@@ -141,7 +141,11 @@ describe('publishCompleteDraftReleases', () => {
             .filter(({ name }) => name.startsWith('latest'))
             .map(({ id, name }) => [
               `https://api.github.com/repos/stablyai/orca/releases/assets/${id}`,
-              name === 'latest.yml' ? 'path: orca-windows-setup.exe\n' : ''
+              name === 'latest.yml'
+                ? 'path: orca-windows-setup.exe\n'
+                : name === 'latest-mac.yml'
+                  ? 'minimumSystemVersion: 22.0.0\n'
+                  : ''
             ])
         )
       )

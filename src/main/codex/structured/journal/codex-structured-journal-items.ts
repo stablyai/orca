@@ -39,6 +39,7 @@ import {
   type JournalReasoningLifecycle
 } from '../../../native-chat/agent-session-journal/journal-reasoning-row'
 import type { CodexRowAttribution } from '../background-work/codex-subagent-linkage'
+import { codexFileChangeApprovalDetail } from '../prompts/codex-file-change-approval-detail'
 
 export class CodexJournalItems {
   readonly ordinals = new CodexTurnOrdinals()
@@ -57,7 +58,6 @@ export class CodexJournalItems {
       | 'now'
       | 'historyImport'
       | 'dispatchEchoes'
-      | 'onUserMessageEcho'
     > & { attributionFor: CodexRowAttribution },
     private readonly activeTurn: (threadId: string) => string | null,
     private readonly suppress: (threadId: string, turnId: string) => void,
@@ -75,7 +75,11 @@ export class CodexJournalItems {
   }
 
   detailFor(threadId: string, itemId: string): string | null {
-    return this.details.get(codexStructuredItemKey(threadId, itemId)) ?? null
+    const key = codexStructuredItemKey(threadId, itemId)
+    const item = this.activeItems.get(key)?.item
+    return item?.type === 'fileChange'
+      ? codexFileChangeApprovalDetail(item.changes)
+      : (this.details.get(key) ?? null)
   }
 
   handle(
@@ -300,10 +304,8 @@ export class CodexJournalItems {
 }
 
 function withItemLifecycle(
-  translated: ReturnType<typeof codexJournalItem>,
-  lifecycle: JournalReasoningLifecycle
+  item: ReturnType<typeof codexJournalItem>,
+  state: JournalReasoningLifecycle
 ): ReturnType<typeof codexJournalItem> {
-  return translated.body
-    ? { ...translated, body: withJournalReasoningLifecycle(translated.body, lifecycle) }
-    : translated
+  return item.body ? { ...item, body: withJournalReasoningLifecycle(item.body, state) } : item
 }

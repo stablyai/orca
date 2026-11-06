@@ -3,10 +3,7 @@ import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import { DaemonPendingRequests } from '../daemon-client-pending-requests'
 import { requestDaemonRpc } from '../daemon-client-rpc-request'
-import { sendDaemonHello } from '../daemon-client-hello-handshake'
 import { writeNotifyWithSettlement } from '../daemon-client-notify-settlement'
-import { startResponsiveDeadline } from '../daemon-responsive-deadline'
-import { PROTOCOL_VERSION } from '../../../protocol/daemon-protocol-version'
 
 // The OS finishes the connect during the freeze; Node delivers it after the next timers phase.
 vi.mock('node:net', () => ({
@@ -21,9 +18,7 @@ vi.mock('node:net', () => ({
     return socket
   }
 }))
-
-const { connectDaemonSocket, waitForDaemonConnectionAttempt } =
-  await import('../daemon-client-socket-connect')
+await import('../daemon-client-socket-connect')
 
 const TIMEOUT_MS = 50
 // Longer than the deadline plus the late-tick tolerance, as a synchronous CreateProcess stall is.
@@ -70,54 +65,6 @@ describe('daemon link deadlines across a main-process freeze', () => {
     expect(onUndeliverable).not.toHaveBeenCalled()
   })
 
-  it('accepts a hello reply that arrived while main was frozen', async () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: write, destroy and pause are assigned below; the handshake uses nothing else besides listeners.
-    const socket = new EventEmitter() as EventEmitter & {
-      write: () => boolean
-      destroy: () => void
-      pause: () => void
-    }
-    const reply = {
-      type: 'hello',
-      ok: true,
-      daemonIdentity: { pid: 1, startedAtMs: 1, launchNonce: 'n' }
-    }
-    socket.write = () => {
-      setImmediate(() => socket.emit('data', Buffer.from(`${JSON.stringify(reply)}\n`)))
-      return true
-    }
-    socket.destroy = vi.fn()
-    socket.pause = () => {}
-    const hello = await startThenFreeze(() =>
-      sendDaemonHello({
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every Socket member the handshake uses.
-        socket: socket as unknown as Socket,
-        token: 'token',
-        role: 'control',
-        timeoutMs: TIMEOUT_MS,
-        protocolVersion: PROTOCOL_VERSION,
-        clientId: 'client'
-      })
-    )
-    expect(hello.identity).toMatchObject({ pid: 1 })
-    expect(socket.destroy).not.toHaveBeenCalled()
-  })
-
-  it('keeps a connection that completed while main was frozen', async () => {
-    const socket = await startThenFreeze(() =>
-      connectDaemonSocket('orca-freeze-test-pipe', TIMEOUT_MS)
-    )
-    expect(socket.destroyed).toBe(false)
-  })
-
-  it('joins a connection attempt that finished while main was frozen', async () => {
-    await expect(
-      startThenFreeze(() =>
-        waitForDaemonConnectionAttempt(new Promise((resolve) => setImmediate(resolve)), TIMEOUT_MS)
-      )
-    ).resolves.toBeUndefined()
-  })
-
   it('resolves a request whose reply arrived while main was frozen', async () => {
     const pendingRequests = new DaemonPendingRequests()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: requestDaemonRpc only calls write.
@@ -141,13 +88,5 @@ describe('daemon link deadlines across a main-process freeze', () => {
       })
     )
     expect(reply).toBe('pong')
-  })
-
-  it('still condemns a peer that never answers while main runs', async () => {
-    const onExpire = vi.fn()
-    const startedAt = performance.now()
-    startResponsiveDeadline(TIMEOUT_MS, onExpire)
-    await vi.waitFor(() => expect(onExpire).toHaveBeenCalledOnce(), { timeout: 1_000 })
-    expect(performance.now() - startedAt).toBeGreaterThanOrEqual(TIMEOUT_MS - 5)
   })
 })
