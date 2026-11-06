@@ -12,8 +12,10 @@ export function inSessionParseFileLane<T>(
   signal?: AbortSignal
 ): Promise<T> {
   const previous = pending.get(path)
+  const acquired = Promise.resolve(previous).catch(() => undefined)
+  const admission = abandonRemoteSessionScanOnCancel(acquired, signal)
   const run = (async () => {
-    await previous?.catch(() => undefined)
+    await acquired
     throwIfAiVaultScanCancelled(signal)
     return parse()
   })()
@@ -26,5 +28,6 @@ export function inSessionParseFileLane<T>(
       }
     })
     .catch(() => undefined)
-  return abandonRemoteSessionScanOnCancel(run, signal)
+  // Why: an active parser must finish cancelling its consumers before its caller returns.
+  return admission.then(() => run)
 }
