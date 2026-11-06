@@ -1,5 +1,6 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
+import { nativeChatShowsOpenedPullRequests } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import {
   readStructuredAgentSessionItem,
   structuredAgentSessionHostCapabilityState
@@ -53,7 +54,7 @@ export function useNativeChatTurnOpenedPullRequests(
   turns: NativeChatTurnRows | null,
   subagentRows: readonly NativeChatSubagentRow[]
 ): NativeChatTurnOpenedPullRequests {
-  const enabled = useAppStore((state) => state.settings?.nativeChatOpenedPullRequests !== false)
+  const enabled = useAppStore((state) => nativeChatShowsOpenedPullRequests(state.settings))
   const owner = useNativeChatVisualOwner()
   const [fullOutputs, setFullOutputs] = useState<{
     owner: typeof owner
