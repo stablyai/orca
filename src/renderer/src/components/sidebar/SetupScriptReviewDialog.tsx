@@ -55,13 +55,13 @@ export function SetupScriptReviewDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent scrollable className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle className="text-sm">
+          <DialogTitle size="compact">
             {translate(
               'auto.components.sidebar.SetupScriptReviewDialog.title',
               'Review setup script'
             )}
           </DialogTitle>
-          <DialogDescription className="text-xs">
+          <DialogDescription size="compact">
             {translate(
               'auto.components.sidebar.SetupScriptReviewDialog.description',
               'Saving runs this whenever Orca creates a worktree for {{repo}}.',
