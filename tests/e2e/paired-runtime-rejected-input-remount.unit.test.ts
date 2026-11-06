@@ -407,7 +407,8 @@ describe('host-rejected paired-runtime input reaches a pane remount', () => {
         removeEventListener: vi.fn()
       }
 
-      const { connectPanePty } = await import('@/components/terminal-pane/pty-connection')
+      const { connectPanePty } =
+        await import('@/components/terminal-pane/pty-connection/connect-pane-pty')
       const { _resetTerminalPaneRecoveryForTests } =
         await import('@/components/terminal-pane/terminal-pane-recovery')
       _resetTerminalPaneRecoveryForTests()

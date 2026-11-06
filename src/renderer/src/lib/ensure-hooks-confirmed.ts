@@ -77,7 +77,8 @@ async function confirmScriptContent(
   scriptContent: string,
   hostId?: ExecutionHostId,
   isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  createdBranchReview = false
 ): Promise<HookTrustApproval> {
   if (isCancelled() || signal?.aborted) {
     return SKIP
@@ -126,6 +127,7 @@ async function confirmScriptContent(
       scriptContent,
       contentHash,
       previouslyApproved,
+      ...(createdBranchReview ? { createdBranchReview: true } : {}),
       onResolve: settle,
       // Why: eviction must fail closed without stranding the singleton trust queue.
       [MODAL_DISMISSED_KEY]: () => settle('skip')
@@ -227,16 +229,33 @@ export async function ensureHooksConfirmed(
   return (await ensureHooksApproved(...args)).decision
 }
 
-/** Re-prompt with a created worktree's setup content that differs from what was approved. */
+/**
+ * Re-prompt with a created worktree's setup content that differs from what was approved.
+ * Approving runs it for this workspace only; recording it would replace the primary checkout's
+ * approval and re-prompt for that on the next create.
+ */
 export function confirmCreatedWorktreeSetupContent(
   getState: () => AppState,
   repoId: string,
   scriptContent: string,
   hostId?: ExecutionHostId
 ): Promise<HookTrustApproval> {
-  return enqueueTrustPrompt(() =>
-    confirmScriptContent(getState(), repoId, 'setup', scriptContent, hostId)
-  )
+  return enqueueTrustPrompt(async () => {
+    const approval = await confirmScriptContent(
+      getState(),
+      repoId,
+      'setup',
+      scriptContent,
+      hostId,
+      undefined,
+      undefined,
+      true
+    )
+    // Repo-wide trust approves any content, but the host runs only content it can match.
+    return approval.decision === 'run' && approval.approvedContentHash === undefined
+      ? { decision: 'run', approvedContentHash: await hashOrcaHookScript(scriptContent) }
+      : approval
+  })
 }
 
 export async function ensureHooksApproved(
