@@ -260,6 +260,9 @@ export const NATIVE_CHAT_METHODS = [
         })
       }
       unsubscribe = subscription.unsubscribe
+      if (!subscription.watching) {
+        return
+      }
       recordMobileViewOpened(
         { clientKind, pairedDeviceId },
         {

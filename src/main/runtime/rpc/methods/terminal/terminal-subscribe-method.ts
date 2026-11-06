@@ -102,6 +102,16 @@ export const TERMINAL_SUBSCRIBE_METHODS = [
           isMobile,
           supportsDesktopViewportClaims: params.capabilities?.desktopViewportClaims === 1,
           supportsWriteUnavailable: params.capabilities?.writeUnavailable === 1,
+          // Only a full stream that published its snapshot counts; the lease under a chat view never does.
+          onEstablished: () =>
+            recordMobileViewOpened(
+              { clientKind, pairedDeviceId },
+              {
+                surface: 'terminal',
+                viewKey: `terminal:${ptyId}`,
+                agent: runtime.getPaneAgentForTelemetry(ptyId)
+              }
+            ),
           rendererMountRequestedBeforePty,
           missingHeadlessStateBeforeMobileFit,
           serializerGenerationBeforeMobileFit: missingHeadlessStateBeforeMobileFit
@@ -114,14 +124,6 @@ export const TERMINAL_SUBSCRIBE_METHODS = [
           await runTerminalLeaseSubscription(args)
           return
         }
-        recordMobileViewOpened(
-          { clientKind, pairedDeviceId },
-          {
-            surface: 'terminal',
-            viewKey: `terminal:${ptyId}`,
-            agent: runtime.getPaneAgentForTelemetry(ptyId)
-          }
-        )
         if (!useBinaryStream) {
           await runTerminalJsonSubscription(args)
           return
