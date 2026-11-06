@@ -145,22 +145,37 @@ export function seedCatalog(): void {
   })
 }
 
-export function startReleaseLaunch() {
+/** One held launch's identity; several launches each take their own. */
+export type HeldLaunch = {
+  sessionId: string
+  operationId: string
+  messageId: string
+  source: string
+}
+
+export function startReleaseLaunch(
+  launch: HeldLaunch = {
+    sessionId: SESSION_ID,
+    operationId: OPERATION_ID,
+    messageId: MESSAGE_ID,
+    source: SOURCE_SCOPE
+  }
+) {
   return startStructuredAgentLaunch('workspace-1', 'codex', {
     requestId: newAgentLaunchRequestId(),
     executionHostId: 'local',
     prompt: HELD,
-    draftFromScope: SOURCE_SCOPE,
+    draftFromScope: launch.source,
     hostLaunch: {
-      operationId: OPERATION_ID,
-      sessionId: SESSION_ID,
+      operationId: launch.operationId,
+      sessionId: launch.sessionId,
       protocol: 'release',
       opening: {
-        clientMessageId: MESSAGE_ID,
+        clientMessageId: launch.messageId,
         body: structuredAgentSessionSendBody(HELD, [])
       },
       accept: {
-        prompt: { text: HELD, clientMessageId: MESSAGE_ID },
+        prompt: { text: HELD, clientMessageId: launch.messageId },
         presentation: 'focused',
         setupReceipt: { required: true, runId: 'setup-run-1' },
         terminalAlternative: { kind: 'agent', prompt: 'none' }
@@ -227,11 +242,15 @@ export function refuseDraftWrites(refuse: boolean): void {
 
 /** The renderer starts again: draft memory, its load and save bookkeeping and the launch registry
  *  go; the stored drafts, the draft journal and the saved launch rows stay. */
-export async function coldReload(): Promise<void> {
+export function restartRenderer(): void {
   const backend = nativeChatComposerDraftStorage()
   clearNativeChatComposerDraftsForTests()
   setNativeChatComposerDraftStorageForTests(backend)
   resetStructuredAgentLaunchRegistryForTests()
   resetStructuredAgentLaunchPersistenceForTests()
+}
+
+export async function coldReload(): Promise<void> {
+  restartRenderer()
   await hydrateNativeChatComposerDrafts()
 }
