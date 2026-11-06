@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { getDefaultSettings } from '../../../../shared/default-global-settings'
+import { getDefaultSettings } from '../../../../shared/constants'
 import { useAppStore } from '@/store'
 
 import { TooltipProvider } from '../ui/tooltip'
