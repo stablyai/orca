@@ -128,6 +128,9 @@ function dispatchStructuredAttention(
           isActiveWorktree: request.workspaceIsActive,
           ...(row?.agentType ? { agentType: row.agentType } : {}),
           agentState: news.agentState,
+          ...(edge.type === 'prompt' && edge.prompt.kind === 'question'
+            ? { agentToolName: 'AskUserQuestion' }
+            : {}),
           ...(news.outcome ? { agentTurnOutcome: news.outcome } : {}),
           ...(row?.prompt ? { agentPrompt: row.prompt } : {}),
           ...(row?.lastAssistantMessage

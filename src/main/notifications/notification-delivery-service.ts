@@ -108,7 +108,8 @@ export function createNotificationDeliveryService(
       const desktopAllowed = isNotificationSourceEnabled(
         settings,
         request.source,
-        request.agentState
+        request.agentState,
+        request.agentToolName
       )
 
       const notificationOptions = buildNotificationOptions(request, translateMain)

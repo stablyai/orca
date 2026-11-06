@@ -123,6 +123,22 @@ export function NotificationsPane({
       <Separator />
 
       <NotificationSettingToggle
+        icon={<MessageCircleQuestion className="size-4" />}
+        label={translate('notifications.questionsOnly', 'Questions Only')}
+        description={translate(
+          'notifications.questionsOnlyDescription',
+          'Only notify when an agent asks a question. Mute permission requests, completed tasks, and terminal bells.'
+        )}
+        checked={notificationSettings.agentQuestionsOnly === true}
+        disabled={!notificationSettings.enabled}
+        onToggle={() =>
+          void updateNotificationSettings({
+            agentQuestionsOnly: !notificationSettings.agentQuestionsOnly
+          })
+        }
+      />
+
+      <NotificationSettingToggle
         icon={<Bot className="size-4" />}
         label={translate(
           'auto.components.settings.NotificationsPane.ca76d06fd2',
@@ -133,7 +149,7 @@ export function NotificationsPane({
           'A coding agent finishes and becomes idle.'
         )}
         checked={notificationSettings.agentTaskComplete}
-        disabled={!notificationSettings.enabled}
+        disabled={!notificationSettings.enabled || notificationSettings.agentQuestionsOnly}
         onToggle={() =>
           void updateNotificationSettings({
             agentTaskComplete: !notificationSettings.agentTaskComplete
@@ -152,7 +168,7 @@ export function NotificationsPane({
           'A coding agent asks for permission or has a question.'
         )}
         checked={notificationSettings.agentNeedsInput}
-        disabled={!notificationSettings.enabled}
+        disabled={!notificationSettings.enabled || notificationSettings.agentQuestionsOnly}
         onToggle={() =>
           void updateNotificationSettings({
             agentNeedsInput: !notificationSettings.agentNeedsInput
@@ -168,7 +184,7 @@ export function NotificationsPane({
           'A background terminal emits a bell character.'
         )}
         checked={notificationSettings.terminalBell}
-        disabled={!notificationSettings.enabled}
+        disabled={!notificationSettings.enabled || notificationSettings.agentQuestionsOnly}
         onToggle={() =>
           void updateNotificationSettings({
             terminalBell: !notificationSettings.terminalBell
