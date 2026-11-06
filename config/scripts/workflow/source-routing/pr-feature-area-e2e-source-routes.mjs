@@ -51,11 +51,6 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
     [`${COMPONENTS}floating-terminal/`]
   ),
   featureRoute(
-    'feature.dictation',
-    ['voice-microphone-selection'],
-    [`${COMPONENTS}dictation/`, 'src/main/speech/']
-  ),
-  featureRoute(
     'feature.ai-vault',
     ['ai-vault-panel-search', 'ai-vault-session-delete'],
     [
@@ -92,6 +87,16 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
   ),
   featureRoute('feature.tasks-page', ['tasks-page'], [`${COMPONENTS}task-page/`]),
   featureRoute(
+    'feature.github-projects',
+    ['github-project-board'],
+    [
+      `${COMPONENTS}github-project/`,
+      'src/renderer/src/store/github/project-',
+      'src/main/github/project-view/',
+      'src/main/ipc/source-control/github-project-view-handlers.ts'
+    ]
+  ),
+  featureRoute(
     'feature.project-groups',
     ['project-group-creation-visibility', 'project-group-manual-sort'],
     ['src/main/project-groups/', 'src/renderer/src/store/project-groups/']
@@ -104,5 +109,17 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
       'new-workspace-linked-item-project-switch'
     ],
     [`${COMPONENTS}new-workspace/`]
+  ),
+  featureRoute(
+    'feature.runtime-host-status',
+    ['runtime-host-status-recovery'],
+    [
+      'src/main/ipc/runtime-environments/runtime-environment-status-',
+      'src/renderer/src/store/runtime-status-subscriptions.ts',
+      'src/renderer/src/store/slices/runtime-status-',
+      'src/shared/remote-runtime/host-store/runtime-environment-pairing-replace-guards.ts',
+      'src/shared/remote-runtime/host-store/runtime-environment-store.ts',
+      `${COMPONENTS}sidebar/workspace-card/identity/worktree-card-header-items.tsx`
+    ]
   )
 ]

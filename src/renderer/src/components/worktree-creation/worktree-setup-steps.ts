@@ -2,7 +2,7 @@ import {
   getVisibleCheckoutProgress,
   type PendingWorktreeCreation,
   type WorktreeCreationPhase
-} from '@/lib/pending-worktree-creation'
+} from '@/lib/workspace/creation/pending-worktree-creation'
 
 export type WorktreeSetupStepId = 'prepare' | 'fetch' | 'create' | 'setup' | 'start-agent'
 

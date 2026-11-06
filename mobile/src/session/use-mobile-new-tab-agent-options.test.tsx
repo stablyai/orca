@@ -16,6 +16,7 @@ const codex: RpcResponse = { id: '1', ok: true, result: ['codex'] }
 type FakeHost = {
   agents: () => RpcResponse | Promise<RpcResponse>
   settings?: unknown
+  connectedAt?: number
 }
 
 function createClient(host: FakeHost): RpcClient & { sendRequest: ReturnType<typeof vi.fn> } {
@@ -33,7 +34,11 @@ function createClient(host: FakeHost): RpcClient & { sendRequest: ReturnType<typ
     throw new Error(`unexpected request: ${method}`)
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Test double implements the two members the loader calls.
-  return { sendRequest, subscribe: vi.fn(() => () => {}) } as unknown as RpcClient & {
+  return {
+    sendRequest,
+    subscribe: vi.fn(() => () => {}),
+    getLastConnectedAt: () => host.connectedAt ?? null
+  } as unknown as RpcClient & {
     sendRequest: ReturnType<typeof vi.fn>
   }
 }
@@ -128,12 +133,21 @@ describe('useMobileNewTabAgentOptions', () => {
     drawer.unmount()
   })
 
-  it("refreshes the host's agents on a new screen, and shows a refusal over the cached ones", async () => {
-    const first = mountDrawer('host-refusal')
-    const host: FakeHost = { agents: () => claude }
+  it("refreshes the host's agents once per connection, and shows a refusal over the cached ones", async () => {
+    const host: FakeHost = { agents: () => claude, connectedAt: 1 }
     const client = createClient(host)
-    await first.render(client, true)
-    first.unmount()
+    for (let screen = 0; screen < 3; screen++) {
+      const earlier = mountDrawer('host-refusal')
+      await earlier.render(client, true)
+      earlier.unmount()
+    }
+    expect(probes(client)).toEqual([
+      'preflight.detectAgents',
+      'preflight.refreshAgents',
+      'preflight.detectAgents'
+    ])
+
+    host.connectedAt = 2
     host.agents = () => ({
       id: '1',
       ok: false,
@@ -144,7 +158,12 @@ describe('useMobileNewTabAgentOptions', () => {
     const drawer = mountDrawer('host-refusal')
     await drawer.render(client, true)
 
-    expect(probes(client)).toEqual(['preflight.detectAgents', 'preflight.refreshAgents'])
+    expect(probes(client)).toEqual([
+      'preflight.detectAgents',
+      'preflight.refreshAgents',
+      'preflight.detectAgents',
+      'preflight.refreshAgents'
+    ])
     expect(drawer.states()).toEqual(['loaded', 'other-runtime'])
     expect(drawer.setOptions.mock.lastCall?.[0]).toEqual([])
     host.agents = () => codex

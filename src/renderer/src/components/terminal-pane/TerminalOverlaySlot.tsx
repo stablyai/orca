@@ -1,4 +1,4 @@
-import { memo, useLayoutEffect, useState } from 'react'
+import { memo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '../../store'
 import { isProvenProcessExit } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
@@ -7,7 +7,7 @@ import type { ActivityTerminalPortalTarget } from '../activity/activity-terminal
 import TerminalPane from './TerminalPane'
 import type { HiddenTerminalPrewarm } from './terminal-pane-types'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
-import { shouldDeferParkedPtyExitTabClose } from './terminal-parked-tab-watchers'
+import { shouldDeferParkedPtyExitTabClose } from './parking/output-watchers/terminal-parked-tab-watchers'
 
 type TerminalOverlaySlotProps = {
   terminalTabId: string
@@ -50,11 +50,9 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   const [shouldMeasureHiddenStartup, setShouldMeasureHiddenStartup] = useState(
     () => useAppStore.getState().pendingStartupByTabId[terminalTabId] !== undefined
   )
-  useLayoutEffect(() => {
-    if (isVisible && shouldMeasureHiddenStartup) {
-      setShouldMeasureHiddenStartup(false)
-    }
-  }, [isVisible, shouldMeasureHiddenStartup])
+  if (isVisible && shouldMeasureHiddenStartup) {
+    setShouldMeasureHiddenStartup(false)
+  }
 
   // Drop with the reveal in one render, or a later lease release re-runs resume and steals focus.
   const prewarm = isVisible || activityTerminalPortal !== null ? null : hiddenPrewarm

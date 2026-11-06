@@ -39,28 +39,67 @@ import { assertWslHostReachable } from '../../wsl/host-lifecycle/wsl-host-gate'
 import { wslHostPhoneRefusal } from '../../wsl/host-lifecycle/wsl-host-phone-reach'
 import { broadcastSshState } from '../ssh/ssh-renderer-broadcast'
 import { restoreManagedHostPortForwards } from '../ssh/ssh-managed-port-forward-restore'
+import { recipeVmWakeIntentFor } from '../../../shared/remote-runtime/recipe-vm-wake'
+import { prepareRecipeVm } from './runtime-environment-recipe-vm-wake'
 
-/** `wslStart: 'never'` serves a WSL host only while it runs: a paired phone never boots a distro. */
-export type ManagedRuntimeCallPreparation = { wslStart?: 'never' }
+/** `wslStart: 'never'` serves a WSL host only while it runs: a paired phone never boots a distro.
+ *  `recipeVmHoldMs` bounds how long an open of a sleeping recipe VM workspace is held. */
+export type ManagedRuntimeCallPreparation = { wslStart?: 'never'; recipeVmHoldMs?: number }
 
 export async function resolveManagedRuntimeEnvironment(
   userDataPath: string,
   selector: string,
-  preparation?: ManagedRuntimeCallPreparation
+  preparation?: ManagedRuntimeCallPreparation,
+  /** The request that needs the server: only one that opens a workspace wakes a sleeping recipe VM. */
+  method?: string,
+  signal?: AbortSignal
 ): Promise<ReturnType<typeof resolveEnvironment>> {
+  return (await prepareManagedRuntimeRequest(userDataPath, selector, preparation, method, signal))
+    .environment
+}
+
+/** The server prepared for a request, with the record from before preparation. */
+export async function prepareManagedRuntimeRequest(
+  userDataPath: string,
+  selector: string,
+  preparation?: ManagedRuntimeCallPreparation,
+  method?: string,
+  signal?: AbortSignal
+): Promise<PreparedManagedRuntimeRequest> {
   const environment = resolveEnvironment(userDataPath, selector)
   // Enforce the WSL gate for calls, subscriptions and status probes.
   assertWslHostReachable(environment)
+  const vm = await prepareRecipeVm(
+    userDataPath,
+    environment,
+    method ? recipeVmWakeIntentFor(method) : 'none',
+    preparation?.recipeVmHoldMs,
+    signal
+  )
   const host = classifyRuntimeEnvironmentHost(environment)
   switch (host.kind) {
     case 'wsl':
       await prepareWslHostForCall(environment, preparation)
       break
     case 'network':
+    case 'ssh':
       await prepareNetworkServerForCall(userDataPath, environment)
       break
   }
-  return resolveEnvironment(userDataPath, environment.id)
+  const prepared = resolveEnvironment(userDataPath, environment.id)
+  return {
+    environment: prepared,
+    before: environment,
+    wokenPairingRevision: vm.wokenPairingRevision
+  }
+}
+
+type PreparedManagedRuntimeRequest = {
+  environment: KnownRuntimeEnvironment
+  /** The record before preparation, and, when a recipe VM wake this request waited for re-paired
+   *  the server, the pairing revision that wake made. */
+  before: KnownRuntimeEnvironment
+  wokenPairingRevision: number | null
 }
 
 /** Check-only: a WSL host is held to the preparation; every other server is left untouched. */

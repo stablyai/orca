@@ -8,7 +8,7 @@ import {
   activateAndRevealWorktree,
   activateAndRevealFolderWorkspace,
   type ActivateAndRevealResult
-} from '@/lib/worktree-activation'
+} from '@/lib/workspace/activation/worktree-activation'
 import { activateWslMovedWorkspace } from '@/lib/wsl-moved-chat-activation'
 import { useAppStore } from '@/store'
 import { activateTerminalTabOnOwner } from '@/lib/terminal-tab-owner-activation'

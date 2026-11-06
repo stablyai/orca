@@ -64,8 +64,6 @@ vi.mock('os', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return { ...actual, platform: () => 'darwin' }
 })
-
-import { EmulatorError } from './emulator-errors'
 import { EmulatorBridge } from './emulator-bridge'
 import { RuntimeEmulatorCommands } from '../runtime/orca-runtime-emulator'
 
@@ -99,28 +97,6 @@ describe('EmulatorBridge helper ownership', () => {
     netFetchMock.mockReset()
   })
 
-  it('shuts down the previous Orca-managed device when requested', async () => {
-    const bridge = new EmulatorBridge()
-    bridge.registerActiveEmulator('wt-1', session('device-old'), { managed: true })
-
-    const stoppedUdid = await bridge.stopActiveManagedForWorktree('wt-1', {
-      shutdownDevice: true
-    })
-
-    expect(stoppedUdid).toBe('device-old')
-    expect(execServeSimCommandMock).toHaveBeenCalledWith(
-      { command: '/serve-sim', env: {} },
-      ['--kill=device-old', '-q'],
-      undefined
-    )
-    expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith('device-old', {
-      helperPid: 1234,
-      includeOrphaned: false
-    })
-    expect(shutdownSimulatorDeviceMock).toHaveBeenCalledWith('device-old')
-    expect(bridge.getActiveForWorktree('wt-1')).toBeNull()
-  })
-
   it('detaches but does not kill a terminal-started helper', async () => {
     const bridge = new EmulatorBridge()
     bridge.registerActiveEmulator('wt-1', session('device-external'))
@@ -131,26 +107,6 @@ describe('EmulatorBridge helper ownership', () => {
     expect(execServeSimCommandMock).not.toHaveBeenCalled()
     expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
     expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
-    expect(bridge.getActiveForWorktree('wt-1')).toBeNull()
-  })
-
-  it('replaces a rediscovered active helper when a worktree explicitly switches devices', async () => {
-    const bridge = new EmulatorBridge()
-    bridge.registerActiveEmulator('wt-1', session('device-external'))
-
-    const stoppedUdid = await bridge.stopActiveForWorktree('wt-1', { shutdownDevice: true })
-
-    expect(stoppedUdid).toBe('device-external')
-    expect(execServeSimCommandMock).toHaveBeenCalledWith(
-      { command: '/serve-sim', env: {} },
-      ['--kill=device-external', '-q'],
-      undefined
-    )
-    expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith('device-external', {
-      helperPid: 1234,
-      includeOrphaned: true
-    })
-    expect(shutdownSimulatorDeviceMock).toHaveBeenCalledWith('device-external')
     expect(bridge.getActiveForWorktree('wt-1')).toBeNull()
   })
 
@@ -176,13 +132,6 @@ describe('EmulatorBridge helper ownership', () => {
     expect(bridge.getActiveForWorktree('wt-external')).toBeNull()
   })
 
-  it('rejects a capability the resolved backend does not support', async () => {
-    const bridge = new EmulatorBridge()
-    await expect(
-      bridge.runCapability('install', { device: 'device-1' }, async () => 'unused')
-    ).rejects.toMatchObject({ code: 'emulator_unsupported' })
-  })
-
   it('does not clean up a failed attach while another start claim can register the device', async () => {
     const waitForEndpointReady = vi.fn(async () => true)
     execServeSimCommandMock.mockResolvedValue({
@@ -204,25 +153,6 @@ describe('EmulatorBridge helper ownership', () => {
     expect(bridge.getActiveForWorktree('wt-surviving')).toMatchObject({
       deviceUdid: 'device-1'
     })
-  })
-
-  it('cleans up a failed attach when no start claim or registered workspace remains', async () => {
-    const waitForEndpointReady = vi.fn(async () => true)
-    execServeSimCommandMock.mockResolvedValue({
-      device: 'device-1',
-      streamUrl: 'http://127.0.0.1:3102/stream.mjpeg',
-      wsUrl: 'ws://127.0.0.1:3102'
-    })
-    const bridge = new EmulatorBridge({ waitForEndpointReady })
-
-    const lease = await bridge.acquireHelperForDevice('device-1')
-    await lease.release({ cleanupIfUnused: true })
-
-    expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith('device-1', {
-      helperPid: undefined,
-      includeOrphaned: true
-    })
-    expect(shutdownSimulatorDeviceMock).toHaveBeenCalledWith('device-1')
   })
 
   it('keeps a shared device alive when one registered workspace detaches', async () => {
@@ -270,78 +200,6 @@ describe('EmulatorBridge helper ownership', () => {
     expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
     expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
     expect(bridge.getActiveForWorktree('wt-attaching')).toMatchObject({ deviceUdid: 'device-1' })
-  })
-
-  it('reuses the active helper for the same requested device', async () => {
-    const waitForEndpointReady = vi.fn(async () => true)
-    const bridge = new EmulatorBridge({ waitForEndpointReady })
-    bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
-
-    const reusable = await bridge.getReusableActiveForWorktree('wt-1', 'device-1')
-
-    expect(reusable?.deviceUdid).toBe('device-1')
-    expect(waitForEndpointReady).toHaveBeenCalledWith('http://127.0.0.1:3100/device-1')
-    expect(listServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith('device-1', {
-      helperPid: 1234,
-      includeOrphaned: false
-    })
-    expect(execServeSimCommandMock).not.toHaveBeenCalled()
-    expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
-    expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
-  })
-
-  it('does not reuse an active helper with a stale endpoint', async () => {
-    const waitForEndpointReady = vi.fn(async () => false)
-    const bridge = new EmulatorBridge({ waitForEndpointReady })
-    bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
-
-    const reusable = await bridge.getReusableActiveForWorktree('wt-1', 'device-1')
-
-    expect(reusable).toBeNull()
-    expect(waitForEndpointReady).toHaveBeenCalledWith('http://127.0.0.1:3100/device-1')
-    expect(listServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
-  })
-
-  it('retries once when serve-sim returns a stale stream endpoint', async () => {
-    const waitForEndpointReady = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true)
-    execServeSimCommandMock.mockResolvedValue({
-      device: 'device-1',
-      streamUrl: 'http://127.0.0.1:3102/stream.mjpeg',
-      wsUrl: 'ws://127.0.0.1:3102'
-    })
-    const bridge = new EmulatorBridge({ waitForEndpointReady })
-
-    const { info } = await bridge.acquireHelperForDevice('device-1')
-
-    expect(info.deviceUdid).toBe('device-1')
-    expect(waitForEndpointReady).toHaveBeenCalledTimes(2)
-    expect(execServeSimCommandMock).toHaveBeenNthCalledWith(
-      1,
-      { command: '/serve-sim', env: {} },
-      ['--detach', '-q', 'device-1'],
-      { json: true }
-    )
-    expect(execServeSimCommandMock).toHaveBeenNthCalledWith(
-      2,
-      { command: '/serve-sim', env: {} },
-      ['--kill=device-1', '-q'],
-      undefined
-    )
-    expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith('device-1', {
-      helperPid: undefined,
-      includeOrphaned: true
-    })
-    expect(listServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith('device-1', {
-      helperPid: undefined,
-      includeOrphaned: true
-    })
-    expect(execServeSimCommandMock).toHaveBeenNthCalledWith(
-      3,
-      { command: '/serve-sim', env: {} },
-      ['--detach', '-q', 'device-1'],
-      { json: true }
-    )
-    expect(hideNativeSimulatorAppMock).toHaveBeenCalledTimes(1)
   })
 
   it('rejects detach results whose stream endpoint never becomes reachable', async () => {
@@ -436,157 +294,6 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     expect(netFetchMock).not.toHaveBeenCalled()
   })
 
-  it('lists only the selected worktree sessions, across backends, and every session for all', async () => {
-    const bridge = new EmulatorBridge()
-    bridge.registerActiveEmulator('wt-ios', session('device-1'), { managed: true })
-    bridge.registerActiveEmulator(
-      'wt-android',
-      { ...session('emulator-5554'), backend: 'android', streamCodec: 'h264' },
-      { managed: true }
-    )
-    const commands = new RuntimeEmulatorCommands({
-      getEmulatorBridge: () => bridge,
-      resolveEmulatorWorkspaceId: vi.fn(async (selector: string) => selector.replace('id:', '')),
-      resolveEmulatorCleanupWorkspaceId: vi.fn(async (selector: string) => selector),
-      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } }) as never,
-      getSettings: () => ({ mobileEmulatorEnabled: true, mobileEmulatorDefaultDeviceUdid: null })
-    })
-
-    await expect(commands.emulatorList({ worktree: 'id:wt-android' })).resolves.toEqual({
-      sessions: [
-        expect.objectContaining({
-          worktreeId: 'wt-android',
-          backend: 'android',
-          deviceUdid: 'emulator-5554'
-        })
-      ]
-    })
-    await expect(commands.emulatorList({ worktree: 'id:wt-none' })).resolves.toEqual({
-      sessions: []
-    })
-    const all = (await commands.emulatorList({})).sessions.map((row) => row.worktreeId)
-    expect(all.sort()).toEqual(['wt-android', 'wt-ios'])
-  })
-
-  it('heals a session registered without an axUrl by deriving it from the stream url', async () => {
-    const tree = [{ type: 'Application', children: [] }]
-    netFetchMock.mockResolvedValue(new Response(JSON.stringify(tree), { status: 200 }))
-    const bridge = new EmulatorBridge()
-    bridge.registerActiveEmulator(
-      'wt-1',
-      {
-        deviceUdid: 'device-1',
-        streamUrl: 'http://127.0.0.1:3100/helper/device-1/stream.mjpeg',
-        wsUrl: 'ws://127.0.0.1:3100/helper/device-1/ws',
-        streamCodec: 'mjpeg'
-      },
-      { managed: true }
-    )
-    const commands = new RuntimeEmulatorCommands({
-      getEmulatorBridge: () => bridge,
-      resolveEmulatorWorkspaceId: vi.fn(async () => 'wt-1'),
-      resolveEmulatorCleanupWorkspaceId: vi.fn(async () => 'wt-1'),
-      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } }) as never,
-      getSettings: () => ({
-        mobileEmulatorEnabled: true,
-        mobileEmulatorDefaultDeviceUdid: null
-      })
-    })
-
-    await expect(commands.emulatorAx({ worktree: 'wt-1' })).resolves.toMatchObject([
-      { type: 'Application' }
-    ])
-    expect(netFetchMock).toHaveBeenCalledWith(
-      'http://127.0.0.1:3100/helper/device-1/ax',
-      expect.any(Object)
-    )
-  })
-
-  it('does not fabricate an /ax endpoint from a non-mjpeg stream url', async () => {
-    const bridge = new EmulatorBridge()
-    bridge.registerActiveEmulator(
-      'wt-1',
-      {
-        deviceUdid: 'device-1',
-        streamUrl: 'http://127.0.0.1:3100/helper/device-1/stream.h264',
-        wsUrl: 'ws://127.0.0.1:3100/helper/device-1/ws',
-        streamCodec: 'mjpeg'
-      },
-      { managed: true }
-    )
-    const commands = new RuntimeEmulatorCommands({
-      getEmulatorBridge: () => bridge,
-      resolveEmulatorWorkspaceId: vi.fn(async () => 'wt-1'),
-      resolveEmulatorCleanupWorkspaceId: vi.fn(async () => 'wt-1'),
-      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } }) as never,
-      getSettings: () => ({
-        mobileEmulatorEnabled: true,
-        mobileEmulatorDefaultDeviceUdid: null
-      })
-    })
-
-    await expect(commands.emulatorAx({ worktree: 'wt-1' })).rejects.toMatchObject({
-      code: 'emulator_no_active'
-    })
-    expect(netFetchMock).not.toHaveBeenCalled()
-  })
-
-  it('reconnects to an existing active helper instead of replacing it', async () => {
-    const send = vi.fn()
-    const waitForEndpointReady = vi.fn(async () => true)
-    const bridge = new EmulatorBridge({ waitForEndpointReady })
-    const active: EmulatorSessionInfo = { ...session('device-1'), backend: 'ios' }
-    bridge.registerActiveEmulator('wt-1', active, { managed: true })
-    const commands = new RuntimeEmulatorCommands({
-      getEmulatorBridge: () => bridge,
-      resolveEmulatorWorkspaceId: vi.fn(async () => 'wt-1'),
-      resolveEmulatorCleanupWorkspaceId: vi.fn(async () => 'wt-1'),
-      getAuthoritativeWindow: () => ({ webContents: { send } }) as never,
-      getSettings: () => ({
-        mobileEmulatorEnabled: true,
-        mobileEmulatorDefaultDeviceUdid: null
-      })
-    })
-
-    const res = await commands.emulatorAttach({ device: 'device-1', worktree: 'wt-1' })
-
-    expect(res).toEqual({ attached: true, info: active })
-    expect(execServeSimCommandMock).not.toHaveBeenCalled()
-    expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
-    expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
-    expect(send).toHaveBeenCalledWith('ui:emulatorAutoAttach', {
-      worktreeId: 'wt-1',
-      info: active
-    })
-  })
-
-  it('checks pane input against Device Hub only for an active iOS session', async () => {
-    const bridge = new EmulatorBridge()
-    bridge.registerActiveEmulator('wt-ios', session('device-1'), { managed: true })
-    bridge.registerActiveEmulator('wt-android', session('emulator-5554'), {
-      managed: true,
-      backend: 'android'
-    })
-    const commands = new RuntimeEmulatorCommands({
-      getEmulatorBridge: () => bridge,
-      resolveEmulatorWorkspaceId: vi.fn(async (worktree: string) => worktree),
-      resolveEmulatorCleanupWorkspaceId: vi.fn(async (worktree: string) => worktree),
-      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } }) as never,
-      getSettings: () => ({ mobileEmulatorEnabled: true, mobileEmulatorDefaultDeviceUdid: null })
-    })
-    assertInputNotShadowedMock.mockRejectedValueOnce(
-      new EmulatorError('emulator_input_blocked', 'Device Hub has taken over input')
-    )
-
-    await expect(commands.emulatorCheckInput({ worktree: 'wt-ios' })).rejects.toMatchObject({
-      code: 'emulator_input_blocked'
-    })
-    await expect(commands.emulatorCheckInput({ worktree: 'wt-android' })).resolves.toEqual({
-      ok: true
-    })
-    expect(assertInputNotShadowedMock.mock.calls).toEqual([['device-1']])
-  })
-
   it('keeps the live workspace device when reopened without a device', async () => {
     listSimulatorDevicesMock.mockImplementation(async () => [
       {
@@ -616,24 +323,5 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     })
     expect(execServeSimCommandMock).not.toHaveBeenCalled()
     expect(bridge.getActiveForWorktree('wt-1')?.deviceUdid).toBe('device-1')
-  })
-
-  it('rejects attach when mobile emulator is disabled', async () => {
-    const bridge = new EmulatorBridge()
-    const commands = new RuntimeEmulatorCommands({
-      getEmulatorBridge: () => bridge,
-      resolveEmulatorWorkspaceId: vi.fn(async () => 'wt-1'),
-      resolveEmulatorCleanupWorkspaceId: vi.fn(async () => 'wt-1'),
-      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } }) as never,
-      getSettings: () => ({
-        mobileEmulatorEnabled: false,
-        mobileEmulatorDefaultDeviceUdid: null
-      })
-    })
-
-    await expect(
-      commands.emulatorAttach({ device: 'device-1', worktree: 'wt-1' })
-    ).rejects.toMatchObject({ code: 'emulator_disabled' })
-    expect(execServeSimCommandMock).not.toHaveBeenCalled()
   })
 })

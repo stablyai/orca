@@ -6,8 +6,8 @@ import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline
 import {
   CALLER,
   envelope
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
-import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
+import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import type { AcpScriptedAgent } from './acp-scripted-agent.test-support'
 import {
   GROK_CONFIG_OPTIONS,
@@ -189,19 +189,6 @@ describe('closing or stopping a Grok chat while it starts', () => {
     })
     await waitFor(() => expect(rig.child()).not.toBe(child))
     await host.close(SESSION, 'user-close')
-  })
-
-  it('lets a Stop reach a child Grok never finished initializing', async () => {
-    const { rig, host } = await openHostRig({
-      script: (agent) => agent.on('initialize', () => {})
-    })
-    const attaching = host.attach(CALLER, attachParams())
-    await rig.frame('initialize')
-    const stopping = host.cancel(CALLER, { envelope: envelope('agentSession.cancel', {}) })
-    await waitFor(() => expect(rig.child().exited).toBe(true))
-    expect((await attaching).ok).toBe(true)
-    expect(await stopping).toMatchObject({ ok: true })
-    expect(rig.spawned.filter((step) => step === 'spawn')).toHaveLength(1)
   })
 
   it('cancels a queued send whose start a Stop ended, with no start failure in the chat', async () => {

@@ -6,15 +6,16 @@ import {
   consumeCommittedPtyShutdownExit,
   deferPtyShutdownExit,
   isHostPtySleepPending
-} from '../pty-shutdown-exit-deferral'
+} from '../pty-transport/shutdown/pty-shutdown-exit-deferral'
 import { POST_REPLAY_MODE_RESET } from '../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { isProvenProcessExit } from '../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
-import { getProviderSessionClaimKey } from '@/lib/sleeping-agent-pane-ownership'
+import '@/lib/agent-session/resume/sleeping-agent-pane-ownership'
+import { getProviderSessionClaimKey } from '../../../../../shared/sleeping-record-legacy-pane-key'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentTurnEndedUncleanly } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
-import { isPtyExitReplacedByRestart } from '../pty-exit-delivery'
+import { isPtyExitReplacedByRestart } from '../pty-transport/delivery/pty-exit-delivery'
 import { armRestartReplacement } from './restart-replacement-on-show'
 import { noteHiddenAgentResumePtyEnded } from './hidden-agent-resume-deferral'
 import { expectExitedSplitPaneClose } from './exited-split-pane-close'

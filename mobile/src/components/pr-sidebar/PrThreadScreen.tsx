@@ -9,7 +9,7 @@ import { openExternalLink } from '../../platform/external-link'
 import { useKeyboardOcclusion } from '../../platform/keyboard-occlusion'
 import { isResolvableComment } from '../../session/pr-comment-actions'
 import { MobileStateView } from '../MobileStateView'
-import { MobileMarkdown } from '../MobileMarkdown'
+import { PrMarkdown } from './PrMarkdown'
 import { PRCommentComposer } from './PRCommentComposer'
 import { PrCommentAvatar } from './PrCommentAvatar'
 import { PrMiniButton } from './PrMiniButton'
@@ -152,7 +152,7 @@ export function PrThreadScreen({
               <Text style={styles.time}>{commentRelativeTime(comment.createdAt, now, t)}</Text>
             </View>
             <View style={styles.body}>
-              <MobileMarkdown content={comment.body} />
+              <PrMarkdown content={comment.body} url={comment.url} />
             </View>
           </View>
         ))}

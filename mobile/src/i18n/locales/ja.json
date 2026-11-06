@@ -225,7 +225,8 @@
       "clipboardRejected": "クリップボードがテキストを受け付けませんでした。",
       "copyFailed": "コピーに失敗しました",
       "copyMessage": "メッセージをコピーする",
-      "selectText": "テキストを選択"
+      "selectText": "テキストを選択",
+      "rewind": "ここに巻き戻す"
     },
     "nativeChatImageViewer": {
       "closeImage": "画像を閉じる",
@@ -538,12 +539,19 @@
     "usageLimit": {
       "reached": "{{agent}} が使用量の上限に達しました。",
       "reachedNamed": "{{agent}} が{{window}}の上限に達しました。",
-      "resetsAt": "{{when}} にリセットされます。",
       "theAgent": "Agent",
       "windowCredits": "追加使用量",
       "windowSession": "セッション",
       "windowWeekly": "週間",
-      "windowWeeklyModel": "モデル別の週間"
+      "windowWeeklyModel": "モデル別の週間",
+      "switchAccount": "アカウントを切り替え",
+      "autoContinueCancelFailed": "自動続行をキャンセルできませんでした。もう一度お試しください。",
+      "autoContinueCancel": "続けない",
+      "statusResetAt": "{{time}} にリセット済み",
+      "statusResetsAt": "{{time}} にリセット",
+      "statusContinuesShortly": "Orca がまもなく続けます",
+      "statusContinuesThen": "その時点で Orca が続けます",
+      "statusWontContinue": "Orca は自動的には続けません"
     },
     "useImageUpload": {
       "attachFailed": "添付に失敗しました。",
@@ -594,9 +602,30 @@
       "attachmentsUnsupported": "目標を設定する前に添付ファイルを削除してください。",
       "pause": "一時停止",
       "resume": "再開"
+    },
+    "rewind": {
+      "title": "ここに巻き戻しますか?",
+      "confirmation": "このメッセージとそれ以降をすべて破棄しますか? メッセージは入力欄に戻り、編集して再送信できます。ディスク上のファイルの変更は保持されます。",
+      "confirm": "巻き戻す",
+      "unsupported": "このチャットは以前のメッセージに戻れません。",
+      "historyNotPaginated": "この古い Codex チャットは以前のメッセージに戻れません。「ここに巻き戻す」を使用するには、新規チャットを開始してください。",
+      "busy": "Agent がアイドル状態になり、このチャットであなたの対応を待つものがなくなると利用できます。",
+      "staleEpoch": "会話が変更されました。最新のメッセージを確認して、もう一度お試しください。",
+      "invalidTarget": "会話をこのメッセージに戻すことはできません。何も変更されていません。",
+      "historyLimit": "この会話は長すぎて巻き戻せません。何も変更されていません。",
+      "providerRefused": "Agent はこのメッセージに戻れませんでした。",
+      "proofMismatch": "Agent の履歴がこのチャットと一致しませんでした。続行する前に会話を確認してください。",
+      "outcomeUnknown": "Orca は会話が以前のメッセージに戻ったかどうかを確認できませんでした。次のメッセージが送信される前に確認します。",
+      "refused": "Orca はこのメッセージに戻れませんでした。続行する前に会話を確認してください。",
+      "unavailable": "チャットの接続が完了するまでお待ちください。",
+      "outcomeUnknownReturned": "Orca は会話がこのメッセージに戻ったかどうかを確認できませんでした。メッセージは入力欄に戻っており、次のメッセージが送信される前に Orca が会話を確認します。",
+      "timeout": "このメッセージに戻った後、チャットが更新されませんでした。最新の内容を確認するには、開き直してください。",
+      "pending": "会話が以前のメッセージに戻るまでお待ちください。"
     }
   },
   "common": {
+    "details": "詳細",
+    "hideDetails": "詳細を非表示",
     "back": "戻る",
     "cancel": "キャンセル",
     "close": "閉じる",
@@ -794,8 +823,8 @@
       "pairingInvalid": "ペアリングが無効",
       "pairingTemporarilyUnavailable": "ペアリングが一時的に利用できません",
       "repairHint": "タップしてデスクトップと再ペアリングしてください。",
+      "sameNetworkOnlyHint": "同じ Wi-Fi または Tailscale でのみ接続できます。どこからでも接続するには、デスクトップでサインインしてもう一度ペアリングしてください",
       "unlockHint": "スマートフォンのロックを解除してから、タップして再試行してください。",
-      "updateDesktopHint": "デスクトップの Orca を更新してサインインすると、どこからでも接続できます。",
       "worktreeAccessibilitySummary": "{{summary}}、{{activeCount}} 件がアクティブ"
     },
     "hostDiagnosticsLink": {
@@ -826,6 +855,13 @@
       "openImage": "画像を開く",
       "wrapLines": "行を折り返す",
       "disableLineWrap": "行の折り返しを無効にする"
+    },
+    "markdownCallout": {
+      "note": "メモ",
+      "tip": "ヒント",
+      "important": "重要",
+      "warning": "警告",
+      "caution": "注意"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "ドロワーを閉じる"
@@ -2009,6 +2045,8 @@
       "managedAccountEnvOverride": "この Claude の起動では独自の Anthropic サインイン変数が設定されています。管理対象の Claude アカウントを使用するには、それらを削除してください。",
       "managedAccountUnsupported": "WSL に Claude アカウントが追加されていますが、Claude チャットには Windows の Claude アカウントが必要です。",
       "modelUnavailable": "{{agent}} は {{detail}} を使用できませんでした。別のモデルを選択して、もう一度送信してください。",
+      "modelUnavailableUpdate": "{{agent}} は {{detail}} を使用できませんでした。再起動後も維持するには {{agent}} を {{minimumVersion}} 以降に更新するか、別のモデルを選択して、もう一度送信してください。",
+      "modelNotSelected": "{{agent}} でモデルが選択されていません。モデルの選択と {{agent}} のサインインを確認して、もう一度送信してください。",
       "noTurnToStop": "{{agent}} には停止できる実行中のターンがありませんでした。",
       "notDelivered": "このメッセージは配信されませんでした。",
       "notDeliveredSendAgain": "このメッセージは配信されませんでした。続けるには、もう一度送信してください。",
@@ -3251,7 +3289,8 @@
       "moreFields_one": "+{{count}} フィールド",
       "moreFields_other": "+{{count}} フィールド",
       "noItems": "プロジェクトのアイテムがありません。",
-      "pullRequestSubtitle": "PR · {{repository}}{{number}}"
+      "pullRequestSubtitle": "PR · {{repository}}{{number}}",
+      "linkedPullRequestsOverflow": "他{{count}}件"
     },
     "githubProjectPickers": {
       "add": "追加",
@@ -3943,6 +3982,8 @@
       "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "元のAgentペインは利用できません。保存済みの出力はここに残ります。",
       "openAgent": "Agentを開く",
       "retryHistory": "履歴を再読み込み",
+      "fullOutputUnavailable": "完全な出力を読み込めませんでした。",
+      "retryFullOutput": "再試行",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "読み込んだ履歴に一致する実行はありません。さらに読み込んでください。",
       "noMatchingRunsYet": "一致する実行はまだありません。",
       "runSummary": "{{title}}、{{status}}、{{date}}",

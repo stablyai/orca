@@ -22,6 +22,11 @@ const CLAUDE_COMPOSER_PROMPT = '❯\u00a0'
 // only while idle at its prompt, where a `❯` + NBSP glyph is unlikely.
 const DECSET_COLOR_PALETTE_UPDATES = '\x1b[?2031h'
 const DECRST_COLOR_PALETTE_UPDATES = '\x1b[?2031l'
+const SGR_RUN = '(?:\\x1b\\[[0-9;:]*m)*'
+// agy's hint row, or its rule / `>` / rule composer rows, which a custom statusLine keeps after replacing the hint (#38930).
+const ANTIGRAVITY_COMPOSER_READY = new RegExp(
+  `\\? for shortcuts|─{8}${SGR_RUN}\\r?\\n${SGR_RUN}>(?:\\s+[A-Za-z][A-Za-z-]*\\s+mode:[^\\n]*)?${SGR_RUN}\\r?\\n${SGR_RUN}─{8}`
+)
 const DECSET_ALT_SCREEN = '\x1b[?1049h'
 const DECRST_ALT_SCREEN = '\x1b[?1049l'
 
@@ -31,7 +36,7 @@ type DraftPasteReadySignalSpec = {
   /** Bytes that revoke `markerAnchor` again, for anchors that describe a mode the agent can leave. */
   markerAnchorEnd: string | null
   /** Composer-ready marker, or null for signals that only use the quiet window. */
-  marker: string | null
+  marker: string | RegExp | null
   /** Bytes that arm the quiet-window fallback, or null when the signal has none. */
   quietAnchor: string | null
 }
@@ -85,6 +90,14 @@ const DRAFT_PASTE_READY_SIGNALS: Record<SingleSignal, DraftPasteReadySignalSpec>
     marker: ZCODE_COMPOSER_BOX_CORNER,
     // ZCode banner animates indefinitely; keep quiet fallback for inline builds whose alt-screen marker never arms.
     quietAnchor: DECSET_BRACKETED_PASTE
+  },
+  // agy's composer; its trust dialog, sign-in menu and a shell prompt never draw it. No quiet fallback:
+  // the shell prompt's 2004h would arm it before agy starts. Evidence: agy 1.2.14 and 1.5.2 startups.
+  'antigravity-composer-prompt': {
+    markerAnchor: DECSET_BRACKETED_PASTE,
+    markerAnchorEnd: DECRST_BRACKETED_PASTE,
+    marker: ANTIGRAVITY_COMPOSER_READY,
+    quietAnchor: null
   },
   'render-quiet-after-bracketed-paste': {
     markerAnchor: null,
@@ -182,7 +195,7 @@ function createSingleSignalScanner(readySignal: SingleSignal): {
       const segmentStart = Math.max(cursor, carriedLength)
       const segment =
         leaveIndex === -1 ? window.slice(segmentStart) : window.slice(segmentStart, leaveIndex)
-      if ((postAnchorRecent + segment).includes(signalMarker ?? '')) {
+      if (signalMarker !== null && containsMarker(postAnchorRecent + segment, signalMarker)) {
         return true
       }
       if (leaveIndex === -1) {
@@ -217,13 +230,13 @@ function createSingleSignalScanner(readySignal: SingleSignal): {
           if (anchorIndex !== -1) {
             sawMarkerAnchor = true
             const postAnchorChunk = combined.slice(anchorIndex + markerAnchor.length)
-            if (postAnchorChunk.includes(signalMarker)) {
+            if (containsMarker(postAnchorChunk, signalMarker)) {
               return { ready: true, armQuietTimer: false }
             }
             postAnchorRecent = postAnchorChunk.slice(-512)
           }
         } else {
-          if (data.includes(signalMarker) || (postAnchorRecent + data).includes(signalMarker)) {
+          if (containsMarker(postAnchorRecent + data, signalMarker)) {
             return { ready: true, armQuietTimer: false }
           }
           postAnchorRecent = (postAnchorRecent + data).slice(-512)
@@ -233,4 +246,8 @@ function createSingleSignalScanner(readySignal: SingleSignal): {
       return { ready: false, armQuietTimer: sawQuietAnchor }
     }
   }
+}
+
+function containsMarker(text: string, marker: string | RegExp): boolean {
+  return typeof marker === 'string' ? text.includes(marker) : marker.test(text)
 }

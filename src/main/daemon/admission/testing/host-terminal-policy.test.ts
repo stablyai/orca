@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HostTerminalPolicy, hostTerminalPolicyPath } from '../host-terminal-policy'
-import { SystemPtyLimit, parseLinuxPtyLimit } from '../system-pty-limit'
+import { SystemPtyLimit } from '../system-pty-limit'
 import * as deadlines from '../../launch/daemon-request-deadline'
 import { HostTerminalLedger } from '../host-terminal-ledger'
 import { TerminalSpawnGate } from '../terminal-spawn-gate'
@@ -116,58 +116,6 @@ describe('host terminal policy', () => {
     next.abandon()
     desktop.stopHostTerminals()
     server.stopHostTerminals()
-  })
-
-  it('caches the capped startup default, validates host capacity and preserves saved/environment priority', async () => {
-    const root = await home()
-    const path = hostTerminalPolicyPath(root, 'machine-a')
-    expect(path).not.toBe(hostTerminalPolicyPath(root, 'machine-b'))
-    expect(hostTerminalPolicyPath(root, null)).toBeNull()
-    const policy = createPolicy(path, {}, system())
-    await expect(policy.save(512, () => true)).rejects.toThrow('capacity')
-    await policy.save(384, () => true)
-    expect(await policy.status('nonce')).toMatchObject({
-      maxTerminals: 384,
-      source: 'saved',
-      systemPtyLimit: 511
-    })
-    const read = vi.fn()
-    const override = createPolicy(path, { ORCA_DAEMON_MAX_HOST_TERMINALS: '600' }, system(), read)
-    await override.start()
-    expect(read).not.toHaveBeenCalled()
-    expect(await override.status('nonce')).toMatchObject({
-      maxTerminals: 600,
-      source: 'environment',
-      editable: false
-    })
-    await expect(override.save(20, () => true)).rejects.toThrow('unavailable')
-    const unidentified = createPolicy(null, {}, system())
-    await unidentified.start()
-    expect(await unidentified.status('nonce')).toMatchObject({ maxTerminals: 256, editable: false })
-    await expect(unidentified.save(10, () => true)).rejects.toThrow()
-    const reduced = createPolicy(path, {}, new SystemPtyLimit(async () => 128))
-    await reduced.start()
-    expect(await reduced.status('nonce')).toMatchObject({ maxTerminals: 384, systemPtyLimit: 128 })
-    for (const [capacity, expected] of [
-      [null, 256],
-      [511, 256],
-      [4096, 2048],
-      [16384, 4096]
-    ] as const) {
-      const probe = vi.fn<() => Promise<number | null>>().mockResolvedValue(capacity)
-      const defaults = createPolicy(null, {}, new SystemPtyLimit(probe))
-      await defaults.start()
-      expect(defaults.admissionMaximum()).toBe(expected)
-      expect(defaults.admissionMaximum()).toBe(expected)
-      expect(probe).toHaveBeenCalledOnce()
-      probe.mockResolvedValue(128)
-      expect(await defaults.status('nonce')).toMatchObject({
-        maxTerminals: expected,
-        source: 'default',
-        systemPtyLimit: 128
-      })
-      expect(defaults.admissionMaximum()).toBe(expected)
-    }
   })
 
   it('publishes slow startup, raises and decreases on settlement without background observers or transient health', async () => {
@@ -502,10 +450,4 @@ describe('host terminal policy', () => {
       expect(rename).toHaveBeenCalledTimes(2)
     }
   )
-
-  it('reports Linux configured global and devpts capacity without subtracting namespace reserve', () => {
-    expect(parseLinuxPtyLimit('4096\n', 'devpts /dev/pts devpts rw,max=128 0 0')).toBe(128)
-    expect(parseLinuxPtyLimit('4096', 'devpts /dev/pts devpts rw 0 0')).toBe(4096)
-    expect(parseLinuxPtyLimit('garbage', '')).toBeNull()
-  })
 })

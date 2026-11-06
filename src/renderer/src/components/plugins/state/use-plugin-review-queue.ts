@@ -4,29 +4,50 @@ import { pluginNeedsReview } from '../presentation/plugin-status-presentation'
 
 /**
  * Which plugin's review is open, plus the ones waiting behind it (an Update all that left several
- * needing review). Closing one review opens the next that still needs it.
+ * needing review). A decision opens the next review; navigation away pauses the sequence.
  */
 export function usePluginReviewQueue(): {
   reviewKey: string | null
-  /** Opens this review now (or closes with null); the queue is kept. */
+  /** Queue advances replace the completed review in page history. */
+  replacePage: boolean
+  /** Opens this review now (or pauses with null), keeping any undecided review queued. */
   show: (pluginKey: string | null) => void
   enqueue: (pluginKeys: readonly string[]) => void
-  /** After a decision: opens the next waiting review that the list still says needs one. */
-  advance: (plugins: readonly PluginHostListEntry[]) => void
+  /** Only a decision for the current review opens the next waiting review. */
+  advance: (pluginKey: string, plugins: readonly PluginHostListEntry[]) => void
   /** Drops reviews for plugins no longer installed. */
   prune: (installedKeys: ReadonlySet<string>) => void
-  /** Back pauses queued reviews without consuming the next one. */
+  /** Leaving a review pauses it; visiting a queued plugin resumes its review. */
+  navigate: (pluginKey: string | null) => void
+  /** Pauses the current review without dropping it from the queue. */
   pause: () => void
   clear: () => void
 } {
-  const [reviewKey, setReviewKey] = useState<string | null>(null)
+  const [{ reviewKey, replacePage }, setReview] = useState<{
+    reviewKey: string | null
+    replacePage: boolean
+  }>({ reviewKey: null, replacePage: false })
   const currentRef = useRef<string | null>(null)
   const waitingRef = useRef<string[]>([])
 
-  const show = useCallback((pluginKey: string | null) => {
+  const setCurrentReview = useCallback((pluginKey: string | null, replacePage = false) => {
     currentRef.current = pluginKey
-    setReviewKey(pluginKey)
+    setReview({ reviewKey: pluginKey, replacePage })
   }, [])
+  const show = useCallback(
+    (pluginKey: string | null) => {
+      const current = currentRef.current
+      if (current === pluginKey) {
+        return
+      }
+      if (current) {
+        waitingRef.current.unshift(current)
+      }
+      waitingRef.current = waitingRef.current.filter((key) => key !== pluginKey)
+      setCurrentReview(pluginKey)
+    },
+    [setCurrentReview]
+  )
   const enqueue = useCallback(
     (pluginKeys: readonly string[]) => {
       const fresh = pluginKeys.filter(
@@ -34,32 +55,43 @@ export function usePluginReviewQueue(): {
       )
       waitingRef.current.push(...fresh)
       if (currentRef.current === null) {
-        show(waitingRef.current.shift() ?? null)
+        setCurrentReview(waitingRef.current.shift() ?? null)
       }
     },
-    [show]
+    [setCurrentReview]
   )
   const advance = useCallback(
-    (plugins: readonly PluginHostListEntry[]) => {
+    (pluginKey: string, plugins: readonly PluginHostListEntry[]) => {
+      if (currentRef.current !== pluginKey) {
+        return
+      }
       const needing = new Set(plugins.filter(pluginNeedsReview).map((plugin) => plugin.pluginKey))
       waitingRef.current = waitingRef.current.filter((key) => needing.has(key))
-      show(waitingRef.current.shift() ?? null)
+      setCurrentReview(waitingRef.current.shift() ?? null, true)
     },
-    [show]
+    [setCurrentReview]
   )
   const prune = useCallback(
     (installedKeys: ReadonlySet<string>) => {
       waitingRef.current = waitingRef.current.filter((key) => installedKeys.has(key))
       if (currentRef.current && !installedKeys.has(currentRef.current)) {
-        show(null)
+        setCurrentReview(null)
+      }
+    },
+    [setCurrentReview]
+  )
+  const clear = useCallback(() => {
+    waitingRef.current = []
+    setCurrentReview(null)
+  }, [setCurrentReview])
+  const navigate = useCallback(
+    (pluginKey: string | null) => {
+      if (currentRef.current !== pluginKey) {
+        show(pluginKey && waitingRef.current.includes(pluginKey) ? pluginKey : null)
       }
     },
     [show]
   )
-  const clear = useCallback(() => {
-    waitingRef.current = []
-    show(null)
-  }, [show])
   const pause = useCallback(() => show(null), [show])
-  return { reviewKey, show, enqueue, advance, prune, pause, clear }
+  return { reviewKey, replacePage, show, enqueue, advance, prune, navigate, pause, clear }
 }

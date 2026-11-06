@@ -23,6 +23,7 @@ import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { Store } from '../../persistence/loading-store/store'
 import { retireRemovedRuntimeEnvironment } from './runtime-environment-removal-cleanup'
+import { removeRedundantManagedPairing } from './runtime-environment-redundant-managed-removal'
 import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environment-preference'
 import { verifyAndAddRuntimeEnvironmentFromPairingCode } from './runtime-environment-pairing-verification'
 import { publishVerifiedPairing } from './runtime-environment-verified-pairing-publish'
@@ -131,6 +132,13 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
           removed: redactRuntimeEnvironment(environment),
           serverStop
         }))
+      }
+      const redundantManagedRemoval = removeRedundantManagedPairing(getUserDataPath(), environment)
+      if (redundantManagedRemoval) {
+        return redundantManagedRemoval.then((removal) => {
+          closeLegacySelectorTransport(args.selector, environment.id)
+          return removal
+        })
       }
       const removed = removeEnvironment(getUserDataPath(), args.selector)
       void retireRemovedRuntimeEnvironment(

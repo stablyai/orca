@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { RuntimeEnvironmentStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { AppState } from '@/store/types'
-import { resolveTerminalInputHostPlatform } from './terminal-input-host-platform'
+import { resolveTerminalInputHostPlatform } from './input/terminal-input-host-platform'
 
 function state(overrides: Partial<AppState> = {}): AppState {
   return {

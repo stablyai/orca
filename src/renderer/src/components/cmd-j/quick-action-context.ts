@@ -9,7 +9,7 @@ import {
   resolveActiveNativeChatSplitTarget,
   runActiveNativeChatSplit
 } from '@/components/native-chat/native-chat-layout-actions'
-import type { NativeChatSplitDirection } from '@/components/native-chat/native-chat-split-shortcut'
+import type { NativeChatSplitDirection } from '@/components/native-chat/native-chat-pane-shortcut'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import type { TabSplitDirection } from '@/store/slices/tabs/tabs-slice-contract'
 

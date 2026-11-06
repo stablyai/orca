@@ -19,7 +19,7 @@ import { TooltipProvider } from '../../ui/tooltip'
 import { useLinearIssueWorkspaceDetail } from '../../linear-issue-workspace-detail-state'
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
-import { writeLinearIssue } from '@/lib/linear-issue-write'
+import { writeLinearIssue } from '@/lib/work-items/linear/linear-issue-write'
 import {
   getProviderRuntimeContextKey,
   bumpProviderRuntimeSessionGeneration

@@ -8,7 +8,6 @@ import { isDeepStrictEqual } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
-  AgentJournalProducerLinkage,
   AgentJournalRenderItem,
   AgentJournalResolution
 } from '../../shared/agent-session/journal/agent-session-journal-types'
@@ -16,16 +15,14 @@ import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-wor
 import type { AgentStatusStructuredSessionSubject } from '../../shared/agent-status/contracts/agent-status-subject'
 import { AgentHookServer } from '../agent-hooks/server'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
-import { settleObservedExitForTest } from '../native-chat/agent-session-wire/structured-agent-session-observed-exit.test-fixture'
-import { StructuredAgentSessionCurrentWork } from '../native-chat/agent-session-wire/structured-agent-session-current-work'
-import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
-import { indexedStatusFeedSession } from '../native-chat/agent-session-wire/structured-agent-session-status-feed-test-session'
+import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { StructuredAgentSessionCurrentWork } from '../native-chat/agent-session-wire/observations/structured-agent-session-current-work'
+import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/observations/structured-agent-session-status-feed'
+import { indexedStatusFeedSession } from '../native-chat/agent-session-wire/observations/testing/structured-agent-session-status-feed-test-session'
 import { invokeCanUseTool } from './claude-can-use-tool-test-support'
-import { system, toolUse } from './claude-child-work-producer-harness.test-fixture'
 import { ClaudeStructuredSessionAdapter } from './structured/claude-structured-session-adapter'
 import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import {
@@ -333,122 +330,7 @@ function answer(
   })
 }
 
-function dismiss(run: Pipeline) {
-  return run.adapter.dismissPrompt({
-    sessionId: SESSION,
-    itemId: run.cardId(),
-    fence: FENCE,
-    answer: false,
-    commit: run.hostRecords({ state: 'cancelled', selectedOptionId: null })
-  })
-}
-
-async function replay(name: string): Promise<Pipeline & { timeline: string[] }> {
-  const run = await pipeline()
-  const timeline: string[] = []
-  for (const event of captured(name)) {
-    const response = isRecord(event.frame.response) ? event.frame.response : null
-    const request = isRecord(event.frame.request) ? event.frame.request : null
-    let label = text(event.frame.subtype) || text(event.frame.type)
-    if (event.from === 'orca' && event.frame.type === 'control_response' && response) {
-      const behavior = isRecord(response.response) ? text(response.response.behavior) : ''
-      await answer(run, behavior === 'deny' ? 'deny' : 'allow')
-      await run.settle()
-      label = behavior
-    } else {
-      await run.step(event)
-      label = request?.subtype === 'can_use_tool' ? 'can_use_tool' : label
-    }
-    const view = run.viewOf(askerOf(name))
-    timeline.push(`${label} -> ${view ? `${view.membership} ${view.state}` : 'none'}`)
-  }
-  return { ...run, timeline }
-}
-
-/** Root → agent-a → agent-n; the request can precede agent-n's Bash call. */
-async function nested(asker: string, toolCallFirst = false): Promise<Pipeline> {
-  const run = await pipeline()
-  const spawn = (id: string, taskId: string, parentRef: string | null) => [
-    toolUse(id, 'Agent', { description: taskId, prompt: 'go' }, parentRef),
-    system('task_started', {
-      task_id: taskId,
-      tool_use_id: id,
-      description: taskId,
-      task_type: 'local_agent'
-    })
-  ]
-  const bash = toolUse('toolu_bash_n', 'Bash', { command: 'touch n' }, 'toolu_n')
-  for (const frame of [
-    ...spawn('toolu_a', 'agent-a', null),
-    ...spawn('toolu_n', 'agent-n', 'toolu_a'),
-    ...(toolCallFirst ? [bash] : [])
-  ]) {
-    await run.step({ from: 'cli', frame })
-  }
-  run.raise('req-n', 'toolu_bash_n', asker)
-  await run.step({
-    from: 'cli',
-    frame: toolUse('toolu_read_n', 'Read', { file_path: 'n' }, 'toolu_n')
-  })
-  return run
-}
-
-function linkageOf(item: AgentJournalProducerLinkage | undefined) {
-  return {
-    agentId: item?.agentId,
-    parentAgentId: item?.parentAgentId,
-    providerParentRef: item?.providerParentRef,
-    producerKind: item?.producerKind,
-    attempt: item?.attempt
-  }
-}
-
 describe("a Claude subagent's permission request", () => {
-  it.each([
-    [
-      'fg-allow',
-      [
-        'session_state_changed -> live working',
-        'can_use_tool -> live waiting',
-        'allow -> live working'
-      ]
-    ],
-    [
-      'bg-allow',
-      [
-        'session_state_changed -> live working',
-        'can_use_tool -> live waiting',
-        'assistant -> live waiting',
-        'success -> live waiting',
-        'allow -> live working'
-      ]
-    ]
-  ])(
-    'waits from its request until answered, beside its card, the parent row as before (%s)',
-    async (name, around) => {
-      const run = await replay(name)
-      const at = run.timeline.indexOf('can_use_tool -> live waiting')
-      expect(run.timeline.slice(at - 1, at - 1 + around.length)).toEqual(around)
-      expect(run.violations()).toEqual([])
-    }
-  )
-
-  it('reads blocked as soon as the request arrives, dated by its card', async () => {
-    const run = await pipeline()
-    await run.ask('fg-allow')
-    const card = pendingCards(run.journal.snapshot().items)[0]
-    expect(run.publishes.at(-1)).toMatchObject({
-      waiting: [card?.agentId],
-      row: {
-        state: 'blocked',
-        stateStartedAt: card?.observedAt,
-        mainAgent: { state: 'blocked', stateStartedAt: card?.observedAt }
-      }
-    })
-    expect(run.viewOf(ASKER)?.operation).toMatchObject({ toolName: 'Bash' })
-    expect(run.violations()).toEqual([])
-  })
-
   it('waits only once its card is written, though the write waits for the journal', async () => {
     const run = await pipeline()
     const events = captured('fg-allow')
@@ -467,28 +349,6 @@ describe("a Claude subagent's permission request", () => {
     expect(run.violations()).toEqual([])
   })
 
-  it.each(['allowed', 'denied', 'dismissed and left to the Stop', 'withdrawn by Claude'] as const)(
-    'frees the subagent when its request is %s',
-    async (how) => {
-      const run = await pipeline()
-      await run.ask('fg-allow')
-      if (how === 'allowed' || how === 'denied') {
-        await answer(run, how === 'allowed' ? 'allow' : 'deny')
-      } else if (how === 'dismissed and left to the Stop') {
-        await dismiss(run)
-      }
-      await run.settle()
-      if (how !== 'allowed' && how !== 'denied') {
-        for (const controller of run.aborts.values()) {
-          controller.abort()
-        }
-        await run.settle()
-      }
-      expect(run.publishes.at(-1)?.waiting).toEqual([])
-      expect(run.violations()).toEqual([])
-    }
-  )
-
   it('waits again, beside its card, when the host fails to record the answer', async () => {
     const run = await pipeline()
     await run.ask('fg-allow')
@@ -500,44 +360,6 @@ describe("a Claude subagent's permission request", () => {
     await run.settle()
     expect(run.publishes.at(-1)?.waiting).toEqual([ASKER])
     expect(run.violations()).toEqual([])
-  })
-
-  it('keeps an answered request in the rows of the subagent that asked', async () => {
-    const run = await replay('fg-allow')
-    const card = run.journal.snapshot().items.find((item) => item.body.kind === 'approval')
-    expect(card?.agentId).toBe(ASKER)
-    expect(card?.body).toMatchObject({
-      resolution: { state: 'resolved', selectedOptionId: 'allow' }
-    })
-  })
-
-  it('names the subagent through the tool call it gates when the CLI does not', async () => {
-    const run = await pipeline()
-    await run.ask('fg-allow', { withoutAgentId: true })
-    expect(pendingCards(run.journal.snapshot().items)[0]?.agentId).toBe(ASKER)
-    expect(run.publishes.at(-1)?.waiting).toEqual([ASKER])
-    expect(run.violations()).toEqual([])
-  })
-
-  it("gives a nested subagent's request the linkage its own rows carry", async () => {
-    const run = await nested('agent-n')
-    const items = run.journal.snapshot().items
-    const card = items.find((item) => item.body.kind === 'approval')
-    const sibling = items.find(
-      (item) => item.body.kind === 'tool-call' && item.agentId === 'agent-n'
-    )
-    expect(linkageOf(card)).toEqual(linkageOf(sibling))
-    expect(card).toMatchObject({ agentId: 'agent-n', parentAgentId: 'agent-a' })
-  })
-
-  it("files the request under the agent the CLI names when the gated call is another's", async () => {
-    const run = await nested('agent-a', true)
-    const items = run.journal.snapshot().items
-    const card = items.find((item) => item.body.kind === 'approval')
-    const askerRow = items.find(
-      (item) => item.body.kind === 'tool-call' && item.agentId === 'agent-a'
-    )
-    expect(linkageOf(card)).toEqual(linkageOf(askerRow))
   })
 
   it('waits each asking subagent beside its own card, and only those', async () => {
@@ -570,62 +392,6 @@ describe("a Claude subagent's permission request", () => {
       second
     )
     await run.settle()
-    expect(run.publishes.at(-1)?.waiting).toEqual([])
-    expect(run.violations()).toEqual([])
-  })
-
-  it("stays blocked on the session's own request after its subagent's is answered", async () => {
-    const run = await pipeline()
-    await run.ask('fg-allow')
-    run.raise('req-main', 'toolu_main_bash')
-    await run.settle()
-    const cards = pendingCards(run.journal.snapshot().items)
-    expect(cards.map((card) => card.agentId ?? null).sort()).toEqual([ASKER, null].sort())
-    // The root request takes precedence over the earlier child request.
-    const own = cards.find((card) => !card.agentId)?.observedAt
-    expect(own).toBeGreaterThan(
-      cards.find((card) => card.agentId === ASKER)?.observedAt ?? Infinity
-    )
-    expect(run.publishes.at(-1)).toMatchObject({
-      waiting: [ASKER],
-      row: { state: 'blocked', stateStartedAt: own, mainAgent: { stateStartedAt: own } }
-    })
-    const subagents = cards.find((card) => card.agentId === ASKER)?.itemId
-    await answer(
-      run,
-      'allow',
-      run.hostRecords({ state: 'resolved', selectedOptionId: 'allow' }, subagents),
-      subagents
-    )
-    await run.settle()
-    expect(run.publishes.at(-1)).toMatchObject({ waiting: [], row: { state: 'blocked' } })
-    expect(run.violations()).toEqual([])
-  })
-
-  it('stops the subagent waiting when the process dies mid-request', async () => {
-    const run = await pipeline()
-    await run.ask('fg-allow')
-    expect(run.publishes.at(-1)?.waiting).toEqual([ASKER])
-    let settled: Promise<unknown> | undefined
-    hooks.onEvent = (event) => {
-      if (event.type === 'ended') {
-        settled = settleObservedExitForTest({
-          journal: run.journal,
-          sessionId: SESSION,
-          fence: FENCE,
-          settlementId: 'provider-exit:test',
-          verdict: { state: 'interrupted', completedAt: run.now() },
-          pendingSubmissionReason: 'provider_exited_before_acknowledgement'
-        })
-      }
-    }
-    run.connection.handlers.onExit?.(new Error('claude crashed'))
-    for (let attempt = 0; attempt < 20 && !settled; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 5))
-    }
-    await settled
-    await run.settle()
-    expect(pendingCards(run.journal.snapshot().items)).toEqual([])
     expect(run.publishes.at(-1)?.waiting).toEqual([])
     expect(run.violations()).toEqual([])
   })

@@ -229,7 +229,8 @@
       "clipboardRejected": "El portapapeles rechazó el texto.",
       "copyFailed": "No se pudo copiar",
       "copyMessage": "Copiar mensaje",
-      "selectText": "Seleccionar texto"
+      "selectText": "Seleccionar texto",
+      "rewind": "Rebobinar hasta aquí"
     },
     "nativeChatImageViewer": {
       "closeImage": "Cerrar imagen",
@@ -577,12 +578,19 @@
     "usageLimit": {
       "reached": "{{agent}} alcanzó su límite de uso.",
       "reachedNamed": "{{agent}} alcanzó su límite {{window}}.",
-      "resetsAt": "Próximo restablecimiento: {{when}}.",
       "theAgent": "El agente",
       "windowCredits": "de uso adicional",
       "windowSession": "de sesión",
       "windowWeekly": "semanal",
-      "windowWeeklyModel": "semanal del modelo"
+      "windowWeeklyModel": "semanal del modelo",
+      "switchAccount": "Cambiar de cuenta",
+      "autoContinueCancelFailed": "No se pudo cancelar la continuación automática. Inténtalo de nuevo.",
+      "autoContinueCancel": "No continuar",
+      "statusResetAt": "Se restableció a las {{time}}",
+      "statusResetsAt": "Se restablece a las {{time}}",
+      "statusContinuesShortly": "Orca continuará en breve",
+      "statusContinuesThen": "Orca continuará entonces",
+      "statusWontContinue": "Orca no continuará automáticamente"
     },
     "useImageUpload": {
       "attachFailed": "No se pudo adjuntar",
@@ -633,9 +641,30 @@
       "attachmentsUnsupported": "Elimina los adjuntos antes de establecer un objetivo.",
       "pause": "Pausar",
       "resume": "Reanudar"
+    },
+    "rewind": {
+      "title": "¿Rebobinar hasta aquí?",
+      "confirmation": "¿Descartar este mensaje y todo lo que viene después? El mensaje vuelve al compositor para que puedas editarlo y reenviarlo. Los cambios de archivos en disco se conservan.",
+      "confirm": "Rebobinar",
+      "unsupported": "Este chat no puede volver a un mensaje anterior.",
+      "historyNotPaginated": "Este chat de Codex más antiguo no puede volver a un mensaje anterior. Inicia un chat nuevo para usar Rebobinar hasta aquí.",
+      "busy": "Disponible cuando el agente esté inactivo y nada en este chat esté esperándote.",
+      "staleEpoch": "La conversación cambió. Revisa los últimos mensajes e inténtalo de nuevo.",
+      "invalidTarget": "La conversación no puede volver a este mensaje. No se cambió nada.",
+      "historyLimit": "Esta conversación es demasiado larga para retroceder en ella. No se cambió nada.",
+      "providerRefused": "El agente no pudo volver a este mensaje.",
+      "proofMismatch": "El historial del agente no coincidía con este chat. Revisa la conversación antes de continuar.",
+      "outcomeUnknown": "Orca no pudo confirmar si la conversación volvió a un mensaje anterior. Lo comprobará antes de enviar tu próximo mensaje.",
+      "refused": "Orca no pudo volver a este mensaje. Revisa la conversación antes de continuar.",
+      "unavailable": "Espera a que el chat termine de conectarse.",
+      "outcomeUnknownReturned": "Orca no pudo confirmar si la conversación volvió a este mensaje. Tu mensaje está de nuevo en el compositor y Orca comprobará la conversación antes de enviar tu próximo mensaje.",
+      "timeout": "El chat no se actualizó después de volver a este mensaje. Vuelve a abrirlo para ver lo más reciente.",
+      "pending": "Espera a que la conversación vuelva al mensaje anterior."
     }
   },
   "common": {
+    "details": "Detalles",
+    "hideDetails": "Ocultar detalles",
     "back": "Atrás",
     "cancel": "Cancelar",
     "close": "Cerrar",
@@ -836,8 +865,8 @@
       "pairingInvalid": "Emparejamiento no válido",
       "pairingTemporarilyUnavailable": "Emparejamiento no disponible temporalmente",
       "repairHint": "Toca para volver a emparejar tu escritorio.",
+      "sameNetworkOnlyHint": "Solo se conecta en la misma red Wi-Fi o por Tailscale. Para conectarte desde cualquier lugar, inicia sesión en tu escritorio y vuelve a emparejar",
       "unlockHint": "Desbloquea tu teléfono y toca para reintentar.",
-      "updateDesktopHint": "Actualiza Orca en el escritorio e inicia sesión para conectarte desde cualquier lugar.",
       "worktreeAccessibilitySummary": "{{summary}}, activos: {{activeCount}}"
     },
     "hostDiagnosticsLink": {
@@ -868,6 +897,13 @@
       "openImage": "Abrir imagen",
       "wrapLines": "Ajustar líneas",
       "disableLineWrap": "Desactivar ajuste de línea"
+    },
+    "markdownCallout": {
+      "note": "Nota",
+      "tip": "Consejo",
+      "important": "Importante",
+      "warning": "Advertencia",
+      "caution": "Precaución"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Cerrar panel"
@@ -2079,6 +2115,8 @@
       "managedAccountEnvOverride": "Este inicio de Claude define sus propias variables de inicio de sesión de Anthropic. Quítelas para usar una cuenta de Claude administrada.",
       "managedAccountUnsupported": "Mientras haya una cuenta de Claude agregada en WSL, los chats de Claude necesitan una cuenta de Claude de Windows.",
       "modelUnavailable": "{{agent}} no pudo usar {{detail}}. Elige otro modelo y vuelve a enviar el mensaje.",
+      "modelUnavailableUpdate": "{{agent}} no pudo usar {{detail}}. Actualiza {{agent}} a {{minimumVersion}} o posterior para conservarlo tras un reinicio, o elige otro modelo y vuelve a enviar el mensaje.",
+      "modelNotSelected": "{{agent}} no tiene ningún modelo seleccionado. Revisa la selección de modelo y el inicio de sesión de {{agent}}, y vuelve a enviar el mensaje.",
       "noTurnToStop": "{{agent}} no tenía ningún turno en curso que detener.",
       "notDelivered": "Este mensaje no se entregó.",
       "notDeliveredSendAgain": "Este mensaje no se entregó. Vuelva a enviarlo para continuar.",
@@ -3344,7 +3382,8 @@
       "moreFields_one": "+{{count}} campo",
       "moreFields_other": "+{{count}} campos",
       "noItems": "No hay elementos en el proyecto",
-      "pullRequestSubtitle": "Pull request · {{repository}}{{number}}"
+      "pullRequestSubtitle": "Pull request · {{repository}}{{number}}",
+      "linkedPullRequestsOverflow": "+{{count}} más"
     },
     "githubProjectPickers": {
       "add": "Agregar",
@@ -4045,6 +4084,8 @@
       "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "El panel original del agente no está disponible. La salida guardada permanece aquí.",
       "openAgent": "Abrir agente",
       "retryHistory": "Reintentar historial",
+      "fullOutputUnavailable": "No se pudo cargar la salida completa.",
+      "retryFullOutput": "Reintentar",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "No hay ejecuciones coincidentes en el historial cargado. Carga más para continuar.",
       "noMatchingRunsYet": "Aún no hay ejecuciones coincidentes.",
       "runSummary": "{{title}}, {{status}}, {{date}}",

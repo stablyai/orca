@@ -50,8 +50,8 @@ const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
   }),
   'agent-sessions-split-chat': () => ({
     title: translate(
-      'components.contextualTours.agentSessions.splitChat.title',
-      'Run two chats side by side'
+      'auto.components.contextual.tours.contextual.tour.step.copy.agent.sessions.split.title',
+      'Split a terminal pane'
     ),
     body: translate(
       'components.contextualTours.agentSessions.splitChat.body',
@@ -62,8 +62,8 @@ const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
       'Click the split button at the top of the chat. Each side gets its own tabs.'
     ),
     primaryActionLabel: translate(
-      'components.contextualTours.agentSessions.splitChat.action',
-      'Split chat'
+      'auto.components.contextual.tours.contextual.tour.step.copy.agent.sessions.split.action',
+      'Split terminal'
     )
   }),
   'agent-sessions-split': () => ({

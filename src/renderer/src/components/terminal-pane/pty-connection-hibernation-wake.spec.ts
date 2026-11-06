@@ -376,7 +376,8 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       const { connectPanePty } = await import('./pty-connection')
       const agentTitleMocks5 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { deliverPtyExitToHandlers } = await import('./pty-exit-delivery')
+      const { deliverPtyExitToHandlers } =
+        await import('./pty-transport/delivery/pty-exit-delivery')
       let onData: ((data: string) => void) | undefined
       const transport = createMockTransport('pty-pane-2')
       transport.connect.mockImplementation(

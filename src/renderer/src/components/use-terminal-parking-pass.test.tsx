@@ -18,7 +18,7 @@ vi.mock('./terminal-parking-pass-candidates', () => ({
     parkingTimers: new Map()
   })
 }))
-vi.mock('./terminal-pane/parked-terminal-buffer-capture', () => ({
+vi.mock('./terminal-pane/parking/capture/parked-terminal-buffer-capture', () => ({
   captureParkedTerminalBuffers: () => true
 }))
 

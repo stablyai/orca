@@ -11,7 +11,7 @@ import {
 import { isAgentSessionLaunchArgs } from '../../../../shared/agent-session/lifecycle/agent-session-launch-args'
 import * as runtimeRecords from '../../agent-session/records/agent-session-runtime-end-record'
 import { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
-import { JournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database'
+import { JournalHostDatabase } from '../../../native-chat/agent-session-journal/database/journal-host-database'
 import {
   releaseAgentSessionRecordStore,
   peekOpenedAgentSessionRecordStore

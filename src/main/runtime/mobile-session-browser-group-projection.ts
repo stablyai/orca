@@ -1,4 +1,9 @@
-import type { RuntimeMobileSessionTabGroup } from '../../shared/runtime-types'
+import type {
+  RuntimeMobileSessionTabGroup,
+  RuntimeMobileSessionTabsSnapshot,
+  RuntimeMobileSessionSnapshotTab
+} from '../../shared/runtime-types'
+import { retireMobileSessionTabSelection } from './session-tabs/mobile-session-tab-selection'
 
 // Terminal-only rebuilds drop browser ids; restore their prior group, assigning only new browsers to target/first group.
 export function appendBrowserTabOrder(
@@ -50,4 +55,29 @@ export function collectBrowserGroupAssignment(
     }
   }
   return assignment
+}
+
+export function withReconciledBrowserTabs(
+  existing: RuntimeMobileSessionTabsSnapshot,
+  tabs: RuntimeMobileSessionSnapshotTab[],
+  liveIds: string[],
+  priorIds: ReadonlySet<string>
+): RuntimeMobileSessionTabsSnapshot {
+  const live = new Set(liveIds)
+  for (const tab of tabs) {
+    if (tab.type === 'browser' && live.has(tab.id)) {
+      live.add(tab.browserWorkspaceId)
+    }
+  }
+  return retireMobileSessionTabSelection(
+    {
+      ...existing,
+      snapshotVersion: existing.snapshotVersion + 1,
+      ...(existing.tabGroups !== undefined
+        ? { tabGroups: appendBrowserTabOrder(existing.tabGroups, liveIds) }
+        : {})
+    },
+    tabs,
+    new Set([...priorIds].filter((id) => !live.has(id)))
+  )
 }

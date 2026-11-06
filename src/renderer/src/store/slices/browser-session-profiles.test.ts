@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import type { BrowserCookieImportSummary } from '../../../../shared/browser-workspace-types'
 import '../../../../shared/execution-host'
-import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
+import { emitBrowserCookieImportToast } from '@/lib/browser/cookies/browser-cookie-import-toast'
 import { getDefaultBrowserProfileForHost } from './browser/browser-host-state'
 import {
   createBrowserMockApi,
