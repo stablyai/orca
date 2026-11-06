@@ -1,7 +1,4 @@
-import { useContext } from 'react'
 import { cn } from '@/lib/utils'
-import { isRootAgentJournalItem } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
-import { NativeChatForkGutterContext } from './native-chat-fork-context'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 import type { MessageRowProps } from './NativeChatMessageRow'
@@ -56,16 +53,8 @@ export function NativeChatAssistantMessageRow({
   // Hide controls on system asides and the still-working frontier, where more content may arrive.
   const showControls =
     !isSystem && words.length > 0 && !continuesTurn && activeTurnIsWorking !== true
-  // Fixed by the pane and the row's own kind, never by support or turn state, so prose never reflows.
-  const reservesForkGutter =
-    useContext(NativeChatForkGutterContext) &&
-    message.role === 'assistant' &&
-    words.length > 0 &&
-    !inSubagentSection &&
-    isRootAgentJournalItem(message)
-  const hoverReveal =
-    'select-none transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100'
-  const revealOnHover = cn('mt-1 w-fit', hoverReveal)
+  const revealOnHover =
+    'mt-1 w-fit select-none transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100'
 
   return (
     <div
@@ -84,28 +73,18 @@ export function NativeChatAssistantMessageRow({
         enablePreview={runtimeContext !== undefined}
       />
       {words ? (
-        <NativeChatForkGutter
-          reserved={reservesForkGutter}
-          fork={
-            reservesForkGutter && fork ? (
-              <NativeChatForkAction itemId={message.id} fork={fork} />
-            ) : null
-          }
-          reveal={hoverReveal}
-        >
-          <NativeChatPacedMarkdown
-            rowKey={message.id}
-            content={words}
-            variant="document"
-            className="text-sm"
-            renderCodeBlock={isSystem ? NativeChatPlainCodeBlock : NativeChatCodeBlock}
-            linkifyFilePaths
-            {...(isSystem ? {} : NATIVE_CHAT_QUOTE_SOURCE_PROPS)}
-            visualMessageId={message.role === 'assistant' ? message.id : undefined}
-            // Only the live turn’s prose frontier can be mid-sentence; structured rows have no per-row streaming flag.
-            streaming={messageIsStreaming(message, activeTurnIsWorking, trailingRun)}
-          />
-        </NativeChatForkGutter>
+        <NativeChatPacedMarkdown
+          rowKey={message.id}
+          content={words}
+          variant="document"
+          className="text-sm"
+          renderCodeBlock={isSystem ? NativeChatPlainCodeBlock : NativeChatCodeBlock}
+          linkifyFilePaths
+          {...(isSystem ? {} : NATIVE_CHAT_QUOTE_SOURCE_PROPS)}
+          visualMessageId={message.role === 'assistant' ? message.id : undefined}
+          // Only the live turn’s prose frontier can be mid-sentence; structured rows have no per-row streaming flag.
+          streaming={messageIsStreaming(message, activeTurnIsWorking, trailingRun)}
+        />
       ) : null}
       {toolRun ? <NativeChatToolRun {...toolRun} /> : null}
       {showControls ? (
@@ -113,6 +92,7 @@ export function NativeChatAssistantMessageRow({
           markdown={words}
           timestamp={message.timestamp}
           onScrollToTop={scrollToTop}
+          action={fork ? <NativeChatForkAction itemId={message.id} fork={fork} /> : null}
           className={cn(
             revealOnHover,
             // They hang into the gap below; a section keeps them inside its border instead.
@@ -120,38 +100,6 @@ export function NativeChatAssistantMessageRow({
           )}
         />
       ) : null}
-    </div>
-  )
-}
-
-/** The response's prose beside a right gutter, the one place its fork sits, at the last line. The
- *  gutter is as tall as the prose, so the action never reaches the next row or adds a line. */
-function NativeChatForkGutter({
-  reserved,
-  fork,
-  reveal,
-  children
-}: {
-  reserved: boolean
-  fork: React.ReactNode
-  reveal: string
-  children: React.ReactNode
-}): React.JSX.Element {
-  if (!reserved) {
-    return <>{children}</>
-  }
-  return (
-    <div className="flex gap-1">
-      <div className="min-w-0 flex-1">{children}</div>
-      <div
-        data-native-chat-find-skip
-        data-native-chat-fork-gutter
-        className="relative w-6 shrink-0"
-      >
-        {fork ? (
-          <div className={cn('absolute bottom-0 right-0 flex items-center', reveal)}>{fork}</div>
-        ) : null}
-      </div>
     </div>
   )
 }

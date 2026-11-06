@@ -1,10 +1,9 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { cleanup, screen } from '@testing-library/react'
+import { cleanup, fireEvent, screen } from '@testing-library/react'
 import { render } from './native-chat-tooltip-test-harness'
 import { afterEach, expect, it, vi } from 'vitest'
 import { MessageRow, type MessageRowProps } from './NativeChatMessageRow'
-import { NativeChatForkGutterContext } from './native-chat-fork-context'
 import type { NativeChatForkRowAction } from './use-native-chat-fork'
 
 vi.mock('@/lib/syntax-highlighting/oniguruma', async () => ({
@@ -14,71 +13,61 @@ vi.mock('@/lib/syntax-highlighting/oniguruma', async () => ({
 
 afterEach(cleanup)
 
-const fork: NativeChatForkRowAction = {
-  support: { kind: 'known', fork: 'checkpoint' },
-  pending: false,
-  request: vi.fn()
+function forkAction(overrides: Partial<NativeChatForkRowAction> = {}): NativeChatForkRowAction {
+  return {
+    support: { kind: 'known', fork: 'checkpoint' },
+    pending: false,
+    request: vi.fn(),
+    ...overrides
+  }
 }
 
-/** The chat's own reply in a pane that draws fork actions; `fork` is present only when offered. */
 function renderReply(props: Partial<MessageRowProps>): HTMLElement {
   const { container } = render(
-    <NativeChatForkGutterContext.Provider value>
-      <MessageRow
-        message={{
-          id: 'reply',
-          role: 'assistant',
-          timestamp: 0,
-          source: 'transcript',
-          blocks: [{ type: 'text', text: 'Looking at the config next.' }]
-        }}
-        expandSignal={false}
-        onScrollMessageToTop={vi.fn()}
-        {...props}
-      />
-    </NativeChatForkGutterContext.Provider>
+    <MessageRow
+      message={{
+        id: 'reply',
+        role: 'assistant',
+        timestamp: 0,
+        source: 'transcript',
+        blocks: [{ type: 'text', text: 'Looking at the config next.' }]
+      }}
+      expandSignal={false}
+      onScrollMessageToTop={vi.fn()}
+      {...props}
+    />
   )
   return container.querySelector<HTMLElement>('.group')!
 }
 
-/** What sets the prose's width: the row's text box and whether a gutter sits beside it. */
-function proseLayout(row: HTMLElement) {
-  const prose = Array.from(row.children).find((child) =>
-    child.textContent?.includes('Looking at the config next.')
-  )
-  return {
-    lines: row.children.length,
-    gutter: prose?.querySelector('[data-native-chat-fork-gutter]') !== null
+const forkButton = () => screen.getByRole('button', { name: 'Fork from this response' })
+
+it('draws Fork in the response hover row right after Copy, and forks that response', () => {
+  const fork = forkAction()
+  renderReply({ fork })
+  const copy = screen.getByRole('button', { name: 'Copy message' })
+
+  expect(copy.parentElement).toBe(forkButton().parentElement)
+  expect(copy.nextElementSibling).toBe(forkButton())
+  fireEvent.click(forkButton())
+  expect(fork.request).toHaveBeenCalledWith('reply')
+})
+
+it('keeps the hover row the same whether Fork is still being checked or ready', () => {
+  const shape = (row: HTMLElement) => {
+    const controls = forkButton().parentElement!
+    return { lines: row.children.length, buttons: controls.querySelectorAll('button').length }
   }
-}
-
-it('keeps a mid-turn fork inside its own response, adding no line before the next row', () => {
-  const plain = proseLayout(renderReply({ continuesTurn: true }))
+  const checking = shape(renderReply({ fork: forkAction({ support: { kind: 'unknown' } }) }))
+  expect(forkButton()).toHaveAttribute('aria-disabled', 'true')
   cleanup()
-  const row = renderReply({ continuesTurn: true, fork })
-  const button = screen.getByRole('button', { name: 'Fork from this response' })
-  const holder = Array.from(row.children).find((child) => child.contains(button))
+  const ready = shape(renderReply({ fork: forkAction() }))
+  expect(forkButton()).toHaveAttribute('aria-disabled', 'false')
 
-  expect(proseLayout(row)).toEqual(plain)
-  expect(holder?.textContent).toContain('Looking at the config next.')
-  expect(row.lastElementChild).toBe(holder)
+  expect(ready).toEqual(checking)
 })
 
-it('keeps the same prose width while the turn runs, once it finishes, and if forks prove unsupported', () => {
-  const working = proseLayout(renderReply({ activeTurnIsWorking: true }))
-  cleanup()
-  const finished = proseLayout(renderReply({ fork }))
-  // The turn-final controls hang below; the fork is only in the gutter.
-  expect(screen.getAllByRole('button', { name: 'Fork from this response' })).toHaveLength(1)
-  cleanup()
-  const unsupported = proseLayout(renderReply({}))
-
-  expect(working.gutter).toBe(true)
-  expect(finished.gutter).toBe(true)
-  expect(unsupported.gutter).toBe(true)
-})
-
-it('gives a subagent reply no gutter', () => {
-  expect(proseLayout(renderReply({ inSubagentSection: true, fork })).gutter).toBe(false)
+it('offers no Fork on a response the turn continues past, which has no hover row', () => {
+  renderReply({ fork: forkAction(), continuesTurn: true })
   expect(screen.queryByRole('button', { name: 'Fork from this response' })).toBeNull()
 })
