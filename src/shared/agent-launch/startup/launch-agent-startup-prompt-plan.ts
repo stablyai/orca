@@ -34,16 +34,13 @@ export type LaunchAgentStartupPromptPlan = {
   submitPastedPrompt: boolean
 }
 
-/** Choose argv/flag delivery versus clean launch plus post-ready paste for follow-up/generated prompts. */
-export function planLaunchAgentStartupPrompt(args: {
-  base: StartupPlanBase
-  prompt: string
-  promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
-  isFollowupPath: boolean
-}): LaunchAgentStartupPromptPlan {
-  const { base, prompt, promptDelivery, isFollowupPath } = args
-  const hasPrompt = prompt.length > 0
-  const pasteAfterReady = (submit: boolean): LaunchAgentStartupPromptPlan => ({
+/** A clean launch whose prompt is pasted once the TUI is ready, submitted or left as a draft. */
+export function planLaunchAgentStartupAfterReady(
+  base: StartupPlanBase,
+  prompt: string,
+  submit: boolean
+): LaunchAgentStartupPromptPlan {
+  return {
     startupPlan: buildAgentStartupPlan({
       ...base,
       prompt: '',
@@ -53,7 +50,20 @@ export function planLaunchAgentStartupPrompt(args: {
     }),
     pasteDraftAfterLaunch: prompt,
     submitPastedPrompt: submit
-  })
+  }
+}
+
+/** Choose argv/flag delivery versus clean launch plus post-ready paste for follow-up/generated prompts. */
+export function planLaunchAgentStartupPrompt(args: {
+  base: StartupPlanBase
+  prompt: string
+  promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
+  isFollowupPath: boolean
+}): LaunchAgentStartupPromptPlan {
+  const { base, prompt, promptDelivery, isFollowupPath } = args
+  const hasPrompt = prompt.length > 0
+  const pasteAfterReady = (submit: boolean): LaunchAgentStartupPromptPlan =>
+    planLaunchAgentStartupAfterReady(base, prompt, submit)
 
   if (hasPrompt && promptDelivery === 'submit-after-ready') {
     // Why: multi-line generated prompts are too large for a shell argv, so launch clean then paste+submit in the TUI.

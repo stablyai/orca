@@ -1,11 +1,12 @@
 import { sendNativeChatObservedWrites } from './native-chat-observed-send'
-import { agentImagePasteWrites } from '../../../../shared/agent-image-paste'
-import { agentImagePastePath } from '../../../../shared/agent-image-paste-path'
+import {
+  AGENT_IMAGE_ATTACHMENT_SETTLE_MS,
+  agentImageAttachmentPastes
+} from '../../../../shared/agent-image-attachment-paste'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { NATIVE_CHAT_SUBMIT_DELAY_MS } from '../../../../shared/native-chat/input/native-chat-answer-stepping'
 import {
-  buildNativeChatImagePasteBytes,
   buildNativeChatPasteBytes,
   NATIVE_CHAT_SUBMIT
 } from '../../../../shared/native-chat/input/native-chat-paste-bytes'
@@ -17,8 +18,6 @@ import {
   type NativeChatSendOptions
 } from './native-chat-input-clear'
 import { sendNativeChatMessage, type NativeChatSendHandle } from './native-chat-runtime-send'
-
-export const NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS = 300
 
 export function sendNativeChatMessageWithImageAttachments(
   agent: AgentType,
@@ -32,15 +31,13 @@ export function sendNativeChatMessageWithImageAttachments(
   }
   const trimmedText = text.trim()
   if (options?.onWriteRejected) {
-    const writes = agentImagePasteWrites(
-      agent,
-      imagePaths.map((path) => buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))),
-      trimmedText.length > 0
-    ).map((data) => ({ data, delayBeforeMs: 0 }))
+    const writes = agentImageAttachmentPastes(agent, imagePaths, trimmedText.length > 0).map(
+      (data) => ({ data, delayBeforeMs: 0 })
+    )
     if (trimmedText) {
       writes.push({
         data: buildNativeChatPasteBytes(text),
-        delayBeforeMs: NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS
+        delayBeforeMs: AGENT_IMAGE_ATTACHMENT_SETTLE_MS
       })
     }
     writes.push({ data: NATIVE_CHAT_SUBMIT, delayBeforeMs: NATIVE_CHAT_SUBMIT_DELAY_MS })
@@ -48,7 +45,7 @@ export function sendNativeChatMessageWithImageAttachments(
   }
   const durationMs =
     (trimmedText.length > 0
-      ? NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS + NATIVE_CHAT_SUBMIT_DELAY_MS
+      ? AGENT_IMAGE_ATTACHMENT_SETTLE_MS + NATIVE_CHAT_SUBMIT_DELAY_MS
       : NATIVE_CHAT_SUBMIT_DELAY_MS) + clearConfirmDurationMs(options)
   return enqueueNativeChatPtySend(
     ptyId,
@@ -66,17 +63,15 @@ export function sendNativeChatMessageWithImageAttachments(
             return
           }
           markWriteStarted()
-          for (const payload of agentImagePasteWrites(
+          for (const payload of agentImageAttachmentPastes(
             agent,
-            imagePaths.map((path) =>
-              buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))
-            ),
+            imagePaths,
             trimmedText.length > 0
           )) {
             sendRuntimePtyInput(ptyId, payload, 'driving')
           }
           if (trimmedText.length > 0) {
-            delay(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS, () => {
+            delay(AGENT_IMAGE_ATTACHMENT_SETTLE_MS, () => {
               sendRuntimePtyInput(ptyId, buildNativeChatPasteBytes(text), 'driving')
               delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
                 sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')

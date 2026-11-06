@@ -82,6 +82,10 @@ export type AgentLaunchSurfaceFactory = {
     freshLaunch: boolean
     terminalCreation?: RuntimeTerminalCreate
     prompt: AgentLaunchPrompt
+    /** A released message's host images, attached ahead of its text in the same serialized write. */
+    images?: readonly string[]
+    /** Runs once any of the input was written, so a false answer after it reads as unconfirmed. */
+    onInputWritten?: () => void
     /** Abort readiness waits and refuse pending pastes. */
     signal?: AbortSignal
   }): Promise<boolean>

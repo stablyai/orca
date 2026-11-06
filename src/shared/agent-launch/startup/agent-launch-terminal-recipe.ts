@@ -14,6 +14,7 @@ import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../permissions/agent-chat-
 import type { AgentStartupPlanInputs } from './agent-startup-plan-inputs'
 import {
   draftLaunchStartupPlan,
+  planLaunchAgentStartupAfterReady,
   planLaunchAgentStartupPrompt,
   type LaunchAgentStartupPromptPlan
 } from './launch-agent-startup-prompt-plan'
@@ -124,22 +125,25 @@ export function planQuickAgentStartup(
   return startupPlan
 }
 
-/** In view: a new agent tab with the held message at the end, delivered as the planner decided. */
+/** In view: a new agent tab with the held message at the end, delivered as the planner decided.
+ *  `heldImages`: the message has images, so it is a message even with no text. */
 export function foregroundTerminalStartup(
   planned: LaunchAgentStartupPromptPlan,
-  heldText: string
+  heldText: string,
+  heldImages = false
 ): CommandStartup | undefined {
   const plan = planned.startupPlan
   if (!plan) {
     return undefined
   }
-  const disposition: Disposition = !heldText
-    ? 'none'
-    : planned.pasteDraftAfterLaunch === null
-      ? 'carried'
-      : planned.submitPastedPrompt
-        ? 'submit'
-        : 'draft'
+  const disposition: Disposition =
+    !heldText && !heldImages
+      ? 'none'
+      : planned.pasteDraftAfterLaunch === null
+        ? 'carried'
+        : planned.submitPastedPrompt
+          ? 'submit'
+          : 'draft'
   return {
     kind: 'command',
     ...classifiedStartup(plan, FOREGROUND_STARTUP, false),
@@ -211,14 +215,30 @@ export type CompiledAgentLaunchTerminal =
   /** The choices contradict a literal command the user wrote; its own words say how to fix it. */
   | { ok: false; error: string }
 
+/** Where the planner would submit the held message: its launch line can't carry images, so a
+ *  message with them is pasted and submitted once the agent is ready instead. */
+function submitsHeldMessage(
+  policy: Extract<AgentLaunchTerminalAlternativeParams, { kind: 'planned' }>['policy'] & {
+    kind: 'foreground'
+  }
+): boolean {
+  return (
+    policy.promptDelivery === 'submit-after-ready' ||
+    (policy.promptDelivery === 'auto-submit' && !policy.isFollowupPath)
+  )
+}
+
 /** A prepared launch's terminal alternative with its released choices, compiled by the ordinary
- *  planners. `heldText` is the launch's own held message. */
+ *  planners. `heldText` is the launch's own held message; `heldImages`, whether it has images,
+ *  which no launch line carries. */
 export function compileAgentLaunchTerminalAlternative(args: {
   alternative: AgentLaunchTerminalAlternativeParams
   heldText: string
+  heldImages?: boolean
   choices: Readonly<Record<string, string>>
   replaceModelSelection: boolean
 }): CompiledAgentLaunchTerminal {
+  const heldImages = args.heldImages === true
   const { alternative } = args
   if (alternative.kind === 'none') {
     return { ok: true }
@@ -234,16 +254,20 @@ export function compileAgentLaunchTerminalAlternative(args: {
   const { policy } = alternative
   if (policy.kind === 'foreground') {
     const heldText = args.heldText.trim()
-    const planned = planLaunchAgentStartupPrompt({
-      base,
-      prompt: heldText,
-      promptDelivery: policy.promptDelivery,
-      isFollowupPath: policy.isFollowupPath
-    })
-    const startup = foregroundTerminalStartup(planned, heldText)
+    const planned = heldImages
+      ? planLaunchAgentStartupAfterReady(base, heldText, submitsHeldMessage(policy))
+      : planLaunchAgentStartupPrompt({
+          base,
+          prompt: heldText,
+          promptDelivery: policy.promptDelivery,
+          isFollowupPath: policy.isFollowupPath
+        })
+    const startup = foregroundTerminalStartup(planned, heldText, heldImages)
     return startup ? { ok: true, startup } : (refusedPlan(base) ?? { ok: true })
   }
-  const plan = planQuickAgentStartup(base, policy.prompt, policy.draftPrompt)
+  // A message the quick plan would carry on its launch line starts clean instead when it has images.
+  const startsClean = heldImages && !policy.heldChatMessage
+  const plan = planQuickAgentStartup(base, startsClean ? '' : policy.prompt, policy.draftPrompt)
   if (!plan) {
     // A paired workspace starts its agent's own launcher; this machine opens no terminal at all.
     return (
@@ -251,8 +275,15 @@ export function compileAgentLaunchTerminalAlternative(args: {
       (policy.paired ? { ok: true, startup: { kind: 'agent', prompt: 'none' } } : { ok: true })
     )
   }
+  const startup = backgroundTerminalStartup(
+    plan,
+    args.heldText,
+    policy.heldChatMessage,
+    !policy.paired
+  )
+  // Pasted and submitted once ready, unless the plan's own draft owns the agent's input.
   return {
     ok: true,
-    startup: backgroundTerminalStartup(plan, args.heldText, policy.heldChatMessage, !policy.paired)
+    startup: startsClean ? { ...startup, prompt: policy.draftPrompt ? 'none' : 'submit' } : startup
   }
 }

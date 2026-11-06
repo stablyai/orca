@@ -169,7 +169,8 @@ function plannedTerminalAlternative(args: {
       kind: 'background',
       prompt: recipe.prompt,
       ...(recipe.draftPrompt ? { draftPrompt: recipe.draftPrompt } : {}),
-      heldChatMessage: Boolean(args.heldChatMessage),
+      // A held image-only message has no text, and is still held.
+      heldChatMessage: args.heldChatMessage !== undefined,
       paired
     }
   }

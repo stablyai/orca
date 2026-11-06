@@ -25,9 +25,12 @@ import { recordCreatedWorktreeLineage as recordCreatedWorktreeLineageState } fro
 import {
   deliverStartupFollowupPrompt,
   pasteWorktreeStartupDraftWhenReady,
-  type StartupFollowupPromptOptions,
   type WorktreeStartupReadinessHost
 } from './runtime-worktree-startup-readiness'
+import {
+  deliverStartupImagePrompt,
+  type StartupImagePromptOptions
+} from './runtime-worktree-startup-image-prompt'
 import {
   provisionWorktreeTerminals,
   type WorktreeTerminalProvisioningArgs,
@@ -246,10 +249,13 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
   deliverStartupFollowup(
     handle: string,
     followup: WorktreeStartupFollowup,
-    options?: StartupFollowupPromptOptions
+    options?: StartupImagePromptOptions
   ): Promise<boolean> {
     const host = this.getWorktreeStartupReadinessHost()
-    return deliverStartupFollowupPrompt(this, host, handle, followup, options)
+    const { images, onInputWritten, ...followupOptions } = options ?? {}
+    return images?.length || onInputWritten
+      ? deliverStartupImagePrompt(this, host, handle, followup, options ?? {})
+      : deliverStartupFollowupPrompt(this, host, handle, followup, followupOptions)
   }
 
   async provisionManagedWorktreeTerminals(

@@ -43,7 +43,7 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     generation: number,
     pastePayload: string,
     options: RuntimeAgentPromptWriteOptions
-  ): Promise<{ submits: number; prompt?: RuntimeTerminalPromptDelivery }>
+  ): Promise<{ submits: number; prompt?: RuntimeTerminalPromptDelivery; imageBytes?: number }>
   /** The opt-in path (`onPermission: 'wait'`, `expectedBinding`), pinned to `ptyId`. */
   protected abstract submitTerminalAgentPrompt(
     handle: string,
@@ -234,6 +234,10 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
   ): Promise<RuntimeTerminalSend> {
     // Why the consuming agent: the foreground process reads the bytes; launchAgent covers startup.
     const payloadFor = (ptyId: string): string => {
+      // Images alone: they are the whole input, with no text frame after them.
+      if (options.images?.length && prompt.length === 0) {
+        return ''
+      }
       // Why: a launch prompt replaced the desktop's draft paste, so it sends that paste's bytes.
       if (options.inputKind === 'launch') {
         return wrapTerminalBracketedPasteText(prompt)
@@ -281,7 +285,8 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
           })
         }
       )
-      const bytesWritten = Buffer.byteLength(payload, 'utf8') + delivery.submits
+      const bytesWritten =
+        Buffer.byteLength(payload, 'utf8') + (delivery.imageBytes ?? 0) + delivery.submits
       return {
         handle,
         accepted: true,
@@ -312,7 +317,8 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
         promptForSchedule: prompt
       })
     })
-    const bytesWritten = Buffer.byteLength(payload, 'utf8') + delivery.submits
+    const bytesWritten =
+      Buffer.byteLength(payload, 'utf8') + (delivery.imageBytes ?? 0) + delivery.submits
     return {
       handle,
       accepted: true,

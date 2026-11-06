@@ -22,13 +22,17 @@ export async function createTerminalSurface(
   const plan = acceptedTerminalStartup(acceptance)
   const held = acceptedHeldMessagePlan(plan)
   const intent = acceptedTerminalIntent(execution.intent, acceptance)
+  // Neither a launch line nor a text draft holds images: such a message is written whole once the
+  // agent is ready, and one the plan leaves as a draft stays unsent with all of it kept.
+  const withImages = (acceptance?.release?.releasedImages().length ?? 0) > 0
+  const unsent = held === 'none' || (withImages && held === 'draft')
   // Only the host's own launcher is offered the text: a caller's command carries what its planner put there.
   const startupPrompt =
-    plan?.kind === 'command' || held === 'none' ? undefined : argvLaunchPrompt(intent)
+    plan?.kind === 'command' || unsent || withImages ? undefined : argvLaunchPrompt(intent)
   // The plan's own draft is pasted once here, never as the held message, so it earns no receipt.
   const draft =
     (plan?.kind === 'command' ? plan.draftPrompt : undefined) ??
-    (held === 'draft' ? intent.prompt?.text : undefined)
+    (held === 'draft' && !unsent ? intent.prompt?.text : undefined)
   const terminal = await surfaces.createTerminalAgent({
     worktreeId: workspace.worktreeId,
     agent: intent.agent,
@@ -54,7 +58,7 @@ export async function createTerminalSurface(
     terminalCreation: terminal.terminalCreation,
     ...(terminal.warning ? { warning: terminal.warning } : {}),
     ...(carried ? { promptRodeLaunchCommand: true } : {}),
-    ...(held === 'none' ? { promptLeftUnsent: true } : {})
+    ...(unsent ? { promptLeftUnsent: true } : {})
   }
 }
 

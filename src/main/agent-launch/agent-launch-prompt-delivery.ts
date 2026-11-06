@@ -93,15 +93,27 @@ export async function deliverTerminalLaunchPrompt(
   if (!intent.prompt || intent.prompt.delivery !== 'submit' || signal?.aborted) {
     return NOT_DELIVERED
   }
+  // A released message's images go in the same write as its text; only all of it, Enter included,
+  // is handed over, and part of it is never sent again.
+  const images = execution.acceptance?.release?.releasedImages() ?? []
+  let written = false
   const delivered = await surfaces.deliverTerminalPrompt?.({
     handle,
     agent: intent.agent,
     freshLaunch,
     terminalCreation,
     prompt: intent.prompt,
+    ...(images.length > 0
+      ? {
+          images,
+          onInputWritten: () => {
+            written = true
+          }
+        }
+      : {}),
     ...(signal ? { signal } : {})
   })
-  return delivered ? HANDED_TO_TERMINAL : NOT_DELIVERED
+  return delivered ? HANDED_TO_TERMINAL : written ? UNCONFIRMED : NOT_DELIVERED
 }
 
 function launchSubmitText(intent: AgentLaunchIntent): string | undefined {

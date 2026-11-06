@@ -172,5 +172,44 @@ describe('agent prompt submission runtime', () => {
     expect(writes).not.toContain('\r')
   })
 
+  it("writes a prompt's images ahead of its text in one operation, counting every byte", async () => {
+    const { runtime, handle, writes } = await createPromptRuntime(() => undefined, 'claude')
+
+    const sent = await runtime.sendTerminalAgentPrompt(handle, 'fix this', {
+      inputKind: 'launch',
+      composerReady: true,
+      acceptQueued: true,
+      requestId: 'launch-prompt',
+      observationTimeoutMs: 0,
+      images: ['/host/a.png', '/host/b.png']
+    })
+
+    expect(writes).toEqual([
+      '\x1b[200~/host/a.png\x1b[201~',
+      '\x1b[200~/host/b.png\x1b[201~ ',
+      '\x1b[200~fix this\x1b[201~',
+      '\r'
+    ])
+    expect(sent.bytesWritten).toBe(writes.join('').length)
+  })
+
+  it('writes nothing after an image once the prompt is cancelled before its text', async () => {
+    const controller = new AbortController()
+    const { runtime, handle, writes } = await createPromptRuntime(
+      () => controller.abort(),
+      'claude'
+    )
+
+    await expect(
+      runtime.sendTerminalAgentPrompt(handle, 'fix this', {
+        inputKind: 'launch',
+        composerReady: true,
+        images: ['/host/a.png', '/host/b.png'],
+        signal: controller.signal
+      })
+    ).rejects.toThrow('request_aborted')
+    expect(writes).toEqual(['\x1b[200~/host/a.png\x1b[201~'])
+  })
+
   // Provider hooks reach headless/minimized runtimes without window or OSC-title evidence.
 })

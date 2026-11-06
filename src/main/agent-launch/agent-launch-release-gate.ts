@@ -60,6 +60,13 @@ function releasedMessageText(input: AgentLaunchReleasedInput): string {
     .join('\n')
 }
 
+/** The released body's images, in order. A URL has no host path a terminal could paste: null. */
+function releasedMessageImages(input: AgentLaunchReleasedInput): (string | null)[] {
+  return (input.firstMessage?.body.blocks ?? []).flatMap((block) =>
+    block.type === 'image-ref' ? [block.path ?? null] : []
+  )
+}
+
 export class AgentLaunchReleaseGate {
   private currentPhase: AgentLaunchReleasePhase = 'preparing'
   private readonly input = Promise.withResolvers<AgentLaunchReleasedInput>()
@@ -210,6 +217,11 @@ export class AgentLaunchReleaseGate {
       : undefined
   }
 
+  /** The host paths of the released message's images, which a terminal pastes before its text. */
+  releasedImages(): string[] {
+    return releasedMessageImages(this.releasedInput()).flatMap((path) => (path ? [path] : []))
+  }
+
   /** The chat's opening message, complete with its files and skills, under the released selection;
    *  a held draft founds none. */
   releasedFirstMessage(): StructuredAgentSessionFirstMessage | undefined {
@@ -223,9 +235,16 @@ export class AgentLaunchReleaseGate {
    *  choice that contradicts the user's own command refuses in the compiler's words. */
   terminalStartup(): AgentLaunchTerminalStartupParams | undefined {
     const input = this.releasedInput()
+    const images = releasedMessageImages(input)
+    if (images.includes(null)) {
+      throw new AgentLaunchSurfaceUnavailableError(
+        `${formatAgentTypeLabel(this.agent)} can't open as a chat here, and a terminal can't attach an image given by URL, so it was not started.`
+      )
+    }
     this.compiled ??= compileAgentLaunchTerminalAlternative({
       alternative: this.terminalAlternative,
       heldText: releasedMessageText(input),
+      heldImages: images.length > 0,
       choices: releasedTerminalChoices(input),
       replaceModelSelection: input.optionsMode === 'replace-model-selection'
     })

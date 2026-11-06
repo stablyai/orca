@@ -5,13 +5,13 @@ import type {
   RuntimeTerminalSend
 } from '../../../../shared/runtime-types'
 import type { AgentTransitionDetector } from '../../../agent-hooks/agent-transition-detector'
-import { OrcaRuntimeWithWriteTerminalAgentPrompt } from './terminal-agent-prompt'
+import { OrcaRuntimeWithAgentPromptImages } from './terminal-agent-prompt-images'
 import {
   AgentPromptPermissionReturnedError,
   waitWhileAgentPromptBlocked
 } from './agent-prompt-permission-hold'
 
-export abstract class OrcaRuntimeWithSubmitTerminalAgentPrompt extends OrcaRuntimeWithWriteTerminalAgentPrompt {
+export abstract class OrcaRuntimeWithSubmitTerminalAgentPrompt extends OrcaRuntimeWithAgentPromptImages {
   abstract readonly agentTransitions: Pick<AgentTransitionDetector, 'subscribe'>
 
   /** Every prompt write judges a restored permission wait on the screen as it is now (#35962). */
@@ -21,7 +21,7 @@ export abstract class OrcaRuntimeWithSubmitTerminalAgentPrompt extends OrcaRunti
     generation: number,
     pastePayload: string,
     options: RuntimeAgentPromptWriteOptions
-  ): Promise<{ submits: number; prompt?: RuntimeTerminalPromptDelivery }> {
+  ): Promise<{ submits: number; prompt?: RuntimeTerminalPromptDelivery; imageBytes?: number }> {
     const write = () =>
       super.writeTerminalAgentPrompt(handle, ptyId, generation, pastePayload, options)
     return this.refreshRestoredWait(handle, ptyId)?.then(write) ?? write()
@@ -49,7 +49,8 @@ export abstract class OrcaRuntimeWithSubmitTerminalAgentPrompt extends OrcaRunti
             promptForSchedule: prompt
           })
         })
-        const bytesWritten = Buffer.byteLength(payload, 'utf8') + delivery.submits
+        const bytesWritten =
+          Buffer.byteLength(payload, 'utf8') + (delivery.imageBytes ?? 0) + delivery.submits
         return {
           handle,
           accepted: true,

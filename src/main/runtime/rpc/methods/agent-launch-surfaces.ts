@@ -250,7 +250,8 @@ export function agentLaunchSurfaceFactory(
       freshLaunch,
       terminalCreation,
       prompt,
-      signal
+      // The launch's signal, and a released message's images with their write receipt.
+      ...input
     }) => {
       const { runtime } = context
       // A stdin-after-start prompt cannot ride a Windows launch line, so it needs the startup path's Windows proof (#10336).
@@ -258,7 +259,7 @@ export function agentLaunchSurfaceFactory(
         return runtime.deliverStartupFollowup(
           handle,
           { agent, prompt: prompt.text },
-          { agentLaunch: true, terminalCreation, ...(signal ? { signal } : {}) }
+          { agentLaunch: true, terminalCreation, ...input }
         )
       }
       return deliverTerminalAgentLaunchPrompt({
@@ -268,7 +269,7 @@ export function agentLaunchSurfaceFactory(
         freshLaunch,
         terminalCreation,
         text: prompt.text,
-        ...(signal ? { signal } : {})
+        ...input
       })
     }
   }

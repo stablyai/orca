@@ -25,6 +25,11 @@ export type RuntimeAgentPromptWriteOptions = Omit<RuntimeTerminalWriteOptions, '
   expectedBinding?: AgentPromptExpectedBinding
   /** Run on accepted Enter write, including OMP paste framing; later abort cannot undo submitted text. */
   onSubmitWritten?: () => void
+  /** Host-readable images pasted ahead of the text in the consuming agent's own framing; outside the
+   *  text, so a plugin's rewrite of the prompt never drops them. */
+  images?: readonly string[]
+  /** Run on the first accepted write: from then on, a failure may leave input in the composer. */
+  onInputWritten?: () => void
 }
 
 export type AgentPromptExpectedBinding = { ptyId: string; processIncarnation: string }

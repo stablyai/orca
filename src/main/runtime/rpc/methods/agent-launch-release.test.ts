@@ -630,6 +630,77 @@ describe('the terminal alternative compiles with the released choices', () => {
     })
   })
 
+  it.each([
+    // Claude's own draft rides its launch line, so a held message is left unsent beside it locally.
+    {
+      platform: 'win32',
+      shell: 'powershell',
+      paired: false,
+      pasted: [['term_1', { agent: 'claude', content: HELD_MESSAGE }]]
+    },
+    { platform: 'darwin', shell: 'posix', paired: true, pasted: [] }
+  ] as const)(
+    'Claude out of view on $shell (paired: $paired) keeps its account, command and draft policy',
+    async ({ platform, shell, paired, pasted }) => {
+      const runtime = hostRuntime(undefined, {
+        createSupport: { supported: false, reason: 'agent' }
+      })
+      const base = resolveAgentStartupPlanInputs({
+        agent: 'claude',
+        settings: {
+          agentCmdOverrides: { claude: CLAUDE.head },
+          agentDefaultArgs: { claude: CLAUDE.args },
+          agentDefaultEnv: { claude: { KEEP: 'unchanged', CLAUDE_CONFIG_DIR: '/home/me/.claude' } }
+        },
+        platform,
+        shell,
+        isRemote: false
+      })
+      const id = operationId()
+      await prepare(
+        runtime,
+        prepared(id, {
+          accountEnv: { CLAUDE_CONFIG_DIR: '/home/me/.claude-work' },
+          terminalAlternative: {
+            kind: 'planned',
+            base,
+            policy: {
+              kind: 'background',
+              prompt: '',
+              draftPrompt: DRAFT,
+              heldChatMessage: true,
+              paired
+            }
+          }
+        })
+      )
+      await untilAwaitingRelease(runtime, id)
+      await release(runtime, id, {
+        options: { model: CLAUDE.model },
+        selection: { model: CLAUDE.model },
+        firstMessage: FIRST_MESSAGE
+      })
+      await expect(status(runtime, id, { waitMs: 5_000 })).resolves.toMatchObject({
+        state: 'succeeded',
+        result: { outcome: { kind: 'terminal' }, prompt: { outcome: 'not-delivered' } }
+      })
+      const options = runtime.createTerminal.mock.calls[0]?.[1]
+      const parsed = tokenizeStartupCommand(String(options?.command), shell)
+      const tokens = parsed.ok ? parsed.tokens : []
+      expect(tokens[0]).toBe(CLAUDE.head)
+      expect(tokens).toEqual(expect.arrayContaining([CLAUDE.unrelated, CLAUDE.model]))
+      expect(tokens).not.toContain(CLAUDE.old)
+      // The selected account outranks the plan's own home; unrelated env survives.
+      expect(options).toMatchObject({
+        env: { KEEP: 'unchanged', CLAUDE_CONFIG_DIR: '/home/me/.claude-work' },
+        launchAgent: 'claude'
+      })
+      expect(runtime.pasteStartupDraftWhenReady.mock.calls).toEqual(pasted)
+      expect(JSON.stringify(runtime.createTerminal.mock.calls)).not.toContain(HELD_MESSAGE)
+      expect(runtime.deliverStartupFollowup).not.toHaveBeenCalled()
+    }
+  )
+
   it('refuses in the compiler’s words when a choice contradicts the user’s own command', async () => {
     const runtime = hostRuntime(undefined, { createSupport: { supported: false, reason: 'agent' } })
     const id = operationId()

@@ -1,8 +1,63 @@
+import '../unused-default-rpc-methods.test-fixture'
+import type * as WorktreeScanCacheModule from '../../../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../../../git/worktrees/catalog/worktree-listing'
 /** A closed composer proves no write; stalled submission proves text was written despite unobserved progress. Receipts must distinguish them to avoid duplicate turns. */
 
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { deliverTerminalAgentLaunchPrompt } from './agent-launch-terminal-prompt'
 import { AGENT_PROMPT_STALLED_ERROR } from '../../terminal/input/agent-prompt-submission-verification'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
+import { tokenizeStartupCommand } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { createAgentPromptSubmissionRuntime } from '../../terminal/input/agent-prompt-submission-runtime-test-fixture'
+import { openTestAgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store-test-harness'
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { setAgentLaunchRecordStore } from './agent-launch.test-fixture'
+
+const createStructured = vi.hoisted(() =>
+  vi.fn(
+    async (args: {
+      envelope: { sessionId: string }
+      firstMessage?: { clientMessageId: string }
+    }): Promise<unknown> => ({
+      ok: true as const,
+      value: { sessionId: args.envelope.sessionId, fence: 1, firstMessage: args.firstMessage }
+    })
+  )
+)
+vi.mock('./structured-agent-session-create', () => ({
+  createStructuredAgentSessionForWorktree: createStructured
+}))
+
+vi.mock('../../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+  listWorktrees: vi.fn(async () => WORKTREES)
+}))
+
+vi.mock('../../../git/worktrees/catalog/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorktreeListingModule>()),
+  listWorktreesStrict: vi.fn(async () => WORKTREES)
+}))
+
+const { WORKTREES } = vi.hoisted(() => ({
+  WORKTREES: [
+    { path: '/tmp/worktree-a', head: 'abc', branch: 'b', isBare: false, isMainWorktree: false }
+  ]
+}))
+
+const {
+  MESSAGE_ID,
+  hostRuntime,
+  operationId,
+  prepare,
+  prepared,
+  release,
+  status,
+  untilAwaitingRelease
+} = await import('./agent-launch-release.test-fixture')
 
 type SendResult = { handle: string; accepted: boolean; bytesWritten: number }
 type SendFn = (
@@ -592,3 +647,232 @@ function fakeClock() {
     }
   }
 }
+
+describe('a released message with images, in the terminal that replaced its chat', () => {
+  const IMAGE = '/host/uploads/shot.png'
+  // The skill keeps its ordinary $name form; the staged file is already its prepared host path.
+  const TEXT = 'fix this with $audit, see @/host/uploads/notes.txt'
+  const DRAFT = 'original draft A: issue context'
+  const PICKED = { model: 'sonnet', effort: 'high' }
+  let directory: string
+
+  beforeEach(async () => {
+    createStructured.mockClear()
+    directory = await mkdtemp(join(tmpdir(), 'orca-agent-launch-rich-terminal-'))
+    setAgentLaunchRecordStore(await openTestAgentSessionRecordStore(directory))
+  })
+  afterEach(async () => {
+    setAgentLaunchRecordStore(null)
+    await closeTestJournalHostDatabases()
+    await rm(directory, { recursive: true, force: true })
+  })
+
+  function base(agent: TuiAgent) {
+    return resolveAgentStartupPlanInputs({
+      agent,
+      settings: {
+        agentCmdOverrides: { [agent]: `my-${agent}` },
+        agentDefaultArgs: { [agent]: '--verbose --model haiku' },
+        agentDefaultEnv: { [agent]: { KEEP: 'unchanged' } }
+      },
+      platform: 'darwin',
+      shell: 'posix',
+      isRemote: false
+    })
+  }
+
+  function body(blocks: unknown[]) {
+    return {
+      kind: 'message',
+      role: 'user',
+      blocks,
+      skills: [{ name: 'audit', path: '/s/SKILL.md' }]
+    }
+  }
+
+  /** Prepares and releases a launch whose chat its host can't run, its terminal's prompt reaching
+   *  the real per-PTY writer of a live agent. */
+  async function launch(args: {
+    agent?: TuiAgent
+    blocks: unknown[]
+    alternative?: unknown
+    chatSupported?: boolean
+    onWrite?: (
+      runtime: Parameters<Parameters<typeof createAgentPromptSubmissionRuntime>[0]>[0],
+      data: string
+    ) => void
+  }) {
+    const agent = args.agent ?? 'claude'
+    const real = await createAgentPromptSubmissionRuntime(
+      (runtime, data) => args.onWrite?.(runtime, data),
+      agent
+    )
+    const ready = {
+      handle: real.handle,
+      condition: 'tui-idle',
+      satisfied: true,
+      status: 'running',
+      exitCode: null
+    } as const
+    vi.spyOn(real.runtime, 'waitForFreshWorkerComposer').mockResolvedValue(ready)
+    vi.spyOn(real.runtime, 'waitForTerminal').mockResolvedValue(ready)
+    const host = hostRuntime(
+      undefined,
+      args.chatSupported ? {} : { createSupport: { supported: false, reason: 'agent' } }
+    )
+    host.deliverStartupFollowup.mockImplementation((_handle, followup, options) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host fixture types its stub loosely; these are the launch's own follow-up and options.
+      real.runtime.deliverStartupFollowup(real.handle, followup as never, options as never)
+    )
+    const id = operationId()
+    await prepare(
+      host,
+      prepared(id, {
+        agent,
+        sessionId: `${agent}_9b1deb4d_3b7d_4bad_9bdd_2b0d7b3dcb6d`,
+        terminalAlternative: args.alternative ?? {
+          kind: 'planned',
+          base: base(agent),
+          policy: { kind: 'foreground', promptDelivery: 'auto-submit', isFollowupPath: false }
+        }
+      })
+    )
+    await untilAwaitingRelease(host, id)
+    await release(host, id, {
+      options: PICKED,
+      selection: PICKED,
+      firstMessage: { clientMessageId: MESSAGE_ID, body: body(args.blocks) }
+    })
+    return { host, writes: real.writes, settled: await status(host, id, { waitMs: 10_000 }) }
+  }
+
+  function command(host: ReturnType<typeof hostRuntime>): string[] {
+    const parsed = tokenizeStartupCommand(
+      String(host.createTerminal.mock.calls[0]?.[1]?.command),
+      'posix'
+    )
+    return parsed.ok ? parsed.tokens : []
+  }
+
+  it('starts clean, then writes its images, its text and one Enter once, under the final choices', async () => {
+    const { host, writes, settled } = await launch({
+      blocks: [
+        { type: 'text', text: TEXT },
+        { type: 'image-ref', path: IMAGE }
+      ]
+    })
+
+    expect(settled).toMatchObject({
+      state: 'succeeded',
+      result: {
+        outcome: { kind: 'terminal' },
+        prompt: { delivery: 'submit', outcome: 'handed-to-terminal' }
+      }
+    })
+    expect(writes).toEqual([
+      '\x1b[200~/host/uploads/shot.png\x1b[201~ ',
+      `\x1b[200~${TEXT}\x1b[201~`,
+      '\r'
+    ])
+    const tokens = command(host)
+    expect(tokens[0]).toBe('my-claude')
+    expect(tokens).toEqual(expect.arrayContaining(['--verbose', 'sonnet']))
+    expect(tokens).not.toContain('haiku')
+    // Nothing of the message rides the launch line, and it is delivered by one follow-up.
+    expect(JSON.stringify(host.createTerminal.mock.calls)).not.toContain('fix this')
+    expect(host.createTerminal.mock.calls[0]?.[1]).toMatchObject({ env: { KEEP: 'unchanged' } })
+    expect(host.deliverStartupFollowup).toHaveBeenCalledOnce()
+  })
+
+  it('submits a message of images alone', async () => {
+    const { writes, settled } = await launch({ blocks: [{ type: 'image-ref', path: IMAGE }] })
+
+    expect(settled).toMatchObject({ result: { prompt: { outcome: 'handed-to-terminal' } } })
+    expect(writes).toEqual(['\x1b[200~/host/uploads/shot.png\x1b[201~', '\r'])
+  })
+
+  it('leaves input unconfirmed and writes nothing more once its process is replaced mid-message', async () => {
+    const { host, writes, settled } = await launch({
+      blocks: [
+        { type: 'text', text: TEXT },
+        { type: 'image-ref', path: IMAGE },
+        { type: 'image-ref', path: '/host/uploads/second.png' }
+      ],
+      onWrite: (runtime, data) => {
+        if (data.includes('shot.png')) {
+          runtime.synchronizePtyOutputSequenceFromProvider(
+            'pty-prompt',
+            { value: 0, generation: 'reset' },
+            0
+          )
+        }
+      }
+    })
+
+    // Not a text-only success and not a clean miss: no one sends it again.
+    expect(settled).toMatchObject({ result: { prompt: { outcome: 'unconfirmed' } } })
+    expect(writes).toEqual(['\x1b[200~/host/uploads/shot.png\x1b[201~'])
+    expect(host.deliverStartupFollowup).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    { paired: false, pasted: [['term_1', { agent: 'codex', content: DRAFT }]] },
+    { paired: true, pasted: [] }
+  ])(
+    'keeps a held message with images unsent out of view (paired: $paired)',
+    async ({ paired, pasted }) => {
+      const { host, writes, settled } = await launch({
+        agent: 'codex',
+        blocks: [
+          { type: 'text', text: TEXT },
+          { type: 'image-ref', path: IMAGE }
+        ],
+        alternative: {
+          kind: 'planned',
+          base: base('codex'),
+          policy: {
+            kind: 'background',
+            prompt: '',
+            draftPrompt: DRAFT,
+            heldChatMessage: true,
+            paired
+          }
+        }
+      })
+
+      expect(settled).toMatchObject({ result: { prompt: { outcome: 'not-delivered' } } })
+      // Only the plan's own draft A is pasted; held message B stays with its owner, whole.
+      expect(host.pasteStartupDraftWhenReady.mock.calls).toEqual(pasted)
+      expect(writes).toEqual([])
+      expect(host.deliverStartupFollowup).not.toHaveBeenCalled()
+    }
+  )
+
+  it('fails a required terminal that cannot attach its image, starting nothing', async () => {
+    const { host, settled } = await launch({
+      blocks: [{ type: 'image-ref', url: 'https://example.com/shot.png' }],
+      alternative: { kind: 'agent', prompt: 'submit' }
+    })
+
+    expect(settled).toMatchObject({ state: 'failed', code: 'agent_launch_surface_unavailable' })
+    expect(host.createTerminal).not.toHaveBeenCalled()
+  })
+
+  it('never lets that unusable terminal veto a chat its host can run', async () => {
+    const blocks = [{ type: 'image-ref', url: 'https://example.com/shot.png' }]
+    const { host, settled } = await launch({
+      blocks,
+      alternative: { kind: 'agent', prompt: 'submit' },
+      chatSupported: true
+    })
+
+    expect(settled).toMatchObject({
+      state: 'succeeded',
+      result: { prompt: { outcome: 'journaled', messageId: MESSAGE_ID } }
+    })
+    expect(createStructured.mock.calls[0]?.[0]).toMatchObject({
+      firstMessage: { clientMessageId: MESSAGE_ID, body: { blocks } }
+    })
+    expect(host.createTerminal).not.toHaveBeenCalled()
+  })
+})

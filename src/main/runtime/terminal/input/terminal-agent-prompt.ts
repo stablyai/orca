@@ -5,10 +5,7 @@ import {
   waitForAgentPromptPromise
 } from './agent-prompt-signals'
 import { assertTerminalInputAdmitted } from './terminal-input-admission'
-import type {
-  AgentPromptExpectedBinding,
-  RuntimeAgentPromptWriteOptions
-} from './agent-prompt-write-options'
+import type { RuntimeAgentPromptWriteOptions } from './agent-prompt-write-options'
 import type {
   RuntimeTerminalPromptDelivery,
   RuntimeTerminalSend
@@ -32,29 +29,13 @@ import {
   verifyAgentPromptSubmission
 } from './agent-prompt-submission-verification'
 import { AgentPromptPermissionReturnedError } from './agent-prompt-permission-hold'
-import { OrcaRuntimeWithResubmitHeldAgentPrompt } from './terminal-agent-prompt-resubmit'
+import { OrcaRuntimeWithAgentPromptBinding } from './terminal-agent-prompt-binding'
 import type { OrcaRuntimeWithCreateAgentPromptRenderGate } from './terminal-agent-prompt-render'
 
-export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithResubmitHeldAgentPrompt {
+export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithAgentPromptBinding {
   protected abstract createAgentPromptRenderGate(
     ...args: Parameters<OrcaRuntimeWithCreateAgentPromptRenderGate['createAgentPromptRenderGate']>
   ): ReturnType<OrcaRuntimeWithCreateAgentPromptRenderGate['createAgentPromptRenderGate']>
-
-  protected assertAgentPromptExpectedBinding(
-    handle: string,
-    expected: AgentPromptExpectedBinding | undefined
-  ): void {
-    if (!expected) {
-      return
-    }
-    const current = this.getTerminalPromptRequestBinding(handle)
-    if (
-      current.ptyId !== expected.ptyId ||
-      current.processIncarnation !== expected.processIncarnation
-    ) {
-      throw new Error('terminal_handle_stale')
-    }
-  }
 
   /** Under `wait`, a pre-paste refusal is the hold's to resume rather than the caller's to see. */
   private throwIfAgentPromptPermissionReturned(
@@ -105,18 +86,15 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     const admissionSignal = observationSignal
       ? AbortSignal.any([observationSignal, deliverySignal])
       : deliverySignal
-    const assertWritable = (signal: AbortSignal): void => {
-      assertAgentPromptRequestActive(signal)
-      this.assertAgentPromptGeneration(ptyId, generation)
-      this.assertLiveTerminalHandleTargetsPty(handle, ptyId)
-      if (incarnationId != null && this.ptysById.get(ptyId)?.incarnationId !== incarnationId) {
-        throw new Error('terminal_handle_stale')
-      }
-      this.assertAgentPromptExpectedBinding(handle, options.expectedBinding)
-      if (this.isPtyStopRequested(ptyId)) {
-        throw new Error('terminal_not_writable')
-      }
+    const target = {
+      handle,
+      ptyId,
+      generation,
+      incarnationId,
+      expectedBinding: options.expectedBinding
     }
+    const assertWritable = (signal: AbortSignal): void =>
+      this.assertAgentPromptWritable(target, signal)
     const beforeWrite = async (signal: AbortSignal): Promise<void> => {
       assertWritable(signal)
       await waitForAgentPromptPromise(
@@ -145,9 +123,12 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
       // Claude can lose the start of a large bracketed paste split across writes; send the whole frame together.
       renderGate?.arm()
       const initialWrite = submitWithPaste ? pastePayload + AGENT_PROMPT_SUBMIT : pastePayload
-      assertTerminalInputAdmitted(this, ptyId, options.inputSource)
-      if (!this.ptyController?.write(ptyId, initialWrite, options.inputKind)) {
-        throw new Error('terminal_not_writable')
+      // Empty after a prompt's images alone: only its Enter remains.
+      if (initialWrite) {
+        assertTerminalInputAdmitted(this, ptyId, options.inputSource)
+        if (!this.ptyController?.write(ptyId, initialWrite, options.inputKind)) {
+          throw new Error('terminal_not_writable')
+        }
       }
       if (submitWithPaste) {
         options.onSubmitWritten?.()

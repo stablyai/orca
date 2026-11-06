@@ -101,13 +101,19 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
   freshLaunch: boolean
   terminalCreation?: TerminalReadinessCreation
   text: string
+  /** A launch's images, pasted ahead of the text in the same serialized write; with them the text
+   *  may be empty. */
+  images?: readonly string[]
+  /** Runs once any of the input reached the agent: a false answer after it is not a clean miss. */
+  onInputWritten?: () => void
   /** See `createLaunchedAgentWriteGuard`; default `refuse`. */
   unprovableHost?: UnprovableHostPolicy
   clock?: ReadinessClock
   /** Aborting ends the readiness wait and refuses the paste; text already handed over stays so. */
   signal?: AbortSignal
 }): Promise<boolean> {
-  if (args.text.trim().length === 0) {
+  const images = args.images?.length ? args.images : undefined
+  if (args.text.trim().length === 0 && !images) {
     return false
   }
   // Check before paste and Enter: a ready signal may belong to a shell after the agent exits.
@@ -143,6 +149,15 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
       requestId: randomUUID(),
       // Once handed over, let the pane show progress; the launch receipt does not claim turn observation.
       observationTimeoutMs: 0,
+      ...(images
+        ? {
+            images,
+            onInputWritten: () => args.onInputWritten?.(),
+            onSubmitWritten: () => {
+              submitted = true
+            }
+          }
+        : {}),
       ...(args.signal
         ? {
             signal: args.signal,
