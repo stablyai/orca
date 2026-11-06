@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
-import type { GestureResponderEvent, ScrollView } from 'react-native'
+import type {
+  GestureResponderEvent,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  ScrollView
+} from 'react-native'
 
 // The same movement the Duo rail allows before a touch stops counting as a press.
 const PRESS_MOVE_SLOP = 8
@@ -24,6 +29,7 @@ export function useTerminalKeyRowTouch<T>({
   const touchRef = useRef({ down: false, x: 0, y: 0 })
   const pressRevisionRef = useRef(0)
   const armedRef = useRef(new Map<string, number>())
+  const scrollXRef = useRef(0)
   const latestRef = useRef(latest)
   const sameShownRef = useRef(sameShown)
   const show = useCallback(() => {
@@ -78,7 +84,14 @@ export function useTerminalKeyRowTouch<T>({
         released()
       }
     },
-    onScroll: cancelPresses,
+    // The page also reports a scroll when one settles, so only a moved row cancels.
+    onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const x = event.nativeEvent.contentOffset.x
+      if (x !== scrollXRef.current) {
+        scrollXRef.current = x
+        cancelPresses()
+      }
+    },
     /** Marks a key as pressed; call from onPressIn. */
     arm: (id: string): void => {
       armedRef.current.set(id, pressRevisionRef.current)
