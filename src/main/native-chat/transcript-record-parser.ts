@@ -54,9 +54,22 @@ function createClaudeRecordSelection() {
   const selections: boolean[] = []
   let key = ''
   let selected = true
+  let opaqueDepth = 0
   return {
     retainScalar: () => selected,
     accept(token: Token): boolean {
+      if (opaqueDepth > 0) {
+        const accepted = selected
+        if (token.name === 'startObject' || token.name === 'startArray') {
+          opaqueDepth++
+        } else if (token.name === 'endObject' || token.name === 'endArray') {
+          if (--opaqueDepth === 0) {
+            selected = selections.at(-1) ?? true
+            return containers.length === 0 || accepted
+          }
+        }
+        return accepted
+      }
       if (token.name === 'startObject' || token.name === 'startArray') {
         const root = containers.length === 0
         const parent = containers.at(-1)
@@ -82,8 +95,12 @@ function createClaudeRecordSelection() {
         if (root) {
           selected = token.name === 'startObject'
         }
-        containers.push(container)
-        selections.push(selected)
+        if (!selected || container === 'opaque') {
+          opaqueDepth = 1
+        } else {
+          containers.push(container)
+          selections.push(selected)
+        }
         return root || selected
       }
       if (token.name === 'endObject' || token.name === 'endArray') {
