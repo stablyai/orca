@@ -27,6 +27,7 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'providerExited',
   'restartFailed',
   'providerRejected',
+  'pluginInputRequired',
   'modelUnavailable',
   'claudeEffortInvalid',
   'attachmentInvalid',
