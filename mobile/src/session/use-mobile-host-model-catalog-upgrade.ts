@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
 import type { AgentSessionModelCatalogResult } from '../../../src/shared/agent-session/agent-session-wire'
 import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-session/options/agent-session-option-catalog-types'
 import type { StructuredAgentSessionOptionRecord } from '../../../src/shared/agent-session/options/structured-agent-session-option-state'
@@ -11,15 +10,14 @@ import {
 } from '../../../src/shared/host-model-listing-waits'
 import { callAgentSession } from './mobile-structured-agent-session-rpc'
 import { usesModelSpecificAcpEfforts } from '../../../src/shared/agent-session/options/agent-model-catalog-ownership'
-import {
-  hostReadsSavedModelCatalogsOnly,
-  withHostModelCatalogAnswer,
-  type HostModelCatalogSnapshot
-} from '../../../src/shared/agent-session/options/host-model-catalog-snapshot-rules'
-import { useHostQuery } from '../query/host-query'
-import { hostModelCatalogKey, hostModelCatalogQuery } from './mobile-host-model-catalog-query'
-import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
-import { readRuntimeStatusProbe } from '../transport/runtime-status-probe'
+import type { HostModelCatalogLaunch } from '../../../src/shared/agent-session/options/host-model-catalog-snapshot-rules'
+
+/** This world's last host lists for one chat's agent (`useHostModelCatalogCache`). A port, so this hook's
+ *  module graph stays free of the query layer for the root-only tests that bundle it. */
+export type HostModelCatalogCache = {
+  seed: (launch: HostModelCatalogLaunch) => AgentSessionModelCatalogResult | undefined
+  record: (worktree: string, catalog: AgentSessionModelCatalogResult) => void
+}
 
 // The host answers a waiting read when its first listing lands, within its own 30s picker wait.
 const LISTING_WAIT_TIMEOUT_MS = 45_000
@@ -28,7 +26,7 @@ const LISTING_WAIT_TIMEOUT_MS = 45_000
 export function useMobileHostModelCatalogUpgrade(args: {
   agent: string | null
   selectedModel?: string
-  hostId: string | null
+  modelCatalogCache?: HostModelCatalogCache | null
   client: RpcClient | null
   sessionId: string | null
   enabled: boolean
@@ -55,7 +53,7 @@ export function useMobileHostModelCatalogUpgrade(args: {
     client,
     enabled,
     fence,
-    hostId,
+    modelCatalogCache,
     newLaunch,
     onListingLanded,
     optionCatalog,
@@ -63,21 +61,6 @@ export function useMobileHostModelCatalogUpgrade(args: {
     updateOptionState,
     worktree
   } = args
-  const queryClient = useQueryClient()
-  const exec = useWorkspaceExecutionHost() ?? 'local'
-  // Older hosts list (start the CLI) when nothing is saved, so only hosts that read saved-only are preloaded.
-  // The session's capability probe already answered for this connection; its answer re-renders the chat.
-  const preload =
-    enabled &&
-    !!client &&
-    hostReadsSavedModelCatalogsOnly(readRuntimeStatusProbe(client)?.capabilities)
-  useHostQuery(
-    hostModelCatalogQuery,
-    { hostId: hostId ?? '', client },
-    { exec },
-    { agent: agent ?? '' },
-    { enabled: preload && !!hostId && !!agent }
-  )
   const receiver = useRef(args.receiveCatalog)
   useEffect(() => {
     receiver.current = args.receiveCatalog
@@ -115,12 +98,8 @@ export function useMobileHostModelCatalogUpgrade(args: {
         return
       }
       // A new chat's answer is the account's a new chat pins, so the next chat starts from it.
-      if (newLaunch && hostId) {
-        queryClient.setQueryData<HostModelCatalogSnapshot | null>(
-          hostModelCatalogKey({ hostId, exec, agent }),
-          (snapshot) =>
-            withHostModelCatalogAnswer(snapshot ?? undefined, worktree ?? '', catalog) ?? null
-        )
+      if (newLaunch) {
+        modelCatalogCache?.record(worktree ?? '', catalog)
       }
       receiver.current(catalog, settled ? 'settled' : event)
     }
@@ -181,13 +160,11 @@ export function useMobileHostModelCatalogUpgrade(args: {
     agent,
     client,
     enabled,
-    exec,
     fence,
-    hostId,
+    modelCatalogCache,
     newLaunch,
     onListingLanded,
     optionCatalog,
-    queryClient,
     sessionId,
     selectedModel,
     updateOptionState,

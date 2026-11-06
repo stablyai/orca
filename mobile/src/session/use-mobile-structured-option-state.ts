@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
 import { mobileStructuredSessionStatusFeed } from './mobile-structured-session-status-feed'
 import { projectRuntimePermission } from '../../../src/shared/agent-session/options/structured-agent-session-permission-option'
 import { useMobileStructuredSelectionController } from './use-mobile-structured-selection-controller'
@@ -16,8 +15,7 @@ import {
   applyStructuredAgentSessionModelCatalog,
   createStructuredAgentSessionOptionState
 } from '../../../src/shared/agent-session/options/structured-agent-session-options'
-import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
-import { readHostModelCatalogSeed } from './mobile-host-model-catalog-query'
+import type { HostModelCatalogCache } from './use-mobile-host-model-catalog-upgrade'
 import { structuredAgentSessionReportsAtFence } from '../../../src/shared/agent-session/options/structured-agent-session-runtime-reports'
 
 // Matches the transcripts this view retains per chat.
@@ -25,7 +23,7 @@ const MAX_RETAINED_CHAT_READERS = 32
 const UNSUPPORTED_REWIND: AgentSessionRewindSupport = { supported: false, reason: 'unsupported' }
 
 export function useMobileStructuredOptionState(args: {
-  hostId: string | null
+  modelCatalogCache?: HostModelCatalogCache | null
   client: RpcClient | null
   optionStamp?: string
   sendSelection?: boolean
@@ -50,7 +48,7 @@ export function useMobileStructuredOptionState(args: {
     sessionId,
     turnId,
     unloadedTurnRevisions,
-    hostId,
+    modelCatalogCache,
     client,
     optionStamp,
     sendSelection,
@@ -71,20 +69,13 @@ export function useMobileStructuredOptionState(args: {
   )
   const providerStarting = summary?.hostExecutionPhase === 'starting'
   const coherentCatalog = usesInstalledAgentModelCatalog(agent ?? '', hostCoherentCatalog)
-  const queryClient = useQueryClient()
-  const exec = useWorkspaceExecutionHost() ?? 'local'
   // The host's last list for this agent when this world holds one, else the quiet placeholder until the host answers.
   const firstFrame = () => {
     const seeded = createStructuredAgentSessionOptionState(agent ?? 'codex', optionCatalog)
-    if (!agent || !hostId || !optionCatalog) {
-      return seeded
-    }
-    const listed = readHostModelCatalogSeed(
-      queryClient,
-      { hostId, exec, agent },
-      { newLaunch, seedsModel: false, ...(worktree ? { worktree } : {}) }
-    )
-    return listed
+    const listed =
+      optionCatalog &&
+      modelCatalogCache?.seed({ newLaunch, seedsModel: false, ...(worktree ? { worktree } : {}) })
+    return listed && optionCatalog
       ? applyStructuredAgentSessionModelCatalog(seeded, optionCatalog, listed, {
           newLaunch,
           coherentCatalog

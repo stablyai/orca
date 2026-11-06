@@ -8,6 +8,7 @@ import { createOrcaQueryClient } from '../query/orca-query-client'
 import { recordRuntimeStatusProbe } from '../transport/runtime-status-probe'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
+import { useHostModelCatalogCache } from './mobile-host-model-catalog-query'
 import {
   descriptorFor,
   rpcSuccess,
@@ -50,9 +51,15 @@ it('shows the host’s last model list when a chat reopens, before its own catal
   const queryClient = createOrcaQueryClient()
   let shown: ReturnType<typeof useMobileStructuredAgentOptions> | null = null
   function Chat(): null {
+    const modelCatalogCache = useHostModelCatalogCache({
+      hostId: 'host-1',
+      client,
+      agent: 'codex',
+      enabled: true
+    })
     const options = useMobileStructuredAgentOptions({
       agent: 'codex',
-      hostId: 'host-1',
+      modelCatalogCache,
       client,
       sessionId: 'session-1',
       enabled: true,

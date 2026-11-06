@@ -26,6 +26,7 @@ import { useMobileStructuredStopPress } from './use-mobile-structured-stop-press
 import { useMobileStructuredSessionHostStopping } from './use-mobile-structured-session-host-stopping'
 import { useMobileStructuredPromptResponses } from './use-mobile-structured-prompt-responses'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
+import { useHostModelCatalogCache } from './mobile-host-model-catalog-query'
 import { useMobileStructuredCommandController } from './use-mobile-structured-command-controller'
 import { useMobileStructuredSessionOptionStamp } from './use-mobile-structured-session-option-stamp'
 import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
@@ -96,7 +97,7 @@ export function useMobileStructuredAgentSession(
   const turnId = runningStructuredAgentSessionTurnId(state)
   const options = useMobileStructuredAgentOptions({
     agent,
-    hostId,
+    modelCatalogCache: useHostModelCatalogCache({ hostId, client, agent, enabled }),
     client,
     sessionId,
     enabled,
