@@ -175,3 +175,18 @@ describe('carryProjectStateThroughIdentityChange', () => {
     )
   })
 })
+
+describe('project prompt template succession', () => {
+  it('carries the project override through remote identity discovery', () => {
+    const previous = makeProject({
+      id: 'repo:r1',
+      sourceRepoIds: ['r1'],
+      linkedWorkItemPromptTemplate: '{url} /engineer',
+      updatedAt: 5
+    })
+    const projected = makeProject({ id: 'github:acme/app', sourceRepoIds: ['r1'] })
+    const result = carryProjectStateThroughIdentityChange([projected], [previous])
+    expect(result.projects[0]?.linkedWorkItemPromptTemplate).toBe('{url} /engineer')
+    expect(result.projects[0]?.updatedAt).toBe(5)
+  })
+})

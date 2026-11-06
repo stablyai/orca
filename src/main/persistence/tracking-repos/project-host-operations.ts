@@ -11,6 +11,7 @@ import type {
 } from '../../../shared/project-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
+import { normalizeLinkedWorkItemPromptTemplate } from '../../../shared/linked-work-item-prompt-settings'
 import type { RepoHostTarget } from '../../../shared/repo-host-identity'
 import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../../shared/execution-host'
 import { normalizeProjectRuntimePreference } from '../../../shared/project-execution-runtime'
@@ -97,6 +98,17 @@ export class ProjectHostPersistenceOperations {
         project.localWindowsRuntimePreference = normalizeProjectRuntimePreference(
           updates.localWindowsRuntimePreference
         )
+      }
+    }
+    if ('linkedWorkItemPromptTemplate' in updates) {
+      const value = updates.linkedWorkItemPromptTemplate
+      if (value === undefined || value === null || typeof value === 'string') {
+        const template = normalizeLinkedWorkItemPromptTemplate(value)
+        if (template === undefined) {
+          delete project.linkedWorkItemPromptTemplate
+        } else {
+          project.linkedWorkItemPromptTemplate = template
+        }
       }
     }
     project.updatedAt = Date.now()

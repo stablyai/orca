@@ -6,6 +6,7 @@ import { notifyInstalledAgentSkillsChanged } from '@/hooks/installed-agent-skill
 import type { RepoSlice } from '../repos/repo-state'
 import { getProjectSetupRuntimeTarget } from './project-host-routing'
 import { mergeUpdatedProjectCompatibilityProject } from '../../../../shared/project-compatibility-merge'
+import { normalizeLinkedWorkItemPromptTemplate } from '../../../../shared/linked-work-item-prompt-settings'
 import { normalizeProjectRow } from '../../../../shared/project-catalog-row-normalization'
 
 export function createProjectUpdateActions(
@@ -33,6 +34,13 @@ export function createProjectUpdateActions(
         }
         // Why: the merge spreads updatedProject.sourceRepoIds, which throws if the host sent a non-array.
         const normalizedProject = normalizeProjectRow(updatedProject)
+        if (
+          'linkedWorkItemPromptTemplate' in updates &&
+          normalizeLinkedWorkItemPromptTemplate(updates.linkedWorkItemPromptTemplate) !==
+            normalizedProject.linkedWorkItemPromptTemplate
+        ) {
+          return false
+        }
         const runtimePreferenceChanged = 'localWindowsRuntimePreference' in updates
         set((state) => ({
           projects: state.projects.map((project) =>

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { startupAgentCreateFields, buildTaskWorkspaceCreateParams } from './workspace-create-params'
+import {
+  startupAgentCreateFields,
+  buildTaskWorkspaceCreateParams,
+  type WorkspaceCreateTaskItem
+} from './workspace-create-params'
 
 describe('startupAgentCreateFields', () => {
   it('sends startupAgent + createdWithAgent so the host resolves launch args', () => {
@@ -244,5 +248,57 @@ describe('task workspace create params', () => {
         nameIsAutoManaged: false
       })
     ).toMatchObject({ name: 'my-branch' })
+  })
+})
+
+describe('linked work item prompt templates', () => {
+  const items: WorkspaceCreateTaskItem[] = [
+    {
+      provider: 'github',
+      source: {
+        type: 'issue',
+        repoId: 'repo-1',
+        number: 1,
+        title: 'Task',
+        url: 'https://github.test/issues/1'
+      }
+    },
+    {
+      provider: 'gitlab',
+      source: {
+        type: 'issue',
+        repoId: 'repo-1',
+        number: 1,
+        title: 'Task',
+        url: 'https://gitlab.test/issues/1'
+      }
+    },
+    {
+      provider: 'linear',
+      source: { identifier: 'ENG-1', title: 'Task', url: 'https://linear.test/ENG-1' }
+    },
+    { provider: 'jira', source: { key: 'ENG-1', title: 'Task', url: 'https://jira.test/ENG-1' } }
+  ]
+
+  it.each(items)('keeps the $provider custom prompt as an unsent draft', (item) => {
+    const params = buildTaskWorkspaceCreateParams({
+      item,
+      targetRepoId: 'repo-1',
+      setupDecision: 'inherit',
+      agent: 'codex',
+      linkedWorkItemPromptTemplate: '{{url}} /ticket-skill'
+    })
+    expect(params.startupDraft).toBe(`${item.source.url} /ticket-skill`)
+    expect(params).not.toHaveProperty('prompt')
+    expect(params).not.toHaveProperty('startupPrompt')
+    expect(
+      buildTaskWorkspaceCreateParams({
+        item,
+        targetRepoId: 'repo-1',
+        setupDecision: 'inherit',
+        agent: 'blank',
+        linkedWorkItemPromptTemplate: '{{url}} /ticket-skill'
+      })
+    ).not.toHaveProperty('startupDraft')
   })
 })

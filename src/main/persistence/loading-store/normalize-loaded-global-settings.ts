@@ -1,4 +1,5 @@
 import { normalizeAgentDefaultSurface } from '../../../shared/native-chat/native-chat-providers'
+import { normalizeLinkedWorkItemPromptTemplate } from '../../../shared/linked-work-item-prompt-settings'
 import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat/native-chat-appearance-settings'
 import { getDefaultVoiceSettings } from '../../../shared/constants'
 import { normalizePRBotAuthorOverrides } from '../../../shared/source-control/review-comments/pr-bot-author-overrides'
@@ -83,6 +84,9 @@ export function normalizeLoadedGlobalSettings(
     agentDefaultSurface: normalizeAgentDefaultSurface(parsed.settings?.agentDefaultSurface),
     nativeChatAppearance: normalizeNativeChatAppearanceSettings(
       parsed.settings?.nativeChatAppearance
+    ),
+    linkedWorkItemPromptTemplate: normalizeLinkedWorkItemPromptTemplate(
+      parsed.settings?.linkedWorkItemPromptTemplate
     ),
     worktreeVisibilityDefaults: migratedExternalVisibility.defaults,
     prBotAuthorOverrides: normalizePRBotAuthorOverrides(parsed.settings?.prBotAuthorOverrides),

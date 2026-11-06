@@ -1,4 +1,5 @@
 import type { Project } from './project-types'
+import { normalizeLinkedWorkItemPromptTemplate } from './linked-work-item-prompt-settings'
 
 export type ProjectIdentitySuccession = {
   /** Projected projects with user-set state carried forward from their predecessor row. */
@@ -8,10 +9,16 @@ export type ProjectIdentitySuccession = {
 }
 
 function carryUserState(projected: Project, previous: Project): Project {
-  return previous.localWindowsRuntimePreference
+  const linkedWorkItemPromptTemplate = normalizeLinkedWorkItemPromptTemplate(
+    previous.linkedWorkItemPromptTemplate
+  )
+  return previous.localWindowsRuntimePreference || linkedWorkItemPromptTemplate
     ? {
         ...projected,
-        localWindowsRuntimePreference: previous.localWindowsRuntimePreference,
+        ...(previous.localWindowsRuntimePreference
+          ? { localWindowsRuntimePreference: previous.localWindowsRuntimePreference }
+          : {}),
+        ...(linkedWorkItemPromptTemplate ? { linkedWorkItemPromptTemplate } : {}),
         updatedAt: Math.max(projected.updatedAt, previous.updatedAt)
       }
     : projected

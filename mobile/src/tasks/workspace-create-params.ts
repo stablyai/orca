@@ -1,4 +1,5 @@
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
+import { renderLinkedWorkItemPromptTemplate } from '../../../src/shared/linked-work-item-prompt-settings'
 import type {
   CreateSparseCheckoutRequest,
   SetupDecision
@@ -96,6 +97,7 @@ export function buildTaskWorkspaceCreateParams(args: {
   sparseCheckout?: WorkspaceCreateSparseCheckout
   hostedStartPoint?: WorkspaceCreateHostedStartPoint
   nameIsAutoManaged?: boolean
+  linkedWorkItemPromptTemplate?: string
 }): WorkspaceCreateParams {
   const {
     item,
@@ -139,7 +141,15 @@ export function buildTaskWorkspaceCreateParams(args: {
   const common = {
     setupDecision,
     activate: true,
-    ...(shouldLaunchAgent ? { startupDraft: item.source.url } : {}),
+    ...(shouldLaunchAgent
+      ? {
+          startupDraft:
+            renderLinkedWorkItemPromptTemplate(
+              args.linkedWorkItemPromptTemplate,
+              item.source.url
+            ) ?? item.source.url
+        }
+      : {}),
     ...(createdWithAgent ? { createdWithAgent } : {}),
     ...(selectedBaseBranch ? { baseBranch: selectedBaseBranch } : {}),
     ...(compareBaseRef ? { compareBaseRef } : {}),

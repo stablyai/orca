@@ -52,6 +52,7 @@ export type TaskResumeState = {
 }
 
 export type RuntimeTaskSettings = {
+  linkedWorkItemPromptTemplate?: string
   defaultTuiAgent?: TuiAgent | 'blank' | null
   disabledTuiAgents?: TuiAgent[]
   agentCmdOverrides?: Record<string, string>

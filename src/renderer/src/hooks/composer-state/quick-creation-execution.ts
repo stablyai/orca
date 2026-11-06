@@ -1,6 +1,7 @@
-import type { QuickCreationExecutionInput } from './composer-model'
-
-import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
+import {
+  getDesktopLinkedWorkItemPromptTemplate,
+  resolveQuickCreateLinkedWorkItemPrompt
+} from '@/lib/linked-work-item-context'
 import { useCallback } from 'react'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
@@ -14,6 +15,7 @@ import { prepareQuickComposerStartup } from './quick-startup-plan'
 import { buildQuickCreationRequest, type QuickSubmitOptions } from './quick-creation-request'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
 import { resolveAgentSessionLaunchRoute } from '@/lib/agent-session-launch-plan'
+import type { QuickCreationExecutionInput } from './composer-submit-model'
 
 export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
   const {
@@ -93,7 +95,15 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
       const promptLinkedWorkItem = agent === null ? null : submitLinkedWorkItem
 
       const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
-        resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote)
+        resolveQuickCreateLinkedWorkItemPrompt(
+          promptLinkedWorkItem,
+          trimmedNote,
+          getDesktopLinkedWorkItemPromptTemplate(
+            useAppStore.getState(),
+            repoId,
+            workspaceRunContext?.hostId ?? selectedRepoExecutionHostId ?? undefined
+          )
+        )
 
       const startupPolicySettlement = await settleComposerSubmit(
         persistSetupAgentStartupPolicy(),
@@ -153,7 +163,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         linkedWorkItem: submitLinkedWorkItem,
         note: trimmedNote,
         repoId,
-        executionHostId: selectedRepoExecutionHostId,
+        executionHostId: workspaceRunContext?.hostId ?? selectedRepoExecutionHostId,
         settings,
         launchHost: selectedRepoAgentLaunchFact,
         shell: selectedRepoStartupShell,
