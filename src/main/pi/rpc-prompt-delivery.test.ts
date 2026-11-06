@@ -199,7 +199,25 @@ it.each([
 it.each([100, 1000])('classifies a refresh diagnostic with %i token mentions', (count) => {
   const prefix = 'OAuth refresh failed for openai-codex: '
   const mentions = 'refresh token '.repeat(count)
-  expect(piRpcFailureFact(prefix + mentions).kind).toBe('providerRejected')
+  const diagnostic = prefix + mentions
+  const exec = RegExp.prototype.exec
+  let scanSteps = 0
+  const scan = vi.spyOn(RegExp.prototype, 'exec').mockImplementation(function (text) {
+    if (text === diagnostic && this.global) {
+      scanSteps += 1
+    }
+    return exec.call(this, text)
+  })
+  let kind: string
+  try {
+    kind = piRpcFailureFact(diagnostic).kind
+  } finally {
+    scan.mockRestore()
+  }
+  expect(kind).toBe('providerRejected')
+  expect(scanSteps).toBeGreaterThan(0)
+  // One advancing token per mention, plus the terminal search; no repeated suffix searches.
+  expect(scanSteps).toBeLessThanOrEqual(count + 1)
   expect(piRpcFailureFact(`${prefix}${mentions}expired`).kind).toBe('notSignedIn')
   expect(piRpcFailureFact(`${prefix}${mentions}\nexpired`).kind).toBe('providerRejected')
   expect(piRpcFailureFact(`${prefix}${mentions}\nrefresh\ntoken expired`).kind).toBe('notSignedIn')
