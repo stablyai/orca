@@ -12,7 +12,11 @@ import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineag
 import { isCrossStoreParent } from '@/store/slices/worktrees/metadata/cross-store-parent-ref'
 import type { DraggedWorktreeCopies } from './dragged-worktree-copies'
 import { getCyclicProjectedWorktreeLineageIds } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
-import { getReorderedWorktreeIdsToUnnest } from './worktree-lineage-drag-drop'
+import {
+  getReorderedWorktreeIdsToUnnest,
+  isReorderInsideFolderRow,
+  type WorktreeReorderDropPoint
+} from './worktree-lineage-drag-drop'
 import { unnestWorktrees } from '../../workspace-actions/parenting/worktree-unnest'
 import {
   getWorktreeHostIdentity,
@@ -24,18 +28,6 @@ import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { getDropFolderParentsInState } from '../../workspace-actions/parenting/use-eligible-folder-parents'
 
 export type WorktreeLineageDropCommit = ReturnType<typeof useWorktreeLineageDropCommit>
-
-/** Whether a drop landed within a folder workspace's card, which holds its nested rows. */
-function isInsideFolderRow(folderIdentity: string, clientY: number | undefined): boolean {
-  if (clientY === undefined) {
-    return false
-  }
-  const row = document.querySelector<HTMLElement>(
-    `[data-worktree-lineage-drop-row][data-worktree-host-identity="${CSS.escape(folderIdentity)}"]`
-  )
-  const rect = row?.getBoundingClientRect()
-  return rect !== undefined && clientY >= rect.top && clientY <= rect.bottom
-}
 
 export function useWorktreeLineageDropCommit(args: {
   repoMap: Map<string, Repo>
@@ -171,7 +163,7 @@ export function useWorktreeLineageDropCommit(args: {
       draggedIds: readonly string[]
       sourceGroupKey: string
       pickedCopies?: DraggedWorktreeCopies
-      dropClientY?: number
+      dropPoint?: WorktreeReorderDropPoint
     }) => {
       const sourceGroup = worktreeDragGroups.find(
         (group) => group.key === unnestArgs.sourceGroupKey
@@ -200,7 +192,7 @@ export function useWorktreeLineageDropCommit(args: {
         cyclicLineageIds
       })
       const unnestedFolderChildren = folderChildren.flatMap(({ copy, parent }) =>
-        isInsideFolderRow(parent, unnestArgs.dropClientY) ? [] : [copy]
+        isReorderInsideFolderRow(parent, unnestArgs.dropPoint) ? [] : [copy]
       )
       if (ids.length === 0 && unnestedFolderChildren.length === 0) {
         return

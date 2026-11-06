@@ -2,7 +2,10 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { getWorktreeLineageDropTargetIdentity } from './worktree-lineage-drag-drop'
+import {
+  getWorktreeLineageDropTargetIdentity,
+  isReorderInsideFolderRow
+} from './worktree-lineage-drag-drop'
 
 describe('getWorktreeLineageDropTargetIdentity', () => {
   it.each([true, false])(
@@ -57,6 +60,24 @@ describe('getWorktreeLineageDropTargetIdentity', () => {
     expect(getWorktreeLineageDropTargetIdentity({ container, target, pointerY: 150 })).toBe(
       'ssh:box|parent'
     )
+  })
+})
+
+describe('isReorderInsideFolderRow', () => {
+  it('keeps a reorder inside the folder card only when the pointer and the insertion line are in it', () => {
+    const folder = document.createElement('div')
+    folder.setAttribute('data-worktree-lineage-drop-row', '')
+    folder.setAttribute('data-worktree-host-identity', 'local|folder:f-1')
+    folder.getBoundingClientRect = () => ({ top: 100, bottom: 300, left: 0, right: 280 }) as DOMRect
+    document.body.append(folder)
+    const inside = { clientX: 140, clientY: 200, lineClientY: 180 }
+    expect(isReorderInsideFolderRow('local|folder:f-1', inside)).toBe(true)
+    expect(isReorderInsideFolderRow('local|folder:f-1', { ...inside, clientX: 900 })).toBe(false)
+    expect(isReorderInsideFolderRow('local|folder:f-1', { ...inside, lineClientY: 320 })).toBe(
+      false
+    )
+    expect(isReorderInsideFolderRow('local|folder:f-1', { ...inside, clientY: 340 })).toBe(false)
+    folder.remove()
   })
 })
 

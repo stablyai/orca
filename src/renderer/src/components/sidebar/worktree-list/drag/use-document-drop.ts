@@ -1,3 +1,4 @@
+import { getWorktreeReorderDropPoint } from './worktree-lineage-drag-drop'
 import { useEffect } from 'react'
 import type React from 'react'
 import { getFullDropIndexForWorktreeDragUnit } from './worktree-drag-units'
@@ -84,7 +85,7 @@ export function useWorktreeDocumentDrop(args: {
         draggedIds: session.draggedIds,
         sourceGroupKey: session.sourceGroupKey,
         pickedCopies: session.pickedCopies,
-        dropClientY: event.clientY
+        dropPoint: getWorktreeReorderDropPoint(event, drop, ctx.scrollRef.current)
       })
       clearWorktreeDrag()
     }

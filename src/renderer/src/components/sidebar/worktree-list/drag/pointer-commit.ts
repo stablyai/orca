@@ -1,3 +1,4 @@
+import { getWorktreeReorderDropPoint } from './worktree-lineage-drag-drop'
 import {
   getWorkspaceKanbanSidebarDropGroups,
   getWorkspaceKanbanSidebarDropTarget,
@@ -130,7 +131,7 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
         draggedIds: drag.draggedIds,
         sourceGroupKey: drag.sourceGroupKey,
         pickedCopies: drag.pickedCopies,
-        dropClientY: event.clientY
+        dropPoint: getWorktreeReorderDropPoint(event, drop, ctx.scrollRef.current)
       })
     } else if (ctx.scrollRef.current) {
       const currentPreview = preferredStatusTarget.status

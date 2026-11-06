@@ -88,3 +88,47 @@ export function getReorderedWorktreeIdsToUnnest(args: {
   }
   return ids
 }
+
+/** Where a reorder dropped: the pointer, and the insertion line it committed to, in client pixels. */
+export type WorktreeReorderDropPoint = { clientX: number; clientY: number; lineClientY: number }
+
+export function getWorktreeReorderDropPoint(
+  pointer: { clientX: number; clientY: number },
+  drop: { dropIndicatorY: number },
+  container: HTMLElement | null
+): WorktreeReorderDropPoint | undefined {
+  if (!container) {
+    return undefined
+  }
+  return {
+    clientX: pointer.clientX,
+    clientY: pointer.clientY,
+    // The indicator is in scroll-content pixels.
+    lineClientY: container.getBoundingClientRect().top + drop.dropIndicatorY - container.scrollTop
+  }
+}
+
+/** Whether a reorder landed inside a folder workspace's card, which holds its nested rows: the
+ * pointer and the committed insertion line both within it. */
+export function isReorderInsideFolderRow(
+  folderIdentity: string,
+  point: WorktreeReorderDropPoint | undefined
+): boolean {
+  if (!point) {
+    return false
+  }
+  const rect = document
+    .querySelector<HTMLElement>(
+      `[data-worktree-lineage-drop-row][data-worktree-host-identity="${CSS.escape(folderIdentity)}"]`
+    )
+    ?.getBoundingClientRect()
+  return (
+    rect !== undefined &&
+    point.clientX >= rect.left &&
+    point.clientX <= rect.right &&
+    point.clientY >= rect.top &&
+    point.clientY <= rect.bottom &&
+    point.lineClientY > rect.top &&
+    point.lineClientY < rect.bottom
+  )
+}
