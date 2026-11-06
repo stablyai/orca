@@ -8,7 +8,7 @@ import {
   currentValue
 } from './use-structured-agent-session-options.test-fixture'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
-import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session-selection-controller'
+import { forgetStructuredSessionSelection } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
 import type { AgentSessionStatusEvent } from '../../../../shared/agent-session/agent-session-wire'
 import type * as RuntimeRpc from '@/runtime/runtime-rpc-client'
