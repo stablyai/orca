@@ -50,6 +50,13 @@ export function flushBrowserNetworkSourceWrites(
 ): boolean {
   while (stream.sendCredit > 0 && stream.pendingWrites.length > 0) {
     const pending = stream.pendingWrites[0]!
+    if (pending.offset === pending.bytes.byteLength) {
+      // An empty write carries nothing, so it never waits for credit.
+      stream.pendingWrites.shift()
+      pending.releaseApplicationBytes()
+      pending.callback()
+      continue
+    }
     const length = connection.sendableBytes(
       Math.min(
         pending.bytes.byteLength - pending.offset,

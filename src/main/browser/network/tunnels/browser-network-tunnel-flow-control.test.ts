@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import type { BrowserNetworkTunnelDuplex } from './browser-network-tunnel-duplex'
 import { afterEach, describe, expect, it } from 'vitest'
 import { BrowserNetworkTunnelClient } from './browser-network-tunnel-client'
 import { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from './browser-network-tunnel-outbound-memory-budget'
@@ -117,6 +118,32 @@ describe('browser network tunnel flow control over a slow link', () => {
     expect(link.sessionClosed).toBe(false)
   })
 
+  it('keeps uploads of tiny writes within the transport queue frame cap', async () => {
+    link = new SimulatedLink({ oneWayMs: 45, toSessionBytesPerMs: 1024 })
+    const uploads = Array.from({ length: 4 }, () =>
+      link!.openUpload(4 * MIB, { chunk: new Uint8Array(1024) })
+    )
+
+    await link.runUntil(() => link!.now >= 8_000)
+
+    // The paired transport closes the tunnel past 2,048 queued frames toward the host.
+    expect(link.peakQueuedToSessionFrames).toBeGreaterThan(256)
+    expect(link.peakQueuedToSessionFrames).toBeLessThanOrEqual(1_024)
+    expect(uploads.every((upload) => upload.sent() > 0)).toBe(true)
+    expect(link.closures).toEqual([])
+  })
+
+  it('completes an empty write without waiting for credit', async () => {
+    link = new SimulatedLink({ oneWayMs: 45 })
+    const socket = await link.openSocket()
+    let written = false
+    socket.write(new Uint8Array(0), () => {
+      written = true
+    })
+    await link.runToQuiet()
+    expect(written).toBe(true)
+  })
+
   it('keeps stalled readers and writers within the legacy memory headroom', async () => {
     link = new SimulatedLink({ oneWayMs: 1 })
     const legacyWindow = BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
@@ -143,6 +170,7 @@ type LinkDirection = {
   lineFreeAt: number
   queued: { departsAt: number; bytes: number }[]
   peakQueuedBytes: number
+  peakQueuedFrames: number
 }
 
 class SimulatedLink {
@@ -214,10 +242,18 @@ class SimulatedLink {
     return { opened: () => opened, received: () => received, unread: () => received - settled }
   }
 
+  async openSocket(): Promise<BrowserNetworkTunnelDuplex> {
+    this.destinations.push(new StreamingDestination(0))
+    const opening = this.client.open({ host: 'socket.internal', port: 443 })
+    await this.runUntil(() => this.inFlight.length === 0)
+    return opening
+  }
+
   openUpload(
     bytes: number,
-    options: { stalled?: boolean; stallWritesAfter?: number } = {}
+    options: { stalled?: boolean; stallWritesAfter?: number; chunk?: Uint8Array } = {}
   ): { sent: () => number } {
+    const chunk = options.chunk ?? CHUNK
     this.destinations.push(
       new StreamingDestination(0, options.stalled ? 0 : options.stallWritesAfter)
     )
@@ -228,8 +264,8 @@ class SimulatedLink {
         if (sent >= bytes) {
           return
         }
-        duplex.write(CHUNK, () => {
-          sent += CHUNK.byteLength
+        duplex.write(chunk, () => {
+          sent += chunk.byteLength
           writeNext()
         })
       }
@@ -244,6 +280,10 @@ class SimulatedLink {
 
   get peakQueuedToSessionBytes(): number {
     return this.toSession.peakQueuedBytes
+  }
+
+  get peakQueuedToSessionFrames(): number {
+    return this.toSession.peakQueuedFrames
   }
 
   async runUntil(done: () => boolean): Promise<void> {
@@ -300,6 +340,7 @@ class SimulatedLink {
     direction.queued.push({ departsAt, bytes: bytes.byteLength })
     const queued = direction.queued.reduce((total, entry) => total + entry.bytes, 0)
     direction.peakQueuedBytes = Math.max(direction.peakQueuedBytes, queued)
+    direction.peakQueuedFrames = Math.max(direction.peakQueuedFrames, direction.queued.length)
     const at = departsAt + this.link.oneWayMs
     this.sends += 1
     const copy = bytes.slice()
@@ -321,7 +362,7 @@ class SimulatedLink {
 }
 
 function linkDirection(bytesPerMs = Number.POSITIVE_INFINITY): LinkDirection {
-  return { bytesPerMs, lineFreeAt: 0, queued: [], peakQueuedBytes: 0 }
+  return { bytesPerMs, lineFreeAt: 0, queued: [], peakQueuedBytes: 0, peakQueuedFrames: 0 }
 }
 
 class StreamingDestination extends EventEmitter implements BrowserNetworkTunnelSocket {

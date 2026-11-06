@@ -6,6 +6,18 @@ import {
 
 type GrowableReceiveStream = { id: number; windowBytes: number; receiveWindowBytes: number }
 
+/**
+ * Least connection credit one DATA frame costs. The WebSocket queues cap frames as well as bytes
+ * (2,048 toward the host, 4,096 toward the client), so tiny frames must not let a connection
+ * window queue more frames than that: 16 MiB / 8 KiB leaves 2,048 data frames toward the client
+ * and 4 MiB / 8 KiB leaves 512 toward the host, with room for control frames.
+ */
+export const BROWSER_NETWORK_TUNNEL_MIN_FRAME_CREDIT_BYTES = 8 * 1024
+
+function frameCredit(bytes: number): number {
+  return Math.max(bytes, BROWSER_NETWORK_TUNNEL_MIN_FRAME_CREDIT_BYTES)
+}
+
 /** A drained stream that has received nothing for this long is idle (a kept-alive socket). */
 export const BROWSER_NETWORK_TUNNEL_IDLE_STREAM_MS = 1_000
 
@@ -100,12 +112,16 @@ export class BrowserNetworkTunnelConnectionCredit {
     return grown
   }
 
+  /** Bytes of the next DATA frame the connection can carry now; 0 means wait for credit. */
   sendableBytes(bytes: number): number {
-    return Math.min(bytes, this.sendCredit)
+    return this.sendCredit < BROWSER_NETWORK_TUNNEL_MIN_FRAME_CREDIT_BYTES
+      ? 0
+      : Math.min(bytes, this.sendCredit)
   }
 
+  /** Charges one DATA frame of this many bytes. */
   spend(bytes: number): void {
-    this.sendCredit -= bytes
+    this.sendCredit -= frameCredit(bytes)
   }
 
   /** Parks a stream until the peer acknowledges more bytes; streams resume in the order they last blocked. */
@@ -148,7 +164,8 @@ export class BrowserNetworkTunnelConnectionCredit {
     if (!this.window) {
       return 0
     }
-    if (bytes > this.receiveCredit) {
+    const charged = frameCredit(bytes)
+    if (charged > this.receiveCredit) {
       return null
     }
     const growth = this.growthByStream.get(streamId)
@@ -158,8 +175,8 @@ export class BrowserNetworkTunnelConnectionCredit {
       // A woken idle stream already holds its grown credit, so it is charged even past the pool.
       this.charge(growth)
     }
-    this.receiveCredit -= bytes
-    this.unacknowledgedBytes += bytes
+    this.receiveCredit -= charged
+    this.unacknowledgedBytes += charged
     if (this.unacknowledgedBytes < this.acknowledgeThreshold) {
       return 0
     }
