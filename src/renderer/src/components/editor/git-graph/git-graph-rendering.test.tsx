@@ -383,7 +383,7 @@ it('keeps a newer selection and its details during refresh and after a partial f
 
   getHistory
     .mockResolvedValueOnce(page(0))
-    .mockRejectedValueOnce(new Error('History request failed'))
+    .mockRejectedValueOnce(Object.assign(new Error('Transport failure'), { message: '' }))
   await act(async () => {
     await controller.refresh()
   })

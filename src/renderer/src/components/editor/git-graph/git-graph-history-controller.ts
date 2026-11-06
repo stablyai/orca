@@ -273,7 +273,7 @@ export class GitGraphHistoryController {
       if (!current()) {
         return undefined
       }
-      const result = error ? previous : (accumulated ?? previous)
+      const result = error !== undefined ? previous : (accumulated ?? previous)
       const selection = this.view.getState().selectedId
       const selectedId =
         result?.items.find((item) => item.id === selection)?.id ?? result?.items[0]?.id
