@@ -1,3 +1,9 @@
+import { selectAgentSessionCurrentRequests } from '../../../src/shared/agent-session/requests/agent-session-current-requests'
+import type { StructuredAgentSessionState } from '../../../src/shared/agent-session/structured-agent-session-reducer'
+import {
+  structuredAgentSessionFollowUpsQueue,
+  structuredAgentSessionQueueEnabled
+} from '../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import type { AgentSessionSendResult } from '../../../src/shared/agent-session/agent-session-wire'
 import type { AgentJournalCursor } from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSkillRef } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
@@ -27,6 +33,8 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
   skills?: readonly AgentJournalSkillRef[]
   /** Sent only when the host advertises `agent-session.queued-messages.v2`. */
   delivery?: 'queue-if-active'
+  /** Sent only when the host advertises immediate steering. */
+  steer?: true
   /** Sent only when the host advertises `agent-session.send-selection.v1`. */
   selection?: Readonly<Record<string, string>>
   /** Sent only when the host advertises `agent-session.send-options.v1`. */
@@ -59,6 +67,7 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
     fields: {
       body,
       ...(input.delivery ? { delivery: input.delivery } : {}),
+      ...(input.steer ? { steer: input.steer } : {}),
       ...(input.options ? { options: input.options } : {}),
       ...(input.selection !== undefined ? { selection: input.selection } : {}),
       ...(input.usageLimitContinuationOfTurnItemId
@@ -76,4 +85,24 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
     input.onAccepted?.(result.cursor)
   }
   return outcome.outcome
+}
+
+/** The desktop's rule: the alternate flips the setting first, then the queue's own rules decide. */
+export function mobileStructuredSendQueues(
+  queueCapable: boolean,
+  queueFollowUps: boolean,
+  state: Pick<StructuredAgentSessionState, 'items' | 'currentRequests' | 'queuedMessages'>,
+  send: { alternate?: boolean; isWorking: boolean; stopping: boolean } = {
+    isWorking: false,
+    stopping: false
+  }
+): boolean {
+  return (
+    queueCapable &&
+    structuredAgentSessionQueueEnabled(
+      structuredAgentSessionFollowUpsQueue(queueFollowUps, send),
+      state,
+      selectAgentSessionCurrentRequests(state)
+    )
+  )
 }

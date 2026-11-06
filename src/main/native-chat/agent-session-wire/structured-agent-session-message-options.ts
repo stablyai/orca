@@ -6,9 +6,28 @@ import type { StructuredAgentSessionAdapter } from './structured-agent-session-a
 import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 
-const OPTION_ORDER = ['model', 'effort', 'serviceTier', 'personality'] as const
+const OPTION_ORDER = ['model', 'effort', 'personality', 'fastMode', 'serviceTier'] as const
 
-/** A different Codex control needs a new turn: steer has no choice parameters. */
+/** Goal continuations inherit the current child's last turn/start choices. */
+export function latestStructuredChildOptionsSubmission(
+  submissions: readonly AgentJournalSubmission[],
+  fence: number
+): AgentJournalSubmission | undefined {
+  return submissions
+    .filter(
+      (submission) =>
+        submission.fence === fence &&
+        submission.handedOverAt !== undefined &&
+        (submission.dispatchState !== 'rejected' || submission.answeredInTurn)
+    )
+    .reduce<AgentJournalSubmission | undefined>(
+      (newest, submission) =>
+        newest && (newest.handedOverAt ?? 0) > (submission.handedOverAt ?? 0) ? newest : submission,
+      undefined
+    )
+}
+
+/** Codex steer cannot change execution options; changed choices need a new turn. */
 export function waitsForCodexTurnOptions(
   record: Pick<AgentSessionRecord, 'provider' | 'sessionId'> | null,
   journal: Pick<AgentSessionJournal, 'newestTurn' | 'itemBody'>,
