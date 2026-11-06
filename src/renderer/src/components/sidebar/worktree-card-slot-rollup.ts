@@ -6,7 +6,8 @@ import { getWorktreeMapFromState } from '@/store/selectors'
 import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import { agentRowDisplayDotState } from '@/lib/agent-row-dot-state'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
-import { workspaceHasLiveMarker } from '@/store/slices/workspace-attention/workspace-live-markers'
+import { isAgentSubjectUnread } from '@/attention/agent-attention-acknowledgement'
+import { readAgentRowTurnRecords } from '@/components/dashboard/dashboard-row-bucket'
 import {
   selectLiveAgentStatusEntriesForWorktree,
   selectRetainedAgentEntriesForWorktree
@@ -28,6 +29,8 @@ export function selectCollapsedLineageSlot(
   }
   const now = Date.now()
   const lines: SlotLineSignal[] = []
+  // Same acknowledgement records the agent rows read, so a child's unread matches its own card.
+  const turnRecords = readAgentRowTurnRecords(state)
   const worktreeMap = getWorktreeMapFromState(state)
   for (const worktreeId of descendantIds) {
     for (const entry of selectLiveAgentStatusEntriesForWorktree(state, worktreeId)) {
@@ -38,7 +41,7 @@ export function selectCollapsedLineageSlot(
         kind: classifySlotLine({
           dotState: agentRowDisplayDotState({ state: entry.state, entry }),
           needsAttention: false,
-          unreadCompletion: Boolean(state.unreadAgentCompletionPanes[entry.paneKey])
+          unreadCompletion: isAgentSubjectUnread(turnRecords, entry.paneKey)
         }),
         at: entry.stateStartedAt > 0 ? entry.stateStartedAt : null
       })
@@ -51,13 +54,14 @@ export function selectCollapsedLineageSlot(
             entry: retained.entry
           }),
           needsAttention: false,
-          unreadCompletion: Boolean(state.unreadAgentCompletionPanes[retained.entry.paneKey])
+          unreadCompletion: isAgentSubjectUnread(turnRecords, retained.entry.paneKey)
         }),
         at: retained.entry.stateStartedAt > 0 ? retained.entry.stateStartedAt : null
       })
     }
     const worktree = worktreeMap.get(worktreeId)
-    if (worktree?.isUnread && !workspaceHasLiveMarker(state, worktreeId)) {
+    // Any unread source counts: a tab or pane marker, or the user's own mark.
+    if (worktree?.isUnread) {
       lines.push({ kind: 'unread', at: worktree.lastActivityAt || null })
     }
   }

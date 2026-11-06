@@ -1,108 +1,16 @@
 import React, { useCallback } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
-import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
 import { translate } from '@/i18n/i18n'
-import { AgentTypeIcon } from '@/lib/agent-type-icon'
-import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
-import { agentVerdictStatusLine } from '@/lib/agent-verdict-status-line'
-import { cn } from '@/lib/utils'
-import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
-import { activateRetainedAgentRow } from './workspace-card/activity/activate-retained-agent-row'
-import { useFocusedAgentPaneKey } from './workspace-card/activity/focused-agent-row-highlight'
-import { useWorktreeAgentActivation } from './workspace-card/activity/use-worktree-agent-activation'
-import { formatSummaryStateLabel } from './workspace-card/activity/worktree-card-agent-summary'
-import { getCompactAgentSecondary } from './workspace-card/activity/worktree-card-compact-agent-row'
-import { slotForLine, type SlotLineSignal } from './worktree-card-slot-signal'
-import type { AgentDotState } from '@/components/AgentStateDot'
-import { WorktreeCardSlot } from './WorktreeCardSlot'
+import { useWorktreeAgentListModel } from './workspace-card/activity/use-worktree-agent-list-model'
+import { ChildAgentsWithIdleGroup } from './workspace-card/activity/worktree-card-idle-child-agents'
+import type { SlotAgentSignals } from './worktree-card-slot-agent-signals'
+import { SlotAgentLineRow } from './worktree-card-slot-agent-line-row'
 
-export type SlotAgentLine = {
-  agent: DashboardAgentRow
-  dotState: AgentDotState
-  signal: SlotLineSignal
+function stopPropagation(event: React.SyntheticEvent): void {
+  event.stopPropagation()
 }
-
-function lineText(agent: DashboardAgentRow, conversationName: string | null, now: number): string {
-  const secondary = getCompactAgentSecondary(agent, now)
-  const request = conversationName ?? getAgentRowPrimaryText(agent.entry)
-  // The slot already says Failed/Interrupted; keep only the error detail, else the request.
-  const verdictLine = agentVerdictStatusLine(agent.entry)
-  if (verdictLine && secondary === verdictLine) {
-    const separator = verdictLine.indexOf(': ')
-    return separator > 0 ? verdictLine.slice(separator + 2) : request || secondary
-  }
-  // The type label is only the fallback; the user's request says more.
-  if (secondary && secondary !== formatAgentTypeLabel(agent.agentType)) {
-    return secondary
-  }
-  return request || secondary
-}
-
-const SlotAgentLineRow = React.memo(function SlotAgentLineRow({
-  line,
-  now,
-  offline,
-  focused,
-  onActivate
-}: {
-  line: SlotAgentLine
-  now: number
-  offline: boolean
-  focused: boolean
-  onActivate: (agent: DashboardAgentRow) => void
-}): React.JSX.Element {
-  const { agent, signal } = line
-  const conversationName = useAgentRowConversationName(agent)
-  const detail = lineText(agent, conversationName, now)
-  const text = offline
-    ? translate('sidebar.cardSlot.lastSeen', 'Last seen {{state}}', {
-        state: formatSummaryStateLabel(line.dotState)
-      }) + (detail ? ` · ${detail}` : '')
-    : detail
-  const quiet = offline || signal.kind === 'seen' || signal.kind === 'idle'
-  const agentLabel = formatAgentTypeLabel(agent.agentType)
-  const handleClick = useCallback(
-    (event: React.MouseEvent) => {
-      event.stopPropagation()
-      onActivate(agent)
-    },
-    [agent, onActivate]
-  )
-
-  return (
-    <button
-      type="button"
-      draggable={false}
-      className={cn(
-        'worktree-agent-row-hover flex h-[19px] w-full min-w-0 items-center gap-1.5 rounded-sm pr-2 pl-1 text-left text-2xs leading-none outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
-        focused && 'bg-worktree-sidebar-accent'
-      )}
-      onClick={handleClick}
-      title={`${agentLabel} · ${text}`}
-      data-worktree-card-slot-line={signal.kind}
-      data-focused-agent-pane={focused ? 'true' : undefined}
-    >
-      <span className="inline-flex shrink-0" aria-label={agentLabel}>
-        <AgentTypeIcon agentType={agent.agentType} size={13} />
-      </span>
-      <span
-        className={cn(
-          'min-w-0 flex-1 truncate',
-          signal.kind === 'unread' && !offline
-            ? 'text-foreground'
-            : quiet
-              ? 'text-muted-foreground/70'
-              : 'text-muted-foreground'
-        )}
-      >
-        {text}
-      </span>
-      <WorktreeCardSlot signal={slotForLine(signal)} now={now} stale={offline} />
-    </button>
-  )
-})
 
 /** Expanded agents' header: the label sits in the icon column and the chevron in the slot column. */
 export function SlotAgentLinesHeader({
@@ -140,62 +48,138 @@ export function SlotAgentLinesHeader({
   )
 }
 
-function stopPropagation(event: React.SyntheticEvent): void {
-  event.stopPropagation()
-}
-
-/** Experimental 2.0 agent lines: icon, what it's doing or said, and the line's own slot. */
+/** Experimental 2.0 agent lines: lead agents, their subagents on demand, and the shared picking/unread/focus model. */
 export function WorktreeCardSlotAgentLines({
   worktreeId,
-  lines,
+  agents,
+  signals,
   now,
-  offline
+  offline,
+  cacheTimersActive
 }: {
   worktreeId: string
-  lines: readonly SlotAgentLine[]
+  agents: DashboardAgentRow[]
+  signals: SlotAgentSignals
   now: number
   offline: boolean
+  /** False while the list is folded away, so hidden rows don't run countdowns. */
+  cacheTimersActive: boolean
 }): React.JSX.Element | null {
-  const focusedPaneKey = useFocusedAgentPaneKey(worktreeId)
-  const activateAgentTab = useWorktreeAgentActivation(worktreeId)
+  const model = useWorktreeAgentListModel(worktreeId, agents)
+  const {
+    showAgentModels,
+    isAgentSendTargetModeActive,
+    sendTargetFor,
+    handleSendTargetClick,
+    handleActivateAgentTab,
+    handleActivateRetainedAgent,
+    handleDismissAgent,
+    hasLineage,
+    expandedIdleChildGroups,
+    toggleLineageParent,
+    toggleIdleChildGroup,
+    isLineageExpanded,
+    isFocusedOrHidesFocus
+  } = model
   const handleActivate = useCallback(
     (agent: DashboardAgentRow) => {
+      // Subagents have no pane of their own; they open their spawning parent.
       const paneKey = agent.activationPaneKey ?? agent.paneKey
       if (agent.rowSource === 'retained') {
-        activateRetainedAgentRow(worktreeId, agent.tab.id, paneKey)
+        handleActivateRetainedAgent(agent.tab.id, paneKey)
       } else {
-        activateAgentTab(agent.tab.id, paneKey)
+        handleActivateAgentTab(agent.tab.id, paneKey)
       }
       void viewClaudeAgentFromRow(agent)
     },
-    [activateAgentTab, worktreeId]
+    [handleActivateAgentTab, handleActivateRetainedAgent]
   )
-  const stopBubble = useCallback((event: React.SyntheticEvent) => {
-    event.stopPropagation()
-  }, [])
 
-  if (lines.length === 0) {
+  const renderBranch = (
+    agent: DashboardAgentRow,
+    ancestors: ReadonlySet<string>,
+    timersActive: boolean
+  ): React.ReactNode => {
+    const line = signals.lineByPaneKey.get(agent.paneKey)
+    // External lineage metadata may cycle; reject repeated ancestors before recursion.
+    if (!line || ancestors.has(agent.paneKey)) {
+      return null
+    }
+    const childAgents = signals.childrenByParentPaneKey.get(agent.paneKey) ?? []
+    const hasChildren = childAgents.length > 0
+    const expanded = hasChildren && isLineageExpanded(agent.paneKey)
+    const nextAncestors = new Set(ancestors)
+    nextAncestors.add(agent.paneKey)
+    const depth = agent.lineage?.depth ?? 0
+    return (
+      <React.Fragment key={agent.paneKey}>
+        <SlotAgentLineRow
+          line={line}
+          displaySignal={
+            hasChildren && !expanded
+              ? (signals.rolledByPaneKey.get(agent.paneKey) ?? line.signal)
+              : line.signal
+          }
+          now={now}
+          offline={offline}
+          focused={isFocusedOrHidesFocus(agent.paneKey, !hasChildren || expanded)}
+          showModel={showAgentModels}
+          cacheTimerActive={timersActive}
+          treeLevel={hasLineage ? depth + 1 : undefined}
+          childCount={hasChildren ? childAgents.length : undefined}
+          childrenExpanded={expanded}
+          // Picking forces every level open, so a toggle would silently flip stored state.
+          onToggleChildren={
+            hasChildren && !isAgentSendTargetModeActive
+              ? () => toggleLineageParent(agent.paneKey)
+              : undefined
+          }
+          sendTarget={sendTargetFor(agent.paneKey)}
+          onSendTarget={handleSendTargetClick}
+          onActivate={handleActivate}
+          // Subagents have no dismissible store entry, and picking reuses the slot.
+          onDismiss={
+            agent.rowSource === 'subagent' || isAgentSendTargetModeActive
+              ? undefined
+              : handleDismissAgent
+          }
+        />
+        {expanded ? (
+          <div
+            role="group"
+            className="ml-2.5 flex flex-col gap-px border-l border-worktree-sidebar-border/70 pl-2"
+          >
+            <ChildAgentsWithIdleGroup
+              childAgents={childAgents}
+              // Picking shows every child flat; folding would hide send targets.
+              flat={isAgentSendTargetModeActive}
+              idleExpanded={expandedIdleChildGroups.has(agent.paneKey)}
+              onToggleIdle={() => toggleIdleChildGroup(agent.paneKey)}
+              layout="slot"
+              ariaLevel={depth + 2}
+              renderChild={(child, idleGroupExpanded) =>
+                renderBranch(child, nextAncestors, timersActive && idleGroupExpanded)
+              }
+            />
+          </div>
+        ) : null}
+      </React.Fragment>
+    )
+  }
+
+  if (signals.rootLines.length === 0) {
     return null
   }
   return (
     <div
       className="mt-px flex flex-col gap-px"
-      role="group"
+      role={hasLineage ? 'tree' : 'group'}
       aria-label={translate('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents')}
-      onDoubleClick={stopBubble}
-      onMouseDown={stopBubble}
-      onPointerDown={stopBubble}
+      onDoubleClick={stopPropagation}
+      onMouseDown={stopPropagation}
+      onPointerDown={stopPropagation}
     >
-      {lines.map((line) => (
-        <SlotAgentLineRow
-          key={line.agent.paneKey}
-          line={line}
-          now={now}
-          offline={offline}
-          focused={line.agent.paneKey === focusedPaneKey}
-          onActivate={handleActivate}
-        />
-      ))}
+      {signals.rootLines.map((line) => renderBranch(line.agent, new Set(), cacheTimersActive))}
     </div>
   )
 }

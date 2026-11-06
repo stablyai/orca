@@ -2,70 +2,85 @@ import React, { useCallback, useMemo } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 
-import { buildAgentRowLineageTree } from '@/components/dashboard/agent-row-lineage-model'
+import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { Button } from '@/components/ui/button'
 import { useNow } from '@/hooks/use-now'
-import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
+import { translate } from '@/i18n/i18n'
+import { canConnectSshStatus, isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 import { useAppStore } from '@/store'
 import { workspaceHasLiveMarker } from '@/store/slices/workspace-attention/workspace-live-markers'
 import type { WorktreeCardController } from './workspace-card/controller/use-worktree-card-controller'
 import { useWorktreeAgentRows } from './workspace-card/activity/useWorktreeAgentRows'
-import { agentRowDisplayDotState as getAgentDotState } from '@/lib/agent-row-dot-state'
-import { WorktreeCardIdentityHover } from './worktree-card-identity-hover'
-import type { WorktreeCardPresentation } from './workspace-card/surface/worktree-card-presentation'
-import { WorktreeCardSecondaryRows } from './workspace-card/surface/worktree-card-secondary-rows'
-import { useCollapsedLineageSlot, useLineageLatestAt } from './worktree-card-slot-rollup'
-import {
-  classifySlotLine,
-  compareSlotLines,
-  slotLineAt,
-  titleRowSlot
-} from './worktree-card-slot-signal'
-import {
-  WorktreeCardDeleteQuickAction,
-  WorktreeCardRenameFailedButton
-} from './worktree-card-title-actions'
-import { WorktreeCardSlot } from './WorktreeCardSlot'
+import { selectAgentRowsUnread } from './workspace-card/activity/worktree-card-agent-ack-inputs'
+import { selectSendTargetControlInputs } from './workspace-card/activity/worktree-card-send-target-inputs'
 import { useWorktreeAgentExpansionState } from './workspace-card/activity/worktree-card-agents-expansion-state'
 import {
   CompactAgentExpansion,
   CompactAgentSummaryButton
 } from './workspace-card/activity/worktree-card-compact-agents'
-import { dispatchSuppressScrollAdjustment } from './workspace-card/activity/WorktreeCardAgents'
-import { translate } from '@/i18n/i18n'
+import { dispatchSuppressScrollAdjustment } from './workspace-card/activity/use-worktree-agent-list-model'
+import { WorktreeCardSshHostControl } from './workspace-card/host/WorktreeCardSshHostControl'
+import { WorktreeCardIdentityHover } from './worktree-card-identity-hover'
+import type { WorktreeCardPresentation } from './workspace-card/surface/worktree-card-presentation'
+import { WorktreeCardSecondaryRows } from './workspace-card/surface/worktree-card-secondary-rows'
+import { useCollapsedLineageSlot, useLineageLatestAt } from './worktree-card-slot-rollup'
+import { titleRowSlot } from './worktree-card-slot-signal'
+import { buildSlotAgentSignals, type SlotAgentSignals } from './worktree-card-slot-agent-signals'
 import {
-  SlotAgentLinesHeader,
-  WorktreeCardSlotAgentLines,
-  type SlotAgentLine
-} from './WorktreeCardSlotAgentLines'
+  WorktreeCardDeleteQuickAction,
+  WorktreeCardRenameFailedButton
+} from './worktree-card-title-actions'
+import { getWorktreeCardHost, WorktreeCardHostName } from './worktree-card-host-name'
+import { WorktreeCardSlot } from './WorktreeCardSlot'
+import { SlotAgentLinesHeader, WorktreeCardSlotAgentLines } from './WorktreeCardSlotAgentLines'
 import { shouldBeginWorktreeRename } from './workspace-card/controller/worktree-card-model'
 import { WorktreeTitleInlineRename } from './workspace-card/identity/WorktreeTitleInlineRename'
 import { WorktreeCardMetaRow } from './workspace-card/metadata/worktree-card-meta-row'
 
 const NO_DESCENDANTS: readonly string[] = []
 
-function useSlotAgentLines(worktreeId: string): SlotAgentLine[] {
-  const agents = useWorktreeAgentRows(worktreeId)
-  // Subagents belong to their lead agent's line; one line per agent.
-  const rootAgents = useMemo(() => buildAgentRowLineageTree(agents).rootRows, [agents])
-  const unreadCompletions = useAppStore(
-    useShallow((s) =>
-      rootAgents.map((agent) => Boolean(s.unreadAgentCompletionPanes[agent.paneKey]))
-    )
+function useSlotAgentSignals(agents: DashboardAgentRow[]): SlotAgentSignals {
+  // Same acknowledgement records the 1.0 rows read, so unread means the same on both cards.
+  const unread = useAppStore(useShallow((s) => selectAgentRowsUnread(s, agents)))
+  return useMemo(() => buildSlotAgentSignals(agents, unread), [agents, unread])
+}
+
+function StaleSlotText({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return (
+    <span className="shrink-0 whitespace-nowrap text-3xs leading-none italic text-muted-foreground/70">
+      {children}
+    </span>
   )
-  return useMemo(() => {
-    const lines = rootAgents.map((agent, index): SlotAgentLine => {
-      const { presentation, dotStateOverride } = resolveRowProgramStatus(agent)
-      const dotState = dotStateOverride ?? getAgentDotState(agent)
-      const kind = classifySlotLine({
-        dotState,
-        needsAttention: Boolean(presentation.attention),
-        unreadCompletion: unreadCompletions[index] ?? false
-      })
-      return { agent, dotState, signal: { kind, at: slotLineAt(agent, kind) } }
-    })
-    return lines.sort((a, b) => compareSlotLines(a.signal, b.signal))
-  }, [rootAgents, unreadCompletions])
+}
+
+/** While an SSH host is down the slot is the way back: reconnect, or why it can't. */
+function SshHostSlot({
+  card,
+  label
+}: {
+  card: WorktreeCardController
+  label: string
+}): React.JSX.Element {
+  const { repo, sshStatus, sshTargetRemoved, sshOwnerEnvironmentId } = card
+  if (sshTargetRemoved) {
+    return (
+      <StaleSlotText>{translate('sidebar.cardSlot.hostRemoved', 'host removed')}</StaleSlotText>
+    )
+  }
+  if (repo?.connectionId && (isConnectingSshStatus(sshStatus) || canConnectSshStatus(sshStatus))) {
+    return (
+      <WorktreeCardSshHostControl
+        targetId={repo.connectionId}
+        targetLabel={label}
+        status={sshStatus}
+        targetRemoved={false}
+        sshOwnerEnvironmentId={sshOwnerEnvironmentId}
+        iconOnly={false}
+        onPointerDown={card.stopQuickActionPointerPropagation}
+      />
+    )
+  }
+  return <StaleSlotText>{translate('sidebar.cardSlot.disconnected', 'disconnected')}</StaleSlotText>
 }
 
 /** Experimental 2.0 card: name and one right-hand slot, then one line per agent. */
@@ -97,11 +112,18 @@ export function WorktreeCardSlotContent({
     childWorkspaceShortLabel,
     settings
   } = card
-  const lines = useSlotAgentLines(worktree.id)
+  const agents = useWorktreeAgentRows(worktree.id)
+  const signals = useSlotAgentSignals(agents)
+  const lines = signals.rootLines
   const now = useNow(30_000)
+  const host = getWorktreeCardHost(card)
+  const sshDown = host?.kind === 'ssh' && host.down
+  const offline = isRuntimeDisconnected || sshDown
   const hasLiveMarker = useAppStore((s) => workspaceHasLiveMarker(s, worktree.id))
-  // A flag with no tab or agent marker behind it was set by the user.
-  const manualUnread = worktree.isUnread && !hasLiveMarker
+  // Picking a send target turns the agent lines into the picker, so they can't stay folded.
+  const pickingSendTarget = useAppStore(
+    (s) => selectSendTargetControlInputs(s, worktree.id).targetMode !== null
+  )
   const descendantIds = lineageDescendantIds ?? NO_DESCENDANTS
   const collapsedLineage = useCollapsedLineageSlot(
     lineageCollapsed ? descendantIds : NO_DESCENDANTS
@@ -115,13 +137,17 @@ export function WorktreeCardSlotContent({
     toggleCompactRootList()
   }, [toggleCompactRootList])
   const showLines = showInlineAgentList && lines.length > 0
-  const foldsAgents = showLines && lines.length > 1
+  const foldsAgents = showLines && lines.length > 1 && !pickingSendTarget
   const ownLinesShown = showLines && (!foldsAgents || agentsExpanded)
+  const agentUnread = signals.allSignals.some((signal) => signal.kind === 'unread')
+  // Any unread source counts (a terminal tab, a pane, the user's mark) unless a visible line already shows it.
+  const workspaceUnread =
+    worktree.isUnread && !(ownLinesShown && agentUnread) ? { manual: !hasLiveMarker } : null
   const titleSlot = titleRowSlot({
-    offline: isRuntimeDisconnected,
-    hiddenLines: ownLinesShown ? [] : lines.map((line) => line.signal),
+    offline,
+    hiddenLines: ownLinesShown ? [] : signals.allSignals,
     collapsedLineage,
-    manualUnread,
+    workspaceUnread,
     ownLinesShown,
     lastActivityAt: worktree.lastActivityAt > 0 ? worktree.lastActivityAt : null,
     lineageLatestAt
@@ -129,14 +155,16 @@ export function WorktreeCardSlotContent({
   const showDetailsRow =
     settings?.worktreeCardDetailsRow === true &&
     (presentation.hasMetaRow || presentation.detailsAndPorts !== null)
-  const titleBold = manualUnread || lines.some((line) => line.signal.kind === 'unread')
+  const titleBold = worktree.isUnread || agentUnread
 
   const agentLines = showLines ? (
     <WorktreeCardSlotAgentLines
       worktreeId={worktree.id}
-      lines={lines}
+      agents={agents}
+      signals={signals}
       now={now}
-      offline={isRuntimeDisconnected}
+      offline={offline}
+      cacheTimersActive={ownLinesShown}
     />
   ) : null
 
@@ -218,10 +246,15 @@ export function WorktreeCardSlotContent({
                 affiliateListMode ? undefined : () => setRenamingWorktreeId(null)
               }
             />
+            {host ? <WorktreeCardHostName host={host} /> : null}
             <WorktreeCardRenameFailedButton card={card} />
             <span className="ml-auto flex shrink-0 items-center gap-1">
               {showDeleteQuickAction ? <WorktreeCardDeleteQuickAction card={card} /> : null}
-              <WorktreeCardSlot signal={titleSlot} now={now} />
+              {sshDown && host ? (
+                <SshHostSlot card={card} label={host.label} />
+              ) : (
+                <WorktreeCardSlot signal={titleSlot} now={now} />
+              )}
             </span>
           </div>
           {showDetailsRow ? (

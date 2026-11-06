@@ -61,6 +61,7 @@ function seedWorkspaces(seeds: readonly WorkspaceSeed[], now: number): void {
   const tabsByWorktree: Record<string, TerminalTab[]> = {}
   const agentStatusByPaneKey: Record<string, AgentStatusEntry> = {}
   const unreadAgentCompletionPanes: Record<string, 'agent-completion'> = {}
+  const acknowledged: Record<string, number> = {}
   const ptyIdsByTabId: Record<string, string[]> = {}
   for (const seed of seeds) {
     tabsByWorktree[seed.id] = seed.agents.map((agent, index) => {
@@ -85,6 +86,8 @@ function seedWorkspaces(seeds: readonly WorkspaceSeed[], now: number): void {
       ptyIdsByTabId[tabId] = [`pty-${tabId}`]
       if (agent.unread) {
         unreadAgentCompletionPanes[paneKey] = 'agent-completion'
+      } else {
+        acknowledged[paneKey] = now - agent.minutesAgo * MINUTE
       }
       return {
         id: tabId,
@@ -108,10 +111,8 @@ function seedWorkspaces(seeds: readonly WorkspaceSeed[], now: number): void {
     worktreeCardProperties: ['status', 'inline-agents'],
     tabsByWorktree: { ...state.tabsByWorktree, ...tabsByWorktree },
     ptyIdsByTabId: { ...state.ptyIdsByTabId, ...ptyIdsByTabId },
-    agentStatusByPaneKey: {
-      ...state.agentStatusByPaneKey,
-      ...agentStatusByPaneKey
-    },
+    agentStatusByPaneKey: { ...state.agentStatusByPaneKey, ...agentStatusByPaneKey },
+    acknowledgedAgentsByPaneKey: { ...state.acknowledgedAgentsByPaneKey, ...acknowledged },
     agentStatusEpoch: state.agentStatusEpoch + 1,
     unreadAgentCompletionPanes: {
       ...state.unreadAgentCompletionPanes,
@@ -296,8 +297,6 @@ const FOLDER_WORKSPACE = folderWorkspaceToWorktree({
   lastActivityAt: 0
 })
 
-function noop(): void {}
-
 function SidebarFrame({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
     <div className="worktree-sidebar flex flex-col gap-0.5 bg-worktree-sidebar py-1.5 text-worktree-sidebar-foreground">
@@ -336,7 +335,7 @@ function Card({
         lineageCollapsed={collapsed}
         lineageDescendantIds={descendantIds}
         lineageChildren={children}
-        onLineageToggle={childCount > 0 ? noop : undefined}
+        onLineageToggle={childCount > 0 ? () => {} : undefined}
       />
     </div>
   )
