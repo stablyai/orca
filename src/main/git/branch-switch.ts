@@ -128,9 +128,13 @@ async function firstHiddenSubmoduleEdit(
   }
   // No gitlink in the index, nothing hidden: skip a second working-tree walk on every switch.
   // The index decides, not `.gitmodules` on disk (sparse checkout can omit it while git still
-  // reads submodule config from the index); a failed or overflowing read probes anyway.
-  const index = await gitExecFileAsync(['ls-files', '--stage', '-z'], execution).catch(() => null)
-  if (index !== null && !index.stdout.split('\0').some((entry) => entry.startsWith('160000 '))) {
+  // reads submodule config from the index). Modes only keep large indexes under the output cap;
+  // a failed, overflowing or too-old-git read probes anyway.
+  const index = await gitExecFileAsync(
+    ['ls-files', '-z', '--format=%(objectmode)'],
+    execution
+  ).catch(() => null)
+  if (index !== null && !index.stdout.split('\0').includes('160000')) {
     return null
   }
   const { stdout } = await gitExecFileAsync(
