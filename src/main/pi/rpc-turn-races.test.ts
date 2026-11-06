@@ -126,7 +126,11 @@ describe('Pi turn settlement races', () => {
   })
 })
 
-it('keeps an expired sign-in visible when Pi accepted the turn before auth failed', async () => {
+it.each([
+  'OAuth refresh failed for openai-codex: token refresh failed (400): invalid_grant',
+  // Pi 1.5.0 error text recorded by QA; the surrounding event is a fixture.
+  '401 {"type":"error","error":{"type":"authentication_error","message":"Invalid bearer token"},"request_id":"req_011Cgmh94VzHrfkrvN866JGF"}'
+])('keeps sign-in visible after an accepted turn fails: %s', async (errorMessage) => {
   const h = await setup()
   await h.start()
   h.turns.receive({
@@ -135,8 +139,7 @@ it('keeps an expired sign-in visible when Pi accepted the turn before auth faile
       role: 'assistant',
       content: [],
       stopReason: 'error',
-      errorMessage:
-        'OAuth refresh failed for openai-codex: token refresh failed (400): invalid_grant'
+      errorMessage
     }
   })
   h.turns.receive({ type: 'agent_settled' })

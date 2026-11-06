@@ -49,14 +49,24 @@ function hasExpiredRefreshToken(error: string): boolean {
   return false
 }
 
+function piHttpErrorStatus(error: string): number | undefined {
+  // Provider SDKs put status in the outer envelope; numbers in the body are not auth evidence.
+  const status =
+    /^([1-5]\d{2})(?:[ \t:]|$)/.exec(error)?.[1] ??
+    /^[^\r\n:()]+ error \(([1-5]\d{2})\):/i.exec(error)?.[1] ??
+    /^[^\r\n:()]+: ([1-5]\d{2}):/.exec(error)?.[1]
+  return status === undefined ? undefined : Number(status)
+}
+
 export function piRpcFailureFact(error: string) {
   const signInRequired =
     error.startsWith(MISSING_KEY_PREFIX) ||
     (error.startsWith('Authentication failed for ') && error.includes("Run '/login ")) ||
-    (error.startsWith('OAuth refresh failed for ') &&
-      (DEAD_OAUTH_GRANT.test(error) ||
+    (error.startsWith('OAuth refresh failed for ')
+      ? DEAD_OAUTH_GRANT.test(error) ||
         hasExpiredRefreshToken(error) ||
-        (/\b401\b/.test(error) && !TEMPORARY_OAUTH_FAILURE.test(error))))
+        (/\b401\b/.test(error) && !TEMPORARY_OAUTH_FAILURE.test(error))
+      : piHttpErrorStatus(error) === 401)
   return agentSessionFailureFact(signInRequired ? 'notSignedIn' : 'providerRejected', {
     detail: providerDiagnostic(error, 'person')
   })

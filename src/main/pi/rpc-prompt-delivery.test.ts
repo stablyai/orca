@@ -176,13 +176,21 @@ it('retains Pi provider detail with sign-in guidance after bounded authenticatio
   )
 })
 
-// Pi b556cfe5b0300a91f39c7bc5369a65a25fb7fcd5: auth/resolve.ts and models-runtime.test.ts.
+// Pi b556cfe5: auth/resolve.ts, utils/error-body.ts and api/bedrock-converse-stream.ts.
 it.each([
   [
     'OAuth refresh failed for openai-codex: token refresh failed (400): invalid_grant',
     'notSignedIn'
   ],
-  ['OAuth refresh failed for openai-codex: fetch failed', 'providerRejected']
+  ['OAuth refresh failed for openai-codex: fetch failed', 'providerRejected'],
+  ['401: Invalid bearer token', 'notSignedIn'],
+  ['OpenAI API error (401): Unauthorized', 'notSignedIn'],
+  ['UnrecognizedClientException: 401: Invalid security token', 'notSignedIn'],
+  ['403: Organization policy denies this model', 'providerRejected'],
+  ['OpenAI API error (503): upstream reported 401', 'providerRejected'],
+  ['Service unavailable: 503: upstream reported 401', 'providerRejected'],
+  ['The message mentions 401 but has no status envelope', 'providerRejected'],
+  ['OAuth refresh failed for openai-codex: 401: network unavailable', 'providerRejected']
 ])('settles %s without retrying an unusable grant', async (error, kind) => {
   vi.useFakeTimers()
   const h = rig()
