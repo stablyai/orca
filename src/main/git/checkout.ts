@@ -26,9 +26,7 @@ export async function checkoutBranch(
       ...gitEnvWithoutYesNoPrompt()
     })
   )
-  return {
-    skippedPaths: [...new Set([...stderr.matchAll(UNLINK_FAILURE)].map((match) => match[1]))]
-  }
+  return { skippedPaths: parseCheckoutSkippedPaths(stderr) }
 }
 
 /** for-each-ref avoids localized branch decoration; return the current branch first. */

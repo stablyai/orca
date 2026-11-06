@@ -31,6 +31,15 @@ function filesLeftBehindMessage(branch: string, skippedPaths: readonly string[])
   return `Switched to ${branch}, but ${files} kept the old branch's content because another program has ${pronoun} open (${skippedPaths[0]}). Close that program, then discard the changes Orca shows for ${pronoun} to finish the switch.`
 }
 
+/** Git prints progress ("Switched to branch …") on stderr too; prefer its own error line. */
+function gitFailureLine(stderr: string): string | null {
+  const lines = stderr
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+  return lines.find((line) => /^(error|fatal):/.test(line)) ?? lines.at(-1) ?? null
+}
+
 async function readCurrentBranch(
   worktreePath: string,
   options: GitRuntimeOptions
@@ -215,9 +224,8 @@ export async function switchBranchGuarded(
       deps.onSwitched?.()
       const stderr = readGitCommandFailureStderr(error) ?? ''
       const failed = parseCheckoutSkippedPaths(stderr)
-      const detail = (
-        stderr.trim() || (error instanceof Error ? error.message : String(error))
-      ).split('\n')[0]
+      const detail =
+        gitFailureLine(stderr) ?? (error instanceof Error ? error.message : String(error))
       throw new BranchSwitchLandedWithWarningError(
         failed.length > 0
           ? filesLeftBehindMessage(branch, failed)
