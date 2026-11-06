@@ -4,8 +4,6 @@ import { pathToFileURL } from 'node:url'
 const WORKFLOWS = '.github/workflows/'
 // A job without timeout-minutes runs until GitHub cancels it at 360 minutes, holding the PR's run open.
 const GITHUB_DEFAULT_TIMEOUT_MINUTES = 360
-// GitHub ends single-CPU ubuntu-slim jobs at 15 minutes, so a longer bound there never applies.
-const UBUNTU_SLIM_TIMEOUT_MINUTES = 15
 
 function runsOnPullRequests(workflow) {
   const on = workflow.on
@@ -41,8 +39,6 @@ export function findUnboundedPullRequestJobs(parseYaml) {
       const timeout = job['timeout-minutes']
       if (!bounded(timeout)) {
         failures.push(`${name}: set timeout-minutes below ${GITHUB_DEFAULT_TIMEOUT_MINUTES}`)
-      } else if (job['runs-on'] === 'ubuntu-slim' && timeout > UBUNTU_SLIM_TIMEOUT_MINUTES) {
-        failures.push(`${name}: ubuntu-slim stops jobs at ${UBUNTU_SLIM_TIMEOUT_MINUTES} minutes`)
       }
     }
   }

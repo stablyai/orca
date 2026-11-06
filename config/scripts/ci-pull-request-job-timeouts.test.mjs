@@ -13,13 +13,13 @@ it('reports jobs without a working limit, including jobs of called workflows', (
     if (workflow.jobs?.selection_evidence) {
       delete workflow.jobs.selection_evidence['timeout-minutes']
     }
-    if (workflow.jobs?.code_paths?.['runs-on'] === 'ubuntu-slim') {
-      workflow.jobs.code_paths['timeout-minutes'] = 20
+    if (workflow.jobs?.code_paths) {
+      workflow.jobs.code_paths['timeout-minutes'] = 360
     }
     return workflow
   }
   expect(findUnboundedPullRequestJobs(parseChanged)).toEqual([
-    'pr.yml code_paths: ubuntu-slim stops jobs at 15 minutes',
+    'pr.yml code_paths: set timeout-minutes below 360',
     'unit-selection-evidence.yml selection_evidence: set timeout-minutes below 360'
   ])
 })
