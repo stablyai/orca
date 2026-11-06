@@ -105,6 +105,10 @@ export function hostStub(): StructuredAgentSessionHost {
     })),
     history: vi.fn(() => ({ ok: true, page: { items: [] } })),
     sessionAgent: vi.fn(() => null),
+    setUserConversationName: vi.fn(async (_sessionId: string, name: string) => ({
+      name,
+      applied: true
+    })),
     attentionReads: { sessionLocation: vi.fn(() => null) },
     journalSnapshot: vi.fn((sessionId: string) => ({
       sessionId,
