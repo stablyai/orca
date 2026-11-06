@@ -4,7 +4,7 @@ import {
   clearedInto,
   conversationRecordReader,
   type AgentSessionRecordReader
-} from './orchestration/structured-session-lineage'
+} from './orchestration/addressing/session-lineage/structured-session-lineage'
 import { scaleDirectory, scaleRecord } from './agent-session-scale.test-fixture'
 import {
   editPersistedTestAgentSessionStore,

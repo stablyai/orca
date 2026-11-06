@@ -181,6 +181,7 @@ export function buildTerminalCreateWindow(args: {
         onStateChanged: () => () => {},
         onCredentialRequest: () => () => {},
         onPortForwardsChanged: () => () => {},
+        onTargetRemoved: () => () => {},
         onDetectedPortsChanged: () => () => {},
         onCredentialResolved: () => () => {}
       },

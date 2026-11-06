@@ -13,7 +13,7 @@
   },
   "files": [
     "../src/main/runtime/integrations/github/runtime-github-repository-query-commands.ts",
-    "../src/main/runtime/rpc/methods/github-repo-work-item-methods.ts",
+    "../src/main/runtime/rpc/methods/source-control/github/github-repo-work-item-methods.ts",
     "../src/main/runtime/orca-runtime.ts",
     "../src/main/runtime/rpc/core.ts",
     "../src/main/runtime/rpc/dispatcher-request-parsing.ts",

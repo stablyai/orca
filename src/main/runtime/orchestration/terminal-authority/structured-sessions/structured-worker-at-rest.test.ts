@@ -8,9 +8,12 @@ import { codexProviderHandle } from '../../../../../shared/agent-session/lifecyc
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { RunningStructuredSession } from '../../structured-session-lineage'
-import '../../db'
+import type { RunningStructuredSession } from '../../addressing/session-lineage/structured-session-lineage'
 import { OrchestrationDb } from '../../db/orchestration-db'
+import '../../db/contract-constants'
+import '../../db/messages/mailbox-routing-page'
+import '../../db/dispatch-row-writer'
+import '../../db/attempt-outcome-projection'
 
 const hostRef: { current: unknown } = { current: null }
 
@@ -32,10 +35,10 @@ const {
   structuredWorkerProcessIncarnation
 } = await import('./structured-worker-identity')
 const { listAddressableStructuredWorkers } =
-  await import('../../structured-worker-group-addressing')
+  await import('../../addressing/groups/structured-worker-group-addressing')
 const { closeStructuredAgentSessionChild } =
   await import('../../../agent-session/structured-agent-session-close')
-const { resolveGroupAddress } = await import('../../groups')
+const { resolveGroupAddress } = await import('../../addressing/groups/group-addressing')
 const { createRestTestRig, foundRestTestChat, sweepTicks } =
   await import('../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig')
 const { STRUCTURED_AGENT_SESSION_IDLE_MS: IDLE_MS } =

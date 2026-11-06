@@ -1,4 +1,4 @@
-import { createImportedForkTip, observeOmpForkTip } from '../imported-fork-tip'
+import { createImportedForkTip, observeOmpForkTip } from './imported-fork-tip'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   adoptedTranscriptSourceObserver,

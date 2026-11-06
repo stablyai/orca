@@ -3,7 +3,7 @@ import {
   USER_KEPT_WORKER_TERMINAL_SQL,
   WORKER_SETTLED_STATES,
   type WorkerTerminalResourceRow
-} from '../../worker-terminal-ownership'
+} from '../../terminal-authority/release/worker-terminal-ownership'
 import {
   isEquivalentPaneKey,
   paneKeyMatchSuffix,

@@ -10,9 +10,9 @@ import type { RuntimeClientSettings } from '../../../src/main/runtime/client/set
 import { AgentModelCatalogStore } from '../../../src/main/native-chat/agent-model-catalog/agent-model-catalog-store'
 import { createAgentModelCatalogService } from '../../../src/main/native-chat/agent-model-catalog/agent-model-catalog-service'
 import { agentModelCatalogFingerprintForRecord } from '../../../src/main/native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
-import { CLIENT_UI_METHODS } from '../../../src/main/runtime/rpc/methods/client-ui'
-import { STATUS_METHODS } from '../../../src/main/runtime/rpc/methods/status'
-import { STRUCTURED_AGENT_SESSION_METHODS } from '../../../src/main/runtime/rpc/methods/structured-agent-session'
+import { CLIENT_UI_METHODS } from '../../../src/main/runtime/rpc/methods/client-state/client-ui'
+import { STATUS_METHODS } from '../../../src/main/runtime/rpc/methods/host-management/status'
+import { STRUCTURED_AGENT_SESSION_METHODS } from '../../../src/main/runtime/rpc/methods/structured-sessions/structured-agent-session'
 import { createRestTestRig } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
 
 import {

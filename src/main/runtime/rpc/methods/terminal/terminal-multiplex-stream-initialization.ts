@@ -110,7 +110,8 @@ export async function initializeMultiplexStream(
     ptyId,
     () => stream.outputPaused,
     isMobile ? request.client?.id : undefined,
-    stream.supportsOutputPause && request.capabilities?.paneVisibility === 1
+    stream.supportsOutputPause && request.capabilities?.paneVisibility === 1,
+    state.viewerDeviceId
   )
   // Report daemon death now, before the next refused keystroke.
   const unsubscribeEndpointLoss = stream.supportsEndpointLossNotice

@@ -10,9 +10,9 @@ import { OrcaRuntimeRpcServer } from '../../src/main/runtime/rpc/server/runtime-
 import {
   runtimeStub,
   setAgentLaunchRecordStore
-} from '../../src/main/runtime/rpc/methods/agent-launch.test-fixture'
-import { AGENT_LAUNCH_METHODS } from '../../src/main/runtime/rpc/methods/agent-launch'
-import { STATUS_METHODS } from '../../src/main/runtime/rpc/methods/status'
+} from '../../src/main/runtime/rpc/methods/agent-launch/agent-launch.test-fixture'
+import { AGENT_LAUNCH_METHODS } from '../../src/main/runtime/rpc/methods/agent-launch/agent-launch'
+import { STATUS_METHODS } from '../../src/main/runtime/rpc/methods/host-management/status'
 import { closeTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
 const TARGETS = [

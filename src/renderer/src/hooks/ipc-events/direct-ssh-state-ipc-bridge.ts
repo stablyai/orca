@@ -82,6 +82,13 @@ export function registerDirectSshStateIpcBridge(unsubs: (() => void)[]): () => v
   )
 
   unsubs.push(
+    window.api.ssh.onTargetRemoved(({ targetId }) => {
+      // Stop deferred reconnects and drop live state whichever client removed the target.
+      useAppStore.getState().clearRemovedSshTargetState(targetId)
+    })
+  )
+
+  unsubs.push(
     window.api.ssh.onPortForwardsChanged(({ targetId, forwards, unrestored }) => {
       const pendingPortHydration = pendingPortHydrationByTargetId.get(targetId)
       if (pendingPortHydration) {

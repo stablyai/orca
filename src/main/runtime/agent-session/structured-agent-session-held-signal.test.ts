@@ -27,8 +27,8 @@ vi.mock('../../ai-vault/scan-service/session-scanner-service-spawn', async (impo
   resolveAiVaultSessionTitlesInService: vi.fn()
 }))
 
-const { AI_VAULT_METHODS } = await import('../rpc/methods/ai-vault')
-await import('../rpc/methods/agent-launch-replay')
+const { AI_VAULT_METHODS } = await import('../rpc/methods/history/ai-vault')
+await import('../rpc/methods/agent-launch/agent-launch-replay')
 
 let stateDirectory: string
 let heldChanges: boolean[]

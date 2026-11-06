@@ -22,7 +22,7 @@ import { resolvePluginHostEntryPath } from '../plugins/workers/plugin-host-proce
 import { applyPluginConsent, applyPluginEnablement } from '../plugins/plugin-enablement'
 import { clearRemovedPluginSettings } from '../plugins/plugin-removal-settings'
 import { clearPluginFrameStorage } from '../plugins/panels/plugin-frame-guest-sessions'
-import { setPluginServiceForRpc } from '../runtime/rpc/methods/plugins'
+import { setPluginServiceForRpc } from '../runtime/rpc/methods/plugins/plugins'
 import { bindPluginDesktopViews } from '../plugins/view/plugin-view-desktop-binding'
 import { openPluginFrameGuestDevTools } from '../plugins/panels/plugin-frame-guest-diagnostics'
 import {

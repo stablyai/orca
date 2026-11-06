@@ -2,8 +2,12 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from 'vitest'
-import { OrchestrationDb } from '../../../src/main/runtime/orchestration/db'
+import { OrchestrationDb } from '../../../src/main/runtime/orchestration/db/orchestration-db'
 import { SCHEMA_VERSION } from '../../../src/main/runtime/orchestration/db/contract-constants'
+import '../../../src/main/runtime/orchestration/db/messages/mailbox-routing-page'
+import '../../../src/main/runtime/orchestration/db/dispatch-row-writer'
+import '../../../src/main/runtime/orchestration/db/attempt-outcome-projection'
+
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 
 // Pin the last pre-v41 implementation: this contract specifically exercises status-only readers.

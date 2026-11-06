@@ -11,12 +11,12 @@ import {
 } from './core'
 
 import { successResponse } from './errors'
-import { ALL_RPC_METHODS } from './methods'
-import { withoutMethodsThisHostDoesNotServe } from './methods/session-terminal-scrollback'
+import { ALL_RPC_METHODS } from './methods/rpc-method-registry'
+import { withoutMethodsThisHostDoesNotServe } from './methods/terminal/session-terminal-scrollback'
 import { emulatorProbe, emulatorProbeError } from '../../emulator/emulator-probe'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { isDurableMutation } from '../../../shared/orchestration-rpc-contract'
-import type { OrchestrationSessionCaller } from '../orchestration/orchestration-caller-identity'
+import type { OrchestrationSessionCaller } from '../orchestration/addressing/orchestration-caller-identity'
 import {
   getOrchestrationMutationExecutor,
   type DurableMutationInvocation,
