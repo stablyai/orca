@@ -3000,7 +3000,7 @@ const ORCA_PLUGIN_AUTHORING_HOST_API_REFERENCE_MARKDOWN = [
   "- `appearance.apply` (capability `appearance:write`; worker; since 1.4): Publishes owned app/editor and terminal colors and selects them in the desktop. Returns publication, not renderer acknowledgement.",
   "  `(params: { expectedRevision: string; app: string; terminal: string }) => { revision: string; themeId: string; mode: \"dark\" | \"light\"; delivery: \"published\" }`",
   "- `workspace.list` (capability `workspace:read`; worker; since 1.3): Lists every workspace, Git worktrees and folders, on every host Orca reaches.",
-  "  `(params?: {}) => { workspaces: { id: string; kind: \"worktree\" | \"folder\"; name: string; path: string; branch: string | null; hostId: string | null }[]; truncated: boolean }`",
+  "  `(params?: {}) => { workspaces: { id: string; kind: \"worktree\" | \"folder\"; name: string; path: string; branch: string | null; hostId: string | null; createdAt: number | null; lastActivityAt: number | null }[]; truncated: boolean }`",
   "- `workspace.open` (capability `workspace:write`; worker; since 1.3): Shows a workspace in Orca, as clicking it in the sidebar does; a folder workspace needs the desktop app.",
   "  `(params: { workspaceId: string }) => { opened: true }`",
   "- `terminal.create` (capability `terminal:send`; worker; since 1.3): Opens a terminal in a workspace, optionally running a command, in the background.",
