@@ -131,7 +131,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
       type="button"
       size="sm"
       aria-label={translate('components.native-chat.queuedMessages.save', 'Save')}
-      className="group-data-[terminal=true]/toolbar:size-8 group-data-[terminal=true]/toolbar:px-0 pointer-coarse:group-data-[terminal=true]/toolbar:size-10"
+      className="group-data-[terminal=true]/toolbar:size-8 pointer-coarse:group-data-[terminal=true]/toolbar:size-10"
       disabled={sendDisabled}
       onMouseDown={(event) => event.preventDefault()}
       onClick={handleCriticalAction}
