@@ -24692,7 +24692,8 @@
     },
     "chart": {
       "clickToZoom": "点击工作区以放大查看",
-      "folderSizes": "文件夹大小"
+      "folderSizes": "文件夹大小",
+      "moreItems": "另有 {{value0}} 项"
     },
     "window": {
       "errorDescription": "关闭并重新打开空间分析以重试",
