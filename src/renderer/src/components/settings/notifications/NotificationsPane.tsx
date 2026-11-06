@@ -23,6 +23,7 @@ type NotificationsPaneProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
 }
 
+/** Merge rapid edits against the latest settings; question-only mode preserves disabled source toggles for later use. */
 export function NotificationsPane({
   settings,
   updateSettings

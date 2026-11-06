@@ -102,8 +102,8 @@ export class TerminalAgentPhonePush {
     }
   }
 
+  /** A newly attached window owns fan-out; headless delivery forwards hook-time tool evidence through the shared source gate. */
   private send(news: PaneNews): void {
-    // Recheck window ownership at delivery to avoid duplicating a newly opened window's push.
     const { agentState, paneKey } = news.event
     if (
       this.deps.hasWindow() ||

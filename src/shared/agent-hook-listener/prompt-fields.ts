@@ -112,6 +112,7 @@ export function resolvePrompt(
   return state.lastPromptByPaneKey.get(paneKey) ?? ''
 }
 
+/** Missing updates inherit tool context; explicit unnamed updates clear it so approvals cannot reuse a previous question tool. */
 export function resolveToolState(
   state: HookListenerState,
   paneKey: string,
