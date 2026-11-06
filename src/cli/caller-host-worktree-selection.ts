@@ -271,13 +271,12 @@ export function selectWorktreeIdOnHost(
   return match ? worktreeSelections([match], catalog)[0]!.selector : undefined
 }
 
-/** The workspace an Orca terminal names, scoped to its host; native folders and floating terminals have no catalog row. */
+/** The workspace this Orca terminal names; native folders and the floating terminal have no catalog row. */
 export function selectCallerTerminalWorkspace(
   catalog: readonly CatalogRow[],
-  hostId: ExecutionHostId,
-  env: Readonly<Record<string, string | undefined>> = process.env
+  hostId: ExecutionHostId
 ): string | undefined {
-  const worktreeId = env.ORCA_WORKTREE_ID
+  const worktreeId = process.env.ORCA_WORKTREE_ID
   const trimmed = worktreeId?.trim()
   if (isFloatingWorkspaceId(worktreeId)) {
     return undefined
@@ -292,7 +291,7 @@ export function selectCallerTerminalWorkspace(
     }
     return scoped
   }
-  return [trimmed, env.ORCA_WORKSPACE_ID?.trim()].find((id) => id?.startsWith('folder:'))
+  return [trimmed, process.env.ORCA_WORKSPACE_ID?.trim()].find((id) => id?.startsWith('folder:'))
 }
 
 export async function resolveCallerPaneWorktreeSelector(
