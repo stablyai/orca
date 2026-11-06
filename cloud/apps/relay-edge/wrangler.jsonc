@@ -52,8 +52,7 @@
         // Per-deploy override: --durable-objects-code-update-mode "deferred 120s"
         "code_update_strategy": { "mode": "deferred", "max_delay": 300 }
       },
-      // Analytics Engine is not enabled on the account; metrics fall back to a no-op.
-      // "analytics_engine_datasets": [{ "binding": "METRICS", "dataset": "orca_relay_edge_spike" }],
+      "analytics_engine_datasets": [{ "binding": "METRICS", "dataset": "orca_relay_edge_spike" }],
       "vars": {
         // No database on the spike: stub credentials, no epoch check (load tests only).
         "EDGE_BACKEND": "spike",

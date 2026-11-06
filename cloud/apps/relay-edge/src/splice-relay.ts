@@ -333,6 +333,8 @@ export class SpliceRelay extends DurableObject<Env> {
   }
 
   private close(ws: WebSocket, code: number, reason: string): void {
+    const kind = this.identify(ws)?.kind ?? 'splice'
+    metric(this.env, 'refuse', 1, `${kind}:${code}`, [], reason)
     try {
       ws.close(code, reason)
     } catch {

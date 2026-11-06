@@ -17,6 +17,7 @@ import {
   type InstallInput,
   type RelayIdentity
 } from '../../relay/src/credential-store'
+import { metric } from './metrics'
 import { EdgePostgresDatabase, isEdgeDatabaseTransientError } from './edge-database'
 import { edgeConfig, type Env } from './env'
 
@@ -58,8 +59,8 @@ class PostgresBackend implements EdgeBackend {
   private readonly database: EdgePostgresDatabase
   private readonly store: RelayCredentialStore
 
-  constructor(connectionString: string, private readonly cellId: string) {
-    this.database = new EdgePostgresDatabase(connectionString)
+  constructor(connectionString: string, private readonly cellId: string, onOp?: (ms: number, outcome: 'ok' | 'transient' | 'error') => void) {
+    this.database = new EdgePostgresDatabase(connectionString, onOp)
     this.store = new RelayCredentialStore(this.database)
   }
 
@@ -193,7 +194,7 @@ export function edgeBackend(env: Env): EdgeBackend {
   const config = edgeConfig(env)
   return config.backend === 'spike'
     ? new SpikeBackend(env)
-    : new PostgresBackend(env.HYPERDRIVE!.connectionString, config.cellId)
+    : new PostgresBackend(env.HYPERDRIVE!.connectionString, config.cellId, (ms, outcome) => metric(env, 'db_op', ms, outcome))
 }
 
 // Control command failures, as the cells report them (host-session-registry controlErrorCode):

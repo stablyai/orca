@@ -753,6 +753,7 @@ export class HostRelay extends DurableObject<Env> {
   }
 
   private close(ws: WebSocket, code: number, reason: string): void {
+    metric(this.env, 'refuse', 1, `control:${code}`, [], reason)
     try {
       ws.close(code, reason)
     } catch {

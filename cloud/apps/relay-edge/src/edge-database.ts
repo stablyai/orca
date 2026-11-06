@@ -95,7 +95,23 @@ class EdgeTransaction implements RelayDatabase {
 export class EdgePostgresDatabase implements RelayDatabase {
   readonly dialect = 'postgres' as const
 
-  constructor(private readonly connectionString: string) {}
+  constructor(
+    private readonly connectionString: string,
+    // Called once per operation with its wall time and outcome (metrics; must not throw).
+    private readonly onOp: (ms: number, outcome: 'ok' | 'transient' | 'error') => void = () => {}
+  ) {}
+
+  private async timed<T>(operation: () => Promise<T>): Promise<T> {
+    const started = Date.now()
+    try {
+      const result = await operation()
+      this.onOp(Date.now() - started, 'ok')
+      return result
+    } catch (error) {
+      this.onOp(Date.now() - started, isEdgeDatabaseTransientError(error) ? 'transient' : 'error')
+      throw error
+    }
+  }
 
   private async connect(): Promise<Client> {
     const client = new Client({
@@ -114,13 +130,15 @@ export class EdgePostgresDatabase implements RelayDatabase {
     return client
   }
 
-  async query(sql: string, params: unknown[] = []): Promise<SqlRow[]> {
-    const client = await this.connect()
-    try {
-      return await run(client, sql, params)
-    } finally {
-      await client.end().catch(() => {})
-    }
+  query(sql: string, params: unknown[] = []): Promise<SqlRow[]> {
+    return this.timed(async () => {
+      const client = await this.connect()
+      try {
+        return await run(client, sql, params)
+      } finally {
+        await client.end().catch(() => {})
+      }
+    })
   }
 
   async queryLocked(sql: string, params: unknown[] = [], options: RelayLockOptions = {}): Promise<SqlRow[]> {
@@ -136,6 +154,10 @@ export class EdgePostgresDatabase implements RelayDatabase {
     operation: (transaction: RelayDatabase) => Promise<T>,
     _options: RelayTransactionOptions = {}
   ): Promise<T> {
+    return this.timed(() => this.runTransaction(operation))
+  }
+
+  private async runTransaction<T>(operation: (transaction: RelayDatabase) => Promise<T>): Promise<T> {
     for (let attempt = 1; ; attempt++) {
       const client = await this.connect()
       let begun = false
