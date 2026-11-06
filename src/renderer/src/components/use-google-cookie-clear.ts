@@ -7,7 +7,7 @@ import { useConfirmationDialog } from './confirmation-dialog-context'
 import {
   captureGoogleCookieClearTarget,
   confirmAndClearGoogleCookies
-} from '@/lib/browser-google-cookie-clear'
+} from '@/lib/browser/cookies/browser-google-cookie-clear'
 import { translate } from '@/i18n/i18n'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 

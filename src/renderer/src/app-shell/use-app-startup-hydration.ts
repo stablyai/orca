@@ -8,12 +8,12 @@ import { reconcileHydratedWorkspaceTabModels } from './reconcile-hydrated-worksp
 import { useStartupActions } from './use-app-startup-actions'
 import { waitForNativeChatDraftsAtStartup } from './native-chat-draft-startup'
 import { WORKTREE_REFRESH_CONCURRENCY } from '../store/slices/worktrees'
-import { sweepRestoredCodexPanesForStaleAccounts } from '../lib/codex-stale-pane-sweep'
-import { fetchWorkspaceSessionWithRuntimeHostOwners } from '../lib/workspace-session-host-hydration'
+import { sweepRestoredCodexPanesForStaleAccounts } from '../lib/agent-session/accounts/codex/codex-stale-pane-sweep'
+import { fetchWorkspaceSessionWithRuntimeHostOwners } from '../lib/workspace/persistence/workspace-session-host-hydration'
 import {
   collectFolderWorkspaceKeysFromSession,
   collectWorktreeHydrationRepoIdsFromSession
-} from '../lib/workspace-session-hydration-keys'
+} from '../lib/workspace/persistence/workspace-session-hydration-keys'
 import { hydratePersistedUIAfterStartupRead } from '../lib/startup-ui-hydration'
 import {
   logRendererStartupDiagnostic,

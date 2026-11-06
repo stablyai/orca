@@ -13,7 +13,7 @@ import { getProviderAccountScope } from '../../provider-accounts/provider-accoun
 import { ProviderHostScopeControl } from '../../provider-accounts/ProviderHostScopeControl'
 import { usePreflightCardStatuses } from './source-control-preflight-card-status'
 import { translate } from '@/i18n/i18n'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 function integrationStatusLabel(
   status: 'connected' | 'unavailable' | 'not-installed' | 'not-authenticated' | 'checking'

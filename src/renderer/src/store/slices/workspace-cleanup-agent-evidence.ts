@@ -19,7 +19,7 @@ import { isExecutionHostAliasForWorktree } from '@/lib/worktree-execution-host-a
 import {
   findIndexedDetectedWorktrees,
   findIndexedWorktreeOwnerForHost
-} from '@/lib/worktree-runtime-owner-index'
+} from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceCleanupAgentStartedFailure } from './workspace-cleanup-preflight-failures'
 import { selectDetectedWorktreesByRepo, selectWorktreesByRepo } from '../workspace-record-selectors'

@@ -1639,17 +1639,17 @@
       "invariant": "Every workspace the `ssh:<targetId>` partition names is hydrated at boot, whatever kind of state it holds - terminal tabs, open editor files with unsaved hot-exit drafts, browser workspaces, tab groups, or host-qualified visit recency. An empty tab row is read as a gap, never as evidence the tabs were closed. A workspace the local partition already holds terminal tabs for is left untouched, and every workspace routes back to the partition that owns it. Adoption never destroys what it was not told about: a host row the partition holds nothing for cannot replace a populated base row, and a bare id the read found contested is gap-filled rather than replaced, because that is exactly the id where `local` and `ssh:<targetId>` are not one workspace written twice. Tab-, pane- and file-keyed rows are recovered through the same indexes the split routed them by. An explicit empty tab row written by this build survives the round trip as a present empty row and is declined by the shared seeding predicate. Boot enumerates the partitions persistence actually holds rather than inferring them from the repo catalog, so a target whose only workspace is a folder is read like any other; a folder workspace routes to the same partition main's RuntimeWorkspaceSessionController writes it to, so one workspace is never written into two stores; and a workspace adopted out of a partition routes back to that partition even on a boot whose repo catalog cannot name the host, so the write cannot re-strand what the read just reunited. `contested` means a repo id the catalog registers on more than one host, or two SSH partitions naming one id - never the mere co-presence of 'local' and `ssh:<targetId>`, which is the repair's own input.",
       "oracle": "Drive the shipping split and renderer read together for an editor-only draft, a contested primary plus parked shadow, and legacy repair followed by a closed-last-terminal round trip. Drive an assembled read into addressed patch callbacks while writing a sibling and require the declined row to survive in its own partition. These in-memory composition checks do not establish file durability or actual reboot recovery.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/workspace-session-ssh-partition-round-trip.test.ts src/renderer/src/lib/workspace-session-ssh-partition-ownership.test.ts src/renderer/src/lib/workspace-session-host-contention.test.ts src/shared/workspace-session/workspace-session-partition-owner.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/workspace/persistence/workspace-session-ssh-partition-round-trip.test.ts src/renderer/src/lib/workspace/persistence/workspace-session-ssh-partition-ownership.test.ts src/renderer/src/lib/workspace/persistence/workspace-session-host-contention.test.ts src/shared/workspace-session/workspace-session-partition-owner.test.ts"
       ],
       "testFiles": [
-        "src/renderer/src/lib/workspace-session-ssh-partition-round-trip.test.ts",
-        "src/renderer/src/lib/workspace-session-ssh-partition-ownership.test.ts",
-        "src/renderer/src/lib/workspace-session-host-contention.test.ts",
+        "src/renderer/src/lib/workspace/persistence/workspace-session-ssh-partition-round-trip.test.ts",
+        "src/renderer/src/lib/workspace/persistence/workspace-session-ssh-partition-ownership.test.ts",
+        "src/renderer/src/lib/workspace/persistence/workspace-session-host-contention.test.ts",
         "src/shared/workspace-session/workspace-session-partition-owner.test.ts"
       ],
       "assertionRefs": [
         {
-          "file": "src/renderer/src/lib/workspace-session-ssh-partition-round-trip.test.ts",
+          "file": "src/renderer/src/lib/workspace/persistence/workspace-session-ssh-partition-round-trip.test.ts",
           "assertions": [
             "still fills a gap on a contested id",
             "sends an editor-only SSH workspace to its partition and reads it back",
@@ -1657,13 +1657,13 @@
           ]
         },
         {
-          "file": "src/renderer/src/lib/workspace-session-ssh-partition-ownership.test.ts",
+          "file": "src/renderer/src/lib/workspace/persistence/workspace-session-ssh-partition-ownership.test.ts",
           "assertions": [
             "keeps a declined row in its own partition when a sibling workspace is written"
           ]
         },
         {
-          "file": "src/renderer/src/lib/workspace-session-host-contention.test.ts",
+          "file": "src/renderer/src/lib/workspace/persistence/workspace-session-host-contention.test.ts",
           "assertions": ["does not strand the runtime co-claimant when the SSH row is written"]
         },
         {
@@ -1679,7 +1679,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/workspace-session-ssh-partition-round-trip.test.ts src/renderer/src/lib/workspace-session-ssh-partition-ownership.test.ts src/renderer/src/lib/workspace-session-host-contention.test.ts src/shared/workspace-session-partition-owner.test.ts",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/workspace-session-ssh-partition-round-trip.test.ts src/renderer/src/lib/workspace-session-ssh-partition-ownership.test.ts src/renderer/src/lib/workspace-session-host-contention.test.ts src/shared/workspace-session/workspace-session-partition-owner.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/workspace/persistence/workspace-session-ssh-partition-round-trip.test.ts src/renderer/src/lib/workspace/persistence/workspace-session-ssh-partition-ownership.test.ts src/renderer/src/lib/workspace/persistence/workspace-session-host-contention.test.ts src/shared/workspace-session/workspace-session-partition-owner.test.ts",
           "result": "passed",
           "durationSeconds": 7.13,
           "summary": "64 tests passed across 5 files: the real Store publish, the shipping write/read split round trip, the older-client empty-publish skew direction, the contested-bare-id and empty-host-row guards, the closed-last-terminal tombstone boundary, and the partition-ownership suite covering folder-workspace routing, the persistence-side partition census, read-source write-back, and the catalog attribution that keeps a residue partition from winning the read."
@@ -1783,7 +1783,7 @@
     },
     {
       "id": "agent-session.hibernation-runtime-inventory-budget",
-      "title": "Hibernation skips irrelevant remote inventories and preserves fresh host evidence",
+      "title": "Hibernation preserves fresh host evidence and shutdown safety",
       "maturity": "experimental",
       "protection": "partial",
       "owner": "agent-session-runtime",
@@ -1793,28 +1793,28 @@
       "providers": ["local", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "remote-runtime"],
-      "coverageNotes": "Local hibernation, remote inventory authority and folder-workspace identity are covered by coordinator/model contracts on macOS. Daemon, SSH, WSL, relay and native platform execution boundaries and existing RPC payloads are unchanged.",
+      "coverageNotes": "Local hibernation, remote inventory authority and folder-workspace identity are covered by coordinator/model contracts on macOS. Daemon, SSH, WSL, relay and native platform execution boundaries and existing RPC payloads are unchanged. Current assertions cover shutdown safety and owning-host selection; historical inventory-count and performance evidence below is retained for provenance and is not current count coverage.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/blob/main/src/renderer/src/lib/agent-hibernation-coordinator.test.ts"
       ],
       "invariant": "Automatic hibernation must retain two stable confirmations and fresh execution-host evidence before shutdown. Skipping a workspace with no completed agent must not authorize a newly completed pane using stale client PTYs.",
-      "oracle": "100 remote workspaces containing working/waiting agents issue zero runtime calls. A skipped workspace completing while another inventory awaits remains ineligible until two later host-confirmed passes, and so does a workspace that only becomes runtime-owned while an inventory is outstanding — a pass carrying no host evidence for a workspace never counts as one of its two confirmations. Folder and git workspaces hibernate the exact host PTY; rejected/truncated inventories and intervening input/output or state changes block shutdown.",
+      "oracle": "Working and waiting agents across remote workspaces must not be shut down. A skipped workspace completing while another inventory awaits remains ineligible until two later host-confirmed passes, and so does a workspace that only becomes runtime-owned while an inventory is outstanding — a pass carrying no host evidence for a workspace never counts as one of its two confirmations. Folder and git workspaces hibernate the exact host PTY; rejected/truncated inventories and intervening input/output or state changes block shutdown.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/agent-hibernation-coordinator.test.ts src/renderer/src/lib/agent-hibernation-planner.test.ts src/renderer/src/lib/agent-hibernation-pane-age.test.ts src/renderer/src/lib/agent-hibernation-visibility.test.ts src/renderer/src/lib/foreground-terminal-tabs.test.ts src/renderer/src/lib/agent-hibernation-runtime-liveness-race.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/agent-session/hibernation/agent-hibernation-coordinator.test.ts src/renderer/src/lib/agent-session/hibernation/agent-hibernation-planner.test.ts src/renderer/src/lib/agent-session/hibernation/agent-hibernation-pane-age.test.ts src/renderer/src/lib/agent-session/hibernation/agent-hibernation-visibility.test.ts src/renderer/src/lib/foreground-terminal-tabs.test.ts src/renderer/src/lib/agent-session/hibernation/agent-hibernation-runtime-liveness-race.test.ts"
       ],
       "testFiles": [
-        "src/renderer/src/lib/agent-hibernation-coordinator.test.ts",
-        "src/renderer/src/lib/agent-hibernation-planner.test.ts",
-        "src/renderer/src/lib/agent-hibernation-pane-age.test.ts",
-        "src/renderer/src/lib/agent-hibernation-visibility.test.ts",
+        "src/renderer/src/lib/agent-session/hibernation/agent-hibernation-coordinator.test.ts",
+        "src/renderer/src/lib/agent-session/hibernation/agent-hibernation-planner.test.ts",
+        "src/renderer/src/lib/agent-session/hibernation/agent-hibernation-pane-age.test.ts",
+        "src/renderer/src/lib/agent-session/hibernation/agent-hibernation-visibility.test.ts",
         "src/renderer/src/lib/foreground-terminal-tabs.test.ts",
-        "src/renderer/src/lib/agent-hibernation-runtime-liveness-race.test.ts"
+        "src/renderer/src/lib/agent-session/hibernation/agent-hibernation-runtime-liveness-race.test.ts"
       ],
       "assertionRefs": [
         {
-          "file": "src/renderer/src/lib/agent-hibernation-coordinator.test.ts",
+          "file": "src/renderer/src/lib/agent-session/hibernation/agent-hibernation-coordinator.test.ts",
           "assertions": [
-            "does not request runtime inventories for 100 workspaces without completed agents",
+            "does not hibernate working or waiting agents across remote workspaces",
             "requires host evidence after a skipped workspace completes during another inventory request",
             "hibernates a runtime-backed candidate in %s with fresh liveness and exact PTYs",
             "fails closed on truncated runtime liveness samples",
@@ -1822,7 +1822,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/lib/agent-hibernation-runtime-liveness-race.test.ts",
+          "file": "src/renderer/src/lib/agent-session/hibernation/agent-hibernation-runtime-liveness-race.test.ts",
           "assertions": [
             "requires host evidence when a workspace becomes runtime-owned during an inventory request"
           ]
@@ -1834,7 +1834,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/agent-hibernation-coordinator.test.ts src/renderer/src/lib/agent-hibernation-planner.test.ts src/renderer/src/lib/agent-hibernation-confirmation.test.ts src/renderer/src/lib/agent-hibernation-pane-age.test.ts src/renderer/src/lib/agent-hibernation-output-activity.test.ts src/renderer/src/lib/agent-hibernation-visibility.test.ts src/renderer/src/lib/foreground-terminal-tabs.test.ts src/renderer/src/lib/agent-hibernation-runtime-liveness-race.test.ts",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/agent-hibernation-coordinator.test.ts src/renderer/src/lib/agent-hibernation-planner.test.ts src/renderer/src/lib/agent-hibernation-pane-age.test.ts src/renderer/src/lib/agent-hibernation-visibility.test.ts src/renderer/src/lib/foreground-terminal-tabs.test.ts src/renderer/src/lib/agent-hibernation-runtime-liveness-race.test.ts",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/agent-session/hibernation/agent-hibernation-coordinator.test.ts src/renderer/src/lib/agent-session/hibernation/agent-hibernation-planner.test.ts src/renderer/src/lib/agent-session/hibernation/agent-hibernation-pane-age.test.ts src/renderer/src/lib/agent-session/hibernation/agent-hibernation-visibility.test.ts src/renderer/src/lib/foreground-terminal-tabs.test.ts src/renderer/src/lib/agent-session/hibernation/agent-hibernation-runtime-liveness-race.test.ts",
           "result": "passed",
           "durationSeconds": 48.18,
           "summary": "93 tests passed across eight coordinator, liveness-race, planner, confirmation, age, activity and visibility files."
@@ -1863,7 +1863,7 @@
       "promotionCriteria": [
         "Complete CI soak with zero unexplained flakes and preserve the observable oracle."
       ],
-      "demotionRule": "Keep experimental until CI soak; investigate failures without relaxing fidelity, liveness or resource-count assertions."
+      "demotionRule": "Keep experimental until CI soak; investigate failures without relaxing fidelity, liveness or shutdown-safety assertions."
     },
     {
       "id": "terminal-performance.osc-status-scan-budget",
@@ -2533,12 +2533,12 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/worktree-jump/WorktreeJumpPalette.test.tsx",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser/palette/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/shared/workspace-session/workspace-session-schema.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/shared/workspace-session/workspace-session-schema.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/worktree-jump/WorktreeJumpPalette.test.tsx src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/shared/workspace-session/workspace-session-schema.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/worktree-jump/WorktreeJumpPalette.test.tsx src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/lib/open-mobile-emulator-tab.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/shared/workspace-session/workspace-session-schema.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser/palette/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/shared/workspace-session/workspace-session-schema.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/browser/palette/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/browser/palette/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/shared/workspace-session/workspace-session-schema.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/worktree-jump/WorktreeJumpPalette.test.tsx src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/browser/palette/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/browser/palette/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/shared/workspace-session/workspace-session-schema.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/worktree-jump/WorktreeJumpPalette.test.tsx src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/browser/palette/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/browser/palette/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/lib/open-mobile-emulator-tab.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/shared/workspace-session/workspace-session-schema.test.ts",
         "pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
@@ -2546,9 +2546,9 @@
         "src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts",
         "src/renderer/src/components/worktree-jump/WorktreeJumpPalette.test.tsx",
         "src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts",
-        "src/renderer/src/lib/browser-palette-page-entries.test.ts",
+        "src/renderer/src/lib/browser/palette/browser-palette-page-entries.test.ts",
         "src/renderer/src/lib/simulator-palette-search.test.ts",
-        "src/renderer/src/lib/browser-page-palette-activation.test.ts",
+        "src/renderer/src/lib/browser/palette/browser-page-palette-activation.test.ts",
         "src/renderer/src/lib/simulator-tab-palette-activation.test.ts",
         "src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts",
         "src/renderer/src/lib/open-mobile-emulator-tab.test.ts",
@@ -2584,7 +2584,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/lib/browser-palette-page-entries.test.ts",
+          "file": "src/renderer/src/lib/browser/palette/browser-palette-page-entries.test.ts",
           "assertions": [
             "same-id local and remote browser tabs appear once under their owning hosts"
           ]
@@ -3648,12 +3648,12 @@
       "providers": ["lan", "tailscale", "cloud-relay"],
       "coveredPlatforms": ["macos", "linux"],
       "coveredProviders": ["lan", "tailscale", "cloud-relay"],
-      "coverageNotes": "Deterministic React/provider tests cover catalog, missing-host, construction, cancellation, release, forget, refresh, backoff, stale-generation outcomes, and path-aware recovery presentation. Direct sessions cover idle probing and three fair misses. Relay sessions cover zero idle polling, rate-limited foreground probes, two fair misses, authenticated activity before semantic decoding, delivery ambiguity, scheduler stalls, and write failure. Physical iOS/Android sleep, carrier/Tailscale loss, and production relay paths remain live-test gaps. Audit1303 intentionally removes supplied-state/mock-callback component and hook examples in mobile/src/transport/connection-health.test.ts. Their exact retired alarms are not equivalent to retained coverage; no new runtime, physical phone or deployed mixed-version evidence is claimed. Audit1315 removes/narrows mobile/src/transport/rpc-session-liveness-watchdog.test.ts. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands. Audit1322 removes/narrows mobile/src/transport/rpc-session-liveness-integration.test.ts, mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands. Audit1341 scope1335 removes/narrows mobile/src/transport/mobile-relay-rpc-session.test.ts, mobile/src/transport/stable-logical-rpc-client.test.ts. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands. Audit1345: focused Linux unit execution now validates this primary selector on source head de234fc7b4a73eda58dd0084bc9e064b5d1191e0. Historical platform statements above describe earlier receipts. Removed fixture/matrix/call-count alarms are intentional losses with no equivalent replacement; no live SSH, physical-provider, p95 or cross-platform claim. Audit1351 refreshes Audit1339 removals/narrowing of mobile/src/transport/mobile-relay-e2ee-link.test.ts. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands. Audit1352: focused Linux unit selections validated on source head b638e07d395b76af3ba6b03761a1a0fe7e5e026e. Historical statements above retain their original scope. Intentional test losses are recorded in knownGaps; these runs claim no physical-provider, p95, rendered E2E or cross-platform validation. Audit1360: focused Linux unit selections validated on source head 415c9cffc2d10024131ec4b6721767a22195de6d. Historical statements above retain their original scope. Intentional test losses are recorded in knownGaps; these runs claim no physical-provider, p95, rendered E2E or cross-platform validation.",
+      "coverageNotes": "Deterministic React/provider tests cover catalog, missing-host, construction, cancellation, release, forget, refresh, backoff, stale-generation outcomes, and path-aware recovery presentation. Direct sessions cover idle probing and three fair misses. Relay sessions cover a 15s idle probe, rate-limited foreground probes, two fair misses, authenticated activity before semantic decoding, delivery ambiguity, scheduler stalls, and write failure. Physical iOS/Android sleep, carrier/Tailscale loss, and production relay paths remain live-test gaps. Audit1303 intentionally removes supplied-state/mock-callback component and hook examples in mobile/src/transport/connection-health.test.ts. Their exact retired alarms are not equivalent to retained coverage; no new runtime, physical phone or deployed mixed-version evidence is claimed. Audit1315 removes/narrows mobile/src/transport/rpc-session-liveness-watchdog.test.ts. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands. Audit1322 removes/narrows mobile/src/transport/rpc-session-liveness-integration.test.ts, mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands. Audit1341 scope1335 removes/narrows mobile/src/transport/mobile-relay-rpc-session.test.ts, mobile/src/transport/stable-logical-rpc-client.test.ts. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands. Audit1345: focused Linux unit execution now validates this primary selector on source head de234fc7b4a73eda58dd0084bc9e064b5d1191e0. Historical platform statements above describe earlier receipts. Removed fixture/matrix/call-count alarms are intentional losses with no equivalent replacement; no live SSH, physical-provider, p95 or cross-platform claim. Audit1351 refreshes Audit1339 removals/narrowing of mobile/src/transport/mobile-relay-e2ee-link.test.ts. Exact retired scenarios are intentionally lost; surviving assertions are limited to unchanged retained authored cases. No equivalent replacement, physical phone or deployed mixed-host claim. Fresh validation is required for narrowed commands. Audit1352: focused Linux unit selections validated on source head b638e07d395b76af3ba6b03761a1a0fe7e5e026e. Historical statements above retain their original scope. Intentional test losses are recorded in knownGaps; these runs claim no physical-provider, p95, rendered E2E or cross-platform validation. Audit1360: focused Linux unit selections validated on source head 415c9cffc2d10024131ec4b6721767a22195de6d. Historical statements above retain their original scope. Intentional test losses are recorded in knownGaps; these runs claim no physical-provider, p95, rendered E2E or cross-platform validation.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4153/mobile-app-disconnects-frequently"
       ],
-      "invariant": "A provider-wanted host without a logical client retries every current-generation pre-client failure until success or explicit cancellation, while release, disconnect, forget, refresh, and stale async continuations preserve their distinct resurrection policies. Direct sessions probe after authenticated silence and terminate after three fair misses. Relay sessions emit no periodic idle or demand-driven probes, use rate-limited foreground probes, and terminate after two fair misses. Authenticated traffic, scheduler stalls, and replacement identities cannot manufacture death. Relay recovery must notify presentation independently of transport-state changes, must not inherit a failed direct path's Tailscale hint, and must retain long-outage escalation.",
-      "oracle": "Inject rejected and never-settling catalog reads, missing profiles, synchronous construction failure, release, refresh, forget, revival, and stale completion under fake time. Require bounded 1s through 60s retry, exact current-generation publication, and no zero-owner or forgotten-client resurrection. Inject direct and relay authenticated text/binary traffic, silent probe windows, stalled clocks, replacement identities, and failed writes. Require direct three-miss tolerance; Relay zero idle and demand-driven liveness traffic, one foreground probe sequence, two fair 4s misses, a 10s voluntary rate limit, no old-session network-change probe, and delivery-unknown mutations without replay. Start and clear Relay recovery without changing transport state and require observers to rerender. Project five failed Tailscale attempts into a neutral Relay-specific verdict, then require twelve attempts to produce a Relay-specific unreachable verdict with no Tailscale hint.",
+      "invariant": "A provider-wanted host without a logical client retries every current-generation pre-client failure until success or explicit cancellation, while release, disconnect, forget, refresh, and stale async continuations preserve their distinct resurrection policies. Direct sessions probe after authenticated silence and terminate after three fair misses. Relay sessions probe after 15s of authenticated silence, emit no demand-driven probes, use rate-limited foreground probes, and terminate after two fair misses; a tolerant miss does not count while authenticated frames arrived during the probe window, or while a sent request still awaits its reply and the link has been silent for less than the request timeout. Authenticated traffic, scheduler stalls, and replacement identities cannot manufacture death. Relay recovery must notify presentation independently of transport-state changes, must not inherit a failed direct path's Tailscale hint, and must retain long-outage escalation.",
+      "oracle": "Inject rejected and never-settling catalog reads, missing profiles, synchronous construction failure, release, refresh, forget, revival, and stale completion under fake time. Require bounded 1s through 60s retry, exact current-generation publication, and no zero-owner or forgotten-client resurrection. Inject direct and relay authenticated text/binary traffic, silent probe windows, stalled clocks, replacement identities, and failed writes. Require direct three-miss tolerance; Relay idle probes only after 15s without authenticated frames, no demand-driven liveness traffic, one foreground probe sequence, two fair 4s misses, a 10s voluntary rate limit, no old-session network-change probe, and delivery-unknown mutations without replay. Start and clear Relay recovery without changing transport state and require observers to rerender. Project five failed Tailscale attempts into a neutral Relay-specific verdict, then require twelve attempts to produce a Relay-specific unreachable verdict with no Tailscale hint.",
       "commands": [
         "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/client-context.test.ts mobile/src/transport/host-open-recovery.test.tsx mobile/src/transport/host-open-retry-scheduler.test.ts mobile/src/transport/rpc-session-liveness-watchdog.test.ts mobile/src/transport/rpc-session-liveness-integration.test.ts mobile/src/transport/mobile-relay-rpc-session.test.ts mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts mobile/src/transport/mobile-endpoint-nudge-router.test.ts mobile/src/transport/mobile-relay-e2ee-link.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts"
       ],
@@ -3725,7 +3725,11 @@
         {
           "file": "mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts",
           "assertions": [
-            "keeps availability returns tolerant while a proven resume bypasses recent probes"
+            "keeps availability returns tolerant while a proven resume bypasses recent probes",
+            "probes an idle relay and closes it when the probes go unanswered",
+            "keeps an idle relay open while a slow reply is still downloading",
+            "closes a silent relay even while requests keep going unanswered",
+            "keeps an idle relay open while a stream backlog delays the probe reply"
           ]
         },
         {
@@ -3788,13 +3792,13 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Each wanted clientless host owns at most one open and one retry timer with a 60-second capped tail. Direct sessions own one idle or probe timer. Idle Relay sessions own no liveness timer and emit no periodic or demand-driven liveness traffic; foreground sequences start at most once per 10 seconds. No subprocess, wire opcode, or server-side work is introduced."
+        "evidence": "Each wanted clientless host owns at most one open and one retry timer with a 60-second capped tail. Direct sessions own one idle or probe timer. Relay sessions own one idle or probe timer and send at most one idle probe per 15 seconds without authenticated frames, about four small round trips per idle foreground minute, and no demand-driven liveness traffic; foreground sequences start at most once per 10 seconds. Each Relay idle probe costs one relay forward and one desktop status.get probe dispatch; no subprocess or wire opcode is introduced."
       },
       "promotionCriteria": [
         "Collect 100 consecutive CI passes or 14 days of soak history.",
         "Capture the existing final-timeout log immediately before an affected-device drop.",
         "Run physical iOS and Android direct LAN, Tailscale, relay, background/resume, and network-handoff journeys.",
-        "Measure reconnect radio and battery impact during the 60-second catalog retry tail, direct 44-second idle liveness budget, and Relay foreground probes."
+        "Measure reconnect radio and battery impact during the 60-second catalog retry tail, direct 44-second idle liveness budget, Relay 15-second idle probes, and Relay foreground probes."
       ],
       "knownGaps": [
         "No physical iOS or Android device was exercised.",
@@ -7872,7 +7876,7 @@
       "invariant": "Every agent launch surface must advertise the provider set detected on its explicit execution authority and launch on that same authority; a local Floating Workspace must never inherit an unrelated active project's WSL, SSH, or paired-runtime context.",
       "oracle": "The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): Model an active WSL project and a native-Windows Floating Workspace with WSL-only Claude and host-only Codex. Keep both detection consumers mounted, require their advertised sets to stay disjoint through refresh, require the legacy active-project inventory to remain unchanged, then independently assert the Floating launch call and PTY transport select local IPC with no WSL project runtime.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useDetectedAgents.test.tsx src/renderer/src/store/slices/detected-agents.test.ts src/renderer/src/store/slices/local-detected-agent-state.test.ts src/renderer/src/store/slices/repos-project-mutations.test.ts src/renderer/src/lib/launch-agent-in-new-tab.test.ts --reporter=verbose",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useDetectedAgents.test.tsx src/renderer/src/store/slices/detected-agents.test.ts src/renderer/src/store/slices/local-detected-agent-state.test.ts src/renderer/src/store/slices/repos-project-mutations.test.ts src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab.test.ts --reporter=verbose",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-spawn-and-startup.test.ts --reporter=dot",
         "Headed Electron/CDP STA-4027 journey on Orca environment windows 2 with a selected Ubuntu-24.04 WSL project and local Floating Workspace"
       ],
@@ -7881,7 +7885,7 @@
         "src/renderer/src/store/slices/detected-agents.test.ts",
         "src/renderer/src/store/slices/local-detected-agent-state.test.ts",
         "src/renderer/src/store/slices/repos-project-mutations.test.ts",
-        "src/renderer/src/lib/launch-agent-in-new-tab.test.ts",
+        "src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-spawn-and-startup.test.ts"
       ],
       "assertionRefs": [
@@ -7907,7 +7911,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/lib/launch-agent-in-new-tab.test.ts",
+          "file": "src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab.test.ts",
           "assertions": [
             "the advertised Floating agent launches in a Floating tab with null runtime ownership and no paired-runtime create call"
           ]
@@ -8052,14 +8056,14 @@
       "invariant": "Workspace activation, launch, restore, sleep, hibernate, dedupe, clearing, mount, remount, and reconnect code must not replay or resume a provider session id already owned, queued, pending, live, or durably bound to a host PTY in that workspace. A renderer with missing projection state must adopt the exact runtime-owned PTY for the original tab and leaf rather than create a replacement.",
       "oracle": "Audit1685 retires changed-source assertion and execution scope without equivalent replacement coverage. Existing unchanged-selector receipts remain scoped to their original sources. Historical prior-source oracle: Audit1683 retires changed-source assertion and execution scope without equivalent replacement coverage. Existing unchanged-selector receipts remain scoped to their original sources. Historical prior-source oracle: Retained exact unchanged-source receipts remain the only current execution evidence. Reduced selectors have no fresh execution result. Historical pre-audit oracle account for changed sources: Existing exact unchanged-selector receipts remain the only current execution evidence. Changed source selectors have no fresh execution result. Historical prior-source oracle account: Renderer-state tests assert provider-session ownership across preserved and queued panes. Main/provider contracts assert atomic attach-only adoption, stable host/worktree/tab/leaf identity, no fresh spawn on adoption, and safe paired-runtime cancellation. The Electron oracle creates inactive runtime-owned Codex and Setup PTYs plus an unrelated canary, seeds an exact resumable provider session, removes only the target renderer projections, and activates the workspace. It requires byte-stable handle, PTY, incarnation, tab, leaf, process PID, renderer graph, persisted binding, runtime id, graph epoch, and daemon PID across first mount and reload; PID-specific DOM keyboard I/O must remain live with one launch, zero resume argv, zero signals, zero interruption text, and no canary mutation.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/agent-session/resume/resume-sleeping-agent-session.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/completed-worker-retirement-resume.unit.test.ts --reporter=verbose",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session.test.ts src/main/providers/local-pty/local-pty-provider-spawn-session.test.ts src/main/daemon/terminal-host/testing/terminal-host.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts src/main/ipc/pty/pty-pane-reservation-settlement.test.ts src/main/runtime/orca-runtime.test.ts src/renderer/src/lib/pane-manager/pane-fit.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-host-session-launch.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/agent-session/resume/resume-sleeping-agent-session.test.ts src/main/providers/local-pty/local-pty-provider-spawn-session.test.ts src/main/daemon/terminal-host/testing/terminal-host.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts src/main/ipc/pty/pty-pane-reservation-settlement.test.ts src/main/runtime/orca-runtime.test.ts src/renderer/src/lib/pane-manager/pane-fit.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-host-session-launch.test.ts",
         "pnpm exec electron-vite build --mode e2e && SKIP_BUILD=1 pnpm exec playwright test tests/e2e/live-background-terminal-mount-authority.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/agent-session/lifecycle/structured-agent-cli-writers.test.ts src/main/runtime/rpc/methods/structured-sessions/creation/structured-agent-session-adoption-replay.test.ts src/main/providers/agent-foreground-process-git-bash.win32.test.ts"
       ],
       "testFiles": [
-        "src/renderer/src/lib/resume-sleeping-agent-session.test.ts",
+        "src/renderer/src/lib/agent-session/resume/resume-sleeping-agent-session.test.ts",
         "tests/e2e/completed-worker-retirement-resume.unit.test.ts",
         "src/main/providers/local-pty/local-pty-provider-spawn-session.test.ts",
         "src/main/daemon/terminal-host/testing/terminal-host.test.ts",
@@ -8091,7 +8095,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/lib/resume-sleeping-agent-session.test.ts",
+          "file": "src/renderer/src/lib/agent-session/resume/resume-sleeping-agent-session.test.ts",
           "assertions": [
             "preserved panes claim their provider session and only stale duplicates are cleared",
             "one launch per provider session: skipped duplicates are cleared instead of relaunched",
@@ -8136,7 +8140,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session.test.ts",
           "result": "passed",
           "durationSeconds": 1.9,
-          "summary": "1 test file(s) passed, 30 tests passed on main@1282f5c2d in a clean checkout."
+          "summary": "1 test file(s) passed, 30 tests passed on main@1282f5c2d in a clean checkout.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/agent-session/resume/resume-sleeping-agent-session.test.ts"
         }
       ],
       "runtimeBudget": {
@@ -8223,7 +8228,7 @@
         "Manual headed paired-server journey: isolated Orca desktop host + separate paired web client + real Codex process + 20-second WebSocket fault + reconnect + explicit stop",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/terminal/adoption/terminal-orphan-topology.test.ts src/renderer/src/runtime/web-session-terminal-orphan-recovery.test.ts src/renderer/src/runtime/web-session-terminal-orphan-mixed-version.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host/testing/terminal-host.test.ts src/main/daemon/providers/routing/testing/daemon-pty-router.test.ts src/main/daemon/providers/routing/testing/degraded-daemon-pty-provider.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts src/main/runtime/orca-runtime.test.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator-process-cadence.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host/testing/terminal-host.test.ts src/main/daemon/providers/routing/testing/daemon-pty-router.test.ts src/main/daemon/providers/routing/testing/degraded-daemon-pty-provider.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator-process-cadence.test.ts src/renderer/src/components/terminal-pane/pty-connection-completion-and-notification.test.ts src/renderer/src/lib/codex-session-restart.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host/testing/terminal-host.test.ts src/main/daemon/providers/routing/testing/daemon-pty-router.test.ts src/main/daemon/providers/routing/testing/degraded-daemon-pty-provider.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator-process-cadence.test.ts src/renderer/src/components/terminal-pane/pty-connection-completion-and-notification.test.ts src/renderer/src/lib/agent-session/accounts/codex/codex-session-restart.test.ts"
       ],
       "testFiles": [
         "src/main/providers/pty-process-inspection.test.ts",
@@ -8235,7 +8240,7 @@
         "src/renderer/src/runtime/runtime-terminal-inspection.test.ts",
         "src/renderer/src/components/terminal-pane/agent-completion-coordinator-process-cadence.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-completion-and-notification.test.ts",
-        "src/renderer/src/lib/codex-session-restart.test.ts",
+        "src/renderer/src/lib/agent-session/accounts/codex/codex-session-restart.test.ts",
         "src/shared/claimed-agent-pty-owner.test.ts",
         "src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts",
         "src/main/runtime/orca-runtime-agent-session-operation.test.ts",
@@ -8278,7 +8283,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/lib/codex-session-restart.test.ts",
+          "file": "src/renderer/src/lib/agent-session/accounts/codex/codex-session-restart.test.ts",
           "assertions": [
             "one unreachable pane cannot suppress restart notices for another authoritatively confirmed Codex pane"
           ]
@@ -8532,7 +8537,7 @@
       "oracle": "Retained exact unchanged-source receipts remain the only current execution evidence. Reduced selectors have no fresh execution result. Historical pre-audit oracle account for changed sources: The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): Start with Active Server=Local desktop, connect and navigate Windows 2, then reveal a local terminal and assert it succeeds while the persisted preference remains local before and after restart. Repeat transient routing and selected-runtime Add Project operations with exact-ID host decoys and completion reordering. Separately pair the real web client to an isolated headed host, then make its sole still-listed runtime compatibility-blocked and unavailable. Require a null authoritative selection, a disabled host option, and disabled Browse, Clone, and Create actions with no local fallback. Repeat against headless serve. Run the byte-identical selector/action contract on latest main, candidate, and candidate with the eligibility seam disabled.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser-session-host-selection.test.ts src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts --maxWorkers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/slices/repos-catalog-reconciliation.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/workspace/ownership/worktree-runtime-owner.test.ts src/renderer/src/store/slices/repos-catalog-reconciliation.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/project-admission/dialog/AddRepoStartSteps.test.tsx --maxWorkers=1",
         "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line",
         "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line"
@@ -8545,7 +8550,7 @@
         "src/renderer/src/web/web-preload-api-runtime-environment.test.ts",
         "src/renderer/src/components/sidebar/project-admission/dialog/AddRepoStartSteps.test.tsx",
         "src/renderer/src/lib/resolved-worktree-execution-host.test.ts",
-        "src/renderer/src/lib/worktree-runtime-owner.test.ts",
+        "src/renderer/src/lib/workspace/ownership/worktree-runtime-owner.test.ts",
         "src/renderer/src/store/slices/repos-catalog-reconciliation.test.ts",
         "src/renderer/src/store/slices/repos-project-groups.test.ts",
         "src/renderer/src/store/slices/repos-selected-owner-routing.test.ts",

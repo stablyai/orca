@@ -3,6 +3,7 @@ import { parentPort, workerData } from 'node:worker_threads'
 import { resampleToRate } from './stt-audio-resample'
 import { OfflineAudioChunker } from './stt-offline-audio-chunker'
 import { buildRecognizerConfig, type RecognizerConfigInput } from './stt-worker-model-config'
+import { createStopTailPadding } from './stt-stop-tail-padding'
 
 type WorkerMessage =
   | ({ type: 'init' } & RecognizerConfigInput)
@@ -20,6 +21,8 @@ let offlineChunker: OfflineAudioChunker | null = null
 let offlineSampleRate = 16000
 // Primed on a session's first feed so stop never waits on the next session's stream.
 let streamPrimed = false
+// Streaming models report the same hypothesis on most 100 ms feeds; only changes are posted.
+let lastPartialText = ''
 
 function loadSherpa(): any {
   const modulePath = workerData?.sherpaModulePath
@@ -68,6 +71,7 @@ function decodeOfflineChunk(samples: Float32Array): string {
 // Discard residual audio and spent streams so a warm worker never carries one session into the next.
 function resetSessionState(): void {
   streamPrimed = false
+  lastPartialText = ''
   try {
     if (!isStreaming) {
       offlineChunker = new OfflineAudioChunker(offlineSampleRate)
@@ -111,7 +115,8 @@ function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
       const resultJson = sherpa.getOnlineStreamResultAsJson(recognizer, stream)
       const result = JSON.parse(resultJson)
       const text = result?.text?.trim()
-      if (text) {
+      if (text && text !== lastPartialText) {
+        lastPartialText = text
         parentPort?.postMessage({ type: 'partial', text })
       }
 
@@ -121,6 +126,7 @@ function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
           parentPort?.postMessage({ type: 'final', text: finalText })
         }
         sherpa.reset(recognizer, stream)
+        lastPartialText = ''
       }
     } else {
       // Bound ONNX allocations below Chromium's >=2GiB crash threshold (#7925); consumers append final segments.
@@ -154,6 +160,10 @@ function handleStop(): void {
 
   try {
     if (isStreaming) {
+      sherpa.acceptWaveformOnline(stream, {
+        sampleRate: offlineSampleRate,
+        samples: createStopTailPadding(offlineSampleRate)
+      })
       sherpa.inputFinished(stream)
       while (sherpa.isOnlineStreamReady(recognizer, stream)) {
         sherpa.decodeOnlineStream(recognizer, stream)

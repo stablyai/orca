@@ -5,8 +5,11 @@ import {
   openPlannedFileBrowserLink,
   type FileBrowserLinkTarget
 } from '@/lib/file-preview-link-open'
-import type { BrowserLinkOpenContext, BrowserOpenOutcome } from '@/lib/browser-link-destination'
-import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import type {
+  BrowserLinkOpenContext,
+  BrowserOpenOutcome
+} from '@/lib/browser/navigation/browser-link-destination'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { getWorkspaceFilePreviewPlan, openFileInBrowserTab } from '@/lib/file-preview'
 
 export async function openResolvedHtmlFileInBrowser(

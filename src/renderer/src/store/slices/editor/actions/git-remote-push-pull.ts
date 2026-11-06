@@ -11,7 +11,7 @@ import {
 import {
   isNonFastForwardRemoteError,
   resolveRemoteOperationErrorMessage
-} from '@/lib/source-control-remote-error'
+} from '@/lib/source-control/remote/source-control-remote-error'
 
 export function createGitRemotePushPull(
   _set: EditorSet,

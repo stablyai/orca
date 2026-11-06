@@ -4,7 +4,7 @@ import type { ILink } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
 import { createWrappedTerminalHttpLinkProvider } from './wrapped-terminal-http-link-provider'
 import { openHttpLinkAtBufferPosition } from './terminal-url-link-hit-testing'
-import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
+import { registerHttpLinkStoreAccessor } from '@/lib/browser/navigation/http-link-routing'
 
 const URL_TEXT = `https://example.com/docs/public-overlay?${'part%20value&'.repeat(7)}view=full#details`
 const CONTENT_WIDTH = 42

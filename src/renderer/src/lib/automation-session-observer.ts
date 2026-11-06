@@ -6,7 +6,7 @@ import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runt
 import { getRemoteRuntimePtyOwner } from '@/runtime/runtime-terminal-stream'
 import { useAppStore } from '@/store'
 import { createAgentStatusOscProcessor } from '../../../shared/agent-status/transport/agent-status-osc'
-import { runtimeWaitExitCode } from '@/lib/agent-background-session-exit'
+import { runtimeWaitExitCode } from '@/lib/agent-session/launch/background/agent-background-session-exit'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
 import { isMainTerminalSideEffectAuthorityForPty } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'

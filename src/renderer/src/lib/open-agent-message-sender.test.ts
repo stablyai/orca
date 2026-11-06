@@ -46,7 +46,9 @@ vi.mock('@/components/terminal-pane/terminal-handle-links', () => ({
   focusRendererTerminalHandle: mocks.focus,
   focusRuntimeTerminalHandle: mocks.remoteFocus
 }))
-vi.mock('./worktree-activation', () => ({ activateAndRevealWorktree: mocks.reveal }))
+vi.mock('./workspace/activation/worktree-activation', () => ({
+  activateAndRevealWorktree: mocks.reveal
+}))
 vi.mock('./wsl-moved-chat-activation', () => ({ activateWslMovedWorkspace: () => false }))
 import { openAgentMessageSender } from './open-agent-message-sender'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'

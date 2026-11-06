@@ -9,7 +9,7 @@ import {
   resolveDefaultAgentForWorktreeNewTab
 } from '@/lib/agent-tab-shortcuts'
 import { chosenAgentChatUnlearned } from '@/lib/host-chat-program'
-import { worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
+import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 
 export type TerminalAgentTabShortcut = {
   actionId: KeybindingActionId | null

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
+import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { resolveTerminalPasteRuntimeEnvironmentId } from './terminal-paste-runtime'
 
 describe('terminal paste runtime', () => {

@@ -16,7 +16,11 @@ vi.mock('./web-runtime-session', () => ({
     return mocks.activeEnvironment
   }
 }))
-vi.mock('@/lib/browser-uuid', () => ({ createBrowserUuid: () => 'uuid-1' }))
+
+const mockLaunchUuid = vi.hoisted(() => () => 'uuid-1')
+vi.mock('../../../../shared/non-secure-context-uuid', () => ({
+  createNonSecureContextUuid: mockLaunchUuid
+}))
 
 import { uploadBrowserFilesToWebAgentSessionAttachments } from './web-agent-session-attachment-upload'
 import { holdBrowserAttachmentFiles } from '@/lib/browser-attachment-files'

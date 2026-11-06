@@ -11,7 +11,7 @@ import {
   usePluginInstallCount
 } from '../presentation/plugin-install-count'
 import { usePluginRollbackVersion } from '../state/use-plugin-rollback-version'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import {
   pluginListingRepositoryUrl,
   pluginReadmePageUrl,
