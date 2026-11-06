@@ -74,28 +74,42 @@ function openTurnDiffSetting(): void {
   })
 }
 
-/** Hiding turns the global setting off, so every chat drops the card; the toast links back to it. */
-function hideTurnDiffSummaries(): void {
-  void useAppStore.getState().updateSettings({ nativeChatTurnDiffSummary: false })
-  toast(translate('components.native-chat.turnDiff.hidden', 'Hidden'), {
-    description: (
-      <Trans
-        i18n={i18n}
-        defaults={translate(
-          'components.native-chat.turnDiff.hiddenDescription',
-          'You can change this anytime in <settings>Settings › Chat</settings>'
-        )}
-        components={{
-          settings: (
-            <button
-              type="button"
-              className="rounded-sm font-medium underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              onClick={openTurnDiffSetting}
-            />
-          )
-        }}
-      />
+function HiddenToastDescription(): React.JSX.Element {
+  return (
+    <Trans
+      i18n={i18n}
+      defaults={translate(
+        'components.native-chat.turnDiff.hiddenDescription',
+        'You can change this anytime in <settings>Settings › Chat</settings>'
+      )}
+      components={{
+        settings: (
+          <button
+            type="button"
+            className="rounded-sm font-medium underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            onClick={openTurnDiffSetting}
+          />
+        )
+      }}
+    />
+  )
+}
+
+/** Hiding turns the global setting off, so every chat drops the card; confirm only a saved change. */
+async function hideTurnDiffSummaries(): Promise<void> {
+  try {
+    await useAppStore.getState().updateSettingsOrThrow({ nativeChatTurnDiffSummary: false })
+  } catch {
+    toast.error(
+      translate(
+        'components.native-chat.turnDiff.hideFailed',
+        "Couldn't hide changed files. Try again, or turn off Changed files summary in Settings › Chat."
+      )
     )
+    return
+  }
+  toast(translate('components.native-chat.turnDiff.hidden', 'Hidden'), {
+    description: <HiddenToastDescription />
   })
 }
 
@@ -123,15 +137,16 @@ export function NativeChatTurnDiffRollup({
         {diff.truncated ? (
           <span>{translate('components.native-chat.turnDiff.partial', 'Partial diff')}</span>
         ) : null}
+        {/* The negative margin keeps the header one text line tall, as the row-height estimate assumes. */}
         <Button
           variant="ghost"
           size="xs"
-          className="ml-auto shrink-0"
+          className="-my-1 ml-auto shrink-0"
           title={translate(
             'components.native-chat.turnDiff.hideTitle',
             'Hide changed files in every chat'
           )}
-          onClick={hideTurnDiffSummaries}
+          onClick={() => void hideTurnDiffSummaries()}
         >
           <EyeOff aria-hidden className="size-3.5" />
           {translate('components.native-chat.turnDiff.hide', 'Hide')}

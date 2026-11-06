@@ -19842,6 +19842,7 @@
         "hide": "Hide",
         "hideTitle": "Hide changed files in every chat",
         "hidden": "Hidden",
+        "hideFailed": "Couldn't hide changed files. Try again, or turn off Changed files summary in Settings › Chat.",
         "hiddenDescription": "You can change this anytime in <settings>Settings › Chat</settings>"
       },
       "receipt": {

@@ -2,7 +2,6 @@
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { ReactElement } from 'react'
 import { toast } from 'sonner'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -15,7 +14,7 @@ import { NativeChatMessageList } from './NativeChatMessageList'
 import { session, stubLayout, stubResizeObserver } from './native-chat-windowing-test-harness'
 import { NativeChatLinkClickContext } from './native-chat-link-click-context'
 
-vi.mock('sonner', () => ({ toast: vi.fn() }))
+vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }))
 
 const messages: NativeChatMessage[] = [
   {
@@ -106,58 +105,76 @@ it('keeps landed files visible after work folds, opens a patch in one click and 
   expect(screen.queryByText('diagnostic-output')).toBeNull()
 })
 
-it('Hide turns the changed-files card off in every chat and the toast links to its setting', () => {
+const hiddenList = (
+  <TooltipProvider>
+    <NativeChatMessageList
+      session={session(messages)}
+      isWorking={false}
+      expandSignal={false}
+      settledTurns={new Map([['u', { startedAt: 1, workedSeconds: 2 }]])}
+    />
+  </TooltipProvider>
+)
+
+function withStore(
+  updateSettingsOrThrow: (updates: Partial<GlobalSettings>) => Promise<void>,
+  run: (actions: { openSettingsPage: () => void; openSettingsTarget: () => void }) => Promise<void>
+): Promise<void> {
   const original = useAppStore.getState()
-  const openSettingsPage = vi.fn()
-  const openSettingsTarget = vi.fn()
-  useAppStore.setState({
-    settings: getDefaultSettings('/tmp'),
-    updateSettings: async (updates: Partial<GlobalSettings>) => {
+  const actions = { openSettingsPage: vi.fn(), openSettingsTarget: vi.fn() }
+  // Settings saved before this setting existed have no key; the card must still show for them.
+  const { nativeChatTurnDiffSummary: _absent, ...savedBeforeSetting } = getDefaultSettings('/tmp')
+  useAppStore.setState({ settings: savedBeforeSetting, updateSettingsOrThrow, ...actions })
+  vi.mocked(toast).mockClear()
+  vi.mocked(toast.error).mockClear()
+  return run(actions).finally(() => useAppStore.setState(original, true))
+}
+
+it('Hide turns the changed-files card off in every chat and the toast links to its setting', () =>
+  withStore(
+    async (updates) => {
       useAppStore.setState((state) => ({ settings: { ...state.settings!, ...updates } }))
     },
-    openSettingsPage,
-    openSettingsTarget
-  })
-  try {
-    const list = (
-      <TooltipProvider>
-        <NativeChatMessageList
-          session={session(messages)}
-          isWorking={false}
-          expandSignal={false}
-          settledTurns={new Map([['u', { startedAt: 1, workedSeconds: 2 }]])}
-        />
-      </TooltipProvider>
-    )
-    render(list)
-    fireEvent.click(screen.getByRole('button', { name: 'Hide' }))
-    expect(useAppStore.getState().settings?.nativeChatTurnDiffSummary).toBe(false)
-    expect(screen.queryByRole('button', { name: /\/repo\/greeting.ts/ })).toBeNull()
-    expect(screen.getByText('Updated the greeting.')).toBeVisible()
+    async ({ openSettingsPage, openSettingsTarget }) => {
+      render(hiddenList)
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Hide' })))
+      expect(useAppStore.getState().settings?.nativeChatTurnDiffSummary).toBe(false)
+      expect(screen.queryByRole('button', { name: /\/repo\/greeting.ts/ })).toBeNull()
+      expect(screen.getByText('Updated the greeting.')).toBeVisible()
 
-    expect(toast).toHaveBeenCalledWith('Hidden', expect.anything())
-    const { description } = vi.mocked(toast).mock.calls[0]![1] as { description: ReactElement }
-    cleanup()
-    render(description)
-    fireEvent.click(screen.getByRole('button', { name: 'Settings › Chat' }))
-    expect(openSettingsPage).toHaveBeenCalledTimes(1)
-    expect(openSettingsTarget).toHaveBeenCalledWith({
-      pane: 'chat',
-      repoId: null,
-      sectionId: 'chat-turn-diff-summary'
-    })
+      expect(toast).toHaveBeenCalledWith('Hidden', expect.anything())
+      const description = vi.mocked(toast).mock.calls[0]?.[1]?.description
+      cleanup()
+      render(<>{typeof description === 'function' ? description() : description}</>)
+      fireEvent.click(screen.getByRole('button', { name: 'Settings › Chat' }))
+      expect(openSettingsPage).toHaveBeenCalledTimes(1)
+      expect(openSettingsTarget).toHaveBeenCalledWith({
+        pane: 'chat',
+        repoId: null,
+        sectionId: 'chat-turn-diff-summary'
+      })
 
-    // A chat opened later stays without the card until the setting is turned back on.
-    cleanup()
-    render(list)
-    expect(screen.queryByRole('button', { name: 'Hide' })).toBeNull()
-    act(() => {
-      useAppStore.setState((state) => ({
-        settings: { ...state.settings!, nativeChatTurnDiffSummary: true }
-      }))
-    })
-    expect(screen.getByRole('button', { name: /\/repo\/greeting.ts/ })).toBeVisible()
-  } finally {
-    useAppStore.setState(original, true)
-  }
-})
+      // A chat opened later stays without the card until the setting is turned back on.
+      cleanup()
+      render(hiddenList)
+      expect(screen.queryByRole('button', { name: 'Hide' })).toBeNull()
+      act(() => {
+        useAppStore.setState((state) => ({
+          settings: { ...state.settings!, nativeChatTurnDiffSummary: true }
+        }))
+      })
+      expect(screen.getByRole('button', { name: /\/repo\/greeting.ts/ })).toBeVisible()
+    }
+  ))
+
+it('a Hide whose save fails keeps the card and says so instead of confirming', () =>
+  withStore(
+    () => Promise.reject(new Error('settings write failed')),
+    async () => {
+      render(hiddenList)
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Hide' })))
+      expect(screen.getByRole('button', { name: /\/repo\/greeting.ts/ })).toBeVisible()
+      expect(toast).not.toHaveBeenCalled()
+      expect(toast.error).toHaveBeenCalledTimes(1)
+    }
+  ))
