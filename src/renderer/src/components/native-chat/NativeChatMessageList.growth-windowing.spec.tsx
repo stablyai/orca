@@ -399,6 +399,42 @@ describe('transcript follow ownership across growth and appends', () => {
     expect(release).toHaveBeenCalledOnce()
   })
 
+  it('preserves a pending wheel return through a no-op following pin after reveal', () => {
+    layout.belowTranscriptPx = 100
+    const release = vi.fn()
+    const retainedSession = { ...session(transcript), retainHistory: () => release }
+    const pane = (isVisible: boolean) => (
+      <NativeChatMessageList
+        session={retainedSession}
+        isVisible={isVisible}
+        isWorking={false}
+        expandSignal={false}
+      />
+    )
+    const { container, rerender } = render(pane(true))
+    paint(container)
+    const scroller = scrollRoot(container)
+    fireEvent.scroll(scroller)
+    const readingAt = scroller.scrollHeight - scroller.clientHeight - 62
+    scrollTranscript(container, readingAt)
+    paint(container)
+    rerender(pane(false))
+    layout.belowTranscriptPx -= 60
+    rerender(pane(true))
+    fireEvent.scroll(scroller)
+    expect(scroller.scrollTop).toBe(readingAt)
+    expect(release).not.toHaveBeenCalled()
+
+    scroller.scrollTop = scroller.scrollHeight - scroller.clientHeight
+    fireEvent.wheel(scroller, { deltaY: 2 })
+    act(() => {
+      deliverResizes()
+    })
+    fireEvent.scroll(scroller)
+    paint(container)
+    expect(release).toHaveBeenCalledOnce()
+  })
+
   it.each([false, true])(
     'keeps reader-return evidence current after compensation (tail clamps: %s)',
     (clamps) => {

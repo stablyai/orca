@@ -6,7 +6,6 @@ export function useNativeChatTranscriptResize({
   contentRef,
   isVisibleRef,
   observeResize,
-  invalidateForwardedGesture,
   followingRef,
   scrollToEndWhenMeasurable,
   syncScrollState
@@ -14,8 +13,7 @@ export function useNativeChatTranscriptResize({
   scrollRef: RefObject<HTMLDivElement | null>
   contentRef: RefObject<HTMLDivElement | null>
   isVisibleRef: RefObject<boolean>
-  observeResize: (geometry: ScrollGeometry) => boolean
-  invalidateForwardedGesture: () => void
+  observeResize: (geometry: ScrollGeometry) => void
   followingRef: RefObject<boolean>
   scrollToEndWhenMeasurable: () => void
   syncScrollState: () => ScrollGeometry | null
@@ -29,9 +27,7 @@ export function useNativeChatTranscriptResize({
       if (!isVisibleRef.current) {
         return
       }
-      if (observeResize(geometryOf(element))) {
-        invalidateForwardedGesture()
-      }
+      observeResize(geometryOf(element))
       // Growth, an opened row included, keeps a following reader at the end.
       if (followingRef.current) {
         scrollToEndWhenMeasurable()
@@ -51,7 +47,6 @@ export function useNativeChatTranscriptResize({
     syncScrollState,
     isVisibleRef,
     observeResize,
-    invalidateForwardedGesture,
     followingRef
   ])
 }

@@ -43,7 +43,7 @@ export function useNativeChatTranscriptScroll({
   const followingRef = useRef(true)
   const previousGeometryRef = useRef<ScrollGeometry | null>(null)
   const readerReturn = useNativeChatReaderReturn(scrollRef, followingRef, previousGeometryRef)
-  const { observeApplicationScroll, observeVisibility, readerAtEnd } = readerReturn
+  const { performApplicationScroll, observeVisibility, readerAtEnd } = readerReturn
   const detachedScrollTopRef = useRef<number | null>(null)
   const isVisibleRef = useRef(isVisible)
   const previousIsVisibleRef = useRef(isVisible)
@@ -79,13 +79,12 @@ export function useNativeChatTranscriptScroll({
           clearForwardedScroll()
           const element = scrollRef.current
           if (resumePin && isVisibleRef.current && hasMeasurableViewport(element)) {
-            scrollToEnd()
-            observeApplicationScroll()
+            performApplicationScroll(scrollToEnd)
           }
         })
       })
     }
-  }, [clearForwardedScroll, observeApplicationScroll, scrollRef, scrollToEnd])
+  }, [clearForwardedScroll, performApplicationScroll, scrollRef, scrollToEnd])
   useEffect(() => clearForwardedScroll, [clearForwardedScroll])
 
   const syncScrollState = useCallback((): ScrollGeometry | null => {
@@ -227,10 +226,9 @@ export function useNativeChatTranscriptScroll({
         return
       }
       clearForwardedScroll()
-      scrollToEnd()
-      observeApplicationScroll()
+      performApplicationScroll(scrollToEnd)
     }
-  }, [clearForwardedScroll, observeApplicationScroll, scrollRef, scrollToEnd])
+  }, [clearForwardedScroll, performApplicationScroll, scrollRef, scrollToEnd])
 
   const scrollToBottom = useCallback(
     (reason?: 'send') => {
@@ -270,8 +268,8 @@ export function useNativeChatTranscriptScroll({
     if (!followingRef.current) {
       if (revealed) {
         if (detachedScrollTopRef.current !== null) {
-          restoreScrollOffset(detachedScrollTopRef.current)
-          observeApplicationScroll()
+          const offset = detachedScrollTopRef.current
+          performApplicationScroll(() => restoreScrollOffset(offset))
         }
         followingRef.current = readerAtEnd(NATIVE_CHAT_FOLLOW_REARM_PX)
       }
@@ -284,7 +282,7 @@ export function useNativeChatTranscriptScroll({
     isVisible,
     itemCount,
     isWorking,
-    observeApplicationScroll,
+    performApplicationScroll,
     readerAtEnd,
     observeVisibility,
     restoreScrollOffset,
@@ -299,7 +297,6 @@ export function useNativeChatTranscriptScroll({
     contentRef,
     isVisibleRef,
     observeResize: readerReturn.observeResize,
-    invalidateForwardedGesture,
     followingRef,
     scrollToEndWhenMeasurable,
     syncScrollState

@@ -46,27 +46,28 @@ export function useNativeChatReaderReturn(
     [previousGeometryRef, scrollRef]
   )
   const observeResize = useCallback(
-    (geometry: ScrollGeometry): boolean => {
+    (geometry: ScrollGeometry) => {
       const previous = previousGeometryRef.current
       // A moved offset still owes its classified scroll event, including measurement compensation.
       if (previous && geometry.scrollTop !== previous.scrollTop) {
-        return false
+        return
       }
       observeGeometry(geometry, false)
-      return (
-        previous !== null &&
-        (geometry.clientHeight !== previous.clientHeight ||
-          geometry.scrollHeight !== previous.scrollHeight)
-      )
     },
     [observeGeometry, previousGeometryRef]
   )
-  const observeApplicationScroll = useCallback(() => {
-    const element = scrollRef.current
-    if (hasMeasurableViewport(element)) {
-      observeGeometry(geometryOf(element), true)
-    }
-  }, [observeGeometry, scrollRef])
+  const performApplicationScroll = useCallback(
+    (write: () => void) => {
+      const element = scrollRef.current
+      const previous = element?.scrollTop
+      write()
+      // A no-op pin leaves pending native movement for its classified scroll event.
+      if (hasMeasurableViewport(element) && element.scrollTop !== previous) {
+        observeGeometry(geometryOf(element), true)
+      }
+    },
+    [observeGeometry, scrollRef]
+  )
   const readerReturned = (geometry: ScrollGeometry, programmatic: boolean): boolean => {
     const start = observeGeometry(geometry, programmatic)
     if (
@@ -97,6 +98,6 @@ export function useNativeChatReaderReturn(
     readerAtEnd,
     observeVisibility,
     observeResize,
-    observeApplicationScroll
+    performApplicationScroll
   }
 }
