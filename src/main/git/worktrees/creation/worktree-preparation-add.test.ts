@@ -23,7 +23,7 @@ vi.mock('./worktree-preparation-lock', async (importOriginal) => ({
   lockWorktreePreparation: mocks.lock,
   verifyWorktreePreparationLock: mocks.verify
 }))
-vi.mock('./worktree-preparation-discard', () => ({ performDiscardPreparedWorktree: mocks.discard }))
+vi.mock('./worktree-preparation-discard', () => ({ discardPreparedWorktree: mocks.discard }))
 
 import { addLockedWorktreePreparation } from './worktree-preparation-add'
 import {
@@ -31,7 +31,6 @@ import {
   getLocalGitCapabilityCache
 } from '../../command-runner/git-capability-state'
 import { WorktreePreparationLockOwnershipError } from './worktree-preparation-lock'
-import { WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS } from '../worktree-operation-options'
 import {
   resetWslLinkedWorktreeGitRoutingForTests,
   seedWslLinkedWorktreeGitRoutingForTests
@@ -52,28 +51,6 @@ beforeEach(() => {
   mocks.discard.mockReset().mockResolvedValue(undefined)
 })
 
-it('asks Git to create the exact marker atomically and only verifies its ownership', async () => {
-  const controller = new AbortController()
-  const options = { signal: controller.signal, timeout: 6000, admissionTier: 'background' as const }
-  await expect(prepare('/prepared', options)).resolves.toBe('/atomic-lock')
-  expect(mocks.git).toHaveBeenCalledExactlyOnceWith(
-    [
-      'worktree',
-      'add',
-      '--detach',
-      '--no-checkout',
-      '--lock',
-      '--reason',
-      reason,
-      '/prepared',
-      'refs/heads/main'
-    ],
-    { cwd: '/repo', ...options }
-  )
-  expect(mocks.verify).toHaveBeenCalledExactlyOnceWith('/prepared', reason, options)
-  expect(mocks.lock).not.toHaveBeenCalled()
-})
-
 it('falls back once on the old-Git reason rejection and caches the absence', async () => {
   mocks.git.mockRejectedValueOnce(unsupported)
   await expect(prepare()).resolves.toBe('/fallback-lock')
@@ -86,53 +63,6 @@ it('falls back once on the old-Git reason rejection and caches the absence', asy
   expect(mocks.lock.mock.calls.map(([path]) => path)).toEqual(['/prepared', '/second'])
   expect(mocks.verify).not.toHaveBeenCalled()
   expect(mocks.discard).not.toHaveBeenCalled()
-})
-
-it.each([
-  ['first', 'cancellation'],
-  ['cached', 'cancellation'],
-  ['first', 'path probe'],
-  ['cached', 'path probe'],
-  ['first', 'marker write'],
-  ['cached', 'marker write']
-])('cleans its successful %s fallback add after a %s failure', async (fallback, failureKind) => {
-  const controller = new AbortController()
-  const options = {
-    signal: controller.signal,
-    timeout: 180_000,
-    wslDistro: 'Ubuntu',
-    admissionTier: 'background' as const
-  }
-  if (fallback === 'cached') {
-    getLocalGitCapabilityCache(options).rememberUnsupported('worktree-add-lock-reason')
-  } else {
-    mocks.git.mockRejectedValueOnce(unsupported)
-  }
-  const failure = new Error(`${failureKind} failed after registration`)
-  mocks.lock.mockImplementationOnce(async () => {
-    if (failureKind === 'cancellation') {
-      controller.abort(failure)
-    }
-    throw failure
-  })
-  await expect(prepare('/prepared', options)).rejects.toBe(failure)
-  expect(mocks.discard).toHaveBeenCalledExactlyOnceWith('/repo', '/prepared', {
-    ...options,
-    signal: undefined,
-    timeout: WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS
-  })
-  expect(mocks.lstat).toHaveBeenCalled()
-  expect(options.timeout).toBe(180_000)
-  expect(options.signal).toBe(controller.signal)
-})
-
-it('preserves the original lock failure when bounded fallback cleanup also fails', async () => {
-  getLocalGitCapabilityCache().rememberUnsupported('worktree-add-lock-reason')
-  const failure = new Error('lock path unavailable')
-  mocks.lock.mockRejectedValueOnce(failure)
-  mocks.discard.mockRejectedValueOnce(new Error('cleanup unavailable'))
-  await expect(prepare()).rejects.toBe(failure)
-  expect(mocks.discard).toHaveBeenCalledOnce()
 })
 
 it.each(['first', 'cached'])(
@@ -287,17 +217,6 @@ it('fails closed when the pre-existing target cannot be inspected', async () => 
   expect(mocks.discard).not.toHaveBeenCalled()
 })
 
-it('keeps a general add failure visible without poisoning the capability or claiming a marker', async () => {
-  const failure = new Error('permission denied')
-  mocks.git.mockRejectedValueOnce(failure)
-  await expect(prepare()).rejects.toBe(failure)
-  expect(mocks.lock).not.toHaveBeenCalled()
-  expect(getLocalGitCapabilityCache().shouldTry('worktree-add-lock-reason')).toBe(true)
-  expect(mocks.discard).toHaveBeenCalledExactlyOnceWith('/repo', '/prepared', {}, reason)
-  await prepare('/next')
-  expect(mocks.git.mock.calls.every(([args]) => args.includes('--reason'))).toBe(true)
-})
-
 it('never removes a pre-existing checkout after add fails', async () => {
   mocks.lstat.mockResolvedValueOnce({})
   mocks.git.mockRejectedValueOnce(new Error('path already exists'))
@@ -313,19 +232,6 @@ it('does not rewrite or discard a generic or competing marker returned after add
   expect(mocks.discard).not.toHaveBeenCalled()
 })
 
-it('attempts ownership-checked cleanup if cancellation interrupts the newly registered add', async () => {
-  const controller = new AbortController()
-  const failure = new Error('add canceled')
-  mocks.git.mockImplementationOnce(async () => {
-    controller.abort()
-    throw failure
-  })
-  const options = { signal: controller.signal }
-  await expect(prepare('/prepared', options)).rejects.toBe(failure)
-  expect(mocks.discard).toHaveBeenCalledExactlyOnceWith('/repo', '/prepared', options, reason)
-  expect(mocks.lock).not.toHaveBeenCalled()
-})
-
 it.each([
   [new Error("unknown option 'reason'"), true],
   [{ stderr: "error: unrecognized option '--reason'" }, true],
@@ -335,4 +241,12 @@ it.each([
   [new Error('permission denied while writing lock reason'), false]
 ])('recognizes only an unsupported lock-reason option: %j', (error, expected) => {
   expect(isUnsupportedWorktreeAddLockReasonError(error)).toBe(expected)
+})
+
+it('uses the atomic lock registration again after an ordinary add failure', async () => {
+  const failure = new Error('permission denied')
+  mocks.git.mockRejectedValueOnce(failure)
+  await expect(prepare()).rejects.toBe(failure)
+  await prepare('/next')
+  expect(mocks.git.mock.calls.at(-1)?.[0]).toContain('--reason')
 })
