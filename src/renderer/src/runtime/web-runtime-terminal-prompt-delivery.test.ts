@@ -22,6 +22,7 @@ import { useAppStore } from '@/store'
 import { registerAgentStartupTerminalBinding } from '@/lib/agent-startup-tab-binding'
 import { installSleepingRecordAccess } from '@/components/terminal-pane/pty-connection/sleeping-record-access'
 import type { ConnectPanePtySession } from '@/components/terminal-pane/pty-connection/connect-pane-pty-session'
+import { installPtyExitHibernate } from '@/components/terminal-pane/pty-connection/pty-exit-hibernate'
 import { installPanePtyVisibilityBind } from '@/components/terminal-pane/pty-connection/pane-pty-visibility-bind'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from '@/components/terminal-pane/remote-runtime-pty-recovery-limits'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../shared/draft-paste-ready-timeout'
@@ -194,14 +195,46 @@ it('recovers consumed startup after an unknown-liveness retirement and remount',
     }
   })
   const exit = vi.fn()
+  Object.assign(session.deps, {
+    isPtyShutdownPending: () => false,
+    consumeSuppressedPtyExit: () => false,
+    clearRuntimePaneTitle: vi.fn(),
+    setCacheTimerStartedAt: vi.fn(),
+    onPtyExitRef: { current: exit }
+  })
+  const exitSession = Object.assign(session, {
+    runtimeEnvironmentId: 'env',
+    resetRendererOrderedSeqForPtyExit: vi.fn(),
+    dropSideEffectFactConsumer: vi.fn(),
+    releaseHiddenRendererPtyDelivery: vi.fn(),
+    manager: { setPaneGpuRendering: vi.fn() },
+    agentCompletionCoordinator: { dispose: vi.fn() }
+  }) as unknown as ConnectPanePtySession
+  installPtyExitHibernate(exitSession)
+  useAppStore
+    .getState()
+    .setAgentStatus(
+      session.cacheKey,
+      { state: 'working', prompt: 'ship it', agentType: 'codex' },
+      'Codex',
+      undefined,
+      { tabId: 'tab-1', worktreeId: 'wt', terminalHandle: 'pty-1' },
+      { launchToken: 'launch-1' }
+    )
   const lost = createRemoteRuntimePtyTransport('env', {
     worktreeId: 'wt',
     tabId: 'tab-1',
     leafId,
-    onPtyExit: exit
+    onPtyExit: exitSession.onExit
   })
+  exitSession.transport = lost
+  exitSession.deps.paneTransportsRef.current.set(1, lost)
   lost.attach({ existingPtyId: ptyId, callbacks: {} })
   await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(ptyId, -1))
+  expect(useAppStore.getState().agentStatusByPaneKey[session.cacheKey]).toBeUndefined()
+  expect(useAppStore.getState().agentLaunchConfigByPaneKey[session.cacheKey]?.identity).toEqual(
+    expect.objectContaining({ launchToken: 'launch-1', terminalHandle: 'pty-1' })
+  )
   expect(mocks.error).not.toHaveBeenCalled()
   expect(isAgentStartupDeliveryConsumed(agentStartupDeliveryKey(identity))).toBe(false)
   lost.disconnect()
@@ -222,6 +255,9 @@ it('recovers consumed startup after an unknown-liveness retirement and remount',
   replacement.disconnect()
   expect(isAgentStartupDeliveryConsumed(agentStartupDeliveryKey(identity))).toBe(true)
   expect(mocks.error).not.toHaveBeenCalled()
+  exitSession.handledExitPtyId = null
+  exitSession.onExit(ptyId, -1)
+  expect(useAppStore.getState().agentLaunchConfigByPaneKey[session.cacheKey]).toBeUndefined()
   forgetAgentStartupDeliveriesForTabs(['tab-1'])
   expect(isAgentStartupDeliveryConsumed(agentStartupDeliveryKey(identity))).toBe(false)
 })
@@ -336,13 +372,14 @@ it('expiry during an acknowledged chunk stops content and closes bracketed paste
   expect(mocks.error).toHaveBeenCalledOnce()
 })
 
-it('settled Aider failure reopens the existing composer with its recoverable prompt', async () => {
+it('settled Aider failure copies the original prompt for its existing terminal', async () => {
   vi.useFakeTimers()
   const ready = Promise.withResolvers<boolean>()
   mocks.ready.mockReturnValue(ready.promise)
+  const copy = vi.fn().mockResolvedValue(undefined)
+  Object.assign(window, { api: { ui: { writeClipboardText: copy } } })
   useAppStore.setState({
-    activeModal: 'none',
-    newWorkspaceDraft: null,
+    activeModal: 'agent-session-history',
     nativeChatLaunchDraftByTabId: {},
     seedNativeChatLaunchDraft: originalState.seedNativeChatLaunchDraft,
     seedNativeChatLaunchPrompt: originalState.seedNativeChatLaunchPrompt,
@@ -362,12 +399,9 @@ it('settled Aider failure reopens the existing composer with its recoverable pro
   )
   expect(mocks.error).toHaveBeenCalledOnce()
   const recovery = mocks.error.mock.calls[0]?.[1].action
-  expect(recovery.label).toBe('Reopen')
   recovery.onClick()
-  expect(useAppStore.getState().activeModal).toBe('new-workspace-composer')
-  expect(useAppStore.getState().modalData).toMatchObject({
-    recovery: { agent: 'aider', note: 'fix the parser' }
-  })
+  expect(copy).toHaveBeenCalledExactlyOnceWith('fix the parser')
+  expect(useAppStore.getState().activeModal).toBe('agent-session-history')
   expect(useAppStore.getState().nativeChatLaunchDraftByTabId['tab-1']?.text).toBe('fix the parser')
   ready.resolve(true)
   await vi.advanceTimersByTimeAsync(0)

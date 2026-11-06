@@ -135,7 +135,7 @@ export type AgentStatusSlice = {
   setMigrationUnsupportedPty: (entry: MigrationUnsupportedPtyEntry) => void
   clearMigrationUnsupportedPty: (ptyId: string) => void
 
-  removeAgentStatus: (paneKey: string) => void
+  removeAgentStatus: (paneKey: string, opts?: { preserveLaunchBinding?: boolean }) => void
 
   removeAgentStatusByTabPrefix: (tabIdPrefix: string) => void
 

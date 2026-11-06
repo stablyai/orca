@@ -49,7 +49,7 @@ export function createAgentStatusCleanupActions(
       })
     },
 
-    removeAgentStatus: (paneKey) => {
+    removeAgentStatus: (paneKey, opts) => {
       const current = get()
       // PTY exit may mean unverified SSH loss; retained-only panes keep ack/cutoff/manual-unread state. Sweep only rows actually present (preserveActivityClearedState).
       if (
@@ -68,7 +68,8 @@ export function createAgentStatusCleanupActions(
           changedPaneKeys.add(paneKey)
           delete next[paneKey]
         }
-        const hasLaunchConfig = paneKey in s.agentLaunchConfigByPaneKey
+        const hasLaunchConfig =
+          !opts?.preserveLaunchBinding && paneKey in s.agentLaunchConfigByPaneKey
         const nextLaunchConfigs = hasLaunchConfig
           ? { ...s.agentLaunchConfigByPaneKey }
           : s.agentLaunchConfigByPaneKey

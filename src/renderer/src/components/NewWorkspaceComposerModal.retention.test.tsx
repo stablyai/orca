@@ -9,7 +9,6 @@ import { RUNTIME_CAPABILITIES } from '../../../shared/protocol-version'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import NewWorkspaceComposerModal from './NewWorkspaceComposerModal'
-import { notifyAgentLaunchPromptNotSent } from '@/lib/agent-launch-prompt-delivery'
 import type { NewWorkspaceComposerCardProps } from './new-workspace/new-workspace-composer-card-props'
 import type * as SetupButtonModule from './agent/AgentLaunchSetupButton'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
@@ -419,13 +418,4 @@ it('offers Reopen with the submitted target and picker and does not replace a ne
   await open('Claude')
   expect(textarea().value).toBe('--verbose')
   expect(screen.getByRole('radio', { name: 'Low' }).getAttribute('aria-checked')).toBe('true')
-})
-
-it('makes a terminal-only agent failed prompt reachable through the existing Reopen composer', async () => {
-  useAppStore.setState({ activeModal: 'none', newWorkspaceDraft: null })
-  render(<NewWorkspaceComposerModal />, { wrapper: TooltipProvider })
-  notifyAgentLaunchPromptNotSent('aider', 'fix the parser')
-  const reopen = evidence.toast.mock.calls.at(-1)?.[1].action.onClick
-  act(reopen)
-  expect(await screen.findByDisplayValue('fix the parser')).toBeTruthy()
 })

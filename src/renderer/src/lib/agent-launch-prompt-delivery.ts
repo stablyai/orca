@@ -6,7 +6,6 @@ import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { canMirrorLaunchDraftToNativeChat } from '../../../shared/native-chat/input/native-chat-launch-draft-mirrorability'
 import { isNativeChatSupportedAgent } from '../../../shared/native-chat/native-chat-agent-support'
 import { useAppStore } from '@/store'
-import type { ComposerModalData } from '@/components/new-workspace/composer-modal-data'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 
 /** Mirror TUI-only launch context into supported native-chat composers, using the same eligibility predicate as chat opening. */
@@ -124,14 +123,9 @@ export function notifyAgentLaunchPromptNotSent(agent: TuiAgent, content?: string
     content !== undefined
       ? {
           action: {
-            label: translate('auto.lib.composerCreateHandoff.reopen', 'Reopen'),
+            label: translate('components.agentSessionContinuation.copyPrompt', 'Copy prompt'),
             onClick: () => {
-              const state = useAppStore.getState()
-              if (state.activeModal === 'none') {
-                state.openModal('new-workspace-composer', {
-                  recovery: { agent, note: content }
-                } satisfies ComposerModalData)
-              }
+              void window.api.ui.writeClipboardText(content)
             }
           }
         }
