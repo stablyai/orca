@@ -21,11 +21,15 @@ function isRpcRefusal(error: unknown, message: string): boolean {
 /** A paired runtime's file for the editor: streamed to a viewer by URL, previewed, or paged past one reply. */
 export async function readRemoteFileContent(
   address: RuntimeRemoteFileAddress,
-  { pageOversizedBinary }: { pageOversizedBinary: boolean }
+  {
+    pageOversizedBinary,
+    preferMediaUrl
+  }: { pageOversizedBinary: boolean; preferMediaUrl?: boolean }
 ): Promise<RuntimeReadableFileContent> {
   const remote = pinRemoteFileAddress(address)
   // Baseline checks discard binary content, so only readers that render bytes mint a stream.
-  const rangePreview = pageOversizedBinary ? await readRemoteRangePreview(remote) : null
+  const rangePreview =
+    pageOversizedBinary && preferMediaUrl !== false ? await readRemoteRangePreview(remote) : null
   if (rangePreview) {
     return rangePreview
   }

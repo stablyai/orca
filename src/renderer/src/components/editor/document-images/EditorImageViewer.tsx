@@ -1,3 +1,5 @@
+import type { ComponentProps } from 'react'
+import ImageViewer from './ImageViewer'
 import { getConnectionIdForFileFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { isClientLocalReadOnlyTab } from '@/lib/files/access/local-file-access'
 import { getWorkspaceFileRevealOwner } from '@/lib/files/os-open/reveal-in-file-manager'
@@ -7,10 +9,12 @@ import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { FileContent } from '../loading/editor-panel-content-types'
 import type { ImageActionSource } from './ImageActions'
 
-export function useEditorImageSource(
-  file: OpenFile,
-  content: FileContent | undefined
-): ImageActionSource {
+type Props = Omit<
+  ComponentProps<typeof ImageViewer>,
+  'content' | 'src' | 'byteSize' | 'filePath' | 'imageSource'
+> & { file: OpenFile; content?: FileContent }
+
+export default function EditorImageViewer({ file, content, ...props }: Props): React.JSX.Element {
   const owner = useAppStore((state) => {
     if (!file.externalSshTargetId && isClientLocalReadOnlyTab(file)) {
       return 'local'
@@ -25,7 +29,7 @@ export function useEditorImageSource(
           connectionId
         })
   })
-  return {
+  const imageSource: ImageActionSource = {
     path: file.filePath,
     ...(owner === 'local' ? { localOwner: owner } : {}),
     ...(content?.mediaUrl && content.imageReadSource
@@ -34,4 +38,14 @@ export function useEditorImageSource(
         }
       : {})
   }
+  return (
+    <ImageViewer
+      {...props}
+      content={content?.content}
+      src={content?.mediaUrl}
+      byteSize={content?.size}
+      filePath={file.filePath}
+      imageSource={imageSource}
+    />
+  )
 }

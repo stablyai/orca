@@ -1,3 +1,4 @@
+import { ImageActionsScope } from '@/components/editor/document-images/ImageActions'
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/class-names'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
@@ -42,7 +43,7 @@ export function NativeChatSurface({
       <NativeChatLinkClickContext value={surface.onLinkClick}>
         <NativeChatSessionHistoryScopeContext.Provider value={surface.sessionHistory}>
           <NativeChatFindQueryContext value={surface.find.isOpen ? surface.find.query : ''}>
-            {children}
+            <ImageActionsScope enabled={surface.isVisible}>{children}</ImageActionsScope>
           </NativeChatFindQueryContext>
         </NativeChatSessionHistoryScopeContext.Provider>
       </NativeChatLinkClickContext>

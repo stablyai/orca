@@ -3,13 +3,12 @@ import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/ope
 import type { PendingEditorReveal } from '@/store/slices/editor/types/pending-editor-reveal'
 import type { GitDiffResult } from '../../../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../shared/git/status/git-status-types'
-import { useEditorImageSource } from '../document-images/use-editor-image-source'
 import { ChangesModeView } from './ChangesModeView'
 import { ConflictBanner, ConflictPlaceholderView } from '../conflict-review/ConflictComponents'
 import {
   CsvViewer,
   CsvPagedViewer,
-  ImageViewer,
+  EditorImageViewer,
   IpynbViewer,
   MermaidViewer,
   MonacoEditor,
@@ -118,7 +117,6 @@ export function EditorEditFileSurface({
   reloadContent: (file: OpenFile, options?: ReloadContentOptions) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const imageSource = useEditorImageSource(activeFile, fileContent)
   if (activeFile.conflict?.kind === 'conflict-placeholder') {
     return <ConflictPlaceholderView file={activeFile} />
   }
@@ -188,12 +186,9 @@ export function EditorEditFileSurface({
             />
           ) : null}
           <div className="min-h-0 flex-1">
-            <ImageViewer
-              content={fileContent.content}
-              src={fileContent.mediaUrl}
-              byteSize={fileContent.size}
-              filePath={activeFile.filePath}
-              imageSource={imageSource}
+            <EditorImageViewer
+              content={fileContent}
+              file={activeFile}
               mimeType={fileContent.mimeType}
               preferenceKey={pdfPreferenceKey}
               scrollCacheKey={pdfViewStateKey}
@@ -339,10 +334,10 @@ export function EditorEditFileSurface({
       monacoEditor={monacoEditor}
     />
   ) : isSvg && mdViewMode === 'rich' ? (
-    <ImageViewer
+    <EditorImageViewer
       key={activeFile.id}
       svgSource={currentContent}
-      filePath={activeFile.filePath}
+      file={activeFile}
       mimeType="image/svg+xml"
     />
   ) : isMermaid && mdViewMode === 'rich' ? (

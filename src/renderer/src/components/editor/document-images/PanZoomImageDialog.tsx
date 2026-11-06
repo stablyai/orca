@@ -17,7 +17,12 @@ import type { PanZoomSize } from '../../../../../shared/document-preview/pan-zoo
 import { PanZoomImageSurface } from './PanZoomImageSurface'
 import { usePanZoomViewport } from '../viewer-viewport/use-pan-zoom-viewport'
 import { useViewerZoomCommands } from '../viewer-viewport/use-viewer-zoom-commands'
-import { ImageActions, ImageActionsButton, keepImageActionsOpen, type ImageActionSource } from './ImageActions'
+import {
+  ImageActions,
+  ImageActionsButton,
+  keepImageActionsOpen,
+  type ImageActionSource
+} from './ImageActions'
 
 type PanZoomImageDialogProps = Omit<
   React.ComponentProps<typeof DialogContent>,
