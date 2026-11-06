@@ -111,7 +111,7 @@ it('keeps one usable sign-in owner as typed rejection and visible failure rows a
     payloadFingerprint: 'refused',
     dispatchState: 'rejected',
     providerItemId: null,
-    reason: words.text,
+    reason: words.reason,
     submittedAt: 1,
     resolvedAt: 2
   }
