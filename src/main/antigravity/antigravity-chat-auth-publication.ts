@@ -1,4 +1,7 @@
-import { AntigravityChatAuthConfigError } from '../../shared/antigravity-chat-auth-config'
+import {
+  AntigravityChatAuthConfigError,
+  type AntigravityChatAuthConfig
+} from '../../shared/antigravity-chat-auth-config'
 
 const publications = new WeakMap<object, 'saving' | 'unconfirmed'>()
 
@@ -15,7 +18,7 @@ export function assertAntigravityChatAuthPublished(value: unknown): void {
 
 /** The Store retains the exact candidate on an uncertain write; rollback restores its predecessor. */
 export async function publishAntigravityChatAuth<T>(
-  candidate: object,
+  candidate: AntigravityChatAuthConfig,
   commit: () => Promise<T>
 ): Promise<T> {
   publications.set(candidate, 'saving')
