@@ -7,10 +7,10 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getDefaultOnboardingState } from '../../../shared/onboarding-defaults'
 import type { FeatureInteractionId } from '../../../shared/feature-interactions'
 import {
-  nativeChatUpgradeTipVariant,
-  parseNativeChatUpgradeTipAudience,
-  type NativeChatUpgradeTipVariant
-} from '../../../shared/native-chat/native-chat-upgrade-tip-audience'
+  chatUiLaunchTipVariant,
+  parseChatUiLaunchTipAudience,
+  type ChatUiLaunchTipVariant
+} from '../../../shared/native-chat/chat-ui-launch-tip-audience'
 import {
   updateSettings as updateSettingsOperation,
   type SettingsMutationOperations
@@ -25,7 +25,7 @@ import {
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { WriteSchedulingOperations } from './write-scheduling'
 import { scheduleSave } from './write-scheduling'
-import { bumpLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
+import { bumpLocalWorktreeScanGeneration } from '../../workspaces/catalog/local-worktree-scan-generation'
 
 type ProfilePreferencesRuntime = Pick<
   StoreRuntimeState,
@@ -181,10 +181,10 @@ export class ProfilePreferences {
     return this.getOnboarding()
   }
 
-  getNativeChatUpgradeTipVariant(): NativeChatUpgradeTipVariant {
-    return nativeChatUpgradeTipVariant(
-      parseNativeChatUpgradeTipAudience(
-        this[profilePreferencesContext].runtime.state.nativeChatUpgradeTipAudience
+  getChatUiLaunchTipVariant(): ChatUiLaunchTipVariant {
+    return chatUiLaunchTipVariant(
+      parseChatUiLaunchTipAudience(
+        this[profilePreferencesContext].runtime.state.chatUiLaunchTipAudience
       )
     )
   }

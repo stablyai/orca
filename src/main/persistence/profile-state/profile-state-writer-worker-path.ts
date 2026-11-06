@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path'
 import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
-} from '../../worker-thread-entry-path'
+} from '../../worker-threads/worker-thread-entry-path'
 
 export function resolveProfileStateWriterWorkerPath(moduleDir = __dirname): string {
   const entry = resolveWorkerThreadEntryPath(

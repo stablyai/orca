@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, vi } from 'vitest'
 import type { Mock } from 'vitest'
-import type * as TuiAgentSelectionModule from '../../../shared/tui-agent-selection'
-import type * as TuiAgentStartupModule from '@/lib/tui-agent-startup'
+import type * as TuiAgentSelectionModule from '../../../shared/agent-launch/catalog/tui-agent-selection'
+import type * as TuiAgentStartupModule from '../../../shared/agent-launch/startup/tui-agent-startup'
 import type * as DirectAgentRoutingModule from '@/lib/launch-work-item-direct-agent-routing'
 import type * as RuntimeRpcSubscribeModule from '@/runtime/runtime-rpc-subscribe'
 
@@ -54,6 +54,7 @@ const mocks: DirectLaunchMocks = vi.hoisted(() => ({
 
 vi.mock('@/store', async () => {
   const { createStore } = await import('zustand/vanilla')
+  const { useStore } = await import('zustand')
   const store = createStore(() => mocks.store)
   Object.defineProperty(mocks, 'store', {
     get: store.getState,
@@ -61,10 +62,17 @@ vi.mock('@/store', async () => {
       store.setState(state, true)
     }
   })
-  return { useAppStore: store }
+  return {
+    useAppStore: Object.assign(
+      (selector: (state: typeof mocks.store) => unknown) => useStore(store, selector),
+      store
+    )
+  }
 })
 
-vi.mock('sonner', () => ({ toast: { error: mocks.toastError, message: vi.fn() } }))
+vi.mock('sonner', () => ({
+  toast: { error: mocks.toastError, message: vi.fn(), success: vi.fn() }
+}))
 
 vi.mock('@/lib/agent-paste-draft', () => ({
   pasteDraftWhenAgentReady: mocks.pasteDraftWhenAgentReady
@@ -125,8 +133,10 @@ vi.mock('@/lib/telemetry', () => ({
   tuiAgentToAgentKind: (agent: string) => agent
 }))
 
-vi.mock('@/lib/tui-agent-startup', async () => {
-  const actual = await vi.importActual<typeof TuiAgentStartupModule>('@/lib/tui-agent-startup')
+vi.mock('../../../shared/agent-launch/startup/tui-agent-startup', async () => {
+  const actual = await vi.importActual<typeof TuiAgentStartupModule>(
+    '../../../shared/agent-launch/startup/tui-agent-startup'
+  )
   return {
     ...actual,
     buildAgentDraftLaunchPlan: vi.fn(actual.buildAgentDraftLaunchPlan),
@@ -134,9 +144,9 @@ vi.mock('@/lib/tui-agent-startup', async () => {
   }
 })
 
-vi.mock('../../../shared/tui-agent-selection', async () => {
+vi.mock('../../../shared/agent-launch/catalog/tui-agent-selection', async () => {
   const actual = await vi.importActual<typeof TuiAgentSelectionModule>(
-    '../../../shared/tui-agent-selection'
+    '../../../shared/agent-launch/catalog/tui-agent-selection'
   )
   return {
     ...actual,
@@ -160,13 +170,17 @@ beforeEach(() => {
   hostMocks.callRuntimeRpc.mockReset().mockResolvedValue({ agents: [] })
   hostMocks.supports.mockReset().mockResolvedValue(false)
   hostMocks.subscribe.mockReset()
-  vi.stubGlobal('window', {
-    api: {
-      worktrees: {
-        resolvePrBase: mocks.resolvePrBase
+  const testWindow = typeof window === 'undefined' ? {} : window
+  vi.stubGlobal(
+    'window',
+    Object.assign(testWindow, {
+      api: {
+        worktrees: {
+          resolvePrBase: mocks.resolvePrBase
+        }
       }
-    }
-  })
+    })
+  )
   hostMocks.checkRuntimeHooks.mockResolvedValue({
     hasHooks: false,
     hooks: null,

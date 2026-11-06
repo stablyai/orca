@@ -8,7 +8,7 @@ import { TERMINAL_METHODS } from './methods/terminal'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 
 const makeRequest = (params: unknown): RpcRequest => ({

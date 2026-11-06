@@ -1,7 +1,7 @@
 // Resume lines enter the selected Windows shell; cmd.exe must never receive PowerShell single quoting (#12320).
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type * as ConnectionOwnerResolution from '@/lib/connection-owner-resolution'
 
 const mockCreateTab = vi.fn()

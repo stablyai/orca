@@ -1,8 +1,11 @@
 import type { ActiveAgentNotesSendResult } from './active-agent-note-send-result'
 import type { AgentMessageTarget } from './agent-message-target'
 import { sendNotesToActiveAgentSession } from './active-agent-note-send'
-import { relaunchFailedStructuredAgentSessionWithMessage } from './structured-agent-session-launch-message'
-import { getStructuredAgentSessionLaunchLifecycle } from './agent-session/launch/structured-agent-session-launch-registry'
+import { relaunchFailedStructuredAgentSessionWithMessage } from './agent-session/launch/structured-agent-session-launch-message'
+import {
+  getStructuredAgentSessionLaunchLifecycle,
+  structuredAgentSessionLaunchHasRetainedInput
+} from './agent-session/launch/structured-agent-session-launch-registry'
 import { sendStructuredAgentSessionMessage } from '@/components/native-chat/structured-agent-session-message-sender'
 import { structuredAgentSessionTargetForTab } from '@/runtime/structured-agent-session-owner'
 import { useAppStore } from '@/store'
@@ -13,8 +16,10 @@ export async function sendMessageToAgent(args: {
   worktreeId: string
   target: AgentMessageTarget
   prompt: string
+  /** False leaves the prompt unsent in a terminal agent's input; a chat takes it in its composer instead. */
+  submit?: boolean
 }): Promise<ActiveAgentNotesSendResult> {
-  const { target, worktreeId } = args
+  const { target, worktreeId, submit = true } = args
   const prompt = args.prompt.trim()
   if (!prompt) {
     return { status: 'empty', code: 'empty' }
@@ -23,8 +28,13 @@ export async function sendMessageToAgent(args: {
     return sendNotesToActiveAgentSession({
       worktreeId,
       prompt,
-      noteTarget: { tabId: target.tabId, leafId: target.leafId }
+      noteTarget: { tabId: target.tabId, leafId: target.leafId },
+      ...(submit ? {} : { submit: false })
     })
+  }
+  // A chat's unsent text belongs in its composer; this path only sends to it.
+  if (!submit) {
+    return { status: 'not-writable', code: 'session-send-refused' }
   }
   const state = useAppStore.getState()
   const tab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
@@ -37,7 +47,11 @@ export async function sendMessageToAgent(args: {
   }
   const lifecycle = getStructuredAgentSessionLaunchLifecycle(worktreeId, target.sessionId)
   // A chat still starting takes no send yet: the notes wait, as its composer would.
-  if (lifecycle === 'pending' || lifecycle === 'visibility-unknown') {
+  if (
+    lifecycle === 'pending' ||
+    (lifecycle === 'visibility-unknown' &&
+      !structuredAgentSessionLaunchHasRetainedInput(worktreeId, target.sessionId))
+  ) {
     return { status: 'not-ready', code: 'session-send-refused' }
   }
   const relaunched = relaunchFailedStructuredAgentSessionWithMessage(

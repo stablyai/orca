@@ -5,16 +5,15 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useNow } from '@/hooks/use-now'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import type { AgentJournalThreadGoal } from '../../../../shared/agent-session-journal-types'
+import { NativeChatComposerTabStrip } from './NativeChatComposerTabStrip'
+import type { AgentJournalThreadGoal } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentSessionThreadGoalElapsedSeconds,
   agentSessionThreadGoalStatusChange
-} from '../../../../shared/agent-session-thread-goal'
-import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session-thread-goal-wire'
-import {
-  formatNativeChatThreadGoalElapsed,
-  nativeChatThreadGoalStatusLabel
-} from './native-chat-thread-goal-presentation'
+} from '../../../../shared/agent-session/agent-session-thread-goal'
+import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/agent-session-thread-goal-wire'
+import { formatAgentSessionThreadGoalElapsed } from '../../../../shared/agent-session/view/agent-session-thread-goal-presentation'
+import { nativeChatThreadGoalStatusLabel } from './native-chat-thread-goal-presentation'
 
 function GoalAction(props: {
   label: string
@@ -45,6 +44,7 @@ function GoalAction(props: {
 
 export function NativeChatThreadGoalBanner(props: {
   goal: AgentJournalThreadGoal
+  objectiveContent?: React.ReactNode
   pending: boolean
   /** False where only the agent's own `/goal` changes the goal, which has no pause. */
   hostChanges: boolean
@@ -66,59 +66,50 @@ export function NativeChatThreadGoalBanner(props: {
   if (label === null) {
     return null
   }
-  const elapsed = formatNativeChatThreadGoalElapsed(
+  const elapsed = formatAgentSessionThreadGoalElapsed(
     agentSessionThreadGoalElapsedSeconds(goal, now, runningTurn)
   )
   const expandLabel = expanded
     ? translate('components.native-chat.goal.collapse', 'Hide full goal')
     : translate('components.native-chat.goal.expand', 'Show full goal')
   return (
-    // Pulled over the composer's top padding so the strip sits on the input box.
-    <div
-      className="group/goal relative -mb-2 shrink-0 px-3 sm:px-4"
-      data-native-chat-thread-goal={goal.status}
-    >
-      <div className="mx-auto w-full max-w-(--chat-content-max-width) px-2">
-        {/* Right after the task strip, that strip's bottom border is this tab's top edge. */}
-        <div className="flex items-start gap-2 rounded-t-md border border-b-0 border-border bg-muted/30 py-1 pr-1 pl-3 text-xs text-muted-foreground group-[[data-native-chat-background-tasks]+&]/goal:rounded-t-none group-[[data-native-chat-background-tasks]+&]/goal:border-t-0">
-          <Goal aria-hidden className="mt-1 size-3.5 shrink-0" />
-          <p className={cn('min-w-0 flex-1 py-0.5', expanded ? 'break-words' : 'truncate')}>
-            <span className="font-semibold text-foreground">{label}</span>{' '}
-            <span>{goal.objective}</span>
-            <span className="tabular-nums">{` • ${elapsed}`}</span>
-          </p>
-          <div className="flex shrink-0 items-center">
-            <GoalAction
-              label={translate('components.native-chat.goal.clear', 'Clear goal')}
-              // Claude's `/goal clear` must enter a fresh turn, like a composer send.
-              disabled={!props.hostChanges && (props.sendUnavailable || props.startsHeld === true)}
-              onClick={() => onChange({ kind: 'clear' })}
-            >
-              <Trash2 className="size-3.5" />
-            </GoalAction>
-            {statusChange === 'paused' ? (
-              <GoalAction
-                label={translate('components.native-chat.goal.pause', 'Pause goal')}
-                disabled={false}
-                onClick={() => onChange({ kind: 'status', status: 'paused' })}
-              >
-                <Pause className="size-3.5" />
-              </GoalAction>
-            ) : statusChange === 'active' ? (
-              <GoalAction
-                label={translate('components.native-chat.goal.resume', 'Resume goal')}
-                disabled={props.startsHeld === true}
-                onClick={() => onChange({ kind: 'status', status: 'active' })}
-              >
-                <Play className="size-3.5" />
-              </GoalAction>
-            ) : null}
-            <GoalAction label={expandLabel} disabled={false} onClick={() => setExpanded(!expanded)}>
-              {expanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
-            </GoalAction>
-          </div>
-        </div>
+    <NativeChatComposerTabStrip data-native-chat-thread-goal={goal.status}>
+      <Goal aria-hidden className="mt-1 size-3.5 shrink-0" />
+      <p className={cn('min-w-0 flex-1 py-0.5', expanded ? 'break-words' : 'truncate')}>
+        <span className="font-semibold text-foreground">{label}</span>{' '}
+        <span>{props.objectiveContent ?? goal.objective}</span>
+        <span className="tabular-nums">{` • ${elapsed}`}</span>
+      </p>
+      <div className="flex shrink-0 items-center">
+        <GoalAction
+          label={translate('components.native-chat.goal.clear', 'Clear goal')}
+          // Claude's `/goal clear` must enter a fresh turn, like a composer send.
+          disabled={!props.hostChanges && (props.sendUnavailable || props.startsHeld === true)}
+          onClick={() => onChange({ kind: 'clear' })}
+        >
+          <Trash2 className="size-3.5" />
+        </GoalAction>
+        {statusChange === 'paused' ? (
+          <GoalAction
+            label={translate('components.native-chat.goal.pause', 'Pause goal')}
+            disabled={false}
+            onClick={() => onChange({ kind: 'status', status: 'paused' })}
+          >
+            <Pause className="size-3.5" />
+          </GoalAction>
+        ) : statusChange === 'active' ? (
+          <GoalAction
+            label={translate('components.native-chat.goal.resume', 'Resume goal')}
+            disabled={props.startsHeld === true}
+            onClick={() => onChange({ kind: 'status', status: 'active' })}
+          >
+            <Play className="size-3.5" />
+          </GoalAction>
+        ) : null}
+        <GoalAction label={expandLabel} disabled={false} onClick={() => setExpanded(!expanded)}>
+          {expanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+        </GoalAction>
       </div>
-    </div>
+    </NativeChatComposerTabStrip>
   )
 }

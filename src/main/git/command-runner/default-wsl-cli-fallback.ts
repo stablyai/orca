@@ -1,9 +1,9 @@
-import { blockedWslDistroForExec } from '../../wsl/wsl-background-exec-gate'
+import { blockedWslDistroForExec } from '../../wsl/discovery/wsl-background-exec-gate'
 import {
   runAsWslUserAct,
   WslDistroStoppedError,
   WslDistroUnverifiableError
-} from '../../wsl/wsl-unc-access-gate'
+} from '../../wsl/filesystem/wsl-unc-access-gate'
 import {
   defaultWslCliDistro,
   resolveDefaultWslCli,

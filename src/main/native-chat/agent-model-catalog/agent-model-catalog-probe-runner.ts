@@ -1,5 +1,6 @@
 import type { ClaudeBackgroundFailedExit } from '../../../shared/claude-background-run-isolation'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import { withTimeout } from '../../../shared/promise-timeout-fallback'
 
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
 import { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
@@ -58,6 +59,8 @@ export type AgentModelCatalogRunnerOptions = {
   spawnImpl?: PipedProcessSpawner
   platform?: NodeJS.Platform
   inheritedEnv?: NodeJS.ProcessEnv
+  /** Finish required replies even when an optional control request never completes. */
+  partialOutput?: { ready: (stdout: string) => boolean; timeoutMs: number }
 }
 
 /** Bound the listing and await child teardown before success, failure or cancellation settles. */
@@ -83,6 +86,7 @@ export async function runAgentModelCatalogListing(
   const stderrDetail = (): string =>
     providerStderrForDisplay(managed.stderrTail()).trim().slice(0, STDERR_DETAIL_MAX_CHARS)
   let timer: ReturnType<typeof setTimeout> | undefined
+  let partialTimer: ReturnType<typeof setTimeout> | undefined
   let onAbort = (): void => {}
   try {
     return await new Promise<string>((resolve, reject) => {
@@ -99,16 +103,25 @@ export async function runAgentModelCatalogListing(
             failedExit
           )
         )
+      // Required replies already in hand outlive an optional reply that runs out of time or room.
+      const failUnlessReady = (message: string, reason: AgentModelCatalogProbeFailure): void =>
+        partialTimer === undefined ? fail(message, reason) : resolve(output.text())
       onAbort = () => fail(`${launch.command} listing stopped`, 'stopped')
       options.signal?.addEventListener('abort', onAbort, { once: true })
       timer = setTimeout(
-        () => fail(`${launch.command} did not list models within ${timeoutMs}ms`, 'timeout'),
+        () =>
+          failUnlessReady(`${launch.command} did not list models within ${timeoutMs}ms`, 'timeout'),
         timeoutMs
       )
       child.stdout.on('data', (chunk: Buffer | string) => {
         output.write(chunk)
         if (output.truncated()) {
-          fail(`${launch.command} listed more than the model catalog reads`, 'output-overflow')
+          failUnlessReady(
+            `${launch.command} listed more than the model catalog reads`,
+            'output-overflow'
+          )
+        } else if (partialTimer === undefined && options.partialOutput?.ready(output.text())) {
+          partialTimer = setTimeout(() => resolve(output.text()), options.partialOutput.timeoutMs)
         }
       })
       child.stdout.on('error', () => {})
@@ -142,6 +155,7 @@ export async function runAgentModelCatalogListing(
     })
   } finally {
     clearTimeout(timer)
+    clearTimeout(partialTimer)
     options.signal?.removeEventListener('abort', onAbort)
     await managed.close()
   }
@@ -157,13 +171,18 @@ export type AgentModelCatalogProbeConnection = { close(): Promise<unknown> }
 
 export async function runAgentModelCatalogSession<C extends AgentModelCatalogProbeConnection, T>(
   open: () => C,
-  body: (connection: C) => Promise<T>,
+  body: (connection: C, ready: (cleanup: () => Promise<unknown>) => void) => Promise<T>,
   options: { label: string; timeoutMs?: number; signal?: AbortSignal }
 ): Promise<T> {
   const timeoutMs = options.timeoutMs ?? AGENT_MODEL_CATALOG_PROBE_TIMEOUT_MS
   throwIfStopped(options.signal, options.label)
   const connection = open()
   let timer: ReturnType<typeof setTimeout> | undefined
+  let cleanup: (() => Promise<unknown>) | undefined
+  const ready = (closeSession: () => Promise<unknown>): void => {
+    cleanup = closeSession
+    clearTimeout(timer)
+  }
   let onAbort = (): void => {}
   const deadline = new Promise<never>((_resolve, reject) => {
     onAbort = () =>
@@ -181,10 +200,13 @@ export async function runAgentModelCatalogSession<C extends AgentModelCatalogPro
     )
   })
   try {
-    return await Promise.race([body(connection), deadline])
+    return await Promise.race([body(connection, ready), deadline])
   } finally {
     clearTimeout(timer)
     options.signal?.removeEventListener('abort', onAbort)
+    if (cleanup) {
+      await withTimeout(cleanup(), 1_000, undefined)
+    }
     await connection.close().catch(() => undefined)
   }
 }

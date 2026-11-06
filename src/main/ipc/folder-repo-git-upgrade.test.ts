@@ -5,7 +5,7 @@ import { realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as FsPromises from 'node:fs/promises'
-import type * as GitRepo from '../git/repo'
+import type * as GitRepo from '../git/repo-detection'
 import type { Repo } from '../../shared/repo-types'
 
 // Count real stats to prevent directory-listing fan-out in polling.
@@ -29,7 +29,7 @@ async function drainGitChecks(): Promise<void> {
   }
 }
 
-vi.mock('../git/repo', async (importOriginal) => {
+vi.mock('../git/repo-detection', async (importOriginal) => {
   const actual = await importOriginal<typeof GitRepo>()
   return {
     ...actual,
@@ -62,18 +62,18 @@ vi.mock('./worktree-remote', () => ({
 vi.mock('./repos/repos-changed-notification', () => ({
   notifyReposChanged: vi.fn()
 }))
-vi.mock('./registered-worktree-roots-cache', () => ({
+vi.mock('./worktrees/removal/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: vi.fn(),
   invalidateAuthorizedRootsCacheForRepo: vi.fn()
 }))
-vi.mock('../worktree-root-preparation', () => ({
+vi.mock('../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: vi.fn(async () => {})
 }))
 
 import { notifyWorktreesChanged } from './worktree-remote'
 import { notifyReposChanged } from './repos/repos-changed-notification'
-import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
-import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
+import { invalidateAuthorizedRootsCache } from './worktrees/removal/registered-worktree-roots-cache'
+import { prepareLocalWorktreeRootForRepo } from '../workspaces/creation/worktree-root-preparation'
 import { notifyMainWindowBecameVisible } from '../window/main-window-visibility'
 import {
   startFolderRepoGitUpgradeWatch,

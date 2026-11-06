@@ -74,7 +74,8 @@ vi.mock('./gh-utils', () => ({
   _resetOwnerRepoCache: vi.fn()
 }))
 
-vi.mock('../git/runner', () => ({
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
@@ -474,9 +475,10 @@ describe('GitHub PR local runtime routing', () => {
       ) {
         return { stdout: '[]' }
       }
-      if (endpoint.endsWith('/commits/head-sha/check-runs?per_page=100')) {
+      if (endpoint.endsWith('/commits/head-sha/check-runs?per_page=100&page=1')) {
         return {
           stdout: JSON.stringify({
+            total_count: 1,
             check_runs: [
               {
                 id: 88,
@@ -489,11 +491,11 @@ describe('GitHub PR local runtime routing', () => {
           })
         }
       }
-      if (endpoint.endsWith('/commits/head-sha/status?per_page=100')) {
-        return { stdout: JSON.stringify({ statuses: [] }) }
+      if (endpoint.endsWith('/commits/head-sha/status?per_page=100&page=1')) {
+        return { stdout: JSON.stringify({ total_count: 0, statuses: [] }) }
       }
-      if (endpoint.endsWith('/commits/head-sha/check-suites?per_page=100')) {
-        return { stdout: JSON.stringify({ check_suites: [] }) }
+      if (endpoint.endsWith('/commits/head-sha/check-suites?per_page=100&page=1')) {
+        return { stdout: JSON.stringify({ total_count: 0, check_suites: [] }) }
       }
       if (endpoint.endsWith('/check-runs/88')) {
         return {

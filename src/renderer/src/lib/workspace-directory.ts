@@ -1,13 +1,15 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { AppState } from '@/store/types'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo,
+  type WorkspaceRecordState
+} from '@/store/workspace-record-selectors'
 
 // Skill discovery omits detected rows, so detected-only workspaces have no directory there.
-export type WorkspaceDirectoryState = Pick<
-  AppState,
-  'worktreesByRepo' | 'folderWorkspaces' | 'floatingWorkspacePath'
-> &
+export type WorkspaceDirectoryState = WorkspaceRecordState &
+  Pick<AppState, 'floatingWorkspacePath'> &
   Partial<Pick<AppState, 'detectedWorktreesByRepo'>>
 
 const NO_DETECTED_WORKTREES: AppState['detectedWorktreesByRepo'] = {}
@@ -22,6 +24,8 @@ export function resolveWorkspaceDirectory(
   executionHostId?: ExecutionHostId | null
 ): string | null {
   const catalog = {
+    projectGroups: state.projectGroups,
+    repos: state.repos,
     worktreesByRepo: selectWorktreesByRepo(state),
     detectedWorktreesByRepo: state.detectedWorktreesByRepo ?? NO_DETECTED_WORKTREES,
     folderWorkspaces: selectFolderWorkspaces(state),

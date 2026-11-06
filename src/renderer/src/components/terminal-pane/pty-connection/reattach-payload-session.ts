@@ -9,7 +9,7 @@ export type ReattachPayloadSession = Pick<
   | 'applySnapshotKittyKeyboardModes'
   | 'buildColdRestoreAgentResumeStartup'
   | 'chooseReattachReplayReset'
-  | 'clearSleepingRecordAfterColdRestoreSpawn'
+  | 'keepResumeRecordAfterColdRestoreSpawn'
   | 'consumeRestoredViewportBlankingMarker'
   | 'createReattachGridPush'
   | 'deps'
@@ -32,4 +32,5 @@ export type ReattachPayloadSession = Pick<
   | 'writeInputModeGround'
   | 'writeReplayEpilogue'
   | 'writeReplayData'
+  | 'streamPosition'
 >

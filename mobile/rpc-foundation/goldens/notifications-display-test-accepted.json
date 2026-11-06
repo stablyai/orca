@@ -31,43 +31,6 @@
         "startedAt": 0
       }
     },
-    "170e48b3b256": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "Pressable": 2,
-        "Text": 5,
-        "View": 3
-      },
-      "labels": ["Send test notification"],
-      "text": [
-        "Having trouble receiving alerts?",
-        "Test push delivery, or a local notification when push is unavailable.",
-        "Send test notification",
-        "Send test notification",
-        "Troubleshooting"
-      ]
-    },
-    "1fe5ab7da384": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "Pressable": 2,
-        "Text": 6,
-        "View": 3
-      },
-      "labels": ["Send test notification"],
-      "text": [
-        "Having trouble receiving alerts?",
-        "Test push delivery, or a local notification when push is unavailable.",
-        "Send test notification",
-        "Send test notification",
-        "Troubleshooting",
-        "Accepted by Orca’s push service. Check for the notification."
-      ]
-    },
     "649d12c8eb9b": {
       "name": "notifications.testPush#1",
       "ordinal": 1,
@@ -103,22 +66,60 @@
         }
       }
     },
-    "6a40b555d64d": {
+    "6b7fba36efde": {
       "crash": {
         "$rpc": "null"
       },
       "elements": {
+        "ChevronRight": 1,
         "Pressable": 2,
         "Text": 5,
-        "View": 3
+        "View": 7
       },
-      "labels": ["Sending…"],
+      "labels": ["Send test notification", "Troubleshooting"],
       "text": [
         "Having trouble receiving alerts?",
+        "Send test notification",
+        "Troubleshooting",
         "Test push delivery, or a local notification when push is unavailable.",
+        "Accepted by Orca’s push service. Check for the notification."
+      ]
+    },
+    "8a172d4948a9": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "ChevronRight": 1,
+        "Pressable": 2,
+        "Text": 4,
+        "View": 7
+      },
+      "labels": ["Send test notification", "Troubleshooting"],
+      "text": [
+        "Having trouble receiving alerts?",
+        "Send test notification",
+        "Troubleshooting",
+        "Test push delivery, or a local notification when push is unavailable."
+      ]
+    },
+    "9585b40ac04d": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "ChevronRight": 1,
+        "Pressable": 2,
+        "Text": 5,
+        "View": 7
+      },
+      "labels": ["Sending…", "Troubleshooting"],
+      "text": [
+        "Having trouble receiving alerts?",
         "Send test notification",
         "Sending…",
-        "Troubleshooting"
+        "Troubleshooting",
+        "Test push delivery, or a local notification when push is unavailable."
       ]
     },
     "eb79a9b3682a": {
@@ -146,7 +147,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "170e48b3b256",
+          "state": "8a172d4948a9",
           "effects": []
         }
       },
@@ -159,7 +160,7 @@
             "mount": "eb79a9b3682a",
             "press": "eb79a9b3682a"
           },
-          "state": "6a40b555d64d",
+          "state": "9585b40ac04d",
           "effects": []
         }
       },
@@ -172,7 +173,7 @@
             "mount": "eb79a9b3682a",
             "press": "eb79a9b3682a"
           },
-          "state": "1fe5ab7da384",
+          "state": "6b7fba36efde",
           "effects": []
         }
       }

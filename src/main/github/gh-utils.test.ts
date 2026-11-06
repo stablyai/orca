@@ -7,12 +7,17 @@ const { gitExecFileAsyncMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn()
 }))
 
-vi.mock('../git/runner', () => ({
-  gitExecFileAsync: gitExecFileAsyncMock,
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   ghExecFileAsync: vi.fn()
 }))
 
-import { _resetRemoteNameListingCache } from '../git/remote-name-listing'
+import { _resetRemoteNameListingCache } from '../git/remotes/remote-name-listing'
 import {
   _getOwnerRepoCacheSize,
   _resetOwnerRepoCache,

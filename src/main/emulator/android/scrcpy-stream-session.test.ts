@@ -8,8 +8,11 @@ vi.mock('node:net', () => ({ connect: io.connect }))
 vi.mock('../emulator-probe', () => ({ emulatorProbe: vi.fn(), emulatorProbeError: vi.fn() }))
 
 class TestSocket extends EventEmitter {
+  destroyed = false
   destroy = vi.fn()
   setTimeout = vi.fn()
+  setNoDelay = vi.fn()
+  write = vi.fn()
 }
 
 function packet(size: number, meta = 123n): Buffer {
@@ -43,7 +46,7 @@ async function startSession() {
   const started = ScrcpyStreamSession.start(
     {
       runner,
-      sdk: { sdkRoot: 'sdk', adb: 'adb', emulator: 'emulator', avdmanager: 'avdmanager' },
+      sdk: { sdkRoot: 'sdk', adb: 'adb', emulator: 'emulator' },
       serial: 'test-device',
       localJarPath: 'server.jar'
     },
@@ -176,6 +179,41 @@ describe('ScrcpyStreamSession video buffering', () => {
     expect(Buffer.isBuffer(data)).toBe(true)
     expect(data.equals(frame.subarray(12))).toBe(true)
     expect(concatenatedBytes).toBeLessThanOrEqual(frame.length * 2)
+  })
+})
+
+describe('ScrcpyStreamSession control', () => {
+  it('tracks the video size control messages must carry across encoder restarts', async () => {
+    const { video, callbacks, started } = await startSession()
+    video.emit('data', handshake())
+    const session = await started
+    expect(session.videoSize()).toEqual({ width: 1080, height: 2400 })
+
+    // A rotation restarts the encoder; only the new SPS (here 600x1280) carries the new size.
+    const sps = Buffer.from('000000016742c01fd900980a1e5f011000000300100000030320f1832480', 'hex')
+    const config = Buffer.alloc(12)
+    config.writeBigUInt64BE(1n << 63n, 0)
+    config.writeUInt32BE(sps.length, 8)
+    video.emit('data', Buffer.concat([config, sps]))
+
+    expect(session.videoSize()).toEqual({ width: 600, height: 1280 })
+    expect(callbacks.onFrame).toHaveBeenCalledWith(expect.objectContaining({ config: true }))
+    session.close()
+  })
+
+  it('writes to the control socket without Nagle delay until the session closes', async () => {
+    const { video, control, started } = await startSession()
+    video.emit('data', handshake())
+    const session = await started
+    const message = Buffer.from([2, 0])
+
+    expect(control.setNoDelay).toHaveBeenCalledWith(true)
+    expect(session.sendControl(message)).toBe(true)
+    expect(control.write).toHaveBeenCalledExactlyOnceWith(message)
+
+    session.close()
+    expect(session.sendControl(message)).toBe(false)
+    expect(control.write).toHaveBeenCalledTimes(1)
   })
 })
 

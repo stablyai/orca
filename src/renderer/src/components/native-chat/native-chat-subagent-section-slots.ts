@@ -1,19 +1,19 @@
 import type {
   NativeChatMessage,
   NativeChatSubagentEntry
-} from '../../../../shared/native-chat-types'
+} from '../../../../shared/native-chat/native-chat-types'
 import {
   normalizeSubagentState,
   subagentGroupBlocks
 } from '../../../../shared/native-chat/transcript/native-chat-subagent-summary'
-import { nativeChatRowRendersContent } from '../../../../shared/native-chat-row-content'
+import { nativeChatRowRendersContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 import {
   type NativeChatRowTypography,
   estimateNativeChatRowHeight,
   nativeChatRowContentMetrics,
   NATIVE_CHAT_SUBAGENT_SECTION_HEAD_PX
 } from './native-chat-row-height-estimate'
-import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat/native-chat-resolution-receipt'
 import { compareMessages } from './native-chat-session-assembler'
 import {
   nativeChatSubagentEntryRuns,

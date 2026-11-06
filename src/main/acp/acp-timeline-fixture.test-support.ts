@@ -1,18 +1,18 @@
 import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
 import { expect } from 'vitest'
-import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   legacyAgentSessionSelectedOptionId,
   type AgentSessionPromptResponse
-} from '../../shared/agent-session-question-answer'
+} from '../../shared/agent-session/agent-session-question-answer'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { openProviderTimelineRig } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
 import type { AcpDialect, AcpRequestPresentation } from './acp-dialects/acp-dialect'
 import { AcpTimelineTranslator } from './acp-timeline-translator'
-import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
-import type { AgentChildWorkView } from '../../shared/agent-status-child-work-view'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import type { AgentChildWorkView } from '../../shared/agent-status/child-work/agent-status-child-work-view'
 import { acpSubagentRecords } from './acp-structured-child-work.test-support'
 import { PromptResponseSchema } from './generated/acp-protocol.generated'
 

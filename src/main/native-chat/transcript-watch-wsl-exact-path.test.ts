@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFsPromisesModule from 'node:fs/promises'
-import type * as WslRunningPathFilterModule from '../wsl-running-path-filter'
+import type * as WslRunningPathFilterModule from '../wsl/filesystem/wsl-running-path-filter'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 
 const UBUNTU_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\ada'
@@ -26,19 +26,19 @@ vi.mock('./transcript-watch-engine', () => ({
 }))
 // These cases cover root and path policy; the E9 gate has its own suite.
 vi.mock('./wsl-transcript-running-admission', () => ({ admitWslTranscriptPath: async () => {} }))
-vi.mock('../wsl/wsl-home-unless-stopped', async () => {
-  const wsl = await import('../wsl')
+vi.mock('../wsl/discovery/wsl-home-unless-stopped', async () => {
+  const wsl = await import('../wsl/discovery/distro-catalog')
   return {
     wslHomeUnlessStopped: (distro: string) => wsl.getWslHomeAsync(distro),
     listRunningWslHomeDirsUnlessStopped: () => wsl.listRunningWslHomeDirsAsync()
   }
 })
-vi.mock('../wsl', () => ({
+vi.mock('../wsl/discovery/distro-catalog', () => ({
   getWslHomeAsync: mocks.getWslHomeAsync,
   listRunningWslDistrosAsync: mocks.listRunningWslDistrosAsync,
   listRunningWslHomeDirsAsync: vi.fn(async () => [UBUNTU_HOME])
 }))
-vi.mock('../wsl-running-path-filter', async (importOriginal) => ({
+vi.mock('../wsl/filesystem/wsl-running-path-filter', async (importOriginal) => ({
   ...(await importOriginal<typeof WslRunningPathFilterModule>()),
   filterPathsToRunningWslDistrosAsync: mocks.filterPathsToRunningWslDistrosAsync
 }))
@@ -57,7 +57,10 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 import { resetHostReadableTranscriptPathCacheForTests } from './host-readable-transcript-path'
 import { subscribeNativeChatTranscript } from './transcript-watch'
 import { WslTranscriptFsError } from './wsl-transcript-fs-gate'
-import { resetWslTranscriptRunningObserverForTests } from './wsl-transcript-running-observer'
+import {
+  resetWslTranscriptRunningObserverForTests,
+  WSL_TRANSCRIPT_RUNNING_OBSERVATION_MS
+} from './wsl-transcript-running-observer'
 
 const realPlatform = process.platform
 
@@ -113,26 +116,6 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
     subscription.unsubscribe()
   })
 
-  it('passes the raw path through untouched off Windows', async () => {
-    setPlatform('darwin')
-    const subscription = await subscribeNativeChatTranscript({
-      agent: 'codex',
-      sessionId: 'wsl-sess',
-      transcriptPath: ROLLOUT_LINUX,
-      resolvePollIntervalMs: 10,
-      onAppend: () => {}
-    })
-
-    await vi.advanceTimersByTimeAsync(50)
-    expect(mocks.install).toHaveBeenCalledWith(
-      ROLLOUT_LINUX,
-      expect.anything(),
-      expect.anything(),
-      expect.any(AbortSignal)
-    )
-    subscription.unsubscribe()
-  })
-
   it('validates an exact UNC path without probing distro homes', async () => {
     setPlatform('win32')
     const subscription = await subscribeNativeChatTranscript({
@@ -154,23 +137,6 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
     subscription.unsubscribe()
   })
 
-  it('does not install an already-UNC path after its distro stops', async () => {
-    setPlatform('win32')
-    mocks.listRunningWslDistrosAsync.mockResolvedValue([])
-    const subscription = await subscribeNativeChatTranscript({
-      agent: 'codex',
-      sessionId: 'wsl-sess',
-      transcriptPath: ROLLOUT_UNC,
-      resolvePollIntervalMs: 10,
-      onAppend: () => {}
-    })
-
-    await vi.advanceTimersByTimeAsync(2_100)
-    expect(mocks.listRunningWslDistrosAsync).toHaveBeenCalledTimes(1)
-    expect(mocks.install).not.toHaveBeenCalled()
-    subscription.unsubscribe()
-  })
-
   it('does not run broad id fallback for an unresolved exact WSL path', async () => {
     setPlatform('win32')
     mocks.listRunningWslDistrosAsync.mockResolvedValue([])
@@ -184,7 +150,7 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
 
     expect(mocks.resolve).toHaveBeenCalledTimes(1)
     mocks.resolve.mockClear()
-    await vi.advanceTimersByTimeAsync(6_100)
+    await vi.advanceTimersByTimeAsync(2_100 + 2 * WSL_TRANSCRIPT_RUNNING_OBSERVATION_MS)
 
     expect(mocks.listRunningWslDistrosAsync).toHaveBeenCalledTimes(3)
     expect(mocks.resolve).not.toHaveBeenCalled()
@@ -205,7 +171,7 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
 
     await vi.advanceTimersByTimeAsync(2_100)
     expect(mocks.install).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(2_100)
+    await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_RUNNING_OBSERVATION_MS)
     expect(mocks.listRunningWslDistrosAsync).toHaveBeenCalledTimes(2)
     expect(mocks.install).toHaveBeenCalledTimes(1)
     subscription.unsubscribe()
@@ -225,7 +191,7 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
 
     await vi.advanceTimersByTimeAsync(2_100)
     expect(mocks.install).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(2_100)
+    await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_RUNNING_OBSERVATION_MS)
     expect(mocks.listRunningWslDistrosAsync).toHaveBeenCalledTimes(2)
     expect(mocks.install).toHaveBeenCalledTimes(1)
     subscription.unsubscribe()

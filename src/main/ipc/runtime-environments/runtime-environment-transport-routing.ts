@@ -1,17 +1,24 @@
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
+import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
+import {
+  type RuntimeEnvironmentSetupFailure,
+  runtimeEnvironmentSetupFailure
+} from '../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
+import { assertCrewSourceCurrent } from './runtime-environment-subscription-setup'
 import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
-import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
+import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
-import { resolveEnvironment, markEnvironmentUsed } from '../../../shared/runtime-environment-store'
+import {
+  resolveEnvironment,
+  markEnvironmentUsed
+} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   requireWslHostWithoutStart,
   resolveManagedRuntimeEnvironment,
   type ManagedRuntimeCallPreparation
 } from './runtime-environment-managed-tunnel'
 import { recordRuntimeEnvironmentUsage } from './runtime-environment-usage-record'
-import type {
-  RuntimeOrchestrationEnvelope,
-  RuntimeRpcResponse
-} from '../../../shared/runtime-rpc-envelope'
+import type * as Rpc from '../../../shared/runtime-rpc-envelope'
 import {
   subscribeRemoteRuntimeRequest,
   type RemoteRuntimeSubscription
@@ -41,13 +48,14 @@ export async function callRuntimeEnvironment(
   params: unknown,
   timeoutMs?: number,
   expectedEnvironmentPairingRevision?: number,
-  envelope?: RuntimeOrchestrationEnvelope,
+  envelope?: Rpc.RuntimeOrchestrationEnvelope,
   options?: {
+    prepareRequest?: Rpc.RuntimeRequestPreparation
     signal?: AbortSignal
     expectedEnvironmentRuntimeId?: string
     preparation?: ManagedRuntimeCallPreparation
   }
-): Promise<RuntimeRpcResponse<unknown>> {
+): Promise<Rpc.RuntimeRpcResponse<unknown>> {
   if (method === 'status.get') {
     let statusOptions = options
     // Why: the status probe dials on its own, so a no-start caller's WSL host is checked first.
@@ -107,7 +115,8 @@ export async function callRuntimeEnvironment(
             effectiveTimeoutMs,
             envelope,
             options?.signal,
-            ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+            ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+            options?.prepareRequest
           )
           markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
           return response
@@ -169,7 +178,7 @@ export async function subscribeRuntimeEnvironment(
   rawCallbacks: {
     onEvent: (
       payload:
-        | { type: 'response'; response: RuntimeRpcResponse<unknown> }
+        | { type: 'response'; response: Rpc.RuntimeRpcResponse<unknown> }
         | { type: 'binary'; bytes: Uint8Array<ArrayBufferLike> }
         | { type: 'error'; code: string; message: string }
         | { type: 'close' }
@@ -178,13 +187,24 @@ export async function subscribeRuntimeEnvironment(
   },
   isCurrent: () => boolean = () => true,
   signal?: AbortSignal,
-  preparation?: ManagedRuntimeCallPreparation
+  preparation?: ManagedRuntimeCallPreparation,
+  crewAttempt?: {
+    assertCurrent: () => void
+    observeFailure: (failure: RuntimeEnvironmentSetupFailure) => void
+  }
 ): Promise<RemoteRuntimeSubscription> {
   const callbacks = {
     ...rawCallbacks,
     onEvent: decodeSessionTabsDeltaEvents(method, rawCallbacks.onEvent)
   }
-  const environment = await resolveManagedRuntimeEnvironment(userDataPath, selector, preparation)
+  crewAttempt?.assertCurrent()
+  const environment = crewAttempt
+    ? resolveEnvironment(userDataPath, selector)
+    : await resolveManagedRuntimeEnvironment(userDataPath, selector, preparation)
+  crewAttempt?.assertCurrent()
+  if (crewAttempt) {
+    assertCrewSourceCurrent(environment)
+  }
   const pairedConnection = getPreferredPairedRuntimeConnection(environment)
   const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
   let markedUsed = false
@@ -196,7 +216,17 @@ export async function subscribeRuntimeEnvironment(
     recordRuntimeEnvironmentUsage(userDataPath, environment.id, { runtimeId })
   }
   const callbacksWithMarkUsed = {
-    onResponse: (response: RuntimeRpcResponse<unknown>) => {
+    onResponse: (response: Rpc.RuntimeRpcResponse<unknown>) => {
+      if (
+        crewAttempt &&
+        response._meta?.runtimeId != null &&
+        response._meta.runtimeId !== environment.runtimeId
+      ) {
+        throw new RemoteRuntimeClientError(
+          'runtime_environment_changed',
+          'Runtime environment identity changed; refresh and try again'
+        )
+      }
       if (response.ok === true) {
         markUsedOnce(response._meta.runtimeId)
       }
@@ -229,7 +259,7 @@ export async function subscribeRuntimeEnvironment(
         signal
       })
     }
-    return await subscribeRemoteRuntimeRequest(
+    const subscription = await subscribeRemoteRuntimeRequest(
       pairedConnection,
       method,
       params,
@@ -237,14 +267,26 @@ export async function subscribeRuntimeEnvironment(
       callbacksWithMarkUsed,
       { clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES, signal }
     )
+    if (crewAttempt) {
+      try {
+        throwIfSignalAborted(signal)
+        crewAttempt.assertCurrent()
+        assertCrewSourceCurrent(environment)
+      } catch (error) {
+        subscription.close()
+        throw error
+      }
+    }
+    return subscription
   } catch (error) {
-    if (error instanceof Error) {
+    if (error instanceof Error && error.name !== 'AbortError') {
       error.message = withRuntimeUnreachableHint(
         environment,
         error.message,
         pairedConnection.endpoint
       )
     }
+    crewAttempt?.observeFailure(runtimeEnvironmentSetupFailure(error, 'subscription'))
     throw error
   }
 }
@@ -252,7 +294,7 @@ export async function subscribeRuntimeEnvironment(
 function markEnvironmentUsedFromResponse(
   userDataPath: string,
   environmentId: string,
-  response: RuntimeRpcResponse<unknown>
+  response: Rpc.RuntimeRpcResponse<unknown>
 ): void {
   if (response.ok === true) {
     markEnvironmentUsed(userDataPath, environmentId, { runtimeId: response._meta.runtimeId })

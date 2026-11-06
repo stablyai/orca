@@ -5,13 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const wslUncDirectoryExistsAsyncMock = vi.hoisted(() => vi.fn())
 
-vi.mock('../wsl', async (importOriginal) => {
+vi.mock('../wsl/filesystem/unc-path-access', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return { ...actual, wslUncDirectoryExistsAsync: wslUncDirectoryExistsAsyncMock }
 })
 
-import { validateWorkingDirectoryAsync } from './local-pty-utils'
-import { _resetWorkingDirectoryValidationStateForTest } from './working-directory-validation'
+import {
+  validateWorkingDirectoryAsync,
+  _resetWorkingDirectoryValidationStateForTest
+} from './working-directory-validation'
 
 let tempDir: string
 

@@ -70,7 +70,8 @@ vi.mock('./gh-utils', () => ({
   classifyListPrsError: (stderr: string) => ({ type: 'unknown', message: stderr })
 }))
 
-vi.mock('../git/runner', () => ({
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 

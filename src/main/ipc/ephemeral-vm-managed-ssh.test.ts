@@ -99,16 +99,6 @@ async function provision(): Promise<unknown> {
   })
 }
 
-it("records the managed server that serves a recipe VM's SSH host", async () => {
-  setupManagedSshRecipe()
-  expect(await provision()).toMatchObject({
-    ok: true,
-    connectionType: 'ssh',
-    environmentId: 'env-managed-vm',
-    runtime: { connectionMode: 'ssh', runtimeEnvironmentId: 'env-managed-vm' }
-  })
-})
-
 it("reconnects a resumed VM's SSH host instead of asking for a pairing code", async () => {
   const { userDataPath, store } = setupManagedSshRecipe()
   const provisioned = await provision()

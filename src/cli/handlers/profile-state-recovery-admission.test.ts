@@ -10,7 +10,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import * as durableFileWrite from '../../main/durable-file-write'
+import * as durableFileWrite from '../../main/filesystem/durable-file-write'
 import {
   acquireProfileStateMaintenance,
   acquireProfileStateRuntimeAdmission

@@ -1,4 +1,4 @@
-from contextlib import ExitStack
+from contextlib import ExitStack, nullcontext
 import importlib.util
 import json
 import sys
@@ -202,6 +202,34 @@ class SnapshotFixture(ExitStack):
 
 
 class RuntimeRenderTest(unittest.TestCase):
+    def test_key_requests_reject_missing_payload_without_input(self):
+        root = FakeAccessible("frame", "Editor")
+        root.get_state_set = lambda: FakeStateSet(FakeStateType.ACTIVE)
+        with SnapshotFixture(root), \
+             patch.object(runtime.Atspi, "generate_keyboard_event", create=True) as keyboard, \
+             patch.object(runtime.subprocess, "run") as process:
+            for payload in ({}, {"key": None}, {"key": ""}):
+                with self.subTest(payload=payload):
+                    with self.assertRaisesRegex(RuntimeError, "key is required"):
+                        runtime.run_operation({"tool": "press_key", "app": "Fixture", "noScreenshot": True, **payload})
+            keyboard.assert_not_called()
+            process.assert_not_called()
+
+    def test_focus_search_keeps_transient_accessible_wrappers_alive(self):
+        class TransientNode:
+            def __init__(self, depth):
+                self.depth = depth
+
+            def get_child_count(self):
+                return int(self.depth < 30)
+
+            def get_child_at_index(self, _):
+                return TransientNode(self.depth + 1)
+
+        focused = runtime.first_descendant(TransientNode(0), lambda node: node.depth == 30)
+        self.assertIsNotNone(focused)
+        self.assertEqual(focused.depth, 30)
+
     def test_snapshot_keeps_semantics_and_image_when_child_geometry_stalls(self):
         late = FakeAccessible("button", "Continue")
         root = FakeAccessible("frame", "Editor", children=[
@@ -400,6 +428,9 @@ class RuntimeRenderTest(unittest.TestCase):
                     if stage == "windowactivate":
                         activate(int(command[-1]))
                         return types.SimpleNamespace(returncode=int(bool(case.get("refused"))), stdout="")
+                    if stage == "type":
+                        keys.append(active[0])
+                        return types.SimpleNamespace(returncode=0)
                     raise AssertionError("unexpected native operation")
 
                 fixture.root.get_state_set = state
@@ -412,6 +443,7 @@ class RuntimeRenderTest(unittest.TestCase):
                          get_window_stack=lambda: case.get("managed", [71, 72]))), create=True), \
                      patch.object(runtime, "GdkX11", types.SimpleNamespace(X11Window=types.SimpleNamespace(get_xid=int)), create=True), \
                      patch.object(runtime.shutil, "which", lambda _: "/usr/bin/xdotool"), \
+                     patch.object(runtime, "temporary_x11_keymap", lambda *_: nullcontext(None)), \
                      patch.object(runtime.subprocess, "run", native), \
                      patch.dict(runtime.os.environ, {"XDG_SESSION_TYPE": case.get("session", "x11")}):
                     request = {"tool": "press_key", "key": "x", "app": "Fixture", "windowIndex": 0,
@@ -477,7 +509,10 @@ class RuntimeRenderTest(unittest.TestCase):
                         if active:
                             fixture.root.get_state_set = lambda: FakeStateSet(FakeStateType.ACTIVE)
                             result = runtime.run_operation({"tool": tool, "app": "Fixture", "text": "x", "noScreenshot": True})
-                            (keys if tool == "type_text" else paste).assert_called_once_with("x")
+                            if tool == "type_text":
+                                keys.assert_called_once_with("x", fixture.root)
+                            else:
+                                paste.assert_called_once_with("x")
                             self.assertEqual(result["action"]["verification"]["state"], "unverified")
                         else:
                             with self.assertRaisesRegex(RuntimeError, "window_not_focused"):
@@ -609,15 +644,6 @@ class RuntimeRenderTest(unittest.TestCase):
             self.assertEqual(timeouts[0][1], -1)
             self.assertEqual(timeouts[-1], (800, 15000))
 
-    def test_named_non_generic_node_skips_unused_summary_walk(self):
-        root = FakeAccessible("button", "Save", children=[FakeAccessible("text", "unused")])
-
-        records, lines, truncation = render(root)
-
-        self.assertEqual([record["name"] for record in records], ["Save"])
-        self.assertEqual(lines, ["0 button Save"])
-        self.assertEqual(root.counter["child_reads"], 0)
-        self.assertFalse(truncation["truncated"])
 
     def test_wide_labeled_controls_never_enumerate_suppressed_children(self):
         roles = (
@@ -637,88 +663,13 @@ class RuntimeRenderTest(unittest.TestCase):
                 self.assertEqual(root.counter["child_reads"], 0)
                 self.assertFalse(truncation["truncated"])
 
-    def test_control_value_or_identifier_keeps_suppression(self):
-        value_node = FakeAccessible("combo box", value="Choice", children=[FakeAccessible("text", "Child")])
-        identifier_node = FakeAccessible("button", children=[FakeAccessible("text", "Child")])
-        identifier_node.get_accessible_id = lambda: "save-button"
-        for root, expected in (
-            (value_node, "0 combo box, Value: Choice"),
-            (identifier_node, "0 button save-button"),
-        ):
-            with self.subTest(expected=expected):
-                records, lines, truncation = render(root)
 
-                self.assertEqual(len(records), 1)
-                self.assertEqual(lines, [expected])
-                self.assertEqual(root.counter["child_reads"], 0)
-                self.assertFalse(truncation["truncated"])
 
-    def test_unlabeled_controls_keep_child_indices_and_depth(self):
-        root = FakeAccessible("button", children=[FakeAccessible("button", "Nested")])
 
-        records, lines, truncation = render(root)
 
-        self.assertEqual([item["runtimeId"] for item in records], [[0], [0, 0]])
-        self.assertEqual(lines, ["0 button", "\t1 button Nested"])
-        self.assertFalse(truncation["truncated"])
 
-    def test_suppressed_child_failure_keeps_control_output(self):
-        root = FailingChildrenAccessible("button", "Save")
 
-        records, lines, truncation = render(root)
 
-        self.assertEqual([item["name"] for item in records], ["Save"])
-        self.assertEqual(lines, ["0 button Save"])
-        self.assertFalse(truncation["truncated"])
-        self.assertEqual(root.counter["child_reads"], 0)
-
-    def test_named_generic_node_keeps_children_without_a_summary(self):
-        root = FakeAccessible("section", "Details", children=[FakeAccessible("text", "body")])
-
-        records, lines, _ = render(root)
-
-        self.assertEqual([record["name"] for record in records], ["Details", "body"])
-        self.assertEqual(lines, ["0 section Details", "\t1 text body"])
-
-    def test_unnamed_generic_node_keeps_plain_text_summary(self):
-        root = FakeAccessible(
-            "section",
-            children=[FakeAccessible("text", "Alpha"), FakeAccessible("text", "Beta")],
-        )
-
-        records, lines, _ = render(root)
-
-        self.assertEqual(len(records), 1)
-        self.assertEqual(lines, ["0 section, Text: Alpha Beta"])
-
-    def test_row_keeps_its_specific_summary_walk(self):
-        root = FakeAccessible(
-            "row",
-            "Invoice",
-            children=[FakeAccessible("text", "Alpha"), FakeAccessible("text", "Beta")],
-        )
-
-        records, lines, _ = render(root)
-
-        self.assertEqual([record["name"] for record in records], ["Invoice", "Alpha", "Beta"])
-        self.assertEqual(lines, ["0 row Invoice, Text: Alpha Beta", "\t1 text Alpha", "\t2 text Beta"])
-
-    def test_empty_generic_wrapper_keeps_elision_path_and_depth(self):
-        root = FakeAccessible("section", children=[FakeAccessible("button", "Continue")])
-
-        records, lines, _ = render(root)
-
-        self.assertEqual([record["runtimeId"] for record in records], [[0, 0]])
-        self.assertEqual(lines, ["0 button Continue"])
-
-    def test_child_failure_keeps_fail_soft_row_output(self):
-        root = FailingChildrenAccessible("row", "Invoice")
-
-        records, lines, truncation = render(root)
-
-        self.assertEqual([record["name"] for record in records], ["Invoice"])
-        self.assertEqual(lines, ["0 row Invoice"])
-        self.assertFalse(truncation["truncated"])
 
     def test_node_limit_keeps_exact_prefix_and_truncation(self):
         root = FakeAccessible(

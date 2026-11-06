@@ -243,7 +243,7 @@ describe('plugin marketplace IPC authority', () => {
     await expect(handler?.(event, { ...identity, enableIfData: true })).resolves.toMatchObject({
       needsReview: false
     })
-    expect(approve).toHaveBeenCalledWith(PLUGIN_KEY, 'sha256-fp', 7)
+    expect(approve).toHaveBeenCalledWith(PLUGIN_KEY, 'sha256-fp')
 
     approve.mockClear()
     await expect(
@@ -253,7 +253,7 @@ describe('plugin marketplace IPC authority', () => {
     await expect(
       handler?.(event, { ...identity, enableIfData: true, expectedFingerprint: 'sha256-fp' })
     ).resolves.toMatchObject({ needsReview: false })
-    expect(approve).toHaveBeenCalledWith(PLUGIN_KEY, 'sha256-fp', 7)
+    expect(approve).toHaveBeenCalledWith(PLUGIN_KEY, 'sha256-fp')
 
     approve.mockClear()
     execution.value = 'declarative'
@@ -303,5 +303,66 @@ describe('plugin marketplace IPC authority', () => {
       })
     }
     expect(approve).not.toHaveBeenCalled()
+  })
+})
+
+describe('plugin update review notices IPC', () => {
+  it('hands the renderer untold holds and nothing when no updater runs', async () => {
+    const notice = {
+      pluginKey: PLUGIN_KEY,
+      name: 'Demo',
+      publisher: 'samples',
+      version: '2.0.0',
+      reason: 'access' as const
+    }
+    const take = vi.fn().mockResolvedValue([notice])
+    registerPluginMarketplaceHandlers(
+      createPluginService(),
+      { ...createServices(), reviewNotices: { take } },
+      () => getDefaultSettings('/tmp'),
+      vi.fn()
+    )
+    await expect(invoke('plugins:takeUpdateReviewNotices')).resolves.toEqual([notice])
+    handlers = new Map()
+    registerPluginMarketplaceHandlers(
+      createPluginService(),
+      createServices(),
+      () => getDefaultSettings('/tmp'),
+      vi.fn()
+    )
+    await expect(invoke('plugins:takeUpdateReviewNotices')).resolves.toEqual([])
+  })
+
+  it('returns public install counts, or none when the service fails or is absent', async () => {
+    const counts = { 'stablyai.orca-nord-theme': 37 }
+    registerPluginMarketplaceHandlers(
+      createPluginService(),
+      {
+        ...createServices(),
+        installStats: { getInstallCounts: vi.fn().mockResolvedValue(counts) }
+      },
+      () => getDefaultSettings('/tmp'),
+      vi.fn()
+    )
+    await expect(invoke('plugins:getInstallCounts')).resolves.toEqual(counts)
+    handlers = new Map()
+    registerPluginMarketplaceHandlers(
+      createPluginService(),
+      {
+        ...createServices(),
+        installStats: { getInstallCounts: vi.fn().mockRejectedValue(new Error('disk')) }
+      },
+      () => getDefaultSettings('/tmp'),
+      vi.fn()
+    )
+    await expect(invoke('plugins:getInstallCounts')).resolves.toEqual({})
+    handlers = new Map()
+    registerPluginMarketplaceHandlers(
+      createPluginService(),
+      createServices(),
+      () => getDefaultSettings('/tmp'),
+      vi.fn()
+    )
+    await expect(invoke('plugins:getInstallCounts')).resolves.toEqual({})
   })
 })

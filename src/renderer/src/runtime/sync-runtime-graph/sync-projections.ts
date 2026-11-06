@@ -1,7 +1,7 @@
 import type { AppState } from '@/store/types'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import { stableHashString } from './editor-draft-hash'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { getOpenFileIndexes } from './mobile-session-inputs'
 import { getMobileMarkdownSourceFile, isMobilePublishableOpenFile } from './mobile-session-surfaces'
 import {
@@ -110,6 +110,7 @@ export function buildRuntimeMobileOpenFilesProjection(openFiles: AppState['openF
               language: file.language,
               mode: file.mode,
               diffSource: file.diffSource,
+              branchOldPath: file.branchOldPath,
               isDirty: file.isDirty,
               mirroredFromRuntimeSession: file.mirroredFromRuntimeSession,
               isUntitled: file.isUntitled,

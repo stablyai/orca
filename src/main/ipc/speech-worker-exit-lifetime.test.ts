@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import type * as FsPromises from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { ModelManager } from '../speech/model-manager'
 import type { SttService } from '../speech/stt-service'
 import type { RuntimeStore } from '../runtime/runtime-store-contract'
@@ -113,7 +113,7 @@ vi.mock('node:worker_threads', async () => {
 import { registerSpeechHandlers } from './speech'
 import { SttService as SpeechService } from '../speech/stt-service'
 import { handleSttWorkerFailure } from '../speech/stt-session-stop'
-import { RuntimeMobileDictationController } from '../runtime/runtime-mobile-dictation-controller'
+import { RuntimeMobileDictationController } from '../runtime/speech/runtime-mobile-dictation-controller'
 
 class TestContents extends EventEmitter {
   id = 9

@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import {
   resolveMobilePairingConnectionMode,
   type MobilePairingConnectionMode
-} from '../../../../shared/mobile-pairing-connection-mode'
+} from '../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 
 /** Resolve persisted mode and sign-in consistently across MobilePage and MobilePane. */
 export function useMobilePairingConnectionMode(): [

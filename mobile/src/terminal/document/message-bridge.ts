@@ -49,14 +49,19 @@ export function startMessageBridge(scope: TerminalDocumentScope) {
       reportEngineError(scope, 'terminal engine missing', 'xterm failed to load', true)
     }
   }
-  // The WebGL atlas retains missing glyphs if it paints before the bundled font finishes loading.
-  if (document.fonts && !document.fonts.check('13px "Orca Nerd Font Symbols"', '\ue0b0')) {
+  // The WebGL atlas retains missing glyphs if it paints before the bundled fonts finish loading.
+  if (document.fonts && !document.fonts.check(...TERMINAL_FONT_PROBE)) {
     return waitForTerminalFont(scope, reportReady)
   }
   reportReady()
 }
 
 const FONT_READY_TIMEOUT_MS = 2000
+// One glyph per bundled face, so check and load cover both.
+const TERMINAL_FONT_PROBE = [
+  '13px "Orca Nerd Font Symbols", "Orca Terminal Symbols"',
+  '\ue0b0\u23f5'
+] as const
 
 function waitForTerminalFont(scope: TerminalDocumentScope, reportReady: () => void) {
   return new Promise<void>((resolve, reject) => {
@@ -105,10 +110,7 @@ function waitForTerminalFont(scope: TerminalDocumentScope, reportReady: () => vo
         finish()
       }
     }
-    observeFontCompletion(
-      document.fonts.load('13px "Orca Nerd Font Symbols"', '\ue0b0'),
-      completion
-    )
+    observeFontCompletion(document.fonts.load(...TERMINAL_FONT_PROBE), completion)
   })
 }
 

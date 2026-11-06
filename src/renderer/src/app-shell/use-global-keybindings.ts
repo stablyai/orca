@@ -5,6 +5,7 @@ import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { getSelectedTextForFileSearch } from '../lib/file-search-selection'
 import { registerAppCommandDispatcher } from '@/lib/app-command-dispatch'
 import { executePluginCommand } from '@/lib/plugin-command-execution'
+import { runBuiltInOrReplacement } from '@/lib/plugin-command-replacements'
 import {
   findPluginCommandForKeybinding,
   globalShortcutTargetYields
@@ -14,7 +15,7 @@ import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut
 import {
   folderRelativePathToIncludeGlob,
   selectedExplorerFolderRelativePath
-} from '../components/right-sidebar/file-search-include-pattern'
+} from '../components/right-sidebar/file-explorer/content-search/file-search-include-pattern'
 import { usePluginCommands } from '@/store/plugin-panels'
 import { useAppStore } from '../store'
 import { keybindingMatchesAction, type KeybindingActionId } from '../../../shared/keybindings'
@@ -75,8 +76,15 @@ export function useGlobalKeybindings(args: {
       ...shortcutStateRef.current,
       activeWorktreeId: useAppStore.getState().activeWorktreeId
     })
-    const unregisterAppCommandDispatcher = registerAppCommandDispatcher((actionId) =>
-      (createAppCommandHandlers(readShortcutState()).get(actionId) ?? (() => false))()
+    const unregisterAppCommandDispatcher = registerAppCommandDispatcher((actionId, source) =>
+      (
+        createAppCommandHandlers(
+          readShortcutState(),
+          undefined,
+          'app',
+          source === 'plugin-host'
+        ).get(actionId) ?? (() => false)
+      )()
     )
 
     const dispatchShortcutInput = (input: ShortcutDispatchInput): void => {
@@ -138,9 +146,11 @@ export function useGlobalKeybindings(args: {
         if (selectedFolderRelativePath !== null && activeWorktreeId) {
           input.preventDefault()
           notifyTerminalCapture('sidebar.search.toggle')
-          actions.showRightSidebarSearch({
-            includePattern: folderRelativePathToIncludeGlob(selectedFolderRelativePath)
-          })
+          runBuiltInOrReplacement('sidebar.search.toggle', () =>
+            actions.showRightSidebarSearch({
+              includePattern: folderRelativePathToIncludeGlob(selectedFolderRelativePath)
+            })
+          )
           return
         }
 
@@ -148,7 +158,9 @@ export function useGlobalKeybindings(args: {
         if (selectedText) {
           input.preventDefault()
           notifyTerminalCapture('sidebar.search.toggle')
-          actions.showRightSidebarSearch({ query: selectedText })
+          runBuiltInOrReplacement('sidebar.search.toggle', () =>
+            actions.showRightSidebarSearch({ query: selectedText })
+          )
           return
         }
       }
@@ -176,7 +188,7 @@ export function useGlobalKeybindings(args: {
         floatingTerminalEnabled
       ) {
         input.preventDefault()
-        openFloatingWorkspaceMaximized()
+        runBuiltInOrReplacement('floatingWorkspace.maximize', openFloatingWorkspaceMaximized)
         return
       }
 

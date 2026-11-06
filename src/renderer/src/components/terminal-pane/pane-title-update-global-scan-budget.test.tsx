@@ -6,26 +6,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { selectTabBarAgentProjections } from '@/components/tab-bar/tab-agent-types-by-tab-id'
-import { useWorktreeActivityStatus } from '@/components/sidebar/use-worktree-activity-status'
-import { useWorktreeActivityStatuses } from '@/components/sidebar/use-worktree-activity-statuses'
+import { useWorktreeActivityStatus } from '@/components/sidebar/workspace-card/activity/use-worktree-activity-status'
+import { useWorktreeActivityStatuses } from '@/components/sidebar/workspace-card/activity/use-worktree-activity-statuses'
 import {
   PaletteLiveStatusProvider,
   PaletteWorktreeStatusDot
 } from '@/components/cmd-j/palette-live-status'
-import { WorktreeCardStatusSlot } from '@/components/sidebar/WorktreeCardStatusSlot'
+import { WorktreeCardStatusSlot } from '@/components/sidebar/workspace-card/surface/WorktreeCardStatusSlot'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { readStoreListenerCount } from '@/store/store-listener-census'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Tab } from '../../../../shared/tab-types'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
 // Hoisted mock factories need erased namespace types because typeof import() annotations are banned.
 import type * as SleepingRecordParkExemptionModule from './sleeping-record-park-exemption'
-import type * as WorktreeAgentActivitySummaryModule from '@/components/sidebar/worktree-agent-activity-summary'
-import type * as WorktreeCardStatusInputsModule from '@/components/sidebar/worktree-card-status-inputs'
-import type * as StructuredAgentSessionProjectionModule from '../../../../shared/structured-agent-session-projection'
+import type * as WorktreeAgentActivitySummaryModule from '@/components/sidebar/workspace-card/activity/worktree-agent-activity-summary'
+import type * as WorktreeCardStatusInputsModule from '@/components/sidebar/workspace-card/activity/worktree-card-status-inputs'
+import type * as StructuredAgentSessionProjectionModule from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
 
@@ -45,18 +45,21 @@ const reads = {
 }
 const chatWork = vi.hoisted(() => ({ hashes: 0 }))
 
-vi.mock('../../../../shared/structured-agent-session-projection', async (importOriginal) => {
-  const actual = await importOriginal<typeof StructuredAgentSessionProjectionModule>()
-  return {
-    ...actual,
-    structuredAgentSessionPaneKey: (
-      ...args: Parameters<typeof actual.structuredAgentSessionPaneKey>
-    ) => {
-      chatWork.hashes += 1
-      return actual.structuredAgentSessionPaneKey(...args)
+vi.mock(
+  '../../../../shared/agent-session/view/structured-agent-session-projection',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof StructuredAgentSessionProjectionModule>()
+    return {
+      ...actual,
+      structuredAgentSessionPaneKey: (
+        ...args: Parameters<typeof actual.structuredAgentSessionPaneKey>
+      ) => {
+        chatWork.hashes += 1
+        return actual.structuredAgentSessionPaneKey(...args)
+      }
     }
   }
-})
+)
 
 // Count selector executions separately from record reads so cache hits remain visible.
 const selectorRuns = vi.hoisted(() => ({
@@ -78,36 +81,42 @@ vi.mock('./sleeping-record-park-exemption', async (importOriginal) => {
   }
 })
 
-vi.mock('@/components/sidebar/worktree-agent-activity-summary', async (importOriginal) => {
-  const actual = await importOriginal<typeof WorktreeAgentActivitySummaryModule>()
-  return {
-    ...actual,
-    selectWorktreeAgentActivitySummary: (
-      ...args: Parameters<typeof actual.selectWorktreeAgentActivitySummary>
-    ) => {
-      selectorRuns.worktreeAgentActivitySummary += 1
-      return actual.selectWorktreeAgentActivitySummary(...args)
+vi.mock(
+  '@/components/sidebar/workspace-card/activity/worktree-agent-activity-summary',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof WorktreeAgentActivitySummaryModule>()
+    return {
+      ...actual,
+      selectWorktreeAgentActivitySummary: (
+        ...args: Parameters<typeof actual.selectWorktreeAgentActivitySummary>
+      ) => {
+        selectorRuns.worktreeAgentActivitySummary += 1
+        return actual.selectWorktreeAgentActivitySummary(...args)
+      }
     }
   }
-})
+)
 
-vi.mock('@/components/sidebar/worktree-card-status-inputs', async (importOriginal) => {
-  const actual = await importOriginal<typeof WorktreeCardStatusInputsModule>()
-  const count = <TArgs extends unknown[], TResult>(
-    select: (...args: TArgs) => TResult
-  ): ((...args: TArgs) => TResult) => {
-    return (...args: TArgs) => {
-      selectorRuns.worktreeCardStatusInputs += 1
-      return select(...args)
+vi.mock(
+  '@/components/sidebar/workspace-card/activity/worktree-card-status-inputs',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof WorktreeCardStatusInputsModule>()
+    const count = <TArgs extends unknown[], TResult>(
+      select: (...args: TArgs) => TResult
+    ): ((...args: TArgs) => TResult) => {
+      return (...args: TArgs) => {
+        selectorRuns.worktreeCardStatusInputs += 1
+        return select(...args)
+      }
+    }
+    return {
+      ...actual,
+      selectRuntimePaneTitlesForWorktree: count(actual.selectRuntimePaneTitlesForWorktree),
+      selectLivePtyIdsForWorktree: count(actual.selectLivePtyIdsForWorktree),
+      selectTerminalLayoutRootsForWorktree: count(actual.selectTerminalLayoutRootsForWorktree)
     }
   }
-  return {
-    ...actual,
-    selectRuntimePaneTitlesForWorktree: count(actual.selectRuntimePaneTitlesForWorktree),
-    selectLivePtyIdsForWorktree: count(actual.selectLivePtyIdsForWorktree),
-    selectTerminalLayoutRootsForWorktree: count(actual.selectTerminalLayoutRootsForWorktree)
-  }
-})
+)
 
 // Profile row subtrees because their store subscriptions can commit without rerunning the wrapper.
 const committedSidebarRows = new Set<string>()

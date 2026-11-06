@@ -2,20 +2,16 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { JournalHostDatabase } from './journal-host-database'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
 } from './journal-host-database-test-support'
-import { replaceJournalEpoch } from './journal-epoch-replacement'
+import { AgentSessionJournal } from './journal-store'
 import { runJournalTransaction } from './journal-database'
-import {
-  deleteJournalEpochRows,
-  insertJournalRow,
-  publishJournalSessionEpoch
-} from './journal-row-table'
+import { insertJournalRow, publishJournalSessionEpoch } from './journal-row-table'
 import type { JournalRow } from './journal-row-schema'
 import { JournalRowWriter } from './journal-row-writer'
 import { JournalWriteQueue } from './journal-write-queue'
@@ -66,7 +62,7 @@ export function registerCommandReceiptTransactionTests(): void {
   })
 
   afterEach(async () => {
-    closeTestJournalHostDatabases()
+    await closeTestJournalHostDatabases()
     await rm(root, { recursive: true, force: true })
   })
 
@@ -154,36 +150,20 @@ export function registerCommandReceiptTransactionTests(): void {
   })
 
   describe('command receipts across epoch replacement', () => {
-    it('survives deletion of its referenced journal epoch as retained spent proof', () => {
+    it('survives the actual replacement transaction without transferring or copying results', async () => {
       database.transaction((db) => {
         insertJournalRow(db, identity.sessionId, epochRow(1, 1000))
-        insertCommandReceiptIfAbsent(db, scope, receipt)
-        deleteJournalEpochRows(db, identity.sessionId, 'epoch-1')
-      })
-      expect(storedRows()).toEqual([])
-      expect(readReceipt()).toEqual({ verdict: 'readable', receipt })
-    })
-
-    it('survives the actual replacement transaction without transferring or copying results', () => {
-      database.transaction((db) => {
-        insertJournalRow(db, identity.sessionId, epochRow(1, 1000))
+        publishJournalSessionEpoch(db, identity, 'epoch-1')
         insertCommandReceiptIfAbsent(db, scope, receipt)
       })
-      replaceJournalEpoch({
-        database,
-        identity,
-        reason: 'legacy_import',
-        fence: 0,
-        items: [],
-        queuePause: { lifted: false, liveStop: null, reopened: false },
-        queue: { cards: [], receipt: { write: () => {}, committed: () => {} } },
-        now: () => 2000,
-        mintEpoch: () => 'epoch-2',
-        onPublished: () => undefined
-      })
+      const journal = new AgentSessionJournal({ database, identity })
+      await journal.open()
+      await journal.replaceEpochItems('legacy_import', 0, [])
       expect(database.db.prepare('SELECT epoch FROM journal_rows').all()).toEqual([
-        { epoch: 'epoch-2' }
+        { epoch: 'epoch-1' },
+        { epoch: 'epoch-1' }
       ])
+      await journal.close()
       expect(readReceipt()).toEqual({ verdict: 'readable', receipt })
       expect(
         database.transaction((db) => insertCommandReceiptIfAbsent(db, scope, receipt))

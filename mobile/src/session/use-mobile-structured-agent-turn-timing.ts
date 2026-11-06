@@ -2,12 +2,12 @@ import { useMemo, useState } from 'react'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../src/shared/agent-session-journal-types'
-import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
-import type { AgentSessionLatestTurn } from '../../../src/shared/agent-session-wire'
-import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
-import type { StructuredAgentHostClock } from '../../../src/shared/structured-agent-session-reducer'
-import { selectStructuredAgentTurnBars } from '../../../src/shared/structured-agent-session-turn-timing'
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { NativeChatSettledTurns } from '../../../src/shared/native-chat/transcript/native-chat-turn-status'
+import type { AgentSessionLatestTurn } from '../../../src/shared/agent-session/agent-session-wire'
+import type { NativeChatTurnJournal } from '../../../src/shared/native-chat/transcript/native-chat-turn-membership'
+import type { StructuredAgentHostClock } from '../../../src/shared/agent-session/structured-agent-session-reducer'
+import { selectStructuredAgentTurnBars } from '../../../src/shared/agent-session/view/structured-agent-session-turn-timing'
 import {
   stepStructuredAgentTurnClock,
   type StructuredAgentTurnClockLatch

@@ -23,6 +23,7 @@ import {
 import type { OrcadManagedRefusal } from '../../../shared/orcad-managed-runtime'
 import { resumeInterruptedOrcadCandidate } from '../../ssh/orcad-interrupted-candidate-resume'
 import { errorMessage } from '../../../shared/error-message'
+import { isOrcadLaunchFailure } from '../../ssh/orcad-launch-failure'
 
 export type OrcadActivationRecoveryResult =
   | { outcome: 'none' }
@@ -33,7 +34,8 @@ export type OrcadActivationRecoveryResult =
       activeVersion: string | null
       readiness: ServeReadiness | null
     }
-  | OrcadManagedRefusal
+  /** A launch failure behind an unverifiable refusal still ended a run. */
+  | (OrcadManagedRefusal & { launchFailure?: Error })
 
 type OrcadActivationRecoveryOptions = OrcadIncumbentRecoveryOptions
 
@@ -84,7 +86,8 @@ export async function recoverInterruptedOrcadActivation(
       code: ORCAD_RECOVERY_UNVERIFIABLE_CODE,
       reason:
         `The interrupted activation could not be reconciled safely: ${errorMessage(error)} ` +
-        'The host remains fenced.'
+        'The host remains fenced.',
+      ...(isOrcadLaunchFailure(error) ? { launchFailure: error } : {})
     }
   }
 }
@@ -121,12 +124,15 @@ async function reconcileOrcadTransaction(
       readiness: await ensureOrcadSlotServing(options, identity)
     }
   }
+  let launchFailure: Error | undefined
   if (transaction.operation === 'activate' && plan.launchedVersion) {
     const readiness = await resumeInterruptedOrcadCandidate(options, transaction)
     if (readiness && 'outcome' in readiness) {
       return readiness
     }
-    if (readiness) {
+    if (readiness && 'launchFailure' in readiness) {
+      launchFailure = readiness.launchFailure
+    } else if (readiness) {
       return {
         outcome: 'recovered',
         resolution: 'committed',
@@ -145,7 +151,7 @@ async function reconcileOrcadTransaction(
     launchedFromState: plan.launchedFromState
   })
   return recovery.outcome === 'refused'
-    ? recovery
+    ? { ...recovery, ...(launchFailure ? { launchFailure } : {}) }
     : {
         outcome: 'recovered',
         resolution: 'restored-incumbent',

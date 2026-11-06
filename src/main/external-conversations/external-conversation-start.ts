@@ -1,8 +1,11 @@
-import type { AgentLaunchResult } from '../../shared/agent-launch-intent'
+import type {
+  AgentLaunchResult,
+  AgentLaunchResult as AgentLaunchPublishedSurface
+} from '../../shared/agent-launch/contracts/agent-launch-intent'
 import type { ConnectorAgent } from '../../shared/external-conversation-link'
 import type { AgentLaunchParams } from '../../shared/rpc-contract/agent-launch-params'
 import { executeAgentLaunch } from '../agent-launch/agent-launch-executor'
-import type { AgentLaunchPublishedSurface } from '../agent-launch/agent-launch-execution'
+
 import {
   agentPaneWorkspace,
   type AgentPaneWorkspace

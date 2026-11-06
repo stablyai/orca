@@ -1,19 +1,16 @@
-// Project touched items at current reduced state for idempotent delivery; adopted echoes retain submission keys.
-
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { compareAgentJournalItems } from '../../../shared/agent-session-journal-position'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
 import type {
   AgentJournalRenderItem,
   AgentJournalSnapshot,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
-import type { AgentSessionJournalBatch } from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalBatch } from '../../../shared/agent-session/agent-session-wire'
 import { isStructuredAgentSessionStopNote } from './structured-agent-session-command-turn'
 import { findSequenceGap } from '../agent-session-journal/journal-cursor'
-import {
-  isJournalStopOrResumeRow,
-  type JournalRow
-} from '../agent-session-journal/journal-row-schema'
+import type { JournalReadRow } from '../agent-session-journal/journal-read-row'
+import { isJournalStopOrResumeRow } from '../agent-session-journal/journal-row-schema'
+// Project touched items at current reduced state for idempotent delivery; adopted echoes retain submission keys.
 
 export type JournalBatchProjection =
   | { ok: true; batch: AgentSessionJournalBatch }
@@ -21,27 +18,40 @@ export type JournalBatchProjection =
   | { ok: false; reset: 'journal_gap' }
 
 export function projectJournalBatch(input: {
-  rows: readonly JournalRow[]
+  rows: readonly JournalReadRow[]
   snapshot: AgentJournalSnapshot
   afterSequence: number
   canonicalItemId?: (itemId: string) => string
+  hasSubmission?: (id: string) => boolean
+  queueSourceIds?: (messageId: string) => readonly string[]
+  readSnapshot?: (touched: ReadonlySet<string>) => AgentJournalSnapshot
 }): JournalBatchProjection {
-  const gap = findSequenceGap(
-    input.rows.map((row) => row.seq),
-    input.afterSequence + 1
-  )
-  if (gap) {
+  if (
+    input.rows.every((row) => row.kind !== 'outcome') &&
+    findSequenceGap(
+      input.rows.map((row) => row.seq),
+      input.afterSequence + 1
+    )
+  ) {
     return { ok: false, reset: 'journal_gap' }
   }
-  const aliases = submissionAliases(input.snapshot.submissions)
+  const aliases = input.canonicalItemId ? undefined : submissionAliases(input.snapshot.submissions)
   const touchedItemIds = new Set<string>()
-  const touchedClientMessageIds = new Set<string>()
   for (const row of input.rows) {
+    if (row.kind === 'outcome') {
+      for (const itemId of row.itemIds) {
+        touchedItemIds.add(input.canonicalItemId?.(itemId) ?? aliases?.get(itemId) ?? itemId)
+      }
+      for (const clientMessageId of row.submissionIds) {
+        touchedItemIds.add(agentJournalSubmissionKey(clientMessageId))
+      }
+      continue
+    }
     if (row.kind === 'lifecycle-batch') {
       for (const mutation of row.mutations) {
         touchedItemIds.add(
           input.canonicalItemId?.(mutation.itemId) ??
-            aliases.get(mutation.itemId) ??
+            aliases?.get(mutation.itemId) ??
             mutation.itemId
         )
       }
@@ -53,33 +63,44 @@ export function projectJournalBatch(input: {
     }
     if (row.kind === 'item' || row.kind === 'tombstone') {
       touchedItemIds.add(
-        input.canonicalItemId?.(row.itemId) ?? aliases.get(row.itemId) ?? row.itemId
+        input.canonicalItemId?.(row.itemId) ?? aliases?.get(row.itemId) ?? row.itemId
       )
       continue
     }
-    // Queue attempt annotations can change the linked send’s display.
+    if (row.kind === 'queue') {
+      for (const id of input.queueSourceIds?.(row.messageId) ?? []) {
+        touchedItemIds.add(agentJournalSubmissionKey(id))
+      }
+    }
+    // A card's row naming its hand-off can change how that send reads (`foldQueuedHandOffInDoubt`).
     const attempt =
-      row.kind === 'queue' && row.change.op === 'queued' ? row.change.attempt : undefined
+      row.kind === 'queue' && row.change.op === 'queued'
+        ? (row.change.attempt ?? row.change.recovers)
+        : undefined
     const clientMessageId =
       row.kind === 'submission' || row.kind === 'dispatch'
         ? row.clientMessageId
         : attempt === undefined
           ? undefined
-          : input.snapshot.submissions.find((submission) => submission.clientMessageId === attempt)
-              ?.clientMessageId
+          : (input.hasSubmission?.(attempt) ??
+              input.snapshot.submissions.some(
+                (submission) => submission.clientMessageId === attempt
+              ))
+            ? attempt
+            : undefined
     if (clientMessageId !== undefined) {
-      touchedClientMessageIds.add(clientMessageId)
       touchedItemIds.add(agentJournalSubmissionKey(clientMessageId))
     }
   }
 
-  const live = liveItemsById(input.snapshot.items)
   const notes = stopNotesByTurn(input.snapshot.items)
   for (const itemId of touchedItemIds) {
     for (const noteId of notes.get(itemId) ?? []) {
       touchedItemIds.add(noteId)
     }
   }
+  const snapshot = input.readSnapshot?.(touchedItemIds) ?? input.snapshot
+  const live = liveItemsById(snapshot.items)
   const items = [...touchedItemIds]
     .map((itemId) => live.get(itemId))
     .filter((item) => item !== undefined)
@@ -90,8 +111,8 @@ export function projectJournalBatch(input: {
       cursor: input.snapshot.cursor,
       items,
       removedItemIds: [...touchedItemIds].filter((itemId) => !live.has(itemId)),
-      submissions: input.snapshot.submissions.filter((submission) =>
-        touchedClientMessageIds.has(submission.clientMessageId)
+      submissions: snapshot.submissions.filter((submission) =>
+        touchedItemIds.has(agentJournalSubmissionKey(submission.clientMessageId))
       )
     }
   }

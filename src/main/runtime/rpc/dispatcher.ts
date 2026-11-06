@@ -91,6 +91,7 @@ export class RpcDispatcher {
       if (featureWait) {
         await featureWait
       }
+      options?.beforeInvoke?.()
       return successResponse(request.id, meta, await this.invokeUnary(admission, options))
     } catch (error) {
       if (probeEmulator) {
@@ -196,7 +197,8 @@ export class RpcDispatcher {
     // Runtime test fakes may omit client-hosted browser routing.
     const clientHostedBrowser = await (runtime.routeClientHostedBrowserRpc?.(
       request.method,
-      params
+      params,
+      context.caller
     ) ?? { handled: false as const })
     if (clientHostedBrowser.handled) {
       recordRuntimeFeatureInteraction(
@@ -263,6 +265,15 @@ export class RpcDispatcher {
       callerFingerprint,
       context.orchestrationCaller?.orcaSessionId
     )
+    if (request.method.startsWith('orchestration.')) {
+      queueMicrotask(() => {
+        try {
+          runtime.refreshAgentSenderAssociations?.()
+        } catch (error) {
+          console.warn('[runtime] Sender identity publication failed', error)
+        }
+      })
+    }
     recordRuntimeFeatureInteraction(runtime, request.method, result, undefined, request.params)
     return result
   }

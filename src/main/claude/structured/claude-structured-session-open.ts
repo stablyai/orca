@@ -3,7 +3,7 @@ import type {
   StructuredAgentSessionProviderOpenResult
 } from '../../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
-import { readClaudeStructuredSessionSettings } from '../claude-structured-session-acquisition-options'
+import { readClaudeStructuredSessionSettings } from './launch/claude-structured-session-acquisition-options'
 import { openClaudeSession, readClaudeStartupFacts } from './claude-structured-session-startup'
 import { catchUpClaudeTranscript } from '../claude-transcript-catch-up'
 import type {
@@ -12,14 +12,18 @@ import type {
   ClaudeStructuredSessionEvent
 } from './claude-structured-session-state'
 
-export async function openClaudeStructuredSession(input: {
+type ClaudeOpenInput = {
   request: StructuredAgentSessionProviderOpenInput
   session: ClaudeSession
   sessions: Map<string, ClaudeSession>
   deps: ClaudeStructuredSessionAdapterDeps
   emit: (session: ClaudeSession, event: ClaudeStructuredSessionEvent) => void
-}): Promise<StructuredAgentSessionProviderOpenResult> {
-  const { request, session, sessions, deps, emit } = input
+}
+
+export async function openClaudeStructuredSession(
+  input: ClaudeOpenInput
+): Promise<StructuredAgentSessionProviderOpenResult> {
+  const { request, session } = input
   request.signal.throwIfAborted()
   if (
     session.fence !== request.fence ||
@@ -27,19 +31,33 @@ export async function openClaudeStructuredSession(input: {
   ) {
     throw new Error('claude session was replaced before open')
   }
-  const { proof, account, resumesTranscript, onLateRefusal } = session.initialization
+  try {
+    return await openStartingClaudeSession(input)
+  } catch (error) {
+    // The start's first ending cause is its report; a Stop stays Stop, so a later result is still taken.
+    throw request.signal.aborted ? error : session.initialization.startup.fail(error)
+  }
+}
+
+async function openStartingClaudeSession(
+  input: ClaudeOpenInput
+): Promise<StructuredAgentSessionProviderOpenResult> {
+  const { request, session, sessions, deps, emit } = input
+  const { proof, account, resumesTranscript, onLateRefusal, startup } = session.initialization
   const opened = openClaudeSession({
     session,
-    facts: readClaudeStartupFacts({
-      connection: session.connection,
-      initProof: proof,
-      sessionId: request.sessionId,
-      providerSessionId: session.providerSessionId,
-      resumesTranscript,
-      account,
-      requestTimeoutMs: deps.requestTimeoutMs,
-      emit: (event) => emit(session, event)
-    }),
+    facts:
+      session.initialization.facts ??
+      readClaudeStartupFacts({
+        connection: session.connection,
+        initProof: proof,
+        sessionId: request.sessionId,
+        providerSessionId: session.providerSessionId,
+        resumesTranscript,
+        account,
+        requestTimeoutMs: deps.requestTimeoutMs,
+        emit: (event) => emit(session, event)
+      }),
     readSettings: () =>
       readClaudeStructuredSessionSettings(session.connection, deps.requestTimeoutMs),
     isCurrent: () => sessions.get(request.sessionId) === session,
@@ -54,7 +72,11 @@ export async function openClaudeStructuredSession(input: {
         acquisitionGeneration: session.acquisitionGeneration
       })
   })
-  const result = await waitForPromiseWithSignal(opened, request.signal)
+  // A failure Claude reports while initialize or catch-up is pending fails this open at once.
+  const result = await waitForPromiseWithSignal(
+    startup.race(opened, request.signal),
+    request.signal
+  )
   const current = () => {
     if (sessions.get(request.sessionId) !== session || request.signal.aborted) {
       throw new Error('claude session closed before startup completed')
@@ -65,29 +87,31 @@ export async function openClaudeStructuredSession(input: {
   const history = session.initialization.history
   const leafUuid = history.leafUuid
   if (resumesTranscript && leafUuid && session.events) {
+    const catchUp = catchUpClaudeTranscript({
+      sessionId: request.sessionId,
+      providerSessionId: session.providerSessionId,
+      leafUuid,
+      claudeConfigDir: session.initialization.claudeConfigDir,
+      cwd: session.initialization.cwd,
+      sink: session.events,
+      signal: request.signal,
+      assertCurrent: () => {
+        current()
+        if (
+          session.translator?.contextActivity !== history.contextActivity ||
+          session.dispatchSequence !== 0
+        ) {
+          throw new Error('claude made live progress before catch-up completed')
+        }
+      },
+      ...(deps.logger ? { logger: deps.logger } : {})
+    })
     history.covered = await waitForPromiseWithSignal(
-      catchUpClaudeTranscript({
-        sessionId: request.sessionId,
-        providerSessionId: session.providerSessionId,
-        leafUuid,
-        claudeConfigDir: session.initialization.claudeConfigDir,
-        cwd: session.initialization.cwd,
-        sink: session.events,
-        signal: request.signal,
-        assertCurrent: () => {
-          current()
-          if (
-            session.translator?.contextActivity !== history.contextActivity ||
-            session.dispatchSequence !== 0
-          ) {
-            throw new Error('claude made live progress before catch-up completed')
-          }
-        },
-        ...(deps.logger ? { logger: deps.logger } : {})
-      }),
+      startup.race(catchUp, request.signal),
       request.signal
     )
     current()
   }
-  return { link: session.link, ...result }
+  startup.open()
+  return { ...result, link: session.link, newConversation: !resumesTranscript }
 }

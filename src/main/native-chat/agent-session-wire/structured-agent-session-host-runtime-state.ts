@@ -1,7 +1,7 @@
 import { createRestartReconciler } from './structured-agent-session-restart-reconcile'
 import { StructuredAgentSessionDeliveryOrder } from './structured-agent-session-delivery-order'
-import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionOwnerProbe } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   createDeferredStructuredAgentSessionEventSink,
   type DeferredStructuredAgentSessionEventSink,
@@ -21,7 +21,10 @@ import {
   StructuredAgentSessionStartupAttempts,
   type StructuredAgentSessionExpiredStartup
 } from './structured-agent-session-startup-attempt'
-import { StructuredAgentSessionStartupExpiredError } from './structured-agent-session-startup-attempt-contract'
+import {
+  StructuredAgentSessionStartupContractError,
+  StructuredAgentSessionStartupExpiredError
+} from './structured-agent-session-startup-attempt-contract'
 
 export class StructuredAgentSessionHostRuntimeState {
   private readonly eventSinks = new Map<string, DeferredStructuredAgentSessionEventSink>()
@@ -50,6 +53,16 @@ export class StructuredAgentSessionHostRuntimeState {
         if (expired.child !== null) {
           onStartupExpired?.(expired)
         }
+      },
+      // The exited child still ends through its own exit; only the start's waits are cancelled.
+      breach: ({ sessionId, attemptId, agent }) => {
+        deps.logger.warn('an agent adapter gave no startup outcome after its process exited', {
+          scope: 'startup-contract',
+          sessionId,
+          attemptId,
+          agent
+        })
+        this.acquireAborts.abort(sessionId, new StructuredAgentSessionStartupContractError(agent))
       }
     })
     this.leaseRenewer = new StructuredAgentSessionLeaseRenewer({

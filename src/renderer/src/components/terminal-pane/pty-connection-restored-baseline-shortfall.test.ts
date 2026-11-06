@@ -8,7 +8,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -154,6 +158,7 @@ describe('restored snapshot baseline shortfall (STA-5179)', () => {
       terminalMainSideEffectAuthority: true
     } as StoreState['settings']
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -167,9 +172,12 @@ describe('restored snapshot baseline shortfall (STA-5179)', () => {
     connectPanePty(
       pane as never,
       createManager(1) as never,
-      createDeps({
-        isVisibleRef: { current: true }
-      }) as never
+      bindPaneAgentTitleMocks(
+        createDeps({
+          isVisibleRef: { current: true }
+        }) as never,
+        agentTitleMocks
+      )
     )
     await flushAsyncTicks(6)
     const transportOptions = createdTransportOptions.at(-1) as {

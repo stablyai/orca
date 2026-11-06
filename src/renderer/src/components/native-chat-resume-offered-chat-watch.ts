@@ -1,5 +1,5 @@
 import type { StructuredAgentSessionStatusFeedOwner } from '@/runtime/structured-agent-session-status-feed'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
 
 /** Watch offered/failed chats only; debounce status/prompt changes into host rereads without one request per streamed summary. */
 

@@ -1,3 +1,5 @@
+import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
+import { writeLinearIssue } from '@/lib/linear-issue-write'
 import { taskProviderErrorMessage } from '@/lib/task-provider-error-copy'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { LinearCustomViewModel } from '../../../../../shared/linear/project-types'
@@ -87,7 +89,6 @@ export function LinearStateCell({
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const providerSettings = sourceContext ?? defaultScopeSource(settings)
-  const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const states = useTeamStates(issue.team.id, providerSettings, issue.workspaceId)
   const [open, setOpen] = useState(false)
   const [pending, setPending] = useState(false)
@@ -103,44 +104,21 @@ export function LinearStateCell({
       }
       reqRef.current += 1
       const reqId = reqRef.current
-      const previousState = issue.state
       const nextState: LinearIssue['state'] = {
         name: newState.name,
         type: newState.type,
         color: newState.color
       }
+      const scope = getLinearSourceScope(providerSettings)
       setPending(true)
-      patchLinearIssue(
-        issue.id,
-        {
-          state: nextState
-        },
-        {
-          sourceContext
-        }
-      )
-      void linearUpdateIssue(
-        providerSettings,
-        issue.id,
-        {
-          stateId
-        },
-        issue.workspaceId
+      void writeLinearIssue(issue, { state: nextState }, providerSettings, () =>
+        linearUpdateIssue(providerSettings, issue.id, { stateId }, issue.workspaceId)
       )
         .then((result) => {
           if (reqId !== reqRef.current) {
             return
           }
           if (result.ok === false) {
-            patchLinearIssue(
-              issue.id,
-              {
-                state: previousState
-              },
-              {
-                sourceContext
-              }
-            )
             toast.error(
               taskProviderErrorMessage(result) ||
                 translate('auto.components.TaskPage.6775c05483', 'Failed to update Linear state')
@@ -148,7 +126,7 @@ export function LinearStateCell({
             return
           }
           useAppStore.getState().invalidateLinearIssueLists({
-            sourceContext
+            scope
           })
           useAppStore.getState().recordFeatureInteraction('linear-tasks')
         })
@@ -156,15 +134,6 @@ export function LinearStateCell({
           if (reqId !== reqRef.current) {
             return
           }
-          patchLinearIssue(
-            issue.id,
-            {
-              state: previousState
-            },
-            {
-              sourceContext
-            }
-          )
           toast.error(
             translate('auto.components.TaskPage.6775c05483', 'Failed to update Linear state')
           )
@@ -175,17 +144,7 @@ export function LinearStateCell({
           }
         })
     },
-    [
-      currentStateId,
-      issue.id,
-      issue.state,
-      issue.workspaceId,
-      patchLinearIssue,
-      pending,
-      providerSettings,
-      sourceContext,
-      states.data
-    ]
+    [currentStateId, issue, pending, providerSettings, states.data]
   )
   return (
     <Popover open={open} onOpenChange={setOpen}>

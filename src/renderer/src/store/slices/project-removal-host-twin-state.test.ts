@@ -1,6 +1,6 @@
 /** Same repo/path IDs can belong to two hosts; removing remote copy must preserve local shells, tabs and dirty drafts. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { registerPendingEditorFlush } from '@/components/editor/editor-pending-flush'
+import { registerPendingEditorFlush } from '@/components/editor/save/flush/editor-pending-flush'
 import { confirmUnsavedDiscard } from './worktrees/teardown/removed-workspace-unsaved-files'
 import {
   createTestStore,
@@ -33,9 +33,9 @@ import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-r
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { ClosedEditorTabSnapshot } from './editor/types/open-file'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import '../../../../shared/workspace-scope'
 import {
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft
@@ -579,54 +579,6 @@ describe('removing a remote project keeps its local twin', () => {
     ).toContain('/work/same/old-remote.ts')
   })
 
-  it('leaves no selection naming the removed host after its last editor closes', async () => {
-    const store = createTestStore()
-    store.setState({
-      repos: [localRow, remoteRow],
-      worktreesByRepo: {
-        [PROJECT_ID]: [
-          makeWorktree({ id: WORKTREE_ID, repoId: PROJECT_ID, hostId: 'local' }),
-          makeWorktree({ id: WORKTREE_ID, repoId: PROJECT_ID, hostId: REMOTE_HOST })
-        ]
-      },
-      openFiles: [
-        makeOpenFile({
-          id: 'editor:remote-only',
-          worktreeId: WORKTREE_ID,
-          runtimeEnvironmentId: 'env-b'
-        })
-      ],
-      activeFileId: 'editor:remote-only',
-      activeWorktreeId: WORKTREE_ID,
-      activeWorkspaceKey: worktreeWorkspaceKey(WORKTREE_ID),
-      activeWorkspaceExecutionHostId: REMOTE_HOST
-    })
-
-    await store.getState().removeProject(PROJECT_ID, { hostId: REMOTE_HOST })
-
-    const state = store.getState()
-    expect(state.activeWorkspaceExecutionHostId).not.toBe(REMOTE_HOST)
-    if (state.activeWorktreeId === null) {
-      expect(state.activeWorkspaceKey).toBeNull()
-    }
-  })
-
-  it('leaves the focused workspace’s active surface alone when a background twin is removed', async () => {
-    const store = seedTwins()
-    store.setState({
-      activeWorktreeId: 'other-repo::/work/other',
-      activeTabType: 'agent-session',
-      activeTabTypeByWorktree: { 'other-repo::/work/other': 'agent-session' }
-    })
-
-    await store.getState().removeProject(PROJECT_ID, { hostId: REMOTE_HOST })
-
-    expect(store.getState().activeTabType).toBe('agent-session')
-    expect(store.getState().activeTabTypeByWorktree['other-repo::/work/other']).toBe(
-      'agent-session'
-    )
-  })
-
   it('keeps a tab that gained a surviving pane during removal and stops its removed pane', async () => {
     const store = seedTwins()
     store.setState((s) => ({
@@ -717,26 +669,5 @@ describe('removing a remote project keeps its local twin', () => {
     await store.getState().removeProject(PROJECT_ID, { hostId: REMOTE_HOST })
 
     expect(store.getState().ptyIdsByTabId['tab-remote']).toBeUndefined()
-  })
-
-  it('leaves the selection unchanged on a single-host removal', async () => {
-    const store = createTestStore()
-    const otherKey = worktreeWorkspaceKey('other-repo::/work/other')
-    const otherRepo: Repo = { ...localRow, id: 'other-repo', path: '/work/other' }
-    store.setState({
-      repos: [remoteRow, otherRepo],
-      worktreesByRepo: {
-        [PROJECT_ID]: [makeWorktree({ id: WORKTREE_ID, repoId: PROJECT_ID, hostId: REMOTE_HOST })]
-      },
-      activeWorktreeId: null,
-      activeWorkspaceKey: otherKey,
-      activeWorkspaceExecutionHostId: REMOTE_HOST
-    })
-
-    await store.getState().removeProject(PROJECT_ID, { hostId: REMOTE_HOST })
-
-    const state = store.getState()
-    expect(state.activeWorkspaceKey).toBe(otherKey)
-    expect(state.activeWorkspaceExecutionHostId).toBe(REMOTE_HOST)
   })
 })

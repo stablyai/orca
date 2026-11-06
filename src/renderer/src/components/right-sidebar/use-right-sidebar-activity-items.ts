@@ -5,7 +5,7 @@ import { useRepoById } from '@/store/selectors'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-visibility'
-import { getPluginPanelActivityItems } from './plugin-panel-activity-items'
+import { getPluginPanelActivityItems } from './plugin-panels/plugin-panel-activity-items'
 import {
   getPortsPanelOwnerKey,
   portsPanelHostForOwnerKey,

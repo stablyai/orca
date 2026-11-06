@@ -3,16 +3,16 @@ import { randomUUID } from 'node:crypto'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import * as stopProjection from '../../native-chat/agent-session-journal/journal-stop-note-projection'
 import * as lineage from './structured-session-lineage'
-import * as journalPosition from '../../../shared/agent-session-journal-position'
-import * as liveTurn from '../../../shared/structured-agent-session-live-turn'
+import * as journalPosition from '../../../shared/agent-session/journal/agent-session-journal-position'
+import * as liveTurn from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
-} from '../agent-session-record-store-test-harness'
+} from '../agent-session/records/agent-session-record-store-test-harness'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 
 // Per-instance array reads count the actual find/iteration work without replacing the algorithms.
 function countedEntries<T>(entries: T[], visit: () => void): T[] {

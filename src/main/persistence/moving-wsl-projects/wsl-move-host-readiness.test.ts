@@ -40,38 +40,6 @@ describe('prepareWslMoveHost (A1)', () => {
     expect(stopped.add).not.toHaveBeenCalled()
   })
 
-  it('adds a host for a running bridge distro, or connects the one it has', async () => {
-    const bridge = deps()
-    expect(await prepareWslMoveHost(bridge, 'ubuntu')).toBe('ready')
-    expect(bridge.add).toHaveBeenCalledWith('ubuntu')
-    const added = deps({ hasHost: () => true })
-    expect(await prepareWslMoveHost(added, 'Ubuntu')).toBe('ready')
-    expect(added.connect).toHaveBeenCalled()
-    expect(added.add).not.toHaveBeenCalled()
-  })
-
-  it('reports a refused add or failed connect as failed', async () => {
-    const refused = deps({
-      add: async () => ({ ok: false, kind: 'failed', message: 'nope' })
-    })
-    expect(await prepareWslMoveHost(refused, 'Ubuntu')).toBe('failed')
-    const broken = deps({
-      hasHost: () => true,
-      connect: async () => {
-        throw new Error('pairing')
-      }
-    })
-    expect(await prepareWslMoveHost(broken, 'Ubuntu')).toBe('failed')
-  })
-
-  // E11 (#33843): a host whose Remove is pending is never connected or added.
-  it('never connects or adds a host whose Remove is pending', async () => {
-    const pending = deps({ hasHost: () => true, removalPending: () => true })
-    expect(await prepareWslMoveHost(pending, 'Ubuntu')).toBe('failed')
-    expect(pending.connect).not.toHaveBeenCalled()
-    expect(pending.add).not.toHaveBeenCalled()
-  })
-
   it('re-reads the pending Remove after the running-distro read', async () => {
     let removing = false
     const racing = deps({

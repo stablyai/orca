@@ -1,21 +1,29 @@
-import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import type {
+  StructuredAgentSessionWorkEvidence,
+  StructuredAgentSessionCurrentWorkJournal,
+  StructuredAgentSessionSeenEnd,
+  StructuredAgentSessionReplacedEnd
+} from './structured-agent-session-work-evidence'
+import {
+  reusePromptProjection,
+  type PromptProjection
+} from './structured-agent-session-actionable-prompts'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
+
 import { isHistoricalProviderTimelineItem } from '../agent-session-timeline/provider-timeline-history'
 import { currentRequestsProjection } from './agent-session-current-requests'
-// Derive operational work from lease, first-hand exit, replaced-runtime and journal evidence.
-// Cleanup writes never gate current work; readers share this projection rather than maintaining rules.
-
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem,
-  type AgentJournalSubmission,
-  type AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
-import { compareAgentJournalItems } from '../../../shared/agent-session-journal-position'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionLatestTurn } from '../../../shared/agent-session-wire'
-import type { StructuredAgentSessionWorkScope } from '../../../shared/structured-agent-session-main-agent-working'
-import { isUnansweredStructuredAgentSessionDispatch } from '../../../shared/structured-agent-session-unanswered-dispatch'
+  type AgentJournalSubmission
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionLatestTurn } from '../../../shared/agent-session/agent-session-wire'
+import type { StructuredAgentSessionWorkScope } from '../../../shared/agent-session/view/structured-agent-session-main-agent-working'
+import { isUnansweredStructuredAgentSessionDispatch } from '../../../shared/agent-session/requests/structured-agent-session-unanswered-dispatch'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import {
@@ -23,29 +31,11 @@ import {
   finalizingStructuredAgentSessionInput,
   structuredAgentSessionHandingOver
 } from './structured-agent-session-handing-over'
+export type { StructuredAgentSessionWorkEvidence } from './structured-agent-session-work-evidence'
+// Derive operational work from lease, first-hand exit, replaced-runtime and journal evidence.
+// Cleanup writes never gate current work; readers share this projection rather than maintaining rules.
 
-export type StructuredAgentSessionCurrentWorkJournal = Pick<
-  AgentSessionJournal,
-  'runningTurn' | 'itemFence' | 'visitItems' | 'submissions' | 'wroteBeforeOpen' | 'item' | 'cursor'
->
-
-export type StructuredAgentSessionWorkEvidence = {
-  record: Pick<AgentSessionConversationView, 'ownerObservation' | 'currentFence'> | null
-  ended?: StructuredAgentSessionSeenEnd
-  revision?: number
-  replaced?: StructuredAgentSessionReplacedEnd | undefined
-  /** Absent means the host has no child observation. */
-  child?: { fence: number; heldSends?: () => ReadonlySet<string> | undefined } | null
-}
-
-/** Replaced runtimes granted all fences through this boundary. */
-type StructuredAgentSessionReplacedEnd = { fence: number }
-
-type StructuredAgentSessionSeenEnd = {
-  fence: number
-  rootGone?: boolean
-  cause?: string
-}
+export type { StructuredAgentSessionCurrentWorkJournal } from './structured-agent-session-work-evidence'
 
 /** Missing records retain legacy fence-0 behavior; released/ended generations have no live fence. */
 export function structuredAgentSessionLiveFence(
@@ -110,12 +100,6 @@ function structuredAgentSessionHandsOver(
   )
 }
 
-type PromptProjection = {
-  epoch: string
-  sequence: number
-  fence: number | null
-  items: AgentJournalRenderItem[]
-}
 const promptProjections = new WeakMap<StructuredAgentSessionCurrentWorkJournal, PromptProjection>()
 
 /** Re-read lease evidence per decision; immutable prompts share cursor/fence caches. */
@@ -137,7 +121,26 @@ export class StructuredAgentSessionCurrentWork {
     private readonly heldSends?: () => ReadonlySet<string> | undefined
   ) {}
 
-  /** Compare effective generation/view, not repeated end-signal revisions that may change nothing. */
+  allowsObservation(): boolean {
+    return !this.ownerUnverifiable
+  }
+
+  generationEnded(submission: AgentJournalSubmission): boolean {
+    if (this.ownerUnverifiable) {
+      return false
+    }
+    const fence = submission.fence
+    return (
+      (this.liveFence !== null && fence < this.liveFence) ||
+      this.liveFence === null ||
+      (this.replaced !== undefined && fence <= this.replaced.fence) ||
+      (this.ended?.rootGone === true && fence === this.ended.fence)
+    )
+  }
+
+  /** What a reader that published this answer compares to learn it changed with no row: the live
+   *  generation, since every answer here is the journal read through it. Not the revision, which
+   *  moves on every generation-end signal: an end that changed nothing is published once. */
   viewKey(): string {
     return `${this.liveFence}${this.ownerUnverifiable ? ':unverifiable' : ''}`
   }
@@ -150,7 +153,8 @@ export class StructuredAgentSessionCurrentWork {
     return `${this.viewKey()}|${this.working() ? 1 : 0}|${sends.join(',')}`
   }
 
-  /** Unanswered sends the child no longer holds read uncertain until their later echo/refusal. */
+  /** A send as clients are told it. One handed to the live child that it no longer holds, with no
+   *  answer, reads in doubt: no client counts it as work, and its echo or refusal still settles it. */
   publishedSubmission = (submission: AgentJournalSubmission): AgentJournalSubmission =>
     this.unanswered(submission) && !this.holds(submission)
       ? {
@@ -173,7 +177,9 @@ export class StructuredAgentSessionCurrentWork {
   }
 
   private unansweredSends(): AgentJournalSubmission[] {
-    return this.journal.submissions().filter((submission) => this.unanswered(submission))
+    return this.journal.inputOrder
+      .recoverableSubmissions()
+      .filter((submission) => this.unanswered(submission))
   }
 
   /** Restate held-send changes even without journal rows. */
@@ -202,7 +208,7 @@ export class StructuredAgentSessionCurrentWork {
     return provenance === undefined || provenance >= this.liveFence
   }
 
-  /** Hand over only this process’s accepted sends; earlier-process sends recover as cards first. */
+  /** Hand over only this process’s accepted sends; earlier-process sends remain ordinary history. */
   handsOver(submission: AgentJournalSubmission): boolean {
     return structuredAgentSessionHandsOver(this.journal, submission)
   }
@@ -232,22 +238,27 @@ export class StructuredAgentSessionCurrentWork {
   actionablePrompts(): AgentJournalRenderItem[] {
     const cursor = this.journal.cursor()
     const prior = promptProjections.get(this.journal)
-    if (
-      prior?.epoch === cursor.epoch &&
-      prior.sequence === cursor.sequence &&
-      prior.fence === this.liveFence
-    ) {
-      return prior.items
+    const reusable = reusePromptProjection(this.journal, prior, cursor, this.liveFence)
+    if (reusable) {
+      return reusable
     }
+    const dependencies = new Set<string>()
     const items: AgentJournalRenderItem[] = []
     this.journal.visitItems((itemId, _sequence, body) => {
       if (
         (body.kind === 'approval' || body.kind === 'question') &&
-        body.resolution.state === 'pending' &&
-        this.isCurrentItem(itemId)
+        body.resolution.state === 'pending'
       ) {
         const item = this.journal.item(itemId)
-        if (item) {
+        dependencies.add(itemId)
+        if (item?.turnScope?.kind === 'turn') {
+          dependencies.add(item.turnScope.turnItemId)
+          const turn = readAgentJournalTurn(this.journal.item(item.turnScope.turnItemId)?.body)
+          if (turn?.userItemId) {
+            dependencies.add(turn.userItemId)
+          }
+        }
+        if (item && this.isCurrentItem(itemId)) {
           items.push(item)
         }
       }
@@ -258,7 +269,12 @@ export class StructuredAgentSessionCurrentWork {
       items.every((item, index) => item === prior.items[index])
         ? prior.items
         : items
-    promptProjections.set(this.journal, { ...cursor, fence: this.liveFence, items: stable })
+    promptProjections.set(this.journal, {
+      ...cursor,
+      fence: this.liveFence,
+      items: stable,
+      dependencies
+    })
     return stable
   }
 
@@ -275,7 +291,9 @@ export class StructuredAgentSessionCurrentWork {
   }
 
   owesAnySend(): boolean {
-    return this.journal.submissions().some((submission) => this.owesSend(submission))
+    return this.journal.inputOrder
+      .recoverableSubmissions()
+      .some((submission) => this.owesSend(submission))
   }
 
   working(): boolean {

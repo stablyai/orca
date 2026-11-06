@@ -14,8 +14,11 @@ import {
 } from './helpers/store'
 import { waitForActivePaneHookDescriptor, waitForActivePanePtyId } from './helpers/terminal'
 import { RuntimeClient } from '../../src/cli/runtime-client'
-import { DaemonClient } from '../../src/main/daemon/client'
-import { getDaemonSocketPath, getDaemonTokenPath } from '../../src/main/daemon/daemon-spawner'
+import { DaemonClient } from '../../src/main/daemon/transport/client/daemon-client'
+import {
+  getDaemonSocketPath,
+  getDaemonTokenPath
+} from '../../src/main/daemon/launch/daemon-spawner'
 import Database from '../../src/main/sqlite/sync-database'
 import { LEGACY_CONTRACT_VERSION } from '../../src/main/runtime/orchestration/db'
 import type { RuntimeTerminalListResult, RuntimeTerminalRead } from '../../src/shared/runtime-types'

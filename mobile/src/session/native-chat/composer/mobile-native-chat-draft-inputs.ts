@@ -1,6 +1,7 @@
 import { useCallback, useSyncExternalStore } from 'react'
-import { pickedSkillsInText } from '../../../../../src/shared/structured-agent-session-send-mutation'
-import type { AgentJournalSkillRef } from '../../../../../src/shared/agent-session-journal-types'
+import { createUuidV4 } from '../../../../../src/shared/uuid-v4'
+import { pickedSkillsInText } from '../../../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
+import type { AgentJournalSkillRef } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
 import type {
@@ -63,6 +64,19 @@ export function updateMobileNativeChatDraftInputs(
   drafts.set(destination.scope, update(readMobileNativeChatDraftInputs(destination.scope)))
   listeners.get(destination.scope)?.forEach((listener) => listener())
 }
+/** Adds uploaded images to the draft they were picked for, each under a fresh chip id. */
+export function addMobileNativeChatDraftImages(
+  scope: MobileNativeChatDraftDestination,
+  uploadedImages: Omit<PendingNativeChatImage, 'id'>[]
+): void {
+  updateMobileNativeChatDraftInputs(scope, (current) => ({
+    ...current,
+    images: [
+      ...current.images,
+      ...uploadedImages.map((image) => ({ ...image, id: createUuidV4() }))
+    ]
+  }))
+}
 export function subscribeMobileNativeChatDraftInputs(
   scope: string | null,
   listener: () => void
@@ -80,12 +94,23 @@ export function subscribeMobileNativeChatDraftInputs(
     }
   }
 }
-export function useMobileNativeChatDraftInputs(scope: string | null): MobileNativeChatDraftInputs {
+export function useMobileNativeChatDraftInputs(scope: string | null): MobileNativeChatDraftInputs
+export function useMobileNativeChatDraftInputs<K extends keyof MobileNativeChatDraftInputs>(
+  scope: string | null,
+  key: K
+): MobileNativeChatDraftInputs[K]
+export function useMobileNativeChatDraftInputs(
+  scope: string | null,
+  key?: keyof MobileNativeChatDraftInputs
+) {
   const subscribe = useCallback(
     (listener: () => void) => subscribeMobileNativeChatDraftInputs(scope, listener),
     [scope]
   )
-  return useSyncExternalStore(subscribe, () => readMobileNativeChatDraftInputs(scope))
+  return useSyncExternalStore(subscribe, () => {
+    const inputs = readMobileNativeChatDraftInputs(scope)
+    return key === undefined ? inputs : inputs[key]
+  })
 }
 export function closeMobileNativeChatEditInputs(
   scope: string,

@@ -1,10 +1,16 @@
-import type { PaneKey } from '../../../../shared/stable-pane-id'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import {
+  TerminalLaunchInputAttempt,
+  type TerminalLaunchInputAttemptOwner
+} from './terminal-launch-input-attempt'
+import type { PtyConnectionDeps } from './pty-connection-types'
+
+import { type PaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   PTY_PRECONNECT_INPUT_MAX_CODE_UNITS,
-  PTY_PRECONNECT_INPUT_MAX_ENTRIES
+  PTY_PRECONNECT_INPUT_MAX_ENTRIES,
+  type PtyPreconnectInputEntry,
+  type PtyPreconnectInputKind
 } from './pty-preconnect-input-buffer'
-import type { PtyPreconnectInputEntry, PtyPreconnectInputKind } from './pty-preconnect-input-buffer'
 
 export type DeferredSplitPaneInputKind = PtyPreconnectInputKind
 export type DeferredSplitPaneInput = PtyPreconnectInputEntry
@@ -25,6 +31,7 @@ export const DEFERRED_SPLIT_PANE_HANDOFF_TTL_MS = 15_000
 export const DEFERRED_SPLIT_PANE_HANDOFF_MAX_RECORDS = 64
 
 type DeferredSplitPaneHandoffRecord = {
+  inputAttempt: TerminalLaunchInputAttempt
   cwdPromise: Promise<string>
   expiresAtMs: number
   expiryTimer: ReturnType<typeof setTimeout>
@@ -34,18 +41,24 @@ type DeferredSplitPaneHandoffRecord = {
 }
 
 const handoffs = new Map<PaneKey, DeferredSplitPaneHandoffRecord>()
-let keyByHandle = new WeakMap<DeferredSplitPaneHandoffHandle, PaneKey>()
+let keyByHandle = new WeakMap<
+  DeferredSplitPaneHandoffHandle,
+  { key: PaneKey; inputAttempt: TerminalLaunchInputAttemptOwner }
+>()
 
-function createHandle(key: PaneKey): DeferredSplitPaneHandoffHandle {
+function createHandle(
+  key: PaneKey,
+  inputAttempt: TerminalLaunchInputAttempt
+): DeferredSplitPaneHandoffHandle {
   const handle = {} as DeferredSplitPaneHandoffHandle
-  keyByHandle.set(handle, key)
+  keyByHandle.set(handle, { key, inputAttempt: inputAttempt.claim() })
   return handle
 }
 
 function getOwnedRecord(
   handle: DeferredSplitPaneHandoffHandle
 ): { key: PaneKey; record: DeferredSplitPaneHandoffRecord } | null {
-  const key = keyByHandle.get(handle)
+  const key = keyByHandle.get(handle)?.key
   const record = key ? handoffs.get(key) : undefined
   if (!key || !record || record.owner !== handle) {
     return null
@@ -57,10 +70,17 @@ function getOwnedRecord(
   return { key, record }
 }
 
-function deleteHandoff(key: PaneKey, expected?: DeferredSplitPaneHandoffRecord): void {
+function deleteHandoff(
+  key: PaneKey,
+  expected?: DeferredSplitPaneHandoffRecord,
+  revoke = false
+): void {
   const record = handoffs.get(key)
   if (!record || (expected && record !== expected)) {
     return
+  }
+  if (revoke) {
+    keyByHandle.get(record.owner)?.inputAttempt.release()
   }
   clearTimeout(record.expiryTimer)
   handoffs.delete(key)
@@ -80,15 +100,17 @@ export function beginDeferredSplitPaneHandoff(
 ): DeferredSplitPaneHandoffHandle {
   const nowMs = Date.now()
   pruneExpiredHandoffs(nowMs)
-  deleteHandoff(key)
+  deleteHandoff(key, undefined, true)
   if (handoffs.size >= DEFERRED_SPLIT_PANE_HANDOFF_MAX_RECORDS) {
     const oldestKey = handoffs.keys().next().value
     if (oldestKey) {
       deleteHandoff(oldestKey)
     }
   }
-  const owner = createHandle(key)
+  const inputAttempt = new TerminalLaunchInputAttempt()
+  const owner = createHandle(key, inputAttempt)
   const record: DeferredSplitPaneHandoffRecord = {
+    inputAttempt,
     cwdPromise,
     expiresAtMs: nowMs + DEFERRED_SPLIT_PANE_HANDOFF_TTL_MS,
     expiryTimer: setTimeout(() => {
@@ -114,7 +136,7 @@ export function claimDeferredSplitPaneHandoff(
     deleteHandoff(key, record)
     return null
   }
-  const owner = createHandle(key)
+  const owner = createHandle(key, record.inputAttempt)
   record.owner = owner
   return {
     handle: owner,
@@ -140,9 +162,10 @@ export function appendDeferredSplitPaneInput(
 }
 
 export function releaseDeferredSplitPaneHandoff(handle: DeferredSplitPaneHandoffHandle): void {
+  keyByHandle.get(handle)?.inputAttempt.release()
   const owned = getOwnedRecord(handle)
   if (owned) {
-    owned.record.owner = createHandle(owned.key)
+    owned.record.owner = createHandle(owned.key, owned.record.inputAttempt)
   }
 }
 
@@ -155,13 +178,13 @@ export function clearDeferredSplitPaneHandoff(handle: DeferredSplitPaneHandoffHa
 
 /** Drops a stale record when a restored pane already has an authoritative PTY. */
 export function discardDeferredSplitPaneHandoffForKey(key: PaneKey): void {
-  deleteHandoff(key)
+  deleteHandoff(key, undefined, true)
 }
 
 export function discardDeferredSplitPaneHandoffsForTab(tabId: string): void {
   for (const [key, record] of handoffs) {
     if (parsePaneKey(key)?.tabId === tabId) {
-      deleteHandoff(key, record)
+      deleteHandoff(key, record, true)
     }
   }
 }
@@ -176,4 +199,16 @@ export function resetDeferredSplitPaneHandoffsForTests(): void {
 export function getDeferredSplitPaneHandoffCountForTests(): number {
   pruneExpiredHandoffs(Date.now())
   return handoffs.size
+}
+
+/** Transfer the launch observation even when no input payload was retained. */
+export function deferredSplitPaneConnectionInput(
+  handle: DeferredSplitPaneHandoffHandle,
+  preconnectInput: readonly DeferredSplitPaneInput[] = []
+): Pick<PtyConnectionDeps, 'launchInputAttempt' | 'preconnectInput' | 'onPreconnectInput'> {
+  return {
+    launchInputAttempt: keyByHandle.get(handle)?.inputAttempt,
+    ...(preconnectInput.length ? { preconnectInput } : {}),
+    onPreconnectInput: (input) => appendDeferredSplitPaneInput(handle, input)
+  }
 }

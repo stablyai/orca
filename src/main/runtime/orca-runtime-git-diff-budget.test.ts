@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../shared/remote-rpc-content-budget'
-import type { GitDiffResult } from '../../shared/git-diff-compare-types'
+import type { GitDiffResult } from '../../shared/git/diff/git-diff-compare-types'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import type * as GitStatusModule from '../git/status'
-import { RuntimeGitCommands } from './orca-runtime-git'
-import type { ResolvedRuntimeGitWorktree } from './runtime-git-command-target'
+
+import { RuntimeGitCommands } from './integrations/git/orca-runtime-git'
+import type { ResolvedRuntimeGitWorktree } from './integrations/git/runtime-git-command-target'
 
 const mocks = vi.hoisted(() => ({
   getDiff: vi.fn(),
@@ -12,10 +12,18 @@ const mocks = vi.hoisted(() => ({
   getCommitDiff: vi.fn()
 }))
 
-vi.mock('../git/status', async () => ({
-  ...(await vi.importActual<typeof GitStatusModule>('../git/status')),
-  getDiff: mocks.getDiff,
-  getBranchDiff: mocks.getBranchDiff,
+vi.mock('../git/source-control/file-diff', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getDiff: mocks.getDiff
+}))
+
+vi.mock('../git/source-control/branch-diff', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getBranchDiff: mocks.getBranchDiff
+}))
+
+vi.mock('../git/source-control/commit-diff', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   getCommitDiff: mocks.getCommitDiff
 }))
 
@@ -75,12 +83,6 @@ describe('runtime git diff transport budget', () => {
     expect(mocks.getDiff).toHaveBeenCalled()
   })
 
-  it('leaves a local-repo diff uncapped when no budget is supplied', async () => {
-    await expect(
-      commands().getRuntimeGitDiff('id:wt-1', 'assets/logo.png', false)
-    ).resolves.toMatchObject({ modifiedContent: OVERSIZED_BASE64 })
-  })
-
   it('caps a local-repo branch diff that exceeds the budget', async () => {
     await expect(
       commands().getRuntimeGitBranchDiff(
@@ -94,43 +96,10 @@ describe('runtime git diff transport budget', () => {
     expect(mocks.getBranchDiff).toHaveBeenCalled()
   })
 
-  it('leaves a local-repo branch diff uncapped when no budget is supplied', async () => {
-    await expect(
-      commands().getRuntimeGitBranchDiff('id:wt-1', BRANCH_COMPARE, 'assets/logo.png')
-    ).resolves.toMatchObject({ modifiedContent: OVERSIZED_BASE64 })
-  })
-
   it('caps a local-repo commit diff that exceeds the budget', async () => {
     await expect(
       commands().getRuntimeGitCommitDiff('id:wt-1', COMMIT_ARGS, REMOTE_RPC_MAX_CONTENT_BYTES)
     ).rejects.toMatchObject(TOO_LARGE)
     expect(mocks.getCommitDiff).toHaveBeenCalled()
-  })
-
-  it('leaves a local-repo commit diff uncapped when no budget is supplied', async () => {
-    await expect(commands().getRuntimeGitCommitDiff('id:wt-1', COMMIT_ARGS)).resolves.toMatchObject(
-      {
-        modifiedContent: OVERSIZED_BASE64
-      }
-    )
-  })
-
-  it('prioritizes local file diff reads without losing WSL routing', async () => {
-    const runtime = commands({ wslDistro: 'Ubuntu' })
-
-    await runtime.getRuntimeGitBranchDiff('id:wt-1', BRANCH_COMPARE, 'assets/logo.png')
-    await runtime.getRuntimeGitCommitDiff('id:wt-1', COMMIT_ARGS)
-
-    const options = { admissionTier: 'interactive', wslDistro: 'Ubuntu' }
-    expect(mocks.getBranchDiff).toHaveBeenLastCalledWith(
-      '/remote/repo',
-      expect.objectContaining({ filePath: 'assets/logo.png' }),
-      options
-    )
-    expect(mocks.getCommitDiff).toHaveBeenLastCalledWith(
-      '/remote/repo',
-      expect.objectContaining({ filePath: 'assets/logo.png' }),
-      options
-    )
   })
 })

@@ -3,7 +3,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { BottomDrawer } from './BottomDrawer'
+import { BottomDrawer } from './bottom-drawer/BottomDrawer'
 
 type ContentProps = {
   title: string
@@ -95,11 +95,11 @@ const styles = themedStyleSheet(() => ({
   button: {
     flex: 1,
     paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     alignItems: 'center'
   },
   cancelButton: {
-    backgroundColor: colors.bgPanel
+    backgroundColor: colors.sheetGroup
   },
   confirmButton: {
     backgroundColor: colors.textPrimary

@@ -128,6 +128,7 @@ export function createBrowserTabActions(
               targetGroupId: options?.targetGroupId,
               ...(options?.split ? { split: options.split } : {}),
               ...(options?.afterTabId ? { afterTabId: options.afterTabId } : {}),
+              ...(options?.showInGroup ? { showInGroup: true } : {}),
               // Why no routing-host default: a substituted host would disown the wrapper from its worktree.
               ...(options?.executionHostId ? { executionHostId: options.executionHostId } : {}),
               activate: shouldActivate

@@ -1,6 +1,6 @@
 import { readFile, stat } from 'node:fs/promises'
 import * as path from 'node:path'
-import { resolveWorktreeHostPath } from '../../../shared/git-metadata-path'
+import { resolveWorktreeHostPath } from '../../../shared/git/metadata/git-metadata-path'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { resolveGitDir } from './resolve-git-dir'
 

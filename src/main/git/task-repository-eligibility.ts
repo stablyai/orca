@@ -1,11 +1,11 @@
-import { parseGitRemoteVerboseOutput } from '../../shared/git-remote-identity'
+import { parseGitRemoteVerboseOutput } from '../../shared/git/remotes/git-remote-identity'
 import { isDefaultGitHubHost } from '../../shared/github/repository-identity-key'
 import { isGitHubHostAuthenticated } from '../github/github-enterprise-repository'
 import { parseGitHubRemoteIdentity } from '../github/github-remote-identity-parsing'
 import { parseGitLabProjectRef } from '../gitlab/project-ref-parser'
-import { REMOTE_URL_PROBE_TIMEOUT_MS } from './remote-url-probe'
+import { REMOTE_URL_PROBE_TIMEOUT_MS } from './remotes/remote-url-probe'
 import { gitExecFileAsync } from './runner'
-import type { RemoteRefLocalGitOptions } from './remote-ref-probe-cache'
+import type { RemoteRefLocalGitOptions } from './remotes/remote-ref-probe-cache'
 
 /** Call only after the requested provider found no usable source; unknown is never exclusion evidence. */
 export async function isTaskRepositoryIneligible(

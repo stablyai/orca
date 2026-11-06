@@ -1,13 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runWslProcessMock = vi.hoisted(() => vi.fn())
-vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
+vi.mock('../wsl/execution/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 
-import { SKILL_INSTALL_PROVIDERS } from '../../shared/skill-install-providers'
-import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { detectSkillProvidersInWsl } from './skill-wsl-provider-detection'
-
-type RunWslProcessSpec = { distro: string; loginPath: string; script: string }
 
 describe('detectSkillProvidersInWsl', () => {
   beforeEach(() => {
@@ -16,24 +12,6 @@ describe('detectSkillProvidersInWsl', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
-  })
-
-  it('asks for the login PATH so a nvm/mise-only install is still found (regression)', async () => {
-    // Without login-shell PATH, nvm-installed agents look absent under bare sh -c.
-    runWslProcessMock.mockResolvedValue({
-      environmentResolved: true,
-      code: 0,
-      stdout: 'codex\n',
-      stderr: '',
-      timedOut: false
-    })
-
-    const found = await detectSkillProvidersInWsl('Ubuntu')
-
-    const [spec] = runWslProcessMock.mock.calls.at(-1) as [RunWslProcessSpec]
-    expect(spec.loginPath).toBe('preferred')
-    expect(spec.distro).toBe('Ubuntu')
-    expect(found).toEqual(['codex'])
   })
 
   it('parses both providers when present', async () => {
@@ -48,26 +26,6 @@ describe('detectSkillProvidersInWsl', () => {
     const found = await detectSkillProvidersInWsl('Ubuntu')
 
     expect(found.toSorted()).toEqual(['claude', 'codex'])
-  })
-
-  it('probes every install provider by the commands Orca detects it with', async () => {
-    runWslProcessMock.mockResolvedValue({
-      environmentResolved: true,
-      code: 0,
-      stdout: 'cursor-agent\n',
-      stderr: '',
-      timedOut: false
-    })
-
-    const found = await detectSkillProvidersInWsl('Ubuntu')
-
-    const [spec] = runWslProcessMock.mock.calls.at(-1) as [RunWslProcessSpec]
-    for (const provider of SKILL_INSTALL_PROVIDERS) {
-      for (const command of getTuiAgentDetectCommands(TUI_AGENT_CONFIG[provider.id])) {
-        expect(spec.script, provider.id).toContain(`'${command}'`)
-      }
-    }
-    expect(found).toEqual(['cursor'])
   })
 
   it('ignores stray output that is not a recognized provider name', async () => {

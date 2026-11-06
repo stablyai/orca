@@ -19,16 +19,18 @@ vi.mock('electron', () => ({
   },
   app: { getPath: () => '/test' }
 }))
-vi.mock('../git/runner', async (original) => ({
+vi.mock('../git/command-runner/git-exec-file', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   gitExecFileAsync: mocks.git
 }))
-vi.mock('../project-runtime-git-options', () => ({ getLocalProjectWorktreeGitOptions: () => ({}) }))
-vi.mock('./registered-worktree-roots-cache', () => ({
+vi.mock('../workspaces/execution-host/project-runtime-git-options', () => ({
+  getLocalProjectWorktreeGitOptions: () => ({})
+}))
+vi.mock('./worktrees/removal/registered-worktree-roots-cache', () => ({
   getRegisteredWorktreeRootsRevision: mocks.rootsRevision,
   registerWorktreeRootsForRepo: mocks.roots
 }))
-vi.mock('../worktree-lineage-pruning', () => ({
+vi.mock('../workspaces/catalog/worktree-lineage-pruning', () => ({
   pruneLineageForMissingRepoWorktrees: mocks.pruneLineage
 }))
 vi.mock('./worktrees/listing/authoritative-local-worktree-metadata-pruning', () => ({

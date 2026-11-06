@@ -10,7 +10,7 @@ import {
 import { isManagedOrcadSshTarget } from '../../../ssh/connection/ssh-connection-store'
 import { browseSshDirectory } from '../../../ssh/ssh-remote-directory-browse'
 import { defineMethod } from '../core'
-import { getPublicSshError, getPublicSshState } from '../../public-ssh-state'
+import { getPublicSshError, getPublicSshState } from '../../hosts/platform-probe/public-ssh-state'
 import type { SshTarget as SshTargetRecord, SshTargetSummary } from '../../../../shared/ssh-types'
 import { isRemoteCliControlAllowed } from '../../../../shared/ssh-remote-cli-control'
 import type {

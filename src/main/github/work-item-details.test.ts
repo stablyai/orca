@@ -695,6 +695,32 @@ describe('getWorkItemDetails', () => {
     )
   })
 
+  it('keeps an ordinary open with an issue repository cached and lenient', async () => {
+    const url = 'https://github.com/upstream-owner/widgets/issues/5'
+    getWorkItemByOwnerRepoMock.mockResolvedValue({ type: 'issue', number: 5, title: 'Up', url })
+    const comments = { nodes: [], pageInfo: { hasNextPage: false } }
+    const issue = JSON.stringify({
+      data: { repository: { issue: { body: 'upstream', comments } } }
+    })
+    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args.join().includes('/timeline?')) {
+        throw new Error('timeline 502')
+      }
+      return { stdout: issue }
+    })
+    // No canonical flag: the open stays cached and survives a failed timeline read.
+    const details = await getWorkItemDetails('/repo-root', 5, 'issue', null, {}, undefined, {
+      owner: 'upstream-owner',
+      repo: 'widgets',
+      host: 'github.com'
+    })
+    expect(details?.body).toBe('upstream')
+    const timeline = ghExecFileAsyncMock.mock.calls.find(([args]) =>
+      args.join().includes('/timeline?')
+    )
+    expect(timeline?.[0]).toContain('--cache')
+  })
+
   // Number-based detail lookups must retain the list's source, avoiding same-number fork/upstream collisions.
   it('forwards the explicit origin source preference to the work item lookup', async () => {
     getWorkItemMock.mockResolvedValueOnce(null)

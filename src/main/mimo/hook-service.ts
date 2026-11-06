@@ -21,7 +21,11 @@ import {
   writeOpenCodeOverlayManifest,
   type OpenCodeOverlayManifest
 } from '../opencode/opencode-overlay-manifest'
-import { isSafeDescendCandidate, mirrorEntry, safeRemoveOverlay } from '../pty/overlay-mirror'
+import {
+  isSafeDescendCandidate,
+  mirrorEntry,
+  safeRemoveOverlay
+} from '../pty/scrollback/overlay-mirror'
 
 const ORCA_MIMOCODE_PLUGIN_FILE = 'orca-mimocode-status.js'
 const MIMOCODE_HOOKS_DIR = 'mimocode-hooks'

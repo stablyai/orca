@@ -1,4 +1,10 @@
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+
+export const TAB_SESSION_HISTORY_PANEL_REQUEST = {
+  scopePaths: ['/repo/wt'],
+  executionHostScope: 'local',
+  sessionLimit: 250
+} as const
 
 export function makeTabSessionHistoryRow(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
   return {

@@ -1,6 +1,6 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
-import { AGENT_HOOK_INSTALL_PLUGINS_METHOD } from '../../shared/agent-hook-relay'
-import { isRecord } from '../../shared/agent-status-child-work-value-guards'
+import { AGENT_HOOK_INSTALL_PLUGINS_METHOD } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
+import { isRecord } from '../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import { selectOpenCodePluginSources } from './opencode-plugin-settings'
 import type { ManagedHookDetectionSettings } from './managed-hook-detection-commands'
 import type { PluginSources } from '../../wsl-guest/plugin-overlay'

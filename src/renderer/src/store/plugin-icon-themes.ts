@@ -21,7 +21,7 @@ export const usePluginIconThemes = iconThemes.useEntries
 /** The selected icon theme as indexes into its registered icons; null means built-in icons. */
 export type ActivePluginIconTheme = Pick<
   PluginIconThemeRegistration,
-  'icons' | 'fileNames' | 'fileExtensions'
+  'icons' | 'fileNames' | 'fileExtensions' | 'folderNames' | 'folderNamesExpanded'
 >
 
 export const useActivePluginIconTheme = create<{ theme: ActivePluginIconTheme | null }>()(() => ({
@@ -71,7 +71,9 @@ function registerIcons(theme: PluginIconThemeRegistration): ActivePluginIconThem
   return {
     icons: keep(theme.icons),
     fileNames: keep(theme.fileNames),
-    fileExtensions: keep(theme.fileExtensions)
+    fileExtensions: keep(theme.fileExtensions),
+    folderNames: keep(theme.folderNames),
+    folderNamesExpanded: keep(theme.folderNamesExpanded)
   }
 }
 

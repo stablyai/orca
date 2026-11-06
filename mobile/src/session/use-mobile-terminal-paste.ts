@@ -2,8 +2,7 @@ import { separateImagePasteFromFollowingText } from '../../../src/shared/image-p
 import {
   normalizeTerminalPasteLineEndings,
   wrapTerminalBracketedPasteText
-} from '../../../src/shared/terminal-bracketed-paste-text'
-import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
+} from '../../../src/shared/terminal/input/terminal-bracketed-paste-text'
 import { useCallback, type RefObject } from 'react'
 import { translate } from '../i18n/mobile-i18n'
 import { terminalInputSend } from '../terminal/mobile-terminal-operations'
@@ -158,8 +157,8 @@ export function useMobileTerminalPaste({
           ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
           : {})
       })
-      if (terminalInputSend.interpret(response) === true) {
-        reportWorkerTerminalUserInput(currentClient, targetHandle)
+      if (terminalInputSend.interpret(response) !== true) {
+        throw new Error('Terminal input was not accepted')
       }
       onSuccess()
       refreshCanPaste()

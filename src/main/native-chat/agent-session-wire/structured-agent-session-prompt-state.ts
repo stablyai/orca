@@ -1,12 +1,12 @@
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   refuse,
-  type AgentSessionCancelResult,
   type AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionCancelResult } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 
@@ -27,7 +27,7 @@ export function settledPrompt(
   ctx: Pick<AgentSessionTurnContext, 'journal'>,
   itemId: string
 ): { item: AgentJournalRenderItem; prompt: PendingPromptBody } | null {
-  const item = ctx.journal.snapshot().items.find((entry) => entry.itemId === itemId)
+  const item = ctx.journal.itemsRead().items.find((entry) => entry.itemId === itemId)
   const prompt = item?.body.kind === 'approval' || item?.body.kind === 'question' ? item.body : null
   return item && prompt && prompt.resolution.state !== 'pending' ? { item, prompt } : null
 }
@@ -54,7 +54,7 @@ export function validatePendingPrompt(
     kind?: 'approval' | 'question'
   }
 ): PendingPromptValidation {
-  const item = ctx.journal.snapshot().items.find((entry) => entry.itemId === input.itemId)
+  const item = ctx.journal.itemsRead().items.find((entry) => entry.itemId === input.itemId)
   if (!item) {
     return promptGone(`No item ${input.itemId} in session ${ctx.sessionId}.`)
   }

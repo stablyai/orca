@@ -4,9 +4,12 @@ import {
   type AgentTabActionId,
   type KeybindingOverrides
 } from '../../../shared/keybindings'
-import { ALL_TUI_AGENTS } from '../../../shared/tui-agent-display-names'
-import { normalizeDisabledTuiAgents, pickTuiAgent } from '../../../shared/tui-agent-selection'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import { ALL_TUI_AGENTS } from '../../../shared/agent-launch/catalog/tui-agent-display-names'
+import {
+  normalizeDisabledTuiAgents,
+  pickTuiAgent
+} from '../../../shared/agent-launch/catalog/tui-agent-selection'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { AppState } from '@/store/types'
 import { loadDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
 import {
@@ -15,7 +18,7 @@ import {
   worktreeLaunchWorkspace
 } from '@/lib/agent-launch-route-input'
 import { agentChoiceMayOpenAsChat } from '@/lib/host-chat-program'
-import { readAgentLaunchPreferencesForWorktree } from '@/components/settings/use-host-agent-launch-preferences'
+import { readAgentLaunchPreferencesForWorktree } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 
 export type BoundAgentTabAction = {
   agent: TuiAgent

@@ -1,15 +1,19 @@
+import { createJournalReducerState } from '../agent-session-journal/journal-reducer'
+import { journalInputOrder } from '../agent-session-journal/journal-input-order'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
-import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
-import { createDeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
-import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
-import type { HistoryCatchUpPlan } from './structured-agent-session-history-catch-up'
 import {
+  type StructuredAgentSessionEventSink,
+  createDeferredStructuredAgentSessionEventSink
+} from './structured-agent-session-event-sink'
+import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
+import {
+  type HistoryCatchUpPlan,
   createHistoryCatchUpBatch,
   runHistoryCatchUp
 } from './structured-agent-session-history-catch-up'
@@ -23,11 +27,19 @@ describe('history catch-up runner', () => {
       cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
       item: () => null,
       itemBody: () => null,
+      presentationRemoved: () => false,
       canonicalItemId: (key: string) => key,
       visitItems: vi.fn(),
       visitItemsWithLinkage: vi.fn(),
       receiptFor: () => null,
       submissions: () => [],
+      currentRead: () => ({
+        sessionId: 'session-1',
+        cursor: { epoch: 'epoch-1', sequence: 0 },
+        items: [],
+        submissions: []
+      }),
+      inputOrder: journalInputOrder(createJournalReducerState('session-1', 'epoch-1')),
       historyOrigin: () => null
     }
     const append = vi.fn<NonNullable<StructuredAgentSessionEventSink['tryAppendTransition']>>(

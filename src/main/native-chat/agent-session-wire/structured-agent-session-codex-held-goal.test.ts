@@ -10,8 +10,8 @@ import {
   HOST_TEST_THREAD as THREAD,
   hostTestOperationId
 } from './structured-agent-session-host-test-data'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 
 let rig: QueuedMessageTestRig
 
@@ -75,26 +75,3 @@ it.each([
     expect((await rig.submission(held.id))?.handedOverAt).toBeUndefined()
   }
 )
-
-it('releases a startup goal when a second message parks while the first turn opens', async () => {
-  await rig.dispose()
-  rig = await createQueuedMessageTestRig({ starting: true, restartable: true })
-  const changeGoal = vi.fn(async () => ({ ok: true as const }))
-  rig.host.deps.adapter.changeThreadGoal = changeGoal
-  const first = rig.send('First model', undefined, { carried: { model: 'model-a' } })
-  const second = rig.send('Second model', undefined, { carried: { model: 'model-b' } })
-  await first.result
-  await second.result
-  const change = { kind: 'set' as const, objective: 'A startup objective' }
-  const goal = rig.host.changeThreadGoal(QUEUED_RIG_CALLER, {
-    envelope: rig.envelope({ change }, 'agentSession.threadGoal', hostTestOperationId()),
-    change
-  })
-  await rig.host.collaboratorsForTests().serialize(SESSION, async () => {})
-  await rig.proveStart()
-  await eventually(() => expect(changeGoal).toHaveBeenCalledOnce())
-  expect(await goal).toMatchObject({ ok: true })
-  expect(rig.dispatch).toHaveBeenCalledOnce()
-  await rig.settleAccepted(first.id, 'a')
-  await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(2))
-})

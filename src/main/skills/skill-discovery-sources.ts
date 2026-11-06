@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
 import { basename, join, type posix } from 'node:path'
 import type { SkillDiscoverySource, SkillProvider, SkillSourceKind } from '../../shared/skills'
-import type { AgentType } from '../../shared/agent-status-types'
+import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
 import type { Repo } from '../../shared/repo-types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import {

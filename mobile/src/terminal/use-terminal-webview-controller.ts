@@ -1,4 +1,4 @@
-import { parseTerminalKittyKeyboardFlags } from '../../../src/shared/terminal-kitty-keyboard-flags'
+import { parseTerminalKittyKeyboardFlags } from '../../../src/shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { readTerminalCellBox, type TerminalCellBox } from './terminal-cell-box'
 import { fitDimensionsFromCell } from './terminal-grid-fit'
@@ -44,6 +44,7 @@ export function useTerminalWebViewController(
     onHaptic,
     onTerminalInput,
     onTerminalQueryReply,
+    onTerminalInteraction,
     onTerminalTap,
     onFileTap,
     onOpenUrl,
@@ -173,6 +174,7 @@ export function useTerminalWebViewController(
           onKeyboardAvoidanceMetrics,
           onHaptic,
           onTerminalInput: interactionActive ? onTerminalInput : undefined,
+          onTerminalInteraction: interactionActive ? onTerminalInteraction : undefined,
           onTerminalTap: interactionActive ? onTerminalTap : undefined,
           onFileTap: interactionActive ? onFileTap : undefined,
           onOpenUrl: interactionActive ? onOpenUrl : undefined,
@@ -194,6 +196,7 @@ export function useTerminalWebViewController(
       onHaptic,
       onTerminalInput,
       onTerminalQueryReply,
+      onTerminalInteraction,
       onTerminalTap,
       onFileTap,
       onOpenUrl,

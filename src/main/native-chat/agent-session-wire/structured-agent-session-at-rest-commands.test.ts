@@ -24,8 +24,8 @@ import {
 } from '../../acp/acp-command-discovery.test-fixture'
 
 import { AtRestCommandCatalog } from './at-rest-command-catalog'
-import { startAgentSessionCommandMenuQuery } from '../../../shared/agent-session-command-menu-query'
-import { createCodexAtRestSkillCatalog } from '../../codex/codex-at-rest-skills-probe'
+import { startAgentSessionCommandMenuQuery } from '../../../shared/agent-session/agent-session-command-menu-query'
+import { createCodexAtRestSkillCatalog } from '../../codex/structured/catalog/codex-at-rest-skills-probe'
 import {
   bindAtRestCommandContexts,
   retireAtRestCommandSettings,
@@ -39,7 +39,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionSlashCommand,
   AgentSessionSubscribeEvent
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import {
   CLAUDE_AT_REST_COMMANDS_TTL_MS,
   ClaudeAtRestCommandCatalog

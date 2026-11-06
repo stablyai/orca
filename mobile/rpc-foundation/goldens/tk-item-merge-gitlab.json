@@ -4,9 +4,38 @@
   "family": "tasks.item-merge-gitlab",
   "namedDeltas": [],
   "values": {
-    "3272022b3a4e": {
+    "104bf14d3af8": {
+      "name": "error",
+      "ordinal": 8,
+      "value": ""
+    },
+    "11b6302399f9": {
+      "name": "mutatingStatus",
+      "ordinal": 10,
+      "value": true
+    },
+    "3c854b38217d": {
+      "name": "detailPayload",
+      "ordinal": 6,
+      "value": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
+    },
+    "40b5b543334f": {
       "name": "gitlab.mergeMR#1",
-      "ordinal": 3,
+      "ordinal": 9,
       "args": [
         {
           "name": "method",
@@ -44,12 +73,10 @@
         }
       }
     },
-    "3ea7248d382b": {
-      "name": "actionItem",
-      "ordinal": 5,
-      "value": {
-        "$rpc": "null"
-      }
+    "42be1ca2bc40": {
+      "name": "mutatingStatus",
+      "ordinal": 4,
+      "value": false
     },
     "589373883844": {
       "error": "",
@@ -91,10 +118,50 @@
         "provider": "gitlab"
       }
     },
-    "af6d48e640c6": {
-      "name": "gitlab.mergeMR#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.mergeMR\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":7,\"method\":\"squash\",\"projectRef\":{\"host\":\"gitlab.com\",\"path\":\"group/project\"}}}"
+    "81282764182b": {
+      "name": "itemReplyDrafts",
+      "ordinal": 7,
+      "value": {
+        "501": "a reply",
+        "comment-2": "a reply"
+      }
+    },
+    "a45f1237e928": {
+      "name": "actionItem",
+      "ordinal": 5,
+      "value": {
+        "provider": "gitlab",
+        "source": {
+          "id": "gitlab:mr:7",
+          "labels": [],
+          "number": 7,
+          "projectRef": {
+            "host": "gitlab.com",
+            "path": "group/project"
+          },
+          "repoId": "repo-1",
+          "state": "opened",
+          "type": "mr"
+        },
+        "title": "A merge request"
+      }
+    },
+    "aa01ca6020fb": {
+      "name": "itemReplyDrafts",
+      "ordinal": 3,
+      "value": {}
+    },
+    "cc2ece9478f0": {
+      "name": "actionItem",
+      "ordinal": 1,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "e0a9defd9b13": {
+      "name": "mutatingStatus",
+      "ordinal": 13,
+      "value": false
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -104,20 +171,24 @@
         "$rpc": "undefined"
       }
     },
-    "ecf9003e4ef1": {
-      "name": "mutatingStatus",
-      "ordinal": 6,
-      "value": false
-    },
-    "ed3a7d6bc894": {
-      "name": "error",
+    "eda130337c99": {
+      "name": "detailPayload",
       "ordinal": 2,
-      "value": ""
+      "value": {
+        "$rpc": "null"
+      }
     },
-    "fd2fad47bec2": {
-      "name": "mutatingStatus",
-      "ordinal": 1,
-      "value": true
+    "f7191833ef4f": {
+      "name": "gitlab.mergeMR#1",
+      "ordinal": 11,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.mergeMR\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":7,\"method\":\"squash\",\"projectRef\":{\"host\":\"gitlab.com\",\"path\":\"group/project\"}}}"
+    },
+    "fbf2ffe3d253": {
+      "name": "actionItem",
+      "ordinal": 12,
+      "value": {
+        "$rpc": "null"
+      }
     }
   },
   "recording": {
@@ -126,14 +197,26 @@
       {
         "id": "merge-settled",
         "observation": {
-          "sender": ["3272022b3a4e"],
-          "payloads": ["af6d48e640c6"],
+          "sender": ["40b5b543334f"],
+          "payloads": ["f7191833ef4f"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "merge-0": "eb79a9b3682a"
           },
           "state": "589373883844",
-          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "3ea7248d382b", "ecf9003e4ef1"]
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "aa01ca6020fb",
+            "42be1ca2bc40",
+            "a45f1237e928",
+            "3c854b38217d",
+            "81282764182b",
+            "104bf14d3af8",
+            "11b6302399f9",
+            "fbf2ffe3d253",
+            "e0a9defd9b13"
+          ]
         }
       }
     ]

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState } from '../../../shared/constants'
-import { ProtectedSecretPersistence } from '../../protected-secret-persistence'
+import { ProtectedSecretPersistence } from '../../credentials/protected-secret-persistence'
 import { serializeSelectiveProfileStateDomains } from './profile-state-authority-writes'
 import { StateSerializationSecretHandlingOperations } from './state-serialization-secret-handling'
 

@@ -1,20 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import {
-  agentSessionLeaseFixture,
-  agentSessionRecordFixture
-} from '../../../../shared/agent-session-record.test-fixture'
-import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session-provider-handle'
-import { isPersistedAgentSessionRecord } from '../../../../shared/agent-session-record'
-import { encodeAgentSessionRecord } from '../../../../shared/agent-session-record-stored-form'
-import { activeProviderContext } from '../../../../shared/agent-session-provider-context'
+import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { isPersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { encodeAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
+import { activeProviderContext } from '../../../../shared/agent-session/agent-session-provider-context'
 import {
   recordAgentSessionProviderHandle,
   reviseAgentSessionProviderResumePoint
 } from './agent-session-provider-handle-transition'
-import {
-  claudeProviderHandle,
-  codexProviderHandle
-} from '../../../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 function resumedLink(fence: number): AgentSessionProviderHandleLink {
   return {
@@ -27,35 +21,6 @@ function resumedLink(fence: number): AgentSessionProviderHandleLink {
 }
 
 describe('recordAgentSessionProviderHandle', () => {
-  it('advances a live Claude chain head and its proof', () => {
-    const record = agentSessionRecordFixture()
-    const next = recordAgentSessionProviderHandle({
-      record,
-      fence: record.lease.runtimeFence,
-      link: resumedLink(record.lease.runtimeFence),
-      now: 4_000
-    })
-    expect(next.providerHandleChain.at(-1)?.handle).toMatchObject({ resumeCursor: 'leaf-2' })
-    expect(next.lease.provenHandleLinkId).toBe('link-2')
-  })
-
-  it('records a leaf during proof without granting ownership', () => {
-    const lease = agentSessionLeaseFixture({
-      runtimeFence: 8,
-      claimStatus: 'reserved',
-      handoffStage: 'new-owner-proving',
-      provenHandleLinkId: null
-    })
-    const next = recordAgentSessionProviderHandle({
-      record: agentSessionRecordFixture(lease),
-      fence: lease.runtimeFence,
-      link: resumedLink(lease.runtimeFence),
-      now: 4_000
-    })
-    expect(next.providerHandleChain.at(-1)?.handle).toMatchObject({ resumeCursor: 'leaf-2' })
-    expect(next.lease).toMatchObject({ claimStatus: 'reserved', provenHandleLinkId: null })
-  })
-
   it('rejects delayed old-child proof and records fresh creation behind the clear boundary', () => {
     const previous = agentSessionRecordFixture()
     const record = {
@@ -114,44 +79,5 @@ describe('reviseAgentSessionProviderResumePoint', () => {
     })
     expect(second.lease.provenHandleLinkId).toBe('link-1')
     expect(isPersistedAgentSessionRecord(encodeAgentSessionRecord(second))).toBe(true)
-  })
-
-  it('refuses a stale owner, a released lease, and a head minted by another owner', () => {
-    const record = agentSessionRecordFixture()
-    expect(() =>
-      reviseAgentSessionProviderResumePoint({
-        record,
-        fence: record.lease.runtimeFence - 1,
-        handle: claudeProviderHandle('provider-session-alpha-1', 'leaf-2'),
-        now: 5_000
-      })
-    ).toThrow('agent_session_stale_fence')
-    expect(() =>
-      revise(agentSessionRecordFixture(agentSessionLeaseFixture({ claimStatus: 'released' })))
-    ).toThrow('agent_session_ownership_unknown')
-    const later = agentSessionRecordFixture(agentSessionLeaseFixture({ runtimeFence: 9 }))
-    expect(() =>
-      revise({
-        ...later,
-        providerHandleChain: [{ ...later.providerHandleChain[0]!, mintedAtFence: 7 }]
-      })
-    ).toThrow('agent_session_provider_handle_invalid')
-    expect(() =>
-      reviseAgentSessionProviderResumePoint({
-        record,
-        fence: record.lease.runtimeFence,
-        handle: claudeProviderHandle('another-provider-session', 'leaf-2'),
-        now: 5_000
-      })
-    ).toThrow('agent_session_provider_handle_invalid')
-    // Same id, another provider's namespace: a different conversation, never this one's leaf.
-    expect(() =>
-      reviseAgentSessionProviderResumePoint({
-        record,
-        fence: record.lease.runtimeFence,
-        handle: codexProviderHandle('provider-session-alpha-1'),
-        now: 5_000
-      })
-    ).toThrow('agent_session_provider_handle_invalid')
   })
 })

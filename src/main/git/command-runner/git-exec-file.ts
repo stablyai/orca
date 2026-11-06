@@ -2,7 +2,7 @@ import { withGitSpan } from '../../observability/instrumentation'
 import {
   resolveGitFetchHeadCommand,
   runWithGitFetchHeadLock
-} from '../../../shared/git-fetch-head-lock'
+} from '../../../shared/git/fetch/git-fetch-head-lock'
 import { pendingWslDriveCheckoutGitRouting } from '../wsl-drive-checkout-git-routing'
 import type { ResolvedCommand } from './wsl-command-resolution'
 import { annotateWslHostFailure, isTransientWslFailure } from './wsl-host-failure'
@@ -20,12 +20,15 @@ import { prepareWindowsHostGitEnvironment } from './windows-host-git-environment
 import { buildNetworkSshPolicyEnv } from './git-ssh-policy-env'
 import { nonInteractiveGitEnv, untranslatedGitOutputEnv } from './git-process-env'
 import { acquireGitAdmission } from './git-subprocess-admission'
-import { GitCommandTimeoutError, gitCommandTimeoutMs } from './git-command-timeout'
-import { classifyGitCommand } from '../../../shared/git-command-classification'
+import {
+  GitCommandTimeoutError,
+  gitCommandTimeoutMs
+} from '../../../shared/git/commands/git-command-timeout'
+import { classifyGitCommand } from '../../../shared/git/commands/git-command-classification'
 import { createAbortError } from './abort-error'
 import { readCapturedGitBuffer, readCapturedGitString } from './captured-git-output'
 import { runUnlessGitCwdKnownMissing } from './missing-git-spawn-cwd'
-import { trackGitWorktreeMutation } from '../git-worktree-mutation-state'
+import { trackGitWorktreeMutation } from './git-worktree-mutation-state'
 import { routeLocalGitOptions, runAdmittedWslGit } from './local-git-runtime-route'
 import { gitRunsIn } from './git-runs-in'
 
@@ -49,7 +52,8 @@ async function gitExecFileAsyncUnlocked(
       if (readEnvironmentReady) {
         await readEnvironmentReady
       }
-      let resolved = resolveGitCommand(args, options, false, options.captureWslLoginShellOutput)
+      // Buffered reads always fence login rc output; only streaming (gitStreamStdout) must stay unfenced.
+      let resolved = resolveGitCommand(args, options, false, true)
       const environmentReady = prepareWindowsHostGitEnvironment(
         resolved,
         options.env,
@@ -57,12 +61,7 @@ async function gitExecFileAsyncUnlocked(
       )
       const env = environmentReady ? await environmentReady : options.env
       const effectiveOptions = env === options.env ? options : { ...options, env }
-      resolved = resolveGitCommand(
-        args,
-        effectiveOptions,
-        false,
-        effectiveOptions.captureWslLoginShellOutput
-      )
+      resolved = resolveGitCommand(args, effectiveOptions, false, true)
       const policy =
         effectiveOptions.useConfiguredSshCommandForNetwork || classifyGitCommand(args) === 'network'
           ? await buildNetworkSshPolicyEnv(effectiveOptions, args)
@@ -114,7 +113,7 @@ async function gitExecFileAsyncUnlocked(
           : execFileCapture(command.binary, command.args, captureOptions)
         // Add a cause when a dead WSL distro returns empty stderr.
         return captured.catch((error: unknown) => {
-          throw annotateWslHostFailure(error, command)
+          throw withCapturedErrorStdout(annotateWslHostFailure(error, command), command)
         })
       }
       const runCapturedCommand = async (): Promise<{ stdout: string; stderr: string }> => {
@@ -131,12 +130,7 @@ async function gitExecFileAsyncUnlocked(
           ) {
             await terminationState.current
             const wasMissing = invalidateMissingDirectWslGit(error, resolved)
-            const fallback = resolveGitCommand(
-              args,
-              effectiveOptions,
-              true,
-              effectiveOptions.captureWslLoginShellOutput
-            )
+            const fallback = resolveGitCommand(args, effectiveOptions, true, true)
             result = await capture(fallback)
             // Why: matching failures can be normal Git control flow; only a successful login retry proves the direct environment was insufficient.
             disableDirectWslGitAfterSuccessfulFallback(wasMissing, resolved)
@@ -173,6 +167,16 @@ async function gitExecFileAsyncUnlocked(
       }
     }
   )
+}
+
+/** Callers parse stdout of non-zero exits (check-ignore exit 1), so strip the fence there too. */
+function withCapturedErrorStdout(error: unknown, command: ResolvedCommand): unknown {
+  if (command.captured && error && typeof error === 'object' && 'stdout' in error) {
+    if (typeof error.stdout === 'string') {
+      error.stdout = readCapturedGitString(error.stdout, command)
+    }
+  }
+  return error
 }
 
 export function gitExecFileAsync(

@@ -1,7 +1,8 @@
-import { buildAgentStartupPlan, planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
+import { buildAgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
+import { planAgentCliArgsSuffix } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import { isTuiAgentEnabled } from '../../../shared/agent-launch/catalog/tui-agent-selection'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { translate } from '@/i18n/i18n'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 

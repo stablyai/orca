@@ -30,6 +30,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   help: '--help                 Show this help message',
   'include-visual-layouts': '--include-visual-layouts Include tab and pane topology in JSON output',
   interrupt: '--interrupt            Send as an interrupt-style input when supported',
+  'keep-open': '--keep-open            Keep the worker open after it finishes',
+  'spec-file': '--spec-file <path|->  Read the spec from a file or stdin',
   id: '--id <id>             Identifier for a target item or permission',
   issue: '--issue <number|null>  Linked GitHub issue number',
   'gitlab-issue':
@@ -124,6 +126,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   amount: '--amount <pixels>      Scroll distance in pixels',
   index: '--index <n>            Tab index to switch to',
   page: '--page <id>            Stable browser page id from `orca tab list --json`',
+  'expect-url':
+    '--expect-url <url>     Fail before acting unless the page is at this exact absolute URL',
   profile: '--profile <id>        Browser profile id',
   'show-profile': '--show-profile        Include tab profile in text output',
   format: '--format <png|jpeg>    Screenshot image format'

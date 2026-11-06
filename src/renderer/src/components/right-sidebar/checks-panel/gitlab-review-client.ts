@@ -4,7 +4,7 @@ import type {
   GitLabWorkItemDetails
 } from '../../../../../shared/gitlab-types'
 import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
-import type { ChecksPanelReview } from '../checks-panel-review'
+import type { ChecksPanelReview } from './checks-panel-review'
 
 export function isGitLabChecksPanelReview(
   review: ChecksPanelReview | null

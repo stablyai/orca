@@ -16,32 +16,6 @@ import { openPluginPanelFromSettings } from '../page/PluginContributionActionPan
 import { languageDisplayName } from '../presentation/plugin-contributions'
 import { PLUGIN_ACTION_TOAST_DURATION_MS } from './plugin-action-toast'
 
-// Why built in: catalog grammars ship no sample, and an empty file shows no highlighting.
-const SYNTAX_SAMPLES: Readonly<Record<string, string>> = {
-  '.gleam':
-    'import gleam/io\n\n// Greets whoever runs it.\npub fn main() -> Nil {\n  let count = 3\n  io.println("Hello from Gleam!")\n}\n',
-  '.prisma':
-    '// A user table.\nmodel User {\n  id    Int     @id @default(autoincrement())\n  email String  @unique\n  name  String?\n}\n',
-  '.nix':
-    '{ pkgs ? import <nixpkgs> { } }:\n\n# A development shell.\npkgs.mkShell {\n  packages = [ pkgs.nodejs ];\n  shellHook = "echo ready";\n}\n',
-  '.gd':
-    'extends Node2D\n\n# Moves right every frame.\nvar speed := 120.0\n\nfunc _process(delta: float) -> void:\n\tposition.x += speed * delta\n',
-  '.tex':
-    '\\documentclass{article}\n\n% A tiny document.\n\\begin{document}\n\\section{Hello}\nInline math: $e^{i\\pi} + 1 = 0$.\n\\end{document}\n'
-}
-
-export function pluginSyntaxSample(
-  syntaxes: readonly { extensions: readonly string[] }[]
-): { extension: string; content: string } | null {
-  for (const extension of syntaxes.flatMap((syntax) => syntax.extensions)) {
-    const content = SYNTAX_SAMPLES[extension.toLowerCase()]
-    if (content) {
-      return { extension, content }
-    }
-  }
-  return null
-}
-
 /** Runs `act` over the workspace Settings came from, or says why it can't. */
 function fromSettingsToWorkspace(act: () => void): void {
   const reason = pluginPanelUnavailableReason(useAppStore.getState())
@@ -52,11 +26,19 @@ function fromSettingsToWorkspace(act: () => void): void {
   act()
 }
 
-export function openPluginSampleFromSettings(sample: { extension: string; content: string }): void {
+/** The first file extension a plugin's grammars declare, which a blank file can show off. */
+export function firstSyntaxExtension(
+  syntaxes: readonly { extensions: readonly string[] }[]
+): string | null {
+  return syntaxes.find((syntax) => syntax.extensions.length > 0)?.extensions[0] ?? null
+}
+
+/** Opens a blank `untitled<extension>` so the plugin's grammar highlights as you type. */
+export function openPluginBlankFileFromSettings(extension: string): void {
   fromSettingsToWorkspace(() => {
     const state = useAppStore.getState()
     state.closeSettingsPage()
-    void state.openSampleFileInActiveWorkspace(sample)
+    void state.openBlankFileInActiveWorkspace(extension)
   })
 }
 
@@ -121,9 +103,9 @@ export function pluginTryAction(
       }
     }
   }
-  const sample = pluginSyntaxSample(contributes.syntaxes)
-  if (sample) {
-    return () => openPluginSampleFromSettings(sample)
+  const syntaxExtension = firstSyntaxExtension(contributes.syntaxes)
+  if (syntaxExtension) {
+    return () => openPluginBlankFileFromSettings(syntaxExtension)
   }
   if (contributes.languagePacks.length > 0) {
     return () => void tryLanguagePack(pluginKey)

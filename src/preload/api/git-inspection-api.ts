@@ -2,20 +2,23 @@ import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
   GitDiffResult
-} from '../../shared/git-diff-compare-types'
-import type { GitMutationInFlight } from '../../shared/git-mutation-in-flight'
+} from '../../shared/git/diff/git-diff-compare-types'
+import type { GitMutationInFlight } from '../../shared/git/commands/git-mutation-in-flight'
 import type {
   GitConflictOperation,
   GitStagingArea,
   GitStatusResult,
   GitUpstreamStatus
-} from '../../shared/git-status-types'
+} from '../../shared/git/status/git-status-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
-import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type {
+  GitHistoryOptions,
+  GitHistoryResult
+} from '../../shared/git/history/git-history-types'
 import type {
   CommitMessageAgentCapability,
   CommitMessageModelCapability
-} from '../../shared/commit-message-agent-spec'
+} from '../../shared/source-control/ai/generation/commit-message-agent-spec'
 
 export type GitInspectionApi = {
   status: (args: {
@@ -73,6 +76,7 @@ export type GitInspectionApi = {
     filePath: string
     staged: boolean
     compareAgainstHead?: boolean
+    oldPath?: string
     connectionId?: string
     wakeWslDistro?: boolean
   }) => Promise<GitDiffResult>

@@ -7,7 +7,7 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
-} from '../../../../shared/terminal-stream-protocol'
+} from '../../../../shared/terminal/stream/terminal-stream-protocol'
 
 export type MultiplexSubscriptionCallbacks = {
   onResponse: (response: unknown) => void

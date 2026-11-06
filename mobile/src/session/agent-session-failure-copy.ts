@@ -2,7 +2,7 @@ import type {
   AgentSessionFailureCopyId,
   AgentSessionFailureCopyValues,
   AgentSessionFailureSay
-} from '../../../src/shared/agent-session-failure-copy'
+} from '../../../src/shared/agent-session/failures/agent-session-failure-copy'
 import { translate } from '../i18n/mobile-i18n'
 import { START_FAILURE_COPY } from './agent-session-start-failure-copy'
 import { SEND_FAILURE_COPY } from './agent-session-send-failure-copy'

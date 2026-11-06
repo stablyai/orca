@@ -2,8 +2,10 @@
 // root-exit proof reaches the single exit handler, including late adapter reports.
 
 import type { AgentSessionCloseObserver } from './structured-agent-session-adapter-stop'
-import { refuse } from '../../../shared/agent-session-wire-refusals'
-import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
+import {
+  refuse,
+  type AgentSessionWireRefusal
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
 import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
 import { stopAgentSessionProviderRoot } from './structured-agent-session-provider-exit-proof'

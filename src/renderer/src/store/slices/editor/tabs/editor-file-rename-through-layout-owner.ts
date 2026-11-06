@@ -15,7 +15,7 @@ import type { OpenFilePathRekey, RekeyOpenFilesResult } from '../types/open-file
 import { isEditorTabContentType } from './editor-tab-content-type'
 import { restorableEditorFile } from './editor-tab-layout-owner'
 import { layoutEditorViewOfOpenFile } from './open-file-layout-view'
-import { rekeyEditorBytesDocuments } from '@/components/editor/editor-bytes-document-boxes'
+import { rekeyEditorBytesDocuments } from '@/components/editor/save/bytes/editor-bytes-document-boxes'
 
 /** Main's renames: an edit-mode file's record moves from its old path; a view takes the new one. */
 function renamesOf(

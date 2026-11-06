@@ -1,7 +1,7 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RESET_TERMINAL_CURSOR_STYLE } from '../../../../shared/terminal-mode-reset-profiles'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { RESET_TERMINAL_CURSOR_STYLE } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import {
   AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS,
@@ -15,15 +15,20 @@ import {
   LEAF_1,
   createMockTransport,
   createPane,
-  createManager
+  createManager,
+  type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import {
   createInitialStoreState,
   buildActiveRuntimeEnvironmentState
 } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
-import type { MockTransport } from './pty-connection-test-pane-fixtures'
+
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
@@ -76,6 +81,8 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
 
     it('preserves permission-title cursor and cache side effects through authoritative hook done', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-hook')
       transportFactoryQueue.push(transport)
       enableActiveRuntimeEnvironment()
@@ -93,7 +100,11 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+      )
       const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
         | ((title: string) => void)
         | undefined
@@ -130,9 +141,15 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
 
     it('preserves a genuine hook completion after suppressing an earlier idle title', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-hook')
       transportFactoryQueue.push(transport)
       enableActiveRuntimeEnvironment()
+      // A known server OS settles the pane's resize model, leaving only completion's subscriber.
+      mockStoreState.runtimeStatusByEnvironmentId = new Map([
+        ['env-1', { status: { hostPlatform: 'linux' as const }, checkedAt: 1 }]
+      ])
       vi.useFakeTimers()
       const paneKey = makePaneKey('tab-1', LEAF_1)
       mockStoreState.agentStatusByPaneKey[paneKey] = {
@@ -149,7 +166,11 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks2)
+      )
 
       const titleHandler = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
@@ -207,6 +228,8 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
 
     it('preserves accepted hook effects and shared completion with desktop banners and attention disabled', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-hook')
       transportFactoryQueue.push(transport)
       enableActiveRuntimeEnvironment()
@@ -229,7 +252,11 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks3)
+      )
 
       const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
         | ((title: string) => void)
@@ -313,6 +340,8 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-crashed-codex')
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
@@ -339,7 +368,11 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
         const manager = createManager(1)
         const deps = createDeps()
 
-        connectPanePty(pane as never, manager as never, deps as never)
+        connectPanePty(
+          pane as never,
+          manager as never,
+          bindPaneAgentTitleMocks(deps as never, agentTitleMocks4)
+        )
         await flushAsyncTicks()
         const titleHandler = createdTransportOptions[0]?.onTitleChange as
           | ((title: string, rawTitle: string) => void)
@@ -401,6 +434,8 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
 
     it('drops an exited agent completion when a replacement agent hook row is active', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks5 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-replaced-codex')
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
@@ -411,7 +446,11 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks5)
+      )
       await flushAsyncTicks()
       const titleHandler = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
@@ -466,6 +505,8 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
 
     it('drops confirmed idle exit when a different hook owner appears between null samples', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks6 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-replaced-codex')
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
@@ -495,7 +536,11 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
         const manager = createManager(1)
         const deps = createDeps()
 
-        connectPanePty(pane as never, manager as never, deps as never)
+        connectPanePty(
+          pane as never,
+          manager as never,
+          bindPaneAgentTitleMocks(deps as never, agentTitleMocks6)
+        )
         await flushAsyncTicks()
         const titleHandler = createdTransportOptions[0]?.onTitleChange as
           | ((title: string, rawTitle: string) => void)
@@ -551,6 +596,8 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
     it('preserves replacement-agent title side effects through the process replacement veto', async () => {
       const { dispatchAgentHookTerminalLifecycle } = await import('./agent-hook-terminal-lifecycle')
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks7 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-replaced-codex')
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
@@ -561,7 +608,11 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks7)
+      )
       await flushAsyncTicks()
       const titleHandler = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)

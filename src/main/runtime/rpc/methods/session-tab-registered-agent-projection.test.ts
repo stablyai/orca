@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-  PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import {
+  PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+} from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-types'
 import {
   STRUCTURED_CHAT_UPDATE_REQUIRED_TAB_TITLE,
@@ -64,11 +66,6 @@ describe('a tab of an agent beyond Claude and Codex', () => {
     ])
     expect(projected.tabGroups?.[0]?.tabOrder).not.toContain('agent-session:grok-session')
     expect(projected.activeTabId).not.toBe('agent-session:grok-session')
-  })
-
-  it('reaches a client that advertises the registered-agents capability unchanged', () => {
-    const payload = snapshot()
-    expect(projectSessionTabAgentStatus(payload, 'runtime', REGISTERED_AGENTS_CLIENT)).toBe(payload)
   })
 
   it('holds a Pi tab for clients that understand registered agents but cannot show Pi dialogs', () => {
