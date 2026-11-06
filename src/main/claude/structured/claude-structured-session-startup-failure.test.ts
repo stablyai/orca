@@ -56,6 +56,7 @@ it.each(['control_request_failed', 'process_exited_nonzero'])(
     connection.closed = true
     connection.exitVerdict = { root: 'exited', tree: 'exited' }
     const exit = withObservedProviderExit(new Error('claude exited'))
+    connection.exited = Promise.resolve(exit)
     connection.handlers.onExit?.(exit, { expected: false })
     await vi.advanceTimersByTimeAsync(10)
     const recorded = sdkExit.records[0].initializationError
