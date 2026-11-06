@@ -1,12 +1,13 @@
 // @vitest-environment happy-dom
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import type * as ReactNative from 'react-native'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
 import { AnchoredDetailCardLayer } from './AnchoredDetailCard'
 import type { AnchoredDetailCardState } from './use-anchored-detail-card'
 
-vi.mock('react-native', () => vi.importActual<typeof import('react-native')>('react-native-web'))
+vi.mock('react-native', () => vi.importActual<typeof ReactNative>('react-native-web'))
 vi.mock('./use-detail-card-motion', () => import('./use-detail-card-motion.web'))
 vi.mock('../theme/use-mobile-color-scheme', () => ({ useMobileColorScheme: () => 'light' }))
 const preference = vi.hoisted((): { enabled: boolean | null } => ({ enabled: false }))
