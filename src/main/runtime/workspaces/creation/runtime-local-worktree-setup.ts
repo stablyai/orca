@@ -1,4 +1,8 @@
-import type { CreateWorktreeResult, SetupDecision } from '../../../../shared/worktree/create-types'
+import type {
+  CreateWorktreeResult,
+  SetupDecision,
+  SetupTrustMismatch
+} from '../../../../shared/worktree/create-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { getEffectiveHooks, loadHooks, runHook } from '../../../workspace-hooks/hooks'
 import {
@@ -9,6 +13,7 @@ import {
   getDefaultTabsLaunch,
   shouldRunSetupForCreate
 } from '../../../workspace-hooks/effective-hook-config'
+import { checkCreatedWorktreeSetupTrust } from '../../../workspace-hooks/created-worktree-setup-trust'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RuntimeStore } from '../../runtime-store-contract'
 
@@ -32,6 +37,7 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
   defaultTabs?: CreateWorktreeResult['defaultTabs']
   warning?: string
   effectiveDecision: SetupDecision
+  setupTrustMismatch?: SetupTrustMismatch
   hookFound: boolean
   shouldRunSetup: boolean
   didStartInProcessSetupHook: boolean
@@ -42,9 +48,17 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
   const yamlHooks = loadHooks(worktreePath)
   const hooks = getEffectiveHooks(repo, worktreePath)
   const effectiveDecision = resolveRuntimeSetupDecision(request)
+  const setupTrustMismatch = checkCreatedWorktreeSetupTrust(
+    repo,
+    yamlHooks,
+    effectiveDecision,
+    request.approvedSetupHash
+  )
+  // Only the approved content may run; the client re-prompts with the branch's.
+  const runDecision = setupTrustMismatch ? 'skip' : effectiveDecision
   let defaultTabs: CreateWorktreeResult['defaultTabs']
   try {
-    defaultTabs = getDefaultTabsLaunch(yamlHooks, repo, effectiveDecision)
+    defaultTabs = getDefaultTabsLaunch(yamlHooks, repo, runDecision)
   } catch (error) {
     console.warn(`[hooks] default tab commands skipped for ${worktreePath}:`, error)
     defaultTabs = yamlHooks?.defaultTabs
@@ -54,7 +68,7 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
   let shouldRunSetup = false
   if (hooks?.scripts.setup) {
     try {
-      shouldRunSetup = shouldRunSetupForCreate(repo, effectiveDecision)
+      shouldRunSetup = shouldRunSetupForCreate(repo, runDecision)
     } catch {
       // A new branch may introduce an unapproved hook; worktree already exists, so skip/warn below rather than fail the create.
     }
@@ -82,7 +96,7 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
         }
       })
     }
-  } else if (hooks?.scripts.setup && effectiveDecision !== 'skip') {
+  } else if (hooks?.scripts.setup && runDecision !== 'skip') {
     const skipped = `orca.yaml setup hook skipped for ${worktreePath}; pass --setup run to run it.`
     warning = warning ? `${warning} Also ${skipped}` : skipped
     console.warn(`[hooks] ${skipped}`)
@@ -92,8 +106,31 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
     ...(defaultTabs ? { defaultTabs } : {}),
     ...(warning ? { warning } : {}),
     effectiveDecision,
+    ...(setupTrustMismatch ? { setupTrustMismatch } : {}),
     hookFound: Boolean(hooks?.scripts.setup),
     shouldRunSetup,
     didStartInProcessSetupHook
+  }
+}
+
+export function buildRuntimeSetupReceipt(
+  prepared: Awaited<ReturnType<typeof prepareRuntimeLocalWorktreeSetup>>,
+  didSpawnSetup: boolean,
+  terminalHandle: string | null | undefined
+): NonNullable<CreateWorktreeResult['setupReceipt']> {
+  const { effectiveDecision, hookFound, shouldRunSetup, setup } = prepared
+  return {
+    requested: effectiveDecision,
+    hookFound,
+    startupPolicy: setup?.waitForAgentStartup ? 'wait-for-setup' : 'start-immediately',
+    state: !hookFound
+      ? 'not_configured'
+      : effectiveDecision === 'skip' || !shouldRunSetup
+        ? 'skipped'
+        : // The in-process setup hook already started; spawn_failed would strand retrying callers.
+          didSpawnSetup || prepared.didStartInProcessSetupHook
+          ? 'running'
+          : 'spawn_failed',
+    ...(terminalHandle ? { terminalHandle } : {})
   }
 }

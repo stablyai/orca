@@ -22432,6 +22432,9 @@
     "alwaysForceDeleteBranchesTooltip": "Applies to branches kept after future workspace deletions."
   },
   "worktree": {
+    "setupTrust": {
+      "createdBranchSkipped": "Setup didn't run: this branch's orca.yaml setup commands differ from the ones you approved."
+    },
     "nestedRemoval": {
       "refreshFailed": "Could not refresh the workspace list",
       "review": "Delete with nested worktrees…",

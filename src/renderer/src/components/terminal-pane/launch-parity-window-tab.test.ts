@@ -65,7 +65,10 @@ vi.mock('@/lib/workspace/creation/setup/workspace-setup-preparation', async (imp
   ...(await importOriginal<Record<string, unknown>>()),
   inspectRequiredWorkspaceSetup: async () => ({ kind: 'decided', decision: 'inherit' })
 }))
-vi.mock('@/lib/ensure-hooks-confirmed', () => ({ ensureHooksConfirmed: async () => 'run' }))
+vi.mock('@/lib/ensure-hooks-confirmed', () => ({
+  ensureHooksConfirmed: async () => 'run',
+  ensureHooksApproved: async () => ({ decision: 'run' })
+}))
 vi.mock('@/lib/windows-terminal-capabilities', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   hasCachedWindowsTerminalCapabilities: () => true,
