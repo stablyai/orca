@@ -86,6 +86,27 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
     [`${COMPONENTS}task-page/jira/`, 'src/main/jira/', 'src/main/ipc/jira/', 'src/shared/jira/']
   ),
   featureRoute('feature.tasks-page', ['tasks-page'], [`${COMPONENTS}task-page/`]),
+  // Pane geometry and the link tooltip share terminal.css and the pane DOM.
+  featureRoute(
+    'feature.terminal-pane-geometry',
+    ['issue-12656-terminal-link-tooltip', 'terminal-pane-padding-edges'],
+    [
+      'src/renderer/src/assets/terminal.css',
+      'src/renderer/src/lib/pane-manager/pane-divider.ts',
+      'src/renderer/src/lib/pane-manager/pane-dom-creation.ts',
+      'src/renderer/src/lib/pane-manager/terminal-linkifier-hover-reset-on-mouseleave.ts'
+    ]
+  ),
+  featureRoute(
+    'feature.github-projects',
+    ['github-project-board'],
+    [
+      `${COMPONENTS}github-project/`,
+      'src/renderer/src/store/github/project-',
+      'src/main/github/project-view/',
+      'src/main/ipc/source-control/github-project-view-handlers.ts'
+    ]
+  ),
   featureRoute(
     'feature.project-groups',
     ['project-group-creation-visibility', 'project-group-manual-sort'],
@@ -99,5 +120,17 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
       'new-workspace-linked-item-project-switch'
     ],
     [`${COMPONENTS}new-workspace/`]
+  ),
+  featureRoute(
+    'feature.runtime-host-status',
+    ['runtime-host-status-recovery'],
+    [
+      'src/main/ipc/runtime-environments/runtime-environment-status-',
+      'src/renderer/src/store/runtime-status-subscriptions.ts',
+      'src/renderer/src/store/slices/runtime-status-',
+      'src/shared/remote-runtime/host-store/runtime-environment-pairing-replace-guards.ts',
+      'src/shared/remote-runtime/host-store/runtime-environment-store.ts',
+      `${COMPONENTS}sidebar/workspace-card/identity/worktree-card-header-items.tsx`
+    ]
   )
 ]

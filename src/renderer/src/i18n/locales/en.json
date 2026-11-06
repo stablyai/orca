@@ -1018,7 +1018,8 @@
       "defaultSurfaceSetAllTerminal": "Set all to Terminal",
       "sameAsChoice": "Same as {{agent}} · {{choice}}",
       "modelListFallback": "Built-in list. Orca could not get a model list from this host.",
-      "chatUnavailableOnWindows": "{{value0}} Chat isn't available on Windows yet, so {{value0}} opens in a terminal on this host. Chats on a macOS or Linux host still work."
+      "chatUnavailableOnWindows": "{{value0}} Chat isn't available on Windows yet, so {{value0}} opens in a terminal on this host. Chats on a macOS or Linux host still work.",
+      "undetectedCommandHint": "If the {{agent}} CLI is installed outside PATH, enter the full path to its executable on this host."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "symlink",
@@ -6432,7 +6433,6 @@
           "savedInProjectSettings": "Saved in this <settings>project's settings</settings>"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "Save local setup",
           "3933401d28": "Configure",
           "31b8b01a45": "Settings",
           "4a98f907ae": "Retry",
@@ -6447,7 +6447,15 @@
           "5bfd5c8779": "Dismiss setup scripts",
           "detectedFromSource": "Detected from <source>{{source}}</source>",
           "ignoresSharedSetup": "This repo ignores shared <yaml>orca.yaml</yaml> setup scripts. Add a local command, or change the source in Settings.",
-          "foundSetupCommandIn": "Found a setup command in <source>{{source}}</source>. Save it to run for new worktrees."
+          "foundSetupCommandIn": "Found a setup command in <source>{{source}}</source>. Save it to run for new worktrees.",
+          "reviewSetupScript": "Review setup script"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "Review setup script",
+          "description": "Saving runs this whenever Orca creates a worktree for {{repo}}.",
+          "setupScript": "Setup script",
+          "archiveScript": "Archive script",
+          "save": "Save local setup"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "Cancel",
@@ -13401,6 +13409,7 @@
           "needsOrcaTitle": "Needs Orca {{value0}} or later",
           "needsOrcaBody": "You have Orca {{value0}}.",
           "back": "Plugins",
+          "backToPlugin": "Back",
           "info": "Info",
           "version": "Version",
           "latest": "Latest",
@@ -13509,6 +13518,20 @@
           "update": "Update",
           "review": "Review",
           "replacesAction": "{{value0}} runs instead of Orca’s {{value1}}"
+        },
+        "PluginAuthor": {
+          "publisher": "Publisher",
+          "catalogByline": "Listed as {{publisher}} by {{catalog}}",
+          "publisherByline": "Publisher: {{publisher}}",
+          "declaredByline": "Declared publisher: {{publisher}}",
+          "catalogClaim": "Publisher listed by {{catalog}}. Authorship is not verified.",
+          "unnamedCatalogClaim": "Publisher listed by the catalog. Authorship is not verified.",
+          "gitClaim": "Publisher derived by Orca from the repository URL. Authorship is not verified.",
+          "unknownClaim": "Publisher source is unknown. Authorship is not verified.",
+          "manifestClaim": "Publisher declared by the plugin. Authorship is not verified.",
+          "shownPluginCount_one": "{{count}} matching plugin shown, including this one",
+          "shownPluginCount_other": "{{count}} matching plugins shown, including this one",
+          "samePublisher": "More listed as {{value0}}"
         },
         "PluginDetailInfo": {
           "previous": "Previous",
@@ -13695,7 +13718,8 @@
           "oneDescription": "Published by {{value0}}. It won’t update until you review it.",
           "manyDescription": "They won’t update until you review them.",
           "review": "Review",
-          "dismiss": "Dismiss"
+          "dismiss": "Dismiss",
+          "movedInstalled": "It stays off until you review it."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "Make sure you trust this folder",
@@ -22277,6 +22301,18 @@
       },
       "windowsChanged": "The host default account changed. Select a saved account to apply it again.",
       "windowsSessions": "Select applies and verifies the host default agy credential. Command choices and later account changes are handled by agy. Existing sessions may keep their previous account.",
+      "authMethod": "Sign in with",
+      "personal": "Google account",
+      "enterprise": "Gemini Enterprise",
+      "gcpProject": "Google Cloud project",
+      "gcpLocation": "Google Cloud location",
+      "projectPlaceholder": "my-project-id",
+      "locationPlaceholder": "us-central1",
+      "signInAgainWith": "Sign in again to use {{method}}.",
+      "settingsIncomplete": "Choose an Antigravity account type and enter its Google Cloud project and location.",
+      "settingsLoadFailed": "Orca couldn't load your Antigravity sign-in settings. Try again.",
+      "settingsSaveFailed": "Orca couldn't save your Antigravity sign-in settings. Try again.",
+      "signInWith": "Signs in with {{method}} on {{host}}.",
       "lastReading": "{{reading}} · Read {{time}}",
       "noReading": "Usage unknown: not read yet"
     },

@@ -5521,7 +5521,6 @@
           "savedInProjectSettings": "이 <settings>프로젝트의 설정</settings>에 저장됨"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "로컬 설정 저장",
           "3933401d28": "구성",
           "31b8b01a45": "설정",
           "4a98f907ae": "다시 시도",
@@ -5536,7 +5535,15 @@
           "5bfd5c8779": "설정 스크립트 닫기",
           "detectedFromSource": "<source>{{source}}</source>에서 감지됨",
           "ignoresSharedSetup": "이 저장소는 공유 <yaml>orca.yaml</yaml> 설정 스크립트를 무시합니다. 로컬 명령을 추가하거나 설정에서 소스를 변경하세요.",
-          "foundSetupCommandIn": "<source>{{source}}</source>에서 설정 명령을 찾았습니다. 새 워크트리에서 실행하려면 저장하세요."
+          "foundSetupCommandIn": "<source>{{source}}</source>에서 설정 명령을 찾았습니다. 새 워크트리에서 실행하려면 저장하세요.",
+          "reviewSetupScript": "설정 스크립트 검토"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "설정 스크립트 검토",
+          "description": "저장하면 Orca가 {{repo}}의 워크트리를 만들 때마다 실행됩니다.",
+          "setupScript": "설정 스크립트",
+          "archiveScript": "아카이브 스크립트",
+          "save": "로컬 설정 저장"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "취소",
@@ -12726,7 +12733,8 @@
           "oneDescription": "게시자: {{value0}}. 검토하기 전까지 업데이트되지 않습니다.",
           "manyDescription": "검토하기 전까지 업데이트되지 않습니다.",
           "review": "검토",
-          "dismiss": "닫기"
+          "dismiss": "닫기",
+          "movedInstalled": "검토할 때까지 꺼진 상태로 유지됩니다."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "이 폴더를 신뢰하는지 확인하세요",

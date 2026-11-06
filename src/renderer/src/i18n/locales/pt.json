@@ -9595,7 +9595,8 @@
           "oneDescription": "Publicado por {{value0}}. Não será atualizado até você revisar.",
           "manyDescription": "Não serão atualizadas até você revisá-las.",
           "review": "Revisar",
-          "dismiss": "Dispensar"
+          "dismiss": "Dispensar",
+          "movedInstalled": "Ele fica desativado até você revisá-lo."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "Confirme que você confia nesta pasta",
@@ -11722,7 +11723,6 @@
           "0f8aba944c": "Navegue até um diretório e clique em Selecionar para escolhê-lo."
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "Salvar configuração local",
           "3933401d28": "Configurar",
           "31b8b01a45": "Configurações",
           "4a98f907ae": "Tentar novamente",
@@ -11737,7 +11737,15 @@
           "5bfd5c8779": "Descartar scripts de configuração",
           "detectedFromSource": "Detectado em <source>{{source}}</source>",
           "ignoresSharedSetup": "Este repositório ignora scripts de configuração compartilhados de <yaml>orca.yaml</yaml>. Adicione um comando local ou altere a origem em Configurações.",
-          "foundSetupCommandIn": "Foi encontrado um comando de configuração em <source>{{source}}</source>. Salve-o para executá-lo nas novas worktrees."
+          "foundSetupCommandIn": "Foi encontrado um comando de configuração em <source>{{source}}</source>. Salve-o para executá-lo nas novas worktrees.",
+          "reviewSetupScript": "Revisar script de configuração"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "Revisar script de configuração",
+          "description": "Ao salvar, isso será executado sempre que o Orca criar uma worktree para {{repo}}.",
+          "setupScript": "Script de configuração",
+          "archiveScript": "Script de arquivamento",
+          "save": "Salvar configuração local"
         },
         "preserved": {
           "branch": {

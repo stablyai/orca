@@ -154,6 +154,7 @@ export type RuntimeStore = {
     terminalCopyTrimsGutter?: GlobalSettings['terminalCopyTrimsGutter']
     agentDefaultSurface?: GlobalSettings['agentDefaultSurface']
     nativeChatProviders?: GlobalSettings['nativeChatProviders']
+    antigravityChatAuth?: GlobalSettings['antigravityChatAuth']
     defaultTaskSource?: GlobalSettings['defaultTaskSource']
     defaultTaskViewPreset?: GlobalSettings['defaultTaskViewPreset']
     visibleTaskProviders?: GlobalSettings['visibleTaskProviders']
@@ -205,5 +206,6 @@ export type RuntimeStore = {
     updates: Partial<GlobalSettings>,
     options?: { notifyListeners?: boolean; originWebContentsId?: number }
   ) => unknown
+  updateSettingsAndFlush?: Store['updateSettingsAndFlush']
   onSettingsChanged?: Store['onSettingsChanged']
 }

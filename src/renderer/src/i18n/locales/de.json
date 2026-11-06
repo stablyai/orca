@@ -6163,7 +6163,6 @@
           "savedInProjectSettings": "In den <settings>Einstellungen dieses Projekts</settings> gespeichert"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "Lokales Setup speichern",
           "3933401d28": "Konfigurieren",
           "31b8b01a45": "Einstellungen",
           "4a98f907ae": "Erneut versuchen",
@@ -6178,7 +6177,15 @@
           "5bfd5c8779": "Setup-Skripte ausblenden",
           "detectedFromSource": "In <source>{{source}}</source> erkannt",
           "ignoresSharedSetup": "Dieses Repo ignoriert gemeinsame Einrichtungsskripte aus <yaml>orca.yaml</yaml>. Einen lokalen Befehl hinzufügen oder die Quelle in den Einstellungen ändern.",
-          "foundSetupCommandIn": "Ein Einrichtungsbefehl wurde in <source>{{source}}</source> gefunden. Speichern, um ihn für neue Worktrees auszuführen."
+          "foundSetupCommandIn": "Ein Einrichtungsbefehl wurde in <source>{{source}}</source> gefunden. Speichern, um ihn für neue Worktrees auszuführen.",
+          "reviewSetupScript": "Einrichtungsskript prüfen"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "Einrichtungsskript prüfen",
+          "description": "Nach dem Speichern wird dies bei jeder Worktree-Erstellung für {{repo}} durch Orca ausgeführt.",
+          "setupScript": "Einrichtungsskript",
+          "archiveScript": "Archivierungsskript",
+          "save": "Lokales Setup speichern"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "Abbrechen",
@@ -13272,7 +13279,8 @@
           "oneDescription": "Veröffentlicht von {{value0}}. Es wird erst aktualisiert, wenn du es prüfst.",
           "manyDescription": "Sie werden erst aktualisiert, wenn du sie prüfst.",
           "review": "Prüfen",
-          "dismiss": "Schließen"
+          "dismiss": "Schließen",
+          "movedInstalled": "Es bleibt aus, bis du es prüfst."
         },
         "PluginThemeUseNow": {
           "assignedLight": "{{value0}} als helles Design festgelegt",
