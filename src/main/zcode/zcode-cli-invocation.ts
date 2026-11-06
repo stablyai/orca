@@ -1,5 +1,8 @@
 import { isAbsolute, win32 } from 'node:path'
-import { resolveStartupShell, tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'
+import {
+  resolveStartupShell,
+  tokenizeStartupCommand
+} from '../../shared/agent-launch/startup/tui-agent-startup-shell'
 import {
   resolveCliCommand,
   resolveExecutableCommand

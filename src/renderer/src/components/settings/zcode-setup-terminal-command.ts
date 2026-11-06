@@ -5,7 +5,7 @@ import {
   quoteStartupArg,
   resolveStartupShell,
   type AgentStartupShell
-} from '../../../../shared/tui-agent-startup-shell'
+} from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveWindowsShellStartupFamily } from '../../../../shared/windows-terminal-shell'
 
 function shellFamily(effectiveShell: string | undefined): AgentStartupShell {

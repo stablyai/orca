@@ -4,9 +4,9 @@
 // Match Node resolution failures and ZCode wrappers that explicitly name the omitted package.
 const ZCODE_MISSING_TUI_RE = /Cannot find (?:package|module) ['"]@zcode\/tui['"]/
 const ZCODE_TUI_UNAVAILABLE_RE =
-  /(?:TUI\s*(?:不可用|未提供|不可使用)|TUI\s+(?:is\s+)?(?:unavailable|not available))/i
+  /(?:TUI\s*(?:\u4e0d\u53ef\u7528|\u672a\u63d0\u4f9b|\u4e0d\u53ef\u4f7f\u7528)|TUI\s+(?:is\s+)?(?:unavailable|not available))/i
 const ZCODE_TUI_REQUIRES_INTERACTIVE_RE =
-  /(?:TUI requires an interactive terminal\.|TUI 需要交互式终端。)/
+  /(?:TUI requires an interactive terminal\.|TUI \u9700\u8981\u4ea4\u4e92\u5f0f\u7ec8\u7aef\u3002)/
 
 /** Unknown means the probe could not determine support; callers must not classify that build as broken. */
 export type ZCodeInteractiveCapability = 'interactive' | 'missing-tui' | 'unknown'
