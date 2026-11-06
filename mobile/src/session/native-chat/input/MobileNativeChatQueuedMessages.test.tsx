@@ -253,11 +253,12 @@ describe('MobileNativeChatQueuedMessages', () => {
     expect(idle.onSend).toHaveBeenCalledExactlyOnceWith('a')
     await act(async () => idle.settle(true))
 
-    for (const [props, alternateSteers] of [
+    const refusals: [Partial<Parameters<typeof MobileNativeChatQueuedMessages>[0]>, boolean][] = [
       [{}, false],
       [{ steerHeld: true }, true],
       [{ cards: [card({ messageId: 'a', command: true }), card({ messageId: 'b' })] }, true]
-    ] as const) {
+    ]
+    for (const [props, alternateSteers] of refusals) {
       const refused = await steerHeadWith(props, alternateSteers)
       expect(refused.pressed).toBe(false)
       expect(refused.onSend).not.toHaveBeenCalled()
