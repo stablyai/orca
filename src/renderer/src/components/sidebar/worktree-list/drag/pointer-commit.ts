@@ -25,7 +25,7 @@ type PointerDropCommitArgs = {
 
 function commitStatusOrPinDrop(
   args: PointerDropCommitArgs,
-  target: WorktreeSidebarStatusDropTarget & { lineageParentId?: string | null },
+  target: WorktreeSidebarStatusDropTarget & { lineageParentIdentity?: string | null },
   dropIndex: number | null
 ): void {
   const { drag, ctx } = args
@@ -86,10 +86,13 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
             y: event.clientY
           })
         : NO_WORKTREE_SIDEBAR_DROP_TARGET,
-      drag.draggedIds
+      drag.pickedCopies
     )
-    if (preferredStatusTarget.lineageParentId) {
-      ctx.commitWorktreeLineageParentDrop(drag.draggedIds, preferredStatusTarget.lineageParentId)
+    if (preferredStatusTarget.lineageParentIdentity) {
+      ctx.commitWorktreeLineageParentDrop(
+        drag.pickedCopies,
+        preferredStatusTarget.lineageParentIdentity
+      )
       ctx.clearWorktreeDrag()
       return
     }
@@ -142,8 +145,8 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
         x: event.clientX,
         y: event.clientY
       })
-      if (target.lineageParentId) {
-        ctx.commitWorktreeLineageParentDrop(drag.draggedIds, target.lineageParentId)
+      if (target.lineageParentIdentity) {
+        ctx.commitWorktreeLineageParentDrop(drag.pickedCopies, target.lineageParentIdentity)
       } else {
         commitStatusOrPinDrop(args, target, statusDrop?.dropIndex ?? null)
       }

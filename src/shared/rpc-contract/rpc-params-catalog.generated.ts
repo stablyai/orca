@@ -253,7 +253,11 @@ import {
   FileSaveCommit
 } from './files-staged-save-params'
 import { FileOpen, FileWatch, WorktreeSelector } from './files-target-params'
-import { TerminalArtifactFile, TerminalArtifactFileWrite } from './files-terminal-artifact-params'
+import {
+  TerminalArtifactFile,
+  TerminalArtifactFileChunk,
+  TerminalArtifactFileWrite
+} from './files-terminal-artifact-params'
 import {
   FolderWorkspaceCreate,
   FolderWorkspacePathStatus,
@@ -713,6 +717,7 @@ import {
   WorktreeListParams,
   WorktreePsParams,
   WorktreeRemove,
+  WorktreeResolveCallerParent,
   WorktreeResolveMrBase,
   WorktreeResolvePrBase,
   WorktreeSelector as WorktreeSelectorOfWorktreeParams,
@@ -1025,6 +1030,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'files.readDocPreviewChunk': DocPreviewFileReadChunk,
   'files.readPreview': FileOpen,
   'files.readTerminalArtifact': TerminalArtifactFile,
+  'files.readTerminalArtifactChunk': TerminalArtifactFileChunk,
   'files.readTerminalArtifactPreview': TerminalArtifactFile,
   'files.rename': FileRename,
   'files.replaceWithUpload': FileReplaceWithUpload,
@@ -1561,6 +1567,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.persistSortOrder': WorktreeSortOrder,
   'worktree.prefetchCreateBase': WorktreePrefetchCreateBase,
   'worktree.ps': WorktreePsParams,
+  'worktree.resolveCallerParent': WorktreeResolveCallerParent,
   'worktree.resolveMrBase': WorktreeResolveMrBase,
   'worktree.resolvePrBase': WorktreeResolvePrBase,
   'worktree.rm': WorktreeRemove,

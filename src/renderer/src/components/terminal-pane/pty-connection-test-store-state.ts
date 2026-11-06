@@ -46,7 +46,7 @@ export type StoreState = {
     string,
     {
       checkedAt: number
-      status: { capabilities?: string[] } | null
+      status: { capabilities?: string[]; hostPlatform?: NodeJS.Platform } | null
     }
   >
   runtimeEnvironmentCatalogHydrated?: boolean

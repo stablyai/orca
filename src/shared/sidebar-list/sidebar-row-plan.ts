@@ -3,6 +3,7 @@ import type { ProjectGroup } from '../project-group-types'
 import type { Repo } from '../repo-types'
 import type { ProjectOrderBy } from '../ui-chrome-types'
 import type { WorktreeLineage } from '../worktree/lineage-types'
+import type { SidebarLineageParentIdentities } from './worktree-lineage-projection'
 import type { WorkspaceStatusDefinition, Worktree } from '../worktree/types'
 import type { ExecutionHostId } from '../execution-host'
 import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from './group-keys'
@@ -73,6 +74,8 @@ export type SidebarRowPlanInputs = {
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   projectOrderBy: ProjectOrderBy
   lineageById: Record<string, WorktreeLineage>
+  /** Parents resolved once over every visible store's complete rows; nesting reuses them. */
+  lineageParentIdentities?: SidebarLineageParentIdentities
   worktreeMap: Map<string, Worktree>
   nestLineage: boolean
   projectGroups: readonly ProjectGroup[]
@@ -101,6 +104,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     workspaceStatuses,
     projectOrderBy,
     lineageById,
+    lineageParentIdentities,
     worktreeMap,
     nestLineage,
     projectGroups,
@@ -131,7 +135,13 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     rows: worktrees,
     identityOf: getWorktreeHostIdentity,
     childrenByParentIdentity: nestLineage
-      ? getSidebarLineageChildren(worktrees, lineageById, worktreeMap, filterRepoIds)
+      ? getSidebarLineageChildren(
+          worktrees,
+          lineageById,
+          worktreeMap,
+          filterRepoIds,
+          lineageParentIdentities
+        )
       : new Map<string, Worktree[]>(),
     isPinned: (worktree) => worktree.isPinned === true,
     duplicatePinned: pinnedDisplayPolicy === 'duplicate-in-groups',
