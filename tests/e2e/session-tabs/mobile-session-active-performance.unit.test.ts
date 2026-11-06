@@ -103,7 +103,7 @@ describe('active-tab selection performance contract', () => {
               entityId: id,
               contentType: 'agent-session' as const,
               agentSessionAgent: 'codex' as const,
-              executionHostId: 'local',
+              executionHostId: 'local' as const,
               worktreeId: WT,
               groupId: groupId(index),
               label: id,
