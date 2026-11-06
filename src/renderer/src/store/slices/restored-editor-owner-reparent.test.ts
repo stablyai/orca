@@ -16,7 +16,7 @@ import {
   getEditorFileOperationContext
 } from '@/lib/editor-file-operation-owner'
 import type { AppState } from '@/store/types'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 import '../../../../shared/layout-owner-switch'
 

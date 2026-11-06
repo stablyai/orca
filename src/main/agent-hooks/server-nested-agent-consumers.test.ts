@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from './server'
 import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
-import { buildRuntimeMobileAgentStatus } from '../runtime/runtime-mobile-agent-status-builder'
+import { buildRuntimeMobileAgentStatus } from '../runtime/session-lifecycle/projection/runtime-mobile-agent-status-builder'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({

@@ -1,6 +1,6 @@
 import { parseQoderSessionFile } from './scanners/qoder/session-scanner-qoder-parser'
 import { parseCodebuddySessionFile } from './scanners/codebuddy/session-scanner-codebuddy-parser'
-import type { AiVaultSession } from '../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
 import { parseDevinSessionFile } from './scanners/devin/session-scanner-devin-parser'
 import { parseAntigravitySessionFile } from './scanners/antigravity/session-scanner-antigravity-parser'

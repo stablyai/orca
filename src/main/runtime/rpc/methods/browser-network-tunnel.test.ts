@@ -3,10 +3,11 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
-  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
+  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
+  BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY
 } from '../../../../shared/protocol-version'
-import { getBrowserHostLeaseRegistry } from '../../browser-host/browser-host-lease-registry-instance'
-import type { BrowserHostLease } from '../../browser-host/browser-host-lease-records'
+import { getBrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry-instance'
+import type { BrowserHostLease } from '../../browser-host/leases/browser-host-lease-records'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from '../../../browser/network/tunnels/browser-network-tunnel-outbound-memory-budget'
 import {
@@ -560,6 +561,35 @@ describe('network.browserTunnel RPC', () => {
     cleanups.values().next().value?.()
     await dispatch
     expect(unregister).toHaveBeenCalledOnce()
+  })
+
+  it('opts into window.v2 flow control only for a client that advertises it', async () => {
+    const cleanups = new Map<string, () => void>()
+    const hostRuntime = runtime(cleanups)
+    const lease = attachLease(hostRuntime)
+    const dispatcher = new RpcDispatcher({
+      runtime: hostRuntime,
+      methods: BROWSER_NETWORK_TUNNEL_METHODS
+    })
+    const registerBinaryMessageHandler = vi.fn(() => vi.fn())
+    const replies: string[] = []
+    const dispatch = dispatcher.dispatchStreaming(request(lease), (reply) => replies.push(reply), {
+      connectionId: 'connection-a',
+      clientKind: 'runtime',
+      pairedDeviceId: 'device-a',
+      clientCapabilities: [...negotiatedCapabilities, BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY],
+      sendBinary: vi.fn(() => true),
+      registerBinaryMessageHandler
+    })
+
+    await vi.waitFor(() => expect(registerBinaryMessageHandler).toHaveBeenCalledOnce())
+    expect(JSON.parse(replies[0]!).result).toEqual({
+      type: 'ready',
+      tunnelGeneration: 1,
+      capabilities: [BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY]
+    })
+    cleanups.values().next().value?.()
+    await dispatch
   })
 
   it('releases route memory when binary-handler cleanup throws', async () => {

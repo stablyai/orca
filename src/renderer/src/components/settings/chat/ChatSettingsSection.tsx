@@ -7,7 +7,7 @@ import { SettingsSection } from '../section-layout/SettingsSection'
 import { SettingsSubsectionHeader } from '../form-controls/SettingsFormControls'
 import { matchesSettingsSearch, type SettingsSearchEntry } from '../search/settings-search'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control-ai-types'
+import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 
 import { useAppStore } from '../../../store/index'
 import { Card, CardContent } from '../../ui/card'

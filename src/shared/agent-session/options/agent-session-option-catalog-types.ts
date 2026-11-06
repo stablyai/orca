@@ -1,5 +1,5 @@
 import type { AgentChoiceCliForm } from '../../agent-launch/choices/agent-launch-choices'
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type {
   SessionOptionDescriptor,
   SessionOptionSelectChoice,
@@ -53,6 +53,8 @@ export type CatalogModel = {
   label: string
   description?: string
   isDefault?: boolean
+  /** The model this listed row runs (Claude's alias `opus` → `claude-opus-5-5`), where the host's listing states it. */
+  resolvedModel?: string
   /** Tokens the model's context window holds, where the host's listing states it. */
   contextWindowTokens?: number
   /** The listing says the model runs Approve for me; absent is unknown, which offers it nowhere. */

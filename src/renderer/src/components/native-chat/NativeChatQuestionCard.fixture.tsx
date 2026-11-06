@@ -1,8 +1,10 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
+import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
 import { NativeChatContextUsageRing } from './NativeChatContextUsageRing'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import { nativeChatAppearanceStyle } from './native-chat-appearance-style'
 import { useState } from 'react'
+import { NativeChatFileLinkExistenceContext } from './native-chat-file-link-existence'
 import { NativeChatStructuredAsyncQuestion } from './NativeChatStructuredAsyncQuestion'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 import type {
@@ -10,6 +12,7 @@ import type {
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { NativeChatLinkClickContext } from './native-chat-link-click-context'
 
 function QuestionControls({
   invertedAccent = false,
@@ -174,4 +177,57 @@ export const pendingAnswer = defineFixture({
       ?.click()
     await new Promise(requestAnimationFrame)
   }
+})
+
+const linkSnapshot = {
+  check: (link: { pathText: string }) => link.pathText === '/tmp/question-mock.html',
+  peek: () => false
+}
+
+const preventLinkDefault = (event: { preventDefault: () => void }): void => event.preventDefault()
+
+const linkExistence = {
+  watch: () => ({ subscribe: () => () => {}, getSnapshot: () => linkSnapshot }),
+  recheck: () => {}
+}
+
+export const links = defineFixture({
+  width: 720,
+  render: () => (
+    <NativeChatFileLinkExistenceContext.Provider value={linkExistence}>
+      <NativeChatLinkClickContext value={preventLinkDefault}>
+        <QuestionControls
+          question={
+            'For the reset time and Continue now action, the proposed surfaces are shown in /tmp/question-mock.html. See [the proposal](https://example.com/proposal).\nWhich surface should carry it?'
+          }
+        />
+      </NativeChatLinkClickContext>
+    </NativeChatFileLinkExistenceContext.Provider>
+  )
+})
+
+export const historyLinks = defineFixture({
+  width: 720,
+  render: () => (
+    <NativeChatFileLinkExistenceContext.Provider value={linkExistence}>
+      <NativeChatLinkClickContext value={preventLinkDefault}>
+        <div
+          className="native-chat-appearance bg-chat-canvas p-4"
+          style={nativeChatAppearanceStyle({})}
+        >
+          <NativeChatAwaitingInputRow
+            subject={{
+              kind: 'questions',
+              questions: [
+                'Review /tmp/question-mock.html. Which surface should carry it?',
+                'See [the proposal](https://example.com/proposal). Continue?'
+              ]
+            }}
+            pending={false}
+          />
+        </div>
+      </NativeChatLinkClickContext>
+    </NativeChatFileLinkExistenceContext.Provider>
+  ),
+  interact: (frame) => frame.querySelector<HTMLButtonElement>('button[aria-expanded]')?.click()
 })

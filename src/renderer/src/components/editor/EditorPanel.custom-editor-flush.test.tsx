@@ -4,8 +4,8 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
-import type { EditorToggleValue } from './EditorViewToggle'
-import { registerEditorFrameFlush } from './editor-pending-flush'
+import type { EditorToggleValue } from './view-mode/EditorViewToggle'
+import { registerEditorFrameFlush } from './save/flush/editor-pending-flush'
 
 vi.mock('./useEditorPanelContentState', () => ({
   useEditorPanelContentState: () => ({

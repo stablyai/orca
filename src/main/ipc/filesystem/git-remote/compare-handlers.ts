@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import type {
   GitBranchCompareResult,
   GitCommitCompareResult
-} from '../../../../shared/git-diff-compare-types'
+} from '../../../../shared/git/diff/git-diff-compare-types'
 import { getBranchCompare } from '../../../git/source-control/branch-compare'
 import { getCommitCompare } from '../../../git/source-control/commit-compare'
 import { resolveRegisteredWorktreePath } from '../../worktrees/removal/registered-worktree-roots-cache'

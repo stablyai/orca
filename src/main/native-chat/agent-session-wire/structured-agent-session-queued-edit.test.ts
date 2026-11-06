@@ -1,5 +1,8 @@
 import { startQueuedEditLease } from '../../../shared/queued-message-edit-lease'
-import { acquired, fakeCodex } from '../../codex/codex-structured-session-adapter-fixture'
+import {
+  acquired,
+  fakeCodex
+} from '../../codex/structured/session-lifecycle/codex-structured-session-adapter-fixture'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
@@ -19,7 +22,7 @@ import {
   readQueuePublication,
   structuredQueueSendGate
 } from './structured-agent-session-queued-publication'
-import { shouldQueueStructuredAgentSessionSend } from './structured-agent-session-queued-messages'
+import { shouldQueueStructuredAgentSessionSend } from './structured-agent-session-queued-gate'
 import { QUEUED_MESSAGES_PUBLISHED_MAX_BYTES } from './structured-agent-session-queued-published-bytes'
 import { QUEUED_MESSAGE_EDIT_LEASE_MS } from '../agent-session-journal/queued-message-edit-leases'
 import { agentSessionAttachmentStoreRoot } from '../agent-session-attachments/agent-session-attachment-references'

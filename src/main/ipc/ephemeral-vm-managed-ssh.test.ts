@@ -30,6 +30,7 @@ import type { Store } from '../persistence/loading-store/store'
 import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
 import { registerEphemeralVmHandlers } from './ephemeral-vm'
 import { suspendEphemeralVmWorkspace } from '../ephemeral-vm/workspace-suspend'
+import { resumeEphemeralVmWorkspace } from '../ephemeral-vm/workspace-resume'
 
 const tempDirs: string[] = []
 afterEach(() => {
@@ -109,7 +110,7 @@ it("reconnects a resumed VM's SSH host instead of asking for a pairing code", as
   await suspendEphemeralVmWorkspace(store, 'ws-1')
   connect.mockClear()
 
-  const resumed = await handlers.get('ephemeralVm:resumeWorkspace')?.(null, { workspaceId: 'ws-1' })
+  const resumed = await resumeEphemeralVmWorkspace(store, 'ws-1')
 
   expect(connect).toHaveBeenCalledTimes(1)
   expect(resumed).toMatchObject({

@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithAgentSessionResumeOwnership } from './agent-session-resume-ownership'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   agentProviderSessionsEqual,
   normalizeAgentProviderSession,
@@ -11,11 +11,11 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import type { OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal as OwnedMobileTerminalCreate } from '../../terminal/launch/mobile-terminal-owned-create'
-import { deterministicAgentSessionUuid } from '../../runtime-agent-launch-resolution'
+import { deterministicAgentSessionUuid } from '../../terminal/launch/runtime-agent-launch-resolution'
 import { isUnclaimedRunningSleepRecord } from './sleep-record-pane-claim'
 import type { ResumedAgentSession } from './agent-session-resume-claims'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
-import { WslHostWindowsOnlyAgentError } from '../../wsl-host-agent-terminal-launch'
+import { WslHostWindowsOnlyAgentError } from '../../terminal/launch/wsl-host-agent-terminal-launch'
 
 export type AgentSessionResumeRefusal =
   | 'window_owns_wake'

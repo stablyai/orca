@@ -1,6 +1,7 @@
-import { isPtyIncarnationId } from '../../../../shared/pty-incarnation'
+import { isPtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import { clampUtf8Tail } from './pty-eager-buffer-clamp'
 import type { PtyDataMeta } from './pty-dispatcher'
+import { keptSuffixMeta, markedAfterEviction } from './terminal-stream-position'
 
 type BufferedPreHandlerPtyData = {
   data: string
@@ -99,16 +100,6 @@ function retainPreHandlerPtyExits(
   preHandlerPtyExit.set(ptyId, kept)
 }
 
-// The gap label describes the dropped first byte, so it can't survive head truncation.
-function truncatedHeadMeta(meta: PtyDataMeta, keptBytes: number): PtyDataMeta {
-  const next: PtyDataMeta = { ...meta }
-  if (typeof meta.rawLength === 'number') {
-    next.rawLength = keptBytes
-  }
-  delete next.gapEscapeState
-  return next
-}
-
 export function bufferPreHandlerPtyData(ptyId: string, data: string, meta?: PtyDataMeta): void {
   if (discardedPreHandlerPtyStates.has(ptyId)) {
     return
@@ -127,7 +118,7 @@ export function bufferPreHandlerPtyData(ptyId: string, data: string, meta?: PtyD
     warnedLostHandlerPtyIds.delete(evictedPtyId)
   }
   const bufferedMeta =
-    meta && chunk.data.length !== data.length ? truncatedHeadMeta(meta, chunk.bytes) : meta
+    chunk.data.length !== data.length ? keptSuffixMeta(meta, data.length, chunk.data.length) : meta
   let state = preHandlerPtyData.get(ptyId)
   if (!state) {
     state = { chunks: [], head: 0, bytes: 0, sequence: 0 }
@@ -141,10 +132,17 @@ export function bufferPreHandlerPtyData(ptyId: string, data: string, meta?: PtyD
   })
   state.bytes += chunk.bytes
   // Maintain total bytes and a head index so many small lost-handler chunks cannot cause quadratic scans/shifts.
+  let evicted = false
   while (state.bytes > PRE_HANDLER_PTY_DATA_MAX_BYTES && state.head < state.chunks.length - 1) {
     state.bytes -= state.chunks[state.head].bytes
     state.chunks[state.head] = { data: '', bytes: 0 }
     state.head += 1
+    evicted = true
+  }
+  if (evicted) {
+    // Evicted bytes leave a gap: the kept head restores from a snapshot and starts at an unknown boundary.
+    const head = state.chunks[state.head]
+    head.meta = markedAfterEviction(head.meta)
   }
   if (state.head > 0 && state.head * 2 >= state.chunks.length) {
     state.chunks.splice(0, state.head)

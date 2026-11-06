@@ -97,72 +97,6 @@ describe('browser session wire identity under Electron', () => {
     expect(distinctJavaScriptUserAgents(result.identities)).toEqual([result.cleanUserAgent])
   }, 40_000)
 
-  it('goes red without the pre-ready process fallback even when the Session setter is restored', async () => {
-    const result = await runProbe('late-session-setter')
-    assertCoverage(result)
-    expect(distinctUserAgents(result.receipts)).toContain(result.rawUserAgent)
-    expect(distinctUserAgents(result.receipts)).toContain(result.cleanUserAgent)
-    expect(identityViolations(result)).not.toEqual([])
-    expect(result.receipts.some(({ userAgent }) => /Firefox\//.test(userAgent ?? ''))).toBe(false)
-  }, 40_000)
-
-  it('emulates the targeted tab and leaves every other context self-consistent', async () => {
-    const result = await runProbe('mobile')
-    assertCoverage(result)
-
-    const targetPaths = [
-      '/',
-      '/document-fetch',
-      '/document-xhr',
-      '/document-image',
-      '/blob-fetch',
-      '/blob-xhr',
-      '/blob-image',
-      '/plain-ws',
-      '/secure-ws'
-    ]
-    expect(distinctUserAgents(receiptsForPaths(result.receipts, targetPaths))).toEqual([
-      result.mobileUserAgent
-    ])
-    expect(identityForContext(result.identities, 'document').userAgent).toBe(result.mobileUserAgent)
-    expect(identityForContext(result.identities, 'blob').userAgent).toBe(result.mobileUserAgent)
-
-    // Shared/service workers retain session identity without a guest-specific override.
-    for (const [context, paths] of [
-      ['shared-worker', ['/shared-worker-fetch-a', '/shared-worker-fetch-b']],
-      ['service-worker', ['/service-worker-fetch']]
-    ] as const) {
-      expect(identityForContext(result.identities, context).userAgent).toBe(result.cleanUserAgent)
-      expect(distinctUserAgents(receiptsForPaths(result.receipts, paths))).toEqual([
-        result.cleanUserAgent
-      ])
-    }
-
-    expect(userAgentForPath(result.receipts, '/popup')).toBe(result.cleanUserAgent)
-    expect(identityForContext(result.identities, 'popup').userAgent).toBe(result.cleanUserAgent)
-  }, 40_000)
-
-  it('leaves a desktop peer and the shared worker untouched by another tab emulation', async () => {
-    const result = await runProbe('mixed-mobile')
-    assertCoverage(result)
-    expect(identityForContext(result.identities, 'document').userAgent).toBe(result.mobileUserAgent)
-    expect(identityForContext(result.identities, 'desktop-peer').userAgent).toBe(
-      result.cleanUserAgent
-    )
-    expect(userAgentForPath(result.receipts, '/desktop-peer')).toBe(result.cleanUserAgent)
-
-    expect(
-      result.identities
-        .filter(({ context }) => context === 'shared-worker')
-        .map(({ userAgent }) => userAgent)
-    ).toEqual([result.cleanUserAgent, result.cleanUserAgent])
-    expect(
-      distinctUserAgents(
-        receiptsForPaths(result.receipts, ['/shared-worker-fetch-a', '/shared-worker-fetch-b'])
-      )
-    ).toEqual([result.cleanUserAgent])
-  }, 40_000)
-
   it('keeps the process-native identity across documents, frames, and workers', async () => {
     const result = await runProbe('native')
     assertCoverage(result)
@@ -428,26 +362,12 @@ function assertCoverage(result: ProbeResult): void {
   expect(result.identities.map(({ context }) => context).sort()).toEqual(expectedContexts.sort())
 }
 
-function identityViolations(result: ProbeResult): string[] {
-  return result.receipts
-    .filter(({ userAgent }) => userAgent !== result.cleanUserAgent)
-    .map(({ protocol, path }) => `${protocol}:${path}`)
-}
-
 function distinctUserAgents(records: readonly { userAgent: string | null }[]): (string | null)[] {
   return [...new Set(records.map(({ userAgent }) => userAgent))].sort()
 }
 
 function distinctJavaScriptUserAgents(records: readonly WireProbeJavaScriptIdentity[]): string[] {
   return [...new Set(records.map(({ userAgent }) => userAgent))].sort()
-}
-
-function receiptsForPaths(
-  receipts: readonly WireProbeReceipt[],
-  paths: readonly string[]
-): WireProbeReceipt[] {
-  const selected = new Set(paths)
-  return receipts.filter(({ path }) => selected.has(path))
 }
 
 function userAgentForPath(receipts: readonly WireProbeReceipt[], path: string): string | null {

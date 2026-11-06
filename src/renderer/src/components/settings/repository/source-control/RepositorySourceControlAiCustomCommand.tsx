@@ -1,6 +1,6 @@
 import type React from 'react'
 import { useState } from 'react'
-import type { SourceControlAiSettings } from '../../../../../../shared/source-control-ai-types'
+import type { SourceControlAiSettings } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { Input } from '../../../ui/input'
 import { Label } from '../../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'

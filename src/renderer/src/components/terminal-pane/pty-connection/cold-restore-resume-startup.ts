@@ -4,7 +4,7 @@ import {
 } from '@/lib/connection-owner-resolution'
 import { normalizeExecutionHostId } from '../../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { buildAgentResumeStartupPlan } from '../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
 import {

@@ -8,24 +8,23 @@ import {
   createSessionSearchClient,
   isUnknownSessionSearchMethod,
   unavailableSessionSearchStatus
-} from '../../../shared/ai-vault-search-client'
+} from '../../../shared/ai-vault/search/ai-vault-search-client'
 import {
   AiVaultSearchRequestSchema,
   AiVaultSearchStatusSchema,
   AiVaultSetSearchEnabledParamsSchema
-} from '../../../shared/ai-vault-search-contract'
+} from '../../../shared/ai-vault/search/ai-vault-search-contract'
 import type {
   AiVaultSearchRequest,
   AiVaultSearchResponse,
   AiVaultSearchStatus
-} from '../../../shared/ai-vault-search-types'
+} from '../../../shared/ai-vault/search/ai-vault-search-types'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   LOCAL_EXECUTION_HOST_ID,
   parseRoutableExecutionHostId,
   type ParsedExecutionHost
 } from '../../../shared/execution-host'
-import { redactStatusForTransport } from '../../../shared/ai-vault-search-transport'
 import { clearSessionSearchInService } from '../../ai-vault/scan-service/session-scanner-service-spawn'
 import { searchAllExecutionHosts, type SessionSearchHostLeg } from './ai-vault-search-all-hosts'
 import { getActiveRuntimeAiVaultHostInfosResult } from './ai-vault'
@@ -195,10 +194,7 @@ async function runtimeHostStatus(environmentId: string): Promise<AiVaultSearchSt
     return unavailableSessionSearchStatus()
   }
   try {
-    return redactStatusForTransport(
-      AiVaultSearchStatusSchema.parse(await call(environmentId, 'aiVault.searchStatus', {})),
-      'relay'
-    )
+    return AiVaultSearchStatusSchema.parse(await call(environmentId, 'aiVault.searchStatus', {}))
   } catch (error) {
     if (isUnknownSessionSearchMethod(error)) {
       throw new Error(HOST_TOO_OLD_MESSAGE)
@@ -214,9 +210,10 @@ function remoteSearchClient(
 ): ReturnType<typeof createSessionSearchClient> | null {
   if (host.kind === 'runtime' && call) {
     const { environmentId } = host
+    // This desktop is a trusted paired client: keep the resume fields its session list already has.
     return createSessionSearchClient(
       (method, params) => call(environmentId, method, params),
-      'relay'
+      'runtime'
     )
   }
   return null

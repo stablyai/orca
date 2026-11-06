@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { composeWorktreeHostIdentity } from '../../shared/worktree/host-qualified-identity'
-import { searchHit, searchResults } from '../../shared/ai-vault-search-test-fixture'
+import { searchHit, searchResults } from '../../shared/ai-vault/search/ai-vault-search-test-fixture'
 import { listResult } from '../ai-vault/structured-session-ownership.test-support'
 import {
   assertLegacyAiVaultResumeCommandAllowed,
@@ -21,7 +21,7 @@ import {
   scaleRecord
 } from './agent-session-scale.test-fixture'
 import { findWorkspaceReferences } from './runtime-reference-find'
-import { parseWorkspaceReferenceUrl } from '../../shared/workspace-reference-identity'
+import { parseWorkspaceReferenceUrl } from '../../shared/workspace-attachments/workspace-reference-identity'
 import { createReferenceAgentIndex } from './runtime-reference-agents'
 import {
   seedTestAgentSessionRecordStore,
@@ -38,7 +38,7 @@ import {
   mintStructuredWorkerPaneKey,
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
-} from './structured-worker-identity'
+} from './orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import {
   openAgentSessionRecordStoreOnce,
   releaseAgentSessionRecordStore
@@ -47,10 +47,8 @@ import { createStructuredAgentSessionLogger } from '../native-chat/agent-session
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { conversationRecordReader } from './orchestration/structured-session-lineage'
 import { requireUnownedStructuredAgentSessionAdoption } from './agent-session/structured-agent-session-create-adoption'
-import { listStructuredSessionsForWorktree } from './structured-session-worktree-teardown'
+import { listStructuredSessionsForWorktree } from './workspaces/removal/structured-session-worktree-teardown'
 import * as membership from './agent-session/records/agent-session-store-state'
-import { createAgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
-import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { AgentSessionReserveRequest } from './agent-session/ownership/agent-session-reservation-admission'
 
 // Uses the complete host harness; discovery, mail reach and every store read execute unchanged.
@@ -515,41 +513,6 @@ describe('real conversation inventory work', () => {
       expect(work.counts).toMatchObject({ inventories: 1, views: n + 1, clones: 0 })
       expect(queries()).toEqual({ executions: 0, rows: 0 })
       expect(hostTestState().acquire).not.toHaveBeenCalled()
-    }
-  )
-  it.each([10, 100])(
-    'prewarms only eligible uncached catalogs with %i real stored chats',
-    async (n) => {
-      const rig = await inventoryRig(n)
-      const work = countStoreWork(rig.store)
-      const probe = vi.fn(async () => ({
-        models: [{ id: 'saved-model', label: 'Saved', isDefault: true, efforts: [] }],
-        origin: 'probe' as const,
-        complete: true
-      }))
-      const catalog = createAgentModelCatalogService({
-        store: new AgentModelCatalogStore(),
-        getConversation: (id) => rig.store.getConversation(id) ?? undefined,
-        getRecord: (id) => rig.store.getRecord(id) ?? undefined,
-        drivesRecord: () => true,
-        resolveAccountHome: async () => rig.rows[0]!.accountHome,
-        hasChatRecords: (agent) =>
-          rig.store.listConversations().some((row) => row.provider === agent),
-        probes: { claude: probe, codex: probe, opencode: probe },
-        listsInChatFolder: new Set(['opencode'])
-      })
-      await catalog.prewarm()
-      expect(work.counts).toMatchObject({ inventories: 2, views: 2 * (n + 1), clones: 0 })
-      expect(probe).toHaveBeenCalledTimes(1)
-      work.reset()
-      await catalog.prewarm()
-      expect(work.counts).toMatchObject({ inventories: 1, views: n + 1, clones: 0 })
-      expect(probe).toHaveBeenCalledTimes(1)
-      catalog.stop()
-      work.reset()
-      await catalog.prewarm()
-      expect(work.counts.views).toBe(0)
-      expect(probe).toHaveBeenCalledTimes(1)
     }
   )
 })

@@ -1,5 +1,5 @@
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { RemoteBrowserPageHandle } from '../store/slices/browser'
 
 export function buildBrowserSessionData(

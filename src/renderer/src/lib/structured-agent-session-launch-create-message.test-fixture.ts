@@ -8,10 +8,27 @@ import {
   SetOptionParams,
   SendParams
 } from '../../../shared/rpc-contract/structured-agent-session-params'
-
+import type { Tab } from '../../../shared/tab-types'
 import type { HostCreateSupport } from './agent-session/launch/structured-agent-session-host-admission'
+import { useAppStore } from '@/store'
+import { registerStructuredSelectionCatalogStore } from './structured-agent-session-selection-controller'
+import { resetStructuredAgentLaunchRegistryForTests } from './agent-session/launch/structured-agent-session-launch-registry'
+import { resetStructuredAgentLaunchPersistenceForTests } from './agent-session/launch/structured-agent-session-launch-persistence'
+import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
+import { resetStructuredAgentSessionReadOwnersForTests } from '@/components/native-chat/structured-agent-session-read-owner'
+import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
+import { startStructuredAgentLaunch } from './agent-session/launch/structured-agent-session-launch'
+import { newAgentLaunchRequestId } from './agent-launch-request-id'
+import {
+  clearNativeChatDraftCacheForTests,
+  readNativeChatDraftCache
+} from '@/components/native-chat/native-chat-draft-cache'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
 
 type CreateMessageFixtureMocks = {
+  rpc: Mock
+  hostBusy: boolean
+  tabs: Tab[]
   call: Mock<(target: unknown, method: string, params: unknown) => Promise<unknown>>
   supports: Mock<() => Promise<boolean>>
   supportsMode: Mock<() => Promise<boolean>>
@@ -28,6 +45,9 @@ type CreateMessageFixtureMocks = {
 const mocks: CreateMessageFixtureMocks = vi.hoisted(() => {
   const settings: Record<string, unknown> = {}
   return {
+    rpc: vi.fn(async () => ({})),
+    hostBusy: false,
+    tabs: [],
     call: vi.fn<(target: unknown, method: string, params: unknown) => Promise<unknown>>(),
     supports: vi.fn<() => Promise<boolean>>(),
     supportsMode: vi.fn<() => Promise<boolean>>(),
@@ -45,7 +65,18 @@ vi.mock('../../../shared/layout-owner-switch', () => ({
   }
 }))
 // This machine's host closes the chat's tab when asked.
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn(async () => ({})) }))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.rpc }))
+vi.mock('@/runtime/structured-agent-session-status-feed', () => {
+  const idle = { status: 'idle', hostExecutionPhase: 'idle' }
+  const working = { status: 'working', hostExecutionPhase: 'idle' }
+  const feed = {
+    activate: () => () => {},
+    subscribe: () => () => {},
+    getSnapshot: () => ({ get: () => (mocks.hostBusy ? working : idle) }),
+    getSessionObservation: () => 'live'
+  }
+  return { getStructuredAgentSessionStatusFeed: () => feed }
+})
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call,
   supportsStructuredAgentSessionCreateOptionsMode: mocks.supportsMode,
@@ -58,40 +89,28 @@ vi.mock('./agent-session/launch/structured-agent-session-host-admission', () => 
 vi.mock('@/runtime/structured-session-tab-inventory', () => ({
   readStructuredSessionTabInventory: mocks.inventory
 }))
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => ({
-      runtimeEnvironmentCatalogHydrated: true,
-      runtimeStatusByEnvironmentId: mocks.runtimeStatusByEnvironmentId,
-      settings: mocks.settings,
-      unifiedTabsByWorktree: {},
-      groupsByWorktree: {},
-      seedNativeChatLaunchDraft: vi.fn(),
-      clearNativeChatLaunchDraft: vi.fn()
-    }),
-    subscribe: () => () => {}
+vi.mock('@/store', () => {
+  const getState = () => ({
+    runtimeEnvironmentCatalogHydrated: true,
+    settings: mocks.settings,
+    unifiedTabsByWorktree: { 'workspace-1': mocks.tabs },
+    agentStatusByPaneKey: {},
+    runtimeStatusByEnvironmentId: mocks.runtimeStatusByEnvironmentId,
+    groupsByWorktree: {},
+    seedNativeChatLaunchDraft: vi.fn(),
+    clearNativeChatLaunchDraft: vi.fn()
+  })
+  return {
+    useAppStore: Object.assign(
+      (selector: (state: ReturnType<typeof getState>) => unknown) => selector(getState()),
+      { getState, subscribe: () => () => {} }
+    )
   }
-}))
+})
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/runtime/structured-chat-host-permission', () => ({
   readStructuredChatHostPermissionVerdict: async () => ({ kind: 'allowed' })
 }))
-
-import { useAppStore } from '@/store'
-import { registerStructuredSelectionCatalogStore } from './structured-agent-session-selection-controller'
-import { resetStructuredAgentLaunchRegistryForTests } from './agent-session/launch/structured-agent-session-launch-registry'
-import { resetStructuredAgentLaunchPersistenceForTests } from './agent-session/launch/structured-agent-session-launch-persistence'
-import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
-import { resetStructuredAgentSessionReadOwnersForTests } from '@/components/native-chat/structured-agent-session-read-owner'
-import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
-import { startStructuredAgentLaunch } from './agent-session/launch/structured-agent-session-launch'
-import { newAgentLaunchRequestId } from './agent-launch-request-id'
-
-import {
-  clearNativeChatDraftCacheForTests,
-  readNativeChatDraftCache
-} from '@/components/native-chat/native-chat-draft-cache'
-import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
 
 export function resetCreateMessageFixture() {
   const restore = registerStructuredSelectionCatalogStore({
@@ -102,6 +121,8 @@ export function resetCreateMessageFixture() {
   vi.clearAllMocks()
   mocks.runtimeStatusByEnvironmentId.clear()
   layoutOwner.isMain = false
+  mocks.hostBusy = false
+  mocks.tabs = []
   localStorage.clear()
   resetStructuredAgentLaunchRegistryForTests()
   resetStructuredAgentLaunchPersistenceForTests()
@@ -146,8 +167,7 @@ function submission(clientMessageId: string): AgentJournalSubmission {
     resolvedAt: null
   }
 }
-function created() {
-  const params = createParams()
+function created(params = createParams()) {
   const rows = params.firstMessage ? [submission(params.firstMessage.clientMessageId)] : []
   const cursor = { epoch: 'epoch-1', sequence: rows.length }
   const page: AgentSessionHistoryPage = {

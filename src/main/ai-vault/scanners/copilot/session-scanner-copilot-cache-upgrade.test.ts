@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import { buildAiVaultResumeCommand } from '../../../../shared/ai-vault-resume-command'
+import { buildAiVaultResumeCommand } from '../../../../shared/ai-vault/resume/ai-vault-resume-command'
 import SyncDatabase from '../../../sqlite/sync-database'
 import { registerSessionSearchIndexConsumer } from '../../../ai-vault-search/session-search-index-consumer'
 import { replayTranscriptRead } from '../../../ai-vault-search/session-search-index-test-fixture'
@@ -17,10 +17,12 @@ import {
   createSessionParseStats,
   parseAgentSessionFileCached
 } from '../../parse-cache/session-scanner-parse-cache'
-import { resetSessionParseCacheForTests } from '../../parse-cache/session-parse-cache-store'
+import {
+  resetSessionParseCacheForTests,
+  type PersistedSessionParseCacheEntry
+} from '../../parse-cache/session-parse-cache-store'
 import { parseCopilotSessionFile } from './session-scanner-copilot-parser'
 import { resetTranscriptConsumersForTests } from '../../transcripts/session-transcript-consumers'
-import type { PersistedSessionParseCacheEntry } from '../../parse-cache/session-parse-cache-store'
 
 let root: string | undefined
 let store: SessionSearchStore | undefined

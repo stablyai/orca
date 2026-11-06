@@ -1,6 +1,6 @@
-import type Database from '../../sqlite/sync-database'
 import { parseJournalRow, serializeJournalRow, type JournalRow } from './journal-row-schema'
 import { AgentSessionJournalError } from './journal-write-guards'
+import type Database from '../../sqlite/sync-database'
 
 export type JournalStoredRow = { epoch: string; seq: number; ts: number; rowJson: string }
 
@@ -48,7 +48,7 @@ export function journalRowReadBack(
   row: JournalRow
 ): { rowJson: string; stored: JournalRow } {
   const rowJson = serializeJournalRow(row)
-  const readBack = parseJournalRow(rowJson)
+  const readBack = parseJournalRow(rowJson, true)
   if (!readBack.ok || readBack.row.seq !== row.seq) {
     throw new AgentSessionJournalError(
       'journal_row_rejected',

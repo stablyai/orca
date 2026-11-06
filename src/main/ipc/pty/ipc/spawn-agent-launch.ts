@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { AgentLaunch } from '../../../../shared/rpc-contract/agent-launch-params'
 import { toAgentLaunchPreferences } from '../../../../shared/agent-launch/choices/agent-launch-preferences'
-import { hasClosedTerminalTabRecord } from '../../../../shared/closed-terminal-tab-tombstones'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { hasClosedTerminalTabRecord } from '../../../../shared/workspace-layout/closed-terminal-tab-tombstones'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch/contracts/agent-launch-tab-closed'
 import { trackRunningAgentLaunchPane } from '../../../agent-launch/agent-launch-pane-attachment'
 import { agentLaunchTokenFor } from '../../../agent-launch/agent-launch-token'
@@ -59,9 +59,11 @@ function withPlannedLaunch(
     ...(launchToken ? { launchToken } : {}),
     ...(planned.launchConfig ? { launchConfig: planned.launchConfig } : {}),
     ...(planned.launchAgent ? { launchAgent: planned.launchAgent } : {}),
-    ...(planned.startupCommandDelivery
-      ? { startupCommandDelivery: planned.startupCommandDelivery }
-      : {}),
+    ...(args.connectionId && args.startupCommandDelivery
+      ? { startupCommandDelivery: args.startupCommandDelivery }
+      : planned.startupCommandDelivery
+        ? { startupCommandDelivery: planned.startupCommandDelivery }
+        : {}),
     ...(planned.telemetry ? { telemetry: planned.telemetry } : {})
   }
 }
@@ -92,7 +94,11 @@ export async function planPaneAgentLaunch(ctx: PtyIpcSpawnState): Promise<void> 
     !args.worktreeId ||
     !params.success ||
     params.data.reuseTerminal ||
-    params.data.prompt
+    (params.data.prompt &&
+      (params.data.prompt.delivery !== 'submit' ||
+        !request ||
+        !('startupPromptCarry' in request) ||
+        request.startupPromptCarry !== 'force-line'))
   ) {
     throw new Error('agent_launch_request_invalid')
   }
@@ -103,6 +109,8 @@ export async function planPaneAgentLaunch(ctx: PtyIpcSpawnState): Promise<void> 
     paneKey,
     running,
     dispatched: false,
+    returnLaunchFailure:
+      request !== null && 'returnLaunchFailure' in request && request.returnLaunchFailure === true,
     refuseIfClosed: () => {
       if (running.closedByUser() || closedInSession(deps.store, paneKey)) {
         throw new AgentLaunchTabClosedError()
@@ -121,6 +129,16 @@ export async function planPaneAgentLaunch(ctx: PtyIpcSpawnState): Promise<void> 
     {
       startupAgent: intent.agent,
       ...(intent.agentArgs !== undefined ? { agentArgs: intent.agentArgs } : {}),
+      ...(request && 'extraAgentArgs' in request && typeof request.extraAgentArgs === 'string'
+        ? { extraAgentArgs: request.extraAgentArgs }
+        : {}),
+      ...(intent.prompt
+        ? {
+            startupPrompt: intent.prompt.text,
+            startupPromptCarry: 'force-line' as const,
+            startupPromptDelivery: 'auto-submit' as const
+          }
+        : {}),
       ...(launchPreferences ? { launchPreferences } : {}),
       ...(intent.launchSource ? { launchSource: intent.launchSource } : {}),
       ...(intent.cwd ? { cwd: intent.cwd } : {}),

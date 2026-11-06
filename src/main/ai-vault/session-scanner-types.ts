@@ -3,7 +3,7 @@ import type {
   AiVaultScanIssue,
   AiVaultSession,
   AiVaultSessionPreviewMessage
-} from '../../shared/ai-vault-types'
+} from '../../shared/ai-vault/contracts/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
   TranscriptMessageSink,
@@ -27,6 +27,8 @@ export type AiVaultScanOptions = {
   geminiSessionsDir?: string
   antigravityBrainDir?: string
   antigravityAppHome?: string
+  /** Orca's managed Antigravity chat transcripts; resolved by the host process. */
+  antigravityChatBrainDir?: string
   includeAntigravityIdeSessions?: boolean
   copilotSessionsDir?: string
   cursorProjectsDir?: string

@@ -38,6 +38,7 @@ export function mockBrowserManager(
     unregisterGuest: vi.fn(),
     holdPaintForCapture: () => () => {},
     holdGuestActive: () => () => {},
+    showAgentViewportInPane: () => {},
     beginAgentCommand: () => ({
       agent: false,
       run: (execute: () => Promise<unknown>) => execute(),

@@ -1,4 +1,4 @@
-import { BrowserClientPageMetadataAck } from '../../../../shared/browser-client-page-metadata-protocol'
+import { BrowserClientPageMetadataAck } from '../../../../shared/browser/client-hosting/browser-client-page-metadata-protocol'
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 

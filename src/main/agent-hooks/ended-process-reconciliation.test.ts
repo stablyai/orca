@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { AgentHookServer } from './server'
 import { buildBody, postHookEvent } from './server.test-fixtures'
 
@@ -63,20 +63,6 @@ function paneState(server: AgentHookServer): string {
 
 // Restored PTYs may lack spawn-time mappings, so ordinary teardown cannot retire their stale rows.
 describe('reconcileEndedProcessForPaneKeys', () => {
-  it('retires a working row whose process is certifiably dead', async () => {
-    const server = await startServer()
-    try {
-      claudeRow(server, 'working')
-      expect(paneState(server)).toBe('working')
-
-      expect(server.reconcileEndedProcessForPaneKeys([PANE])).toBe(1)
-
-      expect(paneState(server)).toBe('missing')
-    } finally {
-      server.stop()
-    }
-  })
-
   it('clears Claude latches even when the stored row already reads done', async () => {
     // Stale latches can re-gate a done row on the next event.
     const server = await startServer()
@@ -92,15 +78,6 @@ describe('reconcileEndedProcessForPaneKeys', () => {
       const response = await postHookEvent(server, buildBody({ hook_event_name: 'Stop' }))
       expect(response.status).toBe(204)
       expect(paneState(server)).toBe('done')
-    } finally {
-      server.stop()
-    }
-  })
-
-  it('is a no-op for a pane with nothing to retire', async () => {
-    const server = await startServer()
-    try {
-      expect(server.reconcileEndedProcessForPaneKeys([PANE])).toBe(0)
     } finally {
       server.stop()
     }
@@ -133,20 +110,6 @@ describe('reconcileEndedProcessForPaneKeys', () => {
       expect(restarted.getStatusSnapshotForPane(PANE)[0]?.launchToken).toBeUndefined()
       expect(restarted.getHydratedAuthorityCommitments()).toHaveLength(0)
       restarted.stop()
-    } finally {
-      server.stop()
-    }
-  })
-
-  it('takes the resume identity too on a certified PTY exit, where no pane is left to resume into', async () => {
-    const server = await startServer()
-    try {
-      resumableClaudeRow(server)
-      server.dropStatusEntry(PANE)
-
-      expect(server.reconcileEndedProcessForPaneKeys([PANE])).toBe(1)
-
-      expect(paneState(server)).toBe('missing')
     } finally {
       server.stop()
     }

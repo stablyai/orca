@@ -2,7 +2,7 @@ import { completeAntigravityTranscriptPairs } from './antigravity-transcript-can
 import { ANTIGRAVITY_HISTORY_ROOTS } from '../../../../shared/antigravity-session-origin'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { AiVaultScanIssue } from '../../../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   isAntigravityTranscriptPath,
   shouldDescendAntigravityBrainDirectory
@@ -29,6 +29,10 @@ export function antigravityDiscoveries(
       ? origins
           .filter((origin) => origin !== 'antigravity-cli')
           .map((origin) => join(home, '.gemini', origin, 'brain'))
+      : []),
+    // Unowned rows resume only as references, which clients without the opt-in would launch as agy IDs.
+    ...(options.includeAntigravityIdeSessions === true && options.antigravityChatBrainDir
+      ? [options.antigravityChatBrainDir]
       : []),
     ...wslHomeDirs.flatMap((homeDir) =>
       origins.map((origin) => join(homeDir, '.gemini', origin, 'brain'))

@@ -12,6 +12,17 @@ export type AgentChoicePatch = {
   options?: Record<string, string | null>
   permissionMode?: AgentPermissionChoice | 'default'
 }
+export function terminalAgentChoices(
+  agent: TuiAgent,
+  choices: AgentDedicatedChoices
+): AgentDedicatedChoices {
+  if (agent !== 'claude' || choices.options?.effort !== 'ultracode') {
+    return choices
+  }
+  const { effort: _chatEffort, ...options } = choices.options
+  return { ...choices, options }
+}
+
 export type AgentLaunchChoices = Partial<Record<TuiAgent, AgentModelOptionChoices>>
 export type AgentChoiceCliForm =
   | { kind: 'value'; names: readonly string[]; lift: 'separate-and-long-equals' | 'never' }
@@ -71,4 +82,12 @@ export type AgentLaunchInputViews = {
   agentArgs?: string | null
   sessionOptions?: Readonly<Record<string, string>>
   chatSessionOptions?: Readonly<Record<string, string>>
+}
+
+export function agentPickerSessionOptions(choices: AgentDedicatedChoices): Record<string, string> {
+  return {
+    ...choices.options,
+    ...(choices.model ? { model: choices.model } : {}),
+    ...(choices.permissionMode ? { permissionMode: choices.permissionMode } : {})
+  }
 }

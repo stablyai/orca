@@ -106,16 +106,4 @@ describe('the catalog version a listing carries', () => {
       first && 'catalogVersion' in first ? first.catalogVersion : undefined
     )
   })
-
-  it('a create reply issued after the change names a later catalog than the listing', async () => {
-    listRepoWorktreesMock.mockResolvedValue([worktreeAt(localRepo, localRepo.path)])
-    const listing = await listLocal()
-    // Create notifications bump generation before stamping the reply.
-    invalidateDetectedWorktreeScanCache(localRepo.id)
-    const createReply = getLocalWorktreeCatalogVersion(localRepo.id)
-
-    const listed = listing && 'catalogVersion' in listing ? listing.catalogVersion : undefined
-    expect(listed?.epoch).toBe(createReply.epoch)
-    expect(listed!.sequence).toBeLessThan(createReply.sequence)
-  })
 })

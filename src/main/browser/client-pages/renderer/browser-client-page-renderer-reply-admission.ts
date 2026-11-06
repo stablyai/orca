@@ -1,7 +1,7 @@
 import type {
   BrowserClientPageRendererReply as RendererReply,
   BrowserClientPageRendererRequest as RendererRequest
-} from '../../../../shared/browser-client-page-renderer-protocol'
+} from '../../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
 
 export type BrowserClientPageRendererFrame = object
 

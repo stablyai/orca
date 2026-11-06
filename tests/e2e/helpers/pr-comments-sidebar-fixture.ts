@@ -1,7 +1,7 @@
 import type { Page } from '@stablyai/playwright-test'
 import type { PRComment } from '../../../src/shared/github/comment-types'
 import type { PRInfo } from '../../../src/shared/github/pull-request-types'
-import { getDefaultSourceControlAiSettings } from '../../../src/shared/source-control-ai'
+import { getDefaultSourceControlAiSettings } from '../../../src/shared/source-control/ai/settings/source-control-ai-settings'
 
 export type PRCommentsSidebarSeed = {
   worktreeId: string

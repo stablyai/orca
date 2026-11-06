@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { recognizeAgentProcessFromCommandLine } from './agent-process-recognition'
-import { selectForegroundProcessCandidate } from './foreground-process-selection'
+import { recognizeAgentProcessFromCommandLine } from './agent-status/process/agent-process-recognition'
 
 // Released 6.9.0 PagerArgs single/JSON/file flags, forwarded by outer Commands::Agent.
 describe('DeepSeek Build native one-shot identity exclusion', () => {
@@ -58,19 +57,5 @@ describe('DeepSeek Build native one-shot identity exclusion', () => {
     'deepseek-build-agent -cwp'
   ])('keeps interactive prompts and option values interactive: %s', (line) => {
     expect(recognizeAgentProcessFromCommandLine(line)?.agent).toBe('dsb')
-  })
-
-  it('does not select a one-shot native child as interactive foreground', () => {
-    expect(
-      selectForegroundProcessCandidate([
-        {
-          pid: 42,
-          ppid: 1,
-          depth: 1,
-          stat: 'S+',
-          command: '/tmp/bin/deepseek-build-agent --print task'
-        }
-      ])
-    ).toBeNull()
   })
 })

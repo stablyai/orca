@@ -1,11 +1,12 @@
-import { isClaudeAgent } from '@/lib/agent-status'
+import { isClaudeAgent as isClaudeAgentDefault } from '../../../../shared/agent-status/title/agent-title-identity'
 import { recordTerminalInputActivity } from '@/lib/terminal-input-activity-coalescing'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 
 export function createTerminalEphemeralActions(
   set: TerminalStoreSet,
-  get: TerminalStoreGet
+  get: TerminalStoreGet,
+  isClaudeAgent = isClaudeAgentDefault
 ): Pick<
   TerminalSlice,
   | 'markDefaultTerminalTabsApplied'

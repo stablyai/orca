@@ -1,0 +1,93 @@
+import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'
+import type { ChecksPanelContextState } from '../use-checks-panel-context-state'
+import type { ChecksPanelCommentResolutionState } from '../comments/use-checks-panel-comment-resolution'
+import type { ChecksPanelReviewDataState } from '../use-checks-panel-review-data'
+import type { ChecksPanelCommentMutationState } from '../comments/use-checks-panel-comment-mutations'
+import type { ChecksPanelEntryRefreshAndTitleActionsState } from '../refresh/use-checks-panel-entry-refresh-and-title-actions'
+import type { ChecksPanelCheckAndReviewActionsState } from '../review-actions/use-checks-panel-check-and-review-actions'
+import type { ChecksPanelRefreshState } from '../refresh/use-checks-panel-manual-refresh'
+import type { ChecksPanelAiQueueState } from '../review-actions/use-checks-panel-ai-queue'
+import type { ChecksPanelReviewState } from '../use-checks-panel-review-state'
+import type { ChecksPanelComposerState } from '../use-checks-panel-composer-state'
+
+export type ChecksPanelActiveContentModel = Pick<
+  ChecksPanelControllerState,
+  | 'activeConnectionId'
+  | 'activeSourceControlLaunchPlatform'
+  | 'activeWorktree'
+  | 'activeWorktreeId'
+  | 'agentComposerState'
+  | 'checks'
+  | 'checksError'
+  | 'checksLoading'
+  | 'claimedCommentResolutionRef'
+  | 'commentResolutionLaunchAcceptedRef'
+  | 'comments'
+  | 'commentsError'
+  | 'commentsLoading'
+  | 'commentsSelectionClearRequest'
+  | 'conflictDetailsRefreshing'
+  | 'detachedHeadDisplay'
+  | 'editingTitle'
+  | 'gitLabPipelineCheck'
+  | 'isFixingChecksWithAI'
+  | 'isRefreshing'
+  | 'isResolvingConflictsWithAI'
+  | 'pendingCommentResolutionRef'
+  | 'repo'
+  | 'saveLaunchActionDefault'
+  | 'setAgentComposerState'
+  | 'settings'
+  | 'titleDraft'
+  | 'titleInputRef'
+  | 'titleSaving'
+  | 'setTitleDraft'
+> &
+  Pick<
+    ChecksPanelContextState,
+    | 'activeConflictReview'
+    | 'activeGitLabReview'
+    | 'activeReview'
+    | 'linkedGitLabMR'
+    | 'pr'
+    | 'prRefreshState'
+    | 'setChecksPanelContentRef'
+  > &
+  Pick<
+    ChecksPanelCommentResolutionState,
+    | 'aiActionDisabledReason'
+    | 'fixChecksDisabledReason'
+    | 'canTargetPRComments'
+    | 'commentsDisabledReason'
+    | 'handleResolve'
+    | 'resolveCommentsWithAIDisabledReason'
+  > &
+  Pick<ChecksPanelReviewDataState, 'getGitLabProjectRef' | 'handleLoadCheckDetails'> &
+  Pick<
+    ChecksPanelCommentMutationState,
+    | 'handleAddPRComment'
+    | 'handleDeleteComment'
+    | 'handleEditComment'
+    | 'handleReplyToComment'
+    | 'handleSetReaction'
+  > &
+  Pick<
+    ChecksPanelEntryRefreshAndTitleActionsState,
+    | 'handleCancelEdit'
+    | 'handleSaveTitle'
+    | 'handleStartEdit'
+    | 'handleTitleKeyDown'
+    | 'refreshHostedReviewAfterMutation'
+  > &
+  Pick<
+    ChecksPanelCheckAndReviewActionsState,
+    | 'handleFixChecksWithAI'
+    | 'handleLinkAnotherReview'
+    | 'handleOpenPR'
+    | 'handleOpenStackPR'
+    | 'handleUnlinkReview'
+  > &
+  Pick<ChecksPanelRefreshState, 'handleRefresh' | 'manualRefreshError'> &
+  Pick<ChecksPanelAiQueueState, 'handleResolveCommentsWithAI' | 'handleResolveConflictsWithAI'> &
+  Pick<ChecksPanelReviewState, 'sourceControlAiActionsVisible'> &
+  Pick<ChecksPanelComposerState, 'stateRequestKey'>

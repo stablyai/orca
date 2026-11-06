@@ -4,8 +4,8 @@ import type { AgentSessionStatusSummary } from '../../../shared/agent-session/ag
 import type {
   AgentChildWorkEvidence,
   AgentChildWorkLiveEvidence
-} from '../../../shared/agent-status-child-work-evidence'
-import { makeStructuredAgentStatusSubject } from '../../../shared/agent-status-subject'
+} from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import { makeStructuredAgentStatusSubject } from '../../../shared/agent-status/contracts/agent-status-subject'
 import { AgentHookServer } from '../../agent-hooks/server'
 import { StructuredAgentSessionStatusOwnership } from './structured-agent-session-status-ownership'
 

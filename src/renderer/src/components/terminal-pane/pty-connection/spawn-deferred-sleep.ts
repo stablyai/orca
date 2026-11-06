@@ -1,7 +1,7 @@
 import { isColdRestoreStartup, paneResumeRecord } from './pane-resume-record'
 import { releaseDeferredCwdFence } from './fresh-spawn-start'
 import { isMainResumedSleepPaneCurrent, mainResumedSleepPane } from './main-resumed-sleep-pane'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import type { SpawnDeferralReason } from '../../../../../shared/host-spawn-admission'
 import {
@@ -9,7 +9,7 @@ import {
   type AgentProviderSessionMetadata,
   type SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { parsePaneKey } from '../../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { stablePaneHasLivePty } from '@/lib/sleeping-agent-pane-ownership'
 import {
   clearPaneSpawnDeferral,

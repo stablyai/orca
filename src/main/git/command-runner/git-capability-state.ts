@@ -1,4 +1,4 @@
-import { GitCapabilityCache } from '../../../shared/git-capability-cache'
+import { GitCapabilityCache } from '../../../shared/git/commands/git-capability-cache'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 import {
   isWslLinkedWorktreeGitRoutingCandidate,

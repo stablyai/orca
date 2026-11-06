@@ -4,7 +4,7 @@ import {
   SessionNotFoundError,
   TerminalHostGoneError,
   TerminalSessionOwnerUnverifiedError
-} from '../../../daemon/daemon-errors'
+} from '../../../daemon/protocol/daemon-errors'
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { keepAbsentPaneBindingForSwap, releaseAbsentPaneOwner } from './absent-pane-owner'
 import { excludeReplacedPaneOwner } from './replaced-pane-owner'

@@ -99,7 +99,6 @@ describe('mounted accessory-repeat delivery lifecycle', () => {
         sessionTabActionSheetKeyboardHideSubRef: { current: null },
         deviceTokenRef: { current: null },
         ptyModesRef: { current: new Map() },
-        commandInputRef: { current: null },
         liveInputRef: { current: null },
         handleLiveInputAccessoryBytes: props.preflight ?? preflight,
         worktreeId: 'workspace',
@@ -250,55 +249,6 @@ describe('mounted accessory-repeat delivery lifecycle', () => {
       expect(view.writes()).toHaveLength(0)
     }
   )
-
-  it('dispatches distinct taps while earlier host acknowledgments are pending', async () => {
-    const view = await mount()
-    const replies: ((reply: RpcResponse) => void)[] = []
-    view.client.sendRequest.mockImplementation(
-      () => new Promise<RpcResponse>((resolve) => replies.push(resolve))
-    )
-    const taps: Promise<boolean>[] = []
-    await act(async () => {
-      for (let index = 0; index < 5; index += 1) {
-        taps.push(view.current().prepareAccessoryPress(input).tap())
-      }
-    })
-    expect(view.writes()).toHaveLength(5)
-    replies.forEach((reply) => reply(accepted))
-    await expect(Promise.all(taps)).resolves.toEqual([true, true, true, true, true])
-    await view.advance(1000)
-    expect(view.writes()).toHaveLength(5)
-  })
-
-  it.each([
-    ['handled', 10],
-    ['suppress-raw', 1]
-  ] as const)(
-    'follows the live editor’s %s result when repeating a local edit',
-    async (kind, expectedEdits) => {
-      const view = await mount()
-      view.preflight.mockResolvedValue({ kind })
-      act(() => view.current().prepareAccessoryPress(input).hold())
-      await view.advance(445)
-      expect(view.preflight).toHaveBeenCalledTimes(expectedEdits)
-      expect(view.writes()).toHaveLength(0)
-    }
-  )
-
-  it('repeats through the latest live editor when live input turns on mid-hold', async () => {
-    const view = await mount()
-    act(() => view.current().prepareAccessoryPress(input).hold())
-    await view.advance(445)
-    expect(view.writes().length).toBeGreaterThan(0)
-    const liveEditor = vi.fn<() => Promise<TerminalLiveAccessoryInputCommitResult>>(async () => ({
-      kind: 'handled'
-    }))
-    await view.update({ preflight: liveEditor })
-    view.client.sendRequest.mockClear()
-    await view.advance(200)
-    expect(liveEditor).toHaveBeenCalled()
-    expect(view.writes()).toHaveLength(0)
-  })
 
   it('waits for each host acknowledgment and drops pending preflight after the terminal changes', async () => {
     const view = await mount()

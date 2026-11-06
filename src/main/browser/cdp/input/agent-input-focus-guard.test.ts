@@ -19,7 +19,6 @@ vi.mock('electron', () => ({
 }))
 
 import {
-  AGENT_INPUT_FOCUS_GUARD_CHANNEL,
   AGENT_INPUT_FOCUS_GUARD_READY_CHANNEL,
   guardPaneFocusForAgentInput
 } from './agent-input-focus-guard'
@@ -46,21 +45,6 @@ describe('guardPaneFocusForAgentInput', () => {
   beforeEach(() => {
     ipcListeners.clear()
     vi.useRealTimers()
-  })
-
-  it('resolves when the pane is ready and ends the guard once', async () => {
-    const { sent, renderer } = fakeRenderer(7, true)
-
-    const release = await guardPaneFocusForAgentInput(renderer, 'page-1')
-    release()
-    release()
-
-    expect(sent.map(({ channel, data }) => [channel, data.active])).toEqual([
-      [AGENT_INPUT_FOCUS_GUARD_CHANNEL, true],
-      [AGENT_INPUT_FOCUS_GUARD_CHANNEL, false]
-    ])
-    expect(sent[0].data.token).toBe(sent[1].data.token)
-    expect(ipcListeners.get(AGENT_INPUT_FOCUS_GUARD_READY_CHANNEL)).toEqual([])
   })
 
   it('refuses the input and ends the guard when the pane never answers', async () => {

@@ -1,0 +1,285 @@
+import { providerStartupFailureFact } from '../../../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import { describe, expect, it, vi } from 'vitest'
+import { CodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
+import { openCodexAppServerConnection } from '../../app-server/codex-app-server-connection'
+import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
+import { codexStructuredPermissionPolicy } from '../../../../shared/codex-permission-policy'
+import { openCodexThread } from './codex-structured-thread-open'
+
+function connectionFor(
+  request: CodexAppServerConnection['request']
+): Pick<CodexAppServerConnection, 'request'> {
+  return { request }
+}
+
+describe('openCodexThread', () => {
+  // Omitting policy can inherit approval_policy = never and suppress Ask prompts.
+  it('sends Ask as an explicit policy on resume, not as absent fields', async () => {
+    const request = vi.fn(async (_method: string, _params?: Record<string, unknown>) => ({
+      thread: { id: 'thread-existing' }
+    }))
+    const permissionPolicy = codexStructuredPermissionPolicy('ask')
+
+    await openCodexThread(
+      connectionFor(request),
+      { cwd: '/workspace', resumeThreadId: 'thread-existing', permissionPolicy },
+      2_000
+    )
+
+    const params = request.mock.calls[0]?.[1] ?? {}
+    expect(params).toMatchObject({
+      approvalPolicy: 'on-request',
+      sandbox: 'read-only',
+      approvalsReviewer: 'user'
+    })
+    expect(Object.keys(params)).toEqual(
+      expect.arrayContaining(['approvalPolicy', 'sandbox', 'approvalsReviewer'])
+    )
+    expect(params).not.toHaveProperty('sandboxPolicy')
+  })
+
+  it('does not retry without excludeTurns after an unsupported-field refusal', async () => {
+    const refusal = new CodexAppServerRequestError(
+      'thread/resume',
+      -32602,
+      'unknown field excludeTurns'
+    )
+    const request = vi.fn(async () => {
+      throw refusal
+    })
+    await expect(
+      openCodexThread(
+        connectionFor(request),
+        { cwd: '/workspace', resumeThreadId: 'thread-1' },
+        2_000
+      )
+    ).rejects.toBe(refusal)
+    expect(request).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    ['success', '', 3],
+    ['second-archive', 'is archived', 3],
+    ['retry-no-rollout', 'no rollout found', 3],
+    ['retry-active-writer', 'already has an active writer', 3],
+    ['unarchive-refusal', 'is archived', 2],
+    ['cancel-before-unarchive', 'cancelled opening', 1],
+    ['cancel-before-retry', 'cancelled opening', 2],
+    ['start', 'is archived', 1]
+  ] as const)(
+    'recovers an archived resume once through the real connection: %s',
+    async (mode, error, calls) => {
+      const fakeAppServer = String.raw`
+      const readline = require('node:readline')
+      const send = (payload) => process.stdout.write(JSON.stringify(payload) + '\n')
+      let resumes = 0
+      let mode
+      readline.createInterface({ input: process.stdin }).on('line', (line) => {
+        const { id, method, params } = JSON.parse(line)
+        if (method === 'initialize') return send({ id, result: {} })
+        if (!id) return
+        mode ??= params.cwd
+        if (method === 'thread/unarchive' && mode !== 'unarchive-refusal') {
+          return send({ id, result: {} })
+        }
+        if (method === 'thread/resume' && ++resumes === 2 && mode !== 'second-archive') {
+          if (mode === 'retry-active-writer') {
+            return send({ id, error: { code: -32600, message: 'thread thread-1 already has an active writer' } })
+          }
+          if (mode === 'retry-no-rollout') {
+            return send({ id, error: { code: -32600, message: 'no rollout found for thread id thread-1' } })
+          }
+          return send({ id, result: { thread: { id: 'thread-1' }, model: 'gpt-saved' } })
+        }
+        send({ id, error: { code: -32600, message: 'session thread-1 is archived. Run ' +
+          String.fromCharCode(96) + 'codex unarchive thread-1' + String.fromCharCode(96) +
+          ' to unarchive it first.' } })
+      })
+    `
+      const connection = await openCodexAppServerConnection({
+        command: process.execPath,
+        args: ['-e', fakeAppServer]
+      })
+      const controller = new AbortController()
+      const request = vi.fn<CodexAppServerConnection['request']>(async (...args) => {
+        try {
+          return await connection.request(...args)
+        } finally {
+          if (
+            (mode === 'cancel-before-unarchive' && args[0] === 'thread/resume') ||
+            (mode === 'cancel-before-retry' && args[0] === 'thread/unarchive')
+          ) {
+            controller.abort(new Error('cancelled opening'))
+          }
+        }
+      })
+      try {
+        const opened = openCodexThread(
+          connectionFor(request),
+          {
+            cwd: mode,
+            resumeThreadId: mode === 'start' ? null : 'thread-1',
+            model: 'gpt-selected',
+            permissionPolicy: codexStructuredPermissionPolicy('ask'),
+            threadConfig: { service_tier: 'priority' },
+            commandEnv: { ORCA_SESSION_ID: 'session-1' }
+          },
+          null,
+          controller.signal
+        )
+        if (error) {
+          await expect(opened).rejects.toThrow(error)
+          if (mode === 'retry-active-writer') {
+            await expect(opened).rejects.toMatchObject({ reason: 'conversationOpenElsewhere' })
+          }
+          if (mode === 'retry-no-rollout') {
+            await expect(opened).rejects.toMatchObject({ reason: 'savedConversationMissing' })
+          }
+        } else {
+          await expect(opened).resolves.toMatchObject({ threadId: 'thread-1', model: 'gpt-saved' })
+          expect(request.mock.calls[2]).toEqual(request.mock.calls[0])
+          expect(request.mock.calls[0]?.[1]).not.toHaveProperty('model')
+        }
+        const methods =
+          mode === 'start'
+            ? ['thread/start']
+            : ['thread/resume', 'thread/unarchive', 'thread/resume'].slice(0, calls)
+        expect(request.mock.calls.map(([method]) => method)).toEqual(methods)
+        if (methods.includes('thread/unarchive')) {
+          expect(request.mock.calls[1]).toEqual([
+            'thread/unarchive',
+            { threadId: 'thread-1' },
+            { timeoutMs: null }
+          ])
+        }
+      } finally {
+        await connection.close()
+      }
+    }
+  )
+
+  describe('a saved thread Codex holds no rollout for', () => {
+    const noRollout = (threadId: string, code = -32600) =>
+      new CodexAppServerRequestError(
+        'thread/resume',
+        code,
+        `codex app-server thread/resume failed: no rollout found for thread id ${threadId}`
+      )
+    function codexWithoutRollout(error: Error = noRollout('thread-unsaved')) {
+      return vi.fn(async (method: string, _params?: Record<string, unknown>) => {
+        if (method === 'thread/resume') {
+          throw error
+        }
+        return { thread: { id: 'thread-new' }, model: 'gpt-live' }
+      })
+    }
+
+    it('explains a missing saved conversation without replacing it', async () => {
+      const request = codexWithoutRollout()
+      const error = await openCodexThread(
+        connectionFor(request),
+        { cwd: '/workspace', resumeThreadId: 'thread-unsaved' },
+        2_000
+      ).catch((error: unknown) => error)
+
+      expect(providerStartupFailureFact(error)).toMatchObject({
+        kind: 'savedConversationMissing',
+        detail: {
+          text: expect.stringContaining('no rollout found for thread id thread-unsaved'),
+          audience: 'log'
+        }
+      })
+      expect(request).toHaveBeenCalledOnce()
+    })
+
+    it('treats no other resume failure as proof that nothing was saved', async () => {
+      const failures = [
+        noRollout('thread-other'),
+        noRollout('thread-unsaved', -32603),
+        new CodexAppServerRequestError(
+          'thread/resume',
+          -32600,
+          'codex app-server thread/resume failed: thread not found'
+        ),
+        new Error('codex app-server exited')
+      ]
+      for (const failure of failures) {
+        const request = codexWithoutRollout(failure)
+        await expect(
+          openCodexThread(
+            connectionFor(request),
+            { cwd: '/workspace', resumeThreadId: 'thread-unsaved' },
+            2_000
+          )
+        ).rejects.toBe(failure)
+        expect(request).toHaveBeenCalledOnce()
+      }
+    })
+
+    it('refuses on the raw frame Codex sends, through the real connection, starting nothing', async () => {
+      const fakeAppServer = String.raw`
+        const readline = require('node:readline')
+        const send = (payload) => process.stdout.write(JSON.stringify(payload) + '\n')
+        readline.createInterface({ input: process.stdin }).on('line', (line) => {
+          const message = JSON.parse(line)
+          if (message.method === 'initialize') return send({ id: message.id, result: {} })
+          if (message.method === 'thread/resume') {
+            const threadId = message.params.threadId
+            return send({
+              id: message.id,
+              error: { code: -32600, message: 'no rollout found for thread id ' + threadId }
+            })
+          }
+          if (message.method === 'thread/start') {
+            return send({ id: message.id, result: { thread: { id: 'thread-new' } } })
+          }
+        })
+      `
+      const connection = await openCodexAppServerConnection({
+        command: process.execPath,
+        args: ['-e', fakeAppServer]
+      })
+      const methods: string[] = []
+      try {
+        await expect(
+          openCodexThread(
+            {
+              request: (...args) => {
+                methods.push(args[0])
+                return connection.request(...args)
+              }
+            },
+            { cwd: '/workspace', resumeThreadId: 'thread-unsaved' },
+            5_000
+          )
+        ).rejects.toMatchObject({ reason: 'savedConversationMissing' })
+        expect(methods).toEqual(['thread/resume'])
+      } finally {
+        await connection.close()
+      }
+    })
+  })
+})
+
+it('keeps an exact active-writer refusal typed through cleanup wrapping', async () => {
+  const error = new CodexAppServerRequestError(
+    'thread/resume',
+    -32600,
+    'thread C already has an active writer'
+  )
+  const request = vi.fn().mockRejectedValue(error)
+  let refused: unknown
+  try {
+    await openCodexThread(connectionFor(request), { cwd: '/workspace', resumeThreadId: 'C' }, 2_000)
+  } catch (caught) {
+    refused = caught
+  }
+  expect(refused).toMatchObject({ reason: 'conversationOpenElsewhere' })
+  expect(providerStartupFailureFact(new AggregateError([refused], 'cleanup failed'))).toMatchObject(
+    {
+      kind: 'conversationOpenElsewhere',
+      detail: { text: error.message, audience: 'log' }
+    }
+  )
+  expect(request).toHaveBeenCalledOnce()
+})

@@ -1,6 +1,6 @@
 /** Use live/unverifiable/exited evidence like SSH: loss of host-generation contact never proves death, including a structured host not yet installed. */
 
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { OrchestrationWorkerReadTranscriptResult } from '../../../../shared/orchestration-worker-output'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -35,9 +35,9 @@ import {
   structuredWorkerAgent,
   structuredWorkerTerminalState,
   type StructuredWorkerObservation
-} from '../../structured-worker-authority'
-import { structuredWorkerOwned } from '../../structured-worker-custody'
-import type { StructuredWorkerIdentity } from '../../structured-worker-identity'
+} from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
+import { structuredWorkerOwned } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-custody'
+import type { StructuredWorkerIdentity } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import type { WorkerTerminalReleaseState } from '../../orchestration/worker-terminal-ownership'
 import { releaseStructuredWorkerSession } from './orchestration-structured-worker-session'
 import {

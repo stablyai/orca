@@ -5,7 +5,7 @@ import { useWorkspaceFileBrowserActionPredicate } from '@/lib/file-preview'
 import { useVisibleWorktreeDiffComments } from '../../diff-comments/use-visible-worktree-diff-comments'
 import type { OpenFile } from '@/store/slices/editor'
 import '@/lib/monaco-setup'
-import type { DiffSection } from '../diff-section-types'
+import type { DiffSection } from '../diff/sections/diff-section-types'
 import {
   EMPTY_GIT_BRANCH_ENTRIES,
   EMPTY_GIT_STATUS_ENTRIES,

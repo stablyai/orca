@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { BrowserHistoryEntry } from '../../../shared/browser-workspace-types'
-import type { WorkspaceDocHistoryEntry } from '../../../shared/workspace-doc-history'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceDocHistoryEntry } from '../../../shared/workspace-session/workspace-doc-history'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { parseWorkspaceSessionsByHostId } from './workspace-session-partitions'
 
 const HOST = 'ssh:target-1'

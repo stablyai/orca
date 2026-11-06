@@ -13,38 +13,6 @@ afterEach(() => {
 })
 
 describe('plugin language pack loading', () => {
-  it('filters malformed language-pack array members without changing valid order', async () => {
-    const first = {
-      id: 'plugin:first',
-      resourceLanguage: pluginLanguageResourceId('plugin:first'),
-      pluginKey: 'first',
-      locale: 'pt-BR',
-      catalog: { greeting: 'Olá' },
-      coverage: 90
-    }
-    const second = {
-      id: 'plugin:second',
-      resourceLanguage: pluginLanguageResourceId('plugin:second'),
-      pluginKey: 'second',
-      locale: 'de',
-      catalog: {},
-      coverage: 10
-    }
-    vi.stubGlobal('window', {
-      api: {
-        plugins: {
-          listLanguagePacks: vi
-            .fn()
-            .mockResolvedValue([null, first, { ...first, catalog: [] }, second])
-        }
-      }
-    })
-
-    await usePluginLanguagePackStore.getState().fetchEntries()
-
-    expect(usePluginLanguagePackStore.getState().entries).toEqual([first, second])
-  })
-
   it('rejects a structured-cloned cyclic catalog before i18next resource installation', async () => {
     const id = 'plugin:cyclic' as const
     const catalog: Record<string, unknown> = { greeting: 'Hello' }

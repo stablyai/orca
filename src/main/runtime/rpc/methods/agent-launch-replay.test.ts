@@ -26,7 +26,7 @@ import {
   readPersistedTestAgentSessionStore
 } from '../../agent-session/records/agent-session-record-store-test-harness'
 import type { RpcContext } from '../core'
-import { terminalStartError } from '../../../../shared/terminal-start-failure'
+import { terminalStartError } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
 import {

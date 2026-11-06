@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { createHookListenerState } from './agent-hook-listener/listener-state'
-import { normalizeAndAccept } from './agent-hook-listener-test-harness'
-import { recognizeAgentProcessFromCommandLine } from './agent-process-recognition'
+import { normalizeAndAccept } from './agent-hook-listener/normalization/agent-hook-listener-test-harness'
+import { recognizeAgentProcessFromCommandLine } from './agent-status/process/agent-process-recognition'
 import { getAgentResumeArgv } from './agent-launch/startup/agent-resume-argv'
 
 describe('CodeBuddy harness', () => {
@@ -30,13 +30,20 @@ describe('CodeBuddy harness', () => {
     expect(rows[5]?.providerSession?.id).toBe('codebuddy-verification')
   })
 
-  it.each([
-    'codebuddy',
-    'cbc',
-    'C:\\Tools\\codebuddy.cmd',
-    'node /usr/lib/node_modules/@tencent-ai/codebuddy-code/dist/codebuddy.js'
-  ])('recognizes interactive %s', (command) => {
-    expect(recognizeAgentProcessFromCommandLine(command)?.agent).toBe('codebuddy')
+  it('waits on the permission prompt notification, not the auto-reviewed PermissionRequest', () => {
+    const state = createHookListenerState()
+    const send = (event: Record<string, unknown>) => normalizeAndAccept(state, 'codebuddy', event)
+    const bash = { tool_name: 'Bash', tool_input: { command: 'curl -sfL https://example.test' } }
+    send({ hook_event_name: 'UserPromptSubmit', prompt: 'download it' })
+    send({ hook_event_name: 'PreToolUse', ...bash })
+    expect(send({ hook_event_name: 'PermissionRequest', ...bash })).toBeNull()
+    expect(
+      send({
+        hook_event_name: 'Notification',
+        notification_type: 'permission_prompt',
+        message: 'needs your permission to use Bash'
+      })?.payload
+    ).toMatchObject({ state: 'waiting', toolName: 'Bash' })
   })
 
   it('excludes print runs and resumes the original provider session', () => {

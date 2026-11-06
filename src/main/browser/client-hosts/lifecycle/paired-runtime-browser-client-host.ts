@@ -1,10 +1,10 @@
 import type {
   BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent,
-  BrowserClientHostCommandResult,
   BrowserClientHostLeaseAuthority
-} from '../../../../shared/browser-client-host-protocol'
-import type { PairedRuntimeConnection } from '../../../../shared/paired-runtime-connection'
+} from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
+import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
+import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type { RemoteRuntimeSubscriptionOptions } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import type { BrowserClientFileChannelAvailability } from '../file-transfers/browser-client-file-channel-transport'

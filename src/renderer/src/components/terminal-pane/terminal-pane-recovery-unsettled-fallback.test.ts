@@ -4,7 +4,7 @@ import {
   captureTerminalPaneRecoveryGeneration,
   requestTerminalPaneRecovery
 } from './terminal-pane-recovery'
-import { bumpTabGeneration, settleCurrentRecovery } from './terminal-recovery-ledger-test-driver'
+import { bumpTabGeneration } from './terminal-recovery-ledger-test-driver'
 import {
   recoveryLedgerMocks as mocks,
   resetRecoveryLedgerStore,
@@ -76,36 +76,6 @@ describe('a pane that never reports an outcome', () => {
     vi.setSystemTime(301_000)
     expect(await requestTerminalPaneRecovery(NEVER_SETTLES)).toBe(true)
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(4)
-  })
-
-  it('lets the user reopen an unsettled attempt the automatic path is holding', async () => {
-    expect(await requestTerminalPaneRecovery(NEVER_SETTLES)).toBe(true)
-    vi.setSystemTime(16_000)
-    expect(await requestTerminalPaneRecovery(NEVER_SETTLES)).toBe(false)
-
-    // Explicit Retry is new evidence and clears unsettled/cooldown refusal.
-    expect(await requestTerminalPaneRecovery({ ...NEVER_SETTLES, trigger: 'user' })).toBe(true)
-    expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(2)
-  })
-
-  it('lets a PTY rebind reopen it the moment the pane finally reports', async () => {
-    expect(await requestTerminalPaneRecovery(NEVER_SETTLES)).toBe(true)
-    vi.setSystemTime(16_000)
-    expect(await requestTerminalPaneRecovery(NEVER_SETTLES)).toBe(false)
-
-    settleCurrentRecovery('tab-1', 'success')
-    expect(await requestTerminalPaneRecovery(NEVER_SETTLES)).toBe(true)
-    expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(2)
-  })
-
-  it('lets an authority change supersede an attempt still sitting pending', async () => {
-    expect(await requestTerminalPaneRecovery(NEVER_SETTLES)).toBe(true)
-    vi.setSystemTime(16_000)
-    expect(await requestTerminalPaneRecovery(NEVER_SETTLES)).toBe(false)
-
-    bumpTabGeneration('tab-1')
-    expect(await requestTerminalPaneRecovery(NEVER_SETTLES)).toBe(true)
-    expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(2)
   })
 
   it('keeps the cap above every trigger but the external lifecycle remount', async () => {

@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { rename, rm, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve } from 'node:path'
-import type { InstalledBrowserExtension } from '../../../../shared/browser-extension-types'
-import { BROWSER_EXTENSION_ORIGINAL_MANIFEST_FILE } from '../../../../shared/browser-extension-worker-api'
+import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
+import { BROWSER_EXTENSION_ORIGINAL_MANIFEST_FILE } from '../../../../shared/browser/extensions/browser-extension-worker-api'
 import { browserSessionRegistry } from '../../sessions/browser-session-registry'
 import {
   readBrowserExtensionArchive,
@@ -15,10 +15,8 @@ import {
   readBrowserExtensionManifest,
   type BrowserExtensionManifestSummary
 } from './browser-extension-manifest'
-import {
-  summarizeManifestPermissions,
-  type BrowserExtensionPermissionSummary
-} from '../permissions/browser-extension-permission-summary'
+import { summarizeManifestPermissions } from '../permissions/browser-extension-permission-summary'
+import type { BrowserExtensionAccessLists as BrowserExtensionPermissionSummary } from '../../../../shared/browser/extensions/browser-extension-permission-warnings'
 import {
   forgetHeldBrowserExtensionUpdate,
   getHeldBrowserExtensionUpdate

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
 import { abortSignalReason, throwIfSignalAborted } from '../../abort-signal-reason'
-import type { PairedRuntimeConnection } from '../../paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
 import type { RuntimeCapability } from '../../protocol-version'
 import { remoteRuntimeClientCapabilities } from '../remote-runtime-client-capabilities'
 import {
@@ -25,7 +25,9 @@ import {
   takeRemoteRuntimePreparedRequest
 } from './remote-runtime-prepared-request-admission'
 import { RemoteRuntimeRequestResponseRouter } from './remote-runtime-request-response-router'
+import { serializePreparedRemoteRuntimeRequest } from './remote-runtime-request-preparation'
 import type {
+  RuntimeRequestPreparation,
   RuntimeRequestSelection,
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
@@ -42,7 +44,8 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
   validateStatus?: (response: RuntimeRpcResponse<RuntimeStatus>) => void,
   signal?: AbortSignal,
   clientCapabilities: readonly RuntimeCapability[] = [],
-  requestSelection?: RuntimeRequestSelection
+  requestSelection?: RuntimeRequestSelection,
+  prepareRequest?: RuntimeRequestPreparation
 ): Promise<RuntimeRpcResponse<TResult>> {
   throwIfSignalAborted(signal)
   if (!isSafeTimerDelayMs(timeoutMs)) {
@@ -60,15 +63,20 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         method: 'status.get'
       })
     : null
+  const serialize = (
+    selectedParams: unknown,
+    selectedEnvelope: RuntimeOrchestrationEnvelope | undefined
+  ) =>
+    serializeRemoteRuntimeRpcRequest({
+      requestId,
+      deviceToken: connection.credential.deviceToken,
+      method,
+      params: selectedParams,
+      envelope: selectedEnvelope
+    })
   const prepare = (selectedParams: unknown) =>
     prepareRemoteRuntimeRequest(new Map(), () =>
-      serializeRemoteRuntimeRpcRequest({
-        requestId,
-        deviceToken: connection.credential.deviceToken,
-        method,
-        params: selectedParams,
-        envelope
-      })
+      serializePreparedRemoteRuntimeRequest(serialize, selectedParams, envelope, prepareRequest)
     )
   const pendingRequest: { preparedRequest: ReturnType<typeof prepare> | null } = {
     // Reserve this connection before authentication; select mutation params only after status.

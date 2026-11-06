@@ -63,7 +63,7 @@ describe('chat selection operation handoff', () => {
     const remember = vi.fn()
     const controller = createStructuredSessionSelectionController(remember)
     const oldEffort = controller.issue('effort', 'low', 'sonnet')
-    oldEffort.transmitted = true
+    expect(controller.freeze()).toEqual([oldEffort])
     const newModel = controller.issue('model', 'opus', null)
     const fast = controller.issue('fastMode', 'true', 'opus')
     const newEffort = controller.issue('effort', 'high', 'sonnet')

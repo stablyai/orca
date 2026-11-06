@@ -1,8 +1,10 @@
-import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 import { getRemoteRuntimeTerminalHandle } from '@/runtime/runtime-terminal-stream'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { admitRemoteForegroundEvidence } from '../../../../shared/remote-foreground-evidence-admission'
-import { isClientOnlyUnverifiableInspection } from '../../../../shared/terminal-process-inspection'
+import {
+  type TerminalProcessInspection as RuntimeTerminalProcessInspection,
+  isClientOnlyUnverifiableInspection
+} from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 
 type ForegroundReader = (
   ptyId: string,

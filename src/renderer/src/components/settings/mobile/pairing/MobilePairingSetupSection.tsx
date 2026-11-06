@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { NetworkInterfacePicker } from '../../../mobile/NetworkInterfacePicker'
 import type { MobileNetworkInterface } from './mobile-network-interface-selection'
-import type { MobilePairingConnectionMode } from '../../../../../../shared/mobile-pairing-connection-mode'
+import type { MobilePairingConnectionMode } from '../../../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 
 type MobilePairingSetupSectionProps = {
   connectionMode: MobilePairingConnectionMode

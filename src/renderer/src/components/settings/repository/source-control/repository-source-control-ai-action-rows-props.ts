@@ -1,17 +1,17 @@
-import type { SourceControlAiModelEdits } from '../../../../../../shared/source-control-ai-action-model-edits'
-import type { ActionArgumentChoices } from '../../../../../../shared/source-control-action-argument-choices'
+import type { SourceControlAiModelEdits } from '../../../../../../shared/source-control/ai/settings/source-control-ai-action-model-edits'
+import type { ActionArgumentChoices } from '../../../../../../shared/source-control/ai/recipes/source-control-action-argument-document'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type {
   RepoSourceControlAiOverrides,
   SourceControlAiModelChoice,
   SourceControlAiSettingsPatch,
   SourceControlAiSettings
-} from '../../../../../../shared/source-control-ai-types'
+} from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import type {
   SourceControlActionRecipe,
   SourceControlActionId,
   SourceControlActionLaunchPreferences
-} from '../../../../../../shared/source-control-ai-actions'
+} from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 
 export type RepositorySourceControlAiActionRowsProps = {
   repoId: string

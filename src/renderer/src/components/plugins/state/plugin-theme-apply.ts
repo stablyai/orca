@@ -8,7 +8,7 @@ import { pluginAppThemeSlotUpdate } from '../../../../../shared/plugin-theme-set
 import {
   hasTerminalColorOverrides,
   TERMINAL_COLOR_OVERRIDES_SETTING
-} from '../../../../../shared/terminal-color-overrides'
+} from '../../../../../shared/terminal-themes/terminal-color-overrides'
 import { withTerminalPluginPalettes } from '@/lib/terminal-plugin-palettes'
 import { useAppStore } from '@/store'
 import { PLUGIN_ACTION_TOAST_DURATION_MS } from './plugin-action-toast'

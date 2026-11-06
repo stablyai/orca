@@ -117,7 +117,7 @@ vi.mock('@/lib/new-workspace', () => ({
   CLIENT_PLATFORM: 'win32'
 }))
 
-vi.mock('../../../shared/source-control-launch-agent-selection', () => ({
+vi.mock('../../../shared/source-control/ai/source-control-launch-agent-selection', () => ({
   pickSourceControlLaunchAgent: mocks.pickSourceControlLaunchAgent,
   readSourceControlLaunchRecipeAgentId: mocks.readSourceControlLaunchRecipeAgentId
 }))
@@ -136,9 +136,13 @@ vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))
 
-vi.mock('../../../shared/source-control-ai', () => ({
-  resolveSourceControlActionRecipe: mocks.resolveSourceControlActionRecipe
-}))
+vi.mock(
+  '../../../shared/source-control/ai/source-control-ai-operation-policy',
+  async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    resolveSourceControlActionRecipe: mocks.resolveSourceControlActionRecipe
+  })
+)
 
 describe('startFixChecksAgent', () => {
   beforeEach(() => {

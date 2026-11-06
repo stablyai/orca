@@ -1,4 +1,4 @@
-import type { PairedE2EEFramingPolicy } from '../../../src/shared/paired-e2ee-framing-policy'
+import type { PairedE2EEFramingPolicy } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-framing-policy'
 import { createDirectE2EEFramingPolicy } from './direct-e2ee-framing-policy'
 import { publicKeyFromBase64 } from './e2ee'
 import { RpcClientSocketSession } from './rpc-client-socket-session'

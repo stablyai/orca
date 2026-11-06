@@ -7,7 +7,7 @@ import {
   type RuntimeAgentOrchestrationDependencies
 } from './runtime-agent-orchestration-projection'
 import { createOrchestrationProjectionScope } from './runtime-agent-orchestration-scope'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { FleetAgentStatusEvidence } from '../../shared/orchestration-fleet-agent-status-evidence'
 import {
   mintAgentStatusFleetEvidence,

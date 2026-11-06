@@ -1,6 +1,6 @@
 import { browserSessionRegistry } from '../../sessions/browser-session-registry'
 import { webContents } from 'electron'
-import { parseChromeExtensionUrl } from '../../../../shared/browser-extension-url'
+import { parseChromeExtensionUrl } from '../../../../shared/browser/extensions/browser-extension-url'
 import { browserManager } from '../../browser-manager'
 import { observeBrowserExtensionCookieChanges } from '../api/cookies'
 import { observeBrowserExtensionActionSession } from '../actions/browser-extension-action-registry'

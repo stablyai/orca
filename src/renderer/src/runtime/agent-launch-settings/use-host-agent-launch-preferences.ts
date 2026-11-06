@@ -2,7 +2,7 @@ import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
+import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { AppState } from '@/store/types'
 import {
   buildAgentLaunchRouteInput,
@@ -143,10 +143,21 @@ export function useHostAgentMenuSettings(
       preferences.defaultTuiAgent,
       preferences.disabledTuiAgents,
       preferences.agentLaunchChoices,
+      preferences.agentDefaultArgs,
+      preferences.agentPermissionDefault,
+      preferences.agentPermissionOverrides,
       snapshot === null
     ] as const
   })
-  const [defaultTuiAgent, disabledTuiAgents, agentLaunchChoices, pending] = useSyncExternalStore(
+  const [
+    defaultTuiAgent,
+    disabledTuiAgents,
+    agentLaunchChoices,
+    agentDefaultArgs,
+    agentPermissionDefault,
+    agentPermissionOverrides,
+    pending
+  ] = useSyncExternalStore(
     useCallback(
       (listener: () => void) => {
         if (!subscription.environmentId || !subscription.active) {
@@ -176,7 +187,14 @@ export function useHostAgentMenuSettings(
       ...desktopSettings,
       defaultTuiAgent,
       disabledTuiAgents,
-      agentLaunchChoices
+      agentLaunchChoices,
+      agentDefaultArgs,
+      agentPermissionDefault,
+      agentPermissionOverrides,
+      agentCmdOverrides: {},
+      agentDefaultEnv: {},
+      nativeChatSessionOptions: {},
+      nativeChatPermissionMode: undefined
     }
   }
 }

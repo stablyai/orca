@@ -12,6 +12,7 @@ import {
 } from '@/components/browser-pane/host-guest/browser-automation-visibility'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
 import { markBrowserPageOpenedByPage } from '@/components/browser-pane/host-guest/browser-page-window-close'
+import { setBrowserPageAgentViewportSize } from '@/components/browser-pane/host-guest/browser-page-viewport'
 import {
   beginAgentInputFocusGuard,
   clearAgentInputFocusGuards,
@@ -134,6 +135,13 @@ export function registerBrowserStateIpcBridge(
       unsubscribeCapturePaintHold()
       capturePaintHolds.releaseAll()
     })
+  }
+  const unsubscribeAgentViewport = window.api.browser.onAgentViewportApplied?.(
+    ({ browserPageId, width, height }) =>
+      setBrowserPageAgentViewportSize(browserPageId, { width, height })
+  )
+  if (unsubscribeAgentViewport) {
+    unsubs.push(unsubscribeAgentViewport)
   }
   const unsubscribeAgentInputFocusGuard = window.api.browser.onAgentInputFocusGuard?.(
     ({ browserPageId, token, active }) => {

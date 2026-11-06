@@ -5,7 +5,7 @@ import type {
   AgentLaunchTabPublished,
   AgentLaunchTabPublishRequest
 } from '../../../shared/agent-launch/contracts/agent-launch-tab-publication'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '../store'
 import { presentAgentLaunchTab } from './agent-launch-tab-presentation'
 import {

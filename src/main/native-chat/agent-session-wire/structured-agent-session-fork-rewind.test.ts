@@ -190,6 +190,78 @@ async function rewindSecondPrompt(uuid = 'prompt-2') {
 }
 
 describe('rewinding a chat whose agent forks', () => {
+  it('admits a direct request with later queued cards and preserves their native Stop boundary through the provider fork', async () => {
+    const journal = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+    await journal.appendItem(
+      { provider: 'claude', sessionId: SOURCE, uuid: 'successful-A' },
+      { kind: 'turn', turnId: 'successful-A', state: 'completed', outcome: 'success' },
+      {
+        fence: store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      }
+    )
+    sink.appendItem(
+      { provider: 'claude', sessionId: SOURCE, uuid: 'prompt-3' },
+      hostTestMessage('prompt-3'),
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    await host.flushStreamedEvents(HOST_TEST_SESSION)
+    // A direct/stale-client request is supported; the informed renderer disables this with a queue.
+    const epoch = journal.cursor().epoch
+    await host.collaboratorsForTests().serialize(HOST_TEST_SESSION, async () => {
+      await journal.queuedMessages.insert({
+        messageId: 'O',
+        body: hostTestMessage('O'),
+        options: { effort: 'high' }
+      })
+      await journal.appendStopEvent(
+        { reason: 'user-stop', caller: 'other-client' },
+        store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence
+      )
+      await journal.queuedMessages.insert({
+        messageId: 'N',
+        body: hostTestMessage('N'),
+        options: { effort: 'low' }
+      })
+    })
+    const cards = structuredClone(journal.queuedMessages.list())
+    const pauses = structuredClone(journal.queuedMessages.pauses())
+    expect(journal.cursor().epoch).toBe(epoch)
+    expect(journal.queuedMessages.nextInputCard()).toBeNull()
+    expect(await rewindSecondPrompt('prompt-3')).toMatchObject({ ok: true })
+    expect(forkForRewind).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ beforeMessage: { sessionId: SOURCE, uuid: 'prompt-3' } })
+    )
+    expect(journal.newestTurn()).toEqual({
+      turnId: 'successful-A',
+      state: 'completed',
+      outcome: 'success'
+    })
+    expect(journal.queuedMessages.list()).toEqual(cards)
+    expect(journal.queuedMessages.pauses()).toEqual(pauses)
+    await host.collaboratorsForTests().serialize(HOST_TEST_SESSION, async () => {
+      await journal.queuedMessages.withdraw(['O'])
+      expect(journal.queuedMessages.nextInputCard()?.messageId).toBe('N')
+      await journal.appendSubmission(
+        {
+          clientMessageId: 'consume-N',
+          body: hostTestMessage('N'),
+          payloadFingerprint: cards[1]!.fingerprint,
+          fence: store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
+          handoverRecorded: true,
+          options: { effort: 'low' }
+        },
+        { messageId: 'N', expect: 'waiting', yieldsToPause: true }
+      )
+    })
+    expect(journal.submissionBody('consume-N')).toEqual(hostTestMessage('N'))
+    expect(journal.queuedMessages.get('N')).toEqual({
+      ...cards[1],
+      state: 'dispatched',
+      consumedAs: 'consume-N'
+    })
+  })
+
   it('commits the fork head with the prefix and rewinds again at rest without starting the agent', async () => {
     const epoch = (await host.journalSnapshot(HOST_TEST_SESSION)).cursor.epoch
     const fields = { itemId: key('prompt-2'), expectedEpoch: epoch }

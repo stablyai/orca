@@ -7,7 +7,7 @@ import {
   hasAgentModelOptionValues,
   yieldAgentChoicesToArgs
 } from '../../agent-launch/choices/agent-choice-layers'
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import {
   findCatalogModel,
   getAgentSessionOptionLaunchCatalog
@@ -205,7 +205,10 @@ function resolveModelOptionLaunch(
   }
   for (const option of modelOptions) {
     const value = modelValues[option.id]
-    if (value === undefined) {
+    if (
+      value === undefined ||
+      (agent === 'claude' && option.id === 'effort' && value === 'ultracode')
+    ) {
       continue
     }
     if (option.apply.composedIntoModel) {

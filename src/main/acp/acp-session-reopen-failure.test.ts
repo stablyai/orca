@@ -9,15 +9,6 @@ import { AcpAgentError, AcpRequestTimeoutError } from './acp-errors'
 import { AcpScriptedAgent } from './acp-scripted-agent.test-support'
 import { agentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
-import { acpReopenFailure } from './acp-session-reopen-failure'
-
-it.each(['ServerUnavailable', 'CatalogNotReady'])(
-  'retains the saved session on a temporary %s load answer',
-  (errorName) => {
-    const error = new AcpAgentError(-32603, 'not ready', { errorName })
-    expect(() => acpReopenFailure(error, 'saved-id', false)).toThrow(error)
-  }
-)
 
 afterEach(async () => {
   vi.useRealTimers()

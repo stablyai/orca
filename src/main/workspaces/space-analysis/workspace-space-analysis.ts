@@ -3,7 +3,7 @@ import { spawnProcessOnWorkerThread } from '../../worker-thread-child-process/wo
 import type {
   WorkspaceSpaceAnalysis,
   WorkspaceSpaceScanProgress
-} from '../../../shared/workspace-space-types'
+} from '../../../shared/workspace-disk-space/workspace-space-types'
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
 import {
   WorkspaceSpaceScanCancelledError,

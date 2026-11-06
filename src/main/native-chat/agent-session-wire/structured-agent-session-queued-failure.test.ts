@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
 import { createClaudeJournalTranslator } from '../../claude/structured/journal/claude-structured-journal-translation'
-import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
-import { readCodexThreadId } from '../../codex/codex-structured-thread-facts'
+import { createCodexJournalTranslator } from '../../codex/structured/journal/codex-structured-journal-translation'
+import { readCodexThreadId } from '../../codex/app-server/codex-structured-thread-facts'
 import {
   createQueuedMessageTestRig,
   eventually,
@@ -15,6 +15,7 @@ import {
   hostTestMessage,
   hostTestOperationId
 } from './structured-agent-session-host-test-data'
+import { ClaudePluginInputError } from '../../claude/claude-plugin-ui'
 import { sendAgentTurn } from '../../runtime/orchestration/send-agent-turn'
 import { structuredSessionPointerCallerKey } from '../../runtime/orchestration/structured-mailbox-pointer-host'
 import { createStructuredSessionObservationClock } from './structured-agent-session-observation-clock.test-fixture'
@@ -44,7 +45,19 @@ function mail(text: string) {
     sessionId: SESSION,
     callerKey: structuredSessionPointerCallerKey(SESSION),
     turn: {
-      body: { ...hostTestMessage(text), from: { kind: 'agent', senders: [], orchestration: null } },
+      body: {
+        ...hostTestMessage(text),
+        from: {
+          kind: 'agent',
+          senders: [],
+          orchestration: {
+            message: 'mail-notice',
+            mailbox: 'run:coordinator',
+            dispatchId: null,
+            messages: [{ messageId: id, runId: 'coordinator', from: 'term_worker' }]
+          }
+        }
+      },
       delivery: 'queue',
       operationId: id,
       expectedRuntimeFence: 1,
@@ -167,6 +180,51 @@ describe('queued follow-ups after an accepted turn fails', () => {
       expect(await rig.handoff(second)).toBeUndefined()
     }
   )
+
+  it('holds queued cards after a plugin ends the live Claude turn, until explicit resume', async () => {
+    const id = await rig.workingSend()
+    const sink = rig.providerEvents()
+    const translator = createClaudeJournalTranslator({ sink })
+    translator.handle({
+      type: 'message',
+      sessionId: SESSION,
+      startsTurn: true,
+      message: {
+        type: 'user',
+        uuid: 'plugin-user',
+        session_id: 'claude-session',
+        isReplay: true,
+        parent_tool_use_id: null,
+        message: { role: 'user', content: 'plugin probe' }
+      }
+    })
+    await sink.written?.()
+    await rig.settleAccepted(id, id)
+    const first = await queue('first plugin follow-up')
+    const second = await queue('second plugin follow-up')
+    const error = new ClaudePluginInputError('blast-radius')
+    translator.handle({
+      type: 'ended',
+      sessionId: SESSION,
+      cause: 'unexpected-exit',
+      reason: error.message,
+      failure: error.failure
+    })
+    await sink.written?.()
+    await rig.host.flushStreamedEvents(SESSION)
+    await held(first, second)
+    sink.publish()
+    await rig.host.flushStreamedEvents(SESSION)
+    await held(first, second)
+    expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
+    const handoff = await dispatched(first)
+    expect(await rig.handoff(second)).toBeUndefined()
+    await openRigTurnFor(rig, handoff)
+    await rig.settleAccepted(handoff, 'first')
+    await openRigTurnFor(rig, handoff, 'completed', 'success')
+    await dispatched(second)
+    translator.dispose()
+  })
 
   it('holds every mid-turn card across repeated wakes, then resumes one turn at a time', async () => {
     const working = await start()

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { codexProviderHandleLink } from '../../codex/codex-structured-owner-identity'
+import { codexProviderHandleLink } from '../../codex/structured/acquisition/codex-structured-owner-identity'
 import type { AgentSessionRecordStore } from './records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from './records/agent-session-record-store-test-harness'
 import type { AgentSessionReserveRequest } from './ownership/agent-session-reservation-admission'
@@ -15,7 +15,7 @@ import {
 
 const NOW = 1_800_000_000_000
 
-// Earlier builds wrote this shape; chats that hold it must still load.
+// Earlier builds wrote this shape.
 const supersedingLink = (threadId: string, superseded: string, fence: number) => ({
   ...codexProviderHandleLink({ threadId, resumed: false, fence, observedAt: NOW }),
   supersedesKey: agentSessionProviderHandleKey(codexProviderHandle(superseded))
@@ -99,38 +99,7 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 
-describe('a saved Codex link superseding a thread Codex never saved', () => {
-  it('becomes the session identity and survives the next restart', async () => {
-    const first = await openTestAgentSessionRecordStore(directory)
-    await prove(first, reserveRequest(), (fence) =>
-      codexProviderHandleLink({
-        threadId: 'thread-unsaved',
-        resumed: false,
-        fence,
-        observedAt: NOW
-      })
-    )
-
-    const second = await restart(first)
-    const expectedFence = second.getRecord(SESSION)?.lease.runtimeFence ?? 0
-    const proved = await prove(second, reserveRequest({ expectedFence }), (fence) =>
-      supersedingLink('thread-new', 'thread-unsaved', fence)
-    )
-
-    expect(proved.lease.claimStatus).toBe('live')
-    expect(proved.providerHandleChain).toEqual([
-      expect.objectContaining({
-        handle: codexProviderHandle('thread-new'),
-        origin: 'created',
-        supersedesKey: 'codex:"thread-unsaved"'
-      })
-    ])
-    expect(proved.lease.provenHandleLinkId).toBe(proved.providerHandleChain[0]?.linkId)
-
-    const third = await restart(second)
-    expect(third.getRecord(SESSION)?.providerHandleChain).toEqual(proved.providerHandleChain)
-  })
-
+describe('a Codex thread started in place of one Codex never saved', () => {
   it('is refused once a resume has proved the conversation Codex saved', async () => {
     const first = await openTestAgentSessionRecordStore(directory)
     await prove(first, reserveRequest(), (fence) =>

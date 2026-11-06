@@ -1,9 +1,9 @@
 import type {
   RepoSourceControlAiOverrides,
   SourceControlAiModelChoice
-} from '../../../../../../shared/source-control-ai-types'
-import type { SourceControlActionId } from '../../../../../../shared/source-control-ai-actions'
-import type { SourceControlAiModelEdits } from '../../../../../../shared/source-control-ai-action-model-edits'
+} from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
+import type { SourceControlActionId } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import type { SourceControlAiModelEdits } from '../../../../../../shared/source-control/ai/settings/source-control-ai-action-model-edits'
 type RepoActionRecipe = NonNullable<
   NonNullable<RepoSourceControlAiOverrides['actionOverrides']>[SourceControlActionId]
 >

@@ -1,4 +1,4 @@
-import type { AgentType } from '../../shared/agent-status-types'
+import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatTurnLifecycle } from '../../shared/native-chat/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
 import { isNoiseMessage } from '../../shared/native-chat/native-chat-noise'

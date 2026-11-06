@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { BrowserHostLeaseAuthority } from '../../../../shared/browser-client-host-protocol'
-import type { BrowserNetworkExecutionHost } from '../../../../shared/browser-network-execution-host'
+import type { BrowserHostLeaseAuthority } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
+import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 
 const {
   bindingStore,

@@ -1,5 +1,5 @@
-import { projectSourceControlActionLaunch } from '../../shared/source-control-action-launch-preferences'
-import { resolveSourceControlActionRecipe } from '../../shared/source-control-ai-operation-policy'
+import { projectSourceControlActionLaunch } from '../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
+import { resolveSourceControlActionRecipe } from '../../shared/source-control/ai/source-control-ai-operation-policy'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { resolveAgentLaunchCommand } from '../../shared/agent-launch/startup/tui-agent-launch-command'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'

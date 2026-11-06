@@ -6,7 +6,7 @@ import { publishBrowserClientPageMetadata } from '../../browser/client-pages/ren
 import {
   BrowserClientPageMetadataParams,
   type BrowserClientPageMetadataPublishOutcome
-} from '../../../shared/browser-client-page-metadata-protocol'
+} from '../../../shared/browser/client-hosting/browser-client-page-metadata-protocol'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import type { BrowserViewportOverride } from '../../../shared/browser-workspace-types'

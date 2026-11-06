@@ -1,5 +1,5 @@
 import { posix as pathPosix } from 'node:path'
-import { quotePosixShell as quoteBashString } from '../../shared/shell-argument-quoting'
+import { quotePosixShell as quoteBashString } from '../../shared/shell/launch/shell-argument-quoting'
 import { runWslProcess } from '../wsl/execution/wsl-runner'
 import {
   getClaudePluginMetadataPaths,

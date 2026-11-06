@@ -1,6 +1,6 @@
 import type { SessionSearchIndexerOptions } from '../../ai-vault-search/session-search-indexer-options'
-import { unavailableSessionSearchStatus } from '../../../shared/ai-vault-search-client'
-import { AiVaultSearchRequestSchema } from '../../../shared/ai-vault-search-contract'
+import { unavailableSessionSearchStatus } from '../../../shared/ai-vault/search/ai-vault-search-client'
+import { AiVaultSearchRequestSchema } from '../../../shared/ai-vault/search/ai-vault-search-contract'
 import { SessionSearchInstance } from '../../ai-vault-search/session-search-instance'
 import {
   sameSessionSearchRoots,

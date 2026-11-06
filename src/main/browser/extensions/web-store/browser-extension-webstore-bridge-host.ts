@@ -4,7 +4,7 @@ import {
   BROWSER_EXTENSION_WEB_STORE_CHANNEL,
   isChromeWebStoreUrl,
   type ChromeWebStoreReply
-} from '../../../../shared/browser-extension-webstore'
+} from '../../../../shared/browser/extensions/browser-extension-webstore'
 import { browserManager } from '../../browser-manager'
 import { getBrowserExtensionProfileIdForSession } from '../api-runtime/browser-extension-api-host'
 import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'

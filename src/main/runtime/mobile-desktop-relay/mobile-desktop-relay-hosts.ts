@@ -1,10 +1,10 @@
 import type { ManagedOrcadDeploymentSummary } from '../../../shared/managed-orcad-execution-host'
-import type { PairingOffer } from '../../../shared/pairing'
-import type { RuntimeEnvironmentSource } from '../../../shared/runtime-environments'
-import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
+import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+import type { RuntimeEnvironmentSource } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import type { RuntimeEnvironmentStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { SshConnectionState } from '../../../shared/ssh-types'
-import type { BrowserPageCreationPlacement } from '../../../shared/browser-client-host-placement'
+import type { BrowserPageCreationPlacement } from '../../../shared/browser/client-hosting/browser-client-host-placement'
 
 export type MobileDesktopRelayHost = {
   environmentId: string

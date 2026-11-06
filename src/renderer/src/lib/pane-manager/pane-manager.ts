@@ -17,7 +17,7 @@ import { setInlineImagesEnabled } from './pane-inline-images'
 import { fitAllPanesInternal } from './pane-tree-ops'
 import { collectPublicPanes, toPublicPane } from './pane-public-view'
 import { applyTerminalGpuAcceleration } from './pane-terminal-gpu-acceleration'
-import { detachPanesWebglForRebuild, rebuildAttachedWebgl } from './pane-webgl-reattach'
+import { detachPanesWebglForRebuild } from './pane-webgl-reattach'
 import {
   markPaneComplexScriptOutput,
   clearPaneWebglTextureAtlases,
@@ -27,7 +27,7 @@ import {
   setPaneGpuRenderingState,
   suspendPaneRendering
 } from './pane-rendering-control'
-import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
+import type { TerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { registerLivePaneManager, unregisterLivePaneManager } from './pane-manager-registry'
 import { releaseHiddenWebglRetention } from './terminal-webgl-hidden-retention'
 import { schedulePaneRevealPresent, schedulePaneRevealRepaint } from './pane-reveal-repaint'
@@ -54,7 +54,8 @@ import {
   refreshAllPaneTerminals
 } from './pane-manager-layout-sweeps'
 import { collectPaneRenderingDiagnostics } from './pane-rendering-diagnostics'
-import { applyPaneLayoutGeometry, type TerminalPaneLayoutNode } from './pane-layout-geometry-apply'
+import { applyPaneLayoutGeometry } from './pane-layout-geometry-apply'
+import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
 
 export type {
@@ -256,10 +257,6 @@ export class PaneManager {
 
   markPaneHasComplexScriptOutput(paneId: number): void {
     markPaneComplexScriptOutput(this.panes, paneId)
-  }
-
-  rebuildPaneWebgl(paneId: number): void {
-    this.withPane(paneId, rebuildAttachedWebgl)
   }
 
   resetWebglTextureAtlases(): void {

@@ -1,4 +1,4 @@
-import type { BrowserClientHostCommandEvent } from '../../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostCommandEvent } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import {
   cleanupBrowserClientPage,
   type BrowserClientPageNetworkRoute as RetainedNetworkRoute,

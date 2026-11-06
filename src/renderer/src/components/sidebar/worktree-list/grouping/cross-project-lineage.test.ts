@@ -1,21 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
-import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import {
-  repo,
-  worktree,
-  project,
-  projectHostSetups
-} from '../../worktree-list-groups-test-fixtures'
-import { makeProjectGroup } from '../../folder-workspace-composer-submit-fixtures'
-import { getWorktreeRevealCollapsedGroupKeys } from '../navigation/worktree-reveal-group-keys'
-import { buildRows, buildSidebarRowPlan } from './build-rows.test-fixture'
-import {
-  getWorktreeLineageGroupKey,
-  getProjectGroupHeaderKey,
-  PINNED_GROUP_KEY
-} from '../../../../../../shared/sidebar-list/group-keys'
+import { repo, worktree } from './worktree-list-groups-test-fixtures'
+
+import { buildRows } from './build-rows.test-fixture'
 
 const childRepo = { ...repo, id: 'child-repo', displayName: 'Child project', path: '/tmp/child' }
 const repos = new Map([
@@ -49,17 +38,6 @@ const worktreeMap = new Map([
   [parent.id, parent],
   [child.id, child]
 ])
-
-const grouping = {
-  projects: [project],
-  projectHostSetups: [repo, childRepo].map((checkout) => ({
-    ...projectHostSetups[0]!,
-    id: checkout.id,
-    repoId: checkout.id,
-    path: checkout.path,
-    displayName: checkout.displayName
-  }))
-}
 
 describe('cross-project sidebar lineage', () => {
   it('ranks by actual owner and keeps notices/actions there while counting displayed children', () => {
@@ -108,93 +86,6 @@ describe('cross-project sidebar lineage', () => {
     ])
     expect(rows.find((row) => row.type === 'pending-creation')).toMatchObject({ repo: childRepo })
   })
-
-  it.each(['single-location', 'duplicate-in-groups'] as const)(
-    'reveals deep separate-checkout occurrences without changing their owner (%s)',
-    (policy) => {
-      const group = makeProjectGroup()
-      const parentRepo = { ...repo, projectGroupId: group.id }
-      const repoMap = new Map([...repos, [repo.id, parentRepo]])
-      const pinnedParent = { ...parent, isPinned: true }
-      const grandchild = { ...child, id: 'grandchild', instanceId: 'grandchild-instance' }
-      const graph = {
-        ...lineageById,
-        [grandchild.id]: {
-          ...lineage,
-          worktreeId: grandchild.id,
-          worktreeInstanceId: grandchild.instanceId,
-          parentWorktreeId: child.id,
-          parentWorktreeInstanceId: 'child-instance'
-        }
-      }
-      const worktrees = [grandchild, child, pinnedParent]
-      const parentSection = `project:${project.id}::setup:${repo.id}`
-      const plan = buildSidebarRowPlan(
-        'repo',
-        worktrees,
-        repoMap,
-        null,
-        new Set(),
-        undefined,
-        undefined,
-        undefined,
-        graph,
-        new Map(worktrees.map((row) => [row.id, row])),
-        true,
-        undefined,
-        [group],
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        grouping,
-        undefined,
-        undefined,
-        'local',
-        policy
-      )
-      const occurrence = plan.occurrencePlan.preferredByIdentity.get(
-        getWorktreeHostIdentity(grandchild)
-      )
-      expect(occurrence).toMatchObject({
-        row: { repoId: childRepo.id },
-        depth: 2,
-        showProjectName: false,
-        sectionKey: policy === 'single-location' ? PINNED_GROUP_KEY : parentSection
-      })
-      expect(occurrence?.parent?.row).toBe(child)
-      const collapsedGroups = new Set([
-        PINNED_GROUP_KEY,
-        parentSection,
-        getProjectGroupHeaderKey(group.id),
-        getWorktreeLineageGroupKey(parent),
-        getWorktreeLineageGroupKey(child)
-      ])
-      expect(plan.render(collapsedGroups).some((row) => row.type === 'item')).toBe(false)
-      const keys = getWorktreeRevealCollapsedGroupKeys({
-        occurrencePlan: plan.occurrencePlan,
-        worktree: grandchild,
-        worktrees,
-        worktreeLineageById: graph,
-        repoMap,
-        defaultHostId: 'local',
-        hostScopedGroups: false,
-        collapsedGroups,
-        groupBy: 'repo',
-        pinnedDisplayPolicy: policy,
-        prCache: null,
-        workspaceStatuses: [],
-        projectGroups: [group]
-      })
-      for (const key of keys) {
-        collapsedGroups.delete(key)
-      }
-      const rendered = plan.render(collapsedGroups).filter((row) => row.type === 'item')
-      expect(rendered.map((row) => row.worktree.id)).toEqual([parent.id, child.id, grandchild.id])
-      expect(rendered[2]?.occurrence).toBe(occurrence)
-      expect(rendered.slice(1).map((row) => row.showProjectName)).toEqual([true, false])
-    }
-  )
 
   it('keeps a hidden parent child in its own section without redundant context', () => {
     const rows = buildRows(

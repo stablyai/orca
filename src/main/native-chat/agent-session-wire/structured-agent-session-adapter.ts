@@ -1,6 +1,7 @@
+import type { CodexAccountUsageRead } from '../../rate-limits/codex-rpc-rate-limit-mapper'
 import type { ClaudeAccountRecipe } from '../../../shared/agent-session/lifecycle/agent-session-acquired-account'
 import type { StructuredAgentSessionAdmitFreshInput } from './structured-agent-session-input-admission'
-import type { AiVaultConversationCopy } from '../../../shared/ai-vault-resume-preparation'
+import type { AiVaultConversationCopy } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type {
   AgentSessionRewindFork,
@@ -33,6 +34,9 @@ import type {
   AgentSessionCloseObserver,
   StructuredAgentSessionAdapterStop
 } from './structured-agent-session-adapter-stop'
+/** `unknown` (no timely, correlated answer) skips this idle stop and asks again later. */
+export type AgentSessionIdleConfirmation = 'idle' | 'busy' | 'unknown'
+
 export type { AgentSessionCancelOutcome } from './structured-agent-session-adapter-stop'
 export type {
   StructuredAgentSessionChildEndCause,
@@ -153,6 +157,18 @@ export type StructuredAgentSessionOptionsReportedEvent =
 export type StructuredAgentSessionLifecycleEvent =
   | StructuredAgentSessionEndedEvent
   | StructuredAgentSessionOptionsReportedEvent
+  | StructuredAgentSessionRetiringEvent
+
+/** A logical failure stops input immediately; only a later ended event proves writer death. */
+export type StructuredAgentSessionRetiringEvent = {
+  type: 'retiring'
+  sessionId: string
+  reason: string
+  failure: SubmissionRejectionFact
+  fence: number
+  acquisitionGeneration: string
+  observedAt: number
+}
 
 export type StructuredAgentSessionProviderChildPhase = 'starting' | 'ready'
 
@@ -177,6 +193,7 @@ export type StructuredAgentSessionSetOptionInput = {
 }
 
 export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & {
+  readAccountUsage?(record: AgentSessionRecord, signal: AbortSignal): Promise<CodexAccountUsageRead>
   open: StructuredAgentSessionProviderOpen
   supportsCreate?(location: AgentSessionExecutionLocation, agent: string): boolean
   /** Keep runtime/location support in adapter data for remote enablement. */
@@ -259,6 +276,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   }): Promise<{ ok: true } | { ok: false; rejected: string }>
   /** Derive unanswered retained work from the live child; false without one. */
   holdsDispatch?(sessionId: string): boolean
+  /** Fresh answer before an idle stop: provider-declared work keeps the child; undefined has none to ask. */
+  confirmIdle?(sessionId: string): Promise<AgentSessionIdleConfirmation> | undefined
   /** The root turn the live child is running, null when idle; absent when the agent cannot say. */
   liveTurnId?(sessionId: string): string | null | undefined
   /** The live child opened in another approval mode than requested and this input picks another model. */

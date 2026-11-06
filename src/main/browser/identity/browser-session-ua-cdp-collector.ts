@@ -1,6 +1,6 @@
 import WebSocket from 'ws'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
-import { isRecord } from '../../../shared/agent-status-child-work-value-guards'
+import { isRecord } from '../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 
 export type BrowserSessionUaCdpRequest = Readonly<{
   targetType: string

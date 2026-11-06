@@ -23,9 +23,12 @@ vi.mock('../../src/cli/runtime-client', async () => {
 })
 vi.mock('../../src/cli/runtime/environments', () => ({
   addEnvironmentFromPairingCode: mocks.addEnvironmentFromPairingCodeMock,
-  listEnvironments: mocks.listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../../src/shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: mocks.listEnvironmentsMock
 }))
 vi.mock('child_process', async (importOriginal) => {
   const original = await importOriginal<typeof childProcess>()

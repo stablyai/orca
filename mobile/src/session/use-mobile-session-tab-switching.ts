@@ -14,7 +14,6 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
     worktreeId,
     client,
     sessionTabs,
-    defaultTerminalHandlesToLiveInput,
     setActiveHandle,
     setSplitTerminalHandles,
     setActiveSessionTabId,
@@ -22,6 +21,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
     markdownDocs,
     fileDocs,
     terminalUnsubsRef,
+    subscribingHandlesRef,
     terminalDiagnosticsRef,
     activeHandleRef,
     visibleTerminalHandlesRef,
@@ -53,7 +53,6 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       terminalDiagnosticsRef.current.tabSwitch('terminal', matchingTab?.id ?? '', false, handle)
       pendingSelectionRef.current = { kind: 'terminal', handle, tabId: matchingTab?.id ?? null }
       activeSessionTabTypeRef.current = 'terminal'
-      defaultTerminalHandlesToLiveInput([handle])
       setActiveSessionTabId(matchingTab?.id ?? null)
       const visible = visibleTerminalHandlesRef?.current
       if (visible?.length === 2 && !visible.includes(handle)) {
@@ -93,7 +92,6 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
     },
     [
       client,
-      defaultTerminalHandlesToLiveInput,
       reportActivation,
       sessionTabs,
       setSplitTerminalHandles,
@@ -110,6 +108,14 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       }
       if (tab.type === 'terminal') {
         if (typeof tab.terminal === 'string') {
+          if (
+            tab.id === activeSessionTabId &&
+            tab.terminal === activeHandleRef.current &&
+            (terminalUnsubsRef.current.has(tab.terminal) ||
+              subscribingHandlesRef.current.has(tab.terminal))
+          ) {
+            return
+          }
           switchTab(tab.terminal)
           return
         }

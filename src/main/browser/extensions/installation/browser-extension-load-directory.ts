@@ -2,14 +2,14 @@ import { createHash } from 'node:crypto'
 import { statSync } from 'node:fs'
 import { cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
-import type { InstalledBrowserExtension } from '../../../../shared/browser-extension-types'
+import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 import {
   BROWSER_EXTENSION_CONTENT_SCRIPT_FILE,
   BROWSER_EXTENSION_ORIGINAL_MANIFEST_FILE,
   BROWSER_EXTENSION_WORKER_SHIM_FILE,
   BROWSER_EXTENSION_WORKER_WRAPPER_FILE,
   BROWSER_EXTENSION_WORKER_TOKEN_FILE
-} from '../../../../shared/browser-extension-worker-api'
+} from '../../../../shared/browser/extensions/browser-extension-worker-api'
 import { buildBrowserExtensionBackgroundWrapper } from './browser-extension-background-wrapper'
 import { withOrcaContentScript } from './browser-extension-content-script-manifest'
 import {

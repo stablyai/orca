@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { BrowserClientHostLeaseAuthority } from '../../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostLeaseAuthority } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { retireBrowserRoutePartitionStorageForEnvironment } from './browser-route-partition-storage-retirement'
 import { PairedRuntimeBrowserClientHostComposition } from '../../client-hosts/lifecycle/paired-runtime-browser-client-host-composition'
 import { PairedRuntimeBrowserClientHostRegistry } from '../../client-hosts/lifecycle/paired-runtime-browser-client-host-registry'

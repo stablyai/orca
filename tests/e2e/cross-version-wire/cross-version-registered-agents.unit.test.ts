@@ -13,7 +13,7 @@ import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '.
 import '../../../src/shared/agent-session/agent-session-runtime-capabilities'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../src/shared/runtime-types'
 import '../../../src/shared/structured-native-chat-launch-route'
-import { parseWorkspaceSession } from '../../../src/shared/workspace-session-schema'
+import { parseWorkspaceSession } from '../../../src/shared/workspace-session/workspace-session-schema'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,

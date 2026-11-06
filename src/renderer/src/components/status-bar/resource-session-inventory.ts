@@ -1,4 +1,4 @@
-import type { DaemonSession } from './resource-usage-merge-types'
+import type { PtyListedSession as DaemonSession } from '../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 
 /** Last-known daemon terminal inventory for the Resource Manager badge. */
 export type DaemonSessionInventory = {

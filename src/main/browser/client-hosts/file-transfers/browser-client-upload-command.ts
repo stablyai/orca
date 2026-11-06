@@ -1,5 +1,5 @@
-import { BROWSER_CLIENT_FILE_CHANNEL_REQUIRED_ERROR } from '../../../../shared/browser-client-file-channel-methods'
-import type { BrowserClientHostCommandEvent } from '../../../../shared/browser-client-host-protocol'
+import { BROWSER_CLIENT_FILE_CHANNEL_REQUIRED_ERROR } from '../../../../shared/browser/client-hosting/browser-client-file-channel-methods'
+import type { BrowserClientHostCommandEvent } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { BrowserClientPageCommandError } from '../../client-pages/execution/browser-client-page-command-failure'
 import type { BrowserClientFileChannelTransport } from './browser-client-file-channel-transport'
 import type { BrowserClientUploadStaging } from './browser-client-upload-staging'

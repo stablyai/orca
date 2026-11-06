@@ -3,12 +3,12 @@ import { getAiVaultWslHomeDirs, invalidateAiVaultSessionListCache } from './cach
 import { deleteAiVaultSessionFile, type AiVaultSessionPathRemover } from './session-delete'
 import { invalidateSessionParseCacheEntry } from './parse-cache/session-parse-cache-store'
 import { invalidateAiVaultBackgroundCache } from './scan-service/session-scanner-background'
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
+import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type {
   AiVaultDeleteSessionArgs,
   AiVaultDeleteSessionResult
-} from '../../shared/ai-vault-session-deletion'
+} from '../../shared/ai-vault/contracts/ai-vault-session-deletion'
 
 export type HostAiVaultSessionDeleteDeps = {
   removePath: AiVaultSessionPathRemover

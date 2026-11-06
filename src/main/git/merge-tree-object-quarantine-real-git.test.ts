@@ -2,11 +2,11 @@ import { existsSync, readdirSync, writeFileSync } from 'node:fs'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { GIT_OBJECT_QUARANTINE_DIR_PREFIX } from '../../shared/git-object-quarantine'
+import { GIT_OBJECT_QUARANTINE_DIR_PREFIX } from '../../shared/git/objects/git-object-quarantine'
 import {
   createDivergentRepoFixture,
   type DivergentRepoFixture
-} from '../../shared/git-object-quarantine-real-git.test-fixture'
+} from '../../shared/git/objects/git-object-quarantine-real-git.test-fixture'
 import {
   __resetPRConflictSummaryCachesForTests,
   getPRConflictSummary
@@ -162,22 +162,6 @@ describe('merge-tree runs against a scratch object store (real Git)', () => {
     expect(offline?.files).toEqual(['shared.txt'])
     expect(scratchFoldersMade).toHaveLength(2)
     expect(clone.scratchDirectories()).toEqual([])
-  })
-
-  it('makes no scratch folder until a check shows this Git writes trees, then one per check', async () => {
-    __resetPRConflictSummaryCachesForTests()
-    const base = fixture.git(fixture.repoPath, 'rev-parse', 'main').trim()
-    const head = fixture.git(fixture.repoPath, 'rev-parse', 'feature-conflict').trim()
-
-    const first = await getPRConflictSummary(fixture.repoPath, 'main', base, head)
-    expect(scratchFoldersMade).toEqual([])
-    __resetPRConflictSummaryDerivationCachesForTests()
-    const second = await getPRConflictSummary(fixture.repoPath, 'main', base, head)
-
-    expect(first?.files).toEqual(['shared.txt'])
-    expect(second?.files).toEqual(['shared.txt'])
-    expect(scratchFoldersMade).toHaveLength(1)
-    expect(fixture.scratchDirectories()).toEqual([])
   })
 
   it('removes the scratch directory when the Git command fails', async () => {

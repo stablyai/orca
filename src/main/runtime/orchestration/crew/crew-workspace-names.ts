@@ -1,5 +1,5 @@
 import { chatNameInputs, layoutNameInputs, terminalNameInputs } from '../orchestration-sender-name'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
 /** Excludes scrollback, focus, bells and other session bookkeeping from name invalidation. */
 export function crewWorkspaceNames(session: WorkspaceSessionState | null | undefined) {

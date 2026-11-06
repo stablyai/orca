@@ -11,8 +11,8 @@ vi.mock('electron', () => ({ app: { getAppPath: () => process.cwd() } }))
 import { runProcess } from '@orca/process-host'
 import { setAppEnvironment } from '../../../shared/app-environment'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
-import { parsePairingCode } from '../../../shared/pairing'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
 import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import { buildWslExecArgs } from '../../../shared/wsl-login-shell-command'
 import {

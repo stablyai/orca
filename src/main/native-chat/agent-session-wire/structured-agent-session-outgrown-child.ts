@@ -3,7 +3,7 @@
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import type { AgentChildWorkView } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import {
@@ -21,10 +21,8 @@ import {
 type OutgrownChildReading = Pick<StructuredAgentSessionHostSession, 'child'> & {
   journal: Pick<
     AgentSessionJournal,
-    'visitItemsWithLinkage' | 'itemFence' | 'newestTurn' | 'itemBody'
-  > & {
-    submissions(): readonly Pick<AgentJournalSubmission, 'dispatchState' | 'fence' | 'rejection'>[]
-  }
+    'visitItemsWithLinkage' | 'itemFence' | 'newestTurn' | 'itemBody' | 'inputOrder'
+  >
 }
 
 const signedOut = (failure: unknown): boolean =>
@@ -38,16 +36,7 @@ export function structuredAgentSessionChildReportedSignedOut(
   if (!child || child.phase === 'starting' || child.close) {
     return false
   }
-  if (
-    journal
-      .submissions()
-      .some(
-        (submission) =>
-          submission.dispatchState === 'rejected' &&
-          submission.fence === child.fence &&
-          signedOut(submission.rejection)
-      )
-  ) {
+  if (journal.inputOrder.signedOutAt(child.fence)) {
     return true
   }
   // A subagent’s sign-in failure says nothing about the parent.

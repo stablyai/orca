@@ -1,5 +1,5 @@
 import type { AutomationDefinitionOperations } from './automation-definition-operations'
-import type { WorkspaceRunContext } from '../../../shared/task-source-context'
+
 import type {
   Automation,
   AutomationPrecheckResult,
@@ -15,11 +15,12 @@ import { hasExtraAgentArgs } from '../../../shared/agent-launch/startup/automati
 import { getAutomationLegacyRepoId } from '../../../shared/automation-run-identity'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import {
+  type WorkspaceRunContext,
   buildTaskSourceContextFromRepo,
   buildWorkspaceRunContext
 } from '../../../shared/task-source-context'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 
 export function normalizeAutomationRunWorkspaceDisplayName(value: string | null): string | null {
   const trimmed = value?.trim()

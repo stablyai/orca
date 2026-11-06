@@ -12,7 +12,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import { getWorkspaceStatusVisualMeta } from '../sidebar/workspace-status'
+import { getWorkspaceStatusVisualMeta } from '../sidebar/workspace-status/presentation/workspace-status'
 import type { DashboardCard, DashboardFilterOptions } from '../../../../shared/dashboard-snapshot'
 import {
   activeDashboardFilterCount,

@@ -10,7 +10,7 @@ import {
   queuePendingAgentStartupDelivery,
   resolveAgentStartupTabId
 } from '@/lib/agent-startup-delayed-delivery'
-import type { FolderWorkspaceLinkedTask } from '../../../shared/folder-workspace-types'
+import type { WorkspaceLinkedItem as FolderWorkspaceLinkedTask } from '../../../shared/worktree/types'
 import { slugifyForWorkspaceName } from '../../../shared/workspace-name'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 export { getLinkedWorkItemSuggestedName } from '../../../shared/workspace-name'

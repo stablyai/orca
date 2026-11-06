@@ -37,8 +37,7 @@ import {
 } from './browser-session-profile-retirement'
 import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
 import { markBrowserIdentityMigrationNoticePending } from '../identity/browser-identity-mode-store'
-import { forgetBrowserSitePermissions } from '../site-settings/browser-site-permission-store'
-import { forgetBrowserSiteDisplay } from '../site-settings/browser-site-display-store'
+import { forgetBrowserProfileOwnedStores } from './browser-profile-owned-stores'
 import { attachBrowserExtensionsToProfileSession } from '../extensions/profile-sessions/browser-extension-session-loader'
 
 type ExtensionIdListKey = 'enabledExtensionIdsByProfileId' | 'pinnedExtensionIdsByProfileId'
@@ -199,11 +198,15 @@ class BrowserSessionRegistry {
     return [...this.profiles.values()]
   }
 
+  /** Called after startup has materialized the known profile sessions. */
+  profileIdForSession(candidate: Electron.Session): string | null {
+    return (
+      this.listProfiles().find((p) => session.fromPartition(p.partition) === candidate)?.id ?? null
+    )
+  }
+
   isAllowedPartition(partition: string): boolean {
-    if (partition === this.defaultPartition) {
-      return true
-    }
-    return [...this.profiles.values()].some((p) => p.partition === partition)
+    return this.listProfiles().some((p) => p.partition === partition)
   }
 
   resolvePartition(profileId: string | null | undefined): string {
@@ -284,14 +287,12 @@ class BrowserSessionRegistry {
 
   async deleteProfile(profileId: string): Promise<boolean> {
     const profile = this.profiles.get(profileId)
-    if (!profile || profile.scope === 'default') {
+    if (!profile || profile.scope === 'default' || !forgetBrowserProfileOwnedStores(profileId)) {
       return false
     }
     this.profiles.delete(profileId)
     this.persistProfiles()
     this.onProfilesChanged?.()
-    forgetBrowserSitePermissions(profileId)
-    forgetBrowserSiteDisplay(profileId)
     this.persistMeta(
       forgetBrowserSessionProfileMeta(this.loadPersistedMeta(), profile, this.defaultPartition)
     )

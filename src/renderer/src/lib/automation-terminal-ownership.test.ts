@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
   createAutomationTerminalOwnership,
   type AutomationTerminalOwnershipStore

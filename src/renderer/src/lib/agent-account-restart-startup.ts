@@ -13,7 +13,7 @@ import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
 import { isSessionHeldByAnotherPane } from '@/lib/claude-session-pane-holders'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata,

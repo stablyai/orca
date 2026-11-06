@@ -3,7 +3,7 @@ import { bindDeferredRpcOperation, defineRpcOperation } from './rpc-operation'
 import { rpcResultVariant } from './rpc-operation-result-reader'
 import type { RpcClient, SendRequestOptions } from './rpc-client'
 import type { RpcResponse } from './types'
-import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY } from '../../../src/shared/source-control-runtime-capabilities'
+import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY } from '../../../src/shared/source-control/runtime/source-control-runtime-capabilities'
 import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../src/shared/github/work-item-target'
 
 export const GITHUB_CONNECTION_CHANGED = 'The Orca server connection changed. Try again.'

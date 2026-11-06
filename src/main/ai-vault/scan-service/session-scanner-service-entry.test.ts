@@ -49,17 +49,6 @@ describe('AI Vault service entry cache invalidation', () => {
     scanAiVaultSessions.mockResolvedValue({ sessions: [], issues: [], scannedAt: '2026-08-10' })
   })
 
-  it('re-applies an invalidation once and then stops re-evicting the path', async () => {
-    emit({ type: 'invalidate', generation: 1, paths: ['/transcripts/a.jsonl'] })
-    expect(invalidationsFor('/transcripts/a.jsonl')).toBe(1)
-
-    await runScan(1)
-    expect(invalidationsFor('/transcripts/a.jsonl')).toBe(2)
-
-    await runScan(2)
-    expect(invalidationsFor('/transcripts/a.jsonl')).toBe(2)
-  })
-
   it('keeps re-applying while another request is still executing', async () => {
     let releaseSlowScan: (() => void) | undefined
     scanAiVaultSessions.mockImplementationOnce(

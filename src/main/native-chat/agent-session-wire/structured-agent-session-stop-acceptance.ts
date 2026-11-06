@@ -105,8 +105,8 @@ export async function acceptCapturedChatStop(
     return accepted.ok ? { ok: true, value: { settled: false, turnId: null } } : accepted
   }
   const sinceStop = ctx.journal.queuedMessages.userStopInForce()?.sequence
-  const handed = ctx.journal
-    .submissions()
+  const handed = ctx.journal.inputOrder
+    .recoverableSubmissions()
     .some(
       (entry) =>
         entry.fence === ctx.fence &&

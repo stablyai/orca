@@ -114,7 +114,7 @@ async function startHost(): Promise<void> {
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${acquire.mock.calls.length}`,
-    idleSweep: { intervalMs: 5, idleMs },
+    idleSweep: { intervalMs: 5, idleMs: () => idleMs },
     now: () => clock
   })
 }

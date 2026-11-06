@@ -34,13 +34,13 @@ vi.mock('@/lib/agent-session/structured-agent-session-provisional-tab', async (i
 })
 
 import { useAppStore } from '@/store'
-import { projectSourceControlActionLaunch } from '../../../shared/source-control-action-launch-preferences'
+import { projectSourceControlActionLaunch } from '../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
-import { submitFolderWorkspaceCreate } from '@/components/sidebar/folder-workspace-composer-submit'
+import { submitFolderWorkspaceCreate } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit'
 import {
   makeFolderWorkspace,
   makeProjectGroup
-} from '@/components/sidebar/folder-workspace-composer-submit-fixtures'
+} from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { launchStructuredWorktreeSession } from './worktree-creation-structured-session'
@@ -125,8 +125,7 @@ function seedPairedServer(): ReturnType<typeof vi.fn> {
     worktreesByRepo: { 'repo-1': [OTHER, CREATED] },
     tabsByWorktree: {},
     ptyIdsByTabId: {},
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only checks the creation is still pending.
-    pendingWorktreeCreations: { 'creation-1': {} as never },
+    pendingWorktreeCreations: { 'creation-1': pendingCreation() },
     settings: {
       ...getDefaultSettings(path.join('workspace', '.orca')),
       activeRuntimeEnvironmentId: 'server-1'
@@ -147,6 +146,18 @@ const REQUEST = {
     launchConfig: { agent: 'claude' }
   }
 } as unknown as WorktreeCreationRequest
+
+function pendingCreation() {
+  return {
+    creationId: 'creation-1',
+    phase: 'creating' as const,
+    status: 'creating' as const,
+    startedAt: 1,
+    indeterminate: false,
+    loaderVisible: true,
+    request: REQUEST
+  }
+}
 
 afterEach(() => {
   mocks.mainStarts.length = 0
@@ -203,8 +214,7 @@ function seedThisMachine(): void {
     worktreesByRepo: { 'repo-1': [LOCAL_OTHER, LOCAL_CREATED] },
     tabsByWorktree: {},
     ptyIdsByTabId: {},
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only checks the creation is still pending.
-    pendingWorktreeCreations: { 'creation-1': {} as never },
+    pendingWorktreeCreations: { 'creation-1': pendingCreation() },
     settings: getDefaultSettings(path.join('workspace', '.orca')),
     // The user moved to another workspace while the create ran.
     activeWorktreeId: LOCAL_OTHER.id

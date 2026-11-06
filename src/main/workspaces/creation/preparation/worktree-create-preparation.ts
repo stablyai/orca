@@ -129,6 +129,10 @@ async function prepareWorktreeCreateInBackground(
     getWorktreePathSettings(repo, store.getSettings(), getWorktreeMirrorDistro(store, repo))
   )
   const canonicalBase = await canonicalBaseRef(repo.path, baseBranch, options)
+  // Project removal already released this repo's checkouts; arming one now would orphan it.
+  if (store.getRepo && !store.getRepo(repo.id)) {
+    return
+  }
   return startPreparation({
     repoPath: repo.path,
     workspaceRoot,

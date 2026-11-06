@@ -6,12 +6,12 @@ import {
   getDaemonPidPath,
   getDaemonSocketPath,
   getDaemonTokenPath
-} from '../../src/main/daemon/daemon-spawner'
-import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
+} from '../../src/main/daemon/launch/daemon-spawner'
+import { PROTOCOL_VERSION } from '../../src/main/daemon/protocol/daemon-protocol-version'
 import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
   toWebTerminalSurfaceTabId
-} from '../../src/shared/terminal-surface-id'
+} from '../../src/shared/workspace-layout/terminal-surface-id'
 import { LAYOUT_REOPEN_HELD_PANES_CAPABILITY } from '../../src/shared/workspace-layout/layout-intents-capability'
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'

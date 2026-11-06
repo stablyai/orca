@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import type { GitDiffResult } from '../../../shared/git-diff-compare-types'
+import type { GitDiffResult } from '../../../shared/git/diff/git-diff-compare-types'
 import { getBranchDiff } from '../../git/source-control/branch-diff'
 import { getCommitDiff } from '../../git/source-control/commit-diff'
 import {

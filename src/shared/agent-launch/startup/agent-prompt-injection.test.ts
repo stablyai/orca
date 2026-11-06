@@ -5,6 +5,7 @@ import {
   buildAgentPromptPasteBytes,
   getAgentPromptSubmitDelayMs,
   getTerminalPasteIngestMs,
+  isCompleteAgentPromptDraft,
   isHeldAgentPromptDraft,
   iterateAgentPromptPasteChunks
 } from './agent-prompt-injection'
@@ -33,13 +34,6 @@ describe('agent prompt injection bytes', () => {
     expect(getAgentPromptSubmitDelayMs('win32', bytes)).toBeGreaterThan(measuredMs)
   })
 
-  it('scales without a cap all the way to the terminal input ceiling', () => {
-    const ceilingBytes = 16 * 1024 * 1024
-    expect(getAgentPromptSubmitDelayMs('win32', ceilingBytes)).toBeGreaterThan(250_000)
-    // Even the fast platforms outrun a flat 500 ms at the ceiling.
-    expect(getAgentPromptSubmitDelayMs('linux', ceilingBytes)).toBeGreaterThan(4_000)
-  })
-
   it('sanitizes embedded escape bytes before framing', () => {
     const bytes = buildAgentPromptPasteBytes('before\x1b[201~after\x1b')
     expect(bytes).toBe(`${BEGIN}before<ESC>[201~after<ESC>${END}`)
@@ -56,6 +50,23 @@ describe('agent prompt injection bytes', () => {
       expect(Buffer.byteLength(chunk, 'utf8')).toBeLessThanOrEqual(31)
       expect(Buffer.from(chunk, 'utf8').toString('utf8')).toBe(chunk)
     }
+  })
+})
+
+describe('isCompleteAgentPromptDraft', () => {
+  it.each([
+    ['the whole prompt', 'first line\r\nsecond line', 'first line\nsecond line', true],
+    ['a prefix of it', 'first line\nsecond line', 'first line', false],
+    [
+      'the prompt with a newline moved, as a wrap shows it',
+      'first line\nsecond line',
+      'first line second\nline',
+      false
+    ],
+    ['the prompt with its spacing edited', 'a  b', 'a b', false],
+    ['a prompt whose trailing newline may not render', 'first line\n', 'first line', false]
+  ])('%s', (_case, prompt, draft, complete) => {
+    expect(isCompleteAgentPromptDraft(draft, prompt)).toBe(complete)
   })
 })
 

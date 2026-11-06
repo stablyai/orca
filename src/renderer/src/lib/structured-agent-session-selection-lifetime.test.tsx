@@ -23,7 +23,7 @@ import {
 import { useStructuredAgentSessionOptions } from '@/components/native-chat/use-structured-agent-session-options'
 import { listRuntimeSessionHostsForStartup } from '@/app-shell/startup-runtime-session-hosts'
 import { structuredAgentSessionTargetForTab } from '@/runtime/structured-agent-session-owner'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   registerStructuredSelectionCatalogStore,
   forgetStructuredSessionSelection,

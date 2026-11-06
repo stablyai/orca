@@ -1,5 +1,5 @@
 import { track } from '../../telemetry/client'
-import type { AgentHookAttributionDiagnostics } from '../../../shared/agent-hook-attribution-diagnostics'
+import type { AgentHookAttributionDiagnostics } from '../../../shared/agent-hook-listener/state/agent-hook-attribution-diagnostics'
 
 /** Keep unattributed hook deliveries visible in telemetry without rejecting the request. */
 export function trackEmptyPaneKeyHook(

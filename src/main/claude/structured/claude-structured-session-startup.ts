@@ -29,7 +29,7 @@ import {
   observeClaudeSettingsApplied,
   readClaudeSettingsApplied,
   readClaudeFastModeFacts,
-  readClaudeSettingsEffort
+  observeClaudeSettingsEffort
 } from './launch/claude-structured-session-options'
 import { claudeExecutionObservations } from './claude-structured-execution-observations'
 import {
@@ -175,7 +175,6 @@ function applyClaudeSettingsFacts(
   writtenSinceRead: boolean
 ): void {
   const { settings, prepared } = facts
-  const effort = readClaudeSettingsEffort(settings)
   const published = claudeStructuredSessionPublicationOptions(prepared)
   if (!writtenSinceRead) {
     const applied = readClaudeSettingsApplied(settings)
@@ -192,19 +191,9 @@ function applyClaudeSettingsFacts(
     return
   }
   observeClaudeSettingsApplied(session, settings)
+  observeClaudeSettingsEffort(session, settings)
   const agrees = (key: string, reported: string): boolean =>
     !session.options.has(key) || session.options.get(key) === reported
-  if (effort) {
-    session.reportedOptions.effort = effort
-    if (agrees('effort', effort)) {
-      session.confirmedOptions.add('effort')
-    }
-  }
-  // A launch `--effort` shows only in `applied`, never in `effective` (measured on 2.1.280).
-  const launchedEffort = session.options.get('effort')
-  if (launchedEffort !== undefined && session.appliedOptions?.effort === launchedEffort) {
-    session.confirmedOptions.add('effort')
-  }
   if (published.fastMode !== null) {
     session.reportedOptions.fastMode = published.fastMode
     if (agrees('fastMode', String(published.fastMode))) {
@@ -223,7 +212,7 @@ function claudeStartedReportedOptions(
   const { model: _projected, ...rest } = current
   const model = claudeExecutionObservations(session).model
   const observed = { ...rest, ...(model ? { model } : {}) }
-  if (session.options.has('effort') || session.reportedOptions.effort !== undefined) {
+  if (session.options.has('effort')) {
     return { reportedOptions: observed }
   }
   const { effort: _displayOnly, ...persisted } = observed

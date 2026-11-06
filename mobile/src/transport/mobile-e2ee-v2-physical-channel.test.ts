@@ -8,16 +8,16 @@ import {
   encodeMobileE2EEV2Transcript,
   validateMobileE2EEV2Handshake,
   type MobileE2EEV2Ready
-} from '../../../src/shared/mobile-e2ee-v2-contract'
+} from '../../../src/shared/remote-runtime/e2ee/mobile-e2ee-v2-contract'
 import {
   openMobileE2EEV2Frame,
   sealMobileE2EEV2Frame
-} from '../../../src/shared/mobile-e2ee-v2-framing'
-import { encodeCompressedFrame } from '../../../src/shared/paired-e2ee-compressed-frame'
+} from '../../../src/shared/remote-runtime/e2ee/mobile-e2ee-v2-framing'
+import { encodeCompressedFrame } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
 
 vi.mock('./direct-e2ee-framing-policy', async () => {
   const { createPairedE2EEFramingPolicy } =
-    await import('../../../src/shared/paired-e2ee-framing-policy')
+    await import('../../../src/shared/remote-runtime/e2ee/paired-e2ee-framing-policy')
   return {
     createDirectE2EEFramingPolicy: (key: string) =>
       createPairedE2EEFramingPolicy(key, {
@@ -37,7 +37,7 @@ vi.mock('expo-crypto', () => ({
 
 import { deriveSharedKey } from './e2ee'
 import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
-import { derivePairedE2EEV2KeySchedule as deriveMobileE2EEV2KeySchedule } from '../../../src/shared/paired-e2ee-v2-key-schedule'
+import { derivePairedE2EEV2KeySchedule as deriveMobileE2EEV2KeySchedule } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-v2-key-schedule'
 import {
   MobileE2EEAuthenticationError,
   MobileE2EEV2PhysicalChannel,

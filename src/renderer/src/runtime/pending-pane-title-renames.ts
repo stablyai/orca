@@ -1,5 +1,5 @@
 import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
-import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
 
 // Hold local renames over pre-rename snapshots until host echo/new revision/expiry; unique leaf IDs key the hold.
 export const PENDING_PANE_TITLE_HOLD_MS = 15_000

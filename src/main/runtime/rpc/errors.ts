@@ -1,4 +1,4 @@
-import { formatTerminalStartFailure } from '../../../shared/terminal-start-failure'
+import { formatTerminalStartFailure } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 // Centralize the runtimeId envelope and error-code contracts that clients use for decisions and display.
 import { AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE } from '../../../shared/agent-launch/contracts/agent-launch-surface'
 import {
@@ -11,7 +11,7 @@ import { CONNECTOR_REPLY_ERROR_CODES } from '../../../shared/rpc-contract/connec
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../shared/orchestration-session-caller-codes'
 import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
 import { COMPUTER_ERROR_CODES } from '../../../shared/runtime-types'
-import { TerminalSplitOutcomeError } from '../../../shared/terminal-split-outcome'
+import { TerminalSplitOutcomeError } from '../../../shared/workspace-layout/terminal-split-outcome'
 import { WslHostWindowsDriveRefusalError } from '../../../shared/wsl-host-windows-drive-refusal'
 import { wslDistroHoldRpcFailure } from '../../../shared/wsl-distro-stopped-hold'
 import { LINEAR_ERROR_CODES } from '../../../shared/linear/agent-access'
@@ -32,7 +32,7 @@ import {
   classifySkillInstallFailureCode
 } from '../../../shared/skill-install-failure'
 import { PLUGIN_CLI_ERROR_CODES } from '../../../shared/plugins/approval/plugin-cli-approval'
-import { GIT_DIFF_TOO_LARGE_CODE } from '../../../shared/git-diff-transport-budget'
+import { GIT_DIFF_TOO_LARGE_CODE } from '../../../shared/git/diff/git-diff-transport-budget'
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../shared/automation-owner-conflict'
 import { ARCHIVE_HOOK_FAILED_REMOVAL_CODE } from '../../../shared/worktree/archive-hook-removal-gate'
 import { NESTED_WORKER_DEPTH_EXCEEDED_CODE } from '../../../shared/nested-worker-depth'

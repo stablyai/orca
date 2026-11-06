@@ -61,7 +61,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     })
 
     stubReactSyncEffect()
-    vi.doMock('../store', () => ({
+    vi.doMock('../store/index', () => ({
       useAppStore: {
         subscribe: vi.fn(() => () => {}),
         getState: () => storeState
@@ -151,7 +151,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     })
 
     stubReactSyncEffect()
-    vi.doMock('../store', () => ({
+    vi.doMock('../store/index', () => ({
       useAppStore: {
         subscribe: vi.fn(() => () => {}),
         getState: () => storeState
@@ -228,7 +228,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     })
 
     stubReactSyncEffect()
-    vi.doMock('../store', () => ({
+    vi.doMock('../store/index', () => ({
       useAppStore: {
         subscribe: vi.fn(() => () => {}),
         getState: () => storeState
@@ -302,7 +302,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     })
 
     stubReactSyncEffect()
-    vi.doMock('../store', () => ({
+    vi.doMock('../store/index', () => ({
       useAppStore: {
         subscribe: vi.fn(() => () => {}),
         getState: () => storeState
@@ -382,7 +382,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     )
 
     stubReactSyncEffect()
-    vi.doMock('../store', () => ({
+    vi.doMock('../store/index', () => ({
       useAppStore: {
         subscribe: vi.fn((listener: StoreSubscribeListener) => {
           subscribeListenerRef.current = listener
@@ -514,7 +514,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     })
 
     stubReactSyncEffect()
-    vi.doMock('../store', () => ({
+    vi.doMock('../store/index', () => ({
       useAppStore: {
         subscribe: vi.fn(() => () => {}),
         getState: () => storeState
@@ -586,7 +586,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       )
 
     stubReactSyncEffect()
-    vi.doMock('../store', () => ({
+    vi.doMock('../store/index', () => ({
       useAppStore: {
         subscribe: store.subscribe,
         getState: store.getState

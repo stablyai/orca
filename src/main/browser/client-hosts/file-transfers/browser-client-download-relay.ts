@@ -8,8 +8,8 @@ import {
   BROWSER_CLIENT_FILE_CHANNEL_PROTOCOL_VERSION,
   BROWSER_CLIENT_FILE_CHANNEL_TRANSFER_MAX_BYTES,
   BrowserClientFileChannelWriteResult
-} from '../../../../shared/browser-client-file-channel-protocol'
-import type { BrowserClientHostedPageInventory } from '../../../../shared/browser-client-host-protocol'
+} from '../../../../shared/browser/client-hosting/browser-client-file-channel-protocol'
+import type { BrowserClientHostedPageInventory } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { BrowserClientFileChannelTransport } from './browser-client-file-channel-transport'
 
 export const BROWSER_CLIENT_FILE_CHANNEL_WRITE_METHOD = 'browser.clientHost.fileChannel.write'

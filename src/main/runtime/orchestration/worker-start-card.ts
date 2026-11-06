@@ -4,7 +4,7 @@ import type {
   AgentJournalAgentStartItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentMessageSender } from '../../../shared/agent-session/agent-session-message-source'
-import type { AgentType } from '../../../shared/agent-status-types'
+import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrchestrationSessionCaller } from './orchestration-caller-identity'
 

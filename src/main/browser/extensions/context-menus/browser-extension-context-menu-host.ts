@@ -3,7 +3,7 @@ import type {
   BrowserExtensionContextMenuClick,
   BrowserExtensionContextMenuGroup,
   BrowserExtensionContextMenuPayload
-} from '../../../../shared/browser-extension-context-menu-types'
+} from '../../../../shared/browser/extensions/browser-extension-context-menu-types'
 import { chromeFrameId } from '../api/web-navigation'
 import { noteBrowserExtensionUserGesture } from '../api/permissions'
 import {

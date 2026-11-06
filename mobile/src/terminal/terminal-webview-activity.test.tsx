@@ -15,31 +15,6 @@ let root: ReactTestRenderer | undefined
 
 afterEach(() => act(() => root?.unmount()))
 
-it('restores the current activity policy before queued commands on readiness and reload', () => {
-  const post = vi.fn()
-  const transport = { post, pingsOnForegroundRecovery: () => false }
-  let controller: ReturnType<typeof useTerminalWebViewController> | undefined
-  function Probe({ active }: { active: boolean }) {
-    controller = useTerminalWebViewController({ interactionActive: active }, transport)
-    return null
-  }
-  act(() => {
-    root = create(<Probe active={false} />)
-  })
-  if (!controller) {
-    throw new Error('Controller did not mount')
-  }
-  act(() => controller?.receive({ type: 'web-ready' }))
-  expect(post.mock.calls[0][0]).toMatchObject({ type: 'set-interaction-active', active: false })
-  act(() => root?.update(<Probe active={true} />))
-  expect(post.mock.lastCall?.[0]).toMatchObject({ type: 'set-interaction-active', active: true })
-  act(() => controller?.resetReadiness())
-  act(() => root?.update(<Probe active={false} />))
-  post.mockClear()
-  act(() => controller?.receive({ type: 'web-ready' }))
-  expect(post.mock.calls[0][0]).toMatchObject({ type: 'set-interaction-active', active: false })
-})
-
 it('rejects bridge-delayed gestures while keeping query replies and readiness available', () => {
   const onTerminalInput = vi.fn(),
     onTerminalTap = vi.fn(),

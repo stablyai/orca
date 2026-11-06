@@ -3,7 +3,7 @@ import type {
   StructuredAgentSessionMutate
 } from './use-structured-agent-session-mutate'
 import type { StructuredAgentSessionLaunchView } from './use-native-chat-provisional-launch'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 export type StructuredAgentSessionOptionsArgs = {
@@ -18,6 +18,8 @@ export type StructuredAgentSessionOptionsArgs = {
   hostOptionStamp?: string
   fence: number | null
   turnId: string | null
+  /** The chat has a turn or a send: its value picks keep the remembered new-chat model. */
+  hasTurn?: boolean
   unloadedTurnRevisions: number | undefined
   capturePresentation?: CaptureStructuredAgentSessionPresentation
   mutate: StructuredAgentSessionMutate

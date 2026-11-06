@@ -1,3 +1,4 @@
+import type * as RuntimeEnvironmentStore from '../shared/remote-runtime/host-store/runtime-environment-store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -23,10 +24,17 @@ const {
 vi.mock('./runtime/environments', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
-    ...actual,
-    listEnvironments: () => [{ id: 'env-1', name: 'env-1' }]
+    ...actual
   }
 })
+
+vi.mock(
+  '../shared/remote-runtime/host-store/runtime-environment-store',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof RuntimeEnvironmentStore>()),
+    listEnvironments: () => [{ id: 'env-1', name: 'env-1' }]
+  })
+)
 
 // Stub hook writes: this suite runs real handlers that would otherwise edit the developer's agent configs.
 vi.mock('../main/agent-hooks/managed-agent-hook-controls', () => ({

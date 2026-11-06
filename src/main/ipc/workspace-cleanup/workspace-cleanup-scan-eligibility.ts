@@ -1,5 +1,5 @@
 import type { Worktree } from '../../../shared/worktree/types'
-import { getPersistedWorkspaceCleanupActivityAt } from '../../../shared/workspace-cleanup'
+import { getPersistedWorkspaceCleanupActivityAt } from '../../../shared/workspace-cleanup/workspace-cleanup'
 import { isWorkspaceInactiveForCleanup } from './workspace-cleanup-candidate'
 
 /** Preserve suggestion-only broad scans for older clients; full-list coverage requires explicit opt-in. */

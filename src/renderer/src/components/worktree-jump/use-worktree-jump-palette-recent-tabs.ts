@@ -7,7 +7,7 @@ import {
   orderRecentWorkspaceTabs,
   type RecentWorkspaceTabRow
 } from '@/lib/recent-workspace-tab-rows'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
   EMPTY_RECENT_TAB_ORDER,
   type OpenTabRecentRow,

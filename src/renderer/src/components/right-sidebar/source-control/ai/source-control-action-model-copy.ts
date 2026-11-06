@@ -2,13 +2,13 @@ import {
   findCatalogModel,
   getAgentSessionOptionCatalog
 } from '../../../../../../shared/agent-session/options/agent-session-option-catalog'
-import type { SourceControlActionLaunchPreferences } from '../../../../../../shared/source-control-ai-actions'
+import type { SourceControlActionLaunchPreferences } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import {
   sourceControlActionOptions,
   sourceControlActionPermissionModeRoute
-} from '../../../../../../shared/source-control-action-options'
-import { sourceControlActionSelectedPreferences } from '../../../../../../shared/source-control-action-launch-preferences'
+} from '../../../../../../shared/source-control/ai/recipes/source-control-action-options'
+import { sourceControlActionSelectedPreferences } from '../../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { translate } from '@/i18n/i18n'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { agentPermissionChoiceLabel } from '../../../agent/launch-settings/AgentPermissionChoiceControls'

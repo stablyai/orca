@@ -40,7 +40,7 @@ import type { AppState } from '../types'
 import type {
   WorkspaceCleanupCandidate,
   WorkspaceCleanupScanResult
-} from '../../../../shared/workspace-cleanup'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
 
 const WORKTREE_ID = 'repo1::/shared/workspace/path'
 const WORKTREE_PATH = '/shared/workspace/path'

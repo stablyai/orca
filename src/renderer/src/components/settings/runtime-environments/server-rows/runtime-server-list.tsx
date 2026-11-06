@@ -3,7 +3,7 @@ import type { ComponentProps } from 'react'
 import {
   getOrcadSshDeployment,
   type PublicKnownRuntimeEnvironment
-} from '../../../../../../shared/runtime-environments'
+} from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/managed-orcad-api'
 import type { RemoteServerUpdateEntry } from '@/runtime/remote-server-update-coordinator'
 import type { UpdateCheckOptions } from '../../../../../../shared/update-status-types'

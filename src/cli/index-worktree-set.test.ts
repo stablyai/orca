@@ -30,9 +30,12 @@ vi.mock('./runtime-client', async () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
 }))
 
 vi.mock('child_process', async () => {
@@ -43,7 +46,7 @@ vi.mock('child_process', async () => {
 import { main } from './index'
 import { RuntimeRpcFailureError } from './runtime/types'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
-import { useWorktreeAwarenessEnvironment } from './index-test-harness'
+import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 describe('orca cli worktree awareness', () => {
   useWorktreeAwarenessEnvironment({
@@ -422,6 +425,37 @@ describe('orca cli worktree awareness', () => {
   )
 
   it.each([
+    { flags: ['--read'], isUnread: false, acknowledges: true },
+    { flags: ['--unread'], isUnread: true, acknowledges: false },
+    { flags: [], isUnread: undefined, acknowledges: false }
+  ])(
+    'sends acknowledgement intent only for explicit --read: $flags',
+    async ({ flags, isUnread, acknowledges }) => {
+      queueFixtures(
+        callMock,
+        okFixture('req_read', { worktree: buildWorktree('/tmp/repo/child', 'feature/child') })
+      )
+      vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      await main(
+        ['worktree', 'set', '--worktree', 'id:repo::/tmp/repo/child', ...flags, '--json'],
+        '/tmp/repo'
+      )
+
+      expect(callMock).toHaveBeenCalledExactlyOnceWith(
+        'worktree.set',
+        expect.objectContaining(isUnread === undefined ? {} : { isUnread })
+      )
+      const params = callMock.mock.calls[0][1]
+      if (acknowledges) {
+        expect(params).toHaveProperty('acknowledgeAttention', true)
+      } else {
+        expect(params).not.toHaveProperty('acknowledgeAttention')
+      }
+    }
+  )
+
+  it.each([
     [['--unread', '--read'], 'Choose either --unread or --read'],
     [['--read', '--unread'], 'Choose either --unread or --read'],
     [['--read', 'yes'], '--read takes no value'],
@@ -442,5 +476,52 @@ describe('orca cli worktree awareness', () => {
     expect(process.exitCode).toBe(1)
 
     process.exitCode = priorExitCode
+  })
+
+  it('refuses a parent on this machine before any write when the server lacks cross-machine lineage', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+    pairRuntimeEnvironment(listEnvironmentsMock, 'build-box')
+    callMock.mockImplementation(async (method: string) => {
+      if (method === 'worktree.list') {
+        return worktreeListFixture([buildWorktree('/tmp/repo', 'main')])
+      }
+      if (method === 'status.get') {
+        return okFixture('req_status', { capabilities: [] })
+      }
+      if (method === 'worktree.show') {
+        const parent = { ...buildWorktree('/tmp/repo', 'main'), instanceId: 'parent-instance' }
+        return okFixture('req_show', { worktree: parent })
+      }
+      if (method === 'worktree.lineageList') {
+        return okFixture('req_lineage', { lineage: {}, installationId: 'mac-install' })
+      }
+      return okFixture('req_set', { worktree: buildWorktree('/srv/child', 'child') })
+    })
+    try {
+      await main(
+        [
+          'worktree',
+          'set',
+          '--worktree',
+          'id:repo::/srv/child',
+          '--parent-worktree',
+          'active',
+          '--display-name',
+          'renamed',
+          '--environment',
+          'build-box',
+          '--json'
+        ],
+        '/tmp/repo'
+      )
+      const methods = callMock.mock.calls.map(([method]) => method)
+      expect(methods).toContain('status.get')
+      expect(methods).not.toContain('worktree.set')
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = priorExitCode
+    }
   })
 })

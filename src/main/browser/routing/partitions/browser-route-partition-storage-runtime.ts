@@ -1,4 +1,4 @@
-import { listEnvironments } from '../../../../shared/runtime-environment-store'
+import { listEnvironments } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   deriveBrowserRoutePartitionStorageScope,
   deriveLocalSshBrowserRoutePartitionStorageScope

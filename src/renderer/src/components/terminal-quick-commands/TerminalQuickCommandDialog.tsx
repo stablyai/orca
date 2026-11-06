@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import type {
   TerminalQuickCommand,
   TerminalQuickCommandScope
-} from '../../../../shared/terminal-quick-command-types'
+} from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
@@ -10,8 +10,8 @@ import {
   getTerminalQuickCommandScope,
   isTerminalAgentQuickCommand,
   supportsTerminalAgentQuickCommand
-} from '../../../../shared/terminal-quick-commands'
-import { getTerminalQuickCommandBodySize } from '../../../../shared/terminal-quick-command-prompt-limit'
+} from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
+import { getTerminalQuickCommandBodySize } from '../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   Dialog,

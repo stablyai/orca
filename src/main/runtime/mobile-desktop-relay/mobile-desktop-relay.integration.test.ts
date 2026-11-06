@@ -4,11 +4,11 @@ import { GITHUB_REPO_WORK_ITEM_METHODS } from '../rpc/methods/github-repo-work-i
 import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../shared/github/work-item-target'
 import { GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY } from '../../../shared/task-source-runtime-capabilities'
 import { randomUUID } from 'node:crypto'
-import { publishHostDescriptor } from '../host-descriptor'
+import { publishHostDescriptor } from '../hosts/platform-probe/host-descriptor'
 import { GITHUB_ISSUE_METHODS } from '../rpc/methods/github-issue-methods'
 import { classifyExactGitHubOperation } from '../../../shared/github/exact-work-item-operation'
 import '../rpc/unused-default-rpc-methods.test-fixture'
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -18,16 +18,16 @@ import {
   DELEGATED_MOBILE_DEVICE_SYNC_METHOD,
   DelegatedMobileDeviceSyncParamsSchema
 } from '../../../shared/delegated-mobile-device-contract'
-import { decodeTerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
+import { decodeTerminalStreamFrame } from '../../../shared/terminal/stream/terminal-stream-protocol'
 import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
-import { mintBrowserScreencastSubscriptionId } from '../browser-screencast-subscription-id'
+import { mintBrowserScreencastSubscriptionId } from '../browser/screencast/browser-screencast-subscription-id'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { setRuntimeBrowserCommandsFactory } from '../runtime-browser-commands-factory'
-import { readRuntimeMetadata } from '../runtime-metadata'
-import { OrcaRuntimeRpcServer } from '../runtime-rpc'
+import { setRuntimeBrowserCommandsFactory } from '../browser/installation/runtime-browser-commands-factory'
+import { readRuntimeMetadata } from '../rpc/server/runtime-metadata'
+import { OrcaRuntimeRpcServer } from '../rpc/server/runtime-rpc'
 import { ORCHESTRATION_CALLER_METHODS } from '../rpc/methods/orchestration/caller-show'
-import { MOBILE_RPC_METHOD_ROUTES } from '../runtime-rpc/runtime-rpc-mobile-method-routing'
-import { MOBILE_RPC_METHOD_ALLOWLIST } from '../runtime-rpc/runtime-rpc-mobile-method-allowlist'
+import { MOBILE_RPC_METHOD_ROUTES } from '../rpc/server/runtime-rpc-mobile-method-routing'
+import { MOBILE_RPC_METHOD_ALLOWLIST } from '../rpc/server/runtime-rpc-mobile-method-allowlist'
 import { STATUS_METHODS } from '../rpc/methods/status'
 import { TERMINAL_METHODS } from '../rpc/methods/terminal'
 import { BROWSER_CORE_METHODS } from '../rpc/methods/browser-core'
@@ -37,8 +37,8 @@ import { RUNTIME_CLIENT_CAPABILITY_METHODS } from '../rpc/methods/runtime-client
 import { WORKTREE_METHODS } from '../rpc/methods/worktree'
 import { CLIENT_UI_METHODS } from '../rpc/methods/client-ui'
 import { PAIRING_METHODS } from '../rpc/methods/pairing'
-import { sendRequest } from '../runtime-rpc-test-harness'
-import { makeStore } from '../runtime-rpc-worktree-store-fixtures'
+import { sendRequest } from '../rpc/server/runtime-rpc-test-harness'
+import { makeStore } from '../rpc/server/runtime-rpc-worktree-store-fixtures'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import type * as PassthroughSocketModule from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
 import { connectPhone, pair, TARGET, type Frame } from './mobile-desktop-relay-phone.test-fixture'
@@ -108,7 +108,9 @@ vi.mock(
 const { getWorktreeOwnerMocks } = vi.hoisted(() => {
   function createWorktreeOwnerMocks() {
     return (async () =>
-      (await import('../runtime-rpc-worktree-store-fixtures')).createWorktreeListingMocks())()
+      (
+        await import('../rpc/server/runtime-rpc-worktree-store-fixtures')
+      ).createWorktreeListingMocks())()
   }
   let fixture: ReturnType<typeof createWorktreeOwnerMocks> | undefined
   return { getWorktreeOwnerMocks: () => (fixture ??= createWorktreeOwnerMocks()) }

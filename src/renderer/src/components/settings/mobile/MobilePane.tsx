@@ -21,8 +21,8 @@ import { translate } from '@/i18n/i18n'
 import {
   canMintMobilePairingOffer,
   type MobilePairingConnectionMode
-} from '../../../../../shared/mobile-pairing-connection-mode'
-import type { MobileRelayMintFailure } from '../../../../../shared/mobile-relay-mint-failure'
+} from '../../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../../../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
 import { useMobilePairingConnectionMode } from '../../mobile/use-mobile-pairing-connection-mode'
 import { useMobilePairingAddressPreference } from '../../mobile/use-mobile-pairing-address-preference'
 import { shouldOpenMobilePairingAddress } from './mobile-pane-search'
