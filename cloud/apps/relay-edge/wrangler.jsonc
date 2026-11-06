@@ -44,6 +44,8 @@
       "name": "orca-relay-edge-spike",
       "workers_dev": true,
       "preview_urls": false,
+      // Owner go 2026-11-06: the edge hostname on the spike until the production Worker exists.
+      "routes": [{ "pattern": "edge.relay.orca.dev", "custom_domain": true }],
       "durable_objects": {
         "bindings": [
           { "name": "HOST_RELAY", "class_name": "HostRelay" },

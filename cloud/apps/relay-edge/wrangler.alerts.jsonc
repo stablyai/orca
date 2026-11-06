@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Edge alerts (src/alerts.ts): separate from the edge so they keep running when it is broken.
+  // Secrets, set from stdin only: AE_READ_TOKEN, ALERT_WEBHOOK_URL.
+  "name": "orca-relay-edge-alerts-spike",
+  "main": "src/alerts.ts",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": false,
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "vars": {
+    "ACCOUNT_ID": "57e6ddd3bb755dbf8e8dc7ff557e9014",
+    "DATASET": "orca_relay_edge_spike",
+    "ENVIRONMENT": "spike",
+    "MIN_VOLUME": "200"
+  }
+}
