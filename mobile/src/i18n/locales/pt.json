@@ -2047,13 +2047,11 @@
       "saveNote": "Salvar nota"
     },
     "diffReviewLoaders": {
-      "changesLoadFailed": "Não foi possível carregar as alterações",
       "committedChangesFailed": "Falha ao carregar alterações commitadas",
       "committedChangesUnavailable": "Alterações commitadas indisponíveis",
       "committedDiffUnavailable": "Diff de alterações commitadas indisponível",
       "desktopUpdateRequired": "Atualize o Orca no desktop para revisar alterações no celular.",
       "diffLoadFailed": "Não foi possível carregar o diff",
-      "invalidSourceControlResponse": "A resposta do controle de versão foi inválida",
       "reviewNotesLoadFailed": "Não foi possível carregar as notas de revisão"
     },
     "diffReviewQueue": {

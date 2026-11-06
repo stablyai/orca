@@ -1981,13 +1981,11 @@
       "saveNote": "Notu kaydet"
     },
     "diffReviewLoaders": {
-      "changesLoadFailed": "Değişiklikler yüklenemedi",
       "committedChangesFailed": "Commit'lenmiş değişiklikler yüklenemedi",
       "committedChangesUnavailable": "Commit'lenmiş değişiklikler kullanılamıyor",
       "committedDiffUnavailable": "Commit'lenmiş diff kullanılamıyor",
       "desktopUpdateRequired": "Değişiklikleri mobilde incelemek için Orca masaüstü uygulamasını güncelleyin.",
       "diffLoadFailed": "Diff yüklenemedi",
-      "invalidSourceControlResponse": "Kaynak kontrolü yanıtı geçersizdi",
       "reviewNotesLoadFailed": "İnceleme notları yüklenemedi"
     },
     "diffReviewQueue": {

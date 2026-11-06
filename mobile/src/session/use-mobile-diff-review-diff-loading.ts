@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
@@ -50,7 +49,7 @@ type DiffLoadingInput = {
 
 // Seen files reopen from the document's cache; a loaded diff stays through transport blips.
 export function useMobileDiffReviewDiffLoading(input: DiffLoadingInput): ReviewDiffState {
-  useMobileTranslation()
+  const t = useMobileTranslation()
   const { hostId, client, connState, target, currentItem, screenState, statusRevision } = input
   const { diffShowWhitespace } = useMobileSourceControlSettings(hostId, client, connState).settings
   // useHostQuery keys by value, so a viewed tick that rebuilds the item reuses the same diff.
@@ -91,10 +90,7 @@ export function useMobileDiffReviewDiffLoading(input: DiffLoadingInput): ReviewD
     return {
       kind: 'error',
       itemKey,
-      message: translate(
-        'session.useDiffReviewDiffLoading.waitingForDesktop',
-        'Waiting for desktop...'
-      )
+      message: t('session.useDiffReviewDiffLoading.waitingForDesktop', 'Waiting for desktop...')
     }
   }
   if (diff.error && !diff.isFetching) {
@@ -103,7 +99,7 @@ export function useMobileDiffReviewDiffLoading(input: DiffLoadingInput): ReviewD
       itemKey,
       message:
         diff.error.message ||
-        translate('session.useDiffReviewDiffLoading.loadFailed', 'Unable to load diff')
+        t('session.useDiffReviewDiffLoading.loadFailed', 'Unable to load diff')
     }
   }
   return { kind: 'loading', itemKey }

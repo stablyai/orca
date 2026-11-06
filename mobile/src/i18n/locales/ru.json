@@ -2113,13 +2113,11 @@
       "saveNote": "Сохранить заметку"
     },
     "diffReviewLoaders": {
-      "changesLoadFailed": "Не удалось загрузить изменения",
       "committedChangesFailed": "Не удалось загрузить изменения в коммитах",
       "committedChangesUnavailable": "Изменения в коммитах недоступны",
       "committedDiffUnavailable": "Сравнение изменений в коммитах недоступно",
       "desktopUpdateRequired": "Обновите Orca на компьютере, чтобы проверять изменения на мобильном устройстве.",
       "diffLoadFailed": "Не удалось загрузить сравнение",
-      "invalidSourceControlResponse": "Некорректный ответ системы управления версиями",
       "reviewNotesLoadFailed": "Не удалось загрузить заметки к проверке"
     },
     "diffReviewQueue": {

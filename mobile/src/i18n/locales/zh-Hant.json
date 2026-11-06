@@ -1977,13 +1977,11 @@
       "saveNote": "儲存備註"
     },
     "diffReviewLoaders": {
-      "changesLoadFailed": "無法載入變更",
       "committedChangesFailed": "載入已提交的變更失敗",
       "committedChangesUnavailable": "無法取得已提交的變更",
       "committedDiffUnavailable": "無法取得已提交的差異",
       "desktopUpdateRequired": "請更新 Orca 桌面版，以便在手機上審查變更。",
       "diffLoadFailed": "無法載入差異",
-      "invalidSourceControlResponse": "原始碼控制回應無效",
       "reviewNotesLoadFailed": "無法載入審查備註"
     },
     "diffReviewQueue": {

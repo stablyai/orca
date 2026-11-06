@@ -2251,8 +2251,6 @@
       "committedChangesUnavailable": "Committed changes unavailable",
       "committedChangesFailed": "Committed changes failed",
       "desktopUpdateRequired": "Update Orca desktop to review changes on mobile.",
-      "changesLoadFailed": "Unable to load changes",
-      "invalidSourceControlResponse": "Source control response was invalid",
       "reviewNotesLoadFailed": "Unable to load review notes",
       "diffLoadFailed": "Unable to load diff",
       "committedDiffUnavailable": "Committed diff is unavailable",

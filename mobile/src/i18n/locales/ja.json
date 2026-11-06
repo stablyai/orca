@@ -1977,13 +1977,11 @@
       "saveNote": "メモを保存"
     },
     "diffReviewLoaders": {
-      "changesLoadFailed": "変更を読み込めません。",
       "committedChangesFailed": "コミット済みの変更の読み込みに失敗しました。",
       "committedChangesUnavailable": "コミット済みの変更は利用できません。",
       "committedDiffUnavailable": "コミット済みの差分は利用できません。",
       "desktopUpdateRequired": "モバイルで変更をレビューするには、デスクトップの Orca を更新してください。",
       "diffLoadFailed": "差分を読み込めません。",
-      "invalidSourceControlResponse": "ソース管理からの応答が無効でした。",
       "reviewNotesLoadFailed": "レビューノートを読み込めません。"
     },
     "diffReviewQueue": {
