@@ -268,7 +268,7 @@ export const NATIVE_CHAT_METHODS = [
         {
           surface: 'chat',
           viewKey: `nativeChat:${params.agent}:${params.sessionId}`,
-          agent: params.agent
+          agent: () => params.agent
         }
       )
     }

@@ -52,7 +52,7 @@ describe('mobile client telemetry', () => {
         {
           surface,
           viewKey,
-          agent,
+          agent: () => agent,
           now: new Date(now)
         }
       )
@@ -71,7 +71,7 @@ describe('mobile client telemetry', () => {
       {
         surface: 'chat',
         viewKey: 'agentSession:desktop',
-        agent: 'codex'
+        agent: () => 'codex'
       }
     )
 

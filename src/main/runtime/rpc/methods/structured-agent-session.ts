@@ -268,7 +268,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       recordMobileViewOpened(ctx, {
         surface: 'chat',
         viewKey: `agentSession:${params.sessionId}`,
-        agent: host.sessionAgent(params.sessionId)
+        agent: () => host.sessionAgent(params.sessionId)
       })
     }
   }),

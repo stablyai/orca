@@ -45,7 +45,8 @@ export function recordMobileViewOpened(
     surface: 'chat' | 'terminal'
     /** Names the chat or terminal, namespaced by stream kind. */
     viewKey: string
-    agent: string | null
+    /** Read only for a view not yet counted today. */
+    agent: () => string | null
     now?: Date
   }
 ): void {
@@ -62,9 +63,14 @@ export function recordMobileViewOpened(
     return
   }
   openedToday.add(key)
-  const kind = agentKind(args.agent)
-  track('mobile_session_opened', {
-    surface: args.surface,
-    ...(kind ? { agent_kind: kind } : {})
-  })
+  // A count must never end the stream it observes.
+  try {
+    const kind = agentKind(args.agent())
+    track('mobile_session_opened', {
+      surface: args.surface,
+      ...(kind ? { agent_kind: kind } : {})
+    })
+  } catch (error) {
+    console.warn('[telemetry] mobile view count failed', error)
+  }
 }
