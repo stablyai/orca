@@ -1,3 +1,5 @@
+import { prepareForkSnapshot } from './structured-agent-session-fork-snapshot'
+import { agentSessionJournalProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { importedAgentSessionForkTipSettled } from './imported-agent-session-fork-tip'
 import { defaultAgentChatLabel } from '../../../../shared/agent-session/agent-session-chat-label'
 import {
@@ -18,9 +20,7 @@ import {
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import {
   resolveCommittedStructuredAgentSessionAdoptionIntent,
-  resolveStructuredAgentSessionAdoptionForCreate,
-  requireUnownedStructuredAgentSessionAdoption,
-  structuredAgentSessionAdoptAttach
+  requireUnownedStructuredAgentSessionAdoption
 } from '../../../runtime/agent-session/structured-agent-session-create-adoption'
 import { structuredAgentRuntimeMetadata } from '../../../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import type { StructuredAgentSessionHost } from '../host/structured-agent-session-host'
@@ -162,6 +162,7 @@ export async function prepareStructuredAgentSessionFork(input: {
     ) {
       fail(`${name} could not finish the copy because the source context changed. Try again.`)
     }
+    return { snapshot: currentSnapshot, boundary: currentBoundary! }
   }
   await requireCurrent()
   const title = normalizeAgentSessionConversationName(
@@ -199,7 +200,7 @@ export async function prepareStructuredAgentSessionFork(input: {
         'providerRejected'
       )
     })
-  await requireCurrent()
+  const current = await requireCurrent()
   if (!copy.sessionId.trim() || copy.sessionId === providerSessionId) {
     fail(`${name} did not save an independent chat copy. Try again.`)
   }
@@ -209,24 +210,43 @@ export async function prepareStructuredAgentSessionFork(input: {
     providerSessionId: copy.sessionId,
     selfSessionId: input.envelope.sessionId
   })
-  const importer = metadata.transcriptImport
-  const adoption = await resolveStructuredAgentSessionAdoptionForCreate({
-    settings: {},
+  const providerHandle = {
+    transport: metadata.definition.handleTransport,
     agent: input.agent,
-    transcriptImport: { ...importer, accountHomeCandidates: () => [record.accountHome] },
-    providerSessionId: copy.sessionId,
-    selectedAccountHome: record.accountHome,
-    launchEnv,
-    workspaceCwd,
-    conversationName: title
+    nativeId: metadata.transcriptImport.handleNamesTranscript ? copy.filePath! : copy.sessionId,
+    ...(copy.resumeCursor ? { resumeCursor: copy.resumeCursor } : {})
+  }
+  const prepared = prepareForkSnapshot({
+    snapshot: current.snapshot,
+    nextItemId: current.boundary.nextItemId,
+    ...(input.agent === 'codex'
+      ? { sourceThreadId: providerSessionId, childThreadId: copy.sessionId }
+      : {})
   })
-  await requireCurrent()
   return {
     envelope: input.envelope,
     fork: {
       sessionId: record.sessionId,
       itemId: input.throughItemId,
-      revalidate: requireCurrent
+      revalidate: async () => {
+        await requireCurrent()
+      },
+      prepared,
+      ...(copy.coverage
+        ? {
+            historyOrigin: {
+              version: 1 as const,
+              kind: 'native_copy' as const,
+              providerHandle: agentSessionJournalProviderHandle({
+                agent: input.agent,
+                providerHandle
+              }),
+              agent: input.agent,
+              ...copy.coverage,
+              ids: [...new Set(copy.coverage.ids)]
+            }
+          }
+        : {})
     },
     location: input.location,
     provider: input.agent,
@@ -240,21 +260,7 @@ export async function prepareStructuredAgentSessionFork(input: {
         : {})
     },
     ...(record.launchArgs ? { launchArgs: record.launchArgs } : {}),
-    adopt: structuredAgentSessionAdoptAttach({
-      definition: metadata.definition,
-      handleNamesTranscript: importer.handleNamesTranscript,
-      transcriptPath: adoption.transcriptPath,
-      conversationName: adoption.conversationName,
-      providerSessionId: copy.sessionId,
-      workspaceCwd,
-      ...(input.agent === 'codex'
-        ? {
-            conversationStore:
-              importer.conversationStore({ accountHome: record.accountHome, launchEnv }) ??
-              undefined
-          }
-        : {})
-    })
+    adopt: { providerHandle, conversationName: title }
   }
 }
 

@@ -1,3 +1,4 @@
+import { handleOpenCodeSqliteRequest } from '../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-dispatch'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -28,7 +29,7 @@ function fixture() {
   let sequence = 0
   const insert = (id: string, type: string, data: unknown, time = 1) =>
     insertMessage.run(id, 'session', type, ++sequence, JSON.stringify(data), time, time)
-  return { path, insert }
+  return { path, insert, db }
 }
 
 it.each([true, false])(
@@ -52,3 +53,23 @@ it.each([true, false])(
     })
   }
 )
+
+it('covers only the fork event user roots, including a file-only prompt, before an immediate CLI append', async () => {
+  const { db, insert, path } = fixture()
+  db.exec(
+    "CREATE TABLE event (id TEXT, aggregate_id TEXT, type TEXT, seq INTEGER); INSERT INTO event VALUES ('evt_fork', 'session', 'session.forked', 1)"
+  )
+  insert('msg_fork_1', 'user', { files: [{ uri: 'file:///image.png' }] })
+  insert('msg_fork_2', 'assistant', {
+    content: [{ type: 'tool', name: 'Read', state: { status: 'completed' } }]
+  })
+  insert('msg_cli', 'user', { text: 'CLI after fork' })
+  expect(
+    await handleOpenCodeSqliteRequest({
+      id: 1,
+      kind: 'fork-coverage',
+      dbPath: path,
+      sessionId: 'session'
+    })
+  ).toEqual({ id: 1, ok: true, value: ['msg_fork_1'] })
+})

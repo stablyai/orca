@@ -50,6 +50,13 @@ export type OpenCodeNativeChatReadRequest = {
   agent?: 'zcode'
 }
 
+export type OpenCodeForkCoverageRequest = {
+  id: number
+  kind: 'fork-coverage'
+  dbPath: string
+  sessionId: string
+}
+
 export type OpenCodeNativeChatReadValue = OpenCodeTranscriptPage | OpenCodeTranscriptSignal | null
 
 export type OpenCodeSqliteWorkerRequest = (
@@ -57,6 +64,7 @@ export type OpenCodeSqliteWorkerRequest = (
   | OpenCodeSqliteParseRequest
   | OpenCodeSqliteCaptureRequest
   | OpenCodeNativeChatReadRequest
+  | OpenCodeForkCoverageRequest
 ) & { timeoutMs?: number }
 
 export type OpenCodeSqliteListValue = {

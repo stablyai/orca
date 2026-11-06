@@ -254,3 +254,33 @@ export function readOpenCode2TranscriptPage(
     forkTip: forkTip.toReversed()
   }
 }
+
+/** Fork-event identities distinguish copied roots from a CLI write made before this read. */
+export function readOpenCode2ForkCoverage(db: SyncDatabase, sessionId: string): string[] | null {
+  if (!sessionExists(db, sessionId)) {
+    return null
+  }
+  const event = asRecord(
+    db
+      .prepare(
+        "SELECT id FROM event WHERE aggregate_id = ? AND type = 'session.forked' ORDER BY seq LIMIT 1"
+      )
+      .get(sessionId)
+  )
+  if (typeof event?.id !== 'string' || !event.id.startsWith('evt_')) {
+    throw new Error('OpenCode did not record the copied conversation')
+  }
+  const prefix = event.id.replace(/^evt_/, 'msg_')
+  return db
+    .prepare(
+      "SELECT id FROM session_message WHERE session_id = ? AND type = 'user' AND id = ? || '_' || seq ORDER BY seq"
+    )
+    .all(sessionId, prefix)
+    .map((value) => {
+      const row = asRecord(value)
+      if (typeof row?.id !== 'string') {
+        throw new Error('OpenCode copied message identity is invalid')
+      }
+      return row.id
+    })
+}

@@ -17,7 +17,7 @@ export function structuredAgentSessionForkBoundary(
   record: AgentSessionRecord,
   throughItemId: string,
   capability: 'checkpoint' | 'tip' = 'checkpoint'
-): { checkpoint: Checkpoint; latest: boolean; retained: string } | null {
+): { checkpoint: Checkpoint; latest: boolean; nextItemId: string | null; retained: string } | null {
   const { items } = agentSessionCurrentContextRows(snapshot.items, snapshot.submissions)
   const index = items.findIndex((item) => item.itemId === throughItemId)
   const selected = items[index]
@@ -77,6 +77,7 @@ export function structuredAgentSessionForkBoundary(
   return {
     checkpoint,
     latest: !next,
+    nextItemId: next?.itemId ?? null,
     retained: JSON.stringify({
       selected: selected.itemId,
       root: root?.itemId,

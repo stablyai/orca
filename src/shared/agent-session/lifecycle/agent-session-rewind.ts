@@ -64,8 +64,16 @@ export const AgentSessionRewindRecordSchema = z.object({
       throughEntryId: Key.optional(),
       materialized: z.boolean().optional(),
       resumeCursor: Key.optional(),
+      coverage: z.array(Key).optional(),
       // The chat's session when it was rewound; a later head means the fork no longer applies.
       replacesSessionId: Key
+    })
+    .optional(),
+  providerRevert: z
+    .object({
+      threadId: Key,
+      beforeTurnId: Key,
+      keptTurnId: Key.nullable()
     })
     .optional(),
   reason: z.string().min(1).max(512).optional(),

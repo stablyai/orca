@@ -1,3 +1,5 @@
+import { readOpenCodeForkCoverageViaWorker } from '../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
+import type { NativeCopyCoverage } from '../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import { observeAcpForkSupport } from './acp-fork-support'
 import { normalizeAgentProviderSession } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import { OpenCodeCopyServerRouteError } from '../../shared/opencode-launch-command'
@@ -38,7 +40,7 @@ export async function copyAcpConversation(
     signal?: AbortSignal
     track: (connection: AcpStructuredConnection) => void
   }
-): Promise<AiVaultConversationCopy> {
+): Promise<AiVaultConversationCopy & { coverage?: NativeCopyCoverage }> {
   const name = acpAgentName(deps.spec.agent)
   const timeout = AbortSignal.timeout(options.timeoutMs ?? ACP_CONVERSATION_COPY_TIMEOUT_MS)
   const signal = options.signal ? AbortSignal.any([timeout, options.signal]) : timeout
@@ -91,8 +93,17 @@ export async function copyAcpConversation(
     if (deps.spec.agent === 'omp' && !filePath) {
       throw new Error('OMP did not save the copied conversation in its pinned session directory.')
     }
+    const dbPath = deps.spec.transcriptImport?.conversationStore({
+      accountHome: input.accountHome,
+      launchEnv: launch.env
+    })
+    const ids =
+      (deps.spec.agent === 'opencode' || deps.spec.agent === 'opencode2') && dbPath
+        ? await readOpenCodeForkCoverageViaWorker({ dbPath, sessionId }, signal)
+        : null
     return {
       sessionId,
+      ...(ids ? { coverage: { unit: 'acp-user-message' as const, ids } } : {}),
       ...(filePath ? { filePath } : {})
     }
   } catch (error) {

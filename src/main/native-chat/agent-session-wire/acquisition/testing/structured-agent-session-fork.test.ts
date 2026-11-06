@@ -89,29 +89,29 @@ function source(agent: 'claude' | 'codex' = 'codex') {
         }
       },
       {
-        itemId: 'ended-root',
+        itemId: 'legacy:codex:source:ended-root',
         sequence: 2,
         revision: 1,
         observedAt: 2,
         body: { kind: 'turn', turnId: 'completed-turn', state: 'completed' }
       },
       {
-        itemId: 'selected-response',
+        itemId: 'legacy:codex:source:selected-response',
         sequence: 3,
         revision: 1,
         observedAt: 3,
-        turnScope: { kind: 'turn', turnItemId: 'ended-root' },
+        turnScope: { kind: 'turn', turnItemId: 'legacy:codex:source:ended-root' },
         body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Remembered' }] }
       },
       {
-        itemId: 'running-root',
+        itemId: 'legacy:codex:source:running-root',
         sequence: 3,
         revision: 1,
         observedAt: 3,
         body: { kind: 'turn', turnId: 'active-turn', state: 'running' }
       },
       {
-        itemId: 'ended-child',
+        itemId: 'legacy:codex:source:ended-child',
         sequence: 4,
         revision: 1,
         observedAt: 4,
@@ -164,7 +164,15 @@ function source(agent: 'claude' | 'codex' = 'codex') {
             .map((row) => JSON.stringify(row))
             .join('\n')}\n`
         )
-        return { sessionId: COPY, filePath }
+        return {
+          sessionId: COPY,
+          filePath,
+          coverage: {
+            unit: agent === 'claude' ? 'claude-entry' : 'codex-turn',
+            ids: agent === 'claude' ? ['prompt', 'answer'] : ['completed-turn']
+          },
+          ...(agent === 'claude' ? { resumeCursor: 'answer' } : {})
+        }
       }
       await writeFile(
         filePath,
@@ -182,7 +190,11 @@ function source(agent: 'claude' | 'codex' = 'codex') {
           .map((row) => JSON.stringify(row))
           .join('\n')}\n`
       )
-      return { sessionId: COPY, filePath }
+      return {
+        sessionId: COPY,
+        filePath,
+        coverage: { unit: 'codex-turn' as const, ids: ['completed-turn'] }
+      }
     }
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: preparation reads only these source/store/adapter facets; destination founding uses the real rig host below.
@@ -205,7 +217,10 @@ function source(agent: 'claude' | 'codex' = 'codex') {
     sessionId: `${agent}_independent_child`,
     agent,
     worktree: 'id:workspace-1',
-    forkFrom: { sessionId: record.sessionId, throughItemId: 'selected-response' },
+    forkFrom: {
+      sessionId: record.sessionId,
+      throughItemId: 'legacy:codex:source:selected-response'
+    },
     now: rig.clock.now,
     randomUuid: () => '00000000-0000-0000-0000-000000000123'
   })
@@ -213,7 +228,7 @@ function source(agent: 'claude' | 'codex' = 'codex') {
     prepareStructuredAgentSessionFork({
       host,
       sessionId: record.sessionId,
-      throughItemId: 'selected-response',
+      throughItemId: 'legacy:codex:source:selected-response',
       agent,
       location: record.location,
       envelope: intent.envelope
@@ -230,7 +245,9 @@ function source(agent: 'claude' | 'codex' = 'codex') {
     },
     tip: () => {
       capability = 'tip'
-      snapshot.items = snapshot.items.filter((item) => item.itemId !== 'running-root')
+      snapshot.items = snapshot.items.filter(
+        (item) => item.itemId !== 'legacy:codex:source:running-root'
+      )
     }
   }
 }
@@ -262,6 +279,15 @@ it('copies the selected retained root, founds its relationship, and replays befo
             })
           }),
           expect.objectContaining({
+            body: expect.objectContaining({ kind: 'turn', turnId: 'completed-turn' })
+          }),
+          expect.objectContaining({
+            body: expect.objectContaining({
+              role: 'assistant',
+              blocks: [{ type: 'text', text: 'Remembered' }]
+            })
+          }),
+          expect.objectContaining({
             body: expect.objectContaining({
               presentation: 'forked-from',
               forkedFrom: { sessionId: 'source-chat' }
@@ -276,7 +302,7 @@ it('copies the selected retained root, founds its relationship, and replays befo
     permissionMode: 'accept-edits',
     forkedFrom: {
       sessionId: 'source-chat',
-      itemId: 'selected-response',
+      itemId: 'legacy:codex:source:selected-response',
       childBoundary: { kind: 'item' }
     },
     options: { model: 'retired-model', effort: 'high', fastMode: 'false' },
@@ -472,7 +498,7 @@ it('keeps an earlier immutable response available while an unrelated later turn 
       sequence: 5,
       revision: 1,
       observedAt: 5,
-      turnScope: { kind: 'turn', turnItemId: 'running-root' },
+      turnScope: { kind: 'turn', turnItemId: 'legacy:codex:source:running-root' },
       body: {
         kind: 'message',
         role: 'assistant',
@@ -481,7 +507,9 @@ it('keeps an earlier immutable response available while an unrelated later turn 
     })
     return nativeCopy(input)
   })
-  await expect(test.prepare()).resolves.toMatchObject({ fork: { itemId: 'selected-response' } })
+  await expect(test.prepare()).resolves.toMatchObject({
+    fork: { itemId: 'legacy:codex:source:selected-response' }
+  })
 })
 
 it('keeps a checkpoint copy valid across a same-root source relaunch', async () => {
@@ -500,7 +528,9 @@ it('keeps a checkpoint copy valid across a same-root source relaunch', async () 
     ]
     return nativeCopy(input)
   })
-  await expect(test.prepare()).resolves.toMatchObject({ fork: { itemId: 'selected-response' } })
+  await expect(test.prepare()).resolves.toMatchObject({
+    fork: { itemId: 'legacy:codex:source:selected-response' }
+  })
 })
 
 it('refuses a tip copy after its source head relaunches', async () => {
