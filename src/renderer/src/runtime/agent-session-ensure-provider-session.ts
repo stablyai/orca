@@ -3,6 +3,7 @@ import { AGENT_SESSION_RESUME_EFFORT_RUNTIME_CAPABILITY } from '../../../shared/
 import { AGENT_SESSION_RESTORE_SOURCE_PANE_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-runtime-capabilities'
 import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 import { isRuntimeCompatBlockError } from './runtime-protocol-compat'
+import { toHostSessionPaneKey } from '../../../shared/workspace-layout/terminal-surface-id'
 
 /** The provider session an ensureAgentSession call may send to this host; older hosts' strict schema rejects `cwd` and `permissionMode`, and older hosts' also `effort`. */
 export async function agentProviderSessionForHostEnsure(
@@ -29,7 +30,7 @@ async function hostAcceptsResumeEffort(environmentId: string): Promise<boolean> 
   }
 }
 
-/** The source pane a saved restore names, for hosts whose strict schema accepts it. */
+/** The source pane a saved restore names, in the host's own keys, for hosts whose strict schema accepts it. */
 export async function restoreSourcePaneOptions(
   environmentId: string,
   paneKey: string
@@ -39,7 +40,7 @@ export async function restoreSourcePaneOptions(
       environmentId,
       AGENT_SESSION_RESTORE_SOURCE_PANE_RUNTIME_CAPABILITY
     ))
-      ? { restoreSourcePaneKey: paneKey }
+      ? { restoreSourcePaneKey: toHostSessionPaneKey(paneKey) }
       : {}
   } catch (error) {
     if (isRuntimeCompatBlockError(error)) {
