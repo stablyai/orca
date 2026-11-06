@@ -2,7 +2,7 @@
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport-types'
+import type { PtyTransport } from './pty-transport/pty-transport-types'
 import { useExpandCollapseActions } from './expand-collapse'
 import { useTerminalKeyboardShortcuts } from './input/keyboard/terminal-keyboard-hook'
 

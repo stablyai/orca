@@ -1,6 +1,6 @@
 import { useAppStore } from '../../../../store/index'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
-import type { PtyTransport } from '../../pty-transport-types'
+import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 import { getConnectionId } from '@/lib/connection-context'
 import type { TerminalPasteSource, TerminalPasteTextOptions } from './terminal-paste-model'
 import {

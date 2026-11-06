@@ -1,5 +1,5 @@
 import type { IDisposable } from '@xterm/xterm'
-import type { PtyTransport } from '../../pty-transport-types'
+import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 
 type CapturedTerminalInputDispatch = {
   targetPaneMounted: boolean

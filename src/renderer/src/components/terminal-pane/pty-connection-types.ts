@@ -4,7 +4,7 @@ import type { detectAgentStatusFromTitle } from '../../../../shared/agent-status
 import type { TerminalLaunchInputAttemptOwner } from './terminal-launch-input-attempt'
 import type { WorkspaceAttentionSlice } from '@/store/slices/workspace-attention/workspace-attention-contract'
 import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
-import type { PtyTransport, PtyTransportRecoveryState } from './pty-transport-types'
+import type { PtyTransport, PtyTransportRecoveryState } from './pty-transport/pty-transport-types'
 import type { SessionRestoredBannerReason } from './session-restored-banner-pane-state'
 import type { ReplayingPanesRef } from './replay-guard'
 import type { RestoredViewportBlankingPanesRef } from './terminal-restored-viewport'
@@ -21,7 +21,7 @@ import type {
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
-import type { PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
+import type { PtyPreconnectInputEntry } from './pty-transport/input/pty-preconnect-input-buffer'
 import type { AgentPaneLaunchRequest } from '../../../../shared/agent-launch/contracts/agent-pane-launch-request'
 
 export type PtyPaneStartup = {
