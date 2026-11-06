@@ -6,7 +6,7 @@ import {
 } from './native-account-host'
 import { createAntigravityHostCredentialBackend } from './native-credential-backend'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
-import { credential, harness } from './native-account-test-fixtures'
+import { credential, harness, refreshedWithoutIdToken } from './native-account-test-fixtures'
 import { parseAntigravityWindowsSnapshot } from './native-windows-token-decode'
 
 vi.mock('./native-credential-backend', () => ({ createAntigravityHostCredentialBackend: vi.fn() }))
@@ -66,4 +66,13 @@ it('reports new credentials and verified account switches, but not baseline read
   expect(changed).toHaveBeenCalledTimes(2)
   await service.listAccounts()
   expect(changed).toHaveBeenCalledTimes(2)
+
+  // Signing in again to the same account issues a new grant, which must clear a sign-in hold.
+  h.setNative(credential('a', 2))
+  await service.listAccounts()
+  expect(changed).toHaveBeenCalledTimes(3)
+
+  h.setNative(refreshedWithoutIdToken(3, 'refresh-2'))
+  await service.listAccounts()
+  expect(changed).toHaveBeenCalledTimes(3)
 })

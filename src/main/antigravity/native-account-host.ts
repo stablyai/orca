@@ -18,7 +18,8 @@ export function setAntigravityNativeCredentialChangeListener(listener: () => voi
 }
 
 // The first read is a baseline: what agy held before Orca looked is unknown.
-// Only a different login reports: agy's own token refreshes must not discard the usage they produce.
+// agy's own token refreshes keep the refresh token and must not discard the usage they produce;
+// a new refresh token is a fresh sign-in, even to the same account, and must clear a sign-in hold.
 function reportingCredentialChanges(
   backend: AntigravityCredentialBackend
 ): AntigravityCredentialBackend {
@@ -30,7 +31,9 @@ function reportingCredentialChanges(
       if (
         current &&
         lastSeen !== undefined &&
-        (lastSeen === null || !isSameAntigravityLogin(lastSeen, current))
+        (lastSeen === null ||
+          lastSeen.refreshToken !== current.refreshToken ||
+          !isSameAntigravityLogin(lastSeen, current))
       ) {
         credentialChangeListener()
       }
