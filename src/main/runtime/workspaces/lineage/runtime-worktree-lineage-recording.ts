@@ -150,7 +150,7 @@ export function recordCreatedWorktreeLineage(
       }
     })
   }
-  if (childInstanceId && store?.setWorkspaceLineage) {
+  if (childInstanceId && store) {
     const record: WorkspaceLineage = {
       childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
       childInstanceId,
@@ -181,7 +181,7 @@ export function recordCreatedWorktreeLineage(
             'Worktree created, but its lineage is held by a workspace at the same path on another host.'
         })
       }
-    } else {
+    } else if (store.setWorkspaceLineage) {
       workspaceLineage = store.setWorkspaceLineage(record)
     }
   }
