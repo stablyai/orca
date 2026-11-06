@@ -12,6 +12,7 @@ import { useNativeChatLaunchDraftAdoption } from './use-native-chat-launch-draft
 import { NativeChatComposerField } from './NativeChatComposerField'
 import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
 import { nativeChatComposerSendState } from './native-chat-composer-send-state'
+import { useNativeChatSteerChordPreview } from './use-native-chat-steer-chord-preview'
 import { useNativeChatComposerHandle } from './use-native-chat-composer-handle'
 import { useNativeChatFileDrops } from './use-native-chat-file-drops'
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
@@ -56,6 +57,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       launchSeed,
       structuredTransport,
       steerHead,
+      onSteerQueuedPreview,
       recallSource,
       inputOwnedByCard = false,
       notices: chatNotices,
@@ -348,6 +350,15 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       setCaret
     })
 
+    const steerChord = useNativeChatSteerChordPreview({
+      root,
+      alternateSend: sendButton.alternateSend,
+      hasDraft: sendButton.hasDraft,
+      steerHead: editSession ? undefined : steerHead,
+      send,
+      onSteerQueuedPreview
+    })
+
     const draftEvents = useNativeChatDraftEvents({
       draft,
       setDraft,
@@ -399,6 +410,8 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
           onDictationHoldStart={dictation.startHoldDictation}
           onDictationHoldEnd={dictation.stopHoldDictation}
           onSend={send}
+          steerPreview={steerChord.preview}
+          onSteerPreview={steerChord.runPreview}
           onStop={interrupt}
           sessionOptionsSurface={sessionOptionsSurface}
           sessionOptionsSnapshot={sessionOptionsSnapshot}

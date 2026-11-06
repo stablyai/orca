@@ -31,6 +31,7 @@ export function NativeChatQueuedMessageList({
   statedFailures,
   steerHeld = false,
   focusComposer,
+  steerPreviewed = false,
   editAttachTo
 }: {
   controller: StructuredAgentSessionQueuedMessagesController
@@ -42,6 +43,8 @@ export function NativeChatQueuedMessageList({
   steerHeld?: boolean
   /** Where focus goes once Steer, Delete or a closing edit takes the focused card away. */
   focusComposer?: () => void
+  /** Cmd/Ctrl is held on an empty composer: mark the head card a press would steer. */
+  steerPreviewed?: boolean
   /** The chat files added in a card's editor attach to, as its chat box attaches them. */
   editAttachTo?: QueuedEditAttachTarget
 }): React.JSX.Element {
@@ -141,6 +144,7 @@ export function NativeChatQueuedMessageList({
                     agentName={agentName}
                     statedFailures={statedFailures}
                     showsSteerShortcut={card === steerableHead}
+                    steerPreviewed={steerPreviewed && card === steerableHead}
                     agentWorking={controller.isWorking}
                     steerHeld={steerHeld}
                     pending={controller.pending(card.messageId)}

@@ -126,6 +126,7 @@ export function NativeChatQueuedMessageCard({
   agentName,
   statedFailures,
   showsSteerShortcut,
+  steerPreviewed = false,
   agentWorking,
   steerHeld = false,
   pending = null,
@@ -144,6 +145,8 @@ export function NativeChatQueuedMessageCard({
   statedFailures?: readonly AgentSessionFailureFact[]
   /** Only the head card answers Cmd/Ctrl+Shift+Enter; only it may show the chord. */
   showsSteerShortcut: boolean
+  /** Cmd/Ctrl+Enter would steer this card now. */
+  steerPreviewed?: boolean
   /** The agent is working: a steerable card's action reads Steer, otherwise Send. */
   agentWorking: boolean
   /** The chat reads Stopping: the card waits for the stop (`NativeChatQueuedMessageList`). */
@@ -195,7 +198,11 @@ export function NativeChatQueuedMessageCard({
       style={drag?.rowStyle}
       data-queued-message-id={card.messageId}
       data-queued-message-state={card.state}
-      className="group/queued relative px-2.5 py-1.5"
+      data-steer-previewed={steerPreviewed || undefined}
+      className={cn(
+        'group/queued relative px-2.5 py-1.5',
+        steerPreviewed && 'bg-accent ring-1 ring-inset ring-primary/30'
+      )}
     >
       {drag?.insertion ? (
         <span

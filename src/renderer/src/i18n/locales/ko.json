@@ -18650,6 +18650,9 @@
       "composer": {
         "send": "보내기",
         "alternateSteerHint": "{{shortcut}}(으)로 지금 보내기",
+        "previewQueue": "대기열에 추가",
+        "previewSteer": "지금 보내기",
+        "previewSteerQueued": "다음 항목 보내기",
         "alternateQueueHint": "{{shortcut}}(으)로 대기열에 추가",
         "noPty": "라이브 terminal이 없습니다. 다시 연결하려면 다시 전환하세요.",
         "locked": "입력이 다른 장치에 의해 보류됩니다.",

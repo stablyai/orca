@@ -147,6 +147,8 @@ export type NativeChatComposerProps = {
   launchPrompt?: { placeholder: string; onEmptySubmit: () => void }
   /** Cmd/Ctrl+Shift+Enter steers the head queued card; false when it can't. */
   steerHead?: () => boolean
+  /** Holding the chord's modifier with an empty composer previews steering the head card. */
+  onSteerQueuedPreview?: (previewed: boolean) => void
   /** The chat's own notices, shown in the composer's notice card above its input. */
   notices?: readonly NativeChatComposerNotice[]
   /** The conversation Up/Down recalls prompts from. */

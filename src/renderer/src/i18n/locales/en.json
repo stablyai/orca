@@ -19877,6 +19877,9 @@
       "composer": {
         "send": "Send",
         "alternateSteerHint": "{{shortcut}} to steer",
+        "previewQueue": "Queue",
+        "previewSteer": "Steer",
+        "previewSteerQueued": "Steer queued",
         "alternateQueueHint": "{{shortcut}} to queue",
         "noPty": "No live terminal — toggle back to reconnect.",
         "locked": "Input is held by another device.",
