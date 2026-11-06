@@ -56,11 +56,7 @@ vi.mock('@/runtime/web-session-tabs-sync/tracking-mappings', () => ({
   resolveHostSessionTabIdForWebSessionTab: resolveHostSessionTabIdForWebSessionTabMock
 }))
 
-import {
-  closeOtherTerminalTabs,
-  closeTerminalTab,
-  closeTerminalTabsToRight
-} from './terminal-tab-actions'
+import { closeOtherTerminalTabs, closeTerminalTab } from './terminal-tab-actions'
 import { terminalOwnerRows } from './terminal-tab-owner-rows.test-fixture'
 
 describe('closeTerminalTab', () => {
@@ -396,55 +392,5 @@ describe('closeOtherTerminalTabs', () => {
     expect(closeTab).toHaveBeenCalledTimes(2)
     expect(closeTab).toHaveBeenNthCalledWith(1, 'close-a', { remoteCloseOwnedByHost: true })
     expect(closeTab).toHaveBeenNthCalledWith(2, 'close-b', { remoteCloseOwnedByHost: true })
-  })
-})
-
-describe('closeTerminalTabsToRight', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    isWebRuntimeSessionActiveMock.mockReturnValue(false)
-  })
-
-  it('delegates terminal tabs to the host while still closing local editor tabs to the right', () => {
-    const closeTab = vi.fn()
-    const closeUnifiedTabs = vi.fn()
-    isWebRuntimeSessionActiveMock.mockReturnValue(true)
-    getStateMock.mockReturnValue({
-      ...terminalOwnerRows('web-runtime'),
-      tabsByWorktree: {
-        'wt-1': [{ id: 'term-a' }, { id: 'term-b' }, { id: 'term-c' }]
-      },
-      openFiles: [{ id: 'file-b', worktreeId: 'wt-1' }],
-      editorBufferIdOf: {},
-      editorBufferViews: {},
-      unifiedTabsByWorktree: {
-        'wt-1': [
-          { id: 'file-tab-b', entityId: 'file-b', worktreeId: 'wt-1', contentType: 'editor' }
-        ]
-      },
-      tabBarOrderByWorktree: { 'wt-1': ['term-a', 'file-tab-b', 'term-b', 'term-c'] },
-      closeTab,
-      closeUnifiedTabs
-    })
-
-    closeTerminalTabsToRight('term-a', 'wt-1')
-
-    expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledTimes(2)
-    expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      tabId: 'term-b',
-      environmentId: 'web-runtime',
-      reason: 'user'
-    })
-    expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      tabId: 'term-c',
-      environmentId: 'web-runtime',
-      reason: 'user'
-    })
-    expect(closeUnifiedTabs).toHaveBeenCalledWith(['file-tab-b'])
-    expect(closeTab).toHaveBeenCalledTimes(2)
-    expect(closeTab).toHaveBeenNthCalledWith(1, 'term-b', { remoteCloseOwnedByHost: true })
-    expect(closeTab).toHaveBeenNthCalledWith(2, 'term-c', { remoteCloseOwnedByHost: true })
   })
 })
