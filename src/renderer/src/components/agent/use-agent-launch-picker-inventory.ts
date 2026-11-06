@@ -74,7 +74,9 @@ export function useAgentLaunchPickerInventorySource(
         ...(worktreeId ? { worktreeId } : {})
       }
     }).executionHostId
-  const target = structuredAgentSessionTargetForHost(executionHostId)
+  const target = structuredAgentSessionTargetForHost(
+    context?.inventoryExecutionHostId ?? executionHostId
+  )
   const registeredAgents = readHostStructuredAgentsForRuntime(
     executionHostId,
     target?.kind === 'local' ? null : context?.runtimeId

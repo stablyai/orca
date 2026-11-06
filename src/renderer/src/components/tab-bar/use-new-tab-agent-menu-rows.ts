@@ -13,7 +13,10 @@ import {
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { useAppStore } from '@/store'
 import { useAgentPickerRefusedWake } from './use-agent-picker-refused-wake'
-import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import {
+  buildAgentLaunchRouteInput,
+  resolveAgentLaunchInventoryHost
+} from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
 import { useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
@@ -95,7 +98,8 @@ export function useAgentMenuObservation(
   const facts = useAppStore(
     useShallow((state) => {
       const input = buildAgentLaunchRouteInput(state, { agent: 'claude', workspace })
-      const host = parseExecutionHostId(input.executionHostId)
+      const inventoryExecutionHostId = resolveAgentLaunchInventoryHost(state, workspace)
+      const host = parseExecutionHostId(inventoryExecutionHostId)
       const status =
         host?.kind === 'runtime'
           ? state.runtimeStatusByEnvironmentId.get(host.environmentId)
@@ -103,6 +107,7 @@ export function useAgentMenuObservation(
       const contact = runtimeHostContactForEntry(status)
       return {
         executionHostId: input.executionHostId,
+        inventoryExecutionHostId,
         runtimeId: host?.kind === 'runtime' ? lastVerifiedRuntimeStatus(status)?.runtimeId : null,
         pairingRevision:
           host?.kind === 'runtime' ? getRuntimeEnvironmentRevision(host.environmentId) : undefined,
@@ -117,7 +122,7 @@ export function useAgentMenuObservation(
   const state = useAppStore.getState()
   const input = buildAgentLaunchRouteInput(state, { agent: 'claude', workspace })
   const { settings, pending: preferencesPending } = useHostAgentMenuSettings(
-    unresolvedTarget ? null : facts,
+    unresolvedTarget ? null : { ...facts, executionHostId: facts.inventoryExecutionHostId },
     desktopSettings,
     open || worktreeShown,
     open
@@ -254,6 +259,7 @@ export function useAgentMenuObservation(
           workspace,
           launchCwd,
           executionHostId: facts.executionHostId,
+          inventoryExecutionHostId: facts.inventoryExecutionHostId,
           pairingRevision: facts.pairingRevision,
           runtimeId: facts.runtimeId,
           settings,

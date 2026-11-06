@@ -34,7 +34,7 @@ import {
 } from '@/store/workspace-record-selectors'
 import { readHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { authorityKey } from '../../../../../../shared/host-authority'
-import { resolveOwner } from '@/lib/resolve-owner'
+import { resolveOwner, runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 
@@ -223,6 +223,22 @@ export function resolveAgentLaunchHost(
     executionHostId,
     hostCapabilities: owner === null ? null : resolveHostCapabilities(store, executionHostId)
   }
+}
+
+/** Inventory and preferences belong to the server even when the terminal runs in nested SSH. */
+export function resolveAgentLaunchInventoryHost(
+  store: AgentLaunchRouteStore,
+  workspace: ProspectiveWorkspace
+): string {
+  const owner = workspace.worktreeId
+    ? runtimeEnvironmentIdForWorkspaceOwner(store, {
+        workspaceId: workspace.worktreeId,
+        ...(workspace.hostId ? { hostId: workspace.hostId } : {})
+      })
+    : undefined
+  return owner?.kind === 'resolved' && owner.environmentId
+    ? toRuntimeExecutionHostId(owner.environmentId)
+    : resolveAgentLaunchHost(store, workspace).executionHostId
 }
 
 export function buildAgentLaunchRouteInput(
