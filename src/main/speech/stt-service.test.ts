@@ -194,6 +194,7 @@ describe('SttService', () => {
   })
 
   it('rebuilds the warm worker when the dictation language changes', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a local start reads only getModelState and getModelDir.
     const service = new SttService({
       getModelState: vi.fn().mockResolvedValue({ id: 'whisper-model', status: 'ready' }),
       getModelDir: vi.fn().mockReturnValue('/tmp/whisper-model')

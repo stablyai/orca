@@ -28,7 +28,7 @@ describe('OpenAiTranscriptionSession', () => {
   it('sends the dictation language only when one is chosen', async () => {
     const languages: (FormDataEntryValue | null)[] = []
     vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => {
-      languages.push((init.body as FormData).get('language'))
+      languages.push(init.body instanceof FormData ? init.body.get('language') : 'not multipart')
       return new Response(JSON.stringify({ text: 'ok' }))
     })
     for (const language of ['ko', undefined]) {
