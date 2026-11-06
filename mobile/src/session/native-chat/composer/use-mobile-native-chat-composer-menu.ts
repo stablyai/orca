@@ -190,7 +190,10 @@ export function useMobileNativeChatComposerMenu(input: {
       row.orcaOwned
         ? agentSessionInteractionCommand(agent ?? '', row.token)
         : null
-    const modeDraft = mode !== null ? structuredAgentSessionModePickDraft(value, cursor, row) : null
+    const modeDraft =
+      mode !== null && row.kind === 'command'
+        ? structuredAgentSessionModePickDraft(value, cursor, row)
+        : null
     if (mode !== null && (!modeDraft || !changeMode || !input.admitsInteractionMode?.(mode))) {
       input.focusField()
       return
