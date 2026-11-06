@@ -84,11 +84,12 @@ export function useTerminalKeyRowTouch<T>({
         released()
       }
     },
-    // The page also reports a scroll when one settles, so only a moved row cancels.
+    // Only a finger moving the row cancels: the page also reports settling, focus and reset scrolls.
     onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const x = event.nativeEvent.contentOffset.x
-      if (x !== scrollXRef.current) {
-        scrollXRef.current = x
+      const moved = x !== scrollXRef.current
+      scrollXRef.current = x
+      if (moved && touchRef.current.down) {
         cancelPresses()
       }
     },
