@@ -1,8 +1,8 @@
 import React, { useCallback } from 'react'
-import { BarChart3, EyeOff } from 'lucide-react'
+import { BarChart3 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { EyeOffDismissButton } from '@/components/dismiss/EyeOffDismissButton'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { useAppStore } from '../../store'
 import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
@@ -75,27 +75,14 @@ export function StatusBarUsageEmptyCta({
                   )}
             </div>
             {/* Mirror the setup-guide dismiss control so hiding this teaching CTA stays recognizable. */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={handleHide}
-                  aria-label={translate(
-                    'auto.components.status.bar.StatusBarUsageEmptyCta.9a542f46c7',
-                    'Hide from status bar'
-                  )}
-                  className="-mr-1 -mt-0.5 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
-                >
-                  <EyeOff className="size-3.5" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={6}>
-                {translate(
-                  'auto.components.status.bar.StatusBarUsageEmptyCta.9a542f46c7',
-                  'Hide from status bar'
-                )}
-              </TooltipContent>
-            </Tooltip>
+            <EyeOffDismissButton
+              label={translate(
+                'auto.components.status.bar.StatusBarUsageEmptyCta.9a542f46c7',
+                'Hide from status bar'
+              )}
+              onClick={handleHide}
+              className="-mr-1 -mt-0.5"
+            />
           </div>
           {remoteOwner ? (
             <p className="text-muted-foreground">
