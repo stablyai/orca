@@ -19947,6 +19947,9 @@
           "cancel": "Cancelar",
           "add": "Adicionar catálogo",
           "body": "Um link pediu para mostrar {{value0}} deste catálogo. Adicione catálogos apenas de pessoas em quem você confia."
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}} ({{value1}})"
         }
       }
     },

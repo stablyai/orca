@@ -18740,6 +18740,9 @@
           "cancel": "Cancelar",
           "add": "Añadir catálogo",
           "body": "Un enlace pidió mostrar {{value0}} de este catálogo. Añade catálogos solo de personas en las que confíes."
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}} ({{value1}})"
         }
       }
     },

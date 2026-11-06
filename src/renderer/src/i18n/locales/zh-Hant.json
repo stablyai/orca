@@ -18666,6 +18666,9 @@
           "cancel": "取消",
           "add": "新增目錄",
           "body": "有連結要求顯示此目錄中的 {{value0}}。請只新增你信任之人的目錄。"
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}}（{{value1}}）"
         }
       }
     },

@@ -18911,6 +18911,9 @@
           "cancel": "İptal",
           "add": "Katalog ekle",
           "body": "Bir bağlantı bu katalogdan {{value0}} öğesini göstermek istedi. Yalnızca güvendiğiniz kişilerin kataloglarını ekleyin."
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}} ({{value1}})"
         }
       }
     },

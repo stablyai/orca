@@ -18960,6 +18960,9 @@
           "cancel": "Annuler",
           "add": "Ajouter le catalogue",
           "body": "Un lien a demandé d’afficher {{value0}} depuis ce catalogue. N’ajoutez des catalogues que de personnes de confiance."
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}} ({{value1}})"
         }
       }
     },

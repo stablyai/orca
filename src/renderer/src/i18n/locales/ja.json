@@ -18267,6 +18267,9 @@
           "cancel": "キャンセル",
           "add": "カタログを追加",
           "body": "リンクがこのカタログの {{value0}} の表示を求めています。カタログは信頼できる相手からのものだけを追加してください。"
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}}（{{value1}}）"
         }
       }
     },

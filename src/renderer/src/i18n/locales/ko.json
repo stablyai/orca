@@ -18267,6 +18267,9 @@
           "cancel": "취소",
           "add": "카탈로그 추가",
           "body": "링크가 이 카탈로그의 {{value0}}을(를) 표시하도록 요청했습니다. 신뢰할 수 있는 사람의 카탈로그만 추가하세요."
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}} ({{value1}})"
         }
       }
     },
