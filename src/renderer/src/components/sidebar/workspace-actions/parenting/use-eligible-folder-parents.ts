@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -8,27 +8,43 @@ import { getEligibleFolderParents, storeAcceptsFolderParentIn } from './worktree
 
 const NO_FOLDER_PARENTS: Worktree[] = []
 
-/** Folder workspaces Set Parent offers `child`; the menu gate and the picker read the same list. */
-export function useEligibleFolderParents(child: Worktree | undefined, enabled = true): Worktree[] {
+/** The folder workspaces any child may take as a parent: Set Parent's menu gate, its picker and a
+ * sidebar drop all read this one policy. Null while disabled. */
+export function useFolderParentEligibility(
+  enabled = true
+): ((child: Worktree) => Worktree[]) | null {
   const folderWorkspaces = useAppStore((s) => (enabled ? selectFolderWorkspaces(s) : undefined))
-  const currentParentWorkspaceKey = useAppStore((s) =>
-    enabled && child
-      ? s.workspaceLineageByChildKey[worktreeWorkspaceKey(child.id)]?.parentWorkspaceKey
-      : undefined
+  const workspaceLineageByChildKey = useAppStore((s) =>
+    enabled ? s.workspaceLineageByChildKey : undefined
   )
   const runtimeStatusByEnvironmentId = useAppStore((s) =>
     enabled ? s.runtimeStatusByEnvironmentId : undefined
   )
-  return useMemo(
-    () =>
-      enabled && child && folderWorkspaces?.length && runtimeStatusByEnvironmentId
+  const folderRows = useMemo(
+    () => folderWorkspaces?.map((folder) => getFolderWorkspaceWorktree(folder)) ?? [],
+    [folderWorkspaces]
+  )
+  const eligibleFor = useCallback(
+    (child: Worktree): Worktree[] =>
+      folderRows.length > 0 && runtimeStatusByEnvironmentId
         ? getEligibleFolderParents({
             child,
-            folderRows: folderWorkspaces.map((folder) => getFolderWorkspaceWorktree(folder)),
-            currentParentWorkspaceKey,
+            folderRows,
+            currentParentWorkspaceKey:
+              workspaceLineageByChildKey?.[worktreeWorkspaceKey(child.id)]?.parentWorkspaceKey,
             storeAcceptsFolderParent: storeAcceptsFolderParentIn(runtimeStatusByEnvironmentId)
           })
         : NO_FOLDER_PARENTS,
-    [child, currentParentWorkspaceKey, enabled, folderWorkspaces, runtimeStatusByEnvironmentId]
+    [folderRows, runtimeStatusByEnvironmentId, workspaceLineageByChildKey]
+  )
+  return enabled ? eligibleFor : null
+}
+
+/** Folder workspaces Set Parent offers `child`; the menu gate and the picker read the same list. */
+export function useEligibleFolderParents(child: Worktree | undefined, enabled = true): Worktree[] {
+  const eligibleFor = useFolderParentEligibility(enabled)
+  return useMemo(
+    () => (eligibleFor && child ? eligibleFor(child) : NO_FOLDER_PARENTS),
+    [child, eligibleFor]
   )
 }

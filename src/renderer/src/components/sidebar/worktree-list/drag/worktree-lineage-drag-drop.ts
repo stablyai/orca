@@ -4,6 +4,8 @@ import { getLineageRenderInfo } from '../../../../../../shared/sidebar-list/work
 
 const WORKTREE_CARD_CONTENT_TARGET_SELECTOR = '[data-worktree-card-parent-content]'
 const WORKTREE_DRAG_ROW_SELECTOR = '[data-worktree-drag-id]'
+// Folder workspace rows take drops as parents without joining reorder groups.
+const LINEAGE_DROP_ROW_SELECTOR = `${WORKTREE_DRAG_ROW_SELECTOR}, [data-worktree-lineage-drop-target]`
 
 const REORDER_GUTTER_RATIO = 0.2
 const REORDER_GUTTER_MAX_HEIGHT_PX = 8
@@ -30,13 +32,13 @@ export function getWorktreeLineageDropTargetIdentity(args: {
   target: Element
   pointerY: number
 }): string | null {
-  const rowTarget = args.target.closest<HTMLElement>(WORKTREE_DRAG_ROW_SELECTOR)
+  const rowTarget = args.target.closest<HTMLElement>(LINEAGE_DROP_ROW_SELECTOR)
   if (!rowTarget || !args.container.contains(rowTarget)) {
     return null
   }
 
   const contentTarget = rowTarget.querySelector<HTMLElement>(WORKTREE_CARD_CONTENT_TARGET_SELECTOR)
-  if (!contentTarget || contentTarget.closest(WORKTREE_DRAG_ROW_SELECTOR) !== rowTarget) {
+  if (!contentTarget || contentTarget.closest(LINEAGE_DROP_ROW_SELECTOR) !== rowTarget) {
     return null
   }
 

@@ -26,6 +26,7 @@ import {
 import type { LineageToggleHandler } from '../../workspace-card/identity/worktree-lineage-toggle-handler-cache'
 import { getFolderWorkspaceCardPrDisplay } from '../../workspace-card/review/folder-workspace-card-pr-display'
 import { FolderPathStatusIndicator } from './FolderPathStatusIndicator'
+import type { WorktreeItemRowContext } from './item-row'
 import type { FolderWorkspaceItemRow } from '../listing/renderable-rows'
 import { forwardOptionPressToCardSurface, getWorktreeOptionId } from './option-dom'
 
@@ -60,7 +61,7 @@ export type FolderWorkspaceRowContext = {
     worktree: Worktree,
     rowKey: string
   ) => void
-}
+} & Pick<WorktreeItemRowContext, 'worktreeDragState' | 'nativeLineageDropTargetIdentity'>
 
 /** The folder's own nested workspaces: its disclosure, and their cards when shown inline. */
 export type FolderRowLineage = {
@@ -130,6 +131,7 @@ export function renderFolderWorkspaceOption(args: {
       data-worktree-id={folderWorktree.id}
       data-worktree-host-identity={folderWorktreeIdentity}
       data-worktree-row-key={folderWorktreeIdentity}
+      data-worktree-lineage-drop-target=""
       {...(vItem
         ? {
             'data-worktree-virtual-row': true,
@@ -174,6 +176,11 @@ export function renderFolderWorkspaceOption(args: {
               : undefined
           }
           onLineageToggle={lineage?.onToggle}
+          isLineageDropTarget={Boolean(
+            ctx.worktreeDragState.draggingWorktreeId &&
+            (ctx.worktreeDragState.lineageDropTargetIdentity === folderWorktreeIdentity ||
+              ctx.nativeLineageDropTargetIdentity === folderWorktreeIdentity)
+          )}
         />
         <div className="pointer-events-auto absolute right-3 top-1.5">
           <FolderPathStatusIndicator status={pathStatus} />

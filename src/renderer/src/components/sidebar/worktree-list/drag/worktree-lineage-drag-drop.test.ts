@@ -36,6 +36,16 @@ describe('getWorktreeLineageDropTargetIdentity', () => {
       )
     }
   )
+
+  it('takes a folder workspace row, which joins no reorder group, as a drop parent', () => {
+    const { container, target } = makeTarget({ worktreeId: 'folder:f-1', top: 100, bottom: 200 })
+    const row = container.firstElementChild!
+    row.removeAttribute('data-worktree-drag-id')
+    row.setAttribute('data-worktree-lineage-drop-target', '')
+    expect(getWorktreeLineageDropTargetIdentity({ container, target, pointerY: 150 })).toBe(
+      'ssh:box|folder:f-1'
+    )
+  })
 })
 
 function makeTarget(args: {
