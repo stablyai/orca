@@ -163,7 +163,7 @@ describe('OpenCodeUsageStore', () => {
   beforeEach(() => {
     tempUserData = mkdtempSync(join(tmpdir(), 'orca-opencode-usage-store-'))
     getPathMock.mockReturnValue(tempUserData)
-    initOpenCodeUsagePath()
+    initOpenCodeUsagePath(tempUserData)
     vi.mocked(scanOpenCodeUsageDatabasesViaWorker).mockReset()
     vi.mocked(scanOpenCodeUsageDatabasesViaWorker).mockResolvedValue(createEmptyScanResult())
     vi.useFakeTimers()
@@ -192,6 +192,7 @@ describe('OpenCodeUsageStore', () => {
       path: join(tempUserData, 'orca-opencode-usage-sources.json'),
       schemaVersion: OPENCODE_USAGE_SCHEMA_VERSION,
       worktreeFingerprint: '[]',
+      hadPreviousHistory: false,
       reuse: false
     })
     expect(persistedJson).not.toContain('\n')
@@ -306,6 +307,7 @@ describe('OpenCodeUsageStore', () => {
     expect(sessions).toEqual([
       {
         sessionId: 'session-1',
+        totalsScope: 'lifetime',
         lastActiveAt: '2026-04-09T10:10:00.000Z',
         durationMinutes: 10,
         projectLabel: 'Repo',

@@ -4,7 +4,6 @@ import { getAppEnvironment } from '../../shared/app-environment'
 import { resolveUserDataPath } from './orcad-app-paths'
 import { prepareOrcadCliLauncher } from './orcad-cli-launcher'
 import { installOrcadHostAdapters, runOrcadQuitHandlers } from './orcad-host-adapters'
-import { prepareOrcadSecretStoreAndMigrate } from './orcad-secret-store-startup'
 import { describeOrcadBindExposure, resolveOrcadBindHost } from './orcad-bind-address'
 import {
   flushOrcadProfileStoreForShutdown,
@@ -24,6 +23,7 @@ import {
 import { stampRuntimeSourceEnv } from '../../shared/runtime-source-env'
 import { adoptWslHostLoginEnvironmentLogged } from './orcad-wsl-host-login-environment'
 import { orcadWsPortOptions } from './orcad-ws-port-policy'
+import { prepareOrcadSecretStoreAndMigrate } from './orcad-secret-store-startup'
 import { createOrcadStartupTiming } from './orcad-startup-timing'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { restoreOrcadTerminalAuthority } from './orcad-restored-terminal-authority'
@@ -222,18 +222,14 @@ async function startOrcadRuntime(
   const { installOrcadEmulatorBridge } = await import('./orcad-emulator-bridge')
   installOrcadEmulatorBridge(runtime, registerCleanup)
 
-  // Restore prior desktop-pushed account selection before automations or CLI launches.
-  const { restoreOrcadHostAccountLaunchEnv } = await import('./orcad-host-account-launch-env-store')
-  restoreOrcadHostAccountLaunchEnv(runtime, runtimeUserDataPath)
-  featureReadiness.open('accounts')
-
-  const { installOrcadSessionSearchService } = await import('./orcad-session-search')
-  sessionSearch = await installOrcadSessionSearchService({
+  const { installOrcadProfileRuntimeServices } = await import('./orcad-profile-runtime-services')
+  sessionSearch = await installOrcadProfileRuntimeServices({
     userDataPath: runtimeUserDataPath,
-    getSettings: () => profileStore.getSettings()
+    store: profileStore,
+    runtime,
+    featureReadiness,
+    registerCleanup
   })
-  getAppEnvironment().onWillQuit(() => sessionSearch?.dispose())
-  featureReadiness.open('sessionSearch')
 
   const { startAgentStateRulesLiveUpdates } =
     await import('../runtime/agent-state-rules/agent-state-rules-live-update')

@@ -245,6 +245,7 @@ it('admits a shared refresh after loading and keeps the newer worker projection'
     path: usageSourceCachePath(cacheFile),
     schemaVersion: 1,
     worktreeFingerprint: '[]',
+    hadPreviousHistory: true,
     reuse: true
   })
   const newer = { sessions: [{ id: 'new-session' }], dailyAggregates: [{ day: '2026-10-10' }] }

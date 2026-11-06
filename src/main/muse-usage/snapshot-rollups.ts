@@ -1,3 +1,8 @@
+import {
+  countUsageDailySessions,
+  applyUsageBreakdownSessionCounts,
+  selectEventUsageSessions
+} from '../usage/usage-session-selection'
 import { highestUsageKey } from '../usage/highest-usage-key'
 import type {
   MuseUsageBreakdownKind,
@@ -53,7 +58,7 @@ export function buildMuseUsageSummary(
   return {
     scope,
     range,
-    sessions: filteredSessions.length,
+    sessions: countUsageDailySessions(filteredDaily, filteredSessions.length),
     events,
     ...totals,
     topModel: highestUsageKey(byModel),
@@ -107,15 +112,25 @@ export function buildMuseUsageBreakdownRows(
     }
   }
 
+  applyUsageBreakdownSessionCounts(rows.values(), filteredDaily, kind)
   return [...rows.values()].sort((left, right) => right.totalTokens - left.totalTokens)
 }
 
 export function buildMuseUsageRecentSessions(
   filteredSessions: MuseUsageSession[],
-  limit = 10
+  limit = 10,
+  filteredDaily?: MuseUsageDailyAggregate[],
+  range: MuseUsageRange = 'all'
 ): MuseUsageSessionRow[] {
+  const selected = filteredDaily
+    ? selectEventUsageSessions('muse', filteredDaily, filteredSessions)
+    : null
+  if (selected) {
+    return selected.slice(0, limit)
+  }
   return filteredSessions.slice(0, limit).map((session) => ({
     sessionId: session.sessionId,
+    ...(range !== 'all' ? { totalsScope: 'lifetime' as const } : {}),
     lastActiveAt: session.lastTimestamp,
     durationMinutes: Math.max(
       0,
