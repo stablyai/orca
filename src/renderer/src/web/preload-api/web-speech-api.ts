@@ -186,6 +186,8 @@ export function createWebSpeechApi(): Pick<
         }
       } catch (error) {
         if (dictation) {
+          // A finish that timed out here may still hold the host's one dictation slot.
+          void cancelOnHost(dictation)
           fail(dictation, error)
         }
       } finally {
