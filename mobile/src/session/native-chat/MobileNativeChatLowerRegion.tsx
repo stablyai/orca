@@ -5,6 +5,7 @@ export function MobileNativeChatLowerRegion({
 }: {
   children: ReactNode
   composerPresent?: boolean
+  scopeKey?: string
 }) {
   return children
 }

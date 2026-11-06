@@ -1,3 +1,4 @@
+import { connectMobileNativeChatScrollGesture } from './mobile-native-chat-scroll-gesture'
 import { externalAllowance, visible } from './mobile-native-chat-lower-geometry'
 
 const BOTTOM_TOLERANCE = 4
@@ -23,9 +24,6 @@ export function connectMobileNativeChatLowerScroll(
   let pending: HTMLElement | null | undefined
   let frame: number | null = null
   let settle: ReturnType<typeof setTimeout> | null = null
-  let touchContacts = 0
-  const pointers = new Set<number>()
-  const touching = () => touchContacts > 0 || pointers.size > 0
   let settling = false
   let disposed = false
   let viewportHeight = viewport.clientHeight
@@ -95,7 +93,7 @@ export function connectMobileNativeChatLowerScroll(
   }
   const reconcile = () => {
     frame = null
-    if (disposed || touching() || settling) {
+    if (disposed || gesture.active() || settling) {
       return
     }
     onGeometry(viewport.clientHeight, externalAllowance(root))
@@ -198,6 +196,9 @@ export function connectMobileNativeChatLowerScroll(
       }
       lastScroll = node.scrollTop
       attached = atBottom()
+      if (!attached) {
+        capture()
+      }
     } else {
       if (!attached) {
         capture()
@@ -206,27 +207,13 @@ export function connectMobileNativeChatLowerScroll(
     recordActive()
     settleLater()
   }
-  const onPointerStart = (event: PointerEvent) => {
-    if (event.pointerType !== 'touch') {
-      pointers.add(event.pointerId)
+  const gesture = connectMobileNativeChatScrollGesture(
+    viewport,
+    () => {
       pending = undefined
-    }
-  }
-  const onPointerEnd = (event: PointerEvent) => {
-    if (pointers.delete(event.pointerId) && !touching()) {
-      settleLater()
-    }
-  }
-  const onTouchStart = (event: TouchEvent) => {
-    touchContacts = event.touches.length
-    pending = undefined
-  }
-  const onTouchEnd = (event: TouchEvent) => {
-    touchContacts = event.touches.length
-    if (!touching()) {
-      settleLater()
-    }
-  }
+    },
+    settleLater
+  )
   const onScrollEnd = () => {
     if (settle !== null) {
       clearTimeout(settle)
@@ -257,12 +244,6 @@ export function connectMobileNativeChatLowerScroll(
   viewport.addEventListener('focusin', onFocus)
   viewport.addEventListener('scroll', onScroll, true)
   viewport.addEventListener('scrollend', onScrollEnd)
-  viewport.addEventListener('pointerdown', onPointerStart, { passive: true })
-  viewport.addEventListener('touchstart', onTouchStart, { passive: true })
-  document.addEventListener('pointerup', onPointerEnd, { passive: true })
-  document.addEventListener('pointercancel', onPointerEnd, { passive: true })
-  document.addEventListener('touchend', onTouchEnd, { passive: true })
-  document.addEventListener('touchcancel', onTouchEnd, { passive: true })
   if (focused()) {
     reveal()
   } else {
@@ -274,6 +255,7 @@ export function connectMobileNativeChatLowerScroll(
     dispose: () => {
       disposed = true
       observer.disconnect()
+      gesture.dispose()
       window.removeEventListener('resize', layoutChanged)
       window.removeEventListener('scroll', onPageScroll, true)
       window.visualViewport?.removeEventListener('resize', layoutChanged)
@@ -282,12 +264,6 @@ export function connectMobileNativeChatLowerScroll(
       viewport.removeEventListener('focusin', onFocus)
       viewport.removeEventListener('scroll', onScroll, true)
       viewport.removeEventListener('scrollend', onScrollEnd)
-      viewport.removeEventListener('pointerdown', onPointerStart)
-      viewport.removeEventListener('touchstart', onTouchStart)
-      document.removeEventListener('pointerup', onPointerEnd)
-      document.removeEventListener('pointercancel', onPointerEnd)
-      document.removeEventListener('touchend', onTouchEnd)
-      document.removeEventListener('touchcancel', onTouchEnd)
       if (frame !== null) {
         cancelAnimationFrame(frame)
       }

@@ -9,10 +9,12 @@ import { connectMobileNativeChatLowerScroll } from './mobile-native-chat-lower-s
 
 export function MobileNativeChatLowerRegion({
   children,
-  composerPresent = true
+  composerPresent = true,
+  scopeKey
 }: {
   children: ReactNode
   composerPresent?: boolean
+  scopeKey?: string
 }) {
   const scrollRef = useRef<ScrollView>(null)
   const contentRef = useRef<View>(null)
@@ -54,7 +56,7 @@ export function MobileNativeChatLowerRegion({
       coordinator.current = null
       connected.dispose()
     }
-  }, [getViewport, getContent])
+  }, [getViewport, getContent, scopeKey])
   useLayoutEffect(layoutChanged)
   return (
     <MobileNativeChatLowerRegionContext value={value}>

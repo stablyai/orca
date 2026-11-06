@@ -57,6 +57,7 @@ afterEach(() => {
   connection?.dispose()
   connection = undefined
   root.remove()
+  vi.useRealTimers()
   vi.restoreAllMocks()
 })
 
@@ -130,30 +131,35 @@ it('lets deliberate scrolling cancel a pending field reveal across an unrelated 
 
 it('defers anchor correction through canceled touch pointers until every contact ends', async () => {
   const lower = connect()
-  field.focus()
   await painted()
-  userScroll(140)
-  await painted()
+  const touched = document.createElement('div')
+  content.append(touched)
   const touch = (type: string, count: number) => {
-    const event = new Event(type, { bubbles: true })
-    Object.defineProperty(event, 'touches', { value: Array.from({ length: count }) })
-    viewport.dispatchEvent(event)
+    const event = new TouchEvent(type, {
+      bubbles: true,
+      touches: Array.from(
+        { length: count },
+        (_, identifier) => new Touch({ identifier, target: touched })
+      )
+    })
+    touched.dispatchEvent(event)
   }
+  vi.useFakeTimers()
   touch('touchstart', 2)
+  viewport.scrollTop = 140
+  viewport.dispatchEvent(new Event('scroll'))
   const canceled = new Event('pointercancel', { bubbles: true })
   Object.defineProperty(canceled, 'pointerType', { value: 'touch' })
   viewport.dispatchEvent(canceled)
   addedAbove = 80
   lower.layoutChanged()
-  await new Promise((resolve) => setTimeout(resolve, 180))
-  await painted()
+  await vi.advanceTimersByTimeAsync(200)
   expect(viewport.scrollTop).toBe(140)
   touch('touchend', 1)
-  await new Promise((resolve) => setTimeout(resolve, 180))
-  await painted()
+  await vi.advanceTimersByTimeAsync(200)
   expect(viewport.scrollTop).toBe(140)
+  touched.remove()
   touch('touchend', 0)
-  await new Promise((resolve) => setTimeout(resolve, 180))
-  await painted()
+  await vi.advanceTimersByTimeAsync(200)
   expect(viewport.scrollTop).toBe(220)
 })
