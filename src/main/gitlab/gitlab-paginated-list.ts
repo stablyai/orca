@@ -3,7 +3,6 @@ import {
   glabHostnameArgs,
   glabRepoExecOptions,
   parseGlabJsonList,
-  parseGlabPaginationHeader,
   type LocalGitExecOptions,
   type ProjectRef
 } from './gl-utils'
@@ -52,11 +51,9 @@ export async function fetchAllGitLabPages<T>(
       throw error
     }
     items.push(...pageItems)
-    // Every followed page must add rows and advance the page number, so the walk always ends.
-    const advertised =
-      pageItems.length > 0 ? parseGlabPaginationHeader(nextPageHeader, page + 1) : undefined
-    if (advertised !== undefined) {
-      page = advertised
+    // Follow only a header naming the next page after a non-empty one; a skip would hide rows.
+    if (pageItems.length > 0 && nextPageHeader?.trim() === String(page + 1)) {
+      page += 1
     } else if (
       // GitLab ends with an empty header; otherwise probe after full pages.
       nextPageHeader === '' ||

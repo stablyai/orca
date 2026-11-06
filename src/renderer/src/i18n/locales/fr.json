@@ -2113,7 +2113,7 @@
         "cb55b0390f": "Gérer",
         "4f9313984d": "Reviewers",
         "02cbe2de44": "Pipeline",
-        "abf2bade22": "Impossible de charger cet élément. Actualisez pour réessayer.",
+        "itemLoadFailed": "Impossible de charger cet élément. Actualisez pour réessayer.",
         "be3d291837": "Fichiers",
         "c996e2962c": "Conversation",
         "b3c156dd51": "Actualiser",

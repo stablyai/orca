@@ -18,7 +18,11 @@ import { GitLabIncompletePaginationError } from './gitlab-paginated-list'
 import { fetchPipelineJobs } from './pipeline-job-graph'
 
 /** Serves `/jobs` and `/bridges` 100 per page with GitLab's x-next-page header. */
-function servePipeline(jobCount: number, bridgeCount: number, stripHeaders = false): void {
+function servePipeline(
+  jobCount: number,
+  bridgeCount: number,
+  headers: 'gitlab' | 'stripped' | 'skipping' = 'gitlab'
+): void {
   glabApiWithHeadersMock.mockImplementation(async (args: string[]) => {
     const match = /pipelines\/7\/(jobs|bridges)\?per_page=100(?:&page=(\d+))?$/.exec(
       args.at(-1) ?? ''
@@ -36,7 +40,13 @@ function servePipeline(jobCount: number, bridgeCount: number, stripHeaders = fal
     )
     return {
       body: JSON.stringify(items),
-      headers: stripHeaders ? {} : { 'x-next-page': start + 100 < total ? String(page + 1) : '' }
+      headers:
+        headers === 'stripped'
+          ? {}
+          : {
+              'x-next-page':
+                start + 100 < total ? String(page + (headers === 'skipping' ? 3 : 1)) : ''
+            }
     }
   })
 }
@@ -64,9 +74,17 @@ describe('fetchPipelineJobs', () => {
     }
   )
 
+  it('does not skip pages when the next-page header jumps ahead', async () => {
+    servePipeline(250, 0, 'skipping')
+
+    const rows = await fetchPipelineJobs('/repo', { host: 'gitlab.com', path: 'g/p' }, 7)
+
+    expect(rows.filter((row) => row.name.startsWith('job-'))).toHaveLength(250)
+  })
+
   it('fails rather than return a prefix when guessed pages run out', async () => {
     // Without headers the walker guesses up to 50 pages past page 1, so 5,101 jobs never finish.
-    servePipeline(5101, 0, true)
+    servePipeline(5101, 0, 'stripped')
 
     await expect(
       fetchPipelineJobs('/repo', { host: 'gitlab.com', path: 'g/p' }, 7)

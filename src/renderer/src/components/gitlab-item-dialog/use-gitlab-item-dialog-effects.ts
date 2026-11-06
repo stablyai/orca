@@ -32,7 +32,7 @@ export function useGitLabItemDetailsEffect(
           // Main returns null for any failed read, not only a missing item.
           setError(
             translate(
-              'auto.components.GitLabItemDialog.abf2bade22',
+              'auto.components.GitLabItemDialog.itemLoadFailed',
               'Could not load this item. Refresh to try again.'
             )
           )
