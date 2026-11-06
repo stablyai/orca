@@ -1,4 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
+import { shallow } from 'zustand/shallow'
+import { persistedUIValuesEqual } from '../../../../../../shared/persisted-ui-equality'
+import { selectWslHostsServing } from '../../use-wsl-hosts-enabled'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
 import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
@@ -27,13 +30,50 @@ import {
   orderHostSectionOptions
 } from '../../../../../../shared/sidebar-list/host-section-order'
 import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host-registry'
-import { createSidebarHostLabelsSelector } from '../controls/sidebar-host-options'
-import { createSidebarHostOptionsSelector } from './sidebar-host-options-selector'
+import {
+  createSidebarHostLabelsSelector,
+  buildSidebarHostOptions,
+  sidebarHostSemantics
+} from '../controls/sidebar-host-options'
 import {
   selectPendingWorktreeCreationKeys,
   decodePendingWorktreeCreationKeys
 } from './pending-worktree-creation-keys'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+
+function createSidebarHostOptionsSelector() {
+  let inputs: readonly unknown[] = []
+  let result: ReturnType<typeof buildSidebarHostOptions> = []
+  return (
+    state: ReturnType<typeof useAppStore.getState>,
+    repos: SectionRowsArgs['repos'],
+    settings: SectionRowsArgs['settings'],
+    hostLabelOverrides: Parameters<typeof buildSidebarHostOptions>[0]['hostLabelOverrides']
+  ): ReturnType<typeof buildSidebarHostOptions> => {
+    const options = {
+      repos,
+      sshTargetLabels: state.sshTargetLabels,
+      sshConnectionStates: state.sshConnectionStates,
+      settings,
+      runtimeEnvironments: state.runtimeEnvironments,
+      runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,
+      hostLabelOverrides,
+      wslHostStatuses: state.wslHostStatuses,
+      wslHostsEnabled: selectWslHostsServing(state),
+      wslHostServerFilesMissing: state.wslHostServerFiles === 'missing'
+    }
+    const nextInputs = Object.values(options)
+    if (shallow(inputs, nextInputs)) {
+      return result
+    }
+    inputs = nextInputs
+    const next = buildSidebarHostOptions(options)
+    if (!persistedUIValuesEqual(result.map(sidebarHostSemantics), next.map(sidebarHostSemantics))) {
+      result = next
+    }
+    return result
+  }
+}
 
 export function useSidebarSectionRows(args: SectionRowsArgs) {
   const { repos, worktrees, repoMap, defaultHostId } = args

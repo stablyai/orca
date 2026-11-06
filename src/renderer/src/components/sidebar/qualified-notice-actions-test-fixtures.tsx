@@ -26,7 +26,7 @@ import WorktreeVisibilityDialog from './workspace-visibility/dialog/WorktreeVisi
 import NewWorkspaceComposerModal from '../NewWorkspaceComposerModal'
 import Settings from '../settings/Settings'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
-import { afterEach, vi } from 'vitest'
+import { afterEach, beforeEach, vi } from 'vitest'
 
 import { z } from 'zod'
 
@@ -83,6 +83,18 @@ export function envelope(
   return { repoId: repo.id, worktrees: rows, authoritative, source: 'git' }
 }
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
+beforeEach(() => {
+  Object.assign(window, {
+    api: {
+      ...window.api,
+      ui: {
+        ...window.api?.ui,
+        set: () => Promise.resolve(),
+        onToggleProjectsCollapse: () => () => {}
+      }
+    }
+  })
+})
 afterEach(() => {
   cleanup()
   groupCards.shipping = false
