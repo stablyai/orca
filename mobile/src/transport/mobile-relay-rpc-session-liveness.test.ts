@@ -191,4 +191,14 @@ describe('mobile relay RPC session liveness', () => {
     await expect(reply).resolves.toMatchObject({ ok: true, result: { size: 3 } })
     expect(session.getState()).toBe('connected')
   })
+
+  it('keeps an idle relay open while a stream backlog delays the probe reply', async () => {
+    const session = await authenticateSession()
+    await vi.advanceTimersByTimeAsync(15_000)
+    for (let elapsed = 0; elapsed < 12_000; elapsed += 1_000) {
+      fakes.linkOptions!.onBinary(new Uint8Array([1]))
+      await vi.advanceTimersByTimeAsync(1_000)
+    }
+    expect(session.getState()).toBe('connected')
+  })
 })

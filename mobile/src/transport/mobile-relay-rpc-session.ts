@@ -178,7 +178,7 @@ export function connectMobileRelayRpcSession(args: {
   const connectWaiters = new MobileRelayConnectWaiters(client)
   const livenessWatchdog = new RpcSessionLivenessWatchdog({
     transport: 'relay',
-    hasRequestInFlight: () => pending.hasWritten(),
+    isLinkBusy: (framesArrived) => framesArrived || pending.hasWritten(),
     idleProbeMs: 15_000,
     probeTimeoutMs: 4_000,
     missedProbeLimit: 2,
