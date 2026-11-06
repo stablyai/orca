@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as GlabApiResponse from './glab-api-response'
 
 const {
   glabExecFileAsyncMock,
@@ -22,7 +23,12 @@ const {
   releaseMock: vi.fn()
 }))
 
-vi.mock('./gl-utils', () => ({
+vi.mock('./gl-utils', async () => ({
+  ...(await vi.importActual<typeof GlabApiResponse>('./glab-api-response')),
+  glabApiWithHeaders: async (args: string[], options: unknown) => ({
+    body: (await glabExecFileAsyncMock(['api', ...args], options)).stdout,
+    headers: {}
+  }),
   acquire: acquireMock,
   release: releaseMock,
   getGlabKnownHosts: getGlabKnownHostsMock,
@@ -72,7 +78,7 @@ describe('getWorkItemDetails', () => {
           })
         }
       }
-      if (endpoint === 'projects/g%2Fp/pipelines/99/bridges?per_page=100') {
+      if (endpoint === 'projects/g%2Fp/pipelines/99/bridges?per_page=100&page=1') {
         return {
           stdout: JSON.stringify(
             Array.from({ length: BRIDGE_COUNT }, (_, i) => ({
