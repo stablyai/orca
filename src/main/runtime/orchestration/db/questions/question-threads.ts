@@ -1,4 +1,4 @@
-import type { MessageRow, QuestionRow } from '../../types'
+import type { MessageRow, QuestionRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { exposeQuestionTimestamps } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'

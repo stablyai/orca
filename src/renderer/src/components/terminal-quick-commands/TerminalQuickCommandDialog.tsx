@@ -12,7 +12,7 @@ import {
   supportsTerminalAgentQuickCommand
 } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { getTerminalQuickCommandBodySize } from '../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import {
   Dialog,
   DialogContent,

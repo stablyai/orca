@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTestStore, makeWorktree } from '@/store/slices/store-test-helpers'
-import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
+import { ensureWorktreeHasInitialTerminal } from '@/lib/workspace/activation/initial-surface/worktree-initial-terminal-seeding'
 import { resolveWorkspaceTerminalHostAuthority } from '@/lib/workspace-terminal-host-authority'
 import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
 

@@ -1,7 +1,7 @@
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store'
 import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-delivery-credit'
-import { recordAgentHibernationPaneOutput } from '@/lib/agent-hibernation-output-activity'
+import { recordAgentHibernationPaneOutput } from '@/lib/agent-session/hibernation/agent-hibernation-output-activity'
 import { observeTerminalBracketedPasteModeOutput } from '../terminal-bracketed-paste'
 import type { PtyDataMeta } from '../pty-dispatcher'
 import { sendTerminalOscColorQueryReplies } from '../terminal-capability-replies'

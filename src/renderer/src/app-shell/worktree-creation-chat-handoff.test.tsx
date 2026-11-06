@@ -10,12 +10,12 @@ import {
   type TabsDrawnFromMain
 } from '@/store/slices/tabs-drawn-from-main.test-fixture'
 
-import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
+import { runBackgroundWorktreeCreation } from '@/lib/workspace/creation/worktree-creation-flow'
 
 import {
   makeCreatedAgentWorktree,
   seedEmptyActivatableWorktree
-} from '@/lib/worktree-activation-created-agent.test-fixture'
+} from '@/lib/workspace/activation/worktree-activation-created-agent.test-fixture'
 
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { registerNativeChatPane } from '@/components/native-chat/native-chat-composer-mount'

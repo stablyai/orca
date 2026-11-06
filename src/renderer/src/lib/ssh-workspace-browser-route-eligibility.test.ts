@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
-import { resolveSshWorkspaceBrowserRouteEligibility } from './ssh-workspace-browser-route-eligibility'
+import { resolveSshWorkspaceBrowserRouteEligibility } from './browser/workspace/ssh-workspace-browser-route-eligibility'
 
 const recipeEnvironment = {
   id: 'env-recipe',

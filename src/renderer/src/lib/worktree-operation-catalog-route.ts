@@ -14,10 +14,12 @@ import { addRoute, resolveExactWorktreeRoute, routeForOwner } from './worktree-o
 import {
   findIndexedDetectedWorktrees,
   findIndexedWorktrees,
-  findIndexedRepoOwnerForHost,
-  resolveIndexedRepoOwner,
   resolveIndexedWorktreeOwner
-} from './worktree-runtime-owner-index'
+} from './workspace/ownership/worktree-runtime-owner-index'
+import {
+  findIndexedRepoOwnerForHost,
+  resolveIndexedRepoOwner
+} from './workspace/ownership/repo-owner-index'
 // Type-only, so routing's shared vocabulary stays in one place without a runtime cycle.
 import type {
   WorktreeOperationOwnerRecord,

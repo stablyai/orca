@@ -7,7 +7,7 @@ import {
   sends,
   composerDraft,
   flushLaunchSettlement
-} from '../../structured-agent-session-launch.test-fixture'
+} from './structured-agent-session-launch.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'

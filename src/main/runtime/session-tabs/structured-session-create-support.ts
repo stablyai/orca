@@ -1,4 +1,4 @@
-import { resolveStructuredAgentSessionForkIntent } from '../../native-chat/structured-agent-session-fork'
+import { resolveStructuredAgentSessionForkIntent } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-fork'
 import {
   captureStructuredAgentCliSource,
   structuredAgentCliSourceFromEvidence
@@ -6,7 +6,7 @@ import {
 import type { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce as RestoreStructuredAgentSessionTabsOnceMethods } from './structured-session-tab-restoration'
 import { agentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { StructuredSessionWorkspaceScope } from './structured-session-workspace-scope'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   resolveCommittedStructuredAgentSessionAdoptionIntent,
   requireUnownedStructuredAgentSessionAdoption,
@@ -14,7 +14,7 @@ import {
   structuredAgentSessionAdoptAttach,
   type StructuredAgentSessionCreateIntentInput
 } from '../agent-session/structured-agent-session-create-adoption'
-import type { AgentSessionAttachParams } from '../../native-chat/agent-session-wire/structured-agent-session-attach'
+import type { AgentSessionAttachParams } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
 import {
   resolveHostStructuredAgentCreateSupport,
   resolveHostStructuredAgentLaunchEnvironment

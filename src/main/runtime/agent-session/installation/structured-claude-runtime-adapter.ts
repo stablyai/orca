@@ -7,7 +7,7 @@ import type {
   ClaudeStructuredSessionEvent
 } from '../../../claude/structured/claude-structured-session-state'
 import { claudeProviderHandleLink } from '../../../claude/structured/claude-structured-owner-identity'
-import type { StructuredAgentSessionLifecycleEvent } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionLifecycleEvent } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 
 import {
   recordAgentSessionProviderHandle,

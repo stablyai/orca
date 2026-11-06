@@ -1,4 +1,4 @@
-import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { createAgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import {
@@ -6,7 +6,7 @@ import {
   workspaceMayOverrideDefaultModel
 } from '../native-chat/agent-model-catalog/agent-project-model-override'
 import type { AgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store'
-import { CALLER } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+import { CALLER } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
 import { GROK_CONFIG_OPTIONS, PROVIDER_SESSION } from './acp-structured-adapter.test-support'
 
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'

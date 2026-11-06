@@ -1,6 +1,6 @@
 import type { ILink } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
-import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { getConnectionId } from '@/lib/connection-context'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 import { createProviderSetup, makeBufferLine } from './terminal-link-provider-buffer-fixtures'
@@ -18,7 +18,7 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorkspace: vi.fn(),
   activateAndRevealWorktree: vi.fn()
 }))

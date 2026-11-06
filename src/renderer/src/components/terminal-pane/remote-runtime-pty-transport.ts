@@ -97,7 +97,7 @@ import {
   registerRemoteRuntimePtyControlReadyReviver,
   type RemoteRuntimePtyRecoveryPhase
 } from './remote-runtime-pty-recovery-state'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import {
   createAgentSessionCreateOperation,
   withAgentSessionCreateOperationId

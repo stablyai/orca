@@ -3,7 +3,7 @@ import {
   NativeChatPasteRequest,
   NATIVE_CHAT_ROOT_SELECTOR,
   nativeChatPasteUnavailableNotice
-} from '@/lib/native-chat-paste-request'
+} from '@/components/native-chat/paste/native-chat-paste-request'
 import { paneIsCoveredByNativeChat } from './native-chat-covered-pane'
 
 /** Route paste to this leaf’s chat; an unready input refuses visibly so bytes cannot reach its hidden terminal. */

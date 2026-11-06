@@ -1,4 +1,4 @@
-import type { DispatchContextRow } from '../../../../orchestration/types'
+import type { DispatchContextRow } from '../../../../orchestration/db/orchestration-records'
 import type { BareRecipientResolution } from './recipient-routing'
 
 /** Shared action order; supplied readers may be command queries or covered invocation-local facts. */

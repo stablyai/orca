@@ -11,6 +11,7 @@ import {
 } from '../../../mobile/src/host-screen/use-host-sidebar-feed'
 import { createHostSidebarFeedReader } from '../../../mobile/src/host-screen/host-sidebar-feed-connection'
 import { readHostMethodReply } from '../../../mobile/src/host-screen/host-sidebar-feed-operations'
+import type { SharedClientEventsClient } from '../../../mobile/src/transport/shared-client-events'
 import {
   hostPlatformRead,
   hostViewSettingsRead
@@ -69,8 +70,11 @@ function socketPort(socket: PairedMobileSocket) {
 }
 
 /** The socket's client-event stream as the page's client subscribes to it, frames in order. */
-function socketEventClient(socket: PairedMobileSocket) {
+function socketEventClient(socket: PairedMobileSocket): SharedClientEventsClient {
   return {
+    // One socket for the helper's life: always connected, no reconnects to tell apart.
+    getState: () => 'connected',
+    getLastConnectedAt: () => null,
     subscribe: (method: string, params: unknown, onData: (payload: unknown) => void) => {
       const id = 'phone-list-events'
       socket.send(id, method, params)

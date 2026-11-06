@@ -122,7 +122,7 @@ async function registerAndDispatch(automation = makeAutomation()): Promise<void>
   })
 }
 
-vi.mock('@/lib/launch-agent-background-session', () => ({
+vi.mock('@/lib/agent-session/launch/background/launch-agent-background-session', () => ({
   launchAgentBackgroundSession: mockLaunchAgentBackgroundSession
 }))
 
@@ -166,8 +166,9 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
-vi.mock('@/lib/browser-uuid', () => ({
-  createBrowserUuid: () => 'create-request-id'
+const mockLaunchUuid = vi.hoisted(() => () => 'create-request-id')
+vi.mock('../../../shared/non-secure-context-uuid', () => ({
+  createNonSecureContextUuid: mockLaunchUuid
 }))
 
 vi.mock('@/store', () => ({

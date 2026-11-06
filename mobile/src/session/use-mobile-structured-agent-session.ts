@@ -282,6 +282,7 @@ export function useMobileStructuredAgentSession(
     turnIndicator,
     ...turnTiming,
     sendWithOutcome,
+    holdUnconfirmed: sends.holdUnconfirmed,
     cancel: () => void stopPress.track(() => requestCancel()),
     cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) =>
       requestCancel(prompt ?? pendingStructuredPromptIdentity(stateRef.current)),

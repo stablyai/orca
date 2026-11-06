@@ -255,7 +255,7 @@ export default function NewWorkspaceComposerCard(
   )
   const handleNamePlainEnter = React.useCallback((): void => {
     const agentTrigger = composerRef?.current?.querySelector<HTMLElement>(
-      '[data-agent-combobox-root="true"][role="combobox"]'
+      '[data-agent-launch-picker-trigger="true"]'
     )
     agentTrigger?.focus()
   }, [composerRef])

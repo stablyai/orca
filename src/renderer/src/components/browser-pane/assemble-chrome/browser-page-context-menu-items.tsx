@@ -2,7 +2,7 @@ import { Fragment, type MutableRefObject } from 'react'
 import { useAppStore } from '@/store'
 import { isMac } from '@/app-shell/app-window-chrome'
 import { translate } from '@/i18n/i18n'
-import { openUrlInTabBesideBrowserPage } from '@/lib/browser-page-tab-opening'
+import { openUrlInTabBesideBrowserPage } from '@/lib/browser/palette/browser-page-tab-opening'
 import {
   buildSearchUrl,
   DEFAULT_SEARCH_ENGINE,

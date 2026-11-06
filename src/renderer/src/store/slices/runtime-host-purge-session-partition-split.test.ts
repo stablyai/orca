@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceSessionPatch } from '../../../../shared/workspace-session/workspace-session-state-types'
-import { patchWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
+import { patchWorkspaceSessionByHost } from '@/lib/workspace/persistence/workspace-session-host-persistence'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }

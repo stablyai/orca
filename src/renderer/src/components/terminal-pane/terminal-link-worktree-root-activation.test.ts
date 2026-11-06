@@ -2,7 +2,7 @@ import type { ILink } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
 import { openDetectedFilePath, openFilePathLinkAtBufferPosition } from './terminal-link-handlers'
 import { getConnectionId } from '@/lib/connection-context'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 import {
   createProviderSetup,
@@ -30,7 +30,7 @@ vi.mock('@/lib/language-detect', () => ({
 }))
 
 // Mock activation orchestration so these suites isolate browser/editor routing from store side effects.
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorkspace: vi.fn(),
   activateAndRevealWorktree: vi.fn()
 }))

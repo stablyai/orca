@@ -12,7 +12,7 @@ import type {
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { StructuredLaunchAttempt } from './structured-agent-session-launch-request'
-import type { AgentLaunchRequestId } from '../../agent-launch-request-id'
+import type { AgentLaunchRequestId } from './routing/agent-launch-request-id'
 import type { StructuredAgentSessionCreateGate } from './structured-agent-session-launch-errors'
 
 export type StructuredAgentLaunchOptions = StructuredLaunchPromptOptions & {

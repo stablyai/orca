@@ -1,4 +1,4 @@
-import type { AgentSessionAcquisition } from '../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { AgentSessionAcquisition } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { openClaudeStreamJsonConnection } from '../claude-stream-json-connection'
 import { claudeLaunchPermissions } from './claude-structured-inbound-control'
 import {
