@@ -5,9 +5,9 @@ import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/workt
 import type { Worktree } from '../../../../shared/worktree/types'
 import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import { getProjectedWorktreeLineage } from '../../../../shared/worktree/workspace-lineage-graph'
 import {
   getSidebarLineageParentsByIdentity,
-  getProjectedWorktreeLineage,
   getProjectedWorktreeLineageChildrenByParentId
 } from '../../../../shared/sidebar-list/worktree-lineage-projection'
 
