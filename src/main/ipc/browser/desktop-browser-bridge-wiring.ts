@@ -54,7 +54,9 @@ export function listDesktopBrowserBridgeCandidates(
   connections: Pick<SshConnectionManager, 'getState'> | null
 ): DesktopBrowserBridgeCandidate[] {
   const candidates: DesktopBrowserBridgeCandidate[] = []
-  for (const target of getSshTargetRegistryStore()?.listTargets() ?? []) {
+  // Why: a managed host's eligibility follows its orcad claim, not whether it is listed in SSH
+  // settings; environment recipes connect runtime-owned targets that are claimed the same way.
+  for (const target of getSshTargetRegistryStore()?.getOrcadRuntimeClaims().listTargets() ?? []) {
     if (!isRemoteCliControlAllowed(target)) {
       continue
     }

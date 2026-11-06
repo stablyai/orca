@@ -67,7 +67,7 @@ vi.mock('node:child_process', () => ({
 vi.mock('../macos-permissions/macos-full-disk-access-status', () => ({
   getMacosFullDiskAccessStatus: getMacosFullDiskAccessStatusMock
 }))
-vi.mock('../daemon/daemon-full-disk-access-status', () => ({
+vi.mock('../daemon/permissions/daemon-full-disk-access-status', () => ({
   getTerminalHostsFullDiskAccessStatus: terminalHostsStatusMock
 }))
 

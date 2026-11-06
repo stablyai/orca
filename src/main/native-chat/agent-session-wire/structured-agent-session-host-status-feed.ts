@@ -25,7 +25,7 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
   deps: () => {
     store: Pick<
       AgentSessionRecordStore,
-      'getConversation' | 'replacedRuntime' | 'listConversations'
+      'getConversation' | 'replacedRuntime' | 'listConversations' | 'isSessionTabRetired'
     >
     logger: StructuredAgentSessionLogger
     onSessionStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged']
@@ -68,6 +68,9 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
     getConversation: (sessionId) => args.deps().store.getConversation(sessionId),
     listConversations: () => args.deps().store.listConversations(),
     replacedRuntime: (sessionId) => args.deps().store.replacedRuntime(sessionId),
+    // A closed chat's agent can still run (a send, a worker); its row shows while it does.
+    rowRetired: (sessionId) =>
+      !args.sessions.get(sessionId)?.child && args.deps().store.isSessionTabRetired(sessionId),
     now: args.now,
     logger: deferredStructuredAgentSessionLogger(() => args.deps().logger),
     onStatusChanged: (summary, options) => args.deps().onSessionStatusChanged?.(summary, options),

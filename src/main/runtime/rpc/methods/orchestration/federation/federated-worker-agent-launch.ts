@@ -101,13 +101,15 @@ export async function launchFederatedWorkerAgent(args: {
           ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {}),
           activate: false,
           ...(args.creatorProvenance ? { creatorProvenance: args.creatorProvenance } : {}),
-          lineage: { noParent: true }
+          lineage: params.crossStoreParent
+            ? { crossStoreParent: params.crossStoreParent }
+            : { noParent: true }
         })
         created = result.worktree
         const terminalHandle = result.startupTerminal?.handle
         effects.push({
           kind: 'worktree',
-          action: 'created_top_level',
+          action: params.crossStoreParent ? 'created_child' : 'created_top_level',
           id: result.worktree.id,
           name: result.worktree.displayName
         })

@@ -5,7 +5,7 @@ import type { ExternalConversationLink } from '../../shared/external-conversatio
 import {
   createLaunchedAgentWriteGuard,
   type LaunchedAgentWriteGuardRuntime
-} from '../runtime/launched-agent-write-guard'
+} from '../runtime/terminal/wait/launched-agent-write-guard'
 import {
   TerminalAgentPromptAnswers,
   type PanePromptTarget,

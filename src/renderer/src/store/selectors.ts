@@ -18,6 +18,7 @@ import {
   getIndexedWorktreesById as getCachedWorktreesById
 } from './worktree-repo-index'
 import { findKnownWorktreeById } from './slices/worktrees/listing/detected-worktree-meta'
+import { getSelectedFolderTwinHostId } from '@/lib/folder-workspace-runtime-owner'
 import { selectWorktreesByRepo } from './workspace-record-selectors'
 import { worktreeCopyOwnerKey } from './slices/worktrees/metadata/worktree-copy-review-clear'
 import { findSoleHostCopy } from '../../../shared/worktree/host-qualified-identity'
@@ -269,9 +270,18 @@ export function selectKnownWorktreeById(
 }
 export const useWorktreeById = (worktreeId: string | null, executionHostId?: ExecutionHostId) =>
   useAppStore((s) => selectKnownWorktreeById(s, worktreeId, executionHostId))
-// File-list callers resolve operation ownership separately from the UI's active host.
-export const useKnownWorktreeById = (worktreeId: string | null) =>
-  useAppStore((s) => (worktreeId ? (findKnownWorktreeById(s, worktreeId) ?? null) : null))
+/** File lists keep host-less git ownership; a folder twin resolves on the copy the user selected. */
+export function selectFileListWorktree(
+  state: WorktreeLookupHostState & Parameters<typeof findKnownWorktreeById>[0],
+  worktreeId: string | null
+): NonNullable<ReturnType<typeof findKnownWorktreeById>> | null {
+  return worktreeId
+    ? (findKnownWorktreeById(state, worktreeId, getSelectedFolderTwinHostId(state, worktreeId)) ??
+        null)
+    : null
+}
+export const useFileListWorktree = (worktreeId: string | null) =>
+  useAppStore((s) => selectFileListWorktree(s, worktreeId))
 export const useActiveWorktree = () => {
   const activeWorktreeId = useActiveWorktreeId()
   return useAppStore((s) =>

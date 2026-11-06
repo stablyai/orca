@@ -150,3 +150,35 @@ it('preserves regressing floors, future exact reservations, ties and non-consumi
   expect(result.kind.has('Z')).toBe(false)
   expect([...items.values()]).toEqual(before)
 })
+
+it('imports a whole historical turn with more than 128 still-open message segments', () => {
+  const frames = [user('long-turn', 'Review the repository')]
+  for (let index = 0; index < 160; index += 1) {
+    frames.push(
+      frame({
+        sessionUpdate: 'agent_message_chunk',
+        messageId: `answer-${index}`,
+        content: { type: 'text', text: 'Retained segment' }
+      })
+    )
+  }
+  frames.push(
+    frame({
+      sessionUpdate: 'agent_message_chunk',
+      messageId: 'answer-0',
+      content: { type: 'text', text: ' and its late tail' }
+    })
+  )
+  const turn = acpHistoryTurns(frames, scope.identity)[0]
+  if (!turn || turn.turn === null) {
+    throw new Error('Missing identified historical turn')
+  }
+  const items = translateHistoryTurn(scope, { ...turn, turn: turn.turn })
+  const answers = items.flatMap((item) =>
+    item.body.kind === 'message' && item.body.role === 'assistant' ? [item.body] : []
+  )
+  expect(answers).toHaveLength(160)
+  expect(answers[0]).toMatchObject({
+    blocks: [{ type: 'text', text: 'Retained segment and its late tail' }]
+  })
+})

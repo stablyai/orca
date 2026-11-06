@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   containsTerminalVerticalLineControl,
   normalizeTerminalChunk
-} from './terminal-ansi-normalization'
-import { appendNormalizedToTailBuffer } from './terminal-tail-buffer'
+} from './terminal/output/terminal-ansi-normalization'
+import { appendNormalizedToTailBuffer } from './terminal/output/tail/terminal-tail-buffer'
 
 describe('terminal vertical-control scanning', () => {
   it('keeps a line control with long retained CSI parameters', () => {

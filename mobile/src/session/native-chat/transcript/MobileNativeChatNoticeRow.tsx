@@ -5,6 +5,7 @@ import {
 import { useContext, useId, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { AlertCircle, AlertTriangle, ChevronRight, Info } from 'lucide-react-native'
+import { MobileNativeChatInterruptedContinueButton } from './MobileNativeChatInterruptedContinueButton'
 import {
   nativeChatNoticeBlock,
   nativeChatNoticeLook,
@@ -20,12 +21,13 @@ import {
   readWholeAgentSessionFailureFact
 } from '../../../../../src/shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureSentence } from '../../../../../src/shared/agent-session/failures/agent-session-failure-words'
+import { agentSessionRemoteSignInCommand } from '../../../../../src/shared/agent-session/lifecycle/agent-session-sign-in'
 import { nativeChatOrcaStopRowText } from '../../../../../src/shared/native-chat/native-chat-orca-stop-words'
 import {
   MobileNativeChatNoticeContext,
-  type MobileNativeChatNoticeNames
+  type MobileNativeChatNoticeView
 } from '../../mobile-native-chat-notice-context'
-import { MobileMarkdown } from '../../../components/MobileMarkdown'
+import { MobileNativeChatMarkdown } from '../MobileNativeChatMarkdown'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
 import { colors, radii, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
@@ -40,15 +42,16 @@ import { NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION } from '../../../../../sr
 import { MONO_SIZE, TEXT_SIZE, scaledType } from './mobile-native-chat-message-styles'
 import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import { toolStyles } from './mobile-native-chat-tool-styles'
+import { styles as chatViewStyles } from '../mobile-native-chat-view-styles'
 
 function toneColor(tone: NativeChatNoticeTone): string {
   return { warning: colors.statusAmber, error: colors.statusRed, notice: colors.textMuted }[tone]
 }
 
-// Desktop's no-Continue wording; the phone always reads its Orca host as remote.
+// The phone always reads its Orca host as remote.
 function noticeLineText(
   notice: NativeChatTextBlock,
-  names: MobileNativeChatNoticeNames,
+  names: MobileNativeChatNoticeView,
   t: Translate
 ): string {
   if (notice.orcaStop) {
@@ -56,7 +59,7 @@ function noticeLineText(
     return nativeChatOrcaStopRowText(
       notice.orcaStop.cause,
       names.hostName ?? say('unnamedServer'),
-      { continueAvailable: false, remoteHost: true },
+      { continueAvailable: names.continuation?.continueAvailable === true, remoteHost: true },
       say
     )
   }
@@ -117,12 +120,10 @@ function NoticeDisclosureSummary({
 export function MobileNativeChatNoticeRow({
   blocks,
   fontScale,
-  onOpenFile,
   onLongPress
 }: {
   blocks: readonly NativeChatBlock[]
   fontScale: number
-  onOpenFile?: (relativePath: string) => void
   onLongPress?: () => void
 }): React.JSX.Element | null {
   useMobileColorScheme()
@@ -146,9 +147,13 @@ export function MobileNativeChatNoticeRow({
   }
   const look = nativeChatNoticeLook(notice)
   const lineText = noticeLineText(notice, names, t)
-  const failureDetail = agentSessionFailureDetailText(
-    readWholeAgentSessionFailureFact(notice.failure)
-  )
+  const failure = readWholeAgentSessionFailureFact(notice.failure)
+  const failureDetail = agentSessionFailureDetailText(failure)
+  const signInCommand =
+    failure?.kind === 'notSignedIn'
+      ? agentSessionRemoteSignInCommand(names.agentName, failure.account)
+      : null
+  const runInTerminal = names.onRunInTerminal
   const detail = failureDetail?.trim() !== lineText.trim() ? failureDetail : undefined
   const diagnosticText = look.kind === 'settled-permission' ? notice.text : detail
   const payload = notice.providerFrame?.payload
@@ -250,11 +255,10 @@ export function MobileNativeChatNoticeRow({
       return (
         <View style={styles.card}>
           <Text style={styles.planTitle}>{copy.plan}</Text>
-          <MobileMarkdown
+          <MobileNativeChatMarkdown
             content={notice.text}
             rangeSelectable
             textScale={fontScale}
-            onOpenFile={onOpenFile}
             onLongPress={onLongPress}
           />
         </View>
@@ -273,11 +277,37 @@ export function MobileNativeChatNoticeRow({
         scaledType(TEXT_SIZE, fontScale),
         look.tone && { color: toneColor(look.tone) }
       ]
+      const continuation = names.continuation
+      const continueOffered =
+        continuation !== undefined &&
+        notice.orcaStop?.turnItemId !== undefined &&
+        notice.orcaStop.turnItemId === continuation.offeredTurnItemId
       const content = (
         <View style={look.tone ? styles.toneText : undefined}>
           <Text selectable={INLINE_TEXT_SELECTION} style={textStyle}>
             {lineText}
           </Text>
+          {continueOffered ? (
+            <MobileNativeChatInterruptedContinueButton onPress={continuation.continueNow} />
+          ) : signInCommand && runInTerminal ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityHint={t(
+                'chat.notice.signInHint',
+                'Opens a terminal on the computer running this chat'
+              )}
+              onPress={() => runInTerminal(signInCommand)}
+              style={({ pressed }) => [
+                chatViewStyles.retryPill,
+                styles.action,
+                pressed && chatViewStyles.retryPillPressed
+              ]}
+            >
+              <Text style={chatViewStyles.retryPillLabel}>
+                {t('chat.notice.signIn', 'Sign in')}
+              </Text>
+            </Pressable>
+          ) : null}
           {detail || payload ? (
             <View>
               <NoticeDisclosureSummary
@@ -369,5 +399,9 @@ const styles = themedStyleSheet(() => ({
   },
   toneText: {
     flex: 1
+  },
+  action: {
+    alignSelf: 'flex-start',
+    marginTop: spacing.sm
   }
 }))

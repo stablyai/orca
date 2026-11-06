@@ -9,7 +9,7 @@ import type { NotificationSettings } from '../../shared/notification-settings-ty
 import type {
   MobileNotificationDispatchEvent,
   MobileNotificationEvent
-} from './runtime-mobile-notification-controller'
+} from './push/notifications/runtime-mobile-notification-controller'
 import { createNotificationDeliveryService } from '../notifications/notification-delivery-service'
 import { TerminalAgentPhonePush } from './terminal-agent-phone-push'
 

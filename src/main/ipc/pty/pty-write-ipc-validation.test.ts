@@ -113,6 +113,23 @@ describe('registerPtyHandlers', () => {
       id: result.id
     })
   })
+  it('tells the runtime about a daemon endpoint loss even with no window', () => {
+    let fanout: ((payload: { id: string }) => void) | undefined
+    installDaemonTestProvider({
+      onWriteUnavailable: vi.fn((callback: (payload: { id: string }) => void) => {
+        fanout = callback
+        return () => {}
+      })
+    })
+    const runtime = new OrcaRuntimeService()
+    const notePtyEndpointLoss = vi.spyOn(runtime, 'notePtyEndpointLoss')
+    registerPtyHandlers(mainWindow as never, runtime)
+    mainWindow.webContents.isDestroyed.mockReturnValue(true)
+
+    fanout?.({ id: 'pane-1' })
+
+    expect(notePtyEndpointLoss).toHaveBeenCalledWith('pane-1')
+  })
   it('rejects malformed and cross-window pty write IPC before provider writes', async () => {
     const mockProc = createMockProc()
     spawnMock.mockReturnValue(mockProc.proc)

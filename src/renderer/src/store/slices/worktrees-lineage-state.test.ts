@@ -222,6 +222,45 @@ describe('worktree lineage state', () => {
     })
   })
 
+  it("assigns a parent on the clicked twin's own host, not its same-id twin", async () => {
+    const store = createTestStore()
+    const lineage = makeLineage()
+    const localTwin = makeWorktree({
+      id: lineage.worktreeId,
+      repoId: 'repo1',
+      path: '/local/child',
+      hostId: LOCAL_EXECUTION_HOST_ID
+    })
+    const serverTwin = makeWorktree({
+      id: lineage.worktreeId,
+      repoId: 'repo1',
+      path: '/remote/child',
+      hostId: 'runtime:owner-env'
+    })
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-twin-assign-parent',
+      ok: true,
+      result: { worktree: { ...serverTwin, lineage } },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({ worktreesByRepo: { repo1: [localTwin, serverTwin] } })
+
+    await store.getState().assignWorktreeParent(lineage.worktreeId, {
+      parentWorktreeId: lineage.parentWorktreeId,
+      executionHostId: 'runtime:owner-env'
+    })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'owner-env',
+      method: 'worktree.set',
+      params: {
+        worktree: `id:${lineage.worktreeId}`,
+        parentWorktree: `id:${lineage.parentWorktreeId}`
+      },
+      timeoutMs: 15_000
+    })
+  })
+
   it('refreshes assignment failures through the worktree owner runtime when host-stamped', async () => {
     const store = createTestStore()
     const lineage = makeLineage()

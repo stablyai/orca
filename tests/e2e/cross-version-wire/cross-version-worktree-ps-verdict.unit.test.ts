@@ -120,8 +120,8 @@ function dotStates(build: Build, rows: Record<string, AgentRow>): Record<string,
 async function loadBuild(ref: string | null): Promise<Build> {
   if (ref === null) {
     const [sources, rows, display] = await Promise.all([
-      import('../../../src/main/runtime/runtime-worktree-agent-sources'),
-      import('../../../src/main/runtime/runtime-worktree-agent-rows'),
+      import('../../../src/main/runtime/workspaces/process-listing/runtime-worktree-agent-sources'),
+      import('../../../src/main/runtime/workspaces/process-listing/runtime-worktree-agent-rows'),
       importWorkingTreeModuleCopy(PHONE_ROW_READER)
     ])
     return {
@@ -134,8 +134,14 @@ async function loadBuild(ref: string | null): Promise<Build> {
   }
   const checkout = await materializeReleaseCheckout(ref)
   const [sources, rows, display] = await Promise.all([
-    importReleaseCheckoutModule(checkout, 'src/main/runtime/runtime-worktree-agent-sources.ts'),
-    importReleaseCheckoutModule(checkout, 'src/main/runtime/runtime-worktree-agent-rows.ts'),
+    importReleaseCheckoutModule(
+      checkout,
+      'src/main/runtime/workspaces/process-listing/runtime-worktree-agent-sources.ts'
+    ),
+    importReleaseCheckoutModule(
+      checkout,
+      'src/main/runtime/workspaces/process-listing/runtime-worktree-agent-rows.ts'
+    ),
     importReleaseCheckoutModule(checkout, PHONE_ROW_READER)
   ])
   return {

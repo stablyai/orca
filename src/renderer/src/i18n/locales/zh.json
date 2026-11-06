@@ -3214,7 +3214,6 @@
             "e8b3741ff7": "被忽略",
             "a9957007eb": "忽略 {{value0}}",
             "bef0adef9b": "分支",
-            "0b1766738a": "仓库",
             "bbb1ab6a6f": "选择{{value0}}",
             "b771c92598": "删除所选内容",
             "7eee951968": "检查工作区安全",
@@ -3223,7 +3222,6 @@
             "b2c1331844": "删除不活动的工作区",
             "7f451a3e2c": "无法忽略清理建议",
             "662b8ec3f8": "工作区清理扫描失败",
-            "4d0b72481c": "忽略",
             "9cc26c019d": "移除",
             "0e2d235c63": "非活动工作区扫描已就绪",
             "4a35c08764": "查看",
@@ -3231,9 +3229,6 @@
             "1d3503357d": "删除继续期间，你可以关闭此窗口并稍后回来。",
             "4c2990886e": "已删除 {{value0}}/{{value1}}",
             "86ba852118": "{{value0}}，{{value1}} 个失败",
-            "deletingCount": "正在删除工作区：{{value0}}",
-            "deleteCount": "删除工作区：{{value0}}？",
-            "selectedForDeletionCount": "已选择删除：{{value0}}",
             "deleteButtonCount": "删除 {{value0}}",
             "archivedStatus": "已归档",
             "74f6c16279": "返回"
@@ -3248,7 +3243,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "提交",
             "contextLabel": "上下文",
             "flagsLabel": "标记",
             "collapseDetails": "收起详情",
@@ -14855,8 +14849,6 @@
           "AiCommitPrSettingsCard": {
             "8d4152701a": "例如llama 运行 llama3.1 {{value0}}",
             "9ee54037a4": "自定义命令",
-            "4b2fc4b80c": "思考努力",
-            "be8917699e": "模型",
             "560d4feb00": "自定义",
             "29d119fe95": "智能体",
             "f9382b48a1": "启用AI作者",
@@ -16476,6 +16468,8 @@
               "25349b66fc": "新的 Markdown 文件",
               "784812ca24": "在活动工作区中打开浏览器选项卡。",
               "892bfa9339": "新浏览器选项卡",
+              "splitChatRight": "右侧拆分聊天",
+              "splitChatDown": "拆分聊天",
               "verbs": {
                 "newBrowser": "新浏览器",
                 "newBrowserTab": "新的浏览器页",
@@ -16489,6 +16483,10 @@
                 "newTerminal": "新终端",
                 "newTerminalTab": "新的终端选项卡",
                 "newShell": "新shell",
+                "splitChatRight": "拆分聊天权限",
+                "splitChatDown": "拆分聊天",
+                "chatPaneRight": "聊天窗格右侧",
+                "chatPaneBelow": "下面的聊天窗格",
                 "terminalTab": "终端选项卡",
                 "createWorktree": "创建工作树",
                 "addWorktree": "添加工作树",
@@ -16498,18 +16496,8 @@
                 "removeWorktree": "删除工作树",
                 "trashWorktree": "垃圾工作树",
                 "addQuickCommand": "添加快捷命令",
-                "newQuickCommand": "新的快捷命令",
-                "splitChatRight": "拆分聊天权限",
-                "newChatRight": "在右侧新建聊天",
-                "chatPaneRight": "聊天窗格右侧",
-                "splitChatDown": "拆分聊天",
-                "newChatBelow": "在下方新建聊天",
-                "chatPaneBelow": "下面的聊天窗格"
-              },
-              "splitChatRight": "右侧拆分聊天",
-              "splitChatRightDescription": "在右侧的拆分窗格中打开新聊天。",
-              "splitChatDown": "拆分聊天",
-              "splitChatDownDescription": "在下面的拆分窗格中打开新聊天。"
+                "newQuickCommand": "新的快捷命令"
+              }
             }
           },
           "palette": {
@@ -18898,8 +18886,6 @@
       },
       "turnDiff": {
         "partial": "部分差异",
-        "showDiff": "显示差异",
-        "hideDiff": "隐藏差异",
         "changedFiles_other": "{{count}} 个已更改的文件"
       },
       "receipt": {
@@ -19425,9 +19411,7 @@
           },
           "noSizes": "尚未测量工作区大小。",
           "noSizesDescription": "测量磁盘使用情况后会显示大小。",
-          "measureSizes": "扫描",
           "measureSizesTitle": "扫描工作区大小",
-          "measureSizesDescription": "扫描磁盘使用情况，按大小比较、排序和过滤工作区。",
           "sizeOnDisk": "磁盘大小：{{value0}}",
           "checkingGitRow": "检查 git 状态",
           "searchPlaceholder": "搜索名称、仓库、分支、路径、主机",
@@ -19957,7 +19941,10 @@
       "workerAutoClose": {
         "running": "临时编排工作代理 · 完成后 2 分钟关闭",
         "finished": "临时编排工作代理已完成 · {{countdown}}后关闭",
-        "keepOpen": "保持打开"
+        "keepOpen": "保持打开",
+        "bannerRunning": "编排工作代理 · 完成后 2 分钟关闭",
+        "bannerFinished": "编排工作代理已完成 · {{countdown}}后关闭",
+        "temporaryBadge": "临时"
       }
     },
     "wslHostMark": {

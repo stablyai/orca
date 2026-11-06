@@ -154,6 +154,7 @@ function senderIndex(state: AppState) {
       row.paneKey === previous.paneKey &&
       row.worktreeId === previous.worktreeId &&
       row.sessionId === previous.sessionId &&
+      row.dispatchActor === previous.dispatchActor &&
       row.tab === previous.tab
     ) {
       index.set(id, previous)
@@ -197,6 +198,13 @@ export function resolveAgentMessageSender(
   sender: AgentMessageSender,
   dispatchId?: string
 ): AgentSenderResolution {
+  if (
+    sender.party.address.startsWith('run:') &&
+    !sender.party.orcaSessionId &&
+    !sender.party.terminalHandle
+  ) {
+    return { kind: 'gone', sender: 'other' }
+  }
   if (!state.agentSenderPublicationsByHost?.[host]) {
     return LEGACY
   }
@@ -207,6 +215,14 @@ export function resolveAgentMessageSender(
       return AMBIGUOUS
     }
     if (location) {
+      const role = sender.party.address.startsWith('dispatch:') || dispatchId !== undefined
+      const stableSession = identity.startsWith('orca_session_id:')
+      if (
+        (identity.startsWith('dispatch:') || (role && !stableSession)) &&
+        location.dispatchActor !== true
+      ) {
+        continue
+      }
       return { kind: 'located', location }
     }
   }

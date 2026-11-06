@@ -19,8 +19,8 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import type { Repo } from '../../shared/repo-types'
 import type { Project } from '../../shared/project-types'
-import type { ResolvedWorktree } from './runtime-worktree-path-identity'
-import { partialRuntimeStore } from './runtime-store-partial-fixture'
+import type { ResolvedWorktree } from './workspaces/catalog/runtime-worktree-path-identity'
+import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
 
 const originalPlatform = process.platform
 

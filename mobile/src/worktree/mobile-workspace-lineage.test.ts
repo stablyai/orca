@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyMobileWorkspaceLineage,
+  getMobileWorkspaceLineageChildren,
   getMobileWorkspaceLineageGroupKey
 } from './mobile-workspace-lineage'
 import {
@@ -143,5 +144,47 @@ describe('applyMobileWorkspaceLineage', () => {
     const rows = applyMobileWorkspaceLineage([local, remote])
 
     expect(rows.map((item) => item.row.hostId)).toEqual(['local', 'ssh:builder'])
+  })
+})
+
+describe('getMobileWorkspaceLineageChildren across machines', () => {
+  const parent = worktree({ worktreeId: 'mac::/src/fix', worktreeInstanceId: 'parent-instance' })
+  const child = worktree({
+    worktreeId: 'srv::/work/fix-tests',
+    hostId: 'runtime:env-1',
+    worktreeInstanceId: 'child-instance',
+    crossStoreParent: {
+      childWorkspaceKey: 'worktree:srv::/work/fix-tests',
+      childInstanceId: 'child-instance',
+      parent: {
+        installationId: 'mac-install',
+        workspaceKey: 'worktree:mac::/src/fix',
+        instanceId: 'parent-instance'
+      },
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' },
+      createdAt: 1
+    }
+  })
+  const server = { hostId: 'runtime:env-1' as const, installationId: 'srv-install' }
+
+  it("nests a relayed server row under the desktop's own parent", () => {
+    const children = getMobileWorkspaceLineageChildren([parent, child], {
+      ownInstallationId: 'mac-install',
+      servers: [server]
+    })
+    expect([...children].map(([key, rows]) => [key, rows.map((row) => row.worktreeId)])).toEqual([
+      ['|mac::/src/fix', ['srv::/work/fix-tests']]
+    ])
+  })
+
+  it('keeps a parent ambiguous when the repo filter hides its twin', () => {
+    const twin = { ...parent, worktreeId: 'mac-copy::/src/fix', repoId: 'repo-2' }
+    const children = getMobileWorkspaceLineageChildren(
+      [parent, twin, child],
+      { ownInstallationId: 'mac-install', servers: [server] },
+      ['repo-1']
+    )
+    expect(children.size).toBe(0)
   })
 })

@@ -92,6 +92,20 @@ function commandItem(item: CodexThreadItem): CodexJournalItem {
   }
 }
 
+function fileChangeToolCall(item: CodexThreadItem, output?: string): CodexJournalItem {
+  return {
+    body: {
+      kind: 'tool-call',
+      name: 'apply_patch',
+      callId: item.id,
+      input: { changes: item.changes ?? null },
+      state: codexItemRunState(item),
+      ...(output === undefined ? {} : { output: journalPayload(output) })
+    },
+    handled: true
+  }
+}
+
 function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
   const changes = Array.isArray(item.changes)
     ? item.changes.flatMap((change) => {
@@ -101,17 +115,8 @@ function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
         return path && diff ? [{ path, diff }] : []
       })
     : []
-  if (changes.length === 0) {
-    return {
-      body: {
-        kind: 'tool-call',
-        name: 'apply_patch',
-        callId: item.id,
-        input: { changes: item.changes ?? null },
-        state: codexItemRunState(item)
-      },
-      handled: true
-    }
+  if (changes.length === 0 || codexItemRunState(item) !== 'completed') {
+    return fileChangeToolCall(item)
   }
   const patch = changes.map((change) => change.diff).join('\n')
   return {
@@ -267,13 +272,7 @@ export function codexStreamingJournalItem(item: CodexThreadItem, text: string): 
     return commandItem({ ...item, aggregatedOutput: text })
   }
   if (item.type === 'fileChange') {
-    const path = Array.isArray(item.changes)
-      ? readString(readRecord(item.changes[0]), 'path')
-      : null
-    return {
-      body: { kind: 'diff', path: path ?? 'pending patch', patch: journalPayload(text) },
-      handled: true
-    }
+    return fileChangeToolCall(item, text)
   }
   if (item.type === 'plan') {
     return {

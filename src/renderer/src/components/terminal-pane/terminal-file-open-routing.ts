@@ -1,10 +1,5 @@
 import type { FileOpenFailure } from './terminal-file-open-failure'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
-import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
-import {
-  isPathInsideWorktree,
-  toWorktreeRelativePath
-} from '../../../../shared/terminal/links/terminal-links'
 import { isMissingRuntimePathError } from '@/runtime/runtime-file-metadata-client'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace, activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -20,23 +15,23 @@ import {
 } from './terminal-file-path-mapping'
 import {
   LOCAL_EXECUTION_HOST_ID,
-  getConnectionExecutionHostId,
-  toRuntimeExecutionHostId
+  getConnectionExecutionHostId
 } from '../../../../shared/execution-host'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 import {
   CLIENT_LOCAL_FILE_TARGET,
   hostGrantedEditorFields,
   resolveHostWorkspaceFile,
+  revealHostWorkspaceRoot,
   type HostWorkspaceFile
 } from './terminal-host-workspace-file'
-import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 import { captureEditorOpenLinkIntent } from '@/store/slices/editor/tabs/editor-open-target-group'
 import { reserveDetectedFilePathOpenTurn } from './terminal-file-open-turn'
 import { openTerminalHtmlFileInBrowser } from './terminal-file-link-browser-open'
 export { isHtmlFilePath } from './local-html-file-destinations'
 import { refuseOpenInGroupRequest } from './terminal-file-open-in-group-toast'
 import { isExplicitEditorScopeKept, openLinkedFileInEditor } from './terminal-file-link-editor-open'
+import { resolveLinkedFileEditorTarget } from './terminal-file-editor-target'
 
 export {
   getTerminalFileContext,
@@ -222,15 +217,18 @@ export function openDetectedFilePath(
       }
       if (canOpenWithSystemDefault) {
         await window.api.shell.openFilePath(mappedFilePath, LOCAL_EXECUTION_HOST_ID)
+      } else if (hostWorkspaceFile) {
+        revealHostWorkspaceRoot(hostWorkspaceFile)
       }
       return
     }
 
-    // Why: a granted file is readable only through its grant, so it opens in Orca, never as a download.
-    if (openWithSystemDefault && !canOpenWithSystemDefault && hostGrant === null) {
-      // Shift+Cmd/Ctrl must match popover’s Download & open with default app; OS cannot directly launch remote paths.
-      await downloadAndOpenRemoteTerminalFile(fileContext, mappedFilePath)
-      return
+    // Shift+Cmd/Ctrl must match popover’s Download & open with default app; OS cannot directly launch remote paths.
+    if (openWithSystemDefault && !canOpenWithSystemDefault) {
+      const download = { grant: hostGrant, isCurrent: isCurrentRequest }
+      if (await downloadAndOpenRemoteTerminalFile(fileContext, mappedFilePath, download)) {
+        return
+      }
     }
 
     // Route local HTML to Orca browser, including system-browser opens OS could not launch.
@@ -261,39 +259,20 @@ export function openDetectedFilePath(
       return
     }
 
-    const store = useAppStore.getState()
-    let targetWorktreeId = worktreeId
-    const runtimeOwnerId = runtimeTargetEnvironmentId(fileContext.target) ?? sourceRuntimeOwnerId
-    let targetExecutionHostId =
-      hostWorkspaceFile?.executionHostId ??
-      (runtimeOwnerId
-        ? toRuntimeExecutionHostId(runtimeOwnerId)
-        : getConnectionExecutionHostId(fileContext.connectionId))
-    let relativePath = mappedFilePath
-    if (worktreePath && isPathInsideWorktree(mappedFilePath, worktreePath)) {
-      const maybeRelative = toWorktreeRelativePath(mappedFilePath, worktreePath)
-      // Keep out-of-project absolute paths so restored tabs still name the user’s external file instead of refusing it as a project file.
-      if (maybeRelative !== null && maybeRelative.length > 0 && !statResult.escapesWorktree) {
-        relativePath = maybeRelative
-      }
-    } else if (
-      hostGrant === null &&
-      !isFloatingWorkspaceId(worktreeId) &&
-      // Why: a local file opens in the workspace it was clicked in, even if another holds it open;
-      // owner-scoped tab ids keep both tabs, and the editor reads local absolute paths directly.
-      targetExecutionHostId !== LOCAL_EXECUTION_HOST_ID &&
-      store.openFiles.some(
-        (openFile) => openFile.filePath === mappedFilePath && openFile.worktreeId !== worktreeId
-      )
-    ) {
-      // Why: early resolution is only needed to avoid an existing sibling-tab collision.
-      const siblingRoute = findWorkspaceFileRoute(store, targetExecutionHostId, mappedFilePath)
-      if (siblingRoute) {
-        targetWorktreeId = siblingRoute.worktreeId
-        targetExecutionHostId = siblingRoute.executionHostId
-        relativePath = siblingRoute.relativePath
-      }
-    }
+    const {
+      worktreeId: targetWorktreeId,
+      executionHostId: targetExecutionHostId,
+      relativePath
+    } = resolveLinkedFileEditorTarget({
+      filePath: mappedFilePath,
+      worktreeId,
+      worktreePath,
+      fileContext,
+      sourceRuntimeOwnerId,
+      hostExecutionHostId: hostWorkspaceFile?.executionHostId,
+      granted: hostGrant !== null,
+      escapesWorktree: statResult.escapesWorktree
+    })
 
     if (
       explicitGroupRequest &&

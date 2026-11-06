@@ -3,7 +3,12 @@ import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-age
 import { foldMainAgentWithRowChildWork } from './agent-hook-row-child-work-fold'
 
 const INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS = 15_000
-const TOOL_PROGRESS_HOOK_EVENTS = new Set(['PreToolUse', 'PostToolUse', 'PostToolUseFailure'])
+const TOOL_PROGRESS_HOOK_EVENTS = new Set([
+  'PreToolUse',
+  'PostToolUse',
+  'PostToolUseFailure',
+  'PostToolBatch'
+])
 
 export function isToolProgressWorkingAfterInterrupt(next: AgentHookEventPayload): boolean {
   if (next.payload.state !== 'working') {

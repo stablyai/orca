@@ -7,7 +7,7 @@ import {
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { writeFencedAgentKeys } from './terminal-agent-fenced-keys'
-import type { AgentPromptExpectedBinding } from './runtime-terminal-contracts'
+import type { AgentPromptExpectedBinding } from './terminal/input/agent-prompt-write-options'
 
 export type TerminalAgentPromptAnswerRuntime = Pick<
   OrcaRuntimeService,

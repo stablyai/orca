@@ -57,25 +57,6 @@ export function readValidGitConfigEnvCount(env: NodeJS.ProcessEnv): number | nul
   return hasDanglingIndex ? null : count
 }
 
-/** Compose indexed Git config without clobbering caller-provided entries. */
-export function appendGitConfigEnv(
-  env: NodeJS.ProcessEnv,
-  entries: readonly (readonly [key: string, value: string])[]
-): NodeJS.ProcessEnv {
-  const next = { ...env }
-  const base = readValidGitConfigEnvCount(env)
-  if (base === null) {
-    // Ambiguous indices may hold caller data; use scalar guards instead of overwriting them.
-    return next
-  }
-  entries.forEach(([key, value], index) => {
-    next[`GIT_CONFIG_KEY_${base + index}`] = key
-    next[`GIT_CONFIG_VALUE_${base + index}`] = value
-  })
-  next.GIT_CONFIG_COUNT = String(base + entries.length)
-  return next
-}
-
 /**
  * Disable interactive Git credential UI while preserving cached credentials
  * and caller-provided askpass programs.
@@ -84,23 +65,19 @@ export function gitCredentialPromptGuardEnv(
   env: NodeJS.ProcessEnv,
   platform: NodeJS.Platform = process.platform
 ): NodeJS.ProcessEnv {
-  const next = appendGitConfigEnv(
-    {
-      ...env,
-      GIT_TERMINAL_PROMPT: '0',
-      GIT_ASKPASS: env.GIT_ASKPASS ?? '',
-      SSH_ASKPASS: env.SSH_ASKPASS ?? '',
-      // Why: GCM can ignore terminal/askpass guards and open its own GUI.
-      GCM_INTERACTIVE: 'never'
-    },
-    // Retain cached credentials while disabling only interactive helper fallback.
-    [
-      ['credential.interactive', 'false'],
-      ['credential.guiPrompt', 'false']
-    ]
-  )
+  // Why: scalar guards only. Agents scrub env names matching KEY/TOKEN/..., which drops
+  // GIT_CONFIG_KEY_n but keeps GIT_CONFIG_COUNT, and Git then refuses every command (#26594).
+  // GCM_INTERACTIVE is GCM's env form of credential.interactive and also suppresses its GUI.
+  const next: NodeJS.ProcessEnv = {
+    ...env,
+    GIT_TERMINAL_PROMPT: '0',
+    GIT_ASKPASS: env.GIT_ASKPASS ?? '',
+    SSH_ASKPASS: env.SSH_ASKPASS ?? '',
+    // Why: GCM can ignore terminal/askpass guards and open its own GUI.
+    GCM_INTERACTIVE: 'never'
+  }
   if (platform === 'win32') {
-    // WSLENV must register the complete indexed config protocol or Git rejects its count.
+    // WSLENV must forward a caller's indexed config as a complete set or Git rejects its count.
     const configKeys =
       readValidGitConfigEnvCount(next) === null
         ? []
