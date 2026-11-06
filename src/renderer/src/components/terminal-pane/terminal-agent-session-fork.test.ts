@@ -79,13 +79,15 @@ async function makePane(capturedText: string): Promise<ManagedPane> {
   await new Promise<void>((resolve) =>
     terminal.write(capturedText.replaceAll('\n', '\r\n'), resolve)
   )
-  return {
+  const pane = {
     leafId: LEAF_ID,
     terminal: {
       buffer: terminal.buffer,
       focus: vi.fn()
     }
-  } as unknown as ManagedPane
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: These consumers only read leafId, terminal.buffer and focus, provided by this real-xterm fixture.
+  return pane as unknown as ManagedPane
 }
 
 describe('forkAgentSessionFromPane', () => {
