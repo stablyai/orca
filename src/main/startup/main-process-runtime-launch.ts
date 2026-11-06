@@ -18,6 +18,7 @@ import { OffscreenBrowserBackend } from '../browser/backends/offscreen-browser-b
 import { browserManager } from '../browser/browser-manager'
 import { getDesktopRelayStatus } from './main-process-relay-status'
 import { startDesktopRelayService } from './main-process-relay-startup'
+import { startAgentcookieSessionSync } from './main-process-agentcookie-sync'
 import { getServeOptions, getBundledWebClientRoot, printServeReady } from './main-process-serve'
 import {
   bindTerminalRuntimeStartupServices,
@@ -244,6 +245,7 @@ async function launchDesktopMode(
       showRuntimeRpcStartupFailureDialog(win, runtimeRpcStartResult.error)
     )
   }
+  startAgentcookieSessionSync()
   // Register before proxy await so concurrent token mints wait rather than fail provider_missing; installer requests are already guarded.
   startDesktopRelayService(runtimeRpc)
   connectDesktopConnectorCloud()
