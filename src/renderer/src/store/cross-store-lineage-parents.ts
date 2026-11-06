@@ -12,6 +12,10 @@ import {
 } from '../../../shared/sidebar-list/worktree-lineage-projection'
 import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  pickFolderLineageRecord,
+  readInlineFolderLineage
+} from '../../../shared/worktree/folder-lineage-parents'
 import { getIndexedAllWorktrees } from './worktree-repo-index'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from './workspace-record-selectors'
 import type { AppState } from './types'
@@ -100,10 +104,16 @@ function hasCrossStoreRecords(state: CrossStoreLineageInputs): boolean {
 }
 
 function hasFolderParentRecords(state: CrossStoreLineageInputs): boolean {
+  if ((selectFolderWorkspaces(state)?.length ?? 0) === 0) {
+    return false
+  }
   return (
-    (selectFolderWorkspaces(state)?.length ?? 0) > 0 &&
     Object.values(state.workspaceLineageByChildKey ?? {}).some((record) =>
       record.parentWorkspaceKey.startsWith('folder:')
+    ) ||
+    // A paired server reports each row's own folder parent, which the merged records can miss.
+    getIndexedAllWorktrees(selectWorktreesByRepo(state)).some((row) =>
+      Boolean(readInlineFolderLineage(row))
     )
   )
 }
@@ -145,7 +155,9 @@ function resolveSidebarParents(
     state.worktreeLineageById,
     rows,
     view,
-    folderParents ? (row) => workspaceLineage[worktreeWorkspaceKey(row.id)] : undefined
+    folderParents
+      ? (row) => pickFolderLineageRecord(workspaceLineage[worktreeWorkspaceKey(row.id)], row)
+      : undefined
   )
   cached = { inputs, identityKey, parents }
   return parents

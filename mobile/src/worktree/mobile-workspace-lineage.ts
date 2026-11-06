@@ -9,14 +9,13 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../src/shared/execution-host'
-import { resolveFolderLineageParents } from '../../../src/shared/worktree/folder-lineage-parents'
+import { resolveLineageParentsByPolicy } from '../../../src/shared/worktree/workspace-lineage-graph'
 import type { WorkspaceLineageEdge } from '../../../src/shared/worktree/lineage-types'
-import { getCyclicLineageChildKeys } from '../../../src/shared/resolved-worktree-lineage'
 import type { MobileRelayHost } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import {
   buildCrossStoreLineageViewOfRows,
   OWN_LINEAGE_STORE_KEY,
-  resolveCrossStoreLineageParents
+  type CrossStoreLineageView
 } from '../../../src/shared/worktree/cross-store-lineage-resolution'
 import {
   NO_WORKTREE_HOST_CONTEXT,
@@ -75,34 +74,19 @@ function getResolutionRows(worktrees: readonly Worktree[]): Map<string, Resoluti
   )
 }
 
-/** Child identity → folder workspace row, for each host-reported folder workspace parent. */
-function getFolderLineageParents(worktrees: readonly Worktree[]): Map<string, Worktree> {
-  if (!worktrees.some((worktree) => readFolderEdge(worktree))) {
-    return new Map()
-  }
-  return new Map(
-    [
-      ...resolveFolderLineageParents(getResolutionRows(worktrees), (row) =>
-        readFolderEdge(row.worktree)
-      )
-    ].map(([child, parent]) => [child, parent.worktree])
-  )
-}
-
 // Unchecked wire data: a newer host may send a shape this build cannot read.
 function readFolderEdge(worktree: Worktree): WorkspaceLineageEdge | undefined {
   const edge = worktree.workspaceLineage
   return edge && typeof edge.parentWorkspaceKey === 'string' ? edge : undefined
 }
 
-/** Child identity → parent row for each server-saved cross-store record that resolves to one row. */
-function getCrossStoreLineageParents(
-  worktrees: readonly Worktree[],
-  stores: MobileLineageStores
-): Map<string, Worktree> {
-  const resolutionRows = getResolutionRows(worktrees)
-  if (![...resolutionRows.values()].some((row) => row.worktree.crossStoreParent)) {
-    return new Map()
+/** The stores' identities a cross-store record is checked against, or none without a record. */
+function getCrossStoreView(
+  rows: ReadonlyMap<string, ResolutionRow>,
+  stores: MobileLineageStores | undefined
+): CrossStoreLineageView | undefined {
+  if (!stores || ![...rows.values()].some((row) => row.worktree.crossStoreParent)) {
+    return undefined
   }
   const installationIds = new Map<string, string | undefined>([
     [OWN_LINEAGE_STORE_KEY, stores.ownInstallationId]
@@ -113,16 +97,10 @@ function getCrossStoreLineageParents(
       installationIds.set(parsed.environmentId, server.installationId)
     }
   }
-  const view = buildCrossStoreLineageViewOfRows(
-    resolutionRows.values(),
+  return buildCrossStoreLineageViewOfRows(
+    rows.values(),
     (row) => row.worktree.crossStoreParent,
     installationIds
-  )
-  return new Map(
-    [...resolveCrossStoreLineageParents(resolutionRows, view)].map(([child, parent]) => [
-      child,
-      parent.worktree
-    ])
   )
 }
 
@@ -136,48 +114,24 @@ export function getMobileWorkspaceLineageChildren(
   stores?: MobileLineageStores,
   filterRepoIds: readonly string[] = []
 ): Map<string, Worktree[]> {
-  const worktreeById = new Map(
-    listed.map((worktree) => [getWorktreeRowIdentity(worktree), worktree])
-  )
-  const parentByChild = new Map<string, Worktree>()
-
-  for (const worktree of listed) {
-    const worktreeId = getWorktreeRowIdentity(worktree)
-    const parentId = worktree.parentWorktreeId
-    const parentIdentity = parentId
-      ? getWorktreeRowIdentity({ worktreeId: parentId, hostId: worktree.hostId })
-      : null
-    const parent = parentIdentity ? worktreeById.get(parentIdentity) : undefined
-    if (
-      !parentIdentity ||
-      parentIdentity === worktreeId ||
-      !parent ||
-      !hasValidLineageParent(worktree, parent)
-    ) {
-      continue
-    }
-    parentByChild.set(worktreeId, parent)
-  }
-  // A worktree parent wins, then a folder workspace in the child's own store, then another store.
-  for (const [child, parent] of getFolderLineageParents(listed)) {
-    if (!parentByChild.has(child)) {
-      parentByChild.set(child, parent)
-    }
-  }
-  const crossStore = stores ? getCrossStoreLineageParents(listed, stores) : new Map()
-  if (crossStore.size > 0) {
-    for (const [child, parent] of crossStore) {
-      if (!parentByChild.has(child)) {
-        parentByChild.set(child, parent)
-      }
-    }
-    const cyclic = getCyclicLineageChildKeys(
-      new Map([...parentByChild].map(([child, parent]) => [child, getWorktreeRowIdentity(parent)]))
-    )
-    for (const child of cyclic) {
-      parentByChild.delete(child)
-    }
-  }
+  const rows = getResolutionRows(listed)
+  // The shared policy: worktree parent, then folder workspace, then another store. The phone trusts
+  // an older host's edge without instance ids and keeps its loops, as it always has.
+  const resolved = resolveLineageParentsByPolicy(rows, {
+    sameStoreParentOf: (row) => {
+      const parentId = row.worktree.parentWorktreeId
+      const parent = parentId
+        ? rows.get(getWorktreeRowIdentity({ worktreeId: parentId, hostId: row.worktree.hostId }))
+        : undefined
+      return parent && parent !== row && hasValidLineageParent(row.worktree, parent.worktree)
+        ? parent
+        : undefined
+    },
+    crossStoreLineage: getCrossStoreView(rows, stores),
+    folderRecordOf: (row) => readFolderEdge(row.worktree),
+    keepSameStoreCycles: true
+  })
+  const parentByChild = new Map([...resolved].map(([child, parent]) => [child, parent.worktree]))
   const shown = (row: Worktree): boolean =>
     filterRepoIds.length === 0 || filterRepoIds.includes(row.repoId)
   const childrenByParentId = new Map<string, Worktree[]>()

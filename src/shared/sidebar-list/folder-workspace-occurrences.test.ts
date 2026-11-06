@@ -78,8 +78,11 @@ const folderRecord: WorkspaceLineage = {
   createdAt: 1
 }
 
-function plan(groupBy: WorktreeGroupBy, record: WorkspaceLineage | undefined): Row[] {
-  const worktrees = [nested, other]
+function plan(
+  groupBy: WorktreeGroupBy,
+  record: WorkspaceLineage | undefined,
+  worktrees: Worktree[] = [nested, other]
+): Row[] {
   const rows = new Map(
     [...worktrees, getFolderWorkspaceWorktree(folder)].map((entry) => [
       getWorktreeHostIdentity(entry),
@@ -130,8 +133,17 @@ describe('folder workspaces as sidebar parents', () => {
       'header Multi repo 2',
       'folder Release children=1',
       '  nested',
-      'header api 1',
+      'header api 2',
       'other'
+    ])
+  })
+
+  it('keeps a project whose only workspace sits under the folder, and its count', () => {
+    expect(shape(plan('repo', folderRecord, [nested]))).toEqual([
+      'header Multi repo 2',
+      'folder Release children=1',
+      '  nested',
+      'header api 1'
     ])
   })
 
@@ -151,6 +163,17 @@ describe('folder workspaces as sidebar parents', () => {
       'other',
       'folder Release children=1',
       '  nested'
+    ])
+  })
+
+  it('nests by lane under status grouping, as worktree parents do', () => {
+    const done = { ...nested, workspaceStatus: 'completed' }
+    expect(shape(plan('workspace-status', folderRecord, [done, other]))).toEqual([
+      'header In progress 2',
+      'other',
+      'folder Release children=0',
+      'header Done 1',
+      'nested'
     ])
   })
 

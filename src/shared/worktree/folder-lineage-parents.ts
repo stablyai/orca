@@ -1,4 +1,4 @@
-import { parseWorkspaceKey } from '../workspace-scope'
+import { folderWorkspaceKey, parseWorkspaceKey } from '../workspace-scope'
 import { lineageStoreKeyOfRow, OWN_LINEAGE_STORE_KEY } from './cross-store-lineage-resolution'
 import type { WorkspaceLineageEdge } from './lineage-types'
 import type { Worktree } from './types'
@@ -82,4 +82,56 @@ export function resolveFolderLineageParents<Row extends FolderLineageRow>(
     }
   }
   return parents
+}
+
+/** A listed row as a host sent it: unchecked wire data beside the row's own instance. */
+type InlineFolderLineageRow = Pick<Worktree, 'instanceId'> & { workspaceLineage?: unknown }
+
+/** A listed row's own folder parent, when its host sent one: null for none, undefined from older hosts. */
+export function readInlineFolderLineage(
+  row: InlineFolderLineageRow
+): WorkspaceLineageEdge | null | undefined {
+  const edge = row.workspaceLineage
+  if (edge === undefined) {
+    return undefined
+  }
+  if (edge === null) {
+    return null
+  }
+  const scope =
+    typeof edge === 'object' &&
+    'parentWorkspaceKey' in edge &&
+    typeof edge.parentWorkspaceKey === 'string'
+      ? parseWorkspaceKey(edge.parentWorkspaceKey)
+      : null
+  if (scope?.type !== 'folder' || typeof edge !== 'object' || edge === null) {
+    return undefined
+  }
+  return folderLineageEdgeOf(
+    {
+      parentWorkspaceKey: folderWorkspaceKey(scope.folderWorkspaceId),
+      parentInstanceId:
+        'parentInstanceId' in edge && typeof edge.parentInstanceId === 'string'
+          ? edge.parentInstanceId
+          : null,
+      childInstanceId:
+        'childInstanceId' in edge && typeof edge.childInstanceId === 'string'
+          ? edge.childInstanceId
+          : null
+    },
+    row.instanceId
+  )
+}
+
+/** The record that places a row: its bucket record when that names this row's instance, else the
+ * row's own reported edge, else a bucket record that names no instance. */
+export function pickFolderLineageRecord(
+  bucket: WorkspaceLineageEdge | null | undefined,
+  row: InlineFolderLineageRow
+): WorkspaceLineageEdge | null | undefined {
+  if (bucket?.childInstanceId && bucket.childInstanceId === row.instanceId) {
+    return bucket
+  }
+  const inline = readInlineFolderLineage(row)
+  return inline !== undefined ? inline : bucket
 }

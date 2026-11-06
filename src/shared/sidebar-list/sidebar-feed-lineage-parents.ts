@@ -1,23 +1,23 @@
 import { parseExecutionHostId } from '../execution-host'
 import {
   composeWorktreeHostIdentity,
-  getExecutionHostIdFromWorktreeHostIdentity,
   getWorktreeHostIdentity
 } from '../worktree/host-qualified-identity'
+import {
+  getSameStoreLineageParent,
+  resolveLineageParentsByPolicy
+} from '../worktree/workspace-lineage-graph'
 import {
   buildCrossStoreLineageViewOfRows,
   OWN_LINEAGE_STORE_KEY
 } from '../worktree/cross-store-lineage-resolution'
-import type { WorkspaceLineageEdge } from '../worktree/lineage-types'
+import type { WorkspaceLineageEdge, WorktreeLineage } from '../worktree/lineage-types'
 import type { Worktree } from '../worktree/types'
 import type { SidebarFeedDomains } from './sidebar-feed-domains'
 import type { SidebarFeedWorkspace } from './sidebar-feed-worktrees'
-import {
-  resolveSidebarLineageParentIdentities,
-  type SidebarLineageParentIdentities
-} from './worktree-lineage-projection'
+import type { SidebarLineageParentIdentities } from './worktree-lineage-projection'
 
-const NO_LINEAGE_MAP = {}
+const NO_LINEAGE_MAP: Readonly<Record<string, WorktreeLineage>> = {}
 
 /** How a reader treats an older server's edge that carries no instance ids. */
 export type FeedLineagePolicy = {
@@ -36,7 +36,7 @@ export function resolveFeedLineageParentIdentities(
 ): SidebarLineageParentIdentities | undefined {
   const crossStoreByRow = new Map<Worktree, unknown>()
   const folderEdgeByRow = new Map<Worktree, WorkspaceLineageEdge>()
-  const legacy: [Worktree, string][] = []
+  const legacyParentIdByRow = new Map<Worktree, string>()
   for (const entry of workspaces) {
     if (entry.crossStoreParent && !entry.folderWorkspace) {
       crossStoreByRow.set(entry.worktree, entry.crossStoreParent)
@@ -45,34 +45,34 @@ export function resolveFeedLineageParentIdentities(
       folderEdgeByRow.set(entry.worktree, entry.workspaceLineage)
     }
     if (policy.acceptLegacyLineage && entry.legacyLineage) {
-      legacy.push([entry.worktree, entry.legacyLineage.parentWorktreeId])
+      legacyParentIdByRow.set(entry.worktree, entry.legacyLineage.parentWorktreeId)
     }
   }
-  if (crossStoreByRow.size === 0 && folderEdgeByRow.size === 0 && legacy.length === 0) {
+  if (crossStoreByRow.size === 0 && folderEdgeByRow.size === 0 && legacyParentIdByRow.size === 0) {
     return undefined
   }
   const rows = new Map(
     workspaces.map((entry) => [getWorktreeHostIdentity(entry.worktree), entry.worktree])
   )
-  const parents = new Map(
-    resolveSidebarLineageParentIdentities(
-      NO_LINEAGE_MAP,
-      rows,
-      crossStoreByRow.size > 0 ? crossStoreViewOf(domains, rows, crossStoreByRow) : undefined,
-      folderEdgeByRow.size > 0 ? (row) => folderEdgeByRow.get(row) : undefined
-    )
-  )
-  for (const [row, parentWorktreeId] of legacy) {
-    const identity = getWorktreeHostIdentity(row)
-    const parentIdentity = composeWorktreeHostIdentity(
-      getExecutionHostIdFromWorktreeHostIdentity(identity),
-      parentWorktreeId
-    )
-    if (!parents.has(identity) && parentIdentity !== identity && rows.has(parentIdentity)) {
-      parents.set(identity, parentIdentity)
-    }
+  // An older server's edge without instance ids sits where a checked worktree edge would.
+  const legacyParentOf = (row: Worktree): Worktree | undefined => {
+    const parentId = legacyParentIdByRow.get(row)
+    const parent =
+      parentId === undefined
+        ? undefined
+        : rows.get(composeWorktreeHostIdentity(row.hostId, parentId))
+    return parent === row ? undefined : parent
   }
-  return parents
+  const parents = resolveLineageParentsByPolicy(rows, {
+    sameStoreParentOf: (row) =>
+      getSameStoreLineageParent(row, NO_LINEAGE_MAP, rows) ?? legacyParentOf(row),
+    crossStoreLineage:
+      crossStoreByRow.size > 0 ? crossStoreViewOf(domains, rows, crossStoreByRow) : undefined,
+    folderRecordOf: folderEdgeByRow.size > 0 ? (row) => folderEdgeByRow.get(row) : undefined
+  })
+  return new Map(
+    [...parents].map(([identity, parent]) => [identity, getWorktreeHostIdentity(parent)])
+  )
 }
 
 function crossStoreViewOf(

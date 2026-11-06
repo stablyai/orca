@@ -68,7 +68,10 @@ const PairedServerWorkspaceRowSchema = z
     crossStoreParent: CrossStoreParentRecordSchema,
     workspaceLineage: WorkspaceLineageEdgeSchema,
     /** An older server's edge without instance ids; only the phone accepts it, as before. */
-    legacyLineage: z.object({ parentWorktreeId: z.string() }).optional().catch(undefined)
+    legacyLineage: z
+      .object({ parentWorktreeId: z.string(), source: z.literal('no-instance-host') })
+      .optional()
+      .catch(undefined)
   })
 
 /** See PairedServerHost; health and compatibility stay open strings, as a reader only compares them. */
@@ -257,7 +260,7 @@ export function normalizePairedServerRow(
     ...(parentWorktreeId &&
     lineageWorktreeInstanceId === undefined &&
     parentWorktreeInstanceId === undefined
-      ? { legacyLineage: { parentWorktreeId } }
+      ? { legacyLineage: { parentWorktreeId, source: 'no-instance-host' as const } }
       : {}),
     recentAt: lastActivityAt,
     activity: reportedActivity(parsed.data)

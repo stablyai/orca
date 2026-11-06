@@ -131,19 +131,20 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
   const projectGroupPaths = getProjectGroupOccurrencePaths(projectGroups)
   // Folder rows are occurrences too, so a folder parent nests its children like any other row.
   const folders = getSidebarFolderOccurrences(renderableFolderWorkspaces)
+  const lineageChildren = nestLineage
+    ? getSidebarLineageChildren(
+        worktrees,
+        lineageById,
+        worktreeMap,
+        filterRepoIds,
+        lineageParentIdentities,
+        folders.rows
+      )
+    : new Map<string, Worktree[]>()
   const occurrencePlan = buildWorktreeOccurrencePlan({
     rows: [...worktrees, ...folders.rows],
     identityOf: getWorktreeHostIdentity,
-    childrenByParentIdentity: nestLineage
-      ? getSidebarLineageChildren(
-          worktrees,
-          lineageById,
-          worktreeMap,
-          filterRepoIds,
-          lineageParentIdentities,
-          folders.rows
-        )
-      : new Map<string, Worktree[]>(),
+    childrenByParentIdentity: lineageChildren,
     isPinned: (worktree) => worktree.isPinned === true && !folders.isFolder(worktree),
     duplicatePinned: pinnedDisplayPolicy === 'duplicate-in-groups',
     owningSectionOf: (worktree) =>
@@ -151,10 +152,11 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     projectIdOf: (worktree) => worktree.repoId,
     sectionsOf: ({ pinned, natural, displayRootByIdentity }) => {
       const folderBound =
-        groupBy === 'repo' ? folders.boundRowsByGroupId(natural, displayRootByIdentity) : null
-      const naturalWorktrees = natural.filter(
-        (row) => !folders.isFolder(row) && !folderBound?.bound.has(row)
-      )
+        groupBy === 'repo'
+          ? folders.boundRowsByGroupId(natural, displayRootByIdentity, lineageChildren)
+          : null
+      // Rows under a folder still count in their own projects; only their display moves.
+      const naturalWorktrees = natural.filter((row) => !folders.isFolder(row))
       const groups: OrderedGroupEntry[] =
         groupBy === 'none'
           ? [[ALL_GROUP_KEY, { label: '', items: naturalWorktrees, repoIds: new Set() }]]
@@ -165,7 +167,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
               prGroupOf,
               workspaceStatuses,
               projectIndex,
-              displayRootByIdentity,
+              displayRootByIdentity: folderBound?.groupingRootByIdentity ?? displayRootByIdentity,
               placeholderRepoIds,
               importedWorktreesByRepo,
               newExternalWorktreesInboxByRepo,
@@ -182,10 +184,11 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
           groupBy === 'repo' && key !== PINNED_GROUP_KEY && group.repo?.projectGroupId
             ? projectGroupPaths.get(group.repo.projectGroupId)
             : undefined
-        const items =
+        const items = (
           groupBy === 'repo' && key !== PINNED_GROUP_KEY
             ? orderMainWorktreeFirst(group.items, sortBy)
             : group.items
+        ).filter((row) => key === PINNED_GROUP_KEY || !folderBound?.bound.has(row))
         return {
           key,
           group,

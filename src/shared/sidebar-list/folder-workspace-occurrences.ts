@@ -42,10 +42,12 @@ export function getSidebarFolderOccurrences(renderable: readonly RenderableFolde
     /** A lane's folder rows, already in display order. */
     rowsOf: (pairs: readonly RenderableFolderWorkspace[] | undefined): Worktree[] =>
       (pairs ?? []).map(rowOf),
-    /** Project grouping: each group's folders, then the rows whose top shown ancestor is one of them. */
+    /** Project grouping: each group's folders, then the rows whose top shown ancestor is one of them,
+     * and each such row's grouping root below the folder, so it still counts in its own project. */
     boundRowsByGroupId(
       natural: readonly Worktree[],
-      displayRootByIdentity: ReadonlyMap<string, Worktree>
+      displayRootByIdentity: ReadonlyMap<string, Worktree>,
+      childrenByParentIdentity: ReadonlyMap<string, readonly Worktree[]>
     ) {
       const sectionItemsByGroupId = new Map<string, Worktree[]>()
       for (const pair of sorted) {
@@ -53,6 +55,7 @@ export function getSidebarFolderOccurrences(renderable: readonly RenderableFolde
         items.push(rowOf(pair))
         sectionItemsByGroupId.set(pair.projectGroup.id, items)
       }
+      const groupingRootByIdentity = new Map(displayRootByIdentity)
       const bound = new Set<Worktree>()
       for (const row of natural) {
         const root = displayRootByIdentity.get(getWorktreeHostIdentity(row))
@@ -63,7 +66,19 @@ export function getSidebarFolderOccurrences(renderable: readonly RenderableFolde
         bound.add(row)
         sectionItemsByGroupId.get(groupId)?.push(row)
       }
-      return { bound, sectionItemsByGroupId }
+      for (const folder of pairByIdentity.keys()) {
+        for (const top of childrenByParentIdentity.get(folder) ?? []) {
+          const pending = [top]
+          for (let row = pending.pop(); row; row = pending.pop()) {
+            const identity = getWorktreeHostIdentity(row)
+            if (groupingRootByIdentity.get(identity) !== top) {
+              groupingRootByIdentity.set(identity, top)
+              pending.push(...(childrenByParentIdentity.get(identity) ?? []))
+            }
+          }
+        }
+      }
+      return { bound, sectionItemsByGroupId, groupingRootByIdentity }
     }
   }
 }

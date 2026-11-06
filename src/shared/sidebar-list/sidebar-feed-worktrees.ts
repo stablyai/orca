@@ -37,7 +37,7 @@ export type SidebarFeedWorkspace = {
   /** Its folder workspace parent in its own store. */
   workspaceLineage?: WorkspaceLineageEdge
   /** An older server's edge without instance ids, which only the phone nests by. */
-  legacyLineage?: { parentWorktreeId: string }
+  legacyLineage?: { parentWorktreeId: string; source: 'no-instance-host' }
 }
 
 /** The fields both a host's own rows and a paired server's rows carry for the list. */
@@ -63,7 +63,8 @@ type FeedRowFields = Pick<
       | 'smartAt'
     >
   > &
-  SidebarFeedRowFacts & { legacyLineage?: { parentWorktreeId: string } }
+  SidebarFeedRowFacts &
+  Pick<SidebarFeedWorkspace, 'legacyLineage'>
 
 function readFeedRow(
   identity: string,
