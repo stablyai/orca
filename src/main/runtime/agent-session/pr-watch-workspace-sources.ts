@@ -44,7 +44,8 @@ export function prWatchWorkspaceSources(
       if (repo?.kind === 'folder') {
         return 'not-git'
       }
-      if (!repo || !branch) {
+      // A detached checkout stays usable: pushes name their branch and created PRs their number.
+      if (!repo) {
         return null
       }
       return { ...repoSource(runtime, repo, executionHostId), checkoutPath: worktree.path, branch }

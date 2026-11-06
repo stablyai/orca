@@ -12,9 +12,9 @@ import type { JournalRow } from '../../native-chat/agent-session-journal/journal
 import { endPRWatchState, readPRPendingHeads } from './pr-check-event-tables'
 import {
   activeSavedPRWatches,
-  completePRPendingAction,
   recordPRChatAction,
-  recordPRHeadObservation
+  recordPRHeadObservation,
+  settlePRPendingObligations
 } from './pr-head-evaluation'
 import { PRPendingActionResume } from './pr-pending-action-resume'
 import { capturePRPendingActions } from './pr-pending-actions'
@@ -92,6 +92,67 @@ describe('recordPRHeadObservation over saved state', () => {
   })
 })
 
+const FULL_A = '89abcde0000000000000000000000000000000ff'
+const WORKSPACE = {
+  repoId: 'r',
+  repoPath: '/repo',
+  checkoutPath: '/repo',
+  repoKind: 'git' as const,
+  branch: 'work',
+  connectionId: null
+}
+const MOVED_ON = {
+  number: 3,
+  headRefName: 'review',
+  headSha: HEAD_B,
+  headRepo: { owner: 'acme', repo: 'repo' },
+  prRepo: { owner: 'acme', repo: 'repo' }
+} as PRInfo
+
+/** chat-1's captured `git push origin work:review`, resumed and awaiting its PR read. */
+function capturePushAndResume(readAfterPush = () => {}): PRPendingActionResume {
+  capturePRPendingActions(
+    database.db,
+    'chat-1',
+    [
+      {
+        kind: 'item',
+        itemId: 'item',
+        revision: 1,
+        body: {
+          kind: 'tool-call',
+          name: 'shell',
+          input: { command: 'git push origin work:review' },
+          state: 'completed',
+          output: {
+            head: 'To github.com:acme/repo.git\n   1234567..89abcde  work -> review\n',
+            byteLength: 1,
+            digest: 'd',
+            truncated: false
+          }
+        }
+      } as unknown as JournalRow
+    ],
+    0,
+    () => undefined
+  )
+  return new PRPendingActionResume({
+    database,
+    chatExists: () => true,
+    chatWorkspace: async () => WORKSPACE,
+    repositories: async () => [],
+    resolvePushRemote: async () => ({ host: 'github.com', owner: 'acme', repo: 'repo' }),
+    readAfterPush,
+    resolveCommitSha: async (_candidate, _pr, abbreviated) =>
+      FULL_A.startsWith(abbreviated) ? FULL_A : null,
+    isCommitInPRHead: async () => false,
+    settle: (row, indices, verified) =>
+      settlePRPendingObligations(database, row, indices, verified),
+    logger: { warn: () => {} },
+    now: () => 10
+  })
+}
+
 describe('a superseded push head and startup', () => {
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'pr-head-replay-'))
@@ -103,66 +164,35 @@ describe('a superseded push head and startup', () => {
     await rm(root, { recursive: true, force: true })
   })
 
-  it('keys a superseded push by its full SHA, so a force-push back repeats nothing', async () => {
-    const fullA = '89abcde0000000000000000000000000000000ff'
-    const workspace = {
-      repoId: 'r',
-      repoPath: '/repo',
-      checkoutPath: '/repo',
-      repoKind: 'git' as const,
-      branch: 'work',
-      connectionId: null
-    }
-    capturePRPendingActions(
-      database.db,
-      'chat-1',
-      [
-        {
-          kind: 'item',
-          itemId: 'item',
-          revision: 1,
-          body: {
-            kind: 'tool-call',
-            name: 'shell',
-            input: { command: 'git push origin work:review' },
-            state: 'completed',
-            output: {
-              head: 'To github.com:acme/repo.git\n   1234567..89abcde  work -> review\n',
-              byteLength: 1,
-              digest: 'd',
-              truncated: false
-            }
-          }
-        } as unknown as JournalRow
-      ],
-      0,
-      () => undefined
-    )
-    const resume = new PRPendingActionResume({
-      database,
-      chatExists: () => true,
-      chatWorkspace: async () => workspace,
-      repositories: async () => [],
-      resolvePushRemote: async () => ({ host: 'github.com', owner: 'acme', repo: 'repo' }),
-      readAfterPush: () => {},
-      resolveCommitSha: async (_candidate, _pr, abbreviated) =>
-        fullA.startsWith(abbreviated) ? fullA : null,
-      isCommitInPRHead: async () => false,
-      complete: (row, verified) => completePRPendingAction(database, row, verified),
-      logger: { warn: () => {} },
-      now: () => 10
+  it('saves a pusher before the read that verified it is evaluated', async () => {
+    recordPRChatAction(database, {
+      chatId: 'chat-0',
+      anchor: { itemId: 'orca:anchor', revision: 1 },
+      forgeHost: 'github.com',
+      owner: 'acme',
+      repo: 'repo',
+      number: 3,
+      kind: 'opened',
+      headSha: null,
+      observedAt: 0
     })
+    const readAfterPush = vi.fn()
+    const resume = capturePushAndResume(readAfterPush)
+    resume.drain()
+    await vi.waitFor(() => expect(readAfterPush).toHaveBeenCalled())
+    // The observer's order: verify, then evaluate the same read, with no await between them.
+    resume.verifyRead(prWatchCandidate(WORKSPACE, null), { ...MOVED_ON, headSha: FULL_A }, 40)
+    expect(read(FULL_A, green(31001), 40).sort()).toEqual(['chat-0', 'chat-1'])
+    resume.clear()
+  })
+
+  it('keys a superseded push by its full SHA, so a force-push back repeats nothing', async () => {
+    const fullA = FULL_A
+    const resume = capturePushAndResume()
     resume.drain()
     // Another push moved the PR to B before the first read.
-    const movedOn = {
-      number: 3,
-      headRefName: 'review',
-      headSha: HEAD_B,
-      headRepo: { owner: 'acme', repo: 'repo' },
-      prRepo: { owner: 'acme', repo: 'repo' }
-    } as PRInfo
     await vi.waitFor(() => {
-      resume.verifyRead(prWatchCandidate(workspace, null), movedOn, 40)
+      resume.verifyRead(prWatchCandidate(WORKSPACE, null), MOVED_ON, 40)
       expect(readPRPendingHeads(database.db, PR_KEY).map((head) => head.headSha)).toEqual([fullA])
     })
     resume.clear()

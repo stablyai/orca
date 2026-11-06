@@ -14,7 +14,8 @@ import {
   openTestJournalHostDatabase
 } from '../../native-chat/agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
-import { completePRPendingAction } from './pr-head-evaluation'
+import { settlePRPendingObligations } from './pr-head-evaluation'
+import type { PRPendingActionResumeDeps } from './pr-pending-action-types'
 import { PRPendingActionResume } from './pr-pending-action-resume'
 import { prWatchCandidate } from './pr-watch-types'
 
@@ -38,12 +39,16 @@ let root: string
 let clock = 1_000
 const journals = createTrackedJournalOpener()
 
-function shellCall(command: string, output: string): AgentJournalItemBody {
+function shellCall(
+  command: string,
+  output: string,
+  state: 'running' | 'completed' = 'completed'
+): AgentJournalItemBody {
   return {
     kind: 'tool-call',
     name: 'shell',
     input: { command },
-    state: 'completed',
+    state,
     output: { head: output, byteLength: output.length, digest: 'd', truncated: false }
   }
 }
@@ -63,7 +68,9 @@ function count(table: string): number {
 }
 
 /** A fresh resume, as after a restart: nothing in memory, only the saved row. */
-function resumeAfterRestart(): PRPendingActionResume {
+function resumeAfterRestart(
+  overrides: Partial<PRPendingActionResumeDeps> = {}
+): PRPendingActionResume {
   const database = openTestJournalHostDatabase(root)
   return new PRPendingActionResume({
     database,
@@ -74,9 +81,11 @@ function resumeAfterRestart(): PRPendingActionResume {
     readAfterPush: () => {},
     resolveCommitSha: async () => null,
     isCommitInPRHead: async () => false,
-    complete: (row, verified) => completePRPendingAction(database, row, verified),
+    settle: (row, indices, verified) =>
+      settlePRPendingObligations(database, row, indices, verified),
     logger: { warn: () => {} },
-    now: () => clock
+    now: () => clock,
+    ...overrides
   })
 }
 
@@ -108,6 +117,92 @@ describe('pending PR actions', () => {
     second.clear()
     expect(count('pr_pending_actions')).toBe(0)
     expect(count('pr_chat_actions')).toBe(1)
+  })
+
+  it('captures a call whose finish commits inside a lifecycle batch', async () => {
+    const journal = await openJournal()
+    const identity = {
+      provider: 'codex' as const,
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      ordinal: 0
+    }
+    const body = shellCall('gh pr create --fill', 'https://github.com/acme/repo/pull/7\n')
+    await journal.appendItem(identity, shellCall('gh pr create --fill', '', 'running'), {
+      fence: 0,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    expect(count('pr_pending_actions')).toBe(0)
+    // The turn's end settles the call in the same batch that ends the turn.
+    await journal.appendLifecycleBatch({
+      settlementId: 'turn-end',
+      fence: 0,
+      mutations: [{ kind: 'item', identity, body, turnScope: AGENT_JOURNAL_THREAD_SCOPE }]
+    })
+    expect(count('pr_pending_actions')).toBe(1)
+  })
+
+  it('keeps each verified target while a sibling resolves, through restart and expiry', async () => {
+    const journal = await openJournal()
+    await journal.appendItem(
+      { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 0 },
+      shellCall(
+        'gh pr create --repo acme/repo --fill && gh pr create --repo me/repo --fill && git push origin HEAD:review',
+        'https://github.com/acme/repo/pull/12\nhttps://github.com/me/repo/pull/12\n' +
+          'To gh-work:acme/repo.git\n * [new branch]      HEAD -> review\n'
+      ),
+      { fence: 0, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    const finishedAt = clock
+    // The push's SSH alias can't be resolved yet; both created PRs are this checkout's own.
+    const unresolved = {
+      repositories: async () => [
+        { owner: 'acme', repo: 'repo' },
+        { owner: 'me', repo: 'repo' }
+      ],
+      resolvePushRemote: async () => null
+    }
+    const first = resumeAfterRestart(unresolved)
+    first.drain()
+    await vi.waitFor(() => expect(count('pr_chat_actions')).toBe(2))
+    first.clear()
+    expect(count('pr_pending_actions')).toBe(1)
+    clock = finishedAt + 25 * 60 * 60_000
+    const second = resumeAfterRestart(unresolved)
+    second.drain()
+    await vi.waitFor(() => expect(count('pr_pending_actions')).toBe(0))
+    second.clear()
+    const owners = openTestJournalHostDatabase(root)
+      .db.prepare('SELECT owner, number FROM pr_chat_actions ORDER BY owner')
+      .all()
+    expect(owners).toEqual([
+      { owner: 'acme', number: 12 },
+      { owner: 'me', number: 12 }
+    ])
+  })
+
+  it('records nothing from a row resumed after its saved expiry', async () => {
+    const journal = await openJournal()
+    await journal.appendItem(
+      { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 0 },
+      shellCall('gh pr create --fill', 'https://github.com/acme/repo/pull/7\n'),
+      { fence: 0, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    let release = () => {}
+    const resolved = new Promise<void>((resolve) => (release = resolve))
+    // Resolution starts in time and succeeds only after the expiry passed.
+    const resume = resumeAfterRestart({
+      repositories: async () => {
+        await resolved
+        return [{ owner: 'acme', repo: 'repo' }]
+      }
+    })
+    resume.drain()
+    clock += 25 * 60 * 60_000
+    release()
+    await vi.waitFor(() => expect(count('pr_pending_actions')).toBe(0))
+    resume.clear()
+    expect(count('pr_chat_actions')).toBe(0)
   })
 
   it('captures nothing from an imported transcript', async () => {

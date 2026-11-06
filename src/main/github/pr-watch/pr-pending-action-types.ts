@@ -38,8 +38,8 @@ export type PRPendingActionResumeDeps = {
     sha: string,
     headSha: string
   ) => Promise<boolean>
-  /** Completes a row atomically: its verified actions saved and the row deleted, in one commit. */
-  complete: (row: PRPendingActionRow, verified: PRVerifiedAction[]) => void
+  /** Decided obligations, verified or terminal: their actions and progress saved in one commit. */
+  settle: (row: PRPendingActionRow, indices: number[], verified: PRVerifiedAction[]) => void
   logger: Pick<StructuredAgentSessionLogger, 'warn'>
   now: () => number
 }

@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS pr_chat_actions (
   kind            TEXT    NOT NULL,
   head_sha        TEXT,
   observed_at     INTEGER NOT NULL,
-  PRIMARY KEY (chat_id, anchor_item_id, number, kind)
+  PRIMARY KEY (chat_id, anchor_item_id, forge_host, owner, repo, number, kind)
 );
 CREATE INDEX IF NOT EXISTS pr_chat_actions_by_pr
   ON pr_chat_actions (forge_host, owner, repo, number);
@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS pr_pending_actions (
   attempts            INTEGER NOT NULL,
   PRIMARY KEY (chat_id, anchor_item_id)
 );
+CREATE INDEX IF NOT EXISTS pr_pending_actions_by_due ON pr_pending_actions (next_attempt_at);
 CREATE TABLE IF NOT EXISTS pr_check_contexts (
   pr_key       TEXT    NOT NULL,
   head_sha     TEXT    NOT NULL,

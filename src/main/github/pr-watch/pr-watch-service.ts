@@ -8,7 +8,6 @@ import type {
 import type { PRInfo } from '../../../shared/github/pull-request-types'
 import { pullRequestKey } from '../../../shared/native-chat/native-chat-pull-request-event'
 import type { JournalRow } from '../../native-chat/agent-session-journal/journal-row-schema'
-import { classifyGitHubOwnerRepoFromRemoteUrl } from '../github-ssh-host-alias-resolution'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import { resolveGitHubApiRepositoryCandidates } from '../github-api-repository'
 import { observedPRCheckRollup } from '../client/lookup/pr-refresh-outcome-assembly'
@@ -20,7 +19,6 @@ import {
   setPRWatchJobHooks
 } from '../pr-refresh-coordinator'
 import { prChecksDone, prWatchNextDueAt, type PRWatchJob } from '../pr-refresh-watch-jobs'
-import type { PushRemote } from './pr-chat-action-recorder'
 import {
   deleteInactiveCurrentPRHeads,
   deletePRMovedHeads,
@@ -31,12 +29,13 @@ import { PREventDeliveryTrigger } from './pr-event-delivery'
 import { isCommitInPRHead, resolvePRCommitSha } from './pr-head-check-read'
 import {
   activeSavedPRWatches,
-  completePRPendingAction,
-  recordPRHeadObservation
+  recordPRHeadObservation,
+  settlePRPendingObligations
 } from './pr-head-evaluation'
 import { PRPendingActionResume } from './pr-pending-action-resume'
 import type { PRVerifiedAction } from './pr-pending-action-types'
-import type { PRPendingActionRow, PRPendingObligation } from './pr-pending-actions'
+import { finishesPRActionCall, type PRPendingActionRow } from './pr-pending-actions'
+import { resolvePushRemote } from './pr-push-remote-resolution'
 import {
   isPRFollowUpJob,
   prFollowUpCandidate,
@@ -49,8 +48,7 @@ import {
   prKeyOf,
   prObservationOf,
   prWatchCandidate,
-  type PRWatchServiceDeps,
-  type PRWatchWorkspace
+  type PRWatchServiceDeps
 } from './pr-watch-types'
 
 const ACTION_WINDOW_MS = 14 * 24 * 60 * 60_000
@@ -85,7 +83,7 @@ export class PRWatchService {
       readAfterPush: (candidate) => enqueuePRRefresh(candidate, 'post-push'),
       resolveCommitSha: resolvePRCommitSha,
       isCommitInPRHead,
-      complete: (row, verified) => this.completeAction(row, verified),
+      settle: (row, indices, verified) => this.settleActions(row, indices, verified),
       now: this.now
     })
     this.earlierHeads = new PREarlierHeadJobs({
@@ -120,10 +118,12 @@ export class PRWatchService {
       index = this.earlierHeads.scheduleMoved(prKey, watch.candidate, index)
     }
     this.resume.drain()
-    // Current heads retire only once every reason is known, follow-up registrations included.
+    // Current heads retire only once every reason is known, follow-up registrations included, and
+    // against the reasons then: actions verified while waiting hold their heads too.
     void settledPRFollowUpKeys().then((followUps) => {
       if (!this.deps.database.isClosed && this.stopObserving) {
-        const held = new Set([...active.keys(), ...followUps])
+        const recent = activeSavedPRWatches(this.deps.database, this.now(), ACTION_WINDOW_MS)
+        const held = new Set([...recent.keys(), ...this.chatWatches.keys(), ...followUps])
         this.deps.database.transaction((db) => deleteInactiveCurrentPRHeads(db, held))
       }
     })
@@ -150,14 +150,18 @@ export class PRWatchService {
     if (this.deps.database.readOnly) {
       return
     }
-    if (rows?.some((row) => row.kind === 'item' && row.body.kind === 'tool-call')) {
+    if (rows && finishesPRActionCall(rows)) {
       this.resume.drain()
     }
     this.deliveries.committed(chatId, journal)
   }
 
-  private completeAction(row: PRPendingActionRow, verified: PRVerifiedAction[]): void {
-    completePRPendingAction(this.deps.database, row, verified)
+  private settleActions(
+    row: PRPendingActionRow,
+    indices: number[],
+    verified: PRVerifiedAction[]
+  ): void {
+    settlePRPendingObligations(this.deps.database, row, indices, verified)
     for (const { action, candidate } of verified) {
       void this.watchChatPR(pullRequestKey(action), action, this.now(), candidate)
     }
@@ -225,6 +229,9 @@ export class PRWatchService {
 
   /** One subscriber, in order: a read may verify a push before it is evaluated for lines. */
   private observe(candidate: GitHubPRRefreshCandidate, outcome: PRRefreshOutcome): void {
+    if (outcome.kind === 'no-pr') {
+      this.resume.noteNoPR(candidate, outcome.fetchedAt)
+    }
     const pr = outcome.kind === 'found' ? outcome.pr : null
     const prKey = pr ? prKeyOf(pr) : null
     if (!pr?.headSha || !prKey || outcome.kind !== 'found') {
@@ -299,33 +306,4 @@ export class PRWatchService {
       }
     }
   }
-}
-
-/** A push's `To` target, its SSH host alias resolved through the checkout's config. A URL git
- *  printed without its user is tried as `git@`; a host that names no GitHub stays as parsed. */
-async function resolvePushRemote(
-  workspace: PRWatchWorkspace,
-  evidence: Extract<PRPendingObligation, { kind: 'pushed' }>['evidence']
-): Promise<PushRemote | 'unknown' | null> {
-  const url = evidence.remoteUrl
-  if (!url) {
-    return 'unknown'
-  }
-  const context = {
-    repoPath: workspace.checkoutPath,
-    connectionId: workspace.connectionId,
-    ...(workspace.wslDistro ? { wslDistro: workspace.wslDistro } : {})
-  }
-  const scpLike = !url.includes('://') && !url.includes('@')
-  for (const candidate of scpLike ? [url, `git@${url}`] : [url]) {
-    const result = await classifyGitHubOwnerRepoFromRemoteUrl(candidate, context)
-    if (result.kind === 'indeterminate') {
-      return null
-    }
-    if (result.kind === 'github') {
-      const { owner, repo, host } = result.ownerRepo
-      return { host: host ?? 'github.com', owner, repo }
-    }
-  }
-  return evidence.remote?.host.includes('.') ? evidence.remote : 'unknown'
 }

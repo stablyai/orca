@@ -12,7 +12,7 @@ import {
   upsertPRPendingHead
 } from './pr-check-event-tables'
 import { insertPRChatAction, readPRChatActions, type PRChatAction } from './pr-watch-tables'
-import { deletePRPendingAction, type PRPendingActionRow } from './pr-pending-actions'
+import { markPRPendingObligationsDone, type PRPendingActionRow } from './pr-pending-actions'
 import type Database from '../../sqlite/sync-database'
 
 /** How long a head the PR moved off keeps being read for its result. */
@@ -61,17 +61,18 @@ export function recordPRChatAction(
   database.transaction((db) => insertActionWithHead(db, action, movedAt))
 }
 
-/** A pending row's every obligation decided: its verified actions and its deletion commit together. */
-export function completePRPendingAction(
+/** Decided obligations: their verified actions and their progress in the row commit together. */
+export function settlePRPendingObligations(
   database: JournalHostDatabase,
   row: PRPendingActionRow,
+  indices: readonly number[],
   verified: readonly { action: PRChatAction; movedAt: number | null }[]
 ): void {
   database.transaction((db) => {
     for (const { action, movedAt } of verified) {
       insertActionWithHead(db, action, movedAt)
     }
-    deletePRPendingAction(db, row)
+    markPRPendingObligationsDone(db, row, indices)
   })
 }
 

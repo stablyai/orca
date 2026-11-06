@@ -18,9 +18,11 @@ export const PR_ACTION_RESOLVE_WINDOW_MS = 24 * 60 * 60_000
 /** A push's PR-head check: git's two minutes, plus three for GitHub to show the push. */
 export const PR_ACTION_VERIFY_WINDOW_MS = 5 * 60_000
 
-export type PRPendingObligation =
+/** `done`: verified (its action already saved) or terminal; the row ends when all are. */
+export type PRPendingObligation = (
   | { kind: 'opened'; target: PRChatOpened }
   | { kind: 'pushed'; target: { branch: string }; evidence: Omit<GitPushUpdate, 'branch'> }
+) & { done?: true }
 
 export type PRPendingActionRow = {
   chatId: string
@@ -32,9 +34,35 @@ export type PRPendingActionRow = {
   attempts: number
 }
 
+type ItemWrite = { itemId: string; revision: number; body: AgentJournalItemBody }
+
+/** Item writes a live batch makes: plain item rows, and the item mutations a lifecycle batch
+ *  commits (a turn's end settling a tool call). Recovered writes are history. */
+function liveItemWrites(rows: readonly JournalRow[]): ItemWrite[] {
+  return rows.flatMap((row): ItemWrite[] => {
+    if (row.recovered) {
+      return []
+    }
+    if (row.kind === 'item') {
+      return [row]
+    }
+    return row.kind === 'lifecycle-batch'
+      ? row.mutations.flatMap((mutation) => (mutation.kind === 'item' ? [mutation] : []))
+      : []
+  })
+}
+
+/** A committed batch that finished a call, so it may have captured work to resume. */
+export function finishesPRActionCall(rows: readonly JournalRow[]): boolean {
+  return liveItemWrites(rows).some(
+    ({ body }) =>
+      body.kind === 'tool-call' && (body.state === 'completed' || body.state === 'failed')
+  )
+}
+
 /** The call's obligations: each PR it created and each ref its own output says it updated. */
-function obligationsOf(chatId: string, row: JournalRow, finishedAt: number): PRPendingObligation[] {
-  const call = row.kind === 'item' ? finishedShellCall(chatId, row, finishedAt) : null
+function obligationsOf(chatId: string, item: ItemWrite, finishedAt: number): PRPendingObligation[] {
+  const call = finishedShellCall(chatId, item, finishedAt)
   if (!call) {
     return []
   }
@@ -70,11 +98,12 @@ export function capturePRPendingActions(
         evidence_json, finished_at, resolve_deadline_at, verify_deadline_at, next_attempt_at,
         attempts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`
     )
-    for (const row of rows) {
-      const before = row.kind === 'item' ? previous(row.itemId) : undefined
-      const alreadyFinished =
-        before?.kind === 'tool-call' && (before.state === 'completed' || before.state === 'failed')
-      if (row.kind !== 'item' || row.recovered || alreadyFinished) {
+    for (const row of liveItemWrites(rows)) {
+      const before = previous(row.itemId)
+      if (
+        before?.kind === 'tool-call' &&
+        (before.state === 'completed' || before.state === 'failed')
+      ) {
         continue
       }
       const obligations = obligationsOf(sessionId, row, committedAt)
@@ -108,17 +137,20 @@ type StoredRow = {
   attempts: number
 }
 
-/** Rows due now, oldest attempt first; at most `limit` per pass. */
+/** Rows due now and not already running (`chat\0anchor` keys), oldest attempt first. */
 export function readDuePRPendingActions(
   db: Database.Database,
   now: number,
-  limit: number
+  limit: number,
+  running: readonly string[]
 ): PRPendingActionRow[] {
   const rows = db
     .prepare(
-      'SELECT * FROM pr_pending_actions WHERE next_attempt_at <= ? ORDER BY next_attempt_at LIMIT ?'
+      `SELECT * FROM pr_pending_actions WHERE next_attempt_at <= ?
+        AND chat_id || char(0) || anchor_item_id NOT IN (SELECT value FROM json_each(?))
+        ORDER BY next_attempt_at LIMIT ?`
     )
-    .all(now, limit) as StoredRow[]
+    .all(now, JSON.stringify(running), limit) as StoredRow[]
   return rows.map((row) => ({
     chatId: row.chat_id,
     anchor: { itemId: row.anchor_item_id, revision: row.anchor_revision },
@@ -130,11 +162,41 @@ export function readDuePRPendingActions(
   }))
 }
 
-export function nextPRPendingActionAt(db: Database.Database): number | null {
-  const row = db.prepare('SELECT MIN(next_attempt_at) AS next FROM pr_pending_actions').get() as {
-    next: number | null
-  }
+/** The earliest attempt still to come; rows already due are running or about to run. */
+export function nextPRPendingActionAt(db: Database.Database, after: number): number | null {
+  const row = db
+    .prepare(
+      'SELECT MIN(next_attempt_at) AS next FROM pr_pending_actions WHERE next_attempt_at > ?'
+    )
+    .get(after) as { next: number | null }
   return row.next
+}
+
+/** Marks obligations done in the saved row; the row is deleted once every one is. */
+export function markPRPendingObligationsDone(
+  db: Database.Database,
+  row: PRPendingActionRow,
+  indices: readonly number[]
+): void {
+  const stored = db
+    .prepare(
+      'SELECT evidence_json FROM pr_pending_actions WHERE chat_id = ? AND anchor_item_id = ?'
+    )
+    .get(row.chatId, row.anchor.itemId) as { evidence_json: string } | undefined
+  if (!stored) {
+    return
+  }
+  const obligations = JSON.parse(stored.evidence_json) as PRPendingObligation[]
+  for (const index of indices) {
+    obligations[index].done = true
+  }
+  if (obligations.every((obligation) => obligation.done)) {
+    deletePRPendingAction(db, row)
+    return
+  }
+  db.prepare(
+    'UPDATE pr_pending_actions SET evidence_json = ? WHERE chat_id = ? AND anchor_item_id = ?'
+  ).run(JSON.stringify(obligations), row.chatId, row.anchor.itemId)
 }
 
 /** A transient failure: back off, with the deadlines fixed at capture. */
@@ -154,4 +216,13 @@ export function deletePRPendingAction(db: Database.Database, row: PRPendingActio
     row.chatId,
     row.anchor.itemId
   )
+}
+
+export function openPRPendingObligations(row: PRPendingActionRow): number[] {
+  return row.obligations.flatMap((obligation, index) => (obligation.done ? [] : [index]))
+}
+
+/** The key due reads exclude a running row by. */
+export function prPendingActionKey(row: PRPendingActionRow): string {
+  return `${row.chatId}\0${row.anchor.itemId}`
 }

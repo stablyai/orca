@@ -1,5 +1,6 @@
 // Resumes captured PR obligations in bounded batches, off the user's action path. Deadlines are the
-// ones fixed at capture; a restart resumes the same row and never renews them.
+// ones fixed at capture; a restart resumes the same row and never renews them. Each obligation is
+// saved as decided on its own, so a sibling still resolving never holds back or loses it.
 
 import type { GitHubPRRefreshCandidate } from '../../../shared/github/pull-request-refresh-types'
 import type { PRInfo } from '../../../shared/github/pull-request-types'
@@ -8,6 +9,8 @@ import type { PRPendingActionResumeDeps, PRVerifiedAction } from './pr-pending-a
 import {
   deferPRPendingAction,
   nextPRPendingActionAt,
+  openPRPendingObligations,
+  prPendingActionKey,
   readDuePRPendingActions,
   type PRPendingActionRow,
   type PRPendingObligation
@@ -21,10 +24,14 @@ import {
   type PRWatchWorkspace
 } from './pr-watch-types'
 
+/** At most this many rows run at once. */
 const BATCH_LIMIT = 20
 const PUSH_READ_INTERVAL_MS = 20_000
 // After the verify deadline, one or two reads decide a late push.
 const LATE_PUSH_WINDOW_MS = 40_000
+// GitHub shows a push on its PR within this; after it, two reads finding no PR end the push.
+const NO_PR_LAG_MS = 2 * 60_000
+const NO_PR_READS = 2
 const RETRY_BASE_MS = 15_000
 const RETRY_MAX_MS = 30 * 60_000
 
@@ -36,8 +43,10 @@ type PendingPush = {
   update: { branch: string; newSha: string | null }
   remote: PushRemote | null
   late: boolean
+  deadline: number
   resolving: boolean
-  settle: (result: PRVerifiedAction | null) => void
+  noPRReads: number
+  finish: (result: PRVerifiedAction | null) => void
   row: PRPendingActionRow
 }
 
@@ -54,84 +63,97 @@ export class PRPendingActionResume {
     this.stopped = true
     this.timers.forEach((timer) => clearTimeout(timer))
     this.timers.clear()
-    if (this.drainTimer) {
-      clearTimeout(this.drainTimer)
-    }
-    this.pushes.forEach((push) => push.settle(null))
+    clearTimeout(this.drainTimer ?? undefined)
+    this.pushes.forEach((push) => push.finish(null))
     this.pushes.clear()
   }
 
-  /** One bounded pass of due rows; the next pass is timed to the earliest backoff. */
+  /** Starts due rows up to the running limit; the next pass is timed to the earliest backoff. */
   drain(): void {
     const { database, now } = this.deps
     if (this.stopped || database.readOnly || database.isClosed) {
       return
     }
-    const due = readDuePRPendingActions(database.db, now(), BATCH_LIMIT + this.inFlight.size)
-    for (const row of due.filter((row) => !this.inFlight.has(rowKey(row))).slice(0, BATCH_LIMIT)) {
-      void this.process(row)
-    }
-    const next = nextPRPendingActionAt(database.db)
-    if (this.drainTimer) {
-      clearTimeout(this.drainTimer)
-    }
+    const room = BATCH_LIMIT - this.inFlight.size
+    const due =
+      room > 0 ? readDuePRPendingActions(database.db, now(), room, [...this.inFlight]) : []
+    due.forEach((row) => void this.process(row))
+    const next = nextPRPendingActionAt(database.db, now())
+    clearTimeout(this.drainTimer ?? undefined)
     this.drainTimer =
       next === null ? null : this.later(() => this.drain(), Math.max(1_000, next - now()))
   }
 
   private async process(row: PRPendingActionRow): Promise<void> {
-    const key = rowKey(row)
+    const key = prPendingActionKey(row)
     this.inFlight.add(key)
     try {
-      if (!this.deps.chatExists(row.chatId)) {
-        return this.deps.complete(row, [])
+      if (!this.deps.chatExists(row.chatId) || this.expired(row)) {
+        return this.settle(row, openPRPendingObligations(row), [])
       }
       const workspace = await this.deps.chatWorkspace(row.chatId)
-      if (workspace === 'not-git') {
-        return this.deps.complete(row, [])
+      // This process serves no SSH checkout: its host's own runtime captures and resolves its pushes.
+      if (workspace === 'not-git' || workspace?.connectionId) {
+        return this.settle(row, openPRPendingObligations(row), [])
       }
-      const results = workspace
-        ? await Promise.all(
-            row.obligations.map((obligation) => this.verify(row, workspace, obligation))
-          )
-        : [TRANSIENT]
-      if (results.some((result) => result === TRANSIENT)) {
+      if (!workspace) {
         return this.retryOrExpire(row)
       }
-      if (!this.stopped) {
-        this.deps.complete(
-          row,
-          results.flatMap((result) => (Array.isArray(result) ? result : []))
+      const results = await Promise.all(
+        openPRPendingObligations(row).map((index) =>
+          this.verify(row, index, workspace).catch(this.failed)
         )
+      )
+      if (results.includes(TRANSIENT)) {
+        this.retryOrExpire(row)
       }
     } catch (error) {
-      this.deps.logger.warn('resuming a pull request action failed', { scope: 'pr-watch', error })
+      this.failed(error)
       this.retryOrExpire(row)
     } finally {
       this.inFlight.delete(key)
+      this.drain()
     }
   }
 
-  /** Transient resolution failures back off until the resolve deadline, then end the row. */
+  private readonly failed = (error: unknown): Transient => {
+    this.deps.logger.warn('resuming a pull request action failed', { scope: 'pr-watch', error })
+    return TRANSIENT
+  }
+
+  private expired(row: PRPendingActionRow): boolean {
+    return this.deps.now() >= row.resolveDeadlineAt
+  }
+
+  /** The saved expiry holds on success too: nothing verified after it becomes an action. */
+  private settle(row: PRPendingActionRow, indices: number[], verified: PRVerifiedAction[]): void {
+    if (this.stopped || this.deps.database.isClosed || indices.length === 0) {
+      return
+    }
+    this.deps.settle(row, indices, this.expired(row) ? [] : verified)
+    indices.forEach((index) => (row.obligations[index].done = true))
+  }
+
+  /** Obligations still resolving back off until the resolve deadline, then end. */
   private retryOrExpire(row: PRPendingActionRow): void {
     const { database, now } = this.deps
     if (this.stopped || database.isClosed) {
       return
     }
-    if (now() >= row.resolveDeadlineAt) {
-      this.deps.complete(row, [])
+    if (this.expired(row)) {
+      this.settle(row, openPRPendingObligations(row), [])
       return
     }
     const delay = Math.min(RETRY_BASE_MS * 2 ** row.attempts, RETRY_MAX_MS)
     database.transaction((db) => deferPRPendingAction(db, row, now() + delay))
-    this.drain()
   }
 
   private async verify(
     row: PRPendingActionRow,
-    workspace: PRWatchWorkspace,
-    obligation: PRPendingObligation
-  ): Promise<PRVerifiedAction[] | Transient> {
+    index: number,
+    workspace: PRWatchWorkspace
+  ): Promise<Transient | void> {
+    const obligation = row.obligations[index]
     if (obligation.kind === 'opened') {
       const pr = obligation.target
       // Only a PR in one of the chat repository's own GitHub remotes gets lines.
@@ -149,30 +171,27 @@ export class PRPendingActionResume {
         headSha: null,
         observedAt: row.finishedAt
       }
-      return own
-        ? [{ action, candidate: prWatchCandidate(workspace, pr.number), movedAt: null }]
-        : []
+      const candidate = prWatchCandidate(workspace, pr.number)
+      return this.settle(row, [index], own ? [{ action, candidate, movedAt: null }] : [])
     }
     const remote = await this.deps.resolvePushRemote(workspace, obligation.evidence)
     if (remote === null) {
       return TRANSIENT
     }
-    const verified = await this.awaitPush(
-      row,
-      workspace,
-      obligation,
-      remote === 'unknown' ? null : remote
-    )
-    return verified ? [verified] : []
+    if (this.expired(row)) {
+      return this.settle(row, [index], [])
+    }
+    await this.awaitPush(row, index, workspace, obligation, remote === 'unknown' ? null : remote)
   }
 
-  /** Resolves when a PR read proves the push, or with null once its window closes. */
+  /** Settles the push once a PR read proves it, or with nothing once its window closes. */
   private awaitPush(
     row: PRPendingActionRow,
+    index: number,
     workspace: PRWatchWorkspace,
     obligation: Extract<PRPendingObligation, { kind: 'pushed' }>,
     remote: PushRemote | null
-  ): Promise<PRVerifiedAction | null> {
+  ): Promise<void> {
     const late = this.deps.now() >= row.verifyDeadlineAt
     const deadline = late ? this.deps.now() + LATE_PUSH_WINDOW_MS : row.verifyDeadlineAt
     const base = prWatchCandidate(workspace, null)
@@ -185,11 +204,15 @@ export class PRPendingActionResume {
         update: { branch, newSha: obligation.evidence.newSha },
         remote,
         late,
+        deadline,
         resolving: false,
+        noPRReads: 0,
         row,
-        settle: (result) => {
+        // Synchronous, so a read that proves the push saves its owner before that read is evaluated.
+        finish: (result) => {
           if (this.pushes.delete(push)) {
-            resolve(result)
+            this.settle(row, [index], result ? [result] : [])
+            resolve()
           }
         }
       }
@@ -203,7 +226,7 @@ export class PRPendingActionResume {
           return
         }
         if (this.deps.now() >= deadline) {
-          push.settle(null)
+          push.finish(null)
           return
         }
         this.deps.readAfterPush(candidate)
@@ -222,11 +245,27 @@ export class PRPendingActionResume {
     const key = prKey ? parsePRKey(prKey) : null
     for (const push of this.pushes) {
       const head =
-        key && !push.resolving && push.candidate.repoPath === candidate.repoPath
+        key &&
+        !push.resolving &&
+        this.deps.now() < push.deadline &&
+        push.candidate.repoPath === candidate.repoPath
           ? pushedPullRequestHead(push.update, push.remote, pr)
           : null
       if (key && head) {
         void this.settleVerified(push, key, pr, head, observedAt)
+      }
+    }
+  }
+
+  /** A pushed branch GitHub still shows no PR for, past its lag, ends after a second such read. */
+  noteNoPR(candidate: GitHubPRRefreshCandidate, observedAt: number): void {
+    for (const push of this.pushes) {
+      if (
+        push.candidate.cacheKey === candidate.cacheKey &&
+        observedAt >= push.row.finishedAt + NO_PR_LAG_MS &&
+        ++push.noPRReads >= NO_PR_READS
+      ) {
+        push.finish(null)
       }
     }
   }
@@ -238,7 +277,6 @@ export class PRPendingActionResume {
     head: { headSha: string; superseded: boolean },
     observedAt: number
   ): Promise<void> {
-    push.resolving = true
     const { row } = push
     const verified = (headSha: string | null, movedAt: number | null): PRVerifiedAction => ({
       action: {
@@ -260,24 +298,24 @@ export class PRPendingActionResume {
       },
       movedAt
     })
+    if (!head.superseded) {
+      push.finish(verified(head.headSha, null))
+      return
+    }
+    push.resolving = true
     try {
-      if (!head.superseded) {
-        push.settle(verified(head.headSha, null))
-      } else if (push.late) {
-        // Verified after its window: ownership only, and only when the commit is already on the PR.
-        const onPR = await this.deps.isCommitInPRHead(
-          push.candidate,
-          key,
-          head.headSha,
-          pr.headSha!
-        )
-        push.settle(onPR ? verified(null, null) : null)
-      } else {
-        // Every head is keyed by its full SHA, so a later read of the same commit finds its memory.
-        const full = await this.deps.resolveCommitSha(push.candidate, key, head.headSha)
-        if (full) {
-          push.settle(verified(full, this.deps.now()))
-        }
+      // Verified after its window: ownership only, and only when the commit is already on the PR.
+      // Otherwise every head is keyed by its full SHA, so a later read of the same commit finds it.
+      const result = push.late
+        ? (await this.deps.isCommitInPRHead(push.candidate, key, head.headSha, pr.headSha!))
+          ? verified(null, null)
+          : null
+        : await this.deps
+            .resolveCommitSha(push.candidate, key, head.headSha)
+            .then((full) => (full ? verified(full, this.deps.now()) : undefined))
+      // A lookup that outlived the window decides nothing; the read loop ends the push.
+      if (result !== undefined && this.deps.now() < push.deadline) {
+        push.finish(result)
       }
     } catch (error) {
       this.deps.logger.warn('verifying a push failed', { scope: 'pr-watch', error })
@@ -295,8 +333,4 @@ export class PRPendingActionResume {
     this.timers.add(timer)
     return timer
   }
-}
-
-function rowKey(row: PRPendingActionRow): string {
-  return `${row.chatId}\0${row.anchor.itemId}`
 }
