@@ -277,7 +277,7 @@ export class LoadedStateParsingOperations {
     const migrated = {
       ...this.cohorts.carryChatUiChoices(
         this.cohorts.keepResumeOnRestartOffForExistingProfiles(
-          this.cohorts.migrateTabSwitchKeybindings(
+          this.cohorts.migrateKeybindings(
             this.cohorts.migrateTelemetry(current, fileExistedOnLoad),
             fileExistedOnLoad
           ),

@@ -81,6 +81,10 @@ export function initializeMainProcessAccountServices(): void {
     legacyTabSwitchSeed: {
       isPending: () => store.getSettings().tabSwitchKeybindingSeed === 'pending',
       markSeeded: () => store.updateSettings({ tabSwitchKeybindingSeed: 'done' })
+    },
+    searchKeybindingSeed: {
+      isPending: () => store.getSettings().searchKeybindingSeed === 'pending',
+      markSeeded: () => store.updateSettings({ searchKeybindingSeed: 'done' })
     }
   })
   browserManager.setSettingsResolver(() => ({ keybindings: state.keybindings?.getOverrides() }))

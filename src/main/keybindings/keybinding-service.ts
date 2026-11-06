@@ -1,4 +1,5 @@
 import {
+  LEGACY_MAC_SEARCH_BINDINGS,
   LEGACY_TAB_SWITCH_BINDINGS,
   type KeybindingActionId,
   type KeybindingFileSnapshot,
@@ -9,19 +10,22 @@ import {
   getUserKeybindingsPath,
   migrateLegacyKeybindings,
   readKeybindingFile,
-  seedLegacyTabSwitchBindings,
+  seedLegacyKeybindings,
   writeKeybindingOverride
 } from './keybinding-file'
+
+type LegacyKeybindingSeed = {
+  isPending: () => boolean
+  markSeeded: () => void
+}
 
 export type KeybindingServiceOptions = {
   homePath: string
   platform?: NodeJS.Platform
   getLegacyOverrides?: () => KeybindingOverrides | undefined
   /** Seed once for pre-existing installs; markSeeded completes the persisted cohort. */
-  legacyTabSwitchSeed?: {
-    isPending: () => boolean
-    markSeeded: () => void
-  }
+  legacyTabSwitchSeed?: LegacyKeybindingSeed
+  searchKeybindingSeed?: LegacyKeybindingSeed
 }
 
 export class KeybindingService {
@@ -35,17 +39,23 @@ export class KeybindingService {
     // A keybindings file supersedes shortcuts stored in legacy global settings.
     migrateLegacyKeybindings(this.configPath, this.platform, options.getLegacyOverrides?.())
     // Complete the cohort only after successful pinning so transient I/O failures retry next launch.
-    if (options.legacyTabSwitchSeed?.isPending()) {
+    for (const [seed, bindings, name] of [
+      [options.legacyTabSwitchSeed, LEGACY_TAB_SWITCH_BINDINGS, 'tab-switch'],
+      [
+        options.searchKeybindingSeed,
+        this.platform === 'darwin' ? LEGACY_MAC_SEARCH_BINDINGS : {},
+        'search'
+      ]
+    ] as const) {
+      if (!seed?.isPending()) {
+        continue
+      }
       try {
         // Seed already read the file; reuse its snapshot for the lazy cache.
-        this.snapshot = seedLegacyTabSwitchBindings(
-          this.configPath,
-          this.platform,
-          LEGACY_TAB_SWITCH_BINDINGS
-        ).snapshot
-        options.legacyTabSwitchSeed.markSeeded()
+        this.snapshot = seedLegacyKeybindings(this.configPath, this.platform, bindings).snapshot
+        seed.markSeeded()
       } catch (error) {
-        console.error('Failed to seed legacy tab-switch keybindings:', error)
+        console.error(`Failed to seed legacy ${name} keybindings:`, error)
       }
     }
   }

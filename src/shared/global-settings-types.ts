@@ -493,6 +493,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   /** One-shot cohort marker for the tab-switch keybinding swap. 'pending' =
    *  pre-existing install (seed pins old chords, then flips to 'done'); 'done' = fresh install. */
   tabSwitchKeybindingSeed?: 'pending' | 'done'
+  /** Existing profiles pin the old Mac search/clear shortcuts once before adopting new defaults. */
+  searchKeybindingSeed?: 'pending' | 'done'
   /** Voice/dictation settings; persistence merge hydrates getDefaultSettings() values for older profiles. */
   voice?: VoiceSettings
   /** Transcript full-text search consent + retention. Absent means off; nothing indexes until the user opts in. */

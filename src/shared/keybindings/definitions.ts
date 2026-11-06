@@ -53,6 +53,11 @@ export const LEGACY_TAB_SWITCH_BINDINGS: Readonly<Partial<Record<KeybindingActio
   'tab.previousAllTypes': ['Mod+Alt+BracketLeft']
 }
 
+export const LEGACY_MAC_SEARCH_BINDINGS: Readonly<Partial<Record<KeybindingActionId, string[]>>> = {
+  'worktree.palette': ['Mod+J'],
+  'terminal.clear': ['Mod+K']
+}
+
 export const DEFINITIONS_BY_ID = new Map<KeybindingActionId, KeybindingDefinition>(
   KEYBINDING_DEFINITIONS.map((definition) => [definition.id, definition])
 )

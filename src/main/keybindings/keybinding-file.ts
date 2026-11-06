@@ -105,7 +105,7 @@ export function migrateLegacyKeybindings(
 }
 
 /** Pin each uncustomized action to its pre-swap chord in the active-platform section, preserving resettable user choices. */
-export function seedLegacyTabSwitchBindings(
+export function seedLegacyKeybindings(
   path: string,
   platform: NodeJS.Platform,
   legacyBindings: Readonly<Partial<Record<KeybindingActionId, string[]>>>

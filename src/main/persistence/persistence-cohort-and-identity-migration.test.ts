@@ -78,6 +78,24 @@ describe('Store', () => {
       expect(store.getSettings().experimentalNewWorktreeCardStyle).toBe(false)
     })
   })
+
+  it('excludes an unopened secondary profile with inherited telemetry from legacy shortcut rollouts', async () => {
+    writeDataFile({
+      settings: {
+        telemetry: {
+          optedIn: false,
+          installId: 'shared-install',
+          existedBeforeTelemetryRelease: true
+        }
+      }
+    })
+    const store = await createStore()
+    expect(store.getSettings().tabSwitchKeybindingSeed).toBe('done')
+    expect(store.getSettings().searchKeybindingSeed).toBe('done')
+    await closeTestStores()
+    const reopened = await createStore()
+    expect(reopened.getSettings().searchKeybindingSeed).toBe('done')
+  })
 })
 
 describe('Store.migrateWorktreeIdentity', () => {

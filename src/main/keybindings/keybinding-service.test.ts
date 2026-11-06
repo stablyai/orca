@@ -1,8 +1,8 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { getEffectiveKeybindingsForAction } from '../../shared/keybindings'
+import { getEffectiveKeybindingsForAction, keybindingMatchesAction } from '../../shared/keybindings'
 import { getUserKeybindingsPath, writeKeybindingOverride } from './keybinding-file'
 import { KeybindingService } from './keybinding-service'
 
@@ -28,7 +28,7 @@ function makeCohort(pending: boolean): {
 
 // Physical bracket codes are layout-independent; Mod maps to the platform modifier.
 
-describe('KeybindingService tab-switch cohort seeding', () => {
+describe('KeybindingService cohort seeding', () => {
   let home: string
 
   beforeEach(() => {
@@ -37,6 +37,70 @@ describe('KeybindingService tab-switch cohort seeding', () => {
 
   afterEach(() => {
     rmSync(home, { recursive: true, force: true })
+  })
+
+  it('pins old search/clear bindings once and keeps a later reset across launches', () => {
+    const cohort = makeCohort(true)
+    const options = {
+      homePath: home,
+      platform: 'darwin' as const,
+      searchKeybindingSeed: cohort.controller
+    }
+    const service = new KeybindingService(options)
+    expect(service.getOverrides()).toEqual({
+      'worktree.palette': ['Mod+J'],
+      'terminal.clear': ['Mod+K']
+    })
+    expect(cohort.seeded()).toBe(true)
+
+    service.setActionBindings('worktree.palette', null)
+    const reopened = new KeybindingService(options)
+    const cmdK = { key: 'k', code: 'KeyK', meta: true, control: false, alt: false, shift: false }
+    expect(
+      keybindingMatchesAction('worktree.palette', cmdK, 'darwin', reopened.getOverrides())
+    ).toBe(true)
+    expect(reopened.getOverrides()).toEqual({ 'terminal.clear': ['Mod+K'] })
+  })
+
+  it('preserves common, disabled and other-platform choices when upgrading search', () => {
+    mkdirSync(join(home, '.orca'))
+    writeFileSync(
+      getUserKeybindingsPath(home),
+      JSON.stringify({
+        keybindings: { 'worktree.palette': ['Mod+Alt+J'] },
+        platforms: {
+          darwin: { 'terminal.clear': [] },
+          win32: { 'worktree.palette': ['Mod+Shift+J'] }
+        }
+      })
+    )
+    const service = new KeybindingService({
+      homePath: home,
+      platform: 'darwin',
+      searchKeybindingSeed: makeCohort(true).controller
+    })
+    expect(service.getOverrides()).toEqual({
+      'worktree.palette': ['Mod+Alt+J'],
+      'terminal.clear': []
+    })
+    expect(service.getSnapshot().platformOverrides.win32).toEqual({
+      'worktree.palette': ['Mod+Shift+J']
+    })
+  })
+
+  it('leaves new profiles and non-Mac profiles without legacy search pins', () => {
+    const fresh = new KeybindingService({
+      homePath: home,
+      platform: 'darwin',
+      searchKeybindingSeed: makeCohort(false).controller
+    })
+    expect(fresh.getOverrides()).toEqual({})
+    const windows = new KeybindingService({
+      homePath: home,
+      platform: 'win32',
+      searchKeybindingSeed: makeCohort(true).controller
+    })
+    expect(windows.getOverrides()).toEqual({})
   })
 
   it('existing install keeps a rebound action AND pins the pre-swap default on the rest', () => {
@@ -70,16 +134,19 @@ describe('KeybindingService tab-switch cohort seeding', () => {
     const fileHome = join(home, 'not-a-dir')
     writeFileSync(fileHome, 'x', 'utf8')
     const cohort = makeCohort(true)
+    const searchCohort = makeCohort(true)
 
     expect(
       () =>
         new KeybindingService({
           homePath: fileHome,
           platform: 'darwin',
-          legacyTabSwitchSeed: cohort.controller
+          legacyTabSwitchSeed: cohort.controller,
+          searchKeybindingSeed: searchCohort.controller
         })
     ).not.toThrow()
     expect(cohort.seeded()).toBe(false)
     expect(cohort.controller.isPending()).toBe(true)
+    expect(searchCohort.controller.isPending()).toBe(true)
   })
 })

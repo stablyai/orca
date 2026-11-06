@@ -14,21 +14,23 @@ type LoadedCohortMigrationOperationsRuntime = Pick<StoreRuntimeState, 'loadNeeds
 export class LoadedCohortMigrationOperations {
   constructor(private readonly runtime: LoadedCohortMigrationOperationsRuntime) {}
 
-  migrateTabSwitchKeybindings(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
-    const existing = state.settings?.tabSwitchKeybindingSeed
-    if (existing === 'pending' || existing === 'done') {
-      return state
-    }
-    // Persist the frozen cohort before the first file makes a fresh install appear existing.
-    this.runtime.loadNeedsSave = true
-    return {
-      ...state,
-      settings: {
-        ...state.settings,
-        // Existing installs seed old chords; fresh ones use current defaults.
-        tabSwitchKeybindingSeed: fileExistedOnLoad ? 'pending' : 'done'
+  migrateKeybindings(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
+    for (const key of ['tabSwitchKeybindingSeed', 'searchKeybindingSeed'] as const) {
+      const existing = state.settings?.[key]
+      if (existing === 'pending' || existing === 'done') {
+        continue
+      }
+      // Freeze each rollout's cohort before saving makes a fresh install appear existing.
+      this.runtime.loadNeedsSave = true
+      state = {
+        ...state,
+        settings: {
+          ...state.settings,
+          [key]: fileExistedOnLoad ? 'pending' : 'done'
+        }
       }
     }
+    return state
   }
 
   /** Reads the retired Chat UI switch from the raw profile, before load strips it. */
