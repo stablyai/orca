@@ -79,23 +79,19 @@ export function buildPersistedUnifiedTabSessionData(
     snapshot.unifiedTabsByWorktree,
     snapshot.groupsByWorktree
   )
-  return buildUnifiedTabSessionData({
-    ...snapshot,
-    unifiedTabsByWorktree: sourceTabs,
-    groupsByWorktree: sourceGroups
-  })
+  return buildUnifiedTabSessionData(snapshot, sourceTabs, sourceGroups)
 }
 
 /** Live layout readback retains transient placement; only persistence transfers views to owners. */
 export function buildUnifiedTabSessionData(
-  snapshot: UnifiedTabSnapshot
+  snapshot: UnifiedTabSnapshot,
+  sourceTabs = snapshot.unifiedTabsByWorktree,
+  sourceGroups = snapshot.groupsByWorktree
 ): PersistedUnifiedTabSessionData {
   const unifiedTabs: WorkspaceSessionState['unifiedTabs'] = {}
   const tabGroups: WorkspaceSessionState['tabGroups'] = {}
   const tabGroupLayouts: WorkspaceSessionState['tabGroupLayouts'] = {}
   const activeGroupIdByWorktree: WorkspaceSessionState['activeGroupIdByWorktree'] = {}
-  const sourceTabs = snapshot.unifiedTabsByWorktree
-  const sourceGroups = snapshot.groupsByWorktree
   const sourceLayouts = snapshot.layoutByWorktree ?? {}
   const sourceActiveGroups = snapshot.activeGroupIdByWorktree ?? {}
   const worktreeIds = new Set([
