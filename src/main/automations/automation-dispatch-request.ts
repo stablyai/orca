@@ -191,7 +191,21 @@ export async function requestAutomationDispatch(
       if (latestRefusal) {
         throw new AutomationDispatchRefusedError(latestRefusal)
       }
-      return dispatcher({ ...request, target: latestTarget })
+      const { onTargetPublished } = request
+      return dispatcher({
+        ...request,
+        target: latestTarget,
+        // A run cancelled or settled meanwhile keeps its status; only a live dispatch links its terminal.
+        ...(onTargetPublished
+          ? {
+              onTargetPublished: (published) => {
+                if (readRun().status === 'dispatching') {
+                  onTargetPublished(published)
+                }
+              }
+            }
+          : {})
+      })
     }
   })
 }

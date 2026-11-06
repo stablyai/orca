@@ -75,7 +75,7 @@ export async function runHeadlessAutomationDispatch(
       // A startup dialog can hold prompt delivery, so the run links its terminal as soon as it opens.
       onTargetPublished: (published) =>
         void runs
-          .updateRun({ runId: run.id, status: run.status, ...launchRunTargetOf(published) })
+          .updateRun({ runId: run.id, status: 'dispatching', ...launchRunTargetOf(published) })
           .catch((error: unknown) => {
             console.warn('[automations] failed to record the opened run terminal:', error)
           })
