@@ -51,6 +51,7 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     }
   }
 
+  /** Create or reconcile the pane a resume needs, reporting the recipe it actually launched with. */
   protected async createRuntimeOwnedMobileSessionTerminal(
     worktreeId: string,
     activate: boolean,
@@ -297,6 +298,10 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
       tab: created,
       publicationEpoch: result.publicationEpoch,
       snapshotVersion: result.snapshotVersion,
+      // A retry can reconcile a PTY from the first attempt, whose recipe may differ from this request's.
+      ...(livePty.pty.launchConfig
+        ? { launchConfig: copySleepingAgentLaunchConfig(livePty.pty.launchConfig) }
+        : {}),
       ...(terminal.startupCwdFallback ? { startupCwdFallback: 'workspace-root' as const } : {})
     }
   }

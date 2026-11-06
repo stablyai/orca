@@ -13,6 +13,7 @@ import type {
 import { resolveDispatchCallerWorktreeId } from '../../orchestration-caller-workspace'
 import { resolveWorkerStartModeOnHost } from '../../orchestration-worker-start-mode'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
+import { recordWorkerLaunchRecipe } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import { EXISTING_WORKTREE_SETUP, placeWorkerAgent } from './worker-start-agent-placement'
 import { awaitStructuredWorkerSetupGate } from './worker-start-structured-setup-gate'
 import { assertOrchestrationWorktreeCreationSupported } from './folder-worktree-placement'
@@ -196,6 +197,10 @@ export async function startLocalWorker(args: {
       effects
     }
     recordCreatedWorkerTerminalCustody(runtime, setupStage, created && !structuredSession)
+    // Record what this launch replays: its own terminal's recipe, or the one the resumed
+    // pane launched with — a reopen creates no terminal here (#37693).
+    const recipe = placed.terminalCreation?.launchConfig ?? placed.reopened?.launchRecipe
+    recordWorkerLaunchRecipe(db, started.dispatch.id, recipe)
     if (persistGatedSetupSpawnFailure(setupStage)) {
       failedStage = 'setup_start'
       throw new Error('Setup terminal failed to start before the gated agent launch.')

@@ -3,7 +3,8 @@ import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   agentProviderSessionsEqual,
   normalizeAgentProviderSession,
-  type AgentProviderSessionMetadata
+  type AgentProviderSessionMetadata,
+  type SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
@@ -26,7 +27,14 @@ export type AgentSessionResumeRefusal =
   | 'windows_only_cli'
 
 export type AgentSessionResumeResult =
-  | { ok: true; handle: string; paneKey: string; ptyId: string }
+  | {
+      ok: true
+      handle: string
+      paneKey: string
+      ptyId: string
+      /** The recipe the resume actually launched with, for a caller that records it again. */
+      launchConfig?: SleepingAgentLaunchConfig
+    }
   | { ok: false; reason: Exclude<AgentSessionResumeRefusal, 'windows_only_cli'> }
   /** A WSL host found only a Windows copy of the agent CLI; message says how to fix it. */
   | { ok: false; reason: 'windows_only_cli'; message: string }
@@ -44,6 +52,8 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
       providerSession: AgentProviderSessionMetadata
       /** The execution host whose hook row reported the session. */
       captureHostId: ExecutionHostId
+      /** The launch recipe recorded from what Orca itself launched; a resume replays it when the pane kept none. */
+      launchRecipe?: SleepingAgentLaunchConfig
       /** Names the new pane, so a retry of one request reconciles the pane it may have started. */
       mutationId: string
       signal?: AbortSignal
@@ -88,10 +98,16 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
     return result
   }
 
+  /** Resume into a fresh pane after the claim, refusing when another pane owns the conversation. */
   private async resumeClaimedAgentSession(
     worktreeId: string,
     session: ResumedAgentSession,
-    request: { captureHostId: ExecutionHostId; mutationId: string; signal?: AbortSignal },
+    request: {
+      captureHostId: ExecutionHostId
+      launchRecipe?: SleepingAgentLaunchConfig
+      mutationId: string
+      signal?: AbortSignal
+    },
     create: {
       identity: { tabId: string; leafId: string }
       onPtySpawnDispatched: () => void
@@ -145,7 +161,9 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
     try {
       resume = this.resolveMobileSessionResumeCommand(workspace, {
         ...session,
-        launchConfig: record?.launchConfig
+        // The pane's own record wins; a worker reopen falls back to the recipe
+        // recorded from what Orca itself launched (#37693).
+        launchConfig: record?.launchConfig ?? request.launchRecipe
       })
     } catch (error) {
       if (error instanceof WslHostWindowsOnlyAgentError) {
@@ -198,7 +216,9 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
       ok: true,
       handle: tab.terminal,
       paneKey: makePaneKey(tab.parentTabId, tab.leafId),
-      ptyId: tab.ptyId
+      ptyId: tab.ptyId,
+      // The PTY may be one an earlier attempt spawned; keep what it actually launched with.
+      launchConfig: created.launchConfig ?? resume.launchConfig
     }
   }
 }
