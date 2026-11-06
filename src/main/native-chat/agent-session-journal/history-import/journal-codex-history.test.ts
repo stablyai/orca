@@ -84,6 +84,79 @@ it.each(['active', 'archive', 'compressed'] as const)(
   }
 )
 
+it('revises an inherited turn without inheriting segment proof (source-derived contract)', async () => {
+  const source = await recordedCodexRollout('b')
+  const parentId = '01a1b0e1-8937-7ba1-87e4-501016bc5f8b'
+  const parent = source.slice(0, 3).map((record, ordinal) => ({
+    ...record,
+    ordinal
+  }))
+  const prefix = `${parent.map((record) => JSON.stringify(record)).join('\n')}\n`
+  await writeFile(join(root, `rollout-2026-11-06T12-42-13-${parentId}.jsonl`), prefix)
+  // The provider synthesizes this abort for an inherited mid-turn fork snapshot.
+  const child = [
+    {
+      ...source[0]!,
+      payload: {
+        ...source[0]!.payload,
+        id: CHILD,
+        history_base: {
+          thread_id: parentId,
+          end_ordinal_exclusive: 3,
+          end_byte_offset: Buffer.byteLength(prefix)
+        }
+      }
+    },
+    {
+      ...source[20]!,
+      payload: {
+        type: 'turn_aborted',
+        turn_id: '01a1b0e1-897d-73e0-b910-5b854abbfcb7',
+        root_turn_id: '01a1b0e1-897d-73e0-b910-5b854abbfcb7',
+        started_at: 1793968933,
+        reason: 'interrupted'
+      }
+    },
+    { ...source[21]!, payload: { ...source[21]!.payload, thread_id: CHILD } }
+  ].map((record, index) => ({ ...record, ordinal: index + 3 }))
+  const filePath = join(root, `rollout-2026-11-06T12-43-12-${CHILD}.jsonl`)
+  await writeFile(filePath, `${child.map((record) => JSON.stringify(record)).join('\n')}\n`)
+  const prepared = await prepareLegacyTranscriptImport(request(filePath))
+  expect(prepared.ok).toBe(true)
+  if (!prepared.ok) {
+    return
+  }
+  expect(prepared.items.filter((row) => row.body.kind === 'turn').map((row) => row.body)).toEqual([
+    {
+      kind: 'turn',
+      turnId: '01a1b0e1-897d-73e0-b910-5b854abbfcb7',
+      state: 'interrupted',
+      outcome: 'cancellation',
+      startedAt: 1793968933000,
+      completedAt: 1793968992675,
+      userItemId:
+        'legacy:codex:01a17c81-30d1-72f0-b84e-002ddfe6fd47:01a1b0e1-8937-7ba1-87e4-501016bc5f8b%3A01a1b0e1-8cd6-72f3-aa25-14c493b54a8f'
+    }
+  ])
+  const c = await chat({ now: 1_800_000_000_000 })
+  const imported = await importLegacyTranscriptIntoJournal({
+    ...request(filePath),
+    journal: c.journal,
+    fence: 1
+  })
+  expect(imported.ok).toBe(true)
+  const rows = c.journal.snapshot().items
+  const opener = rows.find((row) => row.body.kind === 'message' && row.body.role === 'user')!
+  expect(rows[0]?.body).toMatchObject({ kind: 'turn', userItemId: opener.itemId })
+  const command = rows.find((row) => row.body.kind === 'tool-call')?.body
+  expect(command).toMatchObject({
+    callId: 'exec-b421ed59-e65b-4311-acc8-685624133938',
+    state: 'failed',
+    exitCode: -1
+  })
+  expect(command).not.toHaveProperty('endedAs')
+})
+
 it.each(['a', 'b', 'r24'] as const)(
   'imports recorded %s executions and interrupted presentation durably',
   async (label) => {
@@ -488,6 +561,30 @@ it('does not regain first-terminal proof after eviction, replay or a new task st
   expect(
     collect([...evictedBackground, unscoped, background[11]!, background[7]!], 16384).at(-1)?.body
   ).toMatchObject({ callId: 'unscoped-after-frontier' })
+  const fileItem = (id: string, output: string) => ({
+    ...unscoped,
+    payload: {
+      ...unscoped.payload,
+      item: { ...readRecord(unscoped.payload.item), id, aggregated_output: output }
+    }
+  })
+  const revisedFile = collect([
+    fileItem('file-a', 'old output'),
+    fileItem('file-peer', 'peer'),
+    background[8]!,
+    fileItem('file-c', 'later'),
+    fileItem('file-a', 'updated output')
+  ])
+  expect(
+    revisedFile.map((row) =>
+      row.body.kind === 'turn'
+        ? row.body.turnId
+        : row.body.kind === 'tool-call'
+          ? row.body.callId
+          : null
+    )
+  ).toEqual(['file-a', 'file-peer', '01a1b0e1-c125-7c10-ab91-ef9f86b81b3c', 'file-c'])
+  expect(revisedFile[0]?.body).toMatchObject({ output: { head: 'updated output' } })
   const running = {
     ...closure,
     payload: {

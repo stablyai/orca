@@ -84,19 +84,24 @@ export function createCodexHistoryCollector(
     kind: 'root' | 'opener' | 'item' = 'item'
   ) => {
     placement.set(row, window.get(key), group, at, kind, completedSnapshot)
-    window.upsert(key, row, 128)
+    const turnGroup = placement.get(row)?.turnGroup
+    window.upsert(key, row, 128 + (turnGroup ? Buffer.byteLength(JSON.stringify(turnGroup)) : 0))
   }
   const turnRow = (turn: Turn) => {
-    if (!turn.root) {
+    const identity = codexTurnLifecycleIdentity(sessionId, turn.id)
+    const key = agentJournalItemKey(identity)
+    const retained = window.get(key)?.body
+    const opener = retained?.kind === 'turn' ? retained.userItemId : undefined
+    if (!turn.root && !retained) {
       return
     }
     const row: JournalReplacementItem = {
-      identity: codexTurnLifecycleIdentity(sessionId, turn.id),
-      body: projectCodexHistoryTurn(segment, turn.source, turn.userItemId),
+      identity,
+      body: projectCodexHistoryTurn(segment, turn.source, turn.userItemId ?? opener),
       ownerFence: 0,
       turnScope: { kind: 'thread' }
     }
-    store(`turn:${segment}:${turn.id}`, row, turn.root, -Infinity, false, 'root')
+    store(key, row, turn.root, -Infinity, false, 'root')
   }
   return {
     push(row: JournalReplacementItem) {
@@ -129,9 +134,10 @@ export function createCodexHistoryCollector(
         lastRecordAt = time
       }
       let turn = facts.get(turnKey)?.turn
-      const retainedTurn = window.get(turnKey)
-      const retainedRoot = placement.get(retainedTurn)
-      const root = turn?.root ?? (retainedRoot?.kind === 'root' ? retainedRoot.group : undefined)
+      const retainedTurn = turnId
+        ? window.get(agentJournalItemKey(codexTurnLifecycleIdentity(sessionId, turnId)))
+        : undefined
+      const root = turn?.root ?? placement.turnGroup(retainedTurn)
       if (['task_started', 'task_complete', 'turn_aborted'].includes(String(payload.type))) {
         if (!turnId) {
           return
@@ -155,20 +161,15 @@ export function createCodexHistoryCollector(
             }
           }
         }
-        if (!turn) {
-          turn = { id: turnId, complete: false, source: { id: turnId } }
-        }
-        const startedAt =
-          typeof turn.source.startedAt === 'number'
-            ? turn.source.startedAt
-            : retainedTurn?.body.kind === 'turn' && retainedTurn.body.startedAt !== undefined
-              ? retainedTurn.body.startedAt / 1000
-              : codexHistoryRootStart(payload, time)
+        turn ??= { id: turnId, complete: false, source: { id: turnId } }
+        const startedAt = codexHistoryRootStart(payload, time)
         turn.root =
           root ?? (startedAt !== undefined ? placement.root(turnId, startedAt) : undefined)
-        if (startedAt !== undefined) {
-          turn.source.startedAt = startedAt
-        }
+        turn.source.startedAt ??=
+          startedAt ??
+          (retainedTurn?.body.kind === 'turn' && retainedTurn.body.startedAt !== undefined
+            ? retainedTurn.body.startedAt / 1000
+            : undefined)
         if (payload.type !== 'task_started') {
           const wasTerminal = ['completed', 'failed', 'interrupted'].includes(
             String(turn.source.status)

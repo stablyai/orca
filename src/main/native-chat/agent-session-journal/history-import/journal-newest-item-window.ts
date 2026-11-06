@@ -13,17 +13,18 @@ export function createNewestItemWindow(maxBytes: number) {
       entries.delete(key)
     }
   }
-  const upsert = (key: string, item: JournalReplacementItem, extraBytes = 0) => {
+  const store = (key: string, item: JournalReplacementItem, extraBytes = 0) => {
     bytes -= entries.get(key)?.bytes ?? 0
     entries.delete(key)
-    const itemBytes = Buffer.byteLength(JSON.stringify(item)) + Buffer.byteLength(key) + extraBytes
+    const itemBytes = Buffer.byteLength(JSON.stringify(item)) + extraBytes
     entries.set(key, { item, bytes: itemBytes })
     bytes += itemBytes
     trim()
   }
   return {
-    push: (item: JournalReplacementItem) => upsert(`#${sequence++}`, item),
-    upsert,
+    push: (item: JournalReplacementItem) => store(`#${sequence++}`, item),
+    upsert: (key: string, item: JournalReplacementItem, extraBytes = 0) =>
+      store(key, item, Buffer.byteLength(key) + extraBytes),
     get: (key: string) => entries.get(key)?.item,
     reserve: (value: number) => {
       reserved = value

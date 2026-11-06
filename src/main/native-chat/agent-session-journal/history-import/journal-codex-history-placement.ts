@@ -8,6 +8,7 @@ type Placement = {
   at: number
   position: number
   completedSnapshot: boolean
+  turnGroup?: CodexHistoryRoot
 }
 
 const compareNumber = (a: number, b: number) => (a < b ? -1 : a > b ? 1 : 0)
@@ -43,6 +44,10 @@ export function createCodexHistoryPlacement() {
       return root
     },
     get: (row: JournalReplacementItem | undefined) => (row ? entries.get(row) : undefined),
+    turnGroup(row: JournalReplacementItem | undefined) {
+      const group = row ? entries.get(row)?.turnGroup : undefined
+      return group?.segment === segment ? group : undefined
+    },
     set(
       row: JournalReplacementItem,
       previous: JournalReplacementItem | undefined,
@@ -51,12 +56,15 @@ export function createCodexHistoryPlacement() {
       kind: Placement['kind'],
       completedSnapshot: boolean
     ) {
+      const old = previous ? entries.get(previous) : undefined
+      const retained = kind === 'root' || (!group && old?.kind === 'file') ? old : undefined
       entries.set(row, {
-        group: group ?? frontier,
-        kind: group ? kind : 'file',
-        at: group ? at : 0,
-        position: (group ? entries.get(previous ?? row)?.position : undefined) ?? position++,
-        completedSnapshot
+        group: retained?.group ?? group ?? frontier,
+        kind: retained?.kind ?? (group ? kind : 'file'),
+        at: retained?.at ?? (group ? at : 0),
+        position: retained?.position ?? (group ? old?.position : undefined) ?? position++,
+        completedSnapshot,
+        ...(kind === 'root' ? { turnGroup: group } : {})
       })
     },
     items(rows: JournalReplacementItem[]) {
