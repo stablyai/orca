@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AutomationRun } from '../../../../shared/automations-types'
 import { AutomationRunDetailsPage } from './AutomationRunDetailsPage'
+import type { SelectedAutomationRunHistoryOutcome } from './use-selected-automation-run-history'
 
 const run: AutomationRun = {
   id: 'run-1',
@@ -28,6 +29,17 @@ const run: AutomationRun = {
   createdAt: 1
 }
 
+const history: SelectedAutomationRunHistoryOutcome = {
+  automationId: 'auto-1',
+  rowKey: null,
+  ownerKey: null,
+  authority: null,
+  navigation: null,
+  reloadToken: 0,
+  runs: [run],
+  notice: null
+}
+
 let container: HTMLDivElement
 let root: Root
 
@@ -49,6 +61,7 @@ function renderRun(value: AutomationRun): void {
       <AutomationRunDetailsPage
         automation={null}
         run={value}
+        history={history}
         relativeNow={1}
         workspaceDisplay={null}
         viewState={null}
