@@ -13,6 +13,7 @@ import {
   registerCodexAccountsTestHomes,
   testState
 } from './service-test-harness'
+import { CODEX_CREDENTIAL_STORE_PIN_LINE } from '../codex/configuration/settings/managed-home-credential-store-pin'
 
 // Keep asserted config bytes independent of platform socket-path limits.
 vi.mock(
@@ -62,7 +63,9 @@ describe('CodexAccountService config sync', () => {
 
         const loginHome = options.env.CODEX_HOME
         expect(loginHome).toBeTruthy()
-        expect(readFileSync(join(loginHome!, 'config.toml'), 'utf-8')).toBe(canonicalConfig)
+        expect(readFileSync(join(loginHome!, 'config.toml'), 'utf-8')).toBe(
+          `${canonicalConfig}${CODEX_CREDENTIAL_STORE_PIN_LINE}`
+        )
 
         const payload = Buffer.from(JSON.stringify({ email: 'user@example.com' })).toString(
           'base64url'
@@ -176,7 +179,10 @@ describe('CodexAccountService config sync', () => {
         expect(readFileSync(join(managedHomePath, '.orca-managed-home'), 'utf-8')).toBe(
           'account-1\n'
         )
-        expect(readFileSync(join(loginHome!, 'config.toml'), 'utf-8')).toBe(canonicalConfig)
+        // The staging home inherits the managed home's pinned credential store.
+        expect(readFileSync(join(loginHome!, 'config.toml'), 'utf-8')).toBe(
+          `${canonicalConfig}${CODEX_CREDENTIAL_STORE_PIN_LINE}`
+        )
 
         const child = new EventEmitter() as EventEmitter & {
           stdout: PassThrough

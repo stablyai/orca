@@ -133,6 +133,25 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     expect(runtimeConfig).not.toContain('trust_level = "trusted"')
   })
 
+  it('pins a keyring credential store to file in the managed home and leaves ~/.codex unchanged', () => {
+    writeFileSync(
+      getSystemConfigPath(),
+      'model = "system-model"\ncli_auth_credentials_store = "keyring"\n',
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig).toContain('model = "system-model"')
+    expect(runtimeConfig).toContain('cli_auth_credentials_store = "file" # orca:')
+    expect(runtimeConfig).not.toContain('"keyring"')
+    expect(readFileSync(getSystemConfigPath(), 'utf-8')).toBe(
+      'model = "system-model"\ncli_auth_credentials_store = "keyring"\n'
+    )
+  })
+
   it('keeps untrusted when self-healing duplicate project tables', () => {
     mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
     writeFileSync(

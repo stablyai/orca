@@ -1,4 +1,5 @@
 import { stripCodexDaemonOverride } from '../shared-server/codex-daemon-socket-path-guard'
+import { stripManagedHomeCredentialStorePin } from '../settings/managed-home-credential-store-pin'
 import {
   createTomlLineScanState,
   getTomlTableHeader,
@@ -228,6 +229,8 @@ export function extractOrdinaryCodexSettings(config: string): string {
       .filter((section) => isRuntimeProjectTomlSection(section.header))
       .map((section) => getTomlSectionHeaderKey(section.header))
   )
-  // The daemon override belongs to the managed home and must not be promoted.
-  return stripCodexDaemonOverride(stripRuntimeOwnedTomlSections(config, projectHeaders)).trimEnd()
+  // The daemon override and credential-store pin belong to the managed home and must not be promoted.
+  return stripManagedHomeCredentialStorePin(
+    stripCodexDaemonOverride(stripRuntimeOwnedTomlSections(config, projectHeaders))
+  ).trimEnd()
 }

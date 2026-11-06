@@ -18,6 +18,11 @@ vi.mock('electron', () => ({
   }
 }))
 beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
+beforeEach(() => {
+  loginStatusProbeMock.read.mockReset()
+  loginStatusProbeMock.refresh.mockReset()
+  loginStatusProbeMock.refreshIfStale.mockReset()
+})
 
 vi.mock(import('node:os'), async (importOriginal) => {
   const actual = await importOriginal()
@@ -26,6 +31,19 @@ vi.mock(import('node:os'), async (importOriginal) => {
     homedir: () => testState.fakeHomeDir
   }
 })
+
+const loginStatusProbeMock = vi.hoisted(() => ({
+  read: vi.fn<() => { authenticated: boolean; authKind: 'oauth' | 'api-key' | 'none' } | null>(),
+  refresh:
+    vi.fn<
+      () => Promise<{ authenticated: boolean; authKind: 'oauth' | 'api-key' | 'none' } | null>
+    >(),
+  refreshIfStale: vi.fn<() => void>()
+}))
+
+vi.mock('./codex-cli-login-status', () => ({
+  systemDefaultCodexLoginStatus: loginStatusProbeMock
+}))
 
 describe('CodexAccountService config sync', () => {
   registerCodexAccountsTestHomes()
@@ -116,6 +134,89 @@ describe('CodexAccountService config sync', () => {
       } finally {
         warn.mockRestore()
       }
+    })
+
+    it('reports a signed-in system default when a keyring credential store holds the login', async () => {
+      writeFileSync(
+        join(systemCodexHomeDir(), 'config.toml'),
+        'cli_auth_credentials_store = "keyring"\n',
+        'utf-8'
+      )
+      loginStatusProbeMock.read.mockReturnValue({ authenticated: true, authKind: 'oauth' })
+      const service = await newService()
+
+      const state = withoutEnvApiKey(() => service.listAccounts())
+
+      expect(state.systemDefault).toEqual({
+        hasAuth: true,
+        authKind: 'oauth',
+        email: null,
+        providerAccountId: null,
+        workspaceLabel: null
+      })
+    })
+
+    it('awaits the login-status probe for keyring-backed system defaults before listing', async () => {
+      writeFileSync(
+        join(systemCodexHomeDir(), 'config.toml'),
+        'cli_auth_credentials_store = "auto"\n',
+        'utf-8'
+      )
+      loginStatusProbeMock.read.mockReturnValue(null)
+      loginStatusProbeMock.refresh.mockImplementation(async () => {
+        // A real refresh updates the cache that sync snapshots read.
+        loginStatusProbeMock.read.mockReturnValue({ authenticated: true, authKind: 'oauth' })
+        return { authenticated: true, authKind: 'oauth' }
+      })
+      const service = await newService()
+
+      await withoutEnvApiKey(async () => service.refreshSystemDefaultSignIn())
+      const state = withoutEnvApiKey(() => service.listAccounts())
+
+      expect(loginStatusProbeMock.refresh).toHaveBeenCalledTimes(1)
+      expect(state.systemDefault).toMatchObject({ hasAuth: true, authKind: 'oauth' })
+    })
+
+    it('consults the configured store when auth.json exists but cannot establish a login', async () => {
+      writeFileSync(
+        join(systemCodexHomeDir(), 'config.toml'),
+        'cli_auth_credentials_store = "keyring"\n',
+        'utf-8'
+      )
+      writeFileSync(systemAuthPath(), 'null', 'utf-8')
+      loginStatusProbeMock.read.mockReturnValue({ authenticated: true, authKind: 'oauth' })
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const service = await newService()
+
+      try {
+        await withoutEnvApiKey(async () => service.refreshSystemDefaultSignIn())
+        const state = withoutEnvApiKey(() => service.listAccounts())
+
+        expect(loginStatusProbeMock.refresh).toHaveBeenCalledTimes(1)
+        expect(state.systemDefault).toMatchObject({ hasAuth: true, authKind: 'oauth' })
+      } finally {
+        warn.mockRestore()
+      }
+    })
+
+    it('never consults the CLI while credentials stay in auth.json', async () => {
+      writeFileSync(
+        join(systemCodexHomeDir(), 'config.toml'),
+        'cli_auth_credentials_store = "keyring"\n',
+        'utf-8'
+      )
+      writeFileSync(
+        systemAuthPath(),
+        createCodexAuthJson('file@home.dev', 'acct-file', 'refresh-file'),
+        'utf-8'
+      )
+      const service = await newService()
+
+      await withoutEnvApiKey(async () => service.refreshSystemDefaultSignIn())
+      const state = withoutEnvApiKey(() => service.listAccounts())
+
+      expect(loginStatusProbeMock.refresh).not.toHaveBeenCalled()
+      expect(state.systemDefault).toMatchObject({ hasAuth: true, email: 'file@home.dev' })
     })
   })
 })

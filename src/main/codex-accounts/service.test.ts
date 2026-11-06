@@ -12,6 +12,7 @@ import {
   testState
 } from './service-test-harness'
 import { createCanonicalHookTrustFixture } from './service-hook-trust-test-fixtures'
+import { CODEX_CREDENTIAL_STORE_PIN_LINE } from '../codex/configuration/settings/managed-home-credential-store-pin'
 
 // Keep asserted config bytes independent of platform socket-path limits.
 vi.mock(
@@ -73,7 +74,9 @@ describe('CodexAccountService config sync', () => {
     const { CodexAccountService } = await import('./service')
     new CodexAccountService(store as never, rateLimits as never, runtimeHome as never)
 
-    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(canonicalConfig)
+    expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(
+      `${canonicalConfig}${CODEX_CREDENTIAL_STORE_PIN_LINE}`
+    )
     expect(readFileSync(join(managedHomePath, 'auth.json'), 'utf-8')).toBe(
       '{"account":"managed"}\n'
     )
@@ -174,7 +177,7 @@ describe('CodexAccountService config sync', () => {
     await service.selectAccount('account-1')
 
     expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(
-      'sandbox_mode = "danger-full-access"\napproval_policy = "untrusted"\n'
+      `sandbox_mode = "danger-full-access"\napproval_policy = "untrusted"\n${CODEX_CREDENTIAL_STORE_PIN_LINE}`
     )
     expect(rateLimits.refreshForCodexAccountChange).toHaveBeenCalledTimes(1)
     expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledTimes(1)
