@@ -30,6 +30,8 @@ export type AgentModelCatalogClaim = Pick<
   controller: AbortController
   promise: Promise<void>
   ready: Promise<void>
+  /** The folder's default settings this reader asked for, once its scope is known. */
+  projecting?: Promise<void>
 }
 
 /** Every reader's claim, by request; readers of one request share setup, never each other's life. */
@@ -135,13 +137,23 @@ export function createAgentModelCatalogLookup(
       const { fingerprint, exact, resolved, cwd } = scope
       Object.assign(bound, { fingerprint, exact, cwd })
       bindAgentModelCatalogScope(bindings, bindingKey, bound, requestKey)
+      const settled = setup
+      // Settings that outlived their setup's budget are read again while this reader still has
+      // time, even after its claim settled on the listing.
+      const defaults = settled.defaults.then(
+        (found) => found ?? (settled.lapsed() && valid() ? share().defaults : null)
+      )
+      // The folder's settings belong to whichever binding of this request is current when they
+      // arrive, whichever reader asked; each read waits for the ones its own claim asked for.
       bound.projecting = projectAgentModelCatalogDefault(
         params.agent,
-        bound,
-        setup.defaults,
-        // The folder's settings are the binding's, whichever reader is still waiting for them.
-        () => bound.current() && bindings.get(bindingKey) === bound
+        () => {
+          const held = bindings.get(bindingKey)
+          return held?.current() && held.identity === identity ? held : undefined
+        },
+        defaults
       )
+      claim.projecting = bound.projecting
       if (savedOnly) {
         await bound.projecting
         return

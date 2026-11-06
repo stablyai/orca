@@ -75,7 +75,7 @@ export async function waitForAgentModelCatalogRead(input: {
   /** Starts this read's own claim; the read waits on that claim, not another reader's. */
   resolve: (
     params: AgentModelCatalogReadParams
-  ) => { ready: Promise<void>; promise: Promise<void> } | undefined
+  ) => { ready: Promise<void>; promise: Promise<void>; projecting?: Promise<void> } | undefined
   binding: () => AgentModelCatalogBinding | undefined
 }): Promise<void> {
   const { params, store } = input
@@ -83,7 +83,7 @@ export async function waitForAgentModelCatalogRead(input: {
     const claim = input.resolve(params)
     await claim?.ready
     const bound = input.binding()
-    await bound?.projecting
+    await (claim?.projecting ?? bound?.projecting)
     if (Date.now() >= params.deadline) {
       return
     }

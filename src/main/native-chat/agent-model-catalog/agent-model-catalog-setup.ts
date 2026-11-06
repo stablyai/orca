@@ -143,7 +143,11 @@ export function createAgentModelCatalogSetups(
           seedAccountList(deps, facts, agent)
         }
       },
-      lapsed: () => !current(),
+      // Once settled its facts hold for the listing it found, past its budget, until ended.
+      lapsed: () =>
+        held.settled
+          ? signal.aborted || deps.store.retirementRevision(params.agent) !== retirement
+          : !current(),
       end,
       account,
       scope,
@@ -151,8 +155,9 @@ export function createAgentModelCatalogSetups(
       workspaceId: agentModelCatalogReadRecords(deps, params)?.record?.location.workspaceId
     }
     setups.set(key, held)
+    // Its budget holds until every stage has answered, the folder's default settings included.
+    void Promise.all([scope, defaults]).finally(() => clearTimeout(timer))
     void scope.then((facts) => {
-      clearTimeout(timer)
       held.settled = true
       held.fingerprint = current() ? facts?.fingerprint : undefined
       // Its readers start the listing it found as soon as it settles; it stays shared while that

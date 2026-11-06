@@ -280,3 +280,40 @@ it("keeps the folder's defaults when they arrive after a shorter last reader lef
   // The project picks nothing, so the account's default stands.
   expect(await a).toMatchObject({ models: [{ id: 'listed', isDefault: true }] })
 })
+
+it("reuses a settled setup after its starting reader's deadline while its listing still runs", async () => {
+  vi.useFakeTimers()
+  onTestFinished(() => {
+    vi.useRealTimers()
+  })
+  const h = harness()
+  void h.service.demand({ agent: 'codex', sessionId: 'a', deadline: Date.now() + 1_000 })
+  void h.service.demand({ agent: 'codex', sessionId: 'b', deadline: Date.now() + 30_000 })
+  await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
+  await vi.advanceTimersByTimeAsync(2_000)
+  void h.service.demand({ agent: 'codex', sessionId: 'b', deadline: Date.now() + 30_000 })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(h.recordWorkspacePath).toHaveBeenCalledOnce()
+  expect(h.workspaceMayOverrideDefaultModel).toHaveBeenCalledOnce()
+})
+
+it('reads stalled default settings again for a reader with time left, without waiting out its budget', async () => {
+  vi.useFakeTimers()
+  onTestFinished(() => {
+    vi.useRealTimers()
+  })
+  const h = harness()
+  h.folder.settings = Promise.withResolvers<void>()
+  void h.service.demand({ agent: 'codex', sessionId: 'a', deadline: Date.now() + 1_000 })
+  let answer: unknown
+  void h.service
+    .read({ agent: 'codex', sessionId: 'b', waitForListing: true, deadline: Date.now() + 30_000 })
+    .then((result) => {
+      answer = result
+    })
+  await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
+  h.discovery.resolve(listing('listed'))
+  await vi.advanceTimersByTimeAsync(2_000)
+  // The project picks nothing, so once its settings are read the account's default stands.
+  expect(answer).toMatchObject({ models: [{ id: 'listed', isDefault: true }] })
+})

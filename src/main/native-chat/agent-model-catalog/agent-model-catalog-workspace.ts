@@ -146,12 +146,12 @@ export function agentModelCatalogListedDefaults(
  *  and settings that change only the effort leave the account's model standing. */
 export async function projectAgentModelCatalogDefault(
   agent: string,
-  bound: AgentModelCatalogBinding,
-  defaults: Promise<AgentModelCatalogListedDefaults | null>,
-  current: () => boolean
+  binding: () => AgentModelCatalogBinding | undefined,
+  defaults: Promise<AgentModelCatalogListedDefaults | null>
 ): Promise<void> {
   const keeps = await defaults
-  if (keeps && current()) {
+  const bound = keeps ? binding() : undefined
+  if (keeps && bound) {
     bound.keepDefault = independentAgentModelCatalog(agent) ? keeps.model : keeps.effort
     bound.keepEffort = keeps.effort
   }
