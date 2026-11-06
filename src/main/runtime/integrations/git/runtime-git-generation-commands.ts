@@ -15,7 +15,6 @@ import { prepareLocalCommitMessageAgentEnv } from '../../../text-generation/comm
 import {
   cancelGenerateCommitMessageLocal,
   cancelGeneratePullRequestFieldsLocal,
-  discoverCommitMessageModelsLocal,
   generateCommitMessageFromContext,
   generatePullRequestFieldsFromContext,
   resolveCommitMessageSettings
@@ -259,13 +258,11 @@ export class RuntimeGitGenerationCommands {
       return { success: false, error: localEnv.error }
     }
     const { wslDistro } = localGitOptionsForTarget(target)
-    const wsl = wslDistro ? { cwd: target.worktree.path, wslDistro } : null
-    return discoverModelsWithHostCache(
-      { agentId: typedAgentId, agentCommandOverride, env: localEnv.env, wsl },
-      () =>
-        wsl
-          ? discoverCommitMessageModelsLocal(typedAgentId, localEnv.env, agentCommandOverride, wsl)
-          : discoverCommitMessageModelsLocal(typedAgentId, localEnv.env, agentCommandOverride)
-    )
+    return discoverModelsWithHostCache({
+      agentId: typedAgentId,
+      agentCommandOverride,
+      env: localEnv.env,
+      wsl: wslDistro ? { cwd: target.worktree.path, wslDistro } : null
+    })
   }
 }
