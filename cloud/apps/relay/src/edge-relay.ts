@@ -46,8 +46,8 @@ export function inEdgeCohort(
   return edgeCohortBucket(relayHostId) < config.rolloutPercent
 }
 
-// The host still holds units on its old cell (a reservation, splice or migration); moving the row
-// now would release them against the wrong cell. Its next ask, after they settle, moves it.
+// Another director holds the host's row, or the host is on the edge and cannot leave yet (its
+// desktop is still connected there): retry shortly.
 export class EdgeMoveBusyError extends Error {
   constructor() {
     super('relay_edge_move_busy')
@@ -55,6 +55,14 @@ export class EdgeMoveBusyError extends Error {
 }
 
 export const EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS = 2
+
+// The move cannot happen on this ask (old-cell units still held, or the edge did not take the
+// push) and nothing changed: the host stays where it is and moves on a later ask.
+export class EdgeMoveDeferredError extends Error {
+  constructor(reason: 'units_held' | 'push_failed') {
+    super(`relay_edge_move_deferred:${reason}`)
+  }
+}
 
 type Identity = { userId: string; relayHostId: string }
 
@@ -239,7 +247,7 @@ export class EdgeAssignments {
         )
         return this.answer(identity, integer(row, 'assignment_epoch'), leaseExpiresAt)
       }
-      if (requestUnits(row) > 0) throw new EdgeMoveBusyError()
+      if (requestUnits(row) > 0) throw new EdgeMoveDeferredError('units_held')
       const epoch = Math.max(integer(row, 'assignment_epoch'), mapFloor) + 1
       await transaction.query(
         `UPDATE relay_assignments
@@ -289,7 +297,7 @@ export class EdgeAssignments {
           locationHint: edgeLocationHint(region)
         })
       } catch (error) {
-        if (error instanceof EdgeAdminUnavailableError) throw new EdgeMoveBusyError()
+        if (error instanceof EdgeAdminUnavailableError) throw new EdgeMoveDeferredError('push_failed')
         throw error
       }
       if (result.outcome === 'applied' || result.outcome === 'unchanged') return assignmentEpoch
@@ -299,7 +307,7 @@ export class EdgeAssignments {
         [assignmentEpoch, identity.userId, identity.relayHostId]
       )
     }
-    throw new EdgeMoveBusyError()
+    throw new EdgeMoveDeferredError('push_failed')
   }
 
   // A host on the edge is about to be placed elsewhere (cohort off, rollback): first take its

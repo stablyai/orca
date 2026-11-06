@@ -187,12 +187,12 @@ describe('relay edge phase 2: the director moves host data with the host', () =>
     expect(h.fake.pushes).toHaveLength(1)
   })
 
-  it('answers 503 and leaves the row alone when the edge cannot take the push', async () => {
+  it('keeps the host on today\'s path, with no edge row, when the edge cannot take the push', async () => {
     const h = await harness()
     h.fake.down = true
     const response = await h.assign()
-    expect(response.status).toBe(503)
-    expect(response.headers.get('retry-after')).toBe('2')
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ cellUrl: 'https://us-c1.relay.example.test' })
     expect(await h.row()).toBeUndefined()
   })
 

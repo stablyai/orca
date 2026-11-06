@@ -55,6 +55,7 @@ import { isRelayDatabaseTransientError } from './database.js'
 import {
   EDGE_CELL_ID,
   EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS,
+  EdgeMoveDeferredError,
   EdgeMoveBusyError,
   inEdgeCohort,
   mapEpochFloor,
@@ -514,7 +515,7 @@ export function createRelayApp(
       }
     }
     if (edge && toEdge) {
-      let moved: RelayAssignment
+      let moved: RelayAssignment | null
       try {
         moved = await edge.moveToEdge(
           identity,
@@ -525,25 +526,34 @@ export function createRelayApp(
           requestedRegion
         )
       } catch (error) {
-        if (!(error instanceof EdgeMoveBusyError) && !isRelayDatabaseTransientError(error)) throw error
-        logAssignmentRejection({
-          route: 'assign',
-          lane: 'none',
-          hinted: Boolean(body.data.reconnect),
-          relayHostId: claims.relayHostId,
-          reason: operationError(error)
-        })
-        context.header('Retry-After', String(EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS))
-        return context.json({ error: 'assignment_temporarily_unavailable' }, 503)
+        if (error instanceof EdgeMoveDeferredError) {
+          // Nothing moved (old-cell units still held, or the edge did not take the push): today's
+          // path below keeps the host where it is, and a later ask moves it. Never a 503 loop.
+          console.warn(JSON.stringify({ event: 'orca_relay_edge_move_deferred', reason: error.message }))
+          moved = null
+        } else {
+          if (!(error instanceof EdgeMoveBusyError) && !isRelayDatabaseTransientError(error)) throw error
+          logAssignmentRejection({
+            route: 'assign',
+            lane: 'none',
+            hinted: Boolean(body.data.reconnect),
+            relayHostId: claims.relayHostId,
+            reason: operationError(error)
+          })
+          context.header('Retry-After', String(EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS))
+          return context.json({ error: 'assignment_temporarily_unavailable' }, 503)
+        }
       }
-      // Any later re-placement off the edge (rollback) mints above the edge epoch.
-      operations.reservePlacement?.raiseEpochFloor(identity, moved.assignmentEpoch)
-      return context.json({
-        v: 1,
-        cellUrl: moved.cellUrl,
-        assignmentEpoch: moved.assignmentEpoch,
-        lease: await signAssignment(moved)
-      })
+      if (moved) {
+        // Any later re-placement off the edge (rollback) mints above the edge epoch.
+        operations.reservePlacement?.raiseEpochFloor(identity, moved.assignmentEpoch)
+        return context.json({
+          v: 1,
+          cellUrl: moved.cellUrl,
+          assignmentEpoch: moved.assignmentEpoch,
+          lease: await signAssignment(moved)
+        })
+      }
     }
     // Step 5: switched-on cells answer from the map; anything else keeps today's path below.
     let step5: Pick<AssignOptions, 'epochFloor' | 'placeFresh' | 'regionReserve' | 'reserveSpill'> = {}

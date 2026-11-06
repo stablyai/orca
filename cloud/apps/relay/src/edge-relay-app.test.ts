@@ -135,7 +135,7 @@ describe('director routes with the relay edge', () => {
     expect(await response.json()).toMatchObject({ cellUrl: 'https://us-c1.relay.example.test' })
   })
 
-  it('tells a host still holding units on its old cell to retry shortly', async () => {
+  it('keeps a host still holding units on its old cell there (no 503), moving it on a later ask', async () => {
     const h = await harness()
     await h.database.query(
       `INSERT INTO relay_assignments
@@ -146,8 +146,9 @@ describe('director routes with the relay edge', () => {
       [COHORT_HOST]
     )
     const response = await h.assign(COHORT_HOST)
-    expect(response.status).toBe(503)
-    expect(response.headers.get('retry-after')).toBe('2')
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ cellUrl: 'https://us-c1.relay.example.test' })
+    expect(h.assignments.assign).toHaveBeenCalled()
   })
 
   it('answers a phone /v1/resolve for an edge host from the edge row, with the exact wire shape', async () => {
