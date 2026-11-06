@@ -316,6 +316,8 @@ describe('MobileNativeChatComposer on a structured chat', () => {
     await act(async () => labelled('/plan')[0]!.props.onPress())
     expect(field().props.value).toBe('keep  tail')
     expect(calls).toHaveLength(1)
+    expect(labelled('Exit plan mode')[0]!.props.disabled).toBe(true)
+    expect(labelled('Exit plan mode')[0]!.props.accessibilityState).toEqual({ disabled: true })
     expect(options!.optionSnapshot.find((entry) => entry.id === 'interactionMode')?.settable).toBe(
       false
     )
@@ -346,8 +348,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
     expect(labelled('Exit plan mode')[0]!.props.disabled).toBe(false)
     focus.mockClear()
     act(() => labelled('Exit plan mode')[0]!.props.onPress())
-    expect(labelled('Exit plan mode')[0]!.props.disabled).toBe(true)
-    expect(labelled('Exit plan mode')[0]!.props.accessibilityState).toEqual({ disabled: true })
+    expect(labelled('Exit plan mode')).toHaveLength(0)
     expect(field().props.value).toBe('keep /def tail')
     expect(focus).toHaveBeenCalled()
     expect(calls).toHaveLength(3)
