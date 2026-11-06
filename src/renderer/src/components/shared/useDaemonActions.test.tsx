@@ -13,7 +13,9 @@ const { runCleanupMock, snapshotMock, toastErrorMock, toastInfoMock, toastSucces
   }))
 
 vi.mock('./kill-all-terminal-surfaces', () => ({
-  runKillAllTerminalSurfaces: runCleanupMock,
+  runKillAllTerminalSurfaces: runCleanupMock
+}))
+vi.mock('./kill-all-terminal-targets', () => ({
   snapshotKillAllTerminalSurfaceIds: snapshotMock
 }))
 

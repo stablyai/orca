@@ -2,9 +2,9 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
   runKillAllTerminalSurfaces,
-  snapshotKillAllTerminalSurfaceIds,
   type KillAllTerminalSurfacesSummary
 } from '@/components/shared/kill-all-terminal-surfaces'
+import { snapshotKillAllTerminalSurfaceIds } from '@/components/shared/kill-all-terminal-targets'
 import { waitForWorkspaceSessionReady } from '@/lib/worktree-agent-activation-gate'
 import { useAppStore } from '../../store'
 

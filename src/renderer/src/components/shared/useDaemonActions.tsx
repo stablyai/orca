@@ -14,9 +14,9 @@ import {
 import { translate } from '@/i18n/i18n'
 import {
   runKillAllTerminalSurfaces,
-  snapshotKillAllTerminalSurfaceIds,
   type KillAllTerminalSurfacesSummary
 } from './kill-all-terminal-surfaces'
+import { snapshotKillAllTerminalSurfaceIds } from './kill-all-terminal-targets'
 
 export type DaemonActionKind = 'restart' | 'killAll'
 
@@ -255,6 +255,10 @@ function getCopy(kind: DaemonActionKind): DaemonActionCopy {
         {translate(
           'auto.components.shared.useDaemonActions.a702d4196e',
           "This closes every terminal tab across all workspaces and requests shutdown for its current terminal sessions. Any unsaved terminal work is lost. The daemon itself keeps running, and new terminals can be opened immediately. This can't be undone."
+        )}{' '}
+        {translate(
+          'auto.components.shared.useDaemonActions.killAllServerTabsStayOpen',
+          'Tabs from Orca servers and paired computers stay open, and their sessions keep running there. SSH terminals close like local ones.'
         )}
       </>
     ),

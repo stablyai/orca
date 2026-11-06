@@ -7280,6 +7280,7 @@
           "d9657ac204": "Terminal oturumunun kapatılması istendi.",
           "e8f25bd903": "Terminal temizliği tamamlanamadı.",
           "a702d4196e": "Bu, tüm çalışma alanlarındaki her terminal sekmesini kapatır ve mevcut terminal oturumları için kapatma ister. Kaydedilmemiş terminal çalışmaları kaybolur. Daemon'un kendisi çalışmaya devam eder ve yeni terminaller hemen açılabilir. Bu işlem geri alınamaz.",
+          "killAllServerTabsStayOpen": "Orca sunucularının ve eşleştirilmiş bilgisayarların sekmeleri açık kalır ve oturumları orada çalışmaya devam eder. SSH terminalleri yerel terminaller gibi kapatılır.",
           "confirmRestart": "Yeniden başlat",
           "busyRestarting": "Yeniden başlatılıyor…",
           "confirmKillAll": "Tüm oturumları sonlandır",

@@ -1,17 +1,21 @@
 import { describe, expect, it, vi } from 'vitest'
-
 import type { AppState } from '@/store'
-
+import { runKillAllTerminalSurfaces } from './kill-all-terminal-surfaces'
 import {
-  runKillAllTerminalSurfaces,
   snapshotKillAllTerminalSurfaceIds,
   type KillAllTerminalSurfaceState
-} from './kill-all-terminal-surfaces'
+} from './kill-all-terminal-targets'
 
 type TerminalRow = AppState['tabsByWorktree'][string][number]
+type UnifiedRow = AppState['unifiedTabsByWorktree'][string][number]
 
 function terminal(id: string, worktreeId: string): TerminalRow {
   return { id, worktreeId } as TerminalRow
+}
+
+function unified(id: string, entityId: string, worktreeId: string): UnifiedRow {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Kill All reads only these fields of a unified tab.
+  return { id, entityId, worktreeId, contentType: 'terminal' } as UnifiedRow
 }
 
 function state(overrides: Partial<KillAllTerminalSurfaceState> = {}): KillAllTerminalSurfaceState {
@@ -47,6 +51,16 @@ function state(overrides: Partial<KillAllTerminalSurfaceState> = {}): KillAllTer
     runtimeEnvironmentCatalogHydrated: true,
     removedRuntimeEnvironmentIds: new Set()
   }
+}
+
+type WorktreeRows = NonNullable<KillAllTerminalSurfaceState['worktreesByRepo']>[string]
+
+function setWorktreeRows(
+  current: KillAllTerminalSurfaceState,
+  rows: Partial<WorktreeRows[number]>[]
+) {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ownership reads only these row fields.
+  current.worktreesByRepo = { 'fixture-repo': rows as WorktreeRows }
 }
 
 function removeSurface(current: KillAllTerminalSurfaceState, targetId: string): void {
@@ -112,27 +126,116 @@ describe('runKillAllTerminalSurfaces', () => {
     })
   })
 
+  it('leaves tabs mirrored from a paired host open while closing local ones', async () => {
+    const current = state({
+      tabsByWorktree: {
+        'wt-local': [terminal('local-tab', 'wt-local')],
+        'wt-paired': [terminal('mirrored-tab', 'wt-paired')]
+      },
+      unifiedTabsByWorktree: {
+        'wt-paired': [unified('mirrored-visible', 'mirrored-unified', 'wt-paired')]
+      },
+      ptyIdsByTabId: {
+        'local-tab': ['pty-local'],
+        'mirrored-tab': ['remote:env-paired@@terminal-1'],
+        'mirrored-unified': ['remote:env-paired@@terminal-2']
+      }
+    })
+    setWorktreeRows(current, [
+      { id: 'wt-local', repoId: 'fixture-repo', hostId: 'local' },
+      { id: 'wt-paired', repoId: 'fixture-repo', runtimeOwnerEnvironmentId: 'env-paired' }
+    ])
+    const closeSurface = vi.fn((targetId: string) => removeSurface(current, targetId))
+    const killPty = vi.fn().mockResolvedValue(undefined)
+
+    await runKillAllTerminalSurfaces(snapshotKillAllTerminalSurfaceIds(current), {
+      getState: () => current,
+      killDaemonSessions: vi.fn().mockResolvedValue({ killedCount: 0, remainingCount: 0 }),
+      closeSurface,
+      killPty,
+      yieldToRenderer: vi.fn(async () => {}),
+      reportSummary: vi.fn()
+    })
+
+    expect(closeSurface.mock.calls.map(([targetId]) => targetId)).toEqual(['local-tab'])
+    expect(killPty.mock.calls).toEqual([['pty-local']])
+  })
+
+  it('leaves a tab open when its PTY proves only that it runs off this computer', async () => {
+    const current = state({
+      tabsByWorktree: {
+        'wt-local': [terminal('local-tab', 'wt-local')],
+        'wt-unlisted': [terminal('foreign-tab', 'wt-unlisted')]
+      },
+      ptyIdsByTabId: {
+        'local-tab': ['pty-local'],
+        'foreign-tab': ['remote:env-forgotten@@terminal-1', 'ssh:other-host@@pty-2']
+      }
+    })
+    setWorktreeRows(current, [{ id: 'wt-local', repoId: 'fixture-repo', hostId: 'local' }])
+
+    expect(snapshotKillAllTerminalSurfaceIds(current)).toEqual(['local-tab'])
+  })
+
+  it('leaves a local-workspace tab open when one of its panes runs on a paired host', async () => {
+    const current = state({
+      tabsByWorktree: {
+        'wt-local': [terminal('local-tab', 'wt-local'), terminal('split-tab', 'wt-local')]
+      },
+      ptyIdsByTabId: {
+        'local-tab': ['pty-local'],
+        'split-tab': ['pty-local-2', 'remote:env-paired@@terminal-3']
+      }
+    })
+
+    expect(snapshotKillAllTerminalSurfaceIds(current)).toEqual(['local-tab'])
+  })
+
+  it('leaves a pending paired-host tab open before it has a PTY', async () => {
+    const current = state({
+      tabsByWorktree: {
+        'wt-local': [terminal('local-tab', 'wt-local'), terminal('pending', 'wt-local')]
+      },
+      unifiedTabsByWorktree: {
+        'wt-local': [
+          {
+            ...unified('pending-visible', 'pending', 'wt-local'),
+            executionHostId: 'runtime:env-paired'
+          }
+        ]
+      },
+      ptyIdsByTabId: { 'local-tab': ['pty-local'] }
+    })
+
+    expect(snapshotKillAllTerminalSurfaceIds(current)).toEqual(['local-tab'])
+  })
+
+  it('still closes SSH workspace tabs, which this computer relays', async () => {
+    const current = state({
+      tabsByWorktree: { 'wt-ssh': [terminal('ssh-tab', 'wt-ssh')] },
+      ptyIdsByTabId: { 'ssh-tab': ['ssh:devbox@@pty-1'] }
+    })
+    setWorktreeRows(current, [{ id: 'wt-ssh', repoId: 'fixture-repo', hostId: 'ssh:devbox' }])
+
+    expect(snapshotKillAllTerminalSurfaceIds(current)).toEqual(['ssh-tab'])
+  })
+
   it('revalidates remaining ownership after a yield before killing an exact PTY', async () => {
     let current = state({
       activeWorktreeId: 'wt',
-      settings: { activeRuntimeEnvironmentId: 'env-1' },
       tabsByWorktree: {
         wt: [terminal('first', 'wt'), terminal('second', 'wt'), terminal('third', 'wt')]
       },
       ptyIdsByTabId: {
-        first: ['pty-first', 'remote:terminal-1'],
+        first: ['pty-first'],
         second: ['pty-second'],
-        third: ['pty-shared-after-yield', 'remote:env-1@@terminal-1']
+        third: ['pty-shared-after-yield']
       }
     })
     const closeSurface = vi.fn(
       (
         targetId: string,
         options: {
-          precomputedRetirementPlan: {
-            runtimeTerminals: unknown[]
-            cleanupOnlyPtyIds: string[]
-          }
           precomputedCloseState: {
             terminalCountBeforeClose: number
             nextTerminalTabId: string | null
@@ -150,12 +253,11 @@ describe('runKillAllTerminalSurfaces', () => {
     const yieldToRenderer = vi.fn(async () => {
       current = state({
         activeWorktreeId: 'wt',
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
         tabsByWorktree: {
           wt: [terminal('third', 'wt'), terminal('survivor', 'wt')]
         },
         ptyIdsByTabId: {
-          third: ['pty-shared-after-yield', 'remote:env-1@@terminal-1'],
+          third: ['pty-shared-after-yield'],
           survivor: ['pty-shared-after-yield']
         }
       })
@@ -180,18 +282,14 @@ describe('runKillAllTerminalSurfaces', () => {
       terminalCountBeforeClose: 2,
       nextTerminalTabId: 'survivor'
     })
-    expect(closeSurface.mock.calls[2]?.[1].precomputedRetirementPlan).toMatchObject({
-      runtimeTerminals: [],
-      cleanupOnlyPtyIds: ['remote:env-1@@terminal-1']
-    })
-    expect(killPty).not.toHaveBeenCalledWith('pty-first')
-    expect(killPty).not.toHaveBeenCalledWith('pty-second')
+    expect(killPty).toHaveBeenCalledWith('pty-first')
+    expect(killPty).toHaveBeenCalledWith('pty-second')
     expect(killPty).not.toHaveBeenCalledWith('pty-shared-after-yield')
     expect(snapshotKillAllTerminalSurfaceIds(current)).toEqual(['survivor'])
     expect(summary).toMatchObject({
       closeAttemptCount: 3,
       absentTargetCount: 3,
-      exactKillAcceptedCount: 0,
+      exactKillAcceptedCount: 2,
       closeYieldCount: 1
     })
   })

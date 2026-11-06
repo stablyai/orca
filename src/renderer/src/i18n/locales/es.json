@@ -6938,6 +6938,7 @@
           "d9657ac204": "Se solicitó el apagado de la sesión de terminal.",
           "e8f25bd903": "No se pudo completar la limpieza del terminal.",
           "a702d4196e": "Esto cierra cada pestaña de terminal en todos los espacios de trabajo y solicita el apagado de sus sesiones de terminal actuales. Cualquier trabajo de terminal no guardado se pierde. El daemon en sí continúa ejecutándose y se pueden abrir terminales nuevas inmediatamente. Esta acción no se puede deshacer.",
+          "killAllServerTabsStayOpen": "Las pestañas de servidores de Orca y equipos vinculados permanecen abiertas, y sus sesiones siguen ejecutándose allí. Las terminales SSH se cierran igual que las locales.",
           "01d6b7c64e": "Las terminales abiertas y los agentes se reiniciarán. Los terminales en hosts remotos no se ven afectados.",
           "922548bc66": "¿Reiniciar el servicio de terminal?",
           "confirmRestart": "Reiniciar",

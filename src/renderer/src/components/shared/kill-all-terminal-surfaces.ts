@@ -1,15 +1,19 @@
-import { useAppStore, type AppState } from '@/store'
+import { useAppStore } from '@/store'
 import {
   closeTerminalTab,
   type PrecomputedTerminalCloseState
 } from '../terminal/terminal-tab-actions'
 import {
   buildTerminalTabRetirementPlans,
-  type TerminalTabRetirementPlan,
-  type TerminalTabRetirementState
+  type TerminalTabRetirementPlan
 } from '@/store/slices/terminal-tab-retirement'
 import { reserveTerminalRetirementTeardowns } from '@/store/slices/terminal-retirement-teardown-reservation'
 import { notifyDaemonSessionInventoryInvalidated } from '../status-bar/daemon-session-inventory-invalidation'
+import {
+  getKillAllTargetIndex,
+  snapshotKillAllTerminalSurfaceIds,
+  type KillAllTerminalSurfaceState
+} from './kill-all-terminal-targets'
 
 const CLOSE_BATCH_SIZE = 2
 
@@ -19,9 +23,6 @@ type DaemonKillAllResult = {
   killedSessionIds?: string[]
   listingIncomplete?: boolean
 }
-
-export type KillAllTerminalSurfaceState = TerminalTabRetirementState &
-  Pick<AppState, 'activeWorktreeId'>
 
 export type KillAllTerminalSurfacesSummary = {
   targetCount: number
@@ -60,63 +61,6 @@ type KillAllTerminalSurfaceDependencies = {
   now: () => number
   yieldToRenderer: () => Promise<void>
   reportSummary: (summary: KillAllTerminalSurfacesSummary) => void
-}
-
-export function snapshotKillAllTerminalSurfaceIds(
-  state: KillAllTerminalSurfaceState = useAppStore.getState()
-): string[] {
-  const targetIds = new Set<string>()
-  for (const tabs of Object.values(state.tabsByWorktree)) {
-    for (const tab of tabs) {
-      targetIds.add(tab.id)
-    }
-  }
-  for (const tabs of Object.values(state.unifiedTabsByWorktree)) {
-    for (const tab of tabs) {
-      if (tab.contentType === 'terminal') {
-        targetIds.add(tab.entityId)
-      }
-    }
-  }
-  return [...targetIds]
-}
-
-function getTargetIndex(
-  state: KillAllTerminalSurfaceState,
-  targetIds: ReadonlySet<string>
-): {
-  ownerByTargetId: Map<string, string>
-  terminalIdsByWorktree: Map<string, Set<string>>
-} {
-  const ownerByTargetId = new Map<string, string>()
-  const terminalIdsByWorktree = new Map<string, Set<string>>()
-  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
-    const ids = terminalIdsByWorktree.get(worktreeId) ?? new Set<string>()
-    for (const tab of tabs) {
-      ids.add(tab.id)
-      if (targetIds.has(tab.id) && !ownerByTargetId.has(tab.id)) {
-        ownerByTargetId.set(tab.id, worktreeId)
-      }
-    }
-    terminalIdsByWorktree.set(worktreeId, ids)
-  }
-  for (const [worktreeId, tabs] of Object.entries(state.unifiedTabsByWorktree)) {
-    const ids = terminalIdsByWorktree.get(worktreeId) ?? new Set<string>()
-    for (const tab of tabs) {
-      if (tab.contentType === 'terminal') {
-        ids.add(tab.entityId)
-      }
-      if (
-        tab.contentType === 'terminal' &&
-        targetIds.has(tab.entityId) &&
-        !ownerByTargetId.has(tab.entityId)
-      ) {
-        ownerByTargetId.set(tab.entityId, worktreeId)
-      }
-    }
-    terminalIdsByWorktree.set(worktreeId, ids)
-  }
-  return { ownerByTargetId, terminalIdsByWorktree }
 }
 
 function getNextTerminalId(ids: ReadonlySet<string>, closingId: string): string | null {
@@ -174,7 +118,7 @@ export async function runKillAllTerminalSurfaces(
   const remainingTargetIds = new Set(targetIds)
   const createCloseWave = (state: KillAllTerminalSurfaceState) => {
     const remainingIdSet = new Set(remainingTargetIds)
-    const { ownerByTargetId, terminalIdsByWorktree } = getTargetIndex(state, remainingIdSet)
+    const { ownerByTargetId, terminalIdsByWorktree } = getKillAllTargetIndex(state, remainingIdSet)
     const presentTargetIds = [...remainingTargetIds].filter((targetId) =>
       ownerByTargetId.has(targetId)
     )
