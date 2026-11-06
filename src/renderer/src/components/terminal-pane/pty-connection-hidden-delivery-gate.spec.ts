@@ -1,3 +1,4 @@
+import { connectMountedMockPanePty } from './pty-connection-test-connect-mock-pane'
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RESET_AFTER_BYTE_GAP } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
@@ -26,6 +27,7 @@ const TAB_MISSING = { remounted: false as const, declinedBy: 'tab-missing' as co
 const AUTOMATIC_REQUEST = expect.objectContaining({ trigger: 'automatic' })
 
 export function registerPtyConnectionHiddenDeliveryGateTests(): void {
+  const mountedBindings: Awaited<ReturnType<typeof connectMountedMockPanePty>>[] = []
   let mockStoreState: StoreState
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
@@ -56,6 +58,9 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
     })
 
     afterEach(async () => {
+      for (const binding of mountedBindings.splice(0)) {
+        binding.dispose()
+      }
       await restoreTerminalTestGlobals()
     })
 
@@ -80,7 +85,6 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
         ) => void
         binding: { syncProcessTracking: () => void; dispose: () => void }
       }> {
-        const { connectPanePty } = await import('./pty-connection')
         const agentTitleMocks =
           await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport('pty-id')
@@ -101,11 +105,12 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
         transportFactoryQueue.push(transport)
         const pane = createPane(1)
         const manager = createManager(1)
-        const binding = connectPanePty(
-          pane as never,
-          manager as never,
-          bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+        const binding = await connectMountedMockPanePty(
+          pane,
+          manager,
+          bindPaneAgentTitleMocks(deps, agentTitleMocks)
         )
+        mountedBindings.push(binding)
         await flushAsyncTicks(6)
         expect(capturedDataCallback.current).not.toBeNull()
         return { transport, pane, dataCallback: capturedDataCallback.current!, binding }

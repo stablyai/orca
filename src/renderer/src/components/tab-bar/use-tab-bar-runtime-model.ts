@@ -10,6 +10,7 @@ import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { selectNativeChatWslProject } from '../terminal-pane/terminal-pane-host-state'
 import { isNativeChatTranscriptLocalReadable } from '../../../../shared/native-chat/transcript/native-chat-transcript-readability'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
@@ -80,6 +81,7 @@ export type TabBarRuntimeModel = {
   unifiedTabByVisibleId: Map<string, Tab>
   workspaceHasSimulatorTab: boolean
   toggleTabViewMode: (tabId: string) => void
+  nativeChatIsWslProject: boolean | null
   nativeChatTranscriptIsLocalReadable: boolean
   managedBrowserCreationEnabled: boolean
   mobileEmulatorCreationEnabled: boolean
@@ -235,6 +237,7 @@ export function useTabBarRuntimeModel({
   const { tabAgentTypesByTabId, nativeChatTabWideFallbackUnsafeTabsById } = useAppStore(
     useShallow(selectTabBarAgentProjections)
   )
+  const nativeChatIsWslProject = useAppStore((s) => selectNativeChatWslProject(s, worktreeId))
   const nativeChatTranscriptIsLocalReadable = useAppStore((s) =>
     isNativeChatTranscriptLocalReadable(getConnectionIdFromState(s, worktreeId))
   )
@@ -264,6 +267,7 @@ export function useTabBarRuntimeModel({
     toggleTabViewMode,
     tabAgentTypesByTabId,
     nativeChatTabWideFallbackUnsafeTabsById,
+    nativeChatIsWslProject,
     nativeChatTranscriptIsLocalReadable,
     managedBrowserCreationEnabled,
     mobileEmulatorCreationEnabled

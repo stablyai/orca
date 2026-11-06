@@ -2,11 +2,25 @@
 
 import { act, startTransition, Suspense, use } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { cleanup, renderHook } from '@testing-library/react'
+import { useAppStore } from '@/store'
+import { createTabsLabelActions } from '@/store/slices/tabs/tabs-label-actions'
+import { useNativeChatToggleShortcut } from '../native-chat/use-native-chat-toggle-shortcut'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { clearClientHostedBrowserRowSelection } from '@/lib/pane-manager/client-hosted-browser-row-state'
 
 import type { TabBarItem } from './tab-bar-item-model'
 import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
+import type { AppState } from '@/store/types'
+import { createTestStore } from '@/store/slices/store-test-helpers'
+import {
+  makeGroup,
+  makeRepo,
+  makeWorktree,
+  makeTerminalTab,
+  makeUnifiedTab
+} from '../worktree-jump/worktree-jump-palette-test-fixtures'
+import { selectNativeChatWslProject } from '../terminal-pane/terminal-pane-host-state'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   renderTabBarItems,
@@ -16,6 +30,10 @@ import {
 import { useTabBarItemActions } from './use-tab-bar-item-actions'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
+vi.mock('@/store/plugin-panels', () => ({ usePluginCommands: () => [] }))
+vi.mock('@/lib/shortcut-platform', () => ({ getShortcutPlatform: () => 'win32' }))
+vi.mock('@/lib/renderer-app-platform', () => ({ getRendererAppPlatform: () => 'win32' }))
+const menuToggle = vi.fn()
 
 type TabProps = {
   tab?: { id: string; title: string }
@@ -26,6 +44,8 @@ type TabProps = {
   onActivate: (id: string) => void
   onDuplicate?: () => void
   gitStatus?: string | null
+  canToggleViewMode?: boolean
+  onToggleViewMode?: () => void
 }
 
 const tabRenders: { id: string; props: TabProps }[] = []
@@ -137,6 +157,9 @@ function buildItems({
 }
 
 type StripInputs = {
+  nativeChatState?: AppState
+  nativeChatAgent?: AgentType
+  chatMode?: boolean
   onActivate?: (id: string) => void
   generatedTabTitlesEnabled?: boolean
   managedBrowserCreationEnabled?: boolean
@@ -150,6 +173,9 @@ type StripInputs = {
 }
 
 function Strip({
+  nativeChatState,
+  nativeChatAgent,
+  chatMode = false,
   onActivate = NOOP,
   generatedTabTitlesEnabled = false,
   managedBrowserCreationEnabled = false,
@@ -173,10 +199,32 @@ function Strip({
   const runtime: TabBarItemSurfaceRuntime = {
     resolvedGroupId: 'group-1',
     generatedTabTitlesEnabled,
-    unifiedTabByVisibleId: new Map(),
-    tabAgentTypesByTabId: {},
+    unifiedTabByVisibleId: nativeChatState
+      ? new Map([
+          [
+            'terminal-1',
+            {
+              id: 'unified-terminal-1',
+              entityId: 'terminal-1',
+              contentType: 'terminal',
+              groupId: 'group-1',
+              worktreeId: 'wt-1',
+              label: 'codex',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 0,
+              viewMode: chatMode ? 'chat' : 'terminal'
+            }
+          ]
+        ])
+      : new Map(),
+    tabAgentTypesByTabId: nativeChatAgent ? { 'terminal-1': nativeChatAgent } : {},
     nativeChatTabWideFallbackUnsafeTabsById: {},
-    nativeChatTranscriptIsLocalReadable: false,
+    nativeChatIsWslProject: nativeChatState
+      ? selectNativeChatWslProject(nativeChatState, 'wt-1')
+      : false,
+    nativeChatTranscriptIsLocalReadable: Boolean(nativeChatState),
     managedBrowserCreationEnabled,
     statusByRelativePath
   }
@@ -196,7 +244,7 @@ function Strip({
       onTogglePaneExpand: NOOP
     },
     togglePinned: NOOP,
-    toggleTabViewMode: NOOP
+    toggleTabViewMode: menuToggle
   })
   return (
     <>
@@ -269,3 +317,105 @@ describe('tab strip rows', () => {
 })
 
 /** Client-hosted rows overlay panes without changing activeTabId; suppress real-tab underlines while they are selected. */
+it.each([true, false, null])(
+  'gates the tab menu from addressed runtime facts and keeps Return (%s)',
+  (runtime) => {
+    const state: AppState = {
+      ...createTestStore().getState(),
+      activeWorktreeId: null,
+      activeWorkspaceExecutionHostId: null,
+      repos: [{ ...makeRepo(), id: 'repo', executionHostId: 'local' }],
+      projects: [],
+      settings: null,
+      worktreesByRepo:
+        runtime === null
+          ? {}
+          : {
+              repo: [
+                makeWorktree('wt-1', 'Main', {
+                  repoId: 'repo',
+                  hostId: 'local',
+                  path: runtime ? '//wsl.localhost/Ubuntu/work' : 'C:/work'
+                })
+              ]
+            }
+    }
+    renderStrip({ nativeChatState: state, nativeChatAgent: 'codex' })
+    expect(lastRender('terminal-1').canToggleViewMode).toBe(runtime === true)
+    renderStrip({ nativeChatState: state, nativeChatAgent: 'zcode' })
+    expect(lastRender('terminal-1').canToggleViewMode).toBe(false)
+    renderStrip({ nativeChatState: state, nativeChatAgent: 'zcode', chatMode: true })
+    expect(lastRender('terminal-1').canToggleViewMode).toBe(true)
+    lastRender('terminal-1').onToggleViewMode?.()
+    expect(menuToggle).toHaveBeenCalledWith('unified-terminal-1')
+  }
+)
+
+it.each([true, false, null])(
+  'uses runtime facts for shortcut entry and always allows return (%s)',
+  (runtime) => {
+    const previous = useAppStore.getState()
+    const tab = makeUnifiedTab('tab', 'wt', 'tab', 'codex')
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    useAppStore.setState({
+      ...createTestStore().getState(),
+      ...createTabsLabelActions(useAppStore.setState, useAppStore.getState),
+      tabsByWorktree: { wt: [makeTerminalTab('tab', 'wt', 'codex')] },
+      activeWorktreeId: 'wt',
+      activeGroupIdByWorktree: { wt: 'group-wt' },
+      activeWorkspaceExecutionHostId: 'local',
+      groupsByWorktree: { wt: [makeGroup('wt', [tab.id])] },
+      repos: [{ ...makeRepo(), id: 'repo', executionHostId: 'local' }],
+      projects: [],
+      worktreesByRepo:
+        runtime === null
+          ? {}
+          : {
+              repo: [
+                makeWorktree('wt', 'Main', {
+                  repoId: 'repo',
+                  hostId: 'local',
+                  path: runtime ? '//wsl.localhost/Ubuntu/work' : 'C:/work'
+                })
+              ]
+            },
+      unifiedTabsByWorktree: { wt: [{ ...tab, viewMode: 'terminal' }] },
+      agentStatusByPaneKey: {
+        [`tab:${leafId}`]: {
+          state: 'waiting',
+          prompt: '',
+          updatedAt: 0,
+          stateStartedAt: 0,
+          stateHistory: [],
+          paneKey: `tab:${leafId}`,
+          agentType: 'codex'
+        }
+      }
+    })
+    try {
+      renderHook(() => useNativeChatToggleShortcut('wt', true))
+      const press = () => {
+        const event = new KeyboardEvent('keydown', {
+          key: 'F11',
+          code: 'F11',
+          ctrlKey: true,
+          shiftKey: true,
+          bubbles: true,
+          cancelable: true
+        })
+        act(() => document.body.dispatchEvent(event))
+        return event.defaultPrevented
+      }
+      expect(press()).toBe(runtime === true)
+      expect(useAppStore.getState().unifiedTabsByWorktree.wt[0].viewMode).toBe(
+        runtime === true ? 'chat' : 'terminal'
+      )
+      act(() => useAppStore.getState().setTabViewMode(tab.id, 'chat'))
+      expect(press()).toBe(true)
+      expect(useAppStore.getState().unifiedTabsByWorktree.wt[0].viewMode).toBe('terminal')
+    } finally {
+      cleanup()
+      useAppStore.setState(previous, true)
+    }
+  }
+)

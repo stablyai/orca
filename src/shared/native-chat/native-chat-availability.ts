@@ -9,6 +9,8 @@ import {
 /** Resolve launched/detected identity from the tab and status before applying this pure toggle policy. */
 export type NativeChatAvailabilityInput = {
   contentType: Tab['contentType']
+  /** Only WSL projects retain the terminal-backed chat view. */
+  isWslProject?: boolean | null
   /** The coding-agent Orca launched in this terminal, if any (from TerminalTab). */
   launchAgent?: TuiAgent | null
   /** Live identity for manually launched or resumed agents without launch metadata. */
@@ -41,16 +43,32 @@ export function isNativeChatAgentAvailable(
   return isNativeChatSupportedAgent(agent)
 }
 
-/** Existing chat views may return to terminal; entry requires supported, readable agent identity in detected/launch/resolved order. */
-export function canToggleNativeChat(input: NativeChatAvailabilityInput): boolean {
-  if (input.contentType !== 'terminal') {
-    return false
-  }
-  if (input.isChatViewMode === true) {
-    return true
-  }
-  return isNativeChatAgentAvailable(
-    nativeChatAvailabilityAgent(input),
+export type NativeChatSavedDisposition = 'recover' | 'pending' | 'retire'
+
+/** Entry permission cannot revoke an already saved presentation choice. */
+export function nativeChatPresentationPolicy(input: NativeChatAvailabilityInput): {
+  canEnter: boolean
+  saved: NativeChatSavedDisposition
+} {
+  const agent = nativeChatAvailabilityAgent(input)
+  const available = isNativeChatAgentAvailable(
+    agent,
     input.nativeChatTranscriptIsLocalReadable === true
+  )
+  const retired =
+    input.contentType !== 'terminal' ||
+    input.isWslProject === false ||
+    (agent !== null && !isNativeChatSupportedAgent(agent))
+  return {
+    canEnter: !retired && input.isWslProject === true && available,
+    saved: retired ? 'retire' : available ? 'recover' : 'pending'
+  }
+}
+
+/** Return to terminal everywhere; entry requires a WSL project and a supported, readable agent. */
+export function canToggleNativeChat(input: NativeChatAvailabilityInput): boolean {
+  return (
+    input.contentType === 'terminal' &&
+    (input.isChatViewMode === true || nativeChatPresentationPolicy(input).canEnter)
   )
 }

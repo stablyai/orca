@@ -1,3 +1,4 @@
+import { connectMountedMockPanePty } from './pty-connection-test-connect-mock-pane'
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -31,6 +32,7 @@ const REMOUNTED = { remounted: true as const, generation: 1 }
 const AUTOMATIC_REQUEST = expect.objectContaining({ trigger: 'automatic' })
 
 export function registerPtyConnectionTerminalInputGatingTests(): void {
+  const mountedBindings: Awaited<ReturnType<typeof connectMountedMockPanePty>>[] = []
   let mockStoreState: StoreState
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
@@ -61,6 +63,9 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
     })
 
     afterEach(async () => {
+      for (const binding of mountedBindings.splice(0)) {
+        binding.dispose()
+      }
       await restoreTerminalTestGlobals()
     })
 
@@ -646,7 +651,6 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
     })
 
     it('requests a connected pane remount when main reports its daemon write unavailable', async () => {
-      const { connectPanePty } = await import('./pty-connection')
       const agentTitleMocks16 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { _resetTerminalPaneRecoveryForTests } = await import('./terminal-pane-recovery')
@@ -663,10 +667,12 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       )
       transportFactoryQueue.push(transport)
 
-      connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks16)
+      mountedBindings.push(
+        await connectMountedMockPanePty(
+          createPane(1),
+          createManager(1),
+          bindPaneAgentTitleMocks(createDeps(), agentTitleMocks16)
+        )
       )
       await flushAsyncTicks(6)
       writeUnavailable?.()
@@ -678,7 +684,6 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
     })
 
     it('quarantines the interrupted line after a write-unavailable remount, but never device replies', async () => {
-      const { connectPanePty } = await import('./pty-connection')
       const agentTitleMocks17 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { _resetTerminalPaneRecoveryForTests } = await import('./terminal-pane-recovery')
@@ -696,10 +701,12 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       transportFactoryQueue.push(transport)
       const pane = createPane(1)
 
-      connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks17)
+      mountedBindings.push(
+        await connectMountedMockPanePty(
+          pane,
+          createManager(1),
+          bindPaneAgentTitleMocks(createDeps(), agentTitleMocks17)
+        )
       )
       await flushAsyncTicks(6)
       writeUnavailable?.()
@@ -721,7 +728,6 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
 
     it('recovers a wedged write pipeline after accepted input without renderer output', async () => {
       vi.useFakeTimers()
-      const { connectPanePty } = await import('./pty-connection')
       const agentTitleMocks18 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { settleTerminalWriteStallWatch, WRITE_PIPELINE_STALL_CHECK_MS } =
@@ -731,11 +737,12 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       const transport = createMockTransport('pty-wedged')
       transportFactoryQueue.push(transport)
       const pane = createPane(1)
-      const binding = connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks18)
+      const binding = await connectMountedMockPanePty(
+        pane,
+        createManager(1),
+        bindPaneAgentTitleMocks(createDeps(), agentTitleMocks18)
       )
+      mountedBindings.push(binding)
       await flushAsyncTicks()
       pane.terminal.write.mockClear()
       pane.terminal.write.mockImplementation(() => {})

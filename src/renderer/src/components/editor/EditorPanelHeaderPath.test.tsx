@@ -14,7 +14,8 @@ vi.mock('@/store/selectors', () => ({
 
 // Stub owner resolution because this suite does not seed the execution-host catalog.
 vi.mock('@/lib/resolved-worktree-execution-host', () => ({
-  getResolvedExecutionHostIdForWorktree: () => 'local'
+  getResolvedExecutionHostIdForWorktree: () => 'local',
+  getResolvedPhysicalExecutionHostIdForWorktree: () => 'local'
 }))
 
 vi.mock('@/lib/rename-file', () => ({

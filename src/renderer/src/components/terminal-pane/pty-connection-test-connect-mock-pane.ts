@@ -29,3 +29,41 @@ export async function connectMockPanePty(
   const { connectPanePty } = await import('./pty-connection')
   return connectPanePty(...mockPanePtyArgs(pane, manager, deps))
 }
+
+/** Model mount registration before connect, with one teardown for the binding and tab. */
+export async function connectMountedMockPanePty(
+  pane: MockPane,
+  manager: MockPaneManager,
+  deps: PaneConnectionDeps
+): Promise<PanePtyBinding> {
+  const { registerRuntimeTerminalTab } = await import('@/runtime/mounted-terminal-tab-registry')
+  const { connectPanePty } = await import('./pty-connection')
+  const args = mockPanePtyArgs(pane, manager, deps)
+  pane.container.querySelector = () => null
+  manager.getPanes.mockReturnValue([pane])
+  const unregister = registerRuntimeTerminalTab({
+    tabId: args[2].tabId,
+    worktreeId: args[2].worktreeId,
+    getManager: () => args[1],
+    getContainer: () => null,
+    getPtyIdForPane: (id) => args[2].paneTransportsRef.current.get(id)?.getPtyId() ?? null,
+    getTabWideAgentHintLeafId: () => null
+  })
+  try {
+    const binding = connectPanePty(...args)
+    let mounted = true
+    return {
+      ...binding,
+      dispose() {
+        if (mounted) {
+          mounted = false
+          binding.dispose()
+          unregister()
+        }
+      }
+    }
+  } catch (error) {
+    unregister()
+    throw error
+  }
+}

@@ -59,12 +59,16 @@ type IndexedProjectGroupOwnerResolution =
   | { kind: 'missing' }
   | { kind: 'ambiguous' }
 
-export function findIndexedWorktreeOwner(
-  worktreesByRepo: Record<string, readonly WorktreeOwnerRecord[]> | undefined,
+export function findIndexedWorktreeOwner<T extends WorktreeOwnerRecord>(
+  worktreesByRepo: Record<string, readonly T[]> | undefined,
   worktreeId: string
-): WorktreeOwnerRecord | null {
-  const resolution = resolveIndexedWorktreeOwner(worktreesByRepo, worktreeId)
-  return resolution.kind === 'resolved' ? resolution.owner : null
+): T | null {
+  resolveIndexedWorktreeOwner(worktreesByRepo, worktreeId)
+  const entry =
+    worktreesByRepo && worktreeOwnerIndexCache.get(worktreesByRepo)?.owners.get(worktreeId)
+  return entry?.kind === 'resolved'
+    ? (worktreesByRepo?.[entry.bucket]?.[entry.position] ?? null)
+    : null
 }
 
 /** Returns the caller's own row type: the index records where the owner is listed. */

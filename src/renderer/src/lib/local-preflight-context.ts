@@ -10,12 +10,14 @@ import {
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import type { ResolvedAgentBackgroundTarget } from './agent-background-session-contract'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { projectMatchesRepo } from '../../../shared/project-repo-match'
 import { getIndexedRepoMap, getIndexedReposById } from '@/store/worktree-repo-index'
 import { defaultScopeHost } from './default-creation-host'
-import { getLocalProjectRuntimeWorkspace } from './local-project-runtime-workspace'
+import {
+  getLocalProjectRuntimeWorkspace,
+  getLocalProjectRuntimeProjectId
+} from './local-project-runtime-workspace'
+import { getLocalRuntimeProject } from './local-runtime-project-index'
 import { getActiveWorkspaceOwnerTarget } from './resolved-worktree-execution-host'
 import { getEnvironmentRuntimeContextKey } from './provider-runtime-context'
 import { getRendererAppPlatform } from './renderer-app-platform'
@@ -43,6 +45,9 @@ type LocalProjectRuntimeState = Pick<
 > &
   Partial<Pick<AppState, 'folderWorkspaces' | 'projectGroups'>>
 
+type LocalRuntimeWorkspace = Pick<Worktree, 'id' | 'path' | 'repoId' | 'projectId' | 'hostId'>
+type LocalRuntimeRepo = Pick<Repo, 'id' | 'path' | 'connectionId' | 'executionHostId'>
+
 // Reuse fallback identities so WeakMap slice indexes hit instead of rebuilding on every read.
 const EMPTY_REPOS: AppState['repos'] = []
 
@@ -56,7 +61,7 @@ export function getLocalProjectExecutionRuntimeContext(
   worktreeId?: string | null,
   appPlatform: NodeJS.Platform = getRendererAppPlatform(),
   wslContext: LocalProjectRuntimeWslContext = {},
-  resolvedTarget?: ResolvedAgentBackgroundTarget
+  resolvedTarget?: { worktree: LocalRuntimeWorkspace; repo?: LocalRuntimeRepo }
 ): ProjectExecutionRuntimeResolution | undefined {
   if (appPlatform !== 'win32' || worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return undefined
@@ -68,14 +73,32 @@ export function getLocalProjectExecutionRuntimeContext(
   ) {
     return undefined
   }
-  const repo = resolvedTarget?.repo ?? getLocalRuntimeRepoForWorktree(state, worktree)
-  if (!isLocalRuntimeRepo(repo) || !isLocalRuntimeWorktree(worktree)) {
+  const repo =
+    resolvedTarget?.repo ??
+    getLocalRuntimeRepoForWorktree(
+      state,
+      resolvedTarget && worktree && !worktree.hostId
+        ? { ...worktree, hostId: LOCAL_EXECUTION_HOST_ID }
+        : worktree
+    )
+  const repoFreeFolder =
+    resolvedTarget &&
+    !repo &&
+    parseWorkspaceKey(resolvedTarget.worktree.id)?.type === 'folder' &&
+    !resolvedTarget.worktree.repoId
+  if ((!repoFreeFolder && !isLocalRuntimeRepo(repo)) || !isLocalRuntimeWorktree(worktree)) {
     return undefined
   }
   const projectId = resolvedTarget
-    ? (resolvedTarget.worktree.projectId ?? resolvedTarget.worktree.repoId)
-    : getLocalPreflightProjectId(state, worktreeId)
-  const project = getLocalRuntimeProject(state, projectId, repo.id)
+    ? (resolvedTarget.worktree.projectId ??
+      (resolvedTarget.worktree.repoId || resolvedTarget.worktree.id))
+    : getLocalProjectRuntimeProjectId(state, worktreeId)
+  const project = getLocalRuntimeProject(
+    state.projects,
+    projectId,
+    repo?.id ?? '',
+    Boolean(resolvedTarget?.worktree.projectId)
+  )
   const projectRuntimePreference = getWorkspaceRuntimePreference(
     project?.localWindowsRuntimePreference,
     worktree?.path ?? repo?.path
@@ -110,7 +133,7 @@ export function getGlobalWindowsExecutionRuntimeContext(
   }
   return resolveProjectExecutionRuntime({
     appPlatform: 'win32',
-    projectId: getLocalPreflightProjectId(state, worktreeId),
+    projectId: getLocalProjectRuntimeProjectId(state, worktreeId),
     projectRuntimePreference: { kind: 'inherit-global' },
     globalWindowsRuntimeDefault: state.settings.localWindowsRuntimeDefault,
     ...wslContext
@@ -131,7 +154,7 @@ export function getLocalRepoProjectExecutionRuntimeContext(
   if (!isLocalRuntimeRepo(repo)) {
     return undefined
   }
-  const project = getLocalRuntimeProject(state, repoId, repo.id)
+  const project = getLocalRuntimeProject(state.projects, repoId, repo.id)
   const projectId = project?.id ?? repoId
   const projectRuntimePreference = getWorkspaceRuntimePreference(
     project?.localWindowsRuntimePreference,
@@ -211,7 +234,7 @@ export function getLocalAgentPreflightContext(
     return getProjectRuntimePreflightContext(
       resolveProjectExecutionRuntime({
         appPlatform: 'win32',
-        projectId: getLocalPreflightProjectId(state, worktreeId),
+        projectId: getLocalProjectRuntimeProjectId(state, worktreeId),
         projectRuntimePreference: { kind: 'windows-host' },
         globalWindowsRuntimeDefault: deriveGlobalWindowsRuntimeDefaultFromLegacySettings(
           state.settings
@@ -225,7 +248,7 @@ export function getLocalAgentPreflightContext(
       return getProjectRuntimePreflightContext(
         resolveProjectExecutionRuntime({
           appPlatform: 'win32',
-          projectId: getLocalPreflightProjectId(state, worktreeId),
+          projectId: getLocalProjectRuntimeProjectId(state, worktreeId),
           projectRuntimePreference: { kind: 'wsl', distro: explicitDistro },
           globalWindowsRuntimeDefault: deriveGlobalWindowsRuntimeDefaultFromLegacySettings(
             state.settings
@@ -236,7 +259,7 @@ export function getLocalAgentPreflightContext(
     return getProjectRuntimePreflightContext(
       resolveProjectExecutionRuntime({
         appPlatform: 'win32',
-        projectId: getLocalPreflightProjectId(state, worktreeId),
+        projectId: getLocalProjectRuntimeProjectId(state, worktreeId),
         projectRuntimePreference: { kind: 'inherit-global' },
         globalWindowsRuntimeDefault: deriveGlobalWindowsRuntimeDefaultFromLegacySettings(
           state.settings
@@ -296,24 +319,4 @@ function isLocalRuntimeRepo(
 
 function isLocalRuntimeWorktree(worktree?: Pick<Worktree, 'hostId'> | null): boolean {
   return !worktree?.hostId || worktree.hostId === LOCAL_EXECUTION_HOST_ID
-}
-
-function getLocalRuntimeProject(
-  state: LocalProjectRuntimeState,
-  projectId: string,
-  repoId: string
-) {
-  return state.projects?.find(
-    (entry) => entry.id === projectId || projectMatchesRepo(entry, repoId)
-  )
-}
-
-function getLocalPreflightProjectId(
-  state: LocalProjectRuntimeState,
-  worktreeId?: string | null
-): string {
-  const activeWorktree = getLocalProjectRuntimeWorkspace(state, worktreeId)
-  return (
-    activeWorktree?.projectId ?? activeWorktree?.repoId ?? state.activeRepoId ?? 'local-project'
-  )
 }

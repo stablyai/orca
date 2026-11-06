@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { cleanup, render, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { AgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
@@ -11,10 +11,28 @@ import {
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredAgentSessionStartFailureRowIdentity } from '../../../../shared/agent-session/failures/structured-agent-session-start-failure-row-key'
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
+import type * as StructuredLaunchRegistry from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import type * as StructuredLaunch from '@/lib/agent-session/launch/structured-agent-session-launch'
+import { structuredLaunchFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
+import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
   (await import('./NativeChatStructuredSession.test-harness')).createStructuredSessionMocks()
 )
+
+vi.mock(
+  '@/lib/agent-session/launch/structured-agent-session-launch-registry',
+  async (original) => ({
+    ...(await original<typeof StructuredLaunchRegistry>()),
+    useStructuredAgentSessionLaunchLifecycle: () => mocks.launchLifecycle,
+    useStructuredAgentSessionLaunchFailure: () => mocks.launchFailure
+  })
+)
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch', async (original) => ({
+  ...(await original<typeof StructuredLaunch>()),
+  retryStructuredAgentSessionLaunch: mocks.retryLaunch
+}))
+vi.mock('./use-native-chat-tab-owner', () => moduleFactories.useNativeChatTabOwner())
 
 vi.mock('@/runtime/structured-agent-session-client', () =>
   moduleFactories.structuredAgentSessionClient()
@@ -134,3 +152,30 @@ afterEach(() => {
     ).toBeTruthy()
   })
 }
+
+it('explains a direct SSH refusal and keeps the retry route', () => {
+  mocks.launchLifecycle = 'failed'
+  mocks.launchFailure =
+    structuredLaunchFailure(
+      new StructuredAgentSessionCreateRefusalError(
+        'unsupported',
+        'structured_agent_session_unsupported',
+        undefined,
+        'remote'
+      )
+    ) ?? null
+  render(
+    <NativeChatStructuredSession
+      isVisible
+      isFocusedGroup
+      tabId="ssh-tab"
+      sessionId="ssh-session"
+      target={{ kind: 'local' }}
+      agent="claude"
+    />
+  )
+  expect(screen.getByText(/This host isn’t on Orca’s server yet/)).toBeTruthy()
+  expect(screen.queryByText(/structured_agent_session_unsupported/)).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  expect(mocks.retryLaunch).toHaveBeenCalledWith('wt-1', 'ssh-session')
+})

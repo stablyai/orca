@@ -17,6 +17,27 @@ function status(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
   } as AgentStatusEntry
 }
 
+it.each(['openclaude', 'zcode'] as const)('does not offer terminal-backed chat for %s', (agent) => {
+  expect(resolveMobileNativeChat({ type: 'terminal', launchAgent: agent }, true)).toBeNull()
+  expect(
+    resolveMobileNativeChat(
+      {
+        type: 'terminal',
+        nativeChatIdentity: {
+          terminal: 'same-pty',
+          agent,
+          sessionId: 'saved-session',
+          transcriptPath: '/saved/transcript'
+        }
+      },
+      true
+    )
+  ).toBeNull()
+  expect(
+    resolveMobileNativeChat({ type: 'terminal', agentStatus: status({ agentType: agent }) }, true)
+  ).toBeNull()
+})
+
 describe('withRememberedNativeChatIdentity', () => {
   const terminalTab = (
     terminal: string | null,

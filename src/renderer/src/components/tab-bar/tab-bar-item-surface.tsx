@@ -32,6 +32,7 @@ export type TabBarItemSurfaceRuntime = Pick<
   | 'tabAgentTypesByTabId'
   | 'nativeChatTabWideFallbackUnsafeTabsById'
   | 'nativeChatTranscriptIsLocalReadable'
+  | 'nativeChatIsWslProject'
   | 'managedBrowserCreationEnabled'
   | 'statusByRelativePath'
 >
@@ -69,6 +70,7 @@ export function renderTabBarItems({
     tabAgentTypesByTabId,
     nativeChatTabWideFallbackUnsafeTabsById,
     nativeChatTranscriptIsLocalReadable,
+    nativeChatIsWslProject,
     managedBrowserCreationEnabled,
     statusByRelativePath
   } = runtime
@@ -113,6 +115,7 @@ export function renderTabBarItems({
         unifiedTabForItem !== undefined &&
         canToggleNativeChat({
           contentType: 'terminal',
+          isWslProject: nativeChatIsWslProject === true,
           launchAgent: tabWideFallbackSafe ? terminalTab.launchAgent : null,
           detectedAgent,
           resolvedAgent: tabWideFallbackSafe ? resolvedAgent : null,

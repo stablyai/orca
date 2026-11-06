@@ -191,3 +191,35 @@ describe('agent launch caller prompt transport', () => {
     expect(onPromptDelivered).not.toHaveBeenCalled()
   })
 })
+
+it.each(['openclaude', 'zcode'] as const)(
+  'delivers %s input without seeding a retired chat',
+  async (agent) => {
+    resetLaunchFunnelStore(store)
+    const seedPrompt = vi.spyOn(store, 'seedNativeChatLaunchPrompt').mockClear()
+    const seedDraft = vi.spyOn(store, 'seedNativeChatLaunchDraft').mockClear()
+    const { deliverLaunchPromptToAgentTab } = await import('./agent-launch-prompt-delivery')
+    try {
+      for (const submit of [false, true]) {
+        mockPasteDraftWhenAgentReady.mockClear().mockResolvedValue(true)
+        await expect(
+          deliverLaunchPromptToAgentTab({
+            tabId: 'removed',
+            agent,
+            content: 'real draft',
+            submit,
+            forcePaste: true
+          })
+        ).resolves.toBe(true)
+        expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({ agent, content: 'real draft', submit })
+        )
+      }
+      expect(seedPrompt).not.toHaveBeenCalled()
+      expect(seedDraft).not.toHaveBeenCalled()
+    } finally {
+      seedPrompt.mockRestore()
+      seedDraft.mockRestore()
+    }
+  }
+)

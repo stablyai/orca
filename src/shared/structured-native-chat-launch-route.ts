@@ -73,7 +73,7 @@ function clientChoosesStructuredLaunches(capabilities: readonly string[] | undef
 export function resolveStructuredNativeChatSupport(
   input: StructuredNativeChatSupportInput
 ): StructuredNativeChatSupport {
-  // Paired runtimes execute structured sessions themselves; relay SSH hosts cannot.
+  // Served SSH projects use runtime hosts; only unserved SSH hosts reach this refusal.
   const host = parseExecutionHostId(input.executionHostId)
   if (
     input.projectExecutionKind === 'ssh' ||

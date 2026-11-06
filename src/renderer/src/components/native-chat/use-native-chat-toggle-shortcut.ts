@@ -10,6 +10,7 @@ import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
 } from '../../../../shared/modifier-double-tap-detector'
+import { selectNativeChatWslProject } from '../terminal-pane/terminal-pane-host-state'
 import { useAppStore } from '../../store'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
@@ -118,9 +119,11 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
         tabWideFallbackSafe && terminalTab
           ? resolveNativeChatTabAgentEvidence(terminalTab, tab)
           : null
+      const nativeChatIsWslProject = selectNativeChatWslProject(state, worktreeId)
       if (
         !canToggleNativeChat({
           contentType: 'terminal',
+          isWslProject: nativeChatIsWslProject === true,
           launchAgent: detectedAgent || !tabWideFallbackSafe ? null : terminalTab?.launchAgent,
           detectedAgent,
           resolvedAgent: detectedAgent ? null : titleFallbackAgent,
