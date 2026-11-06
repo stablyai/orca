@@ -193,7 +193,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
           // Folder rows follow the lane's worktrees, as their rows always have.
           items:
             key === ALL_GROUP_KEY
-              ? [...items, ...folders.sortedRows]
+              ? [...items, ...folders.rows]
               : [...items, ...folders.rowsOf(group.folderWorkspaces)],
           revealPath: { key, parent: revealPath }
         }

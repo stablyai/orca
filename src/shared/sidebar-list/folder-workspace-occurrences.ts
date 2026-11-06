@@ -34,11 +34,10 @@ export function getSidebarFolderOccurrences(renderable: readonly RenderableFolde
     groupIdByIdentity.set(identity, pair.projectGroup.id)
   }
   const isFolder = (row: Worktree): boolean => pairByIdentity.has(getWorktreeHostIdentity(row))
-  const sortedRows = sorted.map(rowOf)
   return {
-    rows: sortedRows,
-    sortedRows,
-    pairByIdentity: pairByIdentity as ReadonlyMap<string, RenderableFolderWorkspace>,
+    /** Every folder row, in display order. */
+    rows: sorted.map(rowOf),
+    pairByIdentity,
     isFolder,
     /** A lane's folder rows, already in display order. */
     rowsOf: (pairs: readonly RenderableFolderWorkspace[] | undefined): Worktree[] =>
