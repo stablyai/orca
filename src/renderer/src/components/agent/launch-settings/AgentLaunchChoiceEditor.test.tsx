@@ -1,10 +1,12 @@
 // @vitest-environment happy-dom
-import { cleanup, render, waitFor } from '@testing-library/react'
+import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import {
   recordHostModelCatalogSnapshot,
   resetHostModelCatalogSnapshotsForTests
 } from '@/runtime/host-model-catalog-snapshots'
+import { useAppStore } from '@/store'
 import { TooltipProvider } from '../../ui/tooltip'
 import { AgentLaunchChoiceEditor } from './AgentLaunchChoiceEditor'
 
@@ -90,6 +92,28 @@ describe('AgentLaunchChoiceEditor model list', () => {
     await waitFor(() =>
       expect(menus.get('Model')).toEqual(['__agent_default__', 'gpt-6-astra', 'gpt-old'])
     )
+  })
+
+  it('reads the list again when the agent command changes and ignores the older answer', async () => {
+    let answerOlder: (catalog: unknown) => void = () => {}
+    call.mockReturnValueOnce(new Promise((resolve) => (answerOlder = resolve)))
+    call.mockResolvedValueOnce({
+      ...LISTED,
+      models: [{ id: 'gpt-wrapped', label: 'GPT Wrapped', efforts: [] }]
+    })
+    renderEditor()
+    expect(call).toHaveBeenCalledTimes(1)
+
+    act(() => {
+      useAppStore.setState({
+        settings: { agentCmdOverrides: { codex: 'wrapped-codex' } } as unknown as GlobalSettings
+      })
+    })
+
+    await waitFor(() => expect(menus.get('Model')).toEqual(['__agent_default__', 'gpt-wrapped']))
+    expect(call).toHaveBeenCalledTimes(2)
+    await act(async () => answerOlder(LISTED))
+    expect(menus.get('Model')).toEqual(['__agent_default__', 'gpt-wrapped'])
   })
 
   it('does not read a listed default as the default model of every workspace', async () => {
