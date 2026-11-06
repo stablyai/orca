@@ -6,7 +6,7 @@ import type {
   PRRefreshOutcome
 } from '../../shared/github/pull-request-refresh-types'
 import { recordCoalescedCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
-import { sendToTrustedUIRenderer } from '../ipc/ui'
+import { prRefreshRenderers } from './pr-refresh-renderer-port'
 
 export type PRRefreshOutcomeObserver = (
   candidate: GitHubPRRefreshCandidate,
@@ -48,7 +48,7 @@ export class PRRefreshEventPublisher {
       ...event,
       sequence: sequenceOverride ?? this.nextSequence()
     } as GitHubPRRefreshEvent
-    sendToTrustedUIRenderer('gh:prRefreshEvent', payload)
+    prRefreshRenderers().sendToTrustedUI('gh:prRefreshEvent', payload)
   }
 
   record(

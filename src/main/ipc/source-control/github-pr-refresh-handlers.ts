@@ -17,6 +17,8 @@ import {
   addPRRefreshOutcomeObserver,
   setPRRefreshRegistrationCheck
 } from '../../github/pr-refresh-coordinator'
+import { setPRRefreshRendererPort } from '../../github/pr-refresh-renderer-port'
+import { electronPRRefreshRenderer } from '../../host/electron-pr-refresh-renderer'
 import type { Store } from '../../persistence/loading-store/store'
 import type { StatsCollector } from '../../stats/collector'
 import {
@@ -34,6 +36,8 @@ import { abortWhenRendererGone } from '../renderer-lifetime-abort'
 const visibilityCleanupRegistered = new Set<number>()
 
 export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollector): void {
+  // The windows these handlers serve are the renderers the coordinator reports to.
+  setPRRefreshRendererPort(electronPRRefreshRenderer)
   function recordPRIfNeeded(repo: Repo, outcome: PRRefreshOutcome): void {
     if (outcome.kind === 'found' && !stats.hasCountedPR(outcome.pr.url)) {
       stats.record({
