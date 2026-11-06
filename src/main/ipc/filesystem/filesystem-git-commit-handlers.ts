@@ -1,3 +1,4 @@
+import { applyCommit } from '../../git/commit-actions'
 import { ipcMain } from 'electron'
 import { commitChanges, completeMerge } from '../../git/source-control/commit-changes'
 import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
@@ -8,6 +9,27 @@ import { getConnectionExecutionHostId } from '../../../shared/execution-host'
 
 export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
+  for (const [method, operation] of [
+    ['cherryPick', 'cherry-pick'],
+    ['revert', 'revert']
+  ] as const) {
+    ipcMain.handle(
+      `git:${method}`,
+      async (_event, args: { worktreePath: string; commitId: string; connectionId?: string }) => {
+        requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+        const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+        const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+          store,
+          args.worktreePath,
+          worktreePath
+        )
+        return applyCommit(worktreePath, operation, args.commitId, {
+          ...gitOptions,
+          admissionTier: 'interactive'
+        })
+      }
+    )
+  }
   ipcMain.handle(
     'git:commit',
     async (

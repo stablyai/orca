@@ -1,3 +1,4 @@
+import { GIT_COMMIT_ACTION_METHODS } from './git-commit-action-methods'
 import { defineMethod } from '../core'
 import { GIT_COMMIT_MESSAGE_GENERATION_METHODS } from './git-commit-message-generation-methods'
 import { GIT_DIFF_METHODS } from './git-diff-methods'
@@ -125,6 +126,7 @@ export const GIT_METHODS = [
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.abortRuntimeGitRebase(params.worktree)
   }),
+  ...GIT_COMMIT_ACTION_METHODS,
   defineMethod({
     name: 'git.checkout',
     permission: 'workspace',

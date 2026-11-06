@@ -82,6 +82,8 @@ export const GitCommitCompare = WorktreeSelector.extend({
     .pipe(FullGitObjectId)
 })
 
+export const GitCommitAction = WorktreeSelector.extend({ commitId: FullGitObjectId })
+
 export const GitHistoryRefName = z
   .string()
   .refine(isGitHistoryRefName, 'Expected full branch or tag ref names')

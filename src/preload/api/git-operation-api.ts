@@ -1,3 +1,4 @@
+import type { GitCommitActionResult } from '../../shared/git/commands/git-commit-action'
 import type {
   GitForkSyncExpectedUpstream,
   GitForkSyncResult
@@ -52,6 +53,16 @@ export type GitOperationApi = {
     message: string
     connectionId?: string
   }) => Promise<{ success: boolean; error?: string }>
+  cherryPick: (args: {
+    worktreePath: string
+    commitId: string
+    connectionId?: string
+  }) => Promise<GitCommitActionResult>
+  revert: (args: {
+    worktreePath: string
+    commitId: string
+    connectionId?: string
+  }) => Promise<GitCommitActionResult>
   completeMerge: (args: {
     worktreePath: string
     connectionId?: string

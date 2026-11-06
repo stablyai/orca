@@ -1,3 +1,4 @@
+import type { GitCommitActionResult } from '../../shared/git/commands/git-commit-action'
 import { ipcRenderer } from 'electron'
 import type {
   GitForkSyncExpectedUpstream,
@@ -146,6 +147,16 @@ export const gitApi = {
     message: string
     connectionId?: string
   }): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('git:commit', args),
+  cherryPick: (args: {
+    worktreePath: string
+    commitId: string
+    connectionId?: string
+  }): Promise<GitCommitActionResult> => ipcRenderer.invoke('git:cherryPick', args),
+  revert: (args: {
+    worktreePath: string
+    commitId: string
+    connectionId?: string
+  }): Promise<GitCommitActionResult> => ipcRenderer.invoke('git:revert', args),
   completeMerge: (args: {
     worktreePath: string
     connectionId?: string

@@ -1,3 +1,4 @@
+import { applyCommit } from '../git/commit-actions'
 import { gitSyncForkDefaultBranch } from '../git/fork-sync'
 import type { GitRuntimeOptions } from '../git/git-runtime-options'
 import { checkIgnoredPaths } from '../git/source-control/check-ignored-paths'
@@ -75,6 +76,8 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
     getHistory: (worktreePath, historyOptions = {}) =>
       getHistory(worktreePath, { ...historyOptions, ...interactive }),
     commit: (worktreePath, message) => commitChanges(worktreePath, message, interactive),
+    applyCommit: (worktreePath, operation, commitId) =>
+      applyCommit(worktreePath, operation, commitId, interactive),
     completeMerge: (worktreePath) => completeMerge(worktreePath, interactive),
     getStagedCommitContext: (worktreePath) => getStagedCommitContext(worktreePath, interactive),
     getDiff: (worktreePath, filePath, staged, compareAgainstHead, oldPath) =>
