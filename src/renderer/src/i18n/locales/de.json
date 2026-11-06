@@ -17628,6 +17628,8 @@
           "noRunUsageYet": "Noch keine Nutzungsdaten zu Ausführungen",
           "noWorkspace": "Kein Arbeitsbereich",
           "latestSavedOutput": "Zuletzt gespeicherte Ausgabe",
+          "fullOutputUnavailable": "Die vollständige Ausgabe konnte nicht geladen werden.",
+          "retryFullOutput": "Erneut versuchen",
           "backToList": "Alle Automatisierungen",
           "tableName": "Name",
           "tableProject": "Projekt",

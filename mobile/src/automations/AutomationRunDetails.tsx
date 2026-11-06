@@ -32,12 +32,13 @@ export function AutomationRunDetails(props: {
   const t = useMobileTranslation()
   useMobileColorScheme()
   const history = props.history
-  const run = useFullAutomationRun(
+  const full = useFullAutomationRun(
     props.client,
     props.connected,
     history.selected ?? props.run,
     history.scope
   )
+  const run = full.run
   const runError = automationRunErrorText(run)
   const [opening, setOpening] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -183,6 +184,18 @@ export function AutomationRunDetails(props: {
       </View>
       {runError ? <Text style={styles.error}>{runError}</Text> : null}
       <Text style={styles.heading}>{t('automations.mobile.output', 'Output')}</Text>
+      {full.failed ? (
+        <>
+          <Text accessibilityRole="alert" style={styles.error}>
+            {t('automations.mobile.fullOutputUnavailable', "Couldn't load the full output.")}
+          </Text>
+          <AutomationButton
+            label={t('automations.mobile.retryFullOutput', 'Retry')}
+            onPress={full.retry}
+            disabled={!props.connected}
+          />
+        </>
+      ) : null}
       <Text selectable style={styles.output}>
         {getAutomationRunContent(
           { ...run, error: runError },

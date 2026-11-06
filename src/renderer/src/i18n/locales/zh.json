@@ -16974,6 +16974,8 @@
           "noRunUsageYet": "尚无运行用量",
           "noWorkspace": "无工作区",
           "latestSavedOutput": "最近保存的输出",
+          "fullOutputUnavailable": "无法加载完整输出。",
+          "retryFullOutput": "重试",
           "backToList": "全部自动化",
           "tableName": "名称",
           "tableProject": "项目",

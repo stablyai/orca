@@ -45,7 +45,8 @@ export function AutomationRunDetailsPage({
   onOpenWorkspace: () => void
   onBack: () => void
 }): React.JSX.Element {
-  const run = useFullAutomationRun(listedRun, history)
+  const full = useFullAutomationRun(listedRun, history)
+  const run = full.run
   const content = getAutomationRunContent(run)
   const errorText = automationRunErrorText(run)
   return (
@@ -100,6 +101,17 @@ export function AutomationRunDetailsPage({
             label={translate('auto.components.automations.AutomationsPage.runError', 'Error:')}
             error={errorText}
           />
+        ) : null}
+        {full.failed ? (
+          <div role="alert" className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
+            {translate(
+              'auto.components.automations.AutomationsPage.fullOutputUnavailable',
+              "Couldn't load the full output."
+            )}
+            <Button type="button" variant="outline" size="xs" onClick={full.retry}>
+              {translate('auto.components.automations.AutomationsPage.retryFullOutput', 'Retry')}
+            </Button>
+          </div>
         ) : null}
         <CommentMarkdown
           variant="document"

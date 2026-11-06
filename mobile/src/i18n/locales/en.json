@@ -4568,6 +4568,8 @@
       "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "The original agent pane is unavailable. Saved output remains here.",
       "openAgent": "Open agent",
       "retryHistory": "Retry history",
+      "fullOutputUnavailable": "Couldn't load the full output.",
+      "retryFullOutput": "Retry",
       "loadingRuns": "Loading runs…",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "No matching runs in the loaded history. Load more to continue.",
       "noMatchingRunsYet": "No matching runs yet.",

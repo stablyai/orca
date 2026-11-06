@@ -4,13 +4,20 @@ import { automationRunRead } from './automation-operations'
 import type { MobileAutomationRun } from './automation-reply-schema'
 import type { AutomationRunScope } from './use-automation-runs'
 
+export type FullAutomationRun = {
+  run: MobileAutomationRun
+  /** The full read failed; `run` is still the preview. */
+  failed: boolean
+  retry: () => void
+}
+
 /** History lists cut output to a preview marked truncated, so Details reads that run's full row. */
 export function useFullAutomationRun(
   client: RpcClient | null,
   connected: boolean,
   run: MobileAutomationRun,
   scope: AutomationRunScope
-): MobileAutomationRun {
+): FullAutomationRun {
   const expectedOwner = scope?.automationId === run.automationId ? scope.expectedOwner : undefined
   // A new status or capture re-reads; untruncated rows were never cut.
   const key = run.outputSnapshot?.truncated
@@ -21,8 +28,10 @@ export function useFullAutomationRun(
     latest.current = expectedOwner
   })
   const [full, setFull] = useState<{ key: string; run: MobileAutomationRun } | null>(null)
+  const [failedKey, setFailedKey] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
   const loaded = full?.key === key
-  // A failed read keeps the preview, marked truncated; a reconnect or the next history read of the row retries.
+  // A failed read keeps the preview, marked truncated; Retry, a reconnect or the next history read of the row retries.
   useEffect(() => {
     if (!key || loaded || !client || !connected) {
       return
@@ -44,10 +53,21 @@ export function useFullAutomationRun(
           setFull({ key, run: read })
         }
       })
-      .catch(() => {})
+      .catch(() => {
+        if (current && generation === client.getGeneration?.()) {
+          setFailedKey(key)
+        }
+      })
     return () => {
       current = false
     }
-  }, [client, connected, key, loaded, run])
-  return loaded ? full.run : run
+  }, [client, connected, key, loaded, run, attempt])
+  return {
+    run: loaded ? full.run : run,
+    failed: !loaded && key !== null && failedKey === key,
+    retry: () => {
+      setFailedKey(null)
+      setAttempt((value) => value + 1)
+    }
+  }
 }
