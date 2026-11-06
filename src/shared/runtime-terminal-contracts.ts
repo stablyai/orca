@@ -44,6 +44,16 @@ export type RuntimeTerminalSummary = {
   executionHostId?: ExecutionHostId
   /** Read verdict for host liveness: legacy connected can stay true while unreachable. Absent on older hosts. */
   verdict?: PtyLivenessVerdict['status']
+  /** Only when the caller asked for it; absent on older hosts. */
+  attention?: RuntimeTerminalAttention
+}
+
+/** Use of a PTY that its host's own window can't see: a remote client showing it, or input from anywhere. */
+export type RuntimeTerminalAttention = {
+  /** A paired client or phone is displaying it. Clients too old to report hidden panes never count. */
+  shownRemotely: boolean
+  /** Last user input from any client; null if none reached its current process. */
+  lastInputAt: number | null
 }
 
 export type RuntimeTerminalVisualTerminalNode = {

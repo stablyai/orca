@@ -45,7 +45,7 @@ function planFrom(state: AppState, ptyBindingFirstSeenAt: number): string[] {
     tabsByWorktree: state.tabsByWorktree,
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,
     ptyIdsByTabId: state.ptyIdsByTabId,
-    mobileLockedPtyIds: [],
+    inUsePtyIds: [],
     agentStatusByPaneKey: state.agentStatusByPaneKey,
     sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
     lastTerminalInputAtByPaneKey: {},

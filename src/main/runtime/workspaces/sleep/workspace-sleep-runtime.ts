@@ -1,4 +1,5 @@
 import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/runtime-terminal-contracts'
+import type { EphemeralVmRuntimeRecord } from '../../../../shared/ephemeral-vm-runtimes'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type {
@@ -82,6 +83,7 @@ function needsWindowToast(outcome: WorkspaceSleepOutcome): boolean {
 export class WorkspaceSleepCoordinator {
   /** Reopening during sleep prevents subsequent VM suspension. */
   private readonly reopenings = new Map<string, number>()
+  private readonly vmOperations = new Map<string, Promise<void>>()
 
   constructor(private readonly runtime: WorkspaceSleepRuntime) {}
 
@@ -135,6 +137,36 @@ export class WorkspaceSleepCoordinator {
     })
   }
 
+  /** The one path that resumes a workspace's recipe VM. Each workspace's VM resumes and suspends
+   *  one at a time, so a wake behind a running suspend resumes the VM it leaves asleep, and a wake
+   *  behind another wake finds the VM already up (the recipe's resume only runs on a suspended VM).
+   *  Not through the lifecycle queue: that waits to observe the workspace's host, which is the VM
+   *  this wake brings back. */
+  wakeVm(worktreeId: string): Promise<EphemeralVmRuntimeRecord | null> {
+    const platform = this.runtime.workspaceSleepPlatform
+    if (!platform?.ownsVm(worktreeId)) {
+      return Promise.resolve(null)
+    }
+    this.noteReopened(worktreeId)
+    return this.afterVmOperations(worktreeId, () => platform.resumeVm(worktreeId))
+  }
+
+  /** One VM operation at a time per workspace, whether or not lifecycle queueing is on. */
+  private afterVmOperations<T>(worktreeId: string, operation: () => Promise<T>): Promise<T> {
+    const run = (this.vmOperations.get(worktreeId) ?? Promise.resolve()).then(operation)
+    const settled = run.then(
+      () => {},
+      () => {}
+    )
+    this.vmOperations.set(worktreeId, settled)
+    void settled.then(() => {
+      if (this.vmOperations.get(worktreeId) === settled) {
+        this.vmOperations.delete(worktreeId)
+      }
+    })
+    return run
+  }
+
   /** A slept pane was opened: main resumes it, queued like any wake, and the opener attaches. */
   resumePane(pane: RestoredPane, automatic = false): Promise<boolean> {
     if (!automatic) {
@@ -161,7 +193,14 @@ export class WorkspaceSleepCoordinator {
         }
         return host.sleepWorkspace(worktreeId, markAsleep)
       },
-      suspendVm: platform ? (worktreeId) => platform.suspendVm(worktreeId) : null,
+      suspendVm: platform
+        ? (worktreeId, wanted) =>
+            this.afterVmOperations(worktreeId, async () => {
+              if (wanted()) {
+                await platform.suspendVm(worktreeId)
+              }
+            })
+        : null,
       ownRecords: (worktreeId) => runtime.wakeRecordsForWorktree(worktreeId),
       watchReopen: (worktreeId) => {
         const at = this.reopenings.get(worktreeId) ?? 0

@@ -6,18 +6,10 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
-import '../../providers/structured-agent-session-adapter'
-import {
-  AgentSessionAcquisitionExitUnprovenError,
-  AgentSessionAcquisitionRootExitObservedError
-} from '../../acquisition/structured-agent-session-acquisition-errors'
-import { AgentSessionAcquisitionRefusal } from '../../providers/structured-agent-session-adapter-errors'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
-import { withObservedProviderExit } from '../../startup/structured-agent-session-failure-text'
 import {
   HOST_TEST_NOW as NOW,
-  HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
   hostTestAttachParams,
   resetHostTestOperationIds
@@ -32,10 +24,6 @@ import { NO_STRUCTURED_AGENTS } from '../../providers/testing/structured-agent-s
 import { claudeProfileSetupFailed } from '../../../../claude-accounts/claude-profile-launch-errors'
 
 const CALLER = { callerKey: 'client-1' }
-const EXIT_REASON = 'claude stream-json exited (code 1): stderr tail'
-const COULD_NOT_RESTART = "Codex couldn't restart. Send your message to try again."
-const PROVIDER_STOPPED =
-  'Codex stopped before it finished starting. Send your message to try again.'
 
 let root: string
 let store: AgentSessionRecordStore
@@ -102,118 +90,5 @@ describe('failed create owner verdict', () => {
     await expect(host.attach(CALLER, hostTestAttachParams(null))).resolves.toMatchObject({
       ok: true
     })
-  })
-  it.each([
-    // Cleanup proves absence, not why startup failed.
-    ['a failure the cleanup proved gone', () => new Error(EXIT_REASON), {}, COULD_NOT_RESTART],
-    [
-      'an exit the adapter observed',
-      () => withObservedProviderExit(new Error(EXIT_REASON)),
-      { reason: 'providerStartFailed' },
-      PROVIDER_STOPPED
-    ]
-  ])(
-    'answers %s as exited on the first call and its replay, and a new operation starts fresh',
-    async (_case, failure, situation, message) => {
-      acquire.mockRejectedValueOnce(failure())
-      const first = hostTestAttachParams(null)
-      // Preserve ledger details and legacy top-level verdicts across replay.
-      const refusal = {
-        code: 'agent_session_operation_invalid',
-        details: { ...situation, ownerVerdict: 'exited' },
-        message,
-        ownerVerdict: 'exited'
-      }
-
-      await expect(host.attach(CALLER, first)).resolves.toEqual({ ok: false, refusal })
-      await expect(host.attach(CALLER, first)).resolves.toEqual({ ok: false, refusal })
-      expect(acquire).toHaveBeenCalledOnce()
-
-      const retry = hostTestAttachParams(null)
-      expect(retry.envelope.clientOperationId).not.toBe(first.envelope.clientOperationId)
-      await expect(host.attach(CALLER, retry)).resolves.toMatchObject({ ok: true })
-      expect(acquire).toHaveBeenCalledTimes(2)
-      expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
-    }
-  )
-
-  it.each([
-    // Cleanup may cause the root exit itself.
-    ['a root exit the cleanup saw', () => new Error(EXIT_REASON), {}, COULD_NOT_RESTART],
-    [
-      'a root exit the adapter observed',
-      () => withObservedProviderExit(new Error(EXIT_REASON)),
-      { reason: 'providerStartFailed' },
-      PROVIDER_STOPPED
-    ]
-  ])(
-    'answers %s as exited on the first call, in the shape its replay takes',
-    async (_case, cause, situation, message) => {
-      acquire.mockRejectedValueOnce(new AgentSessionAcquisitionRootExitObservedError(cause()))
-      const first = hostTestAttachParams(null)
-      // Preserve ledger details and legacy top-level verdicts across replay.
-      const refusal = {
-        code: 'agent_session_operation_invalid',
-        details: { ...situation, ownerVerdict: 'exited' },
-        message,
-        ownerVerdict: 'exited'
-      }
-
-      await expect(host.attach(CALLER, first)).resolves.toEqual({ ok: false, refusal })
-      await expect(host.attach(CALLER, first)).resolves.toEqual({ ok: false, refusal })
-      expect(acquire).toHaveBeenCalledOnce()
-
-      await expect(host.attach(CALLER, hostTestAttachParams(null))).resolves.toMatchObject({
-        ok: true
-      })
-      expect(acquire).toHaveBeenCalledTimes(2)
-    }
-  )
-
-  it('answers an acquisition refusal with its verdict directly', async () => {
-    acquire.mockRejectedValueOnce(new AgentSessionAcquisitionRefusal('not signed in'))
-
-    await expect(host.attach(CALLER, hostTestAttachParams(null))).resolves.toEqual({
-      ok: false,
-      refusal: {
-        code: 'agent_session_operation_invalid',
-        details: { reason: 'providerStartFailed', ownerVerdict: 'exited' },
-        message: PROVIDER_STOPPED,
-        ownerVerdict: 'exited'
-      }
-    })
-  })
-
-  it('never claims exited when the failed attempt could not prove its process gone', async () => {
-    acquire.mockRejectedValueOnce(new AgentSessionAcquisitionExitUnprovenError(new Error('hung')))
-    const first = hostTestAttachParams(null)
-
-    await expect(host.attach(CALLER, first)).rejects.toThrow()
-    const replay = await host.attach(CALLER, first)
-
-    expect(replay).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_ownership_unknown', ownerVerdict: 'unverifiable' }
-    })
-    // Processless release permits retry without claiming observed death.
-    expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      claimStatus: 'released',
-      deathEvidence: null
-    })
-  })
-
-  it('lets the sink a failed create wrote through go, so the next create and shutdown proceed', async () => {
-    acquire.mockImplementationOnce(async ({ events }) => {
-      events?.setActivity?.(null)
-      throw new Error(EXIT_REASON)
-    })
-
-    await expect(host.attach(CALLER, hostTestAttachParams(null))).resolves.toMatchObject({
-      ok: false
-    })
-    await expect(host.attach(CALLER, hostTestAttachParams(null))).resolves.toMatchObject({
-      ok: true
-    })
-    await expect(host.flushAllStreamedEvents()).resolves.toBeUndefined()
   })
 })

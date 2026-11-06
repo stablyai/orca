@@ -34,6 +34,12 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
   ipcMain.removeHandler('runtime:call')
   ipcMain.removeHandler('runtime:subscribe')
   ipcMain.removeAllListeners('runtime:unsubscribe')
+  ipcMain.removeHandler('ephemeralVm:resumeWorkspace')
+
+  // The window's wake shares the runtime's single VM wake path with its sleep's suspend.
+  ipcMain.handle('ephemeralVm:resumeWorkspace', (_event, args: { workspaceId: string }) =>
+    runtime.wakeWorkspaceVm(args.workspaceId)
+  )
 
   ipcMain.handle(
     'runtime:syncWindowGraph',

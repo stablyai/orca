@@ -37,6 +37,11 @@ import type {
 /** `unknown` (no timely, correlated answer) skips this idle stop and asks again later. */
 export type AgentSessionIdleConfirmation = 'idle' | 'busy' | 'unknown'
 
+export type { AgentSessionCancelOutcome } from './structured-agent-session-adapter-stop'
+export type {
+  StructuredAgentSessionChildEndCause,
+  StructuredAgentSessionStopCause
+} from '../termination/structured-agent-session-stop-cause'
 import type { AgentJournalDispatchRejection } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
 import type { AgentSessionPromptResponse } from '../../../../shared/agent-session/agent-session-question-answer'
@@ -55,10 +60,23 @@ import type {
   StructuredAgentSessionLiveOptions,
   StructuredAgentSessionOptionProjection
 } from '../options/structured-agent-session-option-models'
+export type { StructuredAgentSessionLiveOptions } from '../options/structured-agent-session-option-models'
 
-import './structured-agent-session-adapter-errors'
+export {
+  AgentSessionAcquisitionRefusal,
+  AgentSessionPreSpawnError,
+  AgentSessionPromptAnswerRejectedError,
+  AgentSessionPromptUnavailableError,
+  isAgentSessionPreSpawnError,
+  launchPreparationFailure
+} from './structured-agent-session-adapter-errors'
+export type { AgentSessionPreSpawnReason } from './structured-agent-session-adapter-errors'
 
-import '../acquisition/structured-agent-session-acquisition-errors'
+export {
+  AgentSessionAcquisitionExitProvenError,
+  AgentSessionAcquisitionExitUnprovenError,
+  AgentSessionAcquisitionRootExitObservedError
+} from '../acquisition/structured-agent-session-acquisition-errors'
 
 export type AgentSessionAcquisition = {
   accountRecipe?: ClaudeAccountRecipe
@@ -139,6 +157,18 @@ export type StructuredAgentSessionOptionsReportedEvent =
 export type StructuredAgentSessionLifecycleEvent =
   | StructuredAgentSessionEndedEvent
   | StructuredAgentSessionOptionsReportedEvent
+  | StructuredAgentSessionRetiringEvent
+
+/** A logical failure stops input immediately; only a later ended event proves writer death. */
+export type StructuredAgentSessionRetiringEvent = {
+  type: 'retiring'
+  sessionId: string
+  reason: string
+  failure: SubmissionRejectionFact
+  fence: number
+  acquisitionGeneration: string
+  observedAt: number
+}
 
 export type StructuredAgentSessionProviderChildPhase = 'starting' | 'ready'
 

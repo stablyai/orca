@@ -31,12 +31,18 @@ export const TERMINAL_QUERY_METHODS = [
         requireFreshPtyLiveness: params.requireFreshPtyLiveness,
         includeVisualLayouts: params.includeVisualLayouts
       })
-      if (params.includePreview !== false) {
+      if (params.includePreview !== false && !params.includeAttention) {
         return result
       }
       return {
         ...result,
-        terminals: result.terminals.map(({ preview: _preview, ...terminal }) => terminal)
+        terminals: result.terminals.map(({ preview, ...terminal }) => ({
+          ...terminal,
+          ...(params.includePreview !== false ? { preview } : {}),
+          ...(params.includeAttention && terminal.ptyId
+            ? { attention: runtime.getTerminalAttention(terminal.ptyId) }
+            : {})
+        }))
       }
     }
   }),
