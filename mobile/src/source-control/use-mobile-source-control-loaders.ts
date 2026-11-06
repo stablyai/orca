@@ -103,16 +103,9 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
         setActionError(null)
       }
       refocusRef.current = true
-      return () => {
-        setFocused(false)
-        // Screens above can write (Review stages files), so coming back always revalidates.
-        void queryClient.invalidateQueries({
-          queryKey: statusKey,
-          exact: true,
-          refetchType: 'none'
-        })
-      }
-    }, [queryClient, setActionError, statusKey])
+      // Review reads and writes this same status entry, so coming back shows what it staged without another read.
+      return () => setFocused(false)
+    }, [setActionError])
   )
   const statusQuery = useHostQuery(gitStatusQuery, { hostId, client }, target, NO_INPUT, {
     enabled: statusEnabled,
