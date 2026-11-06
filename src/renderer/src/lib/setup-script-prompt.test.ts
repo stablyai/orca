@@ -78,7 +78,7 @@ describe('isSetupScriptPromptActionable', () => {
     expect(isSetupScriptPromptActionable(okWithoutSetup, localOnlyRepo)).toBe(true)
   })
 
-  it('shows a detected package-manager candidate', () => {
+  it('shows when a setup candidate was detected', () => {
     const candidate = {
       provider: 'package-manager' as const,
       label: 'package manager',
