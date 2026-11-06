@@ -7,26 +7,29 @@ import { getRuntimeGitRefs } from '@/runtime/runtime-git-status-client'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
 import { GIT_HISTORY_REFS_CAPABILITY } from '../../../../../shared/source-control/runtime/git-graph-capabilities'
 import { gitGraphScope, useGitGraphScope } from '@/lib/git-graph-tab'
-import { getConnectionId } from '@/lib/connection-context'
 import { translate } from '@/i18n/i18n'
 import type {
   GitHistoryItemRef,
   GitHistoryRefs
 } from '../../../../../shared/git/history/git-history-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host'
 
 export function GitGraphFilter({
   worktreeId,
+  executionHostId,
   filter,
   supported,
   onChange
 }: {
   worktreeId: string
+  executionHostId?: ExecutionHostId
   filter: GitHistoryRefs
   supported: boolean | undefined
   onChange: (refs: GitHistoryRefs) => void
 }) {
   const requests = useRef<{ running: boolean; pending?: () => Promise<void> }>({ running: false })
   const [open, setOpen] = useState(false)
+  const [draft, setDraft] = useState<{ owner: string; refs: GitHistoryRefs }>()
   const [query, setQuery] = useState('')
   const [search, setSearch] = useState<{
     owner: string
@@ -35,16 +38,20 @@ export function GitGraphFilter({
     error?: string
   }>()
   const [probe, setProbe] = useState<{ owner: string | undefined; capable: boolean | null }>()
-  const scope = useGitGraphScope(worktreeId)
+  const scope = useGitGraphScope(worktreeId, executionHostId)
   const owner = JSON.stringify([worktreeId, scope?.route, scope?.worktree.path])
-  const refs = open && search?.owner === owner && search.query === query ? (search.refs ?? []) : []
-  const error = open && search?.owner === owner && search.query === query ? search.error : undefined
-  const chosen = useMemo(() => new Set(Array.isArray(filter) ? filter : []), [filter])
+  const pickerOpen = open && draft?.owner === owner
+  const draftRefs = draft?.owner === owner ? draft.refs : filter
+  const refs =
+    pickerOpen && search?.owner === owner && search.query === query ? (search.refs ?? []) : []
+  const error =
+    pickerOpen && search?.owner === owner && search.query === query ? search.error : undefined
+  const chosen = useMemo(() => new Set(Array.isArray(draftRefs) ? draftRefs : []), [draftRefs])
   const capable = probe?.owner === owner ? probe?.capable : null
   useEffect(() => {
     let live = true
     setProbe({ owner, capable: null })
-    const scope = gitGraphScope(worktreeId)
+    const scope = gitGraphScope(worktreeId, undefined, executionHostId)
     if (scope) {
       void (
         scope.target.kind === 'local'
@@ -64,9 +71,9 @@ export function GitGraphFilter({
     return () => {
       live = false
     }
-  }, [worktreeId, owner])
+  }, [worktreeId, owner, executionHostId])
   useEffect(() => {
-    if (!open || !capable) {
+    if (!pickerOpen || !capable) {
       return
     }
     let live = true
@@ -88,7 +95,7 @@ export function GitGraphFilter({
     }
     const timeout = setTimeout(() => {
       queue.pending = async () => {
-        const scope = gitGraphScope(worktreeId)
+        const scope = gitGraphScope(worktreeId, undefined, executionHostId)
         if (!live || !scope) {
           return
         }
@@ -98,7 +105,7 @@ export function GitGraphFilter({
               target: scope.target,
               worktreeId,
               worktreePath: scope.worktree.path,
-              connectionId: getConnectionId(worktreeId) ?? undefined
+              connectionId: scope.connectionId ?? undefined
             },
             query
           )
@@ -118,15 +125,25 @@ export function GitGraphFilter({
       queue.pending = undefined
       clearTimeout(timeout)
     }
-  }, [worktreeId, owner, query, open, capable])
+  }, [worktreeId, owner, query, pickerOpen, capable, executionHostId])
+  const apply = (refs = draftRefs) => {
+    const next = Array.isArray(refs) && !refs.length ? 'all' : refs
+    if (draft?.owner === owner && JSON.stringify(next) !== JSON.stringify(filter)) {
+      onChange(next)
+    }
+    setOpen(false)
+    setSearch(undefined)
+  }
   return (
     <div className="flex min-w-0 items-center gap-3">
       <Popover
-        open={open}
+        open={pickerOpen}
         onOpenChange={(next) => {
-          setOpen(next)
-          if (!next) {
-            setSearch(undefined)
+          if (next) {
+            setDraft({ owner, refs: filter })
+            setOpen(true)
+          } else {
+            apply()
           }
         }}
       >
@@ -141,24 +158,10 @@ export function GitGraphFilter({
         </PopoverTrigger>
         <PopoverContent className="w-80 space-y-2" align="start">
           <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                onChange('all')
-                setOpen(false)
-              }}
-            >
+            <Button size="sm" variant="ghost" onClick={() => apply('all')}>
               {translate('gitGraph.allBranches', 'All branches')}
             </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                onChange('head')
-                setOpen(false)
-              }}
-            >
+            <Button size="sm" variant="ghost" onClick={() => apply('head')}>
               {translate('gitGraph.currentBranch', 'Current branch')}
             </Button>
           </div>
@@ -183,7 +186,7 @@ export function GitGraphFilter({
                     } else {
                       next.delete(ref.id)
                     }
-                    onChange(next.size ? [...next].sort() : 'all')
+                    setDraft({ owner, refs: [...next].sort() })
                   }}
                 />
                 <span className="truncate">{ref.name}</span>

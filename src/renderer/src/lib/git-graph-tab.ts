@@ -10,6 +10,7 @@ import {
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import {
   resolveWorktreeOperationRoute,
+  resolveWorktreeOperationRouteForHost,
   type WorktreeOperationRouteState
 } from './worktree-operation-route'
 import { openWorkspaceEditorItem } from '@/store/slices/editor/tabs/workspace-editor-item'
@@ -20,6 +21,10 @@ import {
   readCachedRuntimeEnvironmentCapability,
   runtimeEnvironmentSupportsCapability
 } from '@/runtime/runtime-rpc-client'
+import {
+  getSshTargetIdForExecutionHost,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 
 export const GIT_GRAPH_REFRESH_EVENT = 'orca:git-graph-refresh'
 
@@ -43,14 +48,23 @@ export function gitGraphScopeInputs(state: ReturnType<typeof useAppStore.getStat
   }
 }
 
-export function useGitGraphScope(worktreeId: string) {
+export function useGitGraphScope(worktreeId: string, executionHostId?: ExecutionHostId) {
   const inputs = useAppStore(useShallow(gitGraphScopeInputs))
-  return useMemo(() => gitGraphScope(worktreeId, inputs), [worktreeId, inputs])
+  return useMemo(
+    () => gitGraphScope(worktreeId, inputs, executionHostId),
+    [worktreeId, inputs, executionHostId]
+  )
 }
 
-export function gitGraphScope(worktreeId: string, state: ScopeState = useAppStore.getState()) {
+export function gitGraphScope(
+  worktreeId: string,
+  state: ScopeState = useAppStore.getState(),
+  executionHostId?: ExecutionHostId
+) {
   const worktrees = selectWorktreesByRepo(state)
-  const route = resolveWorktreeOperationRoute(state, worktreeId)
+  const route = executionHostId
+    ? resolveWorktreeOperationRouteForHost(state, worktreeId, executionHostId)
+    : resolveWorktreeOperationRoute(state, worktreeId)
   const worktree = route?.executionHostId
     ? findIndexedWorktreeOwnerForHost(worktrees, worktreeId, route.executionHostId)
     : findFirstIndexedWorktree(worktrees, worktreeId)
@@ -59,7 +73,12 @@ export function gitGraphScope(worktreeId: string, state: ScopeState = useAppStor
     route?.executionHostId &&
     findIndexedRepoOwnerForHost(state.repos, worktree.repoId, route.executionHostId)
   return worktree && route && repo?.kind !== 'folder'
-    ? { worktree, route, target: runtimeTargetForOwnerEnvironment(route.runtimeEnvironmentId) }
+    ? {
+        worktree,
+        route,
+        connectionId: getSshTargetIdForExecutionHost(route.executionHostId),
+        target: runtimeTargetForOwnerEnvironment(route.runtimeEnvironmentId)
+      }
     : null
 }
 
