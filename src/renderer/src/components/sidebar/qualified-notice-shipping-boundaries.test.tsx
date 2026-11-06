@@ -1,5 +1,11 @@
 // @vitest-environment happy-dom
 import {
+  createStore,
+  closeTestStores,
+  readPersistedState,
+  testState
+} from '../../../../main/persistence/persistence-test-harness'
+import {
   fetchWorktreesFixture,
   local,
   detected,
@@ -220,8 +226,6 @@ it('routes the shipping merged Remove Project menu to current Settings scope and
   const { mkdtempSync, rmSync } = await import('node:fs')
   const { tmpdir } = await import('node:os')
   const { join } = await import('node:path')
-  const { createStore, closeTestStores, readPersistedState, testState } =
-    await import('../../../../main/persistence/persistence-test-harness')
   const directory = mkdtempSync(join(tmpdir(), 'orca-pr35595-header-removal-'))
   testState.dir = directory
   const disk = createStore()
