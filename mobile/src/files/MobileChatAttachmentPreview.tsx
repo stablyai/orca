@@ -7,6 +7,7 @@ import { Pressable, Text, View } from 'react-native'
 import { AttachmentTextScrollView } from './AttachmentTextScrollView'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
+import { useSessionListLongPressProps } from '../navigation/session-list-long-press-props'
 import { useWorkspaceClient } from '../transport/use-workspace-client'
 import { createAttachmentTextPreviewHook } from '../../../src/shared/use-attachment-text-preview'
 import { chatTextAttachmentName } from '../../../src/shared/native-chat-text-attachment-references'
@@ -25,6 +26,7 @@ const useAttachmentTextPreview = createAttachmentTextPreviewHook({
 export function MobileChatAttachmentPreview({ params }: { params: MobileFilePreviewRouteParams }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const sessionListLongPress = useSessionListLongPressProps()
   const { client, state } = useWorkspaceClient(params.hostId)
   const router = useWorkspaceRouteHandoff()
   const clipboard = useClipboardWriter()
@@ -66,12 +68,18 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
     }
   }
 
-  const action = (label: string, disabled: boolean, onActivate: () => void) => (
+  const action = (
+    label: string,
+    disabled: boolean,
+    onActivate: () => void,
+    toSessionList = false
+  ) => (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onActivate}
+      {...(toSessionList ? sessionListLongPress : {})}
       style={[styles.backButton, disabled && styles.saveButtonDisabled]}
     >
       <Text style={styles.meta}>{label}</Text>
@@ -81,10 +89,15 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
     <SafeAreaView edges={['bottom']} style={styles.container}>
       <SafeAreaView edges={['top']} style={styles.header}>
         <View style={styles.topBar}>
-          {action(t('common.back', 'Back'), false, () => {
-            source.dispose()
-            router.back()
-          })}
+          {action(
+            t('common.back', 'Back'),
+            false,
+            () => {
+              source.dispose()
+              router.back()
+            },
+            true
+          )}
           <View style={styles.titleBlock}>
             <Text numberOfLines={1} style={styles.title}>
               {chatTextAttachmentName(

@@ -1,4 +1,5 @@
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useSessionListLongPressProps } from '../navigation/session-list-long-press-props'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
@@ -14,14 +15,17 @@ export function AutomationButton(props: {
   disabled?: boolean
   primary?: boolean
   destructive?: boolean
+  toSessionList?: boolean
 }) {
   useMobileColorScheme()
+  const sessionListLongPress = useSessionListLongPressProps()
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ disabled: props.disabled }}
       disabled={props.disabled}
       onPress={props.onPress}
+      {...(props.toSessionList ? sessionListLongPress : {})}
       style={({ pressed }) => [
         styles.button,
         props.primary && styles.primaryButton,

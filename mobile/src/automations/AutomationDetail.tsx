@@ -120,6 +120,7 @@ export function AutomationDetail(props: {
       <AutomationButton
         label={t('automations.mobile.allAutomations', 'All automations')}
         onPress={props.onBack}
+        toSessionList
       />
       <View style={styles.row}>
         <Text style={[styles.title, styles.grow]}>{automation.name}</Text>

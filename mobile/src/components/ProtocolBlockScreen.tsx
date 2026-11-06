@@ -1,6 +1,7 @@
 import { useWallAppUpdate } from '../app-update/use-wall-app-update'
 import { openExternalLink } from '../platform/external-link'
 import { useRouteHandoff } from '../navigation/route-handoff'
+import { useSessionListLongPressProps } from '../navigation/session-list-long-press-props'
 import { Platform, Pressable, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
@@ -94,6 +95,7 @@ function blockBody(verdict: BlockedVerdict, remedy: BlockRemedy, t: Translate): 
 export function ProtocolBlockScreen({ verdict }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const sessionListLongPress = useSessionListLongPressProps()
   const router = useRouteHandoff()
   const mobileUpdate = useWallAppUpdate()
   const remedy = blockRemedy(verdict)
@@ -162,6 +164,7 @@ export function ProtocolBlockScreen({ verdict }: Props) {
             // Hand home replacement to shell; expo-router singleton inside page would render / in WebView instead of leaving it.
             router.replace('/')
           }}
+          {...sessionListLongPress}
         >
           <Text style={styles.secondaryButtonText}>
             {t('components.protocolBlockScreen.backToHosts', 'Back to hosts')}

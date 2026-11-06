@@ -16,6 +16,7 @@ import { customKeyModalStyles as styles } from './CustomKeyModal.styles'
 import { updateStoredCustomKeys, type CustomKey } from '../terminal/terminal-custom-keys'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useSessionListLongPressProps } from '../navigation/session-list-long-press-props'
 import { MobileSwitch } from './MobileSwitch'
 import { ListGroup, ListRow } from './list/ListGroup'
 import { FieldTextInput } from './composer-input/FieldTextInput'
@@ -67,6 +68,7 @@ type Props = {
 export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortcuts }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const sessionListLongPress = useSessionListLongPressProps()
   const [step, setStep] = useState<Step>('choose-type')
   const [shortcutKey, setShortcutKey] = useState('c')
   const [shortcutModifiers, setShortcutModifiers] = useState<TerminalShortcutModifier[]>(['ctrl'])
@@ -186,6 +188,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
             onPress={onBack}
             accessibilityRole="button"
             accessibilityLabel={t('common.back', 'Back')}
+            {...sessionListLongPress}
           >
             <ChevronLeft size={18} color={colors.textSecondary} />
           </Pressable>
