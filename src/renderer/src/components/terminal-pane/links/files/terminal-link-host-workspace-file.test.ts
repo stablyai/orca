@@ -199,7 +199,7 @@ describe('a paired-server link outside its own workspace', () => {
     )
   })
 
-  it('opens a granted archive in Orca, since a grant cannot hand over the whole file', async () => {
+  it('downloads a granted archive through its grant, or opens it in Orca when its host cannot page it', async () => {
     const archive = '/srv/out/build.zip'
     hostAnswers({
       worktree: 'wt-main',
@@ -215,10 +215,18 @@ describe('a paired-server link outside its own workspace', () => {
       }
     })
 
+    vi.mocked(downloadAndOpenRemoteTerminalFile).mockResolvedValueOnce(false)
+
     openDetectedFilePath(archive, null, null, featureWorktree)
     await flushDoubleRaf()
 
-    expect(downloadAndOpenRemoteTerminalFile).not.toHaveBeenCalled()
+    expect(downloadAndOpenRemoteTerminalFile).toHaveBeenCalledWith(
+      expect.anything(),
+      archive,
+      expect.objectContaining({
+        grant: expect.objectContaining({ terminalArtifactGrantId: 'g-1' })
+      })
+    )
     expect(openFilePathMock).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: archive, terminalArtifactGrantId: 'g-1' }),

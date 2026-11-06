@@ -300,7 +300,7 @@ describe('handleOscLink', () => {
     expect(downloadAndOpenRemoteTerminalFile).toHaveBeenCalledWith(
       expect.objectContaining({ connectionId: 'ssh-1' }),
       '/home/me/repo/renders/clip.mp4',
-      expect.any(Function)
+      expect.objectContaining({ grant: null, isCurrent: expect.any(Function) })
     )
   })
 
@@ -312,6 +312,7 @@ describe('handleOscLink', () => {
     openDetectedFilePath('/home/me/repo/renders/clip.mp4', null, null, sshDeps)
     await flushAsyncWork()
     const isRequestCurrent = vi.mocked(downloadAndOpenRemoteTerminalFile).mock.calls[0]?.[2]
+      ?.isCurrent
     expect(isRequestCurrent?.()).toBe(true)
 
     openDetectedFilePath('/home/me/repo/src/main.ts', null, null, sshDeps)

@@ -30,13 +30,17 @@ describe('downloadAndOpenRemoteTerminalFile', () => {
   }
 
   it('opens the downloaded copy while the request is current', async () => {
-    await downloadAndOpenRemoteTerminalFile(fileContext, '/home/me/clip.mp4', { isCurrent: () => true })
+    await downloadAndOpenRemoteTerminalFile(fileContext, '/home/me/clip.mp4', {
+      isCurrent: () => true
+    })
 
     expect(openFilePathMock).toHaveBeenCalledWith('/local/clip.mp4', 'local')
   })
 
   it('does not open the downloaded copy once a newer request superseded it', async () => {
-    await downloadAndOpenRemoteTerminalFile(fileContext, '/home/me/clip.mp4', { isCurrent: () => false })
+    await downloadAndOpenRemoteTerminalFile(fileContext, '/home/me/clip.mp4', {
+      isCurrent: () => false
+    })
 
     expect(downloadFileMock).toHaveBeenCalled()
     expect(openFilePathMock).not.toHaveBeenCalled()
@@ -51,13 +55,17 @@ describe('downloadAndOpenRemoteTerminalFile', () => {
   it('says where the copy was saved when no app opens it', async () => {
     openFilePathMock.mockResolvedValue(false)
 
-    await downloadAndOpenRemoteTerminalFile(fileContext, '/home/me/clip.mp4', { isCurrent: () => true })
+    await downloadAndOpenRemoteTerminalFile(fileContext, '/home/me/clip.mp4', {
+      isCurrent: () => true
+    })
 
     expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('/local/clip.mp4'))
   })
 
   it('stays quiet when an app opens the copy', async () => {
-    await downloadAndOpenRemoteTerminalFile(fileContext, '/home/me/clip.mp4', { isCurrent: () => true })
+    await downloadAndOpenRemoteTerminalFile(fileContext, '/home/me/clip.mp4', {
+      isCurrent: () => true
+    })
 
     expect(toast.error).not.toHaveBeenCalled()
   })
