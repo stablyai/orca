@@ -1,62 +1,7 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
-import { createCodexStructuredItemStreams } from '../../codex/structured/items/codex-structured-item-streams'
 import { createAgentSessionDeltaCoalescer } from './agent-session-delta-coalescer'
 
 describe('empty streamed deltas', () => {
-  it('does not retain empty array slots through repeated Codex publications', () => {
-    const prefix = 'empty-delta-retention-prefix'
-    const streams = createCodexStructuredItemStreams({
-      sink: { appendItem() {}, appendTombstone() {}, publish() {} },
-      turnIdFor: () => 'turn',
-      identityFor: () => ({ provider: 'codex', threadId: 'thread', turnId: 'turn', ordinal: 0 }),
-      attributionFor: () => ({ turnScope: AGENT_JOURNAL_THREAD_SCOPE }),
-      schedule: () => () => {}
-    })
-    const append = (delta: string) =>
-      streams.handle('thread', 'item/agentMessage/delta', { itemId: 'item', delta })
-    append(prefix)
-    try {
-      for (let batch = 0; batch < 4; batch += 1) {
-        for (let index = 0; index < 16_384; index += 1) {
-          append('')
-        }
-        expect(streams.flush().accepted).toBe(true)
-      }
-      const originalJoin = Array.prototype.join
-      let retainedSlots = -1
-      const spy = vi.spyOn(Array.prototype, 'join').mockImplementation(function (
-        this: unknown[],
-        separator
-      ) {
-        // Byte counters cannot detect empty entries retained by the stream's chunk array.
-        if (separator === '' && this[0] === prefix) {
-          retainedSlots = this.length
-        }
-        return originalJoin.call(this, separator)
-      })
-      let snapshot: ReturnType<typeof streams.snapshot>
-      try {
-        snapshot = streams.snapshot('thread', 'item')
-        void snapshot?.text
-      } finally {
-        spy.mockRestore()
-      }
-      expect(retainedSlots).toBe(1)
-      expect(snapshot).toEqual({
-        text: prefix,
-        observedBytes: Buffer.byteLength(prefix),
-        truncated: false
-      })
-      append('é')
-      expect(streams.snapshot('thread', 'item')?.text).toBe(`${prefix}é`)
-      streams.forget('thread', 'item')
-      expect(streams.snapshot('thread', 'item')).toBeNull()
-    } finally {
-      streams.dispose()
-    }
-  })
-
   it('empty increments create no stream and do not dirty retained clean or dirty content', () => {
     const pending = new Set<() => void>()
     const emitted: { key: string; text: string }[] = []

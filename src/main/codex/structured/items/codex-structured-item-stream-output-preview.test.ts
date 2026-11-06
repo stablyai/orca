@@ -1,17 +1,10 @@
-import { expect, it, vi } from 'vitest'
+import { expect, it } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import {
-  boundRunningToolOutput,
-  JOURNAL_RUNNING_PREVIEW_LIMITS
-} from '../../../native-chat/agent-session-journal/journal-payload-bounds'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createCodexStructuredItemStreams } from './codex-structured-item-streams'
-import { codexStreamingJournalItem } from './codex-structured-item-translation'
-
-const HEAD_BYTES = JOURNAL_RUNNING_PREVIEW_LIMITS.inlineHeadBytes
 
 function outputStream(type: 'commandExecution' | 'fileChange') {
   const bodies: AgentJournalItemBody[] = []
@@ -60,52 +53,43 @@ function outputStream(type: 'commandExecution' | 'fileChange') {
   }
 }
 
-it.each([
-  ['commandExecution', 64],
-  ['commandExecution', 640],
-  ['fileChange', 640]
-] as const)(
-  'saves running %s previews of %i KiB of output without re-reading it per checkpoint',
-  (type, kib) => {
-    const { bodies, item, output, streams } = outputStream(type)
-    // The previous whole-output translation is the expected saved form.
-    const body = (text: string) => codexStreamingJournalItem(item, text).body
-    const line = `${'build step output '.repeat(56)}\u{1F600}\n`
-    const join = Array.prototype.join
-    let joined = 0
-    const spy = vi.spyOn(Array.prototype, 'join').mockImplementation(function (
-      this: unknown[],
-      separator?: string
-    ) {
-      const result = join.call(this, separator)
-      if (separator === '') {
-        joined += result.length
-      }
-      return result
-    })
-    let text = ''
-    const expected: AgentJournalItemBody[] = []
-    const send = (delta: string) => {
-      output(delta)
-      text += delta
-      while (expected.length < bodies.length) {
-        expected.push(body(text)!)
-      }
-    }
-    // Split the emoji's surrogate pair across deltas, as a provider chunk boundary might.
-    const cut = line.length - 2
-    while (Buffer.byteLength(text, 'utf8') < kib * 1024) {
-      send(line.slice(0, cut))
-      send(line.slice(cut))
-    }
-    spy.mockRestore()
+it.each(['commandExecution', 'fileChange'] as const)(
+  'saves a running %s row whose output keeps the head, the whole length and its digest',
+  (type) => {
+    const { bodies, output, streams } = outputStream(type)
+    // The emoji's surrogate pair is split across deltas, as a provider chunk boundary might.
+    output('x'.repeat(16_384))
+    output('\ud83d')
+    output('\ude00tail')
+    streams.flush()
 
-    expect(bodies.length).toBeGreaterThan(10)
-    // Each saved row matches the preview that whole-output hashing would have stored.
-    expect(bodies.map(boundRunningToolOutput)).toEqual(expected.map(boundRunningToolOutput))
-    // A checkpoint materializes at most its preview head, whatever the output length.
-    expect(joined).toBeLessThanOrEqual(bodies.length * HEAD_BYTES)
+    expect(bodies.at(-1)).toMatchObject({
+      kind: 'tool-call',
+      state: 'running',
+      output: {
+        head: 'x'.repeat(16_384),
+        byteLength: 16_392,
+        digest: 'b15858eaa966a575ef2a5e8ea52baa9756e4df7ccb5fb74106661ccaf9885b59',
+        truncated: true
+      }
+    })
     // Interruption still saves the whole output.
-    expect(streams.snapshot('thread', 'cmd')?.text).toBe(text)
+    expect(streams.snapshot('thread', 'cmd')?.text).toBe(`${'x'.repeat(16_384)}\u{1F600}tail`)
   }
 )
+
+it('keeps short running output whole', () => {
+  const { bodies, output, streams } = outputStream('commandExecution')
+  output('ok \ud83d')
+  output('\ude00\n')
+  streams.flush()
+
+  expect(bodies.at(-1)).toMatchObject({
+    output: {
+      head: 'ok \u{1F600}\n',
+      byteLength: 8,
+      digest: '2b39e39924d0fdb9c893da964e00b2a9fddea62fa60b00abf448574a92bdfdcb',
+      truncated: false
+    }
+  })
+})

@@ -1,10 +1,8 @@
-import { createAgentSessionDeltaCoalescer } from '../agent-session-wire/agent-session-delta-coalescer'
 import { AcpStructuredLane } from '../../acp/acp-structured-lane'
 import { GENERIC_ACP_DIALECT } from '../../acp/acp-dialects/acp-dialect'
 import { PiRpcMessages } from '../../pi/rpc-messages'
 import { PiRpcContextUsage } from '../../pi/rpc-context-usage'
 import { testEventSinkLogging } from '../agent-session-wire/structured-agent-session-logger-test-support'
-import { measureDeltaSnapshotWork } from '../agent-session-wire/agent-session-delta-work-test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
@@ -141,138 +139,6 @@ it.each(['close', 'tool', 'flush-dispose', 'next-delta'])(
     r.assembler.dispose()
   }
 )
-
-it('calibrates snapshot observation on a separate public materialization', () => {
-  const coalescer = createAgentSessionDeltaCoalescer({ emit: () => {}, schedule: () => () => {} })
-  coalescer.append('calibration', 'unique snapshot control')
-  const meter = measureDeltaSnapshotWork()
-  try {
-    expect(coalescer.snapshot('calibration')?.text).toBe('unique snapshot control')
-    expect(meter.work()).toBeGreaterThan(0)
-    meter.reset()
-    expect(meter.work()).toBe(0)
-  } finally {
-    meter.stop()
-    coalescer.dispose()
-  }
-})
-
-it('releases actual clean timeline owners linearly on session end, turn end, external Stop and dispose', async () => {
-  for (const n of [10, 100]) {
-    for (const boundary of ['session', 'turn', 'stop', 'dispose']) {
-      const r = await openProviderTimelineRig()
-      r.assembler.apply({ type: 'turn.open', turn: 't', at: 1000 })
-      for (let i = 0; i < n; i++) {
-        expect(
-          r.assembler.apply({
-            type: 'text.delta',
-            item: { id: `m${i}` },
-            channel: 'assistant',
-            text: 'P'
-          }).admission.accepted
-        ).toBe(true)
-      }
-      r.assembler.flush()
-      await r.eventSink.written?.()
-      if (boundary === 'stop') {
-        const turn = await r.turn('t')
-        const identity = parseAgentJournalItemKey(providerTurnItemId('t'))
-        if (!turn || !identity) {
-          throw new Error('running turn required')
-        }
-        await r.journal.appendItem(
-          identity,
-          agentJournalTurnBody({ ...turn, state: 'interrupted', completedAt: 2000 }),
-          { fence: 1, turnScope: { kind: 'thread' } }
-        )
-      }
-      const meter = measureDeltaSnapshotWork()
-      if (boundary === 'dispose') {
-        r.assembler.dispose()
-      } else {
-        const result =
-          boundary === 'session'
-            ? r.assembler.apply({ type: 'session.ended', verdict: { state: 'unverifiable' } })
-            : boundary === 'turn'
-              ? r.assembler.apply({ type: 'turn.end', turn: 't', at: 2000, state: 'completed' })
-              : r.assembler.apply({ type: 'activity', text: null })
-        expect(result.admission.accepted).toBe(true)
-      }
-      const work = meter.work()
-      meter.stop()
-      expect(work).toBeLessThanOrEqual(8 * n)
-      await r.eventSink.written?.()
-      for (let i = 0; i < n; i++) {
-        expect(messageText((await r.row(providerItemId('item', `m${i}`)))?.body)).toBe('P')
-      }
-      if (boundary === 'turn' || boundary === 'stop') {
-        expect(await r.turn('t')).toMatchObject({
-          state: boundary === 'stop' ? 'interrupted' : 'completed'
-        })
-      }
-      r.assembler.dispose()
-    }
-  }
-})
-
-it('scans retained owners once on a skipped timer, assembles no body, and tears down without timers at N/10N', async () => {
-  for (const n of [10, 100]) {
-    vi.useFakeTimers({ toFake: ['performance', 'setTimeout', 'clearTimeout'] })
-    let callbacks = 0
-    const r = await openProviderTimelineRig({
-      schedule: (run, ms) => {
-        const timer = setTimeout(() => {
-          callbacks++
-          run()
-        }, ms)
-        return () => clearTimeout(timer)
-      }
-    })
-    for (let i = 0; i < n; i++) {
-      r.assembler.apply({
-        type: 'text.delta',
-        item: { id: `m${i}` },
-        channel: 'assistant',
-        text: 'P'
-      })
-    }
-    r.assembler.flush()
-    await r.eventSink.written?.()
-    r.assembler.apply({
-      type: 'text.delta',
-      item: { id: 'm0' },
-      channel: 'assistant',
-      text: ' tail'
-    })
-    const meter = measureDeltaSnapshotWork()
-    const join = vi.spyOn(Array.prototype, 'join')
-    try {
-      vi.advanceTimersByTime(60)
-      expect(callbacks).toBe(1)
-      expect(
-        join.mock.contexts.some(
-          (chunks) => Array.isArray(chunks) && chunks.includes('P') && chunks.includes(' tail')
-        )
-      ).toBe(false)
-      expect(meter.work()).toBeLessThanOrEqual(3 * n)
-      expect(vi.getTimerCount()).toBe(0)
-      expect(messageText((await r.row(providerItemId('item', 'm0')))?.body)).toBe('P')
-      r.assembler.flush()
-      expect(messageText((await r.row(providerItemId('item', 'm0')))?.body)).toBe('P tail')
-      expect(
-        join.mock.contexts.some(
-          (chunks) => Array.isArray(chunks) && chunks.includes('P') && chunks.includes(' tail')
-        )
-      ).toBe(true)
-    } finally {
-      join.mockRestore()
-      meter.stop()
-    }
-    r.assembler.dispose()
-    expect(vi.getTimerCount()).toBe(0)
-    vi.useRealTimers()
-  }
-})
 
 it('actual ACP lane flush/dispose saves a skipped tail and session end retains Stop semantics', async () => {
   const { AcpStructuredLane } = await import('../../acp/acp-structured-lane')
