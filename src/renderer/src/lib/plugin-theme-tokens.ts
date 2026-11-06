@@ -141,7 +141,7 @@ export function over([r, g, b, a]: Rgba, [br, bg, bb]: Rgba): Rgba {
 }
 
 /** `color-mix(in srgb, a percent%, b)`. */
-function mix(a: Rgba, b: Rgba, percent: number): Rgba {
+export function mix(a: Rgba, b: Rgba, percent: number): Rgba {
   const p = percent / 100
   const channel = (index: 0 | 1 | 2 | 3): number => a[index] * p + b[index] * (1 - p)
   return [channel(0), channel(1), channel(2), channel(3)]
@@ -256,9 +256,25 @@ const HOST_PILL_OUTLINE_MIX = 40
 
 /**
  * How much sidebar text the selected card's host pill outline mixes into the sidebar: Orca's 40%,
- * raised just enough to stand out from the selected wash. Takes tokens that already passed
- * safePluginThemeTokens.
+ * raised to the smallest mix that stands out from the selected wash painted over the sidebar.
  */
+export function hostPillOutlineMixOver(foreground: Rgba, sidebar: Rgba, wash: Rgba | null): number {
+  if (foreground[3] < 1 || sidebar[3] < 1) {
+    return HOST_PILL_OUTLINE_MIX
+  }
+  const card = wash ? over(wash, sidebar) : sidebar
+  // Why the ring floor: the wash matches the pill's fill, so the outline alone keeps the pill from
+  // vanishing. Orca's own outline (2.3:1 light, 2.5:1 dark) already clears 2:1 and stays at 40%;
+  // a dimmer theme gets only the smallest mix that reaches it.
+  for (let percent = HOST_PILL_OUTLINE_MIX; percent < 100; percent++) {
+    if (contrastRatio(mix(foreground, sidebar, percent), card) >= MIN_RING_CONTRAST) {
+      return percent
+    }
+  }
+  return 100
+}
+
+/** hostPillOutlineMixOver for a theme's tokens, which already passed safePluginThemeTokens. */
 export function hostPillOutlineMix(
   tokens: Readonly<Record<string, string>>,
   base: 'light' | 'dark',
@@ -273,19 +289,9 @@ export function hostPillOutlineMix(
   )
   const foreground = effective('--worktree-sidebar-foreground')
   const sidebar = effective('--worktree-sidebar')
-  const wash = effective('--worktree-sidebar-active')
-  if (!foreground || !sidebar || foreground[3] < 1 || sidebar[3] < 1) {
-    return HOST_PILL_OUTLINE_MIX
-  }
-  const card = wash ? over(wash, sidebar) : sidebar
-  // Why the ring floor: the wash matches the pill's fill, so the outline alone keeps the pill from
-  // vanishing; 2:1 stays under the label's 4.5:1, and Orca's own (2.3:1 light, 2.5:1 dark) clears it.
-  for (let percent = HOST_PILL_OUTLINE_MIX; percent < 100; percent++) {
-    if (contrastRatio(mix(foreground, sidebar, percent), card) >= MIN_RING_CONTRAST) {
-      return percent
-    }
-  }
-  return 100
+  return foreground && sidebar
+    ? hostPillOutlineMixOver(foreground, sidebar, effective('--worktree-sidebar-active'))
+    : HOST_PILL_OUTLINE_MIX
 }
 
 let probeContext: OffscreenCanvasRenderingContext2D | null | undefined
