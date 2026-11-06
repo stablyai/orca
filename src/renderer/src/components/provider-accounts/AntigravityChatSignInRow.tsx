@@ -230,9 +230,9 @@ export function useAntigravityChatSignInControls(props: {
       : null
   const hintAllowed =
     status === 'known' &&
-    !running(flow) &&
     flow?.phase !== 'failed' &&
-    !((flow?.phase === 'cancelled' || flow?.phase === 'expired') && auth === 'unknown')
+    !((flow?.phase === 'cancelled' || flow?.phase === 'expired') && auth === 'unknown') &&
+    !running(flow)
   return {
     flow,
     ownFlow,
