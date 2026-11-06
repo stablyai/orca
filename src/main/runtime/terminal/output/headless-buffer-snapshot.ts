@@ -45,8 +45,27 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
     // Why: normal history is separated from an active alternate frame, so the
     // caller's scrollback policy can be honored without painting it into alt.
     const scrollbackRows = opts.scrollbackRows ?? 0
-    const snapshot = state.emulator.getSnapshot({ scrollbackRows })
-    const terminalOwner = state.ownership.owner
+    // Capture between chain writes: one started during settle() paints bytes past outputSequence and clears their escape tail.
+    const captured = state.writeChain.then(() =>
+      // A disposal queued ahead of this capture has already released the emulator.
+      this.headlessTerminals.get(ptyId) === state
+        ? {
+            snapshot: state.emulator.getSnapshot({ scrollbackRows }),
+            seq: state.outputSequence,
+            terminalOwner: state.ownership.owner,
+            isAlternateScreen: state.emulator.isAlternateScreen
+          }
+        : null
+    )
+    state.writeChain = captured.then(
+      () => {},
+      () => {}
+    )
+    const capture = await captured
+    if (!capture) {
+      return null
+    }
+    const { snapshot, seq, terminalOwner, isAlternateScreen } = capture
     const data = snapshot.rehydrateSequences + snapshot.snapshotAnsi
     return data.length > 0 || opts.includeEmpty === true
       ? this.preferTrackedLastTitle(ptyId, {
@@ -56,7 +75,7 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
           rows: snapshot.rows,
           cwd: snapshot.cwd ?? this.terminalCwdByPtyId.get(ptyId),
           lastTitle: snapshot.lastTitle,
-          seq: state.outputSequence,
+          seq,
           source: 'headless' as const,
           oscLinks: snapshot.oscLinks,
           scrollbackAnsi: snapshot.scrollbackAnsi,
@@ -69,7 +88,7 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
             : {}),
           ...(terminalOwner ? { terminalOwner } : {}),
           // Alt snapshots must preserve xterm history used for TUI scroll-up after tab return.
-          alternateScreen: snapshot.modes?.alternateScreen ?? state.emulator.isAlternateScreen,
+          alternateScreen: snapshot.modes?.alternateScreen ?? isAlternateScreen,
           // Do not fold into data: the restorer's later reset would abort this partial escape.
           pendingEscapeTailAnsi: snapshot.pendingEscapeTailAnsi
         })

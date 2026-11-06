@@ -346,6 +346,20 @@ describe('OrcaRuntimeService', () => {
     expect(liveSnapshot?.terminalOwner).toBeUndefined()
   })
 
+  it('claims the sequence of output it painted while the snapshot was settling', async () => {
+    const runtime = createRuntime()
+    syncSinglePty(runtime, 'pty-1')
+    runtime.onPtyData('pty-1', 'status \x1b[38;2;1', 100)
+    const snapshotPromise = runtime.serializeHiddenOutputRecoveryBuffer('pty-1')
+    await Promise.resolve()
+    runtime.onPtyData('pty-1', '57;157;157mthinking\x1b[39m', 101)
+
+    const snapshot = await snapshotPromise
+    // An image that painted the SGR's tail must claim it, or the restorer replays `57;157;157m` as text.
+    expect(snapshot?.data).toContain('thinking')
+    expect(snapshot).toMatchObject({ seq: 39 })
+  })
+
   it('keeps an empty headless snapshot authoritative for hidden-output recovery', async () => {
     const serializeBuffer = vi.fn().mockResolvedValue({
       data: 'stale renderer content\r\n',
