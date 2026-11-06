@@ -223,17 +223,19 @@ describe('ClaudeProfileRouter', () => {
     })
   })
 
-  it('tells whether a terminal opened before routing runs another account than the selected one', () => {
+  it('rebuilds an --account folder whose marker outlived it', async () => {
     const f = fixture()
-    expect(f.router.systemDefaultRunsAnotherAccount()).toBe(true)
-    signIn(f.userHome, 'a@example.test')
-    expect(f.router.systemDefaultRunsAnotherAccount()).toBe(false)
-    const other = fixture()
-    signIn(other.userHome, 'a@example.test')
-    signIn(other.home('a'), 'someone-else@example.test')
-    expect(other.router.systemDefaultRunsAnotherAccount()).toBe(true)
-    f.settings.activeClaudeManagedAccountId = null
-    expect(f.router.systemDefaultRunsAnotherAccount()).toBeNull()
+    signIn(f.home('b'), 'b@example.test')
+    const firstLaunch = prepareClaudePinnedAccountLaunch(f.router, f.dataRoot, 'b')
+    await vi.waitFor(() => expect(f.setup.calls).toBe(1))
+    f.setup.settle()
+    await firstLaunch
+
+    rmSync(f.home('b'), { recursive: true })
+    const rebuilt = prepareClaudePinnedAccountLaunch(f.router, f.dataRoot, 'b')
+    await vi.waitFor(() => expect(f.setup.calls).toBe(2))
+    f.setup.settle()
+    await expect(rebuilt).resolves.toMatchObject({ configDir: f.home('b') })
   })
 
   it('keeps an account on its own folder when System default is signed in to another email, or out', async () => {
