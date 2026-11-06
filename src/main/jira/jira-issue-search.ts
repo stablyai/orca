@@ -214,7 +214,13 @@ async function runIssueSearch(
   if (recordedFailures.length === entries.length) {
     throw (recordedFailures.find((failure) => !failure.auth) ?? recordedFailures[0]).error
   }
-  return entries.length === 1
-    ? results.flat().slice(0, safeLimit)
-    : sortAndLimitIssues(results.flat(), safeLimit)
+  if (entries.length === 1) {
+    return results.flat().slice(0, safeLimit)
+  }
+  const issues = sortByUpdatedAtDescending(results.flat())
+  if ('jql' in query && query.suggestions) {
+    const suffix = `-${query.suggestions.query.trim()}`
+    issues.sort((a, b) => Number(b.key.endsWith(suffix)) - Number(a.key.endsWith(suffix)))
+  }
+  return issues.slice(0, safeLimit)
 }
