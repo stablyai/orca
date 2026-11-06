@@ -9,7 +9,7 @@ import { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationError } from '../orchestration/orchestration-error'
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
-import { ORCHESTRATION_METHODS } from './methods/orchestration'
+import { ORCHESTRATION_METHODS } from './methods/orchestration/orchestration'
 import { createOrchestrationRpcHarness } from './methods/orchestration/rpc-test-harness'
 import { MessageWake } from '../runtime-message-waiters'
 

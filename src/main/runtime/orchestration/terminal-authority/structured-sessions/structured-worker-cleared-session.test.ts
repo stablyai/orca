@@ -31,9 +31,9 @@ const { structuredSessionMailTarget, structuredSessionOwnedMailboxes } =
   await import('../../structured-session-mail-target')
 const { structuredSessionMailReach } = await import('../../structured-session-mail-address')
 const { stopStructuredWorker, readStructuredWorkerJournal, captureStructuredWorkerArchive } =
-  await import('../../../rpc/methods/orchestration-structured-worker-lifecycle')
+  await import('../../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-lifecycle')
 const { releaseStructuredWorkerSession } =
-  await import('../../../rpc/methods/orchestration-structured-worker-session')
+  await import('../../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-session')
 const { inspectWorkerTerminal } =
   await import('../../../rpc/methods/orchestration/worker/worker-observation')
 const { listAddressableStructuredWorkers } =

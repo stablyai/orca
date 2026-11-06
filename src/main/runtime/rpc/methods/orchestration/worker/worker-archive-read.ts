@@ -20,7 +20,7 @@ import {
   encodeWorkerOutputCursor
 } from '../../../../orchestration/worker-output-cursor'
 import type { WorkerStructuredJournalArchive } from '../../../../orchestration/structured-worker-journal-archive'
-import { readArchivedStructuredJournal } from '../../orchestration-structured-worker-lifecycle'
+import { readArchivedStructuredJournal } from '../structured-workers/orchestration-structured-worker-lifecycle'
 
 const ARCHIVED_TERMINAL_PAGE_LINES = 2_000
 

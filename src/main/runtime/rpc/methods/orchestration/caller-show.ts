@@ -20,7 +20,7 @@ import type { z } from 'zod'
 import type { OrchestrationDb } from '../../../orchestration/db'
 import { defineMethod, type RpcContext } from '../../core'
 import { openClosedWorkerTerminal } from './worker/closed-worker-terminal'
-import { ensureStructuredHostInstalled } from '../structured-agent-session-gate'
+import { ensureStructuredHostInstalled } from '../structured-sessions/creation/structured-agent-session-gate'
 
 async function locateParty(
   params: z.infer<typeof PartyLocationParams>,

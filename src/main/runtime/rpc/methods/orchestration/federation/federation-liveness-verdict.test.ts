@@ -3,7 +3,7 @@ import { getDefaultWorkspaceSession } from '../../../../../../shared/constants'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protocol-version'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
-import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { ORCHESTRATION_METHODS } from '../orchestration'
 import { isStreamingMethod, eraseRpcMethods } from '../../../core'
 import { registerBoundPty } from '../../../../orca-runtime-tests/bind-first-pane.test-fixture'
 

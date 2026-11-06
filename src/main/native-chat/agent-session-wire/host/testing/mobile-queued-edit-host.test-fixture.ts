@@ -91,7 +91,7 @@ export const createMobileCommandMenuHostFixture: MobileCommandMenuHostFixtureMod
     const cwd = join(root, 'workspace')
     await mkdir(cwd)
     const { clientRequestsCommands } =
-      await import('../../../../runtime/rpc/methods/structured-agent-session-policy')
+      await import('../../../../runtime/rpc/methods/structured-sessions/structured-agent-session-policy')
     let starts = 0,
       preparations = 0
     const preparation = Promise.withResolvers<void>()

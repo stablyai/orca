@@ -2,7 +2,7 @@
 // Main has no local registry for remote: ids; cover every liveness reply so that final recovery hop cannot drop refusal.
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
-import { TERMINAL_METHODS } from '../../src/main/runtime/rpc/methods/terminal'
+import { TERMINAL_METHODS } from '../../src/main/runtime/rpc/methods/terminal/terminal'
 import type { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import {
   TerminalStreamOpcode,

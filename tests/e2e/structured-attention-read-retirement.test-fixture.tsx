@@ -26,10 +26,13 @@ import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/
 import {
   call,
   installStructuredHostStub,
-  clearStructuredHostStub,
+  clearStructuredHostStub
+} from '../../src/main/runtime/rpc/methods/structured-sessions/protocol/structured-agent-session-rpc.test-fixture'
+
+import {
   STRUCTURED_CLIENT,
   SESSION
-} from '../../src/main/runtime/rpc/methods/structured-agent-session-rpc.test-fixture'
+} from '../../src/main/runtime/rpc/methods/structured-sessions/protocol/structured-agent-session-rpc-client.test-fixture'
 import {
   makeUnifiedTab,
   makeTabGroup,

@@ -11,7 +11,7 @@ const { registry, environments } = vi.hoisted(() => {
 vi.mock('electron', () => ({ webContents: { fromId: vi.fn() } }))
 vi.mock('../../browser/browser-manager', () => ({ browserManager: {} }))
 vi.mock('../../runtime/rpc/dispatcher', () => ({ RpcDispatcher: vi.fn() }))
-vi.mock('../../runtime/rpc/methods/index', () => ({ ALL_RPC_METHODS: [] }))
+vi.mock('../../runtime/rpc/methods/rpc-method-registry', () => ({ ALL_RPC_METHODS: [] }))
 vi.mock('../../managed-server/lifecycle/orcad-managed-tunnel', () => ({
   ensureOrcadManagedTunnel: vi.fn()
 }))

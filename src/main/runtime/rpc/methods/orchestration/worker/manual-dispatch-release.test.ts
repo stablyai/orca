@@ -3,7 +3,7 @@ import type Database from '../../../../../sqlite/sync-database'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
-import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { ORCHESTRATION_METHODS } from '../orchestration'
 import { isStreamingMethod, eraseRpcMethods, type RpcContext } from '../../../core'
 import { parseOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
 

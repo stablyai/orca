@@ -99,7 +99,7 @@ it('delivers newly loaded saved image choices in bounded semantic batches withou
   const { queuedImageReaderSnapshot, queuedImageReaderEvent, queuedImageSourceIds } =
     await import('../../agent-session-wire/publication/history/agent-session-queued-image-reader')
   const { projectQueuedImageCardPublication } =
-    await import('../../../runtime/rpc/methods/structured-agent-session-queued-image-capability')
+    await import('../../../runtime/rpc/methods/structured-sessions/attachments/structured-agent-session-queued-image-capability')
   const { MOBILE_BRIDGE_MAX_FRAME_BYTES } =
     await import('../../../../shared/mobile-bridge-frame-bytes')
   const { emitSubscriberFrame } =
@@ -352,7 +352,7 @@ it('delivers newly loaded saved image choices in bounded semantic batches withou
 
 it('projects a still-active cut source before stateless and middle-page catch-up decisions, with cold reset fallback', async () => {
   const { queuedImageHistoryReader, queuedImageSubscriber } =
-    await import('../../../runtime/rpc/methods/structured-agent-session-queued-image-capability')
+    await import('../../../runtime/rpc/methods/structured-sessions/attachments/structured-agent-session-queued-image-capability')
   const { readAgentSessionHistory, createAgentSessionCatchUpReader } =
     await import('../../agent-session-wire/publication/history/agent-session-history-page')
   const { AgentSessionSubscribers } =

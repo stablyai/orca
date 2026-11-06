@@ -2,12 +2,12 @@ import '../../rpc/unused-default-rpc-methods.test-fixture'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../../rpc/dispatcher'
 import { ORCHESTRATION_CALLER_METHODS } from '../../rpc/methods/orchestration/caller-show'
-import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from '../../rpc/methods/structured-agent-session-reveal'
+import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from '../../rpc/methods/structured-sessions/conversation/structured-agent-session-reveal'
 import {
   seedTestAgentSessionStoreFromNewerBuild,
   editPersistedTestAgentSessionStore
 } from '../records/agent-session-record-store-test-harness'
-import { STRUCTURED_AGENT_SESSION_STATUS_METHODS } from '../../rpc/methods/structured-agent-session-status-stream'
+import { STRUCTURED_AGENT_SESSION_STATUS_METHODS } from '../../rpc/methods/structured-sessions/subscriptions/structured-agent-session-status-stream'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
@@ -29,7 +29,7 @@ import {
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { chatTabCommandsSettled } from '../../orca-runtime-tests/session-layout-apply.test-fixture'
 import * as journalFactory from '../../../native-chat/agent-session-journal/journal-store-factory'
-import { discardStructuredWorkerSession } from '../../rpc/methods/orchestration-structured-worker-session'
+import { discardStructuredWorkerSession } from '../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-session'
 import { closeStructuredAgentSessionChild } from '../structured-agent-session-close'
 import { createTrackedJournalOpener } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'

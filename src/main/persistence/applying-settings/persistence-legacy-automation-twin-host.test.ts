@@ -1,5 +1,5 @@
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
-import { AUTOMATION_METHODS } from '../../runtime/rpc/methods/automations'
+import { AUTOMATION_METHODS } from '../../runtime/rpc/methods/automations/automations'
 import { mergeWorktree } from '../../ipc/worktree-metadata-merge'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import '../../runtime/rpc/unused-default-rpc-methods.test-fixture'

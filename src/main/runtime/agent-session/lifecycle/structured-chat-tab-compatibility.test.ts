@@ -1,7 +1,7 @@
 import '../../rpc/unused-default-rpc-methods.test-fixture'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../../rpc/dispatcher'
-import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from '../../rpc/methods/structured-agent-session-reveal'
+import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from '../../rpc/methods/structured-sessions/conversation/structured-agent-session-reveal'
 import {
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
@@ -17,7 +17,7 @@ import {
 } from './structured-agent-session-tab-authority.test-support'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { chatTabCommandsSettled } from '../../orca-runtime-tests/session-layout-apply.test-fixture'
-import { discardStructuredWorkerSession } from '../../rpc/methods/orchestration-structured-worker-session'
+import { discardStructuredWorkerSession } from '../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-session'
 
 vi.mock('../../../claude/claude-cli-flag-prewarm', () => ({
   prewarmClaudeCliFlags: async () => undefined
@@ -77,7 +77,7 @@ it.each([false, true])(
 )
 
 it('a valid failed hide retires captured raw presentation and stops through the production phone dispatcher', async () => {
-  const { SESSION_TAB_METHODS } = await import('../../rpc/methods/session-tabs')
+  const { SESSION_TAB_METHODS } = await import('../../rpc/methods/session-tabs/session-tabs')
   const rig = await openAuthorityRuntime(await authorityProfile([B], { visible: [B] }))
   await rig.runtime.restoreStructuredAgentSessionTabs()
   const stop = vi.spyOn(rig.host, 'close')
@@ -122,7 +122,7 @@ it.each(['stop', 'discard', 'sweep'] as const)(
       await finish.promise
     })
     const { stopStructuredWorker } =
-      await import('../../rpc/methods/orchestration-structured-worker-lifecycle')
+      await import('../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-lifecycle')
     const { closeStructuredSessionsForWorktree, createStructuredSweepProgress } =
       await import('../../workspaces/removal/structured-session-worktree-teardown')
     vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
@@ -193,12 +193,13 @@ it('cancellation carries the actual create reservation across a held commit, nev
   const { createTestParams, CREATE_TEST_CALLER } =
     await import('../../../native-chat/agent-session-wire/host/testing/structured-agent-session-create-test-fixture')
   const { commitStructuredAgentSessionCreate } =
-    await import('../../rpc/methods/structured-agent-session-create')
+    await import('../../rpc/methods/structured-sessions/creation/structured-agent-session-create')
   const {
     refusingStructuredAgentSessionCreatesClosedFirst,
     noteStructuredAgentSessionClose,
     resetStructuredAgentSessionClosesBeforeCreateForTests
-  } = await import('../../rpc/methods/structured-agent-session-close-before-create')
+  } =
+    await import('../../rpc/methods/structured-sessions/creation/structured-agent-session-close-before-create')
   const base = createTestParams(undefined, {
     accountHome: { variable: 'CODEX_HOME', path: `${root}/codex-home` }
   })
@@ -385,7 +386,7 @@ it.each([
   async (main, caller) => {
     layoutOwner.main = main
     const { STRUCTURED_AGENT_SESSION_CLOSE_METHOD } =
-      await import('../../rpc/methods/structured-agent-session-close-method')
+      await import('../../rpc/methods/structured-sessions/conversation/structured-agent-session-close-method')
     const rig = await openAuthorityRuntime(
       await authorityProfile([], { records: [B], visible: [] })
     )

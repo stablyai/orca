@@ -4,7 +4,7 @@ import { narrowStructuredLaunchSeedOptions } from '../../../../../../shared/nati
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
-import { createStructuredWorkerSession } from '../../orchestration-structured-worker-session'
+import { createStructuredWorkerSession } from '../structured-workers/orchestration-structured-worker-session'
 import { dispatchReportMailbox } from '../../../../orchestration/dispatch-report-mailbox'
 
 export type WorkerEffect = {

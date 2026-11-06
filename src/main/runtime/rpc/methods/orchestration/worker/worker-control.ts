@@ -11,8 +11,8 @@ import {
   showContextOnlyWorker
 } from './worker-observation'
 import { readArchivedWorkerOutput } from './worker-archive-read'
-import { readStructuredWorkerOutput } from '../../orchestration-structured-worker-lifecycle'
-import { releaseStructuredWorkerSession } from '../../orchestration-structured-worker-session'
+import { readStructuredWorkerOutput } from '../structured-workers/orchestration-structured-worker-lifecycle'
+import { releaseStructuredWorkerSession } from '../structured-workers/orchestration-structured-worker-session'
 import { sessionIdFromStructuredWorkerIncarnation } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { readExactWorkerOutput } from './worker-output'
 import { exposeWorkerTerminalResource } from './worker-terminal-resource-presentation'

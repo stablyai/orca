@@ -27,23 +27,26 @@ import {
 } from './structured-chat-coordinator-mail-rig.test-fixture'
 import { getFollowUpDispatch } from '../../db/dispatch-context/worker-follow-up-lineage'
 import { structuredWorkerIdentities } from './structured-worker-identity'
-import { createStructuredWorkerSession } from '../../../rpc/methods/orchestration-structured-worker-session'
+import { createStructuredWorkerSession } from '../../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-session'
 import type { placeWorkerAgent } from '../../../rpc/methods/orchestration/worker/worker-start-agent-placement'
 
 // The worker's chat is created in the rig's real session host, as the production create would.
-vi.mock('../../../rpc/methods/structured-agent-session-create', () => ({
-  createStructuredAgentSessionForWorktree: async (args: {
-    caller: { callerKey: string }
-    envelope: { sessionId: string }
-  }) => {
-    const rig = await import('./structured-chat-coordinator-mail-rig.test-fixture')
-    const { attachParams } = await import('./structured-chat-coordinator-fake-codex-fixture')
-    const attached = await rig.host.attach(args.caller, attachParams(args.envelope.sessionId))
-    await rig.host.setSessionTabVisibility(args.envelope.sessionId, true)
-    rig.threadBySession.set(args.envelope.sessionId, rig.codex.connections.at(-1)!.threadId!)
-    return attached
-  }
-}))
+vi.mock(
+  '../../../rpc/methods/structured-sessions/creation/structured-agent-session-create',
+  () => ({
+    createStructuredAgentSessionForWorktree: async (args: {
+      caller: { callerKey: string }
+      envelope: { sessionId: string }
+    }) => {
+      const rig = await import('./structured-chat-coordinator-mail-rig.test-fixture')
+      const { attachParams } = await import('./structured-chat-coordinator-fake-codex-fixture')
+      const attached = await rig.host.attach(args.caller, attachParams(args.envelope.sessionId))
+      await rig.host.setSessionTabVisibility(args.envelope.sessionId, true)
+      rig.threadBySession.set(args.envelope.sessionId, rig.codex.connections.at(-1)!.threadId!)
+      return attached
+    }
+  })
+)
 
 type WorkspaceLookup = {
   showManagedTerminalWorkspace: (

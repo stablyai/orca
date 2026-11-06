@@ -12,7 +12,7 @@ import { OrchestrationError } from '../../../orchestration/orchestration-error'
 import { sendAgentTurn } from '../../../orchestration/send-agent-turn'
 import { structuredPointerCallerKey } from '../../../orchestration/structured-mailbox-pointer-host'
 import type { DispatchContextRow } from '../../../orchestration/types'
-import { preambleDispatchState } from '../orchestration-structured-worker-session'
+import { preambleDispatchState } from './structured-workers/orchestration-structured-worker-session'
 
 /** Handed over in every case: started, still starting its agent, or held as a card. */
 export type ChatTaskDelivery = 'accepted' | 'pending' | 'queued'

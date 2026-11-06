@@ -8,7 +8,7 @@ import type { OrchestrationEnvironmentTransport } from '../../../../orchestratio
 import type { RpcRequest } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
 import { fingerprintAuthenticatedPairingCredential } from '../../../server/pairing/device-principal'
-import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { ORCHESTRATION_METHODS } from '../orchestration'
 import { syncFederationBarrier } from './federation-sync-barrier.test-support'
 
 describe('orchestration federation control mail', () => {

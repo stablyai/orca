@@ -12,7 +12,7 @@ import { MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT } from './worker-transcript-payload
 import { redactWorkerTerminalLines } from './worker-terminal-redaction'
 import { readWorkerTranscript } from './worker-transcript-read'
 import { isWslHookRelayConnectionId } from '../../../shared/wsl-hook-relay-contract'
-import { captureStructuredWorkerArchive } from '../rpc/methods/orchestration-structured-worker-lifecycle'
+import { captureStructuredWorkerArchive } from '../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-lifecycle'
 import type { WorkerStructuredJournalArchive } from './structured-worker-journal-archive'
 import { structuredWorkerAgent } from './terminal-authority/structured-sessions/structured-worker-authority'
 import type { StructuredWorkerIdentity } from './terminal-authority/structured-sessions/structured-worker-identity'

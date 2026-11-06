@@ -28,7 +28,7 @@ describe('cross-version wire routing for the send path', () => {
     'src/main/runtime/orchestration/send-agent-turn.ts',
     'src/main/runtime/orchestration/orchestration-caller-identity.ts',
     'src/main/runtime/rpc/orchestration-legacy-mail.ts',
-    'src/main/runtime/rpc/methods/orchestration.ts',
+    'src/main/runtime/rpc/methods/orchestration/orchestration.ts',
     'src/main/runtime/rpc/methods/orchestration/runs/dispatch-methods.ts'
   ])('leaves them off for %s, which no cross-version suite executes', (file) => {
     expect(classifyPrJobs([file])).toMatchObject({ should_run: true, 'cross-version-wire': false })

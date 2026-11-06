@@ -5,7 +5,7 @@ import { readCallerStoreInstallationId } from '../../../../hosts/platform-probe/
 import { getCanonicalUserDataPath } from '../../../../../persistence/loading-store/user-data-path'
 import type { CrossStoreParentRef } from '../../../../../../shared/worktree/lineage-types'
 import { supportsCrossStoreLineage } from '../../../../../../shared/worktree-runtime-capabilities'
-import { resolveDispatchCallerWorktreeId } from '../../orchestration-caller-workspace'
+import { resolveDispatchCallerWorktreeId } from '../orchestration-caller-workspace'
 
 /**
  * `--on <server> --worktree new-child`: the server's new worktree nests under the coordinator's

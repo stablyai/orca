@@ -9,8 +9,8 @@ import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
 import { RpcDispatcher } from './rpc/dispatcher'
-import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
-import { STATUS_METHODS } from './rpc/methods/status'
+import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration/orchestration'
+import { STATUS_METHODS } from './rpc/methods/host-management/status'
 import { OrcaRuntimeRpcServer } from './rpc/server/runtime-rpc'
 
 vi.mock('electron', () => ({

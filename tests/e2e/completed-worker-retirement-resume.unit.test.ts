@@ -10,7 +10,7 @@ import type { Worktree } from '../../src/shared/worktree/types'
 import { OrchestrationDb } from '../../src/main/runtime/orchestration/db'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import type { RpcContext } from '../../src/main/runtime/rpc/core'
-import { ORCHESTRATION_METHODS } from '../../src/main/runtime/rpc/methods/orchestration'
+import { ORCHESTRATION_METHODS } from '../../src/main/runtime/rpc/methods/orchestration/orchestration'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import {
   resolveLegacyWorkerTerminalRecoveryAction,

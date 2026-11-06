@@ -7,7 +7,7 @@ import { MAX_TIMER_DELAY_MS } from '../../../../../shared/timer-delay'
 import { codexItemBody } from '../../../../codex/structured/items/codex-structured-item-translation'
 import { OrcaRuntimeService } from '../../../../runtime/orca-runtime'
 import { RpcDispatcher } from '../../../../runtime/rpc/dispatcher'
-import { STRUCTURED_AGENT_SESSION_METHODS } from '../../../../runtime/rpc/methods/structured-agent-session'
+import { STRUCTURED_AGENT_SESSION_METHODS } from '../../../../runtime/rpc/methods/structured-sessions/structured-agent-session'
 import { setStructuredAgentSessionHost } from '../structured-agent-session-registry'
 import {
   hostTestAttachParams,

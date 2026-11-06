@@ -25,9 +25,10 @@ vi.mock('electron', () => ({
 import {
   clearStructuredHostStub,
   hostCalls,
-  installStructuredHostStub,
-  SESSION
-} from '../runtime/rpc/methods/structured-agent-session-rpc.test-fixture'
+  installStructuredHostStub
+} from '../runtime/rpc/methods/structured-sessions/protocol/structured-agent-session-rpc.test-fixture'
+
+import { SESSION } from '../runtime/rpc/methods/structured-sessions/protocol/structured-agent-session-rpc-client.test-fixture'
 import { registerRuntimeHandlers } from './runtime'
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal/viewport/terminal-fit-restore-deadline'
 import { PROJECT_SECTION_PARITY_SERVED } from '../../shared/project-section-parity.test-fixture'

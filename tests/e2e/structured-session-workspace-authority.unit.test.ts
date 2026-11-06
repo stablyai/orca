@@ -14,7 +14,7 @@ import { expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session/journal/agent-session-journal-types'
 import { openAgentSessionJournal } from '../../src/main/native-chat/agent-session-journal/journal-store-factory'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
-import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from '../../src/main/runtime/rpc/methods/structured-agent-session-reveal'
+import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from '../../src/main/runtime/rpc/methods/structured-sessions/conversation/structured-agent-session-reveal'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-runtime-capabilities'
 import {
   acquireWatcherRemovalGate,

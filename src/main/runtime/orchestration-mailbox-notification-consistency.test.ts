@@ -32,7 +32,7 @@ import {
   WORKTREE_ID
 } from './orchestration-mailbox-notification-test-harness'
 import { RpcDispatcher } from './rpc/dispatcher'
-import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
+import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration/orchestration'
 import { MAILBOX_POINTER_WRITE_ATTEMPTED } from './orchestration/db/messages/mailbox-pointer-enter-state'
 
 vi.mock('electron', () => ({

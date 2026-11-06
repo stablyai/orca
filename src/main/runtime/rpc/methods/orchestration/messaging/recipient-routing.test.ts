@@ -6,7 +6,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RpcContext, RpcRequest } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
-import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { ORCHESTRATION_METHODS } from '../orchestration'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 import { resolveBareOrchestrationRecipient } from './recipient-routing'
 import {

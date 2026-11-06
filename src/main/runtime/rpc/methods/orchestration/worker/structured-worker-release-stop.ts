@@ -1,7 +1,7 @@
 import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { WorkerTerminalResourceRow } from '../../../../orchestration/worker-terminal-ownership'
-import { stopStructuredWorker } from '../../orchestration-structured-worker-lifecycle'
+import { stopStructuredWorker } from '../structured-workers/orchestration-structured-worker-lifecycle'
 import type { StructuredWorkerIdentity } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { archiveSummary } from './worker-terminal-resource-presentation'
 import { releaseUnknownRecovery, type WorkerReleaseReceipt } from './worker-release-completion'

@@ -14,7 +14,7 @@ import {
 import { OrchestrationDb } from '../../../../orchestration/db'
 import type { RpcRequest } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
-import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { ORCHESTRATION_METHODS } from '../orchestration'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import * as FailedStartTeardown from './failed-worker-start-teardown'
 

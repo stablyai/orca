@@ -27,7 +27,7 @@ import type { RpcRequest, RpcResponse } from '../../rpc/core'
 import type { ClaudeStructuredAuthPolicy } from '../../../claude-accounts/claude-structured-auth-policy'
 import { RpcDispatcher } from '../../rpc/dispatcher'
 import type { NativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/native-chat-shell-environment'
-import { STRUCTURED_AGENT_SESSION_METHODS } from '../../rpc/methods/structured-agent-session'
+import { STRUCTURED_AGENT_SESSION_METHODS } from '../../rpc/methods/structured-sessions/structured-agent-session'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime,

@@ -2,7 +2,7 @@ import '../runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { PREFLIGHT_METHODS } from '../runtime/rpc/methods/preflight'
+import { PREFLIGHT_METHODS } from '../runtime/rpc/methods/preflight/preflight'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { GlobalWindowsRuntimeDefault } from '../../shared/project-execution-runtime'
 import type { Project } from '../../shared/project-types'
@@ -36,8 +36,10 @@ vi.mock('../wsl/discovery/wsl-background-exec-gate', () => ({
 vi.mock('./agent-detection', () => ({
   detectInstalledAgentsWithShellPathHydration: detectInstalledMock,
   refreshShellPathAndDetectAgents: refreshMock,
-  detectRemoteWindowsTerminalCapabilities: vi.fn(),
   runPreflightCheck: vi.fn()
+}))
+vi.mock('../ipc/preflight-remote-windows-terminal-capabilities', () => ({
+  detectRemoteWindowsTerminalCapabilities: vi.fn()
 }))
 
 const WSL_REPO_PATH = '\\\\wsl.localhost\\Ubuntu-24.04\\home\\me\\project\\repo'

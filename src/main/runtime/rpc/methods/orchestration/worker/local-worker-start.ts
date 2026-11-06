@@ -10,8 +10,8 @@ import type {
   OrchestrationCallerIdentity,
   OrchestrationSessionCaller
 } from '../../../../orchestration/orchestration-caller-identity'
-import { resolveDispatchCallerWorktreeId } from '../../orchestration-caller-workspace'
-import { resolveWorkerStartModeOnHost } from '../../orchestration-worker-start-mode'
+import { resolveDispatchCallerWorktreeId } from '../orchestration-caller-workspace'
+import { resolveWorkerStartModeOnHost } from '../structured-workers/orchestration-worker-start-mode'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { EXISTING_WORKTREE_SETUP, placeWorkerAgent } from './worker-start-agent-placement'
 import { awaitStructuredWorkerSetupGate } from './worker-start-structured-setup-gate'
@@ -34,7 +34,7 @@ import { prepareLocalWorkerStart } from './worker-start-validation'
 import { deliverAndSettleWorkerStartReadiness } from './worker-start-readiness-settlement'
 import type { WorkerStartMutation } from './worker-start-mutation'
 import { prepareWorkerStartCard } from '../../../../orchestration/worker-start-card'
-import { rebindReusedStructuredWorker } from '../../orchestration-structured-worker-session'
+import { rebindReusedStructuredWorker } from '../structured-workers/orchestration-structured-worker-session'
 import { placedWorkerParty, type WorkerFollowUp } from './worker-follow-up-placement'
 
 export async function startLocalWorker(args: {

@@ -7,7 +7,7 @@ import { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationDb } from '../orchestration/db'
 import { defineMethod, type RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
-import { ORCHESTRATION_METHODS } from './methods/orchestration'
+import { ORCHESTRATION_METHODS } from './methods/orchestration/orchestration'
 
 // Find the shipped registration so an implemented but unregistered method still fails the test.
 const REQUEST_SHOW_METHODS = ORCHESTRATION_METHODS.filter(

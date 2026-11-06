@@ -12,8 +12,8 @@ import type { OrchestrationSessionCaller } from '../../../../runtime/orchestrati
 import { resolveOrcaSessionParty } from '../../../../runtime/orchestration/orchestration-party'
 import { ReceivingRuntime } from './structured-agent-session-receiving-runtime.test-support'
 import { eraseRpcMethods, isStreamingMethod } from '../../../../runtime/rpc/core'
-import { STRUCTURED_AGENT_SESSION_METHODS } from '../../../../runtime/rpc/methods/structured-agent-session'
-import { ORCHESTRATION_METHODS } from '../../../../runtime/rpc/methods/orchestration'
+import { STRUCTURED_AGENT_SESSION_METHODS } from '../../../../runtime/rpc/methods/structured-sessions/structured-agent-session'
+import { ORCHESTRATION_METHODS } from '../../../../runtime/rpc/methods/orchestration/orchestration'
 import { resolveWorkerStartRun } from '../../../../runtime/rpc/methods/orchestration/worker/worker-start-authority'
 import { resolveDispatchCreator } from '../../../../runtime/rpc/methods/orchestration/runs/dispatch-creator'
 import {

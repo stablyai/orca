@@ -6,7 +6,7 @@ import { getDefaultPersistedState } from '../../../shared/constants'
 import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
 import { buildNativeChatProviderUpdate } from '../../../shared/native-chat/native-chat-providers'
 import { nativeChatPreferenceFor } from '../../../shared/structured-native-chat-launch-route'
-import { isStructuredNativeChatDefaultFor } from '../../runtime/rpc/methods/structured-agent-session-policy'
+import { isStructuredNativeChatDefaultFor } from '../../runtime/rpc/methods/structured-sessions/structured-agent-session-policy'
 import {
   closeTestStores,
   testState,

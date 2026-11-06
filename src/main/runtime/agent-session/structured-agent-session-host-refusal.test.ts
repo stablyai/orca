@@ -20,7 +20,7 @@ import Database from '../../sqlite/sync-database'
 import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { requireStructuredHost } from '../rpc/methods/structured-agent-session-gate'
+import { requireStructuredHost } from '../rpc/methods/structured-sessions/creation/structured-agent-session-gate'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../ai-vault/structured-session-ownership'
 import type { RpcContext } from '../rpc/core'
 import {

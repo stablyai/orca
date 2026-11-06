@@ -13,7 +13,7 @@ import {
 import { buildDispatchPreamble } from '../../../../orchestration/preamble'
 import { sendAgentTurn } from '../../../../orchestration/send-agent-turn'
 import { createWorkerBriefWriteGuard } from '../../../../terminal/wait/launched-agent-write-guard'
-import { sendStructuredWorkerPreamble } from '../../orchestration-structured-worker-session'
+import { sendStructuredWorkerPreamble } from '../structured-workers/orchestration-structured-worker-session'
 import { chatAssigneeOf } from '../chat-assignee-admission'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { sendChatTask, type ChatTaskDelivery } from '../chat-task-delivery'

@@ -26,7 +26,7 @@ import {
   projectQueuedImageCardPublication,
   queuedImageHistoryReader,
   queuedImageSubscriber
-} from '../../../runtime/rpc/methods/structured-agent-session-queued-image-capability'
+} from '../../../runtime/rpc/methods/structured-sessions/attachments/structured-agent-session-queued-image-capability'
 import { openStructuredAgentSessionConversationJournal } from '../../agent-session-wire/host/structured-agent-session-conversation-open'
 import { agentSessionRecordFixture } from '../../agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'

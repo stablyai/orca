@@ -8,7 +8,7 @@ import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shar
 import { DeviceRegistry } from './server/pairing/device-registry'
 import { OrcaRuntimeRpcServer } from './server/runtime-rpc'
 import { buildRegistry } from './core'
-import { ORCHESTRATION_METHODS } from './methods/orchestration'
+import { ORCHESTRATION_METHODS } from './methods/orchestration/orchestration'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,

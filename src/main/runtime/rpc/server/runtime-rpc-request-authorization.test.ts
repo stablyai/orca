@@ -13,12 +13,12 @@ import { readRuntimeMetadata } from './runtime-metadata'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { DeviceRegistry } from './pairing/device-registry'
 import { sendRequest, withCurrentOrchestrationContract } from './runtime-rpc-test-harness'
-import { STATUS_METHODS } from '../methods/status'
+import { STATUS_METHODS } from '../methods/host-management/status'
 import { ORCHESTRATION_FEDERATION_CONTROL_METHODS } from '../methods/orchestration/federation/federation-control'
 import { ORCHESTRATION_RESET_METHODS } from '../methods/orchestration/runs/reset-methods'
-import { SESSION_TAB_METHODS } from '../methods/session-tabs'
-import { FILE_MUTATION_METHODS } from '../methods/files-mutation-methods'
-import { GIT_METHODS } from '../methods/git'
+import { SESSION_TAB_METHODS } from '../methods/session-tabs/session-tabs'
+import { FILE_MUTATION_METHODS } from '../methods/files/files-mutation-methods'
+import { GIT_METHODS } from '../methods/source-control/git/git'
 
 const methods = [
   ...STATUS_METHODS,

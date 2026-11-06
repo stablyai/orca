@@ -1,5 +1,6 @@
 import { sessionIdFromStructuredWorkerIncarnation } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
-import { observeStructuredWorker } from '../../rpc/methods/orchestration-structured-worker-lifecycle'
+import '../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-lifecycle'
+import { observeStructuredWorker } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { OrcaRuntimeWithApplyMobileDisplayMode } from './terminal-display-mode'
 import { addListenerToMap } from './terminal-listener-map'
 import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'

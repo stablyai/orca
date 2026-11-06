@@ -13,7 +13,7 @@ import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal/viewport
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './desktop-renderer-runtime-capabilities'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import { DESKTOP_RPC_CALLER } from '../runtime/rpc/rpc-caller-identity'
-import { ALL_RPC_METHODS } from '../runtime/rpc/methods'
+import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
 import { DesktopRuntimeSenderLifecycle } from './desktop-runtime-sender-lifecycle'
 import { publishMobileProjectSections } from '../runtime/sidebar-inputs/mobile-project-sections-snapshot'
 
