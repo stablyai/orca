@@ -2,7 +2,7 @@ import { constants } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
-import type { AgentHookTarget } from '../../shared/agent-hook-types'
+import type { AgentHookTarget } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import {
   extractExecutableToken,
   hasPathSeparatorToken,

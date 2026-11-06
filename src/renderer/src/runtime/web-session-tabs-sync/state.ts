@@ -16,7 +16,10 @@ import type {
   BrowserWorkspace
 } from '../../../../shared/browser-workspace-types'
 import type { Tab } from '../../../../shared/tab-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { OpenFile } from '../../store/slices/editor'
 import type { RuntimeBrowserPlacement } from '../../../../shared/runtime-browser-placement'
 

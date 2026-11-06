@@ -12,11 +12,11 @@ import {
   parseOrcadMigrationTerminalHistoryText,
   type OrcadMigrationTerminalHistoryDocument
 } from '../../../shared/orcad-migration/orcad-migration-terminal-history'
-import { PTY_SESSION_ID_SEPARATOR } from '../../../shared/pty-session-id-format'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
-import { getHistorySessionDirName } from '../../daemon/history-paths'
-import { isTerminalCheckpointFile } from '../../daemon/terminal-history-checkpoint-reader'
-import type { SessionMeta } from '../../daemon/terminal-history-metadata'
+import { PTY_SESSION_ID_SEPARATOR } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { getHistorySessionDirName } from '../../daemon/history/storage/history-paths'
+import { isTerminalCheckpointFile } from '../../daemon/history/restoration/terminal-history-checkpoint-reader'
+import type { SessionMeta } from '../../daemon/history/storage/terminal-history-metadata'
 import { syncDirectoryDurablySync } from '../../filesystem/durable-file-write'
 import {
   getOrcadMigrationReceivedBlobPath,

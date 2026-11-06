@@ -4,7 +4,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { worktreeRowMatchesMetaHost } from './worktrees/listing/worktree-meta-host-match'
 import { branchName } from '@/lib/git-utils'
-import { normalizeWorkspaceAttachmentUpdate } from '../../../../shared/workspace-attachments'
+import { normalizeWorkspaceAttachmentUpdate } from '../../../../shared/workspace-attachments/workspace-attachments'
 
 type RequiredKey<T> = { [K in keyof T]-?: undefined extends T[K] ? never : K }[keyof T]
 

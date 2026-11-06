@@ -4,7 +4,7 @@ import {
   MOBILE_RELAY_HOST_WORKTREES_METHOD,
   MOBILE_RELAY_HOSTS_LIST_METHOD,
   MobileRelayHostWorktreesParamsSchema
-} from '../../../../shared/mobile-relay-hosts-contract'
+} from '../../../../shared/remote-runtime/relay/mobile-relay-hosts-contract'
 
 export const MOBILE_RELAY_HOSTS_METHODS = [
   defineMethod({

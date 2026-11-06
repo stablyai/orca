@@ -28,7 +28,7 @@ vi.mock('./host-structured-agents', () => ({
 
 import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
 import { getDefaultSettings } from '../../../shared/constants'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { useAppStore } from '@/store'
 import {
   readHostModelCatalogSnapshot,

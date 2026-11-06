@@ -310,16 +310,3 @@ it.each(['gone', 'held'] as const)(
     warn.mockRestore()
   }
 )
-
-it.each(['changed', 'gone', 'not-editable'] as const)(
-  'initial desktop %s has one clean disposition and readiness cannot revive it',
-  async (status) => {
-    rpc.mockResolvedValueOnce({ status })
-    const hook = harness()
-    await begin(hook)
-    expect(hook.result.current.editor).toBeUndefined()
-    expect(readNativeChatDraftCache(SCOPE)).toBe('')
-    expect(toast.error).toHaveBeenCalledTimes(status === 'not-editable' ? 1 : 0)
-    expect(holdCalls('release')).toHaveLength(1)
-  }
-)

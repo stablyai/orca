@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { loadWorkspaceLayoutWithoutReport } from '../../../shared/workspace-layout/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../shared/workspace-layout/workspace-layout-minted-ids'
 import { publishWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-published'
@@ -12,8 +12,11 @@ import {
 import type { WorkspaceLayoutChangeFrame } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
 import { bootWindowFromPartitions } from '../app-shell/startup-window-view.test-fixture'
 import { provideLayoutFrameTerminalPanes } from '../runtime/layout-frame-terminal-panes'
-import { openWorkspaceLayoutFrameSync } from '../runtime/workspace-layout-frame-sync'
-import type { WorkspaceLayoutFrameSync } from '../runtime/workspace-layout-frame-sync'
+import {
+  openWorkspaceLayoutFrameSync,
+  type WorkspaceLayoutFrameSync
+} from '../runtime/workspace-layout-frame-sync'
+
 import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
 import { createTestStore } from '../store/slices/store-test-helpers'
 import { adoptLiveWorkspacePtySurfaces } from './worktree-agent-live-surface-adoption'

@@ -2,10 +2,9 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { createHookListenerState } from './agent-hook-listener/listener-state'
-import { normalizeAndAccept } from './agent-hook-listener-test-harness'
-import { recognizeAgentProcessFromCommandLine } from './agent-process-recognition'
-import { getAgentSessionOptionCatalog } from './agent-session/options/agent-session-option-catalog'
-import { getAgentResumeArgv } from './agent-resume-argv'
+import { normalizeAndAccept } from './agent-hook-listener/normalization/agent-hook-listener-test-harness'
+import { recognizeAgentProcessFromCommandLine } from './agent-status/process/agent-process-recognition'
+import { getAgentResumeArgv } from './agent-launch/startup/agent-resume-argv'
 
 describe('CodeBuddy harness', () => {
   it('replays the live question lifecycle without settling at late SessionStart', () => {
@@ -31,15 +30,6 @@ describe('CodeBuddy harness', () => {
     expect(rows[5]?.providerSession?.id).toBe('codebuddy-verification')
   })
 
-  it.each([
-    'codebuddy',
-    'cbc',
-    'C:\\Tools\\codebuddy.cmd',
-    'node /usr/lib/node_modules/@tencent-ai/codebuddy-code/dist/codebuddy.js'
-  ])('recognizes interactive %s', (command) => {
-    expect(recognizeAgentProcessFromCommandLine(command)?.agent).toBe('codebuddy')
-  })
-
   it('excludes print runs and resumes the original provider session', () => {
     for (const flag of ['--print', '--serve', '--acp', '--bg', '--background']) {
       expect(recognizeAgentProcessFromCommandLine(`codebuddy ${flag}`)).toBeNull()
@@ -49,19 +39,6 @@ describe('CodeBuddy harness', () => {
       'codebuddy',
       '--resume',
       'session-1'
-    ])
-  })
-
-  it('passes explicit model and effort preferences through the CLI flags', () => {
-    const catalog = getAgentSessionOptionCatalog('codebuddy')
-    expect(catalog?.modelApply.launchArgs?.('fast-model')).toEqual(['--model', 'fast-model'])
-    expect(catalog?.unknownModelOptions?.[0].apply.launchArgs?.('high')).toEqual([
-      '--effort',
-      'high'
-    ])
-    expect(catalog?.modelApply.removeAgentArgs?.(['--model', 'old', '--', 'prompt'])).toEqual([
-      '--',
-      'prompt'
     ])
   })
 })

@@ -9,7 +9,8 @@ import {
 import { structuredAgentSessionMessageSendMutation } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
 import { restoreJournal } from '../agent-session-journal/journal-open'
-import { renderJournalState } from '../agent-session-journal/journal-reducer'
+import { renderJournalStatus } from '../agent-session-journal/journal-public-read'
+import { journalInputOrder } from '../agent-session-journal/journal-input-order'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import type Database from '../../sqlite/sync-database'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
@@ -47,7 +48,10 @@ export function readSavedUsageLimitCut(
   id: string
 ): NativeChatUsageLimitCut | null {
   const load = restoreJournal(db, id)
-  const snapshot = load && !load.newer && !load.damage ? renderJournalState(load.state) : null
+  const snapshot =
+    load && !load.newer && !load.damage
+      ? renderJournalStatus(load.state, journalInputOrder(load.state))
+      : null
   return snapshot ? latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions) : null
 }
 

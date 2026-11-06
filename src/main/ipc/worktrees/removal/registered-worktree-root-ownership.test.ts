@@ -17,7 +17,7 @@ vi.mock('../../worktree-logic', () => ({
 vi.mock('../../../workspaces/execution-host/project-runtime-git-options', () => ({
   getWorktreeMirrorDistroForRuntime: vi.fn()
 }))
-import { resolveAuthorizedPath } from '../../filesystem/filesystem-auth'
+import { resolveAuthorizedPath } from '../../filesystem/access/filesystem-auth'
 import {
   __resetCreatedWorktreeRootsForTests,
   invalidateAuthorizedRootsCache,

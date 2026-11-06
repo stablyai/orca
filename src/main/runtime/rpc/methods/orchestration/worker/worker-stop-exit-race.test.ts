@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   OPERATOR_CLOSE_EXIT_CAUSE,
   type TerminalExitCause
-} from '../../../../../../shared/terminal-exit-cause'
+} from '../../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 
 const h = createOrchestrationWorkerReleaseHarness()

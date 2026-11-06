@@ -4,7 +4,7 @@ import {
 } from '../shared/agent-hook-listener/claude-session-continuation'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
-import { probeAgentProcessPresence } from '../shared/agent-process-presence-probe'
+import { probeAgentProcessPresence } from '../shared/agent-status/process/agent-process-presence-probe'
 
 export class RelayAgentPresence {
   private readonly pending = new WeakMap<AgentHookEventPayload, Promise<void>>()

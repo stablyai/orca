@@ -2,7 +2,7 @@ import { Settings } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { formatUsageLimitResetClock } from '../../../../shared/agent-session/failures/agent-session-usage-limit'
-import { NATIVE_CHAT_USAGE_LIMIT_CONTINUE_SETTING_SECTION_ID } from '../settings/native-chat-usage-limit-continue-setting-target'
+import { NATIVE_CHAT_USAGE_LIMIT_CONTINUE_SETTING_SECTION_ID } from '../settings/chat/native-chat-usage-limit-continue-setting-target'
 
 export type NativeChatUsageLimitAutoContinueState =
   | { kind: 'off' }

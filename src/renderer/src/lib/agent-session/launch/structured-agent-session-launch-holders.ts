@@ -19,9 +19,9 @@ function holdsLaunchIdentity(
   }
   const { attempt } = state.callers
   return (
-    lifecycle !== 'visibility-unknown' &&
-    attempt.kind === 'first' &&
-    (requestId === undefined || attempt.requestId === requestId)
+    (lifecycle !== 'visibility-unknown' ||
+      (!!state.intent.params.firstMessage && requestId !== undefined)) &&
+    (requestId === undefined ? attempt.kind === 'first' : attempt.requestId === requestId)
   )
 }
 

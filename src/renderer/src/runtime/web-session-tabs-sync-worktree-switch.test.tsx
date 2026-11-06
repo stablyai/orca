@@ -3,7 +3,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
-import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
+import type { RuntimeHostStatusSnapshot } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeMobileSessionTabsResult, RuntimeStatus } from '../../../shared/runtime-types'
 import type * as WebRuntimeTerminalCreationModule from './web-runtime-terminal-creation'
 

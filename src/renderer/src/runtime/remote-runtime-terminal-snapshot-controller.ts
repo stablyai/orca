@@ -1,8 +1,8 @@
 import {
   TerminalStreamOpcode,
   encodeTerminalStreamJson
-} from '../../../shared/terminal-stream-protocol'
-import { TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS } from '../../../shared/terminal-multiplex-flow-control'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
+import { TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS } from '../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { RemoteRuntimeTerminalMultiplexerBase } from './remote-runtime-terminal-multiplexer-base'
 import {

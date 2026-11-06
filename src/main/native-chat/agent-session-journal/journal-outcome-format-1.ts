@@ -105,6 +105,7 @@ export const outcomeFormat1StoredScalars = z.object({
   lastActivityAt: number,
   oldestSequence: number,
   highestFence: number,
+  contextBoundary: z.number().int().safe().min(2).optional(),
   derivedTurnScope: z.string().nullable(),
   latestAcceptedTurnSequence: number,
   queuePauseMarks: pauseMarks,
@@ -249,7 +250,7 @@ type Collection = (typeof OUTCOME_FORMAT_1_COLLECTIONS)[number]
 type StoredIn<F> = F extends 'items'
   ? AgentJournalRenderItem
   : F extends 'queue.cards'
-    ? Stored<Cards>
+    ? [string, Omit<Cards extends Map<string, infer V> ? V : never, 'recovers'>]
     : F extends keyof State
       ? Stored<State[F]>
       : never

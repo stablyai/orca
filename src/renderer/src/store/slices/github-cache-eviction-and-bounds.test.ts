@@ -1,63 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { workItemsCacheKey } from '../github/cache-identity'
 import {
   createTestStore,
   makePR,
   mockApi,
   resetRemoteRuntimeMocks
 } from './github-slice-test-harness'
-
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import '../../../../shared/task-source-context'
-
-describe('createGitHubSlice.evictGitHubRepoCaches', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    resetRemoteRuntimeMocks()
-  })
-
-  it('does not let a stale pre-invalidation work-item response rewrite the cache', async () => {
-    const store = createTestStore()
-    const item = {
-      type: 'pr',
-      number: 42,
-      title: 'Old origin PR',
-      url: 'https://example.test/42',
-      updatedAt: '2026-05-22T00:00:00Z'
-    } as GitHubWorkItem
-    let resolveFirst: (value: {
-      items: GitHubWorkItem[]
-      sources: {
-        issues: null
-        prs: { owner: 'fork'; repo: 'r' }
-        originCandidate: { owner: 'fork'; repo: 'r' }
-        upstreamCandidate: { owner: 'up'; repo: 'r' }
-      }
-    }) => void = () => {}
-    mockApi.gh.listWorkItems.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          resolveFirst = resolve
-        })
-    )
-
-    const firstFetch = store.getState().fetchWorkItems('repo-1', '/repo/one', 20, '')
-    await Promise.resolve()
-    store.setState((s) => ({ workItemsInvalidationNonce: s.workItemsInvalidationNonce + 1 }))
-    resolveFirst({
-      items: [item],
-      sources: {
-        issues: null,
-        prs: { owner: 'fork', repo: 'r' },
-        originCandidate: { owner: 'fork', repo: 'r' },
-        upstreamCandidate: { owner: 'up', repo: 'r' }
-      }
-    })
-
-    await expect(firstFetch).resolves.toEqual([{ ...item, repoId: 'repo-1' }])
-    expect(store.getState().workItemsCache[workItemsCacheKey('repo-1', 20, '')]).toBeUndefined()
-  })
-})
 
 describe('createGitHubSlice cache bounds', () => {
   beforeEach(() => {

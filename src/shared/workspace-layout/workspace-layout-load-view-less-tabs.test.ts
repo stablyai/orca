@@ -3,7 +3,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../execution-host'
 import type { Tab, TabContentType } from '../tab-types'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../constants'
 import { translateSessionTabMove } from './old-client/old-client-method-translation'
 import { loadWorkspaceLayout } from './workspace-layout-load'

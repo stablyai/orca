@@ -4,7 +4,10 @@ import type {
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
-import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
+import {
+  bindStructuredAgentSessionInputWork,
+  hostStructuredAgentSessionCurrentWork
+} from './structured-agent-session-host-current-work'
 import { StructuredAgentSessionQueuedMessageDrain } from './structured-agent-session-queued-messages'
 import {
   deleteQueuedStructuredAgentMessage,
@@ -19,6 +22,7 @@ import {
 } from './structured-agent-session-queued-edit'
 import { moveQueuedStructuredAgentMessage } from './structured-agent-session-queued-move'
 import { queuedMailUnavailable } from './structured-agent-session-queued-mail'
+import { canSteerStructuredQueuedMessage } from './structured-agent-session-queued-gate'
 
 /** Read host context lazily during field initialization; session touch renews idle activity. */
 export function wireStructuredAgentSessionQueuedMessages(
@@ -36,6 +40,25 @@ export function wireStructuredAgentSessionQueuedMessages(
     currentWork: (sessionId) =>
       hostStructuredAgentSessionCurrentWork({ store: context().deps.store, sessions }, sessionId),
     wakeDelivery: (sessionId) => context().wakeDelivery(sessionId),
+    canSteer: (sessionId, card) => {
+      const ctx = context()
+      const child = sessions.get(sessionId)?.child
+      const record = ctx.deps.store.getRecord(sessionId)
+      const work = hostStructuredAgentSessionCurrentWork(
+        { store: ctx.deps.store, sessions },
+        sessionId
+      )
+      return canSteerStructuredQueuedMessage(
+        {
+          child,
+          record,
+          work,
+          stopping: ctx.readStopping(sessionId),
+          adapter: ctx.deps.adapter
+        },
+        card
+      )
+    },
     submissionReceipt: (sessionId) => context().deps.store.submissionReceipt(sessionId),
     owed: (sessionId, from) => context().deps.queuedAgentMessageOwed?.(sessionId, from) ?? 'owed',
     logger: deferredStructuredAgentSessionLogger(() => context().deps.logger)
@@ -63,6 +86,7 @@ export function wireStructuredAgentSessionQueuedMessages(
     drain,
     refresh,
     onOpened: (sessionId: string) => {
+      bindStructuredAgentSessionInputWork(context().deps.store, sessionId, sessions.get(sessionId))
       const journal = sessions.get(sessionId)?.journal
       if (journal) {
         // Installed before anything reads the next card, so every reader applies the one mail rule.
@@ -95,11 +119,13 @@ export function wireStructuredAgentSessionQueuedMessages(
       params: Parameters<typeof holdQueuedStructuredAgentMessageEdit>[2]
     ) => holdQueuedStructuredAgentMessageEdit(context(), caller, params),
     /** Generation ends wake drain without renewing idle activity. */
-    onJournalActivity: (sessionId: string, activity = true) => {
+    onJournalActivity: (sessionId: string, activity = true, inputChanged = true) => {
       if (activity) {
         sessions.touch(sessionId)
       }
-      drain.schedule(sessionId)
+      if (inputChanged) {
+        drain.schedule(sessionId)
+      }
     },
     queuedMessageSend: (
       caller: StructuredAgentSessionCaller,

@@ -92,7 +92,7 @@ beforeEach(() => {
   client.record.mockResolvedValue({ recorded: true })
 })
 afterEach(() => {
-  vi.doUnmock('../components/editor/ipynb-kernel-store')
+  vi.doUnmock('../components/editor/notebook/kernel/ipynb-kernel-store')
 })
 
 describe('WSL move renderer store rewrites', () => {

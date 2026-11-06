@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-freshness'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
 import type { OrchestrationCoordinatorKey } from '../orchestration-caller-identity'
 import { createCrewSourceInputs } from './crew-source-inputs'

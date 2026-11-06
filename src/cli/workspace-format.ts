@@ -1,4 +1,4 @@
-import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../shared/remote-runtime/host-catalog/runtime-environments'
 import type {
   RuntimeRepoList,
   RuntimeRepoSearchRefs,

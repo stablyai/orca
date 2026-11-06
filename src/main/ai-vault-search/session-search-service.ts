@@ -2,7 +2,7 @@ import type {
   AiVaultSearchRequest,
   AiVaultSearchResponse,
   AiVaultSearchStatus
-} from '../../shared/ai-vault-search-types'
+} from '../../shared/ai-vault/search/ai-vault-search-types'
 import type { SessionSearchEngine } from './session-search-engine'
 import type { SessionSearchIndexer } from './session-search-indexer'
 import { SessionSearchCursorError } from './session-search-page-cursor'

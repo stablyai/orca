@@ -29,13 +29,21 @@ vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => {
 })
 
 vi.mock('electron', () => moduleMocks.electronModuleMock(reposMocks))
+vi.mock('../ssh/targets/ssh-target-registry', () => ({
+  getSshTargetRegistryStore: () => ({
+    getTarget: (id: string) => (id === 'conn-1' ? { id, label: 'build box' } : undefined)
+  })
+}))
 vi.mock('../git/repo', async (importOriginal) =>
   moduleMocks.gitRepoModuleMock(await importOriginal<typeof RepoModule>(), gitRepoProbeMocks)
 )
 vi.mock('../git/runner', async (importOriginal) =>
   moduleMocks.gitRunnerModuleMock(reposMocks, await importOriginal<typeof GitRunner>())
 )
-vi.mock('../git/worktree', () => moduleMocks.gitWorktreeModuleMock(reposMocks))
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreeGraph: reposMocks.listWorktreeGraphMock
+}))
 vi.mock('./worktrees/removal/registered-worktree-roots-cache', () =>
   moduleMocks.registeredWorktreeRootsCacheModuleMock(reposMocks)
 )
@@ -44,7 +52,7 @@ vi.mock('../workspaces/creation/worktree-root-preparation', () =>
 )
 
 import { registerRepoHandlers } from './repos'
-import { clearGitCapabilityStateForTests } from '../git/git-capability-state'
+import { clearGitCapabilityStateForTests } from '../git/command-runner/git-capability-state'
 import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
 import { getGitRepoRoot } from '../git/repo'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
@@ -433,7 +441,7 @@ describe('repos:add + repos:clone', () => {
     expect(mockStore.removeProjectForHost).not.toHaveBeenCalled()
   })
 
-  it('refuses project setup on an SSH target with the not-connected text and adds no repo', async () => {
+  it('refuses project setup on an SSH target by its label, saying to connect it (#37767)', async () => {
     await expect(
       handlers.get('projectHostSetups:setupExistingFolder')!(null, {
         projectId: 'github:acme/orca',
@@ -441,7 +449,7 @@ describe('repos:add + repos:clone', () => {
         path: '/srv/orca',
         kind: 'git'
       })
-    ).rejects.toThrow('SSH connection "conn-1" not found or not connected')
+    ).rejects.toThrow(/build box/)
 
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })

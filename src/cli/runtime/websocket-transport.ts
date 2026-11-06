@@ -1,10 +1,10 @@
-import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type {
   RuntimeRequestSelection,
   RuntimeOrchestrationEnvelope
 } from '../../shared/runtime-rpc-envelope'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import {
   sendRemoteRuntimeRequest,
   sendRemoteRuntimeRequestWithStatusPreflight

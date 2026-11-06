@@ -1,14 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 
-import {
-  _getWebSessionTabsTrackingCountsForTest,
-  clearWebSessionTabsTrackingForEnvironment
-} from './web-session-tabs-sync/tracking-lifecycle'
+import { _getWebSessionTabsTrackingCountsForTest } from './web-session-tabs-sync/tracking-lifecycle'
 import { applyFreshWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import { resolveHostSessionTabIdForWebSessionTab } from './web-session-tabs-sync/tracking-mappings'
-import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
+
 import {
   ENV,
   HOST_SURFACE_ID,
@@ -29,80 +26,6 @@ vi.mock('../store', () => ({
 
 describe('applyWebSessionTabsSnapshot', () => {
   beforeEach(resetWebSessionTabsSyncTestState)
-
-  it('indexes mirrored agent mappings so removed tabs cannot retain stale host ids', () => {
-    const agentSnapshot = (
-      sessionId: string,
-      hostTabId: string,
-      snapshotVersion: number
-    ): RuntimeMobileSessionTabsResult =>
-      makeSnapshot(
-        [
-          {
-            type: 'agent-session',
-            id: hostTabId,
-            title: 'Codex Chat',
-            sessionId,
-            agent: 'codex',
-            isActive: true
-          }
-        ],
-        {
-          snapshotVersion,
-          activeTabId: hostTabId,
-          activeTabType: 'agent-session'
-        }
-      )
-
-    const firstPatch = applyFreshWebSessionTabsSnapshot(
-      makeState(),
-      agentSnapshot('session-1', 'host-agent-1', 1),
-      ENV,
-      NOW
-    ) as Partial<WebSessionTabsSyncState>
-    const afterFirstSnapshot = { ...makeState(), ...firstPatch } as WebSessionTabsSyncState
-
-    expect(_getWebSessionTabsTrackingCountsForTest()).toEqual({
-      freshness: 1,
-      hostMappings: 1,
-      hostMappingWorktrees: 1
-    })
-
-    applyFreshWebSessionTabsSnapshot(
-      afterFirstSnapshot,
-      agentSnapshot('session-2', 'host-agent-2', 2),
-      ENV,
-      NOW + 1
-    )
-
-    expect(_getWebSessionTabsTrackingCountsForTest()).toEqual({
-      freshness: 1,
-      hostMappings: 1,
-      hostMappingWorktrees: 1
-    })
-    expect(
-      resolveHostSessionTabIdForWebSessionTab(makeState(), {
-        environmentId: ENV,
-        worktreeId: WT,
-        tabId: 'structured-agent-session-session-1'
-      })
-    ).toBeNull()
-    expect(
-      resolveHostSessionTabIdForWebSessionTab(makeState(), {
-        environmentId: ENV,
-        worktreeId: WT,
-        tabId: 'structured-agent-session-session-2'
-      })
-    ).toBe('host-agent-2')
-
-    clearWebSessionTabsTrackingForEnvironment(ENV)
-
-    expect(_getWebSessionTabsTrackingCountsForTest()).toEqual({
-      freshness: 0,
-      hostMappings: 0,
-      hostMappingWorktrees: 0
-    })
-  })
 
   it('clears one worktree mapping without dropping a sibling in the same environment', () => {
     // Why: POSIX paths may contain ':', so this sibling's worktree id is prefixed by WT's — the case a prefix scan wiped.

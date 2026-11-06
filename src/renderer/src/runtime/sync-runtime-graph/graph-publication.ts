@@ -10,8 +10,8 @@ import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeRendererSyncWindowGraph
 } from '../../../../shared/runtime-types'
-import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { applyNativeChatLaunchDraftResolved } from '../native-chat-launch-draft-runtime-resolution'
 import { resolveTerminalLayoutRoot } from '../remote-terminal-layout-resolution'
 import { buildMobileSessionTabSnapshots } from './mobile-session-snapshots'

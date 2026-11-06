@@ -1,3 +1,4 @@
+import { answered } from '../github/answered-request.test-fixture'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
@@ -74,7 +75,7 @@ async function tasksRow(store: ReturnType<typeof createTestStore>, item: GitHubW
   const copy = () => Object.values(store.getState().workItemsCache).flatMap((e) => e.data ?? [])[0]
   const capture = () => store.getState().githubTaskCache.capture(repo, sourceContext)!
   const search = async () =>
-    (
+    answered(
       await store
         .getState()
         .fetchWorkItems(repo.id, repo.path, 20, '', { sourceContext, force: true })
@@ -332,16 +333,18 @@ describe('shared GitHub task records through production store actions', () => {
       }
     })
     lookup.mockResolvedValue({ ...row, labels: ['current'] })
-    const result = await store
-      .getState()
-      .fetchWorkItemsNextPage([{ repoId: repo.id, path: repo.path }], 20, 20, '', 2)
+    const result = answered(
+      await store
+        .getState()
+        .fetchWorkItemsNextPage([{ repoId: repo.id, path: repo.path }], 20, 20, '', 2)
+    )
     expect(result.items[0].labels).toEqual(['current'])
     mockApi.gh.listWorkItems.mockResolvedValue({
       items: [],
       sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
     })
     expect(
-      (
+      answered(
         await store
           .getState()
           .fetchWorkItemsNextPage([{ repoId: repo.id, path: repo.path }], 20, 20, '', 3)
@@ -429,7 +432,7 @@ describe('shared GitHub task records through production store actions', () => {
     ['close', false, true],
     ['label', false, true]
   ] as const)(
-    'settles a disposed owner through its reducer (%s first, label ok %s, accepted base %s)',
+    'settles a disposed owner through its reducer without restoring its collection (%s first, label ok %s, accepted base %s)',
     async (first, labelOk, accepted) => {
       const { store, cache } = setup()
       const { copy, capture } = await tasksRow(store)
@@ -446,14 +449,14 @@ describe('shared GitHub task records through production store actions', () => {
           : [() => label(labelOk), () => close(true)]
       expect(settles[0]().state).toBe('closed')
       expect(settles[1]()).toMatchObject({ state: 'closed', labels: labelOk ? ['bug'] : [] })
-      expect(copy()).toMatchObject({ state: 'closed', labels: labelOk ? ['bug'] : [] })
+      expect(copy()).toBeUndefined()
       expect(close(true)).toMatchObject({ state: 'closed', labels: labelOk ? ['bug'] : [] })
       await flush()
       expect(lookup).not.toHaveBeenCalled()
     }
   )
   it.each([false, true])(
-    'removes only the failed member of disjoint list edits after disposal (accepted base %s)',
+    'settles disjoint edits after disposal without restoring collection membership (accepted base %s)',
     async (accepted) => {
       const { store, cache } = setup()
       const { copy, capture } = await tasksRow(store)
@@ -463,11 +466,9 @@ describe('shared GitHub task records through production store actions', () => {
       const a = cache.operation(row, capture(), { labels: { a: true } })
       const b = cache.operation(row, capture(), { labels: { b: true } })
       rebind(store)
-      // A member the copy gained after disposal is not this owner's to remove.
-      store.getState().patchWorkItem(row.id, (current) => ({ labels: [...current.labels, 'x'] }))
       expect(a(false).labels).toEqual(['b'])
       expect(b(true).labels).toEqual(['b'])
-      expect([...copy().labels].sort()).toEqual(['b', 'x'])
+      expect(copy()).toBeUndefined()
     }
   )
   it('leaves copies to a replacement incarnation and reconciles them with its own read', async () => {
@@ -477,6 +478,7 @@ describe('shared GitHub task records through production store actions', () => {
     const old = cache.operation(row, capture(), { labels: { old: true } })
     expect(copy().labels).toEqual([])
     rebind(store)
+    await tasksRow(store)
     const next = cache.operation(copy(), capture(), { labels: { new: true } })
     expect(cache.projectItem(copy()).labels).toEqual(['new'])
     expect(old(false).labels).toEqual([])

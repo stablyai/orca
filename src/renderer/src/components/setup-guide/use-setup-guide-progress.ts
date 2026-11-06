@@ -15,7 +15,7 @@ import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import { useOnboardingSkillRuntime } from '@/hooks/use-onboarding-skill-runtime'
 import {
   getSetupGuideProgressSnapshot,
   type FeatureWallSetupProgress
@@ -51,7 +51,7 @@ export function useSetupGuideProgress(
   const preflightStatusError = useAppStore((s) => s.preflightStatusError)
   const preflightStatusLoading = useAppStore((s) => s.preflightStatusLoading)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
-  const activeSkillRuntime = useActiveProjectSkillRuntime()
+  const activeSkillRuntime = useOnboardingSkillRuntime()
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
@@ -74,26 +74,21 @@ export function useSetupGuideProgress(
   const [computerUsePermissionStatusChecked, setComputerUsePermissionStatusChecked] =
     useState(false)
   const [computerUseUnavailable, setComputerUseUnavailable] = useState(false)
+  const skillOptions = {
+    enabled: shouldRefreshCoreState && activeSkillRuntime.enabled,
+    discoveryTarget: activeSkillRuntime.discoveryTarget,
+    runtimeTarget: activeSkillRuntime.discoveryRuntimeTarget,
+    agent: activeSkillRuntime.agent,
+    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
+  }
   const { installed: detectedBrowserUseSkillInstalled, loading: detectedBrowserUseSkillLoading } =
-    useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
-      enabled: shouldRefreshCoreState,
-      discoveryTarget: activeSkillRuntime.discoveryTarget,
-      sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
-    })
+    useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, skillOptions)
   const { installed: computerUseSkillInstalled, loading: computerUseSkillLoading } =
-    useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, {
-      enabled: shouldRefreshCoreState,
-      discoveryTarget: activeSkillRuntime.discoveryTarget,
-      sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
-    })
+    useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, skillOptions)
   const {
     installed: detectedOrchestrationSkillInstalled,
     loading: detectedOrchestrationSkillLoading
-  } = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
-    enabled: shouldRefreshCoreState,
-    discoveryTarget: activeSkillRuntime.discoveryTarget,
-    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
-  })
+  } = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, skillOptions)
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
   const linearStatusCurrent = linearStatusContextKey === providerRuntimeContextKey
   const jiraStatusCurrent = jiraStatusContextKey === providerRuntimeContextKey
@@ -281,17 +276,21 @@ export function useSetupGuideProgress(
         settings,
         featureInteractions,
         hasConnectedTaskSource,
-        browserUseSkillInstalled: browserUseSkillInstalled || detectedBrowserUseSkillInstalled,
+        browserUseSkillInstalled: shouldRefreshCoreState
+          ? detectedBrowserUseSkillInstalled
+          : browserUseSkillInstalled,
         computerUseSkillInstalled,
         computerUsePermissionsReady: currentComputerUsePermissionsReady,
         computerUseUnavailable: currentComputerUseUnavailable,
-        orchestrationSkillInstalled:
-          orchestrationSkillInstalled || detectedOrchestrationSkillInstalled,
+        orchestrationSkillInstalled: shouldRefreshCoreState
+          ? detectedOrchestrationSkillInstalled
+          : orchestrationSkillInstalled,
         gitRepoCount,
         worktreesByRepo,
         hasSetupScript: currentSetupScriptProbe.hasSetupScript
       }),
     [
+      shouldRefreshCoreState,
       browserUseSkillInstalled,
       ready,
       currentComputerUseUnavailable,

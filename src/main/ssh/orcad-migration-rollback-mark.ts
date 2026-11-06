@@ -1,4 +1,4 @@
-import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
+import type { KnownRuntimeEnvironment } from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import { listOrcadMigrationSourceCutovers } from './orcad-migration-cutover-journal'
 
 /** Use the durable migration mark or older delta journal time; unreadable journals conservatively return now to block destructive rollback. */

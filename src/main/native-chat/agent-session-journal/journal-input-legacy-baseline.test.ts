@@ -216,10 +216,10 @@ it.each([10, 40])(
             journalInputOrder(replay.state).predecessors(replay.state, id)
           }
           expect(domainQueries).toHaveBeenCalledTimes(2 * n)
-          // Each independent fold adds at most one command-witness transition beyond the frozen baseline; each update traverses at most 54 introduction nodes.
+          // Each independent fold adds at most one command-witness transition; logical replacement also retains the prefix cohort, indexed once in each coordinate index.
           expect(domainSets.mock.calls.length).toBeLessThanOrEqual(4 * (n + 6) + 2 * rows.length)
           expect(indexSets.mock.calls.length).toBeLessThanOrEqual(
-            54 * domainSets.mock.calls.length + 8 * rows.length
+            54 * domainSets.mock.calls.length + 8 * rows.length + 2 * (n + 6)
           )
           console.info(
             'legacy-normalized-output',
@@ -279,7 +279,9 @@ it.each([10, 40])(
           (card) => !card.baseline
         )
       ).toBe(true)
-      expect(journal.inputOrder['cards']['domains']).toBeUndefined()
+      expect(journal.inputOrder['cards']['domains']['root']).toEqual({
+        index: new JournalInputPlaceIndex('')
+      })
       expect(journal.queuedMessages.displayState().inputEntries.size).toBe(0)
       expect(finished.state.inputEntries.size).toBe(0)
       expect(

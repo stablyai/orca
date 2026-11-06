@@ -4,7 +4,7 @@ import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/l
 import type {
   PersistedOpenFile,
   WorkspaceSessionState
-} from '../../../shared/workspace-session-state-types'
+} from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   orcadMigrationOwnerKeyIsAmbiguous,
   orcadMigrationOwnerMatchesScope,
@@ -16,7 +16,7 @@ import {
 import {
   paneBelongsToTabs,
   paneBelongsToTerminalLayout
-} from '../../../shared/workspace-session-pane-ownership'
+} from '../../../shared/workspace-session/workspace-session-pane-ownership'
 
 /** Name unsupported live work and remedies; stale/unowned rows stay in the retained profile. */
 export function collectUnsupportedSessionItems(

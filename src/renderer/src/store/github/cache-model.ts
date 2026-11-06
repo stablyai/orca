@@ -8,16 +8,18 @@ export type WorkItemsCacheSources = {
   ineligible?: true
   issues: GitHubOwnerRepo | null
   prs: GitHubOwnerRepo | null
-  /** Raw origin remote, kept distinct from the effective PR source. */
-  originCandidate: GitHubOwnerRepo | null
-  /** Raw upstream remote, kept distinct from the effective issue source. */
-  upstreamCandidate: GitHubOwnerRepo | null
+  /** Raw origin remote, kept distinct from the effective PR source; absent when an older host didn't report it. */
+  originCandidate?: GitHubOwnerRepo | null
+  /** Raw upstream remote, kept distinct from the effective issue source; absent when an older host didn't report it. */
+  upstreamCandidate?: GitHubOwnerRepo | null
 }
 
 export type WorkItemsCacheError = ClassifiedError & { source: GitHubOwnerRepo }
 
 export type CacheEntry<T> = {
   data: T | null
+  sourceBinding?: string
+  collection?: { owner: number; limit: number; query: string; cacheScope: string | undefined }
   fetchedAt: number
   fetchedHeadOid?: string | null
   headSha?: string

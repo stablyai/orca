@@ -11,10 +11,8 @@ import { withoutNativeChatVisualDirectiveLines } from '../../../../shared/native
 import { PanZoomImageDialog } from '@/components/editor/PanZoomImageDialog'
 import {
   getLocalImageCacheKey,
-  getLocalImageSrcCacheKey,
-  useLocalImageSrc,
-  releaseLocalImageSrcByKey
-} from '@/components/editor/useLocalImageSrc'
+  useLocalImageSrc
+} from '@/components/editor/document-images/useLocalImageSrc'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
 import { isNativeChatPastedImagePath } from '../../../../shared/native-chat/native-chat-image-label'
@@ -81,24 +79,6 @@ function transcriptImageIdentity(
 // Roles do not prove who chose an auto-loaded path; main must validate local images by real file type.
 const TRANSCRIPT_IMAGE_ACCESS = chatImageAccess()
 
-// Key release by value: equal rebuilt owner contexts must not revoke a URL still shown by img.
-function transcriptImageReleaseKey(
-  source: string | undefined,
-  filePath: string,
-  runtimeContext: RuntimeFileOperationArgs | null | undefined
-): string | null {
-  if (!runtimeContext) {
-    return null
-  }
-  return getLocalImageSrcCacheKey(
-    source,
-    filePath,
-    runtimeContext.connectionId,
-    runtimeContext,
-    TRANSCRIPT_IMAGE_ACCESS
-  )
-}
-
 function TranscriptImagePreview({
   block,
   runtimeContext
@@ -142,16 +122,6 @@ function TranscriptImagePreview({
     }
     return observeTranscriptVisibility(element, setNear)
   }, [])
-  const releaseKey = transcriptImageReleaseKey(source, filePath, runtimeContext)
-  useEffect(() => {
-    if (!releaseKey) {
-      return
-    }
-    if (!leaseActive) {
-      releaseLocalImageSrcByKey(releaseKey)
-    }
-    return () => releaseLocalImageSrcByKey(releaseKey)
-  }, [leaseActive, releaseKey])
 
   const previewable = Boolean(source) && (external || runtimeContext !== null)
   const showPreview =

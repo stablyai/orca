@@ -1,4 +1,4 @@
-import type { GitDiffResult } from '../../../shared/git-diff-compare-types'
+import type { GitDiffResult } from '../../../shared/git/diff/git-diff-compare-types'
 import { stableInFlightKey } from '../../../shared/in-flight-promise-dedupe'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitRuntimeOptionsKey } from './git-runtime-options-cache-key'

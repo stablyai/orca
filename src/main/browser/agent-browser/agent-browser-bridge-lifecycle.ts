@@ -1,4 +1,4 @@
-import { CdpWsProxy } from '../cdp-ws-proxy'
+import { CdpWsProxy } from '../cdp/transport/cdp-ws-proxy'
 import { BrowserError } from '../browser-error'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
 import { AgentBrowserBridgeRawProcess } from './agent-browser-bridge-raw-process'

@@ -2,7 +2,7 @@ import React from 'react'
 import { Play, RefreshCw, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { SettingsSwitch } from '@/components/settings/SettingsFormControls'
+import { SettingsSwitch } from '@/components/settings/form-controls/SettingsFormControls'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type {
   ExternalAutomationAction,

@@ -6,6 +6,22 @@ import {
 } from './provider-frame-activity'
 
 describe('provider frame activity', () => {
+  it.each([
+    [1, 'Waiting for 1s'],
+    [20_000, 'Waiting for 20s'],
+    [600_000, 'Waiting for 10m 0s'],
+    [43_200_000, 'Waiting for 12h 0m 0s'],
+    [undefined, 'Waiting'],
+    [-1, 'Waiting'],
+    [Number.NaN, 'Waiting'],
+    [Number.POSITIVE_INFINITY, 'Waiting'],
+    ['600000', 'Waiting']
+  ])('describes a sleep of %s milliseconds without promising a brief wait', (durationMs, label) => {
+    expect(
+      codexProviderFrameActivity('item/started', { item: { type: 'sleep', durationMs } })
+    ).toBe(label)
+  })
+
   it('derives bounded Codex activity without exposing item payloads or opcodes', () => {
     expect(
       codexProviderFrameActivity('item/started', {

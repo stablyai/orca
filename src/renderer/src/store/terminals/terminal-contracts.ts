@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace-session-hydration-keys'

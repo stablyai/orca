@@ -5,8 +5,8 @@ import {
   getCanonicalUserDataPath,
   migrateMobilePairingDataToCanonicalUserDataPath
 } from '../persistence/loading-store/user-data-path'
-import { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
-import { WS_BIND_HOST_LOOPBACK } from '../runtime/runtime-rpc/runtime-rpc-pairing-types'
+import { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'
+import { WS_BIND_HOST_LOOPBACK } from '../runtime/rpc/server/runtime-rpc-pairing-types'
 import { isOrcadSidecarLaunch } from '../window/foreground-activation-policy'
 import { registerMobileHandlers } from '../ipc/mobile'
 import { createRuntimeEnvironmentMobileRelayHosts } from '../ipc/runtime-environments/runtime-environment-mobile-relay-hosts'
@@ -14,7 +14,7 @@ import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { registerHeadlessPtyRuntime } from '../ipc/pty/register-headless-runtime'
 import { LocalPtyProvider } from '../providers/local-pty/local-pty-provider'
 import { publishHeadlessRuntimeGraph } from '../runtime/headless-runtime-graph'
-import { OffscreenBrowserBackend } from '../browser/offscreen-browser-backend'
+import { OffscreenBrowserBackend } from '../browser/backends/offscreen-browser-backend'
 import { browserManager } from '../browser/browser-manager'
 import { getDesktopRelayStatus } from './main-process-relay-status'
 import { startDesktopRelayService } from './main-process-relay-startup'
@@ -36,7 +36,7 @@ import { settleServeDesktopActivation } from './serve-desktop-activation'
 import {
   recordRuntimeRpcStartFailure,
   showRuntimeRpcStartupFailureDialog
-} from '../runtime/runtime-rpc-startup-failure'
+} from '../runtime/rpc/server/runtime-rpc-startup-failure'
 import { registerCliForHeadlessServe } from './serve-cli-registration'
 import { startAppImageCopyPreExtraction } from '../cli/appimage-copy-pre-extraction'
 import { scheduleAllPendingHistoryTreeRemovals } from '../pty/history/terminal-history-deletion'
@@ -53,7 +53,7 @@ import { preserveStateBeforeUpdateRestart } from '../updater/update-restart-pres
 import { resolveUpdateInstallMode } from '../updater/updater-service'
 import { scheduleAgentLaunchRecordWarmup } from './agent-launch-record-warmup'
 import { emitServeBrowserIdentityActionLine } from '../server/serve-stdout-boundary'
-import { getBrowserIdentityModeStatus } from '../browser/browser-identity-mode-store'
+import { getBrowserIdentityModeStatus } from '../browser/identity/browser-identity-mode-store'
 
 type RuntimeService = NonNullable<typeof state.runtime>
 

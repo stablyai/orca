@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 import {
@@ -95,7 +95,7 @@ async function settleStartedStructuredAgentLaunch(
       return { kind: 'failed', error }
     }
     if (launch.isVisibilityUnknown()) {
-      // Unknown state retains badge/retry even though this caller is finished.
+      // Correlation and ordinary input outlive this caller, without retaining its live operation.
       launch.releaseCallerAfterUnknownOutcome()
       return { kind: 'visibility-unknown', sessionId: launch.sessionId }
     }

@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { appendFile, readFile, stat } from 'node:fs/promises'
 import * as path from 'node:path'
-import { checkIgnoredPaths } from './check-ignored-paths'
+import { checkIgnoredPaths } from './source-control/check-ignored-paths'
 import type { GitRuntimeOptions } from './git-runtime-options'
 
 // Offer common dependency/build folders when unignored content saturates status.

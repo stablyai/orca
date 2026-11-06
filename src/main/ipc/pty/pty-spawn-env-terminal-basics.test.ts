@@ -1,4 +1,4 @@
-import { withFreshOmpLaunch } from '../../../shared/omp-fresh-launch'
+import { withFreshOmpLaunch } from '../../../shared/agent-launch/startup/omp-fresh-launch'
 import { describe, expect, it, vi } from 'vitest'
 import {
   piBuildPtyEnvMock,
@@ -17,7 +17,7 @@ import {
   buildJcodeRuntimeDir,
   shouldInjectJcodeRuntimeDir
 } from '../../../shared/jcode-runtime-dir'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { selectShellStartupFeatures } from '../../pty/shell-startup/shell-startup-features'
 import {
   REMOTE_VIEWER_CLIPBOARD_ENV,
@@ -69,10 +69,10 @@ vi.mock('../../memory/pty-registry', () =>
 vi.mock('../../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
-vi.mock('../../codex/codex-pane-account-registry', () =>
+vi.mock('../../codex/configuration/homes/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
-vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
+vi.mock('../../codex/history/index/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
@@ -550,12 +550,12 @@ describe('registerPtyHandlers', () => {
       const env = await spawnAndGetEnv()
       expect(env.ORCA_IMAGE_PROTOCOL).toBe('kitty')
     })
-    it('keeps indexed Git prompt guards in a local agent terminal env', async () => {
+    it('guards a local agent terminal with scalar Git prompt variables only', async () => {
       const env = await spawnAndGetEnv(undefined, undefined, undefined, undefined, 'claude')
       expect(env.GIT_TERMINAL_PROMPT).toBe('0')
       expect(env.GCM_INTERACTIVE).toBe('never')
-      expect(Object.values(env)).toContain('credential.interactive')
-      expect(Object.values(env)).toContain('credential.guiPrompt')
+      // Agents that scrub KEY-named env would split an indexed protocol and break git (#26594).
+      expect(Object.keys(env).filter((key) => key.startsWith('GIT_CONFIG_'))).toEqual([])
     })
     it('guards a trusted local agent when its command uses a custom wrapper', async () => {
       const env = await spawnAndGetEnv(

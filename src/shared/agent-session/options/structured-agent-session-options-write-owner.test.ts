@@ -45,6 +45,7 @@ function harness(agent = 'codex') {
       snapshot: structuredAgentSessionShownSnapshot(view),
       ready: true,
       providerStarting: starting,
+      existingChat: true,
       isCurrentContext: () => true,
       flush: () => controller.flush(sends),
       capturePresentation: () => {
@@ -91,7 +92,7 @@ describe('shared option write transaction', () => {
       const unsubscribe = controller.subscribe(() => observed.push(h.pending()))
       const model = h.writer.setOption('model', 'unlisted-alias')
       expect(controller.overlay()).toEqual({ model: 'unlisted-alias' })
-      expect(observed[0]).toBe('model')
+      expect(observed).toEqual([null, 'model'])
       expect(await h.writer.setOption('model', 'another-alias')).toBe(false)
       const effort = h.writer.setOption('effort', 'unlisted-effort')
       const fast = h.writer.setOption('fastMode', true)

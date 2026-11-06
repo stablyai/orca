@@ -49,8 +49,8 @@ import type { AppState } from '../types'
 import type {
   WorkspaceCleanupCandidate,
   WorkspaceCleanupScanResult
-} from '../../../../shared/workspace-cleanup'
-import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup-host-identity'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
+import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import type { DetectedWorktree, Worktree } from '../../../../shared/worktree/types'
 
 function makeDetectedWorktree(

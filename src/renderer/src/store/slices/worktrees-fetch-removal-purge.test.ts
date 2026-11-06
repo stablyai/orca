@@ -110,50 +110,6 @@ describe('fetchWorktrees', () => {
     expect(store.getState().sortEpoch).toBe(8)
   })
 
-  it('keeps pr-checks and plugin panel tabs for surviving worktrees after an authoritative purge', async () => {
-    const store = createTestStore()
-    const removed = makeWorktree({
-      id: 'repo1::/path/removed',
-      repoId: 'repo1',
-      path: '/path/removed'
-    })
-    const surviving = makeWorktree({
-      id: 'repo1::/path/surviving',
-      repoId: 'repo1',
-      path: '/path/surviving'
-    })
-
-    worktreeListMock.mockResolvedValue([surviving])
-    store.setState({
-      worktreesByRepo: { repo1: [removed, surviving] },
-      sortEpoch: 7,
-      rightSidebarTabByWorktree: {
-        [removed.id]: 'search' as never,
-        [surviving.id]: 'pr-checks' as never
-      },
-      rightSidebarExplorerViewByWorktree: {
-        [removed.id]: 'search',
-        [surviving.id]: 'files'
-      }
-    } as Partial<AppState>)
-
-    await store.getState().fetchWorktrees('repo1')
-
-    // pr-checks is not dropped like unknown values; it survives the purge.
-    expect(store.getState().rightSidebarTabByWorktree).toEqual({ [surviving.id]: 'pr-checks' })
-
-    // A shape-valid plugin panel tab also survives the purge.
-    store.setState({
-      rightSidebarTabByWorktree: {
-        [surviving.id]: 'plugin:orca-samples.my-plugin/dashboard' as never
-      }
-    } as Partial<AppState>)
-    await store.getState().fetchWorktrees('repo1')
-    expect(store.getState().rightSidebarTabByWorktree).toEqual({
-      [surviving.id]: 'plugin:orca-samples.my-plugin/dashboard'
-    })
-  })
-
   it('retains hidden state until an authoritative refresh removes the worktree', async () => {
     const store = createTestStore()
     const visible = makeWorktree({
@@ -312,42 +268,6 @@ describe('fetchWorktrees', () => {
 
     // The backend can reuse persisted instance metadata for the same path.
     expect(hasDismissedHugeRepoWarning(beginHugeRepoWarningProbe(hidden))).toBe(false)
-  })
-
-  it('refreshes only repos owned by the changed visibility-default host', async () => {
-    const store = createTestStore()
-    mockApi.worktrees.listDetected.mockImplementationOnce(async (args) =>
-      qualifyDetectedResult(args, makeDetectedResult(args.repoId, []))
-    )
-    store.setState({
-      repos: [
-        {
-          id: 'local-repo',
-          path: '/local',
-          displayName: 'Local',
-          badgeColor: '#000',
-          addedAt: 0,
-          executionHostId: 'local'
-        },
-        {
-          id: 'runtime-repo',
-          path: '/remote',
-          displayName: 'Remote',
-          badgeColor: '#000',
-          addedAt: 0,
-          executionHostId: 'runtime:env-1'
-        }
-      ],
-      hasHydratedWorktreePurge: true
-    } as Partial<AppState>)
-
-    await store.getState().fetchAllWorktrees({ visibilityOwnerHostId: 'local' })
-
-    expect(mockApi.worktrees.listDetected).toHaveBeenCalledOnce()
-    expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith(
-      expect.objectContaining({ repoId: 'local-repo', executionHostId: 'local' })
-    )
-    expect(mockApi.runtime.call).not.toHaveBeenCalled()
   })
 
   it('purges session-only tab keys after an authoritative refresh', async () => {

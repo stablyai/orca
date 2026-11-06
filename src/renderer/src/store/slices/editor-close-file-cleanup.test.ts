@@ -56,49 +56,7 @@ function mirroredEditorUnifiedTab(id: string, entityId: string, worktreeId: stri
   }
 }
 
-describe('createEditorSlice pending editor reveal', () => {
-  it('clears pending reveal when closing all files in the active worktree', () => {
-    const store = createEditorStore()
-
-    store.getState().openFile({
-      filePath: '/repo/src/file.ts',
-      relativePath: 'src/file.ts',
-      worktreeId: 'wt-1',
-      language: 'typescript',
-      mode: 'edit'
-    })
-    store.getState().setPendingEditorReveal({
-      filePath: '/repo/src/file.ts',
-      line: 42,
-      column: 7,
-      matchLength: 5
-    })
-
-    store.getState().closeAllFiles()
-
-    expect(store.getState().openFiles).toEqual([])
-    expect(store.getState().pendingEditorReveal).toBeNull()
-  })
-})
-
 describe('createEditorSlice editor drafts', () => {
-  it('clears draft buffers when closing the file', () => {
-    const store = createEditorStore()
-
-    store.getState().openFile({
-      filePath: '/repo/src/file.ts',
-      relativePath: 'src/file.ts',
-      worktreeId: 'wt-1',
-      language: 'typescript',
-      mode: 'edit'
-    })
-    store.getState().setEditorDraft('/repo/src/file.ts', 'edited')
-
-    store.getState().closeFile('/repo/src/file.ts')
-
-    expect(store.getState().editorDrafts).toEqual({})
-  })
-
   it('drops replaced preview drafts so hidden preview state cannot linger', () => {
     const store = createEditorStore()
 

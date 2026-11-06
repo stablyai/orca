@@ -612,8 +612,8 @@ describe.each([100, 1_000])('queue failures beside %s retained cards', (size) =>
       })
       pending.adopt()
       expect(read()).toBe(paused)
-      // Main's spendReportedCommandCards fold scans the canonical cards once per item row.
-      expect(sum(canonical) - before[0]).toBe(row.kind === 'item' ? 1 : 0)
+      // Command settlement reads its keyed membership, including on item rows.
+      expect(sum(canonical) - before[0]).toBe(0)
       expect([sum(owned), sets.mock.calls.length]).toEqual(before.slice(1, 3))
       expect(ensures).toBeGreaterThan(before[3])
       expect(visits.mock.calls.length).toBe(0)

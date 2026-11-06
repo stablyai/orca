@@ -36,7 +36,9 @@ vi.mock('@/components/terminal-pane/closed-terminal-leaf-notice', () => ({
   applyClosedTerminalLeafNotice: vi.fn()
 }))
 vi.mock('@/components/terminal/terminal-tab-actions', () => ({ closeTerminalTab: vi.fn() }))
-vi.mock('@/components/sidebar/sleep-worktree-flow', () => ({ runSleepWorktree: vi.fn() }))
+vi.mock('@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow', () => ({
+  runSleepWorktree: vi.fn()
+}))
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')

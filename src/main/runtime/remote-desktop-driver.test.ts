@@ -1,5 +1,5 @@
-import type * as WorktreeScanCacheModule from '../git/worktree-scan-cache'
-import type * as WorktreeListingModule from '../git/worktree-listing'
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 /** Desktop viewers suppress host resize, never input; mobile drivers retain priority and the final viewer releases its floor. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import type * as GitUsernameModule from '../git/git-username'
@@ -8,16 +8,16 @@ import { createPtyWriteInput } from '../ipc/pty/ipc/write-input'
 import { ptyOwnership } from '../ipc/pty/provider/ownership-state'
 
 const { hostProviderWrite } = vi.hoisted(() => ({ hostProviderWrite: vi.fn(() => true) }))
-vi.mock('../git/worktree-scan-cache', async (importOriginal) => {
-  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../git/worktree')
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
   return {
     ...(await importOriginal<typeof WorktreeScanCacheModule>()),
     listWorktrees: facade.listWorktrees
   }
 })
 
-vi.mock('../git/worktree-listing', async (importOriginal) => {
-  const facade = await vi.importMock<typeof WorktreeListingModule>('../git/worktree')
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
   return {
     ...(await importOriginal<typeof WorktreeListingModule>()),
     listWorktreesStrict: facade.listWorktreesStrict
@@ -29,10 +29,14 @@ vi.mock('../ipc/pty/provider/registry', async (importOriginal) => ({
   tryGetProviderForPty: () => ({ write: hostProviderWrite, hasPty: () => true })
 }))
 
-vi.mock('../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue([]),
-  listWorktreesStrict: vi.fn().mockResolvedValue([])
-}))
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  const createWorktreeListingMocks = () => ({
+    listWorktrees: vi.fn().mockResolvedValue([]),
+    listWorktreesStrict: vi.fn().mockResolvedValue([])
+  })
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
+})
 vi.mock('../workspace-hooks/hooks', () => ({
   getEffectiveHooks: vi.fn().mockReturnValue(null),
   runHook: vi.fn().mockResolvedValue({ success: true, output: '' })
@@ -46,12 +50,13 @@ vi.mock('../ipc/worktrees/removal/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: vi.fn(),
   invalidateAuthorizedRootsCacheForRepo: vi.fn()
 }))
+const repoBranchConflictMock = vi.hoisted(() => vi.fn().mockResolvedValue(null))
 vi.mock('../git/repo', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return {
     ...actual,
     getDefaultBaseRef: vi.fn().mockReturnValue('origin/main'),
-    getBranchConflictKind: vi.fn().mockResolvedValue(null)
+    getBranchConflictKind: repoBranchConflictMock
   }
 })
 vi.mock('../git/git-username', async () => {
@@ -788,3 +793,8 @@ describe('terminal layout runtime dispatch and ownership', () => {
     expect(runtime.getTerminalFitOverride('pty')).toBeNull()
   })
 })
+
+vi.mock('../git/repo-branch-conflict', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getBranchConflictKind: repoBranchConflictMock
+}))

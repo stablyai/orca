@@ -4,6 +4,7 @@ import {
   terminalAutoRestoreFitSchema,
   terminalBufferClearedSchema,
   terminalSendAcceptedSchema,
+  terminalInputSessionSchema,
   terminalViewportUpdatedSchema
 } from './terminal-reply-schema'
 
@@ -15,6 +16,16 @@ export const terminalInputSend = bindDeferredRpcOperation(
     acceptance: 'object-result-or-null',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('terminal-send-accepted', terminalSendAcceptedSchema)
+  })
+)
+
+export const terminalInputSessionOpen = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'terminal.input-session-open',
+    method: 'terminal.openInputSession',
+    acceptance: 'object-result-or-null',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('terminal-input-session', terminalInputSessionSchema)
   })
 )
 

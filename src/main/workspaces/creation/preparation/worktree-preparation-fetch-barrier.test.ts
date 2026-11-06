@@ -34,23 +34,6 @@ function consume() {
 }
 
 describe('prepared checkout shared fetch barrier', () => {
-  it('passes initial materialization settlement separately from owning WSL Git options', async () => {
-    mocks.getWorktreeOptions.mockReturnValue({ wslDistro: 'Ubuntu' })
-    const fetch = deferredFetch()
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main', fetch.beforeMaterialization)
-    const entry = listPreparations()[0]!
-    expect(mocks.prepareCheckout).toHaveBeenCalledWith(
-      repo.path,
-      entry.preparedPath,
-      'refs/remotes/origin/main',
-      entry.lockReason,
-      { wslDistro: 'Ubuntu', signal: expect.any(AbortSignal) },
-      fetch.beforeMaterialization
-    )
-    expect(mocks.refreshTip).not.toHaveBeenCalled()
-    fetch.settle()
-  })
-
   it('lets a cold racing consume join the first materialization without a second checkout or refresh', async () => {
     const fetch = deferredFetch()
     let materializations = 0

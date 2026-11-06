@@ -1,11 +1,16 @@
 import { serializeNativeChatAgentReferences } from './native-chat-agent-reference-send'
+import {
+  hasNativeChatStagedFiles,
+  captureNativeChatStagedInput
+} from './native-chat-draft-attachment-staging'
 import { mayHoldAgentReferences } from '../../../../shared/orchestration-agent-reference'
 import { getAgentLabel } from '@/lib/agent-catalog'
-import { formatAgentTypeLabel } from '../../../../shared/agent-type-label'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { MAX_SKILL_REFS } from '../../../../shared/rpc-contract/structured-agent-session-message-params'
 import { SkillRefLimitError } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { promptSkillRefs } from './native-chat-prompt-document'
+import type { StructuredAgentSessionAttachmentPreparation } from './structured-agent-session-send-slot'
 import { useCallback } from 'react'
 import { completeNativeChatStructuredUserAction } from './native-chat-structured-user-action'
 import {
@@ -13,7 +18,7 @@ import {
   isStructuredAgentSessionGoalCommand,
   structuredAgentSessionCommandChangesConversation
 } from '../../../../shared/agent-session/view/structured-agent-session-composer'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { dispatchNativeChatStructuredComposerText } from './native-chat-structured-composer-dispatch'
 import type {
   NativeChatComposerSendIntent,
@@ -108,6 +113,8 @@ export function useNativeChatStructuredComposerSend({
         structuredTransport.onSubmitted?.()
       }
       const isCurrent = structuredTransport.capturePresentation()
+      const revealAdmitted =
+        structuredTransport.captureAdmittedReveal?.() ?? structuredTransport.onSubmitted
       if (
         mayHoldAgentReferences(submittedText) &&
         (!hostCommand ||
@@ -131,6 +138,13 @@ export function useNativeChatStructuredComposerSend({
           }
         }
       )
+      const stagedInput =
+        !hostCommand &&
+        !structuredTransport.attachmentStagingScope &&
+        hasNativeChatStagedFiles(draftScopeKey)
+          ? captureNativeChatStagedInput(draftScopeKey, { text, attachments })
+          : undefined
+      let transferred = false
       const consume = () => {
         // A round trip may outlast edits in any composer for this conversation; remove only the submitted content.
         const submitted = submission.draft
@@ -169,12 +183,19 @@ export function useNativeChatStructuredComposerSend({
         setCaret(composing ? 0 : left.text.length)
         clearSkillOrigin()
       }
+      const prepareAttachments: StructuredAgentSessionAttachmentPreparation | undefined =
+        stagedInput ? (input) => stagedInput.prepare(input, structuredTransport) : undefined
       return dispatchNativeChatStructuredComposerText(
         structuredTransport,
         text,
         attachments,
         promptSkillRefs(submission.draft?.document),
-        intent,
+        {
+          ...intent,
+          ...(prepareAttachments
+            ? { prepareAttachments, onSettled: () => stagedInput?.release() }
+            : {})
+        },
         consume
       )
         .then(({ accepted, error, refusedWhile, revealsTranscript }) => {
@@ -185,10 +206,11 @@ export function useNativeChatStructuredComposerSend({
             finishNativeChatComposerSubmission(draftScopeKey, submission, consumed)
             return false
           }
+          transferred = true
           completeNativeChatStructuredUserAction(
             agent,
             structuredTransport,
-            revealsTranscript && (!hostCommand || isCurrent())
+            revealsTranscript && (!hostCommand || isCurrent()) ? revealAdmitted : undefined
           )
           consume()
           return true
@@ -214,7 +236,12 @@ export function useNativeChatStructuredComposerSend({
           structuredTransport.onError(notice.text, { errorText: notice.errorText })
           return false
         })
-        .finally(() => finishNativeChatComposerSubmission(draftScopeKey, submission))
+        .finally(() => {
+          if (!transferred) {
+            stagedInput?.release()
+          }
+          finishNativeChatComposerSubmission(draftScopeKey, submission)
+        })
     },
     [
       agent,

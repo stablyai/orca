@@ -13,7 +13,7 @@ import {
 } from './agent-browser-batch-command'
 import { AgentBrowserBridgeTabs } from './agent-browser-bridge-tabs'
 import { assertRemoteCliBrowserAccess } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
-import { assertExpectedPageUrlForStep } from '../browser-expected-page-url'
+import { assertExpectedPageUrlForStep } from '../cdp/input/browser-expected-page-url'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
 import { canSkipAgentBrowserSessionReset } from './agent-browser-session-reset'
 import {

@@ -35,7 +35,7 @@ vi.mock('electron', () => ({
 }))
 
 import { getNextDefaultOnAppearanceSettingValue, registerAppMenu } from './register-app-menu'
-import { markNativeBrowserPopupWindow } from '../browser/native-browser-popup-windows'
+import { markNativeBrowserPopupWindow } from '../browser/guest-lifecycle/popups/native-browser-popup-windows'
 
 const isMac = process.platform === 'darwin'
 

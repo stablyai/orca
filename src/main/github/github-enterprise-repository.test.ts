@@ -9,9 +9,18 @@ const { commandExecFileAsyncMock, ghExecFileAsyncMock, gitExecFileAsyncMock, res
   }))
 
 // Mock only execution so identity, runtime and auth-status parsing remain real.
-vi.mock('../git/runner', () => ({
-  commandExecFileAsync: commandExecFileAsyncMock,
-  ghExecFileAsync: ghExecFileAsyncMock,
+vi.mock('../git/command-runner/command-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  commandExecFileAsync: commandExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  ghExecFileAsync: ghExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 

@@ -1,8 +1,8 @@
 import {
   createPairedE2EEClientHandshake,
   type PairedE2EEClientHandshake
-} from '../paired-e2ee-client-handshake'
-import { NODE_PAIRED_E2EE_PRIMITIVES } from '../paired-e2ee-node-primitives'
+} from './e2ee/paired-e2ee-client-handshake'
+import { NODE_PAIRED_E2EE_PRIMITIVES } from './e2ee/node/paired-e2ee-node-primitives'
 import { serializeRemoteRuntimePayload } from './remote-runtime-memory-limits'
 import { parseRemoteRuntimeJsonText } from './requests/remote-runtime-request-frames'
 

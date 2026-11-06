@@ -1,4 +1,7 @@
-import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
+import {
+  isTuiAgent,
+  TUI_AGENT_CONFIG
+} from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { resolveCommittedTitleAgentType } from '../../lib/pane-agent-evidence'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 

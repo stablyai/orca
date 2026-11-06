@@ -5,7 +5,7 @@ import {
   WINDOWS_RM_MAX_RETRIES,
   WINDOWS_RM_RETRY_DELAY_MS
 } from '../../shared/windows-transient-lock-removal'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import { parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import { runWslProcess } from '../wsl/execution/wsl-runner'
 import type { CodexAccountAddTarget, ManagedCodexHomeLocation } from './codex-account-service-types'

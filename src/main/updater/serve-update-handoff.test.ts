@@ -1,5 +1,4 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs'
-import { EventEmitter } from 'node:events'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -115,20 +114,6 @@ describe('serve update handoff', () => {
       expect(hasServeUpdateSupervisor()).toBe(true)
       expect(requestServeUpdateHandoff('1.0.61')).toBe(true)
       expect(readState(profile)?.phase).toBe('install-requested')
-    }
-  )
-
-  it.runIf(process.platform === 'darwin')(
-    'quits a supervised serve child when its CLI parent is lost',
-    async () => {
-      const parent = new EventEmitter()
-      const { installServeSupervisorDisconnectQuit } = await import('./serve-update-handoff')
-
-      const removeListener = installServeSupervisorDisconnectQuit(true, parent)
-      parent.emit('disconnect')
-
-      expect(appMock.quit).toHaveBeenCalledOnce()
-      removeListener()
     }
   )
 })

@@ -18,7 +18,7 @@ import {
   captureParkedTerminalPaneCandidates
 } from '../terminal-pane/terminal-parked-tab-watchers'
 import { capturedPanesByTabId } from '../terminal-pane/terminal-parked-watcher-registry'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalParkingFoundation } from '../use-terminal-parking-foundation'
 import type { StartupTerminalTabHold } from './startup-terminal-tab-hold'
 

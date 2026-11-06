@@ -1,13 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createEditorTabsStore } from './editor-slice-test-harness'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
-import { readingCheck, readingDetails } from '@/components/editor/check-details-reading-fixture'
+import {
+  readingCheck,
+  readingDetails
+} from '@/components/editor/check-details/reading/check-details-reading-fixture'
 import {
   checkDetailsReadingKey,
   checkJobIdentities,
   checkLogDigest,
   checkReadingLogKey
-} from '@/components/editor/check-details-reading-cache'
+} from '@/components/editor/check-details/reading/check-details-reading-cache'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/runtime/close-mirrored-editor-tab', () => ({ notifyHostOfMirroredEditorClose: vi.fn() }))

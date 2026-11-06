@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { realpath } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import type { RuntimeFileStatLike, TerminalFileGrant } from './file-grants'
+import { isBinaryBuffer } from '../../../../shared/binary-buffer'
 import {
   LOCAL_PREVIEWABLE_BINARY_MAX_BYTES,
   MOBILE_FILE_READ_MAX_BYTES
@@ -24,20 +25,20 @@ export async function readFileHandleBufferBounded(
   return buffer.subarray(0, bytesRead)
 }
 
-/** Pin all returnable bytes; size-rejected files need no digest. */
+/** Pin all returnable bytes; size-rejected files need no digest. Binary is null where unread. */
 export async function localTerminalArtifactContentDigest(
   handle: FileHandle,
   size: number
-): Promise<string | null> {
+): Promise<{ contentDigest: string | null; binary: boolean | null }> {
   if (size > LOCAL_PREVIEWABLE_BINARY_MAX_BYTES) {
-    return null
+    return { contentDigest: null, binary: null }
   }
   // Why: hover probes mint grants for any path, so read only the file; procfs reports size 0 for real content.
   const buffer = await readFileHandleBufferBounded(
     handle,
     size === 0 ? LOCAL_PREVIEWABLE_BINARY_MAX_BYTES + 1 : size + 1
   )
-  return terminalArtifactContentDigest(buffer)
+  return { contentDigest: terminalArtifactContentDigest(buffer), binary: isBinaryBuffer(buffer) }
 }
 
 export function terminalArtifactContentDigest(buffer: Buffer): string {
@@ -57,7 +58,7 @@ export function assertTerminalArtifactContentUnchanged(
   }
 }
 
-// Remote peers recompute this identity; changes require capability negotiation.
+// Host-local: grants never leave this process. ctime catches rewrites that keep size and mtime, which utimes can reset but ctime cannot.
 export function terminalFileStatIdentity(stats: RuntimeFileStatLike): string | null {
   const dev = typeof stats.dev === 'number' ? stats.dev : null
   const ino = typeof stats.ino === 'number' ? stats.ino : null
@@ -69,11 +70,12 @@ export function terminalFileStatIdentity(stats: RuntimeFileStatLike): string | n
       : typeof stats.mtime === 'number'
         ? stats.mtime
         : null
+  const ctimeMs = typeof stats.ctimeMs === 'number' ? stats.ctimeMs : 'unknown'
   if (dev !== null && ino !== null && size !== null && mtimeMs !== null) {
-    return `${dev}:${ino}:${nlink ?? 'unknown'}:${size}:${mtimeMs}`
+    return `${dev}:${ino}:${nlink ?? 'unknown'}:${size}:${mtimeMs}:${ctimeMs}`
   }
   if (size !== null && mtimeMs !== null) {
-    return `${size}:${mtimeMs}`
+    return `${size}:${mtimeMs}:${ctimeMs}`
   }
   return null
 }

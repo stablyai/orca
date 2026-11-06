@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { worktreeUsesRemoteConnection } from '@/store/terminals/terminal-workspace-routing'
 import { hasRemoteRuntimePtyForTab } from './tab-agent-remote-pty-selector'
-import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {
   resolveFocusedCompletedTabAgent,
   resolveFocusedRetainedTabAgent,
@@ -16,8 +16,8 @@ import {
   resolveLaunchedAgentExitEvidence,
   resolveTabAgentFromSignals
 } from '../../../shared/tab-agent-from-signals'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
-import type { TerminalAgent } from '../../../shared/terminal-agent'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
+import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
 
 /** Resolve pane identity, separate from activity, without foreground probes: live focused hook → process (normalized to owner group) → reuse/hookless title → completed/retained focused identity → sleeping session → launch → sibling fallback. Native OpenCode titles cannot displace durable ownership; local OSC 133;D suppresses exited idle identity. */
 export function useTabAgent(tab: TerminalTab): TerminalAgent | null {

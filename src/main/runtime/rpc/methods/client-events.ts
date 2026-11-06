@@ -2,7 +2,7 @@ import {
   getRegisteredSshState,
   listRegisteredSshTargets
 } from '../../../ssh/targets/ssh-target-registry'
-import { getPublicSshState } from '../../public-ssh-state'
+import { getPublicSshState } from '../../hosts/platform-probe/public-ssh-state'
 import { defineMethod, defineStreamingMethod } from '../core'
 import { ClientEventsUnsubscribeParams } from '../../../../shared/rpc-contract/client-events-params'
 

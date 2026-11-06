@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   AGENT_DONE_QUIET_MS,
   type AgentPhase,
   type AgentTransition
-} from '../../shared/agent-transitions'
+} from '../../shared/agent-status/lifecycle/agent-transitions'
 import type { ConversationEvent, ConversationSnapshot } from './external-conversation-events'
 import type { ConversationKey } from './external-conversation-types'
 import {

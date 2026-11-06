@@ -3,7 +3,7 @@ import {
   type WorkspaceCleanupCandidate,
   type WorkspaceCleanupScanArgs,
   type WorkspaceCleanupScanResult
-} from '../../../shared/workspace-cleanup'
+} from '../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   readSidecarSnapshot,
   sidecarSnapshotFile,

@@ -1,15 +1,15 @@
 /** Merge local/paired-host samples and daemon sessions by project/workspace; unsampled metrics are null and paired rows are read-only. */
 
 import type { MemorySnapshot, WorktreeMemory } from '../../../../shared/process-stats-types'
-import { parsePtySessionId } from '../../../../shared/pty-session-id-format'
+import { parsePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type {
-  DaemonSession,
   MergeContext,
   UnifiedProjectGroup,
   UnifiedSessionRow,
   UnifiedWorktreeRow
 } from './resource-usage-merge-types'
+import type { PtyListedSession as DaemonSession } from '../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 import { buildResourceSessionBindingIndex } from './resource-session-bindings'
 import {
   resolveResourceFolderWorkspace,

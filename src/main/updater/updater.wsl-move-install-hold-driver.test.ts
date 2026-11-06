@@ -18,7 +18,7 @@ import type * as RigModule from '../persistence/__fixtures__/wsl-mover/wsl-move-
 import type * as RewriteStores from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite-stores'
 import type * as Driver from '../persistence/moving-wsl-projects/wsl-move-driver'
 import type * as RunningMoves from '../persistence/moving-wsl-projects/wsl-move-running-moves'
-import type * as ReleaseHere from '../ipc/wsl-move-release-here'
+import type * as ReleaseHere from '../ipc/wsl/wsl-move-release-here'
 import type * as Retention from '../persistence/moving-wsl-projects/wsl-move-retention'
 
 const {
@@ -100,7 +100,7 @@ async function loadMover(): Promise<Mover> {
     moves: await import('../persistence/moving-wsl-projects/wsl-move-running-moves'),
     rewriteStores:
       await import('../persistence/moving-wsl-projects/wsl-move-desktop-rewrite-stores'),
-    releaseHere: await import('../ipc/wsl-move-release-here'),
+    releaseHere: await import('../ipc/wsl/wsl-move-release-here'),
     retention: await import('../persistence/moving-wsl-projects/wsl-move-retention')
   }
   mover = loaded

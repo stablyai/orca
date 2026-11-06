@@ -1,5 +1,5 @@
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
+import type { RuntimeEnvironmentStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import { remoteRestartRuntimeId } from './native-chat-remote-restart-offer'
 import { createNativeChatRestartOccurrence } from './native-chat-restart-occurrence'
 import { EMPTY } from './native-chat-restart-host-offer'

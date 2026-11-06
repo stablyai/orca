@@ -1,7 +1,9 @@
-import './orca-runtime-test-lifecycle.spec'
+import './orca-runtime-tests/orca-runtime-test-lifecycle.spec'
 import { expect, it, vi } from 'vitest'
-import { OrcaRuntimeService, electronMocks } from './orca-runtime-test-mocks.spec'
-import { TEST_WORKTREE_ID, store } from './orca-runtime-test-fixtures.spec'
+import './orca-runtime-tests/runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from './orca-runtime'
+import { electronMocks } from './orca-runtime-test-mocks/setup.spec'
+import { TEST_WORKTREE_ID, store } from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import type {
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTabsSnapshot

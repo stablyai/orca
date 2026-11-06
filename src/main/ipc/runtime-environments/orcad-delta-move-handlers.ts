@@ -4,7 +4,7 @@ import type {
   OrcadDeltaMovePreview,
   OrcadDeltaMoveResult
 } from '../../../shared/orcad-managed-runtime'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { requireManagedOrcadInfrastructure } from '../../managed-server/lifecycle/orcad-managed-runtime-context'
 import { ensureOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { keepOrcadServerVersion, runOrcadDeltaMove } from '../../ssh/orcad-migration-delta-move'

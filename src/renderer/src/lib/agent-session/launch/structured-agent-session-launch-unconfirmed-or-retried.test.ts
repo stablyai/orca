@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { sourceControlActionRecipeEntry } from '../../../../../shared/source-control-action-selection'
+import { sourceControlActionRecipeEntry } from '../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
@@ -105,7 +105,7 @@ vi.mock('@/lib/launch-agent-in-new-tab', async () => {
 
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
-import { runSourceControlAgentActionStart } from '@/components/right-sidebar/runSourceControlAgentActionStart'
+import { runSourceControlAgentActionStart } from '@/components/right-sidebar/source-control/ai/runSourceControlAgentActionStart'
 import {
   getStructuredAgentSessionLaunchLifecycle,
   resetStructuredAgentLaunchRegistryForTests

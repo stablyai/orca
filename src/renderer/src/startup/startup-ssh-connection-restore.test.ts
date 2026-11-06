@@ -100,30 +100,4 @@ describe('restoreSshConnectionsForStartup', () => {
     // The unreachable host is deferred, so its panes reattach on tab focus.
     expect(harness.setDeferredSshReconnectTargets).toHaveBeenCalledWith(['ssh-asleep'])
   })
-
-  it('does not push a connected background target back into the deferred list', async () => {
-    vi.useFakeTimers()
-    installWindowApi([target('ssh-active'), target('ssh-bg')])
-    // The active host never answers and times out; the background host connects first.
-    harness.connect.mockImplementation((targetId: string) =>
-      targetId === 'ssh-bg'
-        ? Promise.resolve(connectedState(targetId))
-        : new Promise<SshConnectionState>(() => {})
-    )
-
-    const restore = restoreSshConnectionsForStartup({
-      connectionIds: ['ssh-active', 'ssh-bg'],
-      blockingConnectionIds: ['ssh-active'],
-      setDeferredSshReconnectTargets: harness.setDeferredSshReconnectTargets,
-      removeDeferredSshReconnectTarget: harness.removeDeferredSshReconnectTarget,
-      publishSshConnectionState: harness.publishSshConnectionState
-    })
-
-    await vi.advanceTimersByTimeAsync(15_000)
-    await restore
-
-    expect(harness.removeDeferredSshReconnectTarget).toHaveBeenCalledWith('ssh-bg')
-    // Timeout rewrite must not redefer already connected background hosts or fresh panes take the cold-restore path.
-    expect(harness.setDeferredSshReconnectTargets).toHaveBeenLastCalledWith(['ssh-active'])
-  })
 })

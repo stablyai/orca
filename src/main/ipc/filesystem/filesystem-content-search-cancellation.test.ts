@@ -34,8 +34,13 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../git/runner', () => ({
-  gitExecFileAsync: vi.fn(),
+vi.mock('../../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: vi.fn()
+}))
+
+vi.mock('../../git/command-runner/wsl-aware-spawn', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   wslAwareSpawn: wslAwareSpawnMock
 }))
 
@@ -49,17 +54,17 @@ vi.mock('../../../shared/wsl-paths', async (importOriginal) => ({
   }))())
 }))
 
-vi.mock('./filesystem-auth', () => ({
+vi.mock('./access/filesystem-auth', () => ({
   authorizeExternalPath: vi.fn(async (value: string) => value),
   resolveAuthorizedPath: resolveAuthorizedPathMock
 }))
 
-vi.mock('../local-file-access-resolution', () => ({
+vi.mock('./access/local-file-access-resolution', () => ({
   resolveDesktopAuthorizedPath: resolveAuthorizedPathMock,
   resolveLocalFileRequestPath: resolveAuthorizedPathMock
 }))
 
-vi.mock('./filesystem-path-containment', () => ({
+vi.mock('./access/filesystem-path-containment', () => ({
   isENOENT: vi.fn(() => false),
   validateGitRelativeFilePath: vi.fn((value: string) => value)
 }))

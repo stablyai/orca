@@ -20,7 +20,7 @@ import {
   type Surface
 } from './check-details-loader-test-fixture'
 import * as normalization from '@/lib/check-run-details-log-normalization'
-import * as sanitation from '../../../../shared/check-job-log-excerpt'
+import * as sanitation from '../../../../shared/source-control/checks/logs/check-job-log-excerpt'
 import {
   checkLogJob,
   legacyControls,

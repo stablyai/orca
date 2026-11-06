@@ -5,7 +5,7 @@ import type { AgentJournalRenderItem } from '../../../../shared/agent-session/jo
 import type { AgentSessionSubscribeEvent } from '../../../../shared/agent-session/agent-session-wire'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
 import { subscribeRemoteRuntimeRequest } from '../../../../shared/remote-runtime/remote-runtime-client'
-import { quotePosixShell } from '../../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
 import {
   waitForProviderReport,
   type WslScriptedProviderInstall

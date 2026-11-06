@@ -1,7 +1,6 @@
-import { isExecKilledError } from '../../shared/git-remote-error'
+import { isExecKilledError } from '../../shared/git/remotes/git-remote-error'
 
-import { isMissingRemoteRefGitError } from '../../shared/git-missing-remote-ref'
-export { isMissingRemoteRefGitError } from '../../shared/git-missing-remote-ref'
+import { isMissingRemoteRefGitError } from '../../shared/git/refs/git-missing-remote-ref'
 
 // Keep durable review heads only after transport failures; auth, deleted refs, and stale RPC failures must surface.
 const TRANSIENT_FETCH_ERROR_PATTERNS = [

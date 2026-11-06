@@ -1,5 +1,5 @@
 // Only refusals sealed by the pinned key may trigger repair; foreign servers fail identity checks.
-import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { KnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { pairingRevisionOf, type ManagedOrcadPairingGate } from './orcad-managed-pairing-repair'
 import { OrcadManagedPairingRejectedError } from './orcad-managed-tunnel-identity'
 

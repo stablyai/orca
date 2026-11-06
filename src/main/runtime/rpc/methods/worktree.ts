@@ -1,3 +1,5 @@
+import { readCallerStoreInstallationId } from '../../hosts/platform-probe/host-descriptor'
+import { getCanonicalUserDataPath } from '../../../persistence/loading-store/user-data-path'
 import {
   finishAutomationWorkspaceProvenanceRequest,
   releaseAutomationWorkspaceProvenanceRequest,
@@ -5,7 +7,7 @@ import {
   resolveClientAutomationWorkspaceProvenance
 } from '../../../automations/workspace-provenance'
 import { getLocalWorktreeCatalogVersion } from '../../../workspaces/catalog/local-worktree-scan-generation'
-import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
+import { getExplicitWorktreeIdSelector } from '../../workspaces/catalog/runtime-worktree-selection'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
 import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
 import { createWorktreeWithStartupAgent } from '../../../agent-launch/startup-agent-worktree-create'
@@ -26,12 +28,13 @@ import {
   WorktreeResolvePrBase,
   WorktreeSelector,
   WorktreeSortOrder,
-  WorktreeTeardownMissingTerminalsParams
+  WorktreeTeardownMissingTerminalsParams,
+  WorktreeResolveCallerParent
 } from '../../../../shared/rpc-contract/worktree-params'
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
 import { WORKTREE_PROVISIONED_ROOT_METHOD } from './worktree-provisioned-root-method'
 import { waitsForWorktreeRemoval } from '../worktree-removal-marker-projection'
-import { queueWorkspaceDelete } from '../../workspaces/workspace-lifecycle-commands'
+import { queueWorkspaceDelete } from '../../workspaces/lifecycle/workspace-lifecycle-commands'
 import { WORKTREE_SLEEP_METHOD } from './worktree-sleep-method'
 import { WORKTREE_SET_METHOD } from './worktree-set-method'
 
@@ -54,8 +57,22 @@ export const WORKTREE_METHODS = [
     params: null,
     handler: async (_params, { runtime }) => ({
       lineage: await runtime.listWorktreeLineage(),
-      workspaceLineage: await runtime.listWorkspaceLineage()
+      workspaceLineage: await runtime.listWorkspaceLineage(),
+      // Older desktops ignore it, so these children stay standalone there.
+      crossStoreLineage: runtime.listCrossStoreLineage(),
+      // Paired clients name this store by it when linking a child on another machine.
+      installationId: await runtime.readStoreInstallationId()
     })
+  }),
+  defineMethod({
+    name: 'worktree.resolveCallerParent',
+    permission: 'workspace',
+    params: WorktreeResolveCallerParent,
+    handler: async (params, { runtime }) =>
+      await runtime.resolveCallerParentForAnotherStore(
+        params,
+        readCallerStoreInstallationId(runtime.getRuntimeId(), getCanonicalUserDataPath())
+      )
   }),
   defineMethod({
     name: 'worktree.show',

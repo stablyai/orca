@@ -92,7 +92,24 @@ it.each([100, 300])('bounds the added failure display with %i readable legacy ca
   expect(
     db.prepare('SELECT message_id FROM queued_messages WHERE session_id = ?').all(SESSION)
   ).toHaveLength(n)
-  expect(journal.queuedMessages.list()).toHaveLength(n)
+  expect(
+    Array.from({ length: n }, (_, index) => journal.queuedMessages.get(`card:${index}`)).map(
+      (card) => ({
+        id: card?.messageId,
+        state: card?.state,
+        consumedAs: card?.consumedAs,
+        body: card?.body
+      })
+    )
+  ).toEqual(
+    Array.from({ length: n }, (_, index) => ({
+      id: `card:${index}`,
+      state: 'dispatched',
+      consumedAs: `legacy:${index}`,
+      body
+    }))
+  )
+  expect(journal.queuedMessages.list()).toEqual([])
   const cold = structuredClone(ops.counts)
   // Three decoded populations: restore, cached source and failed import. The import builds
   // N queue rows on an isolated draft before its DELETE fails; none of that work is free.
@@ -144,10 +161,10 @@ it.each([100, 300])('bounds the added failure display with %i readable legacy ca
       ...emptyLegacyCounts(),
       displays: 2,
       handoffApplications: 2 * n,
-      itemCopies: 2,
-      itemEntries: 2 * n + 3,
-      submissionCopies: 2,
-      submissionEntries: 2 * (n + 1)
+      itemCopies: 0,
+      itemEntries: 0,
+      submissionCopies: 0,
+      submissionEntries: 0
     },
     failure: emptyLegacyCounts()
   })
@@ -173,10 +190,10 @@ it.each([100, 300])('bounds the added failure display with %i readable legacy ca
       ...emptyLegacyCounts(),
       displays: 1,
       handoffApplications: n,
-      itemCopies: 1,
-      itemEntries: n + 3,
-      submissionCopies: 1,
-      submissionEntries: n + 1
+      itemCopies: 0,
+      itemEntries: 0,
+      submissionCopies: 0,
+      submissionEntries: 0
     },
     failure: emptyLegacyCounts()
   })
@@ -200,10 +217,10 @@ it.each([100, 300])('bounds the added failure display with %i readable legacy ca
     ...emptyLegacyCounts(),
     displays: 1,
     handoffApplications: n,
-    itemCopies: 1,
-    itemEntries: n + 4,
-    submissionCopies: 1,
-    submissionEntries: n + 1
+    itemCopies: 0,
+    itemEntries: 0,
+    submissionCopies: 0,
+    submissionEntries: 0
   }
   expect(failure).toEqual({
     upstream: emptyLegacyCounts(),
