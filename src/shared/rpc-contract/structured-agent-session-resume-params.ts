@@ -20,10 +20,11 @@ export const ForkSource = z
   .object({ sessionId: SessionId, throughItemId: Identifier('Invalid fork item id') })
   .strict()
 
-/** A chat starts fresh, resumes a provider conversation, or forks a native chat. */
+/** Optional source of a resumed chat, message fork, or side chat. */
 export const SOURCE_FIELDS = {
   resumeFrom: ResumeSource.optional(),
-  forkFrom: ForkSource.optional()
+  forkFrom: ForkSource.optional(),
+  sideChatOf: SessionId.optional()
 }
 
 /** createSupport's resume question, sent only to hosts advertising
