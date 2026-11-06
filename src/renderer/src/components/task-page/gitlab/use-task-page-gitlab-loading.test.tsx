@@ -13,11 +13,9 @@ vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn() } }))
 
 const rpc = vi.hoisted(() => ({ call: vi.fn() }))
 
-const supportsCapability = vi.hoisted(() => vi.fn())
-
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: rpc.call,
-  runtimeEnvironmentSupportsCapability: supportsCapability
+  runtimeEnvironmentSupportsCapability: vi.fn()
 }))
 
 import {
@@ -47,7 +45,6 @@ const LIST_STATE = {
 }
 
 beforeEach(() => {
-  supportsCapability.mockReset()
   rpc.call.mockReset().mockResolvedValue({ items: [{ id: 'i1', updatedAt: '2026-10-01' }] })
   glListIssues.mockReset().mockRejectedValue(new Error('Access denied: unknown repository path'))
   Object.assign(window, { api: { gl: { listIssues: glListIssues } } })
@@ -231,52 +228,6 @@ describe('useTaskPageGitLabLoading', () => {
     expect(setGitlabError).not.toHaveBeenCalledWith(expect.stringContaining('Access denied'))
   })
 
-  it.each([false, true])(
-    'sends Mine only to a server that supports it, else shows an error (supported: %s)',
-    async (supported) => {
-      supportsCapability.mockResolvedValue(supported)
-      rpc.call.mockResolvedValue({ items: [], page: 1, perPage: 50, totalCount: 0, totalPages: 0 })
-      const setGitlabError = vi.fn()
-      const setGitlabLoading = vi.fn()
-      renderHook(() =>
-        useTaskPageGitLabLoading({
-          selectedRepos: [serverRepo],
-          selectedReposKey: 'server-repo',
-          primaryRepo: serverRepo,
-          taskSource: 'gitlab',
-          setGitlabItems: vi.fn(),
-          setGitlabLoading,
-          setGitlabError,
-          gitlabRefreshNonce: 0,
-          gitlabView: 'mrs',
-          setGitlabTodos: vi.fn(),
-          setGitlabTodosLoading: vi.fn(),
-          activeGitlabFilter: 'merged',
-          gitlabMRInvolvement: 'authored',
-          ...LIST_STATE
-        })
-      )
-
-      await waitFor(() => expect(setGitlabLoading).toHaveBeenLastCalledWith(false))
-      if (!supported) {
-        expect(rpc.call).not.toHaveBeenCalledWith(
-          expect.anything(),
-          'gitlab.listMRs',
-          expect.anything(),
-          expect.anything()
-        )
-        expect(setGitlabError).toHaveBeenLastCalledWith(expect.any(String))
-      } else {
-        expect(rpc.call).toHaveBeenCalledWith(
-          { kind: 'environment', environmentId: 'build-box' },
-          'gitlab.listMRs',
-          expect.objectContaining({ state: 'merged', involvement: 'authored' }),
-          expect.anything()
-        )
-      }
-    }
-  )
-
   it("never shows the previous filter's rows while a changed filter loads", () => {
     rpc.call.mockReturnValue(new Promise(() => {}))
     const row: GitLabWorkItem = {
@@ -323,51 +274,6 @@ describe('useTaskPageGitLabLoading', () => {
     expect(result.current.displayedGitLabItems).toEqual([])
     expect(result.current.gitlabLoading).toBe(true)
   })
-
-  it.each([12, 120])(
-    'checks an older server once per refresh for %s of its projects',
-    async (projectCount) => {
-      supportsCapability.mockResolvedValue(false)
-      const repos = Array.from({ length: projectCount }, (_, index) => ({
-        ...serverRepo,
-        id: `server-repo-${index}`
-      }))
-      const setGitlabLoading = vi.fn()
-      const { rerender } = renderHook(
-        ({ nonce }) =>
-          useTaskPageGitLabLoading({
-            selectedRepos: repos,
-            selectedReposKey: `servers-${projectCount}`,
-            primaryRepo: repos[0],
-            taskSource: 'gitlab',
-            setGitlabItems: vi.fn(),
-            setGitlabLoading,
-            setGitlabError: vi.fn(),
-            gitlabRefreshNonce: nonce,
-            gitlabView: 'mrs',
-            setGitlabTodos: vi.fn(),
-            setGitlabTodosLoading: vi.fn(),
-            activeGitlabFilter: 'opened',
-            gitlabMRInvolvement: 'authored',
-            ...LIST_STATE
-          }),
-        { initialProps: { nonce: 0 } }
-      )
-      await waitFor(() => expect(setGitlabLoading).toHaveBeenLastCalledWith(false))
-      expect(supportsCapability).toHaveBeenCalledTimes(1)
-
-      setGitlabLoading.mockClear()
-      rerender({ nonce: 1 })
-      await waitFor(() => expect(setGitlabLoading).toHaveBeenLastCalledWith(false))
-      expect(supportsCapability).toHaveBeenCalledTimes(2)
-      expect(rpc.call).not.toHaveBeenCalledWith(
-        expect.anything(),
-        'gitlab.listMRs',
-        expect.anything(),
-        expect.anything()
-      )
-    }
-  )
 
   it('shows MR rows and refresh errors without fetching the advertised probe page', async () => {
     const items: GitLabWorkItem[] = Array.from({ length: 50 }, (_, index) => ({

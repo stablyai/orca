@@ -2,7 +2,7 @@ import type { TaskPageProviderMetadataModel } from '../use-task-page-provider-me
 import { useEffect } from 'react'
 import { translate } from '@/i18n/i18n'
 import { readIpcErrorDetail } from '@/lib/ipc-error'
-import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
+import { gitLabApiFor, type GitLabCapabilityChecks } from '@/runtime/gitlab-owner-api'
 import { mapSettledWithConcurrency } from '../../../../../shared/map-with-concurrency'
 import type { Repo } from '../../../../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
@@ -109,7 +109,7 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     }
     let stale = false
     // One answer per runtime and capability for this refresh, so N projects on one server probe it once.
-    const capabilityChecks = new Map<string, Promise<boolean>>()
+    const capabilityChecks: GitLabCapabilityChecks = new Map()
     setGitlabLoading(true)
     setGitlabError(null)
     const fetchItems =
@@ -117,7 +117,7 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
         ? (repo: (typeof eligibleRepos)[0]) => {
             const isAssignedToMe = activeIssueFilter === 'assigned-to-me'
             const selector = gitLabTaskRepoSelector(repo)
-            return gitLabApiFor(selector, { capabilityChecks })
+            return gitLabApiFor(selector)
               .listIssues({
                 ...selector,
                 state: 'opened',

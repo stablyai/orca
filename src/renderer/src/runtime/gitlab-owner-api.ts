@@ -4,7 +4,13 @@ import {
   RuntimeCapabilityMissingError,
   type GitLabApi
 } from './runtime-gitlab-api'
-import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
+import {
+  callRuntimeRpc,
+  runtimeEnvironmentCapabilityProof,
+  runtimeEnvironmentSupportsCapability,
+  type RuntimeCapabilityProof
+} from './runtime-rpc-client'
+import { captureRuntimeEnvironmentRequestRevision } from './runtime-environment-revision'
 import { forgeCredentialTarget, type ForgeRepoSelector } from './forge-credential-target'
 
 // Why: job logs outlive main's 60s `glab` timeout so its classified error reaches the caller.
@@ -18,22 +24,24 @@ function withSourceRepo(params: unknown, sourceRepoId: string | null): unknown {
     : params
 }
 
-/** Capability answers shared by one caller-owned batch (one Tasks refresh); never kept past it. */
-export type GitLabCapabilityChecks = Map<string, Promise<boolean>>
+/** Capability proofs shared by one caller-owned batch (one Tasks refresh); never kept past it. */
+export type GitLabCapabilityChecks = Map<string, Promise<RuntimeCapabilityProof>>
 
-function checkCapability(
+function capabilityProof(
   environmentId: string,
   capability: RuntimeCapability,
   checks: GitLabCapabilityChecks | undefined
-): Promise<boolean> {
-  const key = `${environmentId}\0${capability}`
+): Promise<RuntimeCapabilityProof> {
+  // Keyed by pairing so a re-paired environment never reuses the previous pairing's answer.
+  const pairing = captureRuntimeEnvironmentRequestRevision(environmentId) ?? ''
+  const key = `${environmentId}\0${pairing}\0${capability}`
   const existing = checks?.get(key)
   if (existing) {
     return existing
   }
-  const check = runtimeEnvironmentSupportsCapability(environmentId, capability)
-  checks?.set(key, check)
-  return check
+  const proof = runtimeEnvironmentCapabilityProof(environmentId, capability)
+  checks?.set(key, proof)
+  return proof
 }
 
 function runtimeGitLabApi(
@@ -44,14 +52,23 @@ function runtimeGitLabApi(
   const target = { kind: 'environment', environmentId } as const
   return createRuntimeGitLabApi({
     call: async (method, params, options) => {
-      if (
-        options?.requiredCapability &&
-        !(await checkCapability(environmentId, options.requiredCapability, capabilityChecks))
-      ) {
+      const timeoutMs = method === 'gitlab.jobTrace' ? JOB_TRACE_TIMEOUT_MS : GITLAB_RPC_TIMEOUT_MS
+      if (!options?.requiredCapability) {
+        return callRuntimeRpc(target, method, withSourceRepo(params, sourceRepoId), { timeoutMs })
+      }
+      const proof = await capabilityProof(
+        environmentId,
+        options.requiredCapability,
+        capabilityChecks
+      )
+      if (!proof.supported) {
         throw new RuntimeCapabilityMissingError()
       }
+      // Served by the runtime and pairing that answered, never one that replaced them meanwhile.
       return callRuntimeRpc(target, method, withSourceRepo(params, sourceRepoId), {
-        timeoutMs: method === 'gitlab.jobTrace' ? JOB_TRACE_TIMEOUT_MS : GITLAB_RPC_TIMEOUT_MS
+        timeoutMs,
+        expectedEnvironmentPairingRevision: proof.pairingRevision,
+        expectedEnvironmentRuntimeId: proof.runtimeId
       })
     },
     supportsCapability: (capability) =>
