@@ -144,7 +144,7 @@ describe('OrcaRuntimeService', () => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       },
-      setWorkspaceLineage: vi.fn((lineage: WorkspaceLineage) => {
+      setFolderParentLineage: vi.fn((_target: HostWorktreeTarget, lineage: WorkspaceLineage) => {
         workspaceLineageByChildKey[lineage.childWorkspaceKey] = lineage
         return lineage
       })
@@ -180,7 +180,8 @@ describe('OrcaRuntimeService', () => {
       capture: { source: 'env-workspace', confidence: 'inferred' }
     })
     expect(result.worktree.workspaceLineage).toBe(result.workspaceLineage)
-    expect(runtimeStore.setWorkspaceLineage).toHaveBeenCalledWith(
+    expect(runtimeStore.setFolderParentLineage).toHaveBeenCalledWith(
+      expect.objectContaining({ id: childId }),
       expect.objectContaining({
         childWorkspaceKey: `worktree:${childId}`,
         parentWorkspaceKey: TEST_FOLDER_WORKSPACE_KEY

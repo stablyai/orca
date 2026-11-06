@@ -42,7 +42,6 @@ import {
 import {
   assertWorktreeParentFlagsCompatible,
   getEnvParentWorkspace,
-  getWorkspaceKeyParentSelector,
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
@@ -224,12 +223,6 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       'Choose either --parent-worktree or --no-parent, not both.'
     )
     const parentSelector = getOptionalStringFlag(flags, 'parent-worktree')
-    if (parentSelector && getWorkspaceKeyParentSelector(parentSelector)?.startsWith('folder:')) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        `Parent selector "${parentSelector}" is a folder. Folder parents are accepted only by orca worktree create.`
-      )
-    }
     const readFlags = getWorktreeReadFlags(flags)
     const reviewLinks = getReviewTargetLinkFlags(flags, { nullable: true })
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue', {

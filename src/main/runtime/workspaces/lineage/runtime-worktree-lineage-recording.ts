@@ -150,24 +150,31 @@ export function recordCreatedWorktreeLineage(
       }
     })
   }
-  if (childInstanceId && store?.setWorkspaceLineage) {
-    workspaceLineage = store.setWorkspaceLineage({
-      childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
-      childInstanceId,
-      parentWorkspaceKey: resolution.parent.workspaceKey,
-      parentInstanceId,
-      origin: resolution.origin,
-      capture: resolution.capture,
-      ...(resolution.taskId ? { taskId: resolution.taskId } : {}),
-      ...(resolution.orchestrationRunId
-        ? { orchestrationRunId: resolution.orchestrationRunId }
-        : {}),
-      ...(resolution.coordinatorHandle ? { coordinatorHandle: resolution.coordinatorHandle } : {}),
-      ...(resolution.createdByTerminalHandle
-        ? { createdByTerminalHandle: resolution.createdByTerminalHandle }
-        : {}),
-      createdAt
-    })
+  if (!childInstanceId) {
+    return { lineage, workspaceLineage, warnings }
+  }
+  const row: WorkspaceLineage = {
+    childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
+    childInstanceId,
+    parentWorkspaceKey: resolution.parent.workspaceKey,
+    parentInstanceId,
+    origin: resolution.origin,
+    capture: resolution.capture,
+    ...(resolution.taskId ? { taskId: resolution.taskId } : {}),
+    ...(resolution.orchestrationRunId ? { orchestrationRunId: resolution.orchestrationRunId } : {}),
+    ...(resolution.coordinatorHandle ? { coordinatorHandle: resolution.coordinatorHandle } : {}),
+    ...(resolution.createdByTerminalHandle
+      ? { createdByTerminalHandle: resolution.createdByTerminalHandle }
+      : {}),
+    createdAt
+  }
+  if (resolution.parent.type === 'folder') {
+    workspaceLineage = (target && store?.setFolderParentLineage?.(target, row)) ?? null
+  } else if (lineage) {
+    // setWorktreeLineage already wrote this row as the link's workspace projection.
+    workspaceLineage = row
+  } else if (store?.setWorkspaceLineage) {
+    workspaceLineage = store.setWorkspaceLineage(row)
   }
   return { lineage, workspaceLineage, warnings }
 }
