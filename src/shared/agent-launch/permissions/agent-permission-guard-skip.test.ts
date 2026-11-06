@@ -10,6 +10,7 @@ import { wholeAgentEnvironmentUpdates } from '../choices/agent-launch-permission
 import { composeAgentLaunchProfile } from '../choices/agent-launch-legacy-publication'
 import { resolveTuiAgentLaunchEnv } from '../choices/tui-agent-launch-defaults'
 import { resolveAgentStartupPlanInputs } from '../startup/agent-startup-plan-inputs'
+import { AgentLaunchSettingsMutation } from '../../rpc-contract/agent-launch-settings-params'
 import type { AgentPermissionChoice } from './tui-agent-permission-choice'
 
 const GUARD_ENV = 'CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS'
@@ -143,6 +144,21 @@ describe('permission-guard-skip mutation', () => {
       )
     ).toThrow()
   })
+
+  // A paired client reaches the host through this schema, so an unlisted type never arrives.
+  it('is accepted by the launch-settings RPC contract', () => {
+    expect(
+      AgentLaunchSettingsMutation.safeParse({
+        type: 'permission-guard-skip',
+        agent: 'claude',
+        enabled: true
+      }).success
+    ).toBe(true)
+    expect(
+      AgentLaunchSettingsMutation.safeParse({ type: 'permission-guard-skip', agent: 'claude' })
+        .success
+    ).toBe(false)
+  })
 })
 
 describe('settings writes', () => {
@@ -156,10 +172,17 @@ describe('settings writes', () => {
         'darwin'
       ).agentDefaultEnv?.claude
     ).toEqual({ KEEP: 'mine' })
+    // The Environment field never shows Orca's entry, so an edit from it never names it.
     expect(
-      wholeAgentEnvironmentUpdates(settings, 'claude', { KEEP: 'mine', [GUARD_ENV]: '1' }, 'darwin')
-        .agentDefaultEnv?.claude
+      wholeAgentEnvironmentUpdates(settings, 'claude', { KEEP: 'mine' }, 'darwin').agentDefaultEnv
+        ?.claude
     ).toEqual({ KEEP: 'mine' })
+  })
+
+  it('writes nothing when an Environment edit changed nothing', () => {
+    expect(
+      wholeAgentEnvironmentUpdates(settingsWith('full-access'), 'claude', {}, 'darwin')
+    ).toEqual({})
   })
 
   // Adding claude to the env-driven presets would both enable this for everyone on Full access and

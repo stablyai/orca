@@ -72,5 +72,8 @@ export const AgentLaunchSettingsMutation = z.discriminatedUnion('type', [
   z.object({ type: z.literal('arguments'), agent: Agent, value: Value }).strict(),
   z.object({ type: z.literal('user-arguments'), agent: Agent, value: Value }).strict(),
   z.object({ type: z.literal('environment-set'), agent: Agent, name: Name, value: Value }).strict(),
-  z.object({ type: z.literal('environment-remove'), agent: Agent, name: Name }).strict()
+  z.object({ type: z.literal('environment-remove'), agent: Agent, name: Name }).strict(),
+  z
+    .object({ type: z.literal('permission-guard-skip'), agent: Agent, enabled: z.boolean() })
+    .strict()
 ])

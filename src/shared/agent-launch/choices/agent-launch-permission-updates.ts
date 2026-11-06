@@ -32,6 +32,7 @@ import {
   type AgentPermissionChoice
 } from '../permissions/tui-agent-permission-choice'
 import { liftAgentPermissionArgs } from '../permissions/tui-agent-permission-lift'
+import { withoutAgentPermissionGuardSkipEnv } from '../permissions/agent-permission-guard-skip'
 import { isTuiAgent } from '../catalog/tui-agent-config'
 import type { TuiAgent } from '../catalog/tui-agent'
 
@@ -222,16 +223,21 @@ export function wholeAgentEnvironmentUpdates(
   const groups = new Map<string, Set<string>>()
   const identity = (name: string) => (platform === 'win32' ? name.toLowerCase() : name)
   const carrierEntries: [string, string][] = []
-  const previous = resolveTuiAgentLaunchEnv(agent, settings, platform, (name, value) => {
-    if (isCarrier(name)) {
-      carrierEntries.push([name, value])
+  // Orca's guard-skip entry is hidden from the Environment field, so the edit never mentions it;
+  // diffing against it would read as a removal and write a record the user never changed.
+  const previous = withoutAgentPermissionGuardSkipEnv(
+    resolveTuiAgentLaunchEnv(agent, settings, platform, (name, value) => {
+      if (isCarrier(name)) {
+        carrierEntries.push([name, value])
+        return true
+      }
+      ordinary.set(name, value)
+      const key = identity(name)
+      groups.set(key, (groups.get(key) ?? new Set<string>()).add(name))
       return true
-    }
-    ordinary.set(name, value)
-    const key = identity(name)
-    groups.set(key, (groups.get(key) ?? new Set<string>()).add(name))
-    return true
-  })
+    }),
+    platform
+  )
   const carrier: AgentLaunchSettingsSource = {
     agentPermissionDefault: settings.agentPermissionDefault,
     agentPermissionOverrides: settings.agentPermissionOverrides?.[agent]
