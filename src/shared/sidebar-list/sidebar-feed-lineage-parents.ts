@@ -1,9 +1,14 @@
 import { parseExecutionHostId } from '../execution-host'
-import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
+import {
+  composeWorktreeHostIdentity,
+  getExecutionHostIdFromWorktreeHostIdentity,
+  getWorktreeHostIdentity
+} from '../worktree/host-qualified-identity'
 import {
   buildCrossStoreLineageViewOfRows,
   OWN_LINEAGE_STORE_KEY
 } from '../worktree/cross-store-lineage-resolution'
+import type { WorkspaceLineageEdge } from '../worktree/lineage-types'
 import type { Worktree } from '../worktree/types'
 import type { SidebarFeedDomains } from './sidebar-feed-domains'
 import type { SidebarFeedWorkspace } from './sidebar-feed-worktrees'
@@ -14,22 +19,67 @@ import {
 
 const NO_LINEAGE_MAP = {}
 
-/** Parents over every feed row, cross-store ones included; undefined while no row carries a
- * cross-store record, so the builder nests exactly as before. Store identities are the host's own
- * (desktop facts) and each paired server's as the host verified it. */
+/** How a reader treats an older server's edge that carries no instance ids. */
+export type FeedLineagePolicy = {
+  /** The phone has always nested by such edges; desktop never has. */
+  acceptLegacyLineage?: boolean
+}
+
+/** Parents over every feed row: cross-store records, folder workspace parents and, for the phone,
+ * older servers' edges without instance ids. Undefined while no row carries any of them, so the
+ * builder nests exactly as before. Store identities are the host's own (desktop facts) and each paired
+ * server's as the host verified it. */
 export function resolveFeedLineageParentIdentities(
   domains: Pick<SidebarFeedDomains, 'desktop' | 'pairedServerHosts'>,
-  workspaces: readonly SidebarFeedWorkspace[]
+  workspaces: readonly SidebarFeedWorkspace[],
+  policy: FeedLineagePolicy = {}
 ): SidebarLineageParentIdentities | undefined {
-  const recordByRow = new Map<Worktree, unknown>()
+  const crossStoreByRow = new Map<Worktree, unknown>()
+  const folderEdgeByRow = new Map<Worktree, WorkspaceLineageEdge>()
+  const legacy: [Worktree, string][] = []
   for (const entry of workspaces) {
     if (entry.crossStoreParent && !entry.folderWorkspace) {
-      recordByRow.set(entry.worktree, entry.crossStoreParent)
+      crossStoreByRow.set(entry.worktree, entry.crossStoreParent)
+    }
+    if (entry.workspaceLineage && !entry.folderWorkspace) {
+      folderEdgeByRow.set(entry.worktree, entry.workspaceLineage)
+    }
+    if (policy.acceptLegacyLineage && entry.legacyLineage) {
+      legacy.push([entry.worktree, entry.legacyLineage.parentWorktreeId])
     }
   }
-  if (recordByRow.size === 0) {
+  if (crossStoreByRow.size === 0 && folderEdgeByRow.size === 0 && legacy.length === 0) {
     return undefined
   }
+  const rows = new Map(
+    workspaces.map((entry) => [getWorktreeHostIdentity(entry.worktree), entry.worktree])
+  )
+  const parents = new Map(
+    resolveSidebarLineageParentIdentities(
+      NO_LINEAGE_MAP,
+      rows,
+      crossStoreByRow.size > 0 ? crossStoreViewOf(domains, rows, crossStoreByRow) : undefined,
+      folderEdgeByRow.size > 0 ? (row) => folderEdgeByRow.get(row) : undefined
+    )
+  )
+  for (const [row, parentWorktreeId] of legacy) {
+    const identity = getWorktreeHostIdentity(row)
+    const parentIdentity = composeWorktreeHostIdentity(
+      getExecutionHostIdFromWorktreeHostIdentity(identity),
+      parentWorktreeId
+    )
+    if (!parents.has(identity) && parentIdentity !== identity && rows.has(parentIdentity)) {
+      parents.set(identity, parentIdentity)
+    }
+  }
+  return parents
+}
+
+function crossStoreViewOf(
+  domains: Pick<SidebarFeedDomains, 'desktop' | 'pairedServerHosts'>,
+  rows: ReadonlyMap<string, Worktree>,
+  recordByRow: ReadonlyMap<Worktree, unknown>
+) {
   const installationIds = new Map<string, string | undefined>([
     [OWN_LINEAGE_STORE_KEY, domains.desktop?.installationId]
   ])
@@ -39,10 +89,9 @@ export function resolveFeedLineageParentIdentities(
       installationIds.set(parsed.environmentId, host.installationId ?? undefined)
     }
   }
-  const rows = workspaces.flatMap((entry) => (entry.folderWorkspace ? [] : [entry.worktree]))
-  return resolveSidebarLineageParentIdentities(
-    NO_LINEAGE_MAP,
-    new Map(rows.map((row) => [getWorktreeHostIdentity(row), row])),
-    buildCrossStoreLineageViewOfRows(rows, (row) => recordByRow.get(row), installationIds)
+  return buildCrossStoreLineageViewOfRows(
+    [...rows.values()].filter((row) => recordByRow.has(row)),
+    (row) => recordByRow.get(row),
+    installationIds
   )
 }

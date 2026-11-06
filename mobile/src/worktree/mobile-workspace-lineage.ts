@@ -4,7 +4,13 @@ import {
   type WorktreeOccurrencePlan
 } from '../../../src/shared/worktree-occurrence-plan'
 import type { WorkspaceListItem, Worktree } from './workspace-list-types'
-import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../src/shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../src/shared/execution-host'
+import { resolveFolderLineageParents } from '../../../src/shared/worktree/folder-lineage-parents'
+import type { WorkspaceLineageEdge } from '../../../src/shared/worktree/lineage-types'
 import { getCyclicLineageChildKeys } from '../../../src/shared/resolved-worktree-lineage'
 import type { MobileRelayHost } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import {
@@ -45,26 +51,56 @@ export type MobileLineageStores = {
   servers: readonly Pick<MobileRelayHost, 'hostId' | 'installationId'>[]
 }
 
+type ResolutionRow = {
+  worktree: Worktree
+  id: string
+  hostId: ExecutionHostId
+  instanceId: string | undefined
+  isArchived: boolean
+}
+
+function getResolutionRows(worktrees: readonly Worktree[]): Map<string, ResolutionRow> {
+  return new Map(
+    worktrees.map((worktree) => [
+      getWorktreeRowIdentity(worktree),
+      {
+        worktree,
+        id: worktree.worktreeId,
+        // Rows the host lists without a host id are its own: only relayed server rows name one.
+        hostId: worktree.hostId ?? LOCAL_EXECUTION_HOST_ID,
+        instanceId: worktree.worktreeInstanceId,
+        isArchived: worktree.isArchived === true
+      }
+    ])
+  )
+}
+
+/** Child identity → folder workspace row, for each host-reported folder workspace parent. */
+function getFolderLineageParents(worktrees: readonly Worktree[]): Map<string, Worktree> {
+  if (!worktrees.some((worktree) => readFolderEdge(worktree))) {
+    return new Map()
+  }
+  return new Map(
+    [
+      ...resolveFolderLineageParents(getResolutionRows(worktrees), (row) =>
+        readFolderEdge(row.worktree)
+      )
+    ].map(([child, parent]) => [child, parent.worktree])
+  )
+}
+
+// Unchecked wire data: a newer host may send a shape this build cannot read.
+function readFolderEdge(worktree: Worktree): WorkspaceLineageEdge | undefined {
+  const edge = worktree.workspaceLineage
+  return edge && typeof edge.parentWorkspaceKey === 'string' ? edge : undefined
+}
+
 /** Child identity → parent row for each server-saved cross-store record that resolves to one row. */
 function getCrossStoreLineageParents(
   worktrees: readonly Worktree[],
   stores: MobileLineageStores
 ): Map<string, Worktree> {
-  // Folder workspaces never nest rows here, so their cross-machine children stay flat as before.
-  const resolutionRows = new Map(
-    worktrees
-      .filter((worktree) => worktree.workspaceKind !== 'folder-workspace')
-      .map((worktree) => [
-        getWorktreeRowIdentity(worktree),
-        {
-          worktree,
-          id: worktree.worktreeId,
-          // Rows the host lists without a host id are its own: only relayed server rows name one.
-          hostId: worktree.hostId ?? LOCAL_EXECUTION_HOST_ID,
-          instanceId: worktree.worktreeInstanceId
-        }
-      ])
-  )
+  const resolutionRows = getResolutionRows(worktrees)
   if (![...resolutionRows.values()].some((row) => row.worktree.crossStoreParent)) {
     return new Map()
   }
@@ -90,8 +126,9 @@ function getCrossStoreLineageParents(
   )
 }
 
-/** Children keyed by parent row identity, over valid edges between the given rows; with `stores`,
- * a parent on another machine counts too (a same-store edge wins), and lineage loops nest nothing.
+/** Children keyed by parent row identity, over valid edges between the given rows: a worktree parent,
+ * else a folder workspace parent in the child's store, else (with `stores`) a parent on another
+ * machine; lineage loops nest nothing.
  * Edges resolve over every row, then `filterRepoIds` keeps those with both ends shown: a hidden
  * twin must still make a parent ambiguous. */
 export function getMobileWorkspaceLineageChildren(
@@ -121,6 +158,12 @@ export function getMobileWorkspaceLineageChildren(
     }
     parentByChild.set(worktreeId, parent)
   }
+  // A worktree parent wins, then a folder workspace in the child's own store, then another store.
+  for (const [child, parent] of getFolderLineageParents(listed)) {
+    if (!parentByChild.has(child)) {
+      parentByChild.set(child, parent)
+    }
+  }
   const crossStore = stores ? getCrossStoreLineageParents(listed, stores) : new Map()
   if (crossStore.size > 0) {
     for (const [child, parent] of crossStore) {
@@ -140,7 +183,12 @@ export function getMobileWorkspaceLineageChildren(
   const childrenByParentId = new Map<string, Worktree[]>()
   for (const worktree of listed) {
     const parent = parentByChild.get(getWorktreeRowIdentity(worktree))
-    if (!parent || !shown(worktree) || !shown(parent)) {
+    // A folder workspace spans projects, so the project filter never hides it as a parent.
+    if (
+      !parent ||
+      !shown(worktree) ||
+      (!shown(parent) && parent.workspaceKind !== 'folder-workspace')
+    ) {
       continue
     }
     const parentIdentity = getWorktreeRowIdentity(parent)

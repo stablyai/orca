@@ -135,9 +135,8 @@ function resolveSidebarParents(
   const rows = new Map<string, Worktree>()
   for (const row of [
     ...getIndexedAllWorktrees(selectWorktreesByRepo(state)),
-    ...(folderParents
-      ? (selectFolderWorkspaces(state) ?? []).map((folder) => getFolderWorkspaceWorktree(folder))
-      : [])
+    // Folder rows parent through their own records and through other stores' records.
+    ...(selectFolderWorkspaces(state) ?? []).map((folder) => getFolderWorkspaceWorktree(folder))
   ]) {
     rows.set(getWorktreeHostIdentity(row), row)
   }
@@ -162,7 +161,7 @@ let lastFolderChildrenCall: {
 } | null = null
 
 /** Workspaces in other stores whose saved parent is a folder workspace, by folder workspace id.
- * The sidebar never nests rows under folders, so only the folder's own views list these. */
+ * The folder panels list them with the folder's own children. */
 export function selectCrossStoreFolderChildrenById(
   state: FolderChildrenInputs
 ): ReadonlyMap<string, readonly Worktree[]> {
