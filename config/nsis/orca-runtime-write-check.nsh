@@ -8,7 +8,9 @@
         System::Call 'kernel32::CloseHandle(p r0)'
         ${Break}
       ${endIf}
-      MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(appCannotBeClosed)" /SD IDCANCEL IDRETRY +3
+      ${if} ${Cmd} `MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(appCannotBeClosed)" /SD IDCANCEL IDRETRY`
+        ${Continue}
+      ${endIf}
       SetErrorLevel 2
       Quit
     ${Loop}

@@ -8,6 +8,7 @@ assert.equal(process.platform, 'win32', 'This smoke check requires Windows and a
 const compiler = process.argv[2]
 assert.ok(compiler, 'Pass the path to makensis.exe')
 const scratch = mkdtempSync(join(tmpdir(), 'Orca runtime lock '))
+assert.equal(dirname(scratch), tmpdir())
 const header = resolve(import.meta.dirname, '../../../nsis/orca-process-check.nsh')
 const includes = resolve(
   import.meta.dirname,
@@ -81,6 +82,14 @@ try {
       executable
     ]
   )
+  console.log(
+    'locked update:',
+    JSON.stringify({
+      exitCode: locked.code,
+      executable: readFileSync(executable, 'utf8'),
+      runtime: readFileSync(runtime, 'utf8')
+    })
+  )
   assert.equal(locked.code, 2, locked.stdout + locked.stderr)
   assert.equal(readFileSync(executable, 'utf8'), 'old executable')
   assert.equal(readFileSync(runtime, 'utf8'), 'old runtime')
@@ -96,6 +105,5 @@ try {
     'NSIS runtime write check passed: locked update unchanged, unlocked update, fresh install'
   )
 } finally {
-  assert.equal(dirname(scratch), tmpdir())
   rmSync(scratch, { recursive: true, force: true })
 }
