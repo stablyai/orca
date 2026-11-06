@@ -1,4 +1,5 @@
 import { afterEach, expect, it } from 'vitest'
+import recordedOmp from './fixtures/omp-v17-windows-new-no-model.json'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { CALLER } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
 import {
@@ -23,7 +24,13 @@ const select = (id: string, category: string, currentValue: string): SessionConf
   category,
   type: 'select',
   currentValue,
-  options: []
+  options:
+    category === 'thought_level'
+      ? [
+          { value: 'low', name: 'Low' },
+          { value: 'high', name: 'High' }
+        ]
+      : []
 })
 const config = (model = MODEL, modelId = 'model', effort?: string): SessionConfigOption[] => [
   select(modelId, 'model', model),
@@ -204,37 +211,104 @@ it('writes explicit new-chat input even when its provisional report is equal', a
   await f.host.close(SESSION, 'user-close')
 })
 
-it.each(['missing', 'echoed'] as const)(
-  'applies model before unproven explicit effort with %s descriptor',
-  async (descriptor) => {
-    const f = await openModel({
-      intent: { model: MODEL, effort: 'high' },
-      script: (agent, native) => {
-        let modelSet = false
-        if (descriptor === 'echoed') {
-          agent.on('session/load', (frame) =>
-            agent.reply(frame, { configOptions: config(MODEL, 'model', 'high') })
-          )
+it('keeps explicit effort through an unoffered turn and applies it despite a fallback echo', async () => {
+  const f = await openModel({
+    intent: { model: MODEL, effort: 'high' },
+    script: (agent, native) => {
+      agent.on('session/set_config_option', (frame) => {
+        const { configId, value } = SetSessionConfigOptionRequestSchema.parse(frame.params)
+        if (configId !== 'variant') {
+          agent.fail(frame, -32602, 'Invalid params', 'model not found')
+          return
         }
-        agent.on('session/set_config_option', (frame) => {
-          const { configId, value } = SetSessionConfigOptionRequestSchema.parse(frame.params)
-          if (configId === 'model') {
-            modelSet = true
-          } else if (configId === 'variant' && modelSet) {
-            native.effort = String(value)
-          } else {
-            agent.fail(frame, -32602, 'Invalid params', 'effort requires model activation')
-            return
-          }
-          agent.reply(frame, { configOptions: config(MODEL, 'model', native.effort) })
-        })
-      }
-    })
-    await f.reply('use high', 'existing_lb/gpt-6.1-sol:high')
-    await f.reply('keep high', 'existing_lb/gpt-6.1-sol:high')
-    await f.host.close(SESSION, 'user-close')
-  }
-)
+        native.effort = String(value)
+        agent.reply(frame, { configOptions: config(MODEL, 'model', 'high') })
+      })
+    }
+  })
+  await f.reply('while the model catalog loads', 'existing_lb/gpt-6.1-sol:low')
+  expect(f.store.getRecord(SESSION)?.options?.effort).toBe('high')
+  const offered = config(MODEL, 'model', 'high').map((option) =>
+    option.id === 'variant'
+      ? {
+          ...option,
+          options: [
+            { value: 'high', name: 'High' },
+            { value: 'default', name: 'Default' }
+          ]
+        }
+      : option
+  )
+  f.rig.child().agent.notify('session/update', push(offered).params)
+  await f.reply('apply the offered effort', 'existing_lb/gpt-6.1-sol:high')
+  f.rig.child().agent.notify('session/update', push(config()).params)
+  await f.reply('retain the model after effort was applied', 'existing_lb/gpt-6.1-sol:high')
+  await f.host.close(SESSION, 'user-close')
+})
+
+it('reads the effort menu returned by an actual model change before the same prompt', async () => {
+  const f = await openModel({
+    intent: { model: OTHER, effort: 'high' },
+    script: (agent, native) => {
+      agent.on('session/set_config_option', (frame) => {
+        const { configId, value } = SetSessionConfigOptionRequestSchema.parse(frame.params)
+        if (configId === 'model') {
+          native.model = String(value)
+        } else if (configId === 'variant') {
+          native.effort = String(value)
+        }
+        agent.reply(frame, { configOptions: config(OTHER, 'model', native.effort) })
+      })
+    }
+  })
+  await f.reply('change model and apply high', 'opencode/beam-free:high')
+  await f.host.close(SESSION, 'user-close')
+})
+
+it('does not send when an offered effort control is genuinely rejected', async () => {
+  const f = await openModel({
+    intent: { model: MODEL, effort: 'high' },
+    script: (agent) => {
+      agent.on('session/load', (frame) =>
+        agent.reply(frame, { configOptions: config(MODEL, 'model', 'high') })
+      )
+    }
+  })
+  const id = await send(f.host, 'use the offered effort')
+  await waitFor(async () =>
+    expect(
+      (await f.host.journalSnapshot(SESSION)).submissions.find(
+        (entry) => entry.clientMessageId === id
+      )
+    ).toMatchObject({ dispatchState: 'rejected' })
+  )
+  expect(framesOf(f.rig.child(), 'session/prompt')).toHaveLength(0)
+  expect(f.store.getRecord(SESSION)?.options?.effort).toBe('high')
+  await f.host.close(SESSION, 'user-close')
+})
+
+it('keeps the recorded OMP unlisted-effort control route', async () => {
+  const f = await openModel({
+    agent: 'omp',
+    intent: { model: MODEL, effort: 'high' },
+    script: (agent, native) => {
+      agent.on('session/load', (frame) =>
+        agent.reply(frame, { configOptions: [...config(), ...recordedOmp.configOptions] })
+      )
+      agent.on('session/set_config_option', (frame) => {
+        const { configId, value } = SetSessionConfigOptionRequestSchema.parse(frame.params)
+        if (configId !== 'thinking' || value !== 'high') {
+          agent.fail(frame, -32602, 'Invalid params', 'unexpected control')
+          return
+        }
+        native.effort = 'high'
+        agent.reply(frame, { configOptions: [...config(), ...recordedOmp.configOptions] })
+      })
+    }
+  })
+  await f.reply('use saved high', 'existing_lb/gpt-6.1-sol:high')
+  await f.host.close(SESSION, 'user-close')
+})
 
 it.each(['response-push', 'push-response'] as const)(
   'reduces restored %s records in one chunk before dispatch',
@@ -352,34 +426,5 @@ it('reconciles live native drift before sending with the saved choice', async ()
   f.native.model = OTHER
   f.rig.child().agent.notify('session/update', push(config(OTHER)).params)
   await f.reply('after drift', 'existing_lb/gpt-6.1-sol:low')
-  await f.host.close(SESSION, 'user-close')
-})
-
-it('does not regain native model adoption after model-changing effort with a stale echo', async () => {
-  const f = await openModel({
-    script: (agent, native) => {
-      agent.on('session/load', (frame) =>
-        agent.reply(frame, { configOptions: config(MODEL, 'model', 'low') })
-      )
-      agent.on('session/set_config_option', (frame) => {
-        const { configId, value } = SetSessionConfigOptionRequestSchema.parse(frame.params)
-        if (configId === 'variant') {
-          native.effort = String(value)
-          native.model = OTHER
-        } else {
-          native.model = String(value)
-        }
-        agent.reply(frame, { configOptions: config(MODEL, 'model', native.effort) })
-      })
-    }
-  })
-  await f.reply('before effort', 'existing_lb/gpt-6.1-sol:low')
-  await f.rig.adapter.setOption({
-    sessionId: SESSION,
-    fence: f.fence(),
-    key: 'effort',
-    value: 'high'
-  })
-  await f.reply('after effort changed the composite model', 'existing_lb/gpt-6.1-sol:high')
   await f.host.close(SESSION, 'user-close')
 })
