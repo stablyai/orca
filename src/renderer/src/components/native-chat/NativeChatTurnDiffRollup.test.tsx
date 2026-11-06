@@ -126,7 +126,14 @@ function withStore(
   const actions = { openSettingsPage: vi.fn(), openSettingsTarget: vi.fn() }
   // Settings saved before this setting existed have no key; the card must still show for them.
   const { nativeChatTurnDiffSummary: _absent, ...savedBeforeSetting } = getDefaultSettings('/tmp')
-  useAppStore.setState({ settings: savedBeforeSetting, updateSettingsOrThrow, ...actions })
+  useAppStore.setState({
+    settings: savedBeforeSetting,
+    updateSettingsOrThrow: (updates) =>
+      updateSettingsOrThrow(
+        typeof updates === 'function' ? updates(useAppStore.getState().settings!) : updates
+      ),
+    ...actions
+  })
   vi.mocked(toast.success).mockClear()
   vi.mocked(toast.error).mockClear()
   return run(actions).finally(() => useAppStore.setState(original, true))

@@ -61,12 +61,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
       ),
     requestContextualTour: (id, source, wasFeaturePreviouslyInteracted, options) =>
       set((s) => {
-        const tour = getContextualTour(
-          id,
-          s.projectGroupingUpgradeTipAudience?.membership === 'eligible'
-            ? s.projectGroupingUpgradeTipAudience.projectId
-            : undefined
-        )
+        const tour = getContextualTour(id)
         const decision = getContextualTourRequestDecision({
           tour,
           persistedUIReady: s.persistedUIReady,
