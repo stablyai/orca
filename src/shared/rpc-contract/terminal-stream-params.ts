@@ -37,9 +37,10 @@ export const TerminalSubscribe = TerminalHandle.extend({
       outputAck: z.literal(1).optional()
     })
     .optional(),
-  /** Continue an ended stream: `units` is the Output text, in UTF-16 code units, received on it after its
-   * snapshot (or its `resumed` reply). The host answers `resumed: true` and sends only what was missed,
-   * or a snapshot as usual. Each token resumes at most once; older hosts strip this and snapshot. */
+  /** Continue an ended stream: `units` is the Output text, in UTF-16 code units, the client applied from that
+   * stream id after its snapshot (or its `resumed` reply), read once it stops applying that stream. The host
+   * answers `resumed: true` and sends only what was missed, or a snapshot as usual. Each token resumes at
+   * most once; older hosts strip this and snapshot. */
   resume: z
     .object({
       streamToken: requiredString('Missing stream token'),

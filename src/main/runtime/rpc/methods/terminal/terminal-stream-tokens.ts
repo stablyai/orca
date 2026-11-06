@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
 import { TerminalStreamResumeLedger, type TerminalResumeGap } from './terminal-stream-resume-ledger'
-import type { PublishedOutputPosition } from '../../../terminal/output/terminal-published-output-ring'
 import type { TerminalSubscriptionArgs } from './terminal-subscribe-types'
 
 // A tab switch or a reconnect comes back within seconds; two minutes covers a phone left in a pocket.
@@ -91,7 +90,7 @@ export function claimTerminalStreamResume(
   deviceId: string | undefined,
   ptyId: string,
   units: number,
-  current: PublishedOutputPosition
+  currentSeq: number
 ): TerminalResumeGap | null {
   const live = liveStreams.get(token)
   if (live && live.deviceId === deviceId) {
@@ -103,7 +102,9 @@ export function claimTerminalStreamResume(
     return null
   }
   try {
-    return entry.resume.ledger.ptyId === ptyId ? entry.resume.ledger.readGap(units, current) : null
+    return entry.resume.ledger.ptyId === ptyId
+      ? entry.resume.ledger.readGap(units, currentSeq)
+      : null
   } finally {
     discardRetained(token)
   }

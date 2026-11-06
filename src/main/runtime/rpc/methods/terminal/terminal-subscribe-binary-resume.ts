@@ -21,7 +21,7 @@ export function tryPublishResumedOutput(
     args.pairedDeviceId,
     ptyId,
     resume.units,
-    { seq: runtime.getPtyOutputSequence(ptyId), size }
+    runtime.getPtyOutputSequence(ptyId)
   )
   const ledger = streamToken?.ledger
   if (
@@ -63,7 +63,8 @@ export function tryPublishResumedOutput(
   }
   for (const item of bufferedOutput) {
     const uncovered = getOutputAfterSnapshotSeq(item, gap.seq)
-    if (uncovered?.data) {
+    // An empty span still moves the seq the phone shows; it sends no frame.
+    if (uncovered && (uncovered.data || uncovered.meta?.rawLength)) {
       state.outputBatcher.push(uncovered.data, uncovered.meta)
     }
   }

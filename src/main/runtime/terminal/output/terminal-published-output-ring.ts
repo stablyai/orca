@@ -1,8 +1,5 @@
 type TerminalSize = { cols: number; rows: number } | null
 
-/** The PTY's output seq and size now; a gap is only valid if the ring still ends there on the same grid. */
-export type PublishedOutputPosition = { seq: number; size: TerminalSize }
-
 export type PublishedTerminalOutput = {
   data: string
   /** PTY output seq after this chunk. */
@@ -13,6 +10,9 @@ export type PublishedTerminalOutput = {
   cwd?: string
 }
 
+/** A seq a client's screen shows, with the coverage epoch and grid it was reached under. */
+export type PublishedOutputPoint = { seq: number; epoch: number; size: TerminalSize }
+
 const RING_MAX_UNITS = 64 * 1024
 
 // Global so a ring recreated for the same PTY never repeats an epoch a stale ledger recorded.
@@ -22,26 +22,27 @@ let nextCoverageEpoch = 1
 export class TerminalPublishedOutputRing {
   /** Changes whenever coverage restarts; output recorded under an older epoch can't be resumed from. */
   epoch = 0
-  private chunks: PublishedTerminalOutput[] = []
+  private chunks: (PublishedTerminalOutput & { size: TerminalSize })[] = []
   private units = 0
   private startSeq = 0
   private endSeq = 0
-  private size: TerminalSize = null
 
-  constructor(seq: number, size: TerminalSize) {
-    this.resetCoverage(seq, size)
+  constructor(
+    seq: number,
+    /** The PTY's grid now. */
+    readonly currentSize: () => TerminalSize
+  ) {
+    this.resetCoverage(seq)
   }
 
-  append(chunk: PublishedTerminalOutput, size: TerminalSize): void {
-    const { seq } = chunk
-    const startSeq = seq - chunk.rawLength
-    // Output written for another grid, or after output that never reached subscribers, replays wrong.
-    if (startSeq !== this.endSeq || !sameSize(size, this.size)) {
-      this.resetCoverage(startSeq, size)
+  append(chunk: PublishedTerminalOutput): void {
+    // Output after output that never reached subscribers can't be stitched onto what a client shows.
+    if (chunk.seq - chunk.rawLength !== this.endSeq) {
+      this.resetCoverage(chunk.seq - chunk.rawLength)
     }
-    this.chunks.push(chunk)
+    this.chunks.push({ ...chunk, size: this.currentSize() })
     this.units += chunk.data.length
-    this.endSeq = seq
+    this.endSeq = chunk.seq
     let dropCount = 0
     while (this.units > RING_MAX_UNITS && dropCount < this.chunks.length) {
       this.units -= this.chunks[dropCount]!.data.length
@@ -53,41 +54,47 @@ export class TerminalPublishedOutputRing {
     }
   }
 
-  resetCoverage(seq = this.endSeq, size: TerminalSize = this.size): void {
+  resetCoverage(seq = this.endSeq): void {
     this.epoch = nextCoverageEpoch++
     this.chunks = []
     this.units = 0
     this.startSeq = seq
     this.endSeq = seq
-    this.size = size
   }
 
-  covers(seq: number, epoch: number): boolean {
-    return epoch === this.epoch && seq >= this.startSeq
+  covers(point: PublishedOutputPoint): boolean {
+    return point.epoch === this.epoch && point.seq >= this.startSeq
   }
 
-  /** Output published after `seq`, or null unless the ring holds all of it for this grid. */
-  readAfter(
-    seq: number,
-    epoch: number,
-    current: PublishedOutputPosition
-  ): PublishedTerminalOutput[] | null {
+  /** The point a client reaches by receiving output through `seq`: the grid that output was written for. */
+  pointAt(seq: number): PublishedOutputPoint {
+    const chunk = this.chunks.findLast((candidate) => candidate.seq - candidate.rawLength < seq)
+    const size = chunk && seq <= chunk.seq ? chunk.size : this.currentSize()
+    return { seq, epoch: this.epoch, size }
+  }
+
+  /** Output published after `point`, or null unless the ring holds all of it, written for the grid the client shows. */
+  readAfter(point: PublishedOutputPoint, currentSeq: number): PublishedTerminalOutput[] | null {
+    const size = this.currentSize()
     if (
-      epoch !== this.epoch ||
-      seq < this.startSeq ||
-      seq > this.endSeq ||
-      current.seq !== this.endSeq ||
-      !sameSize(current.size, this.size)
+      !this.covers(point) ||
+      point.seq > this.endSeq ||
+      currentSeq !== this.endSeq ||
+      !sameSize(point.size, size)
     ) {
       return null
     }
     const gap: PublishedTerminalOutput[] = []
-    for (const chunk of this.chunks) {
-      if (chunk.seq <= seq) {
+    for (const { size: chunkSize, ...chunk } of this.chunks) {
+      if (chunk.seq <= point.seq) {
         continue
       }
+      // Output written for another grid replays wrong on this one.
+      if (!sameSize(chunkSize, size)) {
+        return null
+      }
       const chunkStartSeq = chunk.seq - chunk.rawLength
-      if (chunkStartSeq >= seq) {
+      if (chunkStartSeq >= point.seq) {
         gap.push(chunk)
         continue
       }
@@ -95,7 +102,7 @@ export class TerminalPublishedOutputRing {
       if (chunk.transformed || chunk.rawLength !== chunk.data.length) {
         return null
       }
-      const offset = seq - chunkStartSeq
+      const offset = point.seq - chunkStartSeq
       gap.push({ ...chunk, data: chunk.data.slice(offset), rawLength: chunk.rawLength - offset })
     }
     return gap
@@ -135,22 +142,19 @@ export class TerminalPublishedOutputRings {
   ): { ring: TerminalPublishedOutputRing; release: () => void } {
     let entry = this.rings.get(ptyId)
     if (!entry) {
-      const ring = new TerminalPublishedOutputRing(source.seq, source.size())
+      const ring = new TerminalPublishedOutputRing(source.seq, source.size)
       const unsubscribe = source.subscribe((data, meta) => {
         if (typeof meta?.seq !== 'number') {
           ring.resetCoverage()
           return
         }
-        ring.append(
-          {
-            data,
-            seq: meta.seq,
-            rawLength: meta.rawLength ?? data.length,
-            transformed: meta.transformed === true,
-            ...(meta.cwd !== undefined ? { cwd: meta.cwd } : {})
-          },
-          source.size()
-        )
+        ring.append({
+          data,
+          seq: meta.seq,
+          rawLength: meta.rawLength ?? data.length,
+          transformed: meta.transformed === true,
+          ...(meta.cwd !== undefined ? { cwd: meta.cwd } : {})
+        })
       })
       entry = { ring, holders: 0, unsubscribe }
       this.rings.set(ptyId, entry)
