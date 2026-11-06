@@ -68,15 +68,21 @@ export const CODEX_EVENT_LABEL: Record<(typeof CODEX_EVENTS)[number], CodexEvent
   Interrupt: CODEX_HOOK_EVENT_LABEL.Interrupt!
 }
 
+// Codex's hook review lists unnamed hooks as "Hook N"; Codex hashes this, so changing it re-approves.
+export const CODEX_MANAGED_HOOK_STATUS_MESSAGE = 'Reporting status to Orca'
+
 // Clamp to Codex's per-event timeout caps (Interrupt: 3s) to avoid startup warnings.
 export function buildCodexManagedHook(
   command: string,
   eventName: (typeof CODEX_EVENTS)[number]
 ): HookCommandConfig {
-  return buildManagedCommandHook(
-    command,
-    normalizeCodexHookTimeoutSec(CODEX_EVENT_LABEL[eventName], MANAGED_HOOK_TIMEOUT_SECONDS)
-  )
+  return {
+    ...buildManagedCommandHook(
+      command,
+      normalizeCodexHookTimeoutSec(CODEX_EVENT_LABEL[eventName], MANAGED_HOOK_TIMEOUT_SECONDS)
+    ),
+    statusMessage: CODEX_MANAGED_HOOK_STATUS_MESSAGE
+  }
 }
 
 export const CODEX_MANAGED_EVENT_LABELS = new Set<CodexEventLabel>(
@@ -98,7 +104,8 @@ export function computeOrcaCodexHookHashes(
           groupIndex: 0,
           handlerIndex: 0,
           command,
-          timeoutSec: buildCodexManagedHook(command, eventName).timeout
+          timeoutSec: buildCodexManagedHook(command, eventName).timeout,
+          statusMessage: CODEX_MANAGED_HOOK_STATUS_MESSAGE
         })
       ]
     })
