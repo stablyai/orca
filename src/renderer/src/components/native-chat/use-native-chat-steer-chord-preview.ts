@@ -20,7 +20,9 @@ export function useNativeChatSteerChordPreview(
   /** An open picker takes Enter, so the chord previews nothing then. */
   pickerOpen: boolean
 ): { preview: NativeChatSteerChordPreview | null; runPreview: () => void } {
-  const [held, setHeld] = useState(false)
+  // 'down' while the modifier is pressed alone and the delay runs; 'held' once it has passed.
+  const [chord, setChord] = useState<'up' | 'down' | 'held'>('up')
+  const held = chord === 'held'
   const enabled = alternateSend !== undefined
   useEffect(() => {
     const element = root.current
@@ -29,29 +31,16 @@ export function useNativeChatSteerChordPreview(
     }
     const mac = isMacPlatform()
     const chordKey = mac ? 'Meta' : 'Control'
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const release = (): void => {
-      clearTimeout(timer)
-      timer = undefined
-      setHeld(false)
-    }
+    const release = (): void => setChord('up')
     const onKeyDown = (event: KeyboardEvent): void => {
       // Any other key means a chord is under way (Enter included): it runs, the preview goes.
       // During IME composition the IME owns Enter, so the chord previews nothing either.
-      if (event.key !== chordKey || event.isComposing) {
-        release()
-        return
-      }
       // Shift or Alt already down makes it another chord (Shift steers the head card whatever is typed).
       const otherModifier = event.shiftKey || event.altKey || (mac ? event.ctrlKey : event.metaKey)
-      if (otherModifier) {
+      if (event.key !== chordKey || event.isComposing || otherModifier) {
         release()
-      } else if (!event.repeat && timer === undefined) {
-        timer = setTimeout(() => {
-          timer = undefined
-          // Cmd+Tab inside the delay leaves the window before the preview would show.
-          setHeld(document.hasFocus())
-        }, NATIVE_CHAT_STEER_CHORD_HOLD_MS)
+      } else if (!event.repeat) {
+        setChord((current) => (current === 'up' ? 'down' : current))
       }
     }
     const onKeyUp = (event: KeyboardEvent): void => {
@@ -68,11 +57,21 @@ export function useNativeChatSteerChordPreview(
       element.removeEventListener('keyup', onKeyUp)
       element.removeEventListener('focusout', release)
       element.removeEventListener('compositionstart', release)
-      clearTimeout(timer)
       // A key-up missed while the chord offered nothing must not show a stale preview later.
-      setHeld(false)
+      release()
     }
   }, [root, enabled])
+
+  useEffect(() => {
+    if (chord !== 'down') {
+      return
+    }
+    const timer = setTimeout(() => {
+      // Cmd+Tab inside the delay leaves the window before the preview would show.
+      setChord(document.hasFocus() ? 'held' : 'up')
+    }, NATIVE_CHAT_STEER_CHORD_HOLD_MS)
+    return () => clearTimeout(timer)
+  }, [chord])
 
   useEffect(() => {
     // Only the composer showing a preview listens, so mounted chats add no work here.
@@ -80,7 +79,7 @@ export function useNativeChatSteerChordPreview(
       return
     }
     // macOS drops the Cmd key-up after Cmd+Tab, so leaving the window or tab also releases.
-    const release = (): void => setHeld(false)
+    const release = (): void => setChord('up')
     const onHidden = (): void => {
       if (document.hidden) {
         release()
