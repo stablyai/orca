@@ -130,10 +130,18 @@ export function useAutomationsPageDestinationForm({
     automationAuthorityCatalogKey(editHostResolution.authority) !== dialogAuthorityKey
       ? editHostResolution.entry
       : null
+  // A host's project table can load after the editor opened on it; the chosen project then holds.
+  const editingDestination =
+    local.editingDestination ??
+    (editHostResolution.status === 'ready' &&
+    draft.projectId &&
+    !automationCreateProjectMismatch(repoTables, editHostResolution, draft.projectId)
+      ? { projectId: draft.projectId, destination: editHostResolution }
+      : null)
   const editSaveDestination = resolveAutomationEditDestination({
     currentAutomation: editingRow?.automation ?? null,
     editingAutomationId,
-    editingDestination: local.editingDestination,
+    editingDestination,
     draft,
     targetEdited: local.targetEdited,
     rowKey: editingRowKey,

@@ -7,6 +7,7 @@ import {
 import type { AutomationDestination } from '../shared/automation-owner-precondition'
 import type { RuntimeWorktreeRecord } from '../shared/runtime-types'
 import type { SshTargetSummary } from '../shared/ssh-types'
+import type { SshEditableTarget } from '../shared/ssh-target-management'
 import type { Repo } from '../shared/repo-types'
 import { getManagedOrcadSshTargetId } from '../shared/managed-orcad-execution-host'
 import { listEnvironments } from '../shared/remote-runtime/host-store/runtime-environment-store'
@@ -19,25 +20,31 @@ export type AutomationDestinationTarget = { repo?: string; workspace?: string }
 async function resolveTargetRepo(
   client: RuntimeClient,
   target: AutomationDestinationTarget
-): Promise<Repo> {
+): Promise<{ repo: Repo; worktreeId?: string }> {
   if (target.repo) {
-    return (await client.call<{ repo: Repo }>('repo.show', { repo: target.repo })).result.repo
+    return {
+      repo: (await client.call<{ repo: Repo }>('repo.show', { repo: target.repo })).result.repo
+    }
   }
   const worktree = (
     await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
       worktree: target.workspace
     })
   ).result.worktree
-  return (await client.call<{ repo: Repo }>('repo.show', { repo: `id:${worktree.repoId}` })).result
-    .repo
+  const { repo } = (
+    await client.call<{ repo: Repo }>('repo.show', { repo: `id:${worktree.repoId}` })
+  ).result
+  return { repo, worktreeId: worktree.id }
 }
+
+type RegisteredSshTarget = SshTargetSummary & Pick<SshEditableTarget, 'managedServer'>
 
 // An unregistered target is gone.
 async function registeredSshTarget(
   client: RuntimeClient,
   targetId: string
-): Promise<SshTargetSummary> {
-  const { targets } = await fetchSshTargetSummaries<SshTargetSummary>(client)
+): Promise<RegisteredSshTarget> {
+  const { targets } = await fetchSshTargetSummaries<RegisteredSshTarget>(client)
   const match = targets.find((candidate) => candidate.id === targetId)
   if (!match) {
     throw new AutomationOwnerConflictError(AUTOMATION_OWNER_CONFLICT_CODES.invalidDestination)
@@ -48,7 +55,7 @@ async function registeredSshTarget(
 /** Where a write lands: here, or the managed Orca server that holds an SSH host's automations (#24863). */
 type AutomationWriteRoute =
   | { kind: 'here'; destination?: AutomationDestination }
-  | { kind: 'server'; environmentId: string; host: string; repoId: string }
+  | { kind: 'server'; environmentId: string; host: string; repoId: string; worktreeId?: string }
 
 async function resolveAutomationWriteRoute(
   client: RuntimeClient,
@@ -57,7 +64,7 @@ async function resolveAutomationWriteRoute(
   if (!target.repo && !target.workspace) {
     return { kind: 'here' }
   }
-  const repo = await resolveTargetRepo(client, target)
+  const { repo, worktreeId } = await resolveTargetRepo(client, target)
   const connectionId = repo.connectionId?.trim()
   if (!connectionId) {
     return { kind: 'here', destination: { selector: { kind: 'self' } } }
@@ -67,7 +74,20 @@ async function resolveAutomationWriteRoute(
     (environment) => getManagedOrcadSshTargetId(environment) === connectionId
   )
   if (server) {
-    return { kind: 'server', environmentId: server.id, host: sshTarget.label, repoId: repo.id }
+    return {
+      kind: 'server',
+      environmentId: server.id,
+      host: sshTarget.label,
+      repoId: repo.id,
+      ...(worktreeId ? { worktreeId } : {})
+    }
+  }
+  // A paired CLI may not hold the server this desktop reaches; a desktop copy would never run.
+  if (sshTarget.managedServer) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `${sshTarget.label} now runs automations on its Orca server`
+    )
   }
   // A registered target without a generation needs no fence.
   return sshTarget.generation === undefined
@@ -82,7 +102,7 @@ async function resolveAutomationWriteRoute(
 
 /** The client a create goes to, with its params; a managed SSH host's server takes it by project id. */
 export async function routeAutomationCreate<
-  TCreate extends { repo?: string; runContext?: unknown }
+  TCreate extends { repo?: string; workspace?: string; runContext?: unknown }
 >(
   client: RuntimeClient,
   target: AutomationDestinationTarget,
@@ -100,13 +120,14 @@ export async function routeAutomationCreate<
   if (!repos.some((repo) => repo.id === route.repoId)) {
     throw new RuntimeClientError('invalid_argument', `Move this project to ${route.host} first.`)
   }
-  // The server sets the project up from its own records, not the desktop's SSH run context.
+  // The server sets the project up from its own records, by ids it shares with the desktop.
   return {
     writer: server,
     params: {
       ...create,
       runContext: undefined,
-      repo: create.repo === undefined ? undefined : `id:${route.repoId}`
+      repo: create.repo === undefined ? undefined : `id:${route.repoId}`,
+      ...(route.worktreeId ? { workspace: `id:${route.worktreeId}` } : {})
     }
   }
 }

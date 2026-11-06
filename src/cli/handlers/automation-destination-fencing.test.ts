@@ -39,7 +39,7 @@ vi.mock('../runtime-client', async (original) => ({
   }
 }))
 
-type SshRegistration = { id: string; label: string; generation?: number }
+type SshRegistration = { id: string; label: string; generation?: number; managedServer?: true }
 
 function ok(result: unknown): unknown {
   return { id: 'request-1', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
@@ -318,6 +318,24 @@ describe('CLI automation creates for a managed SSH host', () => {
       { environmentId: 'env-1', params: expect.objectContaining({ repo: 'id:r1' }) }
     ])
     expect(servers.writes[0]?.params).not.toHaveProperty('destination')
+  })
+
+  it('refuses a desktop copy when this CLI does not hold the managed server', async () => {
+    const { call, writes } = authority({
+      registered: [{ id: 'box-1', label: 'box 1', generation: 7, managedServer: true }],
+      repoConnectionId: 'box-1'
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => undefined)
+
+    await expect(
+      AUTOMATION_HANDLERS['automations create']!({
+        client: { call } as never,
+        cwd: '/tmp',
+        flags: new Map([...CREATE_FLAGS, ['repo', 'repo-on-box-1']]),
+        json: true
+      })
+    ).rejects.toThrow('box 1 now runs automations on its Orca server')
+    expect(writes).toEqual([])
   })
 
   it('asks to move a project the server does not have', async () => {

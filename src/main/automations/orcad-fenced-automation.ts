@@ -38,12 +38,17 @@ export function isOrcadFencedAutomation(
 
 /** A desktop row on a host its managed Orca server now serves: it can never run here (#27499). */
 export function managedOrcadHostOf(
-  store: Pick<Store, 'getSshTarget'>,
-  automation: Pick<Automation, 'executionTargetType' | 'executionTargetId'>
+  store: Pick<Store, 'getSshTarget' | 'automationOwnerPrecondition'>,
+  automation: Pick<Automation, 'id' | 'executionTargetType' | 'executionTargetId'>
 ): SshTarget | null {
-  const target =
-    automation.executionTargetType === 'ssh'
-      ? store.getSshTarget(automation.executionTargetId)
-      : undefined
+  // The owner selector also covers local rows pinned to an SSH workspace.
+  const selector = store.automationOwnerPrecondition(automation.id)?.selector
+  const targetId =
+    selector?.kind === 'ssh'
+      ? selector.targetId
+      : automation.executionTargetType === 'ssh'
+        ? automation.executionTargetId
+        : null
+  const target = targetId ? store.getSshTarget(targetId) : undefined
   return target && isManagedOrcadSshTarget(target) ? target : null
 }

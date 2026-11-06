@@ -203,3 +203,28 @@ describe('resolveAutomationRunTarget on a managed SSH host', () => {
     })
   })
 })
+
+describe('resolveAutomationRunTarget on a managed SSH workspace pin', () => {
+  it('skips a local row whose pinned workspace is on a managed SSH host', () => {
+    const store = makeStore([makeSetup()], [makeRepo()])
+    store.automationOwnerPrecondition = () => ({
+      selector: { kind: 'ssh', targetId: 'box', targetGeneration: 7 }
+    })
+    store.getSshTarget = (id: string) =>
+      id === 'box'
+        ? {
+            id,
+            label: 'Build box',
+            host: 'box',
+            port: 22,
+            username: 'me',
+            orcadFence: { environmentId: 'env-1' }
+          }
+        : undefined
+
+    expect(resolveAutomationRunTarget(store, makeAutomation(makeRunContext()))).toMatchObject({
+      ok: false,
+      errorCode: 'managedHostServer'
+    })
+  })
+})

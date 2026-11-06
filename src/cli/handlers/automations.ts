@@ -203,6 +203,9 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     } satisfies AutomationCreateParams
     await assertAutomationFieldsSupported(client, create)
     const { writer, params } = await routeAutomationCreate(client, target, create)
+    if (writer !== client) {
+      await assertAutomationFieldsSupported(writer, create)
+    }
     const result = await writer.call<{ automation: Automation }>('automation.create', params)
     printResult(result, json, formatAutomationShow)
   },
