@@ -48,7 +48,11 @@ export function installPtyInspectIpcHandlers(deps: {
       if (hasLocalPtyId) {
         await getLocalPtyProviderStartupPromise()
       }
-      const capabilities: { id: string; authoritative: boolean | null }[] = []
+      const resolved: {
+        id: string
+        authoritative: boolean | null
+        probeGone: Promise<boolean>
+      }[] = []
       const seen = new Set<string>()
       for (const value of ids) {
         if (
@@ -62,16 +66,24 @@ export function installPtyInspectIpcHandlers(deps: {
         seen.add(value)
         const provider = tryGetProviderForPty(value)
         // Missing inspection support is non-authoritative; unattached SSH relays remain retryable.
-        capabilities.push({
-          id: value,
-          authoritative: !provider
-            ? isDispatchablePtyHost(resolvePtyExecutionHost(value))
-              ? null
-              : false
-            : provider.canProvideAuthoritativeBufferSnapshot
-              ? provider.canProvideAuthoritativeBufferSnapshot(value)
-              : false
-        })
+        const authoritative = !provider
+          ? isDispatchablePtyHost(resolvePtyExecutionHost(value))
+            ? null
+            : false
+          : provider.canProvideAuthoritativeBufferSnapshot
+            ? provider.canProvideAuthoritativeBufferSnapshot(value)
+            : false
+        // Only a local provider's explicit absent answer marks a session gone; SSH and remote hosts keep their own parking rules.
+        // Probes run together so a slow daemon cannot push the batch past the renderer's deadline.
+        const probeGone =
+          authoritative === false && resolvePtyExecutionHost(value) === LOCAL_EXECUTION_HOST_ID
+            ? Promise.resolve(provider?.probePtyLiveness?.(value)).then((live) => live === false)
+            : Promise.resolve(false)
+        resolved.push({ id: value, authoritative, probeGone })
+      }
+      const capabilities: { id: string; authoritative: boolean | null; gone?: boolean }[] = []
+      for (const { id, authoritative, probeGone } of resolved) {
+        capabilities.push({ id, authoritative, ...((await probeGone) ? { gone: true } : {}) })
       }
       return capabilities
     }

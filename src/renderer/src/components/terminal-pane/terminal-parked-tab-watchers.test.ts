@@ -542,6 +542,38 @@ describe('terminal-parked-tab-watchers', () => {
       )
     })
 
+    it('covers a split tab whose every pane session is gone', async () => {
+      clearTerminalProviderSnapshotCapabilities()
+      await synchronizeTerminalProviderSnapshotCapabilities([PTY_ID, SECOND_PTY_ID], async (ids) =>
+        ids.map((id) => ({ id, authoritative: false, gone: true }))
+      )
+      capturePanes([
+        { ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true },
+        { ptyId: SECOND_PTY_ID, paneId: 2, leafId: SECOND_LEAF_ID, drivesTabTitle: false }
+      ])
+
+      expect(canWatcherCoverParkedTerminalTab(WORKTREE_ID, { id: TAB_ID, ptyId: PTY_ID })).toBe(
+        true
+      )
+    })
+
+    it('keeps a split tab mounted when only some pane sessions are gone', async () => {
+      clearTerminalProviderSnapshotCapabilities()
+      await synchronizeTerminalProviderSnapshotCapabilities([PTY_ID, SECOND_PTY_ID], async (ids) =>
+        ids.map((id) =>
+          id === PTY_ID ? { id, authoritative: false, gone: true } : { id, authoritative: true }
+        )
+      )
+      capturePanes([
+        { ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true },
+        { ptyId: SECOND_PTY_ID, paneId: 2, leafId: SECOND_LEAF_ID, drivesTabTitle: false }
+      ])
+
+      expect(canWatcherCoverParkedTerminalTab(WORKTREE_ID, { id: TAB_ID, ptyId: PTY_ID })).toBe(
+        false
+      )
+    })
+
     it('rejects a capture containing a PTY without snapshot backing', () => {
       capturePanes([
         { ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true },

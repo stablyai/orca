@@ -15,7 +15,10 @@ import { anyMountedWorktreeHasLayout as computeAnyMountedWorktreeHasLayout } fro
 import { isParkRestorableTerminalPty } from './terminal-pane/terminal-hidden-view-parking'
 import { canWatcherCoverParkedTerminalTab } from './terminal-pane/terminal-parked-tab-watchers'
 import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
-import { terminalProviderHasAuthoritativeSnapshot } from './terminal/terminal-provider-snapshot-capability'
+import {
+  terminalProviderHasAuthoritativeSnapshot,
+  terminalProviderSessionIsGone
+} from './terminal/terminal-provider-snapshot-capability'
 import type { TerminalParkingFoundation } from './use-terminal-parking-foundation'
 
 export function applyTerminalColdActivation(controller: TerminalParkingFoundation) {
@@ -107,7 +110,7 @@ export function applyTerminalColdActivation(controller: TerminalParkingFoundatio
         ? isParkRestorableTerminalPty(ptyId, renderedActiveWorktreeId, {
             pairedRuntimeParkingEnvironmentIds
           })
-        : terminalProviderHasAuthoritativeSnapshot(ptyId)
+        : terminalProviderHasAuthoritativeSnapshot(ptyId) || terminalProviderSessionIsGone(ptyId)
     if (lastActivationWorktreeIdRef.current !== renderedActiveWorktreeId) {
       lastActivationWorktreeIdRef.current = renderedActiveWorktreeId
       const tabById = new Map(worktreeTabs.map((tab) => [tab.id, tab]))

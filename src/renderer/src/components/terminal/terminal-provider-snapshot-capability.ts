@@ -1,4 +1,4 @@
-type SnapshotCapability = { id: string; authoritative: boolean | null }
+type SnapshotCapability = { id: string; authoritative: boolean | null; gone?: boolean }
 type SnapshotCapabilityResolver = (ids: string[]) => Promise<SnapshotCapability[]>
 export type SnapshotCapabilityTab = { id: string; ptyId?: string | null }
 export type SnapshotCapabilityBindingState = {
@@ -11,6 +11,7 @@ export type SnapshotCapabilityBindingState = {
 }
 
 const authoritativeSnapshotByPtyId = new Map<string, boolean>()
+const goneSessionPtyIds = new Set<string>()
 const unknownCapabilityRetryAtByPtyId = new Map<string, number>()
 const unknownCapabilityAttemptsByPtyId = new Map<string, number>()
 const UNKNOWN_CAPABILITY_RETRY_MS = 1_000
@@ -141,6 +142,11 @@ export async function synchronizeTerminalProviderSnapshotCapabilities(
       authoritativeSnapshotByPtyId.delete(cachedId)
     }
   }
+  for (const goneId of goneSessionPtyIds) {
+    if (!live.has(goneId)) {
+      goneSessionPtyIds.delete(goneId)
+    }
+  }
   for (const pendingId of unknownCapabilityRetryAtByPtyId.keys()) {
     if (!live.has(pendingId)) {
       unknownCapabilityRetryAtByPtyId.delete(pendingId)
@@ -197,9 +203,19 @@ export async function synchronizeTerminalProviderSnapshotCapabilities(
       break
     }
     const resolvedById = new Map(resolved.map((entry) => [entry.id, entry.authoritative]))
+    const goneById = new Map(resolved.map((entry) => [entry.id, entry.gone === true]))
     for (const id of batch) {
       const authoritative = resolvedById.get(id)
       if (typeof authoritative === 'boolean') {
+        const gone = goneById.get(id) === true
+        if (goneSessionPtyIds.has(id) !== gone) {
+          capabilityChanged = true
+          if (gone) {
+            goneSessionPtyIds.add(id)
+          } else {
+            goneSessionPtyIds.delete(id)
+          }
+        }
         capabilityChanged ||=
           (authoritativeSnapshotByPtyId.get(id) === true) !== (authoritative === true)
         authoritativeSnapshotByPtyId.set(id, authoritative)
@@ -258,11 +274,27 @@ export function terminalProviderHasAuthoritativeSnapshot(ptyId: string): boolean
   return authoritativeSnapshotByPtyId.get(ptyId) === true
 }
 
+/** The provider answered that this restored session no longer exists, so a pane remount respawns it and nothing is lost by parking. */
+export function terminalProviderSessionIsGone(ptyId: string): boolean {
+  return goneSessionPtyIds.has(ptyId)
+}
+
+export function terminalProviderAllowsParking(ptyId: string): boolean {
+  return authoritativeSnapshotByPtyId.get(ptyId) === true || goneSessionPtyIds.has(ptyId)
+}
+
+/** A live sibling's exit would close a parked tab whose gone panes carry no watcher, so mixed splits stay mounted. */
+export function mixesLiveAndGoneSessions(ptyIds: readonly (string | null)[]): boolean {
+  const goneCount = ptyIds.filter((ptyId) => ptyId !== null && goneSessionPtyIds.has(ptyId)).length
+  return goneCount > 0 && goneCount < ptyIds.length
+}
+
 export function clearTerminalProviderSnapshotCapabilities(): void {
-  const capabilityChanged = [...authoritativeSnapshotByPtyId.values()].some(
-    (authoritative) => authoritative
-  )
+  const capabilityChanged =
+    [...authoritativeSnapshotByPtyId.values()].some((authoritative) => authoritative) ||
+    goneSessionPtyIds.size > 0
   authoritativeSnapshotByPtyId.clear()
+  goneSessionPtyIds.clear()
   unknownCapabilityRetryAtByPtyId.clear()
   unknownCapabilityAttemptsByPtyId.clear()
   lastSynchronizedLivePtyIds = null
