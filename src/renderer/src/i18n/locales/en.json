@@ -17027,7 +17027,8 @@
           "e2b4d7c8a1": "Choose an agent for this check",
           "f1c9e3a6d4": "Choose agent to fix check",
           "actionRequired": "Action required",
-          "copyOutput": "Copy output"
+          "copyOutput": "Copy output",
+          "allowedFailure": "Allowed to fail"
         },
         "CheckRunJobs": {
           "5a8e1d4f23": " · ",
