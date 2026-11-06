@@ -15,6 +15,11 @@ import {
 } from '../../../../../shared/source-control/ai/recipes/source-control-action-options'
 import { encodeCatalogOptionValue } from '../../../../../shared/agent-session/options/structured-agent-session-option-codec'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentSessionModelCatalogResult } from '../../../../../shared/agent-session/agent-session-wire'
+import {
+  agentPickerEntryOptions,
+  agentPickerModels
+} from '../../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
 import { AgentChoiceMenu } from './AgentChoiceMenu'
 import { sourceControlActionRouteHint } from './AgentChoiceOptionField'
 import { translate } from '@/i18n/i18n'
@@ -29,6 +34,8 @@ export type AgentChoiceControlsProps = {
   optionIds?: readonly string[]
   defaultLabels?: { model?: string; options?: Record<string, string> }
   layout?: 'stacked' | 'contents' | 'rows'
+  /** The host's own list; without a listing the fields keep the release's seed models. */
+  liveCatalog?: AgentSessionModelCatalogResult
   onChange: (value: AgentDedicatedChoices | undefined) => void
 }
 
@@ -63,6 +70,7 @@ export function AgentChoiceFields({
   optionIds,
   defaultLabels,
   layout = 'stacked',
+  liveCatalog,
   onSelect
 }: Omit<AgentChoiceControlsProps, 'onChange'> & {
   onSelect: (patch: AgentChoicePatch) => void
@@ -74,13 +82,34 @@ export function AgentChoiceFields({
   const catalog = picksModel ? getAgentSessionOptionLaunchCatalog(agent) : null
   const selected = value
   const model = catalog && selected?.model ? findCatalogModel(catalog, selected.model) : undefined
-  const unlistedModel = catalog && selected?.model && !model ? selected.model : undefined
-  const options = sourceControlActionOptions(agent, selected?.model ?? '').filter(
+  const live =
+    liveCatalog && liveCatalog.origin !== 'unknown' && liveCatalog.models.length
+      ? { agent, catalog: liveCatalog, terminal: {} }
+      : null
+  const listedModels = live
+    ? agentPickerModels(live).filter(({ hidden }) => !hidden)
+    : (catalog?.models ?? [])
+  const unlistedModel =
+    selected?.model && !(live ? listedModels.some(({ id }) => id === selected.model) : model)
+      ? selected.model
+      : undefined
+  const liveEffort = live
+    ? agentPickerEntryOptions(live, selected?.model, 'terminal').find(({ id }) => id === 'effort')
+    : undefined
+  const options = sourceControlActionOptions(agent, selected?.model ?? '').flatMap((row) => {
     // CLI carrier mappings remain available to Args badges without advertising a mode control.
-    ({ option }) =>
-      (Boolean(model) || option.category !== 'mode') &&
-      (!optionIds || optionIds.includes(option.id))
-  )
+    if (
+      (!model && row.option.category === 'mode') ||
+      (optionIds && !optionIds.includes(row.option.id))
+    ) {
+      return []
+    }
+    if (!live || row.option.id !== 'effort') {
+      return [row]
+    }
+    // A listed model with no reasoning levels gets no effort menu.
+    return liveEffort ? [{ ...row, option: { ...row.option, kind: liveEffort.kind } }] : []
+  })
   const defaultLabel = translate('settings.sourceControl.actionModel.effortDefault', 'Default')
   return (
     <div className={layout === 'contents' ? 'contents' : 'grid min-w-0 grid-cols-1 gap-2'}>
@@ -98,7 +127,7 @@ export function AgentChoiceFields({
                 defaultLabels?.model ??
                 translate('settings.sourceControl.actionModel.agentDefault', 'Agent default')
             },
-            ...catalog.models.map(({ id, label }) => ({ value: id, label })),
+            ...listedModels.map(({ id, label }) => ({ value: id, label })),
             ...(unlistedModel ? [{ value: unlistedModel, label: unlistedModel }] : [])
           ]}
           onChange={(model) => onSelect({ model: model === AGENT_DEFAULT_VALUE ? null : model })}
