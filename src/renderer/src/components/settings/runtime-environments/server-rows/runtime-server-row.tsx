@@ -40,6 +40,7 @@ import {
   managedServerHasConfirmation,
   ManagedServerMenuItems,
   managedServerHasPrimaryAction,
+  managedServerForgettable,
   ManagedServerPrimaryAction
 } from '../managed-servers/managed-server-row-parts'
 import type { ManagedServerLifecycle } from '../managed-servers/use-managed-server-lifecycle'
@@ -108,6 +109,7 @@ export function RuntimeServerRow({
   const [sshDialogOpen, setSshDialogOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const row = useRuntimeServerRowState(environment, details)
+  const managedForgettable = managed ? managedServerForgettable(managed, row.serverReplaced) : false
   const actionBusy = connecting || switching || disconnecting || removing
   const repairable = row.repairRoute === 'access-link'
   // Revoked access-link tokens fail every Connect; only Re-pair can restore access.
@@ -256,7 +258,9 @@ export function RuntimeServerRow({
 
   const showSshAccess = sshAccessApi !== null && !deployment && !pendingSshAccess
   const footer =
-    pendingSshAccess || expanded || (managed && managedServerHasConfirmation(managed)) ? (
+    pendingSshAccess ||
+    expanded ||
+    (managed && managedServerHasConfirmation(managed, managedForgettable)) ? (
       <>
         {pendingSshAccess && sshAccessApi ? (
           <RuntimeSshAccessControl
@@ -266,7 +270,9 @@ export function RuntimeServerRow({
             onChanged={() => onChanged?.()}
           />
         ) : null}
-        {managed ? <ManagedServerConfirmations lifecycle={managed} /> : null}
+        {managed ? (
+          <ManagedServerConfirmations lifecycle={managed} forgettable={managedForgettable} />
+        ) : null}
         {expanded ? (
           <RuntimeServerRowDetails
             endpoint={endpoint}
@@ -323,7 +329,11 @@ export function RuntimeServerRow({
             actionBusy={actionBusy}
             isBusy={isBusy}
             connectDisabled={row.connectionState === 'checking'}
-            managedItems={managed ? <ManagedServerMenuItems lifecycle={managed} /> : null}
+            managedItems={
+              managed ? (
+                <ManagedServerMenuItems lifecycle={managed} forgettable={managedForgettable} />
+              ) : null
+            }
             onUpdate={onOpenUpdate}
             onConnect={() => onConnect(environment)}
             onDisconnect={() => onDisconnect(environment)}

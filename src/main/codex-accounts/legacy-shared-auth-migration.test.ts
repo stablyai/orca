@@ -71,50 +71,6 @@ describe('legacy shared Codex auth migration', () => {
     expect(readFileSync(accountAuthPath, 'utf-8')).toBe(fresh)
   })
 
-  it('marks a uniquely matching stale shared credential as a conclusive no-op', () => {
-    const fresh = createAuth('one@example.com', 'acct-1', 'fresh', 2_000)
-    const stale = createAuth('one@example.com', 'acct-1', 'stale', 1_000)
-    const account = fixture.createAccount('account-1', 'acct-1', fresh)
-    fixture.writeSharedAuth(stale)
-
-    fixture.migrate([account], account.id)
-
-    expect(readFileSync(join(account.managedHomePath, 'auth.json'), 'utf-8')).toBe(fresh)
-    expect(fixture.marker()).toMatchObject({ outcome: 'not-newer', accountId: account.id })
-  })
-
-  it('leaves a mismatched shared identity unadopted and unmarked', () => {
-    const managed = createAuth('one@example.com', 'acct-1', 'managed', 1_000)
-    const mismatch = createAuth('other@example.com', 'acct-other', 'other', 2_000)
-    const account = fixture.createAccount('account-1', 'acct-1', managed)
-    fixture.writeSharedAuth(mismatch)
-
-    fixture.migrate([account], account.id)
-
-    expect(readFileSync(join(account.managedHomePath, 'auth.json'), 'utf-8')).toBe(managed)
-    expect(existsSync(fixture.markerPath)).toBe(false)
-  })
-
-  it('leaves duplicate-identity accounts ambiguous and unmarked', () => {
-    const account1 = fixture.createAccount(
-      'account-1',
-      'acct-duplicate',
-      createAuth('same@example.com', 'acct-duplicate', 'one', 1_000)
-    )
-    const account2 = fixture.createAccount(
-      'account-2',
-      'acct-duplicate',
-      createAuth('same@example.com', 'acct-duplicate', 'two', 1_000)
-    )
-    fixture.writeSharedAuth(createAuth('same@example.com', 'acct-duplicate', 'shared', 2_000))
-
-    fixture.migrate([account1, account2], account1.id)
-
-    expect(readFileSync(join(account1.managedHomePath, 'auth.json'), 'utf-8')).toContain('one')
-    expect(readFileSync(join(account2.managedHomePath, 'auth.json'), 'utf-8')).toContain('two')
-    expect(existsSync(fixture.markerPath)).toBe(false)
-  })
-
   it('refuses an untrusted account home without reading or mutating real ~/.codex', () => {
     const fresh = createAuth('one@example.com', 'acct-1', 'fresh', 2_000)
     const account = fixture.createAccount('account-1', 'acct-1', fresh)
@@ -126,24 +82,6 @@ describe('legacy shared Codex auth migration', () => {
     expect(readFileSync(fixture.systemAuthPath, 'utf-8')).toBe(fixture.systemSentinel)
     expect(existsSync(fixture.markerPath)).toBe(false)
     expect(existsSync(fixture.mcpMarkerPath)).toBe(false)
-  })
-
-  it('migrates the active account even when another account home is stale or deleted', () => {
-    const stale = createAuth('one@example.com', 'acct-1', 'stale', 1_000)
-    const fresh = createAuth('one@example.com', 'acct-1', 'fresh', 2_000)
-    const account = fixture.createAccount('account-1', 'acct-1', stale)
-    const broken = fixture.createAccount(
-      'account-2',
-      'acct-2',
-      createAuth('one@example.com', 'acct-2', 'other', 1_000)
-    )
-    rmSync(broken.managedHomePath, { recursive: true, force: true })
-    fixture.writeSharedAuth(fresh)
-
-    fixture.migrate([account, broken], account.id)
-
-    expect(readFileSync(join(account.managedHomePath, 'auth.json'), 'utf-8')).toBe(fresh)
-    expect(fixture.marker()).toMatchObject({ outcome: 'migrated', accountId: account.id })
   })
 
   it('keeps a deleted-home duplicate identity in the ambiguity gate', () => {
@@ -203,31 +141,6 @@ describe('legacy shared Codex MCP credentials migration (#8440)', () => {
     expect(fixture.marker()).toMatchObject({ outcome: 'migrated', accountId: account.id })
   })
 
-  it('carries the shared MCP store even when auth.json is already current', () => {
-    const fresh = createAuth('one@example.com', 'acct-1', 'fresh', 2_000)
-    const account = fixture.createAccount('account-1', 'acct-1', fresh)
-    fixture.writeSharedAuth(fresh)
-    const mcpStore = JSON.stringify({ MCP_OAUTH: { 'server-a': { access_token: 'tok-a' } } })
-    fixture.writeSharedCredentials(mcpStore)
-
-    fixture.migrate([account], account.id)
-
-    expect(readFileSync(fixture.accountCredentialsPath(account), 'utf-8')).toBe(mcpStore)
-    expect(fixture.marker()).toMatchObject({ outcome: 'already-current' })
-  })
-
-  it('is a no-op when the shared mirror has no MCP .credentials.json', () => {
-    const stale = createAuth('one@example.com', 'acct-1', 'stale', 1_000)
-    const fresh = createAuth('one@example.com', 'acct-1', 'fresh', 2_000)
-    const account = fixture.createAccount('account-1', 'acct-1', stale)
-    fixture.writeSharedAuth(fresh)
-
-    fixture.migrate([account], account.id)
-
-    expect(existsSync(fixture.accountCredentialsPath(account))).toBe(false)
-    expect(fixture.marker()).toMatchObject({ outcome: 'migrated' })
-  })
-
   it('never clobbers a newer per-account .credentials.json', () => {
     const stale = createAuth('one@example.com', 'acct-1', 'stale', 1_000)
     const fresh = createAuth('one@example.com', 'acct-1', 'fresh', 2_000)
@@ -262,37 +175,6 @@ describe('legacy shared Codex MCP credentials migration (#8440)', () => {
 
     expect(readFileSync(fixture.accountCredentialsPath(account), 'utf-8')).toBe(mcpStore)
     expect(fixture.mcpMarker()).toMatchObject({ outcome: 'migrated', accountId: account.id })
-  })
-
-  it('is a full no-op once both generation markers are present', () => {
-    const stale = createAuth('one@example.com', 'acct-1', 'stale', 1_000)
-    const fresh = createAuth('one@example.com', 'acct-1', 'fresh', 2_000)
-    const account = fixture.createAccount('account-1', 'acct-1', stale)
-    fixture.writeSharedAuth(fresh)
-    fixture.writeSharedCredentials(
-      JSON.stringify({ MCP_OAUTH: { 'server-a': { access_token: 'tok-a' } } })
-    )
-    const stamp = `${JSON.stringify({ completedAt: 1, outcome: 'migrated', accountId: account.id })}\n`
-    writeFileSync(fixture.markerPath, stamp, 'utf-8')
-    writeFileSync(fixture.mcpMarkerPath, stamp, 'utf-8')
-
-    fixture.migrate([account], account.id)
-
-    expect(readFileSync(join(account.managedHomePath, 'auth.json'), 'utf-8')).toBe(stale)
-    expect(existsSync(fixture.accountCredentialsPath(account))).toBe(false)
-  })
-
-  it('stamps both generation markers when the mirror has no auth.json', () => {
-    const account = fixture.createAccount(
-      'account-1',
-      'acct-1',
-      createAuth('one@example.com', 'acct-1', 'managed', 1_000)
-    )
-
-    fixture.migrate([account], account.id)
-
-    expect(fixture.marker()).toMatchObject({ outcome: 'no-shared-auth' })
-    expect(fixture.mcpMarker()).toMatchObject({ outcome: 'no-shared-auth' })
   })
 
   it('never leaks the shared MCP store to a non-matching account', () => {

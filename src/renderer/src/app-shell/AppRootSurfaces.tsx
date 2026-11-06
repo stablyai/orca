@@ -18,6 +18,7 @@ import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
 import { TelemetryFirstLaunchSurface } from '../components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from '../components/ZoomOverlay'
 import { WslMoveDialogHost } from '../components/wsl-move/WslMoveDialog'
+import { MacosUpdateRequirementHost } from '../components/macos-update-requirement/MacosUpdateRequirementHost'
 import { shouldRenderPetOverlay } from '../components/pet/pet-overlay-visibility'
 import { useAppStore } from '../store'
 import type { UpdateStatus } from '../../../shared/update-status-types'
@@ -296,6 +297,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
           </OverlayBoundary>
         </Suspense>
       ) : null}
+      <MacosUpdateRequirementHost />
       <AppNotificationCards
         activeView={activeView}
         shouldMountUpdateCard={shouldMountUpdateCard}
