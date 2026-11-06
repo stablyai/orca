@@ -2,6 +2,7 @@ import React, { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
+import type { HostScopedWorktreeKey } from '../../../../shared/worktree/host-qualified-identity'
 import { useNow } from '@/hooks/use-now'
 import { translate } from '@/i18n/i18n'
 import { canConnectSshStatus, isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
@@ -21,7 +22,11 @@ import { WorktreeCardSshHostControl } from './workspace-card/host/WorktreeCardSs
 import { WorktreeCardIdentityHover } from './worktree-card-identity-hover'
 import type { WorktreeCardPresentation } from './workspace-card/surface/worktree-card-presentation'
 import { WorktreeCardSecondaryRows } from './workspace-card/surface/worktree-card-secondary-rows'
-import { useCollapsedLineageSlot, useLineageLatestAt } from './worktree-card-slot-rollup'
+import {
+  collectLineageSlotTargets,
+  useCollapsedLineageSlot,
+  useLineageLatestAt
+} from './worktree-card-slot-rollup'
 import { titleRowSlot } from './worktree-card-slot-signal'
 import { buildSlotAgentSignals, type SlotAgentSignals } from './worktree-card-slot-agent-signals'
 import {
@@ -30,13 +35,20 @@ import {
 } from './worktree-card-title-actions'
 import { getWorktreeCardHost, WorktreeCardHostName } from './worktree-card-host-name'
 import { WorktreeCardChildrenChip } from './worktree-card-children-chip'
-import { WorktreeCardSlot } from './WorktreeCardSlot'
+import { slotLabel, WorktreeCardSlot } from './WorktreeCardSlot'
+import { SlotJumpTrigger } from './worktree-card-slot-jump'
+import {
+  slotTargetKind,
+  slotTargetsFromAgentLines,
+  slotTargetsOfKind,
+  workspaceUnreadTarget
+} from './worktree-card-slot-targets'
 import { SlotAgentLinesHeader, WorktreeCardSlotAgentLines } from './WorktreeCardSlotAgentLines'
 import { shouldBeginWorktreeRename } from './workspace-card/controller/worktree-card-model'
 import { WorktreeTitleInlineRename } from './workspace-card/identity/WorktreeTitleInlineRename'
 import { WorktreeCardMetaRow } from './workspace-card/metadata/worktree-card-meta-row'
 
-const NO_DESCENDANTS: readonly string[] = []
+const NO_DESCENDANTS: readonly HostScopedWorktreeKey[] = []
 
 function useSlotAgentSignals(agents: DashboardAgentRow[]): SlotAgentSignals {
   // Same acknowledgement records the 1.0 rows read, so unread means the same on both cards.
@@ -105,8 +117,8 @@ export function WorktreeCardSlotContent({
     showDeleteQuickAction,
     showLineageChildChip,
     lineageCollapsed,
-    lineageDescendantIds,
-    lineageChildWorktreeIds,
+    lineageDescendantIdentities,
+    lineageChildIdentities,
     onLineageToggle,
     lineageChildAriaLabel,
     childWorkspaceShortLabel,
@@ -124,11 +136,9 @@ export function WorktreeCardSlotContent({
   const pickingSendTarget = useAppStore(
     (s) => selectSendTargetControlInputs(s, worktree.id).targetMode !== null
   )
-  const descendantIds = lineageDescendantIds ?? NO_DESCENDANTS
-  const collapsedLineage = useCollapsedLineageSlot(
-    lineageCollapsed ? descendantIds : NO_DESCENDANTS
-  )
-  const lineageLatestAt = useLineageLatestAt(descendantIds)
+  const descendants = lineageDescendantIdentities ?? NO_DESCENDANTS
+  const collapsedLineage = useCollapsedLineageSlot(lineageCollapsed ? descendants : NO_DESCENDANTS)
+  const lineageLatestAt = useLineageLatestAt(descendants)
   // Several agents fold into the 1.0 summary row; the title slot speaks for them until expanded.
   const { compactRootListExpanded: agentsExpanded, toggleCompactRootList } =
     useWorktreeAgentExpansionState(worktree.id)
@@ -145,13 +155,42 @@ export function WorktreeCardSlotContent({
     worktree.isUnread && !(ownLinesShown && agentUnread) ? { manual: !hasLiveMarker } : null
   const titleSlot = titleRowSlot({
     offline,
-    hiddenLines: ownLinesShown ? [] : signals.allSignals,
+    lines: signals.allSignals,
     collapsedLineage,
     workspaceUnread,
     ownLinesShown,
     lastActivityAt: worktree.lastActivityAt > 0 ? worktree.lastActivityAt : null,
     lineageLatestAt
   })
+  const titleTargetKind = offline ? null : slotTargetKind(titleSlot)
+  const worktreeLastActivityAt = worktree.lastActivityAt > 0 ? worktree.lastActivityAt : null
+  // Only what the title row speaks for: hidden agent lines, collapsed children, the workspace's own mark.
+  const workspaceUnreadShown = workspaceUnread !== null
+  const resolveTitleTargets = useCallback(() => {
+    if (!titleTargetKind) {
+      return []
+    }
+    return slotTargetsOfKind(
+      [
+        ...(ownLinesShown ? [] : slotTargetsFromAgentLines(worktree.id, signals)),
+        ...(lineageCollapsed ? collectLineageSlotTargets(useAppStore.getState(), descendants) : []),
+        ...(workspaceUnreadShown
+          ? [workspaceUnreadTarget(worktree.id, worktreeLastActivityAt)]
+          : [])
+      ],
+      titleTargetKind
+    )
+  }, [
+    descendants,
+    lineageCollapsed,
+    ownLinesShown,
+    signals,
+    titleTargetKind,
+    workspaceUnreadShown,
+    worktree.id,
+    worktreeLastActivityAt
+  ])
+  const titleSlotElement = <WorktreeCardSlot signal={titleSlot} now={now} compact />
   const showDetailsRow =
     settings?.worktreeCardDetailsRow === true &&
     (presentation.hasMetaRow || presentation.detailsAndPorts !== null)
@@ -198,7 +237,7 @@ export function WorktreeCardSlotContent({
       {showLineageChildChip ? (
         <div className="mt-[3px] flex min-w-0 pr-1.5 pl-3.5">
           <WorktreeCardChildrenChip
-            childWorktreeIds={lineageChildWorktreeIds}
+            childIdentities={lineageChildIdentities}
             collapsed={lineageCollapsed}
             label={childWorkspaceShortLabel}
             ariaLabel={lineageChildAriaLabel}
@@ -245,8 +284,16 @@ export function WorktreeCardSlotContent({
               {showDeleteQuickAction ? <WorktreeCardDeleteQuickAction card={card} /> : null}
               {sshDown && host ? (
                 <SshHostSlot card={card} label={host.label} />
+              ) : titleTargetKind ? (
+                <SlotJumpTrigger
+                  resolveTargets={resolveTitleTargets}
+                  label={slotLabel(titleSlot) ?? ''}
+                  className="-mx-1 -my-0.5 px-1 py-0.5"
+                >
+                  {titleSlotElement}
+                </SlotJumpTrigger>
               ) : (
-                <WorktreeCardSlot signal={titleSlot} now={now} />
+                titleSlotElement
               )}
             </span>
           </div>

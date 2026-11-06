@@ -131,12 +131,12 @@ export function mergeSlotExceptions(a: SlotSignal | null, b: SlotSignal | null):
 }
 
 /**
- * The title row stays quiet while its agent lines are on screen; it speaks only for
- * sources the user can't see: hidden agents, collapsed children, or the workspace's own unread mark.
+ * The title row speaks for exceptions the user can't see (hidden agents, collapsed children,
+ * the workspace's own unread mark); otherwise it always shows the time so expanding doesn't jump.
  */
 export function titleRowSlot(args: {
   offline: boolean
-  hiddenLines: readonly SlotLineSignal[]
+  lines: readonly SlotLineSignal[]
   collapsedLineage: SlotSignal | null
   /** Set while the workspace is unread and no visible agent line already shows it; manual = the user marked it. */
   workspaceUnread: { manual: boolean } | null
@@ -150,17 +150,15 @@ export function titleRowSlot(args: {
   const workspaceSignal: SlotSignal | null = args.workspaceUnread
     ? { kind: 'unread', at: args.lastActivityAt, manual: args.workspaceUnread.manual }
     : null
+  const hiddenLines = args.ownLinesShown ? [] : args.lines
   const exception = mergeSlotExceptions(
-    mergeSlotExceptions(slotExceptionFor(args.hiddenLines), args.collapsedLineage),
+    mergeSlotExceptions(slotExceptionFor(hiddenLines), args.collapsedLineage),
     workspaceSignal
   )
   if (exception) {
     return exception
   }
-  if (args.ownLinesShown) {
-    return { kind: 'quiet' }
-  }
-  const ownAt = latest(args.hiddenLines) ?? args.lastActivityAt
+  const ownAt = latest(args.lines) ?? args.lastActivityAt
   const lineageAt = args.lineageLatestAt ?? null
   return {
     kind: 'time',

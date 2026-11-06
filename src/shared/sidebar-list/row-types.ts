@@ -4,6 +4,7 @@ import type { ProjectGroup } from '../project-group-types'
 import type { Repo } from '../repo-types'
 import type { DetectedWorktree, WorkspaceStatus, Worktree } from '../worktree/types'
 import type { ExecutionHostId } from '../execution-host'
+import type { HostScopedWorktreeKey } from '../worktree/host-qualified-identity'
 import type { PRGroupKey } from '../workspace-view/workspace-pr-groups'
 
 export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status'
@@ -63,10 +64,12 @@ export type WorktreeRow = {
   isLastLineageChild: boolean
   lineageChildCount: number
   lineageChildWorktreeIds?: readonly string[]
+  /** Host-qualified, since workspace ids repeat across hosts. */
+  lineageChildIdentities?: readonly HostScopedWorktreeKey[]
   lineageGroupKey?: string
   lineageCollapsed?: boolean
-  /** Every workspace nested under this one, collapsed or not. */
-  lineageDescendantIds?: readonly string[]
+  /** Every workspace nested under this one, collapsed or not; host-qualified. */
+  lineageDescendantIdentities?: readonly HostScopedWorktreeKey[]
   hostContextLabel?: string
   showProjectName?: boolean
 }

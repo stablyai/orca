@@ -14,6 +14,7 @@ export type WorktreeCardSecondaryDetailsInputs = Pick<
   Pick<
     Foundation,
     | 'newCardStyle'
+    | 'worktreeCardStyle'
     | 'compactCards'
     | 'cardDetails'
     | 'agentActivityDisplayMode'

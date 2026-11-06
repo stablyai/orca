@@ -147,6 +147,7 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     linkedAzureDevOpsPR: review.linkedAzureDevOpsPR,
     linkedGiteaPR: review.linkedGiteaPR,
     newCardStyle: foundation.newCardStyle,
+    worktreeCardStyle: foundation.worktreeCardStyle,
     compactCards: foundation.compactCards,
     cardDetails: foundation.cardDetails,
     agentActivityDisplayMode: foundation.agentActivityDisplayMode,

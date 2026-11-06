@@ -244,7 +244,8 @@
       "childNeeds_other": "{{count}} need you",
       "childFailed": "{{count}} failed",
       "childUnread": "{{count}} unread",
-      "childWorking": "{{count}} working"
+      "childWorking": "{{count}} working",
+      "workspaceMarkedUnread": "Workspace marked unread"
     }
   },
   "app": {

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 export type WorktreeAgentExpansionState = {
   // Child lists start collapsed so spawning subagents cannot grow the card and shift the sidebar.
@@ -46,6 +46,35 @@ function persistExpansionState(worktreeId: string, state: WorktreeAgentExpansion
   }
 }
 
+const expansionListeners = new Map<string, Set<() => void>>()
+
+/** Unfold a card's agent list from outside the card, e.g. when a rolled-up slot opens one of its agents. */
+export function expandWorktreeAgentList(worktreeId: string): void {
+  const base = readExpansionState(worktreeId)
+  if (base.compactRootListExpanded) {
+    return
+  }
+  persistExpansionState(worktreeId, { ...base, compactRootListExpanded: true })
+  for (const listener of expansionListeners.get(worktreeId) ?? []) {
+    listener()
+  }
+}
+
+function subscribeExpansion(worktreeId: string, listener: () => void): () => void {
+  let listeners = expansionListeners.get(worktreeId)
+  if (!listeners) {
+    listeners = new Set()
+    expansionListeners.set(worktreeId, listeners)
+  }
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+    if (listeners.size === 0) {
+      expansionListeners.delete(worktreeId)
+    }
+  }
+}
+
 function toggleKey(keys: ReadonlySet<string>, key: string): ReadonlySet<string> {
   const next = new Set(keys)
   if (!next.delete(key)) {
@@ -79,6 +108,15 @@ export function useWorktreeAgentExpansionState(worktreeId: string): WorktreeAgen
       persistExpansionState(worktreeId, next)
       setRendered({ worktreeId, state: next })
     },
+    [worktreeId]
+  )
+
+  // A mounted card picks up an outside unfold; an unmounted one reads it from the cache on mount.
+  useEffect(
+    () =>
+      subscribeExpansion(worktreeId, () =>
+        setRendered({ worktreeId, state: readExpansionState(worktreeId) })
+      ),
     [worktreeId]
   )
 

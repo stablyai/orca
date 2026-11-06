@@ -157,7 +157,7 @@ export const SlotAgentLineRow = React.memo(function SlotAgentLineRow({
   ) : onDismiss ? (
     // Time and dismiss share the slot; hover or focus swaps in the dismiss control.
     <span className="group/dismiss grid shrink-0 items-center justify-items-end [&>*]:col-start-1 [&>*]:row-start-1">
-      <span className="transition-opacity can-hover:group-hover/slot-line:opacity-0 group-has-[button:focus-visible]/dismiss:opacity-0">
+      <span className="transition-opacity can-hover:group-hover/slot-line:opacity-0 group-has-[:focus-visible]/dismiss:opacity-0">
         <WorktreeCardSlot signal={slotForLine(displaySignal)} now={now} stale={offline} />
       </span>
       <button
@@ -188,7 +188,7 @@ export const SlotAgentLineRow = React.memo(function SlotAgentLineRow({
       aria-expanded={hasChildren ? childrenExpanded : undefined}
       aria-current={view?.current ? 'true' : undefined}
       className={cn(
-        'group/slot-line worktree-agent-row-hover flex h-[19px] w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-sm pr-1.5 pl-1 text-left text-2xs leading-none outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
+        'group/slot-line worktree-agent-row-hover flex h-[22px] w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-sm pr-1.5 pl-1 text-left text-2xs leading-none outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
         highlighted && 'bg-worktree-sidebar-accent',
         sendTarget?.status === 'sending' && 'cursor-progress opacity-75',
         sendTarget?.status === 'disabled' && 'cursor-default opacity-60'

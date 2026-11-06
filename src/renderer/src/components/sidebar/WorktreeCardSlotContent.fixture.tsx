@@ -1,6 +1,7 @@
 import React from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import WorktreeCard from './workspace-card/surface/WorktreeCard'
 import * as agentExpansion from './workspace-card/activity/worktree-card-agents-expansion-state'
@@ -217,6 +218,9 @@ function Card({
   collapsed?: boolean
   descendantIds?: readonly string[]
 }): React.JSX.Element {
+  const descendantIdentities = descendantIds?.map((id) =>
+    composeWorktreeHostIdentity(nestedWorktrees.get(id)?.hostId, id)
+  )
   return (
     <div className="relative" data-worktree-id={worktree.id}>
       <WorktreeCard
@@ -228,8 +232,9 @@ function Card({
         nativeDragEnabled={false}
         lineageChildCount={childCount}
         lineageCollapsed={collapsed}
-        lineageDescendantIds={descendantIds}
+        lineageDescendantIdentities={descendantIdentities}
         lineageChildWorktreeIds={descendantIds}
+        lineageChildIdentities={descendantIdentities}
         lineageChildren={children}
         lineageChildrenStyle={rows.getLineageChildrenInlineStyle(
           rows.LINEAGE_CHILDREN_INLINE_OFFSET

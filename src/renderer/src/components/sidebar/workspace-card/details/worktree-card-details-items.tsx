@@ -11,9 +11,7 @@ import type { WorktreeCardController } from '../controller/use-worktree-card-con
 export function renderWorktreeCardIndicators(
   card: WorktreeCardController
 ): React.ReactElement | null {
-  const { worktree, hasDetails, hasPorts, showPR, showIssue } = card
-  // 1.0 draws the PR in its status lane; 2.0 has no lane, so it lists the PR like Classic.
-  const newCardStyle = card.newCardStyle && card.worktreeCardStyle !== 'experimental-2'
+  const { worktree, hasDetails, hasPorts, showPR, showIssue, reviewInStatusLane } = card
   if (!hasDetails && !hasPorts) {
     return null
   }
@@ -21,7 +19,7 @@ export function renderWorktreeCardIndicators(
   const referenceItems = allReferenceItems.filter((item) =>
     item.type !== 'issue'
       ? showPR &&
-        (!newCardStyle ||
+        (!reviewInStatusLane ||
           allReferenceItems.filter((candidate) => candidate.type !== 'issue').length > 1)
       : item.provider === 'linear'
         ? card.showLinearIssue
@@ -40,7 +38,7 @@ export function renderWorktreeCardIndicators(
           issue={card.metaIssue}
           linearIssue={card.metaLinearIssue}
           jiraIssue={card.metaJiraIssue}
-          review={newCardStyle ? null : card.metaReview}
+          review={reviewInStatusLane ? null : card.metaReview}
           comment={card.metaComment}
           automationProvenance={card.metaAutomationProvenance}
           cliProvenance={card.metaCliProvenance}

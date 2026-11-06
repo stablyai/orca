@@ -11,7 +11,7 @@ function formatSlotTime(at: number | null, now: number): string {
   return at === null ? '' : formatShortTimeAgo(at, now)
 }
 
-function slotLabel(signal: SlotSignal): string | undefined {
+export function slotLabel(signal: SlotSignal): string | undefined {
   switch (signal.kind) {
     case 'needs':
       return translate('sidebar.cardSlot.needsYouLabel', 'Waiting on you')
@@ -37,12 +37,15 @@ function slotLabel(signal: SlotSignal): string | undefined {
 export function WorktreeCardSlot({
   signal,
   now,
-  stale = false
+  stale = false,
+  compact = false
 }: {
   signal: SlotSignal
   now: number
   /** The host is offline: show what was last seen, never a live state. */
   stale?: boolean
+  /** Title row: needs/failed as a glyph so long names keep their width; the clickable parent labels it. */
+  compact?: boolean
 }): React.JSX.Element | null {
   if (signal.kind === 'quiet') {
     return null
@@ -50,7 +53,18 @@ export function WorktreeCardSlot({
   const base =
     'inline-flex min-w-[22px] shrink-0 items-center justify-end gap-1 whitespace-nowrap text-3xs leading-none tabular-nums'
   const label = slotLabel(signal)
-  const slotProps = { 'data-worktree-card-slot': signal.kind, title: label }
+  // A compact exception sits inside a labelled button; offline and times keep their tooltip.
+  const labelledByParent =
+    compact &&
+    !stale &&
+    (signal.kind === 'needs' ||
+      signal.kind === 'failed' ||
+      signal.kind === 'unread' ||
+      signal.kind === 'working')
+  const slotProps = {
+    'data-worktree-card-slot': signal.kind,
+    title: labelledByParent ? undefined : label
+  }
 
   if (stale || signal.kind === 'offline') {
     return (
@@ -66,6 +80,14 @@ export function WorktreeCardSlot({
 
   switch (signal.kind) {
     case 'needs':
+      if (compact) {
+        return (
+          <span {...slotProps} className={cn(base, 'font-semibold text-agent-question-text')}>
+            <AgentQuestionIcon className="size-2.5 shrink-0" />
+            {signal.count > 1 ? signal.count : null}
+          </span>
+        )
+      }
       return (
         <span
           {...slotProps}
@@ -84,6 +106,13 @@ export function WorktreeCardSlot({
         </span>
       )
     case 'failed':
+      if (compact) {
+        return (
+          <span {...slotProps} className={cn(base, 'text-destructive')}>
+            <CircleX className="size-2.5 shrink-0" aria-hidden="true" />
+          </span>
+        )
+      }
       return (
         <span {...slotProps} className={cn(base, 'font-semibold text-destructive')}>
           {/* A crossed circle, not a red dot, so failed never reads like the blue unread dot. */}
