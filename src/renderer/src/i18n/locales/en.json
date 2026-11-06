@@ -19901,6 +19901,9 @@
       },
       "composer": {
         "send": "Send",
+        "planMode": "Plan",
+        "moreControls": "More chat controls",
+        "exitPlanMode": "Exit plan mode",
         "alternateSteerHint": "{{shortcut}} to steer",
         "previewQueue": "Queue",
         "previewSteer": "Steer",

@@ -19061,6 +19061,7 @@
         "notDoneGoalChangeIncomplete": "No se pudo terminar de cambiar el objetivo. Revisa el chat."
       },
       "composer": {
+        "planMode": "Planificar",
         "imageUnavailable": "Vista previa no disponible",
         "send": "Enviar",
         "alternateSteerHint": "{{shortcut}} para enviar ahora",

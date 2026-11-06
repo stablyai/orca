@@ -1,4 +1,5 @@
-import { createContext, useContext } from 'react'
+import { createContext, useContext, useLayoutEffect, useRef } from 'react'
+import type { View } from 'react-native'
 
 export type MobileNativeChatLowerRegion = {
   getViewport: () => unknown
@@ -28,4 +29,18 @@ export const MobileNativeChatComposerPresenceContext = createContext(true)
 
 export function useMobileNativeChatLowerGeometry() {
   return useContext(MobileNativeChatLowerGeometryContext)
+}
+
+export function useMobileNativeChatComposerRegion(shown: boolean, focused: boolean) {
+  const groupRef = useRef<View>(null)
+  const lowerRegion = useMobileNativeChatLowerRegion()
+  const menuWasShown = useRef(false)
+  useLayoutEffect(() => {
+    lowerRegion?.layoutChanged()
+    if (shown !== menuWasShown.current && focused) {
+      lowerRegion?.reveal(groupRef.current, shown ? 'menu' : 'edit')
+    }
+    menuWasShown.current = shown
+  })
+  return groupRef
 }

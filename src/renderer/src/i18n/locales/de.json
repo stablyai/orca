@@ -19362,6 +19362,7 @@
       },
       "composer": {
         "send": "Senden",
+        "planMode": "Planen",
         "alternateSteerHint": "{{shortcut}} zum Steuern",
         "previewQueue": "Einreihen",
         "previewSteer": "Steuern",

@@ -18644,6 +18644,7 @@
         "notDoneGoalChangeIncomplete": "목표 변경을 완료하지 못했습니다. 채팅을 확인하세요."
       },
       "composer": {
+        "planMode": "계획",
         "send": "보내기",
         "alternateSteerHint": "{{shortcut}}(으)로 지금 보내기",
         "previewQueue": "대기열에 추가",

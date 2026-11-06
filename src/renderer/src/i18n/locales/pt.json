@@ -20076,6 +20076,7 @@
         "truncatedResponse": "Resposta do provedor truncada (tamanho original: {{bytes}} bytes)."
       },
       "composer": {
+        "planMode": "Planejar",
         "send": "Enviar",
         "alternateSteerHint": "{{shortcut}} para orientar",
         "previewQueue": "Colocar na fila",
