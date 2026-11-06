@@ -251,6 +251,7 @@ export function useAntigravityChatSignInControls(props: {
     copy,
     copyLabel: translate('accounts.antigravity.chatCopyLink', 'Copy sign-in link'),
     signInDisabled: props.disabled || pending || status !== 'known' || otherClients(flow),
+    recoveryDisabled: props.disabled || pending || otherClients(flow),
     start: () => act(() => startAntigravityChatSignIn(owner)),
     cancel: () => act(() => cancelAntigravityChatSignIn(owner)),
     send: (callbackUrl: string, refused: (message: string) => void) =>
@@ -338,7 +339,10 @@ export function AntigravityChatSignInRow(props: {
                 size="xs"
                 // Account switching uses secondary styling once signed in.
                 variant={signIn.action === 'changeAccount' ? 'outline' : 'default'}
-                disabled={signIn.signInDisabled || auth.disabled}
+                disabled={
+                  (auth.recovering ? signIn.recoveryDisabled : signIn.signInDisabled) ||
+                  auth.disabled
+                }
                 onClick={auth.start}
               >
                 {signIn.actionLabel}

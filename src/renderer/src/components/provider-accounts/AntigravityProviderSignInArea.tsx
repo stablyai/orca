@@ -103,7 +103,10 @@ export function AntigravityProviderSignInArea(props: {
                 size="xs"
                 // Account switching uses secondary styling once signed in.
                 variant={signIn.action === 'changeAccount' ? 'ghost' : 'outline'}
-                disabled={signIn.signInDisabled || auth.disabled}
+                disabled={
+                  (auth.recovering ? signIn.recoveryDisabled : signIn.signInDisabled) ||
+                  auth.disabled
+                }
                 onClick={auth.start}
               >
                 {signIn.actionLabel}

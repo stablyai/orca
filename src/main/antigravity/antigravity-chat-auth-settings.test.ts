@@ -69,6 +69,7 @@ it('commits only after stopping old writers and retires account observations onl
   antigravityChatSignIn.set({ auth: 'signedIn', flow: null })
   const store = {
     getSettings: () => settings,
+    updateSettings: (updates: Partial<GlobalSettings>) => Object.assign(settings, updates),
     updateSettingsAndFlush: vi.fn(async (updates: Partial<GlobalSettings>) => {
       expect(stopped).toHaveBeenCalledOnce()
       settings = { ...settings, ...updates }
@@ -97,6 +98,7 @@ it('keeps the saved choice and account observations when saving or stopping fail
   antigravityChatSignIn.set({ auth: 'signedIn', flow: null })
   const store = {
     getSettings: () => settings,
+    updateSettings: (updates: Partial<GlobalSettings>) => Object.assign(settings, updates),
     updateSettingsAndFlush: vi.fn(async () => {
       throw new Error('disk full')
     })
@@ -130,6 +132,7 @@ it('repairs a persisted null to Personal instead of accepting a false no-op', as
   const settings = { ...getDefaultSettings('/fixture'), antigravityChatAuth: null }
   const store = {
     getSettings: () => settings,
+    updateSettings: (updates: Partial<GlobalSettings>) => Object.assign(settings, updates),
     updateSettingsAndFlush: vi.fn(async (updates: Partial<GlobalSettings>) => {
       Object.assign(settings, updates)
       return getDefaultSettings('/fixture')
@@ -147,6 +150,7 @@ it('retains remembered Enterprise project and location while Personal is selecte
   const settings = { ...getDefaultSettings('/fixture'), antigravityChatAuth: enterprise }
   const store = {
     getSettings: () => settings,
+    updateSettings: (updates: Partial<GlobalSettings>) => Object.assign(settings, updates),
     updateSettingsAndFlush: async (updates: Partial<GlobalSettings>) => {
       Object.assign(settings, updates)
       return settings

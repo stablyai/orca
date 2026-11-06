@@ -8,7 +8,6 @@ import { structuredAgentHostLaunchSources } from '../runtime/agent-session/launc
 import * as profileStorage from '../orca-profiles/profile-storage-paths'
 import { resolveAcpLaunchInvocation } from '../acp/acp-structured-launch-resolution'
 import { ANTIGRAVITY_LAUNCH_SPEC } from '../acp/acp-launch-specs'
-import { antigravitySignInFailure } from './antigravity-sign-in-failure'
 import {
   applyAntigravityChatAuthConfig,
   readAntigravityChatAuthConfig
@@ -61,41 +60,25 @@ async function launchFrom(store: Profile['store']) {
   })
 }
 
-it('refuses an uncertain Store candidate through retries and host launch until loading committed state anew', async () => {
+it('restores only the live predecessor after an indeterminate write and never acknowledges the failed choice', async () => {
   const { store, authority, readState } = await fixture()
-  const stopped = vi.fn(async () => {})
-  failWriteIndeterminately(authority)
+  const failure = failWriteIndeterminately(authority)
   try {
-    await expect(applyAntigravityChatAuthConfig(store, enterprise, stopped)).rejects.toMatchObject({
-      code: 'antigravity_account_settings_unconfirmed'
-    })
-    expect(store.getSettings().antigravityChatAuth).toEqual(enterprise)
+    await expect(applyAntigravityChatAuthConfig(store, enterprise, async () => {})).rejects.toBe(
+      failure
+    )
+    expect(store.getSettings().antigravityChatAuth).toBeUndefined()
     expect(readState().settings.antigravityChatAuth).toBeUndefined()
-    stopped.mockClear()
-    expect(() => applyAntigravityChatAuthConfig(store, enterprise, stopped)).toThrow(
-      'Restart Orca on this host'
-    )
-    expect(() =>
-      applyAntigravityChatAuthConfig(store, { method: 'oauth-personal' }, stopped)
-    ).toThrow('Restart Orca on this host')
-    expect(stopped).not.toHaveBeenCalled()
-    expect(() => readAntigravityChatAuthConfig(store)).toThrow('Restart Orca on this host')
-    await expect(launchFrom(store)).rejects.toThrow('Restart Orca on this host')
-    const previous = store.getSettings()
     store.updateSettings({ terminalFontSize: 21 })
-    expect(store.getSettings()).not.toBe(previous)
-    expect(() => readAntigravityChatAuthConfig(store)).toThrow('Restart Orca on this host')
-    await expect(launchFrom(store)).rejects.toThrow('Restart Orca on this host')
-    await withReopenedProfileStore(readState(), 'reopened-auth.json', async (reopened) => {
-      expect(readAntigravityChatAuthConfig(reopened)).toEqual({ method: 'oauth-personal' })
-      await expect(launchFrom(reopened)).resolves.toMatchObject({
-        antigravityChatAuth: { method: 'oauth-personal' }
-      })
+    expect(readAntigravityChatAuthConfig(store)).toEqual({ method: 'oauth-personal' })
+    expect(store.getSettings().terminalFontSize).toBe(21)
+    await expect(launchFrom(store)).resolves.toMatchObject({
+      antigravityChatAuth: { method: 'oauth-personal' }
     })
-    const failure = await launchFrom(store).catch((cause: unknown) => cause)
-    expect(antigravitySignInFailure(failure)).toBe(
-      "Orca couldn't finish saving your Antigravity sign-in settings. Restart Orca on this host, then try again."
+    await expect(applyAntigravityChatAuthConfig(store, enterprise, async () => {})).rejects.toBe(
+      failure
     )
+    expect(readAntigravityChatAuthConfig(store)).toEqual({ method: 'oauth-personal' })
   } finally {
     vi.restoreAllMocks()
   }

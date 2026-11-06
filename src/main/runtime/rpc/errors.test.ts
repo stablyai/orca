@@ -1,7 +1,3 @@
-import {
-  AntigravityChatAuthConfigError,
-  AntigravityChatAuthUnconfirmedError
-} from '../../../shared/antigravity-chat-auth-config'
 import { terminalStartError } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { describe, expect, it } from 'vitest'
 import { mapRuntimeError } from './errors'
@@ -36,19 +32,6 @@ class LineageError extends Error {
 }
 
 describe('mapRuntimeError', () => {
-  it('preserves the distinct Antigravity restart recovery code on the wire', () => {
-    for (const [failure, code] of [
-      [new AntigravityChatAuthUnconfirmedError(), 'antigravity_account_settings_unconfirmed'],
-      [new AntigravityChatAuthConfigError('Incomplete Antigravity settings'), 'runtime_error'],
-      [new Error('Host unreachable'), 'runtime_error']
-    ] as const) {
-      expect(mapRuntimeError('auth', { runtimeId: 'host' }, failure)).toMatchObject({
-        ok: false,
-        error: { code, message: failure.message }
-      })
-    }
-  })
-
   it.each(['agent_session_exited_during_start', 'agent_session_operation_unknown'] as const)(
     'preserves %s while explaining the failed start',
     (code) => {

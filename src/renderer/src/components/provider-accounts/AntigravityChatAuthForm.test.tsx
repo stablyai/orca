@@ -149,7 +149,7 @@ it.each([
   { surface: 'provider', language: 'en', action: 'Sign in' },
   { surface: 'accounts', language: 'es', action: 'Iniciar sesión' }
 ] as const)(
-  '$surface retains the draft and restart instruction after an unconfirmed save ($language)',
+  '$surface keeps a failed-save draft editable and retries through Sign in ($language)',
   async ({ surface, language, action }) => {
     i18n.addResourceBundle('es', 'translation', es)
     await i18n.changeLanguage(language)
@@ -157,8 +157,7 @@ it.each([
       kind: 'environment',
       environmentId: `failed-save-${surface}-${language}`
     } as const
-    const failure =
-      "Orca couldn't finish saving your Antigravity sign-in settings. Restart Orca on this host, then try again."
+    const failure = "Orca couldn't save your Antigravity sign-in settings. Try again."
     vi.mocked(callAntigravityChatAuthConfig).mockImplementation((_owner, config) =>
       config === undefined
         ? Promise.resolve(enterprise)
@@ -166,7 +165,7 @@ it.each([
             new RuntimeRpcCallError({
               id: 'save',
               ok: false,
-              error: { code: 'antigravity_account_settings_unconfirmed', message: failure }
+              error: { code: 'runtime_error', message: failure }
             })
           )
     )
@@ -179,57 +178,18 @@ it.each([
     expect(await screen.findByRole('alert')).toHaveTextContent(failure)
     expect(screen.getAllByText(failure)).toHaveLength(1)
     expect(project).toHaveValue('enterprise-project-changed')
-    expect(
-      screen.queryByRole('button', { name: /Retry|Sign in|Reintentar|Iniciar sesi/ })
-    ).not.toBeInTheDocument()
+    expect(screen.getByRole('combobox')).toBeEnabled()
+    expect(screen.getByRole('button', { name: action })).toBeEnabled()
     expect(callAntigravityChatSignIn).not.toHaveBeenCalled()
-  }
-)
-
-it.each([
-  { surface: 'accounts', language: 'en' },
-  { surface: 'provider', language: 'en' },
-  { surface: 'accounts', language: 'es' }
-] as const)(
-  '$surface presents a direct failed sign-in and rejected settings read once ($language)',
-  async ({ surface, language }) => {
-    i18n.addResourceBundle('es', 'translation', es)
-    await i18n.changeLanguage(language)
-    const target = {
-      kind: 'environment',
-      environmentId: `failed-read-${surface}-${language}`
-    } as const
-    const failure =
-      "Orca couldn't finish saving your Antigravity sign-in settings. Restart Orca on this host, then try again."
-    streams.initial.set(key(target), {
-      revision: 1,
-      auth: 'unknown',
-      flow: { phase: 'failed', flowId: null, error: 'Antigravity sign-in failed. Try again.' }
+    vi.mocked(callAntigravityChatAuthConfig).mockImplementation(
+      async (_owner, config) => config ?? enterprise
+    )
+    await user.click(screen.getByRole('button', { name: action }))
+    await waitFor(() => expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start'))
+    expect(callAntigravityChatAuthConfig).toHaveBeenLastCalledWith(target, {
+      ...enterprise,
+      gcpProject: 'enterprise-project-changed'
     })
-    let rejectRead!: (cause: Error) => void
-    const read = new Promise<AntigravityChatAuthConfig | null>((_resolve, reject) => {
-      rejectRead = reject
-    })
-    vi.mocked(callAntigravityChatAuthConfig).mockReturnValue(read)
-    renderSurface(surface, target)
-    await waitFor(() => expect(callAntigravityChatAuthConfig).toHaveBeenCalledWith(target))
-    await act(async () => {
-      rejectRead(
-        new RuntimeRpcCallError({
-          id: 'read',
-          ok: false,
-          error: { code: 'antigravity_account_settings_unconfirmed', message: failure }
-        })
-      )
-    })
-    expect(screen.getAllByRole('alert')).toHaveLength(1)
-    expect(screen.getByRole('alert')).toHaveTextContent(failure)
-    expect(screen.getAllByText(failure)).toHaveLength(1)
-    expect(screen.getByRole('combobox')).toBeDisabled()
-    expect(
-      screen.queryByRole('button', { name: /Retry|Sign in|Reintentar|Iniciar sesi/ })
-    ).not.toBeInTheDocument()
-    expect(callAntigravityChatSignIn).not.toHaveBeenCalled()
   }
 )
 
@@ -397,30 +357,32 @@ it.each(['accounts', 'provider'] as const)(
 )
 
 it.each(['accounts', 'provider'] as const)(
-  '%s retries initial and refreshed load failures to usable settings',
+  '%s uses its single Sign in action to reread a failed load before preparing Enterprise',
   async (surface) => {
     const target = { kind: 'environment', environmentId: `load-recovery-${surface}` } as const
     vi.mocked(callAntigravityChatAuthConfig).mockRejectedValue(new Error('Host unreachable'))
     const user = userEvent.setup()
     renderSurface(surface, target)
-    for (const revision of [1, 2]) {
-      const message = await screen.findByRole('alert')
-      const retry = screen.getByRole('button', { name: 'Retry' })
-      expect(message.compareDocumentPosition(retry) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-      expect(screen.getAllByRole('button')).toEqual([retry])
-      expect(screen.getByRole('combobox')).toBeDisabled()
-      vi.mocked(callAntigravityChatAuthConfig).mockResolvedValue(personal)
-      await user.click(retry)
-      await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
-      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled()
-      if (revision === 1) {
-        vi.mocked(callAntigravityChatAuthConfig).mockRejectedValue(new Error('Connection lost'))
-        await act(async () => {
-          streams.handlers.get(key(target))?.onEvent({ revision, auth: 'unknown', flow: null })
-        })
-      }
-    }
+    await screen.findByRole('alert')
+    await act(async () => streams.handlers.get(key(target))?.onError(new Error('Connection lost')))
+    const action = screen.getByRole('button', { name: /Sign in|Retry sign-in/ })
+    expect(screen.getAllByRole('button')).toEqual([action])
+    expect(action).toBeEnabled()
+    expect(screen.getByRole('combobox')).toBeDisabled()
+    expect(screen.getByRole('combobox')).not.toHaveTextContent('Google account')
+    await user.click(action)
+    expect(action).toBeEnabled()
+    expect(callAntigravityChatSignIn).not.toHaveBeenCalled()
+    const requests: unknown[] = []
+    vi.mocked(callAntigravityChatAuthConfig).mockImplementation(async (_owner, config) => {
+      requests.push(config ?? 'Get')
+      return config ?? enterprise
+    })
+    await user.click(action)
+    await waitFor(() => expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start'))
+    expect(requests).toEqual(['Get', enterprise])
+    expect(screen.getByRole('combobox')).toHaveTextContent('Gemini Enterprise')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   }
 )
 
@@ -457,35 +419,50 @@ it.each(['accounts', 'provider'] as const)(
     await act(async () => {
       streams.handlers.get(key(target))?.onEvent({ revision: 3, auth: 'unknown', flow: null })
     })
-    expect(await screen.findByRole('button', { name: 'Retry' })).toBeEnabled()
+    expect(await screen.findByRole('button', { name: 'Sign in' })).toBeEnabled()
   }
 )
 
-it('keeps an ordinary failed save draft retryable through the existing sign-in action', async () => {
-  const target = { kind: 'environment', environmentId: 'rolled-back-save' } as const
-  let fail = true
-  vi.mocked(callAntigravityChatAuthConfig).mockImplementation(async (_owner, config) => {
-    if (config && fail) {
-      throw new Error('Disk full')
-    }
-    return config ?? enterprise
-  })
+it('keeps an edited draft ahead of another client’s choice when recovering a failed refresh', async () => {
+  const target = { kind: 'environment', environmentId: 'edited-load-recovery' } as const
+  vi.mocked(callAntigravityChatAuthConfig).mockResolvedValue(enterprise)
   const user = userEvent.setup()
   renderSurface('accounts', target)
   await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
   await user.type(screen.getByLabelText('Google Cloud project'), '-new')
-  await user.click(screen.getByRole('button', { name: 'Sign in' }))
-  expect(await screen.findByRole('alert')).toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
-  expect(screen.getByLabelText('Google Cloud project')).toHaveValue('enterprise-project-new')
-  fail = false
+  vi.mocked(callAntigravityChatAuthConfig).mockRejectedValue(new Error('Connection lost'))
+  await act(async () =>
+    streams.handlers.get(key(target))?.onEvent({ revision: 1, auth: 'unknown', flow: null })
+  )
+  await screen.findByRole('alert')
+  expect(screen.getByRole('combobox')).toHaveTextContent('Gemini Enterprise')
+  vi.mocked(callAntigravityChatAuthConfig).mockImplementation(
+    async (_owner, config) => config ?? personal
+  )
   await user.click(screen.getByRole('button', { name: 'Sign in' }))
   await waitFor(() => expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start'))
-  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  expect(callAntigravityChatAuthConfig).toHaveBeenLastCalledWith(target, {
+    ...enterprise,
+    gcpProject: 'enterprise-project-new'
+  })
+})
+
+it('leaves recovered incomplete settings editable without starting Personal', async () => {
+  const target = { kind: 'environment', environmentId: 'incomplete-load-recovery' } as const
+  vi.mocked(callAntigravityChatAuthConfig).mockRejectedValue(new Error('Connection lost'))
+  const user = userEvent.setup()
+  renderSurface('accounts', target)
+  await screen.findByRole('alert')
+  vi.mocked(callAntigravityChatAuthConfig).mockResolvedValue(null)
+  await user.click(screen.getByRole('button', { name: 'Sign in' }))
+  await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
+  expect(screen.getByRole('combobox')).not.toHaveTextContent('Google account')
+  expect(screen.getByRole('button', { name: 'Sign in' })).toBeDisabled()
+  expect(callAntigravityChatSignIn).not.toHaveBeenCalled()
 })
 
 it.each(['success', 'failure'] as const)(
-  'keeps restart recovery when an overlapping Get settles with %s after Apply',
+  'keeps the editable failed-save draft when an overlapping Get settles with %s after Apply',
   async (outcome) => {
     const target = { kind: 'environment', environmentId: `late-read-${outcome}` } as const
     let finishSave!: (cause: Error) => void
@@ -517,8 +494,8 @@ it.each(['success', 'failure'] as const)(
           id: 'save',
           ok: false,
           error: {
-            code: 'antigravity_account_settings_unconfirmed',
-            message: 'Restart Orca to save your Antigravity settings.'
+            code: 'runtime_error',
+            message: 'Write failed'
           }
         })
       )
@@ -532,10 +509,10 @@ it.each(['success', 'failure'] as const)(
     })
     expect(screen.getAllByRole('alert')).toHaveLength(1)
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'Restart Orca to save your Antigravity settings.'
+      "Orca couldn't save your Antigravity sign-in settings. Try again."
     )
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
-    expect(screen.getByRole('combobox')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled()
+    expect(screen.getByRole('combobox')).toBeEnabled()
     expect(screen.getByLabelText('Google Cloud project')).toHaveValue('enterprise-project-new')
     expect(callAntigravityChatSignIn).not.toHaveBeenCalled()
   }

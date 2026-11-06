@@ -19,26 +19,6 @@ export type AntigravityChatAuthSettings = { antigravityChatAuth?: AntigravityCha
 
 export class AntigravityChatAuthConfigError extends Error {}
 
-export const ANTIGRAVITY_CHAT_AUTH_UNCONFIRMED_CODE = 'antigravity_account_settings_unconfirmed'
-
-export class AntigravityChatAuthUnconfirmedError extends AntigravityChatAuthConfigError {
-  readonly code = ANTIGRAVITY_CHAT_AUTH_UNCONFIRMED_CODE
-
-  constructor() {
-    super(
-      "Orca couldn't finish saving your Antigravity sign-in settings. Restart Orca on this host, then try again."
-    )
-  }
-}
-
-export function isAntigravityChatAuthUnconfirmed(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    'code' in error &&
-    error.code === ANTIGRAVITY_CHAT_AUTH_UNCONFIRMED_CODE
-  )
-}
-
 export function resolveAntigravityChatAuthConfig(value: unknown): AntigravityChatAuthConfig {
   if (value === undefined) {
     return { method: 'oauth-personal' }

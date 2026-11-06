@@ -11,7 +11,7 @@ import {
   publishAntigravityChatAuth
 } from './antigravity-chat-auth-publication'
 
-type AuthStore = Pick<RuntimeStore, 'getSettings' | 'updateSettingsAndFlush'>
+type AuthStore = Pick<RuntimeStore, 'getSettings' | 'updateSettingsAndFlush' | 'updateSettings'>
 
 export function readAntigravityChatAuthConfig(store: AuthStore): AntigravityChatAuthConfig | null {
   const value = store.getSettings().antigravityChatAuth
@@ -45,21 +45,27 @@ export function applyAntigravityChatAuthConfig(
   if (unchanged) {
     return Promise.resolve(next)
   }
-  if (!store.updateSettingsAndFlush) {
+  if (!store.updateSettingsAndFlush || !store.updateSettings) {
     throw new Error(
       'Antigravity account settings cannot be saved on this host. Update Orca and try again.'
     )
   }
   const flush = store.updateSettingsAndFlush.bind(store)
-  return ANTIGRAVITY_LAUNCH_GATE.run(stopLiveChats, () =>
-    publishAntigravityChatAuth(next, async () => {
-      await flush({ antigravityChatAuth: next }, { notifyListeners: true })
+  const restore = store.updateSettings.bind(store)
+  return ANTIGRAVITY_LAUNCH_GATE.run(stopLiveChats, () => {
+    const previous = store.getSettings().antigravityChatAuth
+    return publishAntigravityChatAuth(next, async () => {
+      try {
+        await flush({ antigravityChatAuth: next }, { notifyListeners: true })
+      } catch (error) {
+        if (store.getSettings().antigravityChatAuth === next) {
+          restore({ antigravityChatAuth: previous })
+        }
+        throw error
+      }
       antigravityChatSignIn.set({ auth: 'unknown', flow: null })
       agentModelCatalogStore.expireAgent('antigravity')
       return next
-    }).catch((error: unknown) => {
-      assertAntigravityChatAuthPublished(store.getSettings().antigravityChatAuth)
-      throw error
     })
-  )
+  })
 }
