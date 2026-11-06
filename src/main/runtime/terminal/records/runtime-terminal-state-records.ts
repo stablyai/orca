@@ -68,6 +68,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   readonly ptyId: string
   readonly incarnationId: PtyIncarnationId | null
   readonly worktreeId: string
+  /** Set only when no binding named the workspace; worktree-scoped stops never act on a cwd guess (#36716). */
+  readonly worktreeInferredFromCwd?: true
   readonly connectionId: string | null
   runtimeSessionOwned: boolean
   readonly isWsl: boolean | null

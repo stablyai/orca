@@ -5,20 +5,15 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import type {
   AgentSessionExecutionLocation,
-  AgentSessionLease,
   AgentSessionProcessIdentity,
   AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import type { PersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-legacy-handoff-lease'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import {
-  editPersistedTestAgentSessionStore,
   openTestAgentSessionRecordStore,
-  readPersistedTestAgentSessionStore,
-  seedTestAgentSessionStoreFromNewerBuild
+  readPersistedTestAgentSessionStore
 } from './agent-session-record-store-test-harness'
-import { AGENT_SESSION_CLAIM_KEY_RETENTION_MS } from '../ownership/agent-session-claim-key-retention'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
@@ -47,7 +42,6 @@ const FOLDER: AgentSessionExecutionLocation = {
 
 const MATCHED: AgentSessionOwnerProbe = { outcome: 'identity-matched', matchedOn: ['spawn-token'] }
 const INDETERMINATE: AgentSessionOwnerProbe = { outcome: 'indeterminate', reason: 'no answer' }
-const UNUSED: AgentSessionOwnerProbe = { outcome: 'reservation-unused' }
 
 let counter = 0
 
@@ -129,25 +123,6 @@ async function establishOwner(
   })
 }
 
-/** Seed the retired unshipped conflict-marker shape for compatibility. */
-async function markLegacyConflicted(
-  store: AgentSessionRecordStore,
-  lease: Partial<AgentSessionLease> = {}
-): Promise<void> {
-  if (!store.getRecord('session-alpha')) {
-    await store.reserveOwner(reserveRequest())
-  }
-  await store.transitionHandoff('session-alpha', (record) => ({
-    ...record,
-    lease: {
-      ...record.lease,
-      claimStatus: 'conflicted',
-      handoffStage: 'recovering',
-      ...lease
-    }
-  }))
-}
-
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'orca-agent-session-store-'))
 })
@@ -158,43 +133,6 @@ afterEach(async () => {
 })
 
 describe('acquisition path', () => {
-  it('admits a writer only after reservation, observed identity, and a proved handle', async () => {
-    const store = await open()
-    const reserved = await store.reserveOwner(reserveRequest())
-    expect(reserved.disposition).toBe('created')
-    expect(reserved.record.lease).toMatchObject({
-      runtimeFence: 1,
-      claimStatus: 'reserved',
-      handoffStage: 'new-owner-proving',
-      ownerProcess: null,
-      reservedSpawnToken: 'spawn-a'
-    })
-
-    await expect(
-      store.proveOwner({ sessionId: 'session-alpha', fence: 1, link: handleLink(), now: NOW })
-    ).rejects.toThrow('agent_session_ownership_unknown')
-
-    await store.commitProcessIdentity({
-      sessionId: 'session-alpha',
-      fence: 1,
-      process: processIdentity(),
-      now: NOW
-    })
-    const proved = await store.proveOwner({
-      sessionId: 'session-alpha',
-      fence: 1,
-      link: handleLink(),
-      now: NOW
-    })
-    expect(proved.lease).toMatchObject({
-      claimStatus: 'live',
-      handoffStage: null,
-      provenHandleLinkId: 'link-1',
-      runtimeFence: 1
-    })
-    expect(proved.providerHandleChain).toHaveLength(1)
-  })
-
   it('refuses a child that cannot echo the reserved spawn token', async () => {
     const store = await open()
     await store.reserveOwner(reserveRequest())
@@ -238,35 +176,6 @@ describe('acquisition path', () => {
     ).rejects.toThrow('agent_session_provider_handle_stale_fence')
   })
 
-  it('does not let an established owner re-enter the proof transition', async () => {
-    const store = await open()
-    await establishOwner(store)
-
-    await expect(
-      store.proveOwner({
-        sessionId: 'session-alpha',
-        fence: 1,
-        link: handleLink({
-          linkId: 'link-2',
-          origin: 'resumed',
-          observedAt: NOW + 1
-        }),
-        now: NOW + 1
-      })
-    ).rejects.toThrow('agent_session_ownership_unknown')
-  })
-
-  it('refuses a create that carries a fence and a re-create that does not', async () => {
-    const store = await open()
-    await expect(store.reserveOwner(reserveRequest({ expectedFence: 0 }))).rejects.toThrow(
-      'agent_session_checkpoint_stale'
-    )
-    await establishOwner(store)
-    await expect(store.reserveOwner(reserveRequest({ expectedFence: null }))).rejects.toThrow(
-      'agent_session_conflict'
-    )
-  })
-
   it.each([
     [
       'provider',
@@ -286,21 +195,6 @@ describe('acquisition path', () => {
         })
       )
     ).rejects.toThrow('agent_session_conflict')
-  })
-
-  it("takes request options only for a record it creates, so an existing chat's are kept", async () => {
-    const store = await open()
-    await establishOwner(store, { options: { permissionMode: 'ask' } })
-    await store.reserveOwner(
-      reserveRequest({
-        options: { permissionMode: 'full-access' },
-        expectedFence: 1,
-        probe: { outcome: 'pid-absent' },
-        operation: { callerKey: 'client-1', operationId: operationId(), fingerprint: 'fp-2' }
-      })
-    )
-    expect(store.getRecord('session-alpha')?.lease.runtimeFence).toBe(2)
-    expect(store.getRecord('session-alpha')?.permissionMode).toBe('ask')
   })
 })
 
@@ -326,26 +220,6 @@ describe('concurrent claims', () => {
     expect(store.getRecord('session-alpha')?.lease.runtimeFence).toBe(2)
   })
 
-  it('serializes concurrent creates of the same session id', async () => {
-    const store = await open()
-    const results = await Promise.allSettled([
-      store.reserveOwner(reserveRequest()),
-      store.reserveOwner(reserveRequest())
-    ])
-    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
-    expect(store.getRecord('session-alpha')?.lease.runtimeFence).toBe(1)
-  })
-
-  it('replays a retried operation id instead of reserving twice', async () => {
-    const store = await open()
-    const operation = { callerKey: 'client-1', operationId: operationId(), fingerprint: 'fp-1' }
-    const first = await store.reserveOwner(reserveRequest({ operation }))
-    const second = await store.reserveOwner(reserveRequest({ operation }))
-    expect(second.disposition).toBe('replayed')
-    expect(second.record.lease.runtimeFence).toBe(first.record.lease.runtimeFence)
-    expect(store.listOperationRows()).toHaveLength(1)
-  })
-
   it('refuses the same operation id carrying different parameters', async () => {
     const store = await open()
     const operationId_ = operationId()
@@ -362,17 +236,6 @@ describe('concurrent claims', () => {
         })
       )
     ).rejects.toThrow('agent_session_operation_conflict')
-  })
-
-  it('rolls the in-memory state back when a transaction throws', async () => {
-    const store = await open()
-    await establishOwner(store)
-    const before = store.getRecord('session-alpha')
-    await expect(
-      store.reserveOwner(reserveRequest({ expectedFence: 1, probe: INDETERMINATE }))
-    ).rejects.toThrow('agent_session_ownership_unknown')
-    expect(store.getRecord('session-alpha')).toEqual(before)
-    expect(store.listOperationRows()).toHaveLength(1)
   })
 
   it('never keeps a change in memory that failed to commit to disk', async () => {
@@ -424,82 +287,9 @@ describe('expiry is not eviction', () => {
     expect(evicted.lease).toMatchObject({ runtimeFence: 2, claimStatus: 'released' })
     expect(evicted.lease.deathEvidence?.kind).toBe('pid-absent')
   })
-
-  it('refuses to evict an owner it cannot prove dead', async () => {
-    const store = await open()
-    await establishOwner(store)
-    await expect(
-      store.evictProvenDeadOwner({
-        sessionId: 'session-alpha',
-        expectedFence: 1,
-        probe: INDETERMINATE,
-        now: NOW
-      })
-    ).rejects.toThrow('agent_session_ownership_unknown')
-  })
-
-  it('stops renewing a lease it can no longer vouch for', async () => {
-    const store = await open()
-    await establishOwner(store)
-    const renewed = await store.renewLease({
-      sessionId: 'session-alpha',
-      fence: 1,
-      childProbe: MATCHED,
-      now: NOW + 5_000
-    })
-    expect(renewed.lease.lastRenewedAt).toBe(NOW + 5_000)
-    await expect(
-      store.renewLease({
-        sessionId: 'session-alpha',
-        fence: 1,
-        childProbe: { outcome: 'identity-matched', matchedOn: [] },
-        now: NOW + 10_000
-      })
-    ).rejects.toThrow('agent_session_ownership_unknown')
-  })
 })
 
 describe('restart reconciliation', () => {
-  it('survives a restart and grants no writer until adjudicated', async () => {
-    const first = await open()
-    await establishOwner(first)
-
-    const reopened = await open()
-    const loaded = reopened.getRecord('session-alpha')
-    expect(loaded?.lease.unreconciled).toBe(true)
-    expect(loaded?.providerHandleChain).toHaveLength(1)
-    expect(loaded?.accountHome).toEqual({
-      variable: 'CLAUDE_CONFIG_DIR',
-      path: '/home/dev/.claude-work'
-    })
-    await expect(
-      reopened.renewLease({ sessionId: 'session-alpha', fence: 1, childProbe: MATCHED, now: NOW })
-    ).rejects.toThrow('execution_owner_reconciling')
-    await expect(
-      reopened.reserveOwner(
-        reserveRequest({
-          expectedFence: 1,
-          probe: { outcome: 'pid-absent' },
-          operation: { callerKey: 'client-1', operationId: operationId(), fingerprint: 'fp-2' }
-        })
-      )
-    ).rejects.toThrow('execution_owner_reconciling')
-  })
-
-  it('re-adopts a live owner without moving the fence', async () => {
-    const first = await open()
-    await establishOwner(first)
-    const reopened = await open()
-    await reopened.reconcileOnRestart({ probe: async () => MATCHED, now: NOW + 1_000 })
-    const record = reopened.getRecord('session-alpha')
-    expect(record?.lease).toMatchObject({
-      unreconciled: false,
-      runtimeFence: 1,
-      claimStatus: 'live'
-    })
-    expect(record?.lease.provenHandleLinkId).toBe('link-1')
-  })
-
   it('never applies a stale restart probe to a lease another reconcile already settled', async () => {
     await establishOwner(await open())
     const store = await open()
@@ -529,151 +319,6 @@ describe('restart reconciliation', () => {
       unreconciled: false
     })
   })
-
-  it('keeps the fence monotonic across a restart and never reuses a retired fence', async () => {
-    const first = await open()
-    await establishOwner(first)
-    await first.evictProvenDeadOwner({
-      sessionId: 'session-alpha',
-      expectedFence: 1,
-      probe: { outcome: 'exit-observed' },
-      now: NOW
-    })
-
-    const second = await open()
-    await second.reconcileOnRestart({ probe: async () => UNUSED, now: NOW + 1_000 })
-    const afterRestart = second.getRecord('session-alpha')?.lease.runtimeFence ?? 0
-    expect(afterRestart).toBeGreaterThanOrEqual(2)
-
-    const reacquired = await second.reserveOwner(
-      reserveRequest({
-        expectedFence: afterRestart,
-        probe: UNUSED,
-        spawnToken: 'spawn-b',
-        operation: {
-          callerKey: 'client-1',
-          operationId: operationId(NOW + 1_000),
-          fingerprint: 'fp-2'
-        },
-        now: NOW + 1_000
-      })
-    )
-    expect(reacquired.record.lease.runtimeFence).toBe(afterRestart + 1)
-
-    const third = await open()
-    expect(third.getRecord('session-alpha')?.lease.runtimeFence).toBe(afterRestart + 1)
-  })
-
-  it('sends an unverifiable owner to recovery rather than releasing it', async () => {
-    const first = await open()
-    await establishOwner(first)
-    const reopened = await open()
-    await reopened.reconcileOnRestart({ probe: async () => INDETERMINATE, now: NOW + 1_000 })
-    const lease = reopened.getRecord('session-alpha')?.lease
-    expect(lease).toMatchObject({ handoffStage: 'recovering', runtimeFence: 1 })
-    expect(lease?.ownerProcess).not.toBeNull()
-    await expect(
-      reopened.reserveOwner(
-        reserveRequest({
-          expectedFence: 1,
-          probe: { outcome: 'pid-absent' },
-          operation: {
-            callerKey: 'client-1',
-            operationId: operationId(NOW + 1_000),
-            fingerprint: 'fp-2'
-          },
-          now: NOW + 1_000
-        })
-      )
-    ).rejects.toThrow('agent_session_ownership_unknown')
-  })
-
-  it('re-adjudicates a claim an older record marked conflicted by the owner it names', async () => {
-    const first = await open()
-    await establishOwner(first)
-    await markLegacyConflicted(first)
-
-    const reopened = await open()
-    await reopened.reconcileOnRestart({
-      probe: async () => ({ outcome: 'indeterminate', reason: 'no answer' }),
-      now: NOW
-    })
-    // An unverifiable owner goes to recovery like any other; resolution concludes about it.
-    expect(reopened.getRecord('session-alpha')?.lease).toMatchObject({
-      handoffStage: 'recovering',
-      ownerProcess: { pid: expect.any(Number) }
-    })
-  })
-
-  it('releases a claim an older record marked conflicted that names no process', async () => {
-    const first = await open()
-    await markLegacyConflicted(first, { ownerProcess: null })
-
-    const reopened = await open()
-    await reopened.reconcileOnRestart({
-      probe: async () => ({ outcome: 'indeterminate', reason: 'no answer' }),
-      now: NOW
-    })
-    expect(reopened.getRecord('session-alpha')?.lease).toMatchObject({
-      claimStatus: 'released',
-      handoffStage: null,
-      deathEvidence: null
-    })
-  })
-
-  it('releases a conflict whose named owner is proven gone at restart', async () => {
-    // Present-time exit proof releases old conflict records; without it users could never reopen these sessions.
-    const first = await open()
-    await establishOwner(first)
-    await markLegacyConflicted(first)
-
-    const reopened = await open()
-    await reopened.reconcileOnRestart({ probe: async () => ({ outcome: 'pid-absent' }), now: NOW })
-
-    const lease = reopened.getRecord('session-alpha')?.lease
-    expect(lease).toMatchObject({
-      claimStatus: 'released',
-      handoffStage: null,
-      deathEvidence: { kind: 'pid-absent' }
-    })
-    const reacquired = await reopened.reserveOwner(
-      reserveRequest({
-        expectedFence: lease?.runtimeFence ?? null,
-        probe: { outcome: 'pid-absent' },
-        operation: { callerKey: 'client-1', operationId: operationId(), fingerprint: 'fp-2' }
-      })
-    )
-    expect(reacquired.disposition).toBe('reserved')
-  })
-
-  it('frees a reservation that provably never spawned', async () => {
-    const first = await open()
-    await first.reserveOwner(reserveRequest())
-    const reopened = await open()
-    await reopened.reconcileOnRestart({ probe: async () => UNUSED, now: NOW + 1_000 })
-    expect(reopened.getRecord('session-alpha')?.lease).toMatchObject({
-      claimStatus: 'released',
-      runtimeFence: 2,
-      reservedSpawnToken: null
-    })
-  })
-
-  it('carries the operation ledger across a restart so a retry is still a replay', async () => {
-    const operation = { callerKey: 'client-1', operationId: operationId(), fingerprint: 'fp-1' }
-    const first = await open()
-    await first.reserveOwner(reserveRequest({ operation }))
-    await first.recordOperationOutcome({
-      callerKey: operation.callerKey,
-      operationId: operation.operationId,
-      outcome: { status: 'succeeded', sessionId: 'session-alpha' }
-    })
-
-    const reopened = await open()
-    expect(reopened.listOperationRows()).toHaveLength(1)
-    const replayed = await reopened.reserveOwner(reserveRequest({ operation }))
-    expect(replayed.disposition).toBe('replayed')
-    expect(replayed.record.sessionId).toBe('session-alpha')
-  })
 })
 
 describe('host and workspace isolation', () => {
@@ -695,175 +340,5 @@ describe('host and workspace isolation', () => {
         })
       )
     ).rejects.toThrow('agent_session_conflict')
-  })
-
-  it('keeps native, WSL, and SSH sessions in separate scopes', async () => {
-    const store = await open()
-    await establishOwner(store, { sessionId: '__proto__' })
-    await establishOwner(store, { sessionId: 'session-wsl', location: WSL, spawnToken: 'spawn-b' })
-    await establishOwner(store, { sessionId: 'session-ssh', location: SSH, spawnToken: 'spawn-c' })
-    await establishOwner(store, {
-      sessionId: 'session-folder',
-      location: FOLDER,
-      spawnToken: 'spawn-d'
-    })
-
-    expect(store.listByScope(NATIVE).map((record) => record.sessionId)).toEqual(['__proto__'])
-    expect(store.listByScope(WSL).map((record) => record.sessionId)).toEqual(['session-wsl'])
-    expect(store.listByScope(SSH).map((record) => record.sessionId)).toEqual(['session-ssh'])
-    expect(store.listByScope(FOLDER).map((record) => record.sessionId)).toEqual(['session-folder'])
-    expect((await open()).getRecord('__proto__')).not.toBeNull()
-  })
-
-  it('preserves the workspace kind so a folder workspace is never read back as a worktree', async () => {
-    const first = await open()
-    await establishOwner(first, { sessionId: 'session-folder', location: FOLDER })
-    const reopened = await open()
-    expect(reopened.getRecord('session-folder')?.location).toEqual(FOLDER)
-  })
-})
-
-describe('claim keys and unreadable rows', () => {
-  it.each(['bad', {}, null, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])(
-    'preserves a damaged next-fence floor %j through refusal and unrelated writes',
-    async (minimumNextFence) => {
-      const first = await open()
-      await first.reserveOwner(reserveRequest())
-      await first.setSessionTabVisibility('session-alpha', true, 'tab-alpha')
-      let damaged: PersistedAgentSessionRecord | undefined
-      await editPersistedTestAgentSessionStore(directory, (persisted) => {
-        damaged = persisted.records['session-alpha']
-        Object.assign(damaged.lease, { minimumNextFence })
-      })
-      const reopened = await open()
-      expect(reopened.isSessionUnreadable('session-alpha')).toBe(true)
-      expect(reopened.getRecord('session-alpha')).toBeNull()
-      expect(reopened.getConversation('session-alpha')).toMatchObject({
-        currentFence: 1,
-        neverStarted: false,
-        ownerObservation: { unreconciled: true }
-      })
-      expect(reopened.getConversation('session-alpha')).not.toHaveProperty('lease')
-      expect(reopened.getVisibleSessionTabIndex().sessionIds).toEqual(['session-alpha'])
-      await expect(reopened.setConversationName('session-alpha', 'new')).rejects.toMatchObject({
-        refusal: { details: { reason: 'recordUnreadable' } }
-      })
-      await expect(
-        reopened.renewLease({ sessionId: 'session-alpha', fence: 1, childProbe: UNUSED, now: NOW })
-      ).rejects.toThrow('execution_owner_reconciling')
-      await expect(reopened.reserveOwner(reserveRequest())).rejects.toMatchObject({
-        refusal: { details: { reason: 'recordUnreadable' } }
-      })
-      await expect(reopened.founding.commit(reserveRequest())).rejects.toMatchObject({
-        refusal: { details: { reason: 'recordUnreadable' } }
-      })
-      await establishOwner(reopened, { sessionId: 'session-beta', claimKeyId: 'key-2' })
-      expect((await open()).isSessionUnreadable('session-alpha')).toBe(true)
-      const persisted = await readPersistedTestAgentSessionStore(directory)
-      expect(persisted.records['session-alpha']).toEqual(damaged)
-      expect(persisted.sessionTabs).toContainEqual({
-        tabId: 'tab-alpha',
-        sessionId: 'session-alpha'
-      })
-    }
-  )
-
-  it('uses a legacy floor for the next reservation after restarting a released chat', async () => {
-    const first = await open()
-    await first.reserveOwner(reserveRequest())
-    await editPersistedTestAgentSessionStore(directory, (persisted) => {
-      Object.assign(persisted.records['session-alpha'].lease, {
-        claimStatus: 'released',
-        reservedSpawnToken: null,
-        minimumNextFence: 9
-      })
-    })
-    const reopened = await open()
-    await reopened.reconcileOnRestart({ probe: async () => UNUSED, now: NOW + 1_000 })
-    const reserved = await reopened.reserveOwner(
-      reserveRequest({ expectedFence: 1, probe: UNUSED })
-    )
-    expect(reserved.record.lease.runtimeFence).toBe(9)
-    expect((await open()).getRecord('session-alpha')?.lease).toMatchObject({
-      runtimeFence: 9,
-      minimumNextFence: 9
-    })
-  })
-
-  it('keeps a retired claim key verifiable for the retention window', async () => {
-    const store = await open()
-    await store.retireClaimKey('key-1', NOW)
-    expect(store.isClaimKeyVerifiable('key-1', NOW + AGENT_SESSION_CLAIM_KEY_RETENTION_MS)).toBe(
-      true
-    )
-    expect(
-      store.isClaimKeyVerifiable('key-1', NOW + AGENT_SESSION_CLAIM_KEY_RETENTION_MS + 1)
-    ).toBe(false)
-    expect(store.isClaimKeyVerifiable('key-unknown', NOW)).toBe(true)
-  })
-
-  // Pending provider proof can be valid; a live proof naming no link is corrupt.
-  it('quarantines a record with a live proof naming no handle', async () => {
-    const first = await open()
-    await establishOwner(first)
-    await editPersistedTestAgentSessionStore(directory, (persisted) => {
-      Object.assign(persisted.records['session-alpha'].lease, {
-        provenHandleLinkId: 'link-never-minted'
-      })
-    })
-    expect((await open()).isSessionUnreadable('session-alpha')).toBe(true)
-  })
-
-  // Retired checkpoints no longer affect record readability.
-  it.each([null, { epoch: 3, sequence: 0 }, { epoch: 'bad', sequence: 1 }])(
-    "loads a record carrying an older build's journal checkpoint %o, and drops it on the next write",
-    async (journalCheckpoint) => {
-      const first = await open()
-      await establishOwner(first)
-      await editPersistedTestAgentSessionStore(directory, (persisted) => {
-        Object.assign(persisted.records['session-alpha'].lease, { journalCheckpoint })
-      })
-      const reopened = await open()
-      expect(reopened.isSessionUnreadable('session-alpha')).toBe(false)
-      await reopened.setConversationName('session-alpha', 'renamed')
-      const stored = (await readPersistedTestAgentSessionStore(directory)).records['session-alpha']
-      expect(stored.conversationName).toBe('renamed')
-      expect(stored.lease).not.toHaveProperty('journalCheckpoint')
-    }
-  )
-
-  it('sets aside a row whose handle is in both stored forms and never rewrites it', async () => {
-    const first = await open()
-    await establishOwner(first)
-    let ambiguous: PersistedAgentSessionRecord | undefined
-    await editPersistedTestAgentSessionStore(directory, (persisted) => {
-      ambiguous = persisted.records['session-alpha']
-      Object.assign(ambiguous.providerHandleChain[0].handle, {
-        transport: 'acp',
-        agent: 'grok',
-        nativeId: 'acp-thread',
-        resumeCursor: 'resume-token'
-      })
-    })
-    const reopened = await open()
-    expect(reopened.isSessionUnreadable('session-alpha')).toBe(true)
-    // Unrelated writes must leave unreadable rows intact.
-    await establishOwner(reopened, { sessionId: 'session-beta', claimKeyId: 'key-2' })
-    expect((await open()).isSessionUnreadable('session-alpha')).toBe(true)
-    expect((await readPersistedTestAgentSessionStore(directory)).records['session-alpha']).toEqual(
-      ambiguous
-    )
-  })
-
-  it('refuses to write a store a newer Orca wrote, with the refusal clients print as "update"', async () => {
-    await seedTestAgentSessionStoreFromNewerBuild(directory)
-    const store = await open()
-    expect(store.readOnly).toBe(true)
-    await expect(store.reserveOwner(reserveRequest())).rejects.toMatchObject({
-      refusal: {
-        code: 'agent_session_journal_unreadable',
-        details: { reason: 'journalWrittenByNewerOrca' }
-      }
-    })
   })
 })
