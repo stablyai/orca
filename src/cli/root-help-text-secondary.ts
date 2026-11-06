@@ -44,6 +44,7 @@ export const ROOT_HELP_TEXT_SECONDARY = [
   '  orca search --index-status [--json]',
   '  orca account add [--agent claude|codex] [--json]',
   '  orca account list [--json]',
+  '  orca account usage [--agent <agent>] [--fresh] [--json]',
   '  orca host list [--json]',
   '  orca environment add --name <name> --pairing-code <code> [--json]',
   '  orca environment list [--json]',
