@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { DeviceRegistry } from '../../../src/main/runtime/rpc/server/pairing/device-registry'
+import { usesOlderPairingMethod } from '../../../src/main/runtime/rpc/server/pairing/pairing-ticket-exchange'
 import { PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITY } from '../../../src/shared/remote-runtime/pairing/ticket-exchange-capability'
 import { encodePairingOffer } from '../../../src/shared/remote-runtime/pairing/pairing'
 import { exchangeRemotePairingTicket } from '../../../src/shared/remote-runtime/pairing/remote-pairing-ticket-exchange'
@@ -100,5 +101,9 @@ describe('cross-version: single-use pairing tickets', () => {
       'not_a_ticket'
     )
     expect(current.validateToken(phone.token)?.deviceId).toBe(phone.deviceId)
+    // The desktop can't tell which app made it, so it never asks anyone to update.
+    expect(usesOlderPairingMethod(current.getDevice(phone.deviceId)!, current.listDevices())).toBe(
+      false
+    )
   })
 })
