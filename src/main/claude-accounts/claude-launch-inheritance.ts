@@ -137,8 +137,6 @@ export async function withInheritedClaudeLaunchAccount<T>(
         : null)
   const home = id === null ? router.systemDefaultHome() : await router.prepareAccount(id)
   const pointer = claudeProfileLaunchPointer(router.pointerPath, id, home)
-  // Omit an unset user dir so Claude falls back to its own default instead of reading ''.
-  const configDir = id === null ? router.userConfigDir() : home
   const launch: ClaudeLaunchAccount = {
     router,
     used: false,
@@ -155,7 +153,8 @@ export async function withInheritedClaudeLaunchAccount<T>(
       provenance: id === null ? 'system' : `profile:${id}`,
       envPatch: {
         ORCA_CLAUDE_PROFILE_POINTER: pointer,
-        ...(configDir ? { CLAUDE_CONFIG_DIR: configDir } : {}),
+        // '' clears a CLAUDE_CONFIG_DIR a later Orca setting would add to a System-default child.
+        CLAUDE_CONFIG_DIR: id === null ? (router.userConfigDir() ?? '') : home,
         ORCA_CLAUDE_INJECTED_CONFIG_DIR: id === null ? '' : home
       }
     }

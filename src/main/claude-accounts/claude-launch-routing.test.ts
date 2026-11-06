@@ -195,10 +195,11 @@ describe('one router decision for every Claude launch', () => {
       )
     }
 
-    it('sends no CLAUDE_CONFIG_DIR when the user never set one', async () => {
+    it('clears a CLAUDE_CONFIG_DIR a later setting added when the user never set one', async () => {
       const patch = await launchPatch(coveredAccount())
-      expect(patch).not.toHaveProperty('CLAUDE_CONFIG_DIR')
       expect(patch.ORCA_CLAUDE_INJECTED_CONFIG_DIR).toBe('')
+      const child = applyClaudeEnvPatch({ CLAUDE_CONFIG_DIR: '/from/later/setting' }, patch)
+      expect(child).not.toHaveProperty('CLAUDE_CONFIG_DIR')
     })
 
     it("keeps the user's own CLAUDE_CONFIG_DIR", async () => {
