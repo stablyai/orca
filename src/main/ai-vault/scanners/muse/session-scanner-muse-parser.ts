@@ -34,7 +34,7 @@ type MuseRecord = {
 }
 
 // Convert microsecond recorded_at values to milliseconds; preserve shared parsing for smaller values and ISO strings.
-function museTimestampMs(value: unknown): number | null {
+export function museTimestampMs(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value) && value >= 1e14) {
     return Math.floor(value / 1000)
   }

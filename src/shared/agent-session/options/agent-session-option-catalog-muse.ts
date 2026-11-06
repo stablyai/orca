@@ -1,7 +1,7 @@
 import { agentChoiceCliApply } from '../../agent-launch/choices/agent-choice-cli-apply'
 import type { AgentSessionOptionCatalog, CatalogOption } from './agent-session-option-catalog-types'
 
-// `none` is omitted: native-chat-session-option-labels.ts has no translation for it.
+// `none` is omitted: the meta provider rejects it (`/effort none` reports it unsupported).
 const MUSE_EFFORT: CatalogOption = {
   id: 'effort',
   label: 'Reasoning effort',
@@ -30,7 +30,9 @@ const MUSE_EFFORT: CatalogOption = {
         }
       ],
       '--reasoning-effort'
-    )
+    ),
+    // The TUI takes `/effort <level>` inline and echoes it on its status line.
+    midSession: { kind: 'command', build: (value) => `/effort ${String(value)}` }
   }
 }
 

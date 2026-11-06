@@ -14,6 +14,7 @@ import {
   decodeClaudeTranscriptLine,
   decodeCodexTranscriptLine,
   decodeGrokTranscriptLine,
+  decodeMuseTranscriptLine,
   decodeOmpTranscriptLine
 } from './transcript-line-decoders'
 import { decodeTranscriptStream } from './transcript-stream-lines'
@@ -76,6 +77,11 @@ export async function readNativeChatTranscript(
     if (transcriptAgent === 'omp') {
       return {
         messages: await readTranscript(filePath, decodeOmpTranscriptLine, options.sourceOrder)
+      }
+    }
+    if (transcriptAgent === 'muse') {
+      return {
+        messages: await readTranscript(filePath, decodeMuseTranscriptLine, options.sourceOrder)
       }
     }
     return { error: `Unsupported agent for Chat UI transcript: ${agent}` }

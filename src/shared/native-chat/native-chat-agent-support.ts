@@ -1,6 +1,6 @@
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 
-export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'grok' | 'omp' | 'opencode'
+export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'grok' | 'muse' | 'omp' | 'opencode'
 
 /** Agents whose transcripts the native chat view can parse and render. */
 export const NATIVE_CHAT_SUPPORTED_AGENT_LIST: readonly TuiAgent[] = [
@@ -8,6 +8,7 @@ export const NATIVE_CHAT_SUPPORTED_AGENT_LIST: readonly TuiAgent[] = [
   'openclaude',
   'codex',
   'grok',
+  'muse',
   'omp',
   'opencode',
   'opencode2',
@@ -23,10 +24,16 @@ export function isNativeChatSupportedAgent(agent: string | null | undefined): bo
 }
 
 /** Agents whose Model-A SSH transcript reader is not supported. A hook path alone
- *  does not establish owning-host reads, so OMP remains gated even with metadata. */
+ *  does not establish owning-host reads, so OMP remains gated even with metadata;
+ *  Muse hooks report no transcript path at all. */
 export function nativeChatRequiresLocalTranscript(agent: string | null | undefined): boolean {
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
-  return transcriptAgent === 'grok' || transcriptAgent === 'omp' || transcriptAgent === 'opencode'
+  return (
+    transcriptAgent === 'grok' ||
+    transcriptAgent === 'muse' ||
+    transcriptAgent === 'omp' ||
+    transcriptAgent === 'opencode'
+  )
 }
 
 /** Selector TUIs require key steps rather than pasted option labels. */
@@ -37,9 +44,11 @@ export function shouldStepNativeChatAskAnswer(agent: string | null | undefined):
   )
 }
 
-/** OMP's configurable keys and existing checkbox state cannot be replaced through PTY input. */
+/** OMP's configurable keys and existing checkbox state cannot be replaced through PTY input;
+ *  Muse's selector ignores pasted labels and has no verified key sequence yet. */
 export function nativeChatAskRequiresTerminal(agent: string | null | undefined): boolean {
-  return resolveNativeChatTranscriptAgent(agent) === 'omp'
+  const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
+  return transcriptAgent === 'omp' || transcriptAgent === 'muse'
 }
 
 /** OpenCode confirms an interrupt with a second Escape; Claude Code and Codex read Esc-Esc at an idle prompt as rewind. */
@@ -57,7 +66,7 @@ export function resolveNativeChatTranscriptAgent(
   if (agent === 'opencode' || agent === 'opencode2' || agent === 'zcode') {
     return 'opencode'
   }
-  if (agent === 'codex' || agent === 'grok' || agent === 'omp') {
+  if (agent === 'codex' || agent === 'grok' || agent === 'muse' || agent === 'omp') {
     return agent
   }
   return null

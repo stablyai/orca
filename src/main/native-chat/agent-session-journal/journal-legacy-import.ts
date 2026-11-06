@@ -16,6 +16,7 @@ import {
   decodeClaudeTranscriptLine,
   decodeCodexTranscriptLine,
   decodeGrokTranscriptLine,
+  decodeMuseTranscriptLine,
   decodeOmpTranscriptLine
 } from '../transcript-line-decoders'
 import { readLegacyImportTranscript } from './journal-legacy-transcript-stream'
@@ -198,6 +199,7 @@ const TRANSCRIPT_DECODERS = {
   codex: (line: string, fallbackId: string) =>
     decodeCodexTranscriptLine(line, fallbackId, { historyImport: true }),
   grok: decodeGrokTranscriptLine,
+  muse: decodeMuseTranscriptLine,
   omp: decodeOmpTranscriptLine
 } as const
 

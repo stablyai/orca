@@ -112,6 +112,30 @@ describe('native chat PTY session options', () => {
     })
   })
 
+  it('switches a live Muse terminal’s effort with /effort under its reported unlisted model', async () => {
+    const dispatch = vi.fn()
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'muse',
+      scopeKey: 'pty-muse',
+      mode: 'live',
+      modelLabel: 'Model',
+      reportedValues: { model: 'muse-spark-1.3', effort: 'high' },
+      dispatchCommand: dispatch
+    })!
+    expect(
+      surface.getSnapshot().map(({ id, settable, kind }) => [id, settable, kind.currentValue])
+    ).toEqual([
+      ['model', false, 'muse-spark-1.3'],
+      ['effort', true, 'high']
+    ])
+    const result = await surface.setOption('effort', 'low')
+    expect(dispatch).toHaveBeenCalledWith('/effort low')
+    expect(result.snapshot.find(({ id }) => id === 'effort')).toMatchObject({
+      valueSource: 'dispatched',
+      kind: { currentValue: 'low' }
+    })
+  })
+
   it('keeps a normal Claude model choice native and dispatches the selected model', async () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
       model: 'sonnet',
