@@ -145,7 +145,8 @@ export function createAgentStatusProviderSessionActions(
           const retiredPaneKeys = new Set([paneKey])
           // Identity mismatch clears sleeping launch config; clear registry too or returning old identity reuses stale args/env.
           let nextLaunchConfigs = s.agentLaunchConfigByPaneKey
-          if (registryMatches && registryEntry) {
+          // An owner's none ends the launch, so its registry entry goes rather than re-stamped.
+          if (registryMatches && registryEntry && metadata?.launchConfig !== null) {
             nextLaunchConfigs = {
               ...nextLaunchConfigs,
               [paneKey]: {
