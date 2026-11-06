@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
-import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
+import { emitNativeChatMessageSent } from '@/components/native-chat/telemetry/native-chat-telemetry'
 import {
   nativeChatComposerTargetIsRemote,
   type NativeChatResolvedTarget

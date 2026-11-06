@@ -2,14 +2,17 @@ import type { MutableRefObject } from 'react'
 import type { Editor } from '@tiptap/react'
 import type { EditorView } from '@tiptap/pm/view'
 import { toast } from 'sonner'
-import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
-import { httpLinkActionDestinationsFor, openRoutedHttpLink } from '@/lib/http-link-destinations'
+import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
+import {
+  httpLinkActionDestinationsFor,
+  openRoutedHttpLink
+} from '@/lib/browser/navigation/http-link-destinations'
 import { useAppStore } from '@/store/index'
-import '@/lib/workspace-browser-tab-open'
+import '@/lib/browser/workspace/workspace-browser-tab-open'
 import {
   canOpenWorkspaceBrowserTabOnRuntime,
   canOpenWorkspaceBrowserTabOnSsh
-} from '@/lib/workspace-browser-route-eligibility'
+} from '@/lib/browser/workspace/workspace-browser-route-eligibility'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { getLinkSourceLocalOpenOwner } from '@/lib/link-source-local-open-owner'
 import {

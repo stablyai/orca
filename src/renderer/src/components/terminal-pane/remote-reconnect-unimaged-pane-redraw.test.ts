@@ -37,7 +37,9 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 })
 vi.mock('./cache-timer-seeding', () => ({ shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false) }))
 vi.mock('sonner', () => ({ toast: { info: vi.fn() } }))
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep: vi.fn() }))
+vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
+  notifyCodexPaneBoundForStaleSweep: vi.fn()
+}))
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
   return { ...actual, useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn }
@@ -49,11 +51,13 @@ const nextQueuedTransport = (): MockTransport => {
   }
   return next
 }
-vi.mock('./pty-transport', () => ({ createIpcPtyTransport: vi.fn(() => nextQueuedTransport()) }))
-vi.mock('./remote-runtime-pty-transport', () => ({
+vi.mock('./pty-transport/ipc/pty-transport', () => ({
+  createIpcPtyTransport: vi.fn(() => nextQueuedTransport())
+}))
+vi.mock('./pty-transport/remote-runtime/remote-runtime-pty-transport', () => ({
   createRemoteRuntimePtyTransport: vi.fn(() => nextQueuedTransport())
 }))
-vi.mock('./pty-dispatcher', async (importOriginal) => ({
+vi.mock('./pty-transport/delivery/pty-dispatcher', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getEagerPtyBufferHandle: vi.fn(() => undefined)
 }))

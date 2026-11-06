@@ -35,7 +35,8 @@ export async function preparePendingRuntimeClose(id = 'remote:env-1@@term_origin
   const { replaceRuntimeEnvironmentRevisions } =
     await import('../../runtime/runtime-environment-revision')
   replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 1 }])
-  const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+  const { createRemoteRuntimePtyTransport } =
+    await import('./pty-transport/remote-runtime/remote-runtime-pty-transport')
   const remote = createRemoteRuntimePtyTransport('env-1', {
     worktreeId: 'workspace',
     tabId: p.tabId,

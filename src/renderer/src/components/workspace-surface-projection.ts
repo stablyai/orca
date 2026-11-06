@@ -2,7 +2,8 @@ import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/exec
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import { getCatalogOwnerHostId } from '../lib/worktree-runtime-owner-index'
+import '../lib/workspace/ownership/worktree-runtime-owner-index'
+import { getCatalogOwnerHostId } from '../lib/workspace/ownership/workspace-catalog-owner-index'
 
 export type WorkspaceSurface = { id: string; path: string }
 

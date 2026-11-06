@@ -33,7 +33,7 @@ import type { AutomationHostTarget } from './automation-host-client'
 import type { AutomationAuthorityChangeReason } from './automation-host-invalidation'
 import type { AutomationSaveContext } from './automation-save-context'
 import { automationAuthorityCatalogKey } from './automation-host-catalog-types'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 
 export type AutomationMoveOperationContext = {
   automationDispatchContext: AutomationDispatchContext

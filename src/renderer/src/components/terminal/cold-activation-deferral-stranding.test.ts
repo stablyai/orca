@@ -13,11 +13,12 @@ import {
   synchronizeTerminalProviderSnapshotCapabilities,
   terminalProviderHasAuthoritativeSnapshot
 } from './terminal-provider-snapshot-capability'
+import { canWatcherCoverParkedTerminalTab } from '../terminal-pane/parking/output-watchers/terminal-parked-tab-watchers'
 import {
-  canWatcherCoverParkedTerminalTab,
-  captureParkedTerminalPaneCandidates
-} from '../terminal-pane/terminal-parked-tab-watchers'
-import { capturedPanesByTabId } from '../terminal-pane/terminal-parked-watcher-registry'
+  captureParkedTerminalPaneCandidates,
+  capturedPanesByTabId
+} from '../terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
+
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalParkingFoundation } from '../use-terminal-parking-foundation'
 import type { StartupTerminalTabHold } from './startup-terminal-tab-hold'

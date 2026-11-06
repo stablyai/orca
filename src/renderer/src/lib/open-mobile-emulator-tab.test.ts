@@ -1,3 +1,4 @@
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { openMobileEmulatorTab } from './open-mobile-emulator-tab'
@@ -50,6 +51,7 @@ const mockAttachResult = {
 
 describe('openMobileEmulatorTab', () => {
   beforeEach(() => {
+    setLocalRuntimeCapabilitiesForTests([])
     mockStoreState.activeGroupIdByWorktree = { 'wt-1': 'group-1' }
     mockStoreState.groupsByWorktree = { 'wt-1': [{ id: 'group-1' }] }
     mockStoreState.unifiedTabsByWorktree = {}

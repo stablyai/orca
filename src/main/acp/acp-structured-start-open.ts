@@ -1,9 +1,8 @@
 import { withProviderDiagnostic } from '../../shared/agent-session/failures/agent-session-failure'
-import {
-  AgentSessionAcquisitionRefusal,
-  type StructuredAgentSessionAdapter
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionProviderOpenInput } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
+import '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionProviderOpenInput } from '../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import { acpAgentName } from './acp-structured-agent-definitions'
 import { acpStartupFailure } from './acp-structured-child'
 import type { AcpStructuredChildren } from './acp-structured-child-lifecycle'

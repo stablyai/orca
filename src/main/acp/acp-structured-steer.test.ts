@@ -8,9 +8,9 @@ import {
 import {
   CALLER,
   envelope
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
-import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import type { StructuredAgentSessionAdmitFreshInput } from '../native-chat/agent-session-wire/structured-agent-session-input-admission'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
+import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import type { StructuredAgentSessionAdmitFreshInput } from '../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
 import type { AcpScriptedAgent, FakeFrame } from './acp-scripted-agent.test-support'
 import { awaitAcpTurnEnd } from './acp-structured-stop'
 import { OMP_ACP_DIALECT } from './acp-dialects/omp-dialect'

@@ -26,7 +26,7 @@ import {
   type WorkspaceCleanupRemoveOptions,
   type WorkspaceCleanupRemoveResult
 } from './workspace-cleanup-removal'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 
 export type { WorkspaceCleanupFailure, WorkspaceCleanupRemoveOptions, WorkspaceCleanupRemoveResult }
 export { enrichWorkspaceCleanupCandidates, WORKSPACE_CLEANUP_ENRICHMENT_CONCURRENCY }

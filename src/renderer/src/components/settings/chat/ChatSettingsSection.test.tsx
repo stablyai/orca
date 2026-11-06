@@ -11,6 +11,7 @@ import { getChatAppearanceSearchEntries } from '../appearance/chat/chat-appearan
 import { getChatNamingSearchEntry } from './chat-naming-search'
 import { getChatInlineVisualsSearchEntry } from './chat-inline-visuals-search'
 import { getChatBehaviorSearchEntries } from './chat-behavior-search'
+import { getChatTurnActivitySearchEntries } from './chat-turn-activity-search'
 import { AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { i18n } from '@/i18n/i18n'
@@ -52,6 +53,7 @@ function renderChat(
         searchEntries={[
           ...(showDesktopOnlySettings ? getChatLaunchSearchEntries() : []),
           ...getChatAppearanceSearchEntries(),
+          ...getChatTurnActivitySearchEntries(),
           ...getChatBehaviorSearchEntries(),
           ...(showDesktopOnlySettings
             ? [getChatNamingSearchEntry(), getChatInlineVisualsSearchEntry()]

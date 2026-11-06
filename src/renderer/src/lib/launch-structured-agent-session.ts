@@ -24,7 +24,7 @@ import {
 } from '@/runtime/structured-agent-session-owner'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
 import {
   StructuredAgentSessionCreateRefusalError,
   StructuredAgentSessionCreateUnknownOutcomeError,

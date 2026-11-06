@@ -1,5 +1,5 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { completeWorkerTerminalRelease } from './worker-release-completion'
 
 /** Release the failed attempt's terminal on retry-of: archive output, preserve user takeover and retain interrupted cleanup for recovery.

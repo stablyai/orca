@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { ArrowRight, ExternalLink } from 'lucide-react'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function TaskPageGitLabItemList({
   model
 }: {

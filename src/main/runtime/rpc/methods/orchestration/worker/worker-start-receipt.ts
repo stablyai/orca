@@ -1,6 +1,6 @@
 import { formatTerminalStartFailure } from '../../../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import type { WorkerDispatchRow } from '../../../../orchestration/types'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import type { WorkerDispatchRow } from '../../../../orchestration/db/orchestration-records'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { tearDownFailedWorkerStart } from './failed-worker-start-teardown'
 import {

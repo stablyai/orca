@@ -14,7 +14,7 @@ import {
   readProposedTerminalCols,
   resolvePositiveTerminalDimensions,
   shouldSkipAltFrameForWidthMismatch
-} from '../terminal-snapshot-replay-paint'
+} from '../snapshots/terminal-snapshot-replay-paint'
 
 import { restoredSnapshotPaintsPrintableContent } from '../restored-snapshot-coverage'
 import { ackPaintedColdRestore } from './painted-cold-restore-ack'

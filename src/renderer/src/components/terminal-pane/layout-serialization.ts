@@ -11,7 +11,7 @@ import {
 } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { replayIntoTerminal, type ReplayingPanesRef } from './replay-guard'
-import type { RestoredViewportBlankingPanesRef } from './terminal-restored-viewport'
+import type { RestoredViewportBlankingPanesRef } from './viewport/terminal-restored-viewport'
 import { isXtermInstanceDisposed } from '@/lib/pane-manager/xterm-instance-disposed'
 import { readSplitRatio, SPLIT_RATIO_TOLERANCE } from '@/lib/pane-manager/pane-split-ratio'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'

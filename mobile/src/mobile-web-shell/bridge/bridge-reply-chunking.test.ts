@@ -30,11 +30,22 @@ function part(i: number, of: number, chunk: string, id = ID): BridgeReplyMessage
   return { v: BRIDGE_PROTOCOL_VERSION, type: 'reply', id, part: { i, of }, chunk }
 }
 
-function framesOf(split: BridgeReplySplit): BridgeReplyMessage[] {
+function rawFramesOf(split: BridgeReplySplit): string[] {
   if (!split.ok) {
     throw new Error(`expected a split, got ${split.refusal}`)
   }
   return split.frames
+}
+
+// Read frames with the page's reader, so a frame it would refuse fails the test.
+function framesOf(split: BridgeReplySplit): BridgeReplyMessage[] {
+  return rawFramesOf(split).map((raw) => {
+    const read = readBridgeHostMessage(raw)
+    if (!read.ok || read.message.type !== 'reply') {
+      throw new Error('the page would not read this frame as a reply')
+    }
+    return read.message
+  })
 }
 
 function requiredLast(frames: BridgeReplyMessage[]): BridgeReplyMessage {
@@ -105,10 +116,13 @@ function assemble(frames: BridgeReplyMessage[]): ReturnType<BridgeReplyAssembler
 }
 
 describe('splitBridgeReply', () => {
-  it('leaves a reply that fits in one frame unchunked', () => {
-    const payload = payloadOf({ worktrees: ['a', 'b'] })
-    const frames = framesOf(splitBridgeReply(ID, payload))
-    expect(frames).toEqual([{ v: BRIDGE_PROTOCOL_VERSION, type: 'reply', id: ID, payload }])
+  it('leaves a reply that fits in one frame unchunked, its escaped payload spliced byte for byte', () => {
+    const payload = payloadOf(
+      `quote " slash \\ line\n\u0001 caf\u00e9 ${ASTRAL}${LONE_HIGH_SURROGATE}`
+    )
+    expect(rawFramesOf(splitBridgeReply(ID, payload))).toEqual([
+      '{"v":1,"type":"reply","id":"AAAAAAAAAAAAAAAAAAAAAA","payload":{"id":"r1","ok":true,"result":"quote \\" slash \\\\ line\\n\\u0001 café \u{1f600}\\ud800","_meta":{"runtimeId":"runtime-a"}}}'
+    ])
   })
 
   it('chunks a reply over the frame cap', () => {
@@ -120,8 +134,7 @@ describe('splitBridgeReply', () => {
   })
 
   it('ships only frames the receiving side will accept', () => {
-    for (const frame of framesOf(splitBridgeReply(ID, payloadOf('x'.repeat(1_500_000))))) {
-      const raw = JSON.stringify(frame)
+    for (const raw of rawFramesOf(splitBridgeReply(ID, payloadOf('x'.repeat(1_500_000))))) {
       expect(utf8ByteLength(raw)).toBeLessThanOrEqual(BRIDGE_MAX_MESSAGE_BYTES)
       expect(readBridgeHostMessage(raw).ok).toBe(true)
     }
@@ -138,11 +151,11 @@ describe('splitBridgeReply', () => {
     expect(new TextEncoder().encode(JSON.stringify(payload)).byteLength).toBeGreaterThan(
       BRIDGE_MAX_REPLY_BYTES - 4
     )
-    const frames = framesOf(splitBridgeReply(ID, payload))
+    const split = splitBridgeReply(ID, payload)
+    const frames = framesOf(split)
     expect(BRIDGE_MAX_REPLY_PARTS).toBeGreaterThan(frames.length)
-    for (const frame of frames) {
-      expect(utf8ByteLength(JSON.stringify(frame))).toBeLessThanOrEqual(BRIDGE_MAX_MESSAGE_BYTES)
-      expect(readBridgeHostMessage(JSON.stringify(frame)).ok).toBe(true)
+    for (const raw of rawFramesOf(split)) {
+      expect(utf8ByteLength(raw)).toBeLessThanOrEqual(BRIDGE_MAX_MESSAGE_BYTES)
     }
     expect(assemble(frames)).toEqual({ status: 'complete', payload })
   })
@@ -207,14 +220,13 @@ describe('round trip', () => {
 
   for (const [name, payload] of payloads) {
     it(`reassembles ${name} byte for byte`, () => {
-      const frames = framesOf(splitBridgeReply(ID, payload))
+      const split = splitBridgeReply(ID, payload)
+      const frames = framesOf(split)
       expect(frames.length).toBeLessThanOrEqual(BRIDGE_MAX_REPLY_PARTS)
-      for (const frame of frames) {
-        const raw = JSON.stringify(frame)
+      for (const raw of rawFramesOf(split)) {
         expect(new TextEncoder().encode(raw).byteLength).toBeLessThanOrEqual(
           BRIDGE_MAX_MESSAGE_BYTES
         )
-        expect(readBridgeHostMessage(raw).ok).toBe(true)
       }
       expect(assemble(frames)).toEqual({
         status: 'complete',

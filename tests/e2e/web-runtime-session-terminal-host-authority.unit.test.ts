@@ -1,5 +1,5 @@
 import { createWebRuntimeSessionTerminalResult } from '@/runtime/web-runtime-terminal-create-operation'
-import { launchAgentInWebHostTab } from '../../src/renderer/src/lib/launch-agent-web-host-tab'
+import { launchAgentInWebHostTab } from '../../src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
 import {
   independentActionEffortPlan,
   consumeOldHostPreparedCommand
@@ -83,7 +83,7 @@ vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
 }))
 
-vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
+vi.mock('@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery', () => ({
   deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
 }))

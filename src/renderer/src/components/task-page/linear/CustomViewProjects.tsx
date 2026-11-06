@@ -6,7 +6,7 @@ import {
   LinearProjectTable,
   LinearCollectionNotice
 } from '@/components/linear-project-view-surfaces'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function TaskPageLinearCustomViewProjects({
   model
 }: {

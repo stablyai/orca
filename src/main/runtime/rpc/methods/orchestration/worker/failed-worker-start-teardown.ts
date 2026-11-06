@@ -4,7 +4,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import {
   discardStructuredWorkerSession,
   releaseStructuredWorkerSession
-} from '../../orchestration-structured-worker-session'
+} from '../structured-workers/orchestration-structured-worker-session'
 import type { createStructuredWorkerSessionForWorktree } from './worker-topology'
 
 /** Keep refused tasks reachable with their worker custody until retry or release; other partial starts retire their surface. */

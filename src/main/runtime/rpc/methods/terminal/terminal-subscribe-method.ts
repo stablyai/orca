@@ -25,7 +25,8 @@ export const TERMINAL_SUBSCRIBE_METHODS = [
         registerBinaryStreamHandler,
         signal,
         clientKind,
-        pairedDeviceId
+        pairedDeviceId,
+        clientId: viewerDeviceId
       },
       emit
     ) => {
@@ -99,6 +100,8 @@ export const TERMINAL_SUBSCRIBE_METHODS = [
           emit,
           ptyId,
           clientId,
+          viewerDeviceId,
+          pairedDeviceId,
           isMobile,
           supportsDesktopViewportClaims: params.capabilities?.desktopViewportClaims === 1,
           supportsWriteUnavailable: params.capabilities?.writeUnavailable === 1,

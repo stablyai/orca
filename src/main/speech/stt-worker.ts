@@ -2,19 +2,11 @@
 import { parentPort, workerData } from 'node:worker_threads'
 import { resampleToRate } from './stt-audio-resample'
 import { OfflineAudioChunker } from './stt-offline-audio-chunker'
-import { buildHotwordsConfig, resolveFile, resolveTokens } from './stt-worker-model-config'
+import { buildRecognizerConfig, type RecognizerConfigInput } from './stt-worker-model-config'
+import { createStopTailPadding } from './stt-stop-tail-padding'
 
 type WorkerMessage =
-  | {
-      type: 'init'
-      modelDir: string
-      modelType: string
-      streaming: boolean
-      sampleRate: number
-      files: string[]
-      hotwordsFilePath?: string
-      modelingUnit?: string
-    }
+  | ({ type: 'init' } & RecognizerConfigInput)
   | { type: 'feed'; samples: Float32Array; sampleRate: number }
   | { type: 'stop' }
   | { type: 'discard' }
@@ -27,6 +19,10 @@ let stream: any = null
 let isStreaming = false
 let offlineChunker: OfflineAudioChunker | null = null
 let offlineSampleRate = 16000
+// Primed on a session's first feed so stop never waits on the next session's stream.
+let streamPrimed = false
+// Streaming models report the same hypothesis on most 100 ms feeds; only changes are posted.
+let lastPartialText = ''
 
 function loadSherpa(): any {
   const modulePath = workerData?.sherpaModulePath
@@ -40,128 +36,16 @@ function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
   try {
     sherpa = loadSherpa()
 
-    const { modelDir, modelType, streaming, sampleRate, files } = msg
+    const { streaming, sampleRate } = msg
     isStreaming = streaming
     offlineChunker = streaming ? null : new OfflineAudioChunker(sampleRate)
     offlineSampleRate = sampleRate
 
-    const tokens = resolveTokens(files, modelDir)
-    const hotwords = buildHotwordsConfig(msg)
-
-    if (streaming && modelType === 'transducer') {
-      const config = {
-        featConfig: { sampleRate, featureDim: 80 },
-        modelConfig: {
-          transducer: {
-            encoder: resolveFile(files, 'encoder', modelDir),
-            decoder: resolveFile(files, 'decoder', modelDir),
-            joiner: resolveFile(files, 'joiner', modelDir)
-          },
-          tokens,
-          numThreads: 1,
-          provider: 'cpu',
-          debug: 0
-        },
-        ...hotwords,
-        enableEndpoint: 1,
-        rule1MinTrailingSilence: 2.4,
-        rule2MinTrailingSilence: 1.2,
-        rule3MinUtteranceLength: 20
-      }
-      recognizer = sherpa.createOnlineRecognizer(config)
-      stream = sherpa.createOnlineStream(recognizer)
-    } else if (streaming && modelType === 'paraformer') {
-      const config = {
-        featConfig: { sampleRate, featureDim: 80 },
-        modelConfig: {
-          paraformer: {
-            encoder: resolveFile(files, 'encoder', modelDir),
-            decoder: resolveFile(files, 'decoder', modelDir)
-          },
-          tokens,
-          numThreads: 1,
-          provider: 'cpu',
-          debug: 0
-        },
-        decodingMethod: 'greedy_search',
-        enableEndpoint: 1,
-        rule1MinTrailingSilence: 2.4,
-        rule2MinTrailingSilence: 1.2,
-        rule3MinUtteranceLength: 20
-      }
-      recognizer = sherpa.createOnlineRecognizer(config)
-      stream = sherpa.createOnlineStream(recognizer)
-    } else if (modelType === 'whisper') {
-      const config = {
-        featConfig: { sampleRate, featureDim: 80 },
-        modelConfig: {
-          whisper: {
-            encoder: resolveFile(files, 'encoder', modelDir),
-            decoder: resolveFile(files, 'decoder', modelDir)
-          },
-          tokens,
-          numThreads: 2,
-          provider: 'cpu',
-          debug: 0
-        },
-        decodingMethod: 'greedy_search'
-      }
-      recognizer = sherpa.createOfflineRecognizer(config)
-      stream = sherpa.createOfflineStream(recognizer)
-    } else if (modelType === 'nemo-ctc') {
-      const config = {
-        featConfig: { sampleRate, featureDim: 80 },
-        modelConfig: {
-          nemoCtc: {
-            model: resolveFile(files, 'model', modelDir)
-          },
-          tokens,
-          numThreads: 2,
-          provider: 'cpu',
-          debug: 0
-        },
-        decodingMethod: 'greedy_search'
-      }
-      recognizer = sherpa.createOfflineRecognizer(config)
-      stream = sherpa.createOfflineStream(recognizer)
-    } else if (modelType === 'senseVoice') {
-      const config = {
-        featConfig: { sampleRate, featureDim: 80 },
-        modelConfig: {
-          senseVoice: {
-            model: resolveFile(files, 'model', modelDir),
-            // Empty string = auto-detect language (supports zh/en/ja/ko/yue).
-            language: '',
-            useInverseTextNormalization: 1
-          },
-          tokens,
-          numThreads: 2,
-          provider: 'cpu',
-          debug: 0
-        },
-        decodingMethod: 'greedy_search'
-      }
-      recognizer = sherpa.createOfflineRecognizer(config)
-      stream = sherpa.createOfflineStream(recognizer)
-    } else {
-      const config = {
-        featConfig: { sampleRate, featureDim: 80 },
-        modelConfig: {
-          transducer: {
-            encoder: resolveFile(files, 'encoder', modelDir),
-            decoder: resolveFile(files, 'decoder', modelDir),
-            joiner: resolveFile(files, 'joiner', modelDir)
-          },
-          tokens,
-          numThreads: 2,
-          provider: 'cpu',
-          debug: 0
-        },
-        ...hotwords
-      }
-      recognizer = sherpa.createOfflineRecognizer(config)
-      stream = sherpa.createOfflineStream(recognizer)
-    }
+    const { online, config } = buildRecognizerConfig(msg)
+    recognizer = online
+      ? sherpa.createOnlineRecognizer(config)
+      : sherpa.createOfflineRecognizer(config)
+    stream = online ? sherpa.createOnlineStream(recognizer) : sherpa.createOfflineStream(recognizer)
 
     parentPort?.postMessage({ type: 'ready' })
   } catch (err) {
@@ -186,6 +70,8 @@ function decodeOfflineChunk(samples: Float32Array): string {
 
 // Discard residual audio and spent streams so a warm worker never carries one session into the next.
 function resetSessionState(): void {
+  streamPrimed = false
+  lastPartialText = ''
   try {
     if (!isStreaming) {
       offlineChunker = new OfflineAudioChunker(offlineSampleRate)
@@ -211,6 +97,15 @@ function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
     // Normalize rates before native decode: mixed rates on one recognizer abort the process.
     const samples = resampleToRate(msg.samples, inputRate, offlineSampleRate)
     if (isStreaming) {
+      if (!streamPrimed) {
+        // New streams start with empty encoder caches; zipformer en-20M dropped most of the first second
+        // (first word wrong on 71 of 73 LibriSpeech clips). A second of silence fills them first.
+        sherpa.acceptWaveformOnline(stream, {
+          sampleRate: offlineSampleRate,
+          samples: new Float32Array(offlineSampleRate)
+        })
+        streamPrimed = true
+      }
       sherpa.acceptWaveformOnline(stream, { sampleRate: offlineSampleRate, samples })
 
       while (sherpa.isOnlineStreamReady(recognizer, stream)) {
@@ -220,7 +115,8 @@ function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
       const resultJson = sherpa.getOnlineStreamResultAsJson(recognizer, stream)
       const result = JSON.parse(resultJson)
       const text = result?.text?.trim()
-      if (text) {
+      if (text && text !== lastPartialText) {
+        lastPartialText = text
         parentPort?.postMessage({ type: 'partial', text })
       }
 
@@ -230,6 +126,7 @@ function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
           parentPort?.postMessage({ type: 'final', text: finalText })
         }
         sherpa.reset(recognizer, stream)
+        lastPartialText = ''
       }
     } else {
       // Bound ONNX allocations below Chromium's >=2GiB crash threshold (#7925); consumers append final segments.
@@ -263,6 +160,10 @@ function handleStop(): void {
 
   try {
     if (isStreaming) {
+      sherpa.acceptWaveformOnline(stream, {
+        sampleRate: offlineSampleRate,
+        samples: createStopTailPadding(offlineSampleRate)
+      })
       sherpa.inputFinished(stream)
       while (sherpa.isOnlineStreamReady(recognizer, stream)) {
         sherpa.decodeOnlineStream(recognizer, stream)

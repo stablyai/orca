@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { WorktreeHostConnection } from '@/lib/worktree-host-connection-phase'
+import type { WorktreeHostConnection } from '@/lib/workspace/ownership/worktree-host-connection-phase'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { useSshWorkspaceBrowserRoute as UseSshWorkspaceBrowserRoute } from './use-ssh-workspace-browser-route'
 
@@ -17,10 +17,10 @@ const mocks = vi.hoisted(() => {
   return { hostConnection, ...route, prepare: vi.fn() }
 })
 
-vi.mock('@/lib/worktree-runtime-owner', () => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => mocks.executionHostId
 }))
-vi.mock('@/lib/worktree-host-connection-phase', () => ({
+vi.mock('@/lib/workspace/ownership/worktree-host-connection-phase', () => ({
   selectWorktreeHostConnectionPhase: () => mocks.hostConnection,
   useWorktreeHostConnection: () => mocks.hostConnection
 }))
