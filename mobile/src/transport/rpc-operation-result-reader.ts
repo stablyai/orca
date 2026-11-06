@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { collectSalvageDrops } from '../../../src/shared/zod-salvage'
 import type { RpcCompatibleReader, RpcDecodeIssue } from './rpc-operation-contract'
 

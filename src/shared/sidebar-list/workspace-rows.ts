@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,

@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { readRouteSnapshot } from '../../mobile-web-app/mobile-web-app-route-snapshot.mjs'
 import { MOBILE_WEB_APP_DEPENDENCY_PATH } from '../../mobile-web-app/mobile-web-app-bundle-dependencies.mjs'
 import { existsSync, realpathSync } from 'node:fs'
-import { basename, extname, join, resolve } from 'node:path'
+import { basename, dirname, extname, join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import * as esbuild from 'esbuild'
@@ -133,16 +133,68 @@ const HAIRLINE_PLUGIN_NAME = 'orca-hairline-device-pixel'
 
 const ENTRY_CHUNK_NAME = 'entry'
 
+const ROUTE_MANIFEST_MODULE = /web-entry[\\/]route-manifest(\.ts)?$/
+const ROUTE_ENTRY_NAMESPACE = 'orca-route-entry'
+
+// The entry's own value imports, as written in it, minus the manifest (a route importing it would be an output cycle).
+async function entryImportSpecifiers() {
+  const scan = await esbuild.build({
+    entryPoints: [entryPoint],
+    bundle: true,
+    write: false,
+    metafile: true,
+    format: 'esm',
+    outdir: 'scan',
+    jsx: 'automatic',
+    logLevel: 'silent',
+    plugins: [
+      {
+        name: 'orca-entry-import-scan',
+        setup(build) {
+          build.onResolve({ filter: /.*/ }, (args) =>
+            args.kind === 'entry-point' ? undefined : { path: args.path, external: true }
+          )
+        }
+      }
+    ]
+  })
+  return Object.values(scan.metafile.inputs)
+    .flatMap(({ imports }) =>
+      imports.filter(({ kind }) => kind === 'import-statement').map(({ path }) => path)
+    )
+    .filter((specifier) => !ROUTE_MANIFEST_MODULE.test(join(dirname(entryPoint), specifier)))
+}
+
 // Keep typed route-manifest file for TS/Metro resolution; replace only its body for web.
-function routeManifestPlugin(manifestSource) {
+// esbuild groups modules by the set of entry points reaching them, so modules the entry already loads split into
+// one tiny chunk per subset of routes sharing them. Each route imports the entry's imports first, collapsing them.
+function routeManifestPlugin(manifestSource, routes) {
+  const routeModules = new Set(routes.map((route) => route.module))
+  let entryImports
   return {
     name: ROUTE_MANIFEST_PLUGIN_NAME,
     setup(build) {
-      build.onLoad({ filter: /web-entry[\\/]route-manifest\.ts$/ }, () => ({
+      build.onLoad({ filter: ROUTE_MANIFEST_MODULE }, () => ({
         contents: manifestSource,
         loader: 'js',
         resolveDir: mobileDir
       }))
+      build.onResolve({ filter: /.*/ }, (args) =>
+        args.kind === 'dynamic-import' && routeModules.has(args.path)
+          ? { path: args.path, namespace: ROUTE_ENTRY_NAMESPACE }
+          : undefined
+      )
+      build.onLoad({ filter: /.*/, namespace: ROUTE_ENTRY_NAMESPACE }, async (args) => {
+        entryImports ??= entryImportSpecifiers()
+        const anchors = (await entryImports).map(
+          (specifier) => `import ${JSON.stringify(specifier)}`
+        )
+        return {
+          contents: `${anchors.join('\n')}\nexport { default } from ${JSON.stringify(args.path)}\n`,
+          loader: 'js',
+          resolveDir: dirname(entryPoint)
+        }
+      })
     }
   }
 }
@@ -220,7 +272,7 @@ export function mobileWebAppBuildOptions(routes) {
       zod: MOBILE_ZOD_PACKAGE
     },
     plugins: [
-      routeManifestPlugin(renderMobileWebAppRouteManifest(routes)),
+      routeManifestPlugin(renderMobileWebAppRouteManifest(routes), routes),
       lucideBarrelPlugin,
       hairlineDevicePixelPlugin
     ],
@@ -399,10 +451,27 @@ function localeCatalogOutputs(metafile) {
   )
 }
 
+// esbuild keeps a whole namespace once it is used as a value, and zod's `z` is one: `import { z }` or `z.core`
+// ships ~200 KB of locale tables the page never reads. Only the default English table should reach it.
+const ZOD_LOCALE_TABLE_INPUT = /[\\/]zod[\\/]v4[\\/]locales[\\/](?!en\.js$)[^\\/]+$/
+
 export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
   const routes = await collectMobileWebAppRoutes(appDir)
   await assertRoutesCarryNoSynchronousExports(routes)
   const result = await esbuild.build(mobileWebAppBuildOptions(routes))
+  // Output inputs, not metafile.inputs: esbuild lists every module it parsed, shaken out or not.
+  const zodLocaleTables = Object.values(result.metafile.outputs).flatMap(({ inputs }) =>
+    Object.entries(inputs).filter(
+      ([input, { bytesInOutput }]) => bytesInOutput > 0 && ZOD_LOCALE_TABLE_INPUT.test(input)
+    )
+  )
+  if (zodLocaleTables.length > 0) {
+    throw new Error(
+      `[build-mobile-web-app-bundle] ${String(zodLocaleTables.length)} of zod's locale tables reached the page: ` +
+        "import zod as `import * as z from 'zod'`, never `import { z }`, and read nested namespaces like " +
+        '`z.core` through their own import'
+    )
+  }
   const entryOutputPath = Object.keys(result.metafile.outputs).find(
     (path) => basename(path) === `${ENTRY_CHUNK_NAME}.js`
   )
