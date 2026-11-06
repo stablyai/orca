@@ -121,6 +121,26 @@ describe('orca host rm', () => {
     expect(process.exitCode).toBe(1)
   })
 
+  it.each([
+    ['environment', 'm4air'],
+    ['pairing-code', 'orca://pair?code=x']
+  ])('refuses --%s rather than removing the target on another machine', async (flag, value) => {
+    pairRuntimeEnvironment(listEnvironmentsMock, 'env-m4air', 'm4air')
+    const runtime = fakeSshRuntime()
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['host', 'rm', '--host', `ssh:${STALE.id}`, `--${flag}`, value, '--json'],
+      '/tmp/repo'
+    )
+
+    const printed = printedJson(logSpy)
+    expect(printed.error?.code).toBe('invalid_argument')
+    expect(printed.error?.message).toContain(`\`--${flag}\` does not retarget \`orca host rm\``)
+    expect(runtime.removed).toEqual([])
+    expect(process.exitCode).toBe(1)
+  })
+
   it('refuses an id the runtime does not have, and does not match a label', async () => {
     const runtime = fakeSshRuntime()
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
