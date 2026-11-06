@@ -192,6 +192,15 @@ describe('mobile relay RPC session liveness', () => {
     expect(session.getState()).toBe('connected')
   })
 
+  it('closes a silent relay even while requests keep going unanswered', async () => {
+    const session = await authenticateSession()
+    for (let elapsed = 0; elapsed < 60_000; elapsed += 5_000) {
+      session.sendRequest('status.get', {}).catch(() => {})
+      await vi.advanceTimersByTimeAsync(5_000)
+    }
+    expect(session.getState()).toBe('disconnected')
+  })
+
   it('keeps an idle relay open while a stream backlog delays the probe reply', async () => {
     const session = await authenticateSession()
     await vi.advanceTimersByTimeAsync(15_000)

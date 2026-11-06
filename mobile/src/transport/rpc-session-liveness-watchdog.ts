@@ -23,7 +23,7 @@ type WatchdogOptions = {
   terminate: (identity: RpcSessionIdentity) => void
   onTimeout?: (evidence: LivenessTimeoutEvidence) => void
   // A probe reply can queue behind a large reply or stream backlog, so tolerant misses don't count while the link is busy.
-  isLinkBusy?: (framesArrivedDuringProbe: boolean) => boolean
+  isLinkBusy?: (framesArrivedDuringProbe: boolean, silentMs: number) => boolean
   idleProbeMs?: number | null
   probeTimeoutMs?: number
   missedProbeLimit?: number
@@ -246,7 +246,10 @@ export class RpcSessionLivenessWatchdog {
       this.startProbe(identity, decisiveTimeoutMs)
       return
     }
-    if (decisiveTimeoutMs === null && this.options.isLinkBusy?.(this.lastInboundAt > sentAt)) {
+    if (
+      decisiveTimeoutMs === null &&
+      this.options.isLinkBusy?.(this.lastInboundAt > sentAt, this.now() - this.lastInboundAt)
+    ) {
       this.settleProbe(identity)
       return
     }
