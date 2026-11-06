@@ -124,7 +124,12 @@ describe('OrcaRuntimeService', () => {
 
   it('reports a PTY that remains live after acknowledged worktree sleep', async () => {
     const runtime = new OrcaRuntimeService(store)
-    const liveProcess = { id: 'pty-1', cwd: TEST_WORKTREE_PATH, title: 'Claude' }
+    const liveProcess = {
+      id: 'pty-1',
+      cwd: TEST_WORKTREE_PATH,
+      worktreeId: TEST_WORKTREE_ID,
+      title: 'Claude'
+    }
     runtime.setPtyController({
       write: () => true,
       kill: () => false,
@@ -163,7 +168,16 @@ describe('OrcaRuntimeService', () => {
         if (listCount === 2) {
           throw new Error('daemon unavailable')
         }
-        return listCount === 1 ? [{ id: 'pty-1', cwd: TEST_WORKTREE_PATH, title: 'Claude' }] : []
+        return listCount === 1
+          ? [
+              {
+                id: 'pty-1',
+                cwd: TEST_WORKTREE_PATH,
+                worktreeId: TEST_WORKTREE_ID,
+                title: 'Claude'
+              }
+            ]
+          : []
       }
     })
 
@@ -197,7 +211,8 @@ describe('OrcaRuntimeService', () => {
 
   it('coalesces two clients sleeping the same host worktree', async () => {
     const runtime = new OrcaRuntimeService(store)
-    const initialInventory = deferred<{ id: string; cwd: string; title: string }[]>()
+    const initialInventory =
+      deferred<{ id: string; cwd: string; worktreeId: string; title: string }[]>()
     const listProcesses = vi
       .fn()
       .mockImplementationOnce(() => initialInventory.promise)
@@ -216,7 +231,9 @@ describe('OrcaRuntimeService', () => {
 
     const first = runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
     const second = runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
-    initialInventory.resolve([{ id: 'pty-1', cwd: TEST_WORKTREE_PATH, title: 'Claude' }])
+    initialInventory.resolve([
+      { id: 'pty-1', cwd: TEST_WORKTREE_PATH, worktreeId: TEST_WORKTREE_ID, title: 'Claude' }
+    ])
 
     const [firstResult, secondResult] = await Promise.all([first, second])
     expect(secondResult).toEqual(firstResult)
@@ -231,7 +248,14 @@ describe('OrcaRuntimeService', () => {
     runtime.onClientEvent((event) => events.push(event))
     const listProcesses = vi
       .fn()
-      .mockResolvedValueOnce([{ id: 'pty-before-sleep', cwd: TEST_WORKTREE_PATH, title: 'Shell' }])
+      .mockResolvedValueOnce([
+        {
+          id: 'pty-before-sleep',
+          cwd: TEST_WORKTREE_PATH,
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Shell'
+        }
+      ])
       .mockResolvedValueOnce([])
     runtime.setPtyController({
       write: () => true,
@@ -341,7 +365,11 @@ describe('OrcaRuntimeService', () => {
       }
     })
     runtime.onClientEvent((event) => secondListenerEvents.push(event))
-    const processLists = [[{ id: 'pty-1', cwd: TEST_WORKTREE_PATH, title: 'Claude' }], [], []]
+    const processLists = [
+      [{ id: 'pty-1', cwd: TEST_WORKTREE_PATH, worktreeId: TEST_WORKTREE_ID, title: 'Claude' }],
+      [],
+      []
+    ]
     runtime.setPtyController({
       write: () => true,
       kill: () => false,
@@ -400,7 +428,14 @@ describe('OrcaRuntimeService', () => {
     const events: RuntimeClientEvent[] = []
     runtime.onClientEvent((event) => events.push(event))
     const processLists = [
-      [{ id: 'pty-preserved-history', cwd: TEST_WORKTREE_PATH, title: 'Shell' }],
+      [
+        {
+          id: 'pty-preserved-history',
+          cwd: TEST_WORKTREE_PATH,
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Shell'
+        }
+      ],
       [],
       []
     ]
@@ -437,12 +472,17 @@ describe('OrcaRuntimeService', () => {
       runtime.onClientEvent((event) => events.push(event))
     }
     const secondStop = deferred<boolean>()
-    const failedPty = { id: 'pty-fails', cwd: TEST_WORKTREE_PATH, title: 'Claude' }
+    const failedPty = {
+      id: 'pty-fails',
+      cwd: TEST_WORKTREE_PATH,
+      worktreeId: TEST_WORKTREE_ID,
+      title: 'Claude'
+    }
     const listProcesses = vi
       .fn()
       .mockResolvedValueOnce([
         failedPty,
-        { id: 'pty-slow', cwd: TEST_WORKTREE_PATH, title: 'Shell' }
+        { id: 'pty-slow', cwd: TEST_WORKTREE_PATH, worktreeId: TEST_WORKTREE_ID, title: 'Shell' }
       ])
       .mockResolvedValueOnce([failedPty])
       .mockResolvedValueOnce([failedPty])
