@@ -20,6 +20,7 @@ import {
 } from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import { subscribeConnectionRevival } from '../transport/connection-revival-signal'
 import { readRuntimeStatusProbe } from '../transport/runtime-status-probe'
+import { hostStatusProbe, readProbedHostStatus } from '../transport/host-status-probe-operations'
 import { AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-runtime-capabilities'
 import type { RpcClient } from '../transport/rpc-client'
 import {
@@ -31,6 +32,18 @@ import { subscribeTranscriptAfterHold } from './mobile-structured-transcript-sub
 import { useMobileOlderPageLoader, type OlderPagePhase } from './use-mobile-older-page-loader'
 
 const MAX_RETAINED_SESSION_STATES = 32
+
+// Read alongside the hold, so the stream's first open knows whether to ask for appends.
+async function hostStreamsTextAppends(client: RpcClient): Promise<boolean> {
+  let status = readRuntimeStatusProbe(client)
+  if (status === undefined) {
+    const reply = await hostStatusProbe
+      .request(client, undefined, { timeoutMs: 15_000, failWhenDisconnected: true })
+      .catch(() => null)
+    status = reply ? readProbedHostStatus(reply)?.status : null
+  }
+  return status?.capabilities?.includes(AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY) === true
+}
 
 export function useMobileStructuredAgentState(args: {
   onCommandsChanged?: () => void
@@ -134,11 +147,7 @@ export function useMobileStructuredAgentState(args: {
         callAgentSession(client, 'agentSession.currentRequests', request),
       sessionId,
       subscribe: subscribeTranscriptAfterHold(client, held, () => ended),
-      // This connection's status answer, read at each open; React state would lag it by a commit.
-      textAppend: () =>
-        readRuntimeStatusProbe(client)?.capabilities?.includes(
-          AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY
-        ) === true,
+      textAppend: hostStreamsTextAppends(client),
       subscribeRetryNow: subscribeConnectionRevival
     })
     return () => {

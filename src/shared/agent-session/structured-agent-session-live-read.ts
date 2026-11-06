@@ -57,8 +57,8 @@ export function startStructuredAgentSessionLiveRead(args: {
   hydrate?: (shouldStop: () => boolean) => Promise<void>
   sessionId: string
   subscribe: StructuredAgentSessionLiveSubscribe
-  /** Read at each open: the host advertises AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY. */
-  textAppend?: () => boolean
+  /** Whether the host advertises AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY; opens wait for it. */
+  textAppend?: Promise<boolean>
   readCurrentRequests: (
     request: AgentSessionCurrentRequestsRead
   ) => Promise<AgentSessionCurrentRequestsPiece>
@@ -162,10 +162,7 @@ export function startStructuredAgentSessionLiveRead(args: {
     ) {
       return
     }
-    // Support often lands after the first open (it is re-probed on every reconnect).
-    const upgrade =
-      received.type === 'batch' && connected && !readTextAppends && args.textAppend?.() === true
-    const event = upgrade ? null : readTextAppends ? readTextAppends(received) : received
+    const event = readTextAppends ? readTextAppends(received) : received
     if (!event) {
       replaceStream(eventOpenGeneration)
       return
@@ -229,12 +226,13 @@ export function startStructuredAgentSessionLiveRead(args: {
     unsubscribe()
     unsubscribe = (): void => {}
     try {
+      // Desktop passes none, so its subscribe still goes out in the same turn.
+      const textAppend = args.textAppend ? (await args.textAppend) === true : false
       if (!isCurrentOpenGeneration(currentOpenGeneration)) {
         return
       }
       let closedDuringOpen = false
       const cursor = args.getCursor()
-      const textAppend = args.textAppend?.() === true
       readTextAppends = textAppend ? createAgentSessionTextAppendReader() : null
       const handle = await args.subscribe(
         {

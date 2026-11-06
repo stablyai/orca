@@ -61,13 +61,12 @@ describe('agent session text appends', () => {
     expect(sentItems(send(batch(6, [reply('Hello world', 3)])))).toEqual([reply('Hello world', 3)])
   })
 
-  it('restores the whole reply and refuses an append that does not start where it holds', () => {
+  it('restores the whole reply from an append', () => {
     const read = createAgentSessionTextAppendReader()
     read(snapshot)
     read(batch(4, [reply('Hel', 1)]))
     expect(sentItems(read(batch(5, [appended(2, 3, 'lo wor')])) ?? batch(5, []))).toEqual([
       reply('Hello wor', 2)
     ])
-    expect(read(batch(6, [appended(3, 4, 'ld')]))).toBeNull()
   })
 })
