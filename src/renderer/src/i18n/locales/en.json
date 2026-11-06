@@ -695,6 +695,10 @@
         "widthDescription": "How wide messages and the message box can grow in a wide pane.",
         "resetAppearance": "Reset chat appearance",
         "resetDescription": "Restore the defaults above.",
+        "changedFilesSummary": "Changed files summary",
+        "changedFilesSummaryDescription": "Shows the files each turn changed, with line counts, below the reply.",
+        "changedFilesSummaryKeywordDiff": "diff",
+        "changedFilesSummaryKeywordEdits": "edits",
         "comfortable": "Comfortable",
         "wide": "Wide",
         "full": "Full",
@@ -1370,7 +1374,9 @@
         "cb4d287238": "Server name",
         "3affe7de3a": "Paste a pairing URL from an Orca server that this browser can reach.",
         "e3bcd082ac": "Connect to Orca",
-        "mobileScopeRejected": "This QR code grants limited (mobile) access. To use the full web app, open the browser access link from Settings → Runtime Environments → Share this Orca server → New Link."
+        "mobileScopeRejected": "This QR code grants limited (mobile) access. To use the full web app, open the browser access link from Settings → Runtime Environments → Share this Orca server → New Link.",
+        "replaceSavedServer": "This link connects to a different server than \"{{name}}\" ({{endpoint}}). Connect only if you trust the endpoint below.",
+        "keepSavedServer": "Keep saved server"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "Agent Session History is not available for this execution host.",
@@ -3253,7 +3259,6 @@
         "9cd11ba218": "Jira",
         "11a828abf8": "GitLab",
         "acef77f7ca": "GitHub",
-        "524f095d55": "Needs review",
         "7698af5263": "Mine",
         "94f0339621": "Assigned to me",
         "c2268a9982": "All",
@@ -3349,6 +3354,8 @@
         "loadGitHubWorkFailed": "Failed to load GitHub work.",
         "gitlabViewIssues": "Issues",
         "gitlabViewMrs": "MRs",
+        "gitlabInvolvementEveryone": "Everyone",
+        "gitlabInvolvementReviewing": "Reviewing",
         "gitlabViewTodos": "My Todos",
         "startWorkspaceFromMr": "Start workspace from MR {{number}}",
         "startWorkspaceFromIssue": "Start workspace from issue {{number}}",
@@ -5280,6 +5287,12 @@
             },
             "mainWorktree": "main worktree",
             "detached": "detached"
+          },
+          "antigravity": {
+            "unknownAccount": "Google account",
+            "accounts": "Saved Antigravity Accounts",
+            "readAgo": "Read {{time}}",
+            "notRead": "Usage unknown: not read yet"
           }
         }
       },
@@ -12214,7 +12227,7 @@
             "agentLaunch": "Start agents in your workspaces, including SSH"
           },
           "decisionFailed": "Could not save the permission decision. Try again.",
-          "fullAccessWarning": "Full access: runs as a normal program and can read your files, use the network and run other programs.",
+          "fullAccessWarning": "Full access: runs as a normal program and can read your files, use the network, run other programs and control Orca, including your terminals and agents.",
           "uiWarning": "Runs the publisher's code inside Orca to draw its view. Orca shows what it can access and asks before enabling it."
         },
         "PluginConsentProvenance": {
@@ -14551,6 +14564,13 @@
                   "title": "{{reviewLabelCap}} not supported here",
                   "body": "This repository provider does not support creating a {{reviewLabel}} from Orca."
                 }
+              },
+              "runTime": {
+                "justNow": "just now",
+                "started": "Started {{time}}",
+                "finished": "Finished {{time}}",
+                "notLatestCommitDetail": "Ran on commit {{sha}}, not the latest commit",
+                "notLatestCommit": "Earlier commit"
               }
             }
           },
@@ -19679,6 +19699,8 @@
         "providerExitedAnswer": "{{agent}} has stopped, so your answer was not sent. Send a message to continue.",
         "claudeEffortInvalid": "Claude effort is invalid; choose low, medium, high, xhigh, or max and send again.",
         "modelUnavailable": "{{agent}} couldn't use {{detail}}. Pick another model and send again.",
+        "modelUnavailableUpdate": "{{agent}} couldn't use {{detail}}. Update {{agent}} to {{minimumVersion}} or later to keep it after a restart, or pick another model and send again.",
+        "modelNotSelected": "{{agent}} has no model selected. Check your model selection and {{agent}} sign-in, then send again.",
         "providerRejected": "{{agent}} didn't accept this message.",
         "providerRejectedQuoted": "{{agent}} didn't accept this message: {{detail}}.",
         "attachmentEmpty": "An image on this message is empty, so the message was not sent.",
@@ -19850,7 +19872,11 @@
         "partial": "Partial diff",
         "changedFiles_one": "{{count}} changed file",
         "changedFiles_other": "{{count}} changed files",
-        "showMoreFiles": "Show {{count}} more"
+        "showMoreFiles": "Show {{count}} more",
+        "hide": "Hide",
+        "hidden": "Hidden",
+        "hideFailed": "Couldn't hide changed files. Try again, or turn off Changed files summary in Settings › Chat UI.",
+        "hiddenDescription": "You can change this anytime in <settings>Settings › Chat UI</settings>"
       },
       "receipt": {
         "unavailable": "Selected answer unavailable",
@@ -19884,11 +19910,15 @@
         "permissionDenied": "{{agent}} denied permission. View details.",
         "safetyReview": "{{agent}} reported a safety review warning. View details.",
         "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
-        "modelFallback": "Claude switched models: {{from}} → {{to}}."
+        "modelFallback": "Claude switched models: {{from}} → {{to}}.",
+        "forkedFrom": "Forked from"
       },
       "composer": {
         "send": "Send",
         "alternateSteerHint": "{{shortcut}} to steer",
+        "previewQueue": "Queue",
+        "previewSteer": "Steer",
+        "previewSteerQueued": "Steer queued",
         "alternateQueueHint": "{{shortcut}} to queue",
         "noPty": "No live terminal — toggle back to reconnect.",
         "locked": "Input is held by another device.",
@@ -20629,7 +20659,25 @@
         "cancel": "Don't continue"
       },
       "settings": "Chat settings",
+      "composerWorkspace": {
+        "copyFailed": "Failed to copy",
+        "copyIdentity": "Copy {{value0}}",
+        "folder": "Folder",
+        "mainCheckout": "Main checkout",
+        "worktree": "Worktree"
+      },
       "creationChatNotOpened": "Your worktree is ready, but the chat could not open. Retry to open it with your message.",
+      "fork": {
+        "action": "Fork from this response",
+        "pending": "Forking this chat…",
+        "checking": "Checking whether this chat can fork…",
+        "tooltip": "Fork from this response. The new chat includes this whole response, up to the end of its turn.",
+        "unconfirmed": "{{agent}} couldn't confirm the fork",
+        "unconfirmedDetail": "It may have opened anyway. Check Session History before forking again.",
+        "failed": "{{agent}} couldn't fork this chat",
+        "hostUnsupported": "This host runs an older Orca. Update Orca on the host, then try again.",
+        "failedDetail": "Your chat is unchanged. Try again."
+      },
       "usage": {
         "description": "Show usage for this chat’s Codex account",
         "loading": "Loading Codex usage…",
@@ -20648,6 +20696,18 @@
           "noCredit": "No Codex reset credit is left on this account.",
           "alreadyRedeemed": "That reset credit was already used."
         }
+      },
+      "cardKindHidden": {
+        "title": "We won't show these anymore.",
+        "description": "You can change this anytime in",
+        "settingsLink": "Settings › Chat",
+        "failed": "Could not save that setting."
+      },
+      "openedPullRequests": {
+        "one": "Opened {{name}}",
+        "hide": "Don't show opened pull requests",
+        "many_one": "Opened {{count}} pull request",
+        "many_other": "Opened {{count}} pull requests"
       }
     },
     "tab": {
@@ -21087,7 +21147,11 @@
         "idleStopSearchIdle": "idle",
         "idleStopSearchTimeout": "timeout",
         "idleStopSearchKeepAlive": "keep alive",
-        "idleStopNever": "Never"
+        "idleStopNever": "Never",
+        "openedPullRequestsTitle": "Show pull requests the agent opens",
+        "openedPullRequestsCopy": "A card under the turn that opened a pull request, with its title and changed lines.",
+        "openedPullRequestsSearchPr": "PR",
+        "openedPullRequestsSearchCard": "pull request card"
       }
     },
     "agentChildRow": {
@@ -21486,6 +21550,9 @@
       "saveFailed": "Could not turn on Chat UI. Turn it on in Settings → Chat UI.",
       "terminalSaveFailed": "Could not switch to terminal. Turn off Chat UI in Settings → Chat UI.",
       "switched": "Chat UI is now the default for new agents. You can switch back any time in Settings → Chat UI.",
+      "switchedNoteTitle": "New agents will open in Chat UI",
+      "switchedNoteBody": "Prefer the terminal? Switch back anytime: search <term>Chat UI</term> in Settings.",
+      "openSettings": "Open Settings",
       "dismiss": "Dismiss",
       "demoTabTitle": "Explain login",
       "demoPrompt": "Map out how login works",
@@ -22198,7 +22265,9 @@
         "accounts": "accounts"
       },
       "windowsChanged": "The host default account changed. Select a saved account to apply it again.",
-      "windowsSessions": "Select applies and verifies the host default agy credential. Command choices and later account changes are handled by agy. Existing sessions may keep their previous account."
+      "windowsSessions": "Select applies and verifies the host default agy credential. Command choices and later account changes are handled by agy. Existing sessions may keep their previous account.",
+      "lastReading": "{{reading}} · Read {{time}}",
+      "noReading": "Usage unknown: not read yet"
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",

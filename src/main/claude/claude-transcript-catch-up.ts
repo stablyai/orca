@@ -1,7 +1,5 @@
 import { join } from 'node:path'
 import { isRootAgentJournalItem } from '../../shared/agent-session/journal/agent-session-journal-producer'
-import { encodeClaudeProjectPaths } from '../ai-vault/scanners/claude/claude-project-dir-encoding'
-import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { runHistoryCatchUp } from '../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
@@ -65,22 +63,11 @@ export async function catchUpClaudeTranscript(input: {
       planned.newest?.index === current.newest?.index,
     prepare: async ({ view, journal, signal, check, yieldTurn, warn }) => {
       const claudeProjectsDir = join(input.claudeConfigDir, 'projects')
-      let filePath: string | null = null
-      for (const project of encodeClaudeProjectPaths(input.cwd)) {
-        check()
-        const candidate = join(claudeProjectsDir, project, `${input.providerSessionId}.jsonl`)
-        const info = await wslGatedStat(candidate, 'exact', signal).catch(() => null)
-        check()
-        if (info?.isFile()) {
-          filePath = candidate
-          break
-        }
-      }
-      // A moved project can leave its transcript in the original cwd's bucket.
-      filePath ??= await resolveSessionFilePath(
+      // A moved project can leave its transcript outside the cwd's bucket; the resolver probes both.
+      const filePath = await resolveSessionFilePath(
         'claude',
         input.providerSessionId,
-        { claudeProjectsDir },
+        { claudeProjectsDir, cwd: input.cwd },
         signal
       )
       check()

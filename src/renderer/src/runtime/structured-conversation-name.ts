@@ -3,7 +3,7 @@ import {
   useAppViewExternalStore,
   useAppStateValue
 } from '@/store/app-state-view'
-import { useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import type { Tab } from '../../../shared/tab-types'
 import { isAgentSessionConversationName } from '../../../shared/agent-session/agent-session-conversation-name'
 import type {
@@ -65,8 +65,13 @@ function useStructuredSessionSummaryField<T>(
   }, [executionHostId])
   const watched = sessionId ? feed : null
   useEffect(() => (viewActive ? watched?.activate() : undefined), [viewActive, watched])
+  const subscribe = useCallback(
+    (listener: () => void) =>
+      watched && sessionId ? watched.subscribeSession(sessionId, listener) : noSubscription(),
+    [watched, sessionId]
+  )
   return useAppViewExternalStore(
-    watched?.subscribe ?? noSubscription,
+    subscribe,
     () => read(sessionId ? watched?.getNamingSnapshot().get(sessionId) : undefined),
     () => null
   )

@@ -75,6 +75,8 @@ export type AcpTurnEnding = {
   durationMs?: number
   failureDetail?: string
   notSignedIn?: boolean
+  /** The agent had no model for the prompt; why (selection or sign-in) is unknown. */
+  modelNotSelected?: boolean
   usageLimit?: AgentSessionUsageLimit
   /** Structured error data shows the model provider failed; runtime only. */
   providerFailure?: boolean
@@ -83,6 +85,11 @@ export type AcpTurnEnding = {
 
 /** Undefined means a normally ended /compact succeeded. */
 export type AcpCompactionReply = { outcome: 'skipped' | 'failed'; detail: string }
+
+/** What the agent's own model command reported: the model it now runs, or why it refused. */
+export type AcpModelCommandReply =
+  | { applied: string }
+  | { refused: 'notSignedIn' | 'modelUnavailable'; detail: string }
 
 /** Hooks interpret extensions; lifecycle and row identity stay shared. */
 export type AcpDialect = {
@@ -145,6 +152,17 @@ export type AcpDialect = {
   hookBlock?(meta: unknown): AcpHookBlock | undefined
   failedTurnText?(stopReason: string): string
   compactionReply?(text: string): AcpCompactionReply | undefined
+  /** The agent's own model command resolves selections its model option cannot name. */
+  modelCommand?: {
+    /** Only the model option's own "unknown model" refusal sends the value to the command. */
+    refusedByOption(error: AcpAgentError): boolean
+    /** The prompt failed because no model resolved, not because the agent is signed out. */
+    noModel(error: AcpAgentError): boolean
+    /** The first release whose command resolves what its option refuses; older ones take ids only. */
+    resolvesSelectorsFrom: string
+    text(value: string): string
+    reply(text: string): AcpModelCommandReply
+  }
   /** Hide these commands and reject command-only prompts before dispatch. */
   withheldCommands?: readonly string[]
   /** Which session rows are the agent's own built-ins, as this process's initialize response proves. */

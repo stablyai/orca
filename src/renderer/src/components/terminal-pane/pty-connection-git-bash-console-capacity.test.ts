@@ -190,7 +190,6 @@ async function heldLaunch({
           containerRef: { current: null },
           getTabWideAgentHintLeafId: () => null,
           expandedStyleSnapshotRef: { current: new Map() },
-          paneFontSizesRef: { current: new Map() },
           paneCwdRef: { current: new Map() },
           panePtyBindingsRef: { current: new Map() },
           setTabPaneExpanded: vi.fn(),

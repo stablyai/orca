@@ -17,6 +17,7 @@ import { getEditorModelOwnerKey } from './model-lifetime/identity/editor-model-o
 import { NO_RESOURCE_EVIDENCE, type WorkspaceResource } from '@/lib/workspace-copy-owner'
 import { getMonacoAutoHeightForContent, isMonacoAutoHeightCapped } from './monaco-auto-height'
 import { monacoFindOptions } from './monaco-find-options'
+import { buildEditorUnicodeHighlightOptions } from './editor-unicode-highlight-options'
 import { useMonacoRevealScheduler } from './use-monaco-reveal-scheduler'
 import type { MonacoContentSyncMode } from './monaco-content-sync'
 import { useMonacoContentSyncBridge } from './use-monaco-content-sync-bridge'
@@ -307,10 +308,7 @@ export default function MonacoEditor({
           lineNumbers: 'on',
           renderLineHighlight: 'line',
           automaticLayout: true,
-          unicodeHighlight: {
-            ambiguousCharacters: language !== 'markdown',
-            invisibleCharacters: true
-          },
+          unicodeHighlight: buildEditorUnicodeHighlightOptions(language),
           tabSize: 2,
           readOnly,
           scrollbar: autoHeight

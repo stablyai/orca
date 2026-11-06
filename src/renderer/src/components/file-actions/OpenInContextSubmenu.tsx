@@ -14,6 +14,7 @@ import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
 import { getWorkspaceEditorSshHost } from '@/lib/workspace-editor-ssh-target'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { OpenInApplication } from '../../../../shared/ui-chrome-types'
 import { translate } from '@/i18n/i18n'
 import {
   getOpenInEntryAvailability,
@@ -42,7 +43,7 @@ export function OpenInContextSubmenu({
   )
 
   const handleOpen = useCallback(
-    (command: string) => {
+    (application: OpenInApplication) => {
       if (!path) {
         return
       }
@@ -51,7 +52,8 @@ export function OpenInContextSubmenu({
         worktreePath: path,
         ...openInRoute,
         workspace,
-        command,
+        openInApplicationId: application.id,
+        command: application.command,
         subject: 'path'
       })
     },
@@ -76,7 +78,7 @@ export function OpenInContextSubmenu({
           return (
             <ContextMenuItem
               key={application.id}
-              onSelect={() => handleOpen(application.command)}
+              onSelect={() => handleOpen(application)}
               disabled={!path || availability.disabled}
             >
               {application.command ? (

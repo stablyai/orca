@@ -705,7 +705,9 @@
         "cb4d287238": "서버 이름",
         "3affe7de3a": "이 브라우저가 연결할 수 있는 Orca 서버의 페어링 URL을 붙여넣습니다.",
         "e3bcd082ac": "Orca에 연결",
-        "mobileScopeRejected": "이 QR 코드는 제한된(모바일) 액세스 권한만 제공합니다. 전체 웹 앱을 사용하려면 설정 → 원격 Orca 서버 → 이 Orca 서버 공유 → 새 링크에서 브라우저 액세스 링크를 여세요."
+        "mobileScopeRejected": "이 QR 코드는 제한된(모바일) 액세스 권한만 제공합니다. 전체 웹 앱을 사용하려면 설정 → 원격 Orca 서버 → 이 Orca 서버 공유 → 새 링크에서 브라우저 액세스 링크를 여세요.",
+        "replaceSavedServer": "이 링크는 \"{{name}}\"({{endpoint}})과(와) 다른 서버에 연결합니다. 아래 엔드포인트를 신뢰하는 경우에만 연결하세요.",
+        "keepSavedServer": "저장된 서버 유지"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "이 실행 호스트에서는 Agent 세션 기록을 사용할 수 없습니다.",
@@ -2517,7 +2519,6 @@
         "9cd11ba218": "Jira",
         "11a828abf8": "GitLab",
         "acef77f7ca": "GitHub",
-        "524f095d55": "리뷰 필요",
         "7698af5263": "내 항목",
         "94f0339621": "나에게 할당됨",
         "c2268a9982": "모두",
@@ -2612,6 +2613,8 @@
         "loadGitHubWorkFailed": "GitHub 작업을 불러오지 못했습니다.",
         "gitlabViewIssues": "이슈",
         "gitlabViewMrs": "MR",
+        "gitlabInvolvementEveryone": "모두",
+        "gitlabInvolvementReviewing": "리뷰 중",
         "gitlabViewTodos": "내 할 일",
         "startWorkspaceFromMr": "MR {{number}}에서 워크스페이스 시작",
         "startWorkspaceFromIssue": "이슈 {{number}}에서 워크스페이스 시작",
@@ -11281,7 +11284,7 @@
             "terminalRun": "터미널에서 명령 실행 (SSH 포함)"
           },
           "decisionFailed": "권한 결정을 저장할 수 없습니다. 다시 시도하세요.",
-          "fullAccessWarning": "전체 액세스: 일반 프로그램처럼 실행되며 파일을 읽고, 네트워크를 사용하고, 다른 프로그램을 실행할 수 있습니다.",
+          "fullAccessWarning": "전체 액세스: 일반 프로그램처럼 실행되며 파일을 읽고, 네트워크를 사용하고, 다른 프로그램을 실행하고, 터미널과 에이전트를 포함해 Orca를 제어할 수 있습니다.",
           "uiWarning": "화면을 그리기 위해 게시자의 코드를 Orca 안에서 실행합니다. Orca는 접근할 수 있는 항목을 보여 주고 사용 설정 전에 확인을 요청합니다."
         },
         "PluginConsentProvenance": {
@@ -18651,6 +18654,9 @@
       "composer": {
         "send": "보내기",
         "alternateSteerHint": "{{shortcut}}(으)로 지금 보내기",
+        "previewQueue": "대기열에 추가",
+        "previewSteer": "지금 보내기",
+        "previewSteerQueued": "다음 항목 보내기",
         "alternateQueueHint": "{{shortcut}}(으)로 대기열에 추가",
         "noPty": "라이브 terminal이 없습니다. 다시 연결하려면 다시 전환하세요.",
         "locked": "입력이 다른 장치에 의해 보류됩니다.",
@@ -19384,6 +19390,13 @@
         "hostUnavailable": "첨부 파일 호스트를 사용할 수 없습니다. 다시 연결한 후 시도하세요.",
         "connectionChanged": "연결이 변경되었습니다. 이 첨부 파일을 닫고 다시 여세요.",
         "readFailed": "호스트에서 이 첨부 파일을 읽을 수 없습니다. 다시 연결하고 시도하세요. 파일이 삭제되었거나 변경되었을 수 있습니다."
+      },
+      "composerWorkspace": {
+        "copyFailed": "복사하지 못했습니다",
+        "copyIdentity": "{{value0}} 복사",
+        "folder": "폴더",
+        "mainCheckout": "기본 체크아웃",
+        "worktree": "작업 트리"
       }
     },
     "tab": {
