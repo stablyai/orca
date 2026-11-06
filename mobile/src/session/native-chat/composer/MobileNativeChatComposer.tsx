@@ -17,6 +17,7 @@ import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { MobileNativeChatComposerMenu } from './MobileNativeChatComposerMenu'
+import { MobileNativeChatComposerMenuLayer } from './MobileNativeChatComposerMenuLayer'
 import { MobileNativeChatComposerField } from './MobileNativeChatComposerField'
 import { MobileNativeChatComposerAttachments } from './MobileNativeChatComposerAttachments'
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
@@ -169,6 +170,7 @@ export function MobileNativeChatComposer({
     onAttachPastedText: structured?.onAttachPastedText
   })
   const goal = useMobileNativeChatComposerGoalMode(structured, !!editSession, sendSurfaceId)
+  const menuAnchorRef = useRef<View>(null)
   const menu = useMobileNativeChatComposerMenu({
     value,
     onChangeText: (text) => {
@@ -286,13 +288,15 @@ export function MobileNativeChatComposer({
   }
 
   return (
-    <View>
+    <View ref={menuAnchorRef}>
       {menu.rows.length > 0 ? (
-        <MobileNativeChatComposerMenu
-          rows={menu.rows}
-          onPick={menu.pick}
-          nestedScrollEnabled={editSession ? true : undefined}
-        />
+        <MobileNativeChatComposerMenuLayer anchorRef={menuAnchorRef}>
+          <MobileNativeChatComposerMenu
+            rows={menu.rows}
+            onPick={menu.pick}
+            nestedScrollEnabled={editSession ? true : undefined}
+          />
+        </MobileNativeChatComposerMenuLayer>
       ) : null}
       <View style={styles.composerInset} testID="native-chat-composer-inset">
         {goal.strip}

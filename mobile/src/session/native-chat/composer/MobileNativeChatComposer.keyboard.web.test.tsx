@@ -15,6 +15,7 @@ vi.mock('lucide-react-native', () => ({
   Image: () => null,
   Package: () => null,
   Paperclip: () => null,
+  FileText: () => null,
   Terminal: () => null
 }))
 vi.mock('../../../components/ActionSheetModal', () => ({ ActionSheetModal: () => null }))
@@ -30,7 +31,10 @@ vi.mock('./MobileNativeChatEditActions', () => ({ MobileNativeChatEditActions: (
 vi.mock('./MobileNativeChatComposerAttachments', () => ({
   MobileNativeChatComposerAttachments: () => null
 }))
-vi.mock('./MobileNativeChatComposerMenu', () => ({ MobileNativeChatComposerMenu: () => null }))
+vi.mock(
+  './MobileNativeChatComposerMenuLayer',
+  () => import('./MobileNativeChatComposerMenuLayer.web')
+)
 
 type ComposerProps = ComponentProps<typeof MobileNativeChatComposer>
 
@@ -43,6 +47,7 @@ describe('mobile composer modifier submit in the paired web page', () => {
     vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('iPad')
     onSend.mockReset().mockResolvedValue(true)
     container = document.createElement('div')
+    container.setAttribute('data-testid', 'native-chat-view')
     document.body.append(container)
     root = createRoot(container)
   })
@@ -64,7 +69,7 @@ describe('mobile composer modifier submit in the paired web page', () => {
   async function render(props: Partial<ComposerProps> = {}) {
     function Draft() {
       const [value, setValue] = useState(props.value ?? ' hello ')
-      return (
+      const composer = (
         <MobileNativeChatComposer
           sendSurfaceId="keyboard-test"
           getSendCompletionGeneration={() => 0}
@@ -74,6 +79,13 @@ describe('mobile composer modifier submit in the paired web page', () => {
           onChangeText={setValue}
           onSend={onSend}
         />
+      )
+      return props.editSession ? (
+        <div data-testid="queue-viewport" style={{ overflow: 'hidden' }}>
+          {composer}
+        </div>
+      ) : (
+        composer
       )
     }
     await act(async () => root.render(<Draft />))
@@ -184,4 +196,77 @@ describe('mobile composer modifier submit in the paired web page', () => {
       expect(field().value).toBe(expected)
     }
   )
+
+  function queuedGeometry() {
+    const anchor = { top: 430, width: 390, clipTop: 250, clipHeight: 300 }
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
+      if (this === container) {
+        return new DOMRect(0, 80, 390, 620)
+      }
+      if (this.getAttribute('data-testid') === 'queue-viewport') {
+        return new DOMRect(0, anchor.clipTop, 390, anchor.clipHeight)
+      }
+      return new DOMRect(0, anchor.top, anchor.width, 100)
+    })
+    return anchor
+  }
+
+  async function queuedMention() {
+    await render({
+      value: '@rea',
+      filePaths: ['README.md', 'src/read.ts'],
+      agent: 'codex',
+      editSession: { cancel: vi.fn(), refuseCommand: () => false, locked: false }
+    })
+    await selectEnd()
+  }
+
+  function suggestion() {
+    return container.querySelector<HTMLElement>('[aria-label="README.md"]')
+  }
+
+  it('picks a suggestion outside the clipped queue while keeping the edited draft focused', async () => {
+    queuedGeometry()
+    await queuedMention()
+    const input = field()
+    const row = suggestion()
+    expect(row).not.toBeNull()
+    const queue = container.querySelector('[data-testid="queue-viewport"]')!
+    expect(queue.contains(row)).toBe(false)
+    expect(container.contains(row)).toBe(true)
+    const down = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+    await act(async () => {
+      row!.dispatchEvent(down)
+      row!.click()
+    })
+    expect(down.defaultPrevented).toBe(true)
+    expect(field()).toBe(input)
+    expect(input.value).toBe('@README.md ')
+    expect(document.activeElement).toBe(input)
+    expect(suggestion()).toBeNull()
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
+  it('retires scrolled-out or hidden editor suggestions and restores them from current geometry', async () => {
+    const anchor = queuedGeometry()
+    await queuedMention()
+    expect(suggestion()).not.toBeNull()
+    anchor.top = 900
+    await act(async () => window.dispatchEvent(new Event('scroll')))
+    expect(suggestion()).toBeNull()
+    anchor.top = 430
+    await act(async () => window.dispatchEvent(new Event('scroll')))
+    expect(suggestion()).not.toBeNull()
+    anchor.clipTop = 450
+    anchor.clipHeight = 0
+    await act(async () => window.dispatchEvent(new Event('resize')))
+    expect(suggestion()).toBeNull()
+    anchor.clipTop = 250
+    anchor.clipHeight = 300
+    anchor.width = 0
+    await act(async () => window.dispatchEvent(new Event('resize')))
+    expect(suggestion()).toBeNull()
+    expect(field().value).toBe('@rea')
+    expect(document.activeElement).toBe(field())
+  })
 })

@@ -329,7 +329,7 @@ export function MobileNativeChatView({
 
   return (
     <MobileNativeChatOpenFileContext value={onOpenFile}>
-      <View style={[styles.root, { paddingBottom: bottomPad }]}>
+      <View testID="native-chat-view" style={[styles.root, { paddingBottom: bottomPad }]}>
         {status === 'loading' && messages.length === 0 ? (
           <MobileStateView
             loading
