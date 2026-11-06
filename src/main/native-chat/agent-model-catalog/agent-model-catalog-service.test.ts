@@ -536,6 +536,64 @@ it.each(['opencode', 'opencode2', 'omp'] as const)(
   }
 )
 
+it('keeps one folder-agent listing for a workspace on the same folder when another workspace there moves', async () => {
+  const records = new Map(
+    ['a', 'b'].map((id) => [
+      id,
+      {
+        ...record('/same-account'),
+        sessionId: id,
+        provider: 'opencode',
+        location: { ...record('/same-account').location, workspaceId: `ws-${id}` }
+      }
+    ])
+  )
+  const paths: Record<string, string> = { 'ws-a': '/repo', 'ws-b': '/repo' }
+  const lists: Record<string, PromiseWithResolvers<AgentModelCatalogSuccess>> = {
+    '/repo': Promise.withResolvers(),
+    '/other': Promise.withResolvers()
+  }
+  const probe = vi.fn((_home: AgentSessionAccountHome, options?: { workspacePath?: string }) => {
+    return lists[options!.workspacePath!]!.promise
+  })
+  const service = createAgentModelCatalogService({
+    store: new AgentModelCatalogStore(),
+    getConversation: (id) => {
+      const held = records.get(id)
+      return held ? agentSessionConversationView(held) : undefined
+    },
+    getRecord: (id) => records.get(id),
+    drivesRecord: () => true,
+    resolveAccountHome: async () => GROK_HOME('/same-account'),
+    recordWorkspacePath: async (row) => paths[row.location.workspaceId]!,
+    listsInChatFolder: new Set(['opencode']),
+    probes: { opencode: probe }
+  })
+  onTestFinished(() => {
+    lists['/repo']!.resolve(listing('late'))
+    lists['/other']!.resolve(listing('late'))
+    return service.stop()
+  })
+  const params = (sessionId: string) => ({
+    agent: 'opencode',
+    sessionId,
+    inSessionWorkspace: true as const,
+    waitForListing: true
+  })
+  void service.demand(params('a'))
+  await vi.waitFor(() => expect(probe).toHaveBeenCalledOnce())
+  const b = service.read(params('b'))
+  paths['ws-a'] = '/other'
+  service.retireContext('ws-a')
+  const a = service.read(params('a'))
+  await vi.waitFor(() => expect(probe).toHaveBeenCalledTimes(2))
+  lists['/repo']!.resolve(listing('repo'))
+  expect(await b).toMatchObject({ models: [{ id: 'repo' }] })
+  lists['/other']!.resolve(listing('other'))
+  expect(await a).toMatchObject({ models: [{ id: 'other' }] })
+  expect(probe.mock.calls.map((call) => call[1]?.workspacePath)).toEqual(['/repo', '/other'])
+})
+
 it('shares account rows while keeping workspace default provenance separate', async () => {
   const store = new AgentModelCatalogStore()
   const records = new Map(
