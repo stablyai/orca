@@ -84,6 +84,7 @@ function createSidebarHostOptionsSelector() {
   }
 }
 
+/** Keep filtered project membership and row ownership separate from host/collapse presentation so hidden rows do not change registrations. */
 export function useSidebarSectionRows(args: SectionRowsArgs) {
   const { repos, worktrees, repoMap, defaultHostId } = args
   const hideEmptyProjects = useAppStore((s) => s.hideEmptyProjects)

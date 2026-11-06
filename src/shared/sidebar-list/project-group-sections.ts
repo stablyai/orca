@@ -18,6 +18,7 @@ import {
 } from '../project-section-order'
 import { buildFolderWorkspaceRow } from './row-builders'
 
+/** Retain ancestors of repo and folder rows; hide-empty examines the full subtree rather than only direct workspaces. */
 export function appendProjectGroupSections(
   ctx: SectionAppendContext,
   args: {

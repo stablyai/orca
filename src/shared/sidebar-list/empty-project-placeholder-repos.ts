@@ -2,6 +2,7 @@ import type { Repo } from '../repo-types'
 import type { Worktree } from '../worktree/types'
 import type { WorktreeGroupBy } from './row-types'
 
+/** Preserve registered group membership with placeholders unless hide-empty is enabled; this never alters project registration. */
 export function getEmptyProjectPlaceholderRepoIds(args: {
   hideEmptyProjects?: boolean
   groupBy: WorktreeGroupBy

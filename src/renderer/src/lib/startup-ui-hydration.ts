@@ -28,12 +28,12 @@ export function hydratePersistedUIAfterStartupRead({
   return true
 }
 
+/** Only unhydrated startup failures get defaults; a later session failure must preserve already loaded UI (#1158). */
 export function getStartupErrorFallbackUI(uiHydrated: boolean): PersistedUIState | undefined {
   if (uiHydrated) {
     return undefined
   }
 
-  // Startup failure still needs persistedUIReady (#1158), but defaults must not replace UI loaded before a later session failure.
   return {
     lastActiveRepoId: null,
     lastActiveWorktreeId: null,

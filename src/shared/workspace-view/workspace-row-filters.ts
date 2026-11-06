@@ -153,6 +153,7 @@ export function changedWorkspaceRowFilters(
   return changed
 }
 
+/** Compare omitted optional filters using migration defaults: main-checkout exemption on, hide-empty off. */
 function comparableFilterValue(
   filters: WorkspaceRowFilters,
   key: keyof WorkspaceRowFilters
