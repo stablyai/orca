@@ -194,7 +194,12 @@ export class WorkspaceSleepCoordinator {
         return host.sleepWorkspace(worktreeId, markAsleep)
       },
       suspendVm: platform
-        ? (worktreeId) => this.afterVmOperations(worktreeId, () => platform.suspendVm(worktreeId))
+        ? (worktreeId, wanted) =>
+            this.afterVmOperations(worktreeId, async () => {
+              if (wanted()) {
+                await platform.suspendVm(worktreeId)
+              }
+            })
         : null,
       ownRecords: (worktreeId) => runtime.wakeRecordsForWorktree(worktreeId),
       watchReopen: (worktreeId) => {

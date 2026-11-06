@@ -118,36 +118,6 @@ describe('WorkspaceSleepCoordinator VM wake', () => {
     expect(resumes).toBe(1)
   })
 
-  it('wakes again for a click after a suspend started', async () => {
-    const order: string[] = []
-    const firstResume = gate()
-    let resumes = 0
-    const workspaceSleep = coordinator({
-      suspendVm: async () => {
-        order.push('suspend')
-      },
-      resumeVm: async () => {
-        resumes += 1
-        const resume = `resume:${resumes}`
-        if (resumes === 1) {
-          await firstResume.opened
-        }
-        order.push(resume)
-        return null
-      }
-    })
-
-    const olderWake = workspaceSleep.wakeVm(WORKTREE_ID)
-    const slept = sleep(workspaceSleep)
-    // The sleep's mocks all resolve at once, so one macrotask lets it ask for the suspend.
-    await new Promise((resolve) => setImmediate(resolve))
-    const click = workspaceSleep.wakeVm(WORKTREE_ID)
-    firstResume.open()
-    await Promise.all([olderWake, slept, click])
-
-    expect(order).toEqual(['resume:1', 'suspend', 'resume:2'])
-  })
-
   it("resumes the VM while the workspace's lifecycle queue waits on the host it runs", async () => {
     const lifecycle = heldLifecycleQueue()
     const resumeVm = async (): Promise<EphemeralVmRuntimeRecord | null> => null
@@ -177,6 +147,32 @@ describe('WorkspaceSleepCoordinator VM wake', () => {
     await workspaceSleep.wakeVm(WORKTREE_ID)
     lifecycle.releaseAll()
     await slept
+
+    expect(order).toEqual(['resume'])
+  })
+
+  it('keeps the VM up when the workspace is opened while its suspend waits behind a wake', async () => {
+    const order: string[] = []
+    const resuming = gate()
+    const workspaceSleep = coordinator({
+      suspendVm: async () => {
+        order.push('suspend')
+      },
+      resumeVm: async () => {
+        await resuming.opened
+        order.push('resume')
+        return null
+      }
+    })
+
+    const woke = workspaceSleep.wakeVm(WORKTREE_ID)
+    const slept = sleep(workspaceSleep)
+    // The sleep's mocks all resolve at once, so one macrotask lets it queue the suspend.
+    await new Promise((resolve) => setImmediate(resolve))
+    // A slept pane opened: it counts as a reopen but does not wake the VM itself.
+    workspaceSleep.noteReopened(WORKTREE_ID)
+    resuming.open()
+    await Promise.all([woke, slept])
 
     expect(order).toEqual(['resume'])
   })

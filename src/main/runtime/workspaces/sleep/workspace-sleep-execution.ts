@@ -31,7 +31,8 @@ export type WorkspaceSleepDeps = {
     worktreeId: string,
     markAsleep: boolean
   ) => Promise<AgentSessionWorkspaceSleepResult>
-  suspendVm: ((worktreeId: string) => Promise<void>) | null
+  /** Suspends the VM once its turn comes, unless `wanted` no longer holds by then. */
+  suspendVm: ((worktreeId: string, wanted: () => boolean) => Promise<void>) | null
   /** The wake records main keeps for this host's workspace, read after its terminals stopped. */
   ownRecords: (worktreeId: string) => SleepingAgentSessionRecord[]
   /** Starts watching for the workspace being reopened; the returned check says whether it was. */
@@ -212,10 +213,9 @@ async function sleepWorkspace(
   if (!failure && deps.suspendVm) {
     await batch.batchChatsSettled
     try {
-      // Reopened mid-sleep: it is the user's again, so its VM keeps running.
-      if (!reopened()) {
-        await deps.suspendVm(worktreeId)
-      }
+      // Reopened mid-sleep, even while the suspend waits its turn: it is the user's again, so
+      // its VM keeps running.
+      await deps.suspendVm(worktreeId, () => !reopened())
     } catch (error) {
       console.error('[workspace-sleep] host suspension failed', { worktreeId, error })
       vmSuspendFailure = messageOf(error)
