@@ -5,7 +5,7 @@ import { useRef } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type * as HttpLinkDestinations from '@/lib/browser/navigation/http-link-destinations'
-import type * as TerminalFileOpenRouting from '@/components/terminal-pane/terminal-file-open-routing'
+import type * as TerminalFileOpenRouting from '@/components/terminal-pane/links/files/terminal-file-open-routing'
 import { createNativeChatFileHref } from '../../../../shared/native-chat/native-chat-href-routing'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
@@ -27,10 +27,13 @@ vi.mock('@/lib/browser/navigation/http-link-destinations', async (importOriginal
   ...(await importOriginal<typeof HttpLinkDestinations>()),
   openRoutedHttpLink: mocks.openRoutedHttpLink
 }))
-vi.mock('@/components/terminal-pane/terminal-file-open-routing', async (importOriginal) => ({
-  ...(await importOriginal<typeof TerminalFileOpenRouting>()),
-  openDetectedFilePath: mocks.openDetectedFilePath
-}))
+vi.mock(
+  '@/components/terminal-pane/links/files/terminal-file-open-routing',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof TerminalFileOpenRouting>()),
+    openDetectedFilePath: mocks.openDetectedFilePath
+  })
+)
 vi.mock('./native-chat-http-link-source-owner', () => ({
   resolveNativeChatHttpLinkSourceOwner: () => ({ kind: 'local' }),
   canNativeChatOpenOwnedBrowser: () => false

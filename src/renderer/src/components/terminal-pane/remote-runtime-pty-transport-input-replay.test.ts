@@ -11,11 +11,11 @@ import {
 } from './remote-runtime-pty-transport-test-harness'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
 import { REMOTE_RUNTIME_DISCONNECTED_INPUT_GRACE_MS } from './remote-runtime-disconnected-input-grace'
-import { runTerminalPasteOperationWithTimeout } from './terminal-paste-operation-timeout'
-import { writeTerminalPastePtyInput } from './terminal-pty-paste-writer'
-import { executeTerminalPastePlan } from './terminal-paste-executor'
-import type { TerminalPastePlan } from './terminal-paste-model'
-import { TERMINAL_REMOTE_PASTE_OPERATION_TIMEOUT_MS } from './terminal-paste-limits'
+import { runTerminalPasteOperationWithTimeout } from './input/paste/terminal-paste-operation-timeout'
+import { writeTerminalPastePtyInput } from './input/paste/terminal-pty-paste-writer'
+import { executeTerminalPastePlan } from './input/paste/terminal-paste-executor'
+import type { TerminalPastePlan } from './input/paste/terminal-paste-model'
+import { TERMINAL_REMOTE_PASTE_OPERATION_TIMEOUT_MS } from './input/paste/terminal-paste-limits'
 import {
   REMOTE_RUNTIME_INPUT_REFUSAL_ROUNDS_BEFORE_ESCALATION,
   REMOTE_RUNTIME_INPUT_RESEND_BACKOFF_MS

@@ -12,16 +12,16 @@ import {
   resolveTerminalHttpLinkSourceOwner,
   resolveTerminalLinkRuntimeEnvironmentId,
   resolveTerminalRuntimeHandle
-} from './terminal-http-link-source-owner'
+} from './links/http/terminal-http-link-source-owner'
 import {
   getTerminalFileOpenHint,
   getTerminalUrlOpenHint,
   terminalUrlOpenHintOptionsFor
-} from './terminal-link-open-hints'
-import type { LinkHandlerDeps } from './terminal-link-handlers'
+} from './links/terminal-link-open-hints'
+import type { LinkHandlerDeps } from './links/files/terminal-link-handlers'
 import type { TerminalPathExistsCache } from './terminal-path-exists-cache'
-import type { TerminalLinkActionContext } from './terminal-link-action-request'
-import type { TerminalHttpLinkActionDestinations } from './terminal-url-link-hit-testing'
+import type { TerminalLinkActionContext } from './links/terminal-link-action-request'
+import type { TerminalHttpLinkActionDestinations } from './links/http/terminal-url-link-hit-testing'
 import type { PtyConnectionDeps } from './pty-connection-types'
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
@@ -29,7 +29,7 @@ import { fitAndFocusPanes, fitPanes } from './pane-helpers'
 import { registerRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
 import { normalizeTerminalLayoutSnapshot } from './layout-serialization'
 import { applyTerminalAppearance } from './terminal-appearance'
-import { terminalLinkClickBehaviorFor } from './terminal-link-click-behavior'
+import { terminalLinkClickBehaviorFor } from './links/gestures/terminal-link-click-behavior'
 import { createTerminalPanePtyDeps } from './terminal-pane-pty-deps'
 import type { DeferredSplitPaneHandoffHandle } from './deferred-split-pane-handoff'
 import {

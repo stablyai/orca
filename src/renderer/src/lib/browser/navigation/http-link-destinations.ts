@@ -1,6 +1,6 @@
 import type { BrowserLinkOpenContext } from './browser-link-destination'
 import type { HttpLinkBrowserRequestFields } from './http-link-browser-placement'
-import { showOpenInGroupRefusedToast } from '@/components/terminal-pane/terminal-file-open-in-group-toast'
+import { showOpenInGroupRefusedToast } from '@/components/terminal-pane/links/files/terminal-file-open-in-group-toast'
 import { beginLinkOpenRequest } from '../../link-open-request'
 import { translate } from '@/i18n/i18n'
 import {

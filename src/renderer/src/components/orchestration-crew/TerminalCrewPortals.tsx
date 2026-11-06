@@ -8,7 +8,7 @@ import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   captureTerminalDropTarget,
   getCurrentTerminalDropTransport
-} from '../terminal-pane/terminal-drop-target'
+} from '../terminal-pane/input/file-drop/terminal-drop-target'
 import { insertTerminalCrewMention } from '../terminal-pane/terminal-crew-mention'
 import { useTerminalCrewIdentity } from './use-terminal-crew-identity'
 import { LazyOrchestrationCrewPanel } from './LazyOrchestrationCrewPanel'

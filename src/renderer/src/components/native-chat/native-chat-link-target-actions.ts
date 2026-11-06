@@ -9,7 +9,7 @@ import {
   buildFileLinkActions,
   type FileLinkActions,
   type TerminalFileLinkActionDeps
-} from '@/components/terminal-pane/terminal-file-link-actions'
+} from '@/components/terminal-pane/links/files/terminal-file-link-actions'
 import { routeNativeChatHref } from '../../../../shared/native-chat/native-chat-href-routing'
 import { useAppStore } from '../../store'
 import {
