@@ -56,7 +56,7 @@ function patchCollections(): () => void {
   const counting = (original: Method) =>
     function (this: unknown) {
       // `arguments`, not a rest parameter: that would iterate an array and count itself.
-      const iterator: unknown = Reflect.apply(original, this, arguments)
+      const iterator: unknown = original.apply(this, arguments)
       if (!isIterator(iterator)) {
         return iterator
       }
@@ -94,7 +94,7 @@ function patchCollections(): () => void {
               this,
               function (this: unknown) {
                 visit()
-                return Reflect.apply(callback, this, arguments)
+                return callback.apply(this, arguments)
               },
               thisArg
             )
@@ -102,15 +102,15 @@ function patchCollections(): () => void {
       )
     }
   }
-  const indexOf = Array.prototype.indexOf
+  const indexOf: Method = Array.prototype.indexOf
   for (const key of ['indexOf', 'includes']) {
     replace(
       Array.prototype,
       key,
       (original) =>
         function (this: unknown[], search: unknown, from: unknown) {
-          const at: number = Reflect.apply(indexOf, this, arguments)
-          visit(at === -1 ? this.length : at + 1)
+          const at = indexOf.apply(this, arguments)
+          visit(typeof at === 'number' && at !== -1 ? at + 1 : this.length)
           return original.call(this, search, from)
         }
     )

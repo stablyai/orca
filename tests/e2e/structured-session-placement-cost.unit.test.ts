@@ -115,21 +115,52 @@ it.each([20, 200])(
         }))
       }
     }
-    // Two unchanged main costs, counted apart and reported but outside the bound on the work this
+    // Unchanged main costs, counted apart and reported but outside the bound on the work this
     // change adds (byte-identical to main): each chat tab's title searches the workspace's saved
     // tabs (prune-mobile-session-tab-group-layout.ts:119), and merging a frame searches every
     // group's order once per chat (mobile-session-tab-merge.ts:209). Both read N² entries for N
     // chats in one workspace, so this graph as a whole is not linear. What is bounded instead is
     // how often their callers run and how much input they get: a fixed number of passes per phase.
+    // Main also builds one sender graph reply: keep that real work, its reads and output separate.
     const unmeasured = () => ({
       titleVisits: 0,
       chatOrderVisits: 0,
       projections: 0,
       projectedTabs: 0,
       chatOrderMerges: 0,
-      chatOrderInput: 0
+      chatOrderInput: 0,
+      senderCalls: 0,
+      senderVisits: 0,
+      senderLookups: 0,
+      senderChatReads: 0,
+      senderChatRecords: 0,
+      senderAssociations: 0,
+      senderRecordLookups: 0,
+      senderRecordsEnumerated: 0
     })
     const inherited = unmeasured()
+    let recordCounts: ReturnType<typeof recordQueries>['counts'] | undefined
+    const senders = rig.runtime['agentProjections'].senders
+    const senderReply = rig.runtime['agentSenderGraphReply'].bind(rig.runtime)
+    Object.defineProperty(rig.runtime, 'agentSenderGraphReply', {
+      value: (base: Parameters<typeof senderReply>[0]) => {
+        inherited.senderCalls++
+        const before = senders.workForTest()
+        const recordLookups = recordCounts?.lookups ?? 0
+        const recordsEnumerated = recordCounts?.enumerated ?? 0
+        const reply = collectionVisits(() => senderReply(base))
+        const after = senders.workForTest()
+        inherited.senderVisits += reply.visits
+        inherited.senderLookups += reply.lookups
+        inherited.senderChatReads += after.chatReads - before.chatReads
+        inherited.senderChatRecords += after.chatRecords - before.chatRecords
+        inherited.senderAssociations +=
+          reply.value.agentSenderAssociations?.associations.length ?? 0
+        inherited.senderRecordLookups += (recordCounts?.lookups ?? 0) - recordLookups
+        inherited.senderRecordsEnumerated += (recordCounts?.enumerated ?? 0) - recordsEnumerated
+        return reply.value
+      }
+    })
     const title = rig.runtime['structuredConversationTabName'].bind(rig.runtime)
     Object.defineProperty(rig.runtime, 'structuredConversationTabName', {
       value: (workspaceId: string, sessionId: string) => {
@@ -173,16 +204,26 @@ it.each([20, 200])(
       Object.assign(delivered, { notifications: 0, elements: 0, bytes: 0 })
       Object.assign(inherited, unmeasured())
       const records = recordQueries(rig.store)
+      recordCounts = records.counts
       const synced = collectionVisits(run)
       const published = collectionVisits(() =>
         rig.runtime['mobileSessionTabsNotifyCoalescer'].flushAll()
       )
       records.restore()
+      recordCounts = undefined
       for (const [key, value] of Object.entries({
         recordLookups: records.counts.lookups,
         recordsEnumerated: records.counts.enumerated,
         syncVisits: synced.visits,
         syncLookups: synced.lookups,
+        syncWithSendersVisits: synced.visits + inherited.senderVisits,
+        syncWithSendersLookups: synced.lookups + inherited.senderLookups,
+        phaseTotalVisits:
+          synced.visits +
+          published.visits +
+          inherited.senderVisits +
+          inherited.titleVisits +
+          inherited.chatOrderVisits,
         identities: identities.mock.calls.length,
         rows: rows.mock.calls.length,
         publishVisits: published.visits,
@@ -221,6 +262,23 @@ it.each([20, 200])(
       if (key.endsWith('.recordsEnumerated')) {
         expect(counts[at], key).toBe(0)
       }
+      // A graph replies once; at most one refresh reads each visible chat, with no /clear aliases
+      // or terminal senders in this population. Unrelated closed records do not enter its output.
+      if (key.endsWith('.senderCalls')) {
+        expect(counts[at], key).toBe(key.startsWith('outbound.') ? 0 : 1)
+      }
+      if (key.endsWith('.senderChatReads')) {
+        expect(counts[at], key).toBeLessThanOrEqual(1)
+      }
+      if (/\.(senderChatRecords|senderAssociations)$/.test(key)) {
+        expect(counts[at], key).toBeLessThanOrEqual(listed.length)
+      }
+      if (key.endsWith('.senderRecordLookups')) {
+        expect(counts[at], key).toBeLessThanOrEqual(3 * listed.length)
+      }
+      if (key.endsWith('.senderRecordsEnumerated')) {
+        expect(counts[at], key).toBe(0)
+      }
       // A fixed cost plus a few visits or lookups per listed chat in each phase.
       if (/\.(syncVisits|syncLookups|publishVisits|recordLookups)$/.test(key)) {
         expect(counts[at], key).toBeLessThanOrEqual(GRAPH_PER_CHAT * listed.length + GRAPH_FIXED)
@@ -241,7 +299,9 @@ it.each([20, 200])(
       // Reported, not bounded here: the inherited searches above.
       linear(
         Object.fromEntries(
-          Object.entries(tally).filter(([key]) => !/\.(titleVisits|chatOrderVisits)$/.test(key))
+          Object.entries(tally).filter(
+            ([key]) => !/\.(titleVisits|chatOrderVisits|phaseTotalVisits)$/.test(key)
+          )
         )
       )
     }
