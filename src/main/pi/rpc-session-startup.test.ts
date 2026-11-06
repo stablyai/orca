@@ -1,14 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { PassThrough } from 'node:stream'
-import { JsonlRpcPeer } from '../jsonl-rpc/peer'
+import { JsonlRpcPeer, JsonlRpcResponseError } from '../jsonl-rpc/peer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   closePiRpcAdapterFixtures,
   type FakeConnection,
   restart,
   sessionId,
-  setup,
-  state
+  setup
 } from './rpc-session-adapter.test-fixture'
 
 function openAt8(h: Awaited<ReturnType<typeof setup>>, acquisitionGeneration: string) {
@@ -32,7 +31,9 @@ const recordedState = readFileSync(
 function stateThroughPeer(connection: FakeConnection) {
   const input = new PassThrough()
   const output = new PassThrough()
-  const peer = new JsonlRpcPeer(input, output)
+  const peer = new JsonlRpcPeer(input, output, {
+    onClose: (error) => connection.handlers.onClose?.(error)
+  })
   let requestId: string
   output.on('data', (chunk) => {
     requestId = JSON.parse(String(chunk)).id
@@ -41,7 +42,17 @@ function stateThroughPeer(connection: FakeConnection) {
   connection.request = (command, params, options?: Parameters<JsonlRpcPeer['request']>[2]) =>
     command === 'get_state' ? peer.request(command, params, options) : request(command, params)
   connection.abortRequest = () => peer.close()
-  return () => input.write(`${JSON.stringify({ ...recordedState, id: requestId })}\n`)
+  return Object.assign(
+    () => input.write(`${JSON.stringify({ ...recordedState, id: requestId })}\n`),
+    {
+      refuseAfterWriteFailure: () => {
+        output.emit('error', Object.assign(new Error('Pi stdin ended'), { code: 'EPIPE' }))
+        input.write(
+          `${JSON.stringify({ type: 'response', id: requestId, command: 'get_state', success: false, error: 'Pi refused its state' })}\n`
+        )
+      }
+    }
+  )
 }
 
 afterEach(async () => {
@@ -98,20 +109,51 @@ describe('Pi host awaited open', () => {
   })
 
   it('fails an open if its lane fails while the state request is pending', async () => {
-    const h = await setup()
-    const stateReply = Promise.withResolvers<unknown>()
+    let refuse = false
+    const h = await setup({}, (sink) => ({
+      ...sink,
+      tryAppendTransition: (transition) =>
+        refuse ? { accepted: false, reason: 'failed' } : sink.tryAppendTransition!(transition)
+    }))
+    let reply!: () => unknown
     const { acquired, child } = await restart(h, (connection) => {
-      connection.requestOverride = (command) =>
-        command === 'get_state' ? stateReply.promise : undefined
+      reply = stateThroughPeer(connection)
     })
-    const opening = h.adapter.open({
-      sessionId,
-      fence: 8,
-      acquisitionGeneration: acquired.acquisitionGeneration ?? null,
-      signal: new AbortController().signal
+    const opening = openAt8(h, acquired.acquisitionGeneration)
+    refuse = true
+    child.receive({
+      type: 'extension_ui_request',
+      id: 'startup-confirm',
+      method: 'confirm',
+      title: 'Continue?',
+      message: 'Ready?'
     })
-    child.handlers.onClose?.(new Error('lane failed during startup'))
-    stateReply.resolve(state)
-    await expect(opening).rejects.toThrow('lane failed during startup')
+    await expect(opening).rejects.toMatchObject({ message: 'failed', retry: 'never' })
+    refuse = false
+    reply()
+    await expect(openAt8(h, acquired.acquisitionGeneration)).rejects.toThrow('failed')
+    await expect(
+      h.adapter.dispatch({
+        sessionId,
+        fence: 8,
+        clientMessageId: 'failed-start',
+        executionOptions: {},
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] }
+      })
+    ).rejects.toThrow('Pi session is not live')
+    expect(child.sent).not.toContainEqual(expect.objectContaining({ type: 'prompt' }))
+  })
+
+  it('keeps a native refusal received before the write-side failure closes the peer', async () => {
+    const h = await setup()
+    let reply!: ReturnType<typeof stateThroughPeer>
+    const { acquired } = await restart(h, (connection) => {
+      reply = stateThroughPeer(connection)
+    })
+    const opening = openAt8(h, acquired.acquisitionGeneration).catch((error: unknown) => error)
+    reply.refuseAfterWriteFailure()
+    const failure = await opening
+    expect(failure).toMatchObject({ message: 'Pi refused its state', retry: 'never' })
+    expect(failure.cause).toBeInstanceOf(JsonlRpcResponseError)
   })
 })
