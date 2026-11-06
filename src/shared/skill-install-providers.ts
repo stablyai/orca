@@ -264,6 +264,12 @@ export const SKILL_INSTALL_PROVIDERS = Object.freeze([
     workspaceSegments: null
   },
   {
+    id: 'aiwork',
+    displayName: 'AiWork',
+    globalSegments: null,
+    workspaceSegments: null
+  },
+  {
     id: 'dsh',
     displayName: 'DeepSeek Harness',
     globalSegments: null,

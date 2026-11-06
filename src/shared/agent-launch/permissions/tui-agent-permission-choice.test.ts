@@ -17,6 +17,7 @@ import {
 } from '../choices/tui-agent-launch-defaults'
 import { applyAllAgentsPermission, resolveAgentPermission } from './tui-agent-permission-choice'
 import { migrateAgentPermissionChoice } from './tui-agent-permission-lift'
+import { agentArgsSetPermission } from './agent-permission-args'
 
 const legacy = (
   args: Record<string, string>,
@@ -113,6 +114,25 @@ describe('older clients against a host with the stored choice', () => {
 })
 
 describe('permission carrier ownership across save, reload and consumers', () => {
+  it.each(['--yes', '--dangerously-skip-permissions'])(
+    'keeps AiWork alias %s under Full instead of adding a second -y',
+    (value) => {
+      const before: AgentLaunchSettingsSource = { agentPermissionDefault: 'full-access' }
+      const updates = agentLaunchSettingsMutationUpdates(
+        before,
+        { type: 'user-arguments', agent: 'aiwork', value },
+        'linux'
+      )
+      const loaded = migrateAgentPermissionChoice(
+        JSON.parse(JSON.stringify({ ...before, ...updates })),
+        'linux'
+      )
+      // `aiwork tui` refuses `-y --yes`: the switch may be given only once.
+      expect(resolveTuiAgentLaunchArgs('aiwork', loaded)).toBe(value)
+      expect(agentArgsSetPermission('aiwork', value)).toBe(true)
+    }
+  )
+
   it('applies combined old-client carrier edits against the original projection', () => {
     const host: AgentLaunchSettingsSource = {
       agentPermissionDefault: 'full-access',

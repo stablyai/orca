@@ -17,6 +17,7 @@ import {
   type TerminalCursorContext
 } from '../../../../shared/terminal/input/terminal-composer-draft'
 import { openCodeComposerHoldsDraft } from '../../../../shared/terminal/input/opencode-composer'
+import { aiworkComposerHoldsDraft } from '../../../../shared/terminal/input/aiwork-composer'
 import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox/routing/mailbox-owner'
 
 const DIALOG_HOLD_RECHECK_MS = 2000
@@ -163,9 +164,13 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     )
   }
 
-  // Why: OpenCode's composer has no prompt glyph, so only its own pane is read with its box layout.
+  // Why: OpenCode's composer has no prompt glyph and AiWork's uses its own, so only their own panes
+  // are read with their layouts.
   private hasComposerDraft(ptyId: string, context: TerminalCursorContext | null): boolean {
     const agent = this.getPaneTerminalAgent(ptyId)
+    if (agent === 'aiwork' && context) {
+      return aiworkComposerHoldsDraft(context)
+    }
     return (agent === 'opencode' || agent === 'opencode2') && context
       ? openCodeComposerHoldsDraft(context)
       : !!readTerminalComposerTypedText(context)

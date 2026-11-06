@@ -135,12 +135,16 @@ export function formatMessagePointer(
   count: number,
   mailboxHandle?: string,
   cliCommand: OrchestrationCliCommand = 'orca',
-  heldDeliveryId?: string
+  heldDeliveryId?: string,
+  /** Named for agents whose tool shells lack ORCA_TERMINAL_HANDLE, so `check` finds this terminal. */
+  checkTerminal?: string
 ): string {
   const noun = count === 1 ? 'message' : 'messages'
   const runFlag = mailboxHandle?.startsWith('run:')
     ? ` --run ${mailboxHandle.slice('run:'.length)}`
-    : ''
+    : checkTerminal
+      ? ` --terminal ${checkTerminal}`
+      : ''
   if (heldDeliveryId) {
     return `\nYou have ${count} new orchestration ${noun} after delivery ${heldDeliveryId}, which you have not acknowledged. If you no longer have it, run \`${cliCommand} orchestration check${runFlag}\` to see it again; once it is handled, run \`${cliCommand} orchestration check${runFlag} --ack ${heldDeliveryId}\`, then \`${cliCommand} orchestration check${runFlag}\` for the new mail.\n`
   }

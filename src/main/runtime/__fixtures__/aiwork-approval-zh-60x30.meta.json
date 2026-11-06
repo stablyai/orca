@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-11-06T10:20:15.796Z",
+  "platform": "darwin",
+  "command": ["aiwork", "tui", "--ignore-upgrade"],
+  "cols": 60,
+  "rows": 30,
+  "note": "AiWork TUI manual-mode shell approval at 60 columns (Allow once via Enter at 14s), DTCODER_TUI_LANG=zh, Orca OSC 7501 query reply at 700ms",
+  "exitCode": 0
+}

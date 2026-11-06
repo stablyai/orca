@@ -128,6 +128,23 @@ describe('orchestration RPC methods', () => {
       expect(db.getActiveDispatchForTerminal('term_a')).toBeUndefined()
     })
 
+    it('has the preamble name the terminal for a worker whose tools lack its handle', async () => {
+      setup()
+      const task = db.createTask({ spec: 'work' })
+      vi.spyOn(runtime, 'terminalToolsLackHandle').mockReturnValue(true)
+
+      const result = await call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_aiwork',
+        returnPreamble: true
+      })
+
+      expect(runtime.terminalToolsLackHandle).toHaveBeenCalledWith('term_aiwork')
+      expect(result).toMatchObject({
+        preamble: expect.stringContaining('orchestration check --terminal term_aiwork')
+      })
+    })
+
     it('rejects dispatch to occupied terminal', async () => {
       setup()
       const t1 = db.createTask({ spec: 'first' })
