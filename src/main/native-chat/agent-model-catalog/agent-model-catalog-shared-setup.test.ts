@@ -136,21 +136,6 @@ it.each(['listing', 'setup'] as const)(
   }
 )
 
-it("stops a listing that runs in the chat's folder when that folder's context retires", async () => {
-  const h = harness()
-  h.resolve.mockImplementation(async (_home, _cwd, _lookup, _operation, at) => ({
-    identity: `codex in ${at}`,
-    run: h.run,
-    inChatFolder: true as const
-  }))
-  void h.service.demand({ agent: 'codex', sessionId: 'b' })
-  await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
-  h.service.retireContext('ws')
-  expect(h.run.mock.calls[0]?.[0]?.aborted).toBe(true)
-  await expect(h.discovery.promise).rejects.toThrow()
-  expect(h.service.snapshot({ agent: 'codex', sessionId: 'b' })).not.toHaveProperty('models')
-})
-
 it.each(['gate', 'cli', 'settings'] as const)(
   'settles a waiting reader at once when its agent retires while its %s stage is stalled',
   async (stage) => {

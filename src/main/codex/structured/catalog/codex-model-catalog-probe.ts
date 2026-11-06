@@ -88,7 +88,6 @@ export function createCodexModelCatalogProbe(
       CODEX_HOME: accountHomePath
     }
     return {
-      ...(listIn !== cwd ? { inChatFolder: true as const } : {}),
       identity: { command, args, cwd: listIn, overlay: Object.entries(overlay).sort() },
       run: async (
         signal?: AbortSignal,

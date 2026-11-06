@@ -1,4 +1,4 @@
-/** One abort signal per key (a workspace's command context, an agent's scopes) until it retires. */
+/** One abort signal per key (an agent's scopes) until it retires. */
 export function createAgentModelCatalogFences<K>() {
   const fences = new Map<K, AbortController>()
   return {

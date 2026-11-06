@@ -169,7 +169,6 @@ export function createClaudeModelCatalogProbe(
     const settingSources = listIn === cwd ? CLAUDE_DEFAULT_SETTING_SOURCES : ['user']
     const args = argsFor(true, settingSources)
     return {
-      ...(listIn !== cwd ? { inChatFolder: true as const } : {}),
       identity: {
         command,
         prefixArgs,
