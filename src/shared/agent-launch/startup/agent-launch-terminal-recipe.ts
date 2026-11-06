@@ -87,8 +87,10 @@ function classifiedStartup(
   local: boolean
 ): CommandFields {
   const fields: Record<string, unknown> = {}
-  for (const [key, treatment] of Object.entries(classes)) {
-    const value: unknown = Reflect.get(plan, key)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a Classification's keys are exactly AgentStartupPlan's keys (its mapped type).
+  for (const key of Object.keys(classes) as (keyof AgentStartupPlan)[]) {
+    const treatment = classes[key]
+    const value: unknown = plan[key]
     if (value === undefined || value === null) {
       continue
     }
