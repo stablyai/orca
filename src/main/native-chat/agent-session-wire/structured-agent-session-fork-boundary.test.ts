@@ -1,4 +1,6 @@
+import { readFile } from 'node:fs/promises'
 import { expect, it } from 'vitest'
+import { claudeConversationForkBoundary } from '../../claude/claude-conversation-fork-boundary'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import { fixture, appendItems, item } from './agent-session-history-contract-test-fixture'
@@ -85,4 +87,46 @@ it('carries a settled root opener even when the streamed block never acquired a 
     settled: true,
     rootMessage: { sessionId: 'native-source', uuid: 'prompt-1' }
   })
+})
+
+it('cuts Claude forks before a local-command caveat following the response', async () => {
+  const rows = (
+    await readFile(
+      new URL('../../claude/__fixtures__/claude-rewind-hook.jsonl', import.meta.url),
+      'utf8'
+    )
+  )
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line))
+  const row = (uuid: string, parentUuid: string, content: string, isMeta?: true) => ({
+    ...rows[54],
+    uuid,
+    parentUuid,
+    isMeta,
+    message: { role: 'user', content }
+  })
+  const caveat = row(
+    'caveat',
+    'ef5b13f9-6a3f-5d82-8452-cb799862efc0',
+    '<local-command-caveat>The command below was run directly in Claude Code.</local-command-caveat>',
+    true
+  )
+  const command = row('command', caveat.uuid, '<command-name>/usage</command-name>')
+  const stdout = row('stdout', command.uuid, '<local-command-stdout>ok</local-command-stdout>')
+  const entries = [...rows.slice(0, 48), caveat, command, stdout]
+  const checkpoint = {
+    selectedItemId: 'response',
+    settled: true,
+    throughMessage: { sessionId: 'source', uuid: 'ef5b13f9-6a3f-5d82-8452-cb799862efc0' }
+  }
+  expect(claudeConversationForkBoundary(entries, checkpoint)).toBe(
+    'ef5b13f9-6a3f-5d82-8452-cb799862efc0'
+  )
+  expect(
+    claudeConversationForkBoundary(entries, {
+      ...checkpoint,
+      beforeMessage: { sessionId: 'source', uuid: command.uuid }
+    })
+  ).toBe('ef5b13f9-6a3f-5d82-8452-cb799862efc0')
 })

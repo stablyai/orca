@@ -34,7 +34,7 @@ function isUserRow(value: unknown): value is TranscriptUserRow {
   )
 }
 
-function isLocalCommandCaveatRow(row: TranscriptUserRow): boolean {
+export function isLocalCommandCaveatRow(row: Record<string, unknown>): boolean {
   return (
     row.isMeta === true &&
     typeof row.message === 'object' &&

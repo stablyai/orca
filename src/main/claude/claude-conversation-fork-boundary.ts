@@ -2,6 +2,7 @@ import type { SessionStoreEntry } from '@anthropic-ai/claude-agent-sdk'
 import { AgentConversationCopyError } from '../native-chat/agent-conversation-copy-error'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { decodeClaudeTranscriptLine } from '../native-chat/transcript-line-decoders-claude'
+import { isLocalCommandCaveatRow } from './claude-rewind-fork'
 import { claudeSourceBlockId } from './claude-streamed-block-identity'
 import { isClaudeTranscriptRootPrompt } from './claude-transcript-root-prompt'
 import { claudeRecord } from './structured/journal/claude-structured-item-translation'
@@ -52,7 +53,10 @@ export function claudeConversationForkBoundary(
   }
   chain.reverse()
   if (checkpoint.beforeMessage) {
-    const next = chain.findIndex((row) => row.uuid === checkpoint.beforeMessage?.uuid)
+    let next = chain.findIndex((row) => row.uuid === checkpoint.beforeMessage?.uuid)
+    while (next > 0 && isLocalCommandCaveatRow(chain[next - 1]!)) {
+      next -= 1
+    }
     return next > 0 ? String(chain[next - 1]!.uuid) : unavailable()
   }
   const selected = chain.findIndex((row) => {
@@ -80,7 +84,7 @@ export function claudeConversationForkBoundary(
   const root = chain.slice(start, next === -1 ? undefined : next)
   const endpoint = root.findLast((row) => {
     if (row.type === 'assistant' || row.type === 'user') {
-      return true
+      return !isLocalCommandCaveatRow(row)
     }
     return (
       row.type === 'attachment' &&
