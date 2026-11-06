@@ -230,17 +230,16 @@ export function openDetectedFilePath(
       return
     }
 
-    // Why: a grant serves only text and images, so a granted binary stays in Orca, as upstream does;
-    // "Open in this group" asked for an editor, never a system app or download.
+    // Why: "Open in this group" asked for an editor, never a system app or download.
     if (
       !openWithSystemDefault &&
       !explicitGroupRequest &&
-      hostGrant === null &&
       (await openOsViewerOnlyTerminalFile(
         fileContext,
         mappedFilePath,
         canOpenWithSystemDefault,
-        isCurrentRequest
+        isCurrentRequest,
+        hostGrant
       ))
     ) {
       return
