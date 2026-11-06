@@ -1,23 +1,18 @@
-import { nativeChatFullCommand } from './native-chat-tool-input-text'
+import { nativeChatToolInputText } from './native-chat-tool-input-text'
 import {
   powershellAnalysisScript,
-  powershellInvocationScript,
-  powershellWords
+  powershellInvocationScript
 } from './native-chat-powershell-script'
 import { posixShellWords } from './native-chat-tool-preview-prefix'
 
-// Decodes the script a shell tool call ran into POSIX-readable text for command analysis. A line that
-// is one PowerShell or cmd launch, read in the quoting of what ran it, gives the script it runs.
+// Decodes the script a shell tool call ran into POSIX-readable text for command analysis. Only the
+// launch shapes agents are recorded writing are unwrapped, each in the quoting of what wrote it:
+// argv, a shell's `-c` line, and Codex's Windows `pwsh -Command` line. Anything else is a miss, never
+// a guess: cmd launches, and a launch nested inside a PowerShell tool's script, stay text.
 
 const SHELL_PROGRAM = /^(?:ba|z|k|da|fi)?sh(?:\.exe)?$/iu
 const SHELL_SCRIPT_FLAG = /^-[a-zA-Z]*c$/u
 const POWERSHELL_PROGRAM = /^(?:pwsh|powershell)(?:\.exe)?$/iu
-const CMD_PROGRAM = /^cmd(?:\.exe)?$/iu
-const CMD_FLAG = /^\/[ds]$/iu
-// Node's Windows shell form, in cmd's own quoting: `C:\Windows\System32\cmd.exe /d /s /c "script"`,
-// the whole line. cmd escapes no quote, so only a script holding none is surely one quoted string.
-const CMD_WRAPPER = /^(?:\/d\s+)?(?:\/s\s+)?\/c\s+"([^"]*)"$/iu
-
 function programName(path: string): string {
   return path.split(/[\\/]/).at(-1) ?? ''
 }
@@ -43,68 +38,40 @@ function argvCommand(input: unknown): readonly string[] | null {
   return Array.isArray(argv) && argv.every((part) => typeof part === 'string') ? argv : null
 }
 
-/** The script a decoded launch line runs, PowerShell's or cmd's: null when it can't be read whole,
- *  undefined when the line launches neither. */
+/** The script an argv or a decoded line launches: a shell's `-c` script, or PowerShell's
+ *  `-Command` script. Null when PowerShell's can't be read whole, undefined for anything else. */
 function launchedScript(words: readonly string[]): string | null | undefined {
   const program = programName(words[0] ?? '')
   if (POWERSHELL_PROGRAM.test(program)) {
     return powershellInvocationScript(words)
   }
-  if (CMD_PROGRAM.test(program)) {
-    let index = 1
-    while (CMD_FLAG.test(words[index] ?? '')) {
-      index += 1
-    }
-    return /^\/c$/iu.test(words[index] ?? '') && index + 1 < words.length
-      ? words.slice(index + 1).join(' ')
-      : undefined
-  }
-  return undefined
+  // Arguments after the script are its positional parameters (`$0`, `$1`), not commands.
+  return words.length >= 3 && SHELL_PROGRAM.test(program) && SHELL_SCRIPT_FLAG.test(words[1]!)
+    ? words[2]!
+    : undefined
 }
 
-/** The script of Node's Windows shell form as a whole line, which a bare Windows path can't be read
- *  as POSIX for. */
-function cmdShellFormScript(command: string): string | null {
-  const first = /^\s*(?:"([^"]+)"|(\S+))/u.exec(command)
-  if (!first || !CMD_PROGRAM.test(programName(first[1] ?? first[2] ?? ''))) {
-    return null
-  }
-  const script = CMD_WRAPPER.exec(command.slice(first.index + first[0].length).trim())?.[1]
-  return script?.trim() ? script : null
-}
-
-/** The script a shell tool call ran, as POSIX-readable text; null when there is none to read.
- *  An argv `[sh, -lc, script]` keeps its script whole, since joining it would leave the command
- *  after the wrapper instead of at a command start. */
+/** The script a shell tool call ran, as POSIX-readable text; null when there is none to read. */
 export function nativeChatToolCallScript(name: string, input: unknown): string | null {
   const argv = argvCommand(input)
   if (argv) {
-    const launched = launchedScript(argv)
-    if (launched !== undefined) {
-      return launched
-    }
-    if (
-      argv.length === 3 &&
-      SHELL_PROGRAM.test(programName(argv[0]!)) &&
-      SHELL_SCRIPT_FLAG.test(argv[1]!)
-    ) {
-      return argv[2]!
-    }
+    // Joining an argv would turn its arguments into commands, so one that launches nothing known
+    // has no script to read.
+    return launchedScript(argv) ?? null
   }
-  const command = nativeChatFullCommand(input)
-  if (command === null) {
+  const command = (
+    nativeChatToolInputText(input, 'command') || nativeChatToolInputText(input, 'cmd')
+  )?.trim()
+  if (!command) {
     return null
   }
-  if (name.trim().toLowerCase() !== 'powershell') {
-    // Only a whole line is unwrapped, as the common pattern does: a launch inside a command list
-    // stays text, never rebuilt into commands its comments or heredocs only mention.
-    const words = posixShellWords(command)
-    const launched = words ? launchedScript(words) : undefined
-    return launched !== undefined ? launched : (cmdShellFormScript(command) ?? command)
+  // A tool that is PowerShell itself runs its line as a PowerShell script.
+  if (name.trim().toLowerCase() === 'powershell') {
+    return powershellAnalysisScript(command)
   }
-  // A tool that is PowerShell itself reads its line in PowerShell's quoting, and runs any command
-  // that launches nothing as a PowerShell script.
-  const words = powershellWords(command)
+  // Only a whole line that is one launch is unwrapped, as the common pattern does: any other line
+  // is analyzed as written, its comments, heredocs and other commands kept as they are.
+  const words = posixShellWords(command)
   const launched = words ? launchedScript(words) : undefined
-  return launched !== undefined ? launched : powershellAnalysisScript(command)
+  return launched !== undefined ? launched : command
 }

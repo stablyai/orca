@@ -164,15 +164,20 @@ describe('nativeChatTurnOpenedPullRequests', () => {
         )
       )
     ).toEqual([])
-    // cmd.exe's own wrapper.
+    // A shell argv's arguments after its script are `$0` and `$1`, never commands.
+    expect(
+      openedIn(
+        bashTurn({ command: ['bash', '-lc', 'gh pr create --fill', 'argv0'] }, GH_CREATE_OUTPUT)
+      )
+    ).toEqual([38712])
     expect(
       openedIn(
         bashTurn(
-          { command: 'C:\\Windows\\System32\\cmd.exe /d /s /c "gh pr create --fill"' },
+          { command: ['bash', '-lc', 'echo "$PR_URL"', '; gh pr create --fill'] },
           GH_CREATE_OUTPUT
         )
       )
-    ).toEqual([38712])
+    ).toEqual([])
   })
 
   it('counts a finished call that failed after opening, but not one still running', () => {
@@ -294,10 +299,18 @@ describe('PowerShell create commands', () => {
     // Only a whole line is unwrapped: a launch inside a command list stays text, so it is missed
     // rather than rebuilt from comments or heredocs that only mention it.
     expect(opened("pwsh -Command 'gh pr create --fill' && echo done")).toEqual([])
-    // cmd as Codex's argv join writes it.
-    expect(opened(String.raw`"C:\\Windows\\System32\\cmd.exe" /c 'gh pr create --fill'`)).toEqual([
-      38712
-    ])
+  })
+
+  it('leaves cmd launches and unrecognized wrappers as text, a miss rather than a guess', () => {
+    // No agent is recorded launching cmd, whose quoting POSIX analysis can't read.
+    for (const command of [
+      'C:\\Windows\\System32\\cmd.exe /d /s /c "gh pr create --fill"',
+      String.raw`"C:\Windows\System32\cmd.exe" /c 'gh pr create --fill'`,
+      ['cmd.exe', '/c', 'echo ; gh pr create --fill & type pr-url.txt'],
+      'echo /bin/zsh -lc "gh pr create --fill\n$PR_URL"'
+    ]) {
+      expect(opened(command)).toEqual([])
+    }
   })
 
   it('never takes a launch that a comment or heredoc only mentions, nor drops a real create', () => {
@@ -363,7 +376,7 @@ describe('PowerShell create commands', () => {
     expect(opened("pwsh -Foo -Command 'gh pr create --fill'")).toEqual([])
   })
 
-  it('reads a PowerShell tool the same, with or without its own launch wrapper', () => {
+  it("reads a PowerShell tool's line as its own script, and a launch nested in it as text", () => {
     const viaPowerShellTool = (command: string): number[] =>
       openedIn({
         id: 'm1',
@@ -375,17 +388,16 @@ describe('PowerShell create commands', () => {
           { type: 'tool-result', output: GH_CREATE_OUTPUT, callId: 'c1' }
         ]
       })
-    expect(viaPowerShellTool("pwsh -Command 'gh pr create --fill'")).toEqual([38712])
-    // Its launch line is PowerShell too: `''` and a backtick escape are its own quoting.
-    expect(
-      viaPowerShellTool(
-        "pwsh -Command 'gh pr edit 3 --body ''Run `pnpm test`''; gh pr create --title ''x'' --fill'"
-      )
-    ).toEqual([38712])
-    expect(viaPowerShellTool('pwsh -Command "gh pr create --title `"x`" --fill"')).toEqual([38712])
-    // A backtick line continuation joins words, so the create is an argument here.
-    expect(viaPowerShellTool("pwsh -Command 'echo' `\ngh pr create --fill")).toEqual([])
     expect(viaPowerShellTool('gh pr create --title "it`"s" --fill')).toEqual([38712])
-    expect(viaPowerShellTool("Write-Output 'gh pr create'")).toEqual([])
+    expect(viaPowerShellTool('git push -u origin HEAD; gh pr create --fill')).toEqual([38712])
+    for (const command of [
+      "Write-Output 'gh pr create'",
+      '# gh pr create --fill',
+      // A launch nested in a PowerShell script isn't recorded from any agent, so it stays text.
+      "pwsh -Command 'gh pr create --fill'",
+      'pwsh -Command \'Write-Output ok\' # `\nWrite-Output "; gh pr create --fill`n$env:PR_URL"'
+    ]) {
+      expect(viaPowerShellTool(command)).toEqual([])
+    }
   })
 })

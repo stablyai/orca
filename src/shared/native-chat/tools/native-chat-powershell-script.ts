@@ -11,8 +11,6 @@ const POWERSHELL_OPTIONS_WITH_VALUE = new Set([
   '-windowstyle',
   '-workingdirectory'
 ])
-// Bare characters that join, pipe, redirect or group commands.
-const POWERSHELL_COMMAND_SYNTAX = /[;|&<>(){}]/u
 // Characters that open or close text in POSIX analysis; they never survive inside a literal.
 const QUOTE_CHARACTERS = /['"`]/gu
 
@@ -135,70 +133,4 @@ export function powershellInvocationScript(argv: readonly string[]): string | nu
     }
   }
   return null
-}
-
-/** A PowerShell command line's words: `'…'` (with `''`), `"…"` (with `""` or a backtick escape), and
- *  a bare backtick escape. Null when the line is more than one command, as `a; b` is. */
-export function powershellWords(command: string): string[] | null {
-  const words: string[] = []
-  let word: string | null = null
-  let index = 0
-  while (index < command.length) {
-    const char = command[index]!
-    if (char === '\n' || char === '\r') {
-      // A bare line break ends a statement, so the line is more than one command.
-      return null
-    }
-    if (/\s/u.test(char)) {
-      if (word !== null) {
-        words.push(word)
-      }
-      word = null
-      index += 1
-      continue
-    }
-    if (char === '`' && (command[index + 1] === '\n' || command[index + 1] === '\r')) {
-      // A line continuation separates words, as whitespace does.
-      if (word !== null) {
-        words.push(word)
-      }
-      word = null
-      index += command[index + 1] === '\r' && command[index + 2] === '\n' ? 3 : 2
-      continue
-    }
-    word ??= ''
-    if (char === "'" || char === '"') {
-      index += 1
-      for (;;) {
-        if (index >= command.length) {
-          return null
-        }
-        if (command[index] === char && command[index + 1] === char) {
-          word += char
-          index += 2
-        } else if (command[index] === char) {
-          index += 1
-          break
-        } else if (char === '"' && command[index] === '`' && index + 1 < command.length) {
-          word += command[index + 1]
-          index += 2
-        } else {
-          word += command[index]
-          index += 1
-        }
-      }
-    } else if (char === '`' && index + 1 < command.length) {
-      word += command[index + 1]
-      index += 2
-    } else if (POWERSHELL_COMMAND_SYNTAX.test(char)) {
-      return null
-    } else {
-      word += char
-      index += 1
-    }
-  }
-  if (word !== null) {
-    words.push(word)
-  }
-  return words
 }
