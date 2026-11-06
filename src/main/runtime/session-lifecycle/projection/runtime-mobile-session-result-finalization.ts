@@ -9,7 +9,10 @@ import type {
 
 export function finalizeRuntimeMobileSessionTabsResult(
   { snapshot, tabs }: RuntimeMobileSessionProjectionInput,
-  host: RuntimeMobileSessionProjectionHost
+  host: Pick<
+    RuntimeMobileSessionProjectionHost,
+    'sanitizeGroups' | 'pruneGroupLayout' | 'collectTabIds'
+  >
 ): RuntimeMobileSessionTabsResult {
   const normalized = normalizeMobileSessionTabSelection({ ...snapshot, tabs })
   const active = normalized.tabs.find((tab) => tab.isActive) ?? null

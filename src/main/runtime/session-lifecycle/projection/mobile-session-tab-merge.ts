@@ -169,7 +169,7 @@ export function mergeMobileSessionTabGroups(
         activeTabId:
           keptActive ??
           (activeParentId && tabOrder.includes(activeParentId) ? activeParentId : null) ??
-          tabOrder[0] ??
+          (groups.length > 0 ? tabOrder[0] : null) ??
           null
       }
     })

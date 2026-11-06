@@ -5,6 +5,7 @@ import baseConfig from './vitest.config'
 import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-runtime-pool'
 
 const contracts = [
+  'tests/e2e/session-tabs/mobile-session-active-performance.unit.test.ts',
   'src/renderer/src/components/terminal-pane/pty-connection/saved-resume-cancellation.test.ts',
   'src/main/ipc/pty/runtime/spawn-preflight-saved-resume.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-terminal-writer-acquire.test.ts',

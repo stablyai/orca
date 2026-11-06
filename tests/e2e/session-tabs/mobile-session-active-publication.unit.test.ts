@@ -25,8 +25,16 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-function createRuntime() {
+function createRuntimeFixture() {
   const session = makeWorkspaceSessionWithHeadlessTerminal({
+    tabGroupLayouts: {
+      [WT]: {
+        type: 'split',
+        direction: 'vertical',
+        first: { type: 'leaf', groupId: 'g' },
+        second: { type: 'leaf', groupId: 'g2' }
+      }
+    },
     activeTabId: 'serve-tab',
     activeTabIdByWorktree: { [WT]: 'serve-tab' },
     tabsByWorktree: {
@@ -47,7 +55,7 @@ function createRuntime() {
       'serve-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: 'serve-active' })
     }
   })
-  const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
+  const { runtimeStore, getSession, setSession } = makeRuntimeStoreWithWorkspaceSession(session)
   const runtime = new OrcaRuntimeService(runtimeStore)
   runtime.setPtyController({
     write: () => true,
@@ -56,7 +64,11 @@ function createRuntime() {
     listProcesses: async () => [{ id: 'serve-active', cwd: TEST_WORKTREE_PATH, title: 'sh' }]
   })
   runtime.attachWindow(1)
-  return runtime
+  return { runtime, getSession, setSession }
+}
+
+function createRuntime() {
+  return createRuntimeFixture().runtime
 }
 
 async function publish(runtime: OrcaRuntimeService, id: string, activate = true) {
@@ -162,18 +174,124 @@ describe('host active-tab publication', () => {
     const runtime = createRuntime()
     await publish(runtime, A)
     accept(runtime, rendererFrame(B, 10))
-    expectSelection(await list(runtime), null)
+    const pending = await list(runtime)
+    expectSelection(pending, null)
+    expect(pending.tabGroups?.find((group) => group.id === 'g')?.activeTabId).toBeNull()
     runtime.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(WT, {
       force: true,
       allowAttachedWindow: true,
       onlyRuntimeOwnedTerminals: true
     })
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], unchangedMobileSessionWorktrees: [WT] })
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [],
+      unchangedMobileSessionWorktrees: [WT]
+    })
     expectSelection(await list(runtime), null)
     expect(
       runtime.mobileSessionTabsByWorktree.get(WT)?.tabGroups?.find((group) => group.id === 'g')
         ?.activeTabId
     ).toBe(B)
+    await publish(runtime, B, false)
+    expectSelection(await list(runtime), B)
+  })
+
+  it('does not substitute a preserved row for an unavailable explicit legacy selection', async () => {
+    const runtime = createRuntime()
+    await publish(runtime, A)
+    accept(runtime, {
+      ...rendererFrame(B, 10),
+      tabGroups: undefined,
+      activeGroupId: null,
+      activeTabId: B,
+      activeTabType: 'agent-session'
+    })
+    expectSelection(await list(runtime), null)
+  })
+
+  it('retains the current split layout across runtime-owned hydration before persistence catches up', async () => {
+    vi.useFakeTimers()
+    const { runtime, getSession, setSession } = createRuntimeFixture()
+    await publish(runtime, A)
+    setSession({
+      ...getSession(),
+      tabGroups: {
+        [WT]: [
+          { id: 'g', worktreeId: WT, activeTabId: B, tabOrder: [A, B], recentTabIds: [] },
+          {
+            id: 'g2',
+            worktreeId: WT,
+            activeTabId: 'serve-tab',
+            tabOrder: ['serve-tab'],
+            recentTabIds: []
+          }
+        ]
+      },
+      activeGroupIdByWorktree: { [WT]: 'g' },
+      tabGroupLayouts: {
+        [WT]: {
+          type: 'split',
+          direction: 'vertical',
+          first: { type: 'leaf', groupId: 'g' },
+          second: { type: 'leaf', groupId: 'g2' }
+        }
+      }
+    })
+    const frame: RuntimeMobileSessionTabsSnapshot = {
+      ...rendererFrame(B, 10),
+      tabGroups: [
+        { id: 'g', activeTabId: B, tabOrder: [A, B] },
+        { id: 'g2', activeTabId: 'serve-tab', tabOrder: ['serve-tab'] }
+      ],
+      tabGroupLayout: {
+        type: 'split',
+        direction: 'horizontal',
+        first: { type: 'leaf', groupId: 'g' },
+        second: { type: 'leaf', groupId: 'g2' }
+      }
+    }
+    accept(runtime, frame)
+    await vi.runAllTimersAsync()
+    expect(runtime.mobileSessionTabsByWorktree.get(WT)?.tabGroupLayout).toEqual(
+      frame.tabGroupLayout
+    )
+    const seen: RuntimeMobileSessionTabsResult[] = []
+    runtime.onMobileSessionTabsChanged((snapshot) => seen.push(snapshot))
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [],
+      unchangedMobileSessionWorktrees: [WT]
+    })
+    await vi.runAllTimersAsync()
+    expect(runtime.mobileSessionTabsByWorktree.get(WT)?.tabGroupLayout).toEqual({
+      type: 'split',
+      direction: 'horizontal',
+      first: { type: 'leaf', groupId: 'g' },
+      second: { type: 'leaf', groupId: 'g2' }
+    })
+    expect(seen).toEqual([])
+  })
+
+  it('restores a single saved group with a pending chat without selecting the materialized terminal', async () => {
+    const { runtime, getSession, setSession } = createRuntimeFixture()
+    setSession({
+      ...getSession(),
+      tabGroups: {
+        [WT]: [
+          { id: 'g', worktreeId: WT, activeTabId: B, tabOrder: ['serve-tab', B], recentTabIds: [] }
+        ]
+      },
+      activeGroupIdByWorktree: { [WT]: 'g' },
+      tabGroupLayouts: { [WT]: { type: 'leaf', groupId: 'g' } }
+    })
+    runtime.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(WT, {
+      force: true,
+      allowAttachedWindow: true
+    })
+    expectSelection(await list(runtime), null)
+    expect(runtime.mobileSessionTabsByWorktree.get(WT)?.activeGroupId).toBe('g')
     await publish(runtime, B, false)
     expectSelection(await list(runtime), B)
   })

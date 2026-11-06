@@ -88,7 +88,10 @@ export function withReconciledBrowserTabs(
   return normalizeMobileSessionTabSelection({
     ...existing,
     snapshotVersion: existing.snapshotVersion + 1,
-    activeTabId: active?.id ?? null,
+    activeTabId:
+      existing.activeTabId && !priorIds.has(existing.activeTabId)
+        ? existing.activeTabId
+        : (active?.id ?? null),
     activeTabType: active?.type ?? null,
     tabGroups,
     tabs

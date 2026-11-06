@@ -235,10 +235,16 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
         .filter((tab) => tab.type === 'browser' || tab.type === 'markdown' || tab.type === 'file')
         .map((tab) => tab.id)
       // Restore persisted split groups or cold rebuilds coalesce them into one.
-      const persistedGroups = session.tabGroups?.[entryWorktreeId]
-      const persistedLayout = session.tabGroupLayouts?.[entryWorktreeId]
-      const navigationGroups = existing?.tabGroups ?? persistedGroups
-      const hasPersistedSplit = navigationGroups !== undefined && navigationGroups.length > 1
+      const hasCurrentNavigation = existing?.tabGroups !== undefined
+      const navigationGroups = hasCurrentNavigation
+        ? existing.tabGroups
+        : session.tabGroups?.[entryWorktreeId]
+      const navigationLayout = hasCurrentNavigation
+        ? existing.tabGroupLayout
+        : session.tabGroupLayouts?.[entryWorktreeId]
+      const navigationActiveGroupId = hasCurrentNavigation
+        ? existing.activeGroupId
+        : session.activeGroupIdByWorktree?.[entryWorktreeId]
       const activeTopLevelId = mergedActiveTab
         ? mergedActiveTab.type === 'terminal'
           ? mergedActiveTab.parentTabId
@@ -267,22 +273,16 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
           ? this.getMergedMobileSessionPublicationEpoch(existing, tabs)
           : `headless-hydrated:${Date.now().toString(36)}`,
         snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
-        activeGroupId: hasPersistedSplit
-          ? pickRestoredActiveGroupId(
-              nextTabGroups,
-              [existing?.activeGroupId, session.activeGroupIdByWorktree?.[entryWorktreeId]],
-              activeTopLevelId
-            )
-          : (existing?.activeGroupId ?? groupId),
-        activeTabId: mergedActiveTab?.id ?? null,
+        activeGroupId: pickRestoredActiveGroupId(
+          nextTabGroups,
+          [navigationActiveGroupId],
+          activeTopLevelId
+        ),
+        activeTabId: existing?.activeTabId ?? mergedActiveTab?.id ?? null,
         activeTabType: mergedActiveTab?.type ?? null,
         tabGroups: nextTabGroups,
-        // Carry split layout through runtime hydration on every graph sync to avoid dropping/rebroadcasting it.
-        ...(hasPersistedSplit && persistedLayout
-          ? { tabGroupLayout: persistedLayout }
-          : options.onlyRuntimeOwnedTerminals === true && existing?.tabGroupLayout
-            ? { tabGroupLayout: existing.tabGroupLayout }
-            : {}),
+        // Group navigation and topology must come from the same publication.
+        ...(navigationLayout !== undefined ? { tabGroupLayout: navigationLayout } : {}),
         tabs: mergedTabs
       })
       // Retain the existing object and version for equal projections so unchanged graph syncs do not fan out.

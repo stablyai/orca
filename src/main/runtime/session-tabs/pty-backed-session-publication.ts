@@ -162,7 +162,7 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
         existing?.publicationEpoch ?? `headless:pty-backed:${Date.now().toString(36)}`,
       snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
       activeGroupId: existing?.activeGroupId ?? getHeadlessMobileSessionGroupId(worktreeId),
-      activeTabId: activeTab?.id ?? null,
+      activeTabId: tab.isActive ? tab.id : (existing?.activeTabId ?? activeTab?.id ?? null),
       activeTabType: activeTab?.type ?? null,
       tabGroups: appendChatTabOrder(
         mergeMobileSessionTabGroups(

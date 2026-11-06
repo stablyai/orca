@@ -50,12 +50,10 @@ describe('applyWebSessionTabsSnapshot', () => {
       ]
     })
     recordWebSessionFocusIntent({ environmentId: ENV }, WT, 'agent-session:c')
-    const patch = applyWebSessionTabsSnapshot(
-      state,
-      snapshot,
-      ENV,
-      NOW
-    ) as Partial<WebSessionTabsSyncState>
+    const patch = applyWebSessionTabsSnapshot(state, snapshot, ENV, NOW)
+    if (!patch) {
+      throw new Error('Expected caller focus to produce a navigation patch')
+    }
     const selected = patch.groupsByWorktree?.[WT]?.find(
       (group) => group.id === patch.activeGroupIdByWorktree?.[WT]
     )?.activeTabId
