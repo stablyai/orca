@@ -4,10 +4,8 @@ import type { Store } from '../persistence/loading-store/store'
 import type {
   Automation,
   AutomationDispatchRequest,
-  AutomationDispatchResult,
   AutomationRun
 } from '../../shared/automations-types'
-import { AutomationDispatchCancelledError } from './automation-dispatch-cancelled-error'
 import { resolveAutomationRunTarget, type AutomationRunTargetResult } from './run-target-resolution'
 import type { AutomationRunWriter } from './automation-run-writer'
 import { wslMoveRepoBackoff } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
@@ -96,38 +94,6 @@ export async function recordRefusedAutomationRun(input: {
     workspaceId: input.automation.workspaceId,
     ...failure
   })
-}
-
-/** Record a detached launch's failure; a cancelled or already-launched run is left as it is. */
-export async function recordFailedLaunch(input: {
-  store: Pick<Store, 'listAutomationRuns'>
-  run: AutomationRun
-  error: unknown
-  isActive: () => boolean
-  markDispatchResult: (result: AutomationDispatchResult) => Promise<AutomationRun>
-}): Promise<void> {
-  const { run, error } = input
-  try {
-    const current = input.store
-      .listAutomationRuns(run.automationId)
-      .find((entry) => entry.id === run.id)
-    if (
-      error instanceof AutomationDispatchCancelledError ||
-      !current ||
-      // A failed flush after the launch must not rewrite a launched run.
-      (current.status !== 'pending' && current.status !== 'dispatching') ||
-      !input.isActive()
-    ) {
-      return
-    }
-    await input.markDispatchResult({
-      runId: run.id,
-      status: 'dispatch_failed',
-      error: error instanceof Error ? error.message : String(error)
-    })
-  } catch (writeError) {
-    console.error('[automations] could not record a failed launch', writeError)
-  }
 }
 
 /** Fold broken schedules into one retained skip without interrupting the scheduler tick. */

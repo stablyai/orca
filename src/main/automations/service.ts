@@ -33,7 +33,6 @@ import { reportAutomationScheduleDrift } from './schedule-drift-report'
 import {
   describeScheduledTickRefusal,
   missedBeyondGrace,
-  recordFailedLaunch,
   recordMissedRun,
   recordRefusedAutomationRun,
   recordUnevaluableAutomation
@@ -155,16 +154,23 @@ export class AutomationService {
     const target = this.resolveTarget(automation)
     const run = await this.runs.createRun(automation, Date.now(), 'manual')
     // The saved pending row is the acknowledgement; the lane owns execution behind earlier launches.
-    void this.requestDispatch(automation, run, target, generation).catch((error: unknown) =>
-      recordFailedLaunch({
-        store: this.store,
-        run,
-        error,
-        isActive: () => !this.stopped && generation === this.dispatchGeneration,
-        markDispatchResult: (result) => this.markDispatchResult(result)
-      })
-    )
+    void this.requestDispatch(automation, run, target, generation)
+      .catch((error: unknown) => this.recordFailedLaunch(run, generation, error))
+      .catch((writeError: unknown) =>
+        console.error('[automations] could not record a failed launch', writeError)
+      )
     return run
+  }
+
+  /** Only an unlaunched run of this generation fails; a flush error after launch is not a launch failure. */
+  private async recordFailedLaunch(run: AutomationRun, generation: number, error: unknown) {
+    const current = this.store.listAutomationRuns(run.automationId).find((r) => r.id === run.id)
+    const unlaunched = current?.status === 'pending' || current?.status === 'dispatching'
+    const active = !this.stopped && generation === this.dispatchGeneration
+    if (unlaunched && active && !(error instanceof AutomationDispatchCancelledError)) {
+      const message = error instanceof Error ? error.message : String(error)
+      await this.markDispatchResult({ runId: run.id, status: 'dispatch_failed', error: message })
+    }
   }
 
   async recordRefusedRun(automationId: string): Promise<void> {

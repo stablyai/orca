@@ -115,11 +115,14 @@ describe('automation background writer durability', () => {
   it('keeps a launched run dispatched when its dispatched write fails to flush', async () => {
     const { store, automation } = await fixture()
     const flush = store.flushPendingOrThrowAsync.bind(store)
-    let calls = 0
-    // Flushes: pending row, dispatching claim, then the dispatched write.
+    let failed = false
+    // Fail the one flush that persists the dispatched write.
     vi.spyOn(store, 'flushPendingOrThrowAsync').mockImplementation(async (options) => {
-      calls += 1
-      if (calls === 3) {
+      const dispatched = store
+        .listAutomationRuns(automation.id)
+        .some((entry) => entry.status === 'dispatched')
+      if (dispatched && !failed) {
+        failed = true
         throw new Error('disk full')
       }
       await flush(options)
@@ -130,6 +133,7 @@ describe('automation background writer durability', () => {
       expect(
         store.listAutomationRuns(automation.id).find((entry) => entry.id === run.id)
       ).toMatchObject({ status: 'dispatched', terminalSessionId: 'run-tab' })
+      expect(failed).toBe(true)
     } finally {
       service.stop()
     }
