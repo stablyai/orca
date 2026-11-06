@@ -197,10 +197,9 @@ async function readPRChecks(
             `repo=${ownerRepo.repo}`,
             '-F',
             `pr=${prNumber}`,
-            // Unused by the query, but part of gh's cache key: after a push, a reply cached for the previous head is never served.
-            ...(cacheHead ? ['-f', `cacheHead=${cacheHead}`] : []),
             '-f',
-            `query=${PR_CHECKS_ROLLUP_QUERY}`
+            // The comment is ignored by the server but part of gh's cache key: after a push, a reply cached for the previous head is never served.
+            `query=${PR_CHECKS_ROLLUP_QUERY}${cacheHead ? `# head ${cacheHead}\n` : ''}`
           ],
           ghOptions
         )

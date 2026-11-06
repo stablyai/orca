@@ -14,6 +14,7 @@ const DAY_MS = 24 * HOUR_MS
 export type CheckRunTimeFacts = {
   /** When the check last moved: its finish, or its start while it still runs. */
   whenMs: number | null
+  running: boolean
   /** The duration and earlier-commit note, joined for the row. */
   fixedText: string
   details: string[]
@@ -125,11 +126,24 @@ export function getCheckRunTimeFacts(
   ]
     .filter(Boolean)
     .join(' · ')
-  return { whenMs, fixedText, details }
+  return { whenMs, running, fixedText, details }
 }
 
 export function formatCheckRunAge(facts: CheckRunTimeFacts, nowMs: number): string | null {
-  return facts.whenMs === null ? null : formatAge(nowMs - facts.whenMs)
+  if (facts.whenMs === null) {
+    return null
+  }
+  const age = formatAge(nowMs - facts.whenMs)
+  // A bare age beside "Running" would read as when it ran; say it is when the run started.
+  return facts.running
+    ? translate(
+        'auto.components.right.sidebar.checks.panel.runTime.startedAge',
+        'started {{age}}',
+        {
+          age
+        }
+      )
+    : age
 }
 
 /** The check's age from the shared 30s clock the panel already ticks on, so rows add no timer. */

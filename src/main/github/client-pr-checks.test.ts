@@ -803,7 +803,10 @@ it('carries the actual matching GraphQL commit identity rather than the requeste
   )
   const checks = await getPRChecks('/repo-root', 42, 'a'.repeat(40))
   // gh's cache key follows the expected head, so a push never serves the previous head's reply.
-  expect(ghExecFileAsyncMock.mock.calls[0]?.[0]).toContain(`cacheHead=${'a'.repeat(40)}`)
+  const rollupQuery = (ghExecFileAsyncMock.mock.calls[0]?.[0] as string[]).find((arg) =>
+    arg.startsWith('query=')
+  )
+  expect(rollupQuery).toContain(`# head ${'a'.repeat(40)}`)
   expect(JSON.parse(JSON.stringify(checks))).toEqual([
     {
       name: 'Build',
