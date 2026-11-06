@@ -151,6 +151,7 @@ describe('orca serve asking the app which host to run', () => {
           noPairing: true,
           mobilePairing: true,
           grantDesktopControl: true,
+          allowPublic: true,
           recipeJson: true,
           projectRoot: '/work/app'
         },
@@ -167,6 +168,7 @@ describe('orca serve asking the app which host to run', () => {
       '--serve-no-pairing',
       '--serve-mobile-pairing',
       '--serve-grant-desktop-control',
+      '--serve-allow-public',
       '--serve-recipe-json',
       '--serve-project-root',
       '/work/app'

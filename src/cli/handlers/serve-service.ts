@@ -74,6 +74,7 @@ function serviceSpec(
     port?: string | null
     bind?: string | null
     pairingAddress?: string | null
+    allowPublic?: boolean
   }
 ): ServeServiceSpec {
   return renderServeService({
@@ -85,7 +86,8 @@ function serviceSpec(
     path: resolveServicePath(deps.env),
     port: options.port,
     bind: resolveServeServiceBind(options.bind),
-    pairingAddress: options.pairingAddress
+    pairingAddress: options.pairingAddress,
+    allowPublic: options.allowPublic
   })
 }
 
@@ -117,6 +119,7 @@ export async function installServeService(
     port?: string | null
     bind?: string | null
     pairingAddress?: string | null
+    allowPublic?: boolean
     dryRun: boolean
   },
   deps: ServeServiceDeps = defaultDeps()
@@ -262,6 +265,7 @@ export const SERVE_SERVICE_HANDLERS: Record<string, CommandHandler> = {
       port: getOptionalServePort(flags),
       bind: getOptionalServeBind(flags),
       pairingAddress: optionalString(flags.get('pairing-address')),
+      allowPublic: flags.get('allow-public') === true,
       dryRun: flags.get('dry-run') === true
     })
     emit(result, json, formatServeServiceInstall)

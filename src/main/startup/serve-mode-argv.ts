@@ -8,6 +8,7 @@ const CLI_TO_SERVE_FLAG = new Map([
   ['--no-pairing', '--serve-no-pairing'],
   ['--mobile-pairing', '--serve-mobile-pairing'],
   ['--grant-desktop-control', '--serve-grant-desktop-control'],
+  ['--allow-public', '--serve-allow-public'],
   ['--recipe-json', '--serve-recipe-json']
 ])
 

@@ -16,6 +16,7 @@ import type { DeviceRegistry } from './pairing/device-registry'
 import type { E2EEKeypair } from '../../e2ee-keypair'
 import { UnpairedDeviceAuthThrottle } from '../unpaired-device-auth-throttle'
 import { MobileSocketWiring } from '../mobile-socket-wiring'
+import { createServeNetworkSourceGuard } from './serve-network-source-policy'
 import { RuntimeRpcWebSocketDispatch } from './runtime-rpc-websocket-dispatch'
 import {
   formatWsEndpoint,
@@ -98,6 +99,12 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         publishHostDescriptor(this.runtime.getRuntimeId(), this.hostDescriptor)
         try {
           const host = this.resolveInitialWebSocketBindHost()
+          this.webSocketSourceGuard = createServeNetworkSourceGuard({
+            options: this.serveNetworkSources,
+            bindHost: host,
+            userDataPath: this.userDataPath,
+            devices: pairingIdentity.deviceRegistry.listDevices()
+          })
           const { transport, endpoint } = await this.startWebSocketTransport({
             host,
             port: this.wsPort,
@@ -192,6 +199,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       host: options.host,
       port: options.port,
       staticRoot: this.webClientRoot,
+      ...(this.webSocketSourceGuard ? { sourceGuard: this.webSocketSourceGuard } : {}),
       ...(options.fallbackPort !== undefined ? { fallbackPort: options.fallbackPort } : {}),
       ...(options.preferPinnedPort ? { preferPinnedPort: true } : {}),
       ...(options.requirePinnedPort ? { requirePinnedPort: true } : {}),

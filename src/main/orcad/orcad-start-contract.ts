@@ -13,6 +13,8 @@ export type OrcadOptions = {
   recipeJson?: boolean
   projectRoot?: string
   bind?: string
+  /** Accept clients from public addresses, not only localhost, LAN and Tailscale. */
+  allowPublic?: boolean
   /** Slots have no browser client; orca serve supplies the installed app client. */
   webClientRoot?: string
 }

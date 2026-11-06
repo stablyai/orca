@@ -168,6 +168,15 @@ The command:
 
 Paste the printed pairing URL into **Settings → Remote Orca Servers → Add Server** on the client.
 
+`orca serve` accepts clients from localhost, LAN and Tailscale addresses. It refuses public internet addresses unless:
+
+- you pass `--allow-public`;
+- `--pairing-address` is a hostname or a public IP;
+- a paired client has already connected from a public address; or
+- clients paired before this check was added are still paired.
+
+The startup log says which rule applies, and the first refused public address each hour is logged.
+
 Add `--port 6768` when a firewall, tunnel, or service definition requires a fixed port:
 
 ```bash

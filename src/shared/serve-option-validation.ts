@@ -45,7 +45,9 @@ const SERVE_SECURITY_FLAG_NAMES = [
   '--pairing-address',
   '--serve-pairing-address',
   '--bind',
-  '--serve-bind'
+  '--serve-bind',
+  '--allow-public',
+  '--serve-allow-public'
 ] as const
 
 const SERVE_VALUE_FLAG_NAMES = new Set([

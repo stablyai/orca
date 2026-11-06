@@ -297,6 +297,10 @@ async function startOrcadRuntime(
     enableWebSocket: true,
     // Pin operator exposure across restarts; pairing must not silently widen a loopback bind.
     pinnedBindHost: bindHost,
+    serveNetworkSources: {
+      allowPublic: options.allowPublic === true,
+      pairingAddress: options.pairingAddress ?? null
+    },
     webClientRoot: resolveOrcadWebClientRoot(options.webClientRoot),
     ...orcadWsPortOptions(options.port)
   })

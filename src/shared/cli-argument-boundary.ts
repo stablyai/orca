@@ -6,6 +6,7 @@ export const CLI_BOOLEAN_FLAGS = new Set([
   'agent-wait',
   'all',
   'allow-failed-archive-hook',
+  'allow-public',
   'annotate',
   'attachments',
   'check',

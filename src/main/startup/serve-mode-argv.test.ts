@@ -4,6 +4,9 @@ import {
   findServeSubcommandIndex,
   normalizeServeModeArgv
 } from './serve-mode-argv'
+import { getServeOptions } from './serve-options'
+import { parseArgs as parseOrcadArgs } from '../orcad/orcad-command-arguments'
+import { orcadServeArgs, serveOptionArgs } from '../../shared/orcad-serve-argv'
 
 describe('serve-mode-argv', () => {
   it('does not treat serve as a subcommand when it is an option value', () => {
@@ -95,5 +98,14 @@ describe('serve-mode-argv', () => {
       '--port',
       '1'
     ])
+  })
+
+  it('carries --allow-public to both serve hosts', () => {
+    expect(parseOrcadArgs(orcadServeArgs({ allowPublic: true })).allowPublic).toBe(true)
+    expect(parseOrcadArgs(orcadServeArgs({})).allowPublic).toBeUndefined()
+    expect(getServeOptions(serveOptionArgs({ allowPublic: true }, '--serve-')).allowPublic).toBe(
+      true
+    )
+    expect(getServeOptions(serveOptionArgs({}, '--serve-')).allowPublic).toBe(false)
   })
 })
