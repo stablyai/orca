@@ -16,7 +16,8 @@ export const FILE_READ_DIR_PAGED_RUNTIME_CAPABILITY = 'files.readDir.paged.v1' a
 export const FILE_DOC_PREVIEW_RUNTIME_CAPABILITY = 'files.readDocPreview' as const
 
 // Why: older hosts read a granted file only whole and as text, so a download needs this method.
-export const TERMINAL_ARTIFACT_CHUNK_RUNTIME_CAPABILITY = 'files.readTerminalArtifactChunk.v1' as const
+export const TERMINAL_ARTIFACT_CHUNK_RUNTIME_CAPABILITY =
+  'files.readTerminalArtifactChunk.v1' as const
 
 export const FILES_RUNTIME_CAPABILITIES = [
   'files.pathsExist',
