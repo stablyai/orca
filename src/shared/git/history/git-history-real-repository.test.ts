@@ -4,6 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { resolveExecutableCommand } from '../../node-cli-command-resolution'
+import { GitHistory } from '../../rpc-contract/git-params'
+import { gitHistoryTokens } from './git-history-token-store'
+import { loadGitHistoryRefs } from './git-history-revisions'
 import { loadGitHistoryFromExecutor } from './git-history-execution'
 import { buildDefaultGitHistoryColorMap, buildGitHistoryViewModels } from './git-history-graph'
 
@@ -30,7 +33,9 @@ async function createRepository(inheritedEnv: NodeJS.ProcessEnv = process.env) {
     Object.entries(inheritedEnv).filter(([key]) => !key.toUpperCase().startsWith('GIT_'))
   )
   const git = async (args: string[], cwd = repo, date = '2000-01-04T00:00:00Z') => {
+    const usesStdin = args.includes('--stdin') || args[0] === 'cat-file'
     const result = await runProcess({
+      ...(usesStdin ? { input: date } : {}),
       program: gitBinary,
       args,
       cwd,
@@ -38,8 +43,8 @@ async function createRepository(inheritedEnv: NodeJS.ProcessEnv = process.env) {
         ...fixtureEnv,
         GIT_CONFIG_NOSYSTEM: '1',
         GIT_CONFIG_GLOBAL: emptyConfig,
-        GIT_AUTHOR_DATE: date,
-        GIT_COMMITTER_DATE: date
+        GIT_AUTHOR_DATE: usesStdin ? '2000-01-04T00:00:00Z' : date,
+        GIT_COMMITTER_DATE: usesStdin ? '2000-01-04T00:00:00Z' : date
       },
       timeoutMs: 10000,
       maxOutputBytes: 1024 * 1024
@@ -182,4 +187,97 @@ describe('real branch-only history', () => {
     ])
     expect(untracked.branch).toMatchObject({ ahead: 2, unpushed: 1 })
   })
+})
+
+describe('filtered and pinned history', () => {
+  it('walks only branch, remote and commit-pointing tag roots, including unborn HEAD', async () => {
+    const { repo, git } = await createRepository()
+    await git(['checkout', '--quiet', '--detach'])
+    await git(['commit', '--quiet', '--allow-empty', '-m', 'remote only'])
+    await git(['update-ref', 'refs/remotes/origin/other', 'HEAD'])
+    await git(['commit', '--quiet', '--allow-empty', '-m', 'stash only'])
+    await git(['update-ref', 'refs/stash', 'HEAD'])
+    await git(['checkout', '--quiet', '--detach', 'first'])
+    await git(['commit', '--quiet', '--allow-empty', '-m', 'pull only'])
+    await git(['update-ref', 'refs/pull/1/head', 'HEAD'])
+    await git(['checkout', '--quiet', '--detach', 'first'])
+    await git(['commit', '--quiet', '--allow-empty', '-m', 'tag only'])
+    await git(['tag', '-a', 'inner', '-m', 'inner'])
+    await git(['tag', '-a', 'outer', 'inner', '-m', 'outer'])
+    await git(['tag', 'tree', 'HEAD^{tree}'])
+    await git(['symbolic-ref', 'refs/remotes/origin/alias', 'refs/remotes/origin/other'])
+    await git(['checkout', '--quiet', 'first'])
+    const refs = await loadGitHistoryRefs(git, repo)
+    expect(refs.map((ref) => ref.id)).toEqual([
+      'refs/heads/first',
+      'refs/heads/unrelated',
+      'refs/remotes/origin/other',
+      'refs/tags/inner',
+      'refs/tags/outer'
+    ])
+    const all = await loadGitHistoryFromExecutor(git, repo, { refs: 'all' })
+    expect(all.items.map((item) => item.subject).sort()).toEqual([
+      'A',
+      'B',
+      'V',
+      'remote only',
+      'tag only'
+    ])
+    await git(['checkout', '--orphan', 'unborn'])
+    const unborn = await loadGitHistoryFromExecutor(git, repo, { refs: 'all' })
+    expect(unborn.items.map((item) => item.subject).sort()).toEqual([
+      'A',
+      'B',
+      'V',
+      'remote only',
+      'tag only'
+    ])
+    const chosen = await loadGitHistoryFromExecutor(git, repo, { refs: ['refs/heads/unrelated'] })
+    expect(chosen.items.map((item) => item.subject)).toEqual(['V'])
+    expect(chosen.resolvedRefs).toEqual(['refs/heads/unrelated'])
+    const tag = await loadGitHistoryFromExecutor(git, repo, {
+      refs: ['refs/tags/outer', 'refs/tags/tree']
+    })
+    expect(tag.items.map((item) => item.subject)).toEqual(['tag only', 'A', 'B'])
+    expect(tag.resolvedRefs).toEqual(['refs/tags/outer'])
+  })
+
+  it('keeps page two exact across branch movement and reports lost tokens', async () => {
+    const { repo, git } = await createRepository()
+    await git(['checkout', '--quiet', 'first'])
+    const page = await loadGitHistoryFromExecutor(git, repo, { refs: 'all', limit: 1 })
+    expect(page.items.map((item) => item.subject)).toEqual(['V'])
+    await git(['commit', '--quiet', '--allow-empty', '-m', 'new'])
+    const next = await loadGitHistoryFromExecutor(git, repo, {
+      refs: 'all',
+      historyToken: page.historyToken,
+      skip: 1,
+      limit: 2
+    })
+    expect(next.items.map((item) => item.subject)).toEqual(['A', 'B'])
+    const wrongFilter = await loadGitHistoryFromExecutor(git, repo, {
+      refs: 'head',
+      historyToken: page.historyToken
+    })
+    expect(wrongFilter.historyChanged).toBe(true)
+    for (let index = 0; index < 32; index++) {
+      gitHistoryTokens.put(repo, 'all', [], [])
+    }
+    const evicted = await loadGitHistoryFromExecutor(git, repo, {
+      refs: 'all',
+      historyToken: page.historyToken
+    })
+    expect(evicted).toMatchObject({ items: [], historyChanged: true })
+  })
+
+  it.each(['refs/heads/bad\nname', '-refs/heads/main'])(
+    'rejects unsafe ref names: %s',
+    async (name) => {
+      const { repo, git } = await createRepository()
+      expect(GitHistory.safeParse({ worktree: repo, refs: [name] }).success).toBe(false)
+      await expect(loadGitHistoryFromExecutor(git, repo, { refs: [name] })).rejects.toThrow(
+        'Expected full branch or tag ref names'
+      )
+    }
+  )
 })

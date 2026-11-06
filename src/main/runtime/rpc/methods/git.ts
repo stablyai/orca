@@ -13,6 +13,7 @@ import {
   GitResolveConflict,
   GitForkSync,
   GitHistory,
+  GitRefs,
   GitPush,
   GitRebaseFromBase,
   GitRemoteCommitUrl,
@@ -75,6 +76,12 @@ export const GIT_METHODS = [
       runtime.getRuntimeGitSubmoduleStatus(params.worktree, params.submodulePath, params.area)
   }),
   defineMethod({
+    name: 'git.refs',
+    permission: 'workspace',
+    params: GitRefs,
+    handler: async (params, { runtime }) => runtime.getRuntimeGitRefs(params.worktree, params.query)
+  }),
+  defineMethod({
     name: 'git.history',
     permission: 'workspace',
     params: GitHistory,
@@ -83,6 +90,8 @@ export const GIT_METHODS = [
         limit: params.limit,
         baseRef: params.baseRef,
         branchOnly: params.branchOnly,
+        refs: params.refs,
+        historyToken: params.historyToken,
         skip: params.skip
       })
   }),
