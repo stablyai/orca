@@ -28,7 +28,7 @@ type BlockerArgs = {
   pathOfWorktree: (worktreeId: string) => string | undefined
   /** Whether a terminal row's pane or tab still has a connected terminal on this host. */
   hasLiveTerminal: (row: Pick<AgentRow, 'paneKey' | 'tabId' | 'terminalHandle'>) => boolean
-  probeProcess: ((paneKey: string) => Promise<AgentProcessVerdict | null>) | null
+  probeProcess: (paneKey: string) => Promise<AgentProcessVerdict | null>
   now?: () => number
 }
 
@@ -41,12 +41,12 @@ function isBusyInCheckout(row: AgentRow, args: BlockerArgs): boolean {
   if (!isLocalHookConnectionId(row.connectionId)) {
     return false
   }
-  // Like the sidebar: a closed terminal's row no longer describes a running agent.
-  if (row.structuredHost === undefined && row.tabId !== undefined && !args.hasLiveTerminal(row)) {
+  const path = row.worktreeId ? args.pathOfWorktree(row.worktreeId) : undefined
+  if (path === undefined || !isPathInsideOrEqual(args.checkoutPath, path)) {
     return false
   }
-  const path = row.worktreeId ? args.pathOfWorktree(row.worktreeId) : undefined
-  return path !== undefined && isPathInsideOrEqual(args.checkoutPath, path)
+  // Like the sidebar: a closed terminal's row no longer describes a running agent.
+  return row.structuredHost !== undefined || row.tabId === undefined || args.hasLiveTerminal(row)
 }
 
 function isRecent(row: AgentRow, now: number): boolean {
@@ -84,7 +84,7 @@ function blockerMessage(row: AgentRow, onlyProcessIsLive: boolean): string {
 export async function findAgentSwitchBlocker(args: BlockerArgs): Promise<string | null> {
   const now = args.now ?? Date.now
   for (const row of args.readRows().filter((candidate) => isBusyInCheckout(candidate, args))) {
-    const verdict = (await args.probeProcess?.(row.paneKey).catch(() => null)) ?? null
+    const verdict = await args.probeProcess(row.paneKey).catch(() => null)
     if (verdict === 'exited') {
       continue
     }

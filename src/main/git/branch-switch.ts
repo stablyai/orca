@@ -5,9 +5,9 @@ import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-p
 import { isGitWorktreeMutationInFlight } from './command-runner/git-worktree-mutation-state'
 import { resolveGitDir } from './source-control/resolve-git-dir'
 import { gitOptionsForWorktree, type GitRuntimeOptions } from './git-runtime-options'
-import { gitExecFileAsync } from './runner'
+import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from './runner'
 
-/** A switch outcome the user must act on (refused, or landed with files left behind); shown as-is. */
+/** A switch Orca refused before touching the checkout; the message is shown to the user as-is. */
 export class BranchSwitchRefusedError extends Error {
   constructor(message: string) {
     super(message)
@@ -15,11 +15,19 @@ export class BranchSwitchRefusedError extends Error {
   }
 }
 
+/** The switch landed, but files another program held open kept their old content. */
+export class BranchSwitchFilesLeftBehindError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'BranchSwitchFilesLeftBehindError'
+  }
+}
+
 export type BranchSwitchDeps = {
   /** Status as the panel reads it, so Orca's own shared-path symlinks don't count as changes. */
   getStatus: () => Promise<GitStatusResult>
   /** The provider's checkout, so the user's switch keeps the interactive git queue. */
-  checkout: () => Promise<void>
+  checkout: () => Promise<{ skippedPaths: string[] }>
   /** A user-facing reason when an agent is working in this checkout, else null. */
   getAgentBlocker: () => Promise<string | null>
   /** Record the user's choice before the lock lets a queued first-work rename look at the branch. */
@@ -73,17 +81,35 @@ function changedFilesReason(status: GitStatusResult): string {
   return `Commit or discard ${files} before switching branches.`
 }
 
-/** Submodule `ignore` config hides edits from the panel's status; the switch must still see them. */
-async function firstHiddenSubmoduleChange(
+/** Submodule `ignore` config hides edits from the panel's status; refuse only on edits inside one. */
+async function firstHiddenSubmoduleEdit(
   worktreePath: string,
   options: GitRuntimeOptions
 ): Promise<string | null> {
   const { stdout } = await gitExecFileAsync(
-    ['status', '--porcelain', '--untracked-files=no', '--ignore-submodules=none'],
-    gitOptionsForWorktree(worktreePath, options)
+    ['status', '--porcelain=v2', '--untracked-files=no', '--ignore-submodules=none'],
+    {
+      ...gitOptionsForWorktree(worktreePath, { ...options, admissionTier: 'interactive' }),
+      env: gitOptionalLocksDisabledEnv()
+    }
   )
-  const line = stdout.split('\n').find((entry) => entry.trim().length > 0)
-  return line ? line.slice(3).trim() : null
+  for (const line of stdout.split('\n')) {
+    // `1 XY S<c><m><u> …`: m/u mean tracked or untracked edits inside; a commit mismatch alone
+    // is left alone, since checkout never touches a submodule's working tree.
+    const fields = line.split(' ')
+    const sub = fields[2] ?? ''
+    if (
+      (fields[0] === '1' || fields[0] === '2') &&
+      sub.startsWith('S') &&
+      /[MU]/.test(sub.slice(2))
+    ) {
+      return fields
+        .slice(fields[0] === '1' ? 8 : 9)
+        .join(' ')
+        .split('\t')[0]
+    }
+  }
+  return null
 }
 
 async function readRefusal(
@@ -129,7 +155,7 @@ async function readRefusal(
   if (status.entries.length > 0) {
     return refuse(changedFilesReason(status))
   }
-  const hiddenSubmodule = await firstHiddenSubmoduleChange(worktreePath, options)
+  const hiddenSubmodule = await firstHiddenSubmoduleEdit(worktreePath, options)
   if (hiddenSubmodule) {
     return refuse(
       `Commit, stash or clean the changes inside submodule ${hiddenSubmodule} before switching branches.`
@@ -153,15 +179,12 @@ export async function switchBranchGuarded(
     if (previousBranch === null) {
       return { branch, previousBranch }
     }
-    await deps.checkout()
+    const { skippedPaths } = await deps.checkout()
     deps.onSwitched?.()
-    // Git for Windows can skip a file another program holds open and still exit 0; say so, since
-    // the tree was clean before the checkout.
-    const after = await deps.getStatus()
-    if (after.readError === undefined && after.entries.length > 0) {
-      const count = after.statusLength ?? after.entries.length
-      throw new BranchSwitchRefusedError(
-        `Switched to ${branch}, but ${count === 1 ? '1 file' : `${count} files`} could not be updated, likely because another program has ${count === 1 ? 'it' : 'them'} open (${after.entries[0].path}). Close that program, then discard the leftover changes.`
+    if (skippedPaths.length > 0) {
+      const files = skippedPaths.length === 1 ? '1 file' : `${skippedPaths.length} files`
+      throw new BranchSwitchFilesLeftBehindError(
+        `Switched to ${branch}, but ${files} kept the old branch's content because another program has ${skippedPaths.length === 1 ? 'it' : 'them'} open (${skippedPaths[0]}). Close that program, then discard the changes Orca shows for ${skippedPaths.length === 1 ? 'it' : 'them'} to finish the switch.`
       )
     }
     return { branch, previousBranch }

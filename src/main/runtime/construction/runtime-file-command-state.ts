@@ -210,9 +210,8 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
       paneOf: (pty) => this.paneOfPty(pty),
       terminalHandlesOf: (ptyId) => this.getExistingTerminalHandlesForPtyId(ptyId),
       syncedTabIds: () => this.tabs.keys(),
-      probeProcess: this.checkHookAgentPresenceFn
-        ? (paneKey) => this.checkHookAgentPresenceFn!(paneKey)
-        : null,
+      // Read at switch time: the host installs this callback after this field initializes.
+      probeProcess: (paneKey) => this.checkHookAgentPresenceFn?.(paneKey) ?? Promise.resolve(null),
       notifyBranchChanged: (repoId) => this.notifyBranchRenamed(repoId)
     })
   })

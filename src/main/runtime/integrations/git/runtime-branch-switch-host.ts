@@ -22,7 +22,7 @@ export type BranchSwitchHostSources<P extends ConnectedPty> = {
   paneOf: (pty: P) => { tabId: string | null; paneKey: string | null }
   terminalHandlesOf: (ptyId: string) => readonly string[]
   syncedTabIds: () => Iterable<string>
-  probeProcess: ((paneKey: string) => Promise<AgentProcessVerdict | null>) | null
+  probeProcess: (paneKey: string) => Promise<AgentProcessVerdict | null>
   notifyBranchChanged: (repoId: string) => void
 }
 
@@ -49,6 +49,8 @@ export function createBranchSwitchHost<P extends ConnectedPty>(
   return {
     getAgentSwitchBlocker: async (checkoutPath) => {
       const store = sources.getStore()
+      // Built at most once per switch, and only if an agent in this checkout needs it.
+      let tabIds: Set<string> | null = null
       return findAgentSwitchBlocker({
         checkoutPath,
         readRows: sources.readAgentRows,
@@ -63,7 +65,7 @@ export function createBranchSwitchHost<P extends ConnectedPty>(
         },
         // Same admission as the sidebar roster: a listed tab, or a connected terminal by pane, tab or handle.
         hasLiveTerminal: (row) => {
-          if (row.tabId !== undefined && listedTabIds(sources).has(row.tabId)) {
+          if (row.tabId !== undefined && (tabIds ??= listedTabIds(sources)).has(row.tabId)) {
             return true
           }
           for (const pty of sources.ptys()) {

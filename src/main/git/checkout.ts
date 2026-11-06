@@ -11,20 +11,26 @@ export function assertValidBranchName(branch: string): void {
   }
 }
 
+/** Git for Windows reports a file another program holds open this way, then still exits 0. */
+const UNLINK_FAILURE = /unable to unlink (?:old )?'([^']+)'/g
+
 /** Leave conflicting changes to Git; trailing -- disambiguates the branch from pathspecs. */
 export async function checkoutBranch(
   worktreePath: string,
   branch: string,
   options: GitRuntimeOptions = {}
-): Promise<void> {
+): Promise<{ skippedPaths: string[] }> {
   assertValidBranchName(branch)
-  await runWithGitReadCacheInvalidation(() =>
+  const { stderr } = await runWithGitReadCacheInvalidation(() =>
     gitExecFileAsync(['checkout', branch, '--'], {
       ...gitOptionsForWorktree(worktreePath, options),
       // A locked file must fail the checkout, not open a prompt while the switch lock is held.
       ...gitEnvWithoutYesNoPrompt()
     })
   )
+  return {
+    skippedPaths: [...new Set([...stderr.matchAll(UNLINK_FAILURE)].map((match) => match[1]))]
+  }
 }
 
 /** for-each-ref avoids localized branch decoration; return the current branch first. */

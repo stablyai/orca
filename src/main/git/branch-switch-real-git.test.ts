@@ -78,6 +78,33 @@ describe('switchBranchGuarded', () => {
     expect(await currentBranch()).toBe('main')
   })
 
+  it('refuses edits inside a submodule that ignore config hides, but not a commit mismatch alone', async () => {
+    const library = await mkdtemp(join(tmpdir(), 'orca-branch-switch-lib-'))
+    try {
+      await runProcess({ program: 'git', args: ['init', '-q'], cwd: library })
+      await writeFile(join(library, 'lib.txt'), 'lib\n')
+      await runProcess({ program: 'git', args: ['add', 'lib.txt'], cwd: library })
+      await runProcess({
+        program: 'git',
+        args: ['-c', 'user.name=A', '-c', 'user.email=a@a.test', 'commit', '-qm', 'lib'],
+        cwd: library
+      })
+      await git('-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', library, 'lib')
+      await git('config', '-f', '.gitmodules', 'submodule.lib.ignore', 'all')
+      await git('add', '.gitmodules')
+      await git('commit', '-qm', 'add lib')
+      await git('branch', '-f', 'feature')
+
+      await writeFile(join(directory, 'lib', 'lib.txt'), 'edited\n')
+      await expect(switchBranchGuarded(directory, 'feature', {}, deps())).rejects.toThrow(
+        'Commit, stash or clean the changes inside submodule lib before switching branches.'
+      )
+      expect(await currentBranch()).toBe('main')
+    } finally {
+      await rm(library, { recursive: true, force: true })
+    }
+  })
+
   it('refuses with the agent reason when the checkout is otherwise clean', async () => {
     await expect(
       switchBranchGuarded(directory, 'feature', {}, deps('Claude is working in this workspace.'))
