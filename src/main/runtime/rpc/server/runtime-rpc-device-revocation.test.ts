@@ -3,7 +3,7 @@ import type * as WorktreeListingModule from '../../../git/worktrees/catalog/work
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
 import { encodeDeviceProofMessage } from '../../../../shared/remote-runtime/pairing/device-key-proof'
 import { SimulatedMobileE2EEV2Peer } from '../../mobile-cloud-relay/simulated-mobile-e2ee-v2-peer'
@@ -100,6 +100,10 @@ async function authenticateKeyedWs(offer: PairingOffer, deviceId: string, key: n
 }
 
 describe('OrcaRuntimeRpcServer', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('cleans up pre-auth E2EE WebSocket state when the socket closes', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
@@ -500,7 +504,6 @@ describe('OrcaRuntimeRpcServer', () => {
         expect(server['mobileSocketWiring']?.connectionCount).toBe(0)
       } finally {
         cleanup.mockRestore()
-        vi.useRealTimers()
         await server.stop()
       }
     }
