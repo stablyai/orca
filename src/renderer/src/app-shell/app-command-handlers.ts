@@ -251,6 +251,7 @@ export function createAppCommandHandlers(
         })
       }
     ],
+    ['home.open', () => claim('home.open', () => useAppStore.getState().openHomePage())],
     [
       'view.tasks',
       () => {

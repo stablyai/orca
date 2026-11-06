@@ -19,7 +19,7 @@ export function useOpenStatsSettings(): () => void {
 }
 
 export function HomeUsageCard(): React.JSX.Element {
-  const { rosterProviders, usagePercentageDisplay } = useHomeUsageProviders()
+  const { rosterProviders, isEmptyUsageState, usagePercentageDisplay } = useHomeUsageProviders()
   const openStatsSettings = useOpenStatsSettings()
   const now = useResetCountdownClock(
     rosterProviders.flatMap((p) => getWindowSections(p).map((section) => section.window?.resetsAt))
@@ -34,7 +34,7 @@ export function HomeUsageCard(): React.JSX.Element {
         </Button>
       }
     >
-      {rosterProviders.length === 0 ? (
+      {isEmptyUsageState ? (
         <HomeCardEmpty>
           {translate(
             'auto.components.home.HomeUsageCard.empty',

@@ -234,6 +234,9 @@ export function useGlobalKeybindings(args: {
       if (matchShortcut('view.plugins') && handlers.get('view.plugins')?.()) {
         return
       }
+      if (matchShortcut('home.open') && handlers.get('home.open')?.()) {
+        return
+      }
       for (const actionId of PLUGIN_COMMAND_ALIAS_ACTION_IDS) {
         if (matchShortcut(actionId) && handlers.get(actionId)?.()) {
           return
