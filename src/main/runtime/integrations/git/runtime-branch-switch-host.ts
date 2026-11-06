@@ -18,6 +18,7 @@ type ConnectedPty = { ptyId: string; worktreeId: string; connected: boolean }
 export type BranchSwitchHostSources<P extends ConnectedPty> = {
   getStore: () => RuntimeStore | null
   readAgentRows: () => readonly AgentSwitchRow[]
+  readAgentPaneRows: (paneKey: string) => readonly AgentSwitchRow[]
   ptys: () => Iterable<P>
   paneOf: (pty: P) => { tabId: string | null; paneKey: string | null }
   terminalHandlesOf: (ptyId: string) => readonly string[]
@@ -26,17 +27,45 @@ export type BranchSwitchHostSources<P extends ConnectedPty> = {
   savedTabIds: (workspaceIds: ReadonlySet<string>) => Iterable<string>
   probeProcess: (paneKey: string) => Promise<AgentProcessVerdict | null>
   notifyBranchChanged: (repoId: string) => void
+  /** Every folder workspace's directory by id; read at most once per switch. */
+  folderWorkspacePaths: () => ReadonlyMap<string, string>
 }
 
-/** A worktree or folder workspace's directory, without scanning the catalog. */
-function workspacePath(store: RuntimeStore | null, workspaceId: string): string | undefined {
-  const scope = parseWorkspaceKey(workspaceId)
-  if (scope?.type === 'folder') {
-    return store?.getFolderWorkspace?.(scope.folderWorkspaceId)?.folderPath
+type WorkspacePathOf = (workspaceId: string) => string | undefined
+
+/** The saved-session and folder sources, read from the store only when a switch needs them. */
+export function storeBackedBranchSwitchSources(
+  getStore: () => RuntimeStore | null
+): Pick<BranchSwitchHostSources<ConnectedPty>, 'savedTabIds' | 'folderWorkspacePaths'> {
+  return {
+    savedTabIds: (workspaceIds) => {
+      const store = getStore()
+      return (store?.getWorkspaceSessionHostIds?.() ?? []).flatMap((hostId) => {
+        const tabsByWorktree = store?.getWorkspaceSession?.(hostId)?.tabsByWorktree ?? {}
+        return [...workspaceIds].flatMap((id) => (tabsByWorktree[id] ?? []).map((tab) => tab.id))
+      })
+    },
+    folderWorkspacePaths: () =>
+      new Map(
+        (getStore()?.getFolderWorkspaces?.() ?? []).map((folder) => [folder.id, folder.folderPath])
+      )
   }
-  // A worktree id spells its checkout path.
-  return splitWorktreeIdForFilesystem(scope?.type === 'worktree' ? scope.worktreeId : workspaceId)
-    ?.worktreePath
+}
+
+/** Resolve workspace directories without a catalog scan, reading folder workspaces once if needed. */
+function createWorkspacePathOf(
+  sources: Pick<BranchSwitchHostSources<ConnectedPty>, 'folderWorkspacePaths'>
+): WorkspacePathOf {
+  let folders: ReadonlyMap<string, string> | null = null
+  return (workspaceId) => {
+    const scope = parseWorkspaceKey(workspaceId)
+    if (scope?.type === 'folder') {
+      return (folders ??= sources.folderWorkspacePaths()).get(scope.folderWorkspaceId)
+    }
+    // A worktree id spells its checkout path.
+    return splitWorktreeIdForFilesystem(scope?.type === 'worktree' ? scope.worktreeId : workspaceId)
+      ?.worktreePath
+  }
 }
 
 /**
@@ -47,14 +76,14 @@ function workspacePath(store: RuntimeStore | null, workspaceId: string): string 
 function buildTerminalLiveness<P extends ConnectedPty>(
   sources: BranchSwitchHostSources<P>,
   checkoutPath: string,
-  candidates: readonly AgentSwitchRow[]
+  candidates: readonly AgentSwitchRow[],
+  workspacePathOf: WorkspacePathOf
 ): (row: Pick<AgentSwitchRow, 'paneKey' | 'tabId' | 'terminalHandle'>) => boolean {
-  const store = sources.getStore()
   const paneKeys = new Set<string>()
   const tabIds = new Set<string>()
   const handles = new Set<string>()
   for (const pty of sources.ptys()) {
-    const path = pty.connected ? workspacePath(store, pty.worktreeId) : undefined
+    const path = pty.connected ? workspacePathOf(pty.worktreeId) : undefined
     if (path === undefined || !isPathInsideOrEqual(checkoutPath, path)) {
       continue
     }
@@ -87,13 +116,14 @@ export function createBranchSwitchHost<P extends ConnectedPty>(
 ): Required<Pick<RuntimeGitCommandHost, 'getAgentSwitchBlocker' | 'recordBranchSwitched'>> {
   return {
     getAgentSwitchBlocker: async (checkoutPath) => {
-      const store = sources.getStore()
+      const workspacePathOf = createWorkspacePathOf(sources)
       return findAgentSwitchBlocker({
         checkoutPath,
         readRows: sources.readAgentRows,
-        pathOfWorktree: (workspaceId) => workspacePath(store, workspaceId),
+        readPaneRows: sources.readAgentPaneRows,
+        pathOfWorktree: workspacePathOf,
         buildTerminalLiveness: (candidates) =>
-          buildTerminalLiveness(sources, checkoutPath, candidates),
+          buildTerminalLiveness(sources, checkoutPath, candidates, workspacePathOf),
         probeProcess: sources.probeProcess
       })
     },

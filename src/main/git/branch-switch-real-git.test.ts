@@ -1,8 +1,8 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installRealWorkerThreadChildProcesses } from '../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
 import { switchBranchGuarded, type BranchSwitchDeps } from './branch-switch'
 import { checkoutBranch } from './checkout'
@@ -123,6 +123,25 @@ describe('switchBranchGuarded', () => {
     } finally {
       await rm(library, { recursive: true, force: true })
     }
+  })
+
+  it('records a switch that landed before a failing post-checkout hook and names the hook error', async () => {
+    const hooks = join(directory, '.hooks')
+    await mkdir(hooks)
+    await writeFile(
+      join(hooks, 'post-checkout'),
+      '#!/bin/sh\necho "hook check failed" >&2\nexit 1\n'
+    )
+    await chmod(join(hooks, 'post-checkout'), 0o755)
+    await git('config', 'core.hooksPath', hooks)
+    await writeFile(join(directory, '.git', 'info', 'exclude'), '.hooks/\n')
+    const onSwitched = vi.fn()
+
+    await expect(
+      switchBranchGuarded(directory, 'feature', {}, { ...deps(), onSwitched })
+    ).rejects.toThrow('Switched to feature, but git reported an error: hook check failed')
+    expect(await currentBranch()).toBe('feature')
+    expect(onSwitched).toHaveBeenCalledTimes(1)
   })
 
   it('refuses with the agent reason when the checkout is otherwise clean', async () => {

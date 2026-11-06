@@ -30,7 +30,10 @@ import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-pa
 import type { Repo } from '../../../shared/repo-types'
 import { isWslMoveWorktreeBlocked } from '../../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import { worktreeRowTarget } from '../../persistence/host-qualified-worktree-meta'
-import { createBranchSwitchHost } from '../integrations/git/runtime-branch-switch-host'
+import {
+  createBranchSwitchHost,
+  storeBackedBranchSwitchSources
+} from '../integrations/git/runtime-branch-switch-host'
 import type { RuntimeRepoSelector } from '../workspaces/catalog/runtime-repo-selector'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WindowLayoutCommand } from '../terminal/layout/runtime-layout-apply'
@@ -206,18 +209,12 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
     ...createBranchSwitchHost({
       getStore: () => this.store,
       readAgentRows: () => this.getAgentStatusSnapshotFn?.() ?? [],
+      readAgentPaneRows: (paneKey) => this.getAgentStatusSnapshotForPaneFn?.(paneKey) ?? [],
       ptys: () => this.ptysById.values(),
       paneOf: (pty) => this.paneOfPty(pty),
       terminalHandlesOf: (ptyId) => this.getExistingTerminalHandlesForPtyId(ptyId),
       hasSyncedTab: (tabId) => this.tabs.has(tabId),
-      savedTabIds: (workspaceIds) => {
-        const store = this.store
-        return (store?.getWorkspaceSessionHostIds?.() ?? []).flatMap((hostId) => {
-          const tabsByWorktree = store?.getWorkspaceSession?.(hostId)?.tabsByWorktree ?? {}
-          return [...workspaceIds].flatMap((id) => (tabsByWorktree[id] ?? []).map((tab) => tab.id))
-        })
-      },
-      // Read at switch time: the host installs this callback after this field initializes.
+      ...storeBackedBranchSwitchSources(() => this.store),
       probeProcess: (paneKey) => this.checkHookAgentPresenceFn?.(paneKey) ?? Promise.resolve(null),
       notifyBranchChanged: (repoId) => this.notifyBranchRenamed(repoId)
     })

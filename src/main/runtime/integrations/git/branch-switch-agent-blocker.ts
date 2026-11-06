@@ -27,6 +27,8 @@ type TerminalRef = Pick<AgentSwitchRow, 'paneKey' | 'tabId' | 'terminalHandle'>
 type BlockerArgs = {
   checkoutPath: string
   readRows: () => readonly AgentSwitchRow[]
+  /** The rows the host holds for one pane right now, read by key. */
+  readPaneRows: (paneKey: string) => readonly AgentSwitchRow[]
   pathOfWorktree: (worktreeId: string) => string | undefined
   /** Built once per switch from this checkout's candidates: is a terminal row's terminal still live? */
   buildTerminalLiveness: (candidates: readonly AgentSwitchRow[]) => (row: TerminalRef) => boolean
@@ -78,7 +80,7 @@ function blockerMessage(row: AgentSwitchRow, onlyProcessIsLive: boolean): string
  * Switching files under a busy agent breaks its work. A busy row blocks while its evidence is
  * recent, or while Orca verifies that exact agent process is still running (a long silent tool).
  * A verified exit, or a newer row that is no longer busy here, releases it. Only this checkout's
- * rows reach liveness and probes, and each collection is walked at most once per switch.
+ * rows reach liveness, probes and the keyed re-read; the snapshot is walked once per switch.
  */
 export async function findAgentSwitchBlocker(args: BlockerArgs): Promise<string | null> {
   const now = args.now ?? Date.now
@@ -95,12 +97,11 @@ export async function findAgentSwitchBlocker(args: BlockerArgs): Promise<string 
   const verdicts = await Promise.all(
     probed.map((row) => args.probeProcess(row.paneKey).catch(() => null))
   )
-  // The probes are async; only each pane's latest row decides, judged again in full.
-  const latestByPane = new Map(args.readRows().map((row) => [row.paneKey, row]))
+  // The probes are async; only each pane's current row decides, judged again in full.
   for (const [index, row] of probed.entries()) {
     const verdict = verdicts[index]
-    const latest = latestByPane.get(row.paneKey)
-    if (verdict === 'exited' || !latest || !admitted(latest)) {
+    const latest = args.readPaneRows(row.paneKey).find(admitted)
+    if (verdict === 'exited' || !latest) {
       continue
     }
     const recent = isRecent(latest, now())

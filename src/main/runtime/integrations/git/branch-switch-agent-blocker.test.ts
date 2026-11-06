@@ -26,6 +26,7 @@ function blocker(rows: Row[], verdict: 'live' | 'exited' | null = null) {
   return findAgentSwitchBlocker({
     checkoutPath: '/work/app',
     readRows: () => rows,
+    readPaneRows: (paneKey) => rows.filter((candidate) => candidate.paneKey === paneKey),
     pathOfWorktree: (id) => paths[id],
     buildTerminalLiveness: () => () => true,
     probeProcess: async () => verdict,

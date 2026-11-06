@@ -2,6 +2,7 @@ import { access } from 'node:fs/promises'
 import * as path from 'node:path'
 import type { GitStatusResult } from '../../shared/git/status/git-status-types'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import { resolveWorktreeHostPath } from '../../shared/git/metadata/git-metadata-path'
 import { isGitWorktreeMutationInFlight } from './command-runner/git-worktree-mutation-state'
 import { resolveGitDir } from './source-control/resolve-git-dir'
 import { gitOptionsForWorktree, type GitRuntimeOptions } from './git-runtime-options'
@@ -118,6 +119,11 @@ async function firstHiddenSubmoduleEdit(
   worktreePath: string,
   options: GitRuntimeOptions
 ): Promise<string | null> {
+  // No submodules, nothing hidden: skip a second working-tree walk on every switch.
+  const hostPath = resolveWorktreeHostPath(worktreePath, options) ?? worktreePath
+  if (!(await exists(path.join(hostPath, '.gitmodules')))) {
+    return null
+  }
   const { stdout } = await gitExecFileAsync(
     ['status', '--porcelain=v2', '--untracked-files=no', '--ignore-submodules=none'],
     {
