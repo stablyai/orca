@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { activateWebRuntimeSessionWorktree } from '@/runtime/web-runtime-worktree-activation'
+import { activateWebRuntimeSessionWorktreeOnEnvironment } from '@/runtime/web-runtime-worktree-activation'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import {
@@ -17,7 +17,8 @@ import { wakeWorkspaceAgents } from './worktree-activation-agent-wake'
 import { liftSidebarFiltersHidingWorktree } from './worktree-activation-sidebar-filters'
 import { buildActivationStateTransition } from './worktree-activation-visit'
 import {
-  getExecutionHostIdForWorktree,
+  getKnownExecutionHostIdForWorktree,
+  getUnstampedExecutionHostId,
   runtimeEnvironmentIdOrLocalUnlessTwin
 } from './worktree-runtime-owner'
 import { activateWslMovedWorkspace } from './wsl-moved-chat-activation'
@@ -68,8 +69,9 @@ export function showStructuredChatWorkspace(
   const switched =
     state.activeWorktreeId !== worktreeId ||
     (executionHostId !== undefined &&
-      (state.activeWorkspaceExecutionHostId ?? getExecutionHostIdForWorktree(state, worktreeId)) !==
-        executionHostId)
+      (state.activeWorkspaceExecutionHostId ??
+        getKnownExecutionHostIdForWorktree(state, worktreeId) ??
+        getUnstampedExecutionHostId(state)) !== executionHostId)
   if (state.activeView !== 'terminal') {
     state.setActiveView('terminal')
   }
@@ -99,7 +101,7 @@ function wakeSwitchedWorkspace(
   state.setActiveWorktree(worktreeId, executionHostId)
   const environmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   if (isWorktree && isWebRuntimeSessionActive(environmentId)) {
-    void activateWebRuntimeSessionWorktree({ worktreeId, environmentId })
+    void activateWebRuntimeSessionWorktreeOnEnvironment({ worktreeId, environmentId })
   }
   wakeWorkspaceAgents(worktreeId, {
     hasActivationWork: false,

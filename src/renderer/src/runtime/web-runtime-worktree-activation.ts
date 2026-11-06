@@ -20,6 +20,16 @@ export async function activateWebRuntimeSessionWorktree(args: {
     args.environmentId?.trim() ??
     useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() ??
     null
+  return environmentId
+    ? activateWebRuntimeSessionWorktreeOnEnvironment({ worktreeId: args.worktreeId, environmentId })
+    : false
+}
+
+export async function activateWebRuntimeSessionWorktreeOnEnvironment(args: {
+  worktreeId: string
+  environmentId: string
+}): Promise<boolean> {
+  const environmentId = args.environmentId.trim()
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
   }

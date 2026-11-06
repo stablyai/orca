@@ -5,6 +5,10 @@ import type { Worktree } from '../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import * as sleepingResume from './resume-sleeping-agent-session'
 import * as pruneModule from './retire-moved-structured-session-placement'
+import * as workspaceWake from './worktree-activation-agent-wake'
+import * as webActivation from '@/runtime/web-runtime-worktree-activation'
+import { getKnownExecutionHostIdForWorktree } from './worktree-runtime-owner'
+import { showStructuredChatWorkspace } from './structured-chat-workspace-navigation'
 import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
 import {
   makeCreatedAgentWorktree,
@@ -206,6 +210,54 @@ it('selects the chat host when another host shows the same workspace ID', async 
   expect(useAppStore.getState().activeWorkspaceExecutionHostId).toBe('runtime:env-1')
   expect(shownChat()).toBe(tab.id)
 })
+
+it.each([
+  ['desktop local retry', false, 'local', false],
+  ['desktop runtime switch', false, 'runtime:env-1', true],
+  ['paired runtime retry', true, 'runtime:env-1', false]
+] as const)(
+  'preserves the legacy host comparison for a %s with no repo row',
+  (_, paired, host, wakes) => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', paired)
+    const wake = vi.spyOn(workspaceWake, 'wakeWorkspaceAgents').mockReturnValue(false)
+    const activate = vi
+      .spyOn(webActivation, 'activateWebRuntimeSessionWorktreeOnEnvironment')
+      .mockResolvedValue(true)
+    useAppStore.setState({
+      activeWorktreeId: destination.id,
+      activeWorkspaceExecutionHostId: null,
+      repos: [],
+      detectedWorktreesByRepo: {},
+      worktreesByRepo: {
+        [destination.repoId]: [
+          host === 'local' ? destination : { ...destination, runtimeOwnerEnvironmentId: 'env-1' }
+        ]
+      },
+      runtimeEnvironments: [
+        {
+          id: 'env-1',
+          name: 'Paired server',
+          createdAt: 0,
+          updatedAt: 0,
+          lastUsedAt: null,
+          runtimeId: null,
+          endpoints: [],
+          preferredEndpointId: 'endpoint'
+        }
+      ]
+    })
+    expect(getKnownExecutionHostIdForWorktree(useAppStore.getState(), destination.id)).toBeNull()
+
+    expect(showStructuredChatWorkspace(destination.id, host, { reported: false })).toBe(true)
+
+    expect(useAppStore.getState().activeWorkspaceExecutionHostId).toBe(host)
+    expect(wake).toHaveBeenCalledTimes(wakes ? 1 : 0)
+    expect(activate).toHaveBeenCalledTimes(wakes ? 1 : 0)
+    if (wakes) {
+      expect(activate).toHaveBeenCalledWith({ worktreeId: destination.id, environmentId: 'env-1' })
+    }
+  }
+)
 
 /** A copy of `row` whose own fields count each read. */
 function counted<T extends object>(row: T, reads: { count: number }): T {

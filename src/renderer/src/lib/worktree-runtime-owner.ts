@@ -35,7 +35,7 @@ function getExecutionHostIdFromWorktreeHost(
 }
 
 /** A row that names no host is this machine's: the client stamps every server row on arrival. */
-function getUnstampedExecutionHostId(state: WorktreeRuntimeOwnerState): ExecutionHostId {
+export function getUnstampedExecutionHostId(state: WorktreeRuntimeOwnerState): ExecutionHostId {
   const environmentId = getPairedWebClientEnvironmentId(state)
   return environmentId ? toRuntimeExecutionHostId(environmentId) : 'local'
 }

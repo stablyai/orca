@@ -64,6 +64,7 @@
 2 src/main/runtime/session-tabs/headless-tab-group-moves.ts
 6 src/main/runtime/session-tabs/headless-tab-properties.ts
 1 src/main/runtime/session-tabs/structured-session-tab-close.ts
+1 src/main/runtime/session-tabs/structured-session-tab-restoration.ts # CI10H-1106 one-time compatibility exception, not transfer: record-derived explicit local saved-partition compaction, window owner without authoritative window
 1 src/main/runtime/session-tabs/terminal-surface-retirements.ts
 2 src/main/runtime/terminal/adoption/adopt-terminal-orphans-from-inventory.ts
 1 src/main/runtime/terminal/driver/terminal-driver-resources.ts

@@ -3,6 +3,7 @@
 
 import {
   getRepoExecutionHostId,
+  getRepoRoutingConnectionId,
   LOCAL_EXECUTION_HOST_ID,
   normalizeHostPart,
   parseExecutionHostId,
@@ -22,8 +23,7 @@ import type {
 /** Resolve legacy connectionId and unified SSH ownership in both candidate filters and the resolver; raw reads can discard SSH-only rows early.
  * Non-SSH hosts retain raw connectionId for runtime-nested targets, which require the environment to dial. */
 export function getRepoScopeConnectionId(repo: FolderHostRepo): string | null {
-  const host = parseExecutionHostId(getRepoExecutionHostId(repo))
-  return host?.kind === 'ssh' ? host.targetId : normalizeHostPart(repo.connectionId)
+  return getRepoRoutingConnectionId(repo)
 }
 
 /** What host resolution needs from a scope's repos: any local one, and their one or several SSH connections. */
