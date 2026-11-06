@@ -30,6 +30,11 @@ import type {
 import type { AgentSessionHistoryPage } from '../../../../../shared/agent-session/agent-session-wire'
 import { structuredAgentSessionSendBody } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { structuredAgentLaunchRecordFor } from './structured-agent-session-launch-record'
+import { markStructuredAgentSessionLaunchesPublished } from './structured-agent-session-launch-publication'
+import { resetStructuredAgentLaunchRegistryForTests } from './structured-agent-session-launch-registry'
+import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
+import { readNativeChatComposerDraft } from '@/components/native-chat/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
 import type * as recordModule from './structured-agent-session-launch-record'
 
 // Counts each launch row this window prepares for saving, by the launch it describes.
@@ -50,7 +55,7 @@ const CHAT_STARTED: AgentLaunchStatusResult = {
     outcome: { kind: 'structured', sessionId: SESSION_ID, handle: 'chat' },
     worktreeId: 'workspace-1',
     receipt: { mode: 'structured', preferred: 'structured', reason: 'user_default', detail: '' },
-    prompt: { delivery: 'submit', outcome: 'journaled', messageId: 'host-message' }
+    prompt: { delivery: 'submit', outcome: 'journaled', messageId: MESSAGE_ID }
   }
 }
 
@@ -107,7 +112,7 @@ function startLaunches(count: number, release = false) {
         operationId: ours ? OPERATION_ID : `${OPERATION_ID}-${index}`,
         sessionId,
         ...(release && ours ? { protocol: 'release' as const } : {}),
-        firstMessage: {
+        opening: {
           clientMessageId: messageId,
           body: structuredAgentSessionSendBody(HELD, [])
         },
@@ -289,7 +294,7 @@ describe('one host launch settling beside many others', () => {
     expect(draft(SESSION_ID)).toContain(HELD)
     expect(draft(SESSION_ID)).toContain('Also run lint')
     // ...but nothing claims the hand-back is durable: the launch and its saved row still hold it.
-    expect(state.intent.hostLaunch?.firstMessage?.clientMessageId).toBe(MESSAGE_ID)
+    expect(state.intent.opening?.clientMessageId).toBe(MESSAGE_ID)
     expect(savedRow()).toMatchObject({ firstMessage: { clientMessageId: MESSAGE_ID } })
 
     // Dismissed once storage works: a late callback for it restores no row.
@@ -302,4 +307,143 @@ describe('one host launch settling beside many others', () => {
     expect(late).toMatchObject({ mutations: 0, preparedOthers: 0 })
     expect(savedRow()).toBeUndefined()
   })
+})
+
+describe('a rich opening its host never acknowledged', () => {
+  const SKILL = { name: 'audit', path: '/skills/audit/SKILL.md' }
+  const CLIENT = structuredAgentSessionSendBody(
+    HELD,
+    [{ path: '/client/shot.png', previewUri: '' }],
+    [SKILL]
+  )
+  const ON_HOST = structuredAgentSessionSendBody(
+    HELD,
+    [{ path: '/host/shot.png', previewUri: '' }],
+    [SKILL]
+  )
+  // Inside a work count, whose own spy is the one storage calls reach.
+  const quota = () =>
+    vi.mocked(localStorage.setItem).mockImplementation(() => {
+      throw new DOMException('full', 'QuotaExceededError')
+    })
+
+  /** Ours, rich and released after Setup, beside `count - 1` held launches. */
+  async function releasedRich(count: number, ending: Promise<AgentLaunchReleasePhaseStatusResult>) {
+    mocks.exactSupport.mockResolvedValue(true)
+    host.status.mockReset()
+    host.release.mockReset()
+    host.status.mockResolvedValueOnce({ state: 'awaiting-release' }).mockReturnValueOnce(ending)
+    host.release.mockResolvedValue({ operationId: OPERATION_ID, state: 'running' })
+    startLaunches(count)
+    const launch = startStructuredAgentLaunch('workspace-1', 'codex', {
+      requestId: newAgentLaunchRequestId(),
+      executionHostId: 'local',
+      prompt: HELD,
+      draftFromScope: SOURCE_SCOPE,
+      promptAttachments: [{ path: '/client/shot.png', previewUri: '' }],
+      promptSkills: [SKILL],
+      hostLaunch: {
+        operationId: OPERATION_ID,
+        sessionId: SESSION_ID,
+        protocol: 'release',
+        opening: { clientMessageId: MESSAGE_ID, body: CLIENT },
+        stagedSources: ['/client/shot.png'],
+        prepareFirstMessage: async () => ON_HOST,
+        accept: {
+          presentation: 'focused',
+          setupReceipt: { required: true, runId: 'setup-run-1' },
+          terminalAlternative: { kind: 'none' }
+        }
+      }
+    })
+    await vi.waitFor(() => expect(host.release).toHaveBeenCalledOnce())
+    return launch
+  }
+
+  it.each([3, 30])(
+    'touches only its own row from release to receipt beside %i launches',
+    async (count) => {
+      const ending = Promise.withResolvers<AgentLaunchReleasePhaseStatusResult>()
+      const launch = await releasedRich(count, ending.promise)
+      const settled = await countWork(async () => {
+        ending.resolve(CHAT_STARTED)
+        await launch.launchResult
+        await vi.runOnlyPendingTimersAsync()
+      })
+      expect(settled.preparedOthers).toBe(0)
+      expect(settled.mutations).toBeLessThanOrEqual(3)
+      expect(host.release).toHaveBeenCalledOnce()
+      expect(savedRow()).toBeUndefined()
+      expect(draft(SESSION_ID)).toBe('Also run lint')
+    }
+  )
+
+  it.each([3, 30])(
+    'keeps it through a chat the host already had, every publication and a reload, beside %i launches',
+    async (count) => {
+      const ending = Promise.withResolvers<AgentLaunchReleasePhaseStatusResult>()
+      const launch = await releasedRich(count, ending.promise)
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const refused = await countWork(async () => {
+        quota()
+        // The chat already exists on the host, which refuses this launch while nothing saves.
+        ending.resolve({ state: 'failed', code: 'agent_launch_session_already_exists' })
+        await launch.launchResult.catch(() => undefined)
+        await vi.waitFor(() => expect(lifecycle()).toBe('failed'))
+        await vi.runOnlyPendingTimersAsync()
+      })
+      expect(refused.preparedOthers).toBe(0)
+      const held = { clientMessageId: MESSAGE_ID, body: ON_HOST }
+      expect(getStructuredLaunchStateBySessionId(SESSION_ID)?.intent.opening).toEqual(held)
+      expect(savedRow()).toMatchObject({ firstMessage: held })
+
+      // Local and paired inventories list that existing chat: no receipt for this message.
+      const reads = host.status.mock.calls.length
+      host.status.mockResolvedValue({
+        state: 'failed',
+        code: 'agent_launch_session_already_exists'
+      })
+      const listed = await countWork(async () => {
+        quota()
+        markStructuredAgentSessionLaunchesPublished('local', [
+          { worktreeId: 'workspace-1', sessionId: SESSION_ID }
+        ])
+        await vi.runOnlyPendingTimersAsync()
+        await vi.waitFor(() => expect(host.status.mock.calls.length).toBeGreaterThan(reads))
+        await vi.waitFor(() => expect(lifecycle()).toBe('failed'))
+      })
+      expect(listed.preparedOthers).toBe(0)
+      expect(savedRow()).toMatchObject({ firstMessage: held })
+      expect(lifecycle()).toBe('failed')
+      // Another host listing a chat of that id says nothing about this launch.
+      markStructuredAgentSessionLaunchesPublished('runtime:env-other', [
+        { worktreeId: 'workspace-1', sessionId: SESSION_ID }
+      ])
+      expect(savedRow()).toMatchObject({ firstMessage: held })
+
+      // A reload finds it saved still, as its last save could record it.
+      resetStructuredAgentLaunchRegistryForTests()
+      resetStructuredAgentLaunchPersistenceForTests()
+      expect(savedRow()).toMatchObject({ firstMessage: held })
+
+      // Once the composer can hold it, the next listing reads the launch, gives the whole message
+      // back durably, and only then lets the row go.
+      markStructuredAgentSessionLaunchesPublished('local', [
+        { worktreeId: 'workspace-1', sessionId: SESSION_ID }
+      ])
+      await vi.waitFor(() => expect(savedRow()?.firstMessage).toBeUndefined())
+      const back = readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(SESSION_ID))
+      expect(back.text).toContain(HELD)
+      expect(back.text).toContain('Also run lint')
+      markStructuredAgentSessionLaunchesPublished('local', [
+        { worktreeId: 'workspace-1', sessionId: SESSION_ID }
+      ])
+      await vi.waitFor(() => expect(savedRow()).toBeUndefined())
+      warn.mockRestore()
+      expect(host.release).toHaveBeenCalledOnce()
+      expect(vi.mocked(callRuntimeRpc).mock.calls.map(([, method]) => method)).not.toContain(
+        'agentSession.send'
+      )
+    }
+  )
 })

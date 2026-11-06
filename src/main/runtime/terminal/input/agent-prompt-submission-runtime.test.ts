@@ -1,5 +1,6 @@
 import type * as WorktreeScanCacheModule from '../../../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../../../git/worktrees/catalog/worktree-listing'
+import { getEventListeners } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_PROMPT_BRACKETED_PASTE_END } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import { createAgentPromptSubmissionRuntime } from './agent-prompt-submission-runtime-test-fixture'
@@ -210,6 +211,48 @@ describe('agent prompt submission runtime', () => {
     ).rejects.toThrow('request_aborted')
     expect(writes).toEqual(['\x1b[200~/host/a.png\x1b[201~'])
   })
+
+  it.each([3, 30])(
+    'writes each of %i images once, and an interrupted prompt leaves its replacement only its own',
+    async (count) => {
+      const controller = new AbortController()
+      const interruptAt = Math.ceil(count / 2)
+      const { runtime, handle, writes } = await createPromptRuntime((_runtime, _data, index) => {
+        if (index === interruptAt) {
+          controller.abort()
+        }
+      }, 'claude')
+      const images = (prompt: string) =>
+        Array.from({ length: count }, (_, index) => `/host/${prompt}-${index}.png`)
+      const send = (prompt: string, signal?: AbortSignal) =>
+        runtime.sendTerminalAgentPrompt(handle, prompt, {
+          inputKind: 'launch',
+          composerReady: true,
+          acceptQueued: true,
+          requestId: `launch-${prompt}`,
+          observationTimeoutMs: 0,
+          images: images(prompt),
+          ...(signal ? { signal } : {})
+        })
+
+      await expect(send('first', controller.signal)).rejects.toThrow('request_aborted')
+      expect(writes).toHaveLength(interruptAt)
+      expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0)
+
+      const replacement = new AbortController()
+      writes.length = 0
+      const sent = await send('second', replacement.signal)
+      // One framing write per own image, then its text and one Enter: nothing of the first.
+      expect(writes).toHaveLength(count + 2)
+      expect(
+        writes.slice(0, count).map((data, index) => data.includes(images('second')[index] ?? ''))
+      ).toEqual(images('second').map(() => true))
+      expect(writes.filter((data) => data.includes('/host/first-'))).toEqual([])
+      expect(writes.slice(count)).toEqual(['\x1b[200~second\x1b[201~', '\r'])
+      expect(sent.bytesWritten).toBe(writes.join('').length)
+      expect(getEventListeners(replacement.signal, 'abort')).toHaveLength(0)
+    }
+  )
 
   // Provider hooks reach headless/minimized runtimes without window or OSC-title evidence.
 })

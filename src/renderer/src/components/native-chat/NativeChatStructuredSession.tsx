@@ -44,6 +44,7 @@ import { NativeChatPromptSlotNotices } from './NativeChatComposerNotices'
 import { NativeChatInstallSlot, useNativeChatInstallSlot } from './NativeChatInstallSlot'
 import { useNativeChatComposerError } from './use-native-chat-composer-notice'
 import { useNativeChatProvisionalLaunch } from './use-native-chat-provisional-launch'
+import { nativeChatHeldOpeningComposerProps } from './use-native-chat-held-opening-edit'
 import { useStructuredAgentSessionHostExecution } from './StructuredAgentSessionStatusBridge'
 import { useNativeChatRewindHost } from './use-native-chat-rewind-host'
 import { NativeChatRewindContext } from './native-chat-rewind-context'
@@ -390,18 +391,17 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
           {composerShown && <NativeChatInstallSlot slot={install.slot} agentLabel={agentLabel} />}
           {composerShown ? (
             <NativeChatComposer
+              key={provisionalLaunch.openingEdit?.draftScopeKey}
               ref={composerRef}
               terminalTabId={props.tabId}
-              paneKey={paneKey}
-              draftScopeKey={structuredAgentSessionDraftScopeKey(props.sessionId)}
               targetPtyId={null}
               agent={props.agent}
               {...stopControls.composer}
               unavailableHint={install.unavailableHint}
               steerHead={stopControls.stopping ? undefined : submits.queuedMessages.steerHead}
-              structuredTransport={transport}
               notices={notices}
               recallSource={{ messages: session.messages, withoutImageMarkers: true }}
+              {...nativeChatHeldOpeningComposerProps(provisionalLaunch, paneKey, transport)}
             />
           ) : null}
         </>

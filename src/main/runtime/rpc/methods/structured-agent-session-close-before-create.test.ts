@@ -14,7 +14,14 @@ import {
 } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { call } from './structured-agent-session-rpc.test-fixture'
-import { resetStructuredAgentSessionClosesBeforeCreateForTests } from './structured-agent-session-close-before-create'
+import {
+  createUnderStructuredAgentSessionCloseFence,
+  noteStructuredAgentSessionClose,
+  resetStructuredAgentSessionClosesBeforeCreateForTests,
+  structuredAgentSessionClosedBeforeCreate,
+  subscribeStructuredAgentSessionClose
+} from './structured-agent-session-close-before-create'
+import type { RpcContext } from '../core'
 
 const mocks = vi.hoisted(() => ({ layoutOwnerIsMain: true }))
 vi.mock('../../../../shared/layout-owner-switch', () => ({
@@ -137,3 +144,64 @@ it('a recorded create answers from its record, not from support asked again', as
   expect(await retry()).toMatchObject(refused('agent_session_operation_unknown'))
   expect(changed.resolveStructuredAgentSessionCreateIntent).not.toHaveBeenCalled()
 })
+
+it.each([3, 30])(
+  'fences %i creates on their own closes only, and holds no create or listener once each settles',
+  async (count) => {
+    // No host: this contract counts the fence's own resources, not the closing of a made chat.
+    setStructuredAgentSessionHost(null)
+    const sessions = Array.from({ length: count }, (_, index) => `codex-fence-${index}`)
+    const heard = sessions.map(() => vi.fn())
+    const unsubscribe = sessions.map((session, index) =>
+      subscribeStructuredAgentSessionClose(session, heard[index] ?? (() => {}))
+    )
+    const finishes: ((outcome: 'made' | 'threw') => void)[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: with no host the fence never reads its runtime.
+    const runtime = {} as RpcContext['runtime']
+    const creates = sessions.map((session) =>
+      createUnderStructuredAgentSessionCloseFence(
+        session,
+        runtime,
+        () =>
+          new Promise<string>((resolve, reject) => {
+            finishes.push((outcome) =>
+              outcome === 'made' ? resolve(session) : reject(new Error('create threw'))
+            )
+          })
+      ).catch((error: unknown) => (error instanceof Error ? error : new Error(String(error))))
+    )
+    // Every other chat is closed while its create runs, its record already committed.
+    for (const [index, session] of sessions.entries()) {
+      if (index % 2 === 0) {
+        noteStructuredAgentSessionClose(session, true)
+      }
+    }
+    expect(heard.map((listener) => listener.mock.calls.length)).toEqual(
+      sessions.map((_, index) => (index % 2 === 0 ? 1 : 0))
+    )
+    for (const [index, finish] of finishes.entries()) {
+      finish(index % 3 === 0 ? 'threw' : 'made')
+    }
+    const answers = await Promise.all(creates)
+    expect(
+      answers.map((answer) => (answer instanceof Error ? 'threw' : answer.closedFirst))
+    ).toEqual(sessions.map((_, index) => (index % 3 === 0 ? 'threw' : index % 2 === 0)))
+    for (const remove of unsubscribe) {
+      remove()
+    }
+    // With no create under way, a recorded chat's close is ordinary: no fence, no listener reached.
+    for (const session of sessions) {
+      noteStructuredAgentSessionClose(session, true)
+    }
+    expect(sessions.map(structuredAgentSessionClosedBeforeCreate)).toEqual(
+      sessions.map((_, index) => index % 2 === 0)
+    )
+    // A close before any record still fences, yet reaches no listener already removed.
+    for (const session of sessions) {
+      noteStructuredAgentSessionClose(session, false)
+    }
+    expect(heard.map((listener) => listener.mock.calls.length)).toEqual(
+      sessions.map((_, index) => (index % 2 === 0 ? 1 : 0))
+    )
+  }
+)

@@ -10,6 +10,7 @@ import {
   notifyStructuredLaunchStateChanged,
   type StructuredLaunchState
 } from './structured-agent-session-launch-registry'
+import { ordinaryLaunchOpening } from './structured-agent-session-launch-opening'
 
 /** Completing the caller leaves uncertain opening content independent of live startup work. */
 export function trackStructuredLaunchPromptOutcome(
@@ -31,7 +32,7 @@ export function trackStructuredLaunchPromptOutcome(
       group.outcome = 'failed'
       group.failedAt = Date.now()
     } else {
-      if (state.intent.params.firstMessage) {
+      if (ordinaryLaunchOpening(state.intent)) {
         state.operationEnded = true
         settleStructuredLaunchCreateOptions(state, { kind: 'unknown' })
       }
@@ -73,7 +74,7 @@ export function boundedStructuredLaunchResult(
 ): Promise<StructuredAgentLaunchReceipt> {
   const prompt = caller.promptDeliveryResult
   if (!prompt) {
-    if (state.visibilityUnknown && state.intent.params.firstMessage) {
+    if (state.visibilityUnknown && ordinaryLaunchOpening(state.intent)) {
       const completed = Promise.reject<StructuredAgentLaunchReceipt>(
         new StructuredAgentSessionCreateUnknownOutcomeError(
           'Opening message outcome unknown.',

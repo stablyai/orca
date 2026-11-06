@@ -10,6 +10,7 @@ import {
 import { findIndexedRepoOwner } from '../../repo-owner-index'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import {
+  LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
@@ -43,21 +44,41 @@ export function restoreStructuredLaunchSurfaces(): void {
 }
 
 type OwedHostLaunches = Map<ExecutionHostId, Map<string, StructuredAgentLaunchPersistedRecord[]>>
+type OwedIndex = {
+  revision: number
+  owed: OwedHostLaunches
+  // Debt hosts by the catalog with authority over them: a paired host's own, or the local one
+  // for every host that is not paired. A catalog then visits only the hosts it may end.
+  byAuthority: Map<ExecutionHostId, ExecutionHostId[]>
+}
 // Saved host launches by host and workspace, derived from the saved rows and rebuilt only once
 // they change, so each listing visits just the launches in the workspaces it names.
-let owedIndex: { revision: number; owed: OwedHostLaunches } | undefined
+let owedIndex: OwedIndex | undefined
 
-function owedHostLaunches(): OwedHostLaunches {
+function owedHostLaunches(): OwedIndex {
   const revision = structuredAgentLaunchRecordsRevision()
   if (owedIndex?.revision !== revision) {
     const owed: OwedHostLaunches = new Map()
+    const byAuthority = new Map<ExecutionHostId, ExecutionHostId[]>()
     for (const record of readStructuredAgentLaunchRecords()) {
       const worktreeId = record.surfaceAddress?.worktreeId
       if (record.hostLaunchOperationId === undefined || !worktreeId) {
         continue
       }
-      const byWorkspace = owed.get(record.executionHostId) ?? new Map()
-      owed.set(record.executionHostId, byWorkspace)
+      let byWorkspace = owed.get(record.executionHostId)
+      if (!byWorkspace) {
+        byWorkspace = new Map()
+        owed.set(record.executionHostId, byWorkspace)
+        const authority = catalogOwnsHost(LOCAL_EXECUTION_HOST_ID, record.executionHostId)
+          ? LOCAL_EXECUTION_HOST_ID
+          : record.executionHostId
+        const hosts = byAuthority.get(authority)
+        if (hosts) {
+          hosts.push(record.executionHostId)
+        } else {
+          byAuthority.set(authority, [record.executionHostId])
+        }
+      }
       const inWorkspace = byWorkspace.get(worktreeId)
       if (inWorkspace) {
         inWorkspace.push(record)
@@ -65,9 +86,9 @@ function owedHostLaunches(): OwedHostLaunches {
         byWorkspace.set(worktreeId, [record])
       }
     }
-    owedIndex = { revision, owed }
+    owedIndex = { revision, owed, byAuthority }
   }
-  return owedIndex.owed
+  return owedIndex
 }
 
 /** A host's listing settled: its saved launches this window does not hold come back where the
@@ -77,7 +98,7 @@ export function restoreStructuredLaunchSurfacesListedBy(
   hostId: ExecutionHostId,
   listedWorktreeIds: Iterable<string>
 ): void {
-  const byWorkspace = owedHostLaunches().get(hostId)
+  const byWorkspace = owedHostLaunches().owed.get(hostId)
   if (!byWorkspace) {
     return
   }
@@ -102,11 +123,12 @@ export function settleStructuredLaunchesForFolderCatalog(
 ): void {
   const listed = new Set([...listedByHost.values()].flatMap((keys) => [...keys]))
   const dropped: StructuredAgentLaunchPersistedRecord[] = []
-  for (const [hostId, byWorkspace] of owedHostLaunches()) {
+  const { owed, byAuthority } = owedHostLaunches()
+  for (const hostId of byAuthority.get(catalogHostId) ?? []) {
     if (!catalogOwnsHost(catalogHostId, hostId)) {
       continue
     }
-    for (const [worktreeId, records] of byWorkspace) {
+    for (const [worktreeId, records] of owed.get(hostId) ?? []) {
       if (parseWorkspaceKey(worktreeId)?.type === 'folder' && !listed.has(worktreeId)) {
         dropped.push(
           ...records.filter((record) => !getStructuredLaunchStateBySessionId(record.sessionId))

@@ -16,6 +16,7 @@ import {
   retryStructuredAgentSessionLaunch
 } from '@/lib/agent-session/launch/structured-agent-session-launch'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { useNativeChatHeldOpeningEdit } from './use-native-chat-held-opening-edit'
 
 export type StructuredAgentSessionLaunchView = {
   kind: 'new' | 'resume'
@@ -120,6 +121,7 @@ export function useNativeChatProvisionalLaunch(
       retryStructuredAgentSessionLaunch(worktreeId, sessionId)
     }
   }, [sessionId, worktreeId])
+  const openingEdit = useNativeChatHeldOpeningEdit(worktreeId, sessionId, lifecycle === 'failed')
   const starting = lifecycle === 'pending' || (lifecycle === 'visibility-unknown' && !retainedInput)
   const sendThroughLaunch = useCallback(
     (
@@ -150,6 +152,9 @@ export function useNativeChatProvisionalLaunch(
     /** The first turn went to the host after Setup; picks now are for the next turn. */
     firstTurnSubmitted: launch?.firstTurn === 'submitted',
     sendThroughLaunch,
+    /** A held opening whose files could not reach its host: Edit, or the edit while open. */
+    editOpening: openingEdit.notice,
+    openingEdit: openingEdit.editing,
     transportEnabled: retainedInput || lifecycle === null || lifecycle === 'published'
   }
 }

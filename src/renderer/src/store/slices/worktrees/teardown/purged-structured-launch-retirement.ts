@@ -113,33 +113,93 @@ function hostLaunchDropped(
   return !dropped || hosts === true || !!hosts?.has(executionHostId)
 }
 
+type OwnedByHost = (worktreeId: string, executionHostId: ExecutionHostId) => boolean
+
+/** One part of a purge: the workspaces it drops, whose launches in them end, and its own tab
+ *  retirement once every part's cancellations are known. */
+export type PurgedLaunchScope = {
+  worktreeIds: ReadonlySet<string>
+  /** Only launches on this host end; absent, any host's. */
+  ownedByHost?: OwnedByHost
+  /** The host each id was dropped by, when the purge knows it. */
+  droppedBy?: readonly WorktreePurgeTarget[]
+  retireTabs?: (cancelledSessionIds: ReadonlySet<string>) => void
+}
+
 /** Cancels provisional structured-chat launches in these worktrees, on the given host only.
  *  `droppedBy` names the host each id was dropped by, when the purge knows it. */
 export function cancelStructuredLaunchesForWorktrees(
   worktreeIdSet: ReadonlySet<string>,
-  ownedByHost?: (worktreeId: string, executionHostId: ExecutionHostId) => boolean,
+  ownedByHost?: OwnedByHost,
   droppedBy?: readonly WorktreePurgeTarget[]
 ): Set<string> {
+  return retirePurgedLaunchScopes([{ worktreeIds: worktreeIdSet, ownedByHost, droppedBy }])
+}
+
+/** Ends a whole purge's launches at once: one pass over live and saved launches for all its
+ *  parts, then each part's tabs, with each changed journal saved once at the end. */
+export function retirePurgedLaunchScopes(scopes: readonly PurgedLaunchScope[]): Set<string> {
   const cancelledSessionIds = new Set<string>()
-  batchStructuredAgentLaunchRecordWrites(() =>
-    cancelLaunchesIn(worktreeIdSet, ownedByHost, droppedWorkspaces(droppedBy), cancelledSessionIds)
-  )
+  batchStructuredAgentLaunchRecordWrites(() => {
+    cancelLaunchesIn(scopesByWorkspace(scopes), cancelledSessionIds)
+    for (const scope of scopes) {
+      scope.retireTabs?.(cancelledSessionIds)
+    }
+  })
   return cancelledSessionIds
 }
 
+type WorkspaceScope = { ownedByHost?: OwnedByHost; dropped?: DroppedWorkspaces }
+
+function scopesByWorkspace(
+  scopes: readonly PurgedLaunchScope[]
+): ReadonlyMap<string, WorkspaceScope[]> {
+  const byWorkspace = new Map<string, WorkspaceScope[]>()
+  for (const scope of scopes) {
+    const entry = { ownedByHost: scope.ownedByHost, dropped: droppedWorkspaces(scope.droppedBy) }
+    for (const worktreeId of scope.worktreeIds) {
+      const inWorkspace = byWorkspace.get(worktreeId)
+      if (inWorkspace) {
+        inWorkspace.push(entry)
+      } else {
+        byWorkspace.set(worktreeId, [entry])
+      }
+    }
+  }
+  return byWorkspace
+}
+
+function launchDropped(
+  byWorkspace: ReadonlyMap<string, readonly WorkspaceScope[]>,
+  worktreeId: string,
+  executionHostId: ExecutionHostId,
+  hostLaunch: boolean
+): boolean {
+  return !!byWorkspace
+    .get(worktreeId)
+    ?.some(
+      ({ ownedByHost, dropped }) =>
+        (!ownedByHost || ownedByHost(worktreeId, executionHostId)) &&
+        (!hostLaunch || hostLaunchDropped(dropped, worktreeId, executionHostId))
+    )
+}
+
 function cancelLaunchesIn(
-  worktreeIdSet: ReadonlySet<string>,
-  ownedByHost: ((worktreeId: string, executionHostId: ExecutionHostId) => boolean) | undefined,
-  dropped: DroppedWorkspaces | undefined,
+  byWorkspace: ReadonlyMap<string, readonly WorkspaceScope[]>,
   cancelledSessionIds: Set<string>
 ): void {
+  if (byWorkspace.size === 0) {
+    return
+  }
   for (const launch of structuredLaunchStates()) {
     const worktreeId = launch.intent.worktreeId
     if (
-      worktreeIdSet.has(worktreeId) &&
-      (!ownedByHost || ownedByHost(worktreeId, launch.intent.executionHostId)) &&
-      (!launch.intent.hostLaunch ||
-        hostLaunchDropped(dropped, worktreeId, launch.intent.executionHostId)) &&
+      launchDropped(
+        byWorkspace,
+        worktreeId,
+        launch.intent.executionHostId,
+        !!launch.intent.hostLaunch
+      ) &&
       shouldRetainStructuredAgentSessionLaunchTab(worktreeId, launch.intent.sessionId)
     ) {
       markStructuredAgentSessionLaunchCancelledSilently(
@@ -165,11 +225,9 @@ function cancelLaunchesIn(
     const hostLaunch = record.hostLaunchOperationId !== undefined
     if (
       worktreeId &&
-      worktreeIdSet.has(worktreeId) &&
       (record.executionHostId === 'local' || hostLaunch) &&
-      (!hostLaunch || hostLaunchDropped(dropped, worktreeId, record.executionHostId)) &&
-      (!ownedByHost || ownedByHost(worktreeId, record.executionHostId)) &&
-      !cancelledSessionIds.has(record.sessionId)
+      !cancelledSessionIds.has(record.sessionId) &&
+      launchDropped(byWorkspace, worktreeId, record.executionHostId, hostLaunch)
     ) {
       markStructuredAgentSessionLaunchCancelledSilently(
         worktreeId,

@@ -728,4 +728,32 @@ describe('the terminal alternative compiles with the released choices', () => {
     })
     noEffect(runtime)
   })
+
+  it('refuses at prepare a planned terminal another agent’s planner made', async () => {
+    const runtime = hostRuntime(undefined, { createSupport: { supported: false, reason: 'agent' } })
+    const id = operationId()
+    const codexBase = resolveAgentStartupPlanInputs({
+      agent: 'codex',
+      settings: {},
+      platform: 'darwin',
+      shell: 'posix',
+      isRemote: false
+    })
+    expect(() =>
+      prepare(
+        runtime,
+        prepared(id, {
+          agent: 'claude',
+          terminalAlternative: {
+            kind: 'planned',
+            base: codexBase,
+            policy: { kind: 'foreground', promptDelivery: 'auto-submit', isFollowupPath: false }
+          }
+        })
+      )
+    ).toThrow('Planned terminal must be planned for the launch agent')
+    expect(activeAgentLaunchesFor(rpcContext(runtime, DESKTOP).runtime).size).toBe(0)
+    await expect(release(runtime, id, PICKED)).resolves.toMatchObject({ state: 'absent' })
+    noEffect(runtime)
+  })
 })

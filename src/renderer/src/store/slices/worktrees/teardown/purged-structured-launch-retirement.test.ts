@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import {
   getStructuredLaunchStateBySessionId,
   hasStructuredAgentSessionLaunchCancellationTombstone,
@@ -17,6 +18,7 @@ import { restorePersistedStructuredLaunchState } from '@/lib/agent-session/launc
 import type { WorktreePurgeTarget } from '../../worktree-helpers'
 import { settleStructuredLaunchesForFolderCatalog } from '@/lib/agent-session/launch/structured-agent-session-launch-restore'
 import { cancelStructuredLaunchesForWorktrees } from './purged-structured-launch-retirement'
+import { makeWorktree } from '../../store-test-helpers'
 
 const LAUNCHES = 'orca:structuredAgentLaunches:v1'
 const TOMBSTONES = 'orca:structuredAgentLaunchCancelledSessions:v1'
@@ -119,6 +121,55 @@ describe('removing a paired host with many saved launches', () => {
       countSaves(() => useAppStore.getState().purgeStaleRuntimeHostState(['env-1'])).mutations
     ).toEqual([])
   })
+
+  it.each([3, 30])(
+    "ends one removal of %i hosts' copies of shared workspaces in one save of each journal",
+    (count) => {
+      const ids = Array.from({ length: count }, (_, index) => `repo-1::/shared-${count}-${index}`)
+      const gone = ids.map((_, index) => `runtime:gone-${index}` as ExecutionHostId)
+      const only = 'repo-1::/only'
+      reloadWith([
+        ...ids.flatMap((id, index) => [
+          row(`gone-${index}`, gone[index]!, id),
+          row(`kept-${index}`, ENV_2, id)
+        ]),
+        row('only', ENV_1, only)
+      ])
+      // One removed host's launch is also held live again after a Retry.
+      expect(restorePersistedStructuredLaunchState(ids[0]!, 'gone-0')).toBeDefined()
+      // Each workspace published by its removed host and by env-2, which stays.
+      useAppStore.setState({
+        worktreesByRepo: {
+          'repo-1': ids.flatMap((id, index) => [
+            makeWorktree({ id, repoId: 'repo-1', hostId: gone[index], path: `/shared-${index}` }),
+            makeWorktree({ id, repoId: 'repo-1', hostId: ENV_2, path: `/shared-${index}` })
+          ])
+        }
+      })
+      const purge = () =>
+        useAppStore
+          .getState()
+          .purgeWorktreeTerminalState([
+            ...ids.map((id, index) => hostWorktreeTarget({ id, hostId: gone[index]! })),
+            only
+          ])
+      const saves = countSaves(purge)
+
+      // env-2's copies keep their launches; every removed copy's ends, live or saved only.
+      expect(readStructuredAgentLaunchRecords().map(({ sessionId }) => sessionId)).toEqual(
+        ids.map((_, index) => `kept-${index}`)
+      )
+      expect(getStructuredLaunchStateBySessionId('gone-0')).toBeUndefined()
+      for (const sessionId of ['only', ...ids.map((_, index) => `gone-${index}`)]) {
+        expect(hasStructuredAgentSessionLaunchCancellationTombstone('', sessionId)).toBe(true)
+      }
+      expect(saves.mutations).toEqual([TOMBSTONES, LAUNCHES])
+      expect(saves.tombstoneRows).toBe(count + 1)
+      expect(saves.launchRows).toBe(count)
+      // The same removal again ends and saves nothing.
+      expect(countSaves(purge).mutations).toEqual([])
+    }
+  )
 
   it('ends every launch in memory at once when saving fails, and never blocks the removal', () => {
     reloadWith(rowsOn(ENV_1, 3))

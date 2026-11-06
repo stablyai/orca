@@ -16,6 +16,7 @@ import { callStructuredAgentSession } from '@/runtime/structured-agent-session-c
 import { readStructuredSessionTabInventory } from '@/runtime/structured-session-tab-inventory'
 import { publishStructuredAgentSessionCreateHydration } from './structured-agent-session-create-hydration'
 import { observeStructuredHostLaunch } from './structured-agent-session-host-launch'
+import { ordinaryLaunchOpening } from './structured-agent-session-launch-opening'
 
 export type StructuredAgentLaunchReceipt = {
   sessionId: string
@@ -76,12 +77,13 @@ export async function recoverPublishedSessionReceipt(
   if (typeof fence !== 'number') {
     throw new Error('structured session fence publication unavailable')
   }
-  const firstMessage = state.intent.params.firstMessage
+  const opening = ordinaryLaunchOpening(state.intent)
+  const firstMessage = opening
     ? structuredAgentSessionSettledSends(history.page.submissions, []).recorded.get(
-        state.intent.params.firstMessage.clientMessageId
+        opening.clientMessageId
       )
     : undefined
-  if (state.intent.params.firstMessage && !firstMessage) {
+  if (opening && !firstMessage) {
     if (state.intent.createMessageSupport === true) {
       publishStructuredAgentSessionCreateHydration(state.intent, history.page, fence)
     }
@@ -162,7 +164,7 @@ export async function launchAndReconcile(
     try {
       return await recoverPublishedSessionReceipt(state)
     } catch {
-      if (state.intent.params.firstMessage) {
+      if (ordinaryLaunchOpening(state.intent)) {
         state.visibilityUnknown = true
         state.onVisibilityChanged?.()
         throw error
@@ -186,10 +188,10 @@ export async function reconcileUnknownLaunch(
     state.onVisibilityChanged?.()
     return observeStructuredHostLaunch(state, hostLaunch, () => throwIfLaunchCancelled(state))
   }
-  if (state.intent.params.firstMessage && !requested) {
+  if (ordinaryLaunchOpening(state.intent) && !requested) {
     return recoverPublishedSessionReceipt(state)
   }
-  if (!state.intent.params.firstMessage) {
+  if (!ordinaryLaunchOpening(state.intent)) {
     state.visibilityUnknown = false
     state.onVisibilityChanged?.()
   }

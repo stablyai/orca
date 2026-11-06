@@ -12,6 +12,7 @@ import {
   seedEmptyActivatableWorktree
 } from './worktree-activation-created-agent.test-fixture'
 import type * as launchModule from './agent-session/launch/structured-agent-session-launch-create-call'
+import type * as routingModule from '@/store/slices/project-group-owner-routing'
 import {
   getStructuredAgentSessionLaunchLifecycle,
   getStructuredLaunchStateBySessionId,
@@ -41,8 +42,22 @@ const mocks = vi.hoisted(() => ({
   hostLaunch: vi.fn((_method: string, _params: unknown): Promise<unknown> => new Promise(() => {})),
   // Each paired host's folder catalog reply, by environment id.
   folders: new Map<string, () => Promise<{ folderWorkspaces: FolderWorkspace[] }>>(),
-  rpc: [] as string[]
+  rpc: [] as string[],
+  // Host ownership decisions the launch recovery makes as catalogs settle.
+  ownerChecks: 0
 }))
+vi.mock('@/store/slices/project-group-owner-routing', async (original) => {
+  const routing = await original<typeof routingModule>()
+  return {
+    ...routing,
+    catalogOwnsHost: (...args: Parameters<typeof routing.catalogOwnsHost>) => {
+      if (new Error('caller').stack?.includes('structured-agent-session-launch-restore')) {
+        mocks.ownerChecks++
+      }
+      return routing.catalogOwnsHost(...args)
+    }
+  }
+})
 vi.mock('./agent-session/launch/structured-agent-session-launch-create-call', async (original) => ({
   ...(await original<typeof launchModule>()),
   launchStructuredAgentSession: mocks.createSession
@@ -379,7 +394,7 @@ describe('a held host launch in a folder whose startup read failed', () => {
       hostLaunch: {
         operationId: 'host-op-live',
         sessionId: 'codex-live',
-        firstMessage: message,
+        opening: message,
         accept: {
           prompt: { text: 'Fresh', clientMessageId: 'held-live' },
           presentation: 'focused' as const,
@@ -436,6 +451,7 @@ describe('folder catalogs settling over many held launches', () => {
     draws: number
     storageWrites: number
     rpc: number
+    ownerChecks: number
   }
 
   /** `count` held launches, each in its own env-1 folder among as many unrelated ones; counts
@@ -465,13 +481,18 @@ describe('folder catalogs settling over many held launches', () => {
     for (const id of ids) {
       expect(chatTabs(`codex-${id}`, folderWorkspaceKey(id))).toHaveLength(1)
     }
+    return measureWork(settle)
+  }
+
+  async function measureWork(settle: () => Promise<void>): Promise<Work> {
     const work: Work = {
       rowReads: 0,
       catalogBuilds: 0,
       tabProbes: 0,
       draws: 0,
       storageWrites: 0,
-      rpc: 0
+      rpc: 0,
+      ownerChecks: 0
     }
     const counted = <T extends object>(entry: T, key: keyof T, count: () => void): void => {
       const value = entry[key]
@@ -495,6 +516,7 @@ describe('folder catalogs settling over many held launches', () => {
     })
     const writes = [vi.spyOn(localStorage, 'setItem'), vi.spyOn(localStorage, 'removeItem')]
     const rpcBefore = mocks.rpc.length
+    mocks.ownerChecks = 0
     try {
       await settle()
       work.storageWrites = writes
@@ -507,6 +529,7 @@ describe('folder catalogs settling over many held launches', () => {
     work.rpc = mocks.rpc
       .slice(rpcBefore)
       .filter((method) => method !== 'folderWorkspace.list').length
+    work.ownerChecks = mocks.ownerChecks
     return work
   }
 
@@ -538,6 +561,57 @@ describe('folder catalogs settling over many held launches', () => {
         storageWrites: 0,
         rpc: 0
       })
+    }
+  })
+
+  it("has each paired host's catalog settle only its own host's launches", async () => {
+    const allHostsCost = async (count: number): Promise<Work> => {
+      main.close()
+      resetStructuredAgentLaunchRegistryForTests()
+      resetStructuredAgentLaunchPersistenceForTests()
+      useAppStore.setState({ folderWorkspaces: [], unifiedTabsByWorktree: {} })
+      main = await drawTabsFromMain(useAppStore)
+      const hosts = Array.from({ length: count }, (_, index) => `env-${index + 1}`)
+      api.api = {
+        ...api.api,
+        runtimeEnvironments: { list: async () => hosts.map((id) => ({ id })) }
+      }
+      // One held launch per host, in a folder only that host lists.
+      await reloadWithUnreadablePartition(
+        hosts.map((env) => heldRow(`codex-${env}`, `folder-${env}`, `runtime:${env}`))
+      )
+      hostFolders(
+        Object.fromEntries(
+          hosts.map((env) => [
+            env,
+            [{ ...folder(`folder-${env}`), executionHostId: `runtime:${env}` as const }]
+          ])
+        )
+      )
+      await loadAllHostFolders()
+      const shown = () =>
+        hosts.filter((env) => chatTabs(`codex-${env}`, folderWorkspaceKey(`folder-${env}`)).length)
+      expect(shown()).toEqual(hosts)
+      const work = await measureWork(loadAllHostFolders)
+      expect(shown()).toEqual(hosts)
+      expect(readStructuredAgentLaunchRecords()).toHaveLength(count)
+
+      if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // A tab lost without its launch ending still comes back with its host's next catalog.
+        const lost = folderWorkspaceKey(`folder-${hosts.at(-1)}`)
+        useAppStore.setState((state) => ({
+          unifiedTabsByWorktree: { ...state.unifiedTabsByWorktree, [lost]: [] }
+        }))
+        await loadAllHostFolders()
+        expect(shown()).toEqual(hosts)
+      }
+      return work
+    }
+    for (const count of [3, 30]) {
+      const work = await allHostsCost(count)
+      expect(work).toMatchObject({ catalogBuilds: 0, draws: 0, storageWrites: 0, rpc: 0 })
+      // Every catalog visits its own host's launches alone, never every host's.
+      expect(work.ownerChecks).toBeLessThanOrEqual(count)
     }
   })
 })

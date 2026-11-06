@@ -18,11 +18,11 @@ import { forgetAmbiguousOwnerWarnings } from '@/lib/ambiguous-owner-warning'
 import { forgetWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { removeWorktreeLayout } from '../../tabs/worktree-layout-lifecycle'
 import {
-  cancelStructuredLaunchesForWorktrees,
-  retirePurgedTabLaunches
+  retirePurgedLaunchScopes,
+  retirePurgedTabLaunches,
+  type PurgedLaunchScope
 } from './purged-structured-launch-retirement'
 import { buildWorktreePurgeSurfacePatch } from './worktree-purge-surface-patch'
-import { batchStructuredAgentLaunchRecordWrites } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import { noticeRemovedUnsavedFiles } from './removed-workspace-unsaved-files'
 import { mergeEditorBufferKeepRequests } from '../../editor/buffers/editor-buffer-kept'
 import { buildHostTwinPurgeState, collectHostTwinPurgeScopes } from './host-twin-worktree-purge'
@@ -48,16 +48,19 @@ export function buildWorktreePurgeState(
   }
   const twinIds = new Set([...twinScopes.values()].flatMap((twins) => [...twins.keys()]))
   const fullTargets = targets.filter((target) => !target.hostId || !twinIds.has(target.id))
+  // Why one retirement: the whole removal ends its launches in one pass and one save per journal.
+  const launchScopes: PurgedLaunchScope[] = []
   let patch =
     fullTargets.length > 0
-      ? buildFullWorktreePurgeState(s, fullTargets, changedPaneKeys, options)
+      ? buildFullWorktreePurgeState(s, fullTargets, changedPaneKeys, options, launchScopes)
       : {}
   for (const [hostId, twinHostIds] of twinScopes) {
     const twinPatch = buildHostTwinPurgeState(
       { ...s, ...patch },
       hostId,
       twinHostIds,
-      changedPaneKeys
+      changedPaneKeys,
+      launchScopes
     )
     patch = {
       ...patch,
@@ -68,6 +71,7 @@ export function buildWorktreePurgeState(
       )
     }
   }
+  retirePurgedLaunchScopes(launchScopes)
   // Why both hosts: a paired runtime's copy writes recency and delete state under either identity.
   const hostKeys = [
     ...targets.flatMap((target) =>
@@ -94,32 +98,38 @@ export function buildFullWorktreePurgeState(
   s: AppState,
   normalizedTargets: readonly WorktreePurgeTarget[],
   changedPaneKeys?: Set<string>,
-  options?: WorktreePurgeOptions
+  options?: WorktreePurgeOptions,
+  /** Given, this purge's launch retirement joins the whole removal's instead of running now. */
+  launchScopes?: PurgedLaunchScope[]
 ): Partial<AppState> {
   const worktreeIdSet = new Set(normalizedTargets.map((target) => target.id))
   forgetCombinedDiffViewsForWorktrees(worktreeIdSet)
   // Why: bulk purges bypass close actions, so provisional ownership must die before tab state does.
-  // One retirement: each launch journal it changes is saved once, at its end.
   const launchHostId = options?.launchHostId
-  batchStructuredAgentLaunchRecordWrites(() => {
-    const cancelledSessionIds = cancelStructuredLaunchesForWorktrees(
-      worktreeIdSet,
-      launchHostId ? (_, hostId) => hostId === launchHostId : undefined,
-      launchHostId
-        ? normalizedTargets.map(({ id }) => ({ id, hostId: launchHostId }))
-        : normalizedTargets
-    )
-    for (const worktreeId of worktreeIdSet) {
-      retirePurgedTabLaunches(
-        s,
-        worktreeId,
-        s.tabsByWorktree[worktreeId] ?? [],
-        s.unifiedTabsByWorktree[worktreeId] ?? [],
-        cancelledSessionIds,
-        launchHostId
-      )
+  const launchScope: PurgedLaunchScope = {
+    worktreeIds: worktreeIdSet,
+    ownedByHost: launchHostId ? (_, hostId) => hostId === launchHostId : undefined,
+    droppedBy: launchHostId
+      ? normalizedTargets.map(({ id }) => ({ id, hostId: launchHostId }))
+      : normalizedTargets,
+    retireTabs: (cancelledSessionIds) => {
+      for (const worktreeId of worktreeIdSet) {
+        retirePurgedTabLaunches(
+          s,
+          worktreeId,
+          s.tabsByWorktree[worktreeId] ?? [],
+          s.unifiedTabsByWorktree[worktreeId] ?? [],
+          cancelledSessionIds,
+          launchHostId
+        )
+      }
     }
-  })
+  }
+  if (launchScopes) {
+    launchScopes.push(launchScope)
+  } else {
+    retirePurgedLaunchScopes([launchScope])
+  }
   pruneHostedReviewLinkMutationGenerations(worktreeIdSet)
   // Why: ids are repo::path, so a worktree recreated at the same path must not inherit a stale sleep.
   for (const id of worktreeIdSet) {

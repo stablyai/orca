@@ -11,6 +11,10 @@ import {
 import type { AgentLaunchPrepareParams } from '../../../../../shared/rpc-contract/agent-launch-release-params'
 import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import {
+  PromiseSettlementWaiters,
+  sharedPromiseSettlementWaiters
+} from '../../../../../shared/promise-settlement-waiters'
 import type { StructuredAgentSessionLaunchIntent } from '../../launch-structured-agent-session'
 import type { StructuredHostLaunch } from './structured-agent-session-host-launch'
 import {
@@ -57,7 +61,7 @@ function acceptHostLaunch(
   }
   if (hostLaunch.protocol === 'release') {
     // The same launch without its final choices or message body, which release brings after Setup.
-    const message = hostLaunch.firstMessage
+    const message = intent.opening
     const prepare: AgentLaunchPrepareParams = {
       ...params,
       ...(message
@@ -97,16 +101,68 @@ function readHostLaunchStatus(
   )
 }
 
+type StatusRead = { waiters: PromiseSettlementWaiters<AgentLaunchReleasePhaseStatusResult> }
+
 /** While a held message's files cannot reach the host, reads only whether the launch ended (each
- *  read held up to the host's limit), until an explicit Retry prepares the message again. */
+ *  read held up to the host's limit), until an explicit Retry prepares the message again. One read
+ *  is outstanding at a time: one a Retry overtook is waited on again rather than sent again, and
+ *  each wait detaches from both promises once the other settles. */
 async function readWhileParked(
   intent: StructuredAgentSessionLaunchIntent,
   operationId: string,
-  resumed: Promise<void>
+  resumed: Promise<void>,
+  outstanding: { read?: StatusRead }
 ): Promise<AgentLaunchReleasePhaseStatusResult | 'resumed'> {
-  const read = readHostLaunchStatus(intent, operationId, false)
-  void read.catch(() => {})
-  return Promise.race([resumed.then(() => 'resumed' as const), read])
+  let read = outstanding.read
+  if (!read) {
+    const owned: StatusRead = {
+      waiters: new PromiseSettlementWaiters(
+        readHostLaunchStatus(intent, operationId, false),
+        () => {
+          if (outstanding.read === owned) {
+            delete outstanding.read
+          }
+        }
+      )
+    }
+    read = owned
+    outstanding.read = owned
+  }
+  const detach = new AbortController()
+  try {
+    return await Promise.race([
+      sharedPromiseSettlementWaiters(resumed)
+        .wait({ signal: detach.signal })
+        .then(() => 'resumed' as const),
+      read.waiters.wait({ signal: detach.signal })
+    ])
+  } finally {
+    detach.abort()
+  }
+}
+
+/** Whether the host's answer settles the launch, as opposed to it still running or awaiting. */
+function settlesLaunch(answer: AgentLaunchReleasePhaseStatusResult): answer is HostLaunchAnswer {
+  return answer.state === 'succeeded' || answer.state === 'failed' || answer.state === 'unknown'
+}
+
+/** A refused release says only that this request will not run; the launch's own record says
+ *  whether it ended. One still live keeps its input and reads as unknown until a Retry. */
+async function answerAfterRefusedRelease(
+  intent: StructuredAgentSessionLaunchIntent,
+  operationId: string,
+  code: (typeof HOST_LAUNCH_REQUEST_REFUSALS)[number]
+): Promise<HostLaunchAnswer> {
+  try {
+    const answer = await readHostLaunchStatus(intent, operationId, false)
+    if (settlesLaunch(answer)) {
+      return answer
+    }
+  } catch {
+    // Unread: nothing says the launch ended.
+  }
+  console.warn('[native-chat] host launch release refused', code)
+  return { state: 'unknown' }
 }
 
 /** Reads until the host settles the launch. A lost reply sends the same request again, which names
@@ -137,16 +193,19 @@ async function readHostLaunchAnswer(
   let releasing = false
   // Set while its message's files cannot reach the host; settles on an explicit Retry.
   let parked: Promise<void> | undefined
+  const outstanding: { read?: StatusRead } = {}
   for (;;) {
     throwIfCancelled()
     let answer: AgentLaunchReleasePhaseStatusResult
+    const released = releasing
     try {
       const read = parked
-        ? await readWhileParked(intent, hostLaunch.operationId, parked)
+        ? await readWhileParked(intent, hostLaunch.operationId, parked, outstanding)
         : releasing
           ? await releaseHostLaunchFirstTurn(intent, hostLaunch.operationId)
           : accepted || !accept
-            ? await readHostLaunchStatus(intent, hostLaunch.operationId)
+            ? await (outstanding.read?.waiters.wait() ??
+                readHostLaunchStatus(intent, hostLaunch.operationId))
             : await acceptHostLaunch(intent, hostLaunch, accept)
       if (read === 'resumed') {
         parked = undefined
@@ -165,7 +224,9 @@ async function readHostLaunchAnswer(
         hasRuntimeRpcErrorCode(error, code)
       )
       if (refusal) {
-        return { state: 'failed', code: refusal }
+        return released
+          ? answerAfterRefusedRelease(intent, hostLaunch.operationId, refusal)
+          : { state: 'failed', code: refusal }
       }
       const wait = HOST_LAUNCH_RETRY_DELAYS_MS[misses++]
       if (wait === undefined) {

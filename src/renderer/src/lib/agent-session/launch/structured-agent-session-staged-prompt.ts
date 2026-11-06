@@ -50,6 +50,9 @@ export type StagedStructuredLaunchPrompt = {
   settleCreate: (outcome: StagedDelivery) => void
   /** Its launch was cancelled: never sent, never given back. */
   discarded?: true
+  /** Its host launch still holds it after an unanswered read: its callers stop waiting, and only
+   *  the launch's own answer gives it back or lets it go. */
+  heldByLaunch?: true
   recipientDiscarded?: true
   /** Settles once it is discarded, so its callers need not wait on a create that may never end. */
   whenDiscarded: Promise<void>
@@ -158,6 +161,12 @@ export function settleHostCarriedStructuredLaunchPrompts(sessionId: string): voi
     prompt.delivery = Promise.resolve(delivered)
     prompt.settleCreate(delivered)
     unstageStructuredLaunchPrompt(prompt)
+  }
+}
+
+export function holdStructuredLaunchPromptsForLaunch(sessionId: string): void {
+  for (const prompt of staged.get(sessionId) ?? []) {
+    prompt.heldByLaunch = true
   }
 }
 

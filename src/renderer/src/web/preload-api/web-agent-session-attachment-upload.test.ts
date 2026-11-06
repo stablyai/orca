@@ -39,47 +39,57 @@ beforeEach(() => {
 })
 
 describe('uploadBrowserFilesToWebAgentSessionAttachments', () => {
-  it('uploads a held browser file chunk by chunk at byte offsets and reports its stored path', async () => {
-    const appends: { offset: number; contentBase64: string }[] = []
-    mocks.callEnvironmentEnvelope.mockImplementation(
-      async (_env: string, method: string, params: { offset: number; contentBase64: string }) => {
-        if (method === 'agentSessionAttachment.uploadStart') {
-          return reply({ uploadId: 'u1' })
+  it.each([3, 30])(
+    'uploads a held browser file in %i chunks at byte offsets and reports its stored path',
+    async (count) => {
+      const appends: { offset: number; contentBase64: string }[] = []
+      mocks.callEnvironmentEnvelope.mockImplementation(
+        async (_env: string, method: string, params: { offset: number; contentBase64: string }) => {
+          if (method === 'agentSessionAttachment.uploadStart') {
+            return reply({ uploadId: 'u1' })
+          }
+          if (method === 'agentSessionAttachment.uploadAppend') {
+            appends.push({ offset: params.offset, contentBase64: params.contentBase64 })
+            return reply({ receivedBytes: 0 })
+          }
+          return reply({ path: '/srv/agent-session-attachments/u1/notes.txt', name: 'notes.txt' })
         }
-        if (method === 'agentSessionAttachment.uploadAppend') {
-          appends.push({ offset: params.offset, contentBase64: params.contentBase64 })
-          return reply({ receivedBytes: 0 })
-        }
-        return reply({ path: '/srv/agent-session-attachments/u1/notes.txt', name: 'notes.txt' })
-      }
-    )
-    const bytes = Buffer.alloc(AGENT_SESSION_ATTACHMENT_CHUNK_BYTES + 5, 7)
-    const [token] = holdBrowserAttachmentFiles([new File([bytes], 'notes.txt')])
+      )
+      const bytes = Buffer.alloc(AGENT_SESSION_ATTACHMENT_CHUNK_BYTES * (count - 1) + 5, 7)
+      const [token] = holdBrowserAttachmentFiles([new File([bytes], 'notes.txt')])
 
-    const result = await uploadBrowserFilesToWebAgentSessionAttachments({
-      ...target,
-      paths: [token!, 'orca-browser-file:gone/old.txt']
-    })
+      const result = await uploadBrowserFilesToWebAgentSessionAttachments({
+        ...target,
+        paths: [token!, 'orca-browser-file:gone/old.txt']
+      })
 
-    expect(token).toMatch(/\/notes\.txt$/)
-    expect(mocks.callEnvironmentEnvelope).toHaveBeenCalledWith(
-      'env-1',
-      'agentSessionAttachment.uploadStart',
-      { sessionId: 'session-1', name: 'notes.txt', byteLength: bytes.length },
-      expect.any(Number)
-    )
-    expect(appends.map(({ offset }) => offset)).toEqual([0, AGENT_SESSION_ATTACHMENT_CHUNK_BYTES])
-    expect(
-      Buffer.concat(appends.map(({ contentBase64 }) => Buffer.from(contentBase64, 'base64')))
-    ).toEqual(bytes)
-    expect(result.uploaded).toEqual([
-      { sourcePath: token, path: '/srv/agent-session-attachments/u1/notes.txt' }
-    ])
-    // A token is claimed once; one nothing holds fails instead of attaching nothing silently.
-    expect(result.failed.map(({ sourcePath }) => sourcePath)).toEqual([
-      'orca-browser-file:gone/old.txt'
-    ])
-  })
+      expect(token).toMatch(/\/notes\.txt$/)
+      expect(mocks.callEnvironmentEnvelope).toHaveBeenCalledWith(
+        'env-1',
+        'agentSessionAttachment.uploadStart',
+        { sessionId: 'session-1', name: 'notes.txt', byteLength: bytes.length },
+        expect.any(Number)
+      )
+      // Start, one append per chunk, commit: nothing more however large the file.
+      expect(mocks.callEnvironmentEnvelope).toHaveBeenCalledTimes(count + 2)
+      expect(appends.map(({ offset }) => offset)).toEqual(
+        Array.from({ length: count }, (_, index) => index * AGENT_SESSION_ATTACHMENT_CHUNK_BYTES)
+      )
+      // Each append carries its own chunk alone, so the bytes sent are the file's, once.
+      const sent = appends.map(({ contentBase64 }) => Buffer.from(contentBase64, 'base64'))
+      expect(Math.max(...sent.map((chunk) => chunk.length))).toBe(
+        AGENT_SESSION_ATTACHMENT_CHUNK_BYTES
+      )
+      expect(Buffer.concat(sent)).toEqual(bytes)
+      expect(result.uploaded).toEqual([
+        { sourcePath: token, path: '/srv/agent-session-attachments/u1/notes.txt' }
+      ])
+      // A token is claimed once; one nothing holds fails instead of attaching nothing silently.
+      expect(result.failed.map(({ sourcePath }) => sourcePath)).toEqual([
+        'orca-browser-file:gone/old.txt'
+      ])
+    }
+  )
 
   it('names the prepared launch a chat not yet on its host is uploaded under', async () => {
     mocks.callEnvironmentEnvelope.mockImplementation(async (_env: string, method: string) =>

@@ -20,6 +20,7 @@ export {
   takeBackLegacyStructuredLaunchPrompts,
   settleHostCarriedStructuredLaunchPrompts,
   prepareLegacyStructuredLaunchPrompts,
+  holdStructuredLaunchPromptsForLaunch,
   prepareStructuredLaunchPromptForCreate,
   issueStructuredLaunchPromptForCreate,
   hasStagedStructuredLaunchPrompt,
@@ -162,6 +163,9 @@ export function settleStructuredAgentLaunchPrompt(args: {
           failureNotified: error instanceof StructuredAgentSessionCreateRefusalError,
           ...(inComposer ? { inComposer: true as const } : {})
         }))
+      }
+      if (prompt?.heldByLaunch && !prompt.discarded && !prompt.delivery) {
+        return { delivered: false, unconfirmed: true as const, failureNotified: true }
       }
       // The launch did not submit: its text waits in the chat's composer for the person's own Send.
       if (prompt && !prompt.discarded && !prompt.delivery) {

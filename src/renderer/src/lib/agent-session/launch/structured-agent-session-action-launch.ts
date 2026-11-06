@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 import { readStructuredChatTabSavedName } from '@/runtime/structured-chat-tab-name'
 import {
   getStructuredLaunchStateBySessionId,
-  notifyStructuredLaunchListeners
+  notifyStructuredLaunchStateChanged
 } from './structured-agent-session-launch-registry'
 import { focusTerminalTabSurface } from '../../focus-terminal-tab-surface'
 import type { Tab } from '../../../../../shared/tab-types'
@@ -169,7 +169,8 @@ export async function replaceDeclinedChat(
             { value0: structuredAgentLabel(args.plan.agent) }
           )
     }
-    notifyStructuredLaunchListeners()
+    // Only this launch changed: saving every launch here would rewrite all their rows.
+    notifyStructuredLaunchStateChanged(launchState)
   }
   if (!replacement) {
     return settlement

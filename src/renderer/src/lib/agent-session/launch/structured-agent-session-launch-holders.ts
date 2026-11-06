@@ -4,6 +4,7 @@ import {
   type StructuredLaunchState
 } from './structured-agent-session-launch-registry'
 import type { AgentLaunchRequestId } from '../../agent-launch-request-id'
+import { ordinaryLaunchOpening } from './structured-agent-session-launch-opening'
 
 // Coalesce re-delivery of one action only. Other actions and failed/unconfirmed retries open independent chats/text; conversation resumes still hold because hosts refuse duplicate adoption.
 function holdsLaunchIdentity(
@@ -20,7 +21,7 @@ function holdsLaunchIdentity(
   const { attempt } = state.callers
   return (
     (lifecycle !== 'visibility-unknown' ||
-      (!!state.intent.params.firstMessage && requestId !== undefined)) &&
+      (!!ordinaryLaunchOpening(state.intent) && requestId !== undefined)) &&
     (requestId === undefined ? attempt.kind === 'first' : attempt.requestId === requestId)
   )
 }

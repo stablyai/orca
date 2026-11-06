@@ -3,7 +3,10 @@ import {
   structuredLaunchCompatibleOptions,
   structuredLaunchRequestedOptions
 } from '../../../../../shared/native-chat/input/native-chat-session-option-defaults'
-import { structuredAgentSessionCreateFingerprint } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import {
+  ordinaryLaunchOpening,
+  sealStructuredLaunchCreatePayload
+} from './structured-agent-session-launch-opening'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   type StructuredLaunchState,
@@ -66,24 +69,14 @@ export function prepareStructuredLaunchCreateMessage(
     hostTakesExplicitOptions,
     selection: intent.sendSelectionSupport === true
   })
-  const params = {
+  if (firstMessage) {
+    intent.opening = { ...firstMessage, ...(selection !== undefined ? { selection } : {}) }
+  }
+  sealStructuredLaunchCreatePayload(intent, {
     ...intent.params,
-    ...(firstMessage
-      ? { firstMessage: { ...firstMessage, ...(selection !== undefined ? { selection } : {}) } }
-      : {}),
     ...(options ? { options } : {}),
     ...(optionsMode ? { optionsMode } : {})
-  }
-  intent.params = {
-    ...params,
-    envelope: {
-      ...params.envelope,
-      payloadFingerprint: structuredAgentSessionCreateFingerprint({
-        sessionId: intent.sessionId,
-        ...params
-      })
-    }
-  }
+  })
   intent.createPrepared = true
   notifyStructuredLaunchListeners()
 }
@@ -237,12 +230,12 @@ export function publishWithHeldOptions(
     .then((receipt) =>
       state.promise === publishing
         ? publishStructuredLaunchCreateOptions(state, receipt)
-        : state.intent.params.firstMessage
+        : ordinaryLaunchOpening(state.intent)
           ? receipt
           : state.promise
     )
     .catch((error: unknown) => {
-      if (state.promise !== publishing && state.intent.params.firstMessage) {
+      if (state.promise !== publishing && ordinaryLaunchOpening(state.intent)) {
         throw new StructuredAgentSessionCreateUnknownOutcomeError(
           'Opening message outcome belongs to the current attempt.',
           'agent_session_operation_unknown'

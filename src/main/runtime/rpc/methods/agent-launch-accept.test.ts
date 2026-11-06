@@ -6,6 +6,7 @@ import '../unused-default-rpc-methods.test-fixture'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { getEventListeners } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createSetupRun, type SetupRun } from '../../setup/setup-run'
 import { buildAgentStartupPlan } from '../../../../shared/agent-launch/startup/tui-agent-startup'
@@ -140,6 +141,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.useRealTimers()
   for (const run of runs.splice(0)) {
     run.settle({ kind: 'ended', reason: 'closed' })
   }
@@ -350,22 +352,55 @@ describe('overlapping and changed accepts of one operation', () => {
     )
   })
 
-  it('leaves nothing behind for a status read that times out', async () => {
-    const run = setupRun()
-    const runtime = hostRuntime(run)
-    await accept(runtime, awaiting(run))
-    const [active] = [...activeAgentLaunchesFor(rpcContext(runtime, DESKTOP).runtime).values()]
-    const reactions = vi.spyOn(active.promise, 'then')
-    for (let read = 0; read < 3; read += 1) {
-      await expect(status(runtime, 1)).resolves.toEqual({ state: 'running' })
+  it.each([3, 30])(
+    'shares one observer across %i timed-out, aborted and waiting status reads, leaving nothing behind',
+    async (count) => {
+      const run = setupRun()
+      const runtime = hostRuntime(run)
+      await accept(runtime, awaiting(run))
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      const [active] = [...activeAgentLaunchesFor(rpcContext(runtime, DESKTOP).runtime).values()]
+      const reactions = vi.spyOn(active.promise, 'then')
+      const timers = vi.getTimerCount()
+      const read = (waitMs: number, signal?: AbortSignal) =>
+        STATUS.handler(
+          STATUS.params.parse({ operationId: OPERATION_ID, waitMs }),
+          rpcContext(runtime, { ...DESKTOP, ...(signal ? { signal } : {}) })
+        )
+      const timedOut = Array.from({ length: count }, () => read(1_000))
+      const controllers = Array.from({ length: count }, () => new AbortController())
+      const aborted = controllers.map((controller) =>
+        read(20_000, controller.signal).catch((error: unknown) => error)
+      )
+      const waiting = Array.from({ length: count }, () => read(20_000))
+      const waiters = sharedPromiseSettlementWaiters(active.promise)
+      expect(waiters.waiterCount).toBe(3 * count)
+      expect(vi.getTimerCount()).toBe(timers + 3 * count)
+
+      for (const controller of controllers) {
+        controller.abort()
+      }
+      await Promise.all(aborted)
+      expect(controllers.map(({ signal }) => getEventListeners(signal, 'abort').length)).toEqual(
+        controllers.map(() => 0)
+      )
+      await vi.advanceTimersByTimeAsync(1_000)
+      await expect(Promise.all(timedOut)).resolves.toEqual(
+        timedOut.map(() => ({ state: 'running' }))
+      )
+      expect(waiters.waiterCount).toBe(count)
+      expect(vi.getTimerCount()).toBe(timers + count)
+
+      run.settle({ kind: 'succeeded' })
+      const answers = await Promise.all(waiting)
+      expect(answers.every((answer) => answer.state === 'succeeded')).toBe(true)
+      expect(waiters.waiterCount).toBe(0)
+      expect(vi.getTimerCount()).toBe(timers)
+      expect(reactions.mock.calls.length).toBeLessThanOrEqual(1)
+      expect(createStructured).toHaveBeenCalledOnce()
+      reactions.mockRestore()
     }
-    // One shared observer for every read; each expired read's own waiter is gone.
-    expect(reactions.mock.calls.length).toBeLessThanOrEqual(1)
-    expect(sharedPromiseSettlementWaiters(active.promise).waiterCount).toBe(0)
-    reactions.mockRestore()
-    run.settle({ kind: 'succeeded' })
-    await expect(status(runtime, 5_000)).resolves.toMatchObject({ state: 'succeeded' })
-  })
+  )
 })
 
 describe('the terminal alternative runs the caller’s plan once', () => {

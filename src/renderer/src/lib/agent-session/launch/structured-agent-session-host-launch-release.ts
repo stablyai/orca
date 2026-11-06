@@ -125,17 +125,16 @@ function readFirstTurn(state: StructuredLaunchState, freeze: boolean): ReleasedC
 }
 
 /** Saved with the launch's own row and shown, in one write: a failed save never holds it back. */
-function saveFirstTurn(
+export function saveHostLaunchFirstTurn(
   intent: StructuredAgentSessionLaunchIntent,
   firstTurn: HostLaunchFirstTurn,
-  firstMessage?: StructuredAgentSessionFirstMessage
+  opening?: StructuredAgentSessionFirstMessage
 ): void {
   if (intent.hostLaunch) {
-    intent.hostLaunch = {
-      ...intent.hostLaunch,
-      firstTurn,
-      ...(firstMessage ? { firstMessage } : {})
-    }
+    intent.hostLaunch = { ...intent.hostLaunch, firstTurn }
+  }
+  if (opening) {
+    intent.opening = opening
   }
   notifyStructuredLaunchIntentChanged(intent)
 }
@@ -150,8 +149,8 @@ export function recordHostLaunchFirstTurnBaseline(
   if (hostLaunch?.protocol !== 'release' || hostLaunch.firstTurn || state?.intent !== intent) {
     return
   }
-  const staged = hostLaunch.firstMessage ? hostLaunch.stagedSources : undefined
-  saveFirstTurn(intent, {
+  const staged = intent.opening ? hostLaunch.stagedSources : undefined
+  saveHostLaunchFirstTurn(intent, {
     phase: 'editing',
     ...readFirstTurn(state, false),
     ...(staged?.length ? { staged: [...staged] } : {})
@@ -193,7 +192,7 @@ async function hostReadableFirstMessage(
   operationId: string
 ): Promise<StructuredAgentSessionFirstMessage | undefined> {
   const hostLaunch = intent.hostLaunch
-  const message = hostLaunch?.firstMessage
+  const message = intent.opening
   const firstTurn = hostLaunch?.firstTurn
   const staged = firstTurn?.phase === 'editing' ? firstTurn.staged : undefined
   if (!hostLaunch || !message || !staged?.length) {
@@ -223,14 +222,27 @@ export async function releaseHostLaunchFirstTurn(
     throw new Error('host launch first turn unavailable')
   }
   if (firstTurn.phase !== 'submitted') {
-    heldLaunchState(intent)
-    const firstMessage = await hostReadableFirstMessage(intent, operationId)
+    let firstMessage: StructuredAgentSessionFirstMessage | undefined
+    let preparedFrom: StructuredAgentSessionFirstMessage | undefined
+    // An opening edited while its files were on their way is prepared again; the obsolete one is
+    // never released.
+    do {
+      heldLaunchState(intent)
+      preparedFrom = intent.opening
+      try {
+        firstMessage = await hostReadableFirstMessage(intent, operationId)
+      } catch (error) {
+        if (intent.opening === preparedFrom) {
+          throw error
+        }
+      }
+    } while (intent.opening !== preparedFrom)
     // No await from here to the request: a pick processed during the upload governs this turn.
     firstTurn = { phase: 'submitted', ...readFirstTurn(heldLaunchState(intent), true) }
-    saveFirstTurn(intent, firstTurn, firstMessage)
+    saveHostLaunchFirstTurn(intent, firstTurn, firstMessage)
   }
   const { phase: _submitted, ...choices } = firstTurn
-  const message = intent.hostLaunch?.firstMessage
+  const message = intent.opening
   const params: AgentLaunchReleaseParams = {
     operationId,
     ...choices,

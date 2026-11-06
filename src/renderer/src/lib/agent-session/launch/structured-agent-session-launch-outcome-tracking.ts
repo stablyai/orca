@@ -12,6 +12,7 @@ import {
 } from './structured-agent-session-launch-surface'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import {
+  createStructuredLaunchCallerGroup,
   settleStructuredLaunchCallers,
   structuredLaunchCallersHavePendingWork
 } from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
@@ -22,6 +23,10 @@ import {
   StructuredHostLaunchTerminalError
 } from './structured-agent-session-host-launch'
 import { hostLaunchAwaitsItsTab } from './structured-agent-session-host-launch-retention'
+import {
+  hostLaunchOwesOpening,
+  ordinaryLaunchOpening
+} from './structured-agent-session-launch-opening'
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
 import { nativeChatComposerHasUserContent } from '@/components/native-chat/native-chat-pending-attachment-cache'
 import { afterPendingTab } from '@/runtime/layout-owner-pending-tabs'
@@ -45,12 +50,23 @@ export function maybeCleanupLaunchState(state: StructuredLaunchState): void {
   if (
     state.callers.outcome === 'failed' ||
     state.callers.outcome === 'unknown' ||
-    (state.operationEnded && !!state.intent.params.firstMessage) ||
+    (state.operationEnded && !!ordinaryLaunchOpening(state.intent)) ||
+    hostLaunchOwesOpening(state) ||
     structuredLaunchCallersHavePendingWork(state.callers)
   ) {
     return
   }
   cleanupLaunchState(state)
+}
+
+/** A restarted launch's new callers; an opening retried keeps the request it answers. */
+export function resetStructuredLaunchCallers(
+  state: StructuredLaunchState,
+  retainedOpening: boolean
+): void {
+  const requestId = retainedOpening ? state.callers.attempt.requestId : undefined
+  state.callers = createStructuredLaunchCallerGroup({ kind: 'retry', requestId })
+  state.callers.onSettled = () => maybeCleanupLaunchState(state)
 }
 
 /** The chat's tab shows here now: a host launch kept only for want of it retires as any other. */
@@ -66,7 +82,7 @@ export function reconsiderShownHostLaunch(state: StructuredLaunchState): void {
 function hostLaunchSettledInTerminal(state: StructuredLaunchState, error: unknown): boolean {
   return (
     error instanceof StructuredHostLaunchTerminalError &&
-    !state.intent.hostLaunch?.firstMessage &&
+    !state.intent.opening &&
     !nativeChatComposerHasUserContent(structuredAgentSessionDraftScopeKey(state.intent.sessionId))
   )
 }
@@ -97,7 +113,7 @@ function settleStructuredLaunchRefusal(state: StructuredLaunchState, error: unkn
   }
   if (
     state.visibilityUnknown &&
-    state.intent.params.firstMessage &&
+    ordinaryLaunchOpening(state.intent) &&
     state.callers.attempt.kind === 'retry'
   ) {
     state.operationEnded = true
@@ -130,7 +146,7 @@ export function trackLaunchSettlement(
           state.visibilityUnknown &&
           receipt.sessionId === state.intent.sessionId &&
           receipt.firstMessage?.clientMessageId ===
-            state.intent.params.firstMessage?.clientMessageId &&
+            ordinaryLaunchOpening(state.intent)?.clientMessageId &&
           receipt.firstMessage
         ) {
           settleStructuredAgentSessionSendsFromJournal(
@@ -204,7 +220,7 @@ export function trackLaunchSettlement(
         cleanupUnmaterializedLaunch(state)
         notifyStructuredLaunchStateChanged(state)
       } else {
-        if (state.intent.params.firstMessage) {
+        if (ordinaryLaunchOpening(state.intent)) {
           state.operationEnded = true
           settleStructuredLaunchCreateOptions(state, { kind: 'unknown' })
         }

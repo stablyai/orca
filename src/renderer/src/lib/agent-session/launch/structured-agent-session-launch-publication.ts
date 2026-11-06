@@ -65,7 +65,9 @@ export function markStructuredAgentSessionLaunchPublished(
   if (state.intent.explicitLaunchOptions && state.intent.createMessageSupport !== true) {
     return false
   }
-  if (state.intent.params.firstMessage) {
+  // The chat existing is no receipt for its opening: the chat's journal or the host's own launch
+  // record says what became of it first.
+  if (state.intent.opening) {
     confirmStructuredLaunchFirstMessagePublication(worktreeId, sessionId)
     return false
   }

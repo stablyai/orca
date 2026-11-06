@@ -22,7 +22,10 @@ import {
   type StructuredLaunchFailure
 } from './structured-agent-session-launch-failure'
 import { structuredAgentLabel } from './structured-agent-session-launch-label'
-import { prepareLegacyStructuredLaunchPrompts } from './structured-agent-session-launch-prompt'
+import {
+  holdStructuredLaunchPromptsForLaunch,
+  prepareLegacyStructuredLaunchPrompts
+} from './structured-agent-session-launch-prompt'
 import {
   hostLaunchMessageAcknowledged,
   releaseHostLaunchMessage
@@ -39,11 +42,8 @@ export type StructuredHostLaunch = {
   /** Minted once per user action and reused by every retry of it, so the host runs it at most once. */
   operationId: string
   sessionId: string
-  /** The held message under the id the host's chat founds it with: text, images and skills. Saved
-   *  with the launch before accept, so a reload still holds it, and replaced by its host-readable
-   *  form when released; dropped once the host's answer settles who has it. */
-  firstMessage?: StructuredAgentSessionFirstMessage
-  /** Its client files the host must receive before release, as the staging owner holds them. */
+  /** The opening's client files the host must receive before release, as the staging owner holds
+   *  them. The opening itself is the launch's own (`intent.opening`). */
   stagedSources?: readonly string[]
   /** Uploads those files under this launch and answers the host-readable body; in memory only. */
   prepareFirstMessage?: (
@@ -57,7 +57,7 @@ export type StructuredHostLaunch = {
    *  could not read it, when nothing is released and the launch is left to the host's expiry. */
   firstTurn?: HostLaunchFirstTurn
   /** What accept carries; absent once restored after a reload, which only reads the launch. A
-   *  prepared launch names its message by `firstMessage` instead, whose body release carries. */
+   *  prepared launch names its opening by id instead, whose body release carries. */
   accept?: {
     prompt?: { text: string; clientMessageId: string }
     presentation: 'focused' | 'background'
@@ -71,6 +71,12 @@ export type StructuredHostLaunch = {
     /** Who asked for the launch, as the terminal it may become is counted. */
     launchSource?: string
   }
+}
+
+/** A creation's host launch with the message its chat opens with, which becomes the launch's
+ *  opening as the launch starts. */
+export type StructuredHostLaunchHandoff = StructuredHostLaunch & {
+  opening?: StructuredAgentSessionFirstMessage
 }
 
 /** The host started the agent in a terminal instead of the chat; the chat's tab gives way to it. */
@@ -126,8 +132,14 @@ function notStartedFailure(
 }
 
 function markUnknown(state: ObservedHostLaunch): Error {
-  // Possibly the host's now: a copy goes back to the composer, and nothing sends it again.
-  releaseHostLaunchMessage(state.intent, false)
+  // Text accept carried is possibly the host's now: a copy goes back to the composer, and nothing
+  // sends it again. A prepared launch's opening is not, and a live launch may still need it whole:
+  // it stays, with its first turn, until the same launch says what became of it.
+  if (state.intent.hostLaunch?.protocol === 'release') {
+    holdStructuredLaunchPromptsForLaunch(state.intent.sessionId)
+  } else {
+    releaseHostLaunchMessage(state.intent, false)
+  }
   state.visibilityUnknown = true
   state.onVisibilityChanged?.()
   return new Error('agent_session_operation_unknown')
@@ -153,7 +165,7 @@ async function adoptHostLaunchedChat(
   if (typeof fence !== 'number') {
     throw markUnknown(state)
   }
-  releaseHostLaunchMessage(intent, hostLaunchMessageAcknowledged(result))
+  releaseHostLaunchMessage(intent, hostLaunchMessageAcknowledged(intent, result))
   publishStructuredAgentSessionCreateHydration(intent, history.page, fence)
   return { sessionId: intent.sessionId, fence }
 }
@@ -191,7 +203,7 @@ export async function observeStructuredHostLaunch(
   const { outcome } = answer.result
   if (outcome.kind === 'terminal') {
     // A terminal existing is no receipt for the text: only the host's word on it lets it go.
-    releaseHostLaunchMessage(intent, hostLaunchMessageAcknowledged(answer.result))
+    releaseHostLaunchMessage(intent, hostLaunchMessageAcknowledged(intent, answer.result))
     abandonStructuredAgentSessionLaunchIntent(intent)
     throw new StructuredHostLaunchTerminalError(answer.result)
   }

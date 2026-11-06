@@ -1,4 +1,4 @@
-import { structuredAgentSessionCreateFingerprint } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { sealStructuredLaunchCreatePayload } from './structured-agent-session-launch-opening'
 import {
   setStructuredLaunchState,
   type StructuredLaunchState
@@ -18,16 +18,6 @@ export function releaseStructuredLaunchSource(state: StructuredLaunchState): voi
     return
   }
   const { cliSource: _paneSource, ...resumeById } = resumeFrom
-  const params = { ...intent.params, resumeFrom: resumeById }
-  intent.params = {
-    ...params,
-    envelope: {
-      ...params.envelope,
-      payloadFingerprint: structuredAgentSessionCreateFingerprint({
-        sessionId: intent.sessionId,
-        ...params
-      })
-    }
-  }
+  sealStructuredLaunchCreatePayload(intent, { ...intent.params, resumeFrom: resumeById })
   setStructuredLaunchState(state)
 }

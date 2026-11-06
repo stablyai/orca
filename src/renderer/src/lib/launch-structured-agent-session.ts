@@ -2,12 +2,15 @@ import type {
   HostLaunchFirstTurn,
   StructuredLaunchSurfaceAddress
 } from './agent-session/launch/structured-agent-session-launch-record'
-import type { StructuredHostLaunch } from './agent-session/launch/structured-agent-session-host-launch'
+import type {
+  StructuredHostLaunch,
+  StructuredHostLaunchHandoff
+} from './agent-session/launch/structured-agent-session-host-launch'
+import type { StructuredLaunchCreateParams } from './agent-session/launch/structured-agent-session-launch-opening'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   createStructuredAgentSessionId,
   structuredAgentSessionCreateParams,
-  type StructuredAgentSessionCreateParams,
   type StructuredAgentSessionFirstMessage,
   type StructuredAgentSessionResumeSource
 } from '../../../shared/agent-session/structured-agent-session-create'
@@ -48,7 +51,11 @@ export type StructuredAgentSessionLaunchIntent = {
   executionHostId: ExecutionHostId
   target: RuntimeClientTarget
   agent: TuiAgent
-  params: StructuredAgentSessionCreateParams
+  params: StructuredLaunchCreateParams
+  /** The launch's one opening message, owed to its chat until the chat's journal records it, its
+   *  terminal takes it whole, or the composer durably holds it again. Who sends it is the route:
+   *  ordinary create carries it, a host launch releases it. */
+  opening?: StructuredAgentSessionFirstMessage
   sendSelectionSupport?: boolean
   sendSkillsSupport?: boolean
   createMessageSupport?: boolean
@@ -105,15 +112,14 @@ export function createStructuredAgentSessionLaunchIntent(
   resumeFrom?: StructuredAgentSessionResumeSource,
   hostSeedOptions?: LaunchSeed,
   activate = true,
-  hostLaunch?: StructuredHostLaunch
+  handoff?: StructuredHostLaunchHandoff
 ): StructuredAgentSessionLaunchIntent {
   const owner = structuredAgentSessionOwnerTarget(
     worktreeId,
     executionHostId ?? resolveStructuredAgentSessionOwner(useAppStore.getState(), worktreeId)
   )
   // A host launch names its chat once, so every retry of that request adopts the same one.
-  const sessionId =
-    hostLaunch?.sessionId ?? createStructuredAgentSessionId(agent, createBrowserUuid)
+  const sessionId = handoff?.sessionId ?? createStructuredAgentSessionId(agent, createBrowserUuid)
   if (activate) {
     recordWebSessionFocusIntent(
       structuredAgentSessionFocusOwner(owner.target),
@@ -132,8 +138,19 @@ export function createStructuredAgentSessionLaunchIntent(
       resumeFrom,
       hostSeedOptions
     ),
-    ...(hostLaunch ? { hostLaunch } : {})
+    ...(handoff ? hostLaunchOfHandoff(handoff) : {})
   }
+}
+
+/** The creation's message becomes the launch's opening; the host launch keeps none of its own. */
+function hostLaunchOfHandoff({
+  opening,
+  ...hostLaunch
+}: StructuredHostLaunchHandoff): Pick<
+  StructuredAgentSessionLaunchIntent,
+  'hostLaunch' | 'opening'
+> {
+  return { hostLaunch, ...(opening ? { opening } : {}) }
 }
 
 function buildStructuredAgentSessionLaunchIntent(
@@ -204,7 +221,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   payloadFingerprint: string
   expectedRuntimeFence: number | null
   /** A host launch from before a reload: it is read again, never accepted again. Its
-   *  `firstMessage` is the held message this window still owes the user. */
+   *  `firstMessage` is its opening, which this window still owes the user. */
   hostLaunchOperationId?: string
   /** Its first turn, released after Setup: what the chat showed, or the exact input it sent. */
   hostLaunchFirstTurn?: HostLaunchFirstTurn
@@ -237,10 +254,6 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
       worktree: toRuntimeWorktreeSelector(args.worktreeId),
       agent: args.agent,
       ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
-      // A host launch's message was never part of this payload or its digest.
-      ...(args.firstMessage && !args.hostLaunchOperationId
-        ? { firstMessage: args.firstMessage }
-        : {}),
       ...(args.optionsMode ? { optionsMode: args.optionsMode } : {}),
       ...(args.options ? { options: args.options } : {})
     },
@@ -254,11 +267,11 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
           hostLaunch: {
             operationId: args.hostLaunchOperationId,
             sessionId: args.sessionId,
-            ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
             ...(firstTurn ? { protocol: 'release' as const, firstTurn } : {})
           }
         }
       : {}),
+    ...(args.firstMessage ? { opening: args.firstMessage } : {}),
     // A released first turn shows what it saved, never this machine's defaults of now.
     ...(firstTurn
       ? { seedOptions: firstTurn.options }

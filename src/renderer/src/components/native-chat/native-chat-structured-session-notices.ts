@@ -21,12 +21,14 @@ function nativeChatLaunchNotice({
   failure = null,
   agentLabel,
   onRetry,
+  editOpening,
   claudeSignIn = null
 }: {
   lifecycle: StructuredAgentSessionLaunchLifecycle | null
   failure?: StructuredLaunchFailure | null
   agentLabel?: string
   onRetry: () => void
+  editOpening?: StructuredLaunchOpeningEdit
   /** Replace Retry with sign-in until authentication succeeds. */
   claudeSignIn?: NativeChatClaudeSignIn | null
 }): NativeChatComposerNotice | null {
@@ -57,6 +59,8 @@ function nativeChatLaunchNotice({
     failure?.kind === 'not-started' ||
     (failure?.code === 'agent_session_operation_invalid' && failure.details?.argumentProblem)
   const signInContent = nativeChatAntigravitySignInContent(failure?.details?.reason, agentLabel)
+  const retries =
+    !(claudeSignIn && isClaudeSignInFailureKind(failure?.details?.reason)) && !signInContent
   return {
     content: signInContent,
     key: 'launch',
@@ -69,14 +73,26 @@ function nativeChatLaunchNotice({
             onClick: claudeSignIn.signIn,
             disabled: claudeSignIn.signingIn
           }
-        : signInContent
+        : // An open edit's Save or Cancel decides what happens next, not Retry.
+          signInContent || editOpening === 'editing'
           ? undefined
           : {
               label: translate('auto.components.native.chat.NativeChatLaunchRetry.retry', 'Retry'),
               onClick: onRetry
-            }
+            },
+    ...(retries && editOpening && editOpening !== 'editing'
+      ? {
+          secondaryAction: {
+            label: translate('components.native-chat.editDeliveryNotice', 'Edit'),
+            onClick: editOpening.open
+          }
+        }
+      : {})
   }
 }
+
+/** A held opening whose files could not reach its host: Edit opens it, `editing` while open. */
+export type StructuredLaunchOpeningEdit = { open: () => void } | 'editing'
 
 export function structuredSessionNotices({
   launch,
@@ -92,6 +108,7 @@ export function structuredSessionNotices({
     lifecycle: StructuredAgentSessionLaunchLifecycle | null
     failure: StructuredLaunchFailure | null
     retry: () => void
+    editOpening?: StructuredLaunchOpeningEdit
   }
   agentLabel: string
   sessionError: string | null
@@ -107,6 +124,7 @@ export function structuredSessionNotices({
     failure: launch.failure,
     agentLabel,
     onRetry: launch.retry,
+    editOpening: launch.editOpening,
     claudeSignIn
   })
   // A missing history cannot replace the creation owner's available recovery.

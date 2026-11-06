@@ -254,7 +254,7 @@ it.each([true, false])(
         preparationErrors.push(String(error))
         throw error
       }
-      preparedFirstMessage = intent.params.firstMessage
+      preparedFirstMessage = intent.opening
       throw Object.assign(
         new launchErrorMocks.StructuredAgentSessionCreateRefusalError('provider unavailable'),
         { code: 'structured_agent_session_unsupported' }

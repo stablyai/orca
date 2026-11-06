@@ -41,6 +41,7 @@ import { getJoinableStructuredLaunchState } from './structured-agent-session-lau
 import { publishWithHeldOptions } from './structured-agent-session-launch-create-message'
 import {
   maybeCleanupLaunchState,
+  resetStructuredLaunchCallers,
   trackLaunchSettlement
 } from './structured-agent-session-launch-outcome-tracking'
 import {
@@ -57,6 +58,7 @@ import { releaseStructuredLaunchSource } from './structured-agent-session-launch
 import { joinHeldHostLaunch } from './structured-agent-session-host-launch-join'
 import { adoptRereadHostLaunchTerminal } from './structured-agent-session-host-launch-terminal'
 import * as launchDraft from './structured-agent-session-launch-draft'
+import { ordinaryLaunchOpening } from './structured-agent-session-launch-opening'
 
 type StructuredLaunchStateResult = {
   state: StructuredLaunchState
@@ -96,18 +98,9 @@ function adoptPairedHostSeed(
   notifyStructuredLaunchStateChanged(state)
 }
 
-function resetStructuredLaunchCallers(
-  state: StructuredLaunchState,
-  retainedOpening: boolean
-): void {
-  const requestId = retainedOpening ? state.callers.attempt.requestId : undefined
-  state.callers = createStructuredLaunchCallerGroup({ kind: 'retry', requestId })
-  state.callers.onSettled = () => maybeCleanupLaunchState(state)
-}
-
 function restartStructuredLaunchState(state: StructuredLaunchState, requested = false): void {
   const wasVisibilityUnknown = state.visibilityUnknown
-  const retainedOpening = wasVisibilityUnknown && !!state.intent.params.firstMessage
+  const retainedOpening = wasVisibilityUnknown && !!ordinaryLaunchOpening(state.intent)
   // A host launch keeps its operation whatever became of it: restarting it only reads it again.
   if (!state.intent.hostLaunch && (!wasVisibilityUnknown || (retainedOpening && requested))) {
     const surfaceAddress = state.intent.surfaceAddress
@@ -118,9 +111,9 @@ function restartStructuredLaunchState(state: StructuredLaunchState, requested = 
   delete state.failure
   delete state.operationEnded
   state.callers.outcome = 'pending'
-  // A new create seeds from the settings of now (a paired server's arrive with its probe); picks
-  // held through the failure still apply.
-  if (!retainedOpening) {
+  // A new create seeds from now's settings (a paired server's come with its probe); a host
+  // launch read again and an opening retained keep the picks made for them.
+  if (!retainedOpening && !state.intent.hostLaunch) {
     state.selection = initialStructuredLaunchSelection(state.intent)
   }
   state.onHostSeed = retainedOpening
@@ -141,8 +134,8 @@ function joinStructuredLaunchState(
 ): StructuredLaunchStateResult | undefined {
   // A re-delivery of the same action shares the text it staged, so it is sent once.
   const repeat = repeatedStructuredLaunchAttempt(existing.callers.attempt, options.requestId)
-  const retrying = existing.visibilityUnknown && !existing.intent.params.firstMessage
-  const retained = existing.visibilityUnknown && !!existing.intent.params.firstMessage
+  const retained = existing.visibilityUnknown && !!ordinaryLaunchOpening(existing.intent)
+  const retrying = existing.visibilityUnknown && !retained
   const joined = joinLaunchDelivery(options, existing.promptDelivery)
   // Unconfirmed launches retain text; rechecks must not stage/send a second copy.
   const text = retrying || retained || repeat ? '' : launchPromptText(joined)

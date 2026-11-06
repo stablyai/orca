@@ -5,8 +5,10 @@ import { deleteStructuredAgentLaunchRecord } from './structured-agent-session-la
 import {
   getStructuredLaunchStateBySessionId,
   getPersistedStructuredAgentLaunchRecord,
-  notifyStructuredLaunchListeners
+  notifyStructuredLaunchStateChanged,
+  publishStructuredLaunchStatus
 } from './structured-agent-session-launch-registry'
+import { ordinaryLaunchOpening } from './structured-agent-session-launch-opening'
 
 /** Existing opening content is correlation after uncertainty, not an active create. */
 export function structuredAgentSessionLaunchHasRetainedInput(
@@ -18,11 +20,16 @@ export function structuredAgentSessionLaunchHasRetainedInput(
     return (
       state.intent.worktreeId === worktreeId &&
       launchStateLifecycle(state) === 'visibility-unknown' &&
-      !!state.intent.params.firstMessage
+      !!ordinaryLaunchOpening(state.intent)
     )
   }
   const record = getPersistedStructuredAgentLaunchRecord(sessionId)
-  return !!record?.firstMessage && record.lifecycle !== 'failed'
+  // A host launch's saved opening is its host's to found the chat with, never the chat's to send.
+  return (
+    !!record?.firstMessage &&
+    record.hostLaunchOperationId === undefined &&
+    record.lifecycle !== 'failed'
+  )
 }
 
 /** Exact host recording retires saved opening ownership without restarting a completed caller. */
@@ -44,12 +51,16 @@ export function settleStructuredLaunchFirstMessageFromJournal(
   if (!state && record?.lifecycle === 'failed') {
     return
   }
-  const firstMessage = state?.intent.params.firstMessage ?? record?.firstMessage
+  const firstMessage = state ? state.intent.opening : record?.firstMessage
   const submission = firstMessage && readRecorded().get(firstMessage.clientMessageId)
   if (!submission) {
     return
   }
   if (state) {
+    // The chat's journal has the host launch's opening: the window owes it no longer.
+    if (state.intent.hostLaunch) {
+      delete state.intent.opening
+    }
     state.visibilityUnknown = false
     delete state.failure
     state.callers.outcome = 'published'
@@ -64,7 +75,12 @@ export function settleStructuredLaunchFirstMessageFromJournal(
     )
   }
   deleteStructuredAgentLaunchRecord(sessionId)
-  notifyStructuredLaunchListeners()
+  // Only this launch changed: nothing else is prepared for saving.
+  if (state) {
+    notifyStructuredLaunchStateChanged(state)
+  } else {
+    publishStructuredLaunchStatus()
+  }
 }
 
 /** The launch adopts an existing conversation, which may keep a model of its own. */

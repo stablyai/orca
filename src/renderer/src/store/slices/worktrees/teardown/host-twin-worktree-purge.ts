@@ -24,11 +24,11 @@ import { collectPtyIdsForTab } from '../../terminal-tab-retirement'
 import { createWorktreePurgeOmitters } from './worktree-purge-omitters'
 import { omitSleepingAgentSessionsForWorktrees } from './sleeping-agent-session-omission'
 import {
-  cancelStructuredLaunchesForWorktrees,
-  retirePurgedTabLaunches
+  retirePurgedLaunchScopes,
+  retirePurgedTabLaunches,
+  type PurgedLaunchScope
 } from './purged-structured-launch-retirement'
 import { buildWorktreePurgeSurfacePatch } from './worktree-purge-surface-patch'
-import { batchStructuredAgentLaunchRecordWrites } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import { noticeRemovedUnsavedFiles } from './removed-workspace-unsaved-files'
 import {
   selectDetectedWorktreesByRepo,
@@ -142,35 +142,57 @@ export function buildHostTwinPurgeState(
   s: AppState,
   hostId: ExecutionHostId,
   twinHostIds: ReadonlyMap<string, readonly ExecutionHostId[]>,
-  changedPaneKeys?: Set<string>
+  changedPaneKeys?: Set<string>,
+  /** Given, this host's launch retirement joins the whole purge's instead of running now. */
+  launchScopes?: PurgedLaunchScope[]
 ): Partial<AppState> {
   const twinIds = new Set(twinHostIds.keys())
   const removed = collectRemovedHostTwinState(s, twinIds, hostId, twinHostIds)
-  const canonical = (worktreeId: string) =>
-    removedHostCanonicalizer(s, worktreeId, hostId, twinHostIds.get(worktreeId) ?? [])
-  const terminalTabs: { id: string; ptyId: string | null }[] = []
-  // One retirement: each launch journal it changes is saved once, at its end.
-  batchStructuredAgentLaunchRecordWrites(() => {
-    const cancelledSessionIds = cancelStructuredLaunchesForWorktrees(
-      twinIds,
-      (worktreeId, launchHostId) => canonical(worktreeId)(launchHostId) === hostId
-    )
-    for (const worktreeId of twinIds) {
-      const legacyTabs = (s.tabsByWorktree[worktreeId] ?? []).filter((tab) =>
-        removed.terminalTabIds.has(tab.id)
-      )
-      terminalTabs.push(...legacyTabs)
-      retirePurgedTabLaunches(
+  const canonicalizers = new Map<string, ReturnType<typeof removedHostCanonicalizer>>()
+  const canonical = (worktreeId: string): ReturnType<typeof removedHostCanonicalizer> => {
+    let canonicalize = canonicalizers.get(worktreeId)
+    if (!canonicalize) {
+      canonicalize = removedHostCanonicalizer(
         s,
         worktreeId,
-        legacyTabs,
-        (s.unifiedTabsByWorktree[worktreeId] ?? []).filter((tab) =>
-          removed.otherTabIds.has(tab.id)
-        ),
-        cancelledSessionIds
+        hostId,
+        twinHostIds.get(worktreeId) ?? []
       )
+      canonicalizers.set(worktreeId, canonicalize)
     }
-  })
+    return canonicalize
+  }
+  const legacyTabsByWorktree = new Map(
+    [...twinIds].map((worktreeId) => [
+      worktreeId,
+      (s.tabsByWorktree[worktreeId] ?? []).filter((tab) => removed.terminalTabIds.has(tab.id))
+    ])
+  )
+  const terminalTabs: { id: string; ptyId: string | null }[] = [
+    ...legacyTabsByWorktree.values()
+  ].flat()
+  const launchScope: PurgedLaunchScope = {
+    worktreeIds: twinIds,
+    ownedByHost: (worktreeId, launchHostId) => canonical(worktreeId)(launchHostId) === hostId,
+    retireTabs: (cancelledSessionIds) => {
+      for (const [worktreeId, legacyTabs] of legacyTabsByWorktree) {
+        retirePurgedTabLaunches(
+          s,
+          worktreeId,
+          legacyTabs,
+          (s.unifiedTabsByWorktree[worktreeId] ?? []).filter((tab) =>
+            removed.otherTabIds.has(tab.id)
+          ),
+          cancelledSessionIds
+        )
+      }
+    }
+  }
+  if (launchScopes) {
+    launchScopes.push(launchScope)
+  } else {
+    retirePurgedLaunchScopes([launchScope])
+  }
   // Why: a hydrated terminal can exist only as a unified tab, with no legacy row.
   for (const tabId of removed.terminalTabIds) {
     if (!terminalTabs.some((tab) => tab.id === tabId)) {

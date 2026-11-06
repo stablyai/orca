@@ -81,7 +81,7 @@ export async function adoptHostLaunchedTerminal(
   const terminalTabId = pane ? await awaitDrawnTerminalTab(worktreeId, pane.tabId) : undefined
   // A held message the host gave no receipt for, and the composer could not take back, is still
   // only in the launch: the chat keeps it beside the terminal.
-  const owed = chat.launchState?.intent.hostLaunch?.firstMessage !== undefined
+  const owed = chat.launchState?.intent.opening !== undefined
   return replaceDeclinedChat(
     args,
     worktreeId,

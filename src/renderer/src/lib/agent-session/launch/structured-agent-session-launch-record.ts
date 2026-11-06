@@ -117,7 +117,7 @@ export function structuredAgentLaunchRecordFor(
   intent: StructuredAgentSessionLaunchIntent,
   lifecycle: StructuredAgentLaunchPersistedLifecycle
 ): StructuredAgentLaunchPersistedRecord {
-  const { envelope, resumeFrom, firstMessage, optionsMode, options } = intent.params
+  const { envelope, resumeFrom, optionsMode, options } = intent.params
   // A local launch re-reads this machine's settings on reload; only a paired server's seed is kept.
   const pairedSeed = intent.target.kind === 'local' ? undefined : intent.seedOptions
   return {
@@ -132,11 +132,7 @@ export function structuredAgentLaunchRecordFor(
     ...(resumeFrom ? { resumeFrom } : {}),
     ...(intent.hostLaunch ? { hostLaunchOperationId: intent.hostLaunch.operationId } : {}),
     ...(intent.hostLaunch?.firstTurn ? { hostLaunchFirstTurn: intent.hostLaunch.firstTurn } : {}),
-    // A host launch's held message is saved beside its create payload, never inside it.
-    ...(firstMessage ? { firstMessage } : {}),
-    ...(!firstMessage && intent.hostLaunch?.firstMessage
-      ? { firstMessage: intent.hostLaunch.firstMessage }
-      : {}),
+    ...(intent.opening ? { firstMessage: intent.opening } : {}),
     ...(optionsMode ? { optionsMode } : {}),
     ...(options ? { options } : {}),
     ...(intent.explicitLaunchOptions

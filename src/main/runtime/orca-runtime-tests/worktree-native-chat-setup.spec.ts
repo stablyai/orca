@@ -167,3 +167,48 @@ it('keeps a running required setup while 256 newer setups register and finish', 
   expect(runtime.getSetupRun('repo::later-0')).toBeUndefined()
   expect(runtime.getSetupRun('repo::later-255')).toBeDefined()
 })
+
+it.each([3, 30])(
+  'holds one deadline per live Setup run of %i, never evicted by settled history, and none once settled or forgotten',
+  async (count) => {
+    const runtime = new OrcaRuntimeService(
+      makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession()).runtimeStore
+    )
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const live = Array.from({ length: count }, (_, index) => {
+        const run = createSetupRun(true)
+        runtime.registerSetupRun(`repo::live-${index}`, run)
+        return run
+      })
+      expect(vi.getTimerCount()).toBe(count)
+      for (let index = 0; index < 257; index += 1) {
+        const later = createSetupRun(false)
+        runtime.registerSetupRun(`repo::later-${index}`, later)
+        later.settle({ kind: 'succeeded' })
+      }
+      expect(vi.getTimerCount()).toBe(count)
+      expect(live.map((_, index) => runtime.getSetupRun(`repo::live-${index}`))).toEqual(live)
+
+      // Half settle on their own and stay readable; forgetting the rest ends them as closed.
+      const half = Math.floor(count / 2)
+      for (const run of live.slice(0, half)) {
+        run.settle({ kind: 'succeeded' })
+      }
+      expect(vi.getTimerCount()).toBe(count - half)
+      for (let index = half; index < count; index += 1) {
+        runtime.forgetSetupRun(`repo::live-${index}`)
+      }
+      expect(vi.getTimerCount()).toBe(0)
+      expect(live.slice(half).map((run) => run.result)).toEqual(
+        Array.from({ length: count - half }, () => ({ kind: 'ended', reason: 'closed' }))
+      )
+      expect(live.map((_, index) => runtime.getSetupRun(`repo::live-${index}`))).toEqual([
+        ...live.slice(0, half),
+        ...Array.from({ length: count - half }, () => undefined)
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  }
+)

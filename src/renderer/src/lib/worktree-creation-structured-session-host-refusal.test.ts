@@ -198,7 +198,13 @@ function hostAnswer(answer: HostAnswer, sessionId: string): unknown {
       outcome: { kind: 'structured', sessionId, handle: 'chat' },
       worktreeId: worktree.id,
       receipt: { mode: 'structured', preferred: 'structured', reason: 'user_default', detail: '' },
-      prompt: { delivery: 'submit', outcome: 'journaled', messageId: 'host-message' }
+      // The host names the message it founded the chat with: the one accept carried.
+      prompt: {
+        delivery: 'submit',
+        outcome: 'journaled',
+        messageId: (acceptCalls().at(-1)?.prompt as { clientMessageId?: string } | undefined)
+          ?.clientMessageId
+      }
     }
   }
 }

@@ -7,6 +7,7 @@ import { publishStructuredLaunchCreateOptions } from './structured-agent-session
 import { trackLaunchSettlement } from './structured-agent-session-launch-outcome-tracking'
 import { trackStructuredLaunchConfirmationDeadline } from './structured-agent-session-launch-prompt-outcome'
 import { restorePersistedStructuredLaunchState } from './structured-agent-session-launch-reload'
+import { ordinaryLaunchOpening } from './structured-agent-session-launch-opening'
 import {
   getStructuredLaunchStateBySessionId,
   notifyStructuredLaunchStateChanged
@@ -23,7 +24,7 @@ export function confirmStructuredLaunchFirstMessagePublication(
   if (!state || state.callers.outcome === 'pending' || state.cancelled) {
     return
   }
-  if (state.intent.params.firstMessage) {
+  if (ordinaryLaunchOpening(state.intent)) {
     // A limited history page is observation only; absence cannot authorize create replay.
     void recoverPublishedSessionReceipt(state)
       .then((receipt) => {

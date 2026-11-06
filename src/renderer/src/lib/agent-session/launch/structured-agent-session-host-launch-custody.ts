@@ -13,10 +13,15 @@ import { notifyStructuredLaunchIntentChanged } from './structured-agent-session-
 
 /** The host has the text: founded as its chat's first message, delivered to its terminal, or
  *  carried by the terminal's own command. A draft left unsent, a text the plan gave the terminal
- *  none of, or an unconfirmed send is still the user's. */
-export function hostLaunchMessageAcknowledged(result: AgentLaunchResult): boolean {
-  const outcome = result.prompt?.outcome
-  return outcome === 'journaled' || outcome === 'handed-to-terminal'
+ *  none of, an unconfirmed send or another message's receipt leaves it the user's. */
+export function hostLaunchMessageAcknowledged(
+  intent: StructuredAgentSessionLaunchIntent,
+  result: AgentLaunchResult
+): boolean {
+  const prompt = result.prompt
+  return prompt?.outcome === 'journaled'
+    ? !intent.opening || prompt.messageId === intent.opening.clientMessageId
+    : prompt?.outcome === 'handed-to-terminal'
 }
 
 /** Settles the held message once: let go when the host acknowledged it, else back to the chat's
@@ -27,7 +32,7 @@ export function releaseHostLaunchMessage(
   intent: StructuredAgentSessionLaunchIntent,
   acknowledged: boolean
 ): void {
-  const saved = intent.hostLaunch?.firstMessage
+  const saved = intent.hostLaunch ? intent.opening : undefined
   let settled = true
   if (acknowledged) {
     settleHostCarriedStructuredLaunchPrompts(intent.sessionId)
@@ -40,9 +45,8 @@ export function releaseHostLaunchMessage(
       saved.body
     )
   }
-  if (saved && settled && intent.hostLaunch) {
-    const { firstMessage: _settled, ...rest } = intent.hostLaunch
-    intent.hostLaunch = rest
+  if (saved && settled) {
+    delete intent.opening
     // Its own row saved again without it, and only that row: a later reload has nothing left to
     // give back.
     notifyStructuredLaunchIntentChanged(intent)

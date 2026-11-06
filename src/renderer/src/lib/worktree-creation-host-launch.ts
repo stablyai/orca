@@ -16,7 +16,10 @@ import { isWorktreeCreationSelected } from '@/lib/worktree-creation-surface'
 import { structuredLaunchOwner } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { notifyExplicitChatFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-admission-notices'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
-import type { StructuredHostLaunch } from '@/lib/agent-session/launch/structured-agent-session-host-launch'
+import type {
+  StructuredHostLaunch,
+  StructuredHostLaunchHandoff
+} from '@/lib/agent-session/launch/structured-agent-session-host-launch'
 import { getStructuredLaunchStateBySessionId } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { cancelStructuredAgentLaunch } from '@/lib/agent-session/launch/structured-agent-session-launch'
 import {
@@ -131,7 +134,7 @@ export function worktreeHostLaunch(args: {
   heldChatMessage: string | undefined
   foreground: boolean
   message?: HostLaunchHeldMessage
-}): StructuredHostLaunch {
+}): StructuredHostLaunchHandoff {
   const { identity } = args
   const release = identity.protocol === 'release'
   const owner = structuredLaunchOwner({ route: 'structured-native-chat' }, args.worktreeId)
@@ -162,7 +165,7 @@ export function worktreeHostLaunch(args: {
     sessionId: identity.sessionId,
     ...(release ? { protocol: 'release' as const } : {}),
     ...(body.blocks.length > 0
-      ? { firstMessage: { clientMessageId: identity.clientMessageId, body } }
+      ? { opening: { clientMessageId: identity.clientMessageId, body } }
       : {}),
     ...(staged?.paths.length
       ? { stagedSources: staged.paths, prepareFirstMessage: staged.prepare }
@@ -232,7 +235,7 @@ export function creationHostLaunchPlan(args: {
   draftScope: string
   attachments: StructuredAgentSessionAttachment[] | undefined
   staged: ReturnType<typeof captureNativeChatStagedInput>
-}): { hostLaunch?: StructuredHostLaunch; draftFromScope?: string } {
+}): { hostLaunch?: StructuredHostLaunchHandoff; draftFromScope?: string } {
   const identity = args.pending?.hostLaunch
   const message = creationHeldMessage({ ...args, sourceScope: args.draftScope })
   const rich = Boolean(

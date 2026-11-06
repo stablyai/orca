@@ -31,7 +31,7 @@ import {
 } from '@/lib/structured-agent-launch-settlement'
 import type { StructuredAgentLaunchOptions } from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
 import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
-import type { StructuredHostLaunch } from '@/lib/agent-session/launch/structured-agent-session-host-launch'
+import type { StructuredHostLaunchHandoff } from '@/lib/agent-session/launch/structured-agent-session-host-launch'
 import { relearnHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { awaitLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
 
@@ -55,7 +55,7 @@ export type AgentSessionLaunchVerdict = Pick<
   StructuredAgentLaunchOptions,
   'promptAttachments' | 'promptSkills' | 'preparePrompt'
 > & {
-  hostLaunch?: StructuredHostLaunch
+  hostLaunch?: StructuredHostLaunchHandoff
   route: AgentLaunchRoute
   requestedSurface?: AgentLaunchSurface
   requestId: AgentLaunchRequestId

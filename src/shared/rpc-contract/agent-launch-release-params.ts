@@ -136,7 +136,26 @@ export const AgentLaunchPrepare = AgentLaunchFields.omit({
     setupReceipt: AgentLaunchSetupReceipt
   })
   .required({ operationId: true })
-  .superRefine(refuseSessionIdForAnotherAgent)
+  .superRefine((launch, ctx) => {
+    refuseSessionIdForAnotherAgent(launch, ctx)
+    refusePlannedTerminalForAnotherAgent(launch, ctx)
+  })
+
+/** Another agent's plan would start that agent under this launch's name. Identity only: the plan
+ *  is never compiled here, so an unused terminal cannot veto a chat its host can run. */
+function refusePlannedTerminalForAnotherAgent(
+  launch: { agent: TuiAgent; terminalAlternative: AgentLaunchTerminalAlternativeParams },
+  ctx: z.RefinementCtx
+): void {
+  const alternative = launch.terminalAlternative
+  if (alternative.kind === 'planned' && alternative.base.agent !== launch.agent) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['terminalAlternative', 'base', 'agent'],
+      message: 'Planned terminal must be planned for the launch agent'
+    })
+  }
+}
 
 export type AgentLaunchPrepareParams = z.infer<typeof AgentLaunchPrepare>
 

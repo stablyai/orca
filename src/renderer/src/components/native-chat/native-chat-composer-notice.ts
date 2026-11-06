@@ -12,9 +12,13 @@ export type NativeChatComposerNoticeContent = {
   errorText?: string
 }
 
+type NativeChatComposerNoticeAction = { label: string; onClick: () => void; disabled?: boolean }
+
 export type NativeChatComposerNotice = NativeChatComposerNoticeContent & {
   key: string
-  action?: { label: string; onClick: () => void; disabled?: boolean }
+  action?: NativeChatComposerNoticeAction
+  /** Another way out, shown before `action`. */
+  secondaryAction?: NativeChatComposerNoticeAction
   onDismiss?: () => void
 } & ({ kind: 'error' | 'attachment' | 'device' } | { kind: 'host'; tone: 'warning' | 'muted' })
 

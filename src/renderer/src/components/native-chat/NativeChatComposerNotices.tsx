@@ -85,17 +85,20 @@ function NoticeRow({ notice }: { notice: NativeChatComposerNotice }): React.JSX.
         >
           {notice.content ?? notice.text}
         </p>
-        {notice.action ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            disabled={notice.action.disabled}
-            onClick={notice.action.onClick}
-          >
-            {notice.action.label}
-          </Button>
-        ) : null}
+        {[notice.secondaryAction, notice.action].map((action) =>
+          action ? (
+            <Button
+              key={action.label}
+              type="button"
+              variant="outline"
+              size="xs"
+              disabled={action.disabled}
+              onClick={action.onClick}
+            >
+              {action.label}
+            </Button>
+          ) : null
+        )}
         {notice.onDismiss ? (
           <Button
             type="button"

@@ -29,6 +29,7 @@ import {
 } from '../../launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
 import { resetStructuredAgentLocalLaunchCancelsForTests } from './structured-agent-session-local-launch-cancel'
 import { hostLaunchAwaitsItsTab } from './structured-agent-session-host-launch-retention'
+import { hostLaunchOwesOpening } from './structured-agent-session-launch-opening'
 
 export type StructuredLaunchState = StructuredLaunchRecoveryState & {
   identity: string
@@ -141,7 +142,7 @@ export function deleteStructuredLaunchStateIfCurrent(
 ): boolean {
   if (
     structuredLaunchesBySessionId.get(state.intent.sessionId) !== state ||
-    (hostLaunchAwaitsItsTab(state) && !adoptedElsewhere)
+    ((hostLaunchAwaitsItsTab(state) || hostLaunchOwesOpening(state)) && !adoptedElsewhere)
   ) {
     return false
   }
@@ -165,8 +166,10 @@ function structuredLaunchRecord(
   const lifecycle = launchStateLifecycle(state)
   // A host launch's chat this window never showed is not the user's yet: a reload redraws it from
   // this row and reads the host again.
-  const unshown = lifecycle === 'published' && hostLaunchAwaitsItsTab(state)
-  if (lifecycle === 'cancelled' || (lifecycle === 'published' && !unshown)) {
+  // Nor has one whose opening its host never acknowledged and the composer could not take back.
+  const kept =
+    lifecycle === 'published' && (hostLaunchAwaitsItsTab(state) || hostLaunchOwesOpening(state))
+  if (lifecycle === 'cancelled' || (lifecycle === 'published' && !kept)) {
     return null
   }
   return {
@@ -231,8 +234,7 @@ export function getStructuredAgentSessionLaunchFailure(
   if (lifecycle === 'pending' && state.parkedFailure) {
     return state.parkedFailure
   }
-  return lifecycle === 'failed' ||
-    (lifecycle === 'visibility-unknown' && !!state.intent.params.firstMessage)
+  return lifecycle === 'failed' || (lifecycle === 'visibility-unknown' && !!state.intent.opening)
     ? (state.failure ?? null)
     : null
 }

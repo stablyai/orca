@@ -22,6 +22,10 @@ import {
 } from '@/runtime/structured-agent-session-client'
 import type { StructuredAgentSessionCreateParams } from '../../../../../shared/agent-session/structured-agent-session-create'
 import { withFrameDrawnChatTabPlacement } from '../../frame-drawn-chat-tab-placement'
+import {
+  ordinaryLaunchOpening,
+  structuredLaunchCreatePayload
+} from './structured-agent-session-launch-opening'
 import { publishStructuredAgentSessionCreateHydration } from './structured-agent-session-create-hydration'
 import { askHostCreateSupport } from './structured-agent-session-host-admission'
 import { readStructuredChatHostPermissionVerdict } from '@/runtime/structured-chat-host-permission'
@@ -169,7 +173,10 @@ export async function launchStructuredAgentSession(
   }
   let result: AgentSessionMutationResult<AgentSessionAttachResult>
   // Typed so an async placement fails to compile: a tick here drops an eager joiner's create.
-  const params: StructuredAgentSessionCreateParams = withFrameDrawnChatTabPlacement(intent)
+  const params: StructuredAgentSessionCreateParams = withFrameDrawnChatTabPlacement({
+    ...intent,
+    params: structuredLaunchCreatePayload(intent)
+  })
   // Nothing is created for a chat closed while its host was asked, or whose source retired.
   if (isCancelled() || intent.beforeCreate?.() === false) {
     abandonStructuredAgentSessionLaunchIntent(intent)
@@ -216,22 +223,20 @@ export async function launchStructuredAgentSession(
     abandonStructuredAgentSessionLaunchIntent(intent)
     throw new StructuredAgentSessionCreateRefusalError(message, code, refusal)
   }
-  const firstMessage = intent.params.firstMessage
+  const opening = ordinaryLaunchOpening(intent)
+  const firstMessage = opening
     ? structuredAgentSessionSettledSends(
         [
           ...(result.value.firstMessage ? [result.value.firstMessage] : []),
           ...result.value.page.submissions
         ],
         []
-      ).recorded.get(intent.params.firstMessage.clientMessageId)
+      ).recorded.get(opening.clientMessageId)
     : undefined
   if (intent.createMessageSupport === true) {
     publishStructuredAgentSessionCreateHydration(intent, result.value.page, result.value.fence)
   }
-  if (
-    intent.params.firstMessage &&
-    firstMessage?.clientMessageId !== intent.params.firstMessage.clientMessageId
-  ) {
+  if (opening && firstMessage?.clientMessageId !== opening.clientMessageId) {
     throw new StructuredAgentSessionCreateUnknownOutcomeError(
       'The created chat did not confirm its first message.',
       'agent_session_operation_unknown'
