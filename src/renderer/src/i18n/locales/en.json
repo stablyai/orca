@@ -20688,7 +20688,7 @@
       "cardKindHidden": {
         "description": "You can change this anytime in",
         "settingsLink": "Settings > Chat UI > Turn activity",
-        "failed": "Could not save that setting."
+        "failed": "Couldn't save that. You can turn it off in Settings > Chat UI > Turn activity."
       },
       "openedPullRequests": {
         "one": "Opened {{name}}",

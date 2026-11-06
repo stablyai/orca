@@ -45,7 +45,10 @@ export function hideNativeChatCardKind(
       }),
     () =>
       void toast.error(
-        translate('components.native-chat.cardKindHidden.failed', 'Could not save that setting.')
+        translate(
+          'components.native-chat.cardKindHidden.failed',
+          "Couldn't save that. You can turn it off in Settings > Chat UI > Turn activity."
+        )
       )
   )
 }
