@@ -635,11 +635,18 @@
       "sleep": "Sleep",
       "unpin": "Unpin",
       "pin": "Pin",
+      "rename": "Rename",
       "primaryWorktreeDeleteHint": "Primary worktree — can't be deleted. Remove the project instead.",
       "removeHost": "Remove Host",
       "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later.",
       "deleteFailed": "Failed to delete \"{{name}}\"",
       "deleteAnyway": "Delete Anyway"
+    },
+    "workspaceRenameSheet": {
+      "title": "Rename Workspace",
+      "emptyUsesBranch": "Leave empty to use the branch name.",
+      "emptyUsesFolder": "Leave empty to use the folder name.",
+      "failed": "Couldn't rename the workspace. {{reason}}"
     },
     "workspaceDetailsSheet": {
       "merged": "Merged",
@@ -1319,6 +1326,13 @@
       "openImage": "Open image",
       "wrapLines": "Wrap lines",
       "disableLineWrap": "Disable line wrap"
+    },
+    "markdownCallout": {
+      "note": "Note",
+      "tip": "Tip",
+      "important": "Important",
+      "warning": "Warning",
+      "caution": "Caution"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Dismiss drawer"
@@ -2508,6 +2522,7 @@
       "backgroundTaskNotStopped": "The background task wasn't stopped.",
       "backgroundTasksNotStopped": "The background tasks weren't stopped.",
       "answerUnconfirmed": "Your answer was recorded but the agent did not confirm it.",
+      "pluginInputRequired": "{{agent}} stopped because the \"{{plugin}}\" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal.",
       "hostFault": "Orca ran into a problem, so this didn't go through.",
       "hostFaultTryAgain": "Orca ran into a problem, so this didn't go through. Try again.",
       "hostStopped": "{{agent}} never finished starting, so Orca stopped it.",
@@ -3104,7 +3119,14 @@
       "windowCredits": "extra usage",
       "reachedNamed": "{{agent}} hit its {{window}} limit.",
       "reached": "{{agent}} hit its usage limit.",
-      "resetsAt": "It resets at {{when}}."
+      "switchAccount": "Switch Account",
+      "autoContinueCancelFailed": "Couldn't cancel automatic continuation. Try again.",
+      "autoContinueCancel": "Don't continue",
+      "statusResetAt": "Reset at {{time}}",
+      "statusResetsAt": "Resets at {{time}}",
+      "statusContinuesShortly": "Orca continues shortly",
+      "statusContinuesThen": "Orca continues then",
+      "statusWontContinue": "Orca won't continue automatically"
     },
     "composerPlaceholder": {
       "reconnecting": "Reconnecting…",
@@ -3888,7 +3910,8 @@
       "moreFields_one": "+{{count}} field",
       "moreFields_other": "+{{count}} fields",
       "loading": "Loading project…",
-      "noMatches": "No project items match."
+      "noMatches": "No project items match.",
+      "linkedPullRequestsOverflow": "+{{count}} more"
     },
     "githubProjectPickers": {
       "title": "GitHub Projects",

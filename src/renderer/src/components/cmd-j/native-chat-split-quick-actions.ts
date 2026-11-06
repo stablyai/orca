@@ -2,7 +2,7 @@ import { PanelBottomClose, PanelRightClose } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { CmdJQuickAction } from './quick-actions'
 import type { CmdJQuickActionContext } from './quick-action-context'
-import type { NativeChatSplitDirection } from '@/components/native-chat/native-chat-split-shortcut'
+import type { NativeChatSplitDirection } from '@/components/native-chat/native-chat-pane-shortcut'
 
 function availability(ctx: CmdJQuickActionContext) {
   return ctx.canSplitActiveChat

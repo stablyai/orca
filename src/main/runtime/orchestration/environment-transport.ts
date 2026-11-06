@@ -21,6 +21,12 @@ export type OrchestrationEnvironmentCallOptions = {
   expectedEnvironmentPairingRevision?: number
 }
 
+export type OrchestrationEnvironmentSendOptions = {
+  prepareRequest?: RuntimeRequestPreparation
+  /** Send only to this host incarnation; any other answers runtime_environment_changed before sending. */
+  expectedRuntimeId?: string
+}
+
 export type OrchestrationEnvironmentTransport = {
   resolve(selector: string): OrchestrationWorkerServer
   call(
@@ -30,7 +36,7 @@ export type OrchestrationEnvironmentTransport = {
     timeoutMs?: number,
     envelope?: RuntimeOrchestrationEnvelope,
     expectedEnvironmentPairingRevision?: number,
-    prepareRequest?: RuntimeRequestPreparation
+    send?: OrchestrationEnvironmentSendOptions
   ): Promise<RuntimeRpcResponse<unknown>>
 }
 

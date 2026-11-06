@@ -32,7 +32,8 @@ export class RuntimeTerminalArtifacts {
   }): Promise<RuntimeTerminalPathResolution> {
     // Why: the grant binds the canonical path so later reads cannot be redirected through a symlink.
     const canonicalPath = await canonicalPathForArtifactComparison(args.absolutePath)
-    const { stats, contentDigest, binary } = await statLocalTerminalArtifact(canonicalPath)
+    const { stats, contentDigest, contentBlocks, binary } =
+      await statLocalTerminalArtifact(canonicalPath)
     const isDirectory = stats.isDirectory()
     const grant = isDirectory
       ? null
@@ -41,7 +42,8 @@ export class RuntimeTerminalArtifacts {
           absolutePath: canonicalPath,
           clientId: args.clientId,
           stats,
-          contentDigest
+          contentDigest,
+          contentBlocks
         })
     return {
       worktree: args.worktreeId,

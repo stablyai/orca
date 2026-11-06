@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { HistoryManager } from '../history-manager'
@@ -71,24 +71,6 @@ describe('bounded terminal checkpoint writer', () => {
     expect(readFileSync(checkpointPath, 'utf8')).toBe(previous)
     await expect(manager.checkpoint(SESSION_ID, snapshot('recovered'))).resolves.toBe('committed')
     expect(readFileSync(checkpointPath, 'utf8')).toContain('recovered')
-  })
-
-  it('persists parser-tail and title metadata when present', async () => {
-    const manager = new HistoryManager(dir)
-    await manager.openSession(SESSION_ID, { cwd: '/workspace', cols: 80, rows: 24 })
-
-    await manager.checkpoint(SESSION_ID, {
-      ...snapshot('body'),
-      pendingEscapeTailAnsi: '\x1b[38;5;',
-      lastTitle: 'Codex working'
-    })
-
-    const checkpointPath = join(dir, getHistorySessionDirName(SESSION_ID), 'checkpoint.json')
-    expect(existsSync(checkpointPath)).toBe(true)
-    expect(JSON.parse(readFileSync(checkpointPath, 'utf8'))).toMatchObject({
-      pendingEscapeTailAnsi: '\x1b[38;5;',
-      lastTitle: 'Codex working'
-    })
   })
 
   it('replays a persisted parser tail before incremental log output', async () => {

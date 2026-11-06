@@ -50,17 +50,20 @@ function getCrossStoreLineageParents(
   worktrees: readonly Worktree[],
   stores: MobileLineageStores
 ): Map<string, Worktree> {
+  // Folder workspaces never nest rows here, so their cross-machine children stay flat as before.
   const resolutionRows = new Map(
-    worktrees.map((worktree) => [
-      getWorktreeRowIdentity(worktree),
-      {
-        worktree,
-        id: worktree.worktreeId,
-        // Rows the host lists without a host id are its own: only relayed server rows name one.
-        hostId: worktree.hostId ?? LOCAL_EXECUTION_HOST_ID,
-        instanceId: worktree.worktreeInstanceId
-      }
-    ])
+    worktrees
+      .filter((worktree) => worktree.workspaceKind !== 'folder-workspace')
+      .map((worktree) => [
+        getWorktreeRowIdentity(worktree),
+        {
+          worktree,
+          id: worktree.worktreeId,
+          // Rows the host lists without a host id are its own: only relayed server rows name one.
+          hostId: worktree.hostId ?? LOCAL_EXECUTION_HOST_ID,
+          instanceId: worktree.worktreeInstanceId
+        }
+      ])
   )
   if (![...resolutionRows.values()].some((row) => row.worktree.crossStoreParent)) {
     return new Map()
