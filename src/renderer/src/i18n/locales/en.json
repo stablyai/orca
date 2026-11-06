@@ -14546,8 +14546,7 @@
                 "started": "Started {{time}}",
                 "finished": "Finished {{time}}",
                 "notLatestCommitDetail": "Ran on commit {{sha}}, not the latest commit",
-                "notLatestCommit": "Earlier commit",
-                "startedAge": "started {{age}}"
+                "notLatestCommit": "Earlier commit"
               }
             }
           },

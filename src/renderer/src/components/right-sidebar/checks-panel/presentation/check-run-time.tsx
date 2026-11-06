@@ -135,17 +135,16 @@ export function formatCheckRunAge(facts: CheckRunTimeFacts, nowMs: number): stri
   if (facts.whenMs === null) {
     return null
   }
-  const age = formatAge(nowMs - facts.whenMs)
-  // A bare age beside "Running" would read as when it ran; say it is when the run started.
-  return facts.running
-    ? translate(
-        'auto.components.right.sidebar.checks.panel.runTime.startedAge',
-        'started {{age}}',
-        {
-          age
-        }
-      )
-    : age
+  // Beside a running status an age would read as when it ran; show how long it has been running instead.
+  return facts.running ? formatElapsed(nowMs - facts.whenMs) : formatAge(nowMs - facts.whenMs)
+}
+
+function formatElapsed(elapsedMs: number): string {
+  if (elapsedMs < MINUTE_MS) {
+    return `<${formatUiNarrowDuration(1, 'minute')}`
+  }
+  // Whole minutes only: the label moves on the 30 s clock, so seconds would read as stale.
+  return formatRunDuration(Math.floor(elapsedMs / MINUTE_MS) * MINUTE_MS)
 }
 
 /** The check's age from the shared 30s clock the panel already ticks on, so rows add no timer. */
@@ -181,10 +180,10 @@ export function CheckRunTime({ check }: { check: PRCheckDetail }): React.JSX.Ele
               {age ? ' ·\u00a0' : null}
             </span>
           )}
-          {/* The age answers "when did it run", so it never truncates; its reserved width ("10m ago", "started 10m ago") keeps a growing age from re-truncating the name. */}
+          {/* The age answers "when did it run", so it never truncates; its reserved width ("10m ago", "1h 5m") keeps a growing age from re-truncating the name. */}
           {age && (
             <span
-              className={cn('shrink-0 text-right', facts.running ? 'min-w-[15ch]' : 'min-w-[8ch]')}
+              className={cn('shrink-0 text-right', facts.running ? 'min-w-[6ch]' : 'min-w-[8ch]')}
             >
               {age}
             </span>
