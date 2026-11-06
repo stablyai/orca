@@ -89,18 +89,22 @@ export async function connectIpcPty(
             workspaceId: transportOptions.worktreeId,
             connectionId: transportOptions.connectionId
           })
-    if (trustDecision) {
-      await trustDecision
-      if (context.isDestroyed()) {
-        return
-      }
+    // Bounded: an unanswered prompt releases with today's default (agent-workspace-trust-decision-prompt).
+    const trustAnswer = trustDecision ? await trustDecision : null
+    if (trustDecision && context.isDestroyed()) {
+      return
     }
     if (options.shouldContinue && !options.shouldContinue()) {
       return
     }
     // Fence before spawning: redeployed relays recycle IDs, so earlier buffered state belongs to a previous PTY lifetime.
     const priorIncarnationFence = currentPreHandlerPtySequence()
-    const spawnResult = await spawnIpcPty(transportOptions, options, admittedSessionId)
+    const spawnResult = await spawnIpcPty(
+      transportOptions,
+      options,
+      admittedSessionId,
+      trustAnswer === 'agent-asks'
+    )
     settleAgentLaunchPaneStart(transportOptions.tabId, transportOptions.leafId, spawnResult.id)
     const retireDisposedFreshSpawn = async (): Promise<void> => {
       if (context.handleExplicitlyClosedConnect?.(spawnResult.id)) {
