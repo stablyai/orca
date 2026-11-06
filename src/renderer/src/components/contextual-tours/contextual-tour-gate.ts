@@ -74,8 +74,11 @@ export function getContextualTourStartStepIndex(
       : []
   )
   const candidates = requiredStepIndexes.length > 0 ? requiredStepIndexes : [0]
-  // Never start before the user's latest done step, so steps added ahead of it don't rewind the tour.
-  const lastDoneIndex = tour.steps.findLastIndex((step) => isStepDone(step))
+  // This tour resumes only from its matching split, resolved above; later actions do not fulfill it.
+  const lastDoneIndex =
+    tour.id === 'workspace-agent-sessions'
+      ? -1
+      : tour.steps.findLastIndex((step) => isStepDone(step))
   for (const candidate of candidates) {
     let startIndex = Math.max(candidate, lastDoneIndex)
     while (startIndex < tour.steps.length - 1 && isStepDone(tour.steps[startIndex])) {
