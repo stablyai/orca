@@ -22,6 +22,8 @@ export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
   prompt?: string
   /** Optional CLI arguments appended to the selected agent command; a chat has no command line. */
   agentArgs?: string | null
+  /** Raw action Arguments replace configured Arguments while inheriting host permission. */
+  actionAgentArgs?: string
   /** The launch's saved choice; a chat seeds it and a terminal applies it as flags. */
   sessionOptions?: Readonly<Record<string, string>>
   chatSessionOptions?: Readonly<Record<string, string>>
@@ -56,4 +58,14 @@ export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
   ) => boolean | void
   /** Opens instead of this agent's terminal when the host declines its structured chat. */
   onStructuredHostDeclined?: () => StructuredLaunchTerminal
+}
+
+export function snapshotAgentTabLaunchArgs(args: LaunchAgentInNewTabArgs): LaunchAgentInNewTabArgs {
+  return {
+    ...args,
+    ...(args.sessionOptions !== undefined ? { sessionOptions: { ...args.sessionOptions } } : {}),
+    ...(args.chatSessionOptions !== undefined
+      ? { chatSessionOptions: { ...args.chatSessionOptions } }
+      : {})
+  }
 }

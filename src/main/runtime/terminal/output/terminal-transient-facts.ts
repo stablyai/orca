@@ -13,11 +13,11 @@ import {
   getLeafDisplayRecord,
   getPtyDisplayRecord,
   type TitleDisplayClear
-} from '../../runtime-worktree-status-projection'
+} from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
+} from '../records/runtime-terminal-state-records'
 import type { TerminalTitleFactMeta } from '../../../../shared/terminal/output/terminal-output-side-effects'
 
 export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithScheduleWaitBlockedCheck {

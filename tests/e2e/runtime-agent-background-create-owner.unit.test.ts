@@ -88,6 +88,7 @@ describe('background creation owning-host boundary', () => {
         agent: 'claude',
         prompt: 'Fix checks',
         sessionOptions,
+        ...(sessionOptions?.model ? { agentArgs: '--permission-mode default --verbose' } : {}),
         legacy: async () => {
           throw new Error('Modern host must not compile client defaults')
         }
@@ -98,8 +99,16 @@ describe('background creation owning-host boundary', () => {
       expect(applied?.command).toContain(sessionOptions?.model ? "'picked'" : "'opus'")
       expect(applied?.command).toContain(sessionOptions?.effort ? "'low'" : "'high'")
       expect(applied?.command).not.toContain('sonnet')
+      expect(applied?.command).toContain("'--permission-mode' 'default'")
+      if (sessionOptions?.model) {
+        expect(applied?.command).toContain("'--verbose'")
+      }
       expect(applied?.command).toContain('/server/bin/claude')
-      expect(applied?.command).toContain('/server-tools')
+      if (sessionOptions?.model) {
+        expect(applied?.command).not.toContain('/server-tools')
+      } else {
+        expect(applied?.command).toContain('/server-tools')
+      }
       expect(applied?.env).toMatchObject({ FROM_HOST: 'server' })
       if (sessionOptions?.fastMode) {
         expect(applied?.command).toContain('{"fastMode":true}')
@@ -107,6 +116,21 @@ describe('background creation owning-host boundary', () => {
       expect(applied?.launchConfig?.agentArgs).not.toContain('opus')
       expect(applied?.launchConfig?.agentArgs).not.toContain('picked')
       expect(runtimeCall).toHaveBeenCalledTimes(1)
+      if (sessionOptions?.model) {
+        await expect(
+          createRuntimeAgentBackgroundTerminal({
+            environmentId: 'env-1',
+            worktreeId: 'wt-1',
+            tabId: 'automation-tab',
+            leafId: 'automation-leaf',
+            agent: 'claude',
+            extraAgentArgs: '--verbose',
+            legacy: async () => {
+              throw new Error('No automation fallback')
+            }
+          })
+        ).rejects.toThrow("isn't allowed")
+      }
     }
   )
   it('reports a failed observation and uses recovered host support on the next launch', async () => {

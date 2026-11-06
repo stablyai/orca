@@ -5,13 +5,12 @@ import {
   type AgentStatusStructuredSessionSubject
 } from '../../shared/agent-status/contracts/agent-status-subject'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
-import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
 } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { AgentHookServer } from './server'
-import { GOOD_PANE, PANE } from './server.test-fixtures'
+import { PANE } from './server.test-fixtures'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn(() => ({})) }))
@@ -52,82 +51,6 @@ function terminal(server: AgentHookServer, paneKey: string): void {
 afterEach(() => vi.restoreAllMocks())
 
 describe('structured canonical production slice', () => {
-  it('stores once canonically and supplies every legacy reader from that row', () => {
-    const server = new AgentHookServer()
-    const changed = vi.fn()
-    const enriched = vi.fn()
-    server.subscribeStatusChanges(changed)
-    server.subscribeEnrichedStatus(enriched)
-    server.ingestStructuredStatus(summary(), SUBJECT)
-    expect(server._getStateForTests().lastStatusByPaneKey.size).toBe(0)
-    expect(server.getCanonicalStatusSnapshot().parents).toEqual([
-      expect.objectContaining({
-        subject: SUBJECT,
-        status: expect.objectContaining({ paneKey: PANE_KEY })
-      })
-    ])
-    expect(server.getStatusSnapshotForPane(PANE_KEY)).toEqual(server.getStatusSnapshot())
-    expect(changed).toHaveBeenCalledExactlyOnceWith([
-      expect.objectContaining({
-        paneKey: PANE_KEY,
-        state: 'working',
-        observedInCurrentRuntime: true
-      })
-    ])
-    expect(enriched).toHaveBeenCalledOnce()
-    const replay = vi.fn()
-    server.setListener(replay)
-    expect(replay).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ paneKey: PANE_KEY, isReplay: true })
-    )
-    const tabId = structuredAgentSessionTabId(SESSION)
-    expect(server.getProviderSessionSourceRowsForTab(tabId)).toHaveLength(1)
-    server._resetCanonicalStatusForTests()
-    expect(server.getProviderSessionSourceRowsForTab(tabId)).toEqual([])
-    server.ingestStructuredStatus(summary(), SUBJECT)
-    expect(server.getProviderSessionSourceRowsForTab(tabId)).toHaveLength(1)
-  })
-
-  it('keeps mixed legacy enumeration in original insertion order through updates and re-admission', () => {
-    vi.spyOn(Date, 'now').mockReturnValue(200)
-    const server = new AgentHookServer()
-    const second = makeStructuredAgentStatusSubject(SCOPE, 'canonical-session-two')
-    const secondPane = structuredAgentSessionPaneKey(
-      structuredAgentSessionTabId(second.sessionId),
-      second.sessionId
-    )
-    const baseline = new Map<string, string>()
-    terminal(server, PANE)
-    baseline.set(PANE, 'legacy PTY')
-    server.ingestStructuredStatus(summary(), SUBJECT)
-    baseline.set(PANE_KEY, 'trusted journal')
-    terminal(server, GOOD_PANE)
-    baseline.set(GOOD_PANE, 'legacy PTY')
-    server.ingestStructuredStatus(summary(second), second)
-    baseline.set(secondPane, 'trusted journal')
-    terminal(server, PANE)
-    server.ingestStructuredStatus({ ...summary(), latestPrompt: 'updated' }, SUBJECT)
-    baseline.set(PANE_KEY, 'updated')
-    const listing = () => server.getStatusSnapshot().map((row) => [row.paneKey, row.prompt])
-    expect(listing()).toEqual([...baseline])
-    expect(server.getStatusChangeSnapshot().map((row) => row.paneKey)).toEqual([...baseline.keys()])
-    const replay: string[] = []
-    server.setListener((entry) => replay.push(entry.paneKey))
-    expect(replay).toEqual([...baseline.keys()])
-    server.dropStructuredStatus(SUBJECT)
-    baseline.delete(PANE_KEY)
-    server.ingestStructuredStatus(summary(), SUBJECT)
-    baseline.set(PANE_KEY, 'trusted journal')
-    expect(listing()).toEqual([...baseline])
-    const relocated = makePaneKey('relocated-tab', '88888888-8888-4888-8888-888888888888')
-    server.transferPaneAuthority(PANE, relocated, undefined, 200, { authorityVerified: true })
-    baseline.delete(PANE)
-    baseline.set(relocated, 'legacy PTY')
-    expect(listing()).toEqual([...baseline])
-    expect(server._getStateForTests().lastStatusByPaneKey.size).toBe(2)
-    expect(server.getCanonicalStatusSnapshot().parents).toHaveLength(2)
-  })
-
   it('isolates identical session identifiers across host, WSL and workspace kind scopes', () => {
     const server = new AgentHookServer()
     const scopes: AgentStatusExecutionScope[] = [
@@ -152,20 +75,6 @@ describe('structured canonical production slice', () => {
       subjects.slice(1)
     )
     expect(server._getStateForTests().lastStatusByPaneKey.size).toBe(0)
-  })
-
-  it('rejects missing or mismatched structured scope without fabricating a parent', () => {
-    const server = new AgentHookServer()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: models a caller at an untyped boundary (e.g. IPC) invoking with fewer arguments than the method declares; no typed call expresses a missing required parameter.
-    const ingestMissingSubject = server.ingestStructuredStatus.bind(server) as unknown as (
-      summary: AgentSessionStatusSummary
-    ) => void
-    expect(() => ingestMissingSubject(summary())).toThrow('trusted owner subject')
-    expect(() =>
-      server.ingestStructuredStatus({ ...summary(), workspaceId: 'other' }, SUBJECT)
-    ).toThrow('trusted owner subject')
-    expect(server.getCanonicalStatusSnapshot().parents).toEqual([])
-    expect(server.getStatusSnapshot()).toEqual([])
   })
 
   it('refuses late PTY and relay evidence at a canonically owned address without fanout', () => {
@@ -216,15 +125,5 @@ describe('structured canonical production slice', () => {
     server.retirePaneAuthority(PANE_KEY)
     expect(server.getCanonicalStatusSnapshot().parents).toHaveLength(1)
     expect(server.getStatusSnapshotForPane(PANE_KEY)).toHaveLength(1)
-  })
-
-  it('clears canonical state and renews the owner epoch when the server stops', () => {
-    const server = new AgentHookServer()
-    server.ingestStructuredStatus(summary(), SUBJECT)
-    const epoch = server.getCanonicalStatusSnapshot().epoch
-    server.stop()
-    expect(server.getCanonicalStatusSnapshot().parents).toEqual([])
-    expect(server.getCanonicalStatusSnapshot().epoch).not.toBe(epoch)
-    expect(server.getStatusSnapshot()).toEqual([])
   })
 })

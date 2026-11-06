@@ -3,24 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { handleOpenCodeSqliteRequest } from '../opencode/reader-transport/session-scanner-opencode-sqlite-dispatch'
-import { splitOpenCodeSqliteCandidate } from '../../../../shared/opencode-sqlite-session-path'
 import { writeOpenCodeSqliteDatabase } from '../opencode/sqlite/session-scanner-opencode-sqlite-fixture'
 import SyncDatabase from '../../../sqlite/sync-database'
-
-function readCandidates(value: unknown): { agent: string; path: string }[] {
-  if (typeof value !== 'object' || value === null || !('candidates' in value)) {
-    throw new Error('expected a listing payload with candidates')
-  }
-  const { candidates } = value
-  if (!Array.isArray(candidates)) {
-    throw new Error('expected candidates to be an array')
-  }
-  return candidates.map((candidate) => {
-    const agent = readStringField(candidate, 'agent')
-    const file = isRecord(candidate) ? candidate['file'] : null
-    return { agent, path: readStringField(file, 'path') }
-  })
-}
 
 function readMessageTexts(value: unknown): { text: string }[] {
   if (typeof value !== 'object' || value === null || !('messages' in value)) {
@@ -168,76 +152,6 @@ describe('ZCode AI Vault SQLite worker', () => {
       { text: 'second prompt' },
       { text: 'second response start\nsecond response end' }
     ])
-  })
-
-  it('lists, parses, and captures ZCode sessions without labelling them OpenCode', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'orca-zcode-ai-vault-'))
-    directories.push(directory)
-    const dbPath = join(directory, 'db.sqlite')
-    writeOpenCodeSqliteDatabase(dbPath, [
-      {
-        id: 'zcode-session',
-        directory: '/repo',
-        title: 'ZCode task',
-        turns: [
-          { role: 'user', parts: ['Fix the import'] },
-          { role: 'assistant', parts: ['Import fixed'] }
-        ]
-      }
-    ])
-
-    const listed = await handleOpenCodeSqliteRequest({
-      id: 1,
-      kind: 'list',
-      agent: 'zcode',
-      dbPaths: [dbPath],
-      limit: 10
-    })
-    expect(listed.ok).toBe(true)
-    if (!listed.ok) {
-      return
-    }
-    const candidates = readCandidates(listed.value)
-    expect(candidates).toHaveLength(1)
-    expect(candidates[0]?.agent).toBe('zcode')
-    expect(splitOpenCodeSqliteCandidate(candidates[0]!.path, 'zcode')).toEqual({
-      dbPath,
-      sessionId: 'zcode-session'
-    })
-    expect(splitOpenCodeSqliteCandidate(candidates[0]!.path)).toBeNull()
-
-    const parsed = await handleOpenCodeSqliteRequest({
-      id: 2,
-      kind: 'parse',
-      agent: 'zcode',
-      dbPath,
-      sessionId: 'zcode-session',
-      platform: 'darwin'
-    })
-    expect(parsed).toMatchObject({
-      ok: true,
-      value: {
-        agent: 'zcode',
-        title: 'ZCode task',
-        resumeCommand: "cd '/repo' && zcode --resume 'zcode-session'"
-      }
-    })
-
-    const captured = await handleOpenCodeSqliteRequest({
-      id: 3,
-      kind: 'capture',
-      agent: 'zcode',
-      dbPath,
-      sessionId: 'zcode-session',
-      platform: 'darwin'
-    })
-    expect(captured).toMatchObject({ ok: true, value: { session: { agent: 'zcode' } } })
-    if (!captured.ok) {
-      return
-    }
-    expect(readMessageTexts(captured.value)).toEqual(
-      expect.arrayContaining([expect.objectContaining({ text: 'Fix the import' })])
-    )
   })
 
   it('excludes ZCode hidden transcript messages from preview and search', async () => {

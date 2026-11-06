@@ -30,6 +30,22 @@ describe('CodeBuddy harness', () => {
     expect(rows[5]?.providerSession?.id).toBe('codebuddy-verification')
   })
 
+  it('waits on the permission prompt notification, not the auto-reviewed PermissionRequest', () => {
+    const state = createHookListenerState()
+    const send = (event: Record<string, unknown>) => normalizeAndAccept(state, 'codebuddy', event)
+    const bash = { tool_name: 'Bash', tool_input: { command: 'curl -sfL https://example.test' } }
+    send({ hook_event_name: 'UserPromptSubmit', prompt: 'download it' })
+    send({ hook_event_name: 'PreToolUse', ...bash })
+    expect(send({ hook_event_name: 'PermissionRequest', ...bash })).toBeNull()
+    expect(
+      send({
+        hook_event_name: 'Notification',
+        notification_type: 'permission_prompt',
+        message: 'needs your permission to use Bash'
+      })?.payload
+    ).toMatchObject({ state: 'waiting', toolName: 'Bash' })
+  })
+
   it('excludes print runs and resumes the original provider session', () => {
     for (const flag of ['--print', '--serve', '--acp', '--bg', '--background']) {
       expect(recognizeAgentProcessFromCommandLine(`codebuddy ${flag}`)).toBeNull()

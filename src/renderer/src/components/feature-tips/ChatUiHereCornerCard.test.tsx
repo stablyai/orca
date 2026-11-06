@@ -10,7 +10,7 @@ import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
 import { ChatUiHereCornerCard } from './ChatUiHereCornerCard'
 
-vi.mock('sonner', () => ({ toast: { error: vi.fn(), dismiss: vi.fn() } }))
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), dismiss: vi.fn() } }))
 vi.mock('@/lib/telemetry', () => ({ track: vi.fn() }))
 vi.mock('@/hooks/usePrefersReducedMotion', () => ({ usePrefersReducedMotion: () => true }))
 
@@ -91,7 +91,7 @@ describe('Chat UI corner card', () => {
     updateSettingsOrThrow.mockRejectedValueOnce(new Error('disk unavailable'))
     await act(async () => button('Use Chat UI').click())
     expect(toast.error).toHaveBeenCalledExactlyOnceWith(
-      'Could not turn on Chat UI. Choose Chat in Settings → Agents.'
+      'Could not turn on Chat UI. Turn it on in Settings → Chat UI.'
     )
     expect(track).not.toHaveBeenCalledWith(
       'chat_ui_feature_tip_action',

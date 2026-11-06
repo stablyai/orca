@@ -46,6 +46,7 @@ export const FEATURE_INTERACTION_CATEGORY_BY_ID = {
   'markdown-file-created': 'notes',
   'workspace-creation': 'workspace',
   'project-add-introduction': 'workspace',
+  'projects-collapse-all': 'workspace',
   'agent-browser-setup': 'setup',
   'agent-browser-use': 'agent',
   'ephemeral-vm-setup': 'setup',

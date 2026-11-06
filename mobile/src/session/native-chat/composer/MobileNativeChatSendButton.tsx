@@ -11,7 +11,7 @@ import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
 
 const FOLLOW_UP_ICON = { queue: ListEnd, steer: CornerDownRight } as const
 
-/** Send; while the agent works on a host that queues, it shows what a tap does, and holding it offers the other way when that would differ. */
+/** Send, the same arrow as desktop at all times; while the agent works on a host that queues, holding it offers the other way when that would differ (desktop's Cmd/Ctrl+Enter). */
 export function MobileNativeChatSendButton({
   canSend,
   sendFollowUp,
@@ -40,8 +40,7 @@ export function MobileNativeChatSendButton({
         onPress={() => onSend()}
         onLongPress={sendFollowUp?.offersChoice && canSend ? () => setOpen(true) : undefined}
         canSend={canSend}
-        label={action ? label[action] : t('chat.composer.sendMessage', 'Send message')}
-        icon={action ? FOLLOW_UP_ICON[action] : undefined}
+        label={t('chat.composer.sendMessage', 'Send message')}
       />
       <ActionSheetModal
         visible={open}

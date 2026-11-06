@@ -32,11 +32,7 @@ import { appendCodexLifecycleItem, publishCodexLifecycle } from './codex-structu
 import { readCodexJournalString } from './codex-structured-journal-translation-values'
 import { readCodexTurnId } from '../../app-server/codex-structured-thread-facts'
 import { readCodexDispatchEcho } from '../turns/codex-structured-dispatch-echo'
-import {
-  codexActiveItemBody,
-  codexCompletedItem,
-  interruptedCodexItemBody
-} from '../items/codex-unfinished-item-body'
+import { codexCompletedItem, interruptedCodexItemBody } from '../items/codex-unfinished-item-body'
 import {
   endedJournalReasoning,
   withJournalReasoningLifecycle,
@@ -280,7 +276,7 @@ export class CodexJournalItems {
       }
       const evicted = this.activeItems.get(oldest)
       if (evicted) {
-        const body = interruptedCodexItemBody(codexActiveItemBody(evicted, this.streams))
+        const body = interruptedCodexItemBody(evicted, this.streams)
         if (body) {
           const admission = appendCodexLifecycleItem(this.deps.sink, evicted.identity, body, {
             ...this.deps.attributionFor(evicted.threadId, evicted.turnId),

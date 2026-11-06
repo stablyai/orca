@@ -9,10 +9,10 @@ import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
 import type { ContextualTourOutcome } from '../../../../shared/feature-education-telemetry'
 import { useAppStore } from '@/store'
 import {
+  getContextualTourDisplayProgress,
   getContextualTourOutcomeStepTotal,
   getContextualTourPanelHost,
   getContextualTourStepCopy,
-  getContextualTourStepProgress,
   getMeasurableContextualTourTarget,
   getVisibleContextualTourStepIndexes
 } from './contextual-tour-gate'
@@ -37,23 +37,7 @@ export type ContextualTourOverlayMeasurementResult =
       telemetryTotalSteps: number
     }
 
-export function getContextualTourDisplayProgress(args: {
-  tour: ContextualTour
-  visibleStepIndexes: readonly number[]
-  stepIndex: number
-  activeStep: ContextualTour['steps'][number] | undefined
-}): { current: number; total: number } | null {
-  if (!args.activeStep) {
-    return null
-  }
-  if (args.tour.id === 'browser') {
-    return { current: args.stepIndex + 1, total: args.tour.steps.length }
-  }
-  return getContextualTourStepProgress({
-    visibleStepIndexes: args.visibleStepIndexes,
-    stepIndex: args.stepIndex
-  })
-}
+export { getContextualTourDisplayProgress } from './contextual-tour-gate'
 
 export function getContextualTourMeasurementAction(args: {
   tour: ContextualTour
@@ -202,6 +186,7 @@ export function measureContextualTourOverlayRenderState(args: {
       targetElement: target.element,
       progress,
       title: localizedCopy?.title ?? activeStep.title,
+      badge: activeStep.badge,
       body: formatContextualTourStepCopy(
         localizedCopy?.body ?? getContextualTourStepCopy(activeStep),
         args.keybindings,
@@ -297,18 +282,28 @@ function withLocalizedLabel(
   return action && label ? { ...action, label } : action
 }
 
+const STEP_COPY_SHORTCUT_ACTIONS = [
+  'terminal.splitRight',
+  'sidebar.projects.toggleCollapse'
+] as const satisfies readonly Parameters<typeof formatOptionalShortcutLabel>[0][]
+
 function formatContextualTourStepCopy(
   copy: string,
   keybindings: Parameters<typeof formatOptionalShortcutLabel>[1],
   copyWithoutShortcut?: string
 ): string {
-  if (!copy.includes('{terminal.splitRight}')) {
-    return copy
+  let formatted = copy
+  for (const actionId of STEP_COPY_SHORTCUT_ACTIONS) {
+    const token = `{${actionId}}`
+    if (!formatted.includes(token)) {
+      continue
+    }
+    const shortcut = formatOptionalShortcutLabel(actionId, keybindings)
+    // An unbound shortcut would leave "Press , or …"; name only the click path instead.
+    if (!shortcut && copyWithoutShortcut) {
+      return copyWithoutShortcut
+    }
+    formatted = formatted.replace(token, shortcut ?? '')
   }
-  const shortcut = formatOptionalShortcutLabel('terminal.splitRight', keybindings)
-  // An unbound shortcut would leave "Press , or …"; name only the click path instead.
-  if (!shortcut && copyWithoutShortcut) {
-    return copyWithoutShortcut
-  }
-  return copy.replace('{terminal.splitRight}', shortcut ?? '')
+  return formatted
 }

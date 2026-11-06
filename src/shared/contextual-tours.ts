@@ -1,64 +1,18 @@
-import type { FeatureInteractionId } from './feature-interactions'
+import type { ContextualTour, ContextualTourId } from './contextual-tour-types'
+export type {
+  ContextualTour,
+  ContextualTourId,
+  ContextualTourStep,
+  ContextualTourStepAction,
+  ContextualTourStepActionKind,
+  ContextualTourStepControl,
+  ContextualTourStepPlacement
+} from './contextual-tour-types'
 export {
   isContextualTourStepDone,
   hasContextualTourActionStep,
   hasUndoneContextualTourAction
-} from './contextual-tour-progress'
-
-export type ContextualTourId =
-  | 'workspace-board'
-  | 'workspace-agent-sessions'
-  | 'browser'
-  | 'client-hosted-browser'
-  | 'tasks'
-  | 'automations'
-  | 'floating-workspace'
-  | 'workspace-creation'
-
-export type ContextualTourStepControl = {
-  kind: 'auto-rename-branch-from-work'
-}
-
-export type ContextualTourStepActionKind =
-  | 'next'
-  | 'complete'
-  | 'split-terminal-pane'
-  | 'split-chat-pane'
-  | 'create-worktree'
-  | 'show-worktrees'
-  | 'open-tasks'
-  | 'open-getting-started'
-  | 'open-client-hosted-browser-settings'
-
-export type ContextualTourStepAction = {
-  kind: ContextualTourStepActionKind
-  label: string
-}
-
-export type ContextualTourStepPlacement = 'top' | 'right' | 'bottom' | 'left'
-
-export type ContextualTourStep = {
-  // Stable anchor for localized copy — position-keyed translations shift onto the wrong step when one is inserted.
-  id: string
-  title: string
-  body: string
-  targetSelector: string
-  requiredForStart?: boolean
-  fallbackCopy?: string
-  preferredPlacement?: ContextualTourStepPlacement
-  targetPulse?: boolean
-  hidePrimaryAction?: boolean
-  control?: ContextualTourStepControl
-  primaryAction?: ContextualTourStepAction
-  secondaryAction?: ContextualTourStepAction
-  advanceOnFeatureInteraction?: FeatureInteractionId
-}
-
-export type ContextualTour = {
-  id: ContextualTourId
-  allowedActiveModals?: readonly string[]
-  steps: readonly ContextualTourStep[]
-}
+} from './contextual-tour-action-steps'
 
 export const CONTEXTUAL_TOURS = [
   {
@@ -96,13 +50,13 @@ export const CONTEXTUAL_TOURS = [
       // Exactly one split step shows: its target exists only for the active tab's kind.
       {
         id: 'agent-sessions-split-chat',
-        title: 'Run two chats side by side',
+        title: 'Split a terminal pane',
         body: 'Press {terminal.splitRight}, or click the split button at the top of the chat. Each side gets its own tabs.',
         targetSelector:
           '[data-contextual-tour-target="chat-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"][data-active-content-type="agent-session"]',
         requiredForStart: true,
         preferredPlacement: 'bottom',
-        primaryAction: { kind: 'split-chat-pane', label: 'Split chat' },
+        primaryAction: { kind: 'split-chat-pane', label: 'Split terminal' },
         advanceOnFeatureInteraction: 'tab-splits'
       },
       {
@@ -242,6 +196,23 @@ export const CONTEXTUAL_TOURS = [
         targetSelector:
           '[data-contextual-tour-target="floating-workspace-new-markdown"], [data-contextual-tour-target="floating-workspace-surface"]',
         preferredPlacement: 'left'
+      }
+    ]
+  },
+  {
+    id: 'projects-collapse-all',
+    preserveFocus: true,
+    steps: [
+      {
+        id: 'projects-collapse-all-intro',
+        badge: 'new',
+        title: 'Collapse all projects at once',
+        body: 'Press {sidebar.projects.toggleCollapse}, click this button, or Alt-click any project header.',
+        targetSelector:
+          '[data-contextual-tour-target="projects-collapse-all"]:has([data-projects-collapse-toggle])',
+        requiredForStart: true,
+        preferredPlacement: 'bottom',
+        primaryAction: { kind: 'complete', label: 'Got it' }
       }
     ]
   },

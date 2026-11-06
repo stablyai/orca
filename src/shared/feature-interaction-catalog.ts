@@ -25,6 +25,7 @@ export type FeatureInteractionId =
   | 'markdown-file-created'
   | 'workspace-creation'
   | 'project-add-introduction'
+  | 'projects-collapse-all'
   | 'agent-browser-setup'
   | 'agent-browser-use'
   | 'agent-orchestration-setup'
@@ -100,6 +101,10 @@ export const FEATURE_INTERACTIONS = [
   {
     id: 'project-add-introduction',
     interaction: 'Add Project introduction acknowledged or Add Project dialog opened'
+  },
+  {
+    id: 'projects-collapse-all',
+    interaction: 'all sidebar projects collapsed or expanded at once'
   },
   { id: 'agent-browser-setup', interaction: 'Agent Browser Use setup enabled or opened' },
   { id: 'agent-browser-use', interaction: 'agent browser runtime method used' },

@@ -2,7 +2,10 @@ import {
   launchNewTabPromptThroughHost,
   newTabPromptLaunchesThroughHost
 } from '@/lib/launch-agent-new-tab-host-route'
-import type { LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab-args'
+import {
+  snapshotAgentTabLaunchArgs,
+  type LaunchAgentInNewTabArgs
+} from '@/lib/launch-agent-in-new-tab-args'
 import { useAppStore } from '@/store'
 import { validateActionTerminalArgs } from './launch-work-item-direct-messages'
 import { planLaunchAgentStartupPrompt } from '@/lib/launch-agent-startup-prompt-plan'
@@ -65,13 +68,7 @@ function openAgentInNewTab(
   notifyFailure: boolean,
   notify: () => void
 ): AgentTabLaunchOutcome {
-  args = {
-    ...args,
-    ...(args.sessionOptions !== undefined ? { sessionOptions: { ...args.sessionOptions } } : {}),
-    ...(args.chatSessionOptions !== undefined
-      ? { chatSessionOptions: { ...args.chatSessionOptions } }
-      : {})
-  }
+  args = snapshotAgentTabLaunchArgs(args)
   const {
     agent,
     worktreeId,
@@ -201,7 +198,10 @@ function openAgentInNewTab(
       sessionOptions,
       prompt: trimmedPrompt,
       promptDelivery,
-      agentArgs,
+      agentArgs: args.actionAgentArgs === undefined ? agentArgs : undefined,
+      actionAgentArgs: args.actionAgentArgs,
+      launchPlatform: resolvedLaunchPlatform,
+      launchShell: queuedShell,
       viewMode: 'terminal',
       ...(activate === false ? { activate } : {}),
       onPromptDelivered

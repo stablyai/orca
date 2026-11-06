@@ -8,6 +8,7 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
+import { AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import {
   CLEANUP_METHODS,
   WORK_METHODS
@@ -146,6 +147,39 @@ describe('a host whose agents are set to CLI', () => {
 
       expect(response).toMatchObject({ ok: true })
       expect(hostCalls.close).toHaveBeenCalledWith(SESSION, 'user-close')
+    }
+  )
+})
+
+// The CLI over pairing asks for agent launch and chat rename, not structured chats.
+const PAIRED_CLI = {
+  clientKind: 'runtime' as const,
+  clientCapabilities: [AGENT_LAUNCH_RUNTIME_CAPABILITY, AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY]
+}
+
+describe('the paired CLI', () => {
+  it('renames a chat', async () => {
+    const response = await call(
+      'agentSession.rename',
+      { sessionId: SESSION, name: 'Release notes' },
+      PAIRED_CLI,
+      SETTING_OFF
+    )
+
+    expect(response).toMatchObject({ ok: true, result: { name: 'Release notes', applied: true } })
+    expect(hostCalls.setUserConversationName).toHaveBeenCalledWith(
+      SESSION,
+      'Release notes',
+      'rename'
+    )
+  })
+
+  it.each(WORK_METHODS.filter(({ method }) => method !== 'agentSession.rename'))(
+    'is still refused $method',
+    async ({ method, params }) => {
+      const response = await call(method, params, PAIRED_CLI, SETTING_ON)
+
+      expect(response).toMatchObject({ ok: false, error: UNSUPPORTED })
     }
   )
 })

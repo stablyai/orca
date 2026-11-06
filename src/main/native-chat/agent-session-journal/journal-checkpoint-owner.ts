@@ -1,5 +1,5 @@
 import { setTimeout, clearTimeout } from 'node:timers'
-import { Worker } from 'node:worker_threads'
+import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import type Database from '../../sqlite/sync-database'
 import type { WorkerRequestTransport } from '../../worker-threads/worker-thread-transport'
 import { journalCheckpointWorkerSource } from './journal-checkpoint-worker-source'
@@ -41,7 +41,7 @@ export class JournalCheckpointOwner {
       }
       const worker = options.factory
         ? options.factory()
-        : new Worker(journalCheckpointWorkerSource, {
+        : spawnWorkerThread(journalCheckpointWorkerSource, {
             eval: true,
             workerData: { filename, sizeLimit: JOURNAL_SIZE_LIMIT_BYTES }
           })

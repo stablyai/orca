@@ -5,9 +5,10 @@ import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
 // Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
-await import('../orca-runtime-test-mocks.spec')
-await import('../orca-runtime-test-lifecycle.spec')
-const { TEST_WORKTREE_ID, TEST_WORKTREE_PATH } = await import('../orca-runtime-test-fixtures.spec')
+await import('../orca-runtime-tests/runtime-test-module-registration.spec')
+await import('../orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+const { TEST_WORKTREE_ID, TEST_WORKTREE_PATH } =
+  await import('../orca-runtime-tests/orca-runtime-test-fixtures.spec')
 const { SURFACE_TAB_ID } = await import('../terminal/surface/terminal-surface-replies.test-fixture')
 const { SAVED_GROUP_ID, SECOND_TAB_ID, THIRD_TAB_ID, tabStrip, threeTabSurfaceRuntime } =
   await import('./session-tabs-layout-moves.test-fixture')

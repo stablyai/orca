@@ -1,10 +1,10 @@
+export {
+  getMeasurableContextualTourTarget,
+  hasContextualTourTarget
+} from './contextual-tour-target'
+export type { ContextualTourTarget } from './contextual-tour-target'
 import type { ContextualTour, ContextualTourStep } from '../../../../shared/contextual-tours'
 import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
-
-export type ContextualTourTarget = {
-  element: Element
-  rect: DOMRect
-}
 
 export type ContextualTourRequestDecision =
   | { kind: 'start'; stepIndex: number }
@@ -15,6 +15,7 @@ export type ContextualTourRequestDecision =
         | 'auto-disabled'
         | 'onboarding'
         | 'seen'
+        | 'already-progressed'
         | 'session-consumed'
         | 'active-tour'
         | 'modal'
@@ -36,36 +37,6 @@ export function isContextualTourAllowedForModal(
     return true
   }
   return tour.allowedActiveModals?.includes(activeModal) === true
-}
-
-export function getMeasurableContextualTourTarget(
-  selector: string,
-  root?: ParentNode
-): ContextualTourTarget | null {
-  const queryRoot = root ?? (typeof document !== 'undefined' ? document : null)
-  const elements = getContextualTourTargetCandidates(selector, queryRoot)
-  for (const element of elements) {
-    if (!element || typeof element.getBoundingClientRect !== 'function') {
-      continue
-    }
-    if (!isContextualTourTargetVisible(element)) {
-      continue
-    }
-    let rect: DOMRect
-    try {
-      rect = element.getBoundingClientRect()
-    } catch {
-      continue
-    }
-    if (isMeasurableRect(rect)) {
-      return { element, rect }
-    }
-  }
-  return null
-}
-
-export function hasContextualTourTarget(selector: string, root?: ParentNode): boolean {
-  return getMeasurableContextualTourTarget(selector, root) !== null
 }
 
 export function getContextualTourStartStepIndex(
@@ -103,8 +74,10 @@ export function getContextualTourStartStepIndex(
       : []
   )
   const candidates = requiredStepIndexes.length > 0 ? requiredStepIndexes : [0]
+  // Never start before the user's latest done step, so steps added ahead of it don't rewind the tour.
+  const lastDoneIndex = tour.steps.findLastIndex((step) => isStepDone(step))
   for (const candidate of candidates) {
-    let startIndex = candidate
+    let startIndex = Math.max(candidate, lastDoneIndex)
     while (startIndex < tour.steps.length - 1 && isStepDone(tour.steps[startIndex])) {
       const nextIndex = getNextVisibleContextualTourStepIndex({
         tour,
@@ -202,6 +175,7 @@ export function getContextualTourRequestDecision(args: {
   autoEligible: boolean
   onboardingVisible: boolean
   seenIds: readonly string[]
+  progressBlocked: boolean
   sessionConsumed: boolean
   activeTourId: string | null
   activeModal: string
@@ -221,6 +195,9 @@ export function getContextualTourRequestDecision(args: {
   }
   if (args.seenIds.includes(args.tour.id)) {
     return { kind: 'blocked', reason: 'seen' }
+  }
+  if (args.progressBlocked) {
+    return { kind: 'blocked', reason: 'already-progressed' }
   }
   if (args.sessionConsumed) {
     return { kind: 'blocked', reason: 'session-consumed' }
@@ -269,52 +246,20 @@ export function getContextualTourStepCopy(step: ContextualTourStep): string {
   return step.body || step.fallbackCopy || ''
 }
 
-function isMeasurableRect(rect: DOMRect): boolean {
-  return (
-    Number.isFinite(rect.width) && Number.isFinite(rect.height) && rect.width > 0 && rect.height > 0
-  )
-}
-
-function getContextualTourTargetCandidates(
-  selector: string,
-  queryRoot: ParentNode | null
-): Element[] {
-  if (!queryRoot) {
-    return []
+export function getContextualTourDisplayProgress(args: {
+  tour: ContextualTour
+  visibleStepIndexes: readonly number[]
+  stepIndex: number
+  activeStep: ContextualTour['steps'][number] | undefined
+}): { current: number; total: number } | null {
+  if (!args.activeStep) {
+    return null
   }
-  try {
-    if (typeof queryRoot.querySelectorAll === 'function') {
-      return Array.from(queryRoot.querySelectorAll(selector))
-    }
-    return queryRoot.querySelector(selector) ? [queryRoot.querySelector(selector)!] : []
-  } catch {
-    return []
+  if (args.tour.id === 'browser') {
+    return { current: args.stepIndex + 1, total: args.tour.steps.length }
   }
-}
-
-function isContextualTourTargetVisible(element: Element): boolean {
-  if (
-    typeof element.closest === 'function' &&
-    element.closest('[hidden],[inert],[aria-hidden="true"]')
-  ) {
-    return false
-  }
-
-  if (typeof window === 'undefined' || typeof HTMLElement === 'undefined') {
-    return true
-  }
-
-  let current: Element | null = element
-  while (current instanceof HTMLElement) {
-    const style = window.getComputedStyle(current)
-    if (
-      style.display === 'none' ||
-      style.visibility === 'hidden' ||
-      style.visibility === 'collapse'
-    ) {
-      return false
-    }
-    current = current.parentElement
-  }
-  return true
+  return getContextualTourStepProgress({
+    visibleStepIndexes: args.visibleStepIndexes,
+    stepIndex: args.stepIndex
+  })
 }

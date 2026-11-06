@@ -150,6 +150,24 @@ export class RuntimeFileCommands {
     )
   }
 
+  readTerminalArtifactChunk(
+    worktreeSelector: string,
+    grantId: string,
+    absolutePath: string,
+    offset: number,
+    length: number,
+    clientId?: string
+  ) {
+    return this.artifacts.readTerminalArtifactChunk(
+      worktreeSelector,
+      grantId,
+      absolutePath,
+      offset,
+      length,
+      clientId
+    )
+  }
+
   writeTerminalArtifactFile(
     worktreeSelector: string,
     grantId: string,

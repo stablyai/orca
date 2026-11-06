@@ -56,7 +56,12 @@ export function openFilePathLinkAtBufferPosition(
   deps: FileLinkHitTestDeps
 ): boolean {
   const gesture = ++latestClickGesture
-  const host: FileLinkHost = { ...deps, cwd: deps.startupCwd, homePath: deps.terminalHomePath }
+  const host: FileLinkHost = {
+    ...deps,
+    cwd: deps.startupCwd,
+    homePath: deps.terminalHomePath,
+    homeOnHost: true
+  }
   const readings = findTerminalFileLinksAtBufferPosition(buffer, position, terminalColumns)
   const links: ClickedFileLink[] = []
   for (const [parsed, guess] of [

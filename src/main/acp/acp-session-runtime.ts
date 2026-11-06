@@ -28,6 +28,7 @@ import {
   SetSessionModelResponseSchema,
   SetSessionConfigOptionResponseSchema,
   SessionIdSchema,
+  type ClientCapabilities,
   type InitializeRequest,
   type InitializeResponse,
   type AuthenticateResponse,
@@ -51,6 +52,7 @@ export type AcpSessionRuntimeOptions = {
   /** OMP's typed busy refusal confirms this prompt never ran. */
   retryBusyPrompts?: boolean
   clientInfo?: InitializeRequest['clientInfo']
+  clientCapabilities?: Pick<ClientCapabilities, 'elicitation'>
   peer?: AcpPeerOptions
   onPermission?: AcpPermissionHandler
   /** After abort, handlers still reply or throw (-32800); close ends unanswered requests. */
@@ -115,7 +117,11 @@ export class AcpSessionRuntime {
       'initialize',
       {
         protocolVersion: ACP_PROTOCOL_VERSION,
-        clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
+        clientCapabilities: {
+          fs: { readTextFile: false, writeTextFile: false },
+          terminal: false,
+          ...this.options.clientCapabilities
+        },
         ...(this.options.clientInfo === undefined ? {} : { clientInfo: this.options.clientInfo })
       } satisfies InitializeRequest,
       InitializeResponseSchema
@@ -276,22 +282,11 @@ export class AcpSessionRuntime {
     if (!request) {
       throw new AcpRpcError(-32602, 'Invalid ACP permission request')
     }
-    // The caller decides whether agent-initiated turns may request permission.
+    // Only the started session asks the caller; the caller decides who can answer.
     if (request.sessionId !== this.started?.sessionId) {
       return { outcome: { outcome: 'cancelled' } }
     }
-    // Defer the decision so a preceding refusal in the same chunk takes effect.
-    return answerAcpPermission(
-      request,
-      context,
-      (request, context) =>
-        this.prompts.waitingToRetry
-          ? { outcome: { outcome: 'cancelled' } }
-          : (this.options.onPermission?.(request, context) ?? {
-              outcome: { outcome: 'cancelled' }
-            }),
-      diagnose
-    )
+    return answerAcpPermission(request, context, this.options.onPermission, diagnose)
   }
 
   private diagnose(message: string): void {

@@ -13,6 +13,10 @@ vi.mock(
 )
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
+// Adoption forks the AI Vault service for the chat's title; naming is covered elsewhere.
+vi.mock('../../ai-vault/session-titles/session-title-resolver', () => ({
+  resolveLocalAiVaultSessionTitles: async () => ({ titles: [] })
+}))
 import {
   createTestParams,
   CREATE_TEST_CALLER as CALLER
@@ -25,7 +29,7 @@ import {
   codexLegacyMirrorRecords,
   writeCodexHistoryFixture
 } from '../agent-session-journal/codex-history-test-fixture'
-import { structuredAgentRuntimeMetadata } from '../../runtime/structured-agent-runtime-metadata'
+import { structuredAgentRuntimeMetadata } from '../../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import {
   resolveStructuredAgentSessionAdoptionForCreate,
   structuredAgentSessionAdoptAttach
@@ -106,7 +110,8 @@ it.each([
             }) ?? undefined,
           transcriptPath: adoption.transcriptPath,
           providerSessionId: THREAD,
-          workspaceCwd: fixture.rig.root
+          workspaceCwd: fixture.rig.root,
+          conversationName: 'Fix the flaky login test'
         })
       })
     )
@@ -153,6 +158,7 @@ it.each([
     )
     expect(result.value.page.items).toEqual(snapshot.items)
     expect(fixture.rig.store.getRecord(SESSION)?.accountHome).toEqual(accountHome)
+    expect(fixture.rig.store.getRecord(SESSION)?.conversationName).toBe('Fix the flaky login test')
     expect(fixture.rig.store.getRecord(SESSION)?.providerHandleChain).toMatchObject([
       { origin: 'adopted', mintedAtFence: 1, handle: { nativeId: THREAD } }
     ])
