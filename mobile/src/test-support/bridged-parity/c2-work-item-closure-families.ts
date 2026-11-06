@@ -74,6 +74,7 @@ export const C2_WORK_ITEM_CLOSURE_FAMILIES: PageClosurePins = {
     'tk-item-reply-merge': { verdict: 'bridge-contract' }
   },
   'tasks.item-review-github': {
+    'matrix-tasks.item-review-github-pr-check-discovery': { verdict: 'bridge-contract' },
     'matrix-tasks.item-review-github-github.prchecks-1': { verdict: 'bridge-contract' },
     'matrix-tasks.item-review-github-github.requestprreviewers-1': { verdict: 'bridge-contract' },
     'tk-item-review-github': { verdict: 'bridge-contract' }

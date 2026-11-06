@@ -5,7 +5,7 @@ import {
   RuntimeMobileNotificationController,
   type MobileNotificationDispatchEvent,
   type MobileNotificationEvent
-} from '../runtime/runtime-mobile-notification-controller'
+} from '../runtime/push/notifications/runtime-mobile-notification-controller'
 import {
   agentSessionAttentionSubjectPrefix,
   type StructuredAttentionOrigin,

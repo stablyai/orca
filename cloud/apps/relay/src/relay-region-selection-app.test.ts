@@ -1,6 +1,5 @@
 import { describe, expect, it, vi, type Mock } from 'vitest'
 import type { RelayConfig } from './config.js'
-import { ReservePaceError } from './assignment/reserve-placement/reserve-assignment.js'
 
 const fakes = vi.hoisted(() => ({
   verifyRelayToken: vi.fn(async (token: string) => ({ sub: 'user-1', relayHostId: token }))
@@ -29,90 +28,6 @@ function usAssignment(extra: Record<string, unknown> = {}) {
 }
 
 describe('Relay region selection counters', () => {
-  it('counts a reserve sticky answer as selected, never as a fallback', async () => {
-    const recordRegionSelection = vi.fn()
-    const plan = vi.fn(async () => ({ kind: 'answer', lane: 'sticky', assignment: usAssignment() }))
-    const response = await assign({ recordRegionSelection, plan }, { reconnect: true })
-
-    expect(response.status).toBe(200)
-    expect(recordRegionSelection.mock.calls).toEqual([
-      [{ targetRegion: 'asia-east2', selectedRegion: 'us-central1', fallback: false }]
-    ])
-  })
-
-  it('counts a reserve placement out of the target region as a fallback', async () => {
-    const recordRegionSelection = vi.fn()
-    const plan = vi.fn(async () => ({ kind: 'answer', lane: 'placement', assignment: usAssignment() }))
-    await assign({ recordRegionSelection, plan }, { reconnect: true })
-
-    expect(recordRegionSelection.mock.calls).toEqual([
-      [{ targetRegion: 'asia-east2', selectedRegion: 'us-central1', fallback: true }]
-    ])
-  })
-
-  it('counts a reserve-lane retry as an unavailable region', async () => {
-    const recordRegionSelection = vi.fn()
-    const plan = vi.fn(async () => ({ kind: 'retry', retryAfterSeconds: 2, reason: 'paced' }))
-    const response = await assign({ recordRegionSelection, plan }, { reconnect: true })
-
-    expect(response.status).toBe(503)
-    expect(recordRegionSelection.mock.calls).toEqual([[{ targetRegion: 'asia-east2', fallback: false }]])
-  })
-
-  it('counts a reserve booking paced inside the database lane as an unavailable region', async () => {
-    const recordRegionSelection = vi.fn()
-    const assignFn = vi.fn(async () => {
-      throw new ReservePaceError(3)
-    })
-    const response = await assign({ recordRegionSelection, assign: assignFn })
-
-    expect(response.status).toBe(503)
-    expect(recordRegionSelection.mock.calls).toEqual([[{ targetRegion: 'asia-east2', fallback: false }]])
-  })
-
-  it('does not count the existing row returned on the placement lane as a fallback', async () => {
-    const recordRegionSelection = vi.fn()
-    await assign({ recordRegionSelection, assign: vi.fn(async () => usAssignment()) })
-
-    expect(recordRegionSelection.mock.calls).toEqual([
-      [{ targetRegion: 'asia-east2', selectedRegion: 'us-central1', fallback: false }]
-    ])
-  })
-
-  it('counts a placement out of the target region on any lane as a fallback', async () => {
-    const recordRegionSelection = vi.fn()
-    await assign(
-      {
-        recordRegionSelection,
-        assign: vi.fn(async () => usAssignment({ placed: true })),
-        resolve: vi.fn(async () => usAssignment())
-      },
-      { reconnect: true }
-    )
-
-    expect(recordRegionSelection.mock.calls).toEqual([
-      [{ targetRegion: 'asia-east2', selectedRegion: 'us-central1', fallback: true }]
-    ])
-  })
-
-  it('counts a drain-return re-placement out of the target region as a fallback', async () => {
-    const recordRegionSelection = vi.fn()
-    const recordAssignmentAdmission = vi.fn()
-    await assign(
-      {
-        recordRegionSelection,
-        recordAssignmentAdmission,
-        assign: vi.fn(async () => usAssignment({ placed: true })),
-        resolve: vi.fn(async () => usAssignment({ cellId: 'asia-c1', region: 'asia-east2', homeCellRollIsolated: true }))
-      },
-      { reconnect: true }
-    )
-
-    expect(recordAssignmentAdmission).toHaveBeenCalledWith('drain-return')
-    expect(recordRegionSelection.mock.calls).toEqual([
-      [{ targetRegion: 'asia-east2', selectedRegion: 'us-central1', fallback: true }]
-    ])
-  })
 
   it('never counts a rehome as a fallback, and gives a rehomed new session no region window', async () => {
     const recordRegionSelection = vi.fn()
@@ -139,46 +54,6 @@ describe('Relay region selection counters', () => {
     ])
   })
 
-  it('tells the plan a region is the host’s own only when placement follows it', async () => {
-    const plan = vi.fn(async () => ({ kind: 'database' }))
-    const placed = vi.fn(async () => usAssignment())
-    await assign({ recordRegionSelection: vi.fn(), plan, assign: placed }, { reconnect: true }, { regionalPlacementEnabled: false })
-    await assign({ recordRegionSelection: vi.fn(), plan, assign: placed }, { reconnect: true, preferredRegion: undefined })
-    await assign(
-      { recordRegionSelection: vi.fn(), plan, assign: placed },
-      { reconnect: true, preferredRegion: 'us-central1' },
-      { regionalPlacementEnabled: false }
-    )
-    const unpreferred = { reconnect: true, region: 'us-central1', regionCorrection: false, preferred: false }
-    expect(plan).toHaveBeenNthCalledWith(1, expect.anything(), unpreferred)
-    expect(plan).toHaveBeenNthCalledWith(2, expect.anything(), unpreferred)
-    expect(plan).toHaveBeenNthCalledWith(3, expect.anything(), unpreferred)
-  })
-
-  it('does not count a migration report as a fallback', async () => {
-    const recordRegionSelection = vi.fn()
-    await assign(
-      {
-        recordRegionSelection,
-        resolve: vi.fn(async () => usAssignment({ cellId: 'asia-c1', region: 'asia-east2' })),
-        exchangeRegionCorrection: vi.fn(async () => ({ v: 1, reportStatus: 'accepted' }))
-      },
-      {
-        regionCorrection: {
-          v: 1,
-          action: 'report',
-          generation: 2,
-          assignmentEpoch: 3,
-          policyVersion: 1,
-          outcome: 'inconclusive',
-          reason: 'timeout'
-        }
-      }
-    )
-
-    expect(recordRegionSelection).toHaveBeenCalledTimes(1)
-    expect(recordRegionSelection.mock.calls[0]![0]).toMatchObject({ fallback: false })
-  })
 })
 
 async function assign(

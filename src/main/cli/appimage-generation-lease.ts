@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { readFileSync, unlinkSync } from 'node:fs'
 import { lstat, mkdir, readdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
-import type { ProcessLivenessVerdict } from '../daemon/daemon-incarnation-evidence-types'
+import type { ProcessLivenessVerdict } from '../daemon/endpoint/identity/daemon-incarnation-evidence-types'
 import { parseLinuxStartTicks, readBootIdentity } from '../agent-hooks/managed-hook-owner-identity'
 import {
   resolveAppImageGenerationOfExecutable,

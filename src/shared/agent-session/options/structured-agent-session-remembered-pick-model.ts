@@ -1,5 +1,6 @@
 import {
   structuredAgentSessionDescribedModel,
+  structuredAgentSessionDisplayCatalog,
   structuredAgentSessionShownModel
 } from './structured-agent-session-option-snapshot'
 import type { StructuredAgentSessionOptionState } from './structured-agent-session-options'
@@ -15,9 +16,9 @@ export function structuredAgentSessionRememberedPickModel(
   if (typeof committedModel === 'string' && committedModel.trim()) {
     return { modelId: committedModel }
   }
-  const controlsModelId = state.catalog
-    ? structuredAgentSessionShownModel(state.catalog, state.catalog.models, state.record)
-        .controlsModelId
+  const catalog = structuredAgentSessionDisplayCatalog(state)
+  const controlsModelId = catalog
+    ? structuredAgentSessionShownModel(catalog, catalog.models, state.record).controlsModelId
     : null
   if (!controlsModelId) {
     return null

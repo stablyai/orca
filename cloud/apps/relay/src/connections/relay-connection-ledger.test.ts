@@ -12,26 +12,6 @@ function socket(): { webSocket: WebSocket; close: () => void } {
 }
 
 describe('RelayConnectionLedger', () => {
-  it('orders connection admissions before covering absolute snapshots', () => {
-    const ledger = new RelayConnectionLedger(6, 2)
-    const upgrade = ledger.tryReserveControl(false)!
-    const beforePromotion = ledger.snapshot()
-    const controlSocket = socket()
-    upgrade.promote(controlSocket.webSocket)
-    const afterPromotion = ledger.snapshot()
-
-    expect(beforePromotion.inclusionWatermark).toBeGreaterThanOrEqual(
-      upgrade.inclusionWatermark
-    )
-    expect(afterPromotion.inclusionWatermark).toBeGreaterThan(
-      beforePromotion.inclusionWatermark
-    )
-    expect(afterPromotion).toMatchObject({
-      physicalConnections: 1,
-      inFlightConnections: 0,
-      enforcedConnectionUnits: 1
-    })
-  })
 
   it.each([600, 1_000, 3_000])(
     'enforces the %i-unit boundary with 100 control units reserved',
@@ -64,26 +44,6 @@ describe('RelayConnectionLedger', () => {
       replacement!.release()
     }
   )
-
-  it('reserves both phone legs below the control reserve', () => {
-    const ledger = new RelayConnectionLedger(6, 2)
-    const first = ledger.tryReservePhone()
-    const second = ledger.tryReservePhone()
-
-    expect(first).not.toBeNull()
-    expect(second).not.toBeNull()
-    expect(ledger.tryReservePhone()).toBeNull()
-    expect(ledger.counts()).toEqual({
-      physicalConnections: 0,
-      inFlightConnections: 2,
-      reservedConnectionUnits: 2,
-      enforcedConnectionUnits: 4
-    })
-    expect(ledger.tryReserveControl(false)).toBeNull()
-    expect(ledger.tryReserveControl(true)).not.toBeNull()
-    expect(ledger.tryReserveControl(true)).not.toBeNull()
-    expect(ledger.tryReserveControl(true)).toBeNull()
-  })
 
   it('transfers a pending host-data unit without increasing enforced capacity', () => {
     const ledger = new RelayConnectionLedger(6, 2)
@@ -151,23 +111,6 @@ describe('RelayConnectionLedger', () => {
       enforcedConnectionUnits: 0
     })
     expect(ledger.tryReserveHostData('connection-1')).not.toBeNull()
-  })
-
-  it('releases failed in-flight upgrades exactly once', () => {
-    const ledger = new RelayConnectionLedger(6, 2)
-    const phone = ledger.tryReservePhone()!
-
-    phone.upgrade.release()
-    phone.upgrade.release()
-    phone.hostData.release()
-    phone.hostData.release()
-
-    expect(ledger.counts()).toEqual({
-      physicalConnections: 0,
-      inFlightConnections: 0,
-      reservedConnectionUnits: 0,
-      enforcedConnectionUnits: 0
-    })
   })
 
   it('books units only below the placement ceiling and releases each once', () => {

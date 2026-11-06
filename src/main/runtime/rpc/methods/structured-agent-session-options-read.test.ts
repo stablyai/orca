@@ -11,7 +11,10 @@ import { createCodexModelCatalogProbe } from '../../../codex/structured/catalog/
 import type { runCodexAppServerSession } from '../../../codex/app-server/codex-app-server-session'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
-import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   agentModelCatalogFingerprintForRecord,
@@ -414,4 +417,43 @@ describe('agentSession.modelCatalog for a chat on a model its CLI stopped listin
       expect(reply).toMatchObject({ ok: true, result: { models: [opus] } })
     }
   })
+})
+
+it('observes never-started after a delayed options read, including acquisition at the founding fence', async () => {
+  const record = agentSessionRecordFixture(
+    agentSessionLeaseFixture({
+      sessionId: SESSION,
+      runtimeFence: 1,
+      claimStatus: 'released',
+      ownerProcess: null,
+      reservedSpawnToken: null,
+      handoffStage: null
+    })
+  )
+  record.providerHandleChain = []
+  const host = hostStub()
+  host.deps.store.getConversation = () => agentSessionConversationView(record)
+  setStructuredAgentSessionHost(host)
+  expect(
+    await call('agentSession.options', { sessionId: SESSION }, STRUCTURED_CLIENT)
+  ).toMatchObject({
+    ok: true,
+    result: { sessionNeverStarted: true }
+  })
+  let finish!: (value: Awaited<ReturnType<typeof host.readOptions>>) => void
+  let started!: () => void
+  const reading = new Promise<void>((resolve) => {
+    started = resolve
+  })
+  host.readOptions = () => {
+    started()
+    return new Promise((resolve) => {
+      finish = resolve
+    })
+  }
+  const pending = call('agentSession.options', { sessionId: SESSION }, STRUCTURED_CLIENT)
+  await reading
+  record.lease = { ...record.lease, claimStatus: 'live' }
+  finish({ models: [], current: { defaulted: [], acceptedInputSources: {} } })
+  expect(await pending).toMatchObject({ ok: true, result: { sessionNeverStarted: false } })
 })

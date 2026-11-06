@@ -1,7 +1,7 @@
 import { orderTerminalRowsByTabGroups } from '../../../shared/workspace-layout/terminal-row-order'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import { sanitizeWorkspaceSessionTerminalRetirements } from '../../runtime/mobile-session-terminal-persistence-retirement'
+import { sanitizeWorkspaceSessionTerminalRetirements } from '../../runtime/terminal/surface/mobile-session-terminal-persistence-retirement'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,

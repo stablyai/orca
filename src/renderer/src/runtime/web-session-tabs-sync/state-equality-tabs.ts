@@ -24,6 +24,7 @@ export function terminalTabEqual(a: TerminalTab, b: TerminalTab): boolean {
     a.aiVaultTitle?.agent === b.aiVaultTitle?.agent &&
     a.aiVaultTitle?.sessionId === b.aiVaultTitle?.sessionId &&
     a.aiVaultTitle?.title === b.aiVaultTitle?.title &&
+    a.sessionTitleFromHost === b.sessionTitleFromHost &&
     a.customTitle === b.customTitle &&
     a.color === b.color &&
     a.sortOrder === b.sortOrder &&

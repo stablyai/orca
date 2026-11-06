@@ -6,8 +6,8 @@ import {
   getDaemonPidPath,
   getDaemonSocketPath,
   getDaemonTokenPath
-} from '../../src/main/daemon/daemon-spawner'
-import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
+} from '../../src/main/daemon/launch/daemon-spawner'
+import { PROTOCOL_VERSION } from '../../src/main/daemon/protocol/daemon-protocol-version'
 import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
   toWebTerminalSurfaceTabId
