@@ -6,6 +6,7 @@ import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-at
 import { getProviderChecksOutcome } from '../../../../../../shared/source-control/checks/provider-check-summary'
 import type { WorkspaceAttachment } from '../../../../../../shared/worktree/types'
 import { ReviewIcon } from './worktree-review-presentation'
+import { getLinearIconTone } from './worktree-task-state'
 import { workspaceAttachmentLabel } from '../metadata/worktree-attachment-editing'
 import {
   workspaceReferenceReview,
@@ -49,12 +50,13 @@ function ReferenceGlyph({
   item: WorkspaceAttachment
   details: WorkspaceReferenceDetailsMap
 }): React.JSX.Element {
-  const review = workspaceReferenceReview(item, details[getWorkspaceAttachmentKey(item)])
+  const detail = details[getWorkspaceAttachmentKey(item)]
+  const review = workspaceReferenceReview(item, detail)
   if (review) {
     return <ReviewIcon review={review} />
   }
   if (item.provider === 'linear') {
-    return <LinearIcon className="text-muted-foreground" />
+    return <LinearIcon className={getLinearIconTone(detail?.stateName, detail?.stateType)} />
   }
   if (item.provider === 'jira') {
     return <JiraIcon className="text-muted-foreground" />
