@@ -1,3 +1,6 @@
+import type { WorktreeContextMenuProps } from './WorktreeContextMenu'
+export type { WorktreeContextMenuProps } from './WorktreeContextMenu'
+import { useWorktreePinnedGroupMenu } from './use-worktree-pinned-group-menu'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/repos/use-repository-catalog'
@@ -35,17 +38,6 @@ import { useWorktreeContextMenuSecondaryActions } from './use-worktree-context-m
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import { getWorktreeContextMenuBatchLabels } from './workspace-batch-action-labels'
 import { useTranslate } from '@/i18n/use-translate'
-
-export type WorktreeContextMenuProps = {
-  worktree: Worktree
-  children: React.ReactNode
-  contentClassName?: string
-  selectedWorktrees?: readonly Worktree[]
-  onContextMenuSelect?: (event: React.MouseEvent<HTMLElement>) => readonly Worktree[]
-  onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: string) => void
-  onOpenChange?: (open: boolean) => void
-  onLifecycleComplete?: () => void
-}
 
 export function useWorktreeContextMenuModel({
   worktree,
@@ -329,8 +321,17 @@ export function useWorktreeContextMenuModel({
     [openPendingParentPicker]
   )
 
+  const pinnedGroupMenu = useWorktreePinnedGroupMenu({
+    worktree,
+    menuOpen,
+    allWorktrees,
+    worktreeMap,
+    worktreeLineageById,
+    projectGroupCommands: commands
+  })
   return {
     ...commands,
+    ...pinnedGroupMenu,
     activeContextWorktrees,
     batchDeleteWorktrees,
     browserTabsByWorktree,

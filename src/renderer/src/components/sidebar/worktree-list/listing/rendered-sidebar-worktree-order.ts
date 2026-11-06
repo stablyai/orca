@@ -106,6 +106,8 @@ export function computeRenderedSidebarRows(
     // Why no hostLabelById: it only feeds display-only host context labels, never row order.
     defaultHostId,
     pinnedDisplayPolicy,
+    pinnedGroups: state.settings?.pinnedGroups,
+    pinnedGroupByWorktreeIdentity: state.settings?.pinnedGroupByWorktreeIdentity,
     filterRepoIds: state.filterRepoIds
   }).render(state.collapsedGroups)
 

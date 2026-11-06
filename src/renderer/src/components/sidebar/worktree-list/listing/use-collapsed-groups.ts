@@ -17,6 +17,7 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
 // While the agent send picker targets a workspace, force open every section that hides it.
 export function useEffectiveCollapsedGroups(args: {
+  settings?: AppState['settings']
   occurrencePlan?: WorktreeOccurrencePlan<Worktree>
   hostScopedGroups?: boolean
   collapsedGroups: Set<string>
@@ -81,6 +82,7 @@ export function useEffectiveCollapsedGroups(args: {
     const next = new Set(collapsedGroups)
     for (const groupKey of getWorktreeRevealCollapsedGroupKeys({
       occurrencePlan,
+      settings: args.settings,
       worktree: targetWorktree,
       worktrees,
       visibleWorktrees,
@@ -101,6 +103,7 @@ export function useEffectiveCollapsedGroups(args: {
     }
     return next
   }, [
+    args.settings,
     agentSendTargetWorktreeId,
     occurrencePlan,
     collapsedGroups,

@@ -1,3 +1,4 @@
+import { PinnedGroupHeaderActions } from './PinnedGroupHeaderMenu'
 import {
   getRootProjectHeaderKey,
   getRootProjectHeaderOccurrenceKey
@@ -10,10 +11,6 @@ import { cn } from '@/lib/utils'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
 
-import {
-  type FolderWorkspacePathStatus,
-  isConfirmedStaleFolderPathStatus
-} from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import { getProjectGroupHostId } from '@/store/project-groups/project-group-owner-routing'
 import {
   getHeaderDragRepo,
@@ -34,6 +31,7 @@ import {
 import { FolderPathStatusIndicator } from './FolderPathStatusIndicator'
 import { RepoScanUnavailableIndicator } from './RepoScanUnavailableIndicator'
 import {
+  isFolderWorkspaceCreateDisabled,
   ProjectGroupCreateWorkspaceButton,
   ProjectGroupHeaderMenu
 } from './project-group-header-actions'
@@ -49,14 +47,6 @@ import {
 import { getWorktreeOptionId } from './option-dom'
 import type { SectionHeaderRowContext } from './section-header-row-context'
 import type { Translate } from '@/i18n/use-translate'
-
-// The folder-scan project group whose parent path is gone can't create new workspaces.
-function isFolderWorkspaceCreateDisabled(status: FolderWorkspacePathStatus | null): boolean {
-  return (
-    status?.exists === false &&
-    (isConfirmedStaleFolderPathStatus(status) || status.reason === 'ambiguous-connection')
-  )
-}
 
 export function renderWorktreeSectionHeaderRow(
   args: {
@@ -140,6 +130,7 @@ export function renderWorktreeSectionHeaderRow(
     ctx.groupBy === 'workspace-status'
       ? getWorkspaceStatusFromGroupKey(row.key, ctx.workspaceStatuses)
       : null
+  const isPinnedGroupHeader = row.key.startsWith('pinned-group:')
   const isPinnedHeader = row.key === PINNED_GROUP_KEY
   const headerVisual = getSidebarHeaderVisual(row.icon, ctx.workspaceStatuses, t)
   const label = row.label ?? headerVisual.label ?? ''
@@ -170,8 +161,9 @@ export function renderWorktreeSectionHeaderRow(
     toggleSectionHeaderCollapse(event, collapseKey, ctx)
   // Why: repo/project/status/pinned share compact section chrome; flat "All" stays a simple label.
   const showHeaderCollapseAffordance =
-    row.count > 0 &&
-    (isRepoHeader || isProjectGroupHeader || headerWorkspaceStatus !== null || isPinnedHeader)
+    isPinnedHeader ||
+    isPinnedGroupHeader ||
+    (row.count > 0 && (isRepoHeader || isProjectGroupHeader || headerWorkspaceStatus !== null))
   return (
     <div
       key={vItem.key}
@@ -253,7 +245,7 @@ export function renderWorktreeSectionHeaderRow(
           style={{
             // Why: non-project headers like "All" are flat-list labels; don't reserve project hierarchy indent.
             paddingLeft:
-              isRepoHeader || isProjectGroupHeader
+              isRepoHeader || isProjectGroupHeader || isPinnedGroupHeader
                 ? getProjectGroupHeaderPaddingLeft(row.projectGroupDepth ?? 0)
                 : WORKTREE_SECTION_HEADER_PADDING_LEFT
           }}
@@ -360,6 +352,8 @@ export function renderWorktreeSectionHeaderRow(
                 />
               </div>
             ) : null}
+
+            <PinnedGroupHeaderActions row={row} />
 
             {isProjectGroupHeader && !row.repo && projectGroupIdForHeader ? (
               <ProjectGroupHeaderMenu

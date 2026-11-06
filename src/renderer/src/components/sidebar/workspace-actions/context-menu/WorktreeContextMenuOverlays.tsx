@@ -9,13 +9,24 @@ export function WorktreeContextMenuOverlays({ model }: { model: WorktreeContextM
     <>
       <ProjectGroupNameDialog
         open={model.createGroupDialogOpen}
-        title={t('auto.components.sidebar.WorktreeContextMenu.6664418e98', 'New Project Group')}
-        description={t(
-          'auto.components.sidebar.WorktreeContextMenu.c39c37676a',
-          'Create a group and move this project into it.'
-        )}
+        title={
+          model.isPinnedGroupDialog
+            ? t('auto.components.sidebar.PinnedGroups.newGroup', 'New pin group')
+            : t('auto.components.sidebar.WorktreeContextMenu.6664418e98', 'New Project Group')
+        }
+        description={
+          model.isPinnedGroupDialog
+            ? t(
+                'auto.components.sidebar.PinnedGroups.nameDescription',
+                'Name this group in Pinned.'
+              )
+            : t(
+                'auto.components.sidebar.WorktreeContextMenu.c39c37676a',
+                'Create a group and move this project into it.'
+              )
+        }
         initialName={
-          model.repo
+          !model.isPinnedGroupDialog && model.repo
             ? t(
                 'auto.components.sidebar.ProjectGroupNameDialog.defaultGroupName',
                 '{{name}} group',

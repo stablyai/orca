@@ -1,3 +1,7 @@
+import {
+  getPinnedGroupKey,
+  getPinnedOccurrenceGroupId
+} from '../../../../../../shared/pinned-groups'
 import type { AppState } from '@/store/types'
 import {
   getWorktreeExecutionHostId,
@@ -21,6 +25,7 @@ import type { SidebarLineageParentIdentities } from '../../../../../../shared/si
 import { createSidebarPRGroupReader } from '../grouping/pr-group-key'
 
 export function getWorktreeRevealCollapsedGroupKeys(args: {
+  settings?: AppState['settings']
   occurrencePlan?: WorktreeOccurrencePlan<Worktree>
   worktree: Worktree
   worktrees: readonly Worktree[]
@@ -75,6 +80,12 @@ export function getWorktreeRevealCollapsedGroupKeys(args: {
     return []
   }
   const keys = [`host:${hostId}`]
+  if (occurrence.placement === 'pinned') {
+    const pinnedGroupId = getPinnedOccurrenceGroupId(occurrence, args.settings ?? {})
+    if (pinnedGroupId) {
+      keys.push(getPinnedGroupKey(pinnedGroupId))
+    }
+  }
   let ancestor = occurrence.parent
   while (ancestor) {
     keys.push(getWorktreeLineageGroupKey(ancestor.row))
