@@ -24,6 +24,26 @@ function runHeader(container: HTMLElement): HTMLElement {
 }
 
 describe('NativeChatToolRun', () => {
+  it('shows a completed advisor result in the existing generic card', () => {
+    const { container } = render(
+      <NativeChatToolRun
+        blocks={[
+          { type: 'tool-call', name: 'advisor', input: {}, callId: 'server', state: 'completed' },
+          {
+            type: 'tool-result',
+            callId: 'server',
+            output:
+              '{"type":"advisor_redacted_result","encrypted_content":"redacted-advisor-content"}'
+          }
+        ]}
+        expandSignal
+      />
+    )
+    openToolRunMembers()
+    expect(container).toHaveTextContent('advisor')
+    expect(container).toHaveTextContent('redacted-advisor-content')
+  })
+
   it('renders evidence-shaped projected patches as colored diffs without changes JSON', () => {
     const item: AgentJournalRenderItem = {
       itemId: 'apply-patch',
