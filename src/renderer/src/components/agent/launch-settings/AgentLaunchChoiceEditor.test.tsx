@@ -102,8 +102,9 @@ describe('AgentLaunchChoiceEditor model list', () => {
   it('says the list is built in once the host fails to answer, even with an older answer', async () => {
     recordHostModelCatalogSnapshot(HOST, 'codex', null, {
       origin: 'probe',
+      fetchedAt: 1,
       models: [{ id: 'gpt-older', label: 'GPT Older', isDefault: false, efforts: [] }]
-    } as never)
+    })
     call.mockRejectedValue(new Error('offline'))
     renderEditor()
     expect(menus.get('Model')).toContain('gpt-older')
