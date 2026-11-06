@@ -10,7 +10,7 @@ import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-pal
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { useSourceControlCommitAction } from '../commit/use-commit-action'
 import { useSourceControlWorktreeOperationState } from './use-worktree-operation-state'
-import { getWorktreeOperationStore } from './worktree-operation-store'
+import { getWorktreeOperationStore, writeWorktreeCommitDraft } from './worktree-operation-store'
 import { SourceControlScopeProvider } from './worktree-scope'
 
 const git = vi.hoisted(() => ({
@@ -159,6 +159,35 @@ it('gives a worktree id reused by a new instance a fresh record', () => {
   expect(reused).not.toBe(original)
   expect(reused.getState().draft).toBe('')
   expect(reused.getState().isCommitting).toBe(false)
+})
+
+it('keeps a live draft when a non-authoritative catalog scan briefly drops the row', () => {
+  const row = makeWorktree('wt-blip', 'wt-blip', { instanceId: 'instance-1' })
+  act(() => useAppStore.setState({ worktreesByRepo: { 'repo-1': [row] } }))
+  const store = getWorktreeOperationStore('wt-blip', 'local', 'instance-1')
+  writeWorktreeCommitDraft(store, 'feat: keep me')
+  act(() => useAppStore.setState({ worktreesByRepo: { 'repo-1': [] } }))
+  act(() => useAppStore.setState({ worktreesByRepo: { 'repo-1': [row] } }))
+
+  const after = getWorktreeOperationStore('wt-blip', 'local', 'instance-1')
+  expect(after).toBe(store)
+  expect(after.getState().draft).toBe('feat: keep me')
+})
+
+it('retires only the removed host owner on authoritative purge and fences late draft writes', () => {
+  const local = getWorktreeOperationStore('wt-removed', 'local', 'instance-1')
+  const remote = getWorktreeOperationStore('wt-removed', 'ssh:box', 'instance-1')
+  writeWorktreeCommitDraft(local, 'local draft')
+  writeWorktreeCommitDraft(remote, 'remote draft')
+  useAppStore.getState().purgeWorktreeTerminalState([{ id: 'wt-removed', hostId: 'ssh:box' }])
+  writeWorktreeCommitDraft(remote, 'late remote draft')
+  const replacement = getWorktreeOperationStore('wt-removed', 'ssh:box', 'instance-1')
+  expect(replacement).not.toBe(remote)
+  expect(replacement.getState().draft).toBe('')
+  expect(getWorktreeOperationStore('wt-removed', 'local', 'instance-1')).toBe(local)
+  expect(local.getState().draft).toBe('local draft')
+  useAppStore.getState().purgeWorktreeTerminalState([{ id: 'wt-removed', hostId: 'local' }])
+  expect(getWorktreeOperationStore('wt-removed', 'local', 'instance-1').getState().draft).toBe('')
 })
 
 it('writes the base ref and opens aggregate diffs on the section host while the folder stays active', async () => {

@@ -6,7 +6,8 @@ import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import {
   clearSessionCommitDraftForWorktree,
   loadSessionCommitDrafts,
-  saveSessionCommitDrafts
+  saveSessionCommitDrafts,
+  subscribeWorktreeCommitDraftRetirement
 } from '@/lib/source-control-commit-draft-session'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -92,24 +93,48 @@ function retire(key: string, entry: Entry): void {
   clearSessionCommitDraftForWorktree(entry.store.getState().draftKey)
 }
 
-function entryStillExists(entry: Entry, worktreesByRepo: AppState['worktreesByRepo']) {
-  return getIndexedWorktreesById(worktreesByRepo, entry.worktreeId).some(
-    (row) =>
-      // Why unstamped rows match any host: discovery backfills hostId after the row first lands.
-      (entry.hostId === null || row.hostId === undefined || row.hostId === entry.hostId) &&
-      (entry.instanceId === undefined || row.instanceId === entry.instanceId)
+function hostRows(entry: Entry, worktreesByRepo: AppState['worktreesByRepo']) {
+  return getIndexedWorktreesById(worktreesByRepo, entry.worktreeId).filter(
+    // Why unstamped rows match any host: discovery backfills hostId after the row first lands.
+    (row) => entry.hostId === null || row.hostId === undefined || row.hostId === entry.hostId
   )
+}
+
+function entryIsRetired(entry: Entry, worktreesByRepo: AppState['worktreesByRepo']): boolean {
+  const rows = hostRows(entry, worktreesByRepo)
+  if (rows.length === 0) {
+    return false
+  }
+  // A reused id with a new instance is a different worktree.
+  return (
+    entry.instanceId !== undefined &&
+    rows.every((row) => row.instanceId !== undefined && row.instanceId !== entry.instanceId)
+  )
+}
+
+/** Called only by successful removal or an authoritative purge, never by catalog absence. */
+function retireRemovedWorktreeOperationStores(worktreeId: string, hostId?: ExecutionHostId): void {
+  for (const [key, entry] of entries) {
+    if (entry.worktreeId !== worktreeId) {
+      continue
+    }
+    if (hostId !== undefined && (entry.hostId ?? LOCAL_EXECUTION_HOST_ID) !== hostId) {
+      continue
+    }
+    retire(key, entry)
+  }
 }
 
 function subscribeRetirement(): void {
   retiringSubscribed = true
+  subscribeWorktreeCommitDraftRetirement(retireRemovedWorktreeOperationStores)
   useAppStore.subscribe((state, previous) => {
     const worktreesByRepo = selectWorktreesByRepo(state)
     if (worktreesByRepo === selectWorktreesByRepo(previous)) {
       return
     }
     for (const [key, entry] of entries) {
-      if (!entryStillExists(entry, worktreesByRepo)) {
+      if (entryIsRetired(entry, worktreesByRepo)) {
         retire(key, entry)
       }
     }

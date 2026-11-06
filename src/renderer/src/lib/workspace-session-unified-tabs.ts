@@ -197,7 +197,6 @@ export function editorPlacementsInContentOwners(
       } else {
         const group = sourceGroups[owner]![0]!
         group.tabOrder.push(tab.id)
-        group.activeTabId ??= tab.id
       }
     }
   }

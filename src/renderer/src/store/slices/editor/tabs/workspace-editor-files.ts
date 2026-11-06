@@ -41,6 +41,7 @@ export function editorContentIsReferenced(
 }
 
 type PlacementIndex = {
+  tabById: Map<string, Tab>
   workspaceByTabId: Map<string, string>
   workspacesByEntityId: Map<string, Set<string>>
   tabIdsByEntityId: Map<string, Set<string>>
@@ -50,12 +51,14 @@ export function editorPlacementIndex(tabs: AppState['unifiedTabsByWorktree']): P
   let index = placementIndexes.get(tabs)
   if (!index) {
     index = {
+      tabById: new Map(),
       workspaceByTabId: new Map(),
       workspacesByEntityId: new Map(),
       tabIdsByEntityId: new Map()
     }
     for (const [workspaceId, rows] of Object.entries(tabs)) {
       for (const tab of rows) {
+        index.tabById.set(tab.id, tab)
         index.workspaceByTabId.set(tab.id, workspaceId)
         if (!isEditorTabContentType(tab.contentType)) {
           continue

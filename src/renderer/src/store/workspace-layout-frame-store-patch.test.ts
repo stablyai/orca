@@ -11,12 +11,11 @@ import {
 import { GIT_KEY } from '../../../shared/workspace-layout/workspace-layout-session.test-fixture'
 import { bootWindowFromPartitions } from '../app-shell/startup-window-view.test-fixture'
 import { createStoreSessionMockApi } from './slices/store-session-test-harness'
-import { createTestStore } from './slices/store-test-helpers'
+import { createTestStore, makeUnifiedTab } from './slices/store-test-helpers'
 import type { AppState } from './types'
 import { buildLayoutFrameSlices } from './workspace-layout-frame-slices'
 import { beginPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import { editorContentIsReferenced } from './slices/editor/tabs/workspace-editor-files'
-import { makeUnifiedTab } from './slices/store-test-helpers'
 import { buildLayoutFrameStorePatch } from './workspace-layout-frame-store-patch'
 import {
   DESKTOP_CREATED_SERVER_TAB_HOLDS,
