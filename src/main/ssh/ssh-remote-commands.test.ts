@@ -18,7 +18,7 @@ import {
   lockAgeSecondsCommand,
   tryCreateInstallLockCommand,
   tryStealInstallLockCommand
-} from './ssh-relay-install-lock-commands'
+} from '../managed-server/install/remote-install-lock-commands'
 import {
   commandWithNodePath,
   listRemoteInstallBaseDirsCommand,
@@ -28,14 +28,17 @@ import {
   readRemoteHomeCommand,
   removeRemoteTreeCommand
 } from './ssh-remote-commands'
-import { ORCAD_INSTALL_MODEL, RELAY_INSTALL_MODEL } from './remote-install-model'
+import {
+  ORCAD_INSTALL_MODEL,
+  RELAY_INSTALL_MODEL
+} from '../managed-server/install/remote-install-model'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import {
   createRelayGcListingFixture,
   readUncappedRelayGcPaths,
   runCappedRelayGcShellCommand,
   SSH_EXEC_OUTPUT_CAP_CHARS
-} from './ssh-relay-gc-listing.test-fixture'
+} from '../managed-server/install/remote-install-gc-listing.test-fixture'
 
 const posix = getRemoteHostPlatform('linux-x64')
 const nativePosix = getRemoteHostPlatform(
@@ -133,7 +136,7 @@ describe('ssh remote command builders', () => {
     expect(readRemoteHomeCommand(posix)).toBe('echo $HOME')
     expect(removeRemoteTreeCommand(posix, '/home/me/.orca-remote/x')).toContain('rm -rf')
     const probe = probeOrcadInstalledCommand(posix, '/home/me/orcad')
-    expect(probe).toContain('test -d')
+    expect(probe).toContain("cd '/home/me/orcad'")
     expect(probe).toContain(ORCAD_INSTALL_MODEL.installCompleteFilename)
   })
 
@@ -164,6 +167,24 @@ describe('ssh remote command builders', () => {
     writeFileSync(join(dir, ORCAD_INSTALL_MODEL.installCompleteFilename), '')
     return { dir, artifact: artifacts.at(-1)! }
   }
+
+  it.skipIf(process.platform === 'win32')(
+    'answers a POSIX install complete only with every artifact present, in its own dir',
+    async () => {
+      const { dir, artifact } = stageOrcadInstall(nativePosix)
+      try {
+        const run = async (installDir: string): Promise<string> =>
+          (await runShellCommand(probeOrcadInstalledCommand(nativePosix, installDir))).trim()
+        expect(await run(dir)).toBe('OK')
+        // The relative test must not resolve against the caller's working directory.
+        expect(await run(join(dir, 'missing slot'))).toBe('MISSING')
+        rmSync(join(dir, artifact))
+        expect(await run(dir)).toBe('MISSING')
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  )
 
   it.skipIf(!powerShellExecutable)('rejects a Windows install missing one artifact', async () => {
     const { dir, artifact } = stageOrcadInstall(windows)

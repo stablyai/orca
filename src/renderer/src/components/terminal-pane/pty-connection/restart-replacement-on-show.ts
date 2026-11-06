@@ -1,11 +1,7 @@
 import { useAppStore } from '@/store'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
-/**
- * A terminal service restart ended this pane's process and nothing replaced it. The pane gets its
- * replacement the way a relaunch would (fresh shell, cold-restore agent resume, old output kept),
- * but only once it is shown, so a restart never resumes every background agent at once.
- */
+/** After confirmed service-restart death, replace on reveal with saved output and optional agent resume; never resume every hidden agent at once. */
 export function armRestartReplacement(session: ConnectPanePtySession, ptyId: string): void {
   session.restartReplacementPtyId = ptyId
   if (session.deps.isVisibleRef.current) {
@@ -34,5 +30,5 @@ export function consumeRestartReplacement(session: ConnectPanePtySession): void 
   ) {
     return
   }
-  void session.startFreshColdRestoreAgentResume()
+  void session.spawnColdRestoreAgentResume()
 }

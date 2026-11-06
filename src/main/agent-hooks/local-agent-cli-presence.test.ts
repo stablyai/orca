@@ -5,6 +5,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedAgentHookTarget } from '../../shared/managed-agent-hook-targets'
 import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
 
+const { mergePersistedWindowsPathAsyncMock } = vi.hoisted(() => ({
+  mergePersistedWindowsPathAsyncMock: vi.fn(async (_env: NodeJS.ProcessEnv) => undefined)
+}))
+vi.mock('../pty/environment/windows-environment-path', () => ({
+  mergePersistedWindowsPathAsync: mergePersistedWindowsPathAsyncMock
+}))
+
 const codexTarget: ManagedAgentHookTarget = {
   agent: 'codex',
   tuiAgent: 'codex',
@@ -65,6 +72,22 @@ describe('detectLocalManagedAgentCliPresence', () => {
     )
     expect(result.codex).toEqual({ state: 'missing' })
     expect(probe.mock.calls.map(([filePath]) => filePath)).toEqual(['/home/u/.local/bin/codex'])
+  })
+
+  it('finds a Windows CLI that is only on the persisted registry PATH', async () => {
+    mergePersistedWindowsPathAsyncMock.mockImplementationOnce(async (env) => {
+      env.PATH = 'C:\\Users\\u\\AppData\\Local\\agy\\bin'
+    })
+    const probe = vi.fn(async (filePath: string) => filePath.endsWith('agy\\bin\\codex.EXE'))
+    const result = await detectLocalManagedAgentCliPresence(
+      [codexTarget],
+      { agentCmdOverrides: {} },
+      { fileProbe: { isExecutableFile: probe }, platform: 'win32', pathExt: '.EXE' }
+    )
+    expect(result.codex).toEqual({
+      state: 'found',
+      executablePath: 'C:\\Users\\u\\AppData\\Local\\agy\\bin\\codex.EXE'
+    })
   })
 
   it('uses executable override paths as positive evidence', async () => {
@@ -182,13 +205,14 @@ describe('detectLocalManagedAgentCliPresence', () => {
   it('warns and uses the inherited PATH when shell hydration throws', async () => {
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
+      const probe = vi.fn(async (filePath: string) => filePath === '/inherited/bin/codex')
       const result = await detectLocalManagedAgentCliPresence(
         [codexTarget],
         { agentCmdOverrides: {} },
         {
-          pathEnv: '',
+          pathEnv: '/inherited/bin',
           pathDelimiter: ':',
-          fileProbe: { isExecutableFile: vi.fn(async () => false) },
+          fileProbe: { isExecutableFile: probe },
           platform: 'linux',
           shouldHydrateShellPath: true,
           hydratePath: vi.fn(async () => {
@@ -197,7 +221,8 @@ describe('detectLocalManagedAgentCliPresence', () => {
         }
       )
 
-      expect(result.codex?.state).toBe('missing')
+      expect(result.codex).toEqual({ state: 'found', executablePath: '/inherited/bin/codex' })
+      expect(probe).toHaveBeenCalledWith('/inherited/bin/codex')
       expect(warning).toHaveBeenCalledWith(
         '[agent-hooks] Shell PATH hydration failed; using inherited PATH:',
         expect.objectContaining({ message: 'shell unavailable' })

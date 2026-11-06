@@ -4,13 +4,16 @@ import type { IDisposable } from '@xterm/xterm'
 import { useAppStore } from '../../store'
 import { hydrateRuntimeEnvironmentSshState } from '@/runtime/runtime-environment-ssh-state'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
-import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport-types'
-import type { SearchState } from './terminal-keyboard-shortcut-matching'
+import type { PtyTransport } from './pty-transport/pty-transport-types'
+import type { SearchState } from './input/keyboard/terminal-keyboard-shortcut-matching'
 import type { CloseTerminalDialogCopyKind } from './CloseTerminalDialog'
-import type { TerminalLinkActionRequest } from './terminal-link-action-request'
-import { closeTerminalLinkActionRequest } from './terminal-link-action-request'
+
+import {
+  type TerminalLinkActionRequest,
+  closeTerminalLinkActionRequest
+} from './links/terminal-link-action-request'
 import type { PreparedAgentSessionFork } from './terminal-agent-session-fork'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { createTerminalQuickCommandDraft } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
@@ -39,7 +42,6 @@ export function useTerminalPaneFoundation(props: TerminalPaneProps) {
   } = props
   const containerRef = useRef<HTMLDivElement>(null)
   const managerRef = useRef<PaneManager | null>(null)
-  const paneFontSizesRef = useRef<Map<number, number>>(new Map())
   const expandedPaneIdRef = useRef<number | null>(null)
   const expandedStyleSnapshotRef = useRef<Map<HTMLElement, { display: string; flex: string }>>(
     new Map()
@@ -168,7 +170,6 @@ export function useTerminalPaneFoundation(props: TerminalPaneProps) {
     onCloseTab,
     containerRef,
     managerRef,
-    paneFontSizesRef,
     expandedPaneIdRef,
     expandedStyleSnapshotRef,
     pendingPaneSizeRefreshFrameIdsRef,

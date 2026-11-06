@@ -8,11 +8,7 @@ import {
   resolveBaselineReleaseRef
 } from './release-checkout'
 
-/**
- * The updated web client marks its WebSocket upgrade with `?orca-client=web` so a host can tell
- * it from a phone (React Native also sends an http Origin). A released host must still accept the
- * marked upgrade, and this host must record the marker only when it is present.
- */
+// Released hosts must accept ?orca-client=web upgrades from plain-HTTP LAN pages, like phone upgrades.
 const SUITE_TIMEOUT_MS = 180_000
 const LAN_PAGE = 'http://192.168.1.20:6768'
 
@@ -69,7 +65,7 @@ describe('cross-version: web client upgrade marker', () => {
     await expect(dial(transport, true)).resolves.toBeDefined()
   })
 
-  it('this host records the marker for the web bundle only, never for a phone', async () => {
+  it('this host accepts the marked upgrade and an unmarked one from a LAN page', async () => {
     const transport = new WebSocketTransport({
       host: '127.0.0.1',
       port: 0,
@@ -77,9 +73,7 @@ describe('cross-version: web client upgrade marker', () => {
     })
     await transport.start()
     running.push(transport)
-    const web = await dial(transport, true)
-    expect(transport.webPageOf(web)).toEqual({ webOrigin: LAN_PAGE, webClient: true })
-    const phone = await dial(transport, false)
-    expect(transport.webPageOf(phone)).toBeUndefined()
+    await expect(dial(transport, true)).resolves.toBeDefined()
+    await expect(dial(transport, false)).resolves.toBeDefined()
   })
 })

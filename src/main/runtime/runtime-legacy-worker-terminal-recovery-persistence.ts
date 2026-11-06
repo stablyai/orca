@@ -1,19 +1,19 @@
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { retireTerminalSurfaceFromPersistence } from './mobile-session-terminal-persistence-retirement'
-import type { OrchestrationDb } from './orchestration/db'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
+import { retireTerminalSurfaceFromPersistence } from './terminal/surface/mobile-session-terminal-persistence-retirement'
+import type { OrchestrationDb } from './orchestration/db/orchestration-db'
 import {
   planLegacyWorkerTerminalRecovery,
   type LegacyWorkerTerminalRecoveryPlan
-} from './orchestration/orchestration-legacy-worker-terminal-recovery'
+} from './orchestration/terminal-authority/release/orchestration-legacy-worker-terminal-recovery'
 import type { RuntimeStore } from './runtime-store-contract'
 import type {
   LegacyWorkerRecoveryCandidate,
   LegacyWorkerRecoveryResolution
-} from './runtime-legacy-worker-terminal-recovery-types'
-import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
+} from './orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { cloneWorkspaceSessionState } from '../persistence/restoring-sessions/session-owner-fields'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../persistence/restoring-sessions/workspace-session-write-rollback'
+import { worktreeIdsEqual } from '../../shared/worktree/id'
 
 export class RuntimeLegacyWorkerTerminalRecoveryPersistence {
   constructor(
@@ -61,7 +61,7 @@ export class RuntimeLegacyWorkerTerminalRecoveryPersistence {
                 })
               : session
           const record = next.sleepingAgentSessionsByPaneKey?.[candidate.paneKey]
-          if (record && runtimeWorktreeIdsEqual(record.worktreeId, candidate.worktreeId)) {
+          if (record && worktreeIdsEqual(record.worktreeId, candidate.worktreeId)) {
             const sleeping = { ...next.sleepingAgentSessionsByPaneKey }
             delete sleeping[candidate.paneKey]
             next = { ...next, sleepingAgentSessionsByPaneKey: sleeping }

@@ -1,17 +1,18 @@
 import type { ITerminalInitOnlyOptions, ITerminalOptions, ITheme } from '@xterm/xterm'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
-import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
-import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
+import { resolveTerminalFontWeights } from '../../../../shared/terminal/appearance/terminal-fonts'
+import { normalizeTerminalLineHeight } from '../../../../shared/terminal/appearance/terminal-line-height-settings'
 import {
   buildDefaultTerminalOptions,
   normalizeTerminalFastScrollSensitivity,
   normalizeTerminalScrollSensitivity,
-  resolveTerminalCursorInactiveStyle
+  resolveTerminalCursorInactiveStyle,
+  resolveTerminalScrollOnUserInput
 } from '@/lib/pane-manager/pane-terminal-options'
 import { buildLocalConptyTerminalOptions } from '@/lib/pane-manager/windows-pty-compatibility'
 import { buildFontFamily } from '@/lib/monospace-font-family'
-import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
+import { resolveTerminalMinimumContrastRatio } from '../../../../shared/terminal-themes/terminal-contrast-correction'
 
 /** Options a live settings change can write onto an open preview terminal. */
 export function buildPreviewAppearanceOptions(
@@ -35,6 +36,7 @@ export function buildPreviewAppearanceOptions(
     fastScrollSensitivity: normalizeTerminalFastScrollSensitivity(
       settings?.terminalFastScrollSensitivity
     ),
+    scrollOnUserInput: resolveTerminalScrollOnUserInput(settings?.terminalScrollOnUserInput),
     lineHeight: normalizeTerminalLineHeight(settings?.terminalLineHeight),
     wordSeparator: settings?.terminalWordSeparator,
     // Why only 'true': 'left'/'right' are handled by the keydown policy, which needs Option composable at the xterm level.
@@ -52,12 +54,7 @@ export function previewAdvertisesKittyKeyboard(
   return !terminalInput || terminalInput.kittyKeyboardAdvertised
 }
 
-/**
- * Full option set for the preview's xterm: the same defaults, user appearance,
- * and host compatibility flags a pane resolves, so the agent's TUI negotiates
- * with an identically-configured emulator. Scrollback stays preview-sized —
- * main only ever serializes a short history window into this terminal.
- */
+/** Match pane negotiation and appearance while limiting scrollback to the short history main serializes. */
 export function buildPreviewTerminalOptions(args: {
   settings: GlobalSettings | null
   terminalInput: DashboardCardTerminalInput | null

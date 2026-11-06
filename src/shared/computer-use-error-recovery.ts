@@ -35,6 +35,11 @@ export function computerUseErrorRecoveryData(
         'Retry once with `--restore-window`.',
         'If `--restore-window` was already used, stop retrying restore; bring the app forward manually, check permissions, or prefer `set-value` for editable fields.'
       )
+    case 'background_unavailable':
+      return recoverWith(
+        'If the message names a popup menu or `<select>`, set its option with `orca computer set-value` on that element instead of clicking.',
+        'Otherwise retry once with `--restore-window`; that brings the app forward and uses foreground input, so tell the user it will take over their screen.'
+      )
     case 'window_stale':
       return recoverWith(
         'Run `orca computer list-windows --app <app> --json` and choose a current window selector.',
@@ -85,6 +90,11 @@ export function computerUseErrorRecoveryData(
         'Run `orca computer get-app-state --app <app> --json` before retrying so you know whether the UI changed.',
         'Retry with a simpler semantic action or `--no-screenshot` if observation is slow; do not repeat the same timed-out action blindly.'
       )
+    case 'verification_failed':
+      return recoverWith(
+        'Run `orca computer get-app-state --app <app> --json` and check which field holds the value; another field may have changed instead.',
+        'Do not retry the same `set-value` unchanged. For editable text, click the field and confirm focus, select all (`cmd+a` on macOS, `ctrl+a` on Windows/Linux), then use `type-text` and inspect the resulting value.'
+      )
     case 'screenshot_failed':
       return recoverWith(
         'If the accessibility tree is sufficient, rerun the command with `--no-screenshot` instead of retrying the same screenshot capture.',
@@ -92,6 +102,13 @@ export function computerUseErrorRecoveryData(
         'If the message mentions the payload cap, target a smaller/current window or use `--no-screenshot`.'
       )
     case 'accessibility_error':
+      // Why: an Orca server installed before it bundled computer use reports only this exit (#31777).
+      if (message?.startsWith('computer sidecar exited with code')) {
+        return recoverWith(
+          'If this targets an Orca server (`orca serve`, SSH or WSL), its install may not include computer use: update or reprovision the server, then retry.',
+          'Run `orca computer capabilities --json` to confirm the provider is available before retrying.'
+        )
+      }
       return recoverWith(
         'Run `orca computer capabilities --json` to confirm the provider is available before retrying.',
         'If the message mentions permissions, run `orca computer permissions --id accessibility --json` and grant access.',

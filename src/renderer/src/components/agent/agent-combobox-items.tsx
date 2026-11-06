@@ -19,6 +19,10 @@ type ItemRenderArgs = {
   onSetDefault?: () => void
   icon: React.ReactNode
   label: string
+  disabled?: boolean
+  title?: string
+  /** After the label: an unavailable row's reason, or a chat row's terminal button. */
+  trailing?: React.ReactNode
 }
 
 type AgentDefaultContextMenuProps = {
@@ -49,13 +53,25 @@ export function AgentDefaultContextMenu({
   isDefault,
   onSetDefault
 }: AgentDefaultContextMenuProps): React.ReactNode {
+  const [open, setOpen] = React.useState(false)
   if (!onSetDefault) {
+    // Unmounting an open menu skips onOpenChange; reset so a remount is not marked open.
+    if (open) {
+      setOpen(false)
+    }
     return children
   }
   return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-      <ContextMenuContent className="z-[70]">
+    <ContextMenu onOpenChange={setOpen}>
+      {/* Row highlight follows focus, which moves into the menu; this marker keeps the row lit. */}
+      <ContextMenuTrigger asChild data-context-menu-open={open || undefined}>
+        {children}
+      </ContextMenuTrigger>
+      <ContextMenuContent
+        className="z-[70]"
+        // Why: hovered menu rows beneath take focus; that must not dismiss this menu.
+        onFocusOutside={(event) => event.preventDefault()}
+      >
         <ContextMenuItem onSelect={onSetDefault} disabled={isDefault}>
           <Star className="size-3.5" />
           {isDefault
@@ -75,24 +91,29 @@ export function renderAgentComboboxItem({
   onSelect,
   onSetDefault,
   icon,
-  label
+  label,
+  disabled,
+  title,
+  trailing
 }: ItemRenderArgs): React.ReactNode {
   const row = (
     <CommandItem
       key={key}
       value={itemValue}
       onSelect={onSelect}
+      disabled={disabled}
+      title={title}
       className="items-center gap-2 px-3 py-1.5"
     >
       <Check
         className={cn('size-4 shrink-0 text-foreground', isChecked ? 'opacity-100' : 'opacity-0')}
       />
       <AgentIconLabel icon={icon} label={label} />
+      {trailing}
     </CommandItem>
   )
   return (
-    // Why: z-[70] sits above PopoverContent's z-[60] so the right-click menu
-    // renders in front of the still-open combobox popover instead of behind it.
+    // Keep the default context menu above the still-open combobox popover (z-70 over z-60).
     <AgentDefaultContextMenu key={key} isDefault={isDefault} onSetDefault={onSetDefault}>
       {row}
     </AgentDefaultContextMenu>

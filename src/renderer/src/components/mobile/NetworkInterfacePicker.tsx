@@ -2,7 +2,7 @@ import React, { useMemo } from 'react'
 import { translate } from '@/i18n/i18n'
 import { AddressPicker, type AddressOption } from '../network/AddressPicker'
 import { parseManualNetworkAddress } from '../../../../shared/network/manual-address'
-import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
+import type { MobileNetworkInterface } from '../settings/mobile/pairing/mobile-network-interface-selection'
 
 function formatCustomAddressLabel(address: string): string {
   return translate(
@@ -55,8 +55,7 @@ export function NetworkInterfacePicker({
       })),
     [customAddresses]
   )
-  // Why: a host whose only interfaces are container bridges advertises no address by default, but the
-  // bridges are still listed here — "No interfaces found" would contradict the options right below it.
+  // Bridge-only hosts have selectable options but no default address; do not label that list empty.
   const placeholder =
     options.length > 0 || customOptions.length > 0
       ? translate(

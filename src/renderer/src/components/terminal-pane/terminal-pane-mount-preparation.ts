@@ -1,32 +1,35 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
-import { httpLinkActionDestinationsFor } from '@/lib/http-link-destinations'
+import { httpLinkActionDestinationsFor } from '@/lib/browser/navigation/http-link-destinations'
+import '@/lib/browser/workspace/workspace-browser-tab-open'
 import {
   canOpenWorkspaceBrowserTabOnRuntime,
   canOpenWorkspaceBrowserTabOnSsh
-} from '@/lib/workspace-browser-tab-open'
+} from '@/lib/browser/workspace/workspace-browser-route-eligibility'
 import { resolvePaneWslDistro } from './terminal-pane-wsl-distro'
 import {
   resolveTerminalHttpLinkSourceOwner,
+  resolveTerminalLinkRuntimeEnvironmentId,
   resolveTerminalRuntimeHandle
-} from './terminal-http-link-source-owner'
+} from './links/http/terminal-http-link-source-owner'
 import {
   getTerminalFileOpenHint,
   getTerminalUrlOpenHint,
   terminalUrlOpenHintOptionsFor
-} from './terminal-link-open-hints'
-import type { LinkHandlerDeps } from './terminal-link-handlers'
-import type { TerminalLinkActionContext } from './terminal-link-action-request'
-import type { TerminalHttpLinkActionDestinations } from './terminal-url-link-hit-testing'
+} from './links/terminal-link-open-hints'
+import type { LinkHandlerDeps } from './links/files/terminal-link-handlers'
+import type { TerminalPathExistsCache } from './terminal-path-exists-cache'
+import type { TerminalLinkActionContext } from './links/terminal-link-action-request'
+import type { TerminalHttpLinkActionDestinations } from './links/http/terminal-url-link-hit-testing'
 import type { PtyConnectionDeps } from './pty-connection-types'
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
 import { registerRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
 import { normalizeTerminalLayoutSnapshot } from './layout-serialization'
-import { applyTerminalAppearance } from './terminal-appearance'
-import { terminalLinkClickBehaviorFor } from './terminal-link-click-behavior'
+import { applyTerminalAppearance } from './appearance/terminal-appearance'
+import { terminalLinkClickBehaviorFor } from './links/gestures/terminal-link-click-behavior'
 import { createTerminalPanePtyDeps } from './terminal-pane-pty-deps'
 import type { DeferredSplitPaneHandoffHandle } from './deferred-split-pane-handoff'
 import {
@@ -156,7 +159,7 @@ export function prepareTerminalPaneMount(
       sourceOwner: getHttpLinkSourceOwnerForPane(paneId)
     }
   }
-  const pathExistsCache = new Map<string, boolean>()
+  const pathExistsCache: TerminalPathExistsCache = new Map()
   const linkDeps: LinkHandlerDeps = {
     worktreeId: deps.worktreeId,
     worktreePath,
@@ -167,12 +170,15 @@ export function prepareTerminalPaneMount(
     managerRef: deps.managerRef,
     linkProviderDisposablesRef: refs.linkProviderDisposablesRef,
     pathExistsCache,
-    getRuntimeEnvironmentIdForPane: (paneId) => {
-      const sourceOwner = getHttpLinkSourceOwnerForPane(paneId)
-      return sourceOwner.kind === 'runtime' ? sourceOwner.runtimeEnvironmentId : null
-    },
+    getRuntimeEnvironmentIdForPane: (paneId) =>
+      resolveTerminalLinkRuntimeEnvironmentId(
+        paneTransports.get(paneId),
+        useAppStore.getState(),
+        deps.worktreeId
+      ),
     getRuntimeTerminalHandleForPane: (id) => resolveTerminalRuntimeHandle(paneTransports.get(id)),
-    getLinkActionContext
+    getLinkActionContext,
+    sourceTabId: deps.tabId
   }
   let resizeRaf: number | null = null
   const queueResizeAll = (focusActive: boolean): void => {
@@ -217,8 +223,7 @@ export function prepareTerminalPaneMount(
   if (hydratedInitialScrollback.hydrated) {
     deps.initialLayoutRef.current = hydratedInitialScrollback.layout
   }
-  // Numeric pane ids are mount-local; the handle itself is keyed by the
-  // durable tab/leaf identity so a whole-tab remount can reclaim it.
+  // Numeric IDs die with the mount; durable tab/leaf keys let remounts reclaim deferred handles.
   const deferredSplitHandoffs = new Map<number, DeferredSplitPaneHandoffHandle>()
   const ptyDeps = createTerminalPanePtyDeps({
     deps,
@@ -282,7 +287,6 @@ export function prepareTerminalPaneMount(
         manager,
         currentSettings,
         refs.systemPrefersDarkRef.current,
-        deps.paneFontSizesRef.current,
         deps.paneTransportsRef.current,
         deps.effectiveMacOptionAsAltRef.current,
         deps.paneMode2031Ref.current,

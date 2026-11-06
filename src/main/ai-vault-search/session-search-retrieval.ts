@@ -12,20 +12,16 @@ import {
 import type { SessionRowFilter } from './session-search-row-filter'
 import { SessionSearchTypoRepair } from './session-search-typo-repair'
 
-// The operator-only walk: rows per page, and how far past a full candidate set
-// it will read before giving up on finding more matches.
 const RECENT_PAGE_ROWS = 512
-// Ids per `loadSessions` statement, with room to spare for the filter's own
-// bound values beside them.
+// Leave SQLite parameter capacity for filter values as well as session IDs.
 const SESSION_ID_BATCH = 500
 const RECENT_SCAN_FACTOR = 20
 
-// Measured: user 3 / assistant 2 / tool 1 / identifiers 1 (MRR 0.503 vs 0.475 flat).
+// BM25 column order: user, assistant, tool, identifiers.
 const FULL_WEIGHTS = '3.0, 2.0, 1.0, 1.0'
-// Tool and identifier columns do not contribute to conversation ranking.
 const CONVERSATION_WEIGHTS = '3.0, 2.0, 0.0, 0.0'
 
-// Explicit columns let the existing statement cache reuse these reads; tests pin every schema field.
+// Keep SQL text stable for statement-cache reuse; tests pin the projected schema.
 const SESSION_COLUMN_LIST = (
   [
     'id',
@@ -50,17 +46,9 @@ export type RetrievalScope = {
   scope: SessionSearchScope
   sort: 'relevance' | 'newest'
   filter: SessionRowFilter
-  /**
-   * `repo:` / `path:`, which SQL cannot express. Applied over retrieved rows;
-   * see session-search-row-filter for why it cannot be pushed down.
-   */
+  /** Apply the sidebar’s repo:/path: predicates after SQL filtering to preserve query semantics. */
   matchesOperators: (session: SessionRow) => boolean
-  /**
-   * Sessions retrieved before ranking cuts the page. See
-   * docs/reference/agent-session-search-query-tuning.md for the measurements
-   * behind the default; it is an option because the right value depends on how
-   * large an index is and no single number is right for every host.
-   */
+  /** Session candidates before final ranking and pagination. */
   candidateLimit: number
 }
 
@@ -69,21 +57,15 @@ export type Retrieved = {
   rows: MessageRow[]
   incomplete: boolean
   route: SessionSearchRoute
-  /** The plan the rows were actually retrieved by; snippets highlight from it. */
+  /** Effective retrieval plan, including repairs, used to highlight snippets. */
   plan: SessionSearchQueryPlan
   repairedTerms?: string[]
 }
 
-/**
- * The bm25 weights a scope ranks with. The conversation pair stays here rather
- * than beside `scopedExpression`, because weights are a property of this SQL
- * and nothing else asks for them.
- */
 export function scopedWeights(scope: SessionSearchScope): string {
   return scope === 'all' ? FULL_WEIGHTS : CONVERSATION_WEIGHTS
 }
 
-/** The FTS half of a search: the route ladder and the SQL each rung runs. */
 export class SessionSearchRetrieval {
   private readonly typoRepair: SessionSearchTypoRepair
 
@@ -91,22 +73,13 @@ export class SessionSearchRetrieval {
     this.typoRepair = new SessionSearchTypoRepair(db)
   }
 
-  /**
-   * The route ladder: phrase, then AND, then typo repair, then OR.
-   *
-   * Repair runs before the OR fallback rather than after it fails. A typo next
-   * to a common word would otherwise be masked: the common word alone retrieves
-   * plenty of rows over OR, so nothing would ever look like a miss worth
-   * repairing.
-   */
+  /** Try typo repair before OR so common words cannot mask a misspelled term. */
   run(plan: SessionSearchQueryPlan, scope: RetrievalScope): Retrieved {
     let incomplete = false
     let sessions: SessionRow[] = []
     const match = (expression: string): MessageRow[] => {
       const rows = this.match(expression, scope)
-      // Assigned, not accumulated: only the rung whose rows are returned can
-      // say whether a cap hid anything. A phrase rung that filled the limit and
-      // was then discarded describes a row set the answering rung never used.
+      // Only the route returned to the caller determines whether candidates were truncated.
       incomplete = rows.length >= scope.candidateLimit
       sessions = this.loadSessions(
         rows.map((row) => row.session_row_id),
@@ -136,15 +109,7 @@ export class SessionSearchRetrieval {
     }
   }
 
-  /**
-   * Newest sessions the constraints allow: what an operator-only query names.
-   *
-   * Walked in pages rather than taken in one `LIMIT`, because the operators are
-   * applied in JS. A single cut of the newest N would hand ranking whatever
-   * happened to be recent and then throw most of it away, so `repo:x` on a busy
-   * index could answer with nothing while plenty matched. The walk is bounded
-   * both ways: it stops at a full candidate set, and at a ceiling on rows read.
-   */
+  /** Page until enough JS-filtered operator matches are found, or the scan ceiling is reached. */
   recent(scope: RetrievalScope): { sessions: SessionRow[]; incomplete: boolean } {
     const { conditions, values } = scope.filter
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
@@ -155,11 +120,7 @@ export class SessionSearchRetrieval {
     const ceiling = scope.candidateLimit * RECENT_SCAN_FACTOR
     const sessions: SessionRow[] = []
     let scanned = 0
-    // Why the flag and not a count: both caps mean the same thing to a caller —
-    // a session it never saw may have matched — and only the loop knows which
-    // of them ended it. Reporting rows read instead let the engine infer
-    // completeness from a full candidate set alone, so giving up at the ceiling
-    // with nothing found looked exactly like a search that found nothing.
+    // Reaching the scan ceiling is incomplete even when no operator matches were found.
     let incomplete = false
     while (sessions.length < scope.candidateLimit) {
       if (scanned >= ceiling) {
@@ -201,17 +162,13 @@ export class SessionSearchRetrieval {
   ): SessionSearchQueryPlan | null {
     const typoRepair = this.typoRepair
     let changed = false
-    // Only the body is a candidate for a correction, but the re-plan is fed the
-    // tokens as typed: re-planning the body alone would hand the phrase rung a
-    // sentence with its stop words already gone, and `relay dropping frames`
-    // cannot match the `relay is dropping frames` that is in the transcript.
+    // Repair body terms but replan the full phrase so indexed stop words remain adjacent.
     const repairable = new Set(plan.body.map((term) => term.toLowerCase()))
     const phrase = plan.phrase.map((token) => {
       if (!repairable.has(token.toLowerCase())) {
         return token
       }
-      // Repaired inside the scope the search will run in, so a spelling only
-      // tool output carries neither suppresses a repair nor becomes one.
+      // Tool-only vocabulary must neither suppress nor supply a conversation-scoped repair.
       const fix = typoRepair.correct(token, scope)
       if (fix && fix !== token.toLowerCase()) {
         changed = true
@@ -219,30 +176,17 @@ export class SessionSearchRetrieval {
       }
       return token
     })
-    // The repair changes spellings, not the query's character: the re-plan is
-    // told what the original decided so a corrected literal keeps every term it
-    // was typed with.
+    // Preserve literal mode after repair so corrected terms cannot turn into discarded stop words.
     return changed ? planSessionSearchQuery(phrase.join(' '), plan.literal) : null
   }
 
-  /**
-   * Phrase, then AND, over the tokens as typed; null when neither matches.
-   *
-   * Prose runs it too, and not only a literal-looking query. A sentence pasted
-   * out of a transcript is ordinary words in order, and over OR its common
-   * words fill the candidate limit with recent sessions long before the old
-   * session that holds the sentence is reached, so the exact match a user can
-   * see in front of them comes back missing.
-   */
+  /** Try phrase/AND for prose too, before common OR terms can crowd out an exact sentence. */
   private phraseThenAnd(
     plan: SessionSearchQueryPlan,
     match: (expression: string) => MessageRow[]
   ): { rows: MessageRow[]; route: 'phrase' | 'and' } | null {
     const tokens = plan.phrase
-    // A one-token literal (`resolveTerminalPath`, `src/a/b.ts`) is its own
-    // phrase: the tokenizer keeps it whole, so the exact token is the cheap,
-    // precise first try before the identifier pieces fan out over OR. One word
-    // of prose is not quoting anything, so it goes straight to OR as before.
+    // Single-token literals get an exact attempt before identifier expansion; single prose words go to OR.
     if (tokens.length === 0 || (tokens.length < 2 && !plan.literal)) {
       return null
     }
@@ -267,13 +211,8 @@ export class SessionSearchRetrieval {
       m.session_row_id, m.role, m.ts, s.updated_at
       FROM messages_fts JOIN messages m ON m.id = messages_fts.rowid
       JOIN sessions s ON s.id = m.session_row_id WHERE messages_fts MATCH ?${eligible}`
-    // Why: collapse to one row per session BEFORE the candidate limit, on both
-    // sort orders, so a single long session cannot occupy the whole page.
-    // `max(score)` makes SQLite pick that session's best row for the bare columns.
-    // Cost of grouping instead of a bounded top-N sorter, measured: ~1.75x
-    // (49.6 vs 28.6 ms at 80k matching rows, 183.6 vs 104.1 ms at 240k) and a
-    // temp b-tree over every match. No inner LIMIT can bound it: the CTE has no
-    // order, so any cut drops whole sessions rather than their surplus rows.
+    // Group before limiting so one long session cannot consume the candidate budget.
+    // SQLite’s max(score) selects the best matching row for the other projected columns.
     const order = sort === 'newest' ? 'updated_at DESC, score DESC' : 'score DESC'
     const sql = `WITH matched AS MATERIALIZED (${matched})
       SELECT rowid, max(score) AS score, session_row_id, role, ts FROM matched

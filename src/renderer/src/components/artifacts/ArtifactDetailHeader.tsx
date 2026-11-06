@@ -25,8 +25,7 @@ export function ArtifactDetailHeader({
   onDelete: (target: ArtifactListItem) => void
 }): React.JSX.Element {
   return (
-    // Why: the drawer is right-anchored under the fixed Windows/Linux window-controls
-    // overlay, which paints above it — inset the actions so they stay clickable.
+    // Inset actions below the fixed Windows/Linux controls overlay so they stay clickable.
     <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/50 px-4 py-3 pr-[max(1rem,var(--window-controls-width,0px))]">
       {/* Why: a floor rather than min-w-0 — otherwise the title truncates to nothing before the actions wrap. */}
       <div className="min-w-40 flex-1 space-y-0.5">

@@ -1,6 +1,6 @@
 import './unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OrchestrationDb } from '../orchestration/db'
+import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import { migrateV43 } from '../orchestration/db/schema/migrate-v43'
 import {
   ADDRESS_X,
@@ -15,7 +15,7 @@ import {
 } from './orchestration-session-caller-test-fixture'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
-vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+vi.mock('../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => hostRef.current
 }))
 
@@ -75,16 +75,10 @@ describe('a database an earlier build wrote session:<id> addresses into', () => 
   let seeded: { toX: string; fromX: string }
 
   beforeEach(() => {
-    h = createSessionCallerHarness(hostRef)
-    hostRef.current = {
-      deps: {
-        store: {
-          getRecord: (sessionId: string) => h.records.get(sessionId) ?? null,
-          listRecords: () => [...h.records.values()],
-          getVisibleSessionTabIndex: () => ({ present: true, sessionIds: [SESSION_X, SESSION_Y] })
-        }
-      }
-    }
+    h = createSessionCallerHarness(hostRef, () => ({
+      present: true,
+      sessionIds: [SESSION_X, SESSION_Y]
+    }))
     seeded = seedEarlierBuildRows(h.db)
     h.db.migrate()
   })

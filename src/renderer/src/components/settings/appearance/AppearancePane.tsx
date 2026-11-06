@@ -1,0 +1,293 @@
+import type React from 'react'
+import { useLayoutEffect, useState } from 'react'
+import { AppWindow, PanelLeft, TerminalSquare } from 'lucide-react'
+
+import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+
+import { AppearanceSection } from './AppearanceSection'
+import { AppearanceInterfaceSection } from './AppearanceInterfaceSection'
+import { AppearanceWindowSidebarSection } from './AppearanceWindowSidebarSection'
+import { SearchableSetting } from '../section-layout/SearchableSetting'
+import { matchesSettingsSearch, normalizeSettingsSearchQuery } from '../search/settings-search'
+import { useAppStore } from '../../../store/index'
+import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
+import {
+  getAppIconEntries,
+  getCodeEditorThemeEntries,
+  getLanguageEntries,
+  getLayoutEntries,
+  getStatusBarEntries,
+  getThemeEntries,
+  getTitlebarEntries,
+  getTypographyEntries,
+  getZoomEntries
+} from './appearance-search'
+import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
+import {
+  getSidebarEntries,
+  getLeftSidebarAppearanceEntry,
+  getWorkspaceCardLayoutEntry
+} from './appearance-sidebar-search'
+import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
+import { getTerminalAppearanceSearchEntries } from '../terminal/terminal-search'
+import { TerminalAppearanceSection } from '../terminal/appearance/TerminalAppearanceSection'
+import type { UseTerminalConfigImportReturn } from '../terminal/configuration/useTerminalConfigImport'
+import type { UseWarpThemeImportReturn } from '../terminal/themes/useWarpThemeImport'
+import { AppIconSelector } from './AppIconSelector'
+import { normalizeAppIconId } from '../../../../../shared/app-icon'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
+import { isWebClientLocation } from '@/lib/web-client-location'
+import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
+import { translate } from '@/i18n/i18n'
+
+import { resolveInterfaceSectionSummary } from './appearance-interface-summary'
+
+type AppearancePaneProps = {
+  settings: GlobalSettings
+  updateSettings: (updates: Partial<GlobalSettings>) => void
+  applyTheme: (theme: 'system' | 'dark' | 'light') => void
+  fontSuggestions: string[]
+  terminalFontSuggestions: string[]
+  onRequestFontSuggestions?: () => void
+  systemPrefersDark: boolean
+  terminalConfigImport: UseTerminalConfigImportReturn
+  warpThemes: UseWarpThemeImportReturn
+}
+
+type AppearanceSectionKey = 'interface' | 'terminal' | 'window'
+
+const ALL_APPEARANCE_SECTIONS = [
+  'interface',
+  'terminal',
+  'window'
+] as const satisfies readonly AppearanceSectionKey[]
+
+export function AppearancePane({
+  settings,
+  updateSettings,
+  applyTheme,
+  fontSuggestions,
+  terminalFontSuggestions,
+  onRequestFontSuggestions,
+  systemPrefersDark,
+  terminalConfigImport,
+  warpThemes
+}: AppearancePaneProps): React.JSX.Element {
+  const searchQuery = useAppStore((state) => state.settingsSearchQuery)
+  const appearanceAccordionDeepLink = useAppStore((state) => state.appearanceAccordionDeepLink)
+  const clearAppearanceAccordionDeepLink = useAppStore(
+    (state) => state.clearAppearanceAccordionDeepLink
+  )
+  const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
+  const isWebClient = isWebClientLocation()
+  // Windows web clients have no local system tray; require desktop Electron.
+  const isDesktopWindows = getRendererAppPlatform() === 'win32' && !isWebClient
+  const isDesktopMac = getRendererAppPlatform() === 'darwin' && !isWebClient
+
+  // Expand by default so Terminal/Window controls remain discoverable; sections still collapse independently.
+  const [openSections, setOpenSections] = useState<ReadonlySet<AppearanceSectionKey>>(
+    () => new Set(ALL_APPEARANCE_SECTIONS)
+  )
+
+  // Expand deep-link parents before scrolling so the target row is visible.
+  useLayoutEffect(() => {
+    if (!appearanceAccordionDeepLink) {
+      return
+    }
+    setOpenSections((current) => {
+      if (current.has(appearanceAccordionDeepLink)) {
+        return current
+      }
+      const next = new Set(current)
+      next.add(appearanceAccordionDeepLink)
+      return next
+    })
+    clearAppearanceAccordionDeepLink()
+    // Scroll next frame after synchronous expansion so the target has nonzero height.
+    const frameId = requestAnimationFrame(() => {
+      document
+        .getElementById(USAGE_PERCENTAGE_DISPLAY_SETTING_ID)
+        ?.scrollIntoView({ block: 'nearest' })
+    })
+    return () => {
+      cancelAnimationFrame(frameId)
+    }
+  }, [appearanceAccordionDeepLink, clearAppearanceAccordionDeepLink])
+  const interfaceTitle = translate(
+    'auto.components.settings.AppearancePane.interfaceTitle',
+    'Interface'
+  )
+  const terminalTitle = translate(
+    'auto.components.settings.AppearancePane.terminalTitle',
+    'Terminal'
+  )
+  const windowSidebarTitle = translate(
+    'auto.components.settings.AppearancePane.windowSidebarTitle',
+    'Window & Sidebar'
+  )
+  const windowSidebarSummary = translate(
+    'auto.components.settings.AppearancePane.windowSidebarSummary',
+    'Sidebar, status bar, and file explorer'
+  )
+
+  const interfaceSearchEntries = [
+    { title: interfaceTitle },
+    ...getThemeEntries(),
+    ...getCodeEditorThemeEntries(),
+    ...getZoomEntries(),
+    ...getTypographyEntries(),
+    ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),
+    ...getTitlebarEntries(),
+    ...getReduceVisualEffectsEntries(),
+    ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
+    ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
+  ]
+  const terminalSearchEntries = [
+    { title: terminalTitle },
+    ...getTerminalAppearanceSearchEntries({
+      showDesktopThemeImports: !isWebClient
+    })
+  ]
+  const windowSearchEntries = [
+    {
+      title: windowSidebarTitle,
+      description: windowSidebarSummary
+    },
+    ...getStatusBarEntries(),
+    ...getSidebarEntries(),
+    ...getLayoutEntries(),
+    getLeftSidebarAppearanceEntry(),
+    getWorkspaceCardLayoutEntry()
+  ]
+
+  const interfaceMatches = matchesSettingsSearch(searchQuery, interfaceSearchEntries)
+  const terminalMatches = matchesSettingsSearch(searchQuery, terminalSearchEntries)
+  const windowMatches = matchesSettingsSearch(searchQuery, windowSearchEntries)
+  const interfaceLabelMatches = matchesSettingsSearch(searchQuery, { title: interfaceTitle })
+  const terminalLabelMatches = matchesSettingsSearch(searchQuery, { title: terminalTitle })
+  const windowLabelMatches = matchesSettingsSearch(searchQuery, {
+    title: windowSidebarTitle,
+    description: windowSidebarSummary
+  })
+  const appIconMatches = matchesSettingsSearch(searchQuery, getAppIconEntries())
+
+  // Search reveals matching sections, including advanced controls, without replacing saved disclosure state.
+  function isSectionOpen(key: AppearanceSectionKey): boolean {
+    if (isSearching) {
+      return key === 'interface'
+        ? interfaceMatches
+        : key === 'terminal'
+          ? terminalMatches
+          : windowMatches
+    }
+    return openSections.has(key)
+  }
+
+  function toggleSection(key: AppearanceSectionKey): void {
+    setOpenSections((current) => {
+      const next = new Set(current)
+      if (next.has(key)) {
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+      return next
+    })
+  }
+
+  const interfaceSummary = resolveInterfaceSectionSummary(settings)
+  const terminalSummary = `${
+    settings.terminalFontFamily ||
+    translate('auto.components.settings.AppearancePane.terminalDefaultFont', 'Default font')
+  } · ${settings.terminalFontSize}px`
+
+  return (
+    <div className="space-y-2.5">
+      {interfaceMatches ? (
+        <AppearanceSection
+          id="interface"
+          icon={<AppWindow aria-hidden="true" />}
+          title={interfaceTitle}
+          summary={interfaceSummary}
+          open={isSectionOpen('interface')}
+          onToggle={() => toggleSection('interface')}
+          toggleDisabled={isSearching}
+        >
+          <AppearanceInterfaceSection
+            settings={settings}
+            updateSettings={updateSettings}
+            applyTheme={applyTheme}
+            fontSuggestions={fontSuggestions}
+            onRequestFontSuggestions={onRequestFontSuggestions}
+            isDesktopMac={isDesktopMac}
+            isDesktopWindows={isDesktopWindows}
+            forceVisiblePrimary={interfaceLabelMatches}
+          />
+        </AppearanceSection>
+      ) : null}
+
+      {terminalMatches ? (
+        <AppearanceSection
+          id="terminal"
+          icon={<TerminalSquare aria-hidden="true" />}
+          title={terminalTitle}
+          summary={terminalSummary}
+          open={isSectionOpen('terminal')}
+          onToggle={() => toggleSection('terminal')}
+          toggleDisabled={isSearching}
+        >
+          <TerminalAppearanceSection
+            settings={settings}
+            updateSettings={updateSettings}
+            systemPrefersDark={systemPrefersDark}
+            terminalFontSuggestions={terminalFontSuggestions}
+            onRequestFontSuggestions={onRequestFontSuggestions}
+            terminalConfigImport={terminalConfigImport}
+            warpThemes={warpThemes}
+            forceVisiblePrimary={terminalLabelMatches}
+          />
+        </AppearanceSection>
+      ) : null}
+
+      {windowMatches ? (
+        <AppearanceSection
+          id="window"
+          icon={<PanelLeft aria-hidden="true" />}
+          title={windowSidebarTitle}
+          summary={windowSidebarSummary}
+          open={isSectionOpen('window')}
+          onToggle={() => toggleSection('window')}
+          toggleDisabled={isSearching}
+        >
+          <AppearanceWindowSidebarSection
+            settings={settings}
+            updateSettings={updateSettings}
+            forceVisiblePrimary={windowLabelMatches}
+          />
+        </AppearanceSection>
+      ) : null}
+
+      {/* Keep the App Icon easter egg at the bottom instead of inside Interface advanced. */}
+      {appIconMatches ? (
+        <SearchableSetting
+          title={translate('auto.components.settings.AppearancePane.ca1590d42f', 'App Icon')}
+          description={translate(
+            'auto.components.settings.AppearancePane.0cd9b8228f',
+            'Choose the app icon shown in the Dock and window switcher.'
+          )}
+          keywords={getAppIconEntries().flatMap((entry) => [
+            entry.title,
+            entry.description ?? '',
+            ...(entry.keywords ?? [])
+          ])}
+          className="max-w-none px-1 pt-2"
+        >
+          <AppIconSelector
+            value={normalizeAppIconId(settings.appIcon)}
+            onChange={(appIcon) => updateSettings({ appIcon })}
+          />
+        </SearchableSetting>
+      ) : null}
+    </div>
+  )
+}

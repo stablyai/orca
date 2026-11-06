@@ -1,4 +1,7 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { mkdtemp, readdir, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { acpLaunchSpecFor, type AcpLaunchSpec } from './acp-launch-specs'
 import {
   createAcpModelCatalogProbe,
@@ -8,9 +11,8 @@ import { AcpSessionRuntime } from './acp-session-runtime'
 import { AcpScriptedAgent } from './acp-scripted-agent.test-support'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import { openCodeAcpAccountBinding } from '../opencode/opencode-structured-account-home'
-
-const GROK = acpLaunchSpecFor('grok')!
-// The user's own OpenCode environment, read without the app's managed-account service.
+import recordedEfforts from './fixtures/opencode-v2.0.21-model-efforts.json'
+// Bypass the app's managed-account service for this fixture.
 const OPENCODE: AcpLaunchSpec = {
   ...acpLaunchSpecFor('opencode')!,
   account: openCodeAcpAccountBinding(() => ({
@@ -19,48 +21,53 @@ const OPENCODE: AcpLaunchSpec = {
     environmentForAccount: () => ({})
   }))
 }
-const GROK_HOME = { variable: 'GROK_HOME', path: '/homes/grok-a' }
-
-const MODEL_STATE = {
-  currentModelId: 'grok-build',
-  availableModels: [
-    {
-      modelId: 'grok-build',
-      name: 'Grok Build',
-      _meta: {
-        supportsReasoningEffort: true,
-        // The session's own pick, which must not become a catalog default.
-        reasoningEffort: 'low',
-        reasoningEfforts: [
-          { value: 'low', id: 'fast', label: 'Fast' },
-          { value: 'high', id: 'deep', default: true }
-        ]
-      }
-    },
-    { modelId: 'grok-mini', name: 'Grok Mini', _meta: { supportsReasoningEffort: true } },
-    { modelId: 'grok-chat', name: 'Grok Chat', _meta: {} }
-  ]
-}
 
 const agents: AcpScriptedAgent[] = []
 afterEach(() => {
+  vi.restoreAllMocks()
   for (const agent of agents.splice(0)) {
     agent.close()
   }
 })
 
-function scriptedGrok(initializeMeta: Record<string, unknown>): {
+function scriptedOpenCode2(canDelete: boolean): {
   agent: AcpScriptedAgent
   launches: ProviderProcessLaunch[]
   closed: () => number
-  deps: AcpModelCatalogProbeDeps
+  deps: AcpModelCatalogProbeDeps & {
+    runListing: Mock<NonNullable<AcpModelCatalogProbeDeps['runListing']>>
+  }
 } {
   const agent = new AcpScriptedAgent()
   agents.push(agent)
   agent.on('initialize', (frame) =>
-    agent.reply(frame, { protocolVersion: 1, agentCapabilities: {}, _meta: initializeMeta })
+    agent.reply(frame, {
+      protocolVersion: 1,
+      agentCapabilities: {
+        sessionCapabilities: canDelete ? { delete: {} } : {}
+      }
+    })
   )
-  agent.on('x.ai/models/list', (frame) => agent.reply(frame, { result: MODEL_STATE }))
+  agent.on('session/new', (frame) =>
+    agent.reply(frame, {
+      sessionId: 'probe-session',
+      configOptions: [
+        {
+          id: 'model',
+          name: 'Model',
+          category: 'model',
+          type: 'select',
+          currentValue: 'opencode/exo-free',
+          options: [
+            { value: 'opencode/big-pickle', name: 'Big Pickle' },
+            { value: 'opencode/exo-free', name: 'Exo Free' }
+          ]
+        }
+      ]
+    })
+  )
+  agent.on('session/delete', (frame) => agent.reply(frame, {}))
+  agent.on('session/set_config_option', (frame) => agent.fail(frame, -32602, 'Model unavailable'))
   const launches: ProviderProcessLaunch[] = []
   let closes = 0
   return {
@@ -69,19 +76,21 @@ function scriptedGrok(initializeMeta: Record<string, unknown>): {
     closed: () => closes,
     deps: {
       resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/user' }),
-      dataDirectory: '/orca-data',
-      resolveLaunchEnv: () => ({ XAI_API_KEY: 'from-settings' }),
-      resolveCommand: () => '/opt/grok/bin/grok',
+      resolveCommand: () => '/opt/opencode/bin/opencode',
+      probeVersion: async () => ({ version: '2.0.29' }),
       homePath: '/home/user',
-      connect: (launch) => {
+      dataDirectory: '/orca-data',
+      runListing: vi.fn<NonNullable<AcpModelCatalogProbeDeps['runListing']>>(),
+      connectSession: (launch) => {
         launches.push(launch)
         const runtime = new AcpSessionRuntime(agent.stdout, agent.stdin)
         return {
           initialize: () => runtime.initialize(),
-          requestSessionFreeExtension: (method, params) =>
-            runtime.requestSessionFreeExtension(method, params),
+          start: (options) => runtime.start(options),
+          setConfigOption: (id, value) => runtime.setConfigOption(id, value),
+          deleteSession: (sessionId) => runtime.deleteSession(sessionId),
           close: async () => {
-            closes++
+            closes += 1
             runtime.close()
           }
         }
@@ -91,105 +100,111 @@ function scriptedGrok(initializeMeta: Record<string, unknown>): {
 }
 
 describe('ACP model catalog probes', () => {
-  it('lists Grok from initialize alone, under its pinned account, and closes the child', async () => {
-    const { agent, deps, launches, closed } = scriptedGrok({ modelState: MODEL_STATE })
-    const success = await createAcpModelCatalogProbe(GROK, deps)(GROK_HOME)
-    expect(agent.frames.map((frame) => frame.method)).toEqual(['initialize'])
-    expect(agent.frames[0]!.params).toMatchObject({
-      clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }
-    })
-    expect(launches).toEqual([
-      expect.objectContaining({
-        command: '/opt/grok/bin/grok',
-        args: ['agent', 'stdio'],
-        env: expect.objectContaining({ GROK_HOME: '/homes/grok-a', XAI_API_KEY: 'from-settings' })
+  it('keeps a slow startup listing when effort discovery uses its full budget', async () => {
+    vi.useFakeTimers()
+    try {
+      const { agent, deps, closed } = scriptedOpenCode2(true)
+      agent.on('session/new', (frame) => {
+        setTimeout(
+          () => agent.reply(frame, { sessionId: 'probe-session', ...recordedEfforts.new }),
+          11_000
+        )
       })
-    ])
-    expect(closed()).toBe(1)
-    expect(success.models).toEqual([
-      {
-        id: 'grok-build',
-        label: 'Grok Build',
-        // `initialize`'s currentModelId is not what a session runs, so it names no default.
-        isDefault: false,
-        // Grok's option ids, which its effort config option takes, and its own default only.
-        efforts: [
-          { value: 'fast', label: 'Fast' },
-          { value: 'deep', label: 'Deep' }
-        ],
-        defaultEffort: 'deep'
-      },
-      {
-        id: 'grok-mini',
-        label: 'Grok Mini',
-        isDefault: false,
-        efforts: ['minimal', 'low', 'medium', 'high', 'xhigh'].map((value) => ({
-          value,
-          label: expect.any(String)
-        }))
-      },
-      { id: 'grok-chat', label: 'Grok Chat', isDefault: false, efforts: [] }
-    ])
+      agent.on('session/set_config_option', () => {})
+      const listing = createAcpModelCatalogProbe(OPENCODE, deps)(
+        { kind: 'opencode', locator: { kind: 'unmanaged' } },
+        { workspacePath: '/work/project' }
+      )
+      await vi.waitFor(() =>
+        expect(agent.frames.map((frame) => frame.method)).toContain('session/new')
+      )
+      await vi.advanceTimersByTimeAsync(16_000)
+      expect((await listing).models).toHaveLength(3)
+      expect(agent.frames.at(-1)?.method).toBe('session/delete')
+      expect(closed()).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
-  it('falls back to x.ai/models/list and never authenticates or opens a session', async () => {
-    const { agent, deps } = scriptedGrok({})
-    const success = await createAcpModelCatalogProbe(GROK, deps)(GROK_HOME)
-    expect(agent.frames.map((frame) => frame.method)).toEqual(['initialize', 'x.ai/models/list'])
-    expect(success.models.map((model) => model.id)).toEqual([
-      'grok-build',
-      'grok-mini',
-      'grok-chat'
-    ])
+  it('deletes a session before closing when cancelled during effort discovery', async () => {
+    vi.useFakeTimers()
+    try {
+      const { agent, deps, closed } = scriptedOpenCode2(true)
+      agent.on('session/new', (frame) =>
+        agent.reply(frame, { sessionId: 'probe-session', ...recordedEfforts.new })
+      )
+      agent.on('session/set_config_option', () => {})
+      agent.on('session/delete', (frame) => {
+        expect(closed()).toBe(0)
+        agent.reply(frame, {})
+      })
+      const stop = new AbortController()
+      const listing = createAcpModelCatalogProbe(OPENCODE, deps)(
+        { kind: 'opencode', locator: { kind: 'unmanaged' } },
+        { workspacePath: '/work/project', signal: stop.signal }
+      )
+      const rejected = expect(listing).rejects.toThrow(/listing stopped/)
+      await vi.waitFor(() =>
+        expect(agent.frames.map((frame) => frame.method)).toContain('session/set_config_option')
+      )
+      stop.abort()
+      await rejected
+      expect(agent.frames.at(-1)?.method).toBe('session/delete')
+      expect(closed()).toBe(1)
+      await vi.runAllTimersAsync()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
-  it('fails, closing the child, when Grok lists nothing', async () => {
-    const { agent, deps, closed } = scriptedGrok({})
-    agent.on('x.ai/models/list', (frame) => agent.reply(frame, { error: 'not signed in' }))
-    await expect(createAcpModelCatalogProbe(GROK, deps)(GROK_HOME)).rejects.toThrow(/did not list/)
-    expect(closed()).toBe(1)
-    expect(agent.frames.some((frame) => frame.method === 'authenticate')).toBe(false)
+  it('lists OMP from a session kept in a folder it removes, in the chat folder', async () => {
+    const { agent, deps, launches } = scriptedOpenCode2(false)
+    const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-omp-listing-'))
+    try {
+      const success = await createAcpModelCatalogProbe(acpLaunchSpecFor('omp')!, {
+        ...deps,
+        dataDirectory,
+        resolveCommand: () => '/opt/omp/bin/omp',
+        probeVersion: async () => ({ version: '18.12.2' })
+      })(
+        { variable: 'PI_CODING_AGENT_DIR', path: '/homes/omp' },
+        { workspacePath: '/work/project' }
+      )
+      expect(agent.frames.map((frame) => frame.method)).toEqual(['initialize', 'session/new'])
+      expect(agent.frames[1]!.params).toMatchObject({ cwd: '/work/project' })
+      const root = join(dataDirectory, 'acp-listing-sessions', 'omp')
+      expect(launches).toEqual([
+        expect.objectContaining({
+          args: ['acp', '--session-dir', expect.stringMatching(/run-/)]
+        })
+      ])
+      expect(dirname(launches[0]!.args[2]!)).toBe(root)
+      expect(await readdir(root)).toEqual([])
+      expect(success.models.map((model) => model.id)).toEqual([
+        'opencode/big-pickle',
+        'opencode/exo-free'
+      ])
+    } finally {
+      await rm(dataDirectory, { recursive: true, force: true })
+    }
   })
 
-  it('lists OpenCode with `models --verbose` under its scrubbed launch env, with no ACP call', async () => {
-    const runListing = vi.fn(async () => 'opencode/big-pickle\n{\n  "name": "Big Pickle"\n}\n')
-    const connect = vi.fn()
-    const probe = createAcpModelCatalogProbe(OPENCODE, {
-      resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/user' }),
-      dataDirectory: '/orca-data',
-      resolveCommand: () => '/opt/opencode/bin/opencode',
-      probeVersion: async () => true,
-      homePath: '/home/user',
-      runListing,
-      connect
-    })
-    const success = await probe({ kind: 'opencode', locator: { kind: 'unmanaged' } })
-    expect(connect).not.toHaveBeenCalled()
-    expect(runListing).toHaveBeenCalledWith(
-      expect.objectContaining({
-        command: '/opt/opencode/bin/opencode',
-        args: ['models', '--verbose'],
-        env: expect.objectContaining({ OPENCODE_CLIENT: 'acp' })
-      }),
-      expect.objectContaining({ site: 'opencode-model-catalog-probe' })
+  // An interrupted create can save a session without returning its ID.
+  it('stops a listing cut off while OpenCode 2.x creates its session, without deleting', async () => {
+    const { agent, deps, closed } = scriptedOpenCode2(true)
+    agent.on('session/new', () => {})
+    const stop = new AbortController()
+    const listing = createAcpModelCatalogProbe(OPENCODE, deps)(
+      { kind: 'opencode', locator: { kind: 'unmanaged' } },
+      { workspacePath: '/work/project', signal: stop.signal }
     )
-    expect(success.models).toEqual([
-      { id: 'opencode/big-pickle', label: 'opencode/Big Pickle', isDefault: false, efforts: [] }
-    ])
-  })
-
-  it('lists nothing for a release that runs no structured chat', async () => {
-    const runListing = vi.fn()
-    const probe = createAcpModelCatalogProbe(OPENCODE, {
-      resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
-      dataDirectory: '/orca-data',
-      resolveCommand: () => '/opt/opencode/bin/opencode',
-      probeVersion: async () => false,
-      runListing
-    })
-    await expect(probe({ kind: 'opencode', locator: { kind: 'unmanaged' } })).rejects.toThrow(
-      /does not run structured chats/
+    await vi.waitFor(() =>
+      expect(agent.frames.map((frame) => frame.method)).toContain('session/new')
     )
-    expect(runListing).not.toHaveBeenCalled()
+    stop.abort()
+    await expect(listing).rejects.toThrow(/listing stopped/)
+    expect(closed()).toBe(1)
+    expect(agent.frames.map((frame) => frame.method)).not.toContain('session/delete')
   })
 })

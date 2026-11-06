@@ -41,8 +41,6 @@ function hasJiraStatusChanged(
   return (
     previous.connected !== next.connected ||
     previous.credentialError !== next.credentialError ||
-    previous.credentialErrorReason !== next.credentialErrorReason ||
-    previous.canMoveCredentialKeyToFile !== next.canMoveCredentialKeyToFile ||
     previous.credentialProtection !== next.credentialProtection ||
     previous.supportsScopedTokens !== next.supportsScopedTokens ||
     previous.activeSiteId !== next.activeSiteId ||

@@ -1,10 +1,11 @@
+import { getProviderChecksOutcome } from '../../../../../shared/source-control/checks/provider-check-summary'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import React, { useRef, useEffect } from 'react'
 import { translate } from '@/i18n/i18n'
 import { CheckCircle2, AlertCircle, Clock3, Minus } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { getChecksPillTone, getChecksLabel } from '@/components/task-page-checks-pill'
+import { getChecksPillTone, getChecksLabel } from '../task-page-checks-pill'
 export function PRChecksCell({
   item,
   onOpen,
@@ -47,13 +48,13 @@ export function PRChecksCell({
       </span>
     )
   }
-  const summary = item.checksSummary
+  const outcome = getProviderChecksOutcome(item.checksSummary)
   const Icon =
-    summary?.state === 'success'
+    outcome === 'success'
       ? CheckCircle2
-      : summary?.state === 'failure'
+      : outcome === 'failure'
         ? AlertCircle
-        : summary?.state === 'pending'
+        : outcome === 'pending'
           ? Clock3
           : Minus
   return (

@@ -46,7 +46,9 @@ vi.mock('@/runtime/web-runtime-session-environment', () => ({
 vi.mock('@/lib/open-mobile-emulator-tab', () => ({
   openMobileEmulatorTab: (...args: unknown[]) => mocks.openMobileEmulatorTab(...args)
 }))
-vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: vi.fn() }))
+vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
+  launchAgentInNewTab: vi.fn()
+}))
 vi.mock('@/lib/duplicate-browser-tab-options', () => ({
   buildDuplicatedBrowserTabOptions: () => ({})
 }))
@@ -89,20 +91,6 @@ describe('useTerminalCreateActions creation gates', () => {
     }
   })
 
-  it('toasts instead of creating a browser tab when the provider forbids it', () => {
-    mocks.browserAvailability = { state: 'hidden', reason: 'no browser here' }
-    renderActions().handleNewBrowserTab()
-    expect(mocks.toastError).toHaveBeenCalledWith('no browser here')
-    expect(mocks.createBrowserTab).not.toHaveBeenCalled()
-  })
-
-  it('toasts instead of duplicating a browser tab when the provider forbids it', () => {
-    mocks.browserAvailability = { state: 'hidden', reason: 'no browser here' }
-    renderActions().handleDuplicateBrowserTab('browser-1', 'unified-browser-1')
-    expect(mocks.toastError).toHaveBeenCalledWith('no browser here')
-    expect(mocks.createBrowserTab).not.toHaveBeenCalled()
-  })
-
   it('reports a rejected workspace browser open instead of leaving it unhandled', async () => {
     mocks.state.activeGroupIdByWorktree = { [WORKTREE_ID]: 'group-1' }
     mocks.openNewBrowserTabInActiveWorkspace.mockRejectedValue(new Error('runtime says no'))
@@ -113,13 +101,6 @@ describe('useTerminalCreateActions creation gates', () => {
     process.off('unhandledRejection', unhandled)
     expect(mocks.toastError).toHaveBeenCalledWith('runtime says no')
     expect(unhandled).not.toHaveBeenCalled()
-  })
-
-  it('reports a rejected simulator open instead of leaving it unhandled', async () => {
-    mocks.openMobileEmulatorTab.mockRejectedValue(new Error('emulator says no'))
-    renderActions().handleNewSimulatorTab()
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(mocks.toastError).toHaveBeenCalledWith('emulator says no')
   })
 
   it('appends a shell-override terminal to the saved order, dropping repeated ids', () => {

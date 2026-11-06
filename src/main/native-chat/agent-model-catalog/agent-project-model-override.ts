@@ -10,9 +10,7 @@ import {
   piSettingsMayPickModel
 } from './agent-project-model-config-keys'
 
-// A listing's default is the account's, but a chat runs in a workspace whose own
-// config can pick another model. These checks only ask whether such config sets a
-// model or effort key; they never use what it picks, so a hit means "name no default".
+// Project model/effort settings invalidate the account default without resolving a replacement.
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -23,7 +21,6 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-/** A `.git` file (linked worktree) or a `.git` directory with a HEAD marks a project root. */
 async function isProjectRoot(dir: string): Promise<boolean> {
   const git = join(dir, '.git')
   try {
@@ -34,11 +31,6 @@ async function isProjectRoot(dir: string): Promise<boolean> {
   }
 }
 
-/**
- * The directories a chat started in `cwd` reads project config from: each one
- * from the project root (the nearest ancestor holding `.git`, else `cwd`
- * itself) down to `cwd`.
- */
 async function projectConfigDirectories(cwd: string): Promise<string[]> {
   const chain: string[] = []
   for (let dir = resolve(cwd); ; dir = dirname(dir)) {
@@ -58,13 +50,10 @@ type ProjectModelFile = {
 }
 
 type ProjectModelLayers = {
-  /** Files, relative to each directory of the chain, that the agent reads a model from. */
   files: readonly ProjectModelFile[]
-  /** Folders of `.md` agent definitions whose frontmatter may pick the model. */
   agentFolders?: readonly { path: string; recursive: boolean }[]
-  /** Folders of extension code, which may pick the model however it likes. */
   codeFolders?: readonly string[]
-  /** The agent reads every ancestor of the workspace, not only up to its project root. */
+  /** Include ancestors above the project root. */
   wholeAncestry?: boolean
 }
 
@@ -73,7 +62,21 @@ const files = (
   mayPickModel: (text: string) => boolean
 ): ProjectModelFile[] => paths.map((path) => ({ path, mayPickModel }))
 
-// The project files each agent's CLI reads a model from.
+// OpenCode 2.x reads every ancestor, including above the nearest .git root.
+const OPENCODE_PROJECT_MODEL_LAYERS: ProjectModelLayers = {
+  wholeAncestry: true,
+  files: files(
+    ['opencode.json', 'opencode.jsonc', '.opencode/opencode.json', '.opencode/opencode.jsonc'],
+    openCodeConfigMayPickModel
+  ),
+  agentFolders: [
+    { path: '.opencode/agent', recursive: true },
+    { path: '.opencode/agents', recursive: true },
+    { path: '.opencode/mode', recursive: false },
+    { path: '.opencode/modes', recursive: false }
+  ]
+}
+
 const PROJECT_MODEL_LAYERS: Readonly<Record<string, ProjectModelLayers>> = {
   codex: { files: files(['.codex/config.toml'], codexConfigMayPickModel) },
   claude: {
@@ -82,21 +85,9 @@ const PROJECT_MODEL_LAYERS: Readonly<Record<string, ProjectModelLayers>> = {
       claudeSettingsMayPickModel
     )
   },
-  // OpenCode 2.x discovers `opencode.json(c)` and `.opencode/` in every ancestor of the workspace.
-  opencode: {
-    wholeAncestry: true,
-    files: files(
-      ['opencode.json', 'opencode.jsonc', '.opencode/opencode.json', '.opencode/opencode.jsonc'],
-      openCodeConfigMayPickModel
-    ),
-    agentFolders: [
-      { path: '.opencode/agent', recursive: true },
-      { path: '.opencode/agents', recursive: true },
-      { path: '.opencode/mode', recursive: false },
-      { path: '.opencode/modes', recursive: false }
-    ]
-  },
-  // OMP merges its own `.omp` files and these other agents' project settings into its settings.
+  opencode: OPENCODE_PROJECT_MODEL_LAYERS,
+  opencode2: OPENCODE_PROJECT_MODEL_LAYERS,
+  // OMP also merges other agents' project settings.
   omp: {
     files: [
       ...files(
@@ -115,7 +106,6 @@ const PROJECT_MODEL_LAYERS: Readonly<Record<string, ProjectModelLayers>> = {
       ...files(['.codex/config.toml'], (text) => ompSettingsMayPickModel(text, 'toml'))
     ]
   },
-  // Pi reads `.pi/settings.json` in the chat's folder and loads the extensions beside it.
   pi: {
     files: files(['.pi/settings.json'], piSettingsMayPickModel),
     codeFolders: ['.pi/extensions']
@@ -127,7 +117,7 @@ function isMissing(error: unknown): boolean {
   return code === 'ENOENT' || code === 'ENOTDIR'
 }
 
-/** A missing file is no layer; one that exists but can't be read might pick anything. */
+/** Unreadable files may override defaults; absent files cannot. */
 async function fileMayPickModel(
   path: string,
   mayPickModel: (text: string) => boolean
@@ -141,7 +131,7 @@ async function fileMayPickModel(
   return mayPickModel(text)
 }
 
-// More agent files than this are not read one by one; they may pick anything.
+// Bound reads; catalogs over the cap remain conservatively capable of overriding defaults.
 const MAX_AGENT_FILES = 200
 
 async function agentFolderMayPickModel(folder: string, recursive: boolean): Promise<boolean> {
@@ -163,8 +153,7 @@ async function agentFolderMayPickModel(folder: string, recursive: boolean): Prom
   return found.some(Boolean)
 }
 
-/** A folder holding anything but dotfiles (.DS_Store, .gitkeep) is extension code that may pick
- *  the model. */
+/** Non-dotfile extension content can change models arbitrarily. */
 async function codeFolderMayPickModel(folder: string): Promise<boolean> {
   try {
     return (await readdir(folder)).some((name) => !name.startsWith('.'))
@@ -173,8 +162,7 @@ async function codeFolderMayPickModel(folder: string): Promise<boolean> {
   }
 }
 
-/** A folder that is the agent's own home is account config, not a layer; any other file or agent
- *  folder setting a model or effort is one. */
+/** Exclude account-home config already covered by CLI resolution. */
 async function directoryMayOverride(
   dir: string,
   layers: ProjectModelLayers,
@@ -195,7 +183,6 @@ async function directoryMayOverride(
   return found.some(Boolean)
 }
 
-/** Every directory from the workspace up to the filesystem root. */
 function ancestry(cwd: string): string[] {
   const chain: string[] = []
   for (let dir = resolve(cwd); ; dir = dirname(dir)) {
@@ -206,13 +193,11 @@ function ancestry(cwd: string): string[] {
   }
 }
 
-/** Whether the agent's CLI may read its model from a project's own config. Grok reads its default
- *  model from user, managed and env config only. */
+// Grok uses user, managed and environment config, not project model settings.
 export function agentReadsProjectModelConfig(agent: string): boolean {
   return agent !== 'grok'
 }
 
-/** True when a new chat in `workspacePath` could run a model other than the listed default. */
 export async function workspaceMayOverrideDefaultModel(input: {
   agent: string
   workspacePath: string
@@ -221,7 +206,7 @@ export async function workspaceMayOverrideDefaultModel(input: {
   if (!agentReadsProjectModelConfig(input.agent)) {
     return false
   }
-  // An agent whose project layers are not known here may pick another model anywhere.
+  // Unknown project layers may override defaults anywhere.
   const layers = PROJECT_MODEL_LAYERS[input.agent]
   if (!layers) {
     return true

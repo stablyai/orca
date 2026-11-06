@@ -1,15 +1,15 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { sanitizeWorkspaceSessionTerminalRetirements } from '../../runtime/mobile-session-terminal-persistence-retirement'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { sanitizeWorkspaceSessionTerminalRetirements } from '../../runtime/terminal/surface/mobile-session-terminal-persistence-retirement'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { setMigrationUnsupportedPty } from '../../agent-hooks/migration-unsupported-pty-state'
-import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
-import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session-browser-history'
-import { migrateWorkspaceSessionTerminalScrollbackSnapshots } from '../../terminal-scrollback-snapshots'
+import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session/workspace-session-terminal-buffers'
+import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session/workspace-session-browser-history'
+import { migrateWorkspaceSessionTerminalScrollbackSnapshots } from '../../pty/scrollback/terminal-scrollback-snapshots'
 import {
   deleteRemovedTerminalScrollbackSnapshotsAsync,
   migrateWorkspaceSessionTerminalScrollbackSnapshotsAsync
-} from '../../terminal-scrollback-snapshot-async-migration'
+} from '../../pty/scrollback/terminal-scrollback-snapshot-async-migration'
 import { preserveRuntimeAuthoredWorkspaceSessionFields } from '../runtime-authored-workspace-session-fields'
 import { dropClosedTerminalTabs } from '../closed-terminal-tab-write-fence'
 import { keepWslMoveFrozenSessionsForStore } from '../moving-wsl-projects/wsl-move-session-freeze'
@@ -39,15 +39,14 @@ export function setLocalWorkspaceSession(
   const context = getSessionSnapshotOperationsContext(owner)
   const prior = context.runtime.state.workspaceSession
   session = keepWslMoveFrozenSessionsForStore(session, prior)
-  // Why here and not at the callers: the before-unload stage path writes the renderer's payload
-  // straight through, so a per-caller guard leaves the quit write erasing runtime-authored rows.
+  // Quit staging bypasses caller guards; preserve runtime fields at the shared write boundary.
   session = dropClosedTerminalTabs(preserveRuntimeAuthoredWorkspaceSessionFields(session, prior))
   session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
   session = pruneWorkspaceSessionBrowserHistory(
     pruneLocalTerminalScrollbackBuffers(session, context.runtime.state.repos)
   )
 
-  // Why (Issue #217): merge existing bindings when the incoming binding is empty, so a stale pre-spawn snapshot can't overwrite the durable PTY binding.
+  // Recover bindings from stale pre-spawn snapshots without reviving proven closes.
   const normalized = normalizeWorkspaceSessionPaneIdentities(session, prior?.terminalLayoutsByTabId)
   for (const entry of normalized.migrationUnsupportedEntries) {
     setMigrationUnsupportedPty(entry)
@@ -112,7 +111,7 @@ export function setLocalWorkspaceSession(
       retainedScrollbackRefs(context.runtime)
     )
   }
-  // Why last: the steps above rebase rows on the stored ones; the groups set the order.
+  // Apply group ordering after prior steps finish rebasing stored rows.
   session = orderTerminalRowsByTabGroups(session)
   context.runtime.state.workspaceSession = session
   if (deferSnapshotFiles) {

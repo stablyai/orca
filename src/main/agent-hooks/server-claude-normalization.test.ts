@@ -63,8 +63,6 @@ describe('Claude hook normalization', () => {
   })
 
   it('flags a PostToolUse preview as tool output so native chat will not show it as the reply', () => {
-    // Regression: a Bash result rendered verbatim as an immortal "assistant" bubble in
-    // mobile native chat. The status card still gets the preview; only its provenance is new.
     const result = _internals.normalizeHookPayload(
       'claude',
       buildBody({
@@ -104,7 +102,6 @@ describe('Claude hook normalization', () => {
       }),
       'production'
     )
-    // The prose turn must not inherit the previous tool result's flag.
     const stopped = _internals.normalizeHookPayload(
       'claude',
       buildBody({
@@ -132,7 +129,7 @@ describe('Claude hook normalization', () => {
   })
 
   it('PostToolUse for an unknown tool surfaces the name without input', () => {
-    // Why: a per-tool allowlist picks the preview field; unrecognized tools render name-only to avoid guessing a misleading field (e.g. an opaque ID).
+    // Unknown tools have no safe preview-field mapping; show only the name.
     const result = _internals.normalizeHookPayload(
       'claude',
       buildBody({
@@ -414,11 +411,10 @@ describe('Claude hook normalization', () => {
     })
 
     it('finds an assistant reply that sits past the first chunk boundary', () => {
-      // Why: large tool_result entries push the final reply past the first 64 KB chunk; the scan must keep reading backward to find it.
+      // Large tool results force the backward scan beyond its first 64-KB chunk.
       const filler = 'x'.repeat(70_000)
       const lines = [
         { role: 'assistant', message: { role: 'assistant', content: 'deeply buried reply' } },
-        // 70 KB of tool_result content straddling the first chunk boundary.
         {
           role: 'user',
           message: {
@@ -476,7 +472,6 @@ describe('Claude hook normalization', () => {
       }),
       'production'
     )
-    // Stop event has no tool fields, so the merged snapshot must keep the earlier PreToolUse values.
     const stop = _internals.normalizeHookPayload(
       'claude',
       buildBody({ hook_event_name: 'Stop' }),

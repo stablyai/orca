@@ -7,14 +7,10 @@ export type SourceControlEntryOperation = 'stage' | 'unstage' | 'discard'
 
 const ENTRY_FAILURE_TOAST_ID = 'source-control-entry-mutation'
 
-// Why: worktreeId is nullable, so an occupancy wrapper distinguishes an empty slot from a null-owned one.
+// Wrap nullable ownership to distinguish an empty slot from a null-owned one.
 let entryFailureSlotOwner: { worktreeId: string | null } | null = null
 
-/**
- * Clears the shared entry-failure slot once an attempt — or its retry — lands, but only when the
- * completing attempt is the one that filled it: a slow retry in a worktree the user has left must
- * not erase a failure the worktree they moved to has since raised into the same slot.
- */
+/** Dismiss only the completing attempt's workspace slot so slow old retries cannot erase another workspace's failure. */
 export function dismissSourceControlEntryFailureToast(worktreeId: string | null): void {
   if (!entryFailureSlotOwner || entryFailureSlotOwner.worktreeId !== worktreeId) {
     return
@@ -56,14 +52,7 @@ function entryFailureTitle(
   }
 }
 
-/**
- * Per-row stage/unstage/discard failure. Bulk callers aggregate their own failures into one toast
- * instead — see `reportBulkMutationFailure` and the discard-all summary in `use-discard-confirmation`.
- *
- * A failure belonging to a worktree the user has since left is still reported — silence is the bug
- * this exists to remove — but it names that worktree and offers no action, because every recovery
- * affordance here is bound to the repo the attempt ran against.
- */
+/** Report row failures after navigation with their workspace name and no stale actions; bulk callers aggregate separately. */
 export function showSourceControlEntryFailureToast({
   operation,
   filePath,
@@ -99,16 +88,14 @@ export function showSourceControlEntryFailureToast({
     {
       id: ENTRY_FAILURE_TOAST_ID,
       description: readIpcErrorMessage(error),
-      // Why: sonner's 4s default retires the Retry button before a user reading the path can click it.
+      // Allow time to read the path and reach Retry before Sonner dismisses the toast.
       duration: offerRetry ? 10000 : undefined,
       action:
         offerRetry && onRetry
           ? {
               label: translate('auto.components.right.sidebar.SourceControl.286dbda4d6', 'Retry'),
               onClick: (event) => {
-                // Why: sonner dismisses on action click and its pending removal filters by id, so a
-                // retry that re-fails inside that window would take the re-raised toast with it. The
-                // caller owns this slot instead: it dismisses on success and re-raises on failure.
+                // Own dismissal instead of Sonner's delayed ID removal, which could erase a fast retry failure in the same slot.
                 event.preventDefault()
                 if (useAppStore.getState().activeWorktreeId !== worktreeId) {
                   dismissSourceControlEntryFailureToast(worktreeId)

@@ -4,17 +4,12 @@ import { armFloatingPanelReclaimIntent } from '@/lib/floating-workspace-focus-re
 import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
 import { selectFloatingVisibleTabCount } from '@/store/selectors'
 
-/**
- * What a close does if it leaves its workspace with no tabs. Capture it when the close is requested
- * and run it once the close lands: removing the focused pane blurs it, so panel ownership has to be
- * read up front.
- */
+/** Capture panel ownership before prompts/removal blur it; run the captured reaction only after the close lands. */
 export function captureWorkspaceEmptiedReaction(
   worktreeId: string,
   options?: { floatingPanelGuestOwned?: boolean }
 ): () => void {
-  // Why per workspace: an emptied worktree is left, but the floating panel is never the active
-  // worktree — emptying it from inside instead keeps keyboard ownership for the next Cmd/Ctrl+T.
+  // Emptying the floating panel retains keyboard ownership; emptying a worktree leaves that worktree.
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     const panelOwned =
       options?.floatingPanelGuestOwned === true || isFloatingWorkspacePanelFocused()

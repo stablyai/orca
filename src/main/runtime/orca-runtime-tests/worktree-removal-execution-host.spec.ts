@@ -1,10 +1,9 @@
-import {
-  OrcaRuntimeService,
-  listWorktrees,
-  listWorktreesStrict,
-  removeWorktree
-} from '../orca-runtime-test-mocks.spec'
-import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import { listWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
+import { removeWorktree } from '../../git/worktrees/removal/worktree-removal'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -14,17 +13,21 @@ import {
   TEST_WORKTREE_PATH,
   makeWorktreeMeta,
   store
-} from '../orca-runtime-test-fixtures.spec'
-import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { createWorktreeRemovalRuntime } from './orca-runtime-test-scenario-builders.spec'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { RuntimeStore } from '../runtime-store-contract'
-import type { WorktreeRemovalRecord } from '../../worktree-removal-records'
-import { failedWorktreeRemovals, pendingWorktreeRemovals } from '../../worktree-removal-table'
+import type { WorktreeRemovalRecord } from '../../workspaces/removal/worktree-removal-records'
+import {
+  failedWorktreeRemovals,
+  pendingWorktreeRemovals
+} from '../../workspaces/removal/worktree-removal-table'
 import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests
-} from '../../worktree-background-removal'
-import { RuntimeWorktreeRemovalInFlight } from '../runtime-worktree-removal-in-flight'
+} from '../../workspaces/removal/worktree-background-removal'
+import { RuntimeWorktreeRemovalInFlight } from '../workspaces/removal/runtime-worktree-removal-in-flight'
+import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 const REMOTE_REPO_PATH = '/remote/repo'
 
@@ -42,8 +45,8 @@ function makeRemoteRepoStore(
   const metaById: Record<string, WorktreeMeta> = {
     [TEST_WORKTREE_ID]: makeWorktreeMeta({ hostId: executionHostId, ...metaOverrides })
   }
-  const removeWorktreeMeta = vi.fn((worktreeId: string, hostId?: string) => {
-    if (!hostId || metaById[worktreeId]?.hostId === hostId) {
+  const removeWorktreeMeta = vi.fn(({ id: worktreeId, hostId }: HostWorktreeTarget) => {
+    if (metaById[worktreeId]?.hostId === hostId) {
       delete metaById[worktreeId]
     }
   })
@@ -57,7 +60,7 @@ function makeRemoteRepoStore(
       getRepo: (id: string) => (id === repo.id ? repo : undefined),
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       },
@@ -84,7 +87,7 @@ describe('OrcaRuntimeService worktree removal execution host', () => {
         allowUnverifiedPtyStop: false,
         hostId: 'ssh:target-a'
       })
-    ).rejects.toThrow('Remote connection dropped')
+    ).rejects.toThrow('isn’t served by Orca’s server')
 
     expect(listWorktreesStrict).not.toHaveBeenCalled()
     expect(removeWorktree).not.toHaveBeenCalled()
@@ -160,12 +163,12 @@ class RemovalRuntime extends OrcaRuntimeService {
     return this.removeManagedWorktreeInFlight
   }
 
-  protected override purgeRemovedWorktree(
+  protected override async purgeRemovedWorktree(
     runtimeStore: RuntimeStore,
     worktreeId: string,
     repoId: string,
     hostId?: ExecutionHostId
-  ): void {
+  ): Promise<void> {
     this.purges.push({ store: runtimeStore, worktreeId, repoId, hostId })
   }
 
@@ -178,6 +181,7 @@ class RemovalRuntime extends OrcaRuntimeService {
       { kind: 'local' },
       { id: record.worktreeId, path: record.worktreePath },
       [],
+      {},
       {}
     )
   }

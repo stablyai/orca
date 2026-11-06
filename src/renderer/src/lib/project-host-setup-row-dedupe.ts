@@ -5,19 +5,33 @@ import type {
   ReadyProjectHostSetupOption
 } from './project-host-setup-options'
 
+export type SelectedProjectHostSetup = { projectHostSetupId: string; hostId: ExecutionHostId }
+
 /** Collapses ready setup rows to one per host, then one per checkout on a merged machine. */
 export function dedupeReadySetupRows(
   options: readonly ReadyProjectHostSetupOption[],
-  hostById: ReadonlyMap<ExecutionHostId, ExecutionHostRegistryEntry>
+  hostById: ReadonlyMap<ExecutionHostId, ExecutionHostRegistryEntry>,
+  selected?: SelectedProjectHostSetup | null
 ): ReadyProjectHostSetupOption[] {
-  return collapseMergedHostCheckouts(options.filter(dedupeByHost()), hostById)
+  return collapseMergedHostCheckouts(
+    selectedFirst(options, selected).filter(dedupeByHost()),
+    hostById
+  )
 }
 
-// Why: a project resolves to at most one setup per host — resolveWorkspaceCreationTarget takes the
-// first project+host match and ignores the rest, so extra same-host setups are unreachable. Legacy
-// profiles can still hold them (a linked worktree added as its own project projects a second local
-// setup), which rendered as repeated identical "Local Mac" rows. Keep the first in input order so
-// the row shown is the one workspace creation actually uses.
+// Per-host dedupe keeps the first row, so a host with several checkouts shows the selected one.
+function selectedFirst(
+  options: readonly ReadyProjectHostSetupOption[],
+  selected: SelectedProjectHostSetup | null | undefined
+): readonly ReadyProjectHostSetupOption[] {
+  const isSelected = (option: ReadyProjectHostSetupOption): boolean =>
+    option.id === selected?.projectHostSetupId && option.hostId === selected.hostId
+  return selected
+    ? [...options.filter(isSelected), ...options.filter((option) => !isSelected(option))]
+    : options
+}
+
+// One row per host; the project picker lists a host's other checkouts, so Run on only switches host.
 function dedupeByHost(): (option: ReadyProjectHostSetupOption) => boolean {
   const seenHosts = new Set<ExecutionHostId>()
   return (option) => {
@@ -29,10 +43,7 @@ function dedupeByHost(): (option: ReadyProjectHostSetupOption) => boolean {
   }
 }
 
-// Why: an SSH host and its managed Orca server are one machine, and both can report the same
-// checkout (the old SSH repo locally, the server's own setup remotely), which rendered as two
-// identical rows. Keep the one on the row the picker shows, the route serving the host now. A
-// different path on the other id is a distinct checkout, so it keeps its own row.
+// SSH and managed server may report the same machine/checkout; keep the picker’s current route. Distinct paths remain separate checkouts.
 function collapseMergedHostCheckouts(
   options: readonly ReadyProjectHostSetupOption[],
   hostById: ReadonlyMap<ExecutionHostId, ExecutionHostRegistryEntry>

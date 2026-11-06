@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { translate } from '@/i18n/i18n'
 
 export function dismissStaleAgentRowByKey(paneKey: string): void {
@@ -20,7 +20,6 @@ export function dismissStaleAgentRowByKey(paneKey: string): void {
   }
 }
 
-/** The one notice for a click that reaches an agent whose pane is gone. */
 export function showAgentPaneUnavailable(id?: string): void {
   toast.info(
     translate(

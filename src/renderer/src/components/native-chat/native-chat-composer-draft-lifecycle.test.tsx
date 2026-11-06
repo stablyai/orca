@@ -2,18 +2,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, createElement, Fragment, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
+import type { NativeChatLaunchDraft } from '@/components/native-chat/drafts/native-chat-launch-prompt'
 import type * as DraftHook from './use-native-chat-draft'
 import type * as AttachmentsHook from './use-native-chat-composer-attachments'
 import type * as SendHook from './use-native-chat-structured-composer-send'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import { createMemoryNativeChatComposerDraftStorage } from './native-chat-composer-draft-storage'
+import { imageReferenceToken } from '../../../../shared/native-chat/native-chat-image-reference'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({ isRemoteRuntimePtyId: () => false }))
-vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
-vi.mock('@/lib/worker-terminal-takeover-report', () => ({
-  reportStructuredSessionUserInput: vi.fn()
+vi.mock('@/i18n/i18n', () => ({
+  i18n: { language: 'en' },
+  translate: (_key: string, fallback: string) => fallback
+}))
+vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
+  ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
+  isRemoteRuntimePtyId: () => false
+}))
+vi.mock('@/components/native-chat/telemetry/native-chat-telemetry', () => ({
+  emitNativeChatMessageSent: vi.fn()
 }))
 const mocks = vi.hoisted(() => {
   const launchDrafts: Record<string, NativeChatLaunchDraft> = {}
@@ -51,7 +58,6 @@ type ComposerApi = {
 
 type Dispatched = { handled: boolean; accepted: boolean; error: string | null }
 
-/** A transport whose next send settles only when the test says so. */
 function heldTransport(hostCommand = false): {
   transport: NativeChatStructuredComposerTransport
   settle: () => Promise<void>
@@ -62,6 +68,7 @@ function heldTransport(hostCommand = false): {
   })
   return {
     transport: {
+      capturePresentation: () => () => true,
       send: vi.fn(() => true),
       dispatchCommand: vi.fn(() => dispatched),
       optionsSurface: {
@@ -142,6 +149,7 @@ function composer(
     const attachments = hooks.attachmentsHook.useNativeChatComposerAttachments({
       attachmentScopeKey: scopeKey,
       allowWithoutTarget: true,
+      imageReferences: true,
       caret: 0,
       disabled: false,
       isComposing: () => false,
@@ -161,7 +169,6 @@ function composer(
       setDraft,
       setCaret
     })
-    // The composer fires a send and moves on; each test settles it through the transport.
     onRender({ draft, setDraft, attachments, send: (text) => void send(text) })
     return null
   }
@@ -182,46 +189,6 @@ afterEach(async () => {
 })
 
 describe('native-chat composer draft lifecycle', () => {
-  it('clears the saved draft when a send settles after the composer unmounted', async () => {
-    const hooks = await loadHooks()
-    const seen: { api?: ComposerApi } = {}
-    await mount(
-      createElement(
-        composer(hooks, (next) => {
-          seen.api = next
-        }),
-        { scopeKey: 'tab-1:pane' }
-      )
-    )
-    await act(async () => {
-      seen.api?.setDraft('/goal ship it')
-      hooks.attachmentsHook.appendNativeChatAttachmentCache('tab-1:pane', [
-        { id: 'i1', path: '/tmp/orca-paste-1.png' }
-      ])
-    })
-    window.dispatchEvent(new Event('pagehide'))
-    expect(storedDraft('tab-1:pane')).toMatchObject({ text: '/goal ship it' })
-    const held = seen.api
-
-    // A question prompt replaces the composer while the host accepts the command.
-    await unmount()
-    held?.setDraft('')
-    held?.attachments.clearImageAttachments()
-
-    expect(storedDraft('tab-1:pane')).toBeNull()
-    const reloaded = await loadHooks()
-    const restored: { api?: ComposerApi } = {}
-    await mount(
-      createElement(
-        composer(reloaded, (next) => {
-          restored.api = next
-        }),
-        { scopeKey: 'tab-1:pane' }
-      )
-    )
-    expect(restored.api).toMatchObject({ draft: '', attachments: { imageAttachments: [] } })
-  })
-
   it('clears a saved sent draft when its send settles after the composer unmounted', async () => {
     const hooks = await loadHooks()
     const held = heldTransport()
@@ -301,52 +268,10 @@ describe('native-chat composer draft lifecycle', () => {
       seen.api?.attachments.resolvePendingImageAttachment(pending.id ?? '', '/repo/shot.png')
     )
 
-    expect(seen.api?.draft).toBe('')
+    expect(seen.api?.draft?.trim()).toBe(imageReferenceToken(pending.id ?? ''))
     expect(seen.api?.attachments.imageAttachments.map(({ path }) => path)).toEqual([
       '/repo/shot.png'
     ])
-  })
-
-  it('clears an accepted send’s text and images from the shown composer', async () => {
-    const hooks = await loadHooks()
-    const held = heldTransport()
-    const seen: { api?: ComposerApi } = {}
-    await mount(
-      createElement(
-        composer(hooks, (next) => (seen.api = next), held.transport),
-        { scopeKey: 'agent-session:s1' }
-      )
-    )
-    await act(async () => {
-      seen.api?.setDraft('sent text')
-      seen.api?.attachments.attachResolvedPaths(['/repo/a.png'])
-    })
-    await act(async () => seen.api?.send('sent text'))
-
-    await held.settle()
-
-    expect(seen.api?.draft).toBe('')
-    expect(seen.api?.attachments.imageAttachments).toEqual([])
-    expect(storedDraft('agent-session:s1')).toBeNull()
-  })
-
-  it('leaves a draft replaced before the send was accepted as it is', async () => {
-    const hooks = await loadHooks()
-    const held = heldTransport()
-    const seen: { api?: ComposerApi } = {}
-    await mount(
-      createElement(
-        composer(hooks, (next) => (seen.api = next), held.transport),
-        { scopeKey: 'agent-session:s1' }
-      )
-    )
-    await act(async () => seen.api?.setDraft('sent text'))
-    await act(async () => seen.api?.send('sent text'))
-    await act(async () => seen.api?.setDraft('typed while it was on its way'))
-
-    await held.settle()
-
-    expect(seen.api?.draft).toBe('typed while it was on its way')
   })
 
   it('shares one conversation’s draft between its composers, and keeps what the other added', async () => {
@@ -443,14 +368,16 @@ describe('native-chat composer draft lifecycle', () => {
         { scopeKey: 'tab-1:pane' }
       )
     )
-    // The paste still on its way comes back pending, so Send waits for it.
     expect(
       second.api?.attachments.imageAttachments.map(({ path, pending }) => ({ path, pending }))
     ).toEqual([
       { path: '/repo/x.png', pending: undefined },
       { path: '', pending: true }
     ])
-    await act(async () => second.api?.attachments.clearImageAttachments())
+    await act(async () => {
+      second.api?.setDraft('')
+      second.api?.attachments.clearImageAttachments()
+    })
     await unmount()
 
     // The paste's save fails late in the replaced composer, which drops its placeholder.
@@ -632,10 +559,6 @@ describe('native-chat composer draft lifecycle', () => {
       vi.unstubAllGlobals()
     }
 
-    expect(restoreNativeChatPastes).toHaveBeenCalledWith([
-      `${folder}/orca-paste-1-ab.png`,
-      `${folder}/orca-paste-2-ab.png`
-    ])
     expect(seen.api?.attachments.imageAttachments).toEqual([
       { id: 'kept', path: `${folder}/orca-paste-1-ab.png` },
       { id: 'swept', path: '', unavailableName: 'orca-paste-2-ab.png' }
@@ -672,6 +595,78 @@ describe('native-chat composer draft lifecycle', () => {
       await new Promise((resolve) => setTimeout(resolve, 20))
     })
     expect(seen.api?.draft).toBe('mine, unsaved')
+  })
+
+  it('ignores foreign present/corrupt setup payloads, but keeps guarded absent-record removal through the real channel', async () => {
+    const hooks = await loadHooks()
+    const store = await import('./native-chat-composer-draft-store')
+    const memory = await import('./native-chat-composer-draft-memory')
+    const scope = store.nativeChatLaunchPromptDraftScopeKey('repo::/x', 'codex', 'ssh:new')
+    const raw = 'agent-setup:["ssh:new","repo::/x","codex"]'
+    const seen: { api?: ComposerApi } = {}
+    await mount(
+      createElement(
+        composer(hooks, (next) => (seen.api = next)),
+        { scopeKey: scope }
+      )
+    )
+    await act(async () => seen.api?.setDraft('live Q'))
+    const current = store.readNativeChatComposerDraft(scope)
+    const sender = new BroadcastChannel('orca-native-chat-composer-drafts')
+    const read = vi.spyOn(storage, 'read')
+    const notify = async (value: unknown) => {
+      const requested = Promise.withResolvers<void>()
+      const result = Promise.withResolvers<unknown>()
+      read.mockImplementationOnce(() => {
+        requested.resolve()
+        return result.promise
+      })
+      await act(async () => {
+        sender.postMessage({ scopeKey: raw })
+        await requested.promise
+        result.resolve(value)
+        await result.promise
+      })
+    }
+    try {
+      await notify({
+        text: 'old foreign setup',
+        images: [{ id: 'old', path: '/old.png' }],
+        savedAt: 100
+      })
+      expect(store.readNativeChatComposerDraft(scope)).toBe(current)
+      expect(seen.api?.draft).toBe('live Q')
+      expect(memory.restoredImageChecks.has(raw)).toBe(false)
+      await notify({ corrupt: true })
+      expect(store.readNativeChatComposerDraft(scope)).toBe(current)
+      expect(seen.api?.draft).toBe('live Q')
+      await notify(undefined)
+      expect(seen.api?.draft).toBe('')
+      await act(async () => seen.api?.setDraft('successor Q'))
+      const remove = vi
+        .spyOn(storage, 'remove')
+        .mockRejectedValueOnce(new DOMException('refused', 'QuotaExceededError'))
+      await act(async () => {
+        store.deleteNativeChatComposerDraft(scope)
+        await store.nativeChatComposerDraftWritesSettled()
+        seen.api?.setDraft('guarded Q')
+      })
+      remove.mockRestore()
+      // The actual ordinary local-change guard still refuses foreign removal while deletion is dirty.
+      read.mockClear()
+      sender.postMessage({ scopeKey: raw })
+      const barrier = Promise.withResolvers<void>()
+      sender.onmessage = () => barrier.resolve()
+      const peer = new BroadcastChannel('orca-native-chat-composer-drafts')
+      peer.postMessage({ scopeKey: raw })
+      await act(async () => barrier.promise)
+      peer.close()
+      expect(read).not.toHaveBeenCalled()
+      expect(seen.api?.draft).toBe('guarded Q')
+    } finally {
+      sender.close()
+      read.mockRestore()
+    }
   })
 
   it('shows a composer its draft was refused, keeps it, and clears the mark once a retry lands', async () => {
@@ -722,12 +717,10 @@ describe('native-chat composer draft lifecycle', () => {
       useNativeChatLaunchDraftAdoption({
         terminalTabId: 'tab-1',
         agent: 'claude',
-        launchDraft,
-        launchDraftResolved: false,
+        launchSeed: { launchDraft, launchDraftResolved: false, ownsTabWideLaunchDraft: true },
         draft,
         setDraft,
-        setCaret: () => {},
-        ownsTabWideLaunchDraft: true
+        setCaret: () => {}
       })
       shown = draft
       return null

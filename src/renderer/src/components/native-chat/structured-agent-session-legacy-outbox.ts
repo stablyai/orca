@@ -1,21 +1,17 @@
-// Older builds kept each chat's unsent messages in localStorage and sent them on their own. Nothing
-// sends from that copy any more: the first time a chat opens, each message there that its host does
-// not hold goes back to the chat's composer, and the copy is deleted once that is saved.
-// Temporary: builds before this change wrote the copy. In the first release on or after 2027-04-01,
-// replace this read with a one-time removal of every key under the prefix.
-
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
-import type { AgentSessionWriteNoticePart } from '../../../../shared/agent-session-write-notice-copy'
-import { agentSessionWriteNotDoneParts } from '../../../../shared/agent-session-refusal-notice'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionWriteNoticePart } from '../../../../shared/agent-session/failures/agent-session-write-notice-copy'
+import { agentSessionWriteNotDoneParts } from '../../../../shared/agent-session/failures/agent-session-refusal-notice'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { readStructuredAgentSessionConversationOutline } from '@/runtime/structured-agent-session-client'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import { handBackStructuredAgentSessionMessage } from './structured-agent-session-message-hand-back'
 import { setStructuredAgentSessionSendNotice } from './structured-agent-session-pending-sends'
+// Return legacy unsent copies to the composer only if the host holds neither message nor card; delete only after durable hand-back.
+// On the first release on/after 2027-04-01, replace legacy recovery with one-time prefix-key removal.
 
 const LEGACY_OUTBOX_PREFIX = 'orca:desktopStructuredAgentSessionOutbox:v1:'
 
@@ -50,7 +46,6 @@ function legacyQueuedAt(entry: unknown): number {
   return isRecord(entry) && typeof entry.queuedAt === 'number' ? entry.queuedAt : Infinity
 }
 
-/** In the order they were sent, as the older build read them. */
 export function readLegacyStructuredAgentSessionOutbox(sessionId: string): LegacyOutboxMessage[] {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(legacyKey(sessionId)) ?? '[]')
@@ -80,12 +75,7 @@ export function readLegacyStructuredAgentSessionOutbox(sessionId: string): Legac
 
 const recovering = new Set<string>()
 
-/**
- * Hands back what a chat's legacy copy holds that its host does not, asking the host rather than
- * reading the loaded page: the conversation outline lists every message the chat draws, and the
- * queue every card. A message neither shows comes back worded as not sent when the outline is
- * whole, and as unconfirmed when it is not or the host can't say. Never sends anything.
- */
+/** Check full host outline/queue, never just loaded pages; return missing messages as not sent only with complete evidence, otherwise unconfirmed. Never resend. */
 export async function recoverLegacyStructuredAgentSessionOutbox(args: {
   sessionId: string
   target: RuntimeClientTarget
@@ -137,7 +127,7 @@ export async function recoverLegacyStructuredAgentSessionOutbox(args: {
           ? ['sendOutcomeLost']
           : agentSessionWriteNotDoneParts('composer-send')
     }
-    if (notice) {
+    if (notice && !notice.includes('sendOutcomeLost')) {
       setStructuredAgentSessionSendNotice(sessionId, agentSessionWriteNoticeText(notice))
     }
     if (durable) {

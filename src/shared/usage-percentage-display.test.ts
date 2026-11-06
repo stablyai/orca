@@ -18,8 +18,7 @@ describe('usage percentage display', () => {
 
   it('rounds and bounds percentages for display', () => {
     expect(getDisplayedUsagePercentage(20.5, 'used')).toBe(21)
-    // Complement is taken from the rounded used value (21), so remaining is 79 —
-    // it must not round the complement independently to 80. (#7574)
+    // Complement the rounded used value: 20.5 → 21 used → 79 remaining, not independently rounded 80 (#7574).
     expect(getDisplayedUsagePercentage(20.5, 'remaining')).toBe(79)
     expect(getDisplayedUsagePercentage(120, 'remaining')).toBe(0)
     expect(getDisplayedUsagePercentage(-20, 'used')).toBe(0)

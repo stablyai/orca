@@ -11,6 +11,12 @@ export const WorkspacePortKillParams = z.object({
   port: requiredNumber('Missing port')
 })
 
+export const WorkspacePortProbePageParams = z.object({
+  host: requiredString('Missing host'),
+  port: requiredNumber('Missing port'),
+  protocol: z.enum(['http', 'https'])
+})
+
 export const WorkspacePortScanHostParams = z.object({
   worktree: requiredString('Missing worktree selector')
 })

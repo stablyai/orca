@@ -1,35 +1,17 @@
 import type { FileWithMtime } from '../ai-vault/session-scanner-types'
 
-// Why the index keeps its own cursor: the parse cache's cursor answers "what
-// does the session list already show", which is a different question from "what
-// bytes of this file are already rows". They diverge the moment either side
-// declines a read, so neither may consult the other.
+// Index and parse-cache cursors can diverge when either declines a read; track them independently.
 
-/** Filesystem identity, when discovery could prove it. */
 export type SessionSearchFileIdentity = { dev: number; ino: number } | null
 
-/**
- * What the index holds for one transcript.
- *
- * A null `byteOffset` is a file the index holds rows for and cannot continue:
- * a chunked read committed a prefix, and the reader only hands out an offset
- * when a read finishes. Null rather than a flag because every caller that does
- * arithmetic on the offset then has to say what it means here, at compile time,
- * instead of ignoring a boolean it did not know to read.
- */
+/** A null byteOffset marks a committed prefix that needs a whole read before it can resume. */
 export type SessionSearchIndexedFile = {
   byteOffset: number | null
   mtimeMs: number
   sizeBytes: number | null
 }
 
-/**
- * Whether this file has to be read from the start, whatever its stat says.
- *
- * The mtime and size are the real ones, so a freshness check that compares only
- * those would call a half-written file current and never re-read it. Every such
- * check must start here.
- */
+/** Partial writes require whole reads even when mtime and size still match. */
 export function requiresWholeRead(indexed: SessionSearchIndexedFile | null): boolean {
   return indexed !== null && indexed.byteOffset === null
 }

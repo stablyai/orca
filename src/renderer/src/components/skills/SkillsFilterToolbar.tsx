@@ -117,8 +117,7 @@ export function SkillsFilterToolbar({
           </Tooltip>
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          {/* Why: the view switch shares the chips' pill shape so the row reads
-              as one control strip; the rule marks where filtering starts. */}
+          {/* Match chip pill shapes; the divider separates view selection from filters. */}
           <ToggleGroup
             type="single"
             variant="outline"
@@ -144,8 +143,7 @@ export function SkillsFilterToolbar({
                 size="sm"
                 spacing={1}
                 value={filters.sourceKind}
-                // Why: Radix reports '' when the active item is pressed again; the
-                // list must always have a source filter, so re-press falls back to all.
+                // Radix emits empty on re-press; fall back to all so a source filter always remains selected.
                 onValueChange={(value) =>
                   onFiltersChange({
                     ...filters,

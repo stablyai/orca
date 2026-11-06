@@ -3,11 +3,9 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { OrcadMigrationBlobDescriptor } from '../../../shared/orcad-migration-blob-transfer'
-import {
-  ORCAD_MIGRATION_MANIFEST_VERSION,
-  type OrcadMigrationManifest
-} from '../../../shared/orcad-migration-manifest'
+import type { OrcadMigrationBlobDescriptor } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
+import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../../shared/orcad-migration/orcad-migration-manifest-validation'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import {
   abortOrcadMigrationBlobs,
   assertOrcadMigrationBlobSetMatches,
@@ -28,14 +26,14 @@ beforeEach(() => {
 afterEach(() => rmSync(root, { recursive: true, force: true }))
 
 describe('orcad migration blob staging', () => {
-  it('stages, resumes from disk after a restart, and accepts only exact retries', () => {
+  it('stages, reloads progress from disk, and accepts only exact retries', () => {
     const bytes = Buffer.from('echo one\necho two 🐋\n', 'utf8')
     const descriptor = blob('shell-history', `${'a'.repeat(16)}-zsh`, bytes)
     const manifest = migrationManifest('resume')
     const first = bytes.subarray(0, 9)
 
     expect(stage(manifest, descriptor, 0, first).receivedBytes).toBe(first.length)
-    // A fresh read of the directory is all a restarted host has.
+    // Restart recovery must depend only on the directory.
     expect(inspectOrcadMigrationBlobUploads(manifest, root)).toEqual([
       { ...descriptor, receivedBytes: first.length }
     ])
@@ -191,7 +189,7 @@ describe('orcad migration blob staging', () => {
     stage(manifest, record, 0, recordBytes)
     assertOrcadMigrationBlobSetMatches(manifest, root, [history, record])
 
-    // A retry after a commit that moved the blobs still sees the whole set, from received.
+    // Retried commits must include blobs already moved to received.
     commitOrcadMigrationBlobs(manifest, root)
     assertOrcadMigrationBlobSetMatches(manifest, root, [history, record])
     expect(() => assertOrcadMigrationBlobSetMatches(manifest, root, [history])).toThrow(

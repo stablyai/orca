@@ -1,31 +1,29 @@
-/**
- * Bounds the desktop's `<userData>/orcad-artifacts` slot cache: per target, keep the most
- * recently used slots and evict the rest at startup. The cache survives uninstall (it lives in userData); this is what keeps it small.
- *
- * Never evicted: a slot this process materialized (an SSH deploy may be reading it), the slot
- * a live local orcad serve runs from (named by the profile's instance lock), and the slot a
- * surviving terminal daemon runs from (named by its PID record).
- */
+// Bound persistent artifact caches while retaining materialized, live-server and daemon slots.
+// Unknown machine/boot ownership must preserve slots too.
 import { readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { nodeRuntimeAsset } from '../../shared/node-runtime-pin'
 import { ORCAD_LOCK_FILE_NAME, readOrcadInstanceLockRecord } from './orcad-instance-lock'
+import { orcadPeerPidIsJudgeableHere } from './orcad-lock-holder-locality'
 import { materializedOrcadArtifactVersions } from './orcad-artifact-materializer'
-import { isProcessAlive } from '../daemon/daemon-process-inspection'
-import { liveDaemonOrcadSlots } from './orcad-daemon-slot-pins'
+import { orcadArtifactSlotVersion } from './orcad-artifact-slot-name'
+import { isProcessAlive } from '../daemon/endpoint/identity/daemon-process-inspection'
+import {
+  defaultOrcadSlotPeerJudge,
+  liveDaemonOrcadSlots,
+  type OrcadSlotPeerJudge
+} from './orcad-daemon-slot-pins'
 
-/** The in-use slot plus the two most recent others (the newest three when none is in use). */
-export const ORCAD_ARTIFACT_CACHE_KEEP = 3
+/** In-use slot plus two others, or the newest three when none is in use. */
+const ORCAD_ARTIFACT_CACHE_KEEP = 3
 
-const REPAIR_SUFFIX = /\.repair-\d+$/u
-
-export type OrcadArtifactCachePruneOptions = {
+type OrcadArtifactCachePruneOptions = {
   keep?: number
-  /** Slot versions to keep whatever their age. */
   inUseVersions?: ReadonlySet<string>
 }
 
-/** Removes the stale slots under `cacheRoot` and returns their paths. Best effort per entry. */
+/** Evict old version slots per target, keeping the in-use version and the newest others.
+ *  Only names that parse as slots are candidates: `runtimes/` and staging dirs are never evicted (#38181). */
 export async function pruneOrcadArtifactCache(
   cacheRoot: string,
   options: OrcadArtifactCachePruneOptions = {}
@@ -40,19 +38,20 @@ export async function pruneOrcadArtifactCache(
     }
     const targetRoot = join(cacheRoot, target)
     const slots = await Promise.all(
-      // Dot entries are staging directories another process may be filling right now.
-      (await listNames(targetRoot))
-        .filter((name) => !name.startsWith('.'))
-        .map(async (name) => ({ name, mtimeMs: await mtimeOf(join(targetRoot, name)) }))
+      (await listNames(targetRoot)).flatMap((name) => {
+        const version = orcadArtifactSlotVersion(name)
+        return version
+          ? [mtimeOf(join(targetRoot, name)).then((mtimeMs) => ({ name, version, mtimeMs }))]
+          : []
+      })
     )
     const present = slots.filter(
-      (slot): slot is { name: string; mtimeMs: number } => slot.mtimeMs !== null
+      (slot): slot is { name: string; version: string; mtimeMs: number } => slot.mtimeMs !== null
     )
-    const isInUse = (name: string): boolean => inUse.has(name.replace(REPAIR_SUFFIX, ''))
-    // The in-use version counts toward `keep`; with none in use, the newest stands in for it.
-    const othersToKeep = present.some((slot) => isInUse(slot.name)) ? keep - 1 : keep
+    // The in-use version consumes one keep slot; otherwise retain the newest keep versions.
+    const othersToKeep = present.some((slot) => inUse.has(slot.version)) ? keep - 1 : keep
     const others = present
-      .filter((slot) => !isInUse(slot.name))
+      .filter((slot) => !inUse.has(slot.version))
       .sort((left, right) => right.mtimeMs - left.mtimeMs)
     for (const [index, slot] of others.entries()) {
       if (index < othersToKeep) {
@@ -70,35 +69,42 @@ export async function pruneOrcadArtifactCache(
   return removed
 }
 
-/** A pass over `<userData>/orcad-artifacts` that never evicts a slot something still runs from. */
 export function pruneDesktopOrcadArtifactCache(
   userDataPath: string,
   alsoInUse: readonly string[] = []
 ): Promise<string[]> {
   const cacheRoot = join(userDataPath, 'orcad-artifacts')
-  const daemonSlots = liveDaemonOrcadSlots(userDataPath, cacheRoot)
+  const judge = defaultOrcadSlotPeerJudge()
+  const daemonSlots = liveDaemonOrcadSlots(userDataPath, cacheRoot, isProcessAlive, judge)
   if (!daemonSlots) {
     // An unreadable daemon record could name any slot; evicting nothing is the safe answer.
     return Promise.resolve([])
   }
-  const live = liveLocalOrcadServeVersion(userDataPath)
+  const live = liveLocalOrcadServeVersion(userDataPath, isProcessAlive, judge)
   return pruneOrcadArtifactCache(cacheRoot, {
     inUseVersions: new Set([
       ...materializedOrcadArtifactVersions(),
       ...(live ? [live] : []),
-      ...daemonSlots.map((slot) => slot.replace(REPAIR_SUFFIX, '')),
+      ...daemonSlots.flatMap((slot) => orcadArtifactSlotVersion(slot) ?? []),
       ...alsoInUse
     ])
   })
 }
 
-/** The slot version a live local orcad serve runs from, or null when none holds the profile. */
+/** Keep slots used by local servers, including unverifiable ownership from other machines/boots. */
 export function liveLocalOrcadServeVersion(
   userDataPath: string,
-  isAlive: (pid: number) => boolean = isProcessAlive
+  isAlive: (pid: number) => boolean = isProcessAlive,
+  judge: OrcadSlotPeerJudge = defaultOrcadSlotPeerJudge()
 ): string | null {
   const record = readOrcadInstanceLockRecord(join(userDataPath, ORCAD_LOCK_FILE_NAME))
-  return record && record.role !== 'desktop' && isAlive(record.pid) ? record.version : null
+  if (!record || record.role === 'desktop') {
+    return null
+  }
+  const judgeable = orcadPeerPidIsJudgeableHere(record, judge.self, () =>
+    judge.dataRootIsOnLocalDisk(userDataPath)
+  )
+  return !judgeable || isAlive(record.pid) ? record.version : null
 }
 
 async function listNames(directory: string): Promise<string[]> {

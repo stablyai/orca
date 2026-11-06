@@ -20,12 +20,15 @@ import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { SkillUpdateStatusSegment } from './SkillUpdateStatusSegment'
 import { NativeChatResumeStatusSegment } from './NativeChatResumeStatusSegment'
 import { CaffeinateStatusSegment } from './CaffeinateStatusSegment'
+import { PluginsStatusSegment } from './PluginsStatusSegment'
+import { PluginStatusBarItems } from './PluginStatusBarItems'
 import { RemoteServerUpdateStatusSegment } from './RemoteServerUpdateStatusSegment'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/FloatingTerminalIconContextMenu'
 import { ClaudeSwitcherMenu } from './ClaudeSwitcherMenu'
 import { CodexSwitcherMenu } from './CodexSwitcherMenu'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
+import { AntigravityUsageMenu } from './AntigravityUsageMenu'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import { ProviderSegment, UsageOverflowChip, getUsageTone } from './StatusBarProviderSegment'
 import {
@@ -34,6 +37,7 @@ import {
   usageChipShowsPercentage
 } from './usage-unit-label'
 import { useStatusBarController } from './use-status-bar-controller'
+import { isOwnerNotSetUpPlaceholder } from './owner-usage-rate-limits'
 import { StatusBarVisibilityMenu } from './StatusBarVisibilityMenu'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 
@@ -66,6 +70,7 @@ export function StatusBarSurface({
     return null
   }
   const {
+    antigravityAccounts,
     anyFetching,
     anyVisible,
     barRef,
@@ -85,6 +90,7 @@ export function StatusBarSurface({
     isRefreshing,
     overflowing,
     petEnabled,
+    remoteOwner,
     rosterProviders,
     segmentsIconOnly,
     segmentsRef,
@@ -110,13 +116,14 @@ export function StatusBarSurface({
   return (
     <div
       ref={barRef}
+      data-orca-status-bar=""
       // Why: one line at any width — density steps down first. overflow-clip (not hidden) so focus can't scroll the bar; the clip margin spares focus rings and badge dots.
       className="flex items-center h-6 min-h-[24px] px-3 gap-4 overflow-clip [overflow-clip-margin:3px] whitespace-nowrap border-t border-border bg-[var(--bg-titlebar,var(--card))] text-xs select-none shrink-0 relative"
       onContextMenuCapture={(event) => {
         if (!shouldOpenStatusBarContextMenu(event.target)) {
           return
         }
-        // Why: mirror the app-wide right-click pattern — close peer menus, then anchor a hidden trigger at the cursor so re-clicks reposition.
+        // Close peer menus and anchor at the cursor so repeated right-clicks reposition the menu.
         event.preventDefault()
         window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
         const bounds = event.currentTarget.getBoundingClientRect()
@@ -132,10 +139,9 @@ export function StatusBarSurface({
         <div ref={usageRef} className="flex shrink-0 items-center gap-3">
           {isEmptyUsageState ? (
             showEmptyUsageCta ? (
-              <StatusBarUsageEmptyCta />
+              <StatusBarUsageEmptyCta remoteOwner={remoteOwner} />
             ) : null
           ) : hasVisibleUsageMeters ? (
-            // Consolidated roster pill → opens the all-agents Usage popover (mock parity).
             <StatusBarUsageChangeNotices hasVisibleUsageMeters={hasVisibleUsageMeters}>
               <DropdownMenu
                 open={usageMenuOpen}
@@ -192,8 +198,7 @@ export function StatusBarSurface({
                   side="top"
                   align="start"
                   sideOffset={8}
-                  // Keep the popover (and its drill-in submenus) above the status
-                  // bar instead of overlapping it — bottom padding ≈ footer height.
+                  // Reserve footer height so the popover and drill-in submenus stay above the status bar.
                   collisionPadding={{ top: 8, bottom: 32, left: 8, right: 8 }}
                   className="w-[360px] p-0"
                   onPointerDownOutside={usageMenuFocusHandoff.onPointerDownOutside}
@@ -212,9 +217,11 @@ export function StatusBarSurface({
                     onManageAccounts={handleManageAccounts}
                     onUsageDetails={handleUsageDetails}
                     renderRow={(p, rowNode) => {
-                      // Every provider drills into its detail panel (parity with the
-                      // per-provider dropdowns on main); Claude/Codex additionally get
-                      // the account switcher + runtime toggle + Codex reset credits.
+                      // Why: a placeholder has nothing to drill into; its row opens the host's accounts.
+                      if (isOwnerNotSetUpPlaceholder(p)) {
+                        return null
+                      }
+                      // Claude/Codex detail panels also expose account switching and runtime controls.
                       if (p.provider === 'claude') {
                         return (
                           <ClaudeSwitcherMenu
@@ -223,6 +230,17 @@ export function StatusBarSurface({
                             iconOnly={false}
                             asSubmenu
                             triggerContent={rowNode}
+                          />
+                        )
+                      }
+                      if (p.provider === 'antigravity') {
+                        return (
+                          <AntigravityUsageMenu
+                            antigravity={p}
+                            accounts={antigravityAccounts}
+                            compact={compact}
+                            triggerContent={rowNode}
+                            onManageAccounts={() => handleOpenProviderAccounts('antigravity')}
                           />
                         )
                       }
@@ -289,7 +307,11 @@ export function StatusBarSurface({
       >
         <div ref={segmentsRef} className="flex w-max items-center gap-3">
           {!isPairedWebClientWindow() ? (
-            <CaffeinateStatusSegment iconOnly={segmentsIconOnly} />
+            <>
+              <PluginsStatusSegment />
+              <PluginStatusBarItems iconOnly={segmentsIconOnly} />
+              <CaffeinateStatusSegment iconOnly={segmentsIconOnly} />
+            </>
           ) : null}
           <RemoteServerUpdateStatusSegment iconOnly={segmentsIconOnly} />
           <SkillUpdateStatusSegment iconOnly={segmentsIconOnly} />

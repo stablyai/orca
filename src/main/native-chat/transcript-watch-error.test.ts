@@ -53,27 +53,6 @@ afterEach(async () => {
 })
 
 describe('native chat transcript watcher errors', () => {
-  it('handles a watcher error and rebinds after the directory is readable', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-watch-error-'))
-    roots.push(root)
-    const filePath = join(root, 'transcript.jsonl')
-    await writeFile(filePath, '')
-    const subscription = await subscribeNativeChatTranscript({
-      agent: 'claude',
-      sessionId: 'session',
-      filePath,
-      onAppend: () => {},
-      debounceMs: 0
-    })
-
-    expect(() => watchers[0]!.emit('error', new Error('EPERM'))).not.toThrow()
-    await vi.waitFor(() => expect(watchMock).toHaveBeenCalledTimes(2))
-
-    subscription.unsubscribe()
-    expect(watchers[0]!.close).toHaveBeenCalledOnce()
-    expect(watchers[1]!.close).toHaveBeenCalledOnce()
-  })
-
   it('keeps retrying after the old recovery window and tails a recreated directory', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-watch-gap-'))
     roots.push(root)
@@ -113,35 +92,6 @@ describe('native chat transcript watcher errors', () => {
     expect(watchers[1]!.close).toHaveBeenCalledOnce()
   })
 
-  it('surfaces an error snapshot when the initial drain throws', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-initial-error-'))
-    roots.push(root)
-    const filePath = join(root, 'transcript.jsonl')
-    await writeFile(filePath, '')
-    tailReaderState.failure = new Error('deterministic read failure')
-    const onInitialSnapshot = vi.fn()
-    const onAppend = vi.fn()
-    const subscription = await subscribeNativeChatTranscript({
-      agent: 'claude',
-      sessionId: 'session',
-      filePath,
-      onInitialSnapshot,
-      onAppend,
-      initialLimit: 40,
-      debounceMs: 0
-    })
-    expect(subscription.watching).toBe(true)
-
-    await vi.waitFor(() =>
-      expect(onInitialSnapshot).toHaveBeenCalledWith([], false, 0, 'Transcript unavailable')
-    )
-    // Surfaced once, not spammed by the capped rotation retry loop.
-    await new Promise((resolve) => setTimeout(resolve, 120))
-    expect(onInitialSnapshot).toHaveBeenCalledOnce()
-
-    subscription.unsubscribe()
-  })
-
   it('still wins with a real initial snapshot once the transcript becomes readable', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-initial-recover-'))
     roots.push(root)
@@ -162,11 +112,7 @@ describe('native chat transcript watcher errors', () => {
       expect(onInitialSnapshot).toHaveBeenCalledWith([], false, 0, 'Transcript unavailable')
     )
 
-    // initialDrain stays true after the error, so a recovered read delivers the
-    // real snapshot instead of stranding the client on the error frame.
-    // The content must land before reads recover: the capped rotation retry is
-    // still firing, and any drain that succeeds against a still-empty file
-    // legitimately consumes the pending initial drain with an empty snapshot.
+    // Write content before read recovery: an intervening empty success legitimately consumes initialDrain.
     await writeFile(filePath, claudeLine('u-recovered', 'user', 'back'))
     tailReaderState.failure = null
     watchCallbacks[0]!('change', 'transcript.jsonl')

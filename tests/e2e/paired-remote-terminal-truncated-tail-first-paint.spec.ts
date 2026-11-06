@@ -3,15 +3,16 @@ import os from 'node:os'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import type { RuntimeTerminalRead } from '../../src/shared/runtime-types'
-import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../src/shared/protocol-version'
-import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
+import '../../src/shared/protocol-version'
+import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../src/shared/terminal/runtime-policy/terminal-runtime-capabilities'
+import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
 import { expect, test } from './helpers/orca-app'
 import {
   createRuntimeDesktopPairingOffer,
   launchPairedWebClient
 } from './helpers/paired-electron-client'
 import { getTerminalContent, waitForActivePanePtyId } from './helpers/terminal'
-import { quotePosixShell } from '../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../src/shared/shell/launch/shell-argument-quoting'
 
 const RETENTION_PARK_DELAY_MS = 100
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-truncated-tail-'))

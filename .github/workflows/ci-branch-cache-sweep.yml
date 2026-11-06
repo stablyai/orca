@@ -1,0 +1,62 @@
+name: Sweep idle branch caches
+
+# Branch-scoped caches serve only their branch, and nothing else removes them before LRU eviction
+# reaches main's shared entries. PR merge refs belong to ci-closed-pr-caches.yml; tag refs to releases.
+on:
+  schedule:
+    - cron: '23 */3 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: List what would be deleted without deleting it.
+        type: boolean
+        default: true
+
+permissions:
+  actions: write
+
+concurrency:
+  group: ci-branch-cache-sweep
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # No checkout: only this script runs, with the cache-write token.
+      - uses: actions/github-script@v8
+        env:
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        with:
+          script: |
+            const keep = new Set(['refs/heads/main'])
+            const idleMs = 6 * 60 * 60 * 1000
+            const dryRun = process.env.DRY_RUN === 'true'
+            const now = Date.now()
+            const caches = await github.paginate(github.rest.actions.getActionsCacheList, {
+              ...context.repo, per_page: 100
+            })
+            let count = 0
+            let bytes = 0
+            for (const cache of caches) {
+              if (typeof cache.ref !== 'string' || !cache.ref.startsWith('refs/heads/') ||
+                  keep.has(cache.ref)) continue
+              const idle = now - Date.parse(cache.last_accessed_at)
+              // An unparseable access time compares false, so the cache is kept.
+              if (!(idle > idleMs)) continue
+              core.info(`${dryRun ? 'Would delete' : 'Deleting'} ${cache.ref} ${cache.key} ` +
+                `(${cache.size_in_bytes} B, idle ${Math.round(idle / 3600000)} h)`)
+              count += 1
+              bytes += cache.size_in_bytes ?? 0
+              if (dryRun) continue
+              try {
+                await github.rest.actions.deleteActionsCacheById({
+                  ...context.repo, cache_id: cache.id
+                })
+              } catch (error) {
+                if (error.status !== 404) throw error
+              }
+            }
+            core.info(`${dryRun ? 'Would remove' : 'Removed'} ${count} idle branch caches ` +
+              `(${(bytes / 1e9).toFixed(2)} GB)`)

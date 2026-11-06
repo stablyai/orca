@@ -61,6 +61,8 @@ describe('useMissingWorktreeBounce', () => {
 
     // Why: navigation lands after the render, so the pre-unmount renders must not re-fire.
     render('repo::wt', 'missing')
+    render('repo::wt', 'unknown')
+    render('repo::wt', 'missing')
     expect(bounce).toHaveBeenCalledTimes(1)
     act(() => renderer?.unmount())
   })

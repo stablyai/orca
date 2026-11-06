@@ -5,18 +5,14 @@ import type {
   RuntimeTerminalListResult,
   RuntimeTerminalOrphanAdoptionClaim
 } from '../../../shared/runtime-types'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
-import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
-import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '../../../shared/terminal-surface-id'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
+import {
+  isWebTerminalSurfaceTabId,
+  toHostSessionTabId
+} from '../../../shared/workspace-layout/terminal-surface-id'
 import {
   hasTerminalHandleRetirementProof,
-  isRemovedSnapshot,
-  isValidReadySurface,
-  surfaceKey,
-  terminalLayoutLeafIds,
-  terminalRowsBySurface
-} from './web-session-terminal-orphan-recovery-surface-index'
-export {
   isRemovedSnapshot,
   isValidReadySurface,
   surfaceKey,
@@ -44,6 +40,8 @@ type RecoverySurfaceCoordinates = {
   locallyActive: boolean
   /** A persisted binding whose leaf no longer appears in the layout tree. */
   offTree?: boolean
+  /** A pending row whose handle no host inventory vouched for; it must stay pending, not ready. */
+  unattested?: boolean
 }
 
 export type RecoverySurface = RecoverySurfaceCoordinates & { handle: string }
@@ -169,7 +167,8 @@ export function prepareTerminalOrphanRecovery(
 export function buildRetainedTerminalSurface(surface: AnyRecoverySurface): TerminalSurface {
   const incoming = surface.incoming
   const localTitle = typeof surface.localTab.title === 'string' ? surface.localTab.title.trim() : ''
-  if (!surface.handle) {
+  // Why: a ready row counts as a live terminal, so a slept pane (#30108) would wake in the mirror.
+  if (!surface.handle || surface.unattested) {
     return {
       ...(incoming ?? {
         type: 'terminal',
@@ -210,6 +209,11 @@ export function buildRetainedTerminalSurface(surface: AnyRecoverySurface): Termi
     status: 'ready',
     terminal: surface.handle
   }
+}
+
+/** Marks a pending surface the host's terminal inventory did not list as live. */
+export function withoutHostAttestation(surface: RecoverySurface): RecoverySurface {
+  return surface.pending ? { ...surface, unattested: true } : surface
 }
 
 export function mergeRetainedTerminalSurfaces(

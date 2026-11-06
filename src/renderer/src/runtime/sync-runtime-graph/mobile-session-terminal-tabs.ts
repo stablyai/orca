@@ -1,17 +1,16 @@
 import { normalizeTerminalLayoutSnapshot } from '@/components/terminal-pane/layout-serialization'
-import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
+import { sanitizeTerminalLayoutPaneTitles } from '../../../../shared/workspace-layout/terminal-pane-title-sanitization'
 import type { AppState } from '@/store/types'
 import type { RuntimeMobileSessionSnapshotTab } from '../../../../shared/runtime-types'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
   isNativeChatTabWideFallbackSafe,
   nativeChatLaunchAgentForLeaf
 } from '../../components/native-chat/native-chat-leaf-routing'
 import type { MobileSessionWorktreeInputs } from './types'
+import { isClaudeManagementTitle } from '../../../../shared/agent-status/title/agent-title-core'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
-  isClaudeManagementTitle,
-  isTerminalLeafId,
-  makePaneKey,
   mobileTerminalSurfaceId,
   getRuntimeLeafIdsForTerminal,
   resolveMobileTabWideAgentHintLeafId,
@@ -105,8 +104,20 @@ export function buildMobileTerminalSurfaceTabs(
       type: 'terminal' as const,
       id: mobileTerminalSurfaceId(terminal.id, leafId),
       title,
+      // Why every surface: the name is tab-wide, and a paired desktop reads its active surface.
+      customTitle: terminal.customTitle?.trim() || null,
       ...(tabWideFallbackSafe && terminal.quickCommandLabel?.trim()
         ? { quickCommandLabel: terminal.quickCommandLabel.trim() }
+        : {}),
+      // This window's title sync owns the tab's session name; null tells paired desktops it has none.
+      ...(tabWideFallbackSafe
+        ? {
+            aiVaultTitle: terminal.aiVaultTitle?.title.trim() ? terminal.aiVaultTitle : null,
+            resolvesSessionTitle: true as const
+          }
+        : {}),
+      ...(tabWideFallbackSafe && inputs.generatedTitlesEnabled && terminal.generatedTitle?.trim()
+        ? { generatedTitle: terminal.generatedTitle.trim() }
         : {}),
       parentTabId: terminal.id,
       leafId,

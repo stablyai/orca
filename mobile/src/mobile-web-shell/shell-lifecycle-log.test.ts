@@ -32,7 +32,6 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 
 type Pending = Parameters<typeof stamp>[1]
 
-/** Replays events through the real reducer, collecting what each step would log. */
 type Replayed = {
   session: MobileWebShellSession
   trace: ShellLogTrace
@@ -137,36 +136,35 @@ describe('shell lifecycle log lines', () => {
       'web-shell-flow Web shell: activating app | source=download',
       `web-shell-page Web shell: page painted | source=download build=${BUILD} activatedMs=1234`
     ])
-    // The generation directory names a device path and never reaches the log.
     expect(JSON.stringify(lines)).not.toContain('/Users/someone')
   })
 
-  it('logs nothing for a route that stays native, the normal case for native screens', () => {
+  it('logs the wall a host with no page earns', () => {
     const { session, lines } = replay([
       { type: 'gates-changed', gates: gates({ hostCapabilities: [] }) }
     ])
-    expect(session.state.kind).toBe('native-route')
-    expect(lines).toEqual([])
-  })
-
-  it('logs a missed ready deadline, the failure it causes and the recovery flow', () => {
-    const opened = replay(DOWNLOAD_OPEN)
-    const { lines } = replay([{ type: 'document-loaded' }, { type: 'page-ready-deadline' }], opened)
+    expect(session.state.kind).toBe('wall')
     expect(summary(lines)).toEqual([
-      'web-shell-page Web shell: page never said ready before the deadline',
-      'web-shell-flow Web shell: checking host'
+      'web-shell-flow Web shell: blocked by version check | reason=bundle-unavailable'
     ])
   })
 
-  it('logs a document that never finished loading, and the recovery flow', () => {
+  it('logs a missed ready deadline but not the remount it earns', () => {
+    const opened = replay(DOWNLOAD_OPEN)
+    const { lines } = replay([{ type: 'document-loaded' }, { type: 'page-ready-deadline' }], opened)
+    expect(summary(lines)).toEqual([
+      'web-shell-page Web shell: page never said ready before the deadline'
+    ])
+  })
+
+  it('logs a document that never finished loading but not the remount it earns', () => {
     const opened = replay(DOWNLOAD_OPEN)
     const { lines } = replay(
       [{ type: 'document-started' }, { type: 'document-load-deadline' }],
       opened
     )
     expect(summary(lines)).toEqual([
-      'web-shell-page Web shell: document never finished loading before the deadline',
-      'web-shell-flow Web shell: checking host'
+      'web-shell-page Web shell: document never finished loading before the deadline'
     ])
   })
 
@@ -223,7 +221,7 @@ describe('shell stall lines', () => {
     const opened = replay([{ type: 'gates-changed', gates: gates() }])
     expect(opened.session.state.kind).toBe('checking')
     expect(stall(opened)).toMatchObject({ detail: 'gates=open cache=unread' })
-    // An empty cache leaves `cached` null, so only the trace can tell the manifest wait apart.
+    // With empty cache, trace alone distinguishes a manifest wait from an unfinished cache read.
     const awaitingManifest = replay([{ type: 'cache-read', generation: null }], opened)
     expect(stall(awaitingManifest)).toMatchObject({ detail: 'gates=open cache=read' })
   })
@@ -253,7 +251,6 @@ describe('shell stall lines', () => {
     expect(stall(refusing)).toMatchObject({
       detail: `build=${BUILD} page ready=yes readyAsks=3 documentLoaded=yes`
     })
-    // A replacement document starts its own count.
     const reloaded = replay([{ type: 'document-started' }, { type: 'page-ready' }], refusing)
     expect(stall(reloaded)).toMatchObject({
       detail: `build=${BUILD} page ready=yes readyAsks=1 documentLoaded=no`
@@ -329,11 +326,11 @@ describe('shell lifecycle lines in the exported report', () => {
       lastConnectedAt: 500,
       platform: 'ios',
       appVersion: '0.0.56',
+      bridgeProtocolVersion: 1,
       entries: entries([...opened.lines, ...page.lines, ...present(stall(page))]),
-      shell: { kind: 'ota', bridgeProtocolVersion: 1 },
       nowMs: 60_000
     })
-    expect(report).toContain('Shell: ota · bridge protocol 1')
+    expect(report).toContain('Bridge protocol: 1')
     expect(report).toContain('Likely cause: Connection is healthy.')
     expect(report).toContain('[web-shell-flow] Web shell: activating app')
     expect(report).toContain(
@@ -355,6 +352,7 @@ describe('shell lifecycle lines in the exported report', () => {
       lastConnectedAt: null,
       platform: 'ios',
       appVersion: '0.0.56',
+      bridgeProtocolVersion: 1,
       entries: entries([
         ...failed.lines,
         ...present(stall(replay(DOWNLOAD_OPEN.slice(0, 6)))),
@@ -385,6 +383,7 @@ describe('shell lifecycle lines in the exported report', () => {
       lastConnectedAt: null,
       platform: 'ios',
       appVersion: '0.0.56',
+      bridgeProtocolVersion: 1,
       entries: [timeout, ...entries(replay(DOWNLOAD_OPEN).lines)],
       nowMs: 60_000
     })

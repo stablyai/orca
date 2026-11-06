@@ -43,8 +43,7 @@ export function AutomationSetupDecisionField({
     'Run setup for each new workspace'
   )
   return (
-    // Why: the setup choice is a power-user knob, so tuck it behind the same
-    // Advanced disclosure grammar the New Workspace composer uses.
+    // Keep the advanced setup option behind the New Workspace composer’s disclosure pattern.
     <div className="mt-1">
       <Button
         type="button"

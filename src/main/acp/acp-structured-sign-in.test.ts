@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { providerDiagnosticOf } from '../../shared/agent-session-failure'
-import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
-import { agentSessionFailureSentence } from '../../shared/agent-session-failure-words'
-import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+
+import { providerDiagnosticOf } from '../../shared/agent-session/failures/agent-session-failure'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
+import { AcpSignInPromptError } from './acp-errors'
 import { ACP_LAUNCH_SPECS } from './acp-launch-specs'
+import { AcpSessionRuntime } from './acp-session-runtime'
 import {
   openAcpAdapterRig,
   PROVIDER_SESSION,
@@ -76,21 +76,55 @@ describe('ACP sign-out at the first prompt', () => {
   })
 })
 
+it('ends a running turn signed out when the connection closes for sign-in', async () => {
+  const rig = await openAcpAdapterRig({ script: (agent) => agent.on('session/prompt', () => {}) })
+  await rig.acquire()
+  await sendHello(rig, 'first')
+  await rig.frame('session/prompt')
+  // Simulate the real connection closing on a stderr sign-in link.
+  const internal = 'The agent asked to sign in in a browser'
+  AcpSessionRuntime.prototype.close.call(rig.child(), new AcpSignInPromptError(internal))
+  await rig.settle()
+  expect(rig.settled).toContainEqual(
+    expect.objectContaining({
+      clientMessageId: 'first',
+      state: 'rejected',
+      rejection: expect.objectContaining({ kind: 'notSignedIn' })
+    })
+  )
+  // Internal prompt diagnostics must not appear as agent-authored guidance.
+  const rejected = rig.settled.find((item) => 'state' in item && item.state === 'rejected')
+  expect(rejected && 'reason' in rejected ? rejected.reason : '').not.toContain(internal)
+})
+
+it('starts signed out without Orca words when the connection closes for sign-in', async () => {
+  const rig = await openAcpAdapterRig({ script: (agent) => agent.on('session/new', () => {}) })
+  const starting = rig.acquire()
+  await rig.frame('session/new')
+  const internal = 'The agent asked to sign in in a browser'
+  AcpSessionRuntime.prototype.close.call(rig.child(), new AcpSignInPromptError(internal))
+  await starting
+  const error = rig.openFailure()
+  // Preserve Orca's prompt error when session setup retypes authentication failures.
+  expect(error).toMatchObject({ reason: 'notSignedIn' })
+  expect(providerDiagnosticOf(error)).toBeUndefined()
+})
+
 it.each(ACP_LAUNCH_SPECS)(
-  'preserves $agent startup auth classification and its detail',
+  "keeps $agent's sign-in words over log lines it wrote before refusing its start",
   async (spec) => {
     const detail = 'Sign-in credentials are missing.'
     const rig = await openAcpAdapterRig({
       spec,
-      script: (agent) => agent.on('session/new', (frame) => agent.fail(frame, -32000, detail))
+      script: (agent) =>
+        agent.on('session/new', (frame) => {
+          rig.child().stderr = 'warn: telemetry endpoint unreachable'
+          agent.fail(frame, -32000, detail)
+        })
     })
-    const error = await rig.acquire().catch((failure: unknown) => failure)
-    expect(error).toBeInstanceOf(AgentSessionAcquisitionRefusal)
-    expect(error).toMatchObject({ reason: 'notSignedIn' })
-    expect(providerDiagnosticOf(error)).toEqual({ text: detail, audience: 'person' })
-    const fact = providerStartupFailureFact(error)
-    expect(fact.detail?.text).toBe(detail)
-    expect(agentSessionFailureSentence(fact, 'row', { agentName: spec.agent })).toContain(detail)
+    await rig.acquire()
+    expect(rig.openFailure()).toMatchObject({ reason: 'notSignedIn' })
+    expect(providerDiagnosticOf(rig.openFailure())).toEqual({ text: detail, audience: 'person' })
   }
 )
 
@@ -99,9 +133,10 @@ it.each([
     'No API key found for anthropic.\n\nUse /login, set an API key environment variable, or create /host/agent.db',
     'notSignedIn'
   ],
+  // OMP says this for an unresolved launch selector as well as when signed out.
   [
     'No model selected.\n\nUse /login, set an API key environment variable, or create /host/agent.db\n\nThen use /model to select a model.',
-    'notSignedIn'
+    'modelNotSelected'
   ],
   ['No model selected', undefined],
   ['Rate limit exceeded', undefined],
@@ -126,5 +161,9 @@ it.each([
     ({ body }) => body.kind === 'status' && body.tone === 'error'
   )
   expect(row?.body.kind === 'status' ? row.body.failure?.kind : undefined).toBe(kind)
-  expect(row?.body.kind === 'status' ? row.body.text : '').toContain(detail)
+  expect(row?.body.kind === 'status' ? row.body.text : '').toContain(
+    kind === 'modelNotSelected'
+      ? 'OMP has no model selected. Check your model selection and OMP sign-in, then send again.'
+      : detail
+  )
 })

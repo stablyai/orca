@@ -1,31 +1,101 @@
-import { createElement, useState, type ReactElement } from 'react'
+import { createElement, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileSourceControlContent } from './MobileSourceControlContent'
-import * as branchFormat from './mobile-branch-entry-format'
+import { MobileSourceControlNextStepBar } from './MobileSourceControlNextStepBar'
+import type { MobileSourceControlPrimaryAction } from './mobile-source-control-primary-action'
+
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
 
+type MobileSourceControlContentState = Omit<MobileSourceControlState, 'primaryActionArgs'> & {
+  primaryAction: MobileSourceControlPrimaryAction
+}
+import type { SectionListProps } from 'react-native'
+import type {
+  MobileBranchEntryView,
+  MobileGitStatusEntryView
+} from './mobile-source-control-screen-state'
+
 vi.mock('react-native', () => ({
+  AccessibilityInfo: {
+    isReduceMotionEnabled: async () => false,
+    addEventListener: () => ({ remove: () => {} })
+  },
   ActivityIndicator: 'ActivityIndicator',
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
-  SectionList: ({ ListFooterComponent }: { ListFooterComponent: ReactElement }) =>
-    createElement('SectionList', null, ListFooterComponent),
+  SectionList: (props: SectionListProps<MobileBranchEntryView | MobileGitStatusEntryView>) =>
+    createElement(
+      'SectionList',
+      { ...props, ListHeaderComponent: undefined },
+      typeof props.ListHeaderComponent === 'function' ? null : props.ListHeaderComponent,
+      typeof props.ListFooterComponent === 'function'
+        ? createElement(props.ListFooterComponent)
+        : props.ListFooterComponent,
+      props.sections.map((section) =>
+        createElement(
+          'Section',
+          { key: section.key },
+          props.renderSectionHeader?.({ section }),
+          section.data.slice(0, 20).map((item, index) =>
+            createElement(
+              'Row',
+              { key: item.path },
+              props.renderItem?.({
+                item,
+                index,
+                section,
+                separators: { highlight: noop, unhighlight: noop, updateProps: noop }
+              })
+            )
+          )
+        )
+      )
+    ),
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
   Text: 'Text',
   TextInput: 'TextInput',
   View: 'View'
 }))
 vi.mock('expo-clipboard', () => ({ setStringAsync: async () => {} }))
+// Counts row renders: every file row draws its line stats once.
+const rowRenders = vi.hoisted(() => ({ count: 0 }))
+vi.mock('../components/MobileDiffReviewFileSummary', () => ({
+  MobileDiffLineStats: () => {
+    rowRenders.count += 1
+    return null
+  }
+}))
+vi.mock('react-native-gesture-handler', async () => {
+  const chain = new Proxy({}, { get: () => () => chain })
+  return {
+    Gesture: { Pan: () => chain },
+    GestureDetector: ({ children }: { children: unknown }) => children
+  }
+})
+vi.mock('react-native-reanimated', () => ({
+  default: { View: ({ children }: { children: unknown }) => children },
+  Easing: { bezier: () => () => 0 },
+  ReduceMotion: { Never: 'never' },
+  useAnimatedStyle: () => ({}),
+  useReducedMotion: () => false,
+  useSharedValue: (value: number) => ({ value }),
+  withTiming: (value: number) => value
+}))
+vi.mock('../components/ConfirmModal', () => ({ ConfirmModal: () => null }))
 vi.mock('lucide-react-native', () => ({
   ArrowDown: 'ArrowDown',
   ArrowDownUp: 'ArrowDownUp',
   ArrowUp: 'ArrowUp',
   Check: 'Check',
+  ChevronDown: 'ChevronDown',
   ChevronRight: 'ChevronRight',
   CloudUpload: 'CloudUpload',
   FileText: 'FileText',
   GitBranch: 'GitBranch',
+  GitCommitHorizontal: 'GitCommitHorizontal',
+  GitMerge: 'GitMerge',
+  GitPullRequest: 'GitPullRequest',
   GitPullRequestArrow: 'GitPullRequestArrow',
   History: 'History',
   Minus: 'Minus',
@@ -33,7 +103,9 @@ vi.mock('lucide-react-native', () => ({
   Plus: 'Plus',
   RefreshCw: 'RefreshCw',
   Sparkles: 'Sparkles',
-  Trash2: 'Trash2'
+  Trash2: 'Trash2',
+  TriangleAlert: 'TriangleAlert',
+  Undo2: 'Undo2'
 }))
 
 const noop = () => {}
@@ -41,7 +113,7 @@ const unusedAsync = async (): Promise<never> => {
   throw new Error('unused action')
 }
 
-function initialState(): MobileSourceControlState {
+function initialState(): MobileSourceControlContentState {
   const branchEntries = Array.from({ length: 20 }, (_, index) => ({
     path: `src/file-${index}.ts`,
     status: 'modified' as const,
@@ -63,6 +135,7 @@ function initialState(): MobileSourceControlState {
     client: null,
     connState: 'connected',
     forceReconnect: null,
+    rebaseBaseRef: 'main',
     insets: { top: 0, bottom: 0, left: 0, right: 0 },
     router: {
       back: noop,
@@ -82,8 +155,6 @@ function initialState(): MobileSourceControlState {
     worktreeLabel: 'fixture',
     screenState: { kind: 'loading' },
     branchCompareState: { kind: 'ready', result: branchCompareResult },
-    branchDiffPreview: null,
-    setBranchDiffPreview: noop,
     busyAction: null,
     commitMessage: '',
     setCommitMessage: noop,
@@ -113,12 +184,9 @@ function initialState(): MobileSourceControlState {
       launch: unusedAsync
     },
     keyboardLift: 0,
-    openingPath: null,
-    openingBranchPath: null,
     status: null,
     sections: [],
     branchCompareResult,
-    branchCompareSummaryText: '20 files vs main',
     branchEntries,
     shouldShowBranchCompareSection: true,
     hasVisibleChanges: true,
@@ -127,9 +195,7 @@ function initialState(): MobileSourceControlState {
     stagedCount: 1,
     unstagedCount: 0,
     branchLabel: 'fixture',
-    upstream: undefined,
     upstreamKnown: false,
-    syncLabel: null,
     primaryAction: {
       kind: 'commit',
       label: 'Commit',
@@ -142,14 +208,14 @@ function initialState(): MobileSourceControlState {
     createPrAction: {
       visible: false,
       label: 'Create Pull Request',
+      reviewLabel: 'pull request',
       disabled: true,
       loading: false,
       pushFirst: false,
       onPress: noop
     },
     loadStatus: unusedAsync,
-    openFile: unusedAsync,
-    openBranchDiff: unusedAsync,
+    openDiffForFile: noop,
     runGitAction: unusedAsync,
     stageAll: unusedAsync,
     unstageAll: unusedAsync,
@@ -161,6 +227,8 @@ function initialState(): MobileSourceControlState {
     openHistory: noop,
     checkoutBranch: unusedAsync,
     abortConflictOperation: unusedAsync,
+    resolveConflict: unusedAsync,
+    completeMerge: unusedAsync,
     runActionSheetCommit: unusedAsync,
     runActionSheetCommitSequence: unusedAsync,
     runActionSheetCommitSync: unusedAsync,
@@ -171,23 +239,43 @@ function initialState(): MobileSourceControlState {
 }
 
 let renderer: ReactTestRenderer | null = null
-const controls: { patch: ((patch: Partial<MobileSourceControlState>) => void) | null } = {
+const controls: { patch: ((patch: Partial<MobileSourceControlContentState>) => void) | null } = {
   patch: null
 }
 
-function Fixture({ initial }: { initial: MobileSourceControlState }) {
+function Fixture({ initial }: { initial: MobileSourceControlContentState }) {
   const [state, setState] = useState(initial)
   controls.patch = (patch) => setState((previous) => ({ ...previous, ...patch }))
-  return createElement(MobileSourceControlContent, {
-    state: {
-      ...state,
-      setCommitMessage: (next) =>
-        setState((previous) => ({
-          ...previous,
-          commitMessage: typeof next === 'function' ? next(previous.commitMessage) : next
-        }))
-    }
-  })
+  const liveState = {
+    ...state,
+    setCommitMessage: (next: string | ((previous: string) => string)) =>
+      setState((previous) => ({
+        ...previous,
+        commitMessage: typeof next === 'function' ? next(previous.commitMessage) : next
+      }))
+  }
+  // Laid out as the panel does: the commit box lives in the bar beside the list.
+  return createElement(
+    'View',
+    null,
+    createElement(MobileSourceControlContent, {
+      state: liveState,
+      stageAllInBar: state.primaryAction.kind === 'stage',
+      bottomInset: 0,
+      onOpenCommits: noop
+    }),
+    createElement(MobileSourceControlNextStepBar, {
+      view: { kind: 'composer' },
+      notice: null,
+      agentNotice: null,
+      mergeConfirm: null,
+      composer: liveState,
+      primaryAction: state.primaryAction,
+      keyboardLift: state.keyboardLift,
+      bottomInset: 0,
+      onHeightChange: noop
+    })
+  )
 }
 
 function render(initial = initialState()) {
@@ -195,23 +283,10 @@ function render(initial = initialState()) {
     renderer = create(createElement(Fixture, { initial }))
   })
 }
-function patch(values: Partial<MobileSourceControlState>) {
+function patch(values: Partial<MobileSourceControlContentState>) {
   act(() => {
     controls.patch?.(values)
   })
-}
-function rows() {
-  return (
-    renderer?.root.findAll(
-      (node) =>
-        String(node.type) === 'Pressable' &&
-        typeof node.props.accessibilityLabel === 'string' &&
-        node.props.accessibilityLabel.startsWith('Open committed change')
-    ) ?? []
-  )
-}
-function text() {
-  return JSON.stringify(renderer?.toJSON())
 }
 
 afterEach(() => {
@@ -221,94 +296,25 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('committed branch files during commit-message typing', () => {
-  it.each(['scroll', 'sections'])('keeps the footer without revisiting rows in %s', (layout) => {
-    const initial = initialState()
-    if (layout === 'sections') {
-      initial.sections = [{ area: 'staged', title: 'Staged Changes', data: [] }]
-    }
-    const format = vi.spyOn(branchFormat, 'formatMobileBranchEntryMeta')
-    render(initial)
-    expect(format).toHaveBeenCalledTimes(20)
-    format.mockClear()
-    for (let index = 0; index < 50; index++) {
-      act(() => {
-        const input = renderer?.root.find((node) => String(node.type) === 'TextInput')
-        if (typeof input?.props.onChangeText !== 'function') {
-          throw new Error('missing input handler')
-        }
-        input.props.onChangeText(`message ${index}`)
-      })
-    }
-    expect(renderer?.root.find((node) => String(node.type) === 'TextInput').props.value).toBe(
-      'message 49'
-    )
-    expect(rows()).toHaveLength(20)
-    expect(format).not.toHaveBeenCalled()
-  })
+describe('next-step bar and the keyboard', () => {
+  function input() {
+    return renderer?.root.findAll((node) => String(node.type) === 'TextInput')[0] ?? null
+  }
 
-  it('updates the footer when each of its inputs changes independently', () => {
-    const initial = initialState()
-    const format = vi.spyOn(branchFormat, 'formatMobileBranchEntryMeta')
-    render(initial)
-    patch({ branchCompareSummaryText: 'changed summary' })
-    expect(text()).toContain('changed summary')
-    const first = initial.branchEntries[0]
-    if (!first) {
-      throw new Error('missing fixture entry')
-    }
-    patch({ branchEntries: [{ ...first, path: 'changed.ts' }] })
-    expect(rows()).toHaveLength(1)
-    expect(text()).toContain('changed.ts')
-    patch({ busyAction: 'stage-all' })
-    expect(rows()[0]?.props.disabled).toBe(true)
-    patch({ busyAction: null })
-    expect(rows()[0]?.props.disabled).toBe(false)
-    patch({ openingPath: 'local.ts' })
-    expect(rows()[0]?.props.disabled).toBe(true)
-    patch({ openingPath: null })
-    patch({ openingBranchPath: 'changed.ts' })
-    expect(rows()[0]?.props.disabled).toBe(true)
-    expect(rows()[0]?.findAll((node) => String(node.type) === 'ActivityIndicator')).toHaveLength(1)
-    patch({ openingBranchPath: null })
-    const open = vi.fn(async () => {})
-    patch({ openBranchDiff: open })
+  it('rides the keyboard for its own commit box and steps aside for any other field', () => {
+    render()
+    // Another field (a PR comment) raised the keyboard: the bar must not cover it.
+    patch({ keyboardLift: 300 })
+    expect(input()).toBeNull()
+    patch({ keyboardLift: 0 })
     act(() => {
-      const onPress = rows()[0]?.props.onPress
-      if (typeof onPress !== 'function') {
-        throw new Error('missing branch opener')
+      const onFocus = input()?.props.onFocus
+      if (typeof onFocus !== 'function') {
+        throw new Error('missing focus handler')
       }
-      onPress()
+      onFocus()
     })
-    expect(open).toHaveBeenCalledWith(expect.objectContaining({ path: 'changed.ts' }))
-    patch({ branchCompareState: { kind: 'error', message: 'compare failed' } })
-    expect(text()).toContain('compare failed')
-    expect(rows()).toHaveLength(0)
-    patch({ branchCompareState: initial.branchCompareState })
-    patch({
-      branchCompareResult: {
-        ...initial.branchCompareResult,
-        summary: {
-          status: 'error',
-          baseRef: 'main',
-          changedFiles: 0,
-          commitsAhead: undefined,
-          errorMessage: 'unavailable'
-        }
-      }
-    })
-    expect(text()).toContain('unavailable')
-    expect(rows()).toHaveLength(0)
-    patch({ branchCompareResult: initial.branchCompareResult })
-    expect(rows()).toHaveLength(1)
-    patch({ shouldShowBranchCompareSection: false })
-    expect(text()).not.toContain('Committed on Branch')
-    patch({ shouldShowBranchCompareSection: true })
-    expect(rows()).toHaveLength(1)
-    format.mockClear()
-    patch({ connState: 'disconnected', actionError: 'offline', keyboardLift: 100 })
-    expect(text()).toContain('Reconnecting to desktop')
-    expect(text()).toContain('offline')
-    expect(format).not.toHaveBeenCalled()
+    patch({ keyboardLift: 300 })
+    expect(input()).not.toBeNull()
   })
 })

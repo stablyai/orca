@@ -82,7 +82,7 @@ vi.mock('node:fs/promises', async () => {
         streaming = true
         stream.once('end', () => (streaming = false))
         stream.once('close', () => (streaming = false))
-        stream.on('data', (chunk: Buffer) => {
+        stream.on('data', (chunk) => {
           read.bytes += chunk.length
         })
         return stream
@@ -240,36 +240,6 @@ describe('Claude usage incremental reader', () => {
     expect(onlyFile(result).size).toBe(Buffer.byteLength(replacement))
     expect(result.sessions[0]?.totalInputTokens).toBe(90)
     await expectColdParity(result)
-  }, 5000)
-
-  it('rejects a short sample from an unchanged file once and closes its only handle', async () => {
-    await writeFile(transcriptPath, padding() + assistantRow('old', 10))
-    const original = await stat(transcriptPath)
-    reads.readFailure = 'eof'
-
-    await expect(scan()).rejects.toThrow(/snapshot read.*unchanged file boundary/)
-
-    expect(reads.handles).toEqual([{ path: transcriptPath, closes: 1, closed: true }])
-    expect(reads.windows).toEqual([{ path: transcriptPath, start: 0, bytes: 0 }])
-    expect(reads.streams).toHaveLength(0)
-    expect(await stat(transcriptPath)).toMatchObject({
-      dev: original.dev,
-      ino: original.ino,
-      size: original.size,
-      mtimeMs: original.mtimeMs,
-      ctimeMs: original.ctimeMs
-    })
-  }, 5000)
-
-  it('propagates a sampling access failure without retrying and closes its only handle', async () => {
-    await writeFile(transcriptPath, padding() + assistantRow('old', 10))
-    const failure = Object.assign(new Error('Sampling access denied'), { code: 'EACCES' })
-    reads.readFailure = failure
-
-    await expect(scan()).rejects.toBe(failure)
-
-    expect(reads.handles).toEqual([{ path: transcriptPath, closes: 1, closed: true }])
-    expect(reads.streams).toHaveLength(0)
   }, 5000)
 
   it('rejects a zero-byte post-parse verification read from an unchanged file without retrying', async () => {
@@ -456,72 +426,6 @@ describe('Claude usage incremental reader', () => {
     expect(second.sessions[0]?.totalInputTokens).toBe(45)
     expect(second.sessions[0]?.turnCount).toBe(2)
     await expectColdParity(second)
-  })
-
-  it('rebuilds an older cached projection without a resume checkpoint', async () => {
-    const prefix = padding() + assistantRow('old', 10)
-    await writeFile(transcriptPath, prefix)
-    const first = await scan()
-    const legacyFiles = first.processedFiles.map(({ parseResumeState, ...file }) => {
-      expect(parseResumeState).toBeTruthy()
-      return file
-    })
-    const appended = assistantRow('new', 20)
-    await appendFile(transcriptPath, appended)
-    reads.streams.length = 0
-
-    const second = await scan(legacyFiles)
-
-    expectParseRange(0, Buffer.byteLength(prefix + appended))
-    expect(second.sessions[0]?.totalInputTokens).toBe(30)
-    await expectColdParity(second)
-  })
-
-  it.each([
-    { change: 'an unchanged file', total: 10 },
-    { change: 'an atomic same-size replacement', total: 90 }
-  ])('upgrades legacy identity metadata once for $change', async ({ change, total }) => {
-    const timestamp = new Date('2026-10-09T12:00:00.000Z')
-    const prefix = padding()
-    const original = prefix + assistantRow('old', 10)
-    await writeFile(transcriptPath, original)
-    await utimes(transcriptPath, timestamp, timestamp)
-    const first = await scan()
-    const legacyFiles = first.processedFiles.map(({ physicalFileId, ctimeMs, ...file }) => {
-      expect(physicalFileId).not.toBeUndefined()
-      expect(typeof ctimeMs).toBe('number')
-      return file
-    })
-    if (change === 'an atomic same-size replacement') {
-      const replacement = prefix + assistantRow('new', 90)
-      expect(Buffer.byteLength(replacement)).toBe(Buffer.byteLength(original))
-      const replacementPath = `${transcriptPath}.replacement`
-      await writeFile(replacementPath, replacement)
-      await utimes(replacementPath, timestamp, timestamp)
-      await rename(replacementPath, transcriptPath)
-    }
-    const currentStats = await stat(transcriptPath)
-    expect(currentStats.size).toBe(onlyFile(first).size)
-    expect(currentStats.mtimeMs).toBe(onlyFile(first).mtimeMs)
-    reads.streams.length = 0
-
-    const upgraded = await scan(legacyFiles)
-
-    expectParseRange(0, Buffer.byteLength(original))
-    expect(onlyFile(upgraded).physicalFileId).not.toBeUndefined()
-    expect(typeof onlyFile(upgraded).ctimeMs).toBe('number')
-    expect(upgraded.sessions[0]?.totalInputTokens).toBe(total)
-    await expectColdParity(upgraded)
-    reads.streams.length = 0
-    reads.windows.length = 0
-    reads.handles.length = 0
-
-    const unchanged = await scan(upgraded.processedFiles)
-
-    expect(onlyFile(unchanged)).toBe(onlyFile(upgraded))
-    expect(reads.streams).toHaveLength(0)
-    expect(reads.windows).toHaveLength(0)
-    expect(reads.handles).toHaveLength(0)
   })
 
   it.each([

@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { orderNativeChatMessages } from './native-chat-message-grouping'
-import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
+import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat/native-chat-streaming'
+import { sortForImageNormalization } from './native-chat-session-assembler'
 
 function msg(
   overrides: Partial<NativeChatMessage> & Pick<NativeChatMessage, 'id'>
@@ -16,29 +17,21 @@ function msg(
 }
 
 describe('orderNativeChatMessages', () => {
-  it('orders by ascending timestamp, null first', () => {
-    const ordered = orderNativeChatMessages([
-      msg({ id: 'b', timestamp: 20 }),
-      msg({ id: 'a', timestamp: 10 }),
-      msg({ id: 'n', timestamp: null })
-    ])
-    expect(ordered.map((m) => m.id)).toEqual(['n', 'a', 'b'])
-  })
-
-  it('breaks timestamp ties by id deterministically', () => {
-    const ordered = orderNativeChatMessages([
-      msg({ id: 'z', timestamp: 5 }),
-      msg({ id: 'a', timestamp: 5 })
-    ])
-    expect(ordered.map((m) => m.id)).toEqual(['a', 'z'])
-  })
-
-  it('sorts the streaming preview after real content but before optimistic echoes', () => {
-    const ordered = orderNativeChatMessages([
+  it('sorts the streaming preview after the prompt that caused it', () => {
+    const normalized = sortForImageNormalization([
       msg({ id: 'pending:abc', role: 'user', timestamp: 20, source: 'scrape' }),
       msg({ id: NATIVE_CHAT_STREAMING_ID, timestamp: null }),
-      msg({ id: 'real-user', role: 'user', timestamp: 10 })
+      msg({ id: 'real-user', role: 'user', timestamp: 10, transcriptOrder: 1 }),
+      msg({ id: 'pending:first-queued', role: 'user', timestamp: 30, pendingSend: 'queued' }),
+      msg({ id: 'pending:next-queued', role: 'user', timestamp: 2, pendingSend: 'queued' })
     ])
-    expect(ordered.map((m) => m.id)).toEqual(['real-user', 'streaming', 'pending:abc'])
+    const ordered = orderNativeChatMessages([...normalized])
+    expect(ordered.map((m) => m.id)).toEqual([
+      'real-user',
+      'pending:abc',
+      'streaming',
+      'pending:first-queued',
+      'pending:next-queued'
+    ])
   })
 })

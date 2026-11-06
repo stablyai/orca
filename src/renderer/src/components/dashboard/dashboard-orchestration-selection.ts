@@ -3,10 +3,10 @@ import type { DashboardSnapshotState } from './build-dashboard-snapshot'
 import {
   releaseRuntimeAgentOrchestrationBatchCache,
   selectRuntimeAgentOrchestrationBatch
-} from '../sidebar/worktree-agent-orchestration-batch'
-import { selectRuntimeAgentOrchestrationForWorktree } from '../sidebar/worktree-agent-row-selectors'
+} from '../sidebar/workspace-card/activity/worktree-agent-orchestration-batch'
+import '../sidebar/workspace-card/activity/worktree-agent-row-selectors'
+import { selectWorktreeAgentOrchestration as selectRuntimeAgentOrchestrationForWorktree } from '../sidebar/workspace-card/activity/worktree-agent-orchestration-index'
 
-/** Select the singleton or batched orchestration view for active workspaces. */
 export function selectDashboardOrchestration(
   state: DashboardSnapshotState,
   activeWorkspaces: readonly Pick<ActiveDashboardWorkspace, 'worktree'>[]

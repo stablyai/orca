@@ -12,10 +12,7 @@ const BUCKET = 'onorca-cloud-terraform-state'
 const OBJECT = 'terraform/state/cloud-sql-rollout/production.lock'
 const NOW = 1_756_000_000_000
 
-/**
- * Enough of the Cloud Storage JSON API to exercise real compare-and-swap semantics: generations
- * increment, ifGenerationMatch is enforced, and a mismatch is a 412. `faults` injects failures.
- */
+/** Model real GCS generation increments, ifGenerationMatch and 412 conflicts; faults inject failures. */
 function fakeStorage({ object = null, faults = [] } = {}) {
   const state = { object, requests: [] }
   const fetcher = async (rawUrl, init = {}) => {

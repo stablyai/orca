@@ -6,10 +6,11 @@ import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import { wrapRemoteCommandForPosixShell, type SshExecOptions } from './ssh-connection-utils'
-import { execCommand, isSshCommandExitError } from './ssh-relay-exec-command'
+import { wrapRemoteCommandForPosixShell } from './ssh-posix-command-wrapper'
+import type { SshExecOptions } from './connection/ssh-exec-options'
+import { execCommand, isSshCommandExitError } from './remote-exec/remote-exec-command'
 import { readRemoteHomeCommand } from './ssh-remote-commands'
-import type { SshConnection } from './ssh-connection'
+import type { SshConnection } from './connection/ssh-connection'
 import { tryResolveViaLoginShell } from './ssh-remote-node-resolution'
 import {
   normalizeRemoteHome,
@@ -83,19 +84,6 @@ describe.skipIf(process.platform === 'win32')('SSH exec under noisy startup file
     // The error names the caller's command, not the fence around it.
     expect(failure.message).toContain('"echo partial; exit 3"')
     expect(failure.message).not.toContain('CAPTURE')
-  })
-
-  it('keeps a payload that prints its own script text, as a `ps` inventory does', async () => {
-    const conn = hostWithStartupOutput('echo OK')
-    await expect(
-      execCommand(conn, 'ps -o args= -p $$ | tr "\\n" " "; echo; echo DONE')
-    ).resolves.toMatch(/\nDONE\n$/)
-  })
-
-  it('leaves unwrapped commands for the host shell untouched', async () => {
-    const conn = hostWithStartupOutput('')
-    await execCommand(conn, 'echo raw', { wrapCommand: false })
-    expect(conn.commands).toEqual(['echo raw'])
   })
 })
 

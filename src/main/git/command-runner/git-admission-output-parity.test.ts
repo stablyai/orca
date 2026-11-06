@@ -1,5 +1,4 @@
-// Runs on every platform: parity against real git is the Windows-relevant half of
-// the admission evidence, so it must not share the storm harness's POSIX gate.
+// Keep real-Git parity coverage on Windows even though the storm harness is POSIX-only.
 import { execFileSync } from 'node:child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

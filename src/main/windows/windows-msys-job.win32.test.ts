@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
-import { resolveGitBashPath } from '../git-bash'
-import { quotePosixShell } from '../../shared/wsl-login-shell-command'
+import { resolveGitBashPath } from '../pty/shell-startup/git-bash'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import { listPtyJobProcessIds, terminatePtyJob } from './windows-pty-job'
 
 const describeOnWindows = process.platform === 'win32' ? describe : describe.skip

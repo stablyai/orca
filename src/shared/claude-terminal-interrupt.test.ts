@@ -98,4 +98,52 @@ describe('Claude native interruption evidence', () => {
     tracker.observe('pane', { kind: 'title', title: '✳ Task' }, 262)
     expect(interrupt).not.toHaveBeenCalled()
   })
+
+  it("confirms from Claude's OSC 7501 activity while its titles carry no glyph", () => {
+    const { tracker, interrupt } = createTracker()
+    tracker.observe('pane', { kind: 'activity', status: 'working' }, 100)
+    tracker.observe('pane', { kind: 'title', title: 'Fix the parser' }, 110)
+    tracker.observe('pane', { kind: 'input', data: '\x1b' }, 200)
+    tracker.observe('pane', { kind: 'title', title: 'Fix the parser' }, 210)
+    expect(interrupt).not.toHaveBeenCalled()
+    tracker.observe('pane', { kind: 'activity', status: 'idle' }, 300)
+    expect(interrupt).toHaveBeenCalledOnce()
+  })
+
+  it('accepts the current row when activity went working before the row did', () => {
+    const { tracker, interrupt, replace, row } = createTracker()
+    replace({ ...row, payload: { ...row.payload, state: 'waiting' } })
+    tracker.observe('pane', { kind: 'activity', status: 'working' }, 100)
+    replace({ ...row })
+    tracker.observe('pane', { kind: 'input', data: '\x1b' }, 200)
+    tracker.observe('pane', { kind: 'activity', status: 'idle' }, 300)
+    expect(interrupt).toHaveBeenCalledOnce()
+  })
+
+  it('does not read a later program idle as the Escape landing', () => {
+    const { tracker, interrupt } = createTracker()
+    tracker.observe('pane', { kind: 'activity', status: 'working' }, 100)
+    tracker.observe('pane', { kind: 'input', data: '\x1b' }, 200)
+    tracker.observe('pane', { kind: 'activity', status: 'idle' }, 1_701)
+    expect(interrupt).not.toHaveBeenCalled()
+  })
+
+  it('leaves the turn running when activity stays working after Escape', () => {
+    const { tracker, interrupt } = createTracker()
+    tracker.observe('pane', { kind: 'activity', status: 'working' }, 100)
+    tracker.observe('pane', { kind: 'input', data: '\x1b' }, 200)
+    tracker.observe('pane', { kind: 'activity', status: 'working' }, 250)
+    tracker.observe('pane', { kind: 'activity', status: 'idle' }, 300)
+    expect(interrupt).not.toHaveBeenCalled()
+  })
+
+  it('hands back to title glyphs once Claude stops reporting activity', () => {
+    const { tracker, interrupt } = createTracker()
+    tracker.observe('pane', { kind: 'activity', status: 'idle' }, 50)
+    tracker.observe('pane', { kind: 'activity', status: null }, 60)
+    tracker.observe('pane', { kind: 'title', title: '◐ Task' }, 100)
+    tracker.observe('pane', { kind: 'input', data: '\x1b' }, 200)
+    tracker.observe('pane', { kind: 'title', title: '✳ Task' }, 300)
+    expect(interrupt).toHaveBeenCalledOnce()
+  })
 })

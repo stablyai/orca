@@ -4,15 +4,10 @@ export type AgentsStepId = 'statuses' | 'usage' | 'orchestration'
 
 export type AgentsStep = {
   readonly id: AgentsStepId
-  // Short label rendered in the bottom stepper.
   readonly name: string
-  // Subtitle shown directly under the modal's main title — "you are looking
-  // at this slice of the workflow".
+  // Subtitle naming the current workflow slice.
   readonly subtitle: string
-  // One-sentence summary rendered under the subtitle.
   readonly description: string
-  // Whether the step is optional — surfaced as an "Optional" pill next to the
-  // subtitle so users know they can skip the related setup.
   readonly optional?: boolean
 }
 

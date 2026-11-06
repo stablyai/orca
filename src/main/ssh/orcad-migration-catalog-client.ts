@@ -1,19 +1,24 @@
+import {
+  hasModernAutomationLaunchSetup,
+  automationCanonicalLaunchSetup
+} from '../../shared/automation-launch-setup'
+import { AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY } from '../../shared/automation-runtime-capabilities'
 import { z } from 'zod'
-import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import {
   parseOrcadMigrationCatalogAbortResult,
   parseOrcadMigrationCatalogState
-} from '../../shared/orcad-migration-catalog-state'
+} from '../../shared/orcad-migration/orcad-migration-catalog-state'
 import type {
   OrcadMigrationCatalogAbortResult,
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
 import {
   parseOrcadMigrationSnapshotChunkResult,
   type OrcadMigrationSnapshotChunkRequest,
   type OrcadMigrationSnapshotChunkResult
-} from '../../shared/orcad-migration-scrollback'
+} from '../../shared/orcad-migration/orcad-migration-scrollback'
 import {
   findUnsupportedMigrationBlobKind,
   orcadMigrationBlobKindUnsupportedBlocker,
@@ -21,32 +26,31 @@ import {
   type OrcadMigrationBlobChunkRequest,
   type OrcadMigrationBlobChunkResult,
   type OrcadMigrationBlobDescriptor
-} from '../../shared/orcad-migration-blob-transfer'
-import { parsePairingCode } from '../../shared/pairing'
+} from '../../shared/orcad-migration/orcad-migration-blob-transfer'
+import { orcadMigrationManifestBlobs } from '../../shared/orcad-migration/orcad-migration-automation-run-history'
+import { parsePairingCode } from '../../shared/remote-runtime/pairing/pairing'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import { ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
-import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../shared/remote-runtime-client'
+import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../shared/remote-runtime/remote-runtime-client'
+import { assertOrcadMigrationRequestFits } from './orcad-migration-manifest-export'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import { AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
-import { hasExtraAgentArgs } from '../../shared/automation-extra-agent-args'
-import { requiredOrcadMigrationSourceCapability } from '../../shared/orcad-migration-source-kind'
+import { hasExtraAgentArgs } from '../../shared/agent-launch/startup/automation-extra-agent-args'
+import { requiredOrcadMigrationSourceCapability } from '../../shared/orcad-migration/orcad-migration-source-kind'
+import type { OrcadServerRepository } from './orcad-migration-repository-link'
 
 type OrcadCatalogMigrationOperation = 'abort' | 'commit' | 'stage' | 'state'
 
-/**
- * A destination that does not offer catalog migration: an older orcad without the capability or
- * the method. This is a definite refusal; any other failure, including a lost answer, is not, and
- * the caller re-reads the catalog state before deciding anything.
- */
+/** Missing capability/method is definite refusal; other failures require catalog re-read because a lost reply may hide staged state. */
 export const ORCAD_MIGRATION_DESTINATION_UNSUPPORTED = 'orcad_migration_destination_unsupported'
-/** An older destination would strip automations' extra agent arguments, so the move is refused. */
+/** Refuse older destinations that would silently strip extra agent arguments. */
 export const ORCAD_MIGRATION_DESTINATION_EXTRA_AGENT_ARGS_UNSUPPORTED =
   'orcad_migration_destination_extra_agent_args_unsupported:Update Orca on this host to use extra arguments.'
-/** The destination does not parse this manifest's source kind; nothing was sent, so nothing staged. */
+/** Unsupported source kinds are refused before any staging request. */
 export const ORCAD_MIGRATION_DESTINATION_SOURCE_KIND_UNSUPPORTED =
   'orcad_migration_destination_source_kind_unsupported:Update Orca on this host to move this project to it.'
 
-type CatalogRequestOptions = {
+export type CatalogRequestOptions = {
   signal?: AbortSignal
   timeoutMs?: number
   expectedRuntimeId?: string
@@ -67,7 +71,7 @@ export function stageRemoteOrcadMigrationCatalog(
   return requestCatalogState(pairingCode, 'stage', manifest, options)
 }
 
-/** `expectedBlobs` names what was moved so the destination refuses a commit missing any. */
+/** Expected blobs make the destination refuse incomplete commits. */
 export async function commitRemoteOrcadMigrationCatalog(
   pairingCode: string,
   manifest: OrcadMigrationManifest,
@@ -94,7 +98,7 @@ export async function abortRemoteOrcadMigrationCatalog(
 ): Promise<OrcadMigrationCatalogAbortResult> {
   const result = await request(pairingCode, 'abort', manifest, options)
   const parsed = parseOrcadMigrationCatalogAbortResult(result, manifest)
-  // Older hosts flush real aborts, but their already-absent responses prove no persistence.
+  // Older already-absent replies prove no durability, unlike real aborts.
   if (parsed.state === 'absent' && !parsed.aborted && parsed.durableAbsent !== true) {
     throw new Error('orcad_migration_abort_durability_unverifiable:destination_update_required')
   }
@@ -138,7 +142,7 @@ export async function stageRemoteOrcadMigrationBlobChunk(
     options,
     false,
     null,
-    // Per request: a downgraded destination must refuse the kind, never stage what it can't install.
+    // Recheck every request so a downgraded destination cannot stage an unsupported blob kind.
     (capabilities) => {
       const unsupported = findUnsupportedMigrationBlobKind([request.blob], capabilities)
       if (unsupported) {
@@ -152,24 +156,50 @@ export async function stageRemoteOrcadMigrationBlobChunk(
   return parseOrcadMigrationBlobChunkResult(response.result, request)
 }
 
-const ServerRepositoriesSchema = z.object({
-  repos: z.array(z.object({ id: z.string().min(1), path: z.string().min(1) }))
-})
-
-/** The projects the destination already holds, as ids and host paths, through the same preflight. */
-export async function listRemoteOrcadRepositories(
+export async function listServerRows(
   pairingCode: string,
-  options: CatalogRequestOptions = {}
-): Promise<{ id: string; path: string }[]> {
+  method: string,
+  rows: string,
+  options: CatalogRequestOptions
+): Promise<unknown> {
   const pairing = parsePairingCode(pairingCode)
   if (!pairing) {
     throw new Error('orcad_migration_pairing_code_invalid')
   }
-  const response = await sendSupportedMigrationRequest(pairing, 'repo.list', undefined, options)
+  const response = await sendSupportedMigrationRequest(pairing, method, undefined, options)
   if (!response.ok) {
-    throw new Error(`orcad_migration_repositories_failed:${response.error.message}`)
+    throw new Error(`orcad_migration_${rows}_failed:${response.error.message}`)
   }
-  return ServerRepositoriesSchema.parse(response.result).repos.map(({ id, path }) => ({ id, path }))
+  return response.result
+}
+
+// repo.list returns full stored rows; omitted host fields identify server-local repos.
+const ServerRepositoriesSchema = z.object({
+  repos: z.array(
+    z.object({
+      id: z.string().min(1),
+      path: z.string().min(1),
+      connectionId: z.string().nullish(),
+      executionHostId: z.string().nullish(),
+      projectGroupId: z.string().nullish()
+    })
+  )
+})
+
+export async function listRemoteOrcadRepositories(
+  pairingCode: string,
+  options: CatalogRequestOptions = {}
+): Promise<OrcadServerRepository[]> {
+  const result = await listServerRows(pairingCode, 'repo.list', 'repositories', options)
+  return ServerRepositoriesSchema.parse(result).repos.map(
+    ({ id, path, connectionId, executionHostId, projectGroupId }) => ({
+      id,
+      path,
+      ...(connectionId != null ? { connectionId } : {}),
+      ...(executionHostId != null ? { executionHostId } : {}),
+      ...(projectGroupId != null ? { projectGroupId } : {})
+    })
+  )
 }
 
 async function requestCatalogState(
@@ -193,23 +223,42 @@ async function request(
   if (!pairing) {
     throw new Error('orcad_migration_pairing_code_invalid')
   }
+  // Preserve exact { manifest } wire shape for blob-free and SSH moves.
+  const params = expectedBlobs.length > 0 ? { manifest, expectedBlobs } : { manifest }
+  // Validation-size limits can exceed sealed-frame capacity; reject before the host closes the socket.
+  assertOrcadMigrationRequestFits(params)
+  const imports = operation === 'stage' || operation === 'commit'
   const carriesExtraAgentArgs =
-    (operation === 'stage' || operation === 'commit') &&
+    imports &&
     (manifest.payload.dormantState?.automations ?? []).some((automation) =>
       hasExtraAgentArgs(automation.extraAgentArgs)
     )
+  // An older host would drop the blob a manifest names and import without its rows.
+  const requiredBlobs = imports
+    ? [...expectedBlobs, ...orcadMigrationManifestBlobs(manifest)]
+    : expectedBlobs
   const response = await sendSupportedMigrationRequest(
     pairing,
     METHOD_BY_OPERATION[operation],
-    // Only with blobs: SSH and blob-free moves keep sending exactly `{ manifest }`.
-    expectedBlobs.length > 0 ? { manifest, expectedBlobs } : { manifest },
+    params,
     options,
     carriesExtraAgentArgs,
-    // Every operation: an older destination would parse a non-SSH source as malformed or as SSH.
+    // Recheck source capabilities on every operation; older hosts may misparse non-SSH sources.
     requiredOrcadMigrationSourceCapability(manifest.source),
-    // A destination without the blob channel would strip the field and commit unchecked.
+    // Hosts without blob capability would strip expectedBlobs and commit unchecked.
     (capabilities) => {
-      const unsupported = findUnsupportedMigrationBlobKind(expectedBlobs, capabilities)
+      if (
+        imports &&
+        (manifest.payload.dormantState?.automations ?? []).some((automation) =>
+          hasModernAutomationLaunchSetup(automationCanonicalLaunchSetup(automation))
+        ) &&
+        !capabilities.includes(AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY)
+      ) {
+        throw new Error(
+          'Update Orca on the destination host to keep automation agent launch settings.'
+        )
+      }
+      const unsupported = findUnsupportedMigrationBlobKind(requiredBlobs, capabilities)
       if (unsupported) {
         throw new Error(orcadMigrationBlobKindUnsupportedBlocker(unsupported))
       }
@@ -221,7 +270,7 @@ async function request(
   return response.result
 }
 
-async function sendSupportedMigrationRequest(
+export async function sendSupportedMigrationRequest(
   pairing: NonNullable<ReturnType<typeof parsePairingCode>>,
   method: string,
   params: unknown,

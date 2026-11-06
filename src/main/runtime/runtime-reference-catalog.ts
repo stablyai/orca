@@ -9,20 +9,23 @@ import { readAllWorktreeMetaForHost } from '../persistence/host-qualified-worktr
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { splitWorktreeIdForFilesystem, worktreeIdsEqual } from '../../shared/worktree/id'
 import { getWorktreeHostIdentity } from '../../shared/worktree/host-qualified-identity'
-import { folderWorkspaceToWorktree } from '../../shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktree } from '../../shared/folder-workspaces/folder-workspace-worktree'
 import {
   getWorkspaceAttachments,
   matchesLegacyWorkspaceAttachment
-} from '../../shared/workspace-attachments'
-import { legacyWorkspaceAttachments } from '../../shared/workspace-attachment-legacy'
-import { getWorkspaceReferenceIdentity } from '../../shared/workspace-reference-identity'
+} from '../../shared/workspace-attachments/workspace-attachments'
+import { legacyWorkspaceAttachments } from '../../shared/workspace-attachments/workspace-attachment-legacy'
+import { getWorkspaceReferenceIdentity } from '../../shared/workspace-attachments/workspace-reference-identity'
 import {
   isPathInsideOrEqual,
   isWslUncPathForCallerLinuxPath,
   isWslUncPathForLinuxMountedPath
 } from '../../shared/cross-platform-path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
-import { branchSelectorMatches, runtimePathsEqual } from './runtime-worktree-path-identity'
+import {
+  branchSelectorMatches,
+  runtimePathsEqual
+} from './workspaces/catalog/runtime-worktree-path-identity'
 
 export function listReferenceWorkspaces(
   store: Pick<
@@ -135,6 +138,31 @@ export function listWorkspaceReferences(worktree: ReferenceWorkspace): RuntimeRe
   }
 }
 
+/** Selects from the cached listing, then once from a fresh scan: unsaved worktrees and cold-cache
+ *  branches only resolve after one. */
+export async function selectWarmedReferenceWorkspace(
+  store: Parameters<typeof listReferenceWorkspaces>[0],
+  listing: {
+    cached: () => readonly Worktree[] | undefined
+    scan: () => Promise<readonly Worktree[]>
+  },
+  selector: string,
+  cwd?: string
+): Promise<ReferenceWorkspace> {
+  try {
+    return selectReferenceWorkspace(listReferenceWorkspaces(store, listing.cached()), selector, cwd)
+  } catch (error) {
+    if (!(error instanceof Error) || error.message !== 'selector_not_found') {
+      throw error
+    }
+    return selectReferenceWorkspace(
+      listReferenceWorkspaces(store, await listing.scan()),
+      selector,
+      cwd
+    )
+  }
+}
+
 export function selectReferenceWorkspace(
   workspaces: readonly ReferenceWorkspace[],
   selector: string,
@@ -185,7 +213,7 @@ export function selectReferenceWorkspace(
         (row.branch && branchSelectorMatches(row.branch, selector))
     )
   }
-  // Why: duplicate registrations on one host describe one path; identical paths on different hosts do not.
+  // Deduplicate same-host path registrations; identical paths on different hosts remain distinct.
   if (
     (selector === 'current' || selector.startsWith('path:')) &&
     matches.length > 1 &&

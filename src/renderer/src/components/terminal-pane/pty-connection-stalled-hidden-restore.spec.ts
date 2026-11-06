@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildKittyKeyboardRestore,
   RESET_AFTER_BYTE_GAP
-} from '../../../../shared/terminal-mode-reset-profiles'
+} from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
 import { NORMAL_BUFFER_PROLOGUE } from './pty-connection-test-constants'
 import {
@@ -13,7 +13,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -60,6 +64,8 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
 
     it('abandons a stalled hidden restore with reset, warning, then pending foreground', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -86,7 +92,11 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
         isVisibleRef: { current: false },
         startup: { command: 'codex' }
       })
-      const disposable = connectPanePty(pane as never, manager as never, deps as never)
+      const disposable = connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+      )
       await flushAsyncTicks(6)
 
       expect(capturedDataCallback.current).not.toBeNull()
@@ -125,8 +135,7 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
       const combinedLiveIndex = written.indexOf(firstLive + secondLive)
       expect(warningIndex).toBeGreaterThanOrEqual(0)
       expect(written[warningIndex - 1]).toBe(ABANDONED_RESTORE_GAP)
-      // Exactly one: writeRestoreUnavailableWarning already grounds the gap, so a
-      // second unconditional write here was pure duplication.
+      // Warning already grounds the gap; a second unconditional reset would duplicate it.
       expect(written.filter((data) => data === ABANDONED_RESTORE_GAP)).toHaveLength(1)
       expect(combinedLiveIndex).toBeGreaterThan(warningIndex)
 
@@ -145,13 +154,11 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
       disposable.dispose()
     })
 
-    // STA-4042: the hidden-delivery gate drops renderer-bound bytes, so the span it
-    // ate can contain the `ESC[22m` closing a bold run. Abandoning the restore means
-    // no snapshot will rebuild the buffer, so unless the pen is cleared here every
-    // drained and subsequent cell inherits bold — the "regular text renders bold"
-    // field report.
+    // A dropped span can swallow bold reset; abandonment must ground the pen when no snapshot will restore it (STA-4042).
     it('clears the SGR pen before draining abandoned foreground chunks', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -178,7 +185,11 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
         isVisibleRef: { current: false },
         startup: { command: 'codex' }
       })
-      const disposable = connectPanePty(pane as never, manager as never, deps as never)
+      const disposable = connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks2)
+      )
       await flushAsyncTicks(6)
 
       vi.useFakeTimers()
@@ -206,6 +217,8 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
 
     it('grounds byte-gap state before a remote restore re-arms', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const remotePtyId = 'remote:env-1@@terminal-rearm'
       const transport = createMockTransport(remotePtyId)
       const capturedDataCallback: {
@@ -225,7 +238,11 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
 
       const pane = createPane(1)
       const deps = createDeps({ isVisibleRef: { current: false } })
-      const disposable = connectPanePty(pane as never, createManager(1) as never, deps as never)
+      const disposable = connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks3)
+      )
       await flushAsyncTicks(6)
 
       vi.useFakeTimers()
@@ -245,8 +262,7 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
       const liveIndex = written.indexOf(live)
       expect(resetIndex).toBeGreaterThanOrEqual(0)
       expect(liveIndex).toBeGreaterThan(resetIndex)
-      // The re-arm arm grounds in rearmRemoteHiddenOutputRestoreInsteadOfWarning,
-      // so the abandon body must not ground a second time.
+      // Remote re-arm already grounds the gap; abandonment must not do it again.
       expect(written.filter((data) => data === ABANDONED_RESTORE_GAP)).toHaveLength(1)
       expect(written.join('')).not.toContain('main recovery was unavailable')
 
@@ -255,6 +271,8 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
 
     it('falls back after repeated null hidden restore retries and drains blocked foreground', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -279,7 +297,11 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
         isVisibleRef: { current: false },
         startup: { command: 'codex' }
       })
-      const disposable = connectPanePty(pane as never, manager as never, deps as never)
+      const disposable = connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks4)
+      )
       await flushAsyncTicks(6)
 
       expect(capturedDataCallback.current).not.toBeNull()
@@ -307,8 +329,7 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
       expect(getMainBufferSnapshot).toHaveBeenCalledTimes(4)
       expect(warningIndex).toBeGreaterThanOrEqual(0)
       expect(liveIndex).toBeGreaterThan(warningIndex)
-      // This arm gives up on recovery too, so the gap is grounded exactly once
-      // before the blocked foreground is drained under it.
+      // Ground the abandoned gap once before draining blocked foreground bytes.
       expect(written.filter((data) => data === ABANDONED_RESTORE_GAP)).toHaveLength(1)
       expect(written.indexOf(ABANDONED_RESTORE_GAP)).toBeLessThan(liveIndex)
       disposable.dispose()
@@ -316,6 +337,8 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
 
     it('drops pending foreground overflow when a stalled hidden restore falls back', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks5 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -342,7 +365,11 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
         isVisibleRef: { current: false },
         startup: { command: 'codex' }
       })
-      const disposable = connectPanePty(pane as never, manager as never, deps as never)
+      const disposable = connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks5)
+      )
       await flushAsyncTicks(6)
 
       expect(capturedDataCallback.current).not.toBeNull()
@@ -368,6 +395,8 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
 
     it('coalesces tiny pending foreground chunks when stalled hidden restore falls back', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks6 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -395,7 +424,11 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
         isVisibleRef: { current: false },
         startup: { command: 'codex' }
       })
-      const disposable = connectPanePty(pane as never, manager as never, deps as never)
+      const disposable = connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks6)
+      )
       await flushAsyncTicks(6)
 
       expect(capturedDataCallback.current).not.toBeNull()
@@ -474,6 +507,8 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
       let disposable: { dispose: () => void } | null = null
       try {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks7 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport('pty-id')
         const capturedDataCallback: {
           current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -497,7 +532,11 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
         const deps = createDeps({
           isVisibleRef: { current: false }
         })
-        disposable = connectPanePty(pane as never, manager as never, deps as never)
+        disposable = connectPanePty(
+          pane as never,
+          manager as never,
+          bindPaneAgentTitleMocks(deps as never, agentTitleMocks7)
+        )
         await flushAsyncTicks(6)
 
         capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
@@ -539,6 +578,8 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
 
     it('keeps a newer same-PTY hidden restore after a timed-out snapshot resolves late', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks8 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -579,7 +620,11 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
         isVisibleRef: { current: false },
         startup: { command: 'codex' }
       })
-      const disposable = connectPanePty(pane as never, manager as never, deps as never)
+      const disposable = connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks8)
+      )
       await flushAsyncTicks(6)
 
       expect(capturedDataCallback.current).not.toBeNull()
@@ -641,6 +686,8 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
 
     it('ignores an async hidden-backlog snapshot if the pane changes PTYs first', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks9 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('old-pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -665,7 +712,11 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
       const deps = createDeps({
         isVisibleRef: { current: false }
       })
-      const disposable = connectPanePty(pane as never, manager as never, deps as never)
+      const disposable = connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks9)
+      )
       await flushAsyncTicks(6)
 
       capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
@@ -695,6 +746,8 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
 
     it('does not recover stale hidden backlog state after the pane switches PTYs', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks10 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('old-pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -717,7 +770,11 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
       const deps = createDeps({
         isVisibleRef: { current: false }
       })
-      const disposable = connectPanePty(pane as never, manager as never, deps as never)
+      const disposable = connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks10)
+      )
       await flushAsyncTicks(6)
 
       capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
@@ -743,6 +800,8 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
         return vi.fn()
       })
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks11 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -767,7 +826,11 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
       const deps = createDeps({
         isVisibleRef: { current: false }
       })
-      const disposable = connectPanePty(pane as never, manager as never, deps as never)
+      const disposable = connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks11)
+      )
       await flushAsyncTicks(6)
 
       capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })

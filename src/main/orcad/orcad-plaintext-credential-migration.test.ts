@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { SecretStore } from '../../shared/secret-store'
 import { _resetSecretStoreForTests, setSecretStore } from '../../shared/secret-store'
-import { readStoredCredentialToken } from '../integration-credential-file'
+import { readStoredCredentialToken } from '../credentials/integration-credential-file'
 import { migratePlaintextCredentials } from './orcad-plaintext-credential-migration'
 import { orcadSecretStateFileName } from './orcad-secret-key-record'
 import { createOrcadSecretStore } from './orcad-secret-store'
@@ -24,7 +24,7 @@ describe('migratePlaintextCredentials', () => {
       keyDir: dir,
       platform: 'linux',
       env: {},
-      keyring: null,
+      legacyKeyring: null,
       machineIdentity: () => '0123456789abcdef0123456789abcdef'
     })
     store = orcadStore
@@ -105,14 +105,13 @@ describe('migratePlaintextCredentials', () => {
     const path = join(dir, 'jira.enc')
     writeFileSync(path, 'jira-plaintext', 'utf8')
     const otherMachine = 'fedcba9876543210fedcba9876543210'
-    // An unreadable key record makes the store refuse to seal.
     writeFileSync(join(dir, orcadSecretStateFileName(otherMachine)), '{', 'utf8')
     const locked = createOrcadSecretStore()
     await locked.prepare({
       keyDir: dir,
       platform: 'linux',
       env: {},
-      keyring: null,
+      legacyKeyring: null,
       machineIdentity: () => otherMachine
     })
 

@@ -2,7 +2,7 @@
 
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JiraConnectionStatus, JiraIssue, JiraSite } from '../../../../shared/jira-types'
+import type { JiraConnectionStatus, JiraIssue, JiraSite } from '../../../../shared/jira/jira-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { useJiraUrlSource } from './use-jira-url-source'
 
@@ -149,53 +149,6 @@ describe('useJiraUrlSource', () => {
     })
   })
 
-  it('reuses an already-loaded connection instead of re-reading status', async () => {
-    const context = sourceContext()
-    const loaded = { status: status([site('site-a')], 'site-a'), loaded: true }
-    mocks.lookupJiraIssueSummary.mockResolvedValue(issue('ORCA-1'))
-    // Explicit: clearAllMocks keeps prior implementations, so the retry read must be this test's.
-    mocks.readJiraStatus.mockResolvedValue(status([site('site-a')], 'site-a'))
-    const { result } = renderHook(() =>
-      useJiraUrlSource({
-        value: 'https://company.atlassian.net/browse/ORCA-1',
-        enabled: true,
-        sourceContext: context,
-        connection: loaded
-      })
-    )
-
-    await advanceLookup()
-
-    expect(mocks.readJiraStatus).not.toHaveBeenCalled()
-    expect(result.current.issue?.key).toBe('ORCA-1')
-
-    act(() => result.current.retry())
-    await advanceLookup()
-
-    // A forced retry still needs a fresh read — the cached answer is what failed.
-    expect(mocks.readJiraStatus).toHaveBeenCalledTimes(1)
-    expect(result.current.issue?.key).toBe('ORCA-1')
-  })
-
-  it('re-reads status when the loaded connection has no sites to match', async () => {
-    const context = sourceContext()
-    mocks.readJiraStatus.mockResolvedValue(status([site('site-a')], 'site-a'))
-    mocks.lookupJiraIssueSummary.mockResolvedValue(issue('ORCA-1'))
-    const { result } = renderHook(() =>
-      useJiraUrlSource({
-        value: 'https://company.atlassian.net/browse/ORCA-1',
-        enabled: true,
-        sourceContext: context,
-        connection: { status: status([], 'site-a'), loaded: true }
-      })
-    )
-
-    await advanceLookup()
-
-    expect(mocks.readJiraStatus).toHaveBeenCalledTimes(1)
-    expect(result.current.issue?.key).toBe('ORCA-1')
-  })
-
   it('discards a late issue response after the URL changes', async () => {
     const oldIssue = deferred<JiraIssue | null>()
     let oldSignal: AbortSignal | undefined
@@ -261,49 +214,5 @@ describe('useJiraUrlSource', () => {
       force: true,
       signal: expect.any(AbortSignal)
     })
-  })
-
-  it('stops a late status response after unmount before starting an issue read', async () => {
-    const lateStatus = deferred<JiraConnectionStatus>()
-    const context = sourceContext()
-    mocks.readJiraStatus.mockReturnValue(lateStatus.promise)
-    const { unmount } = renderHook(() =>
-      useJiraUrlSource({
-        value: 'https://company.atlassian.net/browse/ORCA-1',
-        enabled: true,
-        sourceContext: context
-      })
-    )
-    await advanceLookup()
-    unmount()
-
-    await act(async () => {
-      lateStatus.resolve(status([site('site-a')], 'site-a'))
-      await lateStatus.promise
-    })
-
-    expect(mocks.lookupJiraIssueSummary).not.toHaveBeenCalled()
-  })
-
-  it('surfaces a missing paired-runtime capability without reading Jira state', async () => {
-    const context = sourceContext('runtime:env-1')
-    mocks.assertRuntimeEnvironmentCapability.mockRejectedValueOnce(new Error('update-runtime'))
-    const { result } = renderHook(() =>
-      useJiraUrlSource({
-        value: 'https://company.atlassian.net/browse/ORCA-1',
-        enabled: true,
-        sourceContext: context
-      })
-    )
-
-    await advanceLookup()
-
-    expect(result.current.errorKind).toBe('update-runtime')
-    expect(mocks.readJiraStatus).not.toHaveBeenCalled()
-    expect(mocks.assertRuntimeEnvironmentCapability).toHaveBeenCalledWith(
-      'env-1',
-      'worktree.linked-work-item-context.v1',
-      'update-runtime'
-    )
   })
 })

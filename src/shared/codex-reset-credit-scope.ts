@@ -38,8 +38,7 @@ function buildOfferRevision(limits: ProviderRateLimits): string {
       return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0
     })
 
-  // Why: clients treat this as an opaque compare-and-swap token. Including the
-  // fetched-at revision makes a refresh invalidate a confirmation based on old quota data.
+  // Include fetch revision in the opaque CAS token so refresh invalidates confirmations based on old quota data.
   return `v1:${JSON.stringify([
     credits?.availableCount ?? 0,
     credits?.totalEarnedCount ?? null,

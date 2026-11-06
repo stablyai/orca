@@ -1,5 +1,5 @@
 import type { JiraSlice, JiraSliceSet } from './jira-slice-contract'
-import type { JiraIssue } from '../../../../shared/jira-types'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import { getJiraReadIdentity } from './jira-read-coordination'
 
 export function createJiraIssuePatchAction(set: JiraSliceSet): Pick<JiraSlice, 'patchJiraIssue'> {

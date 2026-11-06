@@ -31,10 +31,7 @@ export type WebRuntimeSessionMocks = {
   hasMaterializedWebRuntimeBrowserPage: SessionMock
 }
 
-/**
- * Store actions the optimistic browser stage drives, owned here rather than by each test file's
- * hoisted mock object so every browser-create suite models staging the same way.
- */
+/** Centralize optimistic browser actions so every browser-create suite models staging consistently. */
 export const stagedBrowserTabMocks: {
   closeBrowserTab: SessionMock
   removeRemoteBrowserPageHandle: SessionMock
@@ -189,6 +186,7 @@ export function resetBrowserTabCreateEnvironment(): void {
 export function stubTerminalCreateEnvironment(mocks: WebRuntimeSessionMocks): void {
   vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
   mocks.getState.mockReturnValue({
+    runtimeStatusByEnvironmentId: new Map(),
     settings: {
       activeRuntimeEnvironmentId: ENVIRONMENT_ID
     },

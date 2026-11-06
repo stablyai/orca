@@ -1,4 +1,5 @@
-import { hasRuntimeRpcErrorCode, RuntimeRpcCallError } from '../../../../runtime/runtime-rpc-result'
+import { hasRuntimeRpcErrorCode } from '../../../../../../shared/runtime-rpc-error-code'
+import { RuntimeRpcCallError } from '../../../../runtime/runtime-rpc-result'
 
 export function isRuntimeMethodNotFoundError(error: unknown): boolean {
   return error instanceof RuntimeRpcCallError && error.code === 'method_not_found'

@@ -5,11 +5,6 @@ import { createRoot } from 'react-dom/client'
 import { describe, expect, it, vi } from 'vitest'
 import type { Image, View } from 'react-native'
 import {
-  updateBrowserImageSource,
-  updateBrowserLayerVisibility,
-  whenBrowserFrameDisplayable
-} from './browser-frame-layer-paint'
-import {
   updateBrowserImageSource as updateBrowserImageSourceOnWeb,
   updateBrowserLayerVisibility as updateBrowserLayerVisibilityOnWeb,
   whenBrowserFrameDisplayable as whenBrowserFrameDisplayableOnWeb
@@ -18,10 +13,7 @@ import {
 /** A 1x1 gif, so the probe in the web sibling has something a real decoder would accept. */
 const FRAME_URI = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
 
-/**
- * What RN Web renders an `<Image>` as: the ref is the outer element and the frame is painted as a
- * `background-image` on its first child, which is where `resizeMode` already put `background-size`.
- */
+// RN Web Image ref is outer host; first child holds background-image and resizeMode styles.
 function mountImageHost(): HTMLElement {
   const host = document.createElement('div')
   host.append(document.createElement('div'))
@@ -39,26 +31,6 @@ function mountLayer(): HTMLElement {
 const asImageRef = (node: HTMLElement) => node as unknown as Image
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same mismatch, for the layer refs the visibility writer takes.
 const asViewRef = (node: HTMLElement) => node as unknown as View
-
-describe('the native frame-path writes against an RN Web ref', () => {
-  it('throws from updateBrowserImageSource, because a DOM node has no setNativeProps', () => {
-    expect(() => updateBrowserImageSource(asImageRef(mountImageHost()), FRAME_URI)).toThrow(
-      /setNativeProps is not a function/
-    )
-  })
-
-  it('throws from updateBrowserLayerVisibility for the same reason', () => {
-    expect(() =>
-      updateBrowserLayerVisibility([asViewRef(mountLayer()), asViewRef(mountLayer())], 0)
-    ).toThrow(/setNativeProps is not a function/)
-  })
-
-  it('reports no decode of its own: the rendered Image fires onLoad natively', () => {
-    const onDisplayable = vi.fn()
-    whenBrowserFrameDisplayable(FRAME_URI, { onDisplayable, onUndecodable: vi.fn() })
-    expect(onDisplayable).not.toHaveBeenCalled()
-  })
-})
 
 describe('the web siblings', () => {
   it('paints the frame as a background-image on the element RN Web sizes', () => {
@@ -97,9 +69,7 @@ describe('the web siblings', () => {
     await vi.waitFor(() => expect(onDisplayable).toHaveBeenCalledTimes(1))
   })
 
-  // happy-dom resolves `decode()` for anything, because it has no decoder; a browser rejects on a
-  // corrupt frame. Stubbed rather than skipped: the rejection is the only thing that frees the
-  // pending layer, and an untested one strands the pane on the frame before it for good.
+  // happy-dom has no decoder and always resolves decode; stub rejection to prove failed frame frees pending layer instead of freezing pane.
   it('reports a frame that cannot decode, so the pending layer is not stranded', async () => {
     const onUndecodable = vi.fn()
     const realImage = window.Image
@@ -122,23 +92,10 @@ describe('the web siblings', () => {
   })
 })
 
-/**
- * The same write against the component it is written for, rather than against a shape this file
- * built to match it.
- *
- * `updateBrowserImageSource` paints the host's first element child because that is where RN Web
- * puts the frame today. Every other test here hands it a `div > div` of its own making, so an RN
- * Web release that reorders the host's children — it also renders an accessibility `<img>` in
- * there — would keep all of them green and paint nothing on screen. This one asks RN Web which
- * element it painted and then checks the write lands on that one.
- */
+// Test actual RN Web Image alongside synthetic div fixtures: child reorder could leave fixtures green while writer paints wrong node.
+// Find rendered frame element by its background and verify write lands there.
 describe('against a real react-native-web Image', () => {
-  /**
-   * Loaded through `createRequire` rather than imported: react-native-web ships no type
-   * declarations, so a bare import is an implicit `any` and drops this file out of the
-   * tests-typecheck ratchet. `require` is typed as returning `any` at its own signature, so the
-   * one prop this renders with can be declared here instead of asserted.
-   */
+  // createRequire avoids implicit-any import from untyped RN Web, preserving test typecheck; declare the sole rendered prop instead of asserting.
   const { Image: ReactNativeWebImage }: { Image: ComponentType<{ source: { uri: string } }> } =
     createRequire(import.meta.url)('react-native-web')
 
@@ -211,10 +168,7 @@ describe('against a real react-native-web Image', () => {
     return images[0]?.getAttribute('src') ?? null
   }
 
-  /**
-   * The streaming write never reaches the accessibility `<img>`: it is a prop of RN Web's own
-   * making, and the frame path writes styles.
-   */
+  // Streaming writes styles, leaving RN Web’s prop-driven accessibility img unchanged.
   it('leaves the accessibility image alone when a frame is written imperatively', async () => {
     const { host, unmount } = await renderImage()
     try {
@@ -226,13 +180,7 @@ describe('against a real react-native-web Image', () => {
     }
   })
 
-  /**
-   * A render does reach it, which is what stops the case above being "for the life of the pane".
-   *
-   * RN Web derives the hidden image's `src` from the same `source` prop it paints the background
-   * from, so the pane's next render for any other reason — address focus, a dialog, the view mode,
-   * zoom — carries `renderedFrameSource` and moves it to whatever frame is newest then.
-   */
+  // Any later pane render updates hidden img from newest renderedFrameSource, including focus/dialog/view/zoom changes.
   it('moves the accessibility image on the next render from the pane state', async () => {
     const { host, rerenderWith, unmount } = await renderImage()
     try {

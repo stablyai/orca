@@ -8,7 +8,6 @@ import {
 import type { Recording } from './recording-scenario'
 import type { RecordedValue } from './recording-values'
 
-/** What a golden says about behaviour, whatever else its file format carries alongside. */
 export type DecodedGolden = {
   operation: string
   family: string
@@ -16,24 +15,21 @@ export type DecodedGolden = {
   recording: Recording
 }
 
-/** One place a recording differs: a checkpoint, an observation field, and the JSON path inside it. */
 export type RecordingDifference = {
   checkpoint: string
   field: string
   path: string
   expected: RecordedValue
   actual: RecordedValue
+  expectedPresent?: boolean
+  actualPresent?: boolean
 }
 
-/** The same difference seen at several checkpoints, which an append-only history repeats. */
 export type GroupedDifference = Omit<RecordingDifference, 'checkpoint'> & { checkpoints: string[] }
 
 export const IDENTITY_FIELDS = ['operation', 'family', 'namedDeltas'] as const
 
-/**
- * Resolves a pooled golden without judging its format version, so a diff can read both sides of a
- * format change. `readGolden` is the strict reader the recording suites use.
- */
+// Ignore format version for diffs across format changes; recording suites use the strict readGolden reader.
 export function decodeGoldenFile(file: unknown, id: string): DecodedGolden {
   if (file === null || typeof file !== 'object' || Array.isArray(file)) {
     throw new Error(`Golden ${id} is not a JSON object`)
@@ -105,11 +101,8 @@ export function excerpt(value: RecordedValue, limit = 600): string {
   return json === undefined ? 'absent' : json.length > limit ? `${json.slice(0, limit)}…` : json
 }
 
-/**
- * Checkpoint names keyed by occurrence, because an id may repeat within one golden
- * (`tk-list-linear` records `load-settled` twice). A repeat is shown as `id#2`.
- */
-function checkpointKeys(recording: Recording): string[] {
+// Key repeated checkpoint ids by occurrence so later instances remain distinguishable.
+export function checkpointKeys(recording: Recording): string[] {
   const seen = new Map<string, number>()
   return recording.checkpoints.map((checkpoint) => {
     const occurrence = (seen.get(checkpoint.id) ?? 0) + 1
@@ -118,7 +111,6 @@ function checkpointKeys(recording: Recording): string[] {
   })
 }
 
-/** Checkpoints only one side records, and whether the shared ones kept their order. */
 export function checkpointListDifference(
   expected: Recording,
   actual: Recording
@@ -136,10 +128,54 @@ export function checkpointListDifference(
   }
 }
 
-/** Every field that differs at every checkpoint both sides record, each at its first differing path. */
+// Preserve absent members and array lengths as separate difference evidence.
+export function valueDifferences(
+  expected: RecordedValue,
+  actual: RecordedValue,
+  path = ''
+): Omit<RecordingDifference, 'checkpoint' | 'field'>[] {
+  if (expected === actual) {
+    return []
+  }
+  if (
+    expected === null ||
+    actual === null ||
+    typeof expected !== 'object' ||
+    typeof actual !== 'object' ||
+    Array.isArray(expected) !== Array.isArray(actual)
+  ) {
+    return [{ path, expected, actual }]
+  }
+  const differences: Omit<RecordingDifference, 'checkpoint' | 'field'>[] = []
+  if (Array.isArray(expected) && Array.isArray(actual) && expected.length !== actual.length) {
+    differences.push({ path: `${path}.length`, expected: expected.length, actual: actual.length })
+  }
+  const left = new Map(Object.entries(expected))
+  const right = new Map(Object.entries(actual))
+  for (const key of [...new Set([...left.keys(), ...right.keys()])].sort()) {
+    const next = Array.isArray(expected) ? `${path}[${key}]` : `${path}.${key}`
+    const mine = left.get(key)
+    const theirs = right.get(key)
+    if (!left.has(key) || !right.has(key)) {
+      differences.push({
+        path: next,
+        expected: left.has(key) ? mine! : { $rpc: 'absent' },
+        actual: right.has(key) ? theirs! : { $rpc: 'absent' },
+        expectedPresent: left.has(key),
+        actualPresent: right.has(key)
+      })
+    } else {
+      differences.push(...valueDifferences(mine!, theirs!, next))
+    }
+  }
+  return differences
+}
+
+// Align shared checkpoints by identity and occurrence even when lists differ.
 export function recordingDifferences(
   expected: Recording,
-  actual: Recording
+  actual: Recording,
+  complete = false
 ): RecordingDifference[] {
   const actualKeys = checkpointKeys(actual)
   const actualByKey = new Map(
@@ -155,23 +191,18 @@ export function recordingDifferences(
     for (const field of OBSERVATION_FIELDS) {
       const left = checkpoint.observation[field]
       const right = found.observation[field]
-      if (canonicalJson(left) === canonicalJson(right)) {
+      if (!complete && canonicalJson(left) === canonicalJson(right)) {
         continue
       }
-      const at = firstDifference(left, right)
-      differences.push({
-        checkpoint: key,
-        field,
-        path: at.path,
-        expected: at.expected,
-        actual: at.actual
-      })
+      for (const at of complete ? valueDifferences(left, right) : [firstDifference(left, right)]) {
+        differences.push({ checkpoint: key, field, ...at })
+      }
     }
   }
   return differences
 }
 
-/** Why grouped: a moved early entry re-appears in every later checkpoint of an append-only field. */
+// Group repeated differences from append-only histories across checkpoints.
 export function groupDifferences(differences: RecordingDifference[]): GroupedDifference[] {
   const groups = new Map<string, GroupedDifference>()
   for (const difference of differences) {
@@ -179,7 +210,9 @@ export function groupDifferences(differences: RecordingDifference[]): GroupedDif
       difference.field,
       difference.path,
       canonicalJson(difference.expected),
-      canonicalJson(difference.actual)
+      canonicalJson(difference.actual),
+      difference.expectedPresent,
+      difference.actualPresent
     ].join('\0')
     const group = groups.get(key)
     if (group) {
@@ -192,7 +225,6 @@ export function groupDifferences(differences: RecordingDifference[]): GroupedDif
   return [...groups.values()]
 }
 
-/** A golden's identity fields that differ, named so a failure says which one moved. */
 export function identityDifferences(
   expected: DecodedGolden,
   actual: DecodedGolden

@@ -1,16 +1,17 @@
 import type { AppState } from '../types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type {
-  WorkspaceCleanupCandidate,
-  WorkspaceCleanupDismissal,
-  WorkspaceCleanupUnverifiedRemovalConsent
-} from '../../../../shared/workspace-cleanup'
-import { shouldForceWorkspaceCleanupRemoval } from '../../../../shared/workspace-cleanup'
+
+import {
+  type WorkspaceCleanupCandidate,
+  type WorkspaceCleanupDismissal,
+  type WorkspaceCleanupUnverifiedRemovalConsent,
+  shouldForceWorkspaceCleanupRemoval
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   getWorkspaceCleanupCandidateIdentity,
   getWorkspaceCleanupHostIdentity
-} from '../../../../shared/workspace-cleanup-host-identity'
-import type { PreservedBranchCleanup } from '@/lib/preserved-branch-cleanup'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
+import type { PreservedBranchCleanup } from '../../../../shared/git/branches/preserved-branch-cleanup'
 import {
   preflightWorkspaceCleanupCandidates,
   resolveWorkspaceCleanupRemovalTargets,
@@ -18,6 +19,7 @@ import {
 } from './workspace-cleanup-removal-targets'
 import { enrichWorkspaceCleanupCandidates } from './workspace-cleanup-candidate-enrichment'
 import { invalidateWorkspaceCleanupScanProgress } from './workspace-cleanup-scan-progress'
+import { assertWorkspaceCleanupAgentStopApproved } from './workspace-cleanup-agent-evidence'
 
 export type WorkspaceCleanupFailure = {
   worktreeId: string
@@ -53,9 +55,7 @@ export async function removeWorkspaceCleanupCandidates(
   const failures: WorkspaceCleanupFailure[] = []
   const preservedBranches: PreservedBranchCleanup[] = []
 
-  // Why (STA-4343): the confirmed row — not the id — names the host to delete
-  // on. Everything below carries that owner so nothing re-derives it from the
-  // active workspace, which owns the same `repoId::path` id on another host.
+  // Carry confirmed owner throughout removal; re-deriving from active workspace can select a same-ID twin (STA-4343).
   const targets = resolveWorkspaceCleanupRemovalTargets(
     worktreeIds,
     get(),
@@ -124,14 +124,14 @@ export async function removeWorkspaceCleanupCandidates(
     ...targetsToRemove
   ].sort((a, b) => b.candidate.path.length - a.candidate.path.length)) {
     const result = await get().removeWorktree(
-      // The resolved target names the host whose row the user confirmed; the
-      // removal is routed there instead of to the active workspace's host.
       { id: candidate.worktreeId, executionHostId: target.executionHostId },
       shouldForceWorkspaceCleanupRemoval(candidate),
       // Why: cleanup reports outcomes in its own summary toasts; per-row
       // preserved-branch warnings would stack one toast per removed row.
       {
         suppressPreservedBranchToast: true,
+        assertBeforeDispatch: () =>
+          assertWorkspaceCleanupAgentStopApproved(get(), candidate, target.approvedCandidate),
         ...(sameIdSurvivingHostId ? { sameIdSurvivingHostId } : {}),
         ...(ignoreWorkspaceCleanupScanSurvivors
           ? { ignoreWorkspaceCleanupScanSurvivors: true }
@@ -172,9 +172,7 @@ export async function removeWorkspaceCleanupCandidates(
       const remainingCandidates = state.workspaceCleanupScan?.candidates.filter(
         (candidate) => !removedIdentities.has(getWorkspaceCleanupCandidateIdentity(candidate))
       )
-      // Why: a same-id row on another host survives this removal, and its
-      // dismissal/viewed marks are keyed by worktree id alone — dropping them
-      // would resurrect a row the user already ignored.
+      // Same-ID survivors share dismissal/viewed keys; retain their marks or ignored rows reappear.
       const survivingWorktreeIds = new Set(
         (remainingCandidates ?? []).map((candidate) => candidate.worktreeId)
       )

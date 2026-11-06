@@ -12,8 +12,7 @@ export function createTabsSplitRatioActions(
         if (!currentLayout) {
           return state
         }
-        // Why: an unchanged ratio must not mint fresh root state — every store
-        // subscriber wakes on the new reference (STA-3328).
+        // No-op ratios must preserve root identity to avoid waking every subscriber (STA-3328).
         let targetNode: TabGroupLayoutNode | undefined = currentLayout
         for (const segment of nodePath.length > 0 ? nodePath.split('.') : []) {
           targetNode =

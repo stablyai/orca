@@ -6,14 +6,7 @@ const WORKTREE = 'id:workspace-1'
 const TERMINAL = 'terminal-1'
 const TAB = 'tab-1'
 
-/**
- * Making a session tab the active one, and the reconciliation loop that keeps the tab list honest.
- *
- * The activation pair is recorded because of its one retry: a logical cutover is replayed once, so
- * a golden has to show two sender calls for one action and a non-cutover error showing one. The
- * stream-health controller is recorded for the opposite reason — its generation, barrier and
- * application-revision guards each drop a reply, and only a recording says which drop happened.
- */
+// Record activation’s cutover-only retry and reconciliation’s generation/barrier/revision drops through the real owners.
 export function sessionTabMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -83,7 +76,6 @@ export function sessionTabMountAdapters(
       return {
         action(name) {
           if (name === 'activate') {
-            // Nothing is fetched until the screen turns reconciliation on; the class starts off.
             controller.setReconciliationActive(true)
             return true
           }

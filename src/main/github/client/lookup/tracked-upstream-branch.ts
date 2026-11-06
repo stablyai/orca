@@ -54,7 +54,7 @@ export async function getTrackedUpstreamBranch(
     if (result.upstreamsByBranchName.has(branchName)) {
       return result.upstreamsByBranchName.get(branchName) ?? null
     }
-    // Why: a concurrent snapshot may finish before this branch exists in git; re-probe instead of returning a synthetic null.
+    // A concurrent snapshot can predate branch creation; reprobe instead of fabricating absence.
     const retryInFlight = trackedUpstreamSnapshotInFlight.get(cacheKey)
     if (retryInFlight) {
       const retryResult = await retryInFlight
@@ -62,7 +62,7 @@ export async function getTrackedUpstreamBranch(
     }
   }
 
-  // Why: PR polling asks about hundreds of branches at once; read all upstreams in one git process per repo/runtime, not one probe per branch.
+  // Share one repo/runtime upstream scan across hundreds of polled branches.
   const probeGeneration = beginTrackedUpstreamSnapshotProbe(cacheKey)
   const probe = probeTrackedUpstreamSnapshot(repoPath, connectionId, localGitOptions)
   trackedUpstreamSnapshotInFlight.set(cacheKey, probe)
@@ -117,7 +117,7 @@ export async function probeTrackedUpstreamSnapshot(
   const gitConfigSignature =
     startingGitConfigSignature === endingGitConfigSignature ? endingGitConfigSignature : undefined
   return {
-    // Why: don't cache an empty snapshot after a transient git failure, or every branch lookup re-probes on the next refresh tick.
+    // Do not cache failed snapshots; later lookups must be able to retry.
     cacheable: !configSignatureChanged && !probeFailed,
     probeFailed,
     ...(gitConfigSignature ? { gitConfigSignature } : {}),

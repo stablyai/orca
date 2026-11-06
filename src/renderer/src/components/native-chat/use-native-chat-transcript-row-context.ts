@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
+import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import type { NativeChatTranscriptRowContext } from './NativeChatTranscriptRow'
 import type { StructuredAgentSessionHostWork } from './use-structured-agent-session-transport-state'
@@ -12,7 +12,6 @@ type NativeChatTranscriptRowContextInput = Omit<
   hostWork: StructuredAgentSessionHostWork | undefined
 }
 
-/** The context every transcript row reads, stable until one of its inputs changes. */
 export function useNativeChatTranscriptRowContext({
   agent,
   hostWork,
@@ -20,10 +19,10 @@ export function useNativeChatTranscriptRowContext({
   revealedDiff,
   taskListPredecessors,
   expandedTurnIds,
+  latestTurnKey,
   deliveryNotices,
-  allowFileUriLinks,
   runtimeContext,
-  onLinkClick,
+  structuredAttachments,
   onToggleExpandedTurn,
   subagentDisclosure,
   onScrollMessageToTop,
@@ -37,10 +36,10 @@ export function useNativeChatTranscriptRowContext({
       revealedDiff,
       taskListPredecessors,
       expandedTurnIds,
+      latestTurnKey,
       deliveryNotices,
-      allowFileUriLinks,
       runtimeContext,
-      onLinkClick,
+      structuredAttachments,
       onToggleExpandedTurn,
       subagentDisclosure,
       onScrollMessageToTop,
@@ -49,14 +48,14 @@ export function useNativeChatTranscriptRowContext({
     [
       agent,
       hostWork,
-      allowFileUriLinks,
       expandSignal,
       expandedTurnIds,
+      latestTurnKey,
       deliveryNotices,
-      onLinkClick,
       onRevealDiff,
       revealedDiff,
       runtimeContext,
+      structuredAttachments,
       onScrollMessageToTop,
       taskListPredecessors,
       subagentDisclosure,

@@ -66,11 +66,12 @@ describe('DevinHookService', () => {
     }
     const script = readFileSync(getDevinManagedScriptPath(), 'utf8')
     expect(script).toContain('/hook/devin')
-    // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
-    // on the curl command line (EDR oversized-command-line false positive).
-    expect(script).toContain('printf \'%s\' "$payload" | curl')
+    // stdin keeps large payloads off the command line to avoid EDR false positives.
     expect(script).toContain('--data-urlencode "payload@-"')
     expect(script).not.toContain('--data-urlencode "payload=${payload}"')
+    if (process.platform !== 'win32') {
+      expect(script).toContain('printf \'%s\' "$payload" | LC_ALL= LC_NUMERIC=C curl')
+    }
   })
 
   it('preserves unrelated keys in Devin config when installing hooks', () => {
@@ -106,8 +107,7 @@ describe('DevinHookService', () => {
     const status = new DevinHookService().install()
 
     expect(status.state).toBe('installed')
-    // Why: parse as JSONC, not JSON — asserting with JSON.parse would only pass once the
-    // comment had been stripped, which is the regression this test exists to catch.
+    // JSON.parse would reject the comments this test must preserve.
     expect(parseJsonc(readFileSync(configPath, 'utf8')).hooks.UserPromptSubmit).toBeDefined()
   })
 
@@ -183,9 +183,9 @@ describe('DevinHookService', () => {
     try {
       const scriptPath = 'C:\\Users\\ada\\.orca\\agent-hooks\\devin-hook.cmd'
       const command = getDevinManagedCommand(scriptPath)
-      // Why: Git Bash strips backslashes from a bare path; forward slashes survive every host.
+      // Forward slashes survive Git Bash path handling.
       expect(command).toBe('C:/Users/ada/.orca/agent-hooks/devin-hook.cmd')
-      // A UNC home is cmd-safe but has no drive letter, so it keeps the encoded launcher.
+      // UNC paths retain the encoded launcher because they have no drive letter.
       expect(
         getDevinManagedCommand('\\\\server\\share\\ada\\.orca\\agent-hooks\\devin-hook.cmd')
       ).toMatch(/ -EncodedCommand \S+$/)
@@ -248,7 +248,6 @@ describe('DevinHookService', () => {
     mkdirSync(dirname(scriptPath), { recursive: true })
     writeFileSync(scriptPath, '#!/bin/sh\n')
 
-    // Only install the managed hook for UserPromptSubmit
     writeFileSync(
       configPath,
       `${JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command }] }] } }, null, 2)}\n`
@@ -277,7 +276,6 @@ describe('DevinHookService', () => {
         join('C:\\Users\\test\\AppData\\Roaming', 'devin', 'config.json')
       )
 
-      // Fallback when APPDATA is unset
       delete process.env.APPDATA
       expect(getDevinConfigPath()).toBe(join(homeDir, 'AppData', 'Roaming', 'devin', 'config.json'))
     } finally {

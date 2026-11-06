@@ -7,6 +7,9 @@ describe('connectionRetryAction', () => {
       const reload = vi.fn()
       connectionRetryAction({ hostId: 'h', needsReconnect: false, forceReconnect, reload })?.()
       expect(reload).toHaveBeenCalledTimes(1)
+      if (forceReconnect) {
+        expect(forceReconnect).not.toHaveBeenCalled()
+      }
     }
   })
 
@@ -32,13 +35,13 @@ describe('connectionRetryAction', () => {
   })
 
   it('re-reads when there is no host to re-dial', () => {
-    const reload = vi.fn()
-    connectionRetryAction({
-      hostId: undefined,
-      needsReconnect: true,
-      forceReconnect: null,
-      reload
-    })?.()
-    expect(reload).toHaveBeenCalledTimes(1)
+    for (const forceReconnect of [null, vi.fn()]) {
+      const reload = vi.fn()
+      connectionRetryAction({ hostId: undefined, needsReconnect: true, forceReconnect, reload })?.()
+      expect(reload).toHaveBeenCalledTimes(1)
+      if (forceReconnect) {
+        expect(forceReconnect).not.toHaveBeenCalled()
+      }
+    }
   })
 })

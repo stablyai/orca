@@ -1,18 +1,16 @@
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 /** Matches the renderer's other catalog-style cache TTLs (checks, work items, Jira). */
 export const RUNTIME_CATALOG_STALE_MS = 60_000
 
 let lastCatalogListedAt = 0
 
-/** Why: status coverage cannot observe catalog edits made by another client or the
- * orca CLI, so an old-enough listing must be re-read even when coverage looks complete. */
+/** Status coverage cannot detect other clients’ catalog edits; periodically reread even complete coverage. */
 export function isRuntimeCatalogListingStale(): boolean {
   return Date.now() - lastCatalogListedAt > RUNTIME_CATALOG_STALE_MS
 }
 
-/** Why: this timestamp is module-global, so without a reset one test's clock leaks
- * into every test after it and makes list-count assertions order-dependent. */
+/** Reset module timestamp so one test’s clock cannot affect later list-count assertions. */
 export function resetRuntimeCatalogListingForTests(): void {
   lastCatalogListedAt = 0
 }

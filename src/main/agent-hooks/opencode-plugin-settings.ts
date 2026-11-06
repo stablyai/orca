@@ -1,5 +1,5 @@
 import type { PluginSources } from '../../wsl-guest/plugin-overlay'
-import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
+import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import type { ManagedHookDetectionSettings } from './managed-hook-detection-commands'
 
 function enabled(settings: ManagedHookDetectionSettings, agent: 'opencode' | 'opencode2'): boolean {
@@ -7,7 +7,7 @@ function enabled(settings: ManagedHookDetectionSettings, agent: 'opencode' | 'op
 }
 
 export function openCodePluginSettingsKey(settings: ManagedHookDetectionSettings): string {
-  return `${enabled(settings, 'opencode')}:${enabled(settings, 'opencode2')}`
+  return `${enabled(settings, 'opencode')}:${enabled(settings, 'opencode2')}:${isAgentStatusHooksEnabledForAgent(settings, 'claude') && settings?.claudeSubagentNavigationEnabled !== false}`
 }
 
 export function selectOpenCodePluginSources(
@@ -17,6 +17,11 @@ export function selectOpenCodePluginSources(
   // Older relays retain omitted sources; an empty string replaces the cache and cannot write a plugin.
   return {
     ...sources,
+    claudeAgentViewSource:
+      isAgentStatusHooksEnabledForAgent(settings, 'claude') &&
+      settings?.claudeSubagentNavigationEnabled !== false
+        ? sources.claudeAgentViewSource
+        : '',
     opencodePluginSource: enabled(settings, 'opencode') ? sources.opencodePluginSource : '',
     opencode2PluginSource: enabled(settings, 'opencode2') ? sources.opencode2PluginSource : ''
   }

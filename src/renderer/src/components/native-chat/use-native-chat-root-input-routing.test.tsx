@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render } from '@testing-library/react'
 import { useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { captureInsertionTarget } from '../dictation/dictation-insertion-target'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import { useNativeChatRootInputRouting } from './use-native-chat-root-input-routing'
 
@@ -12,6 +13,7 @@ vi.mock('@/lib/visible-overlay', () => ({ hasVisibleOverlay: () => overlay.visib
 const insertTypedText = vi.fn(() => true)
 const composer: NativeChatComposerHandle = {
   focus: () => true,
+  insertAgentReferences: () => false,
   insertTypedText,
   appendText: () => {},
   acceptsText: () => true,
@@ -22,7 +24,14 @@ const composer: NativeChatComposerHandle = {
 
 function Chat({ revealed }: { revealed: boolean }): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
-  const composerRef = useRef<NativeChatComposerHandle | null>(composer)
+  const messageRef = useRef<HTMLTextAreaElement>(null)
+  const composerRef = useRef<NativeChatComposerHandle | null>({
+    ...composer,
+    focus: () => {
+      messageRef.current?.focus()
+      return true
+    }
+  })
   const answerRef = useRef<HTMLInputElement | null>(null)
   const routing = useNativeChatRootInputRouting({
     tabId: 'chat-tab',
@@ -47,6 +56,7 @@ function Chat({ revealed }: { revealed: boolean }): React.JSX.Element {
         Option
       </div>
       <div data-native-chat-code-content tabIndex={0} data-testid="code" />
+      <textarea ref={messageRef} aria-label="Message" />
       {createPortal(
         <div role="dialog">
           <button type="button">Close preview</button>
@@ -65,15 +75,6 @@ afterEach(() => {
 })
 
 describe('useNativeChatRootInputRouting', () => {
-  it('types into the composer from the transcript and from a focused button or link', () => {
-    const view = render(<Chat revealed />)
-    fireEvent.keyDown(view.getByTestId('transcript'), { key: 'h' })
-    fireEvent.keyDown(view.getByRole('button', { name: 'Copy code' }), { key: 'i' })
-    fireEvent.keyDown(view.getByRole('link', { name: 'example.com' }), { key: '!' })
-
-    expect(insertTypedText.mock.calls).toEqual([['h'], ['i'], ['!']])
-  })
-
   it('leaves Space with a focused button or link and letters with a composite control', () => {
     const view = render(<Chat revealed />)
     expect(fireEvent.keyDown(view.getByRole('button', { name: 'Copy code' }), { key: ' ' })).toBe(
@@ -95,13 +96,6 @@ describe('useNativeChatRootInputRouting', () => {
     fireEvent.keyDown(view.getByRole('button', { name: 'Close preview' }), { key: 'a' })
 
     expect(insertTypedText).not.toHaveBeenCalled()
-  })
-
-  it('types into the composer when nothing has focus and the chat is revealed', () => {
-    render(<Chat revealed />)
-    expect(fireEvent.keyDown(document.body, { key: 'q' })).toBe(false)
-
-    expect(insertTypedText).toHaveBeenCalledWith('q')
   })
 
   it('leaves keys typed with nothing focused alone while hidden, under an overlay, or after unmount', () => {
@@ -131,17 +125,25 @@ describe('useNativeChatRootInputRouting', () => {
     expect(insertTypedText).not.toHaveBeenCalled()
   })
 
-  it('leaves keys aimed at controls outside the chat alone', () => {
+  it('gives dictation started from the transcript or with nothing focused to the composer', () => {
+    const view = render(<Chat revealed />)
+    const message = view.getByRole('textbox', { name: 'Message' })
+    fireEvent.pointerDown(view.getByTestId('transcript'))
+    expect(captureInsertionTarget()).toEqual({ kind: 'text', element: message })
+
+    message.blur()
+    expect(captureInsertionTarget()).toEqual({ kind: 'text', element: message })
+  })
+
+  it('leaves dictation with a focused field or a control outside the chat', () => {
     render(<Chat revealed />)
     const field = document.createElement('input')
-    const list = document.createElement('div')
-    list.setAttribute('role', 'listbox')
-    list.tabIndex = 0
-    document.body.append(field, list)
+    const button = document.createElement('button')
+    document.body.append(field, button)
+    field.focus()
+    expect(captureInsertionTarget()).toEqual({ kind: 'text', element: field })
 
-    fireEvent.keyDown(field, { key: 'a' })
-    fireEvent.keyDown(list, { key: 'b' })
-
-    expect(insertTypedText).not.toHaveBeenCalled()
+    button.focus()
+    expect(captureInsertionTarget()).toBeNull()
   })
 })

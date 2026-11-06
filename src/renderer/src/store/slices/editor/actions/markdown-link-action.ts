@@ -3,11 +3,11 @@ import type { EditorSlice } from '../types/editor-slice'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { detectLanguage } from '@/lib/language-detect'
-import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { getLinkSourceLocalOpenOwner } from '@/lib/link-source-local-open-owner'
-import { resolveMarkdownLinkTarget } from '@/components/editor/markdown-internal-links'
+import { resolveMarkdownLinkTarget } from '@/components/editor/markdown/link-routing/markdown-internal-links'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import { statRuntimePath } from '@/runtime/runtime-file-metadata-client'
 import { getOpenedEditFileIdAfterOpen } from '../file-ids/editor-file-ids'
@@ -86,7 +86,7 @@ export function createMarkdownLinkAction(
               getLinkSourceLocalOpenOwner(initialState, sourceOwner, ctx.worktreeId)
             )
           ) {
-            // Why: a file:// link outside the worktree is client-local; remote runtime/SSH editors must not treat server paths as client paths.
+            // Outside-worktree file:// is client-local; never interpret remote runtime/SSH paths as desktop files.
             showLocalPathOpenBlockedToast()
             return
           }
@@ -138,7 +138,6 @@ export function createMarkdownLinkAction(
         return
       }
 
-      // target.kind === 'markdown'
       const { absolutePath, relativePath, line, column } = target
       let stats: { isDirectory: boolean }
       try {

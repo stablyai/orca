@@ -16,10 +16,7 @@ export function canonicalArtifactFilePath(filePath: string): string {
     : filePath
 }
 
-/**
- * One published link per file per host, whichever surface shares it: the editor, a rendered
- * preview, a browser tab, or the CLI. SSH keys match the CLI's.
- */
+/** Unify published links per file/host across editor, preview, browser and CLI; SSH keys match the CLI. */
 export function fileArtifactSourceKey(owner: FileArtifactOwner, filePath: string): string {
   const path = canonicalArtifactFilePath(filePath)
   const host = parseExecutionHostId(owner.executionHostId)

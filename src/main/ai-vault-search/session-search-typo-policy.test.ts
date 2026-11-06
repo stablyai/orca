@@ -4,7 +4,6 @@ import { openSessionSearchIndexFile } from './session-search-index-test-fixture'
 import { ensureSessionSearchQuerySchema } from './session-search-query-schema'
 import { SessionSearchTypoRepair } from './session-search-typo-repair'
 
-/** A session row the planted messages below hang off, so a repair can see them. */
 function addSession(db: SyncDatabase, id: number): void {
   db.prepare(
     `INSERT INTO sessions(id,agent,session_id,file_path,title,resume_command)
@@ -47,20 +46,13 @@ describe('typo repair policy', () => {
     }
   )
 
-  // A purge cuts a session loose in one transaction and reclaims its rows over
-  // many, so the vocabulary can still list a term whose only rows nothing can
-  // reach. Abandoning the prefix at that term would lose a repair the rest of
-  // the index can already serve.
   it('falls through to the best candidate a reader can still reach', async () => {
     const index = await openSessionSearchIndexFile('ss-typo-orphaned')
     try {
       const { db } = index
       ensureSessionSearchQuerySchema(db)
       addSession(db, 1)
-      // `coalesces` scores higher against `coalescs` than `coalesced` does, and
-      // shares its prefix, so only the fall-through can reach the reachable one.
-      // Session 2 is never created: these rows are what an unfinished purge
-      // leaves behind, and the vocabulary counts them all the same.
+      // The closer match belongs to absent session 2, simulating an unfinished orphan drain.
       for (const [term, session] of [
         ['coalesces', 2],
         ['coalesces', 2],

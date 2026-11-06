@@ -1,45 +1,36 @@
 import { tryRuntimeTargetForWorktreeOwner } from './worktree-owner-target'
+import { warnAmbiguousOwnerOnce } from '@/lib/ambiguous-owner-warning'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { AppState } from '../../../types'
+import { worktreeHostMatchOptions, worktreeMatchesHost } from './worktree-host-ownership'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
 import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
 import { isRuntimeSelectorNotFoundError } from './runtime-worktree-rpc-errors'
 import { persistWorktreeMeta } from '../metadata/worktree-meta-persist'
 import type { WorktreeSliceGet } from './worktree-slice-types'
+import { selectWorktreesByRepo } from '../../../workspace-record-selectors'
 
+/** Replaces only the copy on `hostId`; a same-id twin on another host is a different worktree. */
 export function replaceWorktreeInRepoLists(
-  worktreesByRepo: Record<string, Worktree[]>,
-  updatedWorktree: Worktree
+  state: Pick<AppState, 'repos' | 'worktreesByRepo'>,
+  updatedWorktree: Worktree,
+  hostId: ExecutionHostId
 ): Record<string, Worktree[]> {
   const repoId = getRepoIdFromWorktreeId(updatedWorktree.id)
-  const current = worktreesByRepo[repoId]
+  const current = selectWorktreesByRepo(state)[repoId]
   if (!current) {
-    return worktreesByRepo
+    return selectWorktreesByRepo(state)
   }
+  const options = worktreeHostMatchOptions(state, repoId, hostId)
   return {
-    ...worktreesByRepo,
+    ...selectWorktreesByRepo(state),
     [repoId]: current.map((worktree) =>
-      worktree.id === updatedWorktree.id ? updatedWorktree : worktree
+      worktree.id === updatedWorktree.id && worktreeMatchesHost(worktree, hostId, options)
+        ? updatedWorktree
+        : worktree
     )
   }
-}
-
-// Why: activity bumps fire on every PTY event, so an ambiguous workspace would warn continuously.
-// One line per workspace is enough to diagnose it (#10634).
-export const ambiguousOwnerWarnedWorktreeIds = new Set<string>()
-
-/** Re-arms the once-per-workspace warning; called from every worktree teardown path. */
-export function forgetAmbiguousOwnerWarnings(worktreeIds: Iterable<string>): void {
-  for (const worktreeId of worktreeIds) {
-    ambiguousOwnerWarnedWorktreeIds.delete(worktreeId)
-  }
-}
-
-export function warnAmbiguousOwnerOnce(worktreeId: string, errorLabel: string): void {
-  if (ambiguousOwnerWarnedWorktreeIds.has(worktreeId)) {
-    return
-  }
-  ambiguousOwnerWarnedWorktreeIds.add(worktreeId)
-  console.warn(`Skipped ${errorLabel}: workspace identity is ambiguous across hosts`, worktreeId)
 }
 
 export function persistPassiveWorktreeMetaForOwner(

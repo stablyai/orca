@@ -3,33 +3,25 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { FileDocument } from '../../shared/filesystem-entry-types'
 import { ensureDefaultFloatingWorkspacePath } from '../ipc/floating-workspace-directory'
-import { fileDocumentFromFilePath, isMarkdownDocumentName } from '../ipc/markdown-documents'
+import {
+  fileDocumentFromFilePath,
+  isMarkdownDocumentName
+} from '../../shared/markdown-document-paths'
 
 export function isOsOpenedDocumentName(name: string): boolean {
   const extension = path.extname(name).toLowerCase()
   return isMarkdownDocumentName(name) || extension === '.csv' || extension === '.tsv'
 }
 
-// Why: a shell can only ever hand over the files the user selected; anything past this is a
-// runaway argv, and buffering it unbounded would pin the paths for the whole session.
+// Bound runaway argv so paths cannot occupy memory for the entire session.
 export const MAX_PENDING_OS_OPENED_DOCUMENTS = 32
 
-/**
- * Resolves one argv entry to a local absolute path, or null if it is not one.
- *
- * Why file:// is accepted defensively: electron-builder appends the `%U` field code to the
- * generated Linux `Exec=` line, and `%U` is specified as "URLs". GLib turns out to decode a
- * local `file://` URI back to a plain path before spawning (measured on Ubuntu 24.04, via
- * the same `launch_uris` call a file manager makes), so the branch below is not what fires
- * there today — but the spec permits a URI, and a launcher that honours it literally would
- * otherwise be silently dropped. macOS `open-file` and the Windows shell `%1` pass paths.
- */
+/** Accept file URLs defensively because Linux %U permits URLs, though GLib currently decodes local ones before spawn. macOS/Windows provide paths. */
 function localPathFromArgument(argument: string, platform: NodeJS.Platform): string | null {
   const pathApi = platform === 'win32' ? path.win32 : path.posix
   if (argument.startsWith('file://')) {
     try {
-      // Why the explicit windows flag: this must decode the same way on any host so the
-      // behaviour is testable, and it is what turns `file://server/share` back into a UNC path.
+      // Explicit target-platform decoding keeps host-independent behavior and restores Windows UNC paths.
       return fileURLToPath(argument, { windows: platform === 'win32' })
     } catch {
       return null
@@ -38,13 +30,7 @@ function localPathFromArgument(argument: string, platform: NodeJS.Platform): str
   return pathApi.isAbsolute(argument) ? argument : null
 }
 
-/**
- * Absolute document paths an OS "Open With" put on a launch or second-instance argv.
- *
- * Why no executable/asar/dev-entry filtering: none of those argv entries end in a supported
- * extension, so the extension check already excludes them. Relative entries are dropped
- * because the shell always passes absolute paths and `cwd` is meaningless for a second instance.
- */
+/** Accept absolute supported documents; entrypoints fail extension checks and relative paths have no meaningful second-instance cwd. */
 export function documentPathsFromArguments(
   argv: readonly string[],
   platform: NodeJS.Platform = process.platform
@@ -61,8 +47,7 @@ export function documentPathsFromArguments(
       continue
     }
     const normalized = pathApi.normalize(argument)
-    // Why lowercased on win32: the shell round-trips drive letters and 8.3 casing
-    // inconsistently, and two spellings of one path must not open two tabs.
+    // Windows drive/8.3 casing can change across shell round trips; dedupe case-insensitively.
     const key = platform === 'win32' ? normalized.toLowerCase() : normalized
     if (seen.has(key)) {
       continue
@@ -73,22 +58,16 @@ export function documentPathsFromArguments(
   return paths
 }
 
-/**
- * Buffers document paths the OS handed us until a renderer can receive them.
- *
- * Mirrors SkillShareDeepLinkState: main pushes when a window is already live, and the
- * renderer pulls the same buffer when its listener attaches, so a cold-start "Open With"
- * that lands before mount is not dropped.
- */
+/** Share one push/pull buffer so cold-start Open With survives until the renderer listener mounts. */
 export class OsOpenedDocumentState {
   private pending: string[] = []
 
-  /** Returns true when argv carried at least one supported document path. */
+  /** True means argv contained a supported document. */
   capture(argv: readonly string[], publish?: () => void): boolean {
     return this.add(documentPathsFromArguments(argv), publish)
   }
 
-  /** Returns true when at least one path was a supported document. */
+  /** True means at least one supported document, even if already queued. */
   captureFilePaths(filePaths: readonly string[], publish?: () => void): boolean {
     return this.add(documentPathsFromArguments(filePaths), publish)
   }
@@ -120,8 +99,7 @@ export class OsOpenedDocumentState {
       }
     }
     if (index < filePaths.length) {
-      // Why logged: the cap drops the tail of an oversized selection, and a file the
-      // user explicitly asked to open must not vanish without leaving a trace.
+      // Report dropped selections; explicitly requested files must not disappear without evidence.
       console.warn(
         `[os-open] Dropped ${filePaths.length - index} of ${filePaths.length} OS-opened documents; the pending queue is capped at ${MAX_PENDING_OS_OPENED_DOCUMENTS}.`
       )
@@ -132,10 +110,7 @@ export class OsOpenedDocumentState {
   }
 }
 
-/**
- * Turns OS-handed paths into the same document shape the floating workspace's own
- * file picker produces; the floating tab then reads each one as a user-named file.
- */
+/** Use the floating workspace file-picker shape so OS-opened files retain explicit user-file access. */
 export async function resolveOsOpenedDocuments(
   filePaths: readonly string[]
 ): Promise<FileDocument[]> {
@@ -150,8 +125,7 @@ export async function resolveOsOpenedDocuments(
   const documents: FileDocument[] = []
   for (const filePath of supportedPaths) {
     try {
-      // Why: the shell can hand over a directory named like a document, or a path already
-      // deleted by the time we resolve. Open only something that is really a file.
+      // Shell paths can name directories or files deleted before resolution; only open actual files.
       if (!(await stat(filePath)).isFile()) {
         continue
       }

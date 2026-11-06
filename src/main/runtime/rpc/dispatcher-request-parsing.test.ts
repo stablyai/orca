@@ -36,6 +36,8 @@ describe('parseRpcRequestParams', () => {
 
     expect(parseRpcRequestParams(request({ count: 1.5 }), method, META)).toMatchObject({
       error: {
+        id: 'req-1',
+        _meta: { runtimeId: 'runtime-1' },
         ok: false,
         error: { code: 'invalid_argument', message: 'Count must be an integer' }
       }

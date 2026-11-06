@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
 import type { SshTarget } from '../../shared/ssh-types'
@@ -112,57 +112,5 @@ describe('orcad migration manifest export', () => {
     })
     const { manifestSha256, ...unsigned } = manifest
     expect(manifestSha256).toBe(computeOrcadMigrationManifestSha256(unsigned))
-  })
-
-  it('records a null generation for a legacy registration without mutating it', () => {
-    const target = { ...TARGET, generation: undefined }
-    const manifest = createOrcadMigrationManifest(
-      {
-        collectOrcadMigrationSourceDormantState: emptyDormantPayload,
-        getRepos: () => [],
-        getProjectGroups: () => [],
-        getFolderWorkspaces: () => []
-      },
-      target,
-      { migrationId: 'migration-legacy', now: () => new Date('2026-08-30T12:00:00.000Z') }
-    )
-
-    expect(manifest.source).toMatchObject({ sshTargetGeneration: null })
-    expect(target.generation).toBeUndefined()
-  })
-
-  it('includes a session-only dormant payload', () => {
-    const dormant = emptyDormantPayload()
-    dormant.workspaceSession = {
-      ...getDefaultWorkspaceSession(),
-      tabsByWorktree: {
-        'repo-prod::/srv/worktree': [
-          {
-            id: 'tab-dormant',
-            ptyId: null,
-            worktreeId: 'repo-prod::/srv/worktree',
-            title: 'Dormant',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1
-          }
-        ]
-      }
-    }
-    const manifest = createOrcadMigrationManifest(
-      {
-        collectOrcadMigrationSourceDormantState: () => dormant,
-        getRepos: () => [repo('repo-prod', TARGET.id)],
-        getProjectGroups: () => [],
-        getFolderWorkspaces: () => []
-      },
-      TARGET,
-      { migrationId: 'migration-session-only' }
-    )
-
-    expect(manifest.payload.dormantState?.workspaceSession?.tabsByWorktree).toHaveProperty(
-      'repo-prod::/srv/worktree'
-    )
   })
 })

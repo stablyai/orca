@@ -1,21 +1,22 @@
-import type {
-  AgentStatusEntry,
-  MigrationUnsupportedPtyEntry
-} from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { MigrationUnsupportedPtyEntry } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { HostedReviewProvider } from '../../../../shared/hosted-review'
+import type { HostedReviewProvider } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
-import { branchDisplayName } from '../sidebar/WorktreeCardHelpers'
+import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
+import '../sidebar/workspace-card/activity/worktree-card-empty-inputs'
+import { branchDisplayName } from '../sidebar/workspace-card/identity/worktree-branch-display'
 import { findRepoForHost } from '../../store/slices/repo-host-identity'
 import { getHostedReviewCacheKey } from '../../store/slices/hosted-review-cache-identity'
 import { issueCacheKey as getIssueCacheKey } from '../../store/github/cache-identity'
 import { countWorkspaceSpaceActiveAgents } from './workspace-space-presentation'
 import { getWorkspaceSpaceWorktreeIdentity } from './workspace-space-delete-selection'
 import { getWorkspaceSpaceBranchLabel } from './workspace-space-format'
+import { formatHostedReviewLabel } from './hosted-review-label'
+import { translate } from '@/i18n/i18n'
 
 export type WorkspaceDecisionDetails = {
   isActive: boolean
@@ -74,14 +75,6 @@ export type WorkspaceDecisionInputs = {
   now: number
 }
 
-export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
-  return `${count} ${count === 1 ? singular : plural}`
-}
-
-function formatReviewState(state: string): string {
-  return state.charAt(0).toUpperCase() + state.slice(1)
-}
-
 function countLiveTerminals(
   tabs: readonly TerminalTab[],
   ptyIdsByTabId: Record<string, string[]>
@@ -96,16 +89,28 @@ function getBranchStatus(
     return null
   }
   if (status.ahead === 0 && status.behind === 0) {
-    return 'Synced with upstream'
+    return translate(
+      'auto.components.status.bar.workspaceSpaceDecision.syncedWithUpstream',
+      'Synced with upstream'
+    )
   }
-  const parts: string[] = []
-  if (status.ahead > 0) {
-    parts.push(`${status.ahead} ahead`)
+  if (status.ahead > 0 && status.behind > 0) {
+    return translate(
+      'auto.components.status.bar.workspaceSpaceDecision.aheadAndBehind',
+      '{{ahead}} ahead, {{behind}} behind',
+      {
+        ahead: status.ahead,
+        behind: status.behind
+      }
+    )
   }
-  if (status.behind > 0) {
-    parts.push(`${status.behind} behind`)
-  }
-  return parts.join(', ')
+  return status.ahead > 0
+    ? translate('auto.components.status.bar.workspaceSpaceDecision.ahead', '{{ahead}} ahead', {
+        ahead: status.ahead
+      })
+    : translate('auto.components.status.bar.workspaceSpaceDecision.behind', '{{behind}} behind', {
+        behind: status.behind
+      })
 }
 
 export function getWorkspaceDecisionDetails(
@@ -156,9 +161,7 @@ export function getWorkspaceDecisionDetails(
   const linkedPR = workspaceRecord?.linkedPR ?? null
   const reviewLabel =
     hostedReview !== undefined && hostedReview !== null
-      ? `PR #${hostedReview.number} ${formatReviewState(hostedReview.state)}${
-          hostedReview.status && hostedReview.status !== 'none' ? `, ${hostedReview.status}` : ''
-        }`
+      ? formatHostedReviewLabel(hostedReview)
       : linkedPR
         ? `PR #${linkedPR}`
         : null

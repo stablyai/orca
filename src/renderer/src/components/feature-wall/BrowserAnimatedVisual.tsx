@@ -21,8 +21,7 @@ export function BrowserAnimatedVisual(props: {
   const targets = useBrowserVisualTargetRefs()
   const newBrowserShortcutLabel = useShortcutLabel('tab.newBrowser')
 
-  // Why: branch on the state source, not the element type, so a reducedMotion
-  // toggle re-renders the storyboard in place instead of remounting it.
+  // Keep the component identity stable when reduced motion toggles so the storyboard does not remount.
   const animatedState = useBrowserAnimatedVisualStoryboard(
     targets,
     props.reducedMotion,

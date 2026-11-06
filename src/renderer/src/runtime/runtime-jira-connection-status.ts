@@ -1,10 +1,9 @@
-import { isIntegrationCredentialErrorReason } from '../../../shared/integration-credential-errors'
 import type {
   JiraAuthType,
   JiraConnectionStatus,
   JiraSite,
   JiraViewer
-} from '../../../shared/jira-types'
+} from '../../../shared/jira/jira-types'
 import type { SecretAtRestProtection } from '../../../shared/secret-at-rest-protection'
 
 // Coverage records: tsc fails when the shared union gains or loses an arm.
@@ -94,13 +93,6 @@ export function parseJiraConnectionStatus(value: unknown): JiraConnectionStatus 
     activeSiteId: parseOptionalSiteId(value.activeSiteId),
     selectedSiteId: parseOptionalSiteId(value.selectedSiteId),
     credentialError: typeof value.credentialError === 'string' ? value.credentialError : undefined,
-    credentialErrorReason: isIntegrationCredentialErrorReason(value.credentialErrorReason)
-      ? value.credentialErrorReason
-      : undefined,
-    canMoveCredentialKeyToFile:
-      typeof value.canMoveCredentialKeyToFile === 'boolean'
-        ? value.canMoveCredentialKeyToFile
-        : undefined,
     credentialProtection:
       value.credentialProtection === null || isSecretAtRestProtection(value.credentialProtection)
         ? value.credentialProtection

@@ -21,3 +21,7 @@ export function isEditorTabContentType(
 export function isVirtualEditorFile(file: Pick<OpenFile, 'mode'>): boolean {
   return file.mode === 'check-details'
 }
+
+export function editorTabContentTypeForMode(mode: OpenFile['mode']): EditorTabContentType {
+  return mode === 'conflict-review' || mode === 'check-details' || mode === 'diff' ? mode : 'editor'
+}

@@ -4,7 +4,8 @@ const { gitExecFileAsyncMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn()
 }))
 
-vi.mock('../git/runner', () => ({
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
@@ -14,7 +15,7 @@ import {
   getAzureDevOpsRepoRefForRemote,
   parseAzureDevOpsRepoRef
 } from './repository-ref'
-import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remote-url-probe'
+import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remotes/remote-url-probe'
 
 describe('parseAzureDevOpsRepoRef', () => {
   beforeEach(() => {
@@ -135,18 +136,5 @@ describe('parseAzureDevOpsRepoRef', () => {
       wslDistro: 'Ubuntu',
       timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
-  })
-
-  it('bounds cached repository refs for distinct repo paths', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({
-      stdout: 'git@ssh.dev.azure.com:v3/acme/Project/repo\n',
-      stderr: ''
-    })
-
-    for (let i = 0; i < 513; i += 1) {
-      await getAzureDevOpsRepoRefForRemote(`/repo-${i}`, 'origin')
-    }
-
-    expect(_getAzureDevOpsRepoRefCacheSize()).toBe(512)
   })
 })

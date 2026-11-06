@@ -4,13 +4,13 @@ import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
-import { makeRepo, makeWorktree } from '../../../worktree-jump-palette-test-fixtures'
+import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import { getDefaultSettings } from '../../../../../../shared/constants'
 import {
   getDefaultSourceControlAiSettings,
   DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
-} from '../../../../../../shared/source-control-ai-settings'
-import type { HostedReviewCreationEligibility } from '../../../../../../shared/hosted-review'
+} from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings'
+import type { HostedReviewCreationEligibility } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { useSourceControlCreatePrIntentReview } from './use-create-pr-intent-review'
 
 const runtime = vi.hoisted(() => ({ generate: vi.fn() }))
@@ -46,6 +46,7 @@ it.each(['github', 'gitlab'] as const)(
       branch: 'user/alt-42-fix-login',
       provider,
       baseRef: null,
+      pinnedCopy: null,
       startedAt: 1
     }
     const eligibility: HostedReviewCreationEligibility = {

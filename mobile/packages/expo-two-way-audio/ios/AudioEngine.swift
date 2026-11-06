@@ -10,7 +10,8 @@ class AudioEngine {
 
     public private(set) var voiceIOFormat: AVAudioFormat
     public private(set) var isRecording = false
-    private var wasRecordingBeforeInterruption = false
+    private var interruptionIntent = RecordingInterruptionIntent()
+    private var isTornDown = false
 
     public var onMicDataCallback: ((Data) -> Void)?
     public var onInputVolumeCallback: ((Float) -> Void)?
@@ -62,7 +63,13 @@ class AudioEngine {
             }
 
         self.setupAudioSession()
-        self.setup()
+        do {
+            try self.setup()
+        } catch {
+            // Hand the session back so a failed initialize leaves no other app's audio ducked.
+            tearDown()
+            throw error
+        }
         self.start()
     }
 
@@ -87,6 +94,13 @@ class AudioEngine {
             print("Could not set the audio category: \(error.localizedDescription)")
         }
 
+        // iOS mutes haptics while input runs by default; dictation taps the user on start and stop.
+        do {
+            try session.setAllowHapticsAndSystemSoundsDuringRecording(true)
+        } catch {
+            print("Could not allow haptics during recording: \(error.localizedDescription)")
+        }
+
         do {
             try session.setPreferredSampleRate(voiceIOFormat.sampleRate)
         } catch {
@@ -100,14 +114,10 @@ class AudioEngine {
         }
     }
 
-    func setup() {
+    func setup() throws {
         let input = avAudioEngine.inputNode
-        do {
-            try input.setVoiceProcessingEnabled(true)
-        } catch {
-            print("Could not enable voice processing \(error)")
-            return
-        }
+        // Throw rather than return: an engine with no mic tap would report recording and capture nothing.
+        try input.setVoiceProcessingEnabled(true)
 
         avAudioEngine.inputNode.isVoiceProcessingInputMuted = !isRecording
 
@@ -118,8 +128,7 @@ class AudioEngine {
         avAudioEngine.connect(mainMixer, to: output, format: voiceIOFormat)
 
         input.installTap(onBus: 0, bufferSize: 2048, format: voiceIOFormat) { [weak self] buffer, when in
-            // We don't do any input processing (no volume calculation or passing mic data to the callback) if discardRecording == true
-            // See comment in the playPCMData function
+            // Skip mic processing while playback’s echo canceller adapts; see playPCMData.
             if self?.isRecording == true && self?.discardRecording == false {
                 self?.processMicrophoneBuffer(buffer)
                 self?.updateInputVolume()
@@ -143,7 +152,6 @@ class AudioEngine {
         let frameCount = Int(buffer.frameLength)
         var int16Samples = [Int16](repeating: 0, count: frameCount)
 
-        // Convert float samples to Int16 and update input buffer for volume calculation
         for i in 0..<frameCount {
             let floatSample = max(-1.0, min(1.0, channelData[i]))
             int16Samples[i] = Int16(floatSample * Float(Int16.max))
@@ -152,10 +160,8 @@ class AudioEngine {
             inputBufferIndex = (inputBufferIndex + 1) % inputBuffer.count
         }
 
-        // Create Data object from Int16 samples
         let data = Data(bytes: int16Samples, count: frameCount * MemoryLayout<Int16>.size)
 
-        // Send the data to the callback
         onMicDataCallback?(data)
     }
 
@@ -167,7 +173,6 @@ class AudioEngine {
 
         let frameCount = Int(buffer.frameLength)
 
-        // Update output buffer for volume calculation
         for i in 0..<frameCount {
             let floatSample = max(-1.0, min(1.0, channelData[i]))
             outputBuffer[outputBufferIndex] = floatSample
@@ -176,6 +181,7 @@ class AudioEngine {
     }
 
     func start() {
+        guard !isTornDown else { return }
         do {
             try avAudioEngine.start()
         } catch {
@@ -184,11 +190,8 @@ class AudioEngine {
     }
 
     func playPCMData(_ pcmData: Data) {
-        // Looks like we don't get a proper AEC for the very first chunks of audio that we play.
-        // To work around this, we will discard microphone input for the first few milliseconds.
-        // This will give the AEC time to adapt to the playback audio.
-        // We achieve this by setting discardRecording to true for a short time (this doesn't actually mute the input). It's just not processed in the tap.
-        // Audio that is not processed by the input tap is not sent to the callback and therefore not sent to the server.
+        guard !isTornDown else { return }
+        // AEC misses the first playback chunks; briefly discard mic callbacks (without muting) while it adapts.
         if !hasFirstInputBeenDiscarded {
             self.hasFirstInputBeenDiscarded = true
             self.discardRecording = true
@@ -240,11 +243,29 @@ class AudioEngine {
         input.isVoiceProcessingBypassed = bypass
     }
 
-    func toggleRecording(_ val: Bool) -> Bool {
+    func toggleRecording(_ val: Bool, preservingInterruptionIntent: Bool = false) -> Bool {
+        guard !val || !isTornDown else { return false }
+        if !preservingInterruptionIntent {
+            // An explicit stop also cancels a resume queued before JavaScript cancelled dictation.
+            interruptionIntent.cancel()
+        }
+        if val {
+            do {
+                // System keyboard dictation can leave an existing engine's session inactive.
+                try AVAudioSession.sharedInstance().setActive(true)
+                if !avAudioEngine.isRunning {
+                    try avAudioEngine.start()
+                }
+            } catch {
+                isRecording = false
+                avAudioEngine.inputNode.isVoiceProcessingInputMuted = true
+                print("Could not activate microphone recording: \(error)")
+                return false
+            }
+        }
         isRecording = val
         if !isRecording {
             avAudioEngine.inputNode.isVoiceProcessingInputMuted = true
-            // Reset input buffer, so that volume levels report 0
             inputBuffer = [Float](repeating: 0, count: 2048)
             updateInputVolume()
         } else {
@@ -256,33 +277,29 @@ class AudioEngine {
     }
 
     func stopRecordingAndPlayer(clearInterruptionResume: Bool = true){
-        if clearInterruptionResume {
-            wasRecordingBeforeInterruption = false
-        }
         do {
-            try AVAudioSession.sharedInstance().setActive(false)
+            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         } catch {
             print("Could not set the audio session to inactive: \(error)")
         }
-        toggleRecording(false)
+        toggleRecording(false, preservingInterruptionIntent: !clearInterruptionResume)
         speechPlayer.stop()
         updateOutputVolume()
     }
 
-    func resumeRecordingAndPlayer(){
-        do {
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {
-            print("Could not set the audio session to active: \(error)")
-        }
-        self.checkEngineIsRunning()
-        isRecording = toggleRecording(true)
+    @discardableResult
+    func resumeRecordingAndPlayer() -> Bool {
+        guard toggleRecording(true) else { return false }
         speechPlayer.play()
+        return true
     }
 
     func tearDown() {
-        stopRecordingAndPlayer()
+        guard !isTornDown else { return }
+        isTornDown = true
+        // Stop I/O first; deactivating a session with running I/O returns a busy error.
         avAudioEngine.stop()
+        stopRecordingAndPlayer()
     }
 
     var isPlaying: Bool {
@@ -291,7 +308,6 @@ class AudioEngine {
 
     func stopPlayback() {
         speechPlayer.stop()
-        // Clear any scheduled buffers
         outputBuffer = [Float](repeating: 0, count: 2048)
         updateOutputVolume()
         print("Playback stopped")
@@ -303,6 +319,7 @@ class AudioEngine {
     }
 
     func resumePlayback() {
+        guard !isTornDown else { return }
         if !speechPlayer.isPlaying {
             speechPlayer.play()
             print("Playback resumed")
@@ -310,43 +327,52 @@ class AudioEngine {
     }
 
     private func checkEngineIsRunning() {
+        guard !isTornDown else { return }
         if !avAudioEngine.isRunning {
             start()
         }
     }
 
     private func handleAudioSessionInterruption(_ notification: Notification) {
+        guard !isTornDown else { return }
         guard let userInfo = notification.userInfo,
               let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
               let type = AVAudioSession.InterruptionType(rawValue: typeValue) else { return }
 
         switch type {
         case .began:
-            wasRecordingBeforeInterruption = isRecording
+            interruptionIntent.began(wasRecording: isRecording)
             self.stopRecordingAndPlayer(clearInterruptionResume: false)
             onAudioInterruptionCallback?("began")
         case .ended:
-            if let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt {
-                let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
-                if options.contains(.shouldResume) && wasRecordingBeforeInterruption {
-                    // Interruption ended. Resume playback.
-                    self.resumeRecordingAndPlayer()
-                    wasRecordingBeforeInterruption = false
-                    onAudioInterruptionCallback?("ended")
-                } else {
-                    wasRecordingBeforeInterruption = false
-                    // Interruption ends. Don't resume playback.
-                    onAudioInterruptionCallback?("blocked")
-                }
+            let rawOptions = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
+            let shouldResume = AVAudioSession.InterruptionOptions(rawValue: rawOptions).contains(.shouldResume)
+            switch interruptionIntent.ended(shouldResume: shouldResume, isRecording: isRecording) {
+            case .resume:
+                let resumed = resumeRecordingAndPlayer()
+                onAudioInterruptionCallback?(resumed ? "ended" : "blocked")
+            case .blocked:
+                onAudioInterruptionCallback?("blocked")
+            case .none:
+                break // A newer explicit start already owns the microphone.
             }
         @unknown default:
-            fatalError("Unknown type: \(type)")
+            stopRecordingAndPlayer()
+            onAudioInterruptionCallback?("blocked")
         }
     }
 
     private func handleMediaServicesWereReset() {
+        guard !isTornDown else { return }
         self.avAudioEngine.stop()
-        self.setup()
+        do {
+            try self.setup()
+        } catch {
+            print("Could not rebuild the audio engine: \(error)")
+            tearDown()
+            onAudioInterruptionCallback?("blocked")
+            return
+        }
         self.start()
     }
 
@@ -364,16 +390,13 @@ class AudioEngine {
         let epsilon: Float = 1e-5 // To avoid log(0)
         let rmsValue = sqrt(buffer.reduce(0) { $0 + $1 * $1 } / Float(buffer.count))
 
-        // Convert to decibels
         let dbValue = 20 * log10(max(rmsValue, epsilon))
 
-        // Normalize decibel value to 0-1 range
-        // Assuming minimum audible is -60dB and maximum is 0dB
+        // Normalize the assumed audible range [-80, 0] dB.
         let minDb: Float = -80.0
         let normalizedValue = max(0.0, min(1.0, (dbValue - minDb) / abs(minDb)))
 
-        // Optional: Apply exponential factor to push smaller values down
-        let expFactor: Float = 2.0 // Adjust this value to change the curve
+        let expFactor: Float = 2.0
         let adjustedValue = pow(normalizedValue, expFactor)
 
         return adjustedValue

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { UpdatePaneLayout } from '../../rpc-contract/session-tabs-schemas-params'
-import type { TerminalPaneLayoutNode } from '../../terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../terminal-tab-types'
 import { translateUpdatePaneLayout } from './old-client-pane-layout-translation'
 import { build, terminalTab, testContext, WS } from '../workspace-layout-command.test-fixture'
 import type { WorkspaceLayoutModel } from '../workspace-layout-model'
@@ -40,7 +40,7 @@ function threePanes() {
   return { ctx, model: second.model, tabId, a, b, c }
 }
 
-/** Params as an old desktop sends them (`use-terminal-pane-layout-persistence.ts`), parsed as today. */
+/** Parse older desktop persistence params from use-terminal-pane-layout-persistence.ts. */
 function sent(tabId: string, fields: Record<string, unknown>) {
   return UpdatePaneLayout.parse({
     worktree: WS,

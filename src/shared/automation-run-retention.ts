@@ -2,19 +2,16 @@ import { isFinalAutomationRunStatus, type AutomationRun } from './automations-ty
 
 export const MAX_AUTOMATION_RUNS_PER_AUTOMATION = 100
 
-// Why: the whole state blob is re-serialized on every save, so an unbounded
-// automationRuns made each flush() permanently slower (28.5 MB → 210 ms blocked).
+// Bound runs because every save serializes the whole blob (28.5MB once blocked flush for 210ms).
 export function pruneAutomationRuns(
   runs: readonly AutomationRun[],
   maxPerAutomation: number = MAX_AUTOMATION_RUNS_PER_AUTOMATION
 ): AutomationRun[] {
   const kept = new Set<string>()
-  // Why: a dispatched run's completion can land hours later, and
-  // updateAutomationRun throws if its row is gone — only final runs are evictable.
+  // Evict only final runs; delayed dispatched completion still needs its row.
   const finalRuns = runs.filter((run) => isFinalAutomationRunStatus(run.status))
   for (const automationRuns of Map.groupBy(finalRuns, (run) => run.automationId).values()) {
-    // Why: `createdAt` is the append time; `scheduledFor` breaks ties so runs
-    // minted in the same millisecond drop in a stable, reproducible order.
+    // Order by append createdAt then scheduledFor for stable same-millisecond eviction.
     if (automationRuns.length > maxPerAutomation) {
       automationRuns.sort((a, b) => b.createdAt - a.createdAt || b.scheduledFor - a.scheduledFor)
     }
@@ -28,15 +25,7 @@ export function pruneAutomationRuns(
   return runs.filter((run) => kept.has(run.id) || !isFinalAutomationRunStatus(run.status))
 }
 
-/**
- * Stamp `runNumber` onto legacy runs that predate the field. Must run before
- * {@link pruneAutomationRuns} so the surviving runs carry their true numbers and
- * numbering never restarts.
- *
- * Numbers continue from the highest number the automation already carries, not from
- * the run's append position: a downgrade to a pre-`runNumber` build appends unnumbered
- * runs after pruned survivors numbered 101+, and a position would reissue one of those.
- */
+/** Number legacy runs before pruning. Continue above retained maximums, never append positions: pre-runNumber downgrades can append blanks after pruned 101+ survivors and would reissue titles. */
 export function backfillAutomationRunNumbers(runs: readonly AutomationRun[]): AutomationRun[] {
   const highestPerAutomation = new Map<string, number>()
   for (const run of runs) {

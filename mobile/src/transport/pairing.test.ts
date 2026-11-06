@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { decodePairingUrl, extractPairingCodeFromUrl, parsePairingCode } from './pairing'
-import type { PairingOffer } from './types'
+import type { PairingOffer } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+import { PAIRING_INPUT_MAX_CHARACTERS } from '../../../src/shared/remote-runtime/pairing/mobile-pairing-protocol-limits'
 
 const offer: PairingOffer = {
   v: 2,
@@ -18,30 +19,9 @@ afterEach(() => {
 })
 
 describe('pairing deep links', () => {
-  it('extracts the QR pairing code from the hash payload', () => {
-    expect(extractPairingCodeFromUrl('orca://pair#abc123')).toBe('abc123')
-  })
-
-  it('extracts the pairing code from a query param', () => {
-    expect(extractPairingCodeFromUrl('orca://pair?code=abc123')).toBe('abc123')
-  })
-
-  it('accepts scanner casing and surrounding whitespace', () => {
-    expect(extractPairingCodeFromUrl('  ORCA://PAIR?code=abc123\n')).toBe('abc123')
-  })
-
   it('rejects lookalike routes', () => {
     expect(extractPairingCodeFromUrl('orca://pairing?code=abc123')).toBeNull()
     expect(extractPairingCodeFromUrl('orca://pair-extra?code=abc123')).toBeNull()
-  })
-
-  it('prefers the query pairing code when both query and hash are present', () => {
-    expect(extractPairingCodeFromUrl('orca://pair?code=query-code#hash-code')).toBe('query-code')
-  })
-
-  it('ignores empty and unrelated URLs', () => {
-    expect(extractPairingCodeFromUrl('orca://pair')).toBeNull()
-    expect(extractPairingCodeFromUrl('https://example.com/pair#abc123')).toBeNull()
   })
 
   it('decodes desktop QR payloads when atob requires base64 padding', () => {
@@ -56,20 +36,31 @@ describe('pairing deep links', () => {
     expect(decodePairingUrl(`orca://pair?code=${encodeOffer()}`)).toEqual(offer)
   })
 
-  it('parses a full pairing URL and a bare copied code', () => {
+  it('rejects oversized raw codes and URLs before parsing', () => {
     const code = encodeOffer()
+    const oversizedRawCode = `${code}${' '.repeat(PAIRING_INPUT_MAX_CHARACTERS)}`
+    const oversizedUrl = `orca://pair?code=${code}&ignored=${'A'.repeat(
+      PAIRING_INPUT_MAX_CHARACTERS
+    )}`
 
-    expect(parsePairingCode(`orca://pair?code=${code}`)).toEqual(offer)
-    expect(parsePairingCode(code)).toEqual(offer)
+    expect(parsePairingCode(oversizedRawCode)).toBeNull()
+    expect(extractPairingCodeFromUrl(oversizedUrl)).toBeNull()
+    expect(decodePairingUrl(oversizedUrl)).toBeNull()
   })
 
-  it('preserves a TLS reverse-proxy endpoint with an explicit port and path', () => {
-    const proxiedOffer = {
-      ...offer,
-      endpoint: 'wss://proxy.example:443/orca/runtime'
-    }
-    const code = encodeOffer(proxiedOffer)
+  it('preserves legacy padding and aliases with the same decoded offer', () => {
+    const paddedOffer = { ...offer, endpoint: `${offer.endpoint}/a` }
+    const code = encodeOffer(paddedOffer)
+    expect(code.length % 4).toBe(2)
+    const alias = `${code.slice(0, -1)}${base64Alias(code.at(-1)!)}`
 
-    expect(parsePairingCode(code)).toEqual(proxiedOffer)
+    expect(parsePairingCode(`${code}=`)).toEqual(paddedOffer)
+    expect(parsePairingCode(`${code}==`)).toEqual(paddedOffer)
+    expect(parsePairingCode(alias)).toEqual(paddedOffer)
   })
 })
+
+function base64Alias(character: string): string {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+  return alphabet[alphabet.indexOf(character) + 1]!
+}

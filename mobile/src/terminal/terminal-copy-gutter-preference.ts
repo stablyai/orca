@@ -3,12 +3,7 @@ import { terminalCopyTrimsGutterRead } from '../transport/settings-read-operatio
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 
-/**
- * Desktop owns "Trim Gutter on Copy" (GlobalSettings.terminalCopyTrimsGutter);
- * mobile mirrors it so turning the setting off yields verbatim screen cells on
- * every surface. Read once per connection — the mobile RPC has no
- * settings-change stream — and default to on while the read is in flight.
- */
+// Mirror desktop copy-gutter policy once per connection; mobile has no settings stream and defaults trimming on.
 export function useTerminalCopyTrimsGutter(
   client: RpcClient | null,
   connState: ConnectionState
@@ -32,7 +27,7 @@ export function useTerminalCopyTrimsGutter(
         }
       })
       .catch(() => {
-        // Best-effort: an unreachable host leaves the on-by-default trim in place.
+        // Keep default trimming when the host is unreachable.
       })
     return () => {
       stale = true

@@ -32,18 +32,37 @@ describe('retained Claude request settlements', () => {
     ])
   })
 
-  it('records a failure and keeps the child owner exact', () => {
-    expect(
-      retainClaudeSettledRequests(
-        undefined,
-        base,
-        ended('tool-1', {
-          hookEventName: 'PostToolUseFailure',
-          toolAgentId: 'child-1',
-          toolAgentType: 'Explore'
-        })
-      )
-    ).toEqual([{ toolUseId: 'tool-1', toolAgentId: 'child-1', toolAgentType: 'Explore' }])
+  it('keeps every request a batch end lists, so a reconnect can release a self-denied wait', () => {
+    const batch = {
+      ...base,
+      hookEventName: 'PostToolBatch',
+      claudeSettledRequests: [{ toolUseId: 'tool-1' }, { toolUseId: 'tool-denied' }]
+    }
+    const afterBatch = retainClaudeSettledRequests(undefined, base, batch)
+    const next = { ...base, hookEventName: 'PreToolUse', toolUseId: 'tool-2' }
+    expect(retainClaudeSettledRequests(afterBatch, batch, next)).toEqual([
+      { toolUseId: 'tool-1' },
+      { toolUseId: 'tool-denied' }
+    ])
+  })
+
+  it("keeps a long batch's retention cost independent of its length", () => {
+    const readsFor = (length: number): number => {
+      let reads = 0
+      const requests = Array.from({ length }, (_, index) => ({
+        get toolUseId() {
+          reads++
+          return `tool-${index}`
+        }
+      }))
+      const batch = { ...base, hookEventName: 'PostToolBatch', claudeSettledRequests: requests }
+      retainClaudeSettledRequests([{ toolUseId: 'earlier' }], base, batch)
+      return reads
+    }
+    // Only the newest MAX entries can be retained, each compared with at most 2 * MAX kept ones.
+    const bound = MAX_CLAUDE_SETTLED_REQUESTS * (2 * MAX_CLAUDE_SETTLED_REQUESTS + 1)
+    expect(readsFor(100)).toBeLessThanOrEqual(bound)
+    expect(readsFor(1000)).toBe(readsFor(100))
   })
 
   it.each([
@@ -63,7 +82,11 @@ describe('retained Claude request settlements', () => {
       retained = retainClaudeSettledRequests(retained, base, ended(`tool-${index}`))
     }
     expect(retained).toHaveLength(MAX_CLAUDE_SETTLED_REQUESTS)
-    expect(retained?.at(-1)).toEqual({ toolUseId: 'tool-39' })
+    expect(retained).toEqual(
+      Array.from({ length: MAX_CLAUDE_SETTLED_REQUESTS }, (_, index) => ({
+        toolUseId: `tool-${40 - MAX_CLAUDE_SETTLED_REQUESTS + index}`
+      }))
+    )
   })
 
   it('rejects a malformed or oversized wire list whole', () => {
@@ -86,13 +109,16 @@ describe('retained Claude request settlements', () => {
       hookEventName: 'PermissionRequest',
       toolUseId: 'tool-1',
       toolAgentId: 'child-1',
+      toolAgentType: 'Explore',
       payload: { ...base.payload, state: 'waiting' }
     }
     const replay: AgentHookEventPayload = {
       ...base,
       connectionId: 'conn-1',
       isReplay: true,
-      claudeSettledRequests: [{ toolUseId: 'tool-1', toolAgentId: 'child-1' }]
+      claudeSettledRequests: [
+        { toolUseId: 'tool-1', toolAgentId: 'child-1', toolAgentType: 'Explore' }
+      ]
     }
     expect(isClaudePermissionSettledByReplay(waiting, replay)).toBe(true)
     expect(isClaudePermissionSettledByReplay(waiting, { ...replay, isReplay: undefined })).toBe(
@@ -107,5 +133,17 @@ describe('retained Claude request settlements', () => {
     expect(isClaudePermissionSettledByReplay(waiting, { ...replay, launchToken: 'launch-2' })).toBe(
       false
     )
+    expect(isClaudePermissionSettledByReplay({ ...waiting, toolUseId: 'tool-2' }, replay)).toBe(
+      false
+    )
+    expect(isClaudePermissionSettledByReplay({ ...waiting, toolAgentType: 'Review' }, replay)).toBe(
+      false
+    )
+    expect(
+      isClaudePermissionSettledByReplay(waiting, {
+        ...replay,
+        providerSession: { key: 'session_id', id: 'session-2' }
+      })
+    ).toBe(false)
   })
 })

@@ -2,11 +2,13 @@ import type {
   RuntimeClientEvent,
   RuntimeClientEventStreamMessage
 } from '../../../shared/runtime-client-events'
+import { isNotificationAttentionAcknowledgement } from '../../../shared/notification-settings-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { isRuntimeSubscriptionReplayResponse } from '../../../shared/runtime-subscription-replay'
 import { admitSshConnectionState } from '../../../shared/ssh-retained-payload-admission'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 import { subscribeRuntimeEnvironment } from './runtime-environment-pairing-refresh'
+import { answerBrowserClientHostRequest } from './browser-client-host-request-answer'
 
 export type RuntimeClientEventSubscription = {
   unsubscribe: () => void
@@ -16,22 +18,29 @@ export async function subscribeRuntimeClientEvents(
   environmentId: string,
   onEvent: (event: RuntimeClientEvent) => void,
   onError: (error: unknown) => void = console.warn,
-  // Why: client events emitted while the shared-control transport was down are
-  // lost, not queued. The replay tag on the first post-reconnect response is
-  // the renderer's only signal that mirrored event-derived state (e.g. the
-  // per-environment SSH bucket) may have missed transitions and must resync.
-  onReplayedAfterReconnect?: () => void
+  // Control-outage events are lost, not queued. First replay-tagged response is the only signal to resync event-derived mirrors such as per-environment SSH state.
+  onReplayedAfterReconnect?: () => void,
+  // Managed SSH hosts reach this desktop's browser through the desktop browser bridge instead.
+  options: { hostsBrowserPages: boolean } = { hostsBrowserPages: false }
 ): Promise<RuntimeClientEventSubscription> {
   const handle = await subscribeRuntimeEnvironment(
     {
       selector: environmentId,
       method: 'runtime.clientEvents.subscribe',
+      // Older servers ignore params; newer ones ask only sockets advertising host requests.
+      ...(options.hostsBrowserPages ? { params: { browserHostRequests: true } } : {}),
       timeoutMs: 15_000,
       expectedEnvironmentPairingRevision: getRuntimeEnvironmentRevision(environmentId)
     },
     {
       onResponse: (response) => {
-        handleRuntimeClientEventResponse(response, onEvent, onError, onReplayedAfterReconnect)
+        handleRuntimeClientEventResponse(
+          environmentId,
+          response,
+          onEvent,
+          onError,
+          onReplayedAfterReconnect
+        )
       },
       onError
     }
@@ -40,6 +49,7 @@ export async function subscribeRuntimeClientEvents(
 }
 
 function handleRuntimeClientEventResponse(
+  environmentId: string,
   response: RuntimeRpcResponse<unknown>,
   onEvent: (event: RuntimeClientEvent) => void,
   onError: (error: unknown) => void,
@@ -67,6 +77,10 @@ function handleRuntimeClientEventResponse(
   if (message.type === 'end') {
     return
   }
+  if (message.type === 'browserHostRequested') {
+    void answerBrowserClientHostRequest(environmentId, message.requestId)
+    return
+  }
   if (message.type === 'sshStateChanged') {
     const state = admitSshConnectionState(message.state, message.targetId)
     if (state) {
@@ -85,14 +99,18 @@ function isRuntimeClientEvent(
   message: RuntimeClientEventStreamMessage
 ): message is RuntimeClientEvent {
   return (
+    (message.type === 'notificationAttentionAcknowledged' &&
+      isNotificationAttentionAcknowledgement(message.acknowledgement)) ||
     message.type === 'reposChanged' ||
     message.type === 'worktreesChanged' ||
     message.type === 'nativeChatLaunchDraftResolved' ||
     message.type === 'terminalSideEffects' ||
     message.type === 'sshStateChanged' ||
     message.type === 'automationsChanged' ||
+    message.type === 'browserProfilesChanged' ||
     message.type === 'linearLinkedIssueUpdated' ||
     message.type === 'activateWorktree' ||
-    message.type === 'worktreeTerminalSleepState'
+    message.type === 'worktreeTerminalSleepState' ||
+    message.type === 'workspaceViewChanged'
   )
 }

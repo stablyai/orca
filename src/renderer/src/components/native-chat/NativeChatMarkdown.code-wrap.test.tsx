@@ -98,8 +98,7 @@ describe('native chat code block line wrap', () => {
     ])
   })
 
-  // Streaming fixes escape `x~y` and `- >5` mid-line, so a fence's character offset moves when the
-  // block is next parsed without them.
+  // Streaming escape fixes can shift a fence’s source offset when the finished block is reparsed.
   it.each([
     [
       'the reply finishes',

@@ -1,5 +1,6 @@
 import { defineMethod } from '../../core'
-import { remoteFileContentBudget } from '../files-remote-content-budget'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { remoteFileContentBudget } from '../files/files-remote-content-budget'
 import { remoteRpcResultExceedsContentBudget } from '../../../../../shared/remote-rpc-content-budget'
 import {
   TerminalHandle,
@@ -10,7 +11,8 @@ import {
   TerminalRecoverPane,
   TerminalRename,
   TerminalResolveActive,
-  TerminalResolvePane
+  TerminalResolvePane,
+  TerminalSetPaneTitle
 } from '../../../../../shared/rpc-contract/terminal-unary-params'
 
 export const TERMINAL_QUERY_METHODS = [
@@ -18,12 +20,31 @@ export const TERMINAL_QUERY_METHODS = [
     name: 'terminal.list',
     permission: 'workspace',
     params: TerminalListParams,
-    handler: async (params, { runtime }) =>
-      runtime.listTerminals(params.worktree, params.limit, {
+    handler: async (params, { runtime }) => {
+      // Switch point: main places the swept workspace's live terminals itself, so this listing
+      // names their panes and the window's sweep only reads it.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN && params.placeUnshownLiveTerminals && params.worktree) {
+        await runtime.placeUnshownLiveTerminalsOf(params.worktree)
+      }
+      const result = await runtime.listTerminals(params.worktree, params.limit, {
         handles: params.handles,
         requireFreshPtyLiveness: params.requireFreshPtyLiveness,
         includeVisualLayouts: params.includeVisualLayouts
       })
+      if (params.includePreview !== false && !params.includeAttention) {
+        return result
+      }
+      return {
+        ...result,
+        terminals: result.terminals.map(({ preview, ...terminal }) => ({
+          ...terminal,
+          ...(params.includePreview !== false ? { preview } : {}),
+          ...(params.includeAttention && terminal.ptyId
+            ? { attention: runtime.getTerminalAttention(terminal.ptyId) }
+            : {})
+        }))
+      }
+    }
   }),
   defineMethod({
     name: 'terminal.resolveActive',
@@ -65,8 +86,7 @@ export const TERMINAL_QUERY_METHODS = [
     })
   }),
   defineMethod({
-    // Read-only identity probe. Deliberately NOT `terminal.show`: this one resolves a structured
-    // worker too, and must therefore never hand back anything that looks writable.
+    // Read identity only: structured workers have no writable terminal, so never return terminal.show's shape.
     name: 'terminal.resolveIdentity',
     permission: 'workspace',
     params: TerminalHandle,
@@ -127,6 +147,14 @@ export const TERMINAL_QUERY_METHODS = [
     params: TerminalRename,
     handler: async (params, { runtime }) => ({
       rename: await runtime.renameTerminal(params.terminal, params.title || null)
+    })
+  }),
+  defineMethod({
+    name: 'terminal.setPaneTitle',
+    permission: 'workspace',
+    params: TerminalSetPaneTitle,
+    handler: async (params, { runtime }) => ({
+      paneTitle: await runtime.setPaneTitle(params.terminal, params.title)
     })
   }),
   defineMethod({

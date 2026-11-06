@@ -2,22 +2,15 @@ import { runKeyedSerializedOperation } from './keyed-promise-queue'
 
 const operationQueues = new Map<string, Promise<void>>()
 
-/**
- * Canonical key for a WSL distro name. The operation queue and the
- * registration registry must agree on this to serialize against each other.
- */
+/** The operation queue and registration registry must use the same distro key. */
 export function normalizeWslDistroKey(distro: string): string {
   return distro.trim().toLowerCase()
 }
 
-/**
- * Serializes registration reads and mutations for one WSL distro.
- */
 export function runSerializedWslCliRegistrationOperation<T>(
   distro: string,
   operation: () => Promise<T>
 ): Promise<T> {
-  // Why: startup repair continues in the background and can otherwise undo a
-  // concurrent Settings install/remove or overwrite its ownership metadata.
+  // Background repair must not undo concurrent Settings changes or overwrite their ownership.
   return runKeyedSerializedOperation(operationQueues, normalizeWslDistroKey(distro), operation)
 }

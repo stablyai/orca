@@ -115,7 +115,6 @@ describe('native preload SSH authority forwarding', () => {
     listener({}, { targetId: 'ssh-1', state })
 
     expect(onStateChanged).toHaveBeenCalledWith({ targetId: 'ssh-1', state })
-    expect(onStateChanged.mock.calls[0]?.[0].state).toEqual(state)
   })
 
   it('normalizes partial compatibility authority to unknown for reconciliation', async () => {

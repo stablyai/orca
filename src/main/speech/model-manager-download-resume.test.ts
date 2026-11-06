@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ModelManager } from './model-manager'
+import { openElectronSpeechDownloadRequest } from '../host/electron-speech-services'
 
 const { netRequestMock } = vi.hoisted(() => ({
   netRequestMock: vi.fn()
@@ -40,6 +41,14 @@ type ModelManagerInternals = {
   getPartialDownloadBytes: (filePath: string) => number
 }
 
+function managerInternals(dir: string): ModelManagerInternals {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the tests drive the download hooks the class keeps protected.
+  return new ModelManager(
+    dir,
+    openElectronSpeechDownloadRequest
+  ) as unknown as ModelManagerInternals
+}
+
 type ScriptedResponse = {
   statusCode: number
   headers?: Record<string, string>
@@ -49,9 +58,7 @@ type ScriptedResponse = {
 
 type ScriptedResponseFactory = (sentHeaders: Record<string, string>) => ScriptedResponse
 
-// Emulates Electron's ClientRequest/IncomingMessage closely enough for the
-// download pipeline: a real Readable body so stream.pipeline semantics
-// (including mid-body destroy) match production behavior.
+// Use real Readable bodies so mid-body destruction exercises production stream.pipeline behavior.
 function scriptRequest(factory: ScriptedResponseFactory): {
   sentHeaders: Record<string, string>
   abortMock: ReturnType<typeof vi.fn>
@@ -91,8 +98,7 @@ function scriptRequest(factory: ScriptedResponseFactory): {
           for (const chunk of spec.chunks ?? []) {
             response.push(chunk)
           }
-          // Why: fail on a later tick so pushed chunks flush to the file
-          // stream first, mirroring a transfer that dies mid-body.
+          // Fail on a later tick so pushed chunks reach the file first.
           scheduleResponse(() => {
             if (spec.failWith) {
               response.destroy(new Error(spec.failWith))
@@ -163,7 +169,7 @@ describe('ModelManager download resume', () => {
           chunks: [PAYLOAD.subarray(10)]
         }
       })
-      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+      const manager = managerInternals(dir)
       const filePath = join(dir, 'model.bin')
       const attempt = vi.spyOn(manager, 'downloadFile')
 
@@ -204,7 +210,7 @@ describe('ModelManager download resume', () => {
         chunks: [PAYLOAD],
         failWith: 'net::ERR_CONNECTION_RESET'
       }))
-      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+      const manager = managerInternals(dir)
       const filePath = join(dir, 'model.bin')
 
       await manager.downloadFileWithRetry(
@@ -248,7 +254,7 @@ describe('ModelManager download resume', () => {
           chunks: [PAYLOAD.subarray(15)]
         }
       })
-      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+      const manager = managerInternals(dir)
       const filePath = join(dir, 'model.bin')
       writeFileSync(filePath, PAYLOAD.subarray(0, 10))
 
@@ -297,7 +303,7 @@ describe('ModelManager download resume', () => {
           chunks: [PAYLOAD.subarray(10)]
         }
       })
-      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+      const manager = managerInternals(dir)
       const filePath = join(dir, 'model.bin')
       writeFileSync(filePath, PAYLOAD.subarray(0, 1))
 
@@ -320,14 +326,12 @@ describe('ModelManager download resume', () => {
   it('bounds a server that advances by pathologically tiny segments forever', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
     try {
-      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+      const manager = managerInternals(dir)
       const filePath = join(dir, 'model.bin')
       let bytesWritten = 0
-      // Why: the ceiling costs 4096 iterations, so read progress from memory —
-      // real per-iteration file I/O stalls this test under parallel load.
+      // Read progress from memory: 4096 real file operations stall under parallel load.
       vi.spyOn(manager, 'getPartialDownloadBytes').mockImplementation(() => bytesWritten)
-      // Advances one byte per request against a total larger than the request
-      // ceiling, so it makes forward progress forever without ever completing.
+      // Advance one byte forever without completing before the absolute request ceiling.
       const downloadFileMock = vi.spyOn(manager, 'downloadFile').mockImplementation(() => {
         bytesWritten += 1
         return Promise.resolve()
@@ -344,7 +348,6 @@ describe('ModelManager download resume', () => {
         )
       ).rejects.toThrow(/too many download requests/)
 
-      // The absolute request ceiling (MAX_TOTAL_DOWNLOAD_REQUESTS) bounds it.
       expect(downloadFileMock).toHaveBeenCalledTimes(4_096)
     } finally {
       rmSync(dir, { recursive: true, force: true })
@@ -355,12 +358,8 @@ describe('ModelManager download resume', () => {
     vi.useFakeTimers()
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
     try {
-      // Every attempt delivers a small slice then drops mid-stream — the
-      // classic "dies partway, resumes" pattern. Because each attempt makes
-      // forward progress, the download must complete no matter how many drops
-      // it takes (regression guard: a fixed failure budget used to abandon a
-      // still-advancing large download around attempt 8).
-      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+      // Progress must reset the stall budget; the former fixed budget abandoned advancing downloads near attempt 8.
+      const manager = managerInternals(dir)
       const filePath = join(dir, 'model.bin')
       const SLICE = 2
       let delivered = 0
@@ -382,8 +381,7 @@ describe('ModelManager download resume', () => {
         () => 'resolved',
         (error: unknown) => (error instanceof Error ? error.message : String(error))
       )
-      // Drive the per-attempt backoff (1s each, since progress resets the
-      // stall counter) well past the ten attempts this needs.
+      // Each advancing failure resets backoff to 1s; allow more than the ten required attempts.
       await vi.advanceTimersByTimeAsync(30_000)
 
       await expect(outcome).resolves.toBe('resolved')
@@ -420,7 +418,7 @@ describe('ModelManager download resume', () => {
           chunks: [PAYLOAD.subarray(15)]
         }
       })
-      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+      const manager = managerInternals(dir)
       const filePath = join(dir, 'model.bin')
       writeFileSync(filePath, PAYLOAD.subarray(0, 10))
 
@@ -451,7 +449,7 @@ describe('ModelManager download resume', () => {
         },
         chunks: [PAYLOAD.subarray(0, 10)]
       }))
-      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+      const manager = managerInternals(dir)
       const filePath = join(dir, 'model.bin')
       writeFileSync(filePath, PAYLOAD.subarray(0, 10))
 
@@ -494,7 +492,7 @@ describe('ModelManager download resume', () => {
         headers: { 'content-length': String(PAYLOAD.length) },
         chunks: [PAYLOAD]
       }))
-      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+      const manager = managerInternals(dir)
       const filePath = join(dir, 'model.bin')
       const attempt = vi.spyOn(manager, 'downloadFile')
 
@@ -529,7 +527,7 @@ describe('ModelManager download resume', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
     try {
       scriptRequest(() => ({ statusCode: 404 }))
-      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+      const manager = managerInternals(dir)
 
       await expect(
         manager.downloadFileWithRetry(
@@ -555,7 +553,7 @@ describe('ModelManager download resume', () => {
         statusCode: 429,
         headers: { 'retry-after': '3' }
       }))
-      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+      const manager = managerInternals(dir)
 
       const error = await manager
         .downloadFile(
@@ -578,7 +576,7 @@ describe('ModelManager download resume', () => {
     vi.useFakeTimers()
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
     try {
-      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+      const manager = managerInternals(dir)
       const filePath = join(dir, 'model.bin')
       const rateLimitError = Object.assign(new Error('HTTP 429'), {
         httpStatusCode: 429,
@@ -614,7 +612,7 @@ describe('ModelManager download resume', () => {
   it('does not retry before an excessively long Retry-After window', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
     try {
-      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+      const manager = managerInternals(dir)
       const rateLimitError = Object.assign(new Error('HTTP 429'), {
         httpStatusCode: 429,
         retryAfterMs: 300_000
@@ -642,7 +640,7 @@ describe('ModelManager download resume', () => {
     vi.useFakeTimers()
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
     try {
-      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+      const manager = managerInternals(dir)
       const downloadFileMock = vi
         .spyOn(manager, 'downloadFile')
         .mockRejectedValue(new Error('net::ERR_CONNECTION_RESET'))
@@ -659,8 +657,7 @@ describe('ModelManager download resume', () => {
         () => 'resolved',
         (error: unknown) => (error instanceof Error ? error.message : String(error))
       )
-      // Let the first rejection schedule its backoff before advancing timers;
-      // this avoids racing fake time against stream/file I/O under full-suite load.
+      // Let backoff schedule before advancing fake time to avoid racing real stream/file I/O.
       await vi.advanceTimersByTimeAsync(0)
       expect(downloadFileMock).toHaveBeenCalledTimes(1)
       await vi.advanceTimersByTimeAsync(999)
@@ -693,7 +690,7 @@ describe('ModelManager download resume', () => {
         failWith: 'net::ERR_CONNECTION_RESET'
       }))
       const controller = new AbortController()
-      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+      const manager = managerInternals(dir)
 
       const download = manager.downloadFileWithRetry(
         'https://example.com/model.bin',
@@ -707,8 +704,7 @@ describe('ModelManager download resume', () => {
         () => 'resolved',
         (error: unknown) => (error instanceof Error ? error.message : String(error))
       )
-      // Abort after the transfer failure enters backoff; the next attempt must
-      // settle as Aborted without issuing another request.
+      // Abort during backoff must settle without another request.
       setTimeout(() => controller.abort(), 100)
       const message = await outcome
 

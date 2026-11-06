@@ -10,16 +10,19 @@ import {
 import { isExecutionHostAliasForWorktree } from './worktree-execution-host-alias'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
-import { dedupePaletteWorktrees } from './palette-repo-resolution'
+import { dedupePaletteWorktrees } from './workspace/search/palette-repo-resolution'
 import { getResolvedExecutionHostIdForWorktree } from './resolved-worktree-execution-host'
-import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
+import type { WorktreeRuntimeOwnerState } from './workspace/ownership/worktree-runtime-owner-state'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export function getPaletteOwnershipWorktreeIds(
   state: Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'>
 ): Pick<Worktree, 'id'>[] {
   return [
-    ...dedupePaletteWorktrees(Object.values(state.worktreesByRepo).flat()),
-    ...(state.folderWorkspaces ?? []).map((workspace) => ({ id: folderWorkspaceKey(workspace.id) }))
+    ...dedupePaletteWorktrees(Object.values(selectWorktreesByRepo(state)).flat()),
+    ...(selectFolderWorkspaces(state) ?? []).map((workspace) => ({
+      id: folderWorkspaceKey(workspace.id)
+    }))
   ]
 }
 

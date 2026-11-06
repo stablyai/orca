@@ -218,10 +218,13 @@ describe('nameDarwinTerminals', () => {
     directory.entries = [
       { name: 'gone', rdev: 0x10000009n, error: new Error('ENOENT') },
       { name: 'denied', rdev: 0x10000009n, error: new Error('EACCES') },
-      { name: 'ttys009', rdev: 0x10000009n }
+      { name: 'cu.found', rdev: 0x10000009n }
     ]
 
-    expect(await nameDarwinTerminals(darwinRow('16/9'), directory)).toBe(darwinRow('ttys009'))
+    expect(await nameDarwinTerminals(darwinRow('16/9'), directory)).toBe(darwinRow('cu.found'))
+    expect(directory.readPaths).toEqual(
+      ['ttys009', 'gone', 'denied', 'cu.found'].map((name) => join('/dev', name))
+    )
   })
 
   it('rejects directory open failures so the reader can fall back to ordinary tty ps', async () => {

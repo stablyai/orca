@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import type React from 'react'
-import type { DiffSection } from '../../diff-section-types'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 import { combinedDiffViewPreferences } from '../remember-view/combined-diff-view-memory'
 import { getInitialCombinedDiffSectionLoadIndices } from '../load-sections/combined-diff-initial-section-load'
 import type { CombinedDiffSectionLoadRegistry } from '../load-sections/combined-diff-section-load-registry'
@@ -39,25 +39,31 @@ export function useCombinedDiffViewPreferences({
   )
   const [fileTreeCollapsed, setFileTreeCollapsedState] = useState(
     () =>
-      // Why: the tree is opt-in; only an explicit saved setting should open it while settings are still loading.
+      // While settings load, open the opt-in tree only for an explicit saved preference.
       combinedDiffViewPreferences.fileTreeCollapsed ?? combinedDiffFileTreeVisibleByDefault !== true
   )
 
-  // Why: seed from Settings until the user picks a toolbar mode this session, then follow that choice over the global default.
-  useEffect(() => {
+  // Use settings until the first session toolbar choice, then retain that choice over global defaults.
+  const [prevDiffDefaultView, setPrevDiffDefaultView] = useState(diffDefaultView)
+  if (prevDiffDefaultView !== diffDefaultView) {
+    setPrevDiffDefaultView(diffDefaultView)
     if (diffDefaultView !== undefined && combinedDiffViewPreferences.sideBySide === null) {
       setSideBySide(diffDefaultView === 'side-by-side')
     }
-  }, [diffDefaultView])
+  }
 
-  useEffect(() => {
+  const [prevFileTreeVisibleByDefault, setPrevFileTreeVisibleByDefault] = useState(
+    combinedDiffFileTreeVisibleByDefault
+  )
+  if (prevFileTreeVisibleByDefault !== combinedDiffFileTreeVisibleByDefault) {
+    setPrevFileTreeVisibleByDefault(combinedDiffFileTreeVisibleByDefault)
     if (
       combinedDiffFileTreeVisibleByDefault !== undefined &&
       combinedDiffViewPreferences.fileTreeCollapsed === null
     ) {
       setFileTreeCollapsedState(combinedDiffFileTreeVisibleByDefault === false)
     }
-  }, [combinedDiffFileTreeVisibleByDefault])
+  }
 
   const setFileTreeCollapsed = useCallback((collapsed: boolean) => {
     combinedDiffViewPreferences.fileTreeCollapsed = collapsed
@@ -82,7 +88,7 @@ export function useCombinedDiffViewPreferences({
   )
 
   const toggleSideBySide = useCallback(() => {
-    // Why: React may replay a state updater, so the module preference is written here rather than inside it.
+    // Write module preferences outside React updaters, which may replay.
     const next = !sideBySide
     combinedDiffViewPreferences.sideBySide = next
     setSideBySide(next)

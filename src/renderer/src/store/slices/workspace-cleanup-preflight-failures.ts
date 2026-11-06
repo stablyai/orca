@@ -1,10 +1,11 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type {
-  WorkspaceCleanupCandidate,
-  WorkspaceCleanupScanError,
-  WorkspaceCleanupUnverifiedRemovalConsent
-} from '../../../../shared/workspace-cleanup'
-import { shouldForceWorkspaceCleanupRemoval } from '../../../../shared/workspace-cleanup'
+
+import {
+  type WorkspaceCleanupCandidate,
+  type WorkspaceCleanupScanError,
+  type WorkspaceCleanupUnverifiedRemovalConsent,
+  shouldForceWorkspaceCleanupRemoval
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceCleanupFailure } from './workspace-cleanup'
@@ -41,6 +42,21 @@ export function hasWorkspaceCleanupRiskEscalated(
         candidate.blockers.includes(blocker) && !approvedCandidate.blockers.includes(blocker)
     )
   )
+}
+
+export function getWorkspaceCleanupAgentStartedFailure(
+  target: PreflightFailureTarget,
+  candidate: WorkspaceCleanupCandidate
+): WorkspaceCleanupFailure {
+  return {
+    worktreeId: target.worktreeId,
+    ...(target.executionHostId ? { executionHostId: target.executionHostId } : {}),
+    displayName: candidate.displayName,
+    message: translate(
+      'auto.store.slices.workspace.cleanup.agentStartedSinceConfirmation',
+      'An agent is running in this workspace. Delete it again to review stopping the agent.'
+    )
+  }
 }
 
 export function hasValidWorkspaceCleanupUnverifiedConsent(

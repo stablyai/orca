@@ -1,5 +1,8 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
-import { parseRemoteRuntimePtyId, toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import {
+  isRemoteRuntimePtyId,
+  parseRemoteRuntimePtyId,
+  toRemoteRuntimePtyId
+} from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { isTerminalTabPresent } from '../slices/terminal-tab-retirement'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import {
@@ -22,9 +25,11 @@ export function createTerminalPtyBindingActions(
       }
       let worktreeId: string | null = null
       let wasActivationSpawn = false
+      let wasAlreadyBound = false
       const isRemoteRuntimeMirror = isRemoteRuntimePtyId(ptyId)
       set((s) => {
         const existingPtyIds = s.ptyIdsByTabId[tabId] ?? []
+        wasAlreadyBound = !replacedPtyId && existingPtyIds.includes(ptyId)
         const remote = parseRemoteRuntimePtyId(ptyId)
         const legacyRemotePtyId = remote?.environmentId ? toRemoteRuntimePtyId(remote.handle) : null
         const hasLegacyPtyBinding = legacyRemotePtyId
@@ -79,7 +84,7 @@ export function createTerminalPtyBindingActions(
           const { pendingActivationSpawn: _unused, restoredFromSession: _restored, ...rest } = tab
           void _unused
           void _restored
-          // Why: tab.ptyId is the single-pane fallback for legacy attach; later split-pane spawns must not steal it or remount/close reattaches the tab to the wrong PTY.
+          // Keep legacy single-pane tab.ptyId fallback stable; later split spawns must not redirect remount/close to another PTY.
           const currentTabPtyId = tab.ptyId === replacementPtyId ? ptyId : tab.ptyId
           const nextTabPtyId = currentTabPtyId ?? nextPtyIds[0] ?? null
           const nextPendingActivationSpawn = consumePendingActivationSpawn(
@@ -107,26 +112,33 @@ export function createTerminalPtyBindingActions(
           (s.suppressedPtyExitIds[ptyId] ||
             (replacementPtyId && s.suppressedPtyExitIds[replacementPtyId]))
         )
-        const nextSuppressedPtyExitIds = { ...s.suppressedPtyExitIds }
-        delete nextSuppressedPtyExitIds[ptyId]
-        if (replacementPtyId) {
-          delete nextSuppressedPtyExitIds[replacementPtyId]
-        }
-        if (shouldRetainSuppressedExit) {
-          // Why: handle rotation keeps the same terminal lifecycle; an intentional exit racing the rotation must stay suppressed once.
-          nextSuppressedPtyExitIds[ptyId] = true
+        const touchesSuppressedExit =
+          ptyId in s.suppressedPtyExitIds ||
+          (replacementPtyId !== null && replacementPtyId in s.suppressedPtyExitIds)
+        // Keep identity on a plain reattach so subscribers don't re-render for an unchanged map.
+        const nextSuppressedPtyExitIds = touchesSuppressedExit
+          ? { ...s.suppressedPtyExitIds }
+          : s.suppressedPtyExitIds
+        if (touchesSuppressedExit) {
+          delete nextSuppressedPtyExitIds[ptyId]
+          if (replacementPtyId) {
+            delete nextSuppressedPtyExitIds[replacementPtyId]
+          }
+          if (shouldRetainSuppressedExit) {
+            // Why: handle rotation keeps the same terminal lifecycle; an intentional exit racing the rotation must stay suppressed once.
+            nextSuppressedPtyExitIds[ptyId] = true
+          }
         }
         const nextUnverifiedPtyLossTabIds = s.unverifiedPtyLossTabIds[tabId]
           ? omitUnverifiedPtyLossTabIds(s.unverifiedPtyLossTabIds, [tabId])
           : s.unverifiedPtyLossTabIds
-        // Why: a redeployed relay renumbers from pty-1, so a recorded disownership must not outlive
-        // the id it described once a live PTY answers to that id again.
+        // Redeployed relays reuse IDs; rebinding must retire stale disownership for the old incarnation.
         const nextDisownedPtyIds = omitDisownedPtyIds(
           s.disownedPtyIds,
           replacementPtyId ? [ptyId, replacementPtyId] : [ptyId]
         )
         const hasReplacementPendingRestart = replacementPtyId
-          ? replacementPtyId in s.pendingCodexPaneRestartIds
+          ? replacementPtyId in s.pendingPaneAccountRestarts
           : false
         const hasReplacementRestartNotice = replacementPtyId
           ? replacementPtyId in s.codexRestartNoticeByPtyId
@@ -134,9 +146,9 @@ export function createTerminalPtyBindingActions(
         const hasReplacementMigrationUnsupported = replacementPtyId
           ? replacementPtyId in s.migrationUnsupportedByPtyId
           : false
-        const nextPendingCodexPaneRestartIds = hasReplacementPendingRestart
-          ? { ...s.pendingCodexPaneRestartIds }
-          : s.pendingCodexPaneRestartIds
+        const nextPendingPaneAccountRestarts = hasReplacementPendingRestart
+          ? { ...s.pendingPaneAccountRestarts }
+          : s.pendingPaneAccountRestarts
         const nextCodexRestartNoticeByPtyId = hasReplacementRestartNotice
           ? { ...s.codexRestartNoticeByPtyId }
           : s.codexRestartNoticeByPtyId
@@ -145,8 +157,8 @@ export function createTerminalPtyBindingActions(
           : s.migrationUnsupportedByPtyId
         if (replacementPtyId) {
           if (hasReplacementPendingRestart) {
-            nextPendingCodexPaneRestartIds[ptyId] = true
-            delete nextPendingCodexPaneRestartIds[replacementPtyId]
+            nextPendingPaneAccountRestarts[ptyId] = nextPendingPaneAccountRestarts[replacementPtyId]
+            delete nextPendingPaneAccountRestarts[replacementPtyId]
           }
           if (hasReplacementRestartNotice) {
             const replacedNotice = nextCodexRestartNoticeByPtyId[replacementPtyId]
@@ -166,14 +178,17 @@ export function createTerminalPtyBindingActions(
           ...(nextTabsByWorktree !== s.tabsByWorktree
             ? { tabsByWorktree: nextTabsByWorktree }
             : {}),
-          ptyIdsByTabId: {
-            ...s.ptyIdsByTabId,
-            [tabId]: nextPtyIds
-          },
-          lastKnownRelayPtyIdByTabId: {
-            ...s.lastKnownRelayPtyIdByTabId,
-            [tabId]: ptyId
-          },
+          ...(nextPtyIds !== existingPtyIds || !(tabId in s.ptyIdsByTabId)
+            ? { ptyIdsByTabId: { ...s.ptyIdsByTabId, [tabId]: nextPtyIds } }
+            : {}),
+          ...(s.lastKnownRelayPtyIdByTabId[tabId] !== ptyId
+            ? {
+                lastKnownRelayPtyIdByTabId: {
+                  ...s.lastKnownRelayPtyIdByTabId,
+                  [tabId]: ptyId
+                }
+              }
+            : {}),
           ...(nextUnverifiedPtyLossTabIds !== s.unverifiedPtyLossTabIds
             ? { unverifiedPtyLossTabIds: nextUnverifiedPtyLossTabIds }
             : {}),
@@ -181,7 +196,7 @@ export function createTerminalPtyBindingActions(
             ? { disownedPtyIds: nextDisownedPtyIds }
             : {}),
           suppressedPtyExitIds: nextSuppressedPtyExitIds,
-          pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds,
+          pendingPaneAccountRestarts: nextPendingPaneAccountRestarts,
           codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
           migrationUnsupportedByPtyId: nextMigrationUnsupportedByPtyId,
           ...(nextTerminalLayoutsByTabId !== s.terminalLayoutsByTabId
@@ -193,7 +208,8 @@ export function createTerminalPtyBindingActions(
       // Why: a bound PTY means the workspace is awake by any route (CLI, automation, client wake), not only activation.
       clearWorktreeSleepIntent(worktreeId)
       // Why: activation spawns come from clicking a worktree, not work in it — skip the lastActivityAt stamp and sortEpoch bump; other spawn reasons still bump.
-      if (worktreeId && !wasActivationSpawn && !isRemoteRuntimeMirror) {
+      // A remount reattaching its own live PTY (e.g. a hidden prewarm) is not new work either.
+      if (worktreeId && !wasActivationSpawn && !wasAlreadyBound && !isRemoteRuntimeMirror) {
         get().bumpWorktreeActivity(worktreeId)
       }
     }

@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { translate } from '@/i18n/i18n'
 import { createCreatePrIntentRunToken } from './create-pr-intent-flow'
+import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
 import type { SourceControlCommitAction } from '../commit/use-commit-action'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlFileListing } from '../listing/use-file-listing'
@@ -15,10 +16,6 @@ import type { SourceControlCreatePrIntentReview } from './use-create-pr-intent-r
 import type { SourceControlCreatePrIntentTarget } from './use-create-pr-intent-target'
 import type { SourceControlHostedReviewProviderHint } from './use-hosted-review-provider-hint'
 
-/**
- * One-click "Create PR": commits, pushes, and opens the review, refusing to continue the moment the
- * run no longer owns the worktree it started on.
- */
 export function useSourceControlCreatePrIntentRun({
   activeRepo,
   activeWorktreeId,
@@ -108,11 +105,12 @@ export function useSourceControlCreatePrIntentRun({
       worktreeId: activeWorktreeId,
       worktreePath,
       branch: branchName,
-      // Why: token carries the same provisional provider used for UI copy so a failed
-      // eligibility IPC can synthesize local prep steps for the correct host.
+      // Preserve the UI provider so failed eligibility probes can synthesize the right host’s local prep steps.
       provider: provisionalHostedReviewProvider,
-      // Why: intent crosses async commit/push steps, so the base stays tied to what was selected when the run started.
-      baseRef: effectiveBaseRef ?? null
+      // Pin the selected base across asynchronous commit/push steps.
+      baseRef: effectiveBaseRef ?? null,
+      // The run outlives navigation; its git answers stay on the copy it started from.
+      pinnedCopy: resolveWorktreeGitCopyNow(activeWorktreeId)
     })
     const operationTarget = getCreatePrIntentOperationTarget(token)
     const snapshot = createCreatePrIntentRunSnapshot({

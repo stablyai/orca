@@ -2,15 +2,13 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AiVaultScanWork } from '../../shared/ai-vault-scan-progress'
+import type { AiVaultScanWork } from '../../shared/ai-vault/scanning/ai-vault-scan-progress'
 import {
   AI_VAULT_SCAN_PROGRESS_INTERVAL_MS,
-  noteAiVaultScanFileFound,
-  noteAiVaultScanWorkChanged,
   trackAiVaultScanProgress
 } from './ai-vault-scan-progress'
 import { scanAiVaultSessions } from './session-scanner'
-import { resetSessionParseCacheForTests } from './session-scanner-parse-cache'
+import { resetSessionParseCacheForTests } from './parse-cache/session-parse-cache-store'
 import { isolatedScanRoots, writeJsonlFile } from './session-scanner-test-fixtures'
 
 let tempRoots: string[] = []
@@ -28,37 +26,7 @@ async function tempRoot(): Promise<string> {
   return root
 }
 
-function codexFile(index: number): { path: string; dev: number; ino: number } {
-  return { path: `/sessions/${index}.jsonl`, dev: 1, ino: index + 1 }
-}
-
 describe('scan progress reporting', () => {
-  it('reports at most once per interval, with the latest tally trailing', () => {
-    vi.useFakeTimers()
-    const signal = new AbortController().signal
-    const files: number[] = []
-    const stop = trackAiVaultScanProgress(
-      signal,
-      (work) => files.push(work.agents[0]?.files ?? 0),
-      () => Date.now()
-    )
-
-    noteAiVaultScanFileFound(signal, 'codex', codexFile(0))
-    noteAiVaultScanWorkChanged(signal)
-    for (let index = 1; index < 16; index++) {
-      noteAiVaultScanFileFound(signal, 'codex', codexFile(index))
-      noteAiVaultScanWorkChanged(signal)
-    }
-    expect(files).toEqual([1])
-    vi.advanceTimersByTime(AI_VAULT_SCAN_PROGRESS_INTERVAL_MS)
-    expect(files).toEqual([1, 16])
-
-    stop()
-    noteAiVaultScanWorkChanged(signal)
-    vi.advanceTimersByTime(AI_VAULT_SCAN_PROGRESS_INTERVAL_MS)
-    expect(files).toEqual([1, 16])
-  })
-
   it('reports discovery and reading for its own scan, never for an unrelated one', async () => {
     const root = await tempRoot()
     const roots = isolatedScanRoots(root)
@@ -82,7 +50,6 @@ describe('scan progress reporting', () => {
       () => (now += AI_VAULT_SCAN_PROGRESS_INTERVAL_MS)
     )
 
-    // Same readers, another owner's signal (the index loop or an interactive read).
     await scanAiVaultSessions({
       ...roots,
       platform: 'darwin',

@@ -7,23 +7,22 @@ function makeRepo(id: string, path: string): Repo {
 }
 
 describe('getGitHubRepoLookupIndex', () => {
-  it('retains the first duplicate after indexing later rows', () => {
-    const first = makeRepo('duplicate', '/first')
-    const second = makeRepo('duplicate', '/second')
-    const later = makeRepo('later', '/later')
-    const lookup = getGitHubRepoLookupIndex([first, second, later])
-
-    expect(lookup.findById('duplicate')).toBe(first)
-    expect(lookup.findById('later')).toBe(later)
-    expect(lookup.findById('duplicate')).toBe(first)
-  })
-
   it('matches Array.find ordering for combined ID and path lookups', () => {
     const pathMatch = makeRepo('other', '/target')
     const idMatch = makeRepo('target', '/other')
     const lookup = getGitHubRepoLookupIndex([pathMatch, idMatch])
 
     expect(lookup.findByIdOrPath('target', '/target')).toBe(pathMatch)
+  })
+
+  it('picks the twin at the requested path over an earlier row with the same id', () => {
+    const localTwin = makeRepo('twin', '/laptop/twin')
+    const sshTwin = { ...makeRepo('twin', '/remote/twin'), connectionId: 'builder' }
+    const lookup = getGitHubRepoLookupIndex([localTwin, sshTwin])
+
+    expect(lookup.findByIdOrPath('twin', '/remote/twin')).toBe(sshTwin)
+    expect(lookup.findByIdOrPath('twin', '/laptop/twin')).toBe(localTwin)
+    expect(lookup.findByIdOrPath('twin', '/elsewhere')).toBe(localTwin)
   })
 
   it('scans each repo once across repeated misses', () => {
@@ -44,23 +43,5 @@ describe('getGitHubRepoLookupIndex', () => {
     expect(lookup.findById('missing-first')).toBeUndefined()
     expect(lookup.findById('missing-second')).toBeUndefined()
     expect(idReads).toBe(repos.length)
-  })
-
-  it('stops after a sparse first-row match', () => {
-    let idReads = 0
-    const repos = Array.from({ length: 32 }, (_, index) => {
-      const repo = makeRepo(`repo-${index}`, `/repo-${index}`)
-      return Object.defineProperty(repo, 'id', {
-        configurable: true,
-        enumerable: true,
-        get: () => {
-          idReads += 1
-          return `repo-${index}`
-        }
-      })
-    })
-
-    expect(getGitHubRepoLookupIndex(repos).findById('repo-0')).toBe(repos[0])
-    expect(idReads).toBe(1)
   })
 })

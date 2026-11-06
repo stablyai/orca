@@ -1,7 +1,12 @@
-import { isEditableTarget } from './editable-target'
+import { keybindingRunsInTextField, type KeybindingActionId } from '../../../shared/keybindings'
+import { isEditableTarget, isNativeChatPromptTarget } from './editable-target'
 import { getShortcutPlatform } from './shortcut-platform'
+import {
+  nativeChatPromptClaimsShortcut,
+  textInputOwnsComposition
+} from '../../../shared/text-input-shortcut-policy'
 
-export function fileSearchClaimsTextKey(event: {
+type TextKeyEvent = {
   target: EventTarget | null
   key?: string
   code?: string
@@ -12,7 +17,9 @@ export function fileSearchClaimsTextKey(event: {
   isComposing?: boolean
   altGraph?: boolean
   getModifierState?: (key: string) => boolean
-}): boolean {
+}
+
+export function fileSearchClaimsTextKey(event: TextKeyEvent): boolean {
   if (!isEditableTarget(event.target)) {
     return false
   }
@@ -22,13 +29,7 @@ export function fileSearchClaimsTextKey(event: {
   ) {
     return true
   }
-  if (
-    event.isComposing ||
-    event.key === 'Process' ||
-    event.key === 'Dead' ||
-    event.altGraph ||
-    event.getModifierState?.('AltGraph')
-  ) {
+  if (textInputOwnsComposition(event)) {
     return true
   }
   const isMac = getShortcutPlatform() === 'darwin'
@@ -61,4 +62,30 @@ export function fileSearchClaimsTextKey(event: {
     return true
   }
   return false
+}
+
+export function textFieldClaimsActionKey(
+  event: TextKeyEvent,
+  actionId?: KeybindingActionId
+): boolean {
+  if (isNativeChatPromptTarget(event.target)) {
+    return nativeChatPromptClaimsShortcut(event, getShortcutPlatform(), actionId)
+  }
+  if (!fileSearchClaimsTextKey(event)) {
+    return false
+  }
+  const platform = getShortcutPlatform()
+  // Why: AltGr and Mac Option chords that type a character or dead key stay with the field.
+  if (
+    event.altGraph ||
+    event.getModifierState?.('AltGraph') ||
+    (platform === 'darwin' &&
+      event.altKey &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      (event.key?.length === 1 || event.key === 'Dead'))
+  ) {
+    return true
+  }
+  return !actionId || !keybindingRunsInTextField(actionId, event, platform)
 }

@@ -1,19 +1,22 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher'
 import {
   restorePtyDataHandlersAfterFailedShutdown,
   unregisterPtyDataHandlers
-} from '@/components/terminal-pane/pty-dispatcher'
+} from '@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import '../slices/agent-status/agent-status'
 import {
   collectHibernatedCompletionEvidenceForWorktree,
   collectSleepingAgentSessionRecordsForWorktree
-} from '../slices/agent-status'
+} from '../slices/agent-status/agent-status-recovery-collection'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { equalStringSets, sortedUniquePtyIds } from './terminal-pty-identities'
-import { resolveTerminalStopRuntimeEnvironmentId } from './terminal-workspace-routing'
+import { resolveTerminalPtyOwner } from '@/lib/terminal-worktree-route'
+import { resolveTerminalTeardownOwner } from './terminal-teardown-owner'
 import { removePanesAttention } from '../slices/workspace-attention/subject-attention-transitions'
 import { settleAttentionRemovedBy } from '../slices/workspace-attention/attention-removal-follow-up'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
@@ -31,7 +34,22 @@ export function createTerminalPaneHibernationActions(
       )
       const rendererShutdownPtyIds = [opts.ptyId]
       const state = get()
-      const runtimeEnvironmentId = resolveTerminalStopRuntimeEnvironmentId(state, worktreeId)
+      const worktreeOwner = resolveTerminalPtyOwner(state, worktreeId)
+      const teardownOwner = resolveTerminalTeardownOwner(worktreeOwner, [opts.ptyId])
+      // Use PTY owner for twins; losing bindings without an attributable host stop leaves unseen running agents.
+      if (
+        teardownOwner.kind === 'refused' ||
+        (worktreeOwner.kind === 'ambiguous' &&
+          isRemoteRuntimePtyId(opts.ptyId) &&
+          expectedRuntimePtyIds.length === 0)
+      ) {
+        console.warn('[agent-hibernation] refusing pane hibernation: terminal owner is ambiguous', {
+          worktreeId,
+          paneKey: opts.paneKey
+        })
+        throw new Error('ambiguous_terminal_owner')
+      }
+      const runtimeEnvironmentId = teardownOwner.runtimeEnvironmentId
       // Why: pane transports emit renderer PTY ids, not raw exact-stop handles; guard only the identity that can deliver an exit callback.
       const exitGuardPtyIds = [opts.ptyId]
       const tab = (state.tabsByWorktree[worktreeId] ?? []).find(

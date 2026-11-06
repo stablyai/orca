@@ -22,12 +22,26 @@ export function readAgentAttentionTurnStartedAt(
   )
 }
 
-/**
- * Subjects on the viewed surface whose current turn has not been acknowledged yet.
- *
- * Why compare stateStartedAt (not updatedAt): same-state pings must not re-trigger an ack,
- * matching the is-unvisited rule the workspace card uses.
- */
+/** A turn is unread until acknowledged at or after its start; with no turn there is nothing to read. */
+export function isAgentTurnUnacknowledged(
+  acknowledgedAt: number,
+  turnStartedAt: number | null | undefined
+): boolean {
+  return turnStartedAt != null && acknowledgedAt < turnStartedAt
+}
+
+/** Read the same current-turn records that auto-acknowledgement clears. */
+export function isAgentSubjectUnread(
+  records: AgentAttentionTurnRecords,
+  subjectKey: string
+): boolean {
+  return isAgentTurnUnacknowledged(
+    records.acknowledgedTurnStartedAt[subjectKey] ?? 0,
+    readAgentAttentionTurnStartedAt(records, subjectKey)
+  )
+}
+
+/** Acknowledge viewed subjects by stateStartedAt, not updatedAt, so same-state pings cannot retrigger acknowledgement. */
 export function computeAgentAcknowledgementTargets(
   records: AgentAttentionTurnRecords,
   subjectKey: string | null
@@ -37,12 +51,15 @@ export function computeAgentAcknowledgementTargets(
   }
   const targets: string[] = []
   const acknowledgedAt = records.acknowledgedTurnStartedAt[subjectKey] ?? 0
-  const liveTurn = records.liveTurns[subjectKey]
-  if (liveTurn && acknowledgedAt < liveTurn.stateStartedAt) {
+  if (isAgentTurnUnacknowledged(acknowledgedAt, records.liveTurns[subjectKey]?.stateStartedAt)) {
     targets.push(subjectKey)
   }
-  const retainedTurn = records.retainedTurns[subjectKey]
-  if (retainedTurn && acknowledgedAt < retainedTurn.entry.stateStartedAt) {
+  if (
+    isAgentTurnUnacknowledged(
+      acknowledgedAt,
+      records.retainedTurns[subjectKey]?.entry.stateStartedAt
+    )
+  ) {
     targets.push(subjectKey)
   }
   return targets
@@ -59,13 +76,7 @@ export function resolveViewedUnreadSubjectKey(
   return readAgentAttentionUnreadReason(unreadBySubjectKey[subjectKey]) === null ? null : subjectKey
 }
 
-/**
- * Manual mark-unread protections that no longer apply: the user moved to another subject, or
- * the agent took a new turn.
- *
- * Why keep on null: persisted UI hydrates before the turn snapshot lands, so an active subject
- * with no row yet is "not known", not "moved on"; wiping it would lose the user's mark-unread.
- */
+/** Expire manual-unread protection after a subject switch or new turn. Keep it on missing rows: UI hydrates before turn snapshots, so absence does not prove a switch. */
 export function computeLapsedManualUnreadProtections(
   records: Pick<AgentAttentionTurnRecords, 'liveTurns' | 'retainedTurns'> & {
     manuallyUnreadTurnStartedAt: Record<string, number>

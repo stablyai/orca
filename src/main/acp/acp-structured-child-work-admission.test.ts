@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import {
   closeProviderTimelineRigs,
   openProviderTimelineRig,
@@ -8,12 +8,12 @@ import {
 import { AcpStructuredLane } from './acp-structured-lane'
 import type { AcpTimelineEvent } from './acp-timeline-event'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
-import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { providerTimelineSink } from '../native-chat/agent-session-timeline/provider-timeline-plan'
 import {
   recordingStructuredAgentSessionLogger,
   testEventSinkLogging
-} from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 
 const lanes: AcpStructuredLane[] = []
 afterEach(async () => {
@@ -21,7 +21,6 @@ afterEach(async () => {
   await closeProviderTimelineRigs()
 })
 
-/** What Grok says about one subagent, translated as the adapter would. */
 function subagent(lane: AcpStructuredLane, state: 'working' | 'completed'): AcpTimelineEvent[] {
   const update =
     state === 'working'
@@ -184,7 +183,9 @@ describe('ACP subagent evidence at the ordered journal boundary', () => {
     throwing.apply(subagent(throwing, 'working'))
     throwing.apply(subagent(throwing, 'completed'))
     throwing.apply([{ type: 'turn.open', turn: 'turn', at: 2 }])
-    expect(await rig.rows()).toHaveLength(1)
+    expect((await rig.rows()).map((row) => row.body)).toMatchObject([
+      { kind: 'turn', turnId: 'p:provider-session-1:turn', state: 'running', startedAt: 2 }
+    ])
     expect(failure).toHaveBeenCalledTimes(2)
   })
 

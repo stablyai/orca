@@ -2,12 +2,12 @@ import { createHash } from 'node:crypto'
 import type SyncDatabase from '../sqlite/sync-database'
 import { openCodeTranscriptPageLimit } from '../../shared/opencode-transcript-page-limit'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
-import { asRecord, parseJsonObject } from '../ai-vault/session-scanner-values'
+import { asRecord, extractString, parseJsonObject } from '../ai-vault/session-scanner-values'
 import {
   opencodeMessages,
   OPENCODE_TRANSCRIPT_MAX_ROW_BYTES
 } from './transcript-opencode-part-blocks'
-import type { NativeChatBlock } from '../../shared/native-chat-types'
+import type { NativeChatBlock } from '../../shared/native-chat/native-chat-types'
 import type {
   OpenCodeTranscriptPage,
   OpenCodeTranscriptSignal,
@@ -48,7 +48,11 @@ export function readOpenCode2TranscriptSignal(
   ) {
     throw new Error('OpenCode transcript signal is invalid')
   }
+  const source = columnExists(db, 'session_v2', 'directory')
+    ? asRecord(db.prepare('SELECT directory FROM session_v2 WHERE id = ?').get(sessionId))
+    : null
   return {
+    cwd: extractString(source?.directory),
     messageCount: row.count,
     partCount: 0,
     maxMessageRowId: row.latest,
@@ -190,6 +194,7 @@ export function readOpenCode2TranscriptPage(
     CASE WHEN length(CAST(data AS BLOB)) <= ${OPENCODE_TRANSCRIPT_MAX_ROW_BYTES} THEN data ELSE NULL END AS data
     FROM session_message WHERE session_id = ? AND seq < ? ORDER BY seq DESC LIMIT ?`)
   const items: OpenCodeTranscriptItem[] = []
+  const forkTip: { id: string; role: string; terminal: boolean }[] = []
   let cursor = args.beforeMessageRowId ?? Number.MAX_SAFE_INTEGER
   let scannedRows = 0
   let bytes = 0
@@ -213,6 +218,14 @@ export function readOpenCode2TranscriptPage(
       if (++scannedRows > MAX_SCAN_ROWS || bytes > MAX_PAGE_BYTES) {
         throw new Error('OpenCode transcript page exceeds its read limit')
       }
+      const record = typeof row.data === 'string' ? parseJsonObject(row.data) : null
+      forkTip.push({
+        id: `opencode:${String(row.id)}`,
+        role: row.type === 'idle' ? 'terminal' : String(row.type),
+        terminal:
+          row.type === 'idle' &&
+          ['succeeded', 'interrupted', 'failed'].includes(String(record?.outcome))
+      })
       const mapped = messageItems(value)
       cursor = row.cursor
       for (const item of mapped) {
@@ -234,5 +247,10 @@ export function readOpenCode2TranscriptPage(
       break
     }
   }
-  return { items: items.toReversed(), hasMore, beforeMessageRowId: scannedRows ? cursor : null }
+  return {
+    items: items.toReversed(),
+    hasMore,
+    beforeMessageRowId: scannedRows ? cursor : null,
+    forkTip: forkTip.toReversed()
+  }
 }

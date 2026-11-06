@@ -1,24 +1,20 @@
 import { toast } from 'sonner'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { LoaderCircle } from 'lucide-react'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { translate } from '@/i18n/i18n'
-import {
-  keychainLockedCredentialMessage,
-  useCredentialHostName
-} from '@/components/settings/keychain-credential-notice'
 import { Button } from '@/components/ui/button'
 import { jiraListGridStyle } from '../../jira-list-columns'
 import { JiraListColumnsMenu } from '../../jira-list-columns-menu'
-import { TaskPageJiraSortControls } from '../../task-page-jira-sort-controls'
-import { TaskPageJiraErrorBanner } from '../../task-page-linear-jira-list-model'
-import { TaskPageJiraTextFallbackNotice } from '../../task-page-jira-text-fallback-notice'
-import { TaskPageJiraIssueList } from '@/components/task-page-jira-issue-list'
-import { TaskPageJiraBoardView } from '@/components/task-page-jira-board-view'
-import { TaskPageJiraViewControls } from '@/components/task-page-jira-view-controls'
-import { formatRelativeTime } from '../../task-page-source-context'
-import { getJiraStatusTone } from '@/components/task-page-jira-status-tone'
+import { TaskPageJiraSortControls } from './task-page-jira-sort-controls'
+import { TaskPageJiraErrorBanner } from '../linear/task-page-linear-jira-list-model'
+import { TaskPageJiraTextFallbackNotice } from './task-page-jira-text-fallback-notice'
+import { TaskPageJiraIssueList } from '@/components/task-page/jira/task-page-jira-issue-list'
+import { TaskPageJiraBoardView } from '@/components/task-page/jira/task-page-jira-board-view'
+import { TaskPageJiraViewControls } from '@/components/task-page/jira/task-page-jira-view-controls'
+import { formatRelativeTime } from '../task-page-source-context'
+import { getJiraStatusTone } from '@/components/task-page/jira/task-page-jira-status-tone'
 import JiraIssueWorkspace from '@/components/JiraIssueWorkspace'
 import { TaskPageLinearContent } from '../linear/Content'
 import {
@@ -71,15 +67,6 @@ export function TaskPageJiraContent({
     accountBackedTaskSourceHostId,
     setJiraRefreshNonce
   } = model
-  const { jiraStatusContextKey } = model
-  const credentialHost = useCredentialHostName(
-    jiraStatusContextKey,
-    jiraStatus.credentialErrorReason === 'keychain_locked'
-  )
-  const jiraCredentialError =
-    jiraStatus.credentialErrorReason === 'keychain_locked'
-      ? keychainLockedCredentialMessage('Jira', credentialHost)
-      : jiraStatus.credentialError
   const boardTarget = ipcOrRuntimeTargetForHostId(
     jiraTaskSourceContext?.hostId ?? accountBackedTaskSourceHostId
   )
@@ -131,8 +118,10 @@ export function TaskPageJiraContent({
           />
           <div className="flex shrink-0 items-center gap-2 text-2xs text-muted-foreground">
             <span>
-              {displayedJiraIssues.length}{' '}
-              {translate('auto.components.TaskPage.b7bae28b6a', 'shown')}
+              {translate('auto.components.TaskPage.shownCount', '{{count}} shown', {
+                count: displayedJiraIssues.length,
+                defaultValue_one: '{{count}} shown'
+              })}
             </span>
             {jiraViewMode === 'list' ? (
               <JiraListColumnsMenu ids={jiraColumnIds} onToggle={toggleJiraColumn} />
@@ -155,12 +144,12 @@ export function TaskPageJiraContent({
             />
           ) : null}
 
-          {jiraCredentialError ? (
+          {jiraStatus.credentialError ? (
             <div className="border-b border-border px-4 py-4 text-sm text-destructive">
-              {jiraCredentialError}
+              {jiraStatus.credentialError}
             </div>
           ) : null}
-          {!jiraCredentialError && jiraError ? (
+          {!jiraStatus.credentialError && jiraError ? (
             <TaskPageJiraErrorBanner
               error={jiraError}
               open={jiraErrorDetailsOpen}
@@ -168,7 +157,7 @@ export function TaskPageJiraContent({
             />
           ) : null}
           <TaskPageJiraTextFallbackNotice
-            rejection={jiraCredentialError ? null : jiraJqlRejection}
+            rejection={jiraStatus.credentialError ? null : jiraJqlRejection}
           />
 
           {jiraLoading && jiraIssues.length === 0 ? (
@@ -187,7 +176,7 @@ export function TaskPageJiraContent({
           {!jiraLoading &&
           displayedJiraIssues.length === 0 &&
           !jiraError &&
-          !jiraCredentialError ? (
+          !jiraStatus.credentialError ? (
             <div className="px-4 py-10 text-center">
               <p className="text-sm font-medium text-foreground">
                 {translate('auto.components.TaskPage.eba87f2edb', 'No Jira issues found')}

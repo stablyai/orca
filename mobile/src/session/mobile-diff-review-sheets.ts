@@ -1,14 +1,15 @@
 import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
 import type { ComposerState, SendSheetState } from './mobile-diff-review-screen-model'
 
-// Which review sheet the user wants; the screen's one keyed drawer decides when it can be shown.
-
 export type ReviewSheet =
-  | { kind: 'actions' }
-  | { kind: 'send'; load: SendSheetState }
+  /** `only` limits the sheet to these notes, e.g. the one just written. */
+  | { kind: 'send'; load: SendSheetState; only?: readonly string[] }
   | { kind: 'discard'; target: MobileDiffReviewQueueItem }
   | { kind: 'composer'; composer: ComposerState }
   | { kind: 'completion' }
+  | { kind: 'files' }
+  /** Lines picked in the diff, inclusive, waiting for a note to send or post. */
+  | { kind: 'range'; startLine: number; line: number }
 
 export type ReviewSheetKind = ReviewSheet['kind']
 
@@ -21,7 +22,8 @@ export type ReviewSheetsState = {
 export type ReviewSheetsAction =
   | { type: 'open'; sheet: ReviewSheet }
   | { type: 'openWhenIdle'; sheet: ReviewSheet }
-  | { type: 'close'; kind: ReviewSheetKind }
+  /** With `sheet`, closes only that very presentation, so a slow completion can't close a newer one. */
+  | { type: 'close'; kind: ReviewSheetKind; sheet?: ReviewSheet }
   | { type: 'updateSend'; load: SendSheetState }
 
 export const NO_REVIEW_SHEETS: ReviewSheetsState = { requested: null, deferred: null }
@@ -48,6 +50,9 @@ export function reduceReviewSheets(
       }
       return { requested, deferred: action.sheet }
     case 'close':
+      if (action.sheet && requested !== action.sheet && deferred !== action.sheet) {
+        return state
+      }
       if (requested?.kind === action.kind) {
         return { requested: deferred, deferred: null }
       }
@@ -60,7 +65,7 @@ export function reduceReviewSheets(
       if (requested?.kind !== 'send') {
         return state
       }
-      return { requested: { kind: 'send', load: action.load }, deferred }
+      return { requested: { ...requested, load: action.load }, deferred }
   }
 }
 
@@ -68,13 +73,13 @@ export function reviewComposer(state: ReviewSheetsState): ComposerState | null {
   return state.requested?.kind === 'composer' ? state.requested.composer : null
 }
 
-/** The only ways callers change the review screen's sheets. */
 export function reviewSheetIntents(dispatch: (action: ReviewSheetsAction) => void) {
   return {
     openSheet: (sheet: ReviewSheet) => dispatch({ type: 'open', sheet }),
     /** For async openers: waits for the user's sheet to close instead of closing it. */
     openSheetWhenIdle: (sheet: ReviewSheet) => dispatch({ type: 'openWhenIdle', sheet }),
-    closeSheet: (kind: ReviewSheetKind) => dispatch({ type: 'close', kind }),
+    closeSheet: (kind: ReviewSheetKind, sheet?: ReviewSheet) =>
+      dispatch({ type: 'close', kind, ...(sheet ? { sheet } : {}) }),
     updateSendSheet: (load: SendSheetState) => dispatch({ type: 'updateSend', load })
   }
 }

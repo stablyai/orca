@@ -1,9 +1,7 @@
 import type * as ReactModule from 'react'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { AUTOMATIONS_CHANGED_EVENT } from '@/lib/automations-changed-window-event'
 import { countUnchangedObserverHistoryReads } from './automation-dispatch-observer-test-probe'
-
-const mockDispatchEvent = vi.fn()
 
 const mockLaunchAgentBackgroundSession = vi.fn()
 const mockFindReusableAutomationSession = vi.fn()
@@ -15,6 +13,7 @@ const mockOnDispatchRequested = vi.fn()
 const mockRendererReady = vi.fn()
 const mockFinalizeTerminalOwnership = vi.fn()
 const mockReleaseTerminalOwnership = vi.fn()
+const mockReleaseRuntimeObservers = vi.fn()
 const mockSshNeedsPassphrasePrompt = vi.fn()
 const mockSshGetState = vi.fn()
 const mockSshConnect = vi.fn()
@@ -38,18 +37,20 @@ type TestRepo = {
   path: string
 }
 
+function noSelectedHost(): string | null {
+  return null
+}
+
 const state = {
   activeView: 'terminal' as const,
   activeWorktreeId: 'wt-active',
+  activeWorkspaceExecutionHostId: noSelectedHost(),
   activeTabId: 'tab-active',
   activeTabType: 'terminal' as const,
   repos: [{ id: 'repo-1', connectionId: null, executionHostId: null, path: '/repo' }] as TestRepo[],
-  folderWorkspaces: [] as {
-    id: string
-    projectGroupId: string
-    folderPath: string
-    connectionId: string | null
-  }[],
+  folderWorkspaces: new Array<
+    Pick<FolderWorkspace, 'id' | 'name' | 'projectGroupId' | 'folderPath' | 'connectionId'>
+  >(),
   projectGroups: [] as {
     id: string
     connectionId: string | null
@@ -71,6 +72,7 @@ const state = {
 function makeAutomation(overrides: Record<string, unknown> = {}) {
   return {
     id: 'automation-1',
+    name: 'Nightly setup',
     projectId: 'repo-1',
     prompt: 'run this',
     precheck: null,
@@ -120,7 +122,7 @@ async function registerAndDispatch(automation = makeAutomation()): Promise<void>
   })
 }
 
-vi.mock('@/lib/launch-agent-background-session', () => ({
+vi.mock('@/lib/agent-session/launch/background/launch-agent-background-session', () => ({
   launchAgentBackgroundSession: mockLaunchAgentBackgroundSession
 }))
 
@@ -164,8 +166,9 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
-vi.mock('@/lib/browser-uuid', () => ({
-  createBrowserUuid: () => 'create-request-id'
+const mockLaunchUuid = vi.hoisted(() => () => 'create-request-id')
+vi.mock('../../../shared/non-secure-context-uuid', () => ({
+  createNonSecureContextUuid: mockLaunchUuid
 }))
 
 vi.mock('@/store', () => ({
@@ -182,6 +185,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     vi.clearAllMocks()
     state.activeView = 'terminal'
     state.activeWorktreeId = 'wt-active'
+    state.activeWorkspaceExecutionHostId = null
     state.activeTabId = 'tab-active'
     state.activeTabType = 'terminal'
     state.repos = [{ id: 'repo-1', connectionId: null, executionHostId: null, path: '/repo' }]
@@ -198,6 +202,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
       paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
       ptyId: 'agent-pty',
       startupPlan: {},
+      releaseRuntimeObservers: mockReleaseRuntimeObservers,
       terminalOwnership: {
         finalize: mockFinalizeTerminalOwnership,
         release: mockReleaseTerminalOwnership
@@ -221,39 +226,43 @@ describe('useAutomationDispatchEvents setup launch', () => {
           getState: mockSshGetState,
           connect: mockSshConnect
         }
-      },
-      dispatchEvent: mockDispatchEvent
+      }
     })
   })
 
-  // The scoped event main publishes with the write is the only one; a local emit
-  // here would name no host and re-invalidate every host in the catalog.
-  it('leaves the automationsChanged event to the host that owns the write', async () => {
+  it('restores the prior workspace on the host it was selected on', async () => {
+    state.activeWorkspaceExecutionHostId = 'ssh:box'
+    mockLaunchAgentBackgroundSession.mockImplementationOnce(async () => {
+      state.activeWorktreeId = createdWorktree.id
+      return {
+        tabId: 'agent-tab',
+        paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
+        ptyId: 'agent-pty',
+        startupPlan: {},
+        terminalOwnership: {
+          finalize: mockFinalizeTerminalOwnership,
+          release: mockReleaseTerminalOwnership
+        }
+      }
+    })
+
     await registerAndDispatch()
 
-    expect(mockMarkDispatchResult).toHaveBeenCalled()
-    expect(
-      mockDispatchEvent.mock.calls.filter(([event]) => event?.type === AUTOMATIONS_CHANGED_EVENT)
-    ).toEqual([])
+    expect(state.setActiveWorktree).toHaveBeenCalledWith('wt-active', 'ssh:box')
   })
 
-  it('defaults legacy automations without a setup choice to skipping setup', async () => {
-    await registerAndDispatch(makeAutomation({ setupDecision: undefined }))
+  it('creates a new-per-run workspace on the captured run host, and names none without one', async () => {
+    await registerAndDispatch(
+      makeAutomation({ runContext: { repoId: 'repo-1', hostId: 'local', path: '/repo' } })
+    )
+    expect(mockCreateWorktree.mock.calls[0]?.at(-1)).toEqual(
+      expect.objectContaining({ executionHostId: 'local' })
+    )
 
-    expect(mockCreateWorktree.mock.calls[0][3]).toBe('skip')
-    expect(mockLaunchAgentBackgroundSession).toHaveBeenCalled()
-  })
-
-  it('does not stamp the created workspace with an empty agent-launch fallback', async () => {
+    mockCreateWorktree.mockClear()
     await registerAndDispatch()
-
-    expect(mockCreateWorktree.mock.calls[0][10]).toBeUndefined()
-    expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
-      expect.objectContaining({
-        agent: 'claude',
-        prompt: 'run this',
-        worktreeId: 'wt-created'
-      })
+    expect(mockCreateWorktree.mock.calls[0]?.at(-1)).toEqual(
+      expect.objectContaining({ executionHostId: undefined })
     )
   })
 
@@ -301,6 +310,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     state.folderWorkspaces = [
       {
         id: 'fw-1',
+        name: folderWorkspace.displayName,
         projectGroupId: 'group-1',
         folderPath: '/srv/project',
         connectionId: 'ssh-folder'
@@ -315,7 +325,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
         workspaceMode: 'existing',
         workspaceId: folderWorkspace.id,
         setupDecision: 'skip',
-        runContext: { repoId: 'repo-1', hostId: 'ssh:ssh-folder' }
+        runContext: { repoId: 'repo-1', hostId: 'ssh:ssh-folder', path: '/srv/project/repo' }
       })
     )
 
@@ -346,6 +356,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     state.folderWorkspaces = [
       {
         id: 'fw-local',
+        name: folderWorkspace.displayName,
         projectGroupId: 'group-local',
         folderPath: '/project',
         connectionId: null
@@ -358,7 +369,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
       makeAutomation({
         workspaceMode: 'existing',
         workspaceId: folderWorkspace.id,
-        runContext: { repoId: 'repo-1', hostId: 'local' }
+        runContext: { repoId: 'repo-1', hostId: 'local', path: '/repo' }
       })
     )
 
@@ -378,6 +389,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     state.folderWorkspaces = [
       {
         id: 'fw-other',
+        name: folderWorkspace.displayName,
         projectGroupId: 'group-other',
         folderPath: '/srv/other',
         connectionId: 'ssh-other'
@@ -447,8 +459,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
           : createdWorktree
       })
       mockMarkDispatchResult.mockImplementation(async (result: { status: string }) => {
-        // The retirement clear reuses status 'completed' but nulls the terminal
-        // identity; label it distinctly so ordering stays legible.
+        // Retirement reuses completed state while clearing terminal identity; distinguish it for ordering assertions.
         order.push(
           result.status === 'completed' && Object.hasOwn(result, 'terminalPtyId')
             ? 'clear-terminal-identity'
@@ -466,6 +477,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
           paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
           ptyId: 'agent-pty',
           startupPlan: {},
+          releaseRuntimeObservers: mockReleaseRuntimeObservers,
           terminalOwnership: {
             finalize: mockFinalizeTerminalOwnership,
             release: mockReleaseTerminalOwnership
@@ -507,6 +519,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
         paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
         ptyId: 'agent-pty',
         startupPlan: {},
+        releaseRuntimeObservers: mockReleaseRuntimeObservers,
         terminalOwnership: {
           finalize: mockFinalizeTerminalOwnership,
           release: mockReleaseTerminalOwnership
@@ -515,8 +528,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     })
 
     await registerAndDispatch()
-    // Why: Claude fires SessionStart (a sessionBoundary done) at launch, before the argv
-    // prompt submits — treating it as run completion would close the tab on an empty run.
+    // SessionStart boundary-done precedes prompt submission; treating it as completion closes an empty run.
     launchArgs.onAgentStatus?.({ state: 'done', sessionBoundary: true })
     await Promise.resolve()
     expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
@@ -601,9 +613,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     )
   })
 
-  // Why: transport loss, PTY exit and cap eviction all drop and recreate the live
-  // entry with an empty stateHistory. The working edge is only in the observer's
-  // own bookkeeping by then, so it must survive a zero-overlap rescan.
+  // Recreated entries lose history; preserve the observer’s working edge through transport loss, PTY exit and cap eviction.
   it('completes a reuse-session run when the entry is recreated with no history', async () => {
     const paneKey = 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d'
     mockFindReusableAutomationSession.mockReturnValue({
@@ -632,7 +642,6 @@ describe('useAutomationDispatchEvents setup launch', () => {
     latestStoreSubscriber()
     await Promise.resolve()
 
-    // The entry is dropped and recreated: same pane, now done, history gone.
     state.agentStatusByPaneKey = {
       [paneKey]: {
         paneKey,
@@ -664,6 +673,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
         paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
         ptyId: 'agent-pty',
         startupPlan: {},
+        releaseRuntimeObservers: mockReleaseRuntimeObservers,
         terminalOwnership: {
           finalize: mockFinalizeTerminalOwnership,
           release: mockReleaseTerminalOwnership
@@ -694,6 +704,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
         paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
         ptyId: 'agent-pty',
         startupPlan: {},
+        releaseRuntimeObservers: mockReleaseRuntimeObservers,
         terminalOwnership: {
           finalize: mockFinalizeTerminalOwnership,
           release: mockReleaseTerminalOwnership
@@ -735,6 +746,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
         paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
         ptyId: 'agent-pty',
         startupPlan: {},
+        releaseRuntimeObservers: mockReleaseRuntimeObservers,
         terminalOwnership: {
           finalize: mockFinalizeTerminalOwnership,
           release: mockReleaseTerminalOwnership
@@ -763,6 +775,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
         paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
         ptyId: 'agent-pty',
         startupPlan: {},
+        releaseRuntimeObservers: mockReleaseRuntimeObservers,
         terminalOwnership: {
           finalize: mockFinalizeTerminalOwnership,
           release: mockReleaseTerminalOwnership
@@ -789,12 +802,35 @@ describe('useAutomationDispatchEvents setup launch', () => {
     errorSpy.mockRestore()
   })
 
-  it('preserves a fresh reuse-enabled session as the future reuse seed', async () => {
+  it('releases the launch runtime observers once when a kept-open run completes', async () => {
     mockFindReusableAutomationSession.mockReturnValue(null)
+    let launchArgs: { onAgentStatus?: (payload: { state: string }) => void } = {}
+    mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
+      launchArgs = args
+      return {
+        tabId: 'agent-tab',
+        paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
+        ptyId: 'agent-pty',
+        startupPlan: {},
+        releaseRuntimeObservers: mockReleaseRuntimeObservers,
+        terminalOwnership: {
+          finalize: mockFinalizeTerminalOwnership,
+          release: mockReleaseTerminalOwnership
+        }
+      }
+    })
 
     await registerAndDispatch(makeAutomation({ reuseSession: true }))
+    expect(mockReleaseRuntimeObservers).not.toHaveBeenCalled()
+    launchArgs.onAgentStatus?.({ state: 'done' })
+    launchArgs.onAgentStatus?.({ state: 'done' })
 
-    expect(mockReleaseTerminalOwnership).toHaveBeenCalledOnce()
+    await vi.waitFor(() =>
+      expect(mockMarkDispatchResult).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'completed' })
+      )
+    )
+    expect(mockReleaseRuntimeObservers).toHaveBeenCalledOnce()
     expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
   })
 })

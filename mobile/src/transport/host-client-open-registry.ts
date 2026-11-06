@@ -27,8 +27,7 @@ export class HostClientOpenRegistry {
     const ticket = this.pending.get(hostId)
     if (ticket) {
       ticket.cancelled = true
-      // Why: the host lookup may never settle; release the registry's strong
-      // reference immediately while the ticket still cancels its continuation.
+      // Release strong references even if lookup never settles; the ticket still cancels its continuation.
       this.pending.delete(hostId)
     }
     this.advanceGeneration(hostId)

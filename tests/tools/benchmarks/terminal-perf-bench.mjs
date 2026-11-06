@@ -1,8 +1,5 @@
 #!/usr/bin/env node
-// Terminal interaction latency benchmark: tab creation, tab switching, and
-// workspace switching against the real Electron dev app over CDP. Produces
-// median/p95 phase timings so Windows terminal slowness can be attributed to
-// store work, PTY spawn, shell startup, or renderer paint — not guessed at.
+// Measure real dev-app tab creation/switch and workspace switch over CDP; report median/p95 phases for store, PTY spawn, shell and renderer attribution.
 
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
@@ -125,9 +122,7 @@ function git(cwd, ...cmd) {
   execFileSync('git', cmd, { cwd, stdio: 'pipe' })
 }
 
-/** Local (native-path) git repo with two external worktrees — three workspace
- *  cards total. Native paths keep the benchmark portable and representative of
- *  the default local workflow, unlike the WSL-specific apphang fixture. */
+// Use native local repo plus two external worktrees for portable default-workflow coverage rather than the WSL apphang fixture.
 function createLocalRepoFixture() {
   const baseDir = mkdtempSync(path.join(os.tmpdir(), 'orca-termperf-'))
   const repoPath = path.join(baseDir, 'repo')
@@ -241,8 +236,7 @@ async function activateWorktree(page, worktreeId) {
   )
 }
 
-/** Runs entirely in the renderer so phase timestamps come from one
- *  performance.now() clock with no CDP round-trip skew. */
+// Measure phases in-renderer on one performance.now clock, avoiding CDP round-trip skew.
 async function runTabCreateScenario(page, worktreeId, iterations, shell) {
   return await runWithTimeout(
     'tab-create scenario',
@@ -308,9 +302,7 @@ async function runTabCreateScenario(page, worktreeId, iterations, shell) {
   )
 }
 
-/** K tabs are created up-front (PTY bound), then activation alternates across
- *  them. switchMs = setActiveTab call → active pane manager/pane for the new
- *  tab present → two RAFs (paint settled). */
+// Pre-bind K tabs, alternate activation, and measure active pane availability plus two-rAF settle (not pixel proof).
 async function runTabSwitchScenario(page, worktreeId, switches, shell) {
   return await runWithTimeout(
     'tab-switch scenario',
@@ -460,9 +452,7 @@ function summarizeScenario(name, result) {
   }
   const fields = {}
   const keys = new Set()
-  // Why: a timed-out sample carries its timeout ceiling as the measurement,
-  // which would masquerade as a giant latency in median/p95/max. Timeouts are
-  // reported through the separate timedOut count instead.
+  // Exclude timeout ceilings from latency percentiles; report timedOut separately.
   const completedSamples = result.samples.filter((sample) => !sample.timedOut)
   for (const sample of completedSamples) {
     for (const [key, value] of Object.entries(sample)) {
@@ -488,8 +478,7 @@ function summarizeScenario(name, result) {
 async function main() {
   const args = parseArgs()
   const startedAt = Date.now()
-  // Why: the report and clocks exist before any setup so a launch/setup
-  // failure still produces a report and reaches the cleanup below.
+  // Create report/clocks before setup so launch failures still report and clean up.
   const report = {
     label: args.label,
     startedAt: new Date(startedAt).toISOString(),
@@ -565,8 +554,7 @@ async function main() {
       await browser.close().catch(() => undefined)
     }
     if (launched) {
-      // Why: a shutdown failure must not abort the rest of teardown — the
-      // report still gets written and temp dirs still get removed.
+      // Continue teardown after shutdown failure so reports and fixture cleanup still run.
       try {
         await stopDevApp(launched.child)
       } catch (error) {

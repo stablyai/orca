@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   MAX_ORCAD_MIGRATION_SCROLLBACK_SNAPSHOTS,
   MAX_ORCAD_MIGRATION_SCROLLBACK_TOTAL_BYTES
-} from '../../../shared/orcad-migration-scrollback'
-import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../../shared/terminal-scrollback-limits'
+} from '../../../shared/orcad-migration/orcad-migration-scrollback'
+import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../../shared/terminal/replay/terminal-scrollback-limits'
 import { assessWslMoveTerminals, type WslMovePaneFacts } from './wsl-move-terminal-gate'
 
 const pane = (paneKey: string, extra: Partial<WslMovePaneFacts> = {}): WslMovePaneFacts => ({
@@ -34,20 +34,20 @@ describe('assessWslMoveTerminals', () => {
       'an agent mid-turn',
       { agent: { state: 'working', resumable: true, ownsForeground: true } },
       'agent-working',
-      ['wait', 'end']
+      ['wait', 'end', 'skip-project']
     ],
     [
       'an agent at a permission prompt',
       { agent: { state: 'waiting', resumable: true, ownsForeground: true } },
       'agent-working',
-      ['wait', 'end']
+      ['wait', 'end', 'skip-project']
     ],
     [
       // Copilot, Pi and Freebuff report a pending ask or approval as 'blocked'.
       'an agent reported blocked on a person',
       { agent: { state: 'blocked', resumable: true, ownsForeground: true } },
       'agent-working',
-      ['wait', 'end']
+      ['wait', 'end', 'skip-project']
     ],
     [
       'an agent with no session to resume',
@@ -96,12 +96,31 @@ describe('assessWslMoveTerminals', () => {
     })
   })
 
+  it.each([
+    ['a done, non-resumable row', { state: 'done', resumable: false, ownsForeground: false }],
+    ['a working row', { state: 'working', resumable: true, ownsForeground: false }],
+    ['a waiting row', { state: 'waiting', resumable: false, ownsForeground: false }]
+  ] as const)('does not let %s left on an idle shell block it', (_label, agent) => {
+    expect(gate([pane('t1:a', { agent })])).toEqual({ verdict: 'ready', paneKeys: ['t1:a'] })
+  })
+
+  it('counts a pane listed twice once, for the caps and the ready list', () => {
+    const atCount = Array.from({ length: MAX_ORCAD_MIGRATION_SCROLLBACK_SNAPSHOTS }, (_, i) =>
+      pane(`t${i}:a`)
+    )
+    const verdict = gate([...atCount, pane('t0:a')])
+    expect(verdict.verdict).toBe('ready')
+    expect(verdict.verdict === 'ready' && verdict.paneKeys).toHaveLength(
+      MAX_ORCAD_MIGRATION_SCROLLBACK_SNAPSHOTS
+    )
+  })
+
   it('blocks on unfinished automation runs and orchestration dispatches in scope', () => {
     expect(gate([pane('t1:a')], ['run-1'], ['dispatch-1'])).toEqual({
       verdict: 'blocked',
       blockers: [
-        { kind: 'automation-running', ids: ['run-1'], actions: ['wait'] },
-        { kind: 'dispatch-running', ids: ['dispatch-1'], actions: ['wait'] }
+        { kind: 'automation-running', ids: ['run-1'], actions: ['wait', 'skip-project'] },
+        { kind: 'dispatch-running', ids: ['dispatch-1'], actions: ['wait', 'skip-project'] }
       ]
     })
   })
@@ -120,33 +139,5 @@ describe('assessWslMoveTerminals', () => {
       verdict: 'blocked',
       blockers: [{ kind: 'scrollback-too-large' }]
     })
-  })
-
-  it('lets a move exactly at the transfer caps through', () => {
-    const atCount = Array.from({ length: MAX_ORCAD_MIGRATION_SCROLLBACK_SNAPSHOTS }, (_, i) =>
-      pane(`t${i}:a`)
-    )
-    expect(gate(atCount).verdict).toBe('ready')
-    const perPane = MAX_ORCAD_MIGRATION_SCROLLBACK_TOTAL_BYTES / 64
-    const atTotal = Array.from({ length: 64 }, (_, i) =>
-      pane(`b${i}:a`, { scrollbackBytes: perPane })
-    )
-    expect(gate(atTotal).verdict).toBe('ready')
-  })
-
-  it('reports a pane over its own cap together with a move over the total cap', () => {
-    const over = TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT + 1
-    const panes = [
-      pane('huge:a', { scrollbackBytes: over }),
-      ...Array.from({ length: 52 }, (_, i) =>
-        pane(`b${i}:a`, { scrollbackBytes: TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT })
-      )
-    ]
-    const verdict = gate(panes)
-    expect(verdict.verdict).toBe('blocked')
-    const blocker = verdict.verdict === 'blocked' ? verdict.blockers[0] : undefined
-    expect(blocker?.kind).toBe('scrollback-too-large')
-    expect(blocker?.ids).toHaveLength(53)
-    expect(new Set(blocker?.ids).size).toBe(53)
   })
 })

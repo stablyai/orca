@@ -1,79 +1,112 @@
 import type { MobileFileMedia } from '../files/mobile-file-media'
-import type { StructuredAgentId } from '../../../src/shared/agent-session-provider-handle'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
-import type { TuiAgent } from '../../../src/shared/tui-agent'
-import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
-import type { MobileBrowserTab } from '../browser/MobileBrowserPane'
-import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
+import type {
+  RuntimeMobileSessionAgentTab,
+  RuntimeMobileSessionAgentTabStatus,
+  RuntimeMobileSessionBrowserTab,
+  RuntimeMobileSessionFileTab,
+  RuntimeMobileSessionMarkdownTab,
+  RuntimeMobileSessionTabsResult,
+  RuntimeMobileSessionTerminalClientTab,
+  RuntimeMobileSessionTerminalTab
+} from '../../../src/shared/runtime-types'
+import type { MirroredEvidenceReceipt } from '../../../src/shared/agent-status/contracts/agent-status-observation'
 import type { MobileDiffLine } from './mobile-diff-lines'
 import type { MobileHighlightedDiffLine, MobileSyntaxSegment } from './mobile-file-syntax'
 import type { TerminalRecord } from './mobile-terminal-records'
+import type { MobileNativeChatIdentity } from './native-chat/mobile-native-chat-eligibility'
 
 export type Terminal = TerminalRecord
 
-export type MobileSessionTabType = 'terminal' | 'markdown' | 'file' | 'browser' | 'agent-session'
+export type MobileBrowserTab = Pick<
+  RuntimeMobileSessionBrowserTab,
+  | 'type'
+  | 'id'
+  | 'title'
+  | 'browserWorkspaceId'
+  | 'browserPageId'
+  | 'url'
+  | 'loading'
+  | 'loadError'
+  | 'canGoBack'
+  | 'canGoForward'
+  | 'isActive'
+>
 
+export type MobileSessionTabType = NonNullable<RuntimeMobileSessionTabsResult['activeTabType']>
+
+/** What the phone adds to a host terminal tab; a type test keeps these names off the host's tab. */
+export type MobileTerminalTabPhoneFields = {
+  // Carried across publications so chat stays open before live agent status arrives.
+  nativeChatIdentity?: MobileNativeChatIdentity
+}
+
+// The phone reads a subset of each host tab; fields older hosts omit are optional here.
 export type MobileSessionTab =
-  | {
-      type: 'terminal'
-      id: string
-      title: string
-      parentTabId?: string
-      leafId?: string
-      status?: 'pending-handle' | 'ready'
-      terminal: string | null
-      agentStatus?: AgentStatusEntry | null
-      /** Agent Orca launched in this terminal, if any. This makes chat eligible
-       *  before the first live agent-status update reaches the mobile client. */
-      launchAgent?: TuiAgent
-      /** Host-provided launch context still parked as an unsent TUI-input draft. */
-      launchDraft?: string
-      launchDraftCreatedAt?: number
-      terminalTheme?: MobileTerminalTheme
-      isActive: boolean
-    }
-  | {
-      type: 'agent-session'
-      id: string
-      title: string
-      sessionId: string
-      agent: StructuredAgentId
-      isActive: boolean
-    }
-  | {
-      type: 'markdown'
-      id: string
-      title: string
-      filePath: string
-      relativePath: string
-      isDirty: boolean
-      isActive: boolean
-      documentVersion: string
-    }
-  | {
-      type: 'file'
-      id: string
-      title: string
-      filePath: string
-      relativePath: string
+  | (Pick<RuntimeMobileSessionTerminalTab, 'type' | 'id' | 'title' | 'isActive'> &
+      Partial<
+        Pick<
+          RuntimeMobileSessionTerminalTab,
+          | 'parentTabId'
+          | 'leafId'
+          | 'agentStatus'
+          | 'launchAgent'
+          | 'launchDraft'
+          | 'launchDraftCreatedAt'
+          | 'terminalTheme'
+        >
+      > & {
+        status?: RuntimeMobileSessionTerminalClientTab['status']
+        terminal: string | null
+      } & MobileTerminalTabPhoneFields)
+  | (Pick<
+      RuntimeMobileSessionAgentTab,
+      'type' | 'id' | 'title' | 'sessionId' | 'agent' | 'isActive'
+    > & {
+      chatStatus?: RuntimeMobileSessionAgentTabStatus & MirroredEvidenceReceipt
+    })
+  | Pick<
+      RuntimeMobileSessionMarkdownTab,
+      | 'type'
+      | 'id'
+      | 'title'
+      | 'filePath'
+      | 'relativePath'
+      | 'isDirty'
+      | 'isActive'
+      | 'documentVersion'
+    >
+  | (Pick<
+      RuntimeMobileSessionFileTab,
+      | 'type'
+      | 'id'
+      | 'title'
+      | 'filePath'
+      | 'relativePath'
+      | 'mode'
+      | 'oldPath'
+      | 'isDirty'
+      | 'isActive'
+    > & {
       language?: string
-      mode?: 'edit' | 'diff'
-      diffSource?: 'staged' | 'unstaged' | 'branch' | 'commit'
-      isDirty: boolean
-      isActive: boolean
-    }
+      // The phone also opens branch and commit diffs, which the host never publishes.
+      diffSource?: RuntimeMobileSessionFileTab['diffSource'] | 'branch' | 'commit'
+    })
   | MobileBrowserTab
 
-export type SessionTabsResult = {
-  worktree: string
-  publicationEpoch?: string
-  snapshotVersion: number
-  tabs: MobileSessionTab[]
-  activeTabId: string | null
-  activeTabType: MobileSessionTabType | null
-  /** Host explicitly navigated this device (desktop/CLI `navigation: clients|all`), not a plain republication. */
-  navigationIntent?: 'follow'
-}
+export type SessionTabsResult = Pick<
+  RuntimeMobileSessionTabsResult,
+  | 'worktree'
+  | 'clientHostedPagesUnreconciled'
+  | 'agentSessionsUnverifiable'
+  | 'snapshotVersion'
+  | 'activeTabId'
+  | 'activeTabType'
+  | 'navigationIntent'
+> &
+  Partial<Pick<RuntimeMobileSessionTabsResult, 'publicationEpoch'>> & {
+    tabs: MobileSessionTab[]
+  }
 
 export type RuntimeStatusResult = {
   capabilities?: string[]
@@ -91,6 +124,8 @@ export type MarkdownDocState =
       stale?: boolean
       saving?: boolean
       saveError?: string
+      /** Changes only on phone edits and saves, not host metadata updates. */
+      localRevision?: number
       readOnlyReason?: string
       truncated?: true
       byteLength?: number
@@ -104,13 +139,13 @@ export type FileDocState =
   | { status: 'ready'; kind: 'diff'; lines: MobileDiffLine[]; truncated: boolean }
   | { status: 'ready'; kind: 'image'; dataUri: string }
   | { status: 'ready'; kind: 'html'; content: string }
+  | { status: 'ready'; kind: 'svg'; content: string; truncated: boolean; byteLength: number }
   | { status: 'error'; message: string }
 
 export type RenderableDiffLine = MobileHighlightedDiffLine<MobileDiffLine>
 
 export type DiffCommentActions = {
   comments: DiffComment[]
-  /** Notes a new agent session is still being started with. */
   sendingCommentIds: ReadonlySet<string>
   busy: boolean
   onAdd: (filePath: string, lineNumber: number, body: string) => Promise<boolean>
@@ -144,7 +179,6 @@ export type DirtyMarkdownDraft = {
   content: string
 }
 
-/** `other-runtime`: another Orca server owns the workspace, so the paired host cannot list its agents. */
 export type MobileNewTabAgentLoadState = 'idle' | 'loading' | 'loaded' | 'error' | 'other-runtime'
 
 export type MobileDisplayMode = 'auto' | 'phone' | 'desktop'

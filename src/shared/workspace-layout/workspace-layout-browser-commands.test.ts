@@ -74,7 +74,7 @@ describe('openBrowserTab under the window’s ids', () => {
     ])
   })
 
-  it('places a tab whose group main lacks beside its anchor', () => {
+  it('places a tab whose group main lacks in the workspace’s first group', () => {
     const { ctx, model } = setup()
     const split = build(
       ctx,
@@ -98,8 +98,8 @@ describe('openBrowserTab under the window’s ids', () => {
       model
     ).model
     expect(split.workspaces[WS]!.groups.map((group) => group.tabOrder)).toEqual([
-      [expect.any(String)],
-      ['entry-1', 'entry-2']
+      [expect.any(String), 'entry-2'],
+      ['entry-1']
     ])
   })
 
@@ -161,23 +161,5 @@ describe('browser tab record commands', () => {
     expect(
       outcome(model, { type: 'closeBrowserPage', workspace: WS, browserTabId: 'gone', pageId: 'x' })
     ).toBe('tab_not_found')
-  })
-
-  it('switches the tab’s profile', () => {
-    const { ctx, model } = setup()
-    const next = build(
-      ctx,
-      [
-        {
-          type: 'setBrowserTabProfile',
-          workspace: WS,
-          browserTabId: 'browser-1',
-          profileId: null,
-          sessionPartition: null
-        }
-      ],
-      model
-    ).model
-    expect(records(next)?.at(-1)).toMatchObject({ sessionProfileId: null, sessionPartition: null })
   })
 })

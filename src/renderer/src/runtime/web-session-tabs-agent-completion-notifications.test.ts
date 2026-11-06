@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AgentStatusChange } from '@/store/slices/agent-status/agent-status-contract'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 
 const mocks = vi.hoisted(() => ({
   observeAgentHookCompletionForNotification: vi.fn()
@@ -12,17 +13,19 @@ vi.mock('@/hooks/agent-hook-completion-notifications', () => ({
 }))
 
 import { useAppStore } from '@/store'
-import {
-  createAgentCompletionCoordinator,
-  resetAgentCompletionCoordinatorIdentitiesForTest
-} from '@/components/terminal-pane/agent-completion-coordinator'
+import { createAgentCompletionCoordinator } from '@/components/terminal-pane/agent-completion/agent-completion-coordinator'
+import { resetAgentCompletionCoordinatorIdentitiesForTest } from '@/components/terminal-pane/agent-completion/agent-completion-identity-store'
 import { dispatchTerminalNotification } from '@/components/terminal-pane/use-notification-dispatch'
 import {
   markRendererOwnedAgentStatusWrite,
   registerRendererOwnedAgentStatusPane,
   resetRendererOwnedAgentStatusPanesForTests
 } from '@/components/terminal-pane/renderer-owned-agent-status-registry'
-import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import {
+  applyWebSessionTabsSnapshot,
+  applyWebSessionTabsSnapshots,
+  applyWebSessionTabsSnapshotOperations
+} from './web-session-tabs-sync/snapshot-api'
 import { applyWebSessionTabsStorePatch } from './web-session-tabs-sync/store-patch'
 import { decideWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking-decisions'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
@@ -75,10 +78,34 @@ function makeAgentSnapshot(
   }
 }
 
+/** An older host omits the worktree on agents restored after a restart. */
+function withoutAgentWorktree(
+  snapshot: RuntimeMobileSessionTabsResult
+): RuntimeMobileSessionTabsResult {
+  return {
+    ...snapshot,
+    tabs: snapshot.tabs.map((tab) => {
+      if (tab.type !== 'terminal' || !tab.agentStatus) {
+        return tab
+      }
+      const { worktreeId: _worktreeId, ...agentStatus } = tab.agentStatus
+      return { ...tab, agentStatus }
+    })
+  }
+}
+
 function applySnapshot(snapshot: RuntimeMobileSessionTabsResult, live: boolean): void {
   const decision = decideWebSessionTabsSnapshot(snapshot, ENVIRONMENT_ID)
   applyWebSessionTabsStorePatch(
-    (state) => applyWebSessionTabsSnapshot(state, snapshot, ENVIRONMENT_ID, NOW),
+    (state, changedAgentPaneKeys) =>
+      applyWebSessionTabsSnapshot(
+        state,
+        snapshot,
+        ENVIRONMENT_ID,
+        NOW,
+        undefined,
+        changedAgentPaneKeys
+      ),
     { frames: [{ environmentId: ENVIRONMENT_ID, worktreeId: snapshot.worktree, decision }] },
     snapshot,
     live
@@ -104,47 +131,91 @@ describe('paired session-tab agent completion notifications', () => {
     vi.useRealTimers()
   })
 
-  it('forwards accepted working snapshots and live statuses', () => {
-    applySnapshot(makeAgentSnapshot(1, NOW), false)
-    expect(mocks.observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(1)
-
-    applySnapshot(makeAgentSnapshot(2, NOW + 1_000), true)
-    expect(mocks.observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(2)
-
-    const turnCompletedAt = NOW + 2_000
-    applySnapshot(makeAgentSnapshot(3, NOW + 2_000, turnCompletedAt), true)
-    expect(mocks.observeAgentHookCompletionForNotification).toHaveBeenLastCalledWith({
-      paneKey: makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID),
-      worktreeId: WORKTREE_ID,
-      payload: expect.objectContaining({
-        state: 'working',
-        stateStartedAt: NOW,
-        turnCompletedAt
+  it.each(['single', 'batch', 'operations'] as const)(
+    'reports committed mirror keys through %s reconciliation and retraction',
+    (kind) => {
+      const observed = vi.fn((changes: readonly AgentStatusChange[]) => {
+        for (const change of changes) {
+          expect(useAppStore.getState().agentStatusByPaneKey[change.paneKey]).toBe(change.current)
+        }
       })
-    })
+      const dispose = useAppStore.getState().subscribeAgentStatusChanges(observed)
+      const paneKey = makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID)
+      const apply = (snapshot: RuntimeMobileSessionTabsResult) => {
+        const decision = decideWebSessionTabsSnapshot(snapshot, ENVIRONMENT_ID)
+        const settle = applyWebSessionTabsStorePatch(
+          (state, keys) => {
+            if (kind === 'batch') {
+              return applyWebSessionTabsSnapshots(state, [snapshot], ENVIRONMENT_ID, NOW, keys)
+            }
+            if (kind === 'operations') {
+              return applyWebSessionTabsSnapshotOperations(
+                state,
+                [{ snapshot, environmentId: ENVIRONMENT_ID, decision }],
+                keys
+              )
+            }
+            return applyWebSessionTabsSnapshot(
+              state,
+              snapshot,
+              ENVIRONMENT_ID,
+              NOW,
+              undefined,
+              keys
+            )
+          },
+          { frames: [{ environmentId: ENVIRONMENT_ID, worktreeId: WORKTREE_ID, decision }] }
+        )
+        settle()
+      }
+      try {
+        apply(makeAgentSnapshot(1, NOW))
+        expect(observed).toHaveBeenCalledExactlyOnceWith([
+          {
+            paneKey,
+            previous: undefined,
+            current: useAppStore.getState().agentStatusByPaneKey[paneKey]
+          }
+        ])
+        const previous = useAppStore.getState().agentStatusByPaneKey[paneKey]
+        observed.mockClear()
+        apply({ ...makeAgentSnapshot(2, NOW + 1), tabs: [] })
+        expect(observed).toHaveBeenCalledExactlyOnceWith([
+          { paneKey, previous, current: undefined }
+        ])
+        observed.mockClear()
+        apply({ ...makeAgentSnapshot(3, NOW + 2), tabs: [] })
+        expect(observed).not.toHaveBeenCalled()
+      } finally {
+        dispose()
+      }
+    }
+  )
 
-    applySnapshot(makeAgentSnapshot(4, NOW + 3_000, turnCompletedAt + 1_000), false)
-    expect(mocks.observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(4)
-  })
+  it.each([
+    ['a host naming the worktree', (snapshot: RuntimeMobileSessionTabsResult) => snapshot],
+    ['an older host that omits it', withoutAgentWorktree]
+  ])(
+    'announces one live stamped completion after a late-pair working seed from %s',
+    (_label, frame) => {
+      const dispatchCompletion = vi.fn()
+      const coordinator = createAgentCompletionCoordinator({
+        paneKey: makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID),
+        getPtyId: () => 'pty-1',
+        inspectProcess: vi.fn(),
+        dispatchCompletion,
+        isLive: () => true
+      })
+      mocks.observeAgentHookCompletionForNotification.mockImplementation(({ payload, seedOnly }) =>
+        seedOnly ? coordinator.seedHookStatus(payload) : coordinator.observeHookStatus(payload)
+      )
 
-  it('announces one live stamped completion after a late-pair working seed', () => {
-    const dispatchCompletion = vi.fn()
-    const coordinator = createAgentCompletionCoordinator({
-      paneKey: makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID),
-      getPtyId: () => 'pty-1',
-      inspectProcess: vi.fn(),
-      dispatchCompletion,
-      isLive: () => true
-    })
-    mocks.observeAgentHookCompletionForNotification.mockImplementation(({ payload, seedOnly }) =>
-      seedOnly ? coordinator.seedHookStatus(payload) : coordinator.observeHookStatus(payload)
-    )
+      applySnapshot(frame(makeAgentSnapshot(1, NOW)), false)
+      applySnapshot(frame(makeAgentSnapshot(2, NOW + 1_000, NOW + 1_000)), true)
 
-    applySnapshot(makeAgentSnapshot(1, NOW), false)
-    applySnapshot(makeAgentSnapshot(2, NOW + 1_000, NOW + 1_000), true)
-
-    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
-  })
+      expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    }
+  )
 
   it('announces a host-stamped turn while client OSC status owns the pane', () => {
     const paneKey = makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID)
@@ -352,6 +423,22 @@ describe('paired session-tab agent completion notifications', () => {
           agentStatus: expect.objectContaining({ state: 'done', stateStartedAt: NOW + 15_000 })
         })
       )
+    })
+
+    it('announces a background turn stamped while the host was unreachable, once', () => {
+      applySnapshot(makeAgentSnapshot(1, NOW), true)
+      applySnapshot(makeAgentSnapshot(2, NOW + 45_000, NOW + 15_000), false)
+      expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+
+      applySnapshot(makeAgentSnapshot(3, NOW + 46_000, NOW + 15_000), false)
+      expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    })
+
+    it('seeds a stamped working row found on first load without announcing it', () => {
+      applySnapshot(makeAgentSnapshot(1, NOW, NOW + 15_000), false)
+      vi.advanceTimersByTime(1_500)
+
+      expect(dispatchCompletion).not.toHaveBeenCalled()
     })
 
     it('seeds a done found on first load without announcing it', () => {

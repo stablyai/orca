@@ -27,11 +27,7 @@ function abortReason(signal: AbortSignal): unknown {
   return signal.reason ?? new DOMException('The operation was aborted.', 'AbortError')
 }
 
-/**
- * Electron's net.fetch with a proxy `login` listener. Its internal request has none, so
- * Electron cancels every proxy challenge and app 'login' never sees main-process requests.
- * Everything else mirrors Electron 43's net.fetch.
- */
+/** Mirror Electron 43 net.fetch with proxy login support; its internal request cancels challenges without a listener. */
 export function fetchWithProxyLogin(request: Request, proxySession: Session): Promise<Response> {
   const { signal } = request
   if (signal.aborted) {

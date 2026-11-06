@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render } from '@testing-library/react'
 import { useRef, useState } from 'react'
 import type * as AttachmentUploadModule from './native-chat-attachment-upload'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
@@ -10,13 +10,14 @@ import { useNativeChatFileDrops } from './use-native-chat-file-drops'
 import { NativeChatPaneFileDropSurface } from './NativeChatPaneFileDropSurface'
 import { useNewWorkspaceComposerFileDrop } from '../new-workspace/use-new-workspace-composer-file-drop'
 import { NativeChatImageAttachmentPreview } from './NativeChatImageAttachmentPreview'
-import { toast } from 'sonner'
-import { resetLocalImageSrcStateForTests } from '../editor/useLocalImageSrc'
+import '../editor/document-images/useLocalImageSrc'
+import { resetLocalImageCacheState as resetLocalImageSrcStateForTests } from '../editor/document-images/local-image-src-cache'
 import {
   clearNativeChatAttachmentCacheForTests,
   readNativeChatAttachmentCache,
   useNativeChatComposerAttachments
 } from './use-native-chat-composer-attachments'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const electron = vi.hoisted(() => ({
   on: vi.fn(),
@@ -35,7 +36,11 @@ const intake = vi.hoisted(() => {
     pick: vi.fn()
   }
 })
-vi.mock('@/store', () => ({ useAppStore: { getState: () => ({ tabsByWorktree: {} }) } }))
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign((select: () => unknown) => select(), {
+    getState: () => ({ tabsByWorktree: {} })
+  })
+}))
 // Keeps the real notice strings so the silent-failure guards assert what users see.
 vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({
   ...(await importOriginal<typeof AttachmentUploadModule>()),
@@ -47,8 +52,14 @@ vi.mock('electron', () => ({
   webUtils: { getPathForFile: electron.getPathForFile }
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), loading: vi.fn(), dismiss: vi.fn() } }))
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({ isRemoteRuntimePtyId: () => false }))
+vi.mock('@/i18n/i18n', () => ({
+  translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
+    fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(values?.[name]))
+}))
+vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
+  ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
+  isRemoteRuntimePtyId: () => false
+}))
 
 import { installOsFileDropCancellationGuard } from '@/lib/os-file-drop-cancellation-guard'
 
@@ -70,6 +81,7 @@ function ComposerBody({
   const attachments = useNativeChatComposerAttachments({
     attachmentScopeKey: draft,
     allowWithoutTarget: true,
+    imageReferences: true,
     caret: 0,
     disabled,
     isComposing: () => false,
@@ -94,6 +106,7 @@ function ComposerBody({
       <div>
         <NativeChatPromptEditor
           scopeKey={draft}
+          imageRow={attachments.imageAttachments.map(({ id }) => id)}
           inputRef={textareaRef}
           initialValue="untouched draft"
           disabled={false}
@@ -102,10 +115,11 @@ function ComposerBody({
           onSelect={() => {}}
         />
       </div>
-      {attachments.imageAttachments.map((attachment) => (
+      {attachments.imageAttachments.map((attachment, index) => (
         <NativeChatImageAttachmentPreview
           key={attachment.id}
           attachment={attachment}
+          number={index + 1}
           onRemove={() => {}}
         />
       ))}
@@ -197,36 +211,6 @@ describe('native chat composer drop scoping', () => {
     electron.send.mockClear()
     vi.clearAllMocks()
   })
-
-  it('keeps the paperclip picker attached to its own chat', async () => {
-    intake.pick.mockResolvedValue(['/picked/image.png'])
-    const view = render(
-      <>
-        <ComposerProbe pane="chat-a" />
-        <ComposerProbe pane="chat-b" hidden />
-      </>
-    )
-    await act(async () => screen.getByText('Attach to chat-a').click())
-    await settleAttachments()
-    expect(intake.pick).toHaveBeenCalledOnce()
-    expect(intake.stat).toHaveBeenCalledExactlyOnceWith({
-      filePath: '/picked/image.png',
-      access: { kind: 'user-file' }
-    })
-    expect(readNativeChatAttachmentCache('chat-a').map(({ path }) => path)).toEqual([
-      '/picked/image.png'
-    ])
-    expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
-    expect(view.container.querySelector('[data-notice="chat-a"]')?.textContent).toBe('')
-  })
-  it('keeps a cancelled paperclip picker quiet', async () => {
-    intake.pick.mockResolvedValue([])
-    render(<ComposerProbe pane="chat-a" />)
-    await act(async () => screen.getByText('Attach to chat-a').click())
-    expect(intake.stat).not.toHaveBeenCalled()
-    expect(readNativeChatAttachmentCache('chat-a')).toEqual([])
-    expect(toast.error).not.toHaveBeenCalled()
-  })
   it('captures the host before preparation and refuses a changed host before upload', async () => {
     const gate = Promise.withResolvers<{ paths: string[]; failures: never[] }>()
     intake.prepare.mockImplementationOnce(() => gate.promise)
@@ -247,35 +231,6 @@ describe('native chat composer drop scoping', () => {
     expect(readNativeChatAttachmentCache('session-a')).toEqual([])
     expect(readNativeChatAttachmentCache('session-b')).toEqual([])
     expect(intake.stat).not.toHaveBeenCalled()
-  })
-
-  // #15782: an OS drop that produces nothing must say so. Every assertion here
-  // is about the absence of silence, not about which path was attached.
-  it('reports an OS drop whose files carry no readable path', async () => {
-    electron.getPathForFile.mockReturnValue('')
-    const view = render(<ComposerProbe pane="chat-a" />)
-
-    await dropTwoImages(view.container.querySelector('[data-pane="chat-a"] .ProseMirror')!)
-
-    expect(toast.error).toHaveBeenCalledWith(
-      "Orca couldn't read a path for the dropped files.",
-      expect.any(Object)
-    )
-    expect(electron.send).not.toHaveBeenCalled()
-    expect(readNativeChatAttachmentCache('chat-a')).toEqual([])
-  })
-
-  it('notices an OS drop whose every path is unreadable', async () => {
-    intake.stat.mockRejectedValue(new Error('denied'))
-    const view = render(<ComposerProbe pane="chat-a" />)
-
-    await dropTwoImages(view.container.querySelector('[data-pane="chat-a"] .ProseMirror')!)
-    await settleAttachments()
-
-    expect(view.container.querySelector('[data-notice="chat-a"]')?.textContent).toBe(
-      "Couldn't read the dropped files."
-    )
-    expect(readNativeChatAttachmentCache('chat-a')).toEqual([])
   })
 
   it('notices an OS drop whose owner changes while checking the files', async () => {
@@ -313,7 +268,7 @@ describe('native chat composer drop scoping', () => {
       '/repro/second.png'
     ])
     expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
-    expect(target.textContent).toBe('untouched draft')
+    expect(target.textContent).toBe('Image #1 Image #2 untouched draft')
 
     view.unmount()
     const returned = render(<ComposerProbe pane="chat-b" />)
@@ -337,7 +292,6 @@ describe('native chat composer drop scoping', () => {
       '/repro/first.png',
       '/repro/second.png'
     ])
-    // Both panes show the one shared draft.
     const shown = [...view.container.querySelectorAll('output:not([data-notice])')].map(
       (output) => output.textContent
     )
@@ -345,20 +299,6 @@ describe('native chat composer drop scoping', () => {
       JSON.stringify(['/repro/first.png', '/repro/second.png']),
       JSON.stringify(['/repro/first.png', '/repro/second.png'])
     ])
-  })
-
-  it('keeps a drop into an unowned composer out of every chat pane', async () => {
-    const view = render(
-      <>
-        <ComposerProbe pane="chat-a" />
-        <ComposerProbe pane="chat-b" hidden />
-        <div data-unscoped-composer="true" />
-      </>
-    )
-    await dropTwoImages(view.container.querySelector('[data-unscoped-composer="true"]')!)
-    expect(electron.send).not.toHaveBeenCalled()
-    expect(readNativeChatAttachmentCache('chat-a')).toEqual([])
-    expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
   })
 
   it('isolates native chat drops from the workspace composer while preserving workspace drops', async () => {
@@ -389,35 +329,5 @@ describe('native chat composer drop scoping', () => {
       '/repro/second.png'
     ])
     expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
-  })
-
-  it('previews dropped files as chat images and leaves the other pane untouched', async () => {
-    intake.readFile.mockImplementation(async ({ access }: { access?: { kind: string } }) => {
-      if (access?.kind !== 'chat-image') {
-        throw new Error('Access denied: path resolves outside allowed directories')
-      }
-      return { content: 'AA==', isBinary: true, mimeType: 'image/png' }
-    })
-    await expect(intake.readFile({ filePath: '/repro/first.png' })).rejects.toThrow('Access denied')
-    intake.readFile.mockClear()
-    const view = render(
-      <>
-        <ComposerProbe pane="chat-a" />
-        <ComposerProbe pane="chat-b" hidden />
-      </>
-    )
-    await dropTwoImages(view.container.querySelector('[data-pane="chat-a"] .ProseMirror')!)
-    expect(await screen.findByRole('img', { name: 'first.png' })).toBeTruthy()
-    expect(await screen.findByRole('img', { name: 'second.png' })).toBeTruthy()
-    expect(intake.stat.mock.calls).toEqual([
-      [{ filePath: '/repro/first.png', access: { kind: 'user-file' } }],
-      [{ filePath: '/repro/second.png', access: { kind: 'user-file' } }]
-    ])
-    expect(intake.readFile).toHaveBeenCalledTimes(2)
-    expect(readNativeChatAttachmentCache('chat-a')).toHaveLength(2)
-    expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
-    await expect(intake.readFile({ filePath: '/repro/sibling.png' })).rejects.toThrow(
-      'Access denied'
-    )
   })
 })

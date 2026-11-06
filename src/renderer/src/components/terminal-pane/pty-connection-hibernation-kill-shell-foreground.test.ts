@@ -1,7 +1,7 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { createDeferred, flushAsyncTicks } from './pty-connection-test-async'
 import {
   LEAF_1,
@@ -12,12 +12,17 @@ import {
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 const {
   resetAndRefreshAllTerminalWebglAtlases,
@@ -49,7 +54,7 @@ vi.mock('@/lib/pane-manager/pane-manager-registry', async (importOriginal) => ({
   resetAndRefreshAllTerminalWebglAtlases
 }))
 
-vi.mock('./terminal-webgl-atlas-recovery', () => ({
+vi.mock('./render-health/terminal-webgl-atlas-recovery', () => ({
   scheduleTerminalWebglAtlasRecovery
 }))
 
@@ -80,7 +85,7 @@ vi.mock('sonner', () => ({
   }
 }))
 
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({
+vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
   notifyCodexPaneBoundForStaleSweep
 }))
 
@@ -93,7 +98,7 @@ vi.mock('react', async (importOriginal) => {
   }
 })
 
-vi.mock('./pty-transport', () => ({
+vi.mock('./pty-transport/ipc/pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
@@ -104,7 +109,7 @@ vi.mock('./pty-transport', () => ({
   })
 }))
 
-vi.mock('./remote-runtime-pty-transport', () => ({
+vi.mock('./pty-transport/remote-runtime/remote-runtime-pty-transport', () => ({
   createRemoteRuntimePtyTransport: vi.fn(
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
@@ -117,8 +122,8 @@ vi.mock('./remote-runtime-pty-transport', () => ({
   )
 }))
 
-// Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
-vi.mock('./pty-dispatcher', async (importOriginal) => {
+// Stub eager-buffer lookup to exercise live adoption without the IPC dispatcher.
+vi.mock('./pty-transport/delivery/pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
@@ -155,6 +160,7 @@ describe('shell showing through a hibernation kill', () => {
   }> {
     vi.useFakeTimers()
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
     const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
     const ptyId = 'pty-hibernating'
@@ -165,8 +171,7 @@ describe('shell showing through a hibernation kill', () => {
     })
     transportFactoryQueue.push(transport)
     const paneKey = makePaneKey('tab-1', LEAF_1)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
-    const args = [
+    const args = mockPanePtyArgs(
       createPane(1),
       createManager(1),
       createDeps({
@@ -177,7 +182,9 @@ describe('shell showing through a hibernation kill', () => {
           return suppressed
         })
       })
-    ] as unknown as Parameters<typeof connectPanePty>
+    )
+    bindPaneAgentTitleMocks(args[2], agentTitleMocks)
+
     connectPanePty(...args)
     await vi.advanceTimersByTimeAsync(20)
     await flushAsyncTicks()

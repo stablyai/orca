@@ -1,27 +1,24 @@
-import { useEffect, useCallback } from 'react'
-import { useSoftKeyboard } from '../platform/keyboard-occlusion'
+import { useEffect, useCallback, useRef } from 'react'
+import { currentSoftKeyboardHeight, subscribeSoftKeyboard } from '../platform/keyboard-occlusion'
 import { useTerminalViewportRefit } from '../terminal/terminal-viewport-refit'
-import { saveCustomKeys, type CustomKey } from '../components/CustomKeyModal'
-import { writeLastVisitedWorktree } from '../worktree/last-visited-worktree-repo'
+import { removeCustomKey, type CustomKey } from '../terminal/terminal-custom-keys'
+import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
+import { writeLastVisitedWorktree } from '../worktree/last-visited-worktree-by-host'
 import { resolveTabStripScrollOffset } from './tab-strip-scroll'
 import type { MobileSessionLifecycleModel } from './use-mobile-session-lifecycle'
 
-/**
- * Exactly the fields this hook reads, so the whole lifecycle model still fits and a test can build
- * one. Most of them are forwarded to the viewport refit; the rest are named where they are used.
- */
 export type MobileSessionKeyboardScope = Pick<
   MobileSessionLifecycleModel,
   | 'activeHandleRef'
+  | 'visibleTerminalHandlesRef'
+  | 'terminalPaneViewportsRef'
   | 'activeSessionTabId'
   | 'clientRef'
   | 'connState'
-  | 'customKeys'
   | 'deviceTokenRef'
   | 'hostId'
   | 'router'
   | 'setCustomKeys'
-  | 'setKeyboardHeight'
   | 'setShowCustomKeyModal'
   | 'showNativeChatRef'
   | 'subscribeToTerminal'
@@ -54,22 +51,21 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     tabStripViewportWidthRef,
     tabStripContentWidthRef,
     tabLayoutsRef,
-    customKeys,
     setCustomKeys,
     setShowCustomKeyModal,
-    setKeyboardHeight,
     deviceTokenRef,
     clientRef,
     viewportRef,
     viewportMeasuredRef,
     terminalRefs,
     activeHandleRef,
+    visibleTerminalHandlesRef,
+    terminalPaneViewportsRef,
     terminalFrameRef,
     showNativeChatRef,
     unsubscribeTerminal,
     subscribeToTerminal
   } = scope
-  // Why: non-subscribe layout refits (tab strip, fold, rotation) live in a dedicated hook — see terminal-viewport-refit.ts.
   const {
     notifyTerminalFrameHeight,
     notifyTerminalFrameWidth,
@@ -77,6 +73,8 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     notifyTerminalCellBoxChange
   } = useTerminalViewportRefit({
     activeHandleRef,
+    visibleTerminalHandlesRef,
+    terminalPaneViewportsRef,
     terminalRefs,
     terminalFrameRef,
     viewportRef,
@@ -91,19 +89,40 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     subscribeToTerminal
   })
 
-  // Why: react-native-web's `Keyboard` never fires, so inside the shell's page this screen heard no
-  // keyboard at all — the platform seam answers on both hosts. Visibility before height, as the
-  // listeners had it: the flag is what defers the refit the height change would otherwise trigger.
-  const softKeyboard = useSoftKeyboard()
+  // Use the keyboard seam because web Keyboard emits nothing; visibility goes out with the event, before the lift renders, so refits defer while it opens.
   useEffect(() => {
-    notifyKeyboardVisibility(softKeyboard.visible)
-  }, [notifyKeyboardVisibility, softKeyboard.visible])
-  useEffect(() => {
-    setKeyboardHeight(softKeyboard.height)
-  }, [setKeyboardHeight, softKeyboard.height])
+    notifyKeyboardVisibility(currentSoftKeyboardHeight() > 0)
+    return subscribeSoftKeyboard(
+      () => notifyKeyboardVisibility(true),
+      () => notifyKeyboardVisibility(false)
+    )
+  }, [notifyKeyboardVisibility])
+
+  const heldTabStripRevealRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const cancelHeldTabStripReveal = useCallback(() => {
+    if (heldTabStripRevealRef.current) {
+      clearTimeout(heldTabStripRevealRef.current)
+      heldTabStripRevealRef.current = null
+    }
+  }, [])
+  useEffect(() => cancelHeldTabStripReveal, [cancelHeldTabStripReveal])
+  // Hold strip movement through double-tap detection so its second tap reaches the same tab.
+  const holdTabStripReveal = useCallback(
+    (offset: number, delayMs: number) => {
+      cancelHeldTabStripReveal()
+      heldTabStripRevealRef.current = setTimeout(() => {
+        heldTabStripRevealRef.current = null
+        if (offset !== tabStripOffsetRef.current) {
+          tabStripOffsetRef.current = offset
+          tabStripRef.current?.scrollTo({ x: offset, animated: true })
+        }
+      }, delayMs)
+    },
+    [cancelHeldTabStripReveal]
+  )
 
   const scrollActiveTabIntoView = useCallback((tabId: string | null, animated: boolean) => {
-    if (!tabId) {
+    if (!tabId || heldTabStripRevealRef.current) {
       return
     }
     const layout = tabLayoutsRef.current.get(tabId)
@@ -123,26 +142,25 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     }
   }, [])
 
-  // Reveal the active tab on change; defer one frame so freshly mounted tab layouts are recorded.
   useEffect(() => {
     const id = requestAnimationFrame(() => scrollActiveTabIntoView(activeSessionTabId, true))
     return () => cancelAnimationFrame(id)
   }, [activeSessionTabId, scrollActiveTabIntoView])
 
+  const executionHost = useWorkspaceExecutionHost()
   useEffect(() => {
     if (hostId && worktreeId) {
-      writeLastVisitedWorktree({ hostId, worktreeId })
+      void writeLastVisitedWorktree({ hostId, worktreeId, executionHost })
     }
-  }, [hostId, worktreeId])
+  }, [hostId, worktreeId, executionHost])
 
-  const handleDeleteCustomKey = useCallback(
-    async (key: CustomKey) => {
-      const updated = customKeys.filter((k) => k.id !== key.id)
-      setCustomKeys(updated)
-      await saveCustomKeys(updated)
-    },
-    [customKeys]
-  )
+  const handleDeleteCustomKey = useCallback(async (key: CustomKey) => {
+    try {
+      setCustomKeys(await removeCustomKey(key.id))
+    } catch (error) {
+      console.warn('[custom-keys] the store would not take this removal', error)
+    }
+  }, [])
 
   const handleManageShortcuts = useCallback(() => {
     setShowCustomKeyModal(false)
@@ -154,6 +172,8 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     notifyKeyboardVisibility,
     notifyTerminalCellBoxChange,
     scrollActiveTabIntoView,
+    holdTabStripReveal,
+    cancelHeldTabStripReveal,
     handleDeleteCustomKey,
     handleManageShortcuts
   }

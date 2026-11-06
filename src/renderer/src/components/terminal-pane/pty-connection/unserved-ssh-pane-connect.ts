@@ -1,10 +1,11 @@
 import { useAppStore } from '@/store'
 import { isRuntimeOwnedSshTargetId } from '../../../../../shared/execution-host'
+import { isSshUserDisconnectedMessage } from '../../../../../shared/ssh-user-disconnect-message'
 import { isSshConnectInFlight, trackSshConnect } from '@/ssh/ssh-connect-in-flight'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
-import type { PtyTransport } from '../pty-transport-types'
-import { createUnresolvedOwnerPtyTransport } from '../unresolved-owner-pty-transport'
-import { createLegacyRelayBridgeTransport } from '../legacy-relay-bridge-transport'
+import type { PtyTransport } from '../pty-transport/pty-transport-types'
+import { createUnresolvedOwnerPtyTransport } from '../pty-transport/host-ownership/unresolved-owner-pty-transport'
+import { createLegacyRelayBridgeTransport } from '../pty-transport/legacy-relay/legacy-relay-bridge-transport'
 import {
   legacyRelayBridgePtyIdForPane,
   releaseLegacyRelayBridgePaneClaim
@@ -63,11 +64,7 @@ export function createUnservedSshRowTransport(
   }
 }
 
-/**
- * A pane on a relay-era `ssh:` row never spawns: the reconnect overlay owns it, and the connect
- * converts the host to its managed runtime, whose row remounts the pane. Mounting still dials,
- * as the relay-era pane did, except for passphrase targets, which wait for the user.
- */
+/** Relay-era panes never spawn; overlay-driven conversion remounts them. Dial at mount unless passphrase authentication needs explicit user action. */
 export function connectUnservedSshPaneTarget(
   session: ConnectPanePtySession,
   targetId: string
@@ -99,10 +96,13 @@ export function connectUnservedSshPaneTarget(
     try {
       await trackSshConnect(targetId, window.api.ssh.connect({ targetId, automatic: true }))
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      // A host held disconnected waits for Connect; the inert pane already says so.
+      if (isSshUserDisconnectedMessage(message)) {
+        return
+      }
       console.warn(`[pty-connection] SSH connect failed for ${targetId}:`, err)
-      session.reportError(
-        `SSH connection failed: ${err instanceof Error ? err.message : String(err)}`
-      )
+      session.reportError(`SSH connection failed: ${message}`)
     }
   })()
 }

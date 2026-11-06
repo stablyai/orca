@@ -28,7 +28,9 @@ export async function listRuntimeMarkdownDocuments(
 export async function statRuntimePath(
   context: RuntimeFileOperationArgs,
   absolutePath: string,
-  access?: LocalFileAccess
+  access?: LocalFileAccess,
+  /** A user act; may start a stopped WSL distro. Local stats only. */
+  options: { wakeWslDistro?: boolean } = {}
 ): Promise<{ size: number; isDirectory: boolean; mtime: number }> {
   const remoteArgs = getRemoteFileArgs(context, absolutePath)
   if (!remoteArgs) {
@@ -36,7 +38,8 @@ export async function statRuntimePath(
     return window.api.fs.stat({
       filePath: absolutePath,
       connectionId: context.connectionId,
-      ...localAccess(context.connectionId, access)
+      ...localAccess(context.connectionId, access),
+      ...(options.wakeWslDistro && !context.connectionId ? { wakeWslDistro: true } : {})
     })
   }
   return callRuntimeRpc<{ size: number; isDirectory: boolean; mtime: number }>(
@@ -50,7 +53,11 @@ export async function statRuntimePath(
 export function isMissingRuntimePathError(error: unknown): boolean {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
   return (
-    message.includes('enoent') || message.includes('not found') || message.includes('no such file')
+    message.includes('enoent') ||
+    message.includes('not found') ||
+    message.includes('no such file') ||
+    // Old hosts’ full ENOTDIR errno means absence like ENOENT; do not mistake a filename beginning enotdir for an error.
+    message.includes('enotdir: not a directory')
   )
 }
 

@@ -1,7 +1,8 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, screen } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import {
   NATIVE_CHAT_BOTTOM_THRESHOLD_PX,
@@ -54,16 +55,13 @@ function paint(container: HTMLElement): void {
   throw new Error('the transcript never settled: resize and scroll kept moving it')
 }
 
-// Exercise the real virtualizer while a streaming row grows and messages append.
 describe('transcript follow ownership across growth and appends', () => {
   const TAIL_INDEX = TRANSCRIPT_LENGTH - 1
   const GROWTH_STEPS = 24
   const LINES_PER_STEP = 12
-  /** One wrapped prose line. Content and measured height grow from this one
-   *  number, so a step that adds lines is a step that adds pixels. */
+  // Grow content and measured height from the same wrapped-line size.
   const STREAM_LINE_PX = 22
-  /** Every row but the growing one measures at its estimate, so the reserved
-   *  total is arithmetic rather than a snapshot. */
+  /** All settled rows measure at their estimates, keeping reserved totals deterministic. */
   const BASE_TOTAL_PX =
     (TRANSCRIPT_LENGTH - 1) * ROW_PX + (TRANSCRIPT_LENGTH - 1) * NATIVE_CHAT_ROW_GAP_PX
 
@@ -172,14 +170,10 @@ describe('transcript follow ownership across growth and appends', () => {
       const distance = distanceFromBottom(container)
       frames.push({ step, tail: tailHeightAt(step), total: totalSize, distance })
 
-      // Pinned: the reader is still looking at the bottom of the row.
       expect(distance).toBeLessThanOrEqual(NATIVE_CHAT_BOTTOM_THRESHOLD_PX)
-      // Mounted: never swapped for reserved space while it is the live row.
       expect(indexes).toContain(TAIL_INDEX)
       expect(screen.getByText(/streamed line 0/)).toBeInTheDocument()
-      // Tracking: the reservation follows the measurement, not the estimate.
       expect(totalSize).toBe(BASE_TOTAL_PX + tailHeightAt(step))
-      // Still a window, not the whole transcript remounted by the growth.
       expect(indexes.length).toBeLessThan(TRANSCRIPT_LENGTH / 4)
     }
 
@@ -207,10 +201,8 @@ describe('transcript follow ownership across growth and appends', () => {
       paint(container)
 
       const { totalSize, indexes } = windowState(container)
-      // Not yanked: the offset the reader chose is the offset they still have.
       expect(scrollRoot(container).scrollTop).toBe(readingAt)
-      // The row is off screen but still measured, which is what keeps the
-      // reserved total — and so the scrollbar — honest while it grows.
+      // Keep measuring the offscreen live row so its reserved height and scrollbar track growth.
       expect(indexes).toContain(TAIL_INDEX)
       expect(totalSize).toBe(BASE_TOTAL_PX + tailHeightAt(step))
     }
@@ -233,8 +225,6 @@ describe('transcript follow ownership across growth and appends', () => {
       const parkedAt = scroller.scrollHeight - scroller.clientHeight - parkGapPx
       scrollTranscript(container, parkedAt)
       expect(distanceFromBottom(container)).toBe(parkGapPx)
-      // Not the "scrolled far away" case above: the latest message is still on
-      // screen, so there is nothing to offer a way back to yet.
       expect(screen.queryByRole('button', { name: /jump to latest/i })).toBeNull()
 
       setMeasuredTail(5)
@@ -248,9 +238,7 @@ describe('transcript follow ownership across growth and appends', () => {
         rerender(streamingList(step))
         paint(container)
 
-        // The offset stops moving at all...
         expect(scroller.scrollTop).toBe(parkedAt)
-        // ...so the end runs away from the reader instead of carrying them along.
         const distance = distanceFromBottom(container)
         expect(distance).toBeGreaterThan(previousDistance)
         previousDistance = distance
@@ -363,9 +351,7 @@ describe('transcript follow ownership across growth and appends', () => {
     const { container, rerender } = render(list(transcript))
     paint(container)
     const scroller = scrollRoot(container)
-    // Establish a forward scroll direction before reading at this offset. The
-    // backward-scroll suppression below covers the separate case where a reader
-    // is still moving upward while overscan rows settle.
+    // Seed forward scrolling; backward-scroll suppression is covered separately.
     scrollTranscript(container, 0)
     paint(container)
     const readingAt = 2000
@@ -385,6 +371,123 @@ describe('transcript follow ownership across growth and appends', () => {
     expect(scroller.scrollTop).toBe(readingAt + 200)
     expect(windowState(container).indexes.length).toBeLessThan(TRANSCRIPT_LENGTH / 4)
   })
+
+  it('releases browsed history when passive wheel input arrives after the browser moved', () => {
+    const release = vi.fn()
+    const { container } = render(
+      <NativeChatMessageList
+        session={{ ...session(transcript), retainHistory: () => release }}
+        isWorking={false}
+        expandSignal={false}
+      />
+    )
+    paint(container)
+    const scroller = scrollRoot(container)
+    fireEvent.scroll(scroller)
+    scrollTranscript(container, scroller.scrollHeight - scroller.clientHeight - 20)
+    paint(container)
+    expect(release).not.toHaveBeenCalled()
+
+    scroller.scrollTop = scroller.scrollHeight - scroller.clientHeight
+    fireEvent.wheel(scroller, { deltaY: 20 })
+    // ResizeObserver can notify before the pending native scroll, without changing the content.
+    act(() => {
+      deliverResizes()
+    })
+    fireEvent.scroll(scroller)
+    paint(container)
+    expect(release).toHaveBeenCalledOnce()
+  })
+
+  it('preserves a pending wheel return through a no-op following pin after reveal', () => {
+    layout.belowTranscriptPx = 100
+    const release = vi.fn()
+    const retainedSession = { ...session(transcript), retainHistory: () => release }
+    const pane = (isVisible: boolean) => (
+      <NativeChatMessageList
+        session={retainedSession}
+        isVisible={isVisible}
+        isWorking={false}
+        expandSignal={false}
+      />
+    )
+    const { container, rerender } = render(pane(true))
+    paint(container)
+    const scroller = scrollRoot(container)
+    fireEvent.scroll(scroller)
+    const readingAt = scroller.scrollHeight - scroller.clientHeight - 62
+    scrollTranscript(container, readingAt)
+    paint(container)
+    rerender(pane(false))
+    layout.belowTranscriptPx -= 60
+    rerender(pane(true))
+    fireEvent.scroll(scroller)
+    expect(scroller.scrollTop).toBe(readingAt)
+    expect(release).not.toHaveBeenCalled()
+
+    scroller.scrollTop = scroller.scrollHeight - scroller.clientHeight
+    fireEvent.wheel(scroller, { deltaY: 2 })
+    act(() => {
+      deliverResizes()
+    })
+    fireEvent.scroll(scroller)
+    paint(container)
+    expect(release).toHaveBeenCalledOnce()
+  })
+
+  it.each([false, true])(
+    'keeps reader-return evidence current after compensation (tail clamps: %s)',
+    (clamps) => {
+      layout.belowTranscriptPx = 100
+      const release = vi.fn()
+      const retainHistory = () => release
+      const { container } = render(
+        <NativeChatMessageList
+          session={{ ...session(transcript), retainHistory }}
+          isWorking={false}
+          expandSignal={false}
+        />
+      )
+      paint(container)
+      const scroller = scrollRoot(container)
+      const end = scroller.scrollHeight - scroller.clientHeight
+      // One scrollbar press owns the entire drag, including movement after measurements.
+      fireEvent.pointerDown(scroller)
+      scroller.scrollTop = end - 20
+      fireEvent.scroll(scroller)
+      paint(container)
+      scroller.scrollTop += 1
+      fireEvent.scroll(scroller)
+      paint(container)
+      const before = scroller.scrollTop
+      const aboveIndex = windowState(container).indexes[0]!
+      expect((aboveIndex + 1) * ROW_PITCH_PX).toBeLessThan(before)
+      layout.measuredRowHeights = Array.from({ length: TRANSCRIPT_LENGTH }, (_, index) =>
+        index === aboveIndex ? ROW_PX + 200 : ROW_PX
+      )
+      paint(container)
+      expect(scroller.scrollTop).toBe(before + 200)
+      expect(release).not.toHaveBeenCalled()
+      if (clamps) {
+        layout.belowTranscriptPx -= 60
+        const beforeClamp = scroller.scrollTop
+        scroller.scrollTop = beforeClamp
+        fireEvent.scroll(scroller)
+        paint(container)
+        expect(distanceFromBottom(container)).toBe(0)
+        expect(release).not.toHaveBeenCalled()
+        // A subsequent genuine gesture still releases the same retained history.
+        fireEvent.pointerDown(scroller)
+        scroller.scrollTop -= 20
+        fireEvent.scroll(scroller)
+        paint(container)
+      }
+      scroller.scrollTop = scroller.scrollHeight - scroller.clientHeight
+      fireEvent.scroll(scroller)
+      paint(container)
+      expect(release).toHaveBeenCalledOnce()
+    }
+  )
 
   it('keeps following when a pin echo arrives after the document grows', () => {
     setMeasuredTail(0)
@@ -488,14 +591,9 @@ describe('transcript follow ownership across growth and appends', () => {
     expect(screen.getByRole('button', { name: /jump to latest/i })).toBeInTheDocument()
   })
 
-  // With something above the spacer, the two parties stop agreeing on where the
-  // end is: the transcript measures it from the document, the virtualizer from
-  // the spacer's own height against a container-absolute offset. The second is
-  // short by everything outside the spacer, so it reads a reader who is clearly
-  // above the end as sitting on it.
+  // Chrome outside the spacer makes document-end and virtualizer-end calculations disagree.
   describe('with a gutter above the transcript', () => {
-    /** A gutter well past `pt-10`, standing in for any chrome in flow above
-     *  the spacer. */
+    /** Exceed the normal top gutter to expose spacer/document coordinate differences. */
     const GUTTER_PX = 92
     /** Far enough up that the transcript itself calls the reader detached, and
      *  still inside the band the virtualizer computes (48 + 92 + 24). */
@@ -531,8 +629,6 @@ describe('transcript follow ownership across growth and appends', () => {
           rerender(streamingList(step))
           paint(container)
 
-          // Not dragged along: the offset the reader chose is the offset they keep,
-          // however much the row below them grows.
           expect(scroller.scrollTop).toBe(readingAt)
         }
       }

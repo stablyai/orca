@@ -49,10 +49,25 @@ Scan the Expo QR code with your phone's camera on iOS, or Expo Go on Android.
 For a native dev-client build:
 
 ```bash
-pnpm exec expo run:android
-pnpm exec expo run:ios
+pnpm native ensure ios       # or: pnpm native ensure android [--device <name|udid|serial>]
 pnpm start --dev-client
 ```
+
+`ensure` computes the Expo fingerprint of the native inputs (native dependencies, config plugins,
+`modules/`, `patches/`, and the Expo config). On a **HIT** it installs the cached build on the booted
+simulator or the running emulator in a few seconds. On a **MISS** it regenerates `ios/` or `android/`,
+runs `expo run:<platform>`, and caches the result. `--rebuild` forces a fresh build.
+
+Builds are cached per fingerprint in the user cache directory (`~/Library/Caches/orca-mobile/native-builds`
+on macOS, `$XDG_CACHE_HOME/orca-mobile/native-builds` on Linux, `%LOCALAPPDATA%\orca-mobile\native-builds`
+on Windows, or `ORCA_MOBILE_NATIVE_BUILD_CACHE_DIR`), so every worktree reuses them. The newest three
+per platform are kept. `app.config.js` also registers the cache as Expo's `buildCacheProvider`, so a
+plain `pnpm ios` / `pnpm android` installs a cached build instead of compiling. Only `ensure` writes to
+the cache, because `expo run` reuses an existing `ios/` or `android/` directory even when it was
+generated from older inputs. Expo caches iOS Simulator builds only, not physical devices.
+
+`pnpm native fingerprint` prints the current hashes. On pull requests, the `Mobile native fingerprint`
+job reports in its summary whether the PR changes them, which means dev clients need a native rebuild.
 
 ## Pair With Desktop Orca
 
@@ -154,6 +169,22 @@ The same gate censuses the program first: every `*.test.ts(x)` on disk must be i
 the script's `TESTS_OUTSIDE_PROGRAM` with a reason. Without that, a test excluded from
 `tsconfig.test.json` — or a `Foo.test.tsx` shadowed by a `Foo.test.ts` beside it, which a wildcard
 `include` drops for the higher-priority extension — would leave the ratchet silently.
+
+## Localization
+
+UI copy goes through `src/i18n`, with the same call shape and languages as desktop:
+
+- In components and hooks: `const t = useMobileTranslation()`, then `t('area.thing.label', 'English text')`.
+  The function changes with the language, so list it in memo and callback dependencies.
+- In helpers and imperative code (alerts, notifications): `translate(key, fallback, options)` from
+  `src/i18n/mobile-i18n`, called when the text is shown, never at module scope.
+- Counts: `count === 1 ? t('x.files_one', '{{count}} file', { count }) : t('x.files_other', '{{count}} files', { count })`.
+- Dates and numbers: pass `getUiIntlLocale()` to `Intl` formatters instead of `undefined`.
+- Keep identity separate from display text: never compare or key on a translated string.
+
+Run `pnpm sync:mobile-localization` from the repo root to add new keys to `src/i18n/locales/en.json`;
+other catalogs may lag and fall back to English. `pnpm verify:mobile-localization` and
+`pnpm verify:mobile-localization-coverage` run in CI. iOS permission prompts live in `locales/<lang>.json`.
 
 ## Protocol Version Compatibility
 

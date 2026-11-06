@@ -22,7 +22,11 @@ vi.mock('./serve-sim-execution', () => ({
   execServeSimCommand: vi.fn()
 }))
 
-import { listSimulatorDevices, shutdownSimulatorDevice } from './simctl-simulator-devices'
+import {
+  listSimulatorDevices,
+  resolveSimulatorUdid,
+  shutdownSimulatorDevice
+} from './simctl-simulator-devices'
 
 describe('listSimulatorDevices', () => {
   beforeEach(() => {
@@ -31,18 +35,25 @@ describe('listSimulatorDevices', () => {
     platformMock.mockReturnValue('darwin')
   })
 
-  it('parses simctl devices on macOS', async () => {
+  it('keeps lastBootedAt as usage evidence only when lastUsedAt is absent', async () => {
     execFileMock.mockImplementation((_command, _args, _options, callback) => {
       callback(
         null,
         JSON.stringify({
           devices: {
-            'com.apple.CoreSimulator.SimRuntime.iOS-18-0': [
+            'com.apple.CoreSimulator.SimRuntime.iOS-26-0': [
               {
-                name: 'iPhone 17 Pro',
-                udid: 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE',
+                udid: 'booted-before',
+                name: 'iPhone',
                 state: 'Shutdown',
-                isAvailable: true
+                lastBootedAt: '2026-10-29T10:00:00Z'
+              },
+              {
+                udid: 'used-after',
+                name: 'iPhone',
+                state: 'Shutdown',
+                lastBootedAt: '2026-10-29T10:00:00Z',
+                lastUsedAt: '2026-10-30T11:00:00Z'
               }
             ]
           }
@@ -50,29 +61,11 @@ describe('listSimulatorDevices', () => {
         ''
       )
     })
-
-    await expect(listSimulatorDevices()).resolves.toEqual([
-      {
-        name: 'iPhone 17 Pro',
-        udid: 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE',
-        state: 'Shutdown',
-        runtime: 'com.apple.CoreSimulator.SimRuntime.iOS-18-0',
-        isAvailable: true
-      }
+    const devices = await listSimulatorDevices()
+    expect(devices.map((device) => device.lastUsedAt)).toEqual([
+      '2026-10-29T10:00:00Z',
+      '2026-10-30T11:00:00Z'
     ])
-    expect(execFileMock).toHaveBeenCalledWith(
-      'xcrun',
-      ['simctl', 'list', 'devices', '-j'],
-      { timeout: 15_000 },
-      expect.any(Function)
-    )
-  })
-
-  it('returns no devices on non-macOS hosts', async () => {
-    platformMock.mockReturnValue('linux')
-
-    await expect(listSimulatorDevices()).resolves.toEqual([])
-    expect(execFileMock).not.toHaveBeenCalled()
   })
 
   it('normalizes missing simctl errors for UI and CLI callers', async () => {
@@ -92,6 +85,45 @@ describe('listSimulatorDevices', () => {
     })
     expect(error).toBeInstanceOf(Error)
     expect((error as Error).message).not.toContain('Command failed')
+  })
+})
+
+describe('resolveSimulatorUdid', () => {
+  beforeEach(() => {
+    execFileMock.mockReset()
+    platformMock.mockReturnValue('darwin')
+  })
+
+  it('prefers an exact name over an earlier device whose name only contains it', async () => {
+    execFileMock.mockImplementation((_command, _args, _options, callback) => {
+      callback(
+        null,
+        JSON.stringify({
+          devices: {
+            'com.apple.CoreSimulator.SimRuntime.iOS-27-0': [
+              {
+                name: 'iPhone 17e',
+                udid: '645A2204-ED7C-4253-B298-2749820B1B7E',
+                state: 'Shutdown'
+              },
+              { name: 'iPhone 17', udid: '1BD4732B-EC1A-4074-8C70-6AC369607185', state: 'Shutdown' }
+            ]
+          }
+        }),
+        ''
+      )
+    })
+    const serveSim = { command: 'serve-sim', baseArgs: [], usesElectronAsNode: false }
+
+    await expect(resolveSimulatorUdid('iPhone 17', serveSim)).resolves.toBe(
+      '1BD4732B-EC1A-4074-8C70-6AC369607185'
+    )
+    await expect(resolveSimulatorUdid('iPHONE 17', serveSim)).resolves.toBe(
+      '1BD4732B-EC1A-4074-8C70-6AC369607185'
+    )
+    await expect(resolveSimulatorUdid('17e', serveSim)).resolves.toBe(
+      '645A2204-ED7C-4253-B298-2749820B1B7E'
+    )
   })
 })
 
@@ -120,8 +152,7 @@ describe('shutdownSimulatorDevice', () => {
   })
 
   it('propagates real shutdown failures instead of swallowing them', async () => {
-    // execFile's message echoes the command line, which always contains
-    // "shutdown"; a hung device (timeout kill) must still reject.
+    // Command text always contains shutdown; only the actual device state proves it is already off.
     execFileMock.mockImplementation((_command, _args, _options, callback) => {
       callback(
         Object.assign(

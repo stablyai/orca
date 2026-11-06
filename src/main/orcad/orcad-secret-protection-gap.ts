@@ -1,14 +1,4 @@
-/** What orcad tells a user about how its credentials are protected at rest. */
-
 export const ORCAD_PLAINTEXT_SECRETS_ENV = 'ORCA_HEADLESS_SECRET_STORE'
-
-function keychainName(platform: NodeJS.Platform): string {
-  return platform === 'darwin'
-    ? 'the macOS Keychain'
-    : platform === 'win32'
-      ? 'Windows credential protection'
-      : 'a Secret Service keyring'
-}
 
 export function describeOrcadPlaintextOptOut(): string {
   return (
@@ -24,30 +14,13 @@ export function describeOrcadDisposableProfile(): string {
   )
 }
 
-/**
- * Why not null: the machine ID is not a secret, so a key kept beside the credentials only stops
- * a lone copied file from opening elsewhere — not someone with this account's files or a backup.
- */
-export function describeOrcadHostKeyGap(platform: NodeJS.Platform, hostBound: boolean): string {
-  const why =
-    platform === 'win32'
-      ? `does not use ${keychainName(platform)}`
-      : `could not reach ${keychainName(platform)} when it created its key`
+/** Machine IDs are public; adjacent keys do not protect against copying the whole account or backup. */
+export function describeOrcadHostKeyGap(hostBound: boolean): string {
   const binding = hostBound ? ', mixed with this machine ID' : ''
   return (
-    `Orca's headless server ${why}, so it seals credentials with a key kept beside them in its ` +
-    `private credential directory${binding}. Anyone who can read this account's files on this ` +
-    'host, or a backup of them, can unseal them.'
-  )
-}
-
-/** Why its own message: a locked login Keychain clears without a restart, unlike other failures. */
-export function describeOrcadKeychainLocked(): string {
-  return (
-    "Orca's headless server cannot unseal its credentials: the macOS login Keychain that holds " +
-    'its key is locked. This happens after a reboot when you only sign in over SSH. Sign in to ' +
-    'this Mac at its screen once; the server retries on its own. Saved credentials are kept as ' +
-    'they are and new ones are refused until then.'
+    "Orca's headless server seals credentials with a key kept beside them in its private " +
+    `credential directory${binding}. Anyone who can read this account's files on this host, or a ` +
+    'backup of them, can unseal them.'
   )
 }
 

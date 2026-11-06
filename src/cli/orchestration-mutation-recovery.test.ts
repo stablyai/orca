@@ -314,4 +314,18 @@ describe('orchestration mutation recovery', () => {
     expect(result.data).not.toHaveProperty('originalCommand')
     expect((result.data as { recovery: object }).recovery).not.toHaveProperty('retryCommand')
   })
+
+  it.each([
+    ['runtime_unavailable', true],
+    ['remote_runtime_unavailable', true],
+    ['runtime_timeout', true],
+    ['invalid_runtime_response', true],
+    ['runtime_manually_disconnected', false],
+    ['remote_runtime_timeout', false],
+    ['runtime_rpc_queue_overloaded', false],
+    ['invalid_argument', false]
+  ])('treats %s as an unknown mutation outcome: %s', (code, unknown) => {
+    const error = new RuntimeClientError(code, 'failed', { orchestrationRequestId: 'request-1' })
+    expect(orchestrationMutationRecoveryError(error) !== error).toBe(unknown)
+  })
 })

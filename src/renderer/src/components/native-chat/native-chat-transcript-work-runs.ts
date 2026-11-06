@@ -1,13 +1,11 @@
-// Draws each unbroken stretch of tool calls and thoughts as one slot. A pass over the slots
-// already built, so anything else that takes a slot (a section head, a roster's entries, a
-// row carrying only its turn's bar or rollup) ends a run just by sitting between its rows.
+// Combine calls/thoughts after slot selection so every intervening visible row or section boundary ends the run.
 
-import { agentJournalItemSubagentId } from '../../../../shared/agent-session-journal-producer'
+import { agentJournalItemSubagentId } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
 import {
   nativeChatWorkRunMember,
   nativeChatWorkRunSpans,
   type NativeChatWorkRunRow
-} from '../../../../shared/native-chat-work-run'
+} from '../../../../shared/native-chat/native-chat-work-run'
 import {
   type NativeChatRowTypography,
   estimateNativeChatRowHeight,
@@ -20,7 +18,6 @@ import type {
 } from './native-chat-transcript-slots'
 
 function workRunRow(slot: NativeChatTranscriptSlot): NativeChatWorkRunRow {
-  // Every slot draws something: its message, or its turn's bar or rollup.
   if (slot.kind !== 'message') {
     return { member: null, draws: true, scope: undefined }
   }
@@ -46,12 +43,13 @@ function workRunSlot(
 ): NativeChatMessageSlot {
   const head = members[0]!
   // A turn's bar sits on its first row and its rollup on its last, so the run takes each from there.
-  const { turnDiff } = members.at(-1)!
+  const { turnDiff, openedPullRequests } = members.at(-1)!
   return {
     ...head,
     workRun: members.map((member) => member.message),
     trailingRun: members.some((member) => member.trailingRun),
     turnDiff,
+    openedPullRequests,
     estimatedHeight: estimateNativeChatRowHeight(
       nativeChatWorkRunContentMetrics(
         nativeChatRowContentMetrics(head.message, typography),
@@ -61,6 +59,8 @@ function workRunSlot(
         hasReceipt: false,
         hasStatus: head.status !== undefined,
         hasTurnDiff: turnDiff !== undefined,
+        turnDiffFileCount: turnDiff?.files.length,
+        openedPullRequestCount: openedPullRequests?.length,
         inSubagentSection: head.depth > 0
       },
       typography

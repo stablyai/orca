@@ -1,8 +1,8 @@
 import type {
   HostAccessLinkErrorKind,
   RemotePairingEndpointKind
-} from '../../../shared/remote-pairing-address'
-import type { RemotePairingFailureKind } from '../../../shared/remote-pairing-verification'
+} from '../../../shared/remote-runtime/pairing/remote-pairing-address'
+import type { RemotePairingFailureKind } from '../../../shared/remote-runtime/pairing/remote-pairing-verification'
 import { translate } from '@/i18n/i18n'
 
 export function translateHostAccessLinkError(kind: HostAccessLinkErrorKind): string {
@@ -80,6 +80,11 @@ export function translateRemotePairingFailureDescription(
       return translate(
         'auto.components.settings.RuntimeHostAccessForm.saveFailedHelp',
         'The host was verified, but Orca could not save it. Check the name and local settings storage, then try again.'
+      )
+    case 'different-server':
+      return translate(
+        'auto.components.settings.RuntimeHostAccessForm.differentServerHelp',
+        'This pairing link is for a different server. Create the link on the server you are re-pairing.'
       )
     case 'host-unreachable':
       return translate(

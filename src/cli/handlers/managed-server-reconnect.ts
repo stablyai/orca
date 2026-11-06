@@ -1,8 +1,4 @@
-/**
- * An update or rollback restarts the managed server, and a CLI talking to that runtime then sees
- * its connection close mid-call. That is expected, not a failure: read the host's status once the
- * runtime answers again and report what the action left behind.
- */
+// Updates can close this connection mid-call; report the outcome from status after the runtime returns.
 import type { OrcadManagedRuntimeStatus } from '../../shared/orcad-managed-runtime'
 import type { HandlerContext } from '../dispatch'
 import { printResult } from '../format'

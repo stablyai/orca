@@ -19,6 +19,8 @@ function repo(
     addedAt: undefined,
     connectionId: undefined,
     executionHostId,
+    projectGroupId: undefined,
+    projectGroupOrder: undefined,
     ...(repoIcon ? { repoIcon } : {})
   }
 }
@@ -29,7 +31,8 @@ describe('buildProjectSectionCatalog', () => {
       repos: [repo('r1'), repo('r1', 'runtime:m4air')],
       projects: [],
       setups: [],
-      projectOrderBy: 'manual'
+      projectOrderBy: 'manual',
+      projectGroups: undefined
     }
     const catalog = buildProjectSectionCatalog(
       served,

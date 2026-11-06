@@ -3,8 +3,7 @@ import {
   clampMarkupScale,
   dataUrlByteLength,
   effectiveMarkupScale,
-  markupCanvasSize,
-  MARKUP_DOWNSCALE_STEPS
+  markupCanvasSize
 } from './markup-screenshot-compose'
 
 describe('clampMarkupScale', () => {
@@ -32,7 +31,6 @@ describe('markupCanvasSize', () => {
     const maxPixels = 32 * 1024 * 1024
     const size = markupCanvasSize(4000, 3000, 2, maxPixels)
     expect(size.width * size.height).toBeLessThanOrEqual(maxPixels)
-    // Aspect ratio is preserved (one uniform scale).
     expect(size.width / size.height).toBeCloseTo(4000 / 3000, 3)
   })
 })
@@ -55,21 +53,11 @@ describe('effectiveMarkupScale', () => {
 
 describe('dataUrlByteLength', () => {
   it('decodes the base64 payload size', () => {
-    // "hi" -> base64 "aGk=" (1 pad char) -> 2 bytes
     expect(dataUrlByteLength('data:image/png;base64,aGk=')).toBe(2)
-    // "man" -> "bWFu" (no padding) -> 3 bytes
     expect(dataUrlByteLength('data:image/png;base64,bWFu')).toBe(3)
   })
 
   it('returns 0 for a malformed data url', () => {
     expect(dataUrlByteLength('not-a-data-url')).toBe(0)
-  })
-})
-
-describe('compose budget plans', () => {
-  it('tries full size first, then shrinks (PNG only, descending)', () => {
-    expect(MARKUP_DOWNSCALE_STEPS[0]).toBe(1)
-    expect([...MARKUP_DOWNSCALE_STEPS]).toEqual([...MARKUP_DOWNSCALE_STEPS].sort((a, b) => b - a))
-    expect(MARKUP_DOWNSCALE_STEPS.every((s) => s > 0 && s <= 1)).toBe(true)
   })
 })

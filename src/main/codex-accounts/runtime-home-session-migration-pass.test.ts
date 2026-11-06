@@ -9,8 +9,8 @@ import {
   teardownRuntimeHomeTest,
   testState
 } from './runtime-home-service-test-harness'
-import { getCodexSessionBackfillDate } from '../codex/codex-session-backfill-scan-dates'
-import type { CodexSessionBackfillDate } from '../codex/codex-session-backfill-types'
+import { getCodexSessionBackfillDate } from '../codex/history/backfill/codex-session-backfill-scan-dates'
+import type { CodexSessionBackfillDate } from '../codex/history/backfill/codex-session-backfill-types'
 
 vi.mock('electron', () => ({
   app: {
@@ -125,7 +125,6 @@ describe('host system default session migration pass preparation', () => {
 
     expect(service.prepareHostSystemDefaultSessionMigrationPass()).toBe(true)
 
-    // Recording this launch must not erase the demand the marker still carries.
     expect(JSON.parse(readFileSync(getMarkerPath(), 'utf-8'))).toMatchObject({
       needsFullScan: true
     })

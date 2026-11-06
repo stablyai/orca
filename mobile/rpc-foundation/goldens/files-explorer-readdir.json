@@ -4,22 +4,6 @@
   "family": "files.explorer-screen",
   "namedDeltas": [],
   "values": {
-    "1fac8f3b8f44": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "ChevronLeft": 1,
-        "FlatList": 1,
-        "Pressable": 1,
-        "SafeAreaView": 1,
-        "Text": 2,
-        "View": 3
-      },
-      "labels": ["Back to session"],
-      "rows": ["dir:src", "file:README.md"],
-      "text": ["Files", "orca-files"]
-    },
     "59851eb4cbf7": {
       "name": "files.readDir#1",
       "ordinal": 1,
@@ -52,7 +36,30 @@
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readDir\",\"params\":{\"worktree\":\"id:wt-files\",\"relativePath\":\"\"}}"
     },
-    "e91880eefe86": {
+    "9f1a5ca359ab": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "ChevronLeft": 1,
+        "Defs": 1,
+        "FlatList": 1,
+        "LinearGradient": 1,
+        "Pressable": 1,
+        "Rect": 1,
+        "SafeAreaView": 1,
+        "Search": 1,
+        "Stop": 2,
+        "Svg": 1,
+        "Text": 2,
+        "TextInput": 1,
+        "View": 11
+      },
+      "labels": ["Back to session", "Filter files"],
+      "rows": ["dir:src", "file:README.md"],
+      "text": ["Files", "orca-files"]
+    },
+    "c721e7f4a5c5": {
       "crash": {
         "$rpc": "null"
       },
@@ -61,12 +68,12 @@
         "ChevronLeft": 1,
         "Pressable": 1,
         "SafeAreaView": 1,
-        "Text": 2,
-        "View": 4
+        "Text": 3,
+        "View": 7
       },
       "labels": ["Back to session"],
       "rows": [],
-      "text": ["Files", "orca-files"]
+      "text": ["Files", "orca-files", "Loading files…"]
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -130,7 +137,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "e91880eefe86",
+          "state": "c721e7f4a5c5",
           "effects": []
         }
       },
@@ -142,7 +149,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "1fac8f3b8f44",
+          "state": "9f1a5ca359ab",
           "effects": []
         }
       }

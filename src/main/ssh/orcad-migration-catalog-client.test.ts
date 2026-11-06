@@ -1,15 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  ORCAD_MIGRATION_MANIFEST_VERSION,
-  type OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
+import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../shared/orcad-migration/orcad-migration-manifest-validation'
+import type { OrcadMigrationManifest } from '../../shared/orcad-migration/orcad-migration-manifest'
 import { computeOrcadMigrationManifestSha256 } from '../orcad/orcad-migration-manifest-digest'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+import { AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY } from '../../shared/automation-runtime-capabilities'
+import {
+  ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY,
+  ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY
+} from '../../shared/orcad-runtime-capabilities'
+import {
+  DORMANT_AUTOMATION,
+  dormantState
+} from '../persistence/migrating-orcad-catalog/persistence-orcad-migration-catalog-fixture'
 
 const sendRequest = vi.hoisted(() => vi.fn())
 const status = vi.hoisted(() => ({ capabilities: ['orcad.migration-catalog.v1'] }))
-// Runs the status preflight, then hands the request to the old single-call shape the cases assert.
-vi.mock('../../shared/remote-runtime-client', () => ({
+// Run status preflight, then adapt to the existing single-call assertions.
+vi.mock('../../shared/remote-runtime/remote-runtime-client', () => ({
   sendRemoteRuntimeRequestWithStatusPreflight: async (
     pairing: unknown,
     method: string,
@@ -32,10 +40,12 @@ vi.mock('../../shared/remote-runtime-client', () => ({
 const {
   abortRemoteOrcadMigrationCatalog,
   commitRemoteOrcadMigrationCatalog,
+  listRemoteOrcadRepositories,
   readRemoteOrcadMigrationCatalogState,
   stageRemoteOrcadMigrationCatalog,
   stageRemoteOrcadMigrationSnapshotChunk
 } = await import('./orcad-migration-catalog-client')
+const { listRemoteOrcadFolderCatalog } = await import('./orcad-server-folder-workspaces')
 
 function manifest(): OrcadMigrationManifest {
   const unsigned = {
@@ -66,6 +76,42 @@ beforeEach(() => {
 })
 
 describe('remote orcad migration catalog client', () => {
+  it.each([stageRemoteOrcadMigrationCatalog, commitRemoteOrcadMigrationCatalog])(
+    'requires complete Automation setup support on stage and commit',
+    async (request) => {
+      const base = manifest()
+      const input = { ...base, payload: { ...base.payload, dormantState: dormantState() } }
+      await expect(request(pairingCode, input)).rejects.toThrow(
+        'keep automation agent launch settings'
+      )
+      expect(sendRequest).not.toHaveBeenCalled()
+      status.capabilities.push(AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY)
+      const result = {
+        state: 'staged',
+        migrationId: input.migrationId,
+        manifestSha256: input.manifestSha256,
+        stagedAt: '2026-08-30T12:01:00.000Z'
+      }
+      sendRequest.mockResolvedValue({ ok: true, result })
+      await expect(request(pairingCode, input)).resolves.toEqual(result)
+      expect(sendRequest).toHaveBeenCalledTimes(1)
+      expect(sendRequest.mock.calls[0]?.[2]).toMatchObject({
+        manifest: {
+          payload: {
+            dormantState: {
+              automations: [
+                expect.objectContaining({
+                  agentArgs: DORMANT_AUTOMATION.agentArgs,
+                  launchPreferences: DORMANT_AUTOMATION.launchPreferences
+                })
+              ]
+            }
+          }
+        }
+      })
+    }
+  )
+
   it.each([
     stageRemoteOrcadMigrationCatalog,
     commitRemoteOrcadMigrationCatalog,
@@ -82,6 +128,61 @@ describe('remote orcad migration catalog client', () => {
       }
     }
   )
+
+  it('keeps each server project’s execution host, so a nested SSH row is never read as local', async () => {
+    sendRequest.mockResolvedValue({
+      ok: true,
+      result: {
+        repos: [
+          { id: 'own', path: '/root/a', connectionId: null, displayName: 'own' },
+          { id: 'nested', path: '/root/b', connectionId: 'ssh-nested' },
+          { id: 'runtime', path: '/root/c', executionHostId: 'runtime:env' },
+          // An older orcad row: no host fields at all.
+          { id: 'legacy', path: '/root/d' }
+        ]
+      }
+    })
+    await expect(listRemoteOrcadRepositories(pairingCode)).resolves.toEqual([
+      { id: 'own', path: '/root/a' },
+      { id: 'nested', path: '/root/b', connectionId: 'ssh-nested' },
+      { id: 'runtime', path: '/root/c', executionHostId: 'runtime:env' },
+      { id: 'legacy', path: '/root/d' }
+    ])
+  })
+
+  it('reads the server’s folder workspaces and the groups that place them on a host', async () => {
+    sendRequest.mockImplementation(async (_pairing, method: string) => ({
+      ok: true,
+      result:
+        method === 'folderWorkspace.list'
+          ? {
+              folderWorkspaces: [
+                { id: 'own', folderPath: '/root/a', projectGroupId: 'g', connectionId: null },
+                { id: 'nested', folderPath: '/root/b', projectGroupId: 'g', connectionId: 'ssh-x' }
+              ]
+            }
+          : {
+              groups: [
+                { id: 'g', name: 'G', parentGroupId: null },
+                { id: 'h', executionHostId: 'ssh:other' }
+              ]
+            }
+    }))
+    await expect(listRemoteOrcadFolderCatalog(pairingCode)).resolves.toEqual({
+      folderWorkspaces: [
+        { id: 'own', folderPath: '/root/a', projectGroupId: 'g', connectionId: null },
+        { id: 'nested', folderPath: '/root/b', projectGroupId: 'g', connectionId: 'ssh-x' }
+      ],
+      projectGroups: [
+        { id: 'g', parentGroupId: null },
+        { id: 'h', parentGroupId: null, executionHostId: 'ssh:other' }
+      ]
+    })
+    expect(sendRequest.mock.calls.map((call) => call[1]).sort()).toEqual([
+      'folderWorkspace.list',
+      'projectGroup.list'
+    ])
+  })
 
   it('pins snapshot acknowledgments to the admitted destination runtime', async () => {
     const request = {
@@ -341,5 +442,50 @@ describe('remote orcad migration catalog client', () => {
     await expect(commitRemoteOrcadMigrationCatalog(pairingCode, manifest())).rejects.toThrow(
       'orcad_migration_destination_unsupported'
     )
+  })
+
+  // #37051: an older host would parse past the history reference and import the automations runless.
+  it('never stages or commits a manifest naming its run history on a host without that kind', async () => {
+    const base = manifest()
+    const withHistory: OrcadMigrationManifest = {
+      ...base,
+      payload: {
+        ...base.payload,
+        dormantState: {
+          version: 1,
+          worktreeMeta: [],
+          worktreeLineage: [],
+          workspaceLineage: [],
+          sparsePresets: [],
+          retiredWorktreeNames: [],
+          retiredWorktreeNamespaces: [],
+          automationRunHistory: { sha256: 'd'.repeat(64), byteLength: 10 }
+        }
+      }
+    }
+    const installing = [
+      ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY,
+      ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY
+    ]
+    status.capabilities = installing
+    for (const send of [stageRemoteOrcadMigrationCatalog, commitRemoteOrcadMigrationCatalog]) {
+      await expect(send(pairingCode, withHistory)).rejects.toThrow(
+        /^orcad_migration_destination_blob_kind_unsupported:automation-run-history:/
+      )
+    }
+    expect(sendRequest).not.toHaveBeenCalled()
+
+    status.capabilities = [...installing, 'orcad.migration-blob.automation-run-history.v1']
+    sendRequest.mockResolvedValue({
+      ok: true,
+      result: {
+        state: 'staged',
+        migrationId: withHistory.migrationId,
+        manifestSha256: withHistory.manifestSha256,
+        stagedAt: '2026-08-30T12:01:00.000Z'
+      }
+    })
+    await stageRemoteOrcadMigrationCatalog(pairingCode, withHistory)
+    expect(sendRequest).toHaveBeenCalledOnce()
   })
 })

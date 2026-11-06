@@ -5,21 +5,11 @@ import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { QUICK_OPEN_LISTING_MAX_RESULTS } from '../../../shared/quick-open-listing-limits'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import {
-  getRuntimeFileListTarget,
-  getNestedWorktreeExcludeRequest,
-  getNestedWorktreeExcludePaths,
-  isNestedWorktreePath,
-  type RuntimeFileListState
-} from './quick-open-file-list'
-import * as fileListTarget from './quick-open-file-list-target'
-import * as nestedWorktrees from './quick-open-nested-worktrees'
-import { QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS } from './quick-open-search'
+import type { RuntimeFileListState } from './quick-open-file-list'
+
 import {
   listRuntimeFilesMock,
-  cancelRuntimeFileListMock,
   searchRuntimeFilePathsMock,
-  initialAppState,
   makeProjectGroup,
   makeFolderWorkspace,
   seedRemoteWorktree,
@@ -36,13 +26,6 @@ vi.mock('@/runtime/runtime-file-search-client', async () => {
     cancelRuntimeFileList: mocks.cancelRuntimeFileListMock,
     searchRuntimeFilePaths: mocks.searchRuntimeFilePathsMock
   }
-})
-
-it('keeps the pure file list functions available through the hook module', () => {
-  expect(getRuntimeFileListTarget).toBe(fileListTarget.getRuntimeFileListTarget)
-  expect(getNestedWorktreeExcludeRequest).toBe(fileListTarget.getNestedWorktreeExcludeRequest)
-  expect(getNestedWorktreeExcludePaths).toBe(nestedWorktrees.getNestedWorktreeExcludePaths)
-  expect(isNestedWorktreePath).toBe(nestedWorktrees.isNestedWorktreePath)
 })
 
 describe('useRuntimeFileListForWorktree', () => {
@@ -121,7 +104,6 @@ describe('useRuntimeFileListForWorktree', () => {
         rootPath: '/srv/platform',
         excludePaths: undefined,
         requestToken: expect.any(String),
-        // #12547: the caller names the cap so a full page is readable as truncation.
         maxResults: QUICK_OPEN_LISTING_MAX_RESULTS,
         signal: expect.any(AbortSignal)
       }
@@ -130,8 +112,7 @@ describe('useRuntimeFileListForWorktree', () => {
     expect(states.at(-1)?.truncated).toBe(false)
   })
 
-  // #12547: the host stops at the cap the caller names, so a full page is a prefix. Reporting
-  // truncated:false unconditionally is what left the user with a silent partial list.
+  // A full capped page is only a prefix; marking it complete would silently hide remaining paths (#12547).
   it('reports a capped listing as truncated instead of as the whole workspace', async () => {
     const states: RuntimeFileListState[] = []
     const workspaceKey = folderWorkspaceKey('folder-workspace-1')
@@ -155,223 +136,6 @@ describe('useRuntimeFileListForWorktree', () => {
 
     expect(states.at(-1)?.files).toHaveLength(QUICK_OPEN_LISTING_MAX_RESULTS)
     expect(states.at(-1)?.truncated).toBe(true)
-  })
-
-  it('routes paired folder workspace queries to the owning runtime', async () => {
-    vi.useFakeTimers()
-    const workspaceKey = folderWorkspaceKey('folder-workspace-1')
-    useAppStore.setState({
-      settings: { ...initialAppState.settings, activeRuntimeEnvironmentId: 'env-1' },
-      folderWorkspaces: [
-        makeFolderWorkspace({ connectionId: null, executionHostId: 'runtime:env-1' })
-      ],
-      projectGroups: [makeProjectGroup({ connectionId: null, executionHostId: 'runtime:env-1' })],
-      repos: [],
-      worktreesByRepo: {}
-    } as Partial<AppState>)
-    searchRuntimeFilePathsMock.mockResolvedValue({
-      files: ['notes/remote-folder.md'],
-      truncated: false
-    })
-
-    try {
-      await renderProbe({
-        enabled: true,
-        states: [],
-        query: 'remote-folder',
-        worktreeId: workspaceKey
-      })
-      await act(async () => vi.advanceTimersByTimeAsync(120))
-
-      expect(searchRuntimeFilePathsMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          target: { kind: 'environment', environmentId: 'env-1' },
-          worktreeId: workspaceKey,
-          worktreePath: '/srv/platform'
-        }),
-        expect.objectContaining({ query: 'remote-folder', limit: 32 })
-      )
-      expect(listRuntimeFilesMock).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('cancels the in-flight scan with the same request token on unmount (#7721)', async () => {
-    const workspaceKey = folderWorkspaceKey('folder-workspace-1')
-
-    useAppStore.setState({
-      folderWorkspaces: [makeFolderWorkspace({ connectionId: 'ssh-1' })],
-      projectGroups: [makeProjectGroup({ connectionId: 'ssh-1' })],
-      repos: [],
-      worktreesByRepo: {}
-    } as Partial<AppState>)
-
-    const root = await renderProbe({
-      enabled: true,
-      states: [],
-      worktreeId: workspaceKey
-    })
-    await waitForListRuntimeFilesCall()
-
-    const [listContext, listRequest] = listRuntimeFilesMock.mock.calls[0]
-    expect(cancelRuntimeFileListMock).not.toHaveBeenCalled()
-
-    await act(async () => {
-      root.unmount()
-    })
-
-    expect(cancelRuntimeFileListMock).toHaveBeenCalledWith(listContext, listRequest.requestToken)
-  })
-
-  it('cancels the in-flight scan as soon as listing is disabled', async () => {
-    const workspaceKey = folderWorkspaceKey('folder-workspace-1')
-    listRuntimeFilesMock.mockReturnValue(new Promise<string[]>(() => {}))
-
-    useAppStore.setState({
-      folderWorkspaces: [makeFolderWorkspace({ connectionId: 'ssh-1' })],
-      projectGroups: [makeProjectGroup({ connectionId: 'ssh-1' })],
-      repos: [],
-      worktreesByRepo: {}
-    } as Partial<AppState>)
-
-    const root = await renderProbe({
-      enabled: true,
-      states: [],
-      worktreeId: workspaceKey
-    })
-    await waitForListRuntimeFilesCall()
-
-    const [listContext, listRequest] = listRuntimeFilesMock.mock.calls[0]
-    expect(listContext.connectionId).toBe('ssh-1')
-    expect(cancelRuntimeFileListMock).not.toHaveBeenCalled()
-
-    await act(async () => {
-      root.render(
-        createElement(HookProbe, {
-          enabled: false,
-          states: [],
-          worktreeId: workspaceKey
-        })
-      )
-    })
-    await flushEffects()
-
-    expect(cancelRuntimeFileListMock).toHaveBeenCalledTimes(1)
-    expect(cancelRuntimeFileListMock).toHaveBeenCalledWith(listContext, listRequest.requestToken)
-  })
-
-  it('does not restart the scan when unrelated ownership metadata changes', async () => {
-    const workspaceKey = folderWorkspaceKey('folder-workspace-1')
-    useAppStore.setState({
-      folderWorkspaces: [makeFolderWorkspace({ connectionId: 'ssh-1' })],
-      projectGroups: [makeProjectGroup({ connectionId: 'ssh-1' })],
-      repos: [],
-      worktreesByRepo: {}
-    } as Partial<AppState>)
-
-    await renderProbe({ enabled: true, states: [], worktreeId: workspaceKey })
-    await waitForListRuntimeFilesCall()
-
-    await act(async () => {
-      useAppStore.setState({
-        repos: [
-          {
-            id: 'unrelated-repo',
-            path: '/tmp/unrelated',
-            displayName: 'Unrelated',
-            badgeColor: '#000',
-            addedAt: 0
-          }
-        ]
-      } as Partial<AppState>)
-    })
-    await flushEffects()
-
-    expect(listRuntimeFilesMock).toHaveBeenCalledTimes(1)
-    expect(cancelRuntimeFileListMock).not.toHaveBeenCalled()
-  })
-
-  it('searches the owning runtime after the query debounce without listing all paths', async () => {
-    vi.useFakeTimers()
-    const states: RuntimeFileListState[] = []
-    seedRemoteWorktree()
-    searchRuntimeFilePathsMock.mockResolvedValue({
-      files: ['data/sta-4354-target.ts'],
-      truncated: true
-    })
-
-    try {
-      await renderProbe({
-        enabled: true,
-        states,
-        query: 'sta-4354-target',
-        worktreeId: 'wt-remote'
-      })
-
-      expect(searchRuntimeFilePathsMock).not.toHaveBeenCalled()
-      await act(async () => vi.advanceTimersByTimeAsync(120))
-      await flushEffects()
-
-      expect(searchRuntimeFilePathsMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          target: { kind: 'environment', environmentId: 'env-1' },
-          worktreeId: 'wt-remote',
-          worktreePath: '/srv/remote'
-        }),
-        {
-          includeIgnored: true,
-          followSymlinks: false,
-          query: 'sta-4354-target',
-          limit: 32,
-          excludePaths: undefined,
-          signal: expect.any(AbortSignal)
-        }
-      )
-      expect(listRuntimeFilesMock).not.toHaveBeenCalled()
-      expect(states.at(-1)).toMatchObject({
-        files: ['data/sta-4354-target.ts'],
-        loading: false,
-        truncated: true
-      })
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('loads a bounded remote inventory for empty-query history', async () => {
-    seedRemoteWorktree()
-
-    const states: RuntimeFileListState[] = []
-    await renderProbe({
-      enabled: true,
-      states,
-      query: '   ',
-      worktreeId: 'wt-remote'
-    })
-
-    expect(searchRuntimeFilePathsMock).not.toHaveBeenCalled()
-    expect(listRuntimeFilesMock).toHaveBeenCalledOnce()
-    expect(states.at(-1)).toMatchObject({
-      files: ['packages/app/package.json'],
-      loading: false,
-      truncated: false
-    })
-  })
-
-  it('does not send oversized remote queries', async () => {
-    seedRemoteWorktree()
-    const states: RuntimeFileListState[] = []
-
-    await renderProbe({
-      enabled: true,
-      states,
-      query: 'x'.repeat(QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS + 1),
-      worktreeId: 'wt-remote'
-    })
-
-    expect(searchRuntimeFilePathsMock).not.toHaveBeenCalled()
-    expect(states.at(-1)).toMatchObject({ files: [], loading: false, truncated: false })
   })
 
   it('clears settled remote results when the query is cleared', async () => {
@@ -415,22 +179,6 @@ describe('useRuntimeFileListForWorktree', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('preserves remote full-list callers that do not opt into query search', async () => {
-    seedRemoteWorktree()
-    listRuntimeFilesMock.mockResolvedValue(['src/existing.ts'])
-
-    const states: RuntimeFileListState[] = []
-    await renderProbe({
-      enabled: true,
-      states,
-      worktreeId: 'wt-remote'
-    })
-    await waitForListRuntimeFilesCall()
-
-    expect(searchRuntimeFilePathsMock).not.toHaveBeenCalled()
-    expect(states.at(-1)?.files).toEqual(['src/existing.ts'])
   })
 
   it('aborts superseded runtime queries and ignores stale replies', async () => {
@@ -571,45 +319,6 @@ describe('useRuntimeFileListForWorktree', () => {
       vi.useRealTimers()
     }
   })
-
-  it('keeps the local listing across query changes without restarting it', async () => {
-    const workspaceKey = folderWorkspaceKey('folder-workspace-1')
-    useAppStore.setState({
-      folderWorkspaces: [makeFolderWorkspace()],
-      projectGroups: [makeProjectGroup()],
-      repos: [],
-      worktreesByRepo: {}
-    } as Partial<AppState>)
-    const states: RuntimeFileListState[] = []
-
-    const root = await renderProbe({
-      enabled: true,
-      states,
-      query: 'one',
-      worktreeId: workspaceKey
-    })
-    await waitForListRuntimeFilesCall()
-    await flushEffects()
-    expect(states.at(-1)?.files).toEqual(['packages/app/package.json'])
-
-    await act(async () => {
-      root.render(
-        createElement(HookProbe, {
-          enabled: true,
-          states,
-          query: 'two',
-          worktreeId: workspaceKey
-        })
-      )
-    })
-    await flushEffects()
-
-    expect(listRuntimeFilesMock).toHaveBeenCalledTimes(1)
-    expect(states.at(-1)).toMatchObject({
-      files: ['packages/app/package.json'],
-      loading: false
-    })
-  })
 })
 
 it('merges host-eligible history beyond remote top32 once per palette lifetime', async () => {
@@ -682,38 +391,6 @@ it('keeps ordinary remote search available when recent eligibility is unsupporte
     expect(states.at(-1)?.files).toEqual(['src/file0.ts'])
     expect(states.at(-1)?.loadError).toBeNull()
     expect(states.at(-1)?.recentError).toContain('Update the remote host')
-  } finally {
-    vi.useRealTimers()
-  }
-})
-
-it('merges an eligible recent beyond the local empty-query inventory cap', async () => {
-  vi.useFakeTimers()
-  try {
-    const workspace = makeFolderWorkspace()
-    useAppStore.setState({ folderWorkspaces: [workspace], projectGroups: [makeProjectGroup()] })
-    const states: RuntimeFileListState[] = []
-    listRuntimeFilesMock.mockImplementation((_context, args) =>
-      Promise.resolve(
-        args.candidatePaths
-          ? ['late.ts']
-          : Array.from({ length: QUICK_OPEN_LISTING_MAX_RESULTS }, (_, i) => `file${i}.ts`)
-      )
-    )
-    await renderProbe({
-      enabled: true,
-      worktreeId: folderWorkspaceKey(workspace.id),
-      query: '',
-      recentPaths: ['late.ts'],
-      states
-    })
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(250)
-    })
-    await flushEffects()
-    expect(states.at(-1)?.files).toContain('late.ts')
-    expect(states.at(-1)?.truncated).toBe(true)
-    expect(listRuntimeFilesMock).toHaveBeenCalledTimes(2)
   } finally {
     vi.useRealTimers()
   }

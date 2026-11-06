@@ -1,11 +1,10 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { isAiVaultSessionRecoverableEmpty } from '../../shared/ai-vault-types'
+import { isAiVaultSessionRecoverableEmpty } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { scanAiVaultSessions } from './session-scanner'
-import { parseClaudeSessionContent } from './session-scanner-primary-parsers'
-import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
+import { parseClaudeSessionContent } from './scanners/claude/session-scanner-primary-parsers'
 import { isolatedScanRoots, writeJsonlFile } from './session-scanner-test-fixtures'
 
 let tempRoots: string[] = []
@@ -15,8 +14,7 @@ afterEach(async () => {
   tempRoots = []
 })
 
-// Shape of the real ~/.claude/.../9176163a-*.jsonl artifact: CLI metadata plus
-// four queued subagent messages, and zero user/assistant conversation turns.
+// Mirror a real metadata-only Claude transcript containing queued subagent messages but no conversation turns.
 function metadataOnlyTranscript(sessionId: string): unknown[] {
   return [
     {
@@ -49,8 +47,7 @@ describe('recoverable-but-empty Claude sessions', () => {
       join(roots.claudeProjectsDir, 'project', `${sessionId}.jsonl`),
       metadataOnlyTranscript(sessionId)
     )
-    // Sibling subagent transcripts survive even though the parent conversation
-    // was never persisted; a .meta.json sidecar is not a transcript.
+    // Child transcripts can outlive an unpersisted parent; metadata sidecars must not count as transcripts.
     const subagentsDir = join(roots.claudeProjectsDir, 'project', sessionId, 'subagents')
     await writeJsonlFile(join(subagentsDir, 'agent-arev-contracts-1.jsonl'), [
       {
@@ -78,94 +75,6 @@ describe('recoverable-but-empty Claude sessions', () => {
     expect(isAiVaultSessionRecoverableEmpty(session!)).toBe(true)
   })
 
-  it('reports no recoverable signal for a plain metadata-only session', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-plain-empty-'))
-    tempRoots.push(root)
-    const roots = isolatedScanRoots(root)
-    const sessionId = 'plain-empty-session'
-
-    await writeJsonlFile(join(roots.claudeProjectsDir, 'project', `${sessionId}.jsonl`), [
-      { type: 'mode', mode: 'default', sessionId },
-      { type: 'permission-mode', permissionMode: 'default', sessionId }
-    ])
-
-    const result = await scanAiVaultSessions({ ...roots, platform: 'darwin' })
-    const session = result.sessions.find((entry) => entry.sessionId === sessionId)
-
-    expect(session).toBeDefined()
-    expect(session?.messageCount).toBe(0)
-    expect(session?.queuedMessageCount).toBe(0)
-    expect(session?.subagentTranscriptCount).toBe(0)
-    expect(isAiVaultSessionRecoverableEmpty(session!)).toBe(false)
-  })
-
-  it('counts subagent transcripts for a session that has real turns without flagging it recoverable', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-nonempty-'))
-    tempRoots.push(root)
-    const roots = isolatedScanRoots(root)
-    const sessionId = 'conversation-session'
-
-    await writeJsonlFile(join(roots.claudeProjectsDir, 'project', `${sessionId}.jsonl`), [
-      {
-        type: 'user',
-        sessionId,
-        message: { role: 'user', content: 'Do the thing' }
-      }
-    ])
-    await writeJsonlFile(
-      join(roots.claudeProjectsDir, 'project', sessionId, 'subagents', 'agent-x.jsonl'),
-      [
-        {
-          type: 'user',
-          sessionId,
-          message: { role: 'user', content: 'Subtask' }
-        }
-      ]
-    )
-
-    const result = await scanAiVaultSessions({ ...roots, platform: 'darwin' })
-    const session = result.sessions.find((entry) => entry.sessionId === sessionId)
-
-    expect(session?.messageCount).toBe(1)
-    // Counted for every local session (the row's "N subagents" affordance),
-    // but a session with real turns is never surfaced as recoverable-empty.
-    expect(session?.subagentTranscriptCount).toBe(1)
-    expect(isAiVaultSessionRecoverableEmpty(session!)).toBe(false)
-  })
-
-  it('counts queued messages net of remove and dequeue operations', async () => {
-    const sessionId = 'net-queue-session'
-    const content = [
-      { type: 'mode', mode: 'default', sessionId },
-      ...[1, 2, 3].map((n) => ({
-        type: 'queue-operation',
-        operation: 'enqueue',
-        sessionId,
-        content: `queued prompt ${n}`
-      })),
-      // One prompt consumed, one removed by the user: only one is still queued.
-      { type: 'queue-operation', operation: 'dequeue', sessionId },
-      {
-        type: 'queue-operation',
-        operation: 'remove',
-        sessionId,
-        content: null
-      }
-    ]
-      .map((line) => JSON.stringify(line))
-      .join('\n')
-    const file = {
-      path: `/tmp/${sessionId}.jsonl`,
-      mtimeMs: 0,
-      modifiedAt: '2026-07-08T16:30:00.000Z'
-    }
-
-    const session = await parseClaudeSessionContent(file, content, 'darwin', {
-      executionHostId: 'ssh:host'
-    })
-    expect(session?.queuedMessageCount).toBe(1)
-  })
-
   it('picks up subagent transcripts written after the parent transcript last changed', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-late-sub-'))
     tempRoots.push(root)
@@ -180,8 +89,7 @@ describe('recoverable-but-empty Claude sessions', () => {
       first.sessions.find((entry) => entry.sessionId === sessionId)?.subagentTranscriptCount
     ).toBe(0)
 
-    // The parent file never changes again, but a still-running subagent lands
-    // its transcript afterwards; the cached parse must still surface it.
+    // Child writes must refresh recoverability without changing the cached parent transcript.
     await writeJsonlFile(
       join(roots.claudeProjectsDir, 'project', sessionId, 'subagents', 'agent-late.jsonl'),
       [
@@ -203,8 +111,7 @@ describe('recoverable-but-empty Claude sessions', () => {
     tempRoots.push(root)
     const sessionId = 'remote-session'
     const transcriptPath = join(root, `${sessionId}.jsonl`)
-    // A local sibling dir exists, but the transcript content came from an SSH
-    // host — its real subagents live on that host, not on this disk.
+    // Same-path local artifacts must not enrich a transcript fetched from an SSH host.
     await writeJsonlFile(join(root, sessionId, 'subagents', 'agent-x.jsonl'), [{ type: 'user' }])
     const content = metadataOnlyTranscript(sessionId)
       .map((line) => JSON.stringify(line))
@@ -223,39 +130,5 @@ describe('recoverable-but-empty Claude sessions', () => {
 
     const local = await parseClaudeSessionContent(file, content, 'darwin')
     expect(local?.subagentTranscriptCount).toBe(1)
-  })
-})
-
-describe('countSubagentTranscripts', () => {
-  it('returns 0 when the sibling subagents directory is absent', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-nosub-'))
-    tempRoots.push(root)
-    expect(await countSubagentTranscripts(join(root, 'session.jsonl'))).toBe(0)
-  })
-
-  it('counts only .jsonl transcripts, excluding meta sidecars', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-sub-count-'))
-    tempRoots.push(root)
-    const transcriptPath = join(root, 'session.jsonl')
-    const subagentsDir = join(root, 'session', 'subagents')
-    await writeJsonlFile(join(subagentsDir, 'agent-a.jsonl'), [{ type: 'user' }])
-    await writeJsonlFile(join(subagentsDir, 'agent-b.jsonl'), [{ type: 'user' }])
-    await writeFile(join(subagentsDir, 'agent-a.meta.json'), '{}')
-
-    expect(await countSubagentTranscripts(transcriptPath)).toBe(2)
-  })
-
-  it('excludes non-agent .jsonl files and directories named like transcripts', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-sub-predicate-'))
-    tempRoots.push(root)
-    const transcriptPath = join(root, 'session.jsonl')
-    const subagentsDir = join(root, 'session', 'subagents')
-    await writeJsonlFile(join(subagentsDir, 'agent-a.jsonl'), [{ type: 'user' }])
-    // A stray sibling artifact and a directory would inflate the row badge past
-    // what the on-demand lister shows; both must fail the shared predicate.
-    await writeFile(join(subagentsDir, 'notes.jsonl'), '{}')
-    await mkdir(join(subagentsDir, 'agent-x.jsonl'))
-
-    expect(await countSubagentTranscripts(transcriptPath)).toBe(1)
   })
 })

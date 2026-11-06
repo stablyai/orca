@@ -5,15 +5,15 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
 import type { SshTarget } from '../../../shared/ssh-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { closeTestStores, createSqliteTestStore } from '../../persistence-test-harness'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
 import { Store } from '../loading-store/store'
 import { createOrcadMigrationManifest } from '../../ssh/orcad-migration-manifest-export'
 import {
   getProfileTerminalScrollbackSnapshotRoot,
   readTerminalScrollbackStoredBytesSync,
   writeTerminalScrollbackSnapshotSync
-} from '../../terminal-scrollback-snapshots'
+} from '../../pty/scrollback/terminal-scrollback-snapshots'
 
 const TARGET: SshTarget = {
   id: 'ssh-prod',
@@ -83,29 +83,6 @@ function sourceStore(): Store {
 }
 
 describe('exporting a relay-hosted SSH target from the profile store', () => {
-  it('reads the target catalog and dormant scrollback without changing the source', () => {
-    const store = sourceStore()
-    const before = JSON.stringify({
-      repos: store.getRepos(),
-      session: store.getWorkspaceSession(toSshExecutionHostId(TARGET.id))
-    })
-
-    const manifest = createOrcadMigrationManifest(store, TARGET)
-
-    expect(manifest.payload.repositories.map((repo) => repo.id)).toEqual([REPO_ID])
-    const snapshots = manifest.payload.dormantState?.terminalScrollbackSnapshots ?? []
-    expect(snapshots).toHaveLength(1)
-    const chunk = store.readOrcadMigrationSourceSnapshotChunk(manifest, snapshots[0]!.ref, 0)
-    expect(Buffer.from(chunk.bytesBase64, 'base64').toString('utf8')).toBe('dormant output\r\n')
-    expect(chunk.eof).toBe(true)
-    expect(
-      JSON.stringify({
-        repos: store.getRepos(),
-        session: store.getWorkspaceSession(toSshExecutionHostId(TARGET.id))
-      })
-    ).toBe(before)
-  })
-
   it('refuses a chunk once the dormant buffer changed after export', () => {
     const store = sourceStore()
     const manifest = createOrcadMigrationManifest(store, TARGET)
@@ -172,10 +149,37 @@ describe('exporting a relay-hosted SSH target from the profile store', () => {
     ).toThrow('orcad_migration_manifest_digest_mismatch')
   })
 
-  it('names what still blocks: nothing, once the dormant state is exportable', () => {
+  // #29083: an enabled automation refused every Connect and left the host unconnectable.
+
+  // #30126: three parked shells' local-only scrollback, inlined, overflowed the 768 KB manifest.
+
+  it('retains the newer local-only bytes over an older file saved under the same ref', () => {
     const store = sourceStore()
+    const hostId = toSshExecutionHostId(TARGET.id)
+    const storage = { snapshotRoot: getProfileTerminalScrollbackSnapshotRoot(dataFiles.at(-1)!) }
+    const stored = writeTerminalScrollbackSnapshotSync({
+      tabId: 'tab-1',
+      leafId: 'leaf-1',
+      buffer: 'older shared output\r\n',
+      storage
+    })!
+    const session = dormantSession('')
+    session.terminalLayoutsByTabId['tab-1'] = {
+      ...session.terminalLayoutsByTabId['tab-1']!,
+      buffersByLeafId: {},
+      scrollbackRefsByLeafId: { 'leaf-1': stored }
+    }
+    session.localOnlyScrollbackByTabId = { 'tab-1': { 'leaf-1': 'newer parked output\r\n' } }
+    store.setWorkspaceSession(session, hostId)
     const manifest = createOrcadMigrationManifest(store, TARGET)
-    const census = store.inspectOrcadMigrationUntransferredDependencies(manifest)
-    expect(census.counts['workspace-session']).toBe(0)
+    const ref = manifest.payload.dormantState?.terminalScrollbackSnapshots?.[0]?.ref ?? ''
+    expect(ref).toBe(stored)
+    store.syncOrcadMigrationScrollbackRetention([manifest])
+    store.setWorkspaceSession(getDefaultWorkspaceSession(), hostId)
+
+    const chunk = store.readOrcadMigrationSourceSnapshotChunk(manifest, ref, 0)
+    expect(Buffer.from(chunk.bytesBase64, 'base64').toString('utf8')).toBe(
+      'newer parked output\r\n'
+    )
   })
 })

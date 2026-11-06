@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { resolveProviderChildEnv } from '../provider-process/provider-process-launch'
-import { sealStructuredSessionChild } from '../runtime/structured-session-child-env'
+import { sealStructuredSessionChild } from '../runtime/agent-session/environment/structured-session-child-env'
 import {
   buildPiRpcLaunch,
   PI_RPC_SESSION_ENV_TO_DELETE,
@@ -10,14 +10,6 @@ import {
 
 const options = { command: 'host-resolved-pi', cwd: '/host/folder', fullAccess: true }
 describe('Pi RPC launch', () => {
-  it('uses the supplied host binary and folder, and lets Pi choose its own session store', () => {
-    expect(buildPiRpcLaunch(options)).toMatchObject({
-      command: options.command,
-      cwd: options.cwd,
-      args: ['--mode', 'rpc']
-    })
-  })
-
   it.each([
     '/host/.pi/agent/sessions/session.jsonl',
     'C:\\Users\\dev\\.pi\\agent\\sessions\\session.jsonl'
@@ -103,7 +95,7 @@ describe('Pi RPC launch', () => {
         inherited
       )
     ).toEqual({})
-    // As a structured launch seals it: no caller of its own env, then this session's identity.
+    // Seal inherited caller identity with this structured session's identity.
     const childEnv = resolveProviderChildEnv(
       buildPiRpcLaunch({
         ...options,

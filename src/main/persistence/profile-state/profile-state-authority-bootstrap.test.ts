@@ -45,7 +45,7 @@ vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: vi.fn(() => ({ nth_repo_added: 2 }))
 }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(() => ({ hosts: [] })),
   sshConfigHostsToTargets: vi.fn(() => [])
 }))
@@ -126,12 +126,14 @@ describe('profile state authority bootstrap', () => {
 
     expect(result.classification).toBe('json-only')
     expect(result.migrated).toBe(true)
-    expect(result.authority?.readSerializedState()).toContain('futureExtension')
+    expect(JSON.parse(result.authority?.readSerializedState() ?? '{}')).toMatchObject({
+      futureExtension: { keep: true }
+    })
     expect(existsSync(options.dataFile)).toBe(true)
     expect(existsSync(profileStateJsonExportPath(options.dataFile, 1))).toBe(true)
-    expect(readFileSync(profileStateJsonExportPath(options.dataFile, 1), 'utf8')).toContain(
-      'futureExtension'
-    )
+    expect(
+      JSON.parse(readFileSync(profileStateJsonExportPath(options.dataFile, 1), 'utf8'))
+    ).toMatchObject({ futureExtension: { keep: true } })
     expect(classifyProfileStateStorage(options.dataFile, options.databaseFile)).toBe('both')
 
     if (result.authority === undefined) {
@@ -144,7 +146,9 @@ describe('profile state authority bootstrap', () => {
     expect(store.getSettings().theme).toBe('dark')
 
     const repeated = bootstrapProfileStateAuthority(options)
-    expect(repeated.authority?.readSerializedState()).toContain('futureExtension')
+    expect(JSON.parse(repeated.authority?.readSerializedState() ?? '{}')).toMatchObject({
+      futureExtension: { keep: true }
+    })
   })
 
   it('fails closed when both files are present without a matching acceptance marker', () => {

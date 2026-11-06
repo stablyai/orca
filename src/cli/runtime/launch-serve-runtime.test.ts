@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -14,7 +14,7 @@ const { spawnMock, resolveLocalServeRuntimeMock, serveWithOrcadMock, refuseIfPro
   }))
 
 vi.mock('child_process', () => ({ spawn: spawnMock, spawnSync: vi.fn() }))
-// Why: these cover host selection; the pre-exec profile check would read this machine's own profile.
+// Isolate host selection from the preflight that reads this machine’s profile.
 vi.mock('./serve-electron-preflight', () => ({
   preflightElectronServe: () => null,
   recordElectronServeStartupAbort: vi.fn(),
@@ -27,6 +27,7 @@ vi.mock('./serve-orcad-launch', async (importOriginal) => ({
 }))
 
 import { serveOrcaApp } from './launch'
+import { speechRecognizerPackageName } from '../../shared/speech-recognizer-package'
 
 class FakeChildProcess extends EventEmitter {
   stdout = new EventEmitter()
@@ -35,7 +36,6 @@ class FakeChildProcess extends EventEmitter {
   pid = 4101
 }
 
-/** Electron serve that exits cleanly once spawned, whenever selection gets to spawning it. */
 function electronChild(): void {
   spawnMock.mockImplementation(() => {
     const child = new FakeChildProcess()
@@ -95,20 +95,34 @@ describe('orca serve host selection', () => {
     }
   })
 
-  it('serves on orcad by default', async () => {
-    const selection = { kind: 'orcad', runtime: '/node', entry: '/slot/orcad.js', version: '1' }
-    resolveLocalServeRuntimeMock.mockResolvedValue(selection)
-    serveWithOrcadMock.mockResolvedValue(0)
+  it("serves on orcad by default, handing it the app's browser client", async () => {
+    const appRoot = await mkdtemp(join(tmpdir(), 'orca-serve-orcad-web-'))
+    try {
+      await mkdir(join(appRoot, 'out', 'web'), { recursive: true })
+      await writeFile(join(appRoot, 'out', 'web', 'web-index.html'), '<html></html>')
+      const recognizer = speechRecognizerPackageName(process.platform, process.arch)
+      await mkdir(join(appRoot, 'node_modules', recognizer), { recursive: true })
+      await writeFile(join(appRoot, 'node_modules', recognizer, 'sherpa-onnx.node'), '')
+      process.env.ORCA_SERVE_SUPERVISOR_APP_ROOT = appRoot
+      const selection = { kind: 'orcad', runtime: '/node', entry: '/slot/orcad.js', version: '1' }
+      resolveLocalServeRuntimeMock.mockResolvedValue(selection)
+      serveWithOrcadMock.mockResolvedValue(0)
 
-    await expect(serveOrcaApp({ json: true })).resolves.toBe(0)
-    expect(serveWithOrcadMock).toHaveBeenCalledWith(
-      selection,
-      { json: true },
-      expect.any(String),
-      expect.not.objectContaining({ ELECTRON_RUN_AS_NODE: expect.anything() })
-    )
-    expect(spawnMock).not.toHaveBeenCalled()
-    expect(stderr.join('')).toContain('[serve] running on orcad 1')
+      await expect(serveOrcaApp({ json: true })).resolves.toBe(0)
+      expect(serveWithOrcadMock).toHaveBeenCalledWith(
+        selection,
+        { json: true },
+        expect.any(String),
+        expect.not.objectContaining({ ELECTRON_RUN_AS_NODE: expect.anything() }),
+        join(appRoot, 'out', 'web'),
+        process.platform === 'win32' ? undefined : join(appRoot, 'node_modules', recognizer)
+      )
+      expect(spawnMock).not.toHaveBeenCalled()
+      expect(stderr.join('')).toContain('[serve] running on orcad 1')
+    } finally {
+      delete process.env.ORCA_SERVE_SUPERVISOR_APP_ROOT
+      await rm(appRoot, { recursive: true, force: true })
+    }
   })
 
   it('falls back to Electron and prints why when orcad cannot serve', async () => {
@@ -179,7 +193,12 @@ describe('orca serve host selection', () => {
       expect(resolveLocalServeRuntimeMock).toHaveBeenCalledWith(
         expect.objectContaining({ userDataPath: profile })
       )
-      expect(serveWithOrcadMock).toHaveBeenCalledWith(selection, {}, profile, expect.any(Object))
+      expect(serveWithOrcadMock.mock.calls[0]?.slice(0, 4)).toEqual([
+        selection,
+        {},
+        profile,
+        expect.any(Object)
+      ])
     })
 
     it('uses ORCA_DEV_USER_DATA_PATH for both the selector and a dev Electron child', async () => {
@@ -194,7 +213,7 @@ describe('orca serve host selection', () => {
       expect(resolveLocalServeRuntimeMock).toHaveBeenCalledWith(
         expect.objectContaining({ userDataPath: profile })
       )
-      // A dev build ignores --user-data-dir and reads this instead.
+      // Dev builds read the profile from the environment rather than --user-data-dir.
       expect(electronSpawn().env).toMatchObject({
         ORCA_DEV_USER_DATA_PATH: profile,
         ORCA_SERVE_USER_DATA_PATH: profile

@@ -1,5 +1,5 @@
 import type { ItemDetailLoadingModel } from './use-mobile-tasks-item-detail-loading'
-import { useEffect } from './mobile-tasks-dependencies'
+import { useEffect, useLayoutEffect } from './mobile-tasks-dependencies'
 import {
   editableProjectFields,
   projectFieldDraftValue,
@@ -8,7 +8,30 @@ import {
 } from './mobile-tasks-legacy-foundation'
 import { githubProjectRowDetailRead } from './mobile-task-project-board-operations'
 
-export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel) {
+export function useMobileTasksProjectDetailLoading<
+  Model extends Pick<
+    ItemDetailLoadingModel,
+    | 'activeGitHubProjectHost'
+    | 'client'
+    | 'githubProjectTable'
+    | 'projectRowDetailRefreshSeq'
+    | 'projectRowItem'
+    | 'setExpandedPrFilePath'
+    | 'setPrFileCommentDrafts'
+    | 'resetPrFiles'
+    | 'setProjectBodyDraft'
+    | 'setProjectCommentDraft'
+    | 'setProjectEditingCommentDraft'
+    | 'setProjectEditingCommentId'
+    | 'setProjectFieldDrafts'
+    | 'setProjectReviewersDraft'
+    | 'setProjectRowDetail'
+    | 'setProjectRowDetailError'
+    | 'setProjectRowDetailLoading'
+    | 'setProjectTitleDraft'
+    | 'tasksSupported'
+  >
+>(model: Model) {
   const {
     activeGitHubProjectHost,
     client,
@@ -17,8 +40,7 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
     projectRowItem,
     setExpandedPrFilePath,
     setPrFileCommentDrafts,
-    setPrFileContents,
-    setPrFileLoadingPath,
+    resetPrFiles,
     setProjectBodyDraft,
     setProjectCommentDraft,
     setProjectEditingCommentDraft,
@@ -31,45 +53,42 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
     setProjectTitleDraft,
     tasksSupported
   } = model
+  useLayoutEffect(() => {
+    resetPrFiles()
+  }, [projectRowItem, client, projectRowDetailRefreshSeq, resetPrFiles])
+  // Keyed on row id: field edits, merges and reconnects hand over a new object for the same row.
+  const projectRowId = projectRowItem?.id ?? null
   useEffect(() => {
-    if (!projectRowItem) {
-      setProjectRowDetail(null)
-      setProjectRowDetailLoading(false)
-      setProjectRowDetailError('')
-      setProjectTitleDraft('')
-      setProjectBodyDraft('')
-      setProjectCommentDraft('')
-      setProjectEditingCommentId(null)
-      setProjectEditingCommentDraft('')
-      setProjectReviewersDraft('')
-      setExpandedPrFilePath(null)
-      setPrFileContents({})
-      setPrFileLoadingPath(null)
-      setPrFileCommentDrafts({})
-      setProjectFieldDrafts({})
-      return
-    }
-
-    const type = projectRowType(projectRowItem)
-    const slug = splitRepositorySlug(projectRowItem.content.repository)
-    setProjectTitleDraft(projectRowItem.content.title)
-    setProjectBodyDraft(projectRowItem.content.body ?? '')
+    setProjectTitleDraft(projectRowItem?.content.title ?? '')
+    setProjectBodyDraft(projectRowItem?.content.body ?? '')
     setProjectCommentDraft('')
     setProjectEditingCommentId(null)
     setProjectEditingCommentDraft('')
     setProjectReviewersDraft('')
     setExpandedPrFilePath(null)
-    setPrFileContents({})
-    setPrFileLoadingPath(null)
     setPrFileCommentDrafts({})
     setProjectFieldDrafts(
-      Object.fromEntries(
-        editableProjectFields(githubProjectTable).map((field) => [
-          field.id,
-          projectFieldDraftValue(projectRowItem, field)
-        ])
-      )
+      projectRowItem
+        ? Object.fromEntries(
+            editableProjectFields(githubProjectTable).map((field) => [
+              field.id,
+              projectFieldDraftValue(projectRowItem, field)
+            ])
+          )
+        : {}
     )
+  }, [projectRowId])
+
+  useEffect(() => {
+    if (!projectRowItem) {
+      setProjectRowDetail(null)
+      setProjectRowDetailLoading(false)
+      setProjectRowDetailError('')
+      return
+    }
+
+    const type = projectRowType(projectRowItem)
+    const slug = splitRepositorySlug(projectRowItem.content.repository)
     setProjectRowDetail(null)
     setProjectRowDetailError('')
 
@@ -101,10 +120,7 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
         if (!result.ok) {
           throw new Error(result.error.message)
         }
-        // The five collections are typed by the same entity schemas the item sheet reads them
-        // through, so the casts this call site carried are gone. `reviewDecision` is forwarded with
-        // no coalesce: explicit null and absent are different answers to "has this been reviewed",
-        // and collapsing either is a product change.
+        // Forward reviewDecision unchanged: null and absence represent distinct review states.
         setProjectRowDetail({
           provider: 'github',
           body: result.details.body ?? '',
@@ -135,15 +151,9 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
     return () => {
       stale = true
     }
-  }, [
-    activeGitHubProjectHost,
-    client,
-    githubProjectTable,
-    projectRowDetailRefreshSeq,
-    projectRowItem,
-    tasksSupported
-  ])
+  }, [activeGitHubProjectHost, client, projectRowDetailRefreshSeq, projectRowItem, tasksSupported])
   return model
 }
 
-export type ProjectDetailLoadingModel = ReturnType<typeof useMobileTasksProjectDetailLoading>
+export type ProjectDetailLoadingModel = ItemDetailLoadingModel &
+  ReturnType<typeof useMobileTasksProjectDetailLoading>

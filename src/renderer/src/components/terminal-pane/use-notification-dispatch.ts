@@ -4,23 +4,32 @@ import {
 } from '@/attention/notification-subject-owner'
 import {
   notificationExecutionHostForOwner,
+  notificationWorkspaceExecutionHostForOwner,
   notificationSourceForOwner
 } from '../../../../shared/notification-source'
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
-import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
-import { shareCompatibleTitleIdentityGroup } from '../../../../shared/agent-title-owner'
+import { agentMainAgentVerdict } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import { shareCompatibleTitleIdentityGroup } from '../../../../shared/agent-status/title/agent-title-owner'
+import { isFreshNonDoneAgentStatus } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import type {
+  AgentStatusEntry,
+  AgentStatusState
+} from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
-  isFreshNonDoneAgentStatus,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status-types'
-import { isSupersededAgentCompletionSnapshot } from './agent-completion-snapshot-staleness'
+  isCoordinatorOnlyNews,
+  withApprovalTitle
+} from '../../../../shared/dispatched-worker-attention'
+import { canonicalOrchestrationForRow } from '@/runtime/visible-agent-orchestration'
+import { isSupersededAgentCompletionSnapshot } from './agent-completion/agent-completion-snapshot-staleness'
+import { isAutoApprovedAntigravityPermission } from './antigravity-auto-approved-permission'
 import type {
   AgentCompletionDispatchMeta,
   AgentCompletionStatusSnapshot
-} from './agent-completion-coordinator-types'
+} from './agent-completion/agent-completion-coordinator-types'
+import type { NotificationDispatchResult } from '../../../../shared/notification-settings-types'
 import { getNotificationWorkspaceLabels } from './terminal-notification-state'
 import { createTerminalAttentionSurface } from './terminal-attention-surface'
 import {
@@ -35,6 +44,15 @@ import {
 
 const AGENT_NOTIFICATION_SNAPSHOT_MAX_AGE_MS = 10_000
 
+/** Only a hook row proves a finish its coordinator hears about; a title waiting for approval outranks one. */
+function completionTurnState(
+  event: TerminalNotificationEvent,
+  agentStatus: Pick<AgentStatusEntry, 'state'> | undefined
+): AgentStatusState | undefined {
+  // A title-only stop, or an agent that died mid-turn, reported to no one, so the person hears it.
+  return withApprovalTitle(agentStatus?.state, event.terminalTitle)
+}
+
 function agentSnapshotMatchesExplicitTitle(
   snapshot: { agentType?: string | null } | undefined,
   explicitTitleAgentType: string | null
@@ -46,8 +64,7 @@ function hasFreshActiveHookStatus(
   snapshot: Pick<AgentStatusEntry, 'state' | 'updatedAt' | 'agentType'> | undefined,
   explicitTitleAgentType: string | null
 ): boolean {
-  // Why: pick-a-winner ownership would treat a Pi idle title as a different
-  // agent than a live OMP hook. Same-group titles are wrapper frames, not reuse.
+  // Pi titles can wrap a live OMP hook; compatible-group frames do not prove pane reuse.
   const titleNamesDifferentKnownAgent =
     explicitTitleAgentType &&
     snapshot?.agentType &&
@@ -61,23 +78,17 @@ export type TerminalNotificationEvent = TerminalNotificationBinding & {
   terminalTitle?: string
   agentStatusSnapshot?: AgentCompletionStatusSnapshot
   agentCompletionSource?: AgentCompletionDispatchMeta['source']
+  /** Main's answer to the delivery request this event sends (null: no answer). */
+  onDispatchResult?: (result: NotificationDispatchResult | null) => void
 }
 
-/**
- * Returns a stable dispatch function for terminal notifications.
- * Reads repo/worktree labels from the store at dispatch time rather
- * than via selectors — avoids the allWorktrees() anti-pattern which
- * creates a new array reference on every store update and triggers
- * excessive re-renders of TerminalPane.
- */
+/** Stable dispatcher reads labels at dispatch time to avoid per-pane store subscriptions and fresh allWorktrees arrays. */
 export function dispatchTerminalNotification(
   worktreeId: string,
   event: TerminalNotificationEvent
-): void {
+): boolean {
   const state = useAppStore.getState()
-  // Why: the completion title is the live identity. If it explicitly names an
-  // agent, any snapshot from another agent is stale pane-reuse residue and must
-  // not lend its prompt/agentType or timing id to this notification.
+  // Explicit completion-title identity rejects other-agent snapshot prompts/timing as pane-reuse residue.
   const explicitTitleAgentType =
     event.source === 'agent-task-complete' && event.terminalTitle
       ? resolveCommittedTitleAgentType(event.terminalTitle)
@@ -103,12 +114,10 @@ export function dispatchTerminalNotification(
     !eventAgentStatusSnapshot &&
     hasFreshActiveHookStatus(storedAgentStatus, explicitTitleAgentType)
   ) {
-    // Why: a title-only idle signal can race behind active hook state; a
-    // confirmed process exit is independent authority that the turn ended.
-    return
+    // Confirmed exit proves completion even when a title-only idle signal races behind active hook state.
+    return false
   }
-  // Why: a process can die before its hook emits done; do not label the
-  // resulting completion notification with that stale active state or prompt.
+  // A dead process may never emit done; stale active hooks cannot label its completion prompt/state.
   const agentStatus =
     event.source === 'agent-task-complete'
       ? (eventAgentStatusSnapshot ??
@@ -118,9 +127,13 @@ export function dispatchTerminalNotification(
       : undefined
   if (
     event.source === 'agent-task-complete' &&
-    isSupersededAgentCompletionSnapshot(storedAgentStatus, eventAgentStatusSnapshot)
+    (isSupersededAgentCompletionSnapshot(storedAgentStatus, eventAgentStatusSnapshot) ||
+      isAutoApprovedAntigravityPermission(
+        agentStatus,
+        event.paneKey ? state.agentLaunchConfigByPaneKey[event.paneKey] : undefined
+      ))
   ) {
-    return
+    return false
   }
   const agentNotificationStateStartedAt =
     eventAgentStatusSnapshot?.stateStartedAt ?? freshStoredAgentStatus?.stateStartedAt
@@ -129,22 +142,26 @@ export function dispatchTerminalNotification(
       subject: { workspaceId: worktreeId, surfaceKey: event.paneKey },
       reason: event.source === 'agent-task-complete' ? 'agent-completion' : 'terminal-bell',
       settlesTurn: event.source === 'agent-task-complete',
-      // Why: main-process hook IPC can update inactive worktrees before the renderer's live-PTY
-      // map catches up. An accepted fresh hook snapshot is authority that the turn ended;
-      // title/BEL-only paths still need surface liveness.
-      hasFreshActivityEvidence: Boolean(agentStatus)
+      // Fresh accepted hooks can arrive before inactive-worktree PTY hydration; title/BEL-only completion still requires live surface evidence.
+      hasFreshActivityEvidence: Boolean(agentStatus),
+      coordinatorOnlyNews:
+        event.source === 'agent-task-complete' &&
+        isCoordinatorOnlyNews(completionTurnState(event, agentStatus), () =>
+          event.paneKey === undefined
+            ? undefined
+            : canonicalOrchestrationForRow(state, event.paneKey)
+        )
     },
     createTerminalAttentionSurface(state)
   )
   if (!attentionDecision.admitted) {
-    return
+    return false
   }
 
   // Desktop settings are applied in main after independent mobile delivery.
 
   const sound = readAgentAttentionNotificationSound(state.settings ?? {})
-  // Why: pane keys are reused across turns. A rich OS notification must not
-  // expose the previous turn's prompt if the current turn has no fresh hook snapshot yet.
+  // Reused pane keys must not expose a prior turn’s prompt without a fresh current snapshot.
   const agentSnapshot = agentStatus
     ? {
         agentType: agentStatus.agentType,
@@ -161,14 +178,14 @@ export function dispatchTerminalNotification(
       ? buildAgentNotificationId({
           worktreeId,
           paneKey: event.paneKey,
-          // Why: delayed hook completions may dispatch after PTY teardown has
-          // removed the live row; carry the hook timing so the OS notification
-          // still has the same dismissible id as the unread agent event.
+          // Carry hook timing after PTY teardown so OS/unread events share the same dismissible identity.
           stateStartedAt: agentNotificationStateStartedAt
         })
       : null
 
+  let requested = false
   const requestDelivery = (request: AgentAttentionDeliveryRequest): void => {
+    requested = true
     const owner = resolveTerminalNotificationOwner(state, worktreeId, event)
     const executionHost = notificationExecutionHostForOwner(owner)
     deliverAgentAttentionNotification(
@@ -176,6 +193,7 @@ export function dispatchTerminalNotification(
         source: event.source,
         ...(notificationId ? { notificationId } : {}),
         worktreeId: request.workspaceId,
+        workspaceExecutionHostId: notificationWorkspaceExecutionHostForOwner(owner),
         ...(executionHost ? { executionHost } : {}),
         paneKey: request.subjectKey ?? undefined,
         ...getNotificationWorkspaceLabels(state, request.workspaceId, event.terminalTitle),
@@ -184,7 +202,8 @@ export function dispatchTerminalNotification(
         isActiveWorktree: request.workspaceIsActive,
         ...agentSnapshot
       },
-      sound
+      sound,
+      event.onDispatchResult
     )
   }
 
@@ -192,13 +211,16 @@ export function dispatchTerminalNotification(
     unread: state.markAgentAttentionUnread,
     requestDelivery
   })
+  return requested
 }
 
 export function useNotificationDispatch(
   worktreeId: string
 ): (event: TerminalNotificationEvent) => void {
   return useCallback(
-    (event: TerminalNotificationEvent) => dispatchTerminalNotification(worktreeId, event),
+    (event: TerminalNotificationEvent) => {
+      dispatchTerminalNotification(worktreeId, event)
+    },
     [worktreeId]
   )
 }

@@ -21,7 +21,7 @@ vi.mock('./skill-ipc-main-window', () => ({
   handleMainWindowSkillIpc: (channel: string, handler: unknown) => handleMock(channel, handler)
 }))
 
-vi.mock('./runtime-environment-transport-routing', () => ({
+vi.mock('./runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: callRuntimeEnvironmentMock
 }))
 
@@ -30,7 +30,7 @@ vi.mock('../skills/skill-runtime-capability', () => ({
   supportsSkillRuntimeManagement: supportsManagementMock
 }))
 
-vi.mock('../wsl', () => ({ listWslDistrosAsync: vi.fn(async () => []) }))
+vi.mock('../wsl/discovery/distro-catalog', () => ({ listWslDistrosAsync: vi.fn(async () => []) }))
 
 import { registerSkillInstallManagementIpcHandlers } from './skill-install-management-ipc-handlers'
 

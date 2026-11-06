@@ -8,7 +8,7 @@ import {
   PR_COMMENT_OPEN_AUTHOR_CLASS,
   PR_COMMENT_RESOLVED_AUTHOR_CLASS,
   PR_COMMENT_RESOLVED_CONTAINER_CLASS
-} from '@/lib/pr-comment-resolution-classes'
+} from '@/lib/source-control/review/comments/pr-comment-resolution-classes'
 import { formatRelativeTime } from '@/components/github/work-item-state-presentation'
 import { CommentCodeContext } from '@/components/github/CommentCodeContext'
 import { CommentReactions } from '@/components/github/CommentReactions'
@@ -18,6 +18,7 @@ import type { TaskSourceContext } from '../../../../../shared/task-source-contex
 import { translate } from '@/i18n/i18n'
 import { loadPRFileContents } from '../load-item-details/pr-file-content-cache'
 import { CommentReplyForm } from './comment-reply-form'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export type ConversationCommentCardContext = {
   repoPath: string | null
@@ -114,7 +115,7 @@ export function renderCommentCard(
                   variant="ghost"
                   size="icon-xs"
                   className="size-7"
-                  onClick={() => window.api.shell.openUrl(comment.url)}
+                  onClick={(event) => openAppHttpLink(comment.url, { event })}
                   aria-label={translate(
                     'auto.components.GitHubItemDialog.a154ec5224',
                     'Open comment on GitHub'

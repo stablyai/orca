@@ -8,11 +8,16 @@ import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version
 import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
 import Database from '../../sqlite/sync-database'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { OrchestrationDb } from '../orchestration/db'
+import { OrchestrationDb } from '../orchestration/db/orchestration-db'
+import '../orchestration/db/contract-constants'
+import '../orchestration/db/messages/mailbox-routing-page'
+import '../orchestration/db/dispatch-row-writer'
+import '../orchestration/db/attempt-outcome-projection'
 import type { RpcRequest, RpcResponse } from './core'
 import { RpcDispatcher } from './dispatcher'
-import { ORCHESTRATION_METHODS } from './methods/orchestration'
+import { ORCHESTRATION_METHODS } from './methods/orchestration/orchestration'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
+import { MessageWake } from '../runtime-message-waiters'
 
 const COORDINATOR_HANDLE = 'term_legacy_coord'
 const COORDINATOR_PANE = 'tab_coord:44444444-4444-4444-8444-444444444444'
@@ -316,8 +321,7 @@ describe('legacy coordinator takeover races', () => {
 
   it('partitions a coordinator group send by legacy recipient contract', async () => {
     const harness = createHarness()
-    // A second worker on the CURRENT contract in the same adopted Run. Group addresses reach a
-    // Run's Dispatches, so the partition needs two Dispatches, not a Dispatch and a loose pane.
+    // Use two current-contract Dispatches in the adopted Run: group mail targets Dispatches, so a loose pane cannot prove partitioning.
     const currentTask = harness.db.createTask({
       runId: harness.adoptedRunId,
       spec: 'current-contract assignment',
@@ -471,7 +475,7 @@ describe('legacy coordinator takeover races', () => {
     vi.spyOn(harness.runtime, 'waitForMessage').mockImplementation(
       () =>
         new Promise((resolve) => {
-          resolveWait = () => resolve('notified')
+          resolveWait = () => resolve(new MessageWake())
           signalWaitStarted?.()
         })
     )
@@ -532,7 +536,7 @@ describe('legacy coordinator takeover races', () => {
     vi.spyOn(harness.runtime, 'waitForMessage').mockImplementation(
       () =>
         new Promise((resolve) => {
-          resolveWait = () => resolve('notified')
+          resolveWait = () => resolve(new MessageWake())
           signalWaitStarted?.()
         })
     )
@@ -676,8 +680,7 @@ describe('legacy coordinator takeover races', () => {
       () =>
         new Promise<boolean>((resolve, reject) => {
           detectionCalls += 1
-          // Why reject instead of re-arming: a second call would overwrite resolveDetection and
-          // strand the first promise, hanging to a timeout instead of naming what changed.
+          // Reject rearming: replacing resolveDetection would strand the first promise until timeout.
           if (detectionCalls > 1) {
             reject(
               new Error(

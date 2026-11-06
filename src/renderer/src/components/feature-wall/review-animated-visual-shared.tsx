@@ -1,10 +1,6 @@
 import type { JSX } from 'react'
 import { translate } from '@/i18n/i18n'
 
-// Why: shared between ReviewNotesAnimatedVisual / ReviewShipAnimatedVisual.
-// Kept in a single module so the two pages stay aligned (same diff data,
-// same icon set, same caret/cursor scaffolding).
-
 export function CursorIcon(): JSX.Element {
   return (
     <svg
@@ -265,13 +261,8 @@ export const PR_TITLE = 'Run schema + backfill in order during migration'
 export const PR_BODY =
   'Awaits schema before backfill so commits stay in order. Skips rows with no tier on reruns.'
 
-// Why: same files appear in the SC changes list and conceptually feed both
-// the commit message and the PR body, so the read→write relationship reads
-// as one motion to the viewer.
 export const SHIP_FILES: readonly string[] = ['migrate.ts', 'backfill-users.ts', 'migrate.test.ts']
 
-// Lightweight tokenizer — just enough so the diff doesn't read as one solid
-// color block. Quiet by design.
 export function tokenize(line: string): string {
   const KW =
     /\b(?:const|let|await|function|return|if|else|for|of|in|try|catch|throw|new|export|import|from)\b/g

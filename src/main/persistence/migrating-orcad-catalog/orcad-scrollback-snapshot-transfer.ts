@@ -1,19 +1,19 @@
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import type { OrcadMigrationManifest } from '../../../shared/orcad-migration-manifest'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import {
   decodeOrcadMigrationSnapshotChunk,
   type OrcadMigrationSnapshotChunkRequest,
   type OrcadMigrationSnapshotChunkResult,
   type OrcadMigrationSnapshotUploadState,
   type OrcadMigrationTerminalScrollbackSnapshot
-} from '../../../shared/orcad-migration-scrollback'
-import { syncDirectoryDurablySync } from '../../durable-file-write'
+} from '../../../shared/orcad-migration/orcad-migration-scrollback'
+import { syncDirectoryDurablySync } from '../../filesystem/durable-file-write'
 import {
   getTerminalScrollbackSnapshotPath,
   getTerminalScrollbackSnapshotRoot,
   type TerminalScrollbackSnapshotStorage
-} from '../../terminal-scrollback-snapshots'
+} from '../../pty/scrollback/terminal-scrollback-snapshots'
 import {
   appendOrcadMigrationStagedChunk,
   ensureOrcadMigrationDirectory,
@@ -27,11 +27,7 @@ import {
   requireStagedOrcadMigrationManifest
 } from './orcad-migration-staged-file'
 
-/**
- * Destination side: append one verified chunk to the staging file for a snapshot the staged
- * manifest names. `stagedManifest` is the manifest the importer accepted; a request for any
- * other migration or digest is refused. Retries of an already-written range must match it.
- */
+/** Only the staged manifest's snapshots may receive chunks; retried ranges must match. */
 export function stageOrcadMigrationSnapshotChunk(args: {
   stagedManifest: OrcadMigrationManifest | null
   storage: TerminalScrollbackSnapshotStorage
@@ -133,7 +129,6 @@ export function abortOrcadMigrationSnapshots(
   removeOrcadMigrationStagingDirectory(getTerminalScrollbackSnapshotRoot(storage), manifest)
 }
 
-/** Removes staging for every migration the importer no longer holds staged. */
 export function pruneOrcadMigrationSnapshotStaging(
   stagedManifests: readonly OrcadMigrationManifest[],
   storage: TerminalScrollbackSnapshotStorage

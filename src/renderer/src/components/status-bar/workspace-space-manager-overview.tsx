@@ -1,6 +1,7 @@
 import { AlertTriangle, HardDrive, Loader2, RefreshCw, X } from 'lucide-react'
 import { Button } from '../ui/button'
-import { formatBytes } from './workspace-space-format'
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
+import { formatBytes, getWorkspaceSpaceScanningFallbackLabel } from './workspace-space-format'
 import { translate } from '@/i18n/i18n'
 import { Metric, UpdatedMetric } from './workspace-space-metrics'
 import { WorkspaceSpaceTreemap } from './workspace-space-treemap'
@@ -56,73 +57,42 @@ export function WorkspaceSpaceManagerOverview({
     )
   }
   return (
-    <>
-      <div className="grid overflow-hidden rounded-lg border border-border/65 bg-background/35 md:grid-cols-4 md:divide-x md:divide-border/60">
-        <Metric
-          label={translate(
-            'auto.components.status.bar.WorkspaceSpaceManagerPanel.09960d86bd',
-            'Scanned'
-          )}
-          value={analysis ? formatBytes(analysis.totalSizeBytes) : '—'}
-        />
-        <Metric
-          label={translate('workspaceSpace.metric.linkedWorktrees', 'Linked worktrees')}
-          value={analysis ? formatBytes(analysis.reclaimableBytes) : '—'}
-        />
-        <Metric
-          label={translate(
-            'auto.components.status.bar.WorkspaceSpaceManagerPanel.43171f3e60',
-            'Workspaces'
-          )}
-          value={
-            analysis
-              ? analysis.unavailableWorktreeCount > 0
-                ? `${analysis.scannedWorktreeCount}/${analysis.worktreeCount}`
-                : String(analysis.scannedWorktreeCount)
-              : '—'
-          }
-        />
-        <UpdatedMetric scannedAt={analysis?.scannedAt ?? null} isScanning={isScanning} />
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-          {isScanning ? (
-            <Loader2 className="size-4 shrink-0 animate-spin" />
-          ) : (
-            <HardDrive className="size-4 shrink-0" />
-          )}
-          <span className="truncate">
-            {analysis
-              ? isScanning
-                ? translate(
-                    'auto.components.status.bar.WorkspaceSpaceManagerPanel.34174bd83d',
-                    '{{value0}}. You can leave this page; the last result stays visible.',
-                    { value0: progressLabel ?? 'Scanning workspace sizes' }
-                  )
-                : translate(
-                    'workspaceSpace.summary.linkedWorktrees',
-                    '{{value0}} is used by linked worktrees. Managed worktrees can be removed here.',
-                    { value0: formatBytes(analysis.reclaimableBytes) }
-                  )
-              : isScanning
-                ? translate(
-                    'auto.components.status.bar.WorkspaceSpaceManagerPanel.265d956765',
-                    '{{value0}}. You can leave this page.',
-                    { value0: progressLabel ?? 'Scanning workspace sizes' }
-                  )
-                : translate(
-                    'auto.components.status.bar.WorkspaceSpaceManagerPanel.e91dd2a9ae',
-                    'Run a scan to inspect workspace sizes.'
-                  )}
-          </span>
+    <div className="shrink-0 space-y-2.5">
+      <div className="flex min-w-0 items-center rounded-lg border border-border/65 bg-background/35">
+        <div className="grid min-w-0 flex-1 grid-cols-4 divide-x divide-border/60">
+          <Metric
+            label={translate(
+              'auto.components.status.bar.WorkspaceSpaceManagerPanel.09960d86bd',
+              'Scanned'
+            )}
+            value={analysis ? formatBytes(analysis.totalSizeBytes) : '—'}
+          />
+          <Metric
+            label={translate('workspaceSpace.metric.linkedWorktrees', 'Linked worktrees')}
+            shortLabel={translate('workspaceSpace.compact.linked', 'Linked')}
+            value={analysis ? formatBytes(analysis.reclaimableBytes) : '—'}
+          />
+          <Metric
+            label={translate(
+              'auto.components.status.bar.WorkspaceSpaceManagerPanel.43171f3e60',
+              'Workspaces'
+            )}
+            value={
+              analysis
+                ? analysis.unavailableWorktreeCount > 0
+                  ? `${analysis.scannedWorktreeCount}/${analysis.worktreeCount}`
+                  : String(analysis.scannedWorktreeCount)
+                : '—'
+            }
+          />
+          <UpdatedMetric scannedAt={analysis?.scannedAt ?? null} isScanning={isScanning} />
         </div>
         <Button
           variant="outline"
           size="sm"
           onClick={isScanning ? cancelScan : refresh}
           disabled={progress?.state === 'cancelling'}
-          className="w-28 gap-1.5"
+          className="mr-1.5 w-24 shrink-0"
         >
           {isScanning ? (
             progress?.state === 'cancelling' ? (
@@ -155,8 +125,31 @@ export function WorkspaceSpaceManagerOverview({
         </Button>
       </div>
 
+      {isScanning ? (
+        <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="size-4 shrink-0 animate-spin" />
+          <span className="truncate">
+            {analysis
+              ? translate(
+                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.34174bd83d',
+                  '{{value0}}. You can leave this page; the last result stays visible.',
+                  {
+                    value0: progressLabel ?? getWorkspaceSpaceScanningFallbackLabel()
+                  }
+                )
+              : translate(
+                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.265d956765',
+                  '{{value0}}. You can leave this page.',
+                  {
+                    value0: progressLabel ?? getWorkspaceSpaceScanningFallbackLabel()
+                  }
+                )}
+          </span>
+        </div>
+      ) : null}
+
       {scanError ? (
-        <div className="flex items-start gap-2 rounded-md border border-destructive/35 bg-destructive/8 px-3 py-2 text-xs text-destructive">
+        <div className="flex items-start gap-2 rounded-md border border-destructive/35 bg-destructive/8 px-2 py-1.5 text-xs text-destructive">
           <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
           <span className="min-w-0 break-words">
             {scanError}
@@ -171,20 +164,46 @@ export function WorkspaceSpaceManagerOverview({
       ) : null}
 
       {repoErrors.length > 0 ? (
-        <div className="space-y-1.5 rounded-md border border-border/70 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-          {repoErrors.map((repo) => (
+        <div className="rounded-md border border-border/70 bg-muted/20 px-2 py-1.5 text-xs text-muted-foreground">
+          {repoErrors.slice(0, 1).map((repo) => (
             <div key={repo.repoId} className="flex items-start gap-2">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-              <span className="min-w-0 break-words">
+              <span className="min-w-0 truncate" title={`${repo.displayName}: ${repo.error}`}>
                 {repo.displayName}: {repo.error}
               </span>
+              {repoErrors.length > 1 ? (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      aria-label={translate(
+                        'workspaceSpace.scan.moreErrors',
+                        '{{value0}} more scan errors',
+                        { value0: repoErrors.length - 1 }
+                      )}
+                    >
+                      +{repoErrors.length - 1}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-80">
+                    <div className="max-h-56 space-y-2 overflow-y-auto scrollbar-sleek text-xs">
+                      {repoErrors.map((entry) => (
+                        <div key={entry.repoId} className="break-words">
+                          <span className="font-medium">{entry.displayName}:</span> {entry.error}
+                        </div>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              ) : null}
             </div>
           ))}
         </div>
       ) : null}
 
       {hasRows || isInitialScan ? (
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(20rem,0.6fr)]">
+        <div className="grid min-h-0 grid-cols-[minmax(0,1.4fr)_minmax(16rem,0.6fr)] gap-2.5">
           <WorkspaceSpaceTreemap
             rows={sourceRows}
             isScanning={isInitialScan}
@@ -198,6 +217,6 @@ export function WorkspaceSpaceManagerOverview({
           <WorkspaceSpaceBreakdownList worktree={inspectedWorktree} isScanning={isInitialScan} />
         </div>
       ) : null}
-    </>
+    </div>
   )
 }

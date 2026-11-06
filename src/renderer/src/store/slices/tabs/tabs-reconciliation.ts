@@ -1,3 +1,4 @@
+import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import type { AppState } from '../../types'
 import type { Tab } from '../../../../../shared/tab-types'
 import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-order'
@@ -20,11 +21,7 @@ export type WorktreeTabModelReconciliation = {
   activeRenderableTabId: string | null
 }
 
-/**
- * Pure projection of one workspace's reconciliation patch. Passing `batch`
- * lets a multi-workspace fold reuse its own map drafts and `openFiles` index;
- * the projected values are identical either way.
- */
+/** Pure single-workspace patch; optional batch reuses map drafts/openFiles index without changing projected values. */
 export function projectWorktreeTabModelReconciliation(
   state: AppState,
   worktreeId: string,
@@ -40,10 +37,7 @@ export function projectWorktreeTabModelReconciliation(
     if (unifiedTerminalEntityIds.has(tab.id)) {
       return false
     }
-    // Why: reconnectable legacy tabs must re-enter the unified model instead of being orphaned.
-    // A session-scoped unverified-loss marker is also liveness evidence: the
-    // host may have disappeared before it could publish a PTY, so keep the row
-    // visible until a replacement binds or the user closes it.
+    // Reconnect or unverified host-loss evidence keeps legacy tabs live until replacement binds or user closes them.
     return (
       terminalTabHasReconnectablePty(state, tab.id, tab.ptyId) ||
       state.unverifiedPtyLossTabIds[tab.id] === true
@@ -105,8 +99,7 @@ export function projectWorktreeTabModelReconciliation(
   const liveTerminalIds = new Set(
     runtimeTerminalTabs.filter((tab) => !orphanTerminalIds.has(tab.id)).map((tab) => tab.id)
   )
-  // Why batched: the unbatched scan is O(openFiles) per workspace, so a
-  // whole-session reconcile is O(workspaces x openFiles).
+  // Batch index avoids O(workspaces × openFiles) rescanning.
   const liveEditorIds: ReadonlySet<string> = batch
     ? (batch.liveEditorIdsByWorktree.get(worktreeId) ?? EMPTY_LIVE_EDITOR_IDS)
     : new Set(
@@ -130,21 +123,22 @@ export function projectWorktreeTabModelReconciliation(
   }
 
   const renderableTabs = reconciledUnifiedTabs.filter(isRenderableTab)
-  // Why: hand the stored array back when nothing was filtered, so an unrelated
-  // change (orphans, layout) does not give `unifiedTabsByWorktree` a new identity.
+  // No filtering must preserve tab-array identity even if orphan/layout state changed.
   const validTabs =
     renderableTabs.length === reconciledUnifiedTabs.length ? reconciledUnifiedTabs : renderableTabs
   const validTabIds = new Set(validTabs.map((tab) => tab.id))
   const nextGroupsWithEmpty = reconciledGroups.map((group) => {
-    const tabOrder = group.tabOrder.filter((tabId) => validTabIds.has(tabId))
+    const slots = structuredLaunchSlotIds(worktreeId, group.id)
+    const tabOrder = group.tabOrder.filter((tabId) => validTabIds.has(tabId) || slots.has(tabId))
+    const realOrder = tabOrder.filter((id) => validTabIds.has(id))
     const activeTabId =
       group.activeTabId && validTabIds.has(group.activeTabId)
         ? group.activeTabId
-        : (tabOrder[0] ?? null)
+        : (realOrder[0] ?? null)
     const tabOrderUnchanged =
       tabOrder.length === group.tabOrder.length &&
       tabOrder.every((tabId, index) => tabId === group.tabOrder[index])
-    const recentTabIds = sanitizeRecentTabIds(group.recentTabIds, tabOrder)
+    const recentTabIds = sanitizeRecentTabIds(group.recentTabIds, realOrder)
     const recentUnchanged =
       recentTabIds.length === (group.recentTabIds ?? []).length &&
       recentTabIds.every((id, index) => id === (group.recentTabIds ?? [])[index])
@@ -154,7 +148,11 @@ export function projectWorktreeTabModelReconciliation(
   })
   const prunedGroups =
     validTabs.length > 0
-      ? nextGroupsWithEmpty.filter((group) => group.tabOrder.length > 0)
+      ? nextGroupsWithEmpty.filter(
+          // Preserve intentional empty panes; only collapse groups emptied by stale-tab cleanup.
+          (group, index) =>
+            group.tabOrder.length > 0 || reconciledGroups[index].tabOrder.length === 0
+        )
       : nextGroupsWithEmpty
   const groupsChanged =
     prunedGroups.length !== groups.length ||

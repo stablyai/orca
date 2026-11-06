@@ -6,7 +6,9 @@ export function computerProviderUnavailableMessage(platform: NodeJS.Platform): s
     ].join(' ')
   }
   if (platform === 'linux' || platform === 'win32') {
-    return `computer-use has no native provider for ${platform}; the platform runtime file was not found`
+    const runtime =
+      platform === 'linux' ? 'computer-use-linux/runtime.py' : 'computer-use-windows/runtime.ps1'
+    return `Computer use isn't available on this host: its Orca install has no ${runtime}. On an Orca server installed before computer use shipped with it, update or reprovision the server.`
   }
   return `computer-use has no native provider for ${platform}`
 }

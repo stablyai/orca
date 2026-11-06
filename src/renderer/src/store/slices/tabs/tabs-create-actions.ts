@@ -1,4 +1,5 @@
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import { getActiveExecutionHostIdForWorktree } from '@/lib/unified-tab-host-ownership'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
@@ -18,7 +19,9 @@ import {
 } from '../../../../../shared/workspace-layout/tab-order'
 import { resolveUnifiedTabCreatePlacement } from './tabs-create-placement'
 import { emptySplitGroup, insertSplitGroup } from './tabs-group-actions'
-import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
+import { createdTabPreviewFlag } from './tab-preview-flag'
+import { selectFolderWorkspaces } from '../../workspace-record-selectors'
 
 export function createTabsCreateActions(
   set: TabsSliceSet,
@@ -30,6 +33,7 @@ export function createTabsCreateActions(
       const splitGroupId = init?.split ? createBrowserUuid() : undefined
       let created!: Tab
       set((current) => {
+        init?.validatePlacement?.(current)
         const state =
           init?.split && splitGroupId
             ? {
@@ -53,7 +57,7 @@ export function createTabsCreateActions(
           lookupWorktrees: () =>
             [
               ...(state.allWorktrees?.() ?? []),
-              ...(state.folderWorkspaces ?? []).map(folderWorkspaceToWorktree)
+              ...(selectFolderWorkspaces(state) ?? []).map(folderWorkspaceToWorktree)
             ].filter((worktree) => worktree.id === worktreeId)
         })
         const { group, groupsByWorktree, activeGroupIdByWorktree } = ensureGroup(
@@ -84,15 +88,20 @@ export function createTabsCreateActions(
         const executionHostId =
           init?.executionHostId ?? getActiveExecutionHostIdForWorktree(state, worktreeId)
         // Why: preview replacement may have removed the anchor; the order then appends in-partition.
-        nextOrder = insertTabIdIntoOrder(
-          nextOrder,
-          nextTabs,
-          id,
-          init?.isPinned === true,
-          placement.anchorTabId
-        )
+        nextOrder =
+          contentType === 'agent-session' &&
+          nextOrder.includes(id) &&
+          structuredLaunchSlotIds(worktreeId, group.id).has(id)
+            ? nextOrder
+            : insertTabIdIntoOrder(
+                nextOrder,
+                nextTabs,
+                id,
+                init?.isPinned === true,
+                placement.anchorTabId
+              )
         const insertedIndex = nextOrder.indexOf(id)
-        // Why always: preview replacement can leave a gap, so an append alone would reuse a sibling's sortOrder.
+        // Preview replacement may leave sortOrder gaps; renumber even on append to prevent collisions.
         nextTabs = applyTabOrderSortValues(nextTabs, nextOrder)
         created = {
           id,
@@ -115,13 +124,14 @@ export function createTabsCreateActions(
           createdAt,
           // Why: creating an active tab is a focus event; Cmd+J recency reads lastFocusedAt.
           ...(recordsFocus ? { lastFocusedAt: createdAt } : {}),
-          isPreview: init?.isPreview,
+          ...createdTabPreviewFlag(init?.isPreview),
           isPinned: init?.isPinned
         }
 
-        const nextActiveTabId = shouldActivate ? created.id : (group.activeTabId ?? created.id)
+        const nextActiveTabId =
+          shouldActivate || init?.showInGroup ? created.id : (group.activeTabId ?? created.id)
         const sanitizedRecent = sanitizeRecentTabIds(group.recentTabIds, nextOrder)
-        // Why: automation-created browser tabs must paint without stealing the visible group selection from the user's current tab.
+        // Automation-created browsers paint without stealing the visible group selection.
         const nextRecent = shouldActivate
           ? pushRecentTabId(sanitizedRecent, created.id)
           : sanitizedRecent
@@ -195,7 +205,7 @@ export function createTabsCreateActions(
           createdAt,
           // Why: creating an active tab is a focus event; Cmd+J recency reads lastFocusedAt.
           ...(shouldActivate ? { lastFocusedAt: createdAt } : {}),
-          isPreview: init?.isPreview,
+          ...createdTabPreviewFlag(init?.isPreview),
           isPinned: init?.isPinned
         }
         const newGroup: TabGroup = {

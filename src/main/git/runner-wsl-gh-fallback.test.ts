@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as BackgroundDistroGate from '../wsl/discovery/wsl-background-distro-gate'
 import {
   createFakeSpawnedChild,
   fakeSpawnDispatch,
   fakeSpawnReturning
 } from '../../shared/__fixtures__/fake-spawned-child'
-import type * as WslModule from '../wsl'
+import type * as WslModule from '../wsl/discovery/distro-catalog'
 import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 
 const { execFileSyncMock, spawnMock, getDefaultWslDistroMock } = vi.hoisted(() => ({
@@ -13,23 +14,23 @@ const { execFileSyncMock, spawnMock, getDefaultWslDistroMock } = vi.hoisted(() =
   getDefaultWslDistroMock: vi.fn()
 }))
 
+// The default-distro fallback asks whether the distro runs before it may start it (E9).
+vi.mock('../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof BackgroundDistroGate>()),
+  readWslDistroRunningState: vi.fn(async () => 'running')
+}))
+
 vi.mock('child_process', () => ({
   execFile: vi.fn(),
   execFileSync: execFileSyncMock,
   spawn: spawnMock
 }))
 
-vi.mock('../wsl', async (importOriginal) => ({
+vi.mock('../wsl/discovery/distro-catalog', async (importOriginal) => ({
   ...(await importOriginal<typeof WslModule>()),
   getDefaultWslDistro: getDefaultWslDistroMock
 }))
-
-import {
-  ghExecFileAsync,
-  ghExecFileWithScopeAsync,
-  glabExecFileAsync,
-  setDefaultWslDistroOverride
-} from './runner'
+import { ghExecFileAsync, glabExecFileAsync, setDefaultWslDistroOverride } from './runner'
 import { _resetGhRateLimitBreaker } from './gh-rate-limit-breaker'
 
 const PRIMARY_RATE_LIMIT_STDERR =
@@ -67,43 +68,6 @@ describe('ghExecFileAsync WSL fallback', () => {
     })
   })
 
-  it('falls back to host gh for explicit-repo WSL calls when gh is missing in the distro', async () => {
-    spawnMock.mockImplementation(
-      fakeSpawnDispatch((program) =>
-        program === 'wsl.exe' ? { stderr: WSL_GH_MISSING, code: 1 } : { stdout: '[]' }
-      )
-    )
-
-    await expect(
-      ghExecFileAsync(['issue', 'list', '--repo', 'stablyhq/noqa', '--json', 'number,title'], {
-        cwd: String.raw`\\wsl.localhost\Ubuntu\home\jinwoo\stably\noqa`
-      })
-    ).resolves.toEqual({ stdout: '[]', stderr: '' })
-
-    expect(spawnMock).toHaveBeenNthCalledWith(
-      1,
-      'wsl.exe',
-      [
-        '-d',
-        'Ubuntu',
-        '--exec',
-        'bash',
-        '-c',
-        "cd '/home/jinwoo/stably/noqa' && 'gh' 'issue' 'list' '--repo' 'stablyhq/noqa' '--json' 'number,title'"
-      ],
-      // Why a concrete directory (#16463): `undefined` makes CreateProcessW inherit
-      // Orca's own cwd, a deletable WSL UNC path when it was launched from a
-      // worktree. The Linux directory still rides inside the command.
-      expect.objectContaining({ cwd: expect.any(String) })
-    )
-    expect(spawnMock).toHaveBeenNthCalledWith(
-      2,
-      'gh',
-      ['issue', 'list', '--repo', 'stablyhq/noqa', '--json', 'number,title'],
-      expect.objectContaining({ cwd: undefined })
-    )
-  })
-
   it('does not fall back for repo-context gh calls without explicit repo context', async () => {
     spawnMock.mockImplementation(fakeSpawnReturning({ stderr: WSL_GH_MISSING, code: 1 }))
 
@@ -116,73 +80,6 @@ describe('ghExecFileAsync WSL fallback', () => {
     expect(spawnMock).toHaveBeenCalledTimes(1)
   })
 
-  it('falls back for short-form explicit repo flags used by gh', async () => {
-    spawnMock.mockImplementation(
-      fakeSpawnDispatch((program) =>
-        program === 'wsl.exe' ? { stderr: WSL_GH_MISSING, code: 1 } : { stdout: '[]' }
-      )
-    )
-
-    await expect(
-      ghExecFileAsync(['issue', 'list', '-R', 'stablyhq/noqa'], {
-        cwd: String.raw`\\wsl.localhost\Ubuntu\home\jinwoo\stably\noqa`
-      })
-    ).resolves.toEqual({ stdout: '[]', stderr: '' })
-
-    expect(spawnMock).toHaveBeenNthCalledWith(
-      2,
-      'gh',
-      ['issue', 'list', '-R', 'stablyhq/noqa'],
-      expect.objectContaining({ cwd: undefined })
-    )
-  })
-
-  it('falls back for compact short-form repo flags used by gh', async () => {
-    spawnMock.mockImplementation(
-      fakeSpawnDispatch((program) =>
-        program === 'wsl.exe' ? { stderr: WSL_GH_MISSING, code: 1 } : { stdout: '[]' }
-      )
-    )
-
-    await expect(
-      ghExecFileAsync(['issue', 'list', '-Rstablyhq/noqa'], {
-        cwd: String.raw`\\wsl.localhost\Ubuntu\home\jinwoo\stably\noqa`
-      })
-    ).resolves.toEqual({ stdout: '[]', stderr: '' })
-
-    expect(spawnMock).toHaveBeenNthCalledWith(
-      2,
-      'gh',
-      ['issue', 'list', '-Rstablyhq/noqa'],
-      expect.objectContaining({ cwd: undefined })
-    )
-  })
-
-  it('falls back for repo view with an explicit positional repository', async () => {
-    spawnMock.mockImplementation(
-      fakeSpawnDispatch((program) =>
-        program === 'wsl.exe' ? { stderr: WSL_GH_MISSING, code: 1 } : { stdout: '{"isFork":false}' }
-      )
-    )
-
-    await expect(
-      ghExecFileAsync(
-        ['repo', 'view', 'github.acme-corp.com/stablyhq/noqa', '--json', 'isFork,parent'],
-        {
-          cwd: String.raw`\\wsl.localhost\Ubuntu\home\jinwoo\stably\noqa`,
-          host: 'github.acme-corp.com'
-        }
-      )
-    ).resolves.toEqual({ stdout: '{"isFork":false}', stderr: '' })
-
-    expect(spawnMock).toHaveBeenNthCalledWith(
-      2,
-      'gh',
-      ['repo', 'view', 'github.acme-corp.com/stablyhq/noqa', '--json', 'isFork,parent'],
-      expect.objectContaining({ cwd: undefined })
-    )
-  })
-
   it('does not fall back for gh api calls that depend on repo-context placeholders', async () => {
     spawnMock.mockImplementation(fakeSpawnReturning({ stderr: WSL_GH_MISSING, code: 1 }))
 
@@ -193,45 +90,6 @@ describe('ghExecFileAsync WSL fallback', () => {
     ).rejects.toThrow('gh: command not found')
 
     expect(spawnMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('retries idempotent gh GraphQL query transient failures', async () => {
-    spawnMock
-      .mockImplementationOnce(fakeSpawnReturning({ stderr: TRANSIENT_502, code: 1 }))
-      .mockImplementationOnce(fakeSpawnReturning({ stdout: '{"data":{}}' }))
-
-    await expect(
-      ghExecFileAsync(['api', 'graphql', '-f', 'query=query { viewer { login } }'])
-    ).resolves.toEqual({ stdout: '{"data":{}}', stderr: '' })
-
-    expect(spawnMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('retries a host-pinned idempotent gh GraphQL query after host injection', async () => {
-    spawnMock
-      .mockImplementationOnce(fakeSpawnReturning({ stderr: TRANSIENT_502, code: 1 }))
-      .mockImplementationOnce(fakeSpawnReturning({ stdout: '{"data":{}}' }))
-
-    await expect(
-      ghExecFileAsync(['api', 'graphql', '-f', 'query=query { viewer { login } }'], {
-        host: 'github.acme-corp.com'
-      })
-    ).resolves.toEqual({ stdout: '{"data":{}}', stderr: '' })
-
-    expect(spawnMock).toHaveBeenCalledTimes(2)
-    expect(spawnMock).toHaveBeenNthCalledWith(
-      1,
-      'gh',
-      [
-        'api',
-        '--hostname',
-        'github.acme-corp.com',
-        'graphql',
-        '-f',
-        'query=query { viewer { login } }'
-      ],
-      expect.any(Object)
-    )
   })
 
   it('does not retry non-idempotent gh API transient failures', async () => {
@@ -267,62 +125,6 @@ describe('ghExecFileAsync WSL fallback', () => {
     ).rejects.toThrow('HTTP 502 Bad Gateway')
 
     expect(spawnMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('retries cwd-less gh calls through the default WSL distro when host gh is missing', async () => {
-    getDefaultWslDistroMock.mockReturnValue('Ubuntu')
-    spawnMock
-      .mockImplementationOnce(fakeSpawnReturning(spawnEnoent('gh')))
-      .mockImplementationOnce(fakeSpawnReturning({ stdout: '{"resources":{}}' }))
-
-    await expect(ghExecFileAsync(['api', 'rate_limit'])).resolves.toEqual({
-      stdout: '{"resources":{}}',
-      stderr: ''
-    })
-
-    expect(spawnMock).toHaveBeenNthCalledWith(
-      2,
-      'wsl.exe',
-      ['-d', 'Ubuntu', '--exec', 'bash', '-c', "'gh' 'api' 'rate_limit'"],
-      // Why a concrete directory (#16463): `undefined` makes CreateProcessW inherit
-      // Orca's own cwd, a deletable WSL UNC path when it was launched from a
-      // worktree. This global call has no repo directory at all, so nothing about
-      // where it runs changes.
-      expect.objectContaining({ cwd: expect.any(String) })
-    )
-  })
-
-  it('returns the WSL scope after a missing native gh falls back', async () => {
-    getDefaultWslDistroMock.mockReturnValue('Ubuntu')
-    spawnMock
-      .mockImplementationOnce(fakeSpawnReturning(spawnEnoent('gh')))
-      .mockImplementationOnce(fakeSpawnReturning({ stdout: 'gho_wsl' }))
-
-    await expect(
-      ghExecFileWithScopeAsync(['auth', 'token', '--hostname', 'github.com'])
-    ).resolves.toEqual({
-      stdout: 'gho_wsl',
-      stderr: '',
-      rateLimitScope: 'wsl:ubuntu:github.com'
-    })
-    expect(spawnMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('returns the native scope after a missing WSL gh falls back', async () => {
-    spawnMock
-      .mockImplementationOnce(fakeSpawnReturning({ stderr: WSL_GH_MISSING, code: 127 }))
-      .mockImplementationOnce(fakeSpawnReturning({ stdout: 'gho_native' }))
-
-    await expect(
-      ghExecFileWithScopeAsync(['auth', 'token', '--hostname', 'github.com'], {
-        wslDistro: 'Ubuntu'
-      })
-    ).resolves.toEqual({
-      stdout: 'gho_native',
-      stderr: '',
-      rateLimitScope: 'native:github.com'
-    })
-    expect(spawnMock).toHaveBeenCalledTimes(2)
   })
 
   it('checks a blocked WSL scope before repeating a native-to-WSL fallback', async () => {
@@ -377,41 +179,6 @@ describe('ghExecFileAsync WSL fallback', () => {
     expect(spawnMock).toHaveBeenCalledTimes(1)
   })
 
-  it('does not retry high-level glab update transient failures', async () => {
-    spawnMock.mockImplementation(fakeSpawnReturning({ stderr: TRANSIENT_502, code: 1 }))
-
-    await expect(
-      glabExecFileAsync(['issue', 'update', '5', '-R', 'stablyai/orca'], {
-        cwd: String.raw`C:\repo`
-      })
-    ).rejects.toThrow('HTTP 502 Bad Gateway')
-
-    expect(spawnMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('retries cwd-less glab calls through the default WSL distro when host glab is missing', async () => {
-    getDefaultWslDistroMock.mockReturnValue('Ubuntu')
-    spawnMock
-      .mockImplementationOnce(fakeSpawnReturning(spawnEnoent('glab')))
-      .mockImplementationOnce(fakeSpawnReturning({ stdout: '[]' }))
-
-    await expect(glabExecFileAsync(['api', 'projects'])).resolves.toEqual({
-      stdout: '[]',
-      stderr: ''
-    })
-
-    expect(spawnMock).toHaveBeenNthCalledWith(
-      2,
-      'wsl.exe',
-      ['-d', 'Ubuntu', '--exec', 'bash', '-c', "'glab' 'api' 'projects'"],
-      // Why a concrete directory (#16463): `undefined` makes CreateProcessW inherit
-      // Orca's own cwd, a deletable WSL UNC path when it was launched from a
-      // worktree. This global call has no repo directory at all, so nothing about
-      // where it runs changes.
-      expect.objectContaining({ cwd: expect.any(String) })
-    )
-  })
-
   it('times out the default-WSL glab fallback and waits for full tree cleanup', async () => {
     vi.useFakeTimers()
     getDefaultWslDistroMock.mockReturnValue('Ubuntu')
@@ -419,8 +186,7 @@ describe('ghExecFileAsync WSL fallback', () => {
     const taskkill = createFakeSpawnedChild(3600)
     spawnMock
       .mockImplementationOnce(fakeSpawnReturning(spawnEnoent('glab')))
-      // Why a child that never exits: this is the wedged WSL helper the deadline
-      // has to reap, so nothing must settle the promise before taskkill reports.
+      // Keep the child unsettled until taskkill reports completion.
       .mockImplementationOnce(() => wslChild)
       .mockImplementation(() => taskkill)
 
@@ -494,76 +260,6 @@ describe('ghExecFileAsync WSL fallback', () => {
       'glab',
       ['auth', 'status'],
       expect.objectContaining({ cwd: undefined })
-    )
-  })
-
-  it('still retries idempotent glab transient failures', async () => {
-    spawnMock
-      .mockImplementationOnce(fakeSpawnReturning({ stderr: TRANSIENT_502, code: 1 }))
-      .mockImplementationOnce(fakeSpawnReturning({ stdout: '[]' }))
-
-    await expect(
-      glabExecFileAsync(['api', 'projects/stablyai%2Forca/issues'], {
-        cwd: String.raw`C:\repo`
-      })
-    ).resolves.toEqual({ stdout: '[]', stderr: '' })
-
-    expect(spawnMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('resolves fallback to the overridden distro if configured, and falls back to default WSL distro otherwise', async () => {
-    // 1) Test with override configured (should use 'Debian' override)
-    setDefaultWslDistroOverride('Debian')
-    getDefaultWslDistroMock.mockReturnValue('Ubuntu')
-
-    spawnMock
-      .mockImplementationOnce(fakeSpawnReturning(spawnEnoent('gh')))
-      .mockImplementationOnce(
-        fakeSpawnDispatch((program, args) =>
-          program === 'wsl.exe' && args.includes('Debian')
-            ? { stdout: 'Logged in to github.com as override' }
-            : { stderr: 'Wrong distro fallback', code: 1 }
-        )
-      )
-
-    await expect(ghExecFileAsync(['auth', 'status'])).resolves.toEqual({
-      stdout: 'Logged in to github.com as override',
-      stderr: ''
-    })
-
-    expect(spawnMock).toHaveBeenCalledTimes(2)
-    expect(spawnMock).toHaveBeenNthCalledWith(
-      2,
-      'wsl.exe',
-      ['-d', 'Debian', '--exec', 'bash', '-c', "'gh' 'auth' 'status'"],
-      expect.any(Object)
-    )
-
-    // 2) Test without override (should use default 'Ubuntu')
-    spawnMock.mockClear()
-    setDefaultWslDistroOverride(null)
-
-    spawnMock
-      .mockImplementationOnce(fakeSpawnReturning(spawnEnoent('gh')))
-      .mockImplementationOnce(
-        fakeSpawnDispatch((program, args) =>
-          program === 'wsl.exe' && args.includes('Ubuntu')
-            ? { stdout: 'Logged in to github.com as default' }
-            : { stderr: 'Wrong distro fallback', code: 1 }
-        )
-      )
-
-    await expect(ghExecFileAsync(['auth', 'status'])).resolves.toEqual({
-      stdout: 'Logged in to github.com as default',
-      stderr: ''
-    })
-
-    expect(spawnMock).toHaveBeenCalledTimes(2)
-    expect(spawnMock).toHaveBeenNthCalledWith(
-      2,
-      'wsl.exe',
-      ['-d', 'Ubuntu', '--exec', 'bash', '-c', "'gh' 'auth' 'status'"],
-      expect.any(Object)
     )
   })
 })

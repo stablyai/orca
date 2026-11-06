@@ -1,10 +1,5 @@
-/**
- * The upgrade 1.4.225 ships into: a 1.4.224 app quit with a terminal running, so its relay keeps the
- * shell alive, and that relay refuses this build's handshake. The bridge must reach the shell through
- * the old relay's own `--connect`, drive it, survive a dropped connection, never displace an
- * attached 1.4.224 client, and retire the pane once the shell exits.
- * COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay-bridge/.
- */
+// Reach live v1.4.224 terminals through the old relay’s --connect after upgrade, without displacing an attached old client.
+// COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
 import type { ChildProcess } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -14,9 +9,10 @@ import { toAppSshPtyId } from '../../../src/shared/ssh-pty-id'
 import {
   LegacyRelayClient,
   LegacyRelayOwnerHeldError
-} from '../../../src/main/ssh/legacy-relay-bridge/legacy-relay-client'
-import { LegacyRelayTargetBridge } from '../../../src/main/ssh/legacy-relay-bridge/legacy-relay-target-bridge'
-import type { LegacyRelayEndpoint } from '../../../src/main/ssh/legacy-relay-bridge/legacy-relay-endpoints'
+} from '../../../src/main/ssh/legacy-relay/legacy-relay-client'
+import { LegacyRelayTargetBridge } from '../../../src/main/ssh/legacy-relay/legacy-relay-target-bridge'
+import { LegacyRelayPaneOwners } from '../../../src/main/ssh/legacy-relay/legacy-relay-pane-owners'
+import type { LegacyRelayEndpoint } from '../../../src/main/ssh/legacy-relay/legacy-relay-endpoints'
 import { getRemoteHostPlatform } from '../../../src/main/ssh/ssh-remote-platform'
 import { materializeReleaseCheckout } from './release-checkout'
 import {
@@ -31,7 +27,7 @@ import {
 } from './released-relay-daemon'
 
 const TARGET_ID = 'ssh-upgraded'
-// Why so long: building the release's relay and its 30s owner grace both count against it.
+// Budget for the release build and its 30s owner grace.
 const SUITE_TIMEOUT_MS = 240_000
 const OLD_APP_ID = 'v1.4.224-desktop'
 
@@ -152,7 +148,6 @@ describe.skipIf(process.platform === 'win32')(
         } finally {
           oldApp.dispose()
         }
-        // The old desktop's input reached the shell, and the bridge takes over once it leaves.
         const client = await open()
         try {
           const { replay } = await client.attach(relayPtyId)
@@ -212,7 +207,8 @@ describe.skipIf(process.platform === 'win32')(
           onExit: (id) => exits.push(id),
           onTerminalExited: () => {
             exitedTelemetry += 1
-          }
+          },
+          owners: new LegacyRelayPaneOwners()
         })
         try {
           await bridge.refresh()
@@ -229,7 +225,6 @@ describe.skipIf(process.platform === 'win32')(
           expect(bridge.snapshot()).toEqual([])
           expect(exitedTelemetry).toBe(1)
           expect(opened.every((client) => client.closed)).toBe(true)
-          // The relay itself is left alone: it keeps running on its own grace.
           expect(daemon.exitCode).toBeNull()
         } finally {
           bridge.dispose()

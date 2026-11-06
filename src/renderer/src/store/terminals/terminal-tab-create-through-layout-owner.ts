@@ -1,19 +1,51 @@
-// Terminal tab creates in a layout-owner build (phase C3). Main writes each tab under the ids the
-// window drew it with, before any later command from this window names its pane, so a split of a
-// just-created pane finds it. The window still draws first: its callers act on the tab at once
-// (select, retitle, anchor, mount, launch). Main's copy reaches the window through layout frames.
+// C3: window draws immediately for synchronous callers; main records the same IDs before later pane commands. Main-created tabs retain main’s facts so window saves do not mutate them.
 
-import { createBrowserUuid } from '@/lib/browser-uuid'
-import { holdLayoutFramesForWindowCommand } from '@/lib/window-session-write-activity'
-import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
+import { afterLayoutFrame } from '@/runtime/layout-frame-position'
+import { expectTabRowFields } from '@/runtime/layout-owner-pane-intents'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
+import { sendLayoutApply } from '@/runtime/layout-apply-send'
 import { newGroupSplitOf } from '@/runtime/layout-owner-new-group-split'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { layoutFrameTerminalTab } from '@/runtime/layout-frame-terminal-panes'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import { pickStoredFields } from '../../../../shared/workspace-layout/stored-record-fields'
 import type {
   CommandOf,
   LayoutApplyReply
 } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { AppState } from '../types'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import {
+  clearWindowTabMark,
+  markWindowTabStarting,
+  startWindowTabInMain,
+  windowTabStartsInMain
+} from './window-tab-start-in-main'
+
+/** Use main’s creation facts while retaining fields it omitted, such as window-resolved WSL shell when launch named none. */
+export function withMainTerminalFacts(tab: TerminalTab): TerminalTab {
+  const main = layoutFrameTerminalTab(tab.worktreeId, tab.id)
+  if (!main) {
+    return tab
+  }
+  const terminal = main.terminal
+  return {
+    ...tab,
+    createdAt: main.createdAt,
+    ...(terminal?.defaultTitle
+      ? { title: terminal.defaultTitle, defaultTitle: terminal.defaultTitle }
+      : {}),
+    ...(terminal
+      ? pickStoredFields(terminal, [
+          'shellOverride',
+          'startupCwd',
+          'forceHostRuntime',
+          'launchAgent'
+        ])
+      : {})
+  }
+}
 
 /** What the window's `createTab` just drew, as main's create command. */
 export function terminalTabCreateCommand(
@@ -37,8 +69,8 @@ export function terminalTabCreateCommand(
     tabId: tab.id,
     // createTab always lays out a single first pane.
     leafId: root?.type === 'leaf' ? root.leafId : '',
-    // Main makes a split made with the tab along with it. Another group main lacks (the
-    // workspace's first) falls back to main's own placement until the window's save names it.
+    // Main makes a split made with the tab along with it, and takes the group as a workspace's
+    // first when it holds none.
     ...(entry
       ? {
           groupId: entry.groupId,
@@ -46,52 +78,62 @@ export function terminalTabCreateCommand(
         }
       : {}),
     ...(entry?.viewMode ? { viewMode: entry.viewMode } : {}),
+    ...(tab.quickCommandLabel?.trim() ? { quickCommandLabel: tab.quickCommandLabel.trim() } : {}),
+    createdAt: entry?.createdAt ?? tab.createdAt,
     creation
   }
 }
 
-/**
- * Sends a tab the window just drew to main. Nothing to undo on any answer: main holding the same
- * pane already, or a paired server or no partition holding the workspace, leaves the window's own
- * session save to carry the tab, as today.
- */
+/** Keep drawn tab pending until main answers; refusal closes/stops it. Server-routed twins retain their window/partition copy. */
 export function recordCreatedTerminalTabInLayoutOwner(
   state: AppState,
-  command: CommandOf<'createTerminalTab'> & { tabId: string; leafId: string }
+  command: CommandOf<'createTerminalTab'> & { tabId: string; leafId: string },
+  start?: { tab: TerminalTab; store: Parameters<typeof startWindowTabInMain>[0] }
 ): void {
-  // Why: a paired server mirrors this workspace's tabs; main does not own its layout.
-  if (getExplicitRuntimeEnvironmentIdForWorktree(state, command.workspace)) {
+  // Why: a tab main already holds is its own.
+  if (layoutFrameTerminalTab(command.workspace, command.tabId)) {
     return
   }
-  void callRuntimeRpc<LayoutApplyReply>({ kind: 'local' }, 'layout.apply', { command }).then(
-    (reply) => {
-      if (!reply.ok && reply.code !== 'host_not_owned') {
-        console.warn('[layout-owner] createTerminalTab refused:', reply.code)
+  const { workspace, ...rest } = command
+  // Main starts the first terminal once it holds the tab; until then the pane waits for it.
+  const startsInMain =
+    start !== undefined &&
+    runtimeEnvironmentIdUnlessTwin(state, workspace) === null &&
+    windowTabStartsInMain(state, start.tab)
+  const mark = startsInMain
+    ? markWindowTabStarting(start.store, command.tabId, command.leafId)
+    : null
+  const unmark = (): void => {
+    if (start && mark) {
+      clearWindowTabMark(start.store, makePaneKey(command.tabId, command.leafId), mark)
+    }
+  }
+  const sent = sendLayoutApply(state, workspace, rest, {
+    apply: () => {
+      if (start && mark) {
+        startWindowTabInMain(start.store, start.tab, command.leafId, mark)
       }
     },
-    (error: unknown) => {
-      console.warn(
-        '[layout-owner] createTerminalTab failed:',
-        error instanceof Error ? error.message : error
-      )
-    }
-  )
+    // A paired server may hold it: the pane starts its own terminal, as today.
+    asToday: unmark,
+    refused: () => {
+      unmark()
+      state.closeTab(command.tabId, { reason: 'cleanup' })
+    },
+    drawn: true
+  })
+  if (!sent) {
+    unmark()
+  }
 }
 
-/**
- * A workspace's first terminal on activation (F23). Main creates it only into a workspace its copy
- * holds no tab of, so this window and the runtime asking at once still make one tab. The window
- * draws main's answer itself, under main's ids; frames wait meanwhile so they cannot draw it first
- * without the window's own facts (main gets its shell and cwd with the window's next save). False
- * when a paired server owns the workspace's layout. `create` with no ids opens the terminal as
- * today: main holds no partition for the workspace.
- */
+/** F23: main atomically creates only in empty owned workspaces, preventing concurrent window/runtime duplicates. Frames/reopened snapshots carry window row fields; paired ownership or rolled-back writes use create fallback. */
 export function createInitialTerminalThroughLayoutOwner(
   getState: () => AppState,
   worktreeId: string,
-  create: (ids?: { tabId: string; leafId: string }) => void
+  create: () => void
 ): boolean {
-  if (getExplicitRuntimeEnvironmentIdForWorktree(getState(), worktreeId)) {
+  if (runtimeEnvironmentIdUnlessTwin(getState(), worktreeId) !== null) {
     return false
   }
   const tabId = createBrowserUuid()
@@ -103,7 +145,8 @@ export function createInitialTerminalThroughLayoutOwner(
       create()
     }
   }
-  const release = holdLayoutFramesForWindowCommand()
+  // Kept until the frame bringing main's tab takes it, even one an owed write holds back.
+  const release = expectTabRowFields(tabId, ACTIVATION_ROW_FIELDS)
   void callRuntimeRpc<LayoutApplyReply>({ kind: 'local' }, 'layout.apply', {
     command: {
       type: 'createTerminalTab',
@@ -114,19 +157,22 @@ export function createInitialTerminalThroughLayoutOwner(
     }
   })
     .then(
-      (reply) => {
-        if (reply.ok) {
-          // No tab id: main's copy already shows a tab here, which its frames bring.
-          if (reply.result.tabId === tabId && !holdsTerminalTab(getState(), tabId)) {
-            create({ tabId, leafId })
+      (reply) =>
+        // After the frame with main's tab: the stream may end first, and the window draws it then.
+        afterLayoutFrame(reply.frameSeq, () => {
+          if (reply.ok && reply.result.tabId === tabId) {
+            return
           }
-        } else if (reply.code === 'host_not_owned') {
-          createAsToday()
-        } else {
-          console.warn('[layout-owner] initial createTerminalTab refused:', reply.code)
-        }
-      },
+          // No tab id: main's copy already shows a tab here, which its frames bring.
+          release()
+          if (!reply.ok && reply.code === 'host_not_owned') {
+            createAsToday()
+          } else if (!reply.ok) {
+            console.warn('[layout-owner] initial createTerminalTab refused:', reply.code)
+          }
+        }),
       (error: unknown) => {
+        release()
         // Why as today: a thrown write is rolled back, so main holds no such tab.
         console.warn(
           '[layout-owner] initial createTerminalTab failed:',
@@ -141,10 +187,8 @@ export function createInitialTerminalThroughLayoutOwner(
         error instanceof Error ? error.message : error
       )
     })
-    .finally(release)
   return true
 }
 
-function holdsTerminalTab(state: AppState, tabId: string): boolean {
-  return Object.values(state.tabsByWorktree).some((tabs) => tabs.some((tab) => tab.id === tabId))
-}
+/** The window's own mark on a first terminal: its spawn does not count as workspace activity. */
+const ACTIVATION_ROW_FIELDS = { pendingActivationSpawn: true } as const

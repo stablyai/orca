@@ -1,3 +1,5 @@
+import { githubTaskBinding } from '@/lib/github-task-observation'
+import { getWorkItemPageErrorTypes } from '../../../../shared/github/work-item-page-errors'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
@@ -9,35 +11,29 @@ import {
   PER_REPO_FETCH_LIMIT
 } from '../../../../shared/work-items'
 import { getTaskSourceCacheScope } from '../../../../shared/task-source-context'
-import {
-  GITHUB_SEARCH_RESULT_WINDOW_ERROR_PATTERN,
-  isGitHubWorkItemsQueryTooLarge
-} from '../slices/github-work-items-query-bounds'
+import { isGitHubWorkItemsQueryTooLarge } from '../slices/github-work-items-query-bounds'
 import { workItemsCacheKey, workItemsInflightRequestKey } from './cache-identity'
-import { GITHUB_SEARCH_RESULT_WINDOW, isFresh, WORK_ITEMS_CACHE_TTL } from './cache-policy'
+import { isFresh, WORK_ITEMS_CACHE_TTL } from './cache-policy'
 import {
   acquireProviderRequestSlot as acquireWorkItemSlot,
   inflightWorkItemsRequests,
   releaseProviderRequestSlot as releaseWorkItemSlot
 } from './request-coordination'
-import { findRepoForGitHubOwner } from './repository-routing'
 import {
-  countGitHubWorkItemsForRepo,
   getGitHubWorkItemRequestContext,
+  findGitHubWorkItemRepo,
   getWorkItemsCacheKeyForOwner,
   isGitHubUnavailableWorkItemsError,
   listGitHubWorkItemsForRepo,
-  getGitHubSourceTarget
+  getGitHubSourceTarget,
+  getGitHubWorkItemRowHostId
 } from './work-item-routing'
 
 export const createWorkItemAggregateActions = (
   get: Parameters<StateCreator<AppState>>[1]
 ): Pick<
   GitHubSlice,
-  | 'fetchWorkItemsAcrossRepos'
-  | 'fetchWorkItemsNextPage'
-  | 'countWorkItemsAcrossRepos'
-  | 'prefetchWorkItems'
+  'fetchWorkItemsAcrossRepos' | 'fetchWorkItemsNextPage' | 'prefetchWorkItems'
 > => ({
   fetchWorkItemsAcrossRepos: async (repos, perRepoLimit, displayLimit, query, options) => {
     if (isGitHubWorkItemsQueryTooLarge(query)) {
@@ -76,7 +72,11 @@ export const createWorkItemAggregateActions = (
                   r.repoId,
                   perRepoLimit,
                   query,
-                  getTaskSourceCacheScope(r.sourceContext)
+                  getTaskSourceCacheScope(r.sourceContext),
+                  (() => {
+                    const repo = findGitHubWorkItemRepo(get(), r.repoId, r.path, r.sourceContext)
+                    return repo && githubTaskBinding(repo)
+                  })()
                 )
               : getWorkItemsCacheKeyForOwner(get(), r.repoId, perRepoLimit, query, r.path)
           const cached = get().workItemsCache[key]?.data
@@ -90,7 +90,13 @@ export const createWorkItemAggregateActions = (
         }
       })
     )
-    const merged = sortWorkItemsByNumber(perProjectResults.flat()).slice(0, displayLimit)
+    if (perProjectResults.some((result) => result === undefined)) {
+      return undefined
+    }
+    const merged = sortWorkItemsByNumber(perProjectResults.flatMap((result) => result ?? [])).slice(
+      0,
+      displayLimit
+    )
     // Why: only claim global unavailability when every eligible source failed for a reachability reason; skipped SSH repos aren't GitHub sources here.
     const githubUnavailable =
       requestFailureCount > 0 &&
@@ -113,7 +119,7 @@ export const createWorkItemAggregateActions = (
     const perProjectResults = await Promise.all(
       repos.map(async (r) => {
         const requestState = get()
-        const repo = findRepoForGitHubOwner(requestState, r.repoId, r.path)
+        const repo = findGitHubWorkItemRepo(requestState, r.repoId, r.path, r.sourceContext)
         const requestContext = getGitHubWorkItemRequestContext(
           requestState,
           getGitHubSourceTarget(requestState, repo, r.sourceContext),
@@ -121,35 +127,31 @@ export const createWorkItemAggregateActions = (
           r.path,
           r.sourceContext
         )
+        const attempt = requestState.githubSourceCollections.capture(repo, r.sourceContext)
         await acquireWorkItemSlot()
         try {
+          if (!get().githubSourceCollections.current(attempt)) {
+            return undefined
+          }
           const envelope = await listGitHubWorkItemsForRepo(requestContext, {
             limit: perRepoLimit,
             query: query || undefined,
             page,
-            ...(options?.noCache ? { noCache: true } : {})
+            ...(options?.noCache ? { noCache: true } : {}),
+            ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
           })
-          // Why: page-N failures aren't in the per-repo banner (keyed on the initial fetch); log them so pagination failures are observable instead of silently truncating (richer surface deferred, design doc §6).
+          if (!get().githubSourceCollections.accept(attempt, envelope, query, false)) {
+            return undefined
+          }
+          errorTypes.push(...getWorkItemPageErrorTypes(envelope.errors))
+          // Page-N errors bypass initial-fetch banners; log them to expose silent truncation (design §6).
           if (envelope.errors?.issues) {
-            const { type, message } = envelope.errors.issues
-            // Why: only the 1000-result-window 422 may drive the unreachable
-            // clamp; demote other validation errors so they read as failures.
-            errorTypes.push(
-              type === 'validation_error' &&
-                !GITHUB_SEARCH_RESULT_WINDOW_ERROR_PATTERN.test(message)
-                ? 'unknown'
-                : type
-            )
             console.warn(
               `[workItems] next page ${r.repoId} issues-side partial failure:`,
               envelope.errors.issues
             )
           }
           if (envelope.errors?.prs) {
-            // Why: the window 422 is issue-side only — a PR-side validation
-            // error must never join the unreachable signal.
-            const { type } = envelope.errors.prs
-            errorTypes.push(type === 'validation_error' ? 'unknown' : type)
             console.warn(
               `[workItems] next page ${r.repoId} prs-side partial failure:`,
               envelope.errors.prs
@@ -159,8 +161,22 @@ export const createWorkItemAggregateActions = (
             failedCount += 1
             return [] as GitHubWorkItem[]
           }
-          return envelope.items.map((item): GitHubWorkItem => ({ ...item, repoId: r.repoId }))
+          const repoHostId = getGitHubWorkItemRowHostId(
+            requestState,
+            r.repoId,
+            r.path,
+            r.sourceContext
+          )
+          const items = envelope.items.map((item): GitHubWorkItem => ({
+            ...item,
+            repoId: r.repoId,
+            ...(repoHostId ? { repoHostId } : {})
+          }))
+          return get().githubTaskCache.acceptSearch(items, attempt.binding)
         } catch (err) {
+          if (!get().githubSourceCollections.current(attempt)) {
+            return undefined
+          }
           if (isGitHubWorkItemsSshRemoteRequiredError(err)) {
             if (options?.requireComplete) {
               failedCount += 1
@@ -175,48 +191,14 @@ export const createWorkItemAggregateActions = (
         }
       })
     )
-    const merged = sortWorkItemsByNumber(perProjectResults.flat()).slice(0, displayLimit)
-    return { items: merged, failedCount, errorTypes }
-  },
-
-  countWorkItemsAcrossRepos: async (repos, query, perRepoLimit) => {
-    if (isGitHubWorkItemsQueryTooLarge(query)) {
-      return { totalCount: 0, totalPages: 0 }
+    if (perProjectResults.some((result) => result === undefined)) {
+      return undefined
     }
-    const normalizedLimit = Math.max(1, Math.floor(perRepoLimit))
-    // Why: GitHub 422s pages that start past its 1000-result search window.
-    const maxReachablePages = Math.max(1, Math.ceil(GITHUB_SEARCH_RESULT_WINDOW / normalizedLimit))
-    const counts = await Promise.all(
-      repos.map(async (r) => {
-        // Why: same stampede cap as item-fetch — without a slot a 90-repo selection fires 90 concurrent count IPCs before the main-side rate-limit guard sees the first 403.
-        await acquireWorkItemSlot()
-        try {
-          const requestState = get()
-          const repo = findRepoForGitHubOwner(requestState, r.repoId, r.path)
-          const requestContext = getGitHubWorkItemRequestContext(
-            requestState,
-            getGitHubSourceTarget(requestState, repo, r.sourceContext),
-            r.repoId,
-            r.path,
-            r.sourceContext
-          )
-          return await countGitHubWorkItemsForRepo(requestContext, { query: query || undefined })
-        } catch {
-          return 0
-        } finally {
-          releaseWorkItemSlot()
-        }
-      })
+    const merged = sortWorkItemsByNumber(perProjectResults.flatMap((result) => result ?? [])).slice(
+      0,
+      displayLimit
     )
-    return {
-      totalCount: counts.reduce((sum, count) => sum + count, 0),
-      // Why: repos advance independently by page, so take the max across repos — a sum/page-width undercounts when one repo owns most results.
-      totalPages: counts.reduce(
-        (maxPages, count) =>
-          Math.max(maxPages, Math.min(Math.ceil(count / normalizedLimit), maxReachablePages)),
-        0
-      )
-    }
+    return { items: merged, failedCount, errorTypes }
   },
 
   prefetchWorkItems: (repoId, repoPath, limit = PER_REPO_FETCH_LIMIT, query = '', options) => {
@@ -224,10 +206,16 @@ export const createWorkItemAggregateActions = (
       return
     }
     const requestState = get()
-    const repo = findRepoForGitHubOwner(requestState, repoId, repoPath)
+    const repo = findGitHubWorkItemRepo(requestState, repoId, repoPath, options?.sourceContext)
     const key =
       options?.sourceContext?.provider === 'github'
-        ? workItemsCacheKey(repoId, limit, query, getTaskSourceCacheScope(options.sourceContext))
+        ? workItemsCacheKey(
+            repoId,
+            limit,
+            query,
+            getTaskSourceCacheScope(options.sourceContext),
+            repo && githubTaskBinding(repo)
+          )
         : getWorkItemsCacheKeyForOwner(requestState, repoId, limit, query, repoPath)
     const cached = get().workItemsCache[key]
     const requestContext = getGitHubWorkItemRequestContext(

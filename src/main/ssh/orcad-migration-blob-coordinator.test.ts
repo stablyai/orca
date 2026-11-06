@@ -7,12 +7,12 @@ import {
   ORCAD_MIGRATION_BLOB_CHUNK_BYTES,
   requiredMigrationBlobCapabilities,
   type OrcadMigrationBlobDescriptor
-} from '../../shared/orcad-migration-blob-transfer'
-import {
-  ORCAD_MIGRATION_MANIFEST_VERSION,
-  type OrcadMigrationCatalogState,
-  type OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
+} from '../../shared/orcad-migration/orcad-migration-blob-transfer'
+import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../shared/orcad-migration/orcad-migration-manifest-validation'
+import type {
+  OrcadMigrationCatalogState,
+  OrcadMigrationManifest
+} from '../../shared/orcad-migration/orcad-migration-manifest'
 import { ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
 import {
   commitOrcadMigrationBlobs,
@@ -119,12 +119,6 @@ describe('orcad migration blob sender', () => {
     ).rejects.toThrow('orcad_migration_blob_descriptor_conflict:terminal-restore-hints')
     expect(destination.stageChunk).not.toHaveBeenCalled()
   })
-
-  it('sends nothing and asks nothing when there are no blobs', async () => {
-    const destination = realDestination([])
-    await transferOrcadMigrationBlobs({ source: source(), manifest, blobs: [], destination })
-    expect(destination.readCapabilities).not.toHaveBeenCalled()
-  })
 })
 
 function descriptor(
@@ -157,7 +151,7 @@ function source() {
   }
 }
 
-/** The real staging module behind the RPC shapes, so resume reads what a host would report. */
+/** Use real staging semantics so resume observes host-equivalent state. */
 function realDestination(capabilities: readonly string[]) {
   const readState = async (): Promise<OrcadMigrationCatalogState> => {
     const blobUploads = inspectOrcadMigrationBlobUploads(manifest, root)

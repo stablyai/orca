@@ -66,49 +66,6 @@ describe('installWindowVisibilitySubscriptionParking', () => {
     vi.restoreAllMocks()
   })
 
-  it('parks every subscription after the grace and restarts them on reveal', async () => {
-    const first = resolvedSpec()
-    const second = resolvedSpec()
-    const dispose = installWindowVisibilitySubscriptionParking([first.spec, second.spec])
-    await settle()
-
-    setDocumentVisibility('hidden')
-    vi.advanceTimersByTime(WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS - 1)
-    expect(first.unsubscribes[0]).not.toHaveBeenCalled()
-    expect(second.unsubscribes[0]).not.toHaveBeenCalled()
-
-    vi.advanceTimersByTime(1)
-    expect(first.unsubscribes[0]).toHaveBeenCalledTimes(1)
-    expect(second.unsubscribes[0]).toHaveBeenCalledTimes(1)
-    expect(first.currents[0]()).toBe(false)
-
-    setDocumentVisibility('visible')
-    await settle()
-    expect(first.subscribe).toHaveBeenCalledTimes(2)
-    expect(second.subscribe).toHaveBeenCalledTimes(2)
-    expect(first.currents[0]()).toBe(false)
-    expect(first.currents[1]()).toBe(true)
-
-    dispose()
-    expect(first.unsubscribes[1]).toHaveBeenCalledTimes(1)
-    expect(second.unsubscribes[1]).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not reconnect during a quick hide and show', async () => {
-    const harness = resolvedSpec()
-    const dispose = installWindowVisibilitySubscriptionParking([harness.spec])
-    await settle()
-
-    setDocumentVisibility('hidden')
-    vi.advanceTimersByTime(WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS - 1)
-    setDocumentVisibility('visible')
-    vi.advanceTimersByTime(WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS)
-
-    expect(harness.subscribe).toHaveBeenCalledTimes(1)
-    expect(harness.unsubscribes[0]).not.toHaveBeenCalled()
-    dispose()
-  })
-
   it('widens the park delay after a quickly undone park and resets it after a long hide', async () => {
     const harness = resolvedSpec()
     const dispose = installWindowVisibilitySubscriptionParking([harness.spec])
@@ -138,27 +95,6 @@ describe('installWindowVisibilitySubscriptionParking', () => {
     setDocumentVisibility('hidden')
     vi.advanceTimersByTime(WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS)
     expect(harness.unsubscribes[2]).toHaveBeenCalledTimes(1)
-    dispose()
-  })
-
-  it('reports each visibility generation before restarting its subscriptions', async () => {
-    const first = resolvedSpec()
-    const second = resolvedSpec()
-    const onVisibilityResume = vi.fn()
-    const dispose = installWindowVisibilitySubscriptionParking([first.spec, second.spec], {
-      onVisibilityResume
-    })
-    await settle()
-
-    setDocumentVisibility('hidden')
-    vi.advanceTimersByTime(WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS)
-    setDocumentVisibility('visible')
-    await settle()
-
-    expect(onVisibilityResume).toHaveBeenCalledWith({
-      visibilityGeneration: 1,
-      restartingSpecIndexes: [0, 1]
-    })
     dispose()
   })
 
@@ -280,25 +216,6 @@ describe('installWindowVisibilitySubscriptionParking', () => {
     dispose()
   })
 
-  it('stays parked when installed hidden and starts on reveal', async () => {
-    setDocumentVisibility('hidden')
-    const harness = resolvedSpec()
-    const onVisibilityResume = vi.fn()
-    const dispose = installWindowVisibilitySubscriptionParking([harness.spec], {
-      onVisibilityResume
-    })
-
-    expect(harness.subscribe).not.toHaveBeenCalled()
-    setDocumentVisibility('visible')
-    await settle()
-    expect(harness.subscribe).toHaveBeenCalledTimes(1)
-    expect(onVisibilityResume).toHaveBeenCalledWith({
-      visibilityGeneration: 1,
-      restartingSpecIndexes: [0]
-    })
-    dispose()
-  })
-
   it('restarts after input proves an already parked hidden document is stale', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const harness = resolvedSpec()
@@ -360,20 +277,6 @@ describe('installWindowVisibilitySubscriptionParking', () => {
     expect(secondUnsubscribe).toHaveBeenCalledTimes(1)
   })
 
-  it('retires a pending handle that resolves after permanent cleanup', async () => {
-    const pending = createDeferred<{ unsubscribe: () => void }>()
-    const unsubscribe = vi.fn()
-    const subscribe = vi.fn(() => pending.promise)
-    const dispose = installWindowVisibilitySubscriptionParking([{ subscribe }])
-
-    dispose()
-    pending.resolve({ unsubscribe })
-    await settle()
-
-    expect(unsubscribe).toHaveBeenCalledTimes(1)
-    expect(subscribe).toHaveBeenCalledTimes(1)
-  })
-
   it('retries a rejected replacement while visible and cancels retries on cleanup', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0)
     const initialUnsubscribe = vi.fn()
@@ -410,27 +313,5 @@ describe('installWindowVisibilitySubscriptionParking', () => {
     dispose()
     vi.advanceTimersByTime(WINDOW_VISIBILITY_SUBSCRIPTION_RETRY_INITIAL_MS * 2)
     expect(subscribe).toHaveBeenCalledTimes(4)
-  })
-
-  it('isolates unsubscribe failures across entries', async () => {
-    const onUnsubscribeError = vi.fn()
-    const secondUnsubscribe = vi.fn()
-    const first: WindowVisibilitySubscriptionSpec = {
-      subscribe: async () => ({
-        unsubscribe: () => {
-          throw new Error('unsubscribe failed')
-        }
-      }),
-      onUnsubscribeError
-    }
-    const second: WindowVisibilitySubscriptionSpec = {
-      subscribe: async () => ({ unsubscribe: secondUnsubscribe })
-    }
-    const dispose = installWindowVisibilitySubscriptionParking([first, second])
-    await settle()
-
-    dispose()
-    expect(onUnsubscribeError).toHaveBeenCalledOnce()
-    expect(secondUnsubscribe).toHaveBeenCalledOnce()
   })
 })

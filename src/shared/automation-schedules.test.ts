@@ -286,8 +286,7 @@ describe('automation schedules', () => {
     expect(formatAutomationSchedule('0 9,17 * * MON-FRI')).toBe('Custom schedule')
   })
 
-  // Restriction is lexical (#15896), but a star step is still a star: `*/1` does not
-  // restrict, so the day rule stays AND and this fires on Mondays only.
+  // Star-step */1 stays unrestricted, preserving AND and Monday-only firing (#15896).
   it('treats a stepped cron day-of-month field as unrestricted for DOM/DOW matching', () => {
     const next = nextAutomationOccurrenceAfter(
       '0 9 */1 * MON',

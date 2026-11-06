@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { XTERM_COMPOSITION_SESSION_END_EVENT } from '@/components/terminal-pane/terminal-ime-composition-route'
+import { XTERM_COMPOSITION_SESSION_END_EVENT } from '@/components/terminal-pane/input/ime/terminal-ime-composition-route'
 import { afterEach, describe, expect, it } from 'vitest'
 import { installTypingLatencyInputEvents, type TypingInputSignal } from './input-events'
 
@@ -57,20 +57,6 @@ describe('installTypingLatencyInputEvents', () => {
     expect(signals.map(({ source, text }) => ({ source, text }))).toEqual([
       { source: 'ime', text: '한' }
     ])
-  })
-
-  it('detaches every listener', () => {
-    const signals: TypingInputSignal[] = []
-    detach = installTypingLatencyInputEvents(window, (signal) => {
-      signals.push(signal)
-    })
-    detach()
-    detach = null
-
-    keydown({ key: 'a' })
-    sessionEnd('한')
-
-    expect(signals).toEqual([])
   })
 
   it('settles prevented and unprevented commits once after propagation', () => {

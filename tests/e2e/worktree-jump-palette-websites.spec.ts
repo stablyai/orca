@@ -32,6 +32,28 @@ for (const theme of ['light', 'dark'] as const) {
     await input.fill('brex login')
     await expect(website).toHaveCount(0)
 
+    await input.fill('readthedocs.io')
+    await expect(website).toContainText('Go to readthedocs.io')
+    await expect(website).toHaveAttribute('data-selected', 'true')
+
+    await orcaPage.evaluate(() => {
+      window.__store!.setState((state) => ({
+        worktreesByRepo: Object.fromEntries(
+          Object.entries(state.worktreesByRepo).map(([repoId, worktrees]) => [
+            repoId,
+            worktrees.map((worktree) =>
+              worktree.id === state.activeWorktreeId
+                ? { ...worktree, displayName: 'project.dev server' }
+                : worktree
+            )
+          ])
+        )
+      }))
+    })
+    await input.fill('project.dev')
+    await expect(palette.locator('[cmdk-item]').first()).toContainText('Go to project.dev')
+    await expect(website).toHaveAttribute('data-selected', 'true')
+
     const server = await startBrowserLinkServer()
     try {
       const address = server.sourceUrl.replace('http://', '')

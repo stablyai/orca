@@ -138,9 +138,7 @@ describe('notification workspace labels', () => {
     }
   )
 
-  // A repo id is registered per host, so two hosts can hold one id at different
-  // paths. Their worktree ids are then unique, so the collision lives entirely in
-  // the repo lookup — the id-keyed repo map is last-wins and names the wrong project.
+  // Repo IDs collide across hosts independently of workspace IDs; bare-ID last-wins lookup can name the wrong project.
   function duplicateRepoIdAcrossHosts(): Repo[] {
     return [
       {
@@ -233,14 +231,7 @@ describe('notification workspace labels', () => {
     } as const
     type CollidingHostId = keyof typeof HOSTS
 
-    /**
-     * Reachability: both rows land through the production per-host merge, which
-     * replaces only the refreshing host's rows and keeps every other host's.
-     *
-     * `naiveWinner` refreshes first and is listed last in `repos`, so it is the row
-     * a first-wins worktree map AND a last-wins repo map both answer with. Naming
-     * the other host therefore cannot pass by accident.
-     */
+    // Real per-host merges retain both rows; order the wrong host to win both naive first-worktree and last-repo lookups so correct ownership cannot pass accidentally.
     function stateWithCollidingHosts(naiveWinner: CollidingHostId) {
       const rival: CollidingHostId = naiveWinner === 'local' ? 'ssh:build-box' : 'local'
       const repos: Repo[] = [rival, naiveWinner].map((hostId) => ({

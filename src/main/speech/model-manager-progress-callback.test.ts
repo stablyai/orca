@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { ModelManager } from './model-manager'
+import { openElectronSpeechDownloadRequest } from '../host/electron-speech-services'
 
 vi.mock('electron', () => ({
   app: {
@@ -23,7 +24,7 @@ describe('ModelManager progress callbacks', () => {
   it('unsubscribes progress callbacks without replacing other listeners', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
     try {
-      const manager = new ModelManager(dir)
+      const manager = new ModelManager(dir, openElectronSpeechDownloadRequest)
       const internals = manager as unknown as ModelManagerInternals
       const first = vi.fn()
       const second = vi.fn()
@@ -49,7 +50,7 @@ describe('ModelManager progress callbacks', () => {
   it('coalesces per-chunk download progress to whole percent', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
     try {
-      const manager = new ModelManager(dir)
+      const manager = new ModelManager(dir, openElectronSpeechDownloadRequest)
       const internals = manager as unknown as ModelManagerInternals
       const listener = vi.fn()
       manager.setProgressCallback(listener)

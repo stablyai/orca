@@ -1,3 +1,5 @@
+import { useAppStore } from '@/store'
+import { subscribeRuntimeHostContactRegained } from '@/runtime/runtime-host-contact-regained'
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { notifyStructuredAttentionView } from '@/attention/agent-subject-read-actions'
 import { structuredAttentionReadObservation } from './structured-attention-read-observation'
@@ -31,10 +33,20 @@ export function useStructuredAgentSessionRead(args: {
   const { sessionId, target, isVisible = true } = args
   const { owner, snapshot } = useReadOwnerSnapshot(sessionId, target)
   const isViewed = args.isViewed ?? isVisible
+  const environmentId = target.kind === 'environment' ? target.environmentId : null
   const observationKey = structuredAttentionReadObservation(snapshot.state)
   const lastView = useRef<{ owner: typeof owner; observationKey: string } | null>(null)
 
-  useEffect(() => (isVisible ? owner.activate() : undefined), [isVisible, owner])
+  useEffect(() => {
+    if (isVisible) {
+      return owner.activate({
+        getState: useAppStore.getState,
+        subscribeRetryNow: (retry) =>
+          environmentId ? subscribeRuntimeHostContactRegained(environmentId, retry) : () => {}
+      })
+    }
+    return undefined
+  }, [isVisible, owner, environmentId])
   useEffect(() => {
     const observedCursor = snapshot.state.cursor
     if (!isViewed) {
@@ -61,7 +73,10 @@ export function useStructuredAgentSessionRead(args: {
     readCurrent: snapshot.current,
     loadingOlder: snapshot.loadingOlder,
     olderHistoryGeneration: snapshot.olderHistoryGeneration,
+    initialHistoryAutoLoad: snapshot.initialHistoryAutoLoad,
     loadOlder: owner.loadOlder,
+    retainHistory: owner.retainHistory,
+    trimHistory: owner.trimHistory,
     providerSession: snapshot.providerSession
   }
 }

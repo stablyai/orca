@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import { TERMINAL_METHODS } from './methods/terminal'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
 import {
@@ -11,7 +11,7 @@ import {
   decodeTerminalStreamFrame,
   decodeTerminalStreamJson,
   decodeTerminalStreamText
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   const registry = createSubscriptionRegistryDouble()
@@ -20,8 +20,7 @@ function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeSe
     getRuntimeId: () => 'test-runtime',
     registerOwnedSubscriptionCleanup: registry.registerOwnedSubscriptionCleanup,
     subscribeToPtyExit: vi.fn(() => vi.fn()),
-    // Why: subscribe streams register as remote view subscribers for Phase-5
-    // query-authority suppression (terminal-query-authority.md).
+    // View registration suppresses competing model query replies (terminal-query-authority.md).
     registerRemoteTerminalViewSubscriber: () => () => {},
     requestRendererTerminalTabMount: () => false,
     ...overrides
@@ -144,7 +143,13 @@ describe('terminal subscribe buffering', () => {
 
     await vi.waitFor(() => expect(runtime.handleMobileSubscribe).toHaveBeenCalled())
     expect(dataListener).toBeDefined()
-    expect(registerRemoteTerminalViewSubscriber).toHaveBeenCalledWith('pty-1')
+    expect(registerRemoteTerminalViewSubscriber).toHaveBeenCalledWith(
+      'pty-1',
+      undefined,
+      'phone-1',
+      false,
+      undefined
+    )
     dataListener?.('\x1b[6n', { seq: 4, rawLength: 4 })
     resolveMobileSubscribe()
 
@@ -302,8 +307,7 @@ describe('terminal subscribe buffering', () => {
       expect(await outcomePromise).toBe('settled')
       expect(runtime.subscribeToTerminalData).not.toHaveBeenCalled()
       expect(runtime.subscribeToFitOverrideChanges).not.toHaveBeenCalled()
-      // Cleanup must exist before snapshot work so an abort cannot orphan a
-      // desktop width floor, but the abort must consume it before listeners start.
+      // Install cleanup before snapshot work to protect width floors; consume it on abort before adding listeners.
       expect(runtime.registerOwnedSubscriptionCleanup).toHaveBeenCalledWith(
         'terminal-1:desktop-1',
         expect.any(Function),
@@ -312,7 +316,7 @@ describe('terminal subscribe buffering', () => {
       )
       expect(registry.peekCleanup('terminal-1:desktop-1')).toBeUndefined()
       expect(runtime.waitForTerminal).not.toHaveBeenCalled()
-      // The consumed cleanup emits the terminating frame; no snapshot/data may leak past it.
+      // After cleanup ends the stream, no snapshot or data may leak.
       expect(messages.map((msg) => JSON.parse(msg).result?.type)).toEqual(['end'])
     } finally {
       vi.useRealTimers()
@@ -551,11 +555,7 @@ describe('terminal subscribe buffering', () => {
         (frame) => frame.opcode === TerminalStreamOpcode.SnapshotStart
       )
       const decodedStarts = snapshotStarts.map((frame) => decodeTerminalStreamJson(frame.payload))
-      // Why one snapshot: overflow during the initial serialize is recovered
-      // INLINE (drop pending, re-read, re-serialize) before anything is sent,
-      // so the client's first scrollback snapshot is already current. The
-      // 'resized'/pending-output-overflow follow-up path remains only for
-      // overflow that begins after the initial snapshot went out.
+      // Initial overflow recovers inline before first publication; resized recovery handles overflow beginning after that snapshot.
       expect(decodedStarts).toEqual([expect.objectContaining({ kind: 'scrollback', seq })])
       const snapshotText = decodedFrames
         .filter((frame) => frame.opcode === TerminalStreamOpcode.SnapshotChunk)
@@ -802,9 +802,7 @@ describe('terminal subscribe buffering', () => {
       await vi.waitFor(() => expect(runtime.serializeTerminalBuffer).toHaveBeenCalled())
       snapshotResolvers[0]?.({ data: '', cols: 120, rows: 40, seq: 0, source: 'headless' })
       await vi.waitFor(() => expect(runtime.serializeTerminalBuffer).toHaveBeenCalledTimes(2))
-      // Why applying is safe without a seq here: inline recovery serialized
-      // AFTER dropping the overflowed pending queue, so the snapshot covers
-      // those chunks by construction — no seq-based trimming is needed.
+      // Inline recovery drops pending before serialization, so the snapshot covers those chunks even without seq.
       snapshotResolvers[1]?.({
         data: 'renderer fallback snapshot\r\n',
         cols: 120,
@@ -822,7 +820,7 @@ describe('terminal subscribe buffering', () => {
       const snapshotStart = decodedFrames.find(
         (frame) => frame.opcode === TerminalStreamOpcode.SnapshotStart
       )
-      // Why: layout versions and output offsets are different sequence domains.
+      // Layout versions and output offsets use separate sequence domains.
       const snapshotInfo = decodeTerminalStreamJson(snapshotStart!.payload)
       expect(snapshotInfo).toMatchObject({ kind: 'scrollback' })
       expect(snapshotInfo).not.toHaveProperty('seq')
@@ -835,8 +833,7 @@ describe('terminal subscribe buffering', () => {
         .filter((frame) => frame.opcode === TerminalStreamOpcode.Output)
         .map((frame) => decodeTerminalStreamText(frame.payload))
         .join('')
-      // Why empty: the overflowed pending queue was dropped before the
-      // covering snapshot was serialized; nothing needs replay.
+      // Pending overflow was dropped before the covering snapshot; replay must be empty.
       expect(output).toBe('')
 
       runtime.cleanupSubscription('terminal-1:desktop-1')

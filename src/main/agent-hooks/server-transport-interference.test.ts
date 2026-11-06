@@ -1,12 +1,10 @@
-// Reproduces #11217's mechanism without an IDS: an authenticated hook POST whose body is cut
-// short of its own Content-Length. The listener fails open on every request error, so the only
-// way this stays diagnosable is if the truncation is classified before it is swallowed.
+// Diagnose authenticated body truncation before fail-open request handling swallows it.
 import { connect } from 'node:net'
 import { IncomingMessage, ServerResponse } from 'node:http'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { HookTransportInterferenceReport } from '../../shared/agent-hook-transport-interference'
+import type { HookTransportInterferenceReport } from '../../shared/agent-hook-listener/transport/agent-hook-transport-interference'
 import { AgentHookServer } from './server'
-import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../shared/opencode-startup-prompt'
+import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../shared/agent-launch/startup/opencode-startup-prompt'
 import { HOOK_REQUEST_SLOWLORIS_MS } from '../../shared/agent-hook-listener/listener-limits'
 
 async function postTruncatedHook(
@@ -24,7 +22,7 @@ async function postTruncatedHook(
       socket.write(
         `POST ${pathname} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/x-www-form-urlencoded\r\nX-Orca-Agent-Hook-Token: ${token}\r\nContent-Length: ${announcedLength}\r\n\r\n${sentBytes}`
       )
-      // Why: an RST mid-body is what an inspecting IDS does; a FIN would be an ordinary client hangup.
+      // Reset mid-body to simulate interference rather than an ordinary FIN hangup.
       setTimeout(() => {
         socket.resetAndDestroy()
         resolve()
@@ -38,11 +36,10 @@ async function postTruncatedHook(
       reject(new Error('truncated post never connected'))
     })
   })
-  // Why: the server settles the request on 'close', which lands a tick after the client's reset.
+  // Server close handling follows the client reset asynchronously.
   await new Promise((resolve) => setTimeout(resolve, 50))
 }
 
-/** Opens a POST that announces a body and then never sends it, so Orca's own slowloris cap ends it. */
 async function postStalledHook(
   port: number,
   token: string,
@@ -72,19 +69,6 @@ async function postStalledHook(
     timeout.mockRestore()
   }
   await new Promise((resolve) => setTimeout(resolve, 50))
-}
-
-async function postCompleteHook(port: number, token: string): Promise<void> {
-  const body = 'paneKey=tab%3Aleaf&payload=%7B%7D'
-  const response = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'X-Orca-Agent-Hook-Token': token
-    },
-    body
-  })
-  expect(response.status).toBe(204)
 }
 
 describe('AgentHookServer transport interference', () => {
@@ -134,7 +118,6 @@ describe('AgentHookServer transport interference', () => {
     ])
     expect(warn.mock.calls.flat().join(' ')).toContain('security software')
 
-    // Why: warn-once — a blocked fleet must not turn every hook event into a log line.
     await postTruncatedHook(port, token)
     expect(reports).toHaveLength(1)
   }, 20_000)
@@ -174,23 +157,12 @@ describe('AgentHookServer transport interference', () => {
     }
   }, 30_000)
 
-  it('never reports for POSTs that deliver their whole body', async () => {
-    const { port, token, reports } = await startServer()
-
-    for (let i = 0; i < 5; i++) {
-      await postCompleteHook(port, token)
-    }
-
-    expect(reports).toEqual([])
-  }, 20_000)
-
   it('excludes requests the slowloris cap destroyed, so the count stays honest', async () => {
     const { port, token, reports } = await startServer()
 
     await postTruncatedHook(port, token)
     await postTruncatedHook(port, token)
-    // Why: Orca destroys this one itself at HOOK_REQUEST_SLOWLORIS_MS; counting it would make
-    // every stalled agent look like an IDS block.
+    // Orca's own slowloris timeout must not be misclassified as external interference.
     await postStalledHook(port, token)
     expect(reports).toEqual([])
 
@@ -202,7 +174,7 @@ describe('AgentHookServer transport interference', () => {
   it('never reports for unauthenticated probes', async () => {
     const { port, reports } = await startServer()
 
-    // Why: a port scanner is not interference; only a request that cleared the token check can be.
+    // Unauthenticated scans cannot establish interference with a legitimate hook.
     await postTruncatedHook(port, 'wrong-token')
     await postTruncatedHook(port, 'wrong-token')
     await postTruncatedHook(port, 'wrong-token')

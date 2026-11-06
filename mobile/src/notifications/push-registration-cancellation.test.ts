@@ -22,6 +22,7 @@ vi.mock('../mobile-web-shell/removed-host-shell-cache', () => ({
   forgetHostUpdateFailures: async () => undefined,
   deleteHostPageCache: async () => undefined
 }))
+vi.mock('../device-store/device-store', () => ({ wipeHostStore: async () => undefined }))
 vi.mock('./mobile-push-lease-renewal', () => ({ startMobilePushLeaseRenewal: () => () => {} }))
 
 const storage = new Map<string, string>()
@@ -130,7 +131,7 @@ it('does not register with stale consent after the user disables notifications d
   )
 })
 
-it('waits for the Android notification channel before registering a token', async () => {
+it('waits for notification channel readiness before requesting a token', async () => {
   const pending = deferred<void>()
   vi.mocked(ensureDesktopNotificationChannel).mockReturnValueOnce(pending.promise)
   const connection = client()

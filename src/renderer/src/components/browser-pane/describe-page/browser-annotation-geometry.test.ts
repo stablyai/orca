@@ -72,9 +72,7 @@ describe('browser annotation composer placement', () => {
     expect(anchorFor({ x: 800, y: 150, width: 300, height: 300 }, 1400, 600).side).toBe('left')
   })
 
-  // Nothing fits here, so the card overlaps wherever Radix ends up putting it — this pins the
-  // anchor only. Where the card finally lands is Radix's to decide and is measured against the
-  // real popover in a browser, which jsdom cannot do.
+  // Only the anchor is asserted: when nothing fits, Radix collision handling controls the final overlap and needs a real browser to measure.
   it('anchors to the deeper vertical band when no side can hold the card', () => {
     const anchor = anchorFor({ x: 20, y: 20, width: 860, height: 560 }, 900, 600)
     expect(anchor.side).toBe('bottom')

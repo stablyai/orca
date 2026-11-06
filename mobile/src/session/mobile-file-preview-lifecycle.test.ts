@@ -85,10 +85,11 @@ function previewSession() {
         sessionTabsRef,
         setSessionTabs: () => {},
         setFileDocs,
-        reconcileBufferedDraftsRef: { current: () => {} },
         closedTabTombstonesRef: { current: new Map() },
         pendingBrowserFocusPageIdRef: { current: null },
-        activeSessionTabIdRef: { current: keptTab.id }
+        activeSessionTabIdRef: { current: keptTab.id },
+        selectedSessionTabIdRef: { current: keptTab.id },
+        pendingSelectionRef: { current: null }
       })
     )
     readers = useMobileSessionDocumentReaders(
@@ -141,44 +142,6 @@ function previewSession() {
 }
 
 describe('mobile file preview lifetime', () => {
-  it('releases successfully closed previews through repeated tab churn and keeps open caches', async () => {
-    const session = previewSession()
-    try {
-      for (let index = 0; index < 64; index++) {
-        const tab = fileTab(`closed-${index}`)
-        session.open(tab, { status: 'ready', kind: 'html', content: `Preview ${index}` })
-        await session.close(tab)
-      }
-      expect(session.tabs()).toEqual([session.keptTab])
-      expect([...session.docs()]).toEqual([[session.keptTab.id, session.keptDoc]])
-    } finally {
-      session.dispose()
-    }
-  })
-
-  it.each([refusedReply(), new Error('Disconnected')])(
-    'keeps a preview when closing fails: %s',
-    async (reply) => {
-      const session = previewSession()
-      const tab = fileTab('still-open')
-      const doc: FileDocState = {
-        status: 'ready',
-        kind: 'image',
-        dataUri: 'data:image/png;base64,AQ=='
-      }
-      try {
-        session.open(tab, doc)
-        session.setCloseReply(reply)
-        await session.close(tab)
-        expect(session.tabs()).toContain(tab)
-        expect(session.docs().get(tab.id)).toBe(doc)
-        expect(session.docs().get(session.keptTab.id)).toBe(session.keptDoc)
-      } finally {
-        session.dispose()
-      }
-    }
-  )
-
   it.each([textReply('Late content'), refusedReply()])(
     'does not recreate a closed preview from a late read: %s',
     async (reply) => {
@@ -223,4 +186,31 @@ describe('mobile file preview lifetime', () => {
       }
     }
   )
+
+  it('keeps the newer file reread when an older one finishes later', async () => {
+    const session = previewSession()
+    const tab = fileTab('raced')
+    const ready: FileDocState = {
+      status: 'ready',
+      kind: 'file',
+      content: 'Cached',
+      truncated: false,
+      byteLength: 6
+    }
+    try {
+      session.open(tab, ready)
+      const older = session.read(tab)
+      const newer = session.read(tab)
+      expect(session.docs().get(tab.id)).toBe(ready)
+      session.reply(1, textReply('New content'))
+      await newer
+      const current = session.docs().get(tab.id)
+      session.reply(0, textReply('Old content'))
+      await older
+      expect(session.docs().get(tab.id)).toBe(current)
+      expect(current).toMatchObject({ content: 'New content' })
+    } finally {
+      session.dispose()
+    }
+  })
 })

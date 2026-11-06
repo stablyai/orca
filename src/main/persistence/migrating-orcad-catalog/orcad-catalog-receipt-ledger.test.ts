@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultPersistedState } from '../../../shared/constants'
-import { MAX_ORCAD_MIGRATION_IMPORT_RECEIPTS } from '../../../shared/orcad-migration-manifest'
-import { manifest } from '../../persistence-orcad-migration-catalog-fixture'
+import { MAX_ORCAD_MIGRATION_IMPORT_RECEIPTS } from '../../../shared/orcad-migration/orcad-migration-manifest-validation'
+import { manifest } from './persistence-orcad-migration-catalog-fixture'
 import {
   expireOrcadMigrationStages,
   findOrcadMigrationImportReceipt,

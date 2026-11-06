@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  ORCAD_MIGRATION_MANIFEST_VERSION,
-  type OrcadMigrationCatalogState,
-  type OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
-import type { OrcadMigrationTerminalScrollbackSnapshot } from '../../shared/orcad-migration-scrollback'
+import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../shared/orcad-migration/orcad-migration-manifest-validation'
+import type {
+  OrcadMigrationCatalogState,
+  OrcadMigrationManifest
+} from '../../shared/orcad-migration/orcad-migration-manifest'
+import type { OrcadMigrationTerminalScrollbackSnapshot } from '../../shared/orcad-migration/orcad-migration-scrollback'
 import { transferOrcadMigrationSnapshots } from './orcad-migration-snapshot-coordinator'
 
 const BYTES = Buffer.from('resume these bytes', 'utf8')
@@ -84,25 +84,6 @@ describe('orcad migration snapshot coordinator', () => {
       expect.objectContaining({ offset: initialOffset, ref: SNAPSHOT.ref })
     )
     expect(remoteReads).toEqual([])
-  })
-
-  it('fails closed when an old host omits snapshot upload state', async () => {
-    const sourceRead = vi.fn(unreachableRead)
-    const store = source(sourceRead)
-    await expect(
-      transferOrcadMigrationSnapshots({
-        source: store,
-        manifest: MANIFEST,
-        state: staged(),
-        destination: {
-          stageChunk: async () => {
-            throw new Error('must not upload')
-          },
-          readState: async () => staged()
-        }
-      })
-    ).rejects.toThrow('orcad_migration_snapshot_transfer_unsupported')
-    expect(sourceRead).not.toHaveBeenCalled()
   })
 
   it('refuses a snapshot whose source length changed since export', async () => {

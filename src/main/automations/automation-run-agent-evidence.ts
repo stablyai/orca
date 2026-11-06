@@ -1,57 +1,27 @@
-/**
- * What an idle pane says about a run. A ready shell prompt satisfies `tui-idle` too, so a prompt
- * typed at a shell whose agent is not installed ("command not found") would read as finished.
- * The agent's own status for the run's pane, reported since the run started, completes it as on
- * the desktop. Not every agent reports status (no hooks on the host, no recognised title), so for
- * those an idle pane still means done, but only after the agent had time to start and only when
- * no shell refused its command.
- */
 import type { AutomationRun } from '../../shared/automations-types'
+import {
+  automationRunFailure,
+  type AutomationRunFailure
+} from '../../shared/automation-run-failure-copy'
+import {
+  isTurnDoneSince,
+  judgeIdleAgentTurn,
+  type AgentTurnStatusRow
+} from '../runtime/agent-state-rules/agent-turn-idle-verdict'
 
-/** Covers agent spin-up over SSH before an idle pane without agent status is believed. */
-export const AGENT_START_GRACE_MS = 2 * 60 * 1000
-/** Only output after the prompt: a refusal further up predates this run. */
-const MISSING_COMMAND_TAIL_LINES = 6
-
-// bash, zsh, dash/sh, fish, PowerShell and cmd.exe refusing a command that does not exist.
-const MISSING_COMMAND_PATTERNS = [
-  /command not found/i,
-  /^\S+: \d+: \S+: not found$/i,
-  /unknown command/i,
-  /is not recognized as (?:the name of a cmdlet|an internal or external command)/i
-]
+export { AGENT_START_GRACE_MS } from '../runtime/agent-state-rules/agent-turn-idle-verdict'
 
 export type AutomationRunAgentEvidence = {
-  /** Agent status rows for a pane, from hooks, OSC and titles alike. */
-  getAgentStatusRowsForPane(paneKey: string): readonly { receivedAt: number }[]
-  /** The names the run's agent command may run under, to tell its refusal from its output. */
+  getAgentStatusRowsForPane(paneKey: string): readonly AgentTurnStatusRow[]
+  /** Executable aliases used to distinguish a launch refusal from ordinary output. */
   agentCommandsForRun(run: AutomationRun): readonly string[]
 }
 
 export type IdleRunVerdict =
   | { kind: 'completed' }
-  | { kind: 'failed'; error: string }
+  | ({ kind: 'failed' } & AutomationRunFailure)
   /** An idle shell that may not have started the agent yet. */
   | { kind: 'wait' }
-
-/** A shell refusing one of the agent's own commands; an agent's tool output never matches. */
-export function findMissingCommandLine(
-  tail: readonly string[],
-  commands: readonly string[]
-): string | null {
-  const names = commands.map((command) => command.split(/\s+/)[0]).filter(Boolean)
-  const recent = tail
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .slice(-MISSING_COMMAND_TAIL_LINES)
-  return (
-    recent.find(
-      (line) =>
-        MISSING_COMMAND_PATTERNS.some((pattern) => pattern.test(line)) &&
-        names.some((name) => line.includes(name))
-    ) ?? null
-  )
-}
 
 export function judgeIdleRun(
   evidence: AutomationRunAgentEvidence,
@@ -60,19 +30,48 @@ export function judgeIdleRun(
   runStartedAt: number,
   now: number
 ): IdleRunVerdict {
-  const paneKey = run.terminalPaneKey
-  if (
-    paneKey &&
-    evidence.getAgentStatusRowsForPane(paneKey).some((row) => row.receivedAt >= runStartedAt)
-  ) {
-    return { kind: 'completed' }
-  }
-  const missing = findMissingCommandLine(tail, evidence.agentCommandsForRun(run))
-  if (missing) {
+  const verdict = judgeIdleAgentTurn(
+    {
+      rows: run.terminalPaneKey ? evidence.getAgentStatusRowsForPane(run.terminalPaneKey) : [],
+      // Ignore completion evidence from before this run’s prompt.
+      sentAt: run.dispatchedAt ?? runStartedAt,
+      tail,
+      readAgentCommands: () => evidence.agentCommandsForRun(run)
+    },
+    now
+  )
+  if (verdict.kind === 'failed') {
     return {
       kind: 'failed',
-      error: `Automation agent did not start; this host could not run its command (${missing}).`
+      error: `Automation agent did not start; this host could not run its command (${verdict.missingCommandLine}).`
     }
   }
-  return now - runStartedAt >= AGENT_START_GRACE_MS ? { kind: 'completed' } : { kind: 'wait' }
+  if (verdict.kind === 'completed' && verdict.interrupted) {
+    return { kind: 'failed', ...automationRunFailure('agentInterrupted') }
+  }
+  return verdict.kind === 'completed' ? { kind: 'completed' } : verdict
+}
+
+/** The run's verdict once the agent reported its turn done at least `heldForMs` ago and no row of its pane says otherwise; null until then. Decided from one read of the rows, so a row cleared afterwards cannot change it. */
+export function judgeHeldRunTurn(
+  evidence: AutomationRunAgentEvidence,
+  run: AutomationRun,
+  runStartedAt: number,
+  now: number,
+  heldForMs: number
+): Exclude<IdleRunVerdict, { kind: 'wait' }> | null {
+  const sentAt = run.dispatchedAt ?? runStartedAt
+  const rows = (
+    run.terminalPaneKey ? evidence.getAgentStatusRowsForPane(run.terminalPaneKey) : []
+  ).filter((row) => !row.providerSessionOnly)
+  const done = rows.filter((row) => isTurnDoneSince(row, sentAt))
+  if (
+    !rows.every((row) => row.state === 'done') ||
+    !done.some((row) => now - row.stateStartedAt >= heldForMs)
+  ) {
+    return null
+  }
+  return done.some((row) => row.interrupted === true)
+    ? { kind: 'failed', ...automationRunFailure('agentInterrupted') }
+    : { kind: 'completed' }
 }

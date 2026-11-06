@@ -1,8 +1,8 @@
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import { recheckUnconfirmedStructuredAgentLaunches } from '../../lib/structured-agent-session-launch-unconfirmed-recheck'
+import { recheckUnconfirmedStructuredAgentLaunches } from '../../lib/agent-session/launch/structured-agent-session-launch-unconfirmed-recheck'
 import { useAppStore } from '../../store'
-import { recoverWebSessionTerminalOrphansBeforeApply } from '../web-session-terminal-orphan-recovery'
+import { recoverMirroredTerminalOrphansBeforeApply } from './mirror-terminal-orphan-recovery'
 import { queueAcceptedWebSessionTerminalSnapshot } from '../web-session-terminal-handle-events'
 import {
   recordReceivedWebSessionTabsInventory,
@@ -14,6 +14,7 @@ import {
   WEB_SESSION_TABS_FRAME_OUTRANKED
 } from './tracking-decisions'
 import { acceptReplayedWebSessionTabsSnapshot } from './tracking-lifecycle'
+import { applyReceivedAgentSenderPublications } from './received-agent-sender-publications'
 import { applyWebSessionTabsSnapshots } from './snapshot-api'
 import {
   latestSessionTabsSnapshotByWorktree,
@@ -37,7 +38,6 @@ export type GlobalSessionInventoryEventArgs = {
   coordinator: VisibilityResumeCoordinator
 }
 
-/** Apply a full-inventory frame from the all-worktrees stream, fencing visibility omissions. */
 export function handleGlobalSessionInventoryEvent({
   environmentId,
   expectedEnvironmentConnectionGeneration,
@@ -53,16 +53,6 @@ export function handleGlobalSessionInventoryEvent({
 }: GlobalSessionInventoryEventArgs): void {
   const skipUnchangedResumeWork = awaitingVisibilityResumeInventory.value && !replayed
   awaitingVisibilityResumeInventory.value = false
-  const unchanged = event.snapshots.map((snapshot) => {
-    const key = `${environmentId}:${snapshot.worktree}`
-    const freshness = latestSessionTabsSnapshotByWorktree.get(key)
-    return Boolean(
-      skipUnchangedResumeWork &&
-      !replayableSessionTabsSnapshotByWorktree.has(key) &&
-      freshness?.publicationEpoch === snapshot.publicationEpoch &&
-      freshness.snapshotVersion === snapshot.snapshotVersion
-    )
-  })
   const receivedFrames = event.snapshots.map((snapshot) => {
     const frame = recordReceivedWebSessionTabsSnapshot(
       environmentId,
@@ -72,6 +62,18 @@ export function handleGlobalSessionInventoryEvent({
     )
     coordinator.recordSnapshotReceipt(environmentId, snapshot, frame, runtimeId)
     return frame
+  })
+  applyReceivedAgentSenderPublications(environmentId, event.snapshots, runtimeId)
+  // After receipt: a held close dropped at receipt marks its unchanged frame for redraw.
+  const unchanged = event.snapshots.map((snapshot) => {
+    const key = `${environmentId}:${snapshot.worktree}`
+    const freshness = latestSessionTabsSnapshotByWorktree.get(key)
+    return Boolean(
+      skipUnchangedResumeWork &&
+      !replayableSessionTabsSnapshotByWorktree.has(key) &&
+      freshness?.publicationEpoch === snapshot.publicationEpoch &&
+      freshness.snapshotVersion === snapshot.snapshotVersion
+    )
   })
   const inventoryFrame = recordReceivedWebSessionTabsInventory(environmentId)
   const missing = coordinator.recordInventoryReceipt(
@@ -87,7 +89,7 @@ export function handleGlobalSessionInventoryEvent({
     event.snapshots.map((snapshot, index) =>
       unchanged[index]
         ? Promise.resolve(snapshot)
-        : recoverWebSessionTerminalOrphansBeforeApply(
+        : recoverMirroredTerminalOrphansBeforeApply(
             useAppStore.getState(),
             snapshot,
             environmentId,
@@ -131,11 +133,19 @@ export function handleGlobalSessionInventoryEvent({
         decisions[index]!.apply ? [snapshot] : []
       )
       settleHydration = applyWebSessionTabsStorePatch(
-        (state) => applyWebSessionTabsSnapshots(state, freshSnapshots, environmentId),
+        (state, changedAgentPaneKeys) =>
+          applyWebSessionTabsSnapshots(
+            state,
+            freshSnapshots,
+            environmentId,
+            undefined,
+            changedAgentPaneKeys
+          ),
         {
           frames: applicable.map(({ snapshot }, index) => ({
             environmentId,
             worktreeId: snapshot.worktree,
+            source: snapshot,
             decision: decisions[index]!,
             expectedEnvironmentConnectionGeneration,
             expectedEnvironmentPairingRevision,
@@ -175,7 +185,6 @@ export function handleGlobalSessionInventoryEvent({
         settleHydration?.()
       }
     })
-  // Each subscription opens with one census: the host is reachable again. Chats it lists were
-  // already settled as published above, before any recovery await.
+  // Each subscription opens with one census: recheck launches now that the host is reachable.
   recheckUnconfirmedStructuredAgentLaunches(toRuntimeExecutionHostId(environmentId))
 }

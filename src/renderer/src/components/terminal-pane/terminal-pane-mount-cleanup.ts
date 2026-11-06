@@ -3,7 +3,8 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 import { restoreExpandedLayoutFrom } from './expand-collapse'
-import { captureParkedTerminalPaneCandidates } from './terminal-parked-tab-watchers'
+import './parking/output-watchers/terminal-parked-tab-watchers'
+import { captureParkedTerminalPaneCandidates } from './parking/output-watchers/terminal-parked-watcher-registry'
 import { shouldDetachPaneTransportOnUnmount } from './terminal-pane-lifecycle-primitives'
 import { cancelQueuedTerminalPaneSplitRequests } from './terminal-pane-split-request-routing'
 import {
@@ -13,6 +14,7 @@ import {
   type DeferredSplitPaneHandoffHandle
 } from './deferred-split-pane-handoff'
 import { isTerminalTabPresent } from '@/store/slices/terminal-tab-retirement'
+import { clearTerminalFontSizeOverride } from './appearance/terminal-font-size-overrides'
 import { e2eConfig } from '@/lib/e2e-config'
 import { useAppStore } from '@/store'
 
@@ -37,17 +39,14 @@ export function cleanupTerminalPaneMount(args: {
   const { tabId, worktreeId, managerRef, paneTransportsRef, panePtyBindingsRef } = deps
   const currentStore = useAppStore.getState()
   const currentWorktreeTabs = currentStore.tabsByWorktree[worktreeId]
-  // Queued split cancellation stays worktree-scoped: a tab that merely moved
-  // buckets must still cancel this worktree's queue.
+  // Cancel queued splits by original worktree even if the tab moved buckets.
   const tabRemainsInWorktree = Boolean(
     currentWorktreeTabs?.some((candidate) => candidate.id === tabId)
   )
   if (!tabRemainsInWorktree) {
     cancelQueuedTerminalPaneSplitRequests(tabId, worktreeId)
   }
-  // Handoff retention is deliberately broader: a tab move removes the old
-  // worktree bucket before the replacement surface mounts, so use the shared
-  // global ownership check to let an ID-less deferred split survive a rehome.
+  // Global ownership permits handoff across the bucket gap before a rehomed surface mounts, including deferred splits without PTY IDs.
   const tabStillExists = isTerminalTabPresent(currentStore, tabId)
   unregisterRuntimeTab()
   cancelResize()
@@ -94,8 +93,7 @@ export function cleanupTerminalPaneMount(args: {
     const deferredSplitHandoff = deferredSplitHandoffs.get(paneId)
     if (deferredSplitHandoff) {
       if (tabStillExists && !ptyId) {
-        // Keep only the transient launch record; the old transport and
-        // xterm are still disposable during a whole-tab remount.
+        // Retain only transient launch identity across whole-tab remounts; dispose old transport/xterm.
         releaseDeferredSplitPaneHandoff(deferredSplitHandoff)
       } else {
         clearDeferredSplitPaneHandoff(deferredSplitHandoff)
@@ -116,9 +114,11 @@ export function cleanupTerminalPaneMount(args: {
     }
   }
   if (!tabStillExists) {
-    // Covers a pane whose transport was removed before this cleanup (for
-    // example, a close raced the effect teardown).
+    // Cleanup also covers transports removed by a racing close.
     discardDeferredSplitPaneHandoffsForTab(tabId)
+    for (const pane of manager.getPanes()) {
+      clearTerminalFontSizeOverride(pane.leafId)
+    }
   }
   for (const binding of panePtyBindingsRef.current.values()) {
     binding.dispose()

@@ -1,10 +1,10 @@
-import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspace-worktree'
+import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { RenderRow } from '../listing/render-row'
 import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
-import type { PinnedWorktreeDisplayPolicy } from '../grouping/row-types'
+import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import { isPinnedWorktreeRow } from '../listing/renderable-rows'
 import { getRenderRowWorktreeItem, renderRowContainsWorktree } from './render-row-lookup'
 import { getWorktreeOptionId } from '../rows/option-dom'

@@ -1,5 +1,6 @@
 import { blockMarkdown } from './html-block-markdown'
 import { markdownToHtml } from './markdown-to-html'
+import { WORKSPACE_IMAGE_PATH_ATTRIBUTE } from './markdown-inline-render'
 import { post } from './host-bridge'
 import { editorElement } from './editor-surface'
 import type { RichMarkdownEditorScope } from './document-scope'
@@ -13,27 +14,43 @@ export function currentMarkdown(scope: RichMarkdownEditorScope): string {
     .trimEnd()
 }
 
-/** A checkbox the user could move under a read-only document would record nothing, so it cannot. */
-export function syncTaskCheckboxesDisabled(scope: RichMarkdownEditorScope) {
+// A task's own words: its checkbox label, nested lists and code blocks are not part of its name.
+function ownTaskText(node: Node): string {
+  if (node.nodeType === node.TEXT_NODE) {
+    return node.nodeValue ?? ''
+  }
+  if (!(node instanceof Element) || node.matches('label, ul, ol, pre')) {
+    return ''
+  }
+  if (node.matches('br')) {
+    return ' '
+  }
+  const text = Array.from(node.childNodes, ownTaskText).join('')
+  return node.matches('p, div') ? ` ${text} ` : text
+}
+
+/** Keep task controls named from their own live text and unavailable in read-only documents. */
+export function syncTaskCheckboxes(scope: RichMarkdownEditorScope) {
   editorElement(scope)
     .querySelectorAll<HTMLInputElement>('input[type="checkbox"]')
     .forEach((input) => {
       input.disabled = !scope.editable
+      const item = input.closest('li')
+      const label = (item ? ownTaskText(item).replace(/\s+/g, ' ').trim() : '') || 'Task'
+      if (input.getAttribute('aria-label') !== label) {
+        input.setAttribute('aria-label', label)
+      }
     })
 }
 
-/**
- * Tells the host what the surface now holds, under the generation it was given.
- *
- * The generation goes back out untouched so the host can drop a change that crossed with content
- * it had already replaced. The document's own rewrites are not changes, which is what
- * `suppressInput` says.
- */
+// Echo host generation unchanged for stale-change filtering; suppressInput excludes document’s own rewrites.
 export function emitChange(scope: RichMarkdownEditorScope) {
   if (scope.suppressInput || !scope.editable) {
     return
   }
   scope.clearTimer(scope.inputTimer)
+  syncTaskCheckboxes(scope)
+  showWorkspaceImages(scope)
   const pendingGeneration = scope.documentGeneration
   scope.lastMarkdown = currentMarkdown(scope)
   post(scope, { type: 'change', markdown: scope.lastMarkdown, generation: pendingGeneration })
@@ -47,20 +64,36 @@ export function setMarkdown(scope: RichMarkdownEditorScope, markdown: string, ge
   scope.savedSelectionRange = null
   scope.selectionDroppedOnBlur = false
   scope.lastMarkdown = String(markdown || '')
+  scope.workspaceImageSources.clear()
   editorElement(scope).innerHTML = markdownToHtml(scope, scope.lastMarkdown)
-  syncTaskCheckboxesDisabled(scope)
+  syncTaskCheckboxes(scope)
   scope.suppressInput = false
+  showWorkspaceImages(scope)
 }
 
-/**
- * Takes back the pending input timer, which is the one thing the document owns that outlives it.
- *
- * A listener comes off with the element it was on, but a scheduled callback holds the scope and
- * fires into a document nobody is looking at any more — posting a change to a host that has
- * unmounted the editor, under the generation of content it has replaced. Nothing schedules the
- * handle today; it is cancelled here because the day something does, this is where the cancel has
- * to already be.
- */
+// Edits reuse each render's loads (undo and paste bring back images with no source); a failed path waits for the next render.
+function showWorkspaceImages(scope: RichMarkdownEditorScope) {
+  editorElement(scope)
+    .querySelectorAll<HTMLImageElement>(`img[${WORKSPACE_IMAGE_PATH_ATTRIBUTE}]:not([src])`)
+    .forEach((image) => {
+      const path = image.getAttribute(WORKSPACE_IMAGE_PATH_ATTRIBUTE) ?? ''
+      let source = scope.workspaceImageSources.get(path)
+      if (!source) {
+        source = scope.loadImageSource(path)
+        scope.workspaceImageSources.set(path, source)
+      }
+      source.then(
+        (src) => {
+          if (!scope.stopped && !image.hasAttribute('src')) {
+            image.src = src
+          }
+        },
+        () => {}
+      )
+    })
+}
+
+// Cancel pending callback to release scope and prevent change after unmount/content replacement; currently nothing schedules timer, but cancellation must accompany future use.
 export function stopEditorContent(scope: RichMarkdownEditorScope) {
   scope.clearTimer(scope.inputTimer)
   scope.inputTimer = null
@@ -69,5 +102,5 @@ export function stopEditorContent(scope: RichMarkdownEditorScope) {
 export function setEditable(scope: RichMarkdownEditorScope, editable: boolean) {
   scope.editable = Boolean(editable)
   editorElement(scope).setAttribute('contenteditable', scope.editable ? 'true' : 'false')
-  syncTaskCheckboxesDisabled(scope)
+  syncTaskCheckboxes(scope)
 }

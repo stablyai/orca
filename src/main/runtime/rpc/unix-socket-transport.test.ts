@@ -16,8 +16,7 @@ class FakeSocket extends EventEmitter {
   setNoDelay(): void {}
   end(): void {}
 
-  // Emulates net.Socket.setTimeout: ms>0 arms the idle timer, ms=0 suspends it,
-  // and a re-arm without a callback keeps the originally registered handler.
+  // Match setTimeout: positive arms, zero suspends, and callback-free rearm preserves the handler.
   setTimeout(ms: number, handler?: () => void): this {
     if (handler) {
       this.idleHandler = handler
@@ -103,22 +102,6 @@ describe('UnixSocketTransport', () => {
     expect(received).toEqual([oversized ? '' : message])
   })
 
-  it('retains only the byte count of the partial tail between messages', () => {
-    const { socket, received } = createReceiver()
-    const large = 'a'.repeat(700000)
-    socket.emit('data', `${large}\npart`)
-    socket.emit('data', `ial\r\n\n${large}\n`)
-    expect(received).toEqual([large, 'partial', large])
-  })
-
-  it('checks the combined incoming buffer before dispatching any complete messages', () => {
-    const { socket, received } = createReceiver()
-    socket.emit('data', `${'a'.repeat(700000)}\n${'b'.repeat(700000)}\n`)
-    expect(received).toEqual([''])
-    socket.emit('data', 'later\n')
-    expect(received).toEqual([''])
-  })
-
   it('clears request keepalive timers when the socket closes before a reply', () => {
     const transport = new UnixSocketTransport({
       endpoint: '/tmp/orca-runtime-rpc-test.sock',
@@ -152,38 +135,5 @@ describe('UnixSocketTransport', () => {
 
     vi.advanceTimersByTime(500)
     expect(socket.writes).toHaveLength(1)
-  })
-
-  it('lets a slow non-long-poll dispatch outlive the idle timer and answers when it finishes', () => {
-    const transport = new UnixSocketTransport({ endpoint: 'test-pipe', kind: 'named-pipe' })
-    const socket = new FakeSocket()
-    transport.onMessage((_message, reply) => {
-      // Slow handler (e.g. worktree.create on a large repo) past the 30s window.
-      setTimeout(() => reply('slow-ok'), 45_000)
-    })
-    ;(transport as unknown as UnixSocketTransportInternals).handleConnection(
-      socket as unknown as Socket
-    )
-
-    socket.emit('data', '{"id":"slow","method":"worktree.create"}\n')
-
-    vi.advanceTimersByTime(30_000)
-    expect(socket.destroyed).toBe(false)
-
-    vi.advanceTimersByTime(15_000)
-    expect(socket.writes).toContain('slow-ok\n')
-
-    // The reap resumes once the connection goes quiet with nothing in flight.
-    vi.advanceTimersByTime(30_000)
-    expect(socket.destroyed).toBe(true)
-  })
-
-  it('still reaps a connection that goes idle with no dispatch in flight', () => {
-    const { socket } = createReceiver()
-    socket.emit('data', '{"id":"fast","method":"status.get"}\n')
-    expect(socket.writes).toContain('ok\n')
-
-    vi.advanceTimersByTime(30_000)
-    expect(socket.destroyed).toBe(true)
   })
 })

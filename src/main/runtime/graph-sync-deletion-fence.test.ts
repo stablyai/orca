@@ -1,8 +1,4 @@
-/**
- * Deletion fence: a renderer snapshot that raced a worktree delete must not
- * resurrect the removed occupant's browser/terminal rows in a same-id
- * recreation, while the genuine successor is accepted promptly.
- */
+/** Reject pre-delete frames for recreated ids while accepting the genuine successor. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   RuntimeMobileSessionTabsResult,
@@ -174,8 +170,7 @@ describe('graph-sync deletion fence', () => {
     expect(internals.mobileSessionTabsByWorktree.has(WT)).toBe(false)
     expect(events).toHaveLength(0)
 
-    // A reloaded renderer publishes a fresh generation; the resync-path throw
-    // on a superseded generation needs the graph to leave 'ready' first.
+    // Reloaded renderer generations require leaving ready before testing superseded-generation resync.
     internals.rendererGeneration = null
     sync([makeRendererSnapshot({ version: 1, epoch: 'renderer:gen-2' })], {
       rendererGeneration: 'renderer:gen-2'

@@ -62,14 +62,12 @@ export function useNativeChatSendLifecycle(
     }, handle.settleAfterMs)
   }, [])
 
-  // Why: delayed Enter/image writes belong to the exact PTY target. A pane
-  // swap or unmount must cancel them before that PTY can close or be reused.
+  // Cancel delayed Enter/image writes during commit before a swapped PTY can close or be reused.
   useLayoutEffect(() => cancelPendingSends, [cancelPendingSends, targetPtyId, terminalTabId])
 
   const inputOwnedByCard = cardOwnership?.inputOwnedByCard === true
   const onPendingSendRetired = cardOwnership?.onPendingSendRetired ?? onPendingSendCanceled
-  // Why: once a card owns the agent's input, an unsubmitted Enter would answer it. No line clear
-  // either: it would type under the dialog, and the next send clears the line first.
+  // Card ownership makes a pending Enter an answer; retire it without typing a line-clear under the dialog.
   useLayoutEffect(() => {
     if (inputOwnedByCard) {
       settlePendingSends(onPendingSendRetired, true)

@@ -69,7 +69,7 @@ export async function waitForMacBundleVersion(
     signal?.addEventListener('abort', () => finish(false), { once: true })
     poll = setInterval(check, 250)
     try {
-      // Why: ShipIt replaces the whole .app, so watch its stable parent rather than an inode inside the old bundle.
+      // ShipIt replaces the whole bundle; watch its stable parent.
       watcher = watch(dirname(appBundlePath), check)
       watcher.on('error', () => {
         watcher?.close()

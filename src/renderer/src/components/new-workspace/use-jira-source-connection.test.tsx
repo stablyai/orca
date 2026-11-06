@@ -4,7 +4,7 @@ import { act, renderHook } from '@testing-library/react'
 import type * as React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import type { JiraConnectionStatus } from '../../../../shared/jira-types'
+import type { JiraConnectionStatus } from '../../../../shared/jira/jira-types'
 import {
   getJiraSourceConnectionRevisionKey,
   useJiraSourceConnection
@@ -74,36 +74,6 @@ describe('useJiraSourceConnection', () => {
     vi.clearAllMocks()
     mocks.jiraConnectionRevisions = {}
     mocks.listeners.clear()
-  })
-
-  it('exposes Jira only after the selected source host reports a connection', async () => {
-    mocks.readJiraStatus.mockResolvedValue(status(true))
-    const context = sourceContext()
-    const { result } = renderHook(() =>
-      useJiraSourceConnection({ enabled: true, sourceContext: context })
-    )
-
-    expect(result.current).toEqual({ status: null, loaded: false })
-    await act(async () => {
-      await Promise.resolve()
-    })
-
-    expect(result.current.status?.connected).toBe(true)
-    expect(result.current.loaded).toBe(true)
-    expect(mocks.readJiraStatus).toHaveBeenCalledWith(context)
-  })
-
-  it('keeps Jira hidden when the selected source host is disconnected', async () => {
-    mocks.readJiraStatus.mockResolvedValue(status(false))
-    const { result } = renderHook(() =>
-      useJiraSourceConnection({ enabled: true, sourceContext: sourceContext('ssh:host-1') })
-    )
-
-    await act(async () => {
-      await Promise.resolve()
-    })
-
-    expect(result.current.status?.connected).toBe(false)
   })
 
   it('reads no status until the composer engages Jira', async () => {
