@@ -9,7 +9,11 @@ import type { MobileSessionTab } from './mobile-session-route-types'
 export function notificationPaneTab(tabs: readonly MobileSessionTab[], paneKey: string) {
   const pane = parsePaneKey(paneKey)
   if (!pane) {
-    return undefined
+    return tabs.find(
+      (tab) =>
+        tab.type === 'terminal' &&
+        (tab.terminal === paneKey || tab.id === paneKey || tab.agentStatus?.paneKey === paneKey)
+    )
   }
   return tabs.find((tab) =>
     tab.type === 'terminal'

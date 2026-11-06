@@ -111,6 +111,10 @@ export type AiVaultSessionSubagentInfo = {
 export type AiVaultSessionTitleKind = 'named' | 'fallback'
 
 export type AiVaultSession = {
+  /** A durable Orca conversation with no provider transcript to read or mutate. */
+  source?: 'structured-record'
+  /** Host-proven content; absent or unknown must preserve recoverable conversations. */
+  conversationContent?: 'empty' | 'present' | 'unknown'
   /** Recorded account home; null proves System default, absent means unknown. */
   accountHome?: AgentSessionAccountHome | null
   accountWslDistro?: string | null
@@ -139,7 +143,7 @@ export type AiVaultSession = {
   previewMessagesTruncated?: boolean
   /** Bounded opening-prompt identity for Antigravity history joins; never a rolling preview. */
   antigravityOpeningPrompt?: { hash: string; timestamp: string | null }
-  /** Full first non-injected prompt only on on-demand getFirstUserPrompt reparses; list scans omit it for payload/cost. */
+  /** Opening human prompt; durable journal previews are bounded, provider-file full reads remain on demand. */
   firstUserPrompt?: string | null
   /** Latest provider-authenticated user prompt; absent when the transcript has no trustworthy signal. */
   lastUserPrompt?: string | null
@@ -226,6 +230,10 @@ export type AiVaultScanIssue = {
 } & Omit<AiVaultScanIssueText, 'message'>
 
 export type AiVaultListArgs = {
+  selectedSessionId?: string
+  /** Primary conversation navigation includes durable chats without provider files. */
+  includeStructuredSessions?: boolean
+  historyOwnership?: { projectKey?: string }
   /** Opts a selected runtime-host refresh into content-conditional replies. */
   afterFingerprint?: string | null
   /** Opt-in promises this client starts IDE history in a new CLI conversation. */
@@ -240,6 +248,8 @@ export type AiVaultListArgs = {
 }
 
 export type AiVaultListResult = {
+  /** This host included durable Orca records, even when no provider transcript exists. */
+  includesStructuredSessions?: true
   /** Local scan entry that produced this result; absent for remote and merged results. */
   scanId?: string
   fingerprint?: string

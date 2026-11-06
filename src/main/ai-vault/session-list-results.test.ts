@@ -164,3 +164,19 @@ it('retains recovered scope rows through All-computers aggregation and smaller c
   expect(merged.issues).toEqual([SCOPE_TRUNCATION])
   expect(merged.scannedAt).toBe(local.scannedAt)
 })
+
+it('retains a selected remote conversation beyond the merged result limit', () => {
+  const selected = {
+    ...session(0),
+    executionHostId: 'runtime:server' as const,
+    id: 'remote-selected'
+  }
+  const results = [
+    { ...listResult([]), sessions: [session(2)] },
+    { ...listResult([]), sessions: [session(1), selected] }
+  ]
+  expect(
+    mergeAiVaultListResults(results, 1, false, [], 'remote-selected').sessions.map((row) => row.id)
+  ).toEqual(['session-2', 'remote-selected'])
+  expect(mergeAiVaultListResults(results, 1).sessions.map((row) => row.id)).toEqual(['session-2'])
+})

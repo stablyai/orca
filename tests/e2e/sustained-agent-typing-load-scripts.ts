@@ -150,7 +150,6 @@ function codexEchoProbeScript(
   splitDelayMs: number
 ): string {
   return `
-import { appendFileSync } from 'node:fs'
 
 process.stdin.setEncoding('utf8')
 if (process.stdin.isTTY) process.stdin.setRawMode(true)
