@@ -44,7 +44,7 @@ test('collection lifecycle preserves worktrees and membership rules', async ({
         if (!store) {
           return 0
         }
-        await store.getState().fetchRepos()
+        await store.getState().fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
         await store.getState().updateRepo(repoId, { externalWorktreeVisibility: 'show' })
         await store.getState().fetchWorktrees(repoId)
         return store.getState().worktreesByRepo[repoId]?.length ?? 0
