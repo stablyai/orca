@@ -65,6 +65,22 @@ export function buildNewExternalWorktreesInboxRow(
   }
 }
 
+function hiddenDescendantIds(
+  occurrences: readonly WorktreeOccurrence<Worktree>[],
+  parent: WorktreeOccurrence<Worktree>
+): string[] {
+  const ids: string[] = []
+  const start = occurrences.indexOf(parent)
+  for (let index = start + 1; start !== -1 && index < occurrences.length; index++) {
+    const occurrence = occurrences[index]!
+    if (occurrence.depth <= parent.depth) {
+      break
+    }
+    ids.push(occurrence.row.id)
+  }
+  return ids
+}
+
 export function appendWorktreeRows(
   result: Row[],
   repoOf: RepoOfWorktree,
@@ -125,7 +141,12 @@ export function appendWorktreeRows(
       ...(occurrence.childCount > 0
         ? {
             lineageGroupKey: getWorktreeLineageGroupKey(worktree),
-            lineageCollapsed: options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree))
+            lineageCollapsed: options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree)),
+            ...(options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree))
+              ? {
+                  lineageHiddenDescendantIds: hiddenDescendantIds(sectionOccurrences, occurrence)
+                }
+              : {})
           }
         : {})
     })

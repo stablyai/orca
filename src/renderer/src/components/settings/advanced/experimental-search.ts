@@ -218,8 +218,8 @@ export function getExperimentalSearchEntry() {
     ),
     newWorktreeCardStyle: findEntry(
       translate(
-        'auto.components.settings.experimental.search.newWorktreeCardStyle.title',
-        'New card style'
+        'auto.components.settings.experimental.search.worktreeCardStyle.title',
+        'Card style'
       )
     ),
     ephemeralVms: findEntry(

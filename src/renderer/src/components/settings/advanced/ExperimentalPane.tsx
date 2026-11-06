@@ -1,3 +1,4 @@
+import { getWorktreeCardStyle, worktreeCardStyleSettingsUpdate, type WorktreeCardStyle } from '../../../../../shared/worktree/card-style'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { Label } from '../../ui/label'
 import { Switch } from '../../ui/switch'
@@ -6,7 +7,7 @@ import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { getExperimentalSearchEntry } from './experimental-search'
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
-import { NumberField, SettingsSwitch } from '../form-controls/SettingsFormControls'
+import { NumberField, SettingsSegmentedControl, SettingsSwitch } from '../form-controls/SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { AgentDashboardExperimentalSetting } from '../../dashboard/AgentDashboardExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from '../virtual-machines/recipes/EphemeralVmsExperimentalSetting'
@@ -48,7 +49,7 @@ export function ExperimentalPane({
     getExperimentalSearchEntry().newWorktreeCardStyle
   ])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
-  const newWorktreeCardStyleEnabled = settings.experimentalNewWorktreeCardStyle === true
+  const worktreeCardStyle = getWorktreeCardStyle(settings)
   // Use the planner’s clamped millisecond value/default while editing minutes.
   const agentHibernationIdleMinutes = Math.round(
     getEffectiveAgentHibernationIdleMs(settings.agentHibernationIdleMs) / MS_PER_MINUTE
@@ -214,12 +215,12 @@ export function ExperimentalPane({
       {showNewWorktreeCardStyle ? (
         <SearchableSetting
           title={translate(
-            'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.title',
-            'New card style'
+            'auto.components.settings.ExperimentalPane.worktreeCardStyle.title',
+            'Card style'
           )}
           description={translate(
-            'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.description',
-            'Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.'
+            'auto.components.settings.ExperimentalPane.worktreeCardStyle.copy',
+            'Choose how workspace cards look in the sidebar. Experimental 2.0 shows only what needs you, on the right.'
           )}
           keywords={getExperimentalSearchEntry().newWorktreeCardStyle.keywords}
           className="space-y-3 py-2"
@@ -229,28 +230,48 @@ export function ExperimentalPane({
             <div className="min-w-0 shrink space-y-0.5">
               <Label>
                 {translate(
-                  'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.title',
-                  'New card style'
+                  'auto.components.settings.ExperimentalPane.worktreeCardStyle.title',
+                  'Card style'
                 )}
               </Label>
               <p className="text-xs text-muted-foreground">
                 {translate(
-                  'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.copy',
-                  'Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.'
+                  'auto.components.settings.ExperimentalPane.worktreeCardStyle.copy',
+                  'Choose how workspace cards look in the sidebar. Experimental 2.0 shows only what needs you, on the right.'
                 )}
               </p>
             </div>
-            <SettingsSwitch
-              checked={newWorktreeCardStyleEnabled}
+            <SettingsSegmentedControl<WorktreeCardStyle>
+              size="sm"
+              value={worktreeCardStyle}
+              onChange={(style) => updateSettings(worktreeCardStyleSettingsUpdate(style))}
               ariaLabel={translate(
-                'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.toggleLabel',
-                'Toggle new card style'
+                'auto.components.settings.ExperimentalPane.worktreeCardStyle.ariaLabel',
+                'Card style'
               )}
-              onChange={() =>
-                updateSettings({
-                  experimentalNewWorktreeCardStyle: !newWorktreeCardStyleEnabled
-                })
-              }
+              options={[
+                {
+                  value: 'classic',
+                  label: translate(
+                    'auto.components.settings.ExperimentalPane.worktreeCardStyle.classic',
+                    'Classic'
+                  )
+                },
+                {
+                  value: 'experimental-1',
+                  label: translate(
+                    'auto.components.settings.ExperimentalPane.worktreeCardStyle.experimental1',
+                    'Experimental 1.0'
+                  )
+                },
+                {
+                  value: 'experimental-2',
+                  label: translate(
+                    'auto.components.settings.ExperimentalPane.worktreeCardStyle.experimental2',
+                    'Experimental 2.0'
+                  )
+                }
+              ]}
             />
           </div>
         </SearchableSetting>

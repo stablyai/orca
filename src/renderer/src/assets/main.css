@@ -96,6 +96,7 @@
   --color-agent-question: var(--agent-question);
   --color-agent-working: var(--agent-working);
   --color-agent-question-text: var(--agent-question-text);
+  --color-unread: var(--unread);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -256,6 +257,8 @@
   --agent-working: var(--color-yellow-500);
   /* Legible weight for text/glyphs on a tinted --agent-question surface. */
   --agent-question-text: var(--color-orange-700);
+  /* A finished agent result the user hasn't seen; blue so it never reads as a state color. */
+  --unread: var(--color-blue-500);
   /* Keep PR-state hues stable across theme changes. */
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
@@ -372,6 +375,7 @@
   --ai-action-accent: var(--color-violet-400);
   --agent-question: var(--color-orange-500);
   --agent-question-text: var(--color-orange-300);
+  --unread: var(--color-blue-400);
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
   --workspace-status-progress: #d4a300;
@@ -1563,6 +1567,32 @@ html.native-shell .app-layout {
   );
   --muted: color-mix(in oklab, var(--worktree-sidebar-foreground) 5%, var(--worktree-sidebar));
   --border: color-mix(in oklab, var(--worktree-sidebar-foreground) 5%, var(--worktree-sidebar));
+}
+
+/* Experimental 2.0 lineage guide: painted, so it adds no width; a 5px tick reaches each child's title. */
+.worktree-card-slot-lineage {
+  --worktree-card-slot-guide: color-mix(
+    in srgb,
+    var(--worktree-sidebar-foreground) 16%,
+    transparent
+  );
+  background: linear-gradient(var(--worktree-card-slot-guide), var(--worktree-card-slot-guide))
+    no-repeat 0 0 / 1px 100%;
+}
+
+.worktree-card-slot-lineage > * {
+  position: relative;
+}
+
+.worktree-card-slot-lineage > *::before {
+  content: '';
+  position: absolute;
+  left: -3px;
+  top: 15px;
+  width: 5px;
+  height: 1px;
+  background: var(--worktree-card-slot-guide);
+  pointer-events: none;
 }
 
 .worktree-agent-row-hover:hover {

@@ -187,6 +187,7 @@ export function renderWorktreeItemRow(
         lineageChildCount={itemRow.lineageChildCount}
         lineageChildWorktreeIds={itemRow.lineageChildWorktreeIds}
         lineageCollapsed={itemRow.lineageCollapsed}
+        lineageHiddenDescendantIds={itemRow.lineageHiddenDescendantIds}
         lineageChildren={lineageChildren}
         lineageChildrenStyle={lineageChildrenStyle}
         onLineageToggle={
