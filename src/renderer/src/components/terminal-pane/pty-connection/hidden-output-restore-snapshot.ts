@@ -187,7 +187,11 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
           session.recordRendererOrderedSeq(snapshot)
           if (typeof snapshot.seq === 'number' && restorePtyId) {
             // The replay, pending escape tail included, leaves xterm exactly at the snapshot's position.
-            session.streamPosition.anchor(restorePtyId, snapshot.seq)
+            session.streamPosition.anchor(
+              restorePtyId,
+              snapshot.seq,
+              snapshot.pendingEscapeTailAnsi ?? ''
+            )
           }
           recordTerminalOutput(session.pane.terminal)
           await waitForTerminalReplayWritesParsed(session.pane.terminal)
