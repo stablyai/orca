@@ -38,24 +38,23 @@ export function startHostWorktreeRefresh({
 }: HostWorktreeRefreshArgs): () => void {
   let stale = false
   let eventStreamReady = false
-  // A buried or backgrounded page reads nothing on change notices; the foreground refresh catches up.
-  let worktreesOwed = false
-  let reposOwed = false
-  let viewSettingsOwed = false
+  // Set when a buried or backgrounded page skips notices; coming back then re-reads everything once.
+  let owed = false
   let lastWorktreeReadAt = 0
-  let trailingChangeRefresh: ReturnType<typeof setTimeout> | null = null
+  let trailingRead: ReturnType<typeof setTimeout> | undefined
   const hidden = (): boolean => appState.currentState !== 'active'
 
   const readWorktrees = (options?: WorktreeRefreshOptions): void => {
     lastWorktreeReadAt = Date.now()
     void fetchWorktrees(options)
   }
+  const readEverything = (worktreeOptions?: WorktreeRefreshOptions): void => {
+    readWorktrees(worktreeOptions)
+    void fetchRepoMetadata({ force: true, queueIfInFlight: true })
+    void syncViewSettings({ resend: true })
+  }
   const refreshWorktreesOnChange = (): void => {
-    if (hidden()) {
-      worktreesOwed = true
-      return
-    }
-    if (trailingChangeRefresh) {
+    if (trailingRead) {
       return
     }
     const wait = lastWorktreeReadAt + WORKTREE_REFRESH_MS - Date.now()
@@ -63,26 +62,12 @@ export function startHostWorktreeRefresh({
       readWorktrees()
       return
     }
-    trailingChangeRefresh = setTimeout(() => {
-      trailingChangeRefresh = null
+    trailingRead = setTimeout(() => {
+      trailingRead = undefined
       if (!hidden()) {
         readWorktrees()
       }
     }, wait)
-  }
-  const refreshReposOnChange = (): void => {
-    if (hidden()) {
-      reposOwed = true
-    } else {
-      void fetchRepoMetadata({ force: true, queueIfInFlight: true })
-    }
-  }
-  const syncViewSettingsOnChange = (resend: boolean): void => {
-    if (hidden()) {
-      viewSettingsOwed = true
-    } else {
-      void (resend ? syncViewSettings({ resend }) : syncViewSettings())
-    }
   }
 
   const refreshOnForeground = (): void => {
@@ -90,21 +75,16 @@ export function startHostWorktreeRefresh({
       return
     }
     sidebarFeed?.refresh()
-    if (trailingChangeRefresh) {
-      clearTimeout(trailingChangeRefresh)
-      trailingChangeRefresh = null
+    clearTimeout(trailingRead)
+    trailingRead = undefined
+    if (owed) {
+      owed = false
+      // Queued: a read still in flight was sent before the notices this page skipped.
+      readEverything({ allowDuringModal: true, queueIfInFlight: true })
+      return
     }
-    // Queued after skipped notices: a read still in flight was sent before them.
-    readWorktrees({ allowDuringModal: true, ...(worktreesOwed ? { queueIfInFlight: true } : {}) })
-    void fetchRepoMetadata(
-      reposOwed ? { force: true, queueIfInFlight: true } : { queueIfInFlight: true }
-    )
-    if (viewSettingsOwed) {
-      void syncViewSettings({ resend: true })
-    }
-    worktreesOwed = false
-    reposOwed = false
-    viewSettingsOwed = false
+    readWorktrees({ allowDuringModal: true })
+    void fetchRepoMetadata({ queueIfInFlight: true })
   }
 
   const appStateSubscription = appState.addEventListener('change', (state) => {
@@ -115,7 +95,7 @@ export function startHostWorktreeRefresh({
   const interval = sidebarFeed
     ? null
     : setInterval(() => {
-        if (appState.currentState !== 'active') {
+        if (hidden()) {
           return
         }
         void fetchWorktrees()
@@ -134,12 +114,10 @@ export function startHostWorktreeRefresh({
       if (replayedAfterReconnect) {
         // Why: client events are not queued while disconnected, so re-read both snapshots after replay.
         if (hidden()) {
-          worktreesOwed = true
+          owed = true
         } else {
-          readWorktrees()
+          readEverything()
         }
-        refreshReposOnChange()
-        syncViewSettingsOnChange(true)
       }
       return
     }
@@ -147,19 +125,23 @@ export function startHostWorktreeRefresh({
       eventStreamReady = false
       return
     }
+    if (hidden()) {
+      owed = true
+      return
+    }
     if (event.type === 'sidebarInputsChanged') {
       sidebarFeed?.changed(event)
     } else if (event.type === 'reposChanged') {
       // Why: folder workspace mutations publish reposChanged, and worktree.ps owns this catalog.
       refreshWorktreesOnChange()
-      refreshReposOnChange()
+      void fetchRepoMetadata({ force: true, queueIfInFlight: true })
     } else if (event.type === 'workspaceViewChanged') {
-      syncViewSettingsOnChange(false)
+      void syncViewSettings()
     } else if (event.type === 'worktreesChanged') {
       refreshWorktreesOnChange()
     } else if (event.type === 'sshStateChanged') {
       // Why: host badges carry SSH health, read with the labels from ssh.listTargetSummaries.
-      refreshReposOnChange()
+      void fetchRepoMetadata({ force: true, queueIfInFlight: true })
     }
   })
 
@@ -175,9 +157,7 @@ export function startHostWorktreeRefresh({
 
   return () => {
     stale = true
-    if (trailingChangeRefresh) {
-      clearTimeout(trailingChangeRefresh)
-    }
+    clearTimeout(trailingRead)
     if (interval) {
       clearInterval(interval)
     }
