@@ -1,4 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
+import { boundNativeChatWindow } from '../../../../shared/native-chat/native-chat-merge'
+import { NATIVE_CHAT_INITIAL_LIMIT } from './native-chat-pagination'
 import {
   createNativeChatTranscriptRetention,
   encodeNativeChatTranscriptIdentity
@@ -41,15 +43,23 @@ export function useNativeChatRetainedSession(
     messages: session.messages,
     settled: readPhase === 'ready'
   })
+  const sourceTrimHistory = session.trimHistory
+  const trimHistory = useCallback(() => {
+    retentionRef.current.capture(
+      identity,
+      boundNativeChatWindow(messages, NATIVE_CHAT_INITIAL_LIMIT)
+    )
+    sourceTrimHistory?.()
+  }, [identity, messages, sourceTrimHistory])
   if (messages === session.messages && readPhase === session.readPhase) {
     return session
   }
   if (!sessionMatchesIdentity) {
-    return { ...session, messages, readPhase, status: 'loading', error: undefined }
+    return { ...session, messages, readPhase, trimHistory, status: 'loading', error: undefined }
   }
   // Retained history beats the full-pane error: a reveal-time read/stream failure is usually transient.
   if (session.status === 'error' && messages.length > 0) {
-    return { ...session, messages, readPhase, status: 'ready', error: undefined }
+    return { ...session, messages, readPhase, trimHistory, status: 'ready', error: undefined }
   }
-  return { ...session, messages, readPhase }
+  return { ...session, messages, readPhase, trimHistory }
 }
