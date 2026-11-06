@@ -24,6 +24,9 @@ export type ObservedExitSocketScenario =
 export async function runObservedExitSocketScenario(scenario: ObservedExitSocketScenario) {
   const harness = await startLateExitHarness()
   const legacy = await startDaemonAdapterHarness(() => createMockSubprocess())
+  // Why: the drain sweep retires an older generation that owns nothing, and this scenario
+  // needs a live older generation to answer the close verification beside the current one.
+  await legacy.adapter.spawn({ sessionId: 'legacy-generation-holder', cols: 80, rows: 24 })
   const router = new DaemonPtyRouter({ current: harness.adapter, legacy: [legacy.adapter] })
   let fallbackKills = 0
   try {
