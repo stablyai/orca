@@ -1,7 +1,6 @@
-import { createHash, type Hash } from 'node:crypto'
 import { open, constants, type FileHandle } from 'node:fs/promises'
 import { extname } from 'node:path'
-import type { TerminalFileGrant } from './file-grants'
+import type { TerminalFileContentBlocks, TerminalFileGrant } from './file-grants'
 import {
   LOCAL_PREVIEWABLE_BINARY_MAX_BYTES,
   MOBILE_FILE_READ_MAX_BYTES,
@@ -12,7 +11,9 @@ import {
   assertTerminalArtifactContentUnchanged,
   assertTerminalFileGrantFresh,
   canonicalPathForArtifactComparison,
-  readFileHandleBufferBounded
+  readFileHandleBufferBounded,
+  TERMINAL_ARTIFACT_CONTENT_BLOCK_BYTES,
+  terminalArtifactContentDigest
 } from './artifact-integrity'
 import { isBinaryBuffer } from '../../../../shared/binary-buffer'
 import type {
@@ -107,76 +108,67 @@ export async function readLocalTerminalArtifactRangeFromHandle(
     throw new Error('Cannot read a directory')
   }
   assertTerminalFileGrantFresh(grant, fileStats)
+  if (grant.contentDigest !== null && grant.contentBlocks && fileStats.size > 0) {
+    return readVerifiedBlocksPage(
+      handle,
+      grant,
+      grant.contentBlocks,
+      fileStats.size,
+      offset,
+      length
+    )
+  }
   if (grant.contentDigest !== null) {
+    // Why: procfs sizes read as 0, so only a whole read sees (and verifies) the content.
     assertFileReadRange(offset, length)
-    const stream = sequentialDigestStream(grant, offset)
-    // Why: procfs sizes read as 0, and out-of-order or concurrent paging has no running digest.
-    if (fileStats.size === 0 || !stream) {
-      const buffer = await readFileHandleBufferBounded(
-        handle,
-        LOCAL_PREVIEWABLE_BINARY_MAX_BYTES + 1
-      )
-      assertTerminalArtifactContentUnchanged(grant, buffer)
-      return fileRangePage(buffer.subarray(offset, offset + length), offset, buffer.byteLength)
-    }
-    if (fileStats.size > LOCAL_PREVIEWABLE_BINARY_MAX_BYTES) {
-      digestStreams.delete(grant)
-      throw new Error('terminal_file_grant_stale')
-    }
-    const page = await readGrantPage(handle, grant, fileStats.size, offset, length)
-    // Why: re-hashing the whole file per page made a 10 MiB download hash ~270 MiB; the
-    // running digest over every delivered byte is checked on the EOF page, and the client
-    // discards the download if that page fails.
-    const bytes = Buffer.from(page.contentBase64, 'base64')
-    stream.hash.update(bytes)
-    stream.nextOffset += bytes.byteLength
-    if (page.eof) {
-      digestStreams.delete(grant)
-      if (stream.hash.digest('hex') !== grant.contentDigest) {
-        throw new Error('terminal_file_grant_stale')
-      }
-    }
-    return page
+    const buffer = await readFileHandleBufferBounded(handle, LOCAL_PREVIEWABLE_BINARY_MAX_BYTES + 1)
+    assertTerminalArtifactContentUnchanged(grant, buffer)
+    return fileRangePage(buffer.subarray(offset, offset + length), offset, buffer.byteLength)
   }
-  return readGrantPage(handle, grant, fileStats.size, offset, length)
+  const page = await readFileHandleRange(handle, fileStats.size, offset, length)
+  // Why: a file rewritten during this read must not land a torn page.
+  assertTerminalFileGrantFresh(grant, await handle.stat())
+  return page
 }
 
-type GrantDigestStream = { nextOffset: number; hash: Hash }
-
-// 'contended': two downloads of one grant interleaved, so pages fall back to whole-file checks.
-const digestStreams = new WeakMap<TerminalFileGrant, GrantDigestStream | 'contended'>()
-
-function sequentialDigestStream(
-  grant: TerminalFileGrant,
-  offset: number
-): GrantDigestStream | null {
-  const existing = digestStreams.get(grant)
-  if (existing === 'contended') {
-    return null
-  }
-  if (offset === 0) {
-    if (existing && existing.nextOffset > 0) {
-      digestStreams.set(grant, 'contended')
-      return null
-    }
-    const stream = { nextOffset: 0, hash: createHash('sha256') }
-    digestStreams.set(grant, stream)
-    return stream
-  }
-  return existing && existing.nextOffset === offset ? existing : null
-}
-
-async function readGrantPage(
+/** Reads the blocks a page touches and checks each against the grant, so no page carries unpinned bytes. */
+async function readVerifiedBlocksPage(
   handle: FileHandle,
   grant: TerminalFileGrant,
+  blocks: TerminalFileContentBlocks,
   size: number,
   offset: number,
   length: number
 ): Promise<RuntimeFileReadChunkResult> {
-  const page = await readFileHandleRange(handle, size, offset, length)
+  assertFileReadRange(offset, length)
+  if (size !== blocks.byteLength) {
+    throw new Error('terminal_file_grant_stale')
+  }
+  if (offset >= size) {
+    return fileRangePage(Buffer.alloc(0), offset, size)
+  }
+  const blockBytes = TERMINAL_ARTIFACT_CONTENT_BLOCK_BYTES
+  const firstBlock = Math.floor(offset / blockBytes)
+  const readStart = firstBlock * blockBytes
+  const readEnd = Math.min(size, Math.ceil((offset + length) / blockBytes) * blockBytes)
+  const buffer = Buffer.alloc(readEnd - readStart)
+  const { bytesRead } = await handle.read(buffer, 0, buffer.length, readStart)
+  if (bytesRead !== buffer.length) {
+    throw new Error('terminal_file_grant_stale')
+  }
+  for (let start = 0; start < buffer.length; start += blockBytes) {
+    const digest = terminalArtifactContentDigest(buffer.subarray(start, start + blockBytes))
+    if (digest !== blocks.digests[firstBlock + start / blockBytes]) {
+      throw new Error('terminal_file_grant_stale')
+    }
+  }
   // Why: a file rewritten during this read must not land a torn page.
   assertTerminalFileGrantFresh(grant, await handle.stat())
-  return page
+  return fileRangePage(
+    buffer.subarray(offset - readStart, offset - readStart + length),
+    offset,
+    size
+  )
 }
 
 export async function openLocalTerminalArtifactGrant(

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { FileHandle } from 'node:fs/promises'
 import type { TerminalFileGrant } from './file-grants'
-import { terminalArtifactContentDigest } from './artifact-integrity'
+import { terminalArtifactContentBlocks, terminalArtifactContentDigest } from './artifact-integrity'
 import { readLocalTerminalArtifactRangeFromHandle } from './local-artifact-read'
 
 const PAGE = 384 * 1024
@@ -24,22 +24,21 @@ function pinnedGrant(bytes: Buffer): TerminalFileGrant {
     worktreeId: 'wt-1',
     absolutePath: '/tmp/out.bin',
     provider: 'local',
-    expiresAt: Date.now() + 60_000,
+    expiresAt: Number.MAX_SAFE_INTEGER,
     // Why: null stat identity models a same-size swap that stat cannot see.
     statIdentity: null,
-    contentDigest: terminalArtifactContentDigest(bytes)
+    contentDigest: terminalArtifactContentDigest(bytes),
+    contentBlocks: terminalArtifactContentBlocks(bytes)
   }
 }
 
 async function download(
   grant: TerminalFileGrant,
   file: { bytes: Buffer },
-  readSizes: number[],
-  beforePage?: (offset: number) => void
+  readSizes: number[]
 ): Promise<Buffer> {
   const pages: Buffer[] = []
   for (let offset = 0, eof = false; !eof;) {
-    beforePage?.(offset)
     const page = await readLocalTerminalArtifactRangeFromHandle(
       fakeHandle(file, readSizes),
       grant,
@@ -64,29 +63,48 @@ describe('readLocalTerminalArtifactRangeFromHandle', () => {
     expect(readSizes.reduce((sum, size) => sum + size, 0)).toBe(file.bytes.byteLength)
   })
 
-  it('rejects the EOF page when a same-size swap lands between pages', async () => {
-    const original = Buffer.alloc(PAGE * 2 + 1, 0x01)
+  it('rejects the first page read after a same-size swap, not just the EOF page', async () => {
+    const original = Buffer.alloc(PAGE * 3, 0x01)
     const file = { bytes: original }
     const grant = pinnedGrant(original)
+    const read = (offset: number) =>
+      readLocalTerminalArtifactRangeFromHandle(fakeHandle(file, []), grant, offset, PAGE)
 
-    await expect(
-      download(grant, file, [], (offset) => {
-        if (offset > 0) {
-          file.bytes = Buffer.alloc(original.byteLength, 0x02)
-        }
-      })
-    ).rejects.toThrow('terminal_file_grant_stale')
+    await read(0)
+    file.bytes = Buffer.alloc(original.byteLength, 0x02)
+
+    await expect(read(PAGE)).rejects.toThrow('terminal_file_grant_stale')
   })
 
-  it('still serves out-of-order pages by verifying the whole file', async () => {
-    const file = { bytes: Buffer.alloc(PAGE * 2, 0x07) }
+  it('serves unaligned and out-of-order pages with the granted bytes', async () => {
+    const bytes = Buffer.from(Array.from({ length: PAGE * 2 + 5 }, (_, i) => i % 251))
+    const file = { bytes }
+    const grant = pinnedGrant(bytes)
     const page = await readLocalTerminalArtifactRangeFromHandle(
       fakeHandle(file, []),
-      pinnedGrant(file.bytes),
-      PAGE,
+      grant,
+      PAGE + 7,
+      1000
+    )
+    expect(
+      Buffer.from(page.contentBase64, 'base64').equals(bytes.subarray(PAGE + 7, PAGE + 1007))
+    ).toBe(true)
+    expect(page.eof).toBe(false)
+    const tail = await readLocalTerminalArtifactRangeFromHandle(
+      fakeHandle(file, []),
+      grant,
+      PAGE * 2,
       PAGE
     )
-    expect(page.bytesRead).toBe(PAGE)
-    expect(page.eof).toBe(true)
+    expect(tail.bytesRead).toBe(5)
+    expect(tail.eof).toBe(true)
+  })
+
+  it('rejects a page when the file size no longer matches the grant', async () => {
+    const original = Buffer.alloc(PAGE, 0x03)
+    const file = { bytes: Buffer.concat([original, Buffer.from('x')]) }
+    await expect(
+      readLocalTerminalArtifactRangeFromHandle(fakeHandle(file, []), pinnedGrant(original), 0, PAGE)
+    ).rejects.toThrow('terminal_file_grant_stale')
   })
 })
