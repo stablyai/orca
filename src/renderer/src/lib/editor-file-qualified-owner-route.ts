@@ -1,3 +1,4 @@
+import { resolveUnstampedRecordHost } from './worktree-operation-catalog-route'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
@@ -38,7 +39,14 @@ export function resolveQualifiedEditorOwnerRoute(
             selectDetectedWorktreesByRepo(state),
             worktreeId,
             executionHostId
-          ).length > 0
+          ).length > 0 ||
+          (executionHostId === 'local' &&
+            findIndexedDetectedWorktrees(selectDetectedWorktreesByRepo(state), worktreeId).some(
+              (row) =>
+                !row.hostId &&
+                !row.runtimeOwnerEnvironmentId?.trim() &&
+                resolveUnstampedRecordHost(state, row) === 'local'
+            ))
   const resolution: WorktreeOperationRouteResolution = published
     ? resolveWorktreeOperationRouteResultForHost(state, worktreeId, executionHostId)
     : { kind: 'missing' }

@@ -1,10 +1,11 @@
+import { makeDetectedResult } from '../../worktrees-detected-listing-fixtures'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createUntitledFileInActiveWorkspace } from './untitled-file-creation'
 import {
   assertEditorFileOperationCurrent,
   captureEditorFileOperationProvenance
 } from '@/lib/editor-file-operation-owner'
-import { createTestStore, makeWorktree, seedStore } from '../../store-test-helpers'
+import { createTestStore, makeWorktree, seedStore, TEST_REPO } from '../../store-test-helpers'
 import { createStoreCascadesMockApi } from '../../store-cascades-test-harness'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
@@ -103,3 +104,47 @@ describe('untitled files in a selected workspace copy', () => {
     )
   })
 })
+
+it.each(['local', 'runtime:peer'] as const)(
+  'qualifies an unstamped detected row only on its catalog owner (%s)',
+  async (host) => {
+    const store = setup('local')
+    seedStore(store, {
+      repos: [{ ...TEST_REPO, id: 'repo1', executionHostId: host }],
+      worktreesByRepo: {},
+      detectedWorktreesByRepo: {
+        repo1: makeDetectedResult('repo1', [
+          makeWorktree({ id, repoId: 'repo1', path: '/hidden/copy', hostId: undefined })
+        ])
+      }
+    })
+    const created = await createUntitledFileInActiveWorkspace(
+      store.getState,
+      'group',
+      async (context) => {
+        context.assertOperationCurrent()
+        return {
+          filePath: '/hidden/copy/untitled.md',
+          relativePath: 'untitled.md',
+          worktreeId: id,
+          language: 'markdown',
+          isUntitled: true,
+          mode: 'edit',
+          operationProvenance: context.operationProvenance
+        }
+      },
+      'Creation failed',
+      id,
+      'local'
+    )
+    expect(created).toBe(host === 'local')
+    if (host === 'local') {
+      expect(store.getState().openFile).toHaveBeenCalledWith(
+        expect.objectContaining({ filePath: '/hidden/copy/untitled.md' }),
+        expect.anything()
+      )
+    } else {
+      expect(store.getState().openFile).not.toHaveBeenCalled()
+    }
+  }
+)
