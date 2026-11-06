@@ -59,10 +59,14 @@ describe('NativeChatGitHubPeekBody', () => {
   })
 
   it('shows just the name when there is no web preview, but keeps the failure for the chat repo', async () => {
-    lookup.answer.mockResolvedValue(null)
-    view(null)
-    await act(async () => {})
+    // The same card while pending as after no answer: just the name, no skeleton to collapse.
+    let answer: (item: unknown) => void = () => {}
+    lookup.answer.mockReturnValue(new Promise((resolve) => (answer = resolve)))
+    const { container } = view(null)
+    const pending = container.innerHTML
     expect(screen.getByText('other/tools')).toBeTruthy()
+    await act(async () => answer(null))
+    expect(container.innerHTML).toBe(pending)
     expect(screen.queryByText('Preview unavailable.')).toBeNull()
     cleanup()
     view(undefined)

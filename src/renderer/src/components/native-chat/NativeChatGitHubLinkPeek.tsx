@@ -73,7 +73,7 @@ export function NativeChatGitHubPeekBody({
   link: GitHubIssueOrPRLink
   /** For a link to another repo, which an older host or a repo the sign-in can't read leaves
    *  unanswered: what such a link showed before, kept until its details arrive, and never a failure.
-   *  Null keeps the skeleton, then just the name. Undefined for the chat repo's own links. */
+   *  Null shows just the name until then. Undefined for the chat repo's own links. */
   otherRepoFallback?: ReactNode
 }): ReactNode {
   const { state, retry } = useNativeChatHoverPreview(
@@ -120,13 +120,13 @@ export function NativeChatGitHubPeekBody({
           ) : null}
           <PeekFooter item={state.value} />
         </>
-      ) : state.status === 'loading' ? (
+      ) : otherRepoFallback !== undefined ? null : state.status === 'loading' ? (
         <div aria-hidden className="flex flex-col gap-1.5 motion-safe:animate-pulse">
           <div className="h-3.5 w-11/12 rounded bg-muted" />
           <div className="h-3.5 w-1/2 rounded bg-muted" />
           <div className="mt-0.5 h-3 w-1/3 rounded bg-muted" />
         </div>
-      ) : otherRepoFallback !== undefined ? null : (
+      ) : (
         <div className="flex items-center gap-1 text-xs text-muted-foreground">
           <span>
             {translate('components.native-chat.githubPeek.unavailable', 'Preview unavailable.')}
