@@ -4,7 +4,6 @@ import {
   openSessionSearchHarness,
   type SessionSearchHarness
 } from './session-search-engine-test-fixture'
-import { SessionSearchTypoRepair } from './session-search-typo-repair'
 
 let harness: SessionSearchHarness | null = null
 let control: SessionSearchHarness | null = null
@@ -69,22 +68,7 @@ it('excludes tool-only spellings before typo visibility and candidate selection 
   expect(page.hits.map((hit) => hit.sessionId)).toEqual(['1'])
 })
 
-it('exhausts typo visibility after 1024 postings including excluded tool rows', async () => {
-  harness = await openSessionSearchHarness('ss-typo-posting-budget')
-  addSyntheticSession(harness.db, { id: 1, role: 'tool', text: 'coalesces', rows: 1023 })
-  addSyntheticSession(harness.db, { id: 2, text: 'coalesces', rows: 2 })
-  const repair = new SessionSearchTypoRepair(harness.db)
-  for (const scope of ['all', 'conversation'] as const) {
-    expect(repair.correct('coalescs', scope)).toBeNull()
-  }
-  // Removing one excluded posting puts the two live occurrences inside the examined-postings bound.
-  harness.db.exec('DELETE FROM messages_fts WHERE rowid = 1; DELETE FROM messages WHERE id = 1')
-  for (const scope of ['all', 'conversation'] as const) {
-    expect(repair.correct('coalescs', scope)).toBe('coalesces')
-  }
-})
-
-it('keeps an exact spelling when excluded postings exhaust its visibility probe', async () => {
+it('keeps an exact spelling in a tool-heavy vocabulary', async () => {
   harness = await openSessionSearchHarness('ss-typo-exhausted-exact')
   addSyntheticSession(harness.db, { id: 1, role: 'tool', text: 'coalesces', rows: 1023 })
   addSyntheticSession(harness.db, { id: 2, text: 'coalesces', rows: 2 })

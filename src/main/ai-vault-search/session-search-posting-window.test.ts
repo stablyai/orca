@@ -1,0 +1,80 @@
+import { expect, it } from 'vitest'
+import { addSyntheticSession, openSessionSearchHarness } from './session-search-engine-test-fixture'
+
+it('freezes the newest index window before ranking and pages its truncated result once', async () => {
+  const index = await openSessionSearchHarness('ss-posting-window')
+  try {
+    index.db.exec('BEGIN')
+    for (let id = 1; id <= 12; id++) {
+      addSyntheticSession(index.db, {
+        id,
+        text: 'windowword',
+        rows: 1000,
+        updatedAt: `2026-09-${String(20 - id).padStart(2, '0')}T00:00:00.000Z`
+      })
+    }
+    index.db.exec('COMMIT')
+    const request = { query: 'windowword', limit: 1 }
+    const first = index.engine.search(request)
+    expect(first.hits.map((hit) => hit.sessionId)).toEqual(['11'])
+    expect(first.truncated.candidates).toBe(true)
+    expect(first.page.hasMore).toBe(true)
+    const next = index.engine.search({ ...request, cursor: first.page.cursor! })
+    expect(next.hits.map((hit) => hit.sessionId)).toEqual(['12'])
+    expect(next.truncated.candidates).toBe(true)
+    expect(next.page).toEqual({ cursor: null, hasMore: false })
+  } finally {
+    await index.close()
+  }
+})
+
+it('charges tool postings to scan work but leaves all candidate slots for conversations', async () => {
+  const index = await openSessionSearchHarness('ss-posting-tools')
+  try {
+    index.db.exec('BEGIN')
+    addSyntheticSession(index.db, { id: 1, text: 'crowded', rows: 1000 })
+    addSyntheticSession(index.db, { id: 2, text: 'crowded', rows: 2000 })
+    addSyntheticSession(index.db, { id: 3, text: 'crowded', role: 'tool', rows: 8500 })
+    index.db.exec('COMMIT')
+    const result = index.engine.search({ query: 'crowded' })
+    expect(result.hits.map((hit) => hit.sessionId)).toEqual(['2'])
+    expect(result.truncated.candidates).toBe(true)
+    const filtered = index.engine.search({ query: 'crowded repo:absent' })
+    expect(filtered.hits).toEqual([])
+    expect(filtered.truncated.candidates).toBe(true)
+  } finally {
+    await index.close()
+  }
+})
+
+it('shares examined postings across phrase and AND without rewalking filtered matches', async () => {
+  const index = await openSessionSearchHarness('ss-posting-routes')
+  try {
+    index.db.exec('BEGIN')
+    addSyntheticSession(index.db, { id: 1, text: 'alpha x beta', rows: 2 })
+    addSyntheticSession(index.db, { id: 2, text: 'alpha beta', role: 'tool', rows: 6000 })
+    index.db.exec('COMMIT')
+    const result = index.engine.search({ query: '"alpha beta"' })
+    expect(result.hits).toEqual([])
+    expect(result.truncated.candidates).toBe(true)
+  } finally {
+    await index.close()
+  }
+})
+
+it('keeps an inconclusive own spelling and reports even an empty budget-limited result', async () => {
+  const index = await openSessionSearchHarness('ss-posting-own-term')
+  try {
+    index.db.exec('BEGIN')
+    addSyntheticSession(index.db, { id: 1, text: 'coalesces', rows: 2 })
+    addSyntheticSession(index.db, { id: 2, text: 'coalesce', rows: 2 })
+    addSyntheticSession(index.db, { id: 3, text: 'coalesces', role: 'tool', rows: 10001 })
+    index.db.exec('COMMIT')
+    const result = index.engine.search({ query: 'coalesces' })
+    expect(result.planner.repairedTerms).toBeUndefined()
+    expect(result.hits).toEqual([])
+    expect(result.truncated.candidates).toBe(true)
+  } finally {
+    await index.close()
+  }
+})

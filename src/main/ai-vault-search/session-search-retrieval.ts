@@ -14,6 +14,7 @@ import {
 } from './session-search-query-planner'
 import type { SessionRowFilter } from './session-search-row-filter'
 import { SessionSearchTypoRepair } from './session-search-typo-repair'
+import { SessionSearchPostings, SESSION_SEARCH_MESSAGE_CANDIDATES } from './session-search-postings'
 
 const RECENT_PAGE_ROWS = 512
 // Leave SQLite parameter capacity for filter values as well as session IDs.
@@ -24,7 +25,7 @@ const RECENT_SCAN_FACTOR = 20
 const FULL_WEIGHTS = '3.0, 2.0, 1.0, 1.0'
 const CONVERSATION_WEIGHTS = '3.0, 2.0, 0.0, 0.0'
 
-// Keep SQL text stable for statement-cache reuse; tests pin the projected schema.
+// Keep SQL text stable for statement-cache reuse.
 const SESSION_COLUMN_LIST = (
   [
     'id',
@@ -80,22 +81,26 @@ export class SessionSearchRetrieval {
   run(plan: SessionSearchQueryPlan, scope: RetrievalScope): Retrieved {
     let incomplete = false
     let sessions: SessionRow[] = []
+    const sessionCache = new Map<number, SessionRow | null>()
+    const postings = new SessionSearchPostings(this.db, scope.scope, (id) => {
+      if (!sessionCache.has(id)) {
+        sessionCache.set(id, this.loadSessions([id], scope)[0] ?? null)
+      }
+      return sessionCache.get(id) !== null
+    })
     const match = (expression: string): MessageRow[] => {
-      const rows = this.match(expression, scope)
-      // Only the route returned to the caller determines whether candidates were truncated.
-      incomplete = rows.length >= scope.candidateLimit
-      sessions = this.loadSessions(
-        rows.map((row) => row.session_row_id),
-        scope
+      const rows = this.match(expression, scope, postings)
+      incomplete ||= rows.length >= SESSION_SEARCH_MESSAGE_CANDIDATES
+      sessions = [...new Set(rows.map((row) => row.session_row_id))].flatMap(
+        (id) => sessionCache.get(id) ?? []
       )
-      const eligible = new Set(sessions.map((row) => row.id))
-      return rows.filter((row) => eligible.has(row.session_row_id))
+      return rows
     }
     const exact = this.phraseThenAnd(plan, match)
     if (exact) {
-      return { ...exact, plan, incomplete, sessions }
+      return { ...exact, plan, incomplete: incomplete || postings.exhausted, sessions }
     }
-    const repaired = this.repair(plan, scope.scope)
+    const repaired = this.repair(plan, scope.scope, postings)
     const effective = repaired ?? plan
     const literal = repaired ? this.phraseThenAnd(repaired, match) : null
     const found = literal ?? {
@@ -105,7 +110,7 @@ export class SessionSearchRetrieval {
     return {
       sessions,
       rows: found.rows,
-      incomplete,
+      incomplete: incomplete || postings.exhausted,
       route: repaired ? (`typo+${found.route}` as SessionSearchRoute) : found.route,
       plan: effective,
       ...(repaired ? { repairedTerms: repaired.body } : {})
@@ -188,7 +193,7 @@ export class SessionSearchRetrieval {
       const sessionRows = this.db
         .prepare(`SELECT ${SESSION_COLUMN_LIST} FROM sessions WHERE ${conditions.join(' AND ')}`)
         .all(...batch, ...scope.filter.values)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The private sessions schema defines SessionRow; tests compare every projected column and value with that schema.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The selected columns match the private sessions schema defining SessionRow.
       rows.push(...(sessionRows as SessionRow[]))
     }
     return rows.filter((row) => scope.matchesOperators(row))
@@ -196,7 +201,8 @@ export class SessionSearchRetrieval {
 
   private repair(
     plan: SessionSearchQueryPlan,
-    scope: SessionSearchScope
+    scope: SessionSearchScope,
+    postings: SessionSearchPostings
   ): SessionSearchQueryPlan | null {
     const typoRepair = this.typoRepair
     let changed = false
@@ -207,7 +213,7 @@ export class SessionSearchRetrieval {
         return token
       }
       // Tool-only vocabulary must neither suppress nor supply a conversation-scoped repair.
-      const fix = typoRepair.correct(token, scope)
+      const fix = typoRepair.correct(token, scope, postings)
       if (fix && fix !== token.toLowerCase()) {
         changed = true
         return fix
@@ -239,24 +245,27 @@ export class SessionSearchRetrieval {
     return and.length > 0 ? { rows: and, route: 'and' } : null
   }
 
-  private match(expression: string, scope: RetrievalScope): MessageRow[] {
-    const { filter, sort, candidateLimit } = scope
-    const eligible = filter.conditions.length
-      ? ` AND m.session_row_id IN (SELECT id FROM sessions WHERE ${filter.conditions.join(' AND ')})`
-      : ''
-    const matched = `SELECT messages_fts.rowid AS rowid,
-      -bm25(messages_fts, ${scopedWeights(scope.scope)}) AS score,
-      m.session_row_id, m.role, m.ts, s.updated_at
-      FROM messages_fts JOIN messages m ON m.id = messages_fts.rowid
-      JOIN sessions s ON s.id = m.session_row_id WHERE messages_fts MATCH ? AND m.role != 'tool'${eligible}`
-    // Group before limiting so one long session cannot consume the candidate budget.
-    // SQLite’s max(score) selects the best matching row for the other projected columns.
-    const order = sort === 'newest' ? 'updated_at DESC, score DESC' : 'score DESC'
-    const sql = `WITH matched AS MATERIALIZED (${matched})
-      SELECT rowid, max(score) AS score, session_row_id, role, ts FROM matched
-      GROUP BY session_row_id ORDER BY ${order} LIMIT ${candidateLimit}`
-    return this.db
-      .prepare(sql)
-      .all(scopedExpression(scope.scope, expression), ...filter.values) as MessageRow[]
+  private match(
+    expression: string,
+    scope: RetrievalScope,
+    postings: SessionSearchPostings
+  ): MessageRow[] {
+    const rows: MessageRow[] = []
+    for (const row of postings.matching(expression)) {
+      rows.push(row)
+      if (rows.length >= SESSION_SEARCH_MESSAGE_CANDIDATES) {
+        break
+      }
+    }
+    if (!rows.length) {
+      return []
+    }
+    const scores = this.db
+      .prepare(`SELECT rowid, -bm25(messages_fts, ${scopedWeights(scope.scope)}) AS score
+        FROM messages_fts WHERE messages_fts MATCH ?
+        AND rowid IN (SELECT value FROM json_each(?))`)
+      .all(scopedExpression(scope.scope, expression), JSON.stringify(rows.map((row) => row.rowid)))
+    const byId = new Map(scores.map((row) => [Number(row.rowid), Number(row.score)]))
+    return rows.map((row) => ({ ...row, score: byId.get(row.rowid) ?? 0 }))
   }
 }

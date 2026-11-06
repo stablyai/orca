@@ -1,6 +1,7 @@
 import type SyncDatabase from '../sqlite/sync-database'
 import type { SessionSearchScope } from './session-search-engine-types'
-import { quoteFtsTerm, scopedExpression } from './session-search-query-planner'
+import { quoteFtsTerm } from './session-search-query-planner'
+import { SessionSearchPostings } from './session-search-postings'
 
 const MIN_TERM_LENGTH = 4
 const MAX_TERM_LENGTH = 40
@@ -9,7 +10,6 @@ const MIN_DOC_FREQUENCY = 2
 const MIN_SIMILARITY = 0.82
 const MAX_CANDIDATES = 4000
 const MAX_VISIBILITY_PROBES = 8
-const MAX_EXAMINED_POSTINGS = 1024
 // Cap frequency tie-break counts so common terms cannot make repair unbounded.
 const MAX_COUNTED_ROWS = 64
 
@@ -36,24 +36,9 @@ function similarity(a: string, b: string): number {
 
 /** Validate against live scoped rows: vocabulary includes other columns and orphans. */
 export class SessionSearchTypoRepair {
-  private readonly liveRows: ReturnType<SyncDatabase['prepare']>
   private readonly candidatesByPrefix: ReturnType<SyncDatabase['prepare']>
 
-  constructor(db: SyncDatabase) {
-    this.liveRows = db.prepare(
-      // Why: admit unscoped postings before filtering so tools and orphans consume the same budget.
-      `WITH postings AS MATERIALIZED (
-         SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?
-         LIMIT ${MAX_EXAMINED_POSTINGS + 1}
-       ), visible AS (
-         SELECT m.id FROM (SELECT rowid FROM postings LIMIT ${MAX_EXAMINED_POSTINGS}) admitted
-         JOIN messages m ON m.id = admitted.rowid
-         JOIN sessions s ON s.id = m.session_row_id
-         WHERE m.role != 'tool' AND (? = 'all' OR EXISTS (
-           SELECT 1 FROM messages_fts WHERE rowid = admitted.rowid AND messages_fts MATCH ?
-         )) LIMIT ${MAX_COUNTED_ROWS}
-       ) SELECT count(*) AS rows, (SELECT count(*) FROM postings) AS examined FROM visible`
-    )
+  constructor(private readonly db: SyncDatabase) {
     // Term order uses the vocab index and keeps the candidate cutoff independent of orphan counts.
     this.candidatesByPrefix = db.prepare(
       `SELECT term FROM messages_vocab
@@ -62,35 +47,32 @@ export class SessionSearchTypoRepair {
     )
   }
 
-  private probeVisibility(
-    term: string,
-    scope: SessionSearchScope
-  ): { rows: number; exhausted: boolean } {
-    const quoted = quoteFtsTerm(term)
-    const row = this.liveRows.get(quoted, scope, scopedExpression(scope, quoted))
-    return {
-      rows: Number(row?.rows ?? 0),
-      exhausted: Number(row?.examined) > MAX_EXAMINED_POSTINGS
+  private countRows(term: string, postings: SessionSearchPostings): number {
+    let rows = 0
+    for (const _row of postings.matching(quoteFtsTerm(term))) {
+      if (++rows >= MAX_COUNTED_ROWS) {
+        break
+      }
     }
+    return rows
   }
 
-  hasPostings(term: string, scope: SessionSearchScope): boolean {
-    const { rows, exhausted } = this.probeVisibility(term, scope)
-    return rows > 0 || exhausted
-  }
-
-  correct(term: string, scope: SessionSearchScope): string | null {
+  correct(
+    term: string,
+    scope: SessionSearchScope,
+    postings = new SessionSearchPostings(this.db, scope)
+  ): string | null {
     const lowered = term.toLowerCase()
     if (lowered.length < MIN_TERM_LENGTH || lowered.length > MAX_TERM_LENGTH) {
       return null
     }
-    if (this.hasPostings(lowered, scope)) {
+    if (this.countRows(term, postings) > 0 || postings.exhausted) {
       return null
     }
     // Widen cautiously: common prefix, transposed pair, then first letter.
     const prefixes = [lowered.slice(0, 2), lowered[1] + lowered[0], lowered[0]]
     for (const prefix of prefixes) {
-      const best = this.bestVisible(lowered, prefix, scope)
+      const best = this.bestVisible(lowered, prefix, postings)
       if (best) {
         return best
       }
@@ -99,12 +81,16 @@ export class SessionSearchTypoRepair {
   }
 
   /** Probe several ranked candidates so an invisible best match does not suppress a live repair. */
-  private bestVisible(lowered: string, prefix: string, scope: SessionSearchScope): string | null {
+  private bestVisible(
+    lowered: string,
+    prefix: string,
+    postings: SessionSearchPostings
+  ): string | null {
     const counted = this.ranked(lowered, prefix)
       .slice(0, MAX_VISIBILITY_PROBES)
       .map((candidate) => ({
         ...candidate,
-        rows: this.probeVisibility(candidate.term, scope).rows
+        rows: this.countRows(candidate.term, postings)
       }))
       .filter((candidate) => candidate.rows >= MIN_DOC_FREQUENCY)
     if (counted.length === 0) {

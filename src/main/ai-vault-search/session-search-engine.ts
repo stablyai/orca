@@ -233,11 +233,22 @@ export class SessionSearchEngine {
     sort: 'relevance' | 'newest'
   ): RankedPage {
     const retrieved = this.retrieval.run(plan, scope)
-    const best = new Map<number, MessageRow>(retrieved.rows.map((row) => [row.session_row_id, row]))
+    const best = new Map<number, MessageRow>()
+    for (const row of retrieved.rows) {
+      const previous = best.get(row.session_row_id)
+      if (
+        !previous ||
+        row.score > previous.score ||
+        (row.score === previous.score && row.rowid < previous.rowid)
+      ) {
+        best.set(row.session_row_id, row)
+      }
+    }
+    const ranked = rankSessionHits(retrieved.sessions, best, sort)
     return {
-      ranked: rankSessionHits(retrieved.sessions, best, sort),
+      ranked: ranked.slice(0, this.candidateLimit),
       retrieved,
-      incomplete: retrieved.incomplete
+      incomplete: retrieved.incomplete || ranked.length >= this.candidateLimit
     }
   }
 
