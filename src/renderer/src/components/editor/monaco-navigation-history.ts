@@ -43,6 +43,7 @@ function historyFor(worktreeId: string): History {
 function navigate(worktreeId: string, direction: Direction): void {
   const history = historyFor(worktreeId)
   const location = history.step(direction, canRestoreLocation)
+
   if (location) {
     history.replaceCurrent(restoreLocation(location))
   }
@@ -50,6 +51,7 @@ function navigate(worktreeId: string, direction: Direction): void {
 
 function readActiveEditorTarget(params: EditorParams, state: AppState): Target | null {
   const file = state.openFiles.find((candidate) => candidate.id === params.fileIdRef.current)
+
   if (
     !file ||
     file.mode !== FILE_MODE ||
@@ -61,6 +63,7 @@ function readActiveEditorTarget(params: EditorParams, state: AppState): Target |
   }
 
   const tab = state.getActiveTab(file.worktreeId)
+
   if (
     (tab && tab.entityId !== file.id) ||
     (params.viewStateId && tab && params.viewStateId !== tab.id && params.viewStateId !== file.id)
@@ -86,6 +89,7 @@ function readEditorViewport(editorInstance: editor.IStandaloneCodeEditor) {
 function readEditorLocation(params: EditorParams): Location | null {
   const target = readActiveEditorTarget(params, useAppStore.getState())
   const viewport = readEditorViewport(params.editorInstance)
+
   if (!target || !viewport) {
     return null
   }
@@ -104,6 +108,7 @@ function recordEditorLocation(
 
   cancelRestore()
   const location = readEditorLocation(params)
+
   if (!location) {
     return
   }
@@ -114,11 +119,13 @@ function recordEditorLocation(
 
 function updateEditorLocation(params: EditorParams, recording: RecordingState): void {
   const previous = recording.location
+
   if (!previous || hasPendingRestore()) {
     return
   }
 
   const viewport = readEditorViewport(params.editorInstance)
+
   if (!viewport) {
     return
   }
@@ -156,6 +163,7 @@ function handleNavigationKey(event: KeyboardEvent, recorder: Recorder): void {
   }
 
   const direction = navigationDirection(event)
+
   if (!direction) {
     cancelRestore()
 
@@ -163,12 +171,14 @@ function handleNavigationKey(event: KeyboardEvent, recorder: Recorder): void {
   }
 
   const location = recorder.snapshot()
+
   if (!location) {
     return
   }
 
   event.preventDefault()
   event.stopPropagation()
+
   if (!event.repeat) {
     recorder.update()
     navigate(location.file.worktreeId, direction)

@@ -63,6 +63,7 @@ function hasCurrentOwner(
 
   try {
     const { file } = location
+
     if (file.operationProvenance) {
       assertEditorFileOperationCurrent(state, file.worktreeId, file.operationProvenance)
     }
@@ -93,6 +94,7 @@ function withActiveTab(location: Location): Location {
 function activateExistingLocation(state: AppState, location: Location, file: OpenFile): Location {
   state.setActiveFile(file.id, file.worktreeId)
   const tab = location.tabId ? state.getTab(location.tabId) : null
+
   if (tab?.entityId === file.id) {
     state.activateTab(tab.id)
 

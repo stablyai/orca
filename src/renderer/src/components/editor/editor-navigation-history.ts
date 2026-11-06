@@ -41,6 +41,7 @@ function recordLocation(
   explicitJump: boolean
 ): HistoryState {
   const current = state.entries[state.index]
+
   if (current && coalescesLocation(current, location, explicitJump)) {
     return replaceCurrent(state, location)
   }
@@ -81,6 +82,7 @@ export function createEditorNavigationHistory(): History {
     },
     step: (direction: Direction, canVisit: CanVisitLocation = () => true): Location | null => {
       const index = nextLocationIndex(state.current, direction, canVisit)
+
       if (index < 0) {
         return null
       }
