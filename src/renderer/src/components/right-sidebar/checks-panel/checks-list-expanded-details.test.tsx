@@ -197,3 +197,12 @@ describe('ChecksList expanded check details', () => {
     expect(container.textContent).toContain('ERROR: Job failed: exit code 1')
   })
 })
+
+describe('ChecksList row state', () => {
+  it('names the state on the status icon instead of beside it', () => {
+    renderChecksList()
+    const row = container.querySelector('.group\\/check-row')
+    expect(row?.querySelector('[role="img"]')?.getAttribute('aria-label')).toBe('Failed')
+    expect(row?.textContent).toBe('verify')
+  })
+})

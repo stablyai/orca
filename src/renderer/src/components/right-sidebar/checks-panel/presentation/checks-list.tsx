@@ -16,8 +16,7 @@ import { translate } from '@/i18n/i18n'
 import { CHECK_COLOR, CHECK_ICON } from './check-presentation'
 import { CheckRunDetails } from './check-run-details'
 import { CheckRunTime } from './check-run-time'
-import { getCheckStatusLabel } from '../../../../../../shared/source-control/checks/pr-check-status-label'
-import { getCheckStatusLabel as getLocalizedCheckStatusLabel } from '@/components/github/pr-check-presentation'
+import { getCheckStatusLabel } from '@/components/github/pr-check-presentation'
 import { type ChecksListProps, useChecksListState } from '../refresh/use-checks-list-state'
 import { openAppHttpLink, openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
 import type { PRCheckDetail } from '../../../../../../shared/github/check-types'
@@ -144,8 +143,6 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
             {rows.map((row) => {
               const check = row.check
               const conclusion = check.conclusion ?? 'pending'
-              const Icon = CHECK_ICON[conclusion] ?? CircleDashed
-              const color = CHECK_COLOR[conclusion] ?? 'text-muted-foreground'
               const expanded = expandedCheckKeys.has(row.key)
               const openUrl = check.url
               return (
@@ -164,21 +161,12 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
                         expanded && 'rotate-90'
                       )}
                     />
-                    <Icon
-                      className={cn(
-                        'size-3.5 shrink-0',
-                        color,
-                        conclusion === 'pending' && 'animate-spin motion-reduce:animate-none'
-                      )}
-                    />
+                    <CheckStatusIcon check={check} />
                     <span className="flex-1 truncate @[19rem]:min-w-9 text-[12px] text-foreground">
                       {check.name}
                     </span>
                     <CheckRunTime check={check} />
                     <span className="flex shrink-0 items-center gap-1">
-                      <span className="text-[11px] text-muted-foreground">
-                        {getCheckStatusLabel(check)}
-                      </span>
                       {openUrl && (
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -253,26 +241,41 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
   )
 }
 
+// The icon already shows the state, so its word lives in the icon's tooltip and accessible name, not beside it.
+function CheckStatusIcon({ check }: { check: PRCheckDetail }): React.JSX.Element {
+  const conclusion = check.conclusion ?? 'pending'
+  const Icon = CHECK_ICON[conclusion] ?? CircleDashed
+  const label = getCheckStatusLabel(check)
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span role="img" aria-label={label} className="flex shrink-0">
+          <Icon
+            className={cn(
+              'size-3.5',
+              CHECK_COLOR[conclusion] ?? 'text-muted-foreground',
+              conclusion === 'pending' && 'animate-spin motion-reduce:animate-none'
+            )}
+          />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 // The parent pipeline opens on the provider; it has no inline job log to expand.
 function PipelineCheckRow({ check }: { check: PRCheckDetail }): React.JSX.Element {
   const conclusion = check.conclusion ?? 'pending'
-  const Icon = CHECK_ICON[conclusion] ?? CircleDashed
   const content = (
     <>
-      <Icon
-        className={cn(
-          'size-3.5 shrink-0',
-          CHECK_COLOR[conclusion] ?? 'text-muted-foreground',
-          conclusion === 'pending' && 'animate-spin motion-reduce:animate-none'
-        )}
-      />
+      <CheckStatusIcon check={check} />
       <span className="flex-1 truncate @[19rem]:min-w-9 text-[12px] text-foreground">
         {check.name}
       </span>
       <CheckRunTime check={check} />
-      <span className="text-[11px] text-muted-foreground">
-        {getLocalizedCheckStatusLabel(check)}
-      </span>
       {check.url && <ExternalLink className="size-3 shrink-0 text-muted-foreground" />}
     </>
   )
