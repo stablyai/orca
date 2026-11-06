@@ -1,4 +1,11 @@
-import { useLayoutEffect, useState, type ReactNode, type RefObject } from 'react'
+import {
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject
+} from 'react'
 import { createPortal } from 'react-dom'
 import { View } from 'react-native'
 import { useKeyboardOcclusion } from '../../../platform/keyboard-occlusion'
@@ -21,6 +28,15 @@ export function MobileNativeChatComposerMenuLayer({
 }) {
   const keyboard = useKeyboardOcclusion()
   const keepKeyboard = useKeyboardPersistingTaps('always')
+  const surfaceRef = useRef<HTMLElement | null>(null)
+  const updateRef = useRef<(() => void) | null>(null)
+  const setSurface = useCallback(
+    (node: unknown) => {
+      surfaceRef.current = node instanceof HTMLElement ? node : null
+      keepKeyboard(node)
+    },
+    [keepKeyboard]
+  )
   const [placement, setPlacement] = useState<Placement | null>(null)
   useLayoutEffect(() => {
     const anchor: unknown = anchorRef.current
@@ -32,7 +48,16 @@ export function MobileNativeChatComposerMenuLayer({
     if (!root) {
       return
     }
-    const update = () => {
+    const ownerDocument = anchor.ownerDocument
+    let disposed = false
+    const update = (focusTarget: EventTarget | null = ownerDocument.activeElement) => {
+      if (
+        !(focusTarget instanceof Node) ||
+        (!anchor.contains(focusTarget) && !surfaceRef.current?.contains(focusTarget))
+      ) {
+        setPlacement(null)
+        return
+      }
       const rect = anchor.getBoundingClientRect()
       const bounds = root.getBoundingClientRect()
       const viewport = window.visualViewport
@@ -84,28 +109,52 @@ export function MobileNativeChatComposerMenuLayer({
           : next
       )
     }
+    const updateGeometry = () => update()
+    const onFocusOut = (event: FocusEvent) => {
+      if (event.relatedTarget) {
+        update(event.relatedTarget)
+      } else {
+        // Finish the focus transfer before deciding whether the interaction lost focus.
+        queueMicrotask(() => {
+          if (!disposed) {
+            update()
+          }
+        })
+      }
+    }
+    updateRef.current = updateGeometry
     update()
-    const observer = new ResizeObserver(update)
+    const observer = new ResizeObserver(updateGeometry)
     for (let parent: HTMLElement | null = anchor; parent; parent = parent.parentElement) {
       observer.observe(parent)
     }
-    window.addEventListener('resize', update)
-    window.addEventListener('scroll', update, true)
-    window.visualViewport?.addEventListener('resize', update)
-    window.visualViewport?.addEventListener('scroll', update)
+    ownerDocument.addEventListener('focusin', updateGeometry)
+    ownerDocument.addEventListener('focusout', onFocusOut)
+    window.addEventListener('resize', updateGeometry)
+    window.addEventListener('scroll', updateGeometry, true)
+    window.visualViewport?.addEventListener('resize', updateGeometry)
+    window.visualViewport?.addEventListener('scroll', updateGeometry)
     return () => {
+      disposed = true
+      updateRef.current = null
       observer.disconnect()
-      window.removeEventListener('resize', update)
-      window.removeEventListener('scroll', update, true)
-      window.visualViewport?.removeEventListener('resize', update)
-      window.visualViewport?.removeEventListener('scroll', update)
+      ownerDocument.removeEventListener('focusin', updateGeometry)
+      ownerDocument.removeEventListener('focusout', onFocusOut)
+      window.removeEventListener('resize', updateGeometry)
+      window.removeEventListener('scroll', updateGeometry, true)
+      window.visualViewport?.removeEventListener('resize', updateGeometry)
+      window.visualViewport?.removeEventListener('scroll', updateGeometry)
     }
   }, [anchorRef, keyboard])
+  useLayoutEffect(() => {
+    updateRef.current?.()
+  })
 
   return placement
     ? createPortal(
         <View
-          ref={keepKeyboard}
+          ref={setSurface}
+          pointerEvents="box-none"
           style={{
             position: 'absolute',
             left: placement.left,
