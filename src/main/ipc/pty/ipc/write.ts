@@ -2,6 +2,7 @@ import type { PtyRendererDelivery } from '../session'
 import { getPtyIpc } from '../pty-host-bindings'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { createPtyWriteInput } from './write-input'
+import { installPtyTerminalAttentionIpcHandler } from './terminal-attention'
 
 export function installPtyWriteIpcHandlers(deps: {
   mainWindow?: PtyRendererDelivery
@@ -18,6 +19,8 @@ export function installPtyWriteIpcHandlers(deps: {
   } = createPtyWriteInput(deps)
 
   const hostViewportClaimTails = new Map<string, Promise<boolean>>()
+  // Input from every client lands here; agent sleep reads it back with who else is viewing.
+  installPtyTerminalAttentionIpcHandler(deps)
 
   ipcMain.on('pty:write', (event, args: unknown) => {
     if (!isPtyWriteEventFromMainWindow(event) || !isPtyWritePayload(args)) {
