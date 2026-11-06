@@ -125,7 +125,6 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
   const comparedReadRef = useRef<string | null>(null)
   if (lastResetIdentityRef.current !== statusIdentityKey) {
     lastResetIdentityRef.current = statusIdentityKey
-    comparedReadRef.current = null
     // Retire before fresh status arrives; otherwise the old compare can publish into the new worktree.
     branchCompare.reset()
     setBranchCompareState({ kind: 'idle' })

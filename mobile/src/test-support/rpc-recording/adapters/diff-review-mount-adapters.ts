@@ -1,5 +1,7 @@
 import type { MountAdapter } from '../recording-scenario'
 import type * as CommitLoader from '../../../session/mobile-diff-review-commit-loader'
+import type * as SnapshotLoader from '../../../session/mobile-diff-review-snapshot-loader'
+import type * as GitStatusQuery from '../../../source-control/mobile-git-status-query'
 import type { operationModuleLoader } from '../operation-module-loader'
 
 const WORKTREE = 'repo-9::/w'
@@ -60,11 +62,11 @@ export function diffReviewMountAdapters(
       return {
         action(name, args) {
           if (name === 'snapshot') {
-            const statusQuery = modules.load<
-              typeof import('../../../source-control/mobile-git-status-query')
-            >('mobile/src/source-control/mobile-git-status-query.ts').gitStatusQuery
+            const statusQuery = modules.load<typeof GitStatusQuery>(
+              'mobile/src/source-control/mobile-git-status-query.ts'
+            ).gitStatusQuery
             return modules
-              .load<typeof import('../../../session/mobile-diff-review-snapshot-loader')>(
+              .load<typeof SnapshotLoader>(
                 'mobile/src/session/mobile-diff-review-snapshot-loader.ts'
               )
               .loadMobileDiffReviewSnapshot(client, WORKTREE, {
