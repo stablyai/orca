@@ -104,6 +104,22 @@ describe('Codex async questions', () => {
     expect(answered?.interactivePrompt).toBeUndefined()
   })
 
+  it('drops open questions when the user sends a plain message instead of a reply', () => {
+    const pane = codexPane()
+    pane.report({ hook_event_name: 'UserPromptSubmit', turn_id: 'turn-1', prompt: 'Set up a db' })
+    pane.report(ASK)
+    expect(pane.report(ACCEPTED).main).toMatchObject(waitingOnQuestion)
+
+    // Orca's chat card answers an async question as a quoted message, as Codex clients do.
+    const steered = pane.report({
+      hook_event_name: 'UserPromptSubmit',
+      turn_id: 'turn-1',
+      prompt: '> Which database should the probe use?\n\nSQLite'
+    }).main
+    expect(steered).toMatchObject({ state: 'working' })
+    expect(steered?.interactivePrompt).toBeUndefined()
+  })
+
   it('drops an unanswered question when the turn ends', () => {
     const pane = codexPane()
     pane.report({ hook_event_name: 'UserPromptSubmit', turn_id: 'turn-1', prompt: 'Set up a db' })

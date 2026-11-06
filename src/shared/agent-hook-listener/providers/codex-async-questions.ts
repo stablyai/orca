@@ -24,7 +24,8 @@ export type CodexPendingAsyncQuestion = { toolName: string; prompt: string }
 /**
  * Codex asks a non-blocking question mid-turn: its status stays working, PostToolUse lands ~20 ms
  * after PreToolUse, and each answer arrives as a UserPromptSubmit reply. Only the hooks show it,
- * so track it here. A skip (Ctrl+]) sends no hook and stays pending until the turn ends.
+ * so track it here. A skip (Ctrl+]) sends no hook and stays pending until the turn ends or the
+ * user sends a plain message.
  */
 export function trackCodexAsyncQuestions(
   state: HookListenerState,
@@ -86,7 +87,12 @@ function openCall(
 function answerCalls(state: HookListenerState, paneKey: string, prompt: string | undefined): void {
   const calls = state.codexAsyncQuestionsByPaneKey.get(paneKey)
   const body = prompt?.trim()
-  if (!calls || !body?.startsWith(REPLY_OPEN) || !body.endsWith(REPLY_CLOSE)) {
+  if (!calls) {
+    return
+  }
+  // A plain message answers or abandons them all, as native chat's transcript scan reads it.
+  if (!body?.startsWith(REPLY_OPEN) || !body.endsWith(REPLY_CLOSE)) {
+    state.codexAsyncQuestionsByPaneKey.delete(paneKey)
     return
   }
   for (const [callId, index] of readReplyItems(
