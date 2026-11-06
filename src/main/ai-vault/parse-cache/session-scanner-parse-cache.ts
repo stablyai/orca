@@ -1,5 +1,4 @@
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
-import { throwIfAiVaultScanCancelled } from '../ai-vault-scan-cancellation'
+import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../ai-vault-scan-cancellation'
 import { createQoderSessionResumeState } from '../scanners/qoder/session-scanner-qoder-parser'
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { inSessionParseFileLane } from './session-parse-file-lane'
@@ -283,7 +282,7 @@ async function reuseCachedSession(
   }
   // Index titles can change independently of the transcript signature.
   if (session && candidate.agent === 'codex') {
-    session = await waitForPromiseWithSignal(refreshCachedCodexTitle(candidate, session), signal)
+    session = await waitForAiVaultScan(refreshCachedCodexTitle(candidate, session), signal)
   }
   throwIfAiVaultScanCancelled(signal)
   storeSessionParseCacheEntry(key, { ...entry, session })

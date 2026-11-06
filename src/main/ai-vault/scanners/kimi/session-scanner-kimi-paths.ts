@@ -1,3 +1,4 @@
+import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
@@ -10,8 +11,6 @@ import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-err
 import { asRecord } from '../../session-scanner-record-value'
 import { extractString } from '../../session-scanner-values'
 import { KimiSessionIndexCache } from './session-scanner-kimi-index-cache'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
-import { throwIfAiVaultScanCancelled } from '../../ai-vault-scan-cancellation'
 
 export function resolveKimiSessionsDir(override?: string): string {
   if (override?.trim()) {
@@ -72,7 +71,7 @@ export async function readKimiWorkDirBySessionId(
   const generation = workDirCacheByIndexPath.beginRead()
   let identity: Awaited<ReturnType<typeof wslGatedStat>>
   try {
-    identity = await wslGatedStat(indexPath, 'scan', signal)
+    identity = await waitForAiVaultScan(wslGatedStat(indexPath, 'scan', signal), signal)
   } catch {
     throwIfAiVaultScanCancelled(signal)
     // Failed index stats leave sessions listed without cwd; discard cached enrichment for retry.
@@ -80,7 +79,7 @@ export async function readKimiWorkDirBySessionId(
     return new Map()
   }
 
-  return waitForPromiseWithSignal(
+  return waitForAiVaultScan(
     workDirCacheByIndexPath.get(
       indexPath,
       {

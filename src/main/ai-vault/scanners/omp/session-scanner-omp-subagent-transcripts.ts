@@ -1,5 +1,4 @@
-import { throwIfAiVaultScanCancelled } from '../../ai-vault-scan-cancellation'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
 import { wslGatedReaddir } from '../../../native-chat/wsl-transcript-fs-access'
 import { basename, dirname, extname, join } from 'node:path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
@@ -39,7 +38,7 @@ export async function countOmpSubagentTranscripts(
 ): Promise<number> {
   let entries
   try {
-    entries = await waitForPromiseWithSignal(
+    entries = await waitForAiVaultScan(
       wslGatedReaddir(ompArtifactDirFor(transcriptFilePath), 'scan', signal),
       signal
     )

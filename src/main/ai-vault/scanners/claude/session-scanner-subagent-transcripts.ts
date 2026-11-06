@@ -1,5 +1,4 @@
-import { throwIfAiVaultScanCancelled } from '../../ai-vault-scan-cancellation'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
 import { wslGatedReaddir } from '../../../native-chat/wsl-transcript-fs-access'
 import { basename, dirname, extname, join } from 'node:path'
 
@@ -28,7 +27,7 @@ export async function countSubagentTranscripts(
 ): Promise<number> {
   let entries
   try {
-    entries = await waitForPromiseWithSignal(
+    entries = await waitForAiVaultScan(
       wslGatedReaddir(subagentTranscriptsDirFor(transcriptFilePath), 'scan', signal),
       signal
     )

@@ -1,5 +1,4 @@
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
-import { throwIfAiVaultScanCancelled } from '../ai-vault-scan-cancellation'
+import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../ai-vault-scan-cancellation'
 import {
   hasTranscriptConsumers,
   transcriptConsumers,
@@ -72,7 +71,7 @@ export class TranscriptMessageChannel implements TranscriptMessageSink {
   async drain(): Promise<void> {
     throwIfAiVaultScanCancelled(this.start?.signal)
     if (this.start?.indexing) {
-      await waitForPromiseWithSignal(
+      await waitForAiVaultScan(
         Promise.all(this.readers.flatMap((reader) => (reader.drain ? [reader.drain()] : []))),
         this.start.signal
       )

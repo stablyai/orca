@@ -1,4 +1,4 @@
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
 import { wslGatedReadFile } from '../../../native-chat/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -53,13 +53,13 @@ export async function parseJcodeSessionFile(
 ): Promise<AiVaultSession | null> {
   const fold = foldJcodeSessionContent(
     file,
-    await wslGatedReadFile(file.path, 'utf-8', 'scan', signal),
+    await waitForAiVaultScan(wslGatedReadFile(file.path, 'utf-8', 'scan', signal), signal),
     platform,
     { messages }
   )
   let step = fold.next()
   while (!step.done) {
-    await waitForPromiseWithSignal(messages?.drain?.() ?? Promise.resolve(), signal)
+    await waitForAiVaultScan(messages?.drain?.() ?? Promise.resolve(), signal)
     step = fold.next()
   }
   return step.value

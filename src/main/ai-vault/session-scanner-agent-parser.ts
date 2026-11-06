@@ -1,7 +1,7 @@
+import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from './ai-vault-scan-cancellation'
 import { parseQoderSessionFile } from './scanners/qoder/session-scanner-qoder-parser'
 import { parseCodebuddySessionFile } from './scanners/codebuddy/session-scanner-codebuddy-parser'
 import type { AiVaultSession } from '../../shared/ai-vault/contracts/ai-vault-types'
-import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { parseDevinSessionFile } from './scanners/devin/session-scanner-devin-parser'
 import { parseAntigravitySessionFile } from './scanners/antigravity/session-scanner-antigravity-parser'
 import { parseDroidSessionFile } from './scanners/droid/session-scanner-droid-parser'
@@ -43,7 +43,7 @@ async function readOpenCodeSqliteCandidate(
   signal?: AbortSignal,
   agent?: 'opencode2' | 'zcode'
 ): Promise<AiVaultSession | null> {
-  throwIfSignalAborted(signal)
+  throwIfAiVaultScanCancelled(signal)
   const request = { ...sqliteCandidate, platform, signal }
   if (!messages?.active) {
     const parse =
@@ -52,8 +52,8 @@ async function readOpenCodeSqliteCandidate(
         : agent === 'zcode'
           ? parseZcodeSqliteSessionViaWorker
           : parseOpenCodeSqliteSessionViaWorker
-    const session = await waitForPromiseWithSignal(parse(request), signal)
-    throwIfSignalAborted(signal)
+    const session = await waitForAiVaultScan(parse(request), signal)
+    throwIfAiVaultScanCancelled(signal)
     return session
   }
   const capture =
@@ -62,13 +62,13 @@ async function readOpenCodeSqliteCandidate(
       : agent === 'zcode'
         ? captureZcodeSqliteSessionViaWorker
         : captureOpenCodeSqliteSessionViaWorker
-  const result = await waitForPromiseWithSignal(capture(request), signal)
+  const result = await waitForAiVaultScan(capture(request), signal)
   for (const message of result.messages) {
-    throwIfSignalAborted(signal)
+    throwIfAiVaultScanCancelled(signal)
     messages.push(message)
-    await waitForPromiseWithSignal(messages.drain?.() ?? Promise.resolve(), signal)
+    await waitForAiVaultScan(messages.drain?.() ?? Promise.resolve(), signal)
   }
-  throwIfSignalAborted(signal)
+  throwIfAiVaultScanCancelled(signal)
   return result.session
 }
 

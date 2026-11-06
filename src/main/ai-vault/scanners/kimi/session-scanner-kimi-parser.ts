@@ -1,4 +1,4 @@
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
 import {
   openTranscriptReadStream,
   wslGatedReadFile
@@ -34,10 +34,12 @@ export async function parseKimiSessionFile(
 ): Promise<AiVaultSession | null> {
   let stateRecord: Record<string, unknown> | null
   try {
-    stateRecord = asRecord(
-      JSON.parse(await wslGatedReadFile(file.path, 'utf-8', 'scan', signal)) as unknown
+    const parsed: unknown = JSON.parse(
+      await waitForAiVaultScan(wslGatedReadFile(file.path, 'utf-8', 'scan', signal), signal)
     )
+    stateRecord = asRecord(parsed)
   } catch (error) {
+    throwIfAiVaultScanCancelled(signal)
     // Propagate WSL refusal so an unreachable state file is not cached as no session.
     if (
       error instanceof WslTranscriptFsError ||
@@ -94,7 +96,7 @@ async function consumeKimiWireTranscript(
   const lines = createInterface({ input, crlfDelay: Infinity })
   try {
     for await (const line of lines) {
-      await waitForPromiseWithSignal(accumulator.messages.drain?.() ?? Promise.resolve(), signal)
+      await waitForAiVaultScan(accumulator.messages.drain?.() ?? Promise.resolve(), signal)
       const record = parseJsonObject(line)
       if (!record) {
         continue
@@ -118,6 +120,7 @@ async function consumeKimiWireTranscript(
       }
     }
   } catch (error) {
+    throwIfAiVaultScanCancelled(signal)
     // Metadata-only sessions may list, but WSL refusal must propagate so missing wire content remains retryable.
     if (
       error instanceof WslTranscriptFsError ||
@@ -131,7 +134,7 @@ async function consumeKimiWireTranscript(
     input.destroy()
   }
   flushAssistant()
-  await waitForPromiseWithSignal(accumulator.messages.drain?.() ?? Promise.resolve(), signal)
+  await waitForAiVaultScan(accumulator.messages.drain?.() ?? Promise.resolve(), signal)
 }
 
 function consumeKimiUserMessage(accumulator: SessionAccumulator, value: unknown): void {

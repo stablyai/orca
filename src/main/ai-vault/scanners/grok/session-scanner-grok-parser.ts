@@ -1,4 +1,4 @@
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
 import {
   openTranscriptReadStream,
   wslGatedReadFile
@@ -34,9 +34,10 @@ export async function parseGrokSessionFile(
   messages?: TranscriptMessageSink,
   signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
-  const record = asRecord(
-    JSON.parse(await wslGatedReadFile(file.path, 'utf-8', 'scan', signal)) as unknown
+  const parsed: unknown = JSON.parse(
+    await waitForAiVaultScan(wslGatedReadFile(file.path, 'utf-8', 'scan', signal), signal)
   )
+  const record = asRecord(parsed)
   if (!record) {
     return null
   }
@@ -72,7 +73,7 @@ async function consumeGrokChatHistory(
   const lines = createInterface({ input, crlfDelay: Infinity })
   try {
     for await (const line of lines) {
-      await waitForPromiseWithSignal(accumulator.messages.drain?.() ?? Promise.resolve(), signal)
+      await waitForAiVaultScan(accumulator.messages.drain?.() ?? Promise.resolve(), signal)
       const record = parseJsonObject(line)
       if (!record) {
         continue
@@ -107,6 +108,7 @@ async function consumeGrokChatHistory(
       )
     }
   } catch (error) {
+    throwIfAiVaultScanCancelled(signal)
     // Summary-only sessions can list; WSL refusal must propagate so incomplete history is not cached as current.
     if (
       error instanceof WslTranscriptFsError ||

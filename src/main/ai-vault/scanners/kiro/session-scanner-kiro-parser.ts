@@ -1,3 +1,4 @@
+import { waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
 import { basename } from 'node:path'
 import { wslGatedReadFile } from '../../../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
@@ -131,7 +132,7 @@ export async function parseKiroSessionFile(
 ): Promise<AiVaultSession | null> {
   const accumulator = createKiroAccumulator(
     file,
-    await wslGatedReadFile(file.path, 'utf-8', 'scan', signal),
+    await waitForAiVaultScan(wslGatedReadFile(file.path, 'utf-8', 'scan', signal), signal),
     messages
   )
   if (!accumulator) {

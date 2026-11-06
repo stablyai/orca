@@ -1,4 +1,4 @@
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
 import { openTranscriptReadStream } from '../../../native-chat/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
 import type {
@@ -226,7 +226,7 @@ async function finalizeCodexParseState(
   let titleKind: AiVaultSessionTitleKind =
     snapshot.titleSource === 'meta' && snapshot.accumulator.title ? 'named' : 'fallback'
   if (snapshot.sawSessionMeta) {
-    const indexedTitle = await waitForPromiseWithSignal(
+    const indexedTitle = await waitForAiVaultScan(
       Promise.resolve(args.titleReader?.(snapshot.accumulator.sessionId)),
       args.signal
     )

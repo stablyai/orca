@@ -19,7 +19,6 @@ import {
   registerTranscriptConsumer,
   resetTranscriptConsumersForTests
 } from './transcripts/session-transcript-consumers'
-import { isAiVaultScanCancelledError } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { resetSessionParseCacheForTests } from './parse-cache/session-parse-cache-store'
 import {
   resetWslTranscriptFsGateForTests,
@@ -132,7 +131,10 @@ describe('AI Vault session parse with a stalled WSL transcript body read', () =>
       controller.signal
     )
     const cancelled = first.catch((error) => {
-      expect(isAiVaultScanCancelledError(error)).toBe(true)
+      expect(error).toMatchObject({
+        name: 'AbortError',
+        message: 'Agent Session History scan was cancelled'
+      })
       return 'cancelled'
     })
     await finalizing
