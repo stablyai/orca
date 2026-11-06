@@ -31,6 +31,7 @@ import { parseSshTranscriptPath } from './ssh-transcript-path'
 import { readIndexedCodexThreadRolloutPath } from '../codex/history/index/codex-state-db'
 import { readCodexRolloutSessionMetaId } from '../codex/history/rollouts/codex-rollout-session-meta'
 import { admitTranscriptPath } from './transcript-path-admission'
+import { findIndexedWslCodexRollout } from './wsl-codex-indexed-rollout'
 import { wslTranscriptFsRefusal, type WslTranscriptFsError } from './wsl-transcript-fs-gate'
 
 // Read shared discovery roots per call; preference order prevents cross-account matches.
@@ -237,7 +238,7 @@ async function findFirstInDirs(
   for (const dir of dirs) {
     try {
       const hit = isWslUncPath(dir)
-        ? await findWslSessionPath(agent, dir, sessionId, signal)
+        ? await findWslSessionFile(agent, dir, sessionId, signal)
         : await findHostSessionFile(agent, dir, sessionId, signal, strictErrors)
       if (hit) {
         return hit
@@ -255,6 +256,21 @@ async function findFirstInDirs(
     throw unavailable
   }
   return null
+}
+
+async function findWslSessionFile(
+  agent: SessionIdLookupAgent,
+  root: string,
+  sessionId: string,
+  signal?: AbortSignal
+): Promise<string | null> {
+  if (agent === 'codex') {
+    const indexed = await findIndexedWslCodexRollout(root, sessionId, signal)
+    if (indexed && (await readCodexRolloutSessionMetaId(indexed, signal)) === sessionId) {
+      return indexed
+    }
+  }
+  return findWslSessionPath(agent, root, sessionId, signal)
 }
 
 async function findHostSessionFile(
