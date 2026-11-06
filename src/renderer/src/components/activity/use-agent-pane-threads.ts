@@ -80,6 +80,7 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
           migrationUnsupportedByPtyId: storeData.migrationUnsupportedByPtyId,
           retainedAgentsByPaneKey: storeData.retainedAgentsByPaneKey,
           tabsByWorktree: storeData.tabsByWorktree,
+          ptyIdsByTabId: storeData.ptyIdsByTabId,
           unifiedTabsByWorktree: storeData.activityTabs,
           worktreeMap: storeData.worktreeMap,
           repoMap: storeData.repoMap,
