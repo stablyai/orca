@@ -145,7 +145,7 @@ export function registerPtyConnectionHiddenBacklogReconciliationTests(): void {
             seq: 5_000_000
           })
           const { _dispatchPtyModelRestoreNeededForTest } =
-            await import('./pty-model-restore-channel')
+            await import('./pty-transport/delivery/pty-model-restore-channel')
           _dispatchPtyModelRestoreNeededForTest({
             id: 'pty-id',
             reason: 'pending-cap',
@@ -337,7 +337,7 @@ export function registerPtyConnectionHiddenBacklogReconciliationTests(): void {
             seq: 64
           })
           const { _dispatchPtyModelRestoreNeededForTest } =
-            await import('./pty-model-restore-channel')
+            await import('./pty-transport/delivery/pty-model-restore-channel')
           _dispatchPtyModelRestoreNeededForTest({
             id: 'pty-id',
             reason: 'pending-cap',
@@ -453,7 +453,7 @@ export function registerPtyConnectionHiddenBacklogReconciliationTests(): void {
           // Pane hides mid-stream; main drops the hidden frame and marks restore.
           isVisibleRef.current = false
           const { _dispatchPtyModelRestoreNeededForTest } =
-            await import('./pty-model-restore-channel')
+            await import('./pty-transport/delivery/pty-model-restore-channel')
           _dispatchPtyModelRestoreNeededForTest({
             id: 'pty-id',
             reason: 'hidden-drop',
@@ -496,7 +496,7 @@ export function registerPtyConnectionHiddenBacklogReconciliationTests(): void {
             pendingDeliveryStartSeq: 80
           })
           const { _dispatchPtyModelRestoreNeededForTest } =
-            await import('./pty-model-restore-channel')
+            await import('./pty-transport/delivery/pty-model-restore-channel')
           _dispatchPtyModelRestoreNeededForTest({
             id: 'pty-id',
             reason: 'pending-cap',

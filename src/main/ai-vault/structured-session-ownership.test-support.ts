@@ -10,9 +10,9 @@ import type {
   AiVaultListResult,
   AiVaultSession
 } from '../../shared/ai-vault/contracts/ai-vault-types'
-import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredProviderSessionOwnership } from '../native-chat/agent-session-wire/structured-provider-session-ownership'
-import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredProviderSessionOwnership } from '../native-chat/agent-session-wire/host/structured-provider-session-ownership'
+import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   claudeProviderHandle,
   codexProviderHandle

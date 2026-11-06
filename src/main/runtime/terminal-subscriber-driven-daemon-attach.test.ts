@@ -3,9 +3,10 @@ import './rpc/unused-default-rpc-methods.test-fixture'
  * Exercise real runtime/multiplex with controller data gated on attach; no renderer is present. */
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
+import { deriveRemoteRuntimeTerminalCreateHandle } from './terminal/identity/remote-runtime-terminal-create-identity'
 import { RpcDispatcher } from './rpc/dispatcher'
 import type { RpcRequest } from './rpc/core'
-import { TERMINAL_METHODS } from './rpc/methods/terminal'
+import { TERMINAL_METHODS } from './rpc/methods/terminal/terminal'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -31,6 +32,7 @@ type RuntimeInternals = {
   ) => Promise<unknown>
   // Optional so this suite still runs, and fails on behavior, against a runtime without it.
   notePtyEndpointLoss?: (ptyId: string) => void
+  resolveTerminalWorkspaceLaunchScope: () => Promise<{ id: string; connectionId: null }>
 }
 
 function internals(runtime: OrcaRuntimeService): RuntimeInternals {
@@ -42,6 +44,8 @@ type DaemonSessionModel = {
   rows: number
   attached: boolean
   screen: string
+  terminalHandle?: string
+  lastTitle?: string
 }
 
 /** Models the daemon provider boundary: inventory of live sessions, data
@@ -70,6 +74,7 @@ function createDaemonProviderModel(opts: { snapshotCapable: boolean }) {
         cwd: '/tmp/wt',
         worktreeId: WORKTREE_ID,
         title: '',
+        ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
         cols: session.cols,
         rows: session.rows
       })),
@@ -98,6 +103,10 @@ function createDaemonProviderModel(opts: { snapshotCapable: boolean }) {
         return false
       }
       session.attached = true
+      // The runtime controller seeds the attach snapshot's title, as attachPtyFromRuntimeController does.
+      if (session.lastTitle) {
+        runtime?.seedTerminalRestoreTail(ptyId, { lastTitle: session.lastTitle })
+      }
       return true
     },
     serializeProviderBuffer: async (ptyId: string) => {
@@ -446,6 +455,49 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
     expect(model.emitData(PTY_ID, 'worker still printing\r\n')).toBe(true)
     const read = await runtime.readTerminal(handle)
     expect(read.tail.join('\n')).toContain('worker still printing')
+  })
+
+  it('streams a survivor a terminal.create retry adopts after a restart', async () => {
+    const runtime = new OrcaRuntimeService()
+    const model = createDaemonProviderModel({ snapshotCapable: false })
+    model.bind(runtime)
+    runtime.setPtyController(model.controller as never)
+    vi.spyOn(internals(runtime), 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
+      id: WORKTREE_ID,
+      connectionId: null
+    })
+    model.sessions.set(PTY_ID, {
+      cols: 80,
+      rows: 24,
+      attached: false,
+      screen: '',
+      terminalHandle: deriveRemoteRuntimeTerminalCreateHandle(
+        'device-a',
+        WORKTREE_ID,
+        'mutation-1'
+      ),
+      lastTitle: '✳ Claude Code'
+    })
+    const spawn = vi.fn()
+
+    const adopted = await runtime.dedupeTerminalCreate(
+      'device-a',
+      `id:${WORKTREE_ID}`,
+      'mutation-1',
+      true,
+      spawn
+    )
+
+    expect(spawn).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID]))
+    expect(model.emitData(PTY_ID, 'still working\r\n')).toBe(true)
+    const [listed] = (await runtime.listTerminals()).terminals
+    expect(listed).toMatchObject({
+      handle: adopted.handle,
+      title: '✳ Claude Code',
+      preview: 'still working'
+    })
+    expect(listed.lastOutputAt).not.toBeNull()
   })
 
   it('does not subscriber-attach or provider-read a session this app already spawned', async () => {

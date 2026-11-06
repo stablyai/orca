@@ -8,7 +8,7 @@ import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-type
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { OrcaRuntimeService } from './orca-runtime'
 import { RpcDispatcher } from './rpc/dispatcher'
-import { SESSION_TAB_METHODS } from './rpc/methods/session-tabs'
+import { SESSION_TAB_METHODS } from './rpc/methods/session-tabs/session-tabs'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { bindPaneFirst } from './orca-runtime-tests/bind-first-pane.test-fixture'
 import { partialRuntimeStore, storeRepo } from './orca-runtime-tests/runtime-store-partial-fixture'

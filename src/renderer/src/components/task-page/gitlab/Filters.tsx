@@ -7,6 +7,34 @@ import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { LoaderCircle, RefreshCw } from 'lucide-react'
+import { getGitLabMRInvolvementFilters } from '@/components/task-page/task-page-localized-options'
+
+function FilterChip({
+  label,
+  active,
+  onSelect
+}: {
+  label: string
+  active: boolean
+  onSelect: () => void
+}): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onSelect}
+      className={cn(
+        'rounded-md border px-2 py-1 text-xs transition',
+        active
+          ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
+          : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
+      )}
+    >
+      {label}
+    </button>
+  )
+}
+
 export function TaskPageGitLabFilters({
   model
 }: {
@@ -28,7 +56,9 @@ export function TaskPageGitLabFilters({
     gitlabView,
     setGitlabView,
     gitlabTodosLoading,
-    activeGitlabFilter
+    activeGitlabFilter,
+    gitlabMRInvolvement,
+    setGitlabMRInvolvement
   } = model
   return (
     <>
@@ -105,30 +135,38 @@ export function TaskPageGitLabFilters({
             <div className="flex flex-wrap gap-2">
               {gitlabView === 'issues' || gitlabView === 'mrs'
                 ? (gitlabView === 'issues' ? gitLabIssueFilters : gitLabMRFilters).map(
-                    ({ id, label }) => {
-                      const active = activeGitlabFilter === id
-                      return (
-                        <button
-                          key={id}
-                          type="button"
-                          onClick={() => {
-                            setGitlabFilter(id)
-                            setGitlabRefreshNonce((n) => n + 1)
-                          }}
-                          className={cn(
-                            'rounded-md border px-2 py-1 text-xs transition',
-                            active
-                              ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
-                              : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
-                          )}
-                        >
-                          {label}
-                        </button>
-                      )
-                    }
+                    ({ id, label }) => (
+                      <FilterChip
+                        key={id}
+                        label={label}
+                        active={activeGitlabFilter === id}
+                        onSelect={() => {
+                          setGitlabFilter(id)
+                          setGitlabRefreshNonce((n) => n + 1)
+                        }}
+                      />
+                    )
                   )
                 : null}
             </div>
+            {gitlabView === 'mrs' ? (
+              <>
+                <span aria-hidden className="h-4 w-px bg-border/60" />
+                <div className="flex flex-wrap gap-2">
+                  {getGitLabMRInvolvementFilters().map(({ id, label }) => (
+                    <FilterChip
+                      key={id ?? 'everyone'}
+                      label={label}
+                      active={gitlabMRInvolvement === id}
+                      onSelect={() => {
+                        setGitlabMRInvolvement(id)
+                        setGitlabRefreshNonce((n) => n + 1)
+                      }}
+                    />
+                  ))}
+                </div>
+              </>
+            ) : null}
           </div>
           <div
             className="flex shrink-0 items-center gap-2"

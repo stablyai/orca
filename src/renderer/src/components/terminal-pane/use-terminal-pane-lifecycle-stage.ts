@@ -12,6 +12,7 @@ export function useTerminalPaneLifecycleStage(controller: TerminalPaneCloseContr
     cwd,
     dispatchNotification,
     effectiveMacOptionAsAlt,
+    detachPaneToNewTab,
     handleExternalPaneDrop,
     initialLayoutRef,
     isActive,
@@ -28,7 +29,6 @@ export function useTerminalPaneLifecycleStage(controller: TerminalPaneCloseContr
     onPtyExitRef,
     onPtyRecoveryStateRef,
     paneCwdRef,
-    paneFontSizesRef,
     paneKittyKeyboardModesRef,
     paneLastThemeModeRef,
     paneMode2031Ref,
@@ -90,7 +90,6 @@ export function useTerminalPaneLifecycleStage(controller: TerminalPaneCloseContr
     getTabWideAgentHintLeafId: () => getTabWideAgentHintLeafIdRef.current(),
     containerRef,
     expandedStyleSnapshotRef,
-    paneFontSizesRef,
     paneTransportsRef,
     paneCwdRef,
     paneMode2031Ref,
@@ -135,6 +134,7 @@ export function useTerminalPaneLifecycleStage(controller: TerminalPaneCloseContr
     setPaneCount,
     setPaneLayoutRevision,
     resolveExternalPaneDropTarget,
-    onExternalPaneDrop: handleExternalPaneDrop
+    onExternalPaneDrop: handleExternalPaneDrop,
+    detachPaneToNewTab
   })
 }

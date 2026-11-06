@@ -1,5 +1,5 @@
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import type { RemoteDispatchAttachmentRow } from '../../../../orchestration/types'
+import type { RemoteDispatchAttachmentRow } from '../../../../orchestration/db/orchestration-records'
 import { defineMethod } from '../../../core'
 import { isUserKeptWorkerTerminalOwner } from '../../../../orchestration/db/worker-terminal/worker-terminal-user-keep'
 import { mapWithConcurrency } from '../../../../../../shared/map-with-concurrency'

@@ -28,7 +28,7 @@ import type {
   ClientHostedBrowserCloseIntentsByEnvironment,
   PendingClientHostedBrowserClose
 } from '@/runtime/client-hosted-browser-close-intents'
-import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace-session-hydration-keys'
+import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { TabSplitDirection, TabSplitTarget } from '../tabs/tabs-slice-contract'
 import type { RuntimeBrowserPlacement } from '../../../../../shared/runtime-browser-placement'

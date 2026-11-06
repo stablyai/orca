@@ -1,7 +1,7 @@
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import { notifyNativeChatComposerState } from './native-chat-composer-mount'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
-import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
+import type { ClipboardEventHandler, KeyboardEventHandler, RefObject, ReactNode } from 'react'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import type { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
@@ -22,13 +22,17 @@ import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
 } from '../../../../shared/native-chat/input/native-chat-session-options'
-import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
+import type {
+  NativeChatOptionPickerRequest,
+  NativeChatComposerImageAttachment
+} from './native-chat-composer-types'
 import { NativeChatImageAttachmentPreview } from './NativeChatImageAttachmentPreview'
 import type { NativeChatComposerGoalMode } from './use-native-chat-composer-submit'
 import { translate } from '@/i18n/i18n'
 import { useNativeChatComposerDraftUnsaved } from './use-native-chat-draft-unsaved'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { NativeChatFollowUpBehavior } from '../../../../shared/native-chat/input/native-chat-follow-up-behavior'
+import type { NativeChatSteerChordPreview } from './use-native-chat-steer-chord-preview'
 
 function noop(): void {}
 
@@ -84,6 +88,9 @@ export type NativeChatComposerFieldProps = {
   onDictationHoldStart: () => void
   onDictationHoldEnd: () => void
   onSend: () => void
+  /** Held Cmd/Ctrl: Send shows, and a click runs, what Cmd/Ctrl+Enter would do. */
+  steerPreview?: NativeChatSteerChordPreview | null
+  onSteerPreview?: () => void
   onStop?: () => void
   sessionOptionsSurface: SessionOptionsSurface | null
   sessionOptionsSnapshot: SessionOptionDescriptor[]
@@ -92,22 +99,10 @@ export type NativeChatComposerFieldProps = {
   goalMode?: NativeChatComposerGoalMode
   agent?: string
   launchPrompt?: { placeholder: string }
+  workspaceFooter?: ReactNode
 }
 
-export type NativeChatComposerImageAttachment = {
-  id: string
-  /** Empty while `pending`: the clipboard image has no agent-readable path yet. */
-  path: string
-  connectionId?: string
-  /** Show clipboard thumbnails immediately, without waiting for disk/upload completion. */
-  previewUrl?: string
-  /** True while the pasted image is still being written to disk or uploaded. */
-  pending?: boolean
-  /** The file's name while it uploads: a dropped or picked file, not a pasted image. */
-  pendingName?: string
-  /** Set on an image the draft names but can't send: the file to attach again. */
-  unavailableName?: string
-}
+export type { NativeChatComposerImageAttachment } from './native-chat-composer-types'
 
 /** After a clear suppressed by IME, preserve only the composed segment; compare both ends because the caret need not be at the end. */
 function imeComposedSegment(base: string, settled: string): string {
@@ -170,6 +165,8 @@ export function NativeChatComposerField({
   onDictationHoldStart,
   onDictationHoldEnd,
   onSend,
+  steerPreview = null,
+  onSteerPreview,
   onStop,
   sessionOptionsSurface,
   sessionOptionsSnapshot,
@@ -177,7 +174,8 @@ export function NativeChatComposerField({
   sessionOptionsPickerRequest,
   goalMode,
   agent,
-  launchPrompt
+  launchPrompt,
+  workspaceFooter
 }: NativeChatComposerFieldProps): React.JSX.Element {
   const draftNotSaved = useNativeChatComposerDraftUnsaved(draftScopeKey)
   const optionCount =
@@ -245,6 +243,7 @@ export function NativeChatComposerField({
   const dictationHoldStart = useLatestHandler(onDictationHoldStart)
   const dictationHoldEnd = useLatestHandler(onDictationHoldEnd)
   const send = useLatestHandler(onSend)
+  const runSteerPreview = useLatestHandler(onSteerPreview ?? noop)
   const stop = useLatestHandler(onStop ?? noop)
   const exitGoalMode = useLatestHandler(goalMode?.exit ?? noop)
 
@@ -411,6 +410,8 @@ export function NativeChatComposerField({
                 onDictationHoldStart={dictationHoldStart}
                 onDictationHoldEnd={dictationHoldEnd}
                 onSend={send}
+                steerPreview={steerPreview}
+                onSteerPreview={runSteerPreview}
                 onStop={onStop ? stop : undefined}
                 sessionOptionsSurface={sessionOptionsSurface}
                 sessionOptionsSnapshot={sessionOptionsSnapshot}
@@ -423,6 +424,7 @@ export function NativeChatComposerField({
               />
             </div>
           </div>
+          {workspaceFooter}
         </div>
       </div>
     </div>

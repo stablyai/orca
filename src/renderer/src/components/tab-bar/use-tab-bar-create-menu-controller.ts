@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
+import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import type { TabBarCreateMenuController } from './tab-bar-create-menu-contract'
 export type { TabBarCreateMenuController } from './tab-bar-create-menu-contract'
 import { useAgentLaunchPickerInventorySource } from '../agent/use-agent-launch-picker-inventory'
@@ -276,11 +276,13 @@ export function useTabBarCreateMenuController({
     window.addEventListener('blur', dismiss)
     return () => window.removeEventListener('blur', dismiss)
   }, [newTabMenuOpen])
-  useEffect(() => {
+  const [prevNewTabMenuOpen, setPrevNewTabMenuOpen] = useState(newTabMenuOpen)
+  if (prevNewTabMenuOpen !== newTabMenuOpen) {
+    setPrevNewTabMenuOpen(newTabMenuOpen)
     if (!newTabMenuOpen) {
       setCreateMenuQuery('')
     }
-  }, [newTabMenuOpen])
+  }
   return {
     agentMenu,
     agentPickerInventory,

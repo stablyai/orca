@@ -14,7 +14,7 @@ import { getConnectionIdForWorktreeCopy } from '@/lib/connection-owner-resolutio
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { isNativeChatTranscriptLocalReadable } from '../../../../shared/native-chat/transcript/native-chat-transcript-readability'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import { useOptionalShortcutLabel, useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {

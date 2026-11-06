@@ -1,5 +1,6 @@
-import { discardPreHandlerPtyState } from './pty-pre-handler-buffer'
-import { unregisterPtyDataHandlers } from './pty-dispatcher'
+import { discardPreHandlerPtyState } from './pty-transport/delivery/pty-pre-handler-buffer'
+import './pty-transport/delivery/pty-dispatcher'
+import { unregisterPtyDataHandlers } from './pty-transport/shutdown/pty-shutdown-data-suspension'
 import { disposeParkedTerminalWatchersForPtyIds } from './terminal-parked-watcher-registry'
 
 export function reapUnboundCodexPty(ptyId: string, reason: string): void {

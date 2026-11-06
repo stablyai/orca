@@ -3,6 +3,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type * as ConnectionOwnerResolution from '@/lib/connection-owner-resolution'
+import type * as LaunchAgentKindModule from '../../../shared/agent-kind'
 
 const mockCreateTab = vi.fn()
 
@@ -70,8 +71,14 @@ vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'win32' }))
 vi.mock('sonner', () => ({ toast: { message: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/telemetry', () => ({
   track: vi.fn(),
-  tuiAgentToAgentKind: (agent: string) => agent
+  tuiAgentToAgentKind: mockLaunchAgentKind
 }))
+const mockLaunchAgentKind = vi.hoisted(() => (agent: string) => agent)
+vi.mock('../../../shared/agent-kind', async (importOriginal) => ({
+  ...(await importOriginal<typeof LaunchAgentKindModule>()),
+  tuiAgentToAgentKind: mockLaunchAgentKind
+}))
+
 vi.mock('@/components/tab-bar/reconcile-order', () => ({
   reconcileTabOrder: vi.fn((_stored, termIds: string[]) => [...termIds])
 }))
@@ -92,7 +99,8 @@ const record: SleepingAgentSessionRecord = {
 }
 
 async function launch(sessionRecord = record): Promise<string | undefined> {
-  const { launchSleepingAgentSession } = await import('./sleeping-agent-session-launch')
+  const { launchSleepingAgentSession } =
+    await import('./agent-session/resume/sleeping-agent-session-launch')
   launchSleepingAgentSession(sessionRecord)
   const options = mockCreateTab.mock.calls.at(-1)?.[3] as
     | { pendingStartup?: { command: string } }

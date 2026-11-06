@@ -1,3 +1,4 @@
+import { codexRolloutItem } from '../../../codex/history/rollouts/codex-rollout-item-projection'
 import { timestampIso } from '../../session-scanner-accumulator'
 import { asRecord } from '../../session-scanner-record-value'
 import type { SessionAccumulator } from '../../session-scanner-types'
@@ -65,11 +66,9 @@ export function publishCodexCompletedTool(
   if (!accumulator.messages.active) {
     return
   }
-  const item = asRecord(payload.item)
-  if (item?.type === 'CommandExecution' || item?.type === 'command_execution') {
-    const command = Array.isArray(item.command)
-      ? item.command.filter((part) => typeof part === 'string').join(' ')
-      : item.command
+  const item = codexRolloutItem(payload.item)
+  if (item?.type === 'commandExecution') {
+    const command = item.command
     publishToolContent(
       accumulator,
       [
@@ -78,15 +77,15 @@ export function publishCodexCompletedTool(
       ],
       timestamp
     )
-  } else if (item?.type === 'FileChange' || item?.type === 'file_change') {
-    const changes = asRecord(item.changes) ?? {}
-    for (const [path, value] of Object.entries(changes)) {
+  } else if (item?.type === 'fileChange') {
+    const changes = Array.isArray(item.changes) ? item.changes : []
+    for (const value of changes) {
       const change = asRecord(value)
       publishToolContent(
         accumulator,
         [
-          { type: 'tool_use', name: 'apply_patch', input: { path } },
-          { type: 'tool_result', content: change?.unified_diff ?? change?.content }
+          { type: 'tool_use', name: 'apply_patch', input: { path: change?.path } },
+          { type: 'tool_result', content: change?.diff }
         ],
         timestamp
       )

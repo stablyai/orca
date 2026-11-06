@@ -4,7 +4,7 @@ import { isProvenProcessExit } from '../../../shared/terminal/pty/lifecycle/term
 import { closeTerminalTab } from './terminal/terminal-tab-actions'
 import type { TerminalTabCloseIntent } from './terminal/terminal-tab-close-intent'
 import { shouldDeferParkedPtyExitTabClose } from './terminal-pane/terminal-parked-tab-watchers'
-import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
+import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
 import type { TerminalCreateController } from './use-terminal-create-actions'
 
 export function useTerminalCloseActions(controller: TerminalCreateController) {

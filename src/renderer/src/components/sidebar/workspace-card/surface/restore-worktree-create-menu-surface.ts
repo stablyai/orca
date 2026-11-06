@@ -1,6 +1,6 @@
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { useAppStore } from '@/store'
-import { gateAndReseedEmptyWorkspace } from '@/lib/worktree-activation-gated-empty-reseed'
+import { gateAndReseedEmptyWorkspace } from '@/lib/workspace/activation/worktree-activation-gated-empty-reseed'
 
 /** Restore a dismissed picker's missing surface only while its workspace and host remain active. */
 export function restoreWorktreeCreateMenuSurface(

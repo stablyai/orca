@@ -1,6 +1,6 @@
 import { removePaneKeys } from './agent-status/agent-status-pane-keyed-records'
 import type { AppState } from '../types'
-import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-activity'
+import { forgetAgentHibernationTabOutput } from '@/lib/agent-session/hibernation/agent-hibernation-output-activity'
 import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
 import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'
 // Use store-free registry to avoid a slice-evaluation cycle through terminal-parked-tab-watchers.

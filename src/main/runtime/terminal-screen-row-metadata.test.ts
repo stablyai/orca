@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { HeadlessEmulator } from '../daemon/emulation/headless-emulator'
 import { projectTerminalVisibleLines } from './terminal/view/orca-runtime-terminal-projection'
-import { redactWorkerTerminalView } from './orchestration/worker-terminal-redaction'
+import { redactWorkerTerminalView } from './orchestration/terminal-authority/views/worker-terminal-redaction'
 
 describe('screen row provenance boundaries', () => {
   it.each([5, 30, 100])(

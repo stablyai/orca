@@ -1,10 +1,10 @@
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
-import { resolveAgentLaunchExecutionContext } from '@/lib/launch-agent-execution-context'
+import { resolveAgentLaunchExecutionContext } from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
 import { describe, expect, it, vi } from 'vitest'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
 import { runtimeStatuses } from './browser-slice-test-harness'
 import { getAgentDetectionTargetKeyForWorktree } from '@/hooks/useAgentDetectionTarget'
-import { buildAgentLaunchRouteInput, worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
+import { buildAgentLaunchRouteInput, worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { getWorkspaceClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 
 const id = 'repo1::/path/twin'

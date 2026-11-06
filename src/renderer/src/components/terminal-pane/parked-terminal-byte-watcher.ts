@@ -18,8 +18,8 @@ import {
   createParkedTerminalCommandStatusPolicy,
   readInFlightCommandCodeTurn
 } from './parked-terminal-command-status'
-import { subscribeToPtyData } from './pty-data-sidecar-subscriptions'
-import { createPtyOutputProcessor } from './pty-output-processor'
+import { subscribeToPtyData } from './pty-transport/delivery/pty-data-sidecar-subscriptions'
+import { createPtyOutputProcessor } from './pty-transport/output/pty-output-processor'
 import { isRendererHiddenPtyDeliveryGateEnabled } from './terminal-hidden-delivery-gate'
 import {
   isMainTerminalSideEffectAuthorityForPty,
@@ -28,7 +28,7 @@ import {
 import { dispatchTerminalNotification } from './use-notification-dispatch'
 import { hasPendingHookLaneCompletion } from '@/hooks/agent-hook-completion-notifications'
 import { hookLaneTitleTurnEndEvidence } from '@/hooks/agent-hook-turn-end-ownership'
-import { acquireHiddenRendererPtyDeliveryClaim } from './pty-renderer-delivery-claims'
+import { acquireHiddenRendererPtyDeliveryClaim } from './pty-transport/delivery/pty-renderer-delivery-claims'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 // Why: keep the live path's BEL-vs-completion race window so notification behavior is identical whether a tab is parked or mounted.

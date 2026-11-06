@@ -6,7 +6,7 @@
 import { ORCHESTRATION_ASK_MAX_TIMEOUT_MS } from '../../../shared/orchestration-ask-timeout'
 import { isDurableMutation } from '../../../shared/orchestration-rpc-contract'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { ALL_RPC_METHODS } from '../../runtime/rpc/methods'
+import { ALL_RPC_METHODS } from '../../runtime/rpc/methods/rpc-method-registry'
 import {
   hashCanonical,
   readPromptBasePayloadHash,

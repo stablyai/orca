@@ -93,3 +93,38 @@ export const dollars = defineFixture({
     </div>
   )
 })
+
+export const advisor = defineFixture({
+  width: 640,
+  render: () => (
+    <div className="native-chat-appearance p-4">
+      <MessageRow
+        message={{
+          id: 'advisor',
+          role: 'assistant',
+          timestamp: 0,
+          source: 'transcript',
+          blocks: [
+            { type: 'tool-call', name: 'advisor', input: {}, callId: 'server', state: 'completed' },
+            {
+              type: 'tool-result',
+              callId: 'server',
+              output:
+                '{"type":"advisor_redacted_result","encrypted_content":"redacted-advisor-content"}'
+            }
+          ]
+        }}
+        expandSignal
+        onScrollMessageToTop={() => {}}
+      />
+    </div>
+  ),
+  interact: async (frame) => {
+    const members = frame.querySelectorAll<HTMLButtonElement>(
+      '[data-native-chat-tool-run-members] button[aria-expanded="false"]'
+    )
+    for (const member of members) {
+      member.click()
+    }
+  }
+})

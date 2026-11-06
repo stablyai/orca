@@ -1,16 +1,11 @@
 import type { GitLabPipelineJob } from '../../shared/gitlab-types'
 import { encodedProject } from './project-path-encoding'
-import {
-  glabHostnameArgs,
-  glabRepoExecOptions,
-  glabExecFileAsync,
-  type LocalGitExecOptions,
-  type ProjectRef
-} from './gl-utils'
+import { gitLabRunTimes } from './gitlab-run-times'
+import { fetchAllGitLabPages, GitLabIncompletePaginationError } from './gitlab-paginated-list'
+import type { LocalGitExecOptions, ProjectRef } from './gl-utils'
 
 // Child CI jobs live under bridge pipelines, not the parent pipeline's jobs endpoint.
 
-const PIPELINE_JOB_PAGE_SIZE = 100
 // Bound child-pipeline expansion per details load.
 const MAX_CHILD_PIPELINES_TO_EXPAND = 20
 // Each fetch launches glab; cap polling fan-out to match the shared CLI admission limit.
@@ -23,6 +18,8 @@ type GitLabRawJob = {
   status?: string
   web_url?: string
   duration?: number | null
+  started_at?: string | null
+  finished_at?: string | null
 }
 
 type GitLabRawBridge = {
@@ -32,6 +29,8 @@ type GitLabRawBridge = {
   status?: string
   web_url?: string
   duration?: number | null
+  started_at?: string | null
+  finished_at?: string | null
   downstream_pipeline?: {
     id?: number
     project_id?: number
@@ -48,7 +47,8 @@ function mapPipelineJob(raw: GitLabRawJob, pipelineId: number): GitLabPipelineJo
     stage: raw.stage ?? '',
     status: raw.status ?? '',
     webUrl: raw.web_url ?? '',
-    duration: typeof raw.duration === 'number' ? raw.duration : null
+    duration: typeof raw.duration === 'number' ? raw.duration : null,
+    ...gitLabRunTimes(raw)
   }
 }
 
@@ -63,30 +63,29 @@ function mapBridgeAsJob(raw: GitLabRawBridge, pipelineId: number): GitLabPipelin
     // Bridge status may remain successful while its downstream pipeline is running or failed.
     status: childStatus || raw.status || '',
     webUrl: raw.downstream_pipeline?.web_url ?? raw.web_url ?? '',
-    duration: typeof raw.duration === 'number' ? raw.duration : null
+    duration: typeof raw.duration === 'number' ? raw.duration : null,
+    // The trigger job's own times can end long before the child pipeline it now stands for.
+    ...(childStatus ? {} : gitLabRunTimes(raw))
   }
 }
 
-async function fetchPipelineJobPage(
+async function fetchPipelineJobList(
   repoPath: string,
   projectRef: ProjectRef,
   pipelineId: number,
   connectionId: string | null | undefined,
-  localGitOptions: LocalGitExecOptions
+  localGitOptions: LocalGitExecOptions,
+  signal: AbortSignal
 ): Promise<GitLabPipelineJob[]> {
-  const { stdout } = await glabExecFileAsync(
-    [
-      'api',
-      ...glabHostnameArgs(projectRef, connectionId),
-      `projects/${encodedProject(projectRef.path)}/pipelines/${pipelineId}/jobs?per_page=${PIPELINE_JOB_PAGE_SIZE}`
-    ],
-    glabRepoExecOptions(repoPath, connectionId, localGitOptions)
+  const jobs = await fetchAllGitLabPages<GitLabRawJob>(
+    repoPath,
+    projectRef,
+    `projects/${encodedProject(projectRef.path)}/pipelines/${pipelineId}/jobs`,
+    connectionId,
+    localGitOptions,
+    signal
   )
-  const data = JSON.parse(stdout) as GitLabRawJob[]
-  if (!Array.isArray(data)) {
-    return []
-  }
-  return data.map((job) => mapPipelineJob(job, pipelineId))
+  return jobs.map((job) => mapPipelineJob(job, pipelineId))
 }
 
 async function fetchPipelineBridges(
@@ -94,18 +93,17 @@ async function fetchPipelineBridges(
   projectRef: ProjectRef,
   pipelineId: number,
   connectionId: string | null | undefined,
-  localGitOptions: LocalGitExecOptions
+  localGitOptions: LocalGitExecOptions,
+  signal: AbortSignal
 ): Promise<GitLabRawBridge[]> {
-  const { stdout } = await glabExecFileAsync(
-    [
-      'api',
-      ...glabHostnameArgs(projectRef, connectionId),
-      `projects/${encodedProject(projectRef.path)}/pipelines/${pipelineId}/bridges?per_page=${PIPELINE_JOB_PAGE_SIZE}`
-    ],
-    glabRepoExecOptions(repoPath, connectionId, localGitOptions)
+  return fetchAllGitLabPages<GitLabRawBridge>(
+    repoPath,
+    projectRef,
+    `projects/${encodedProject(projectRef.path)}/pipelines/${pipelineId}/bridges`,
+    connectionId,
+    localGitOptions,
+    signal
   )
-  const data = JSON.parse(stdout) as GitLabRawBridge[]
-  return Array.isArray(data) ? data : []
 }
 
 function childPipelineTarget(
@@ -165,11 +163,35 @@ export async function fetchPipelineJobs(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabPipelineJob[]> {
+  // Once the graph has failed, stop sibling page walks nobody will read.
+  const graphFailed = new AbortController()
+  const failGraph = (error: unknown): never => {
+    graphFailed.abort()
+    throw error
+  }
+  // Bridges and children tolerate a failed first page (e.g. a forbidden child project), never a partial list.
+  const tolerateUnreadable =
+    <T>(fallback: T) =>
+    (error: unknown): T =>
+      error instanceof GitLabIncompletePaginationError ? failGraph(error) : fallback
+
   const [parentJobs, bridges] = await Promise.all([
-    fetchPipelineJobPage(repoPath, projectRef, pipelineId, connectionId, localGitOptions),
-    fetchPipelineBridges(repoPath, projectRef, pipelineId, connectionId, localGitOptions).catch(
-      () => [] as GitLabRawBridge[]
-    )
+    fetchPipelineJobList(
+      repoPath,
+      projectRef,
+      pipelineId,
+      connectionId,
+      localGitOptions,
+      graphFailed.signal
+    ).catch(failGraph),
+    fetchPipelineBridges(
+      repoPath,
+      projectRef,
+      pipelineId,
+      connectionId,
+      localGitOptions,
+      graphFailed.signal
+    ).catch(tolerateUnreadable([] as GitLabRawBridge[]))
   ])
 
   const bridgeRows = bridges.map((bridge) => mapBridgeAsJob(bridge, pipelineId))
@@ -191,13 +213,14 @@ export async function fetchPipelineJobs(
     childTargets,
     MAX_CONCURRENT_CHILD_FETCHES,
     (target) =>
-      fetchPipelineJobPage(
+      fetchPipelineJobList(
         repoPath,
         target.projectRef,
         target.pipelineId,
         connectionId,
-        localGitOptions
-      ).catch(() => [] as GitLabPipelineJob[])
+        localGitOptions,
+        graphFailed.signal
+      ).catch(tolerateUnreadable([] as GitLabPipelineJob[]))
   )
 
   // Keep parent/child job order, and add bridge rollups only when no expanded job shares their name.
