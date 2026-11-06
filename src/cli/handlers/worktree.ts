@@ -1,4 +1,4 @@
-import { parentCwdNextSteps, withWorktreeSelectorRecovery } from '../worktree-selector-recovery'
+import { withWorktreeSelectorRecovery } from '../worktree-selector-recovery'
 import type {
   RuntimeWorktreeListResult,
   RuntimeWorktreePsResult,
@@ -23,7 +23,6 @@ import {
   getRequiredStringFlag
 } from '../flags'
 import {
-  getOptionalWorktreeSelector,
   getRequiredWorktreeSelector,
   resolveWorktreeCreateCwdContext,
   resolveCurrentWorktreeSelector
@@ -31,7 +30,8 @@ import {
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { parseCliAgent, readCliAgentLaunch } from '../agent-launch-request'
 import { createWorktreeWithAgent } from './worktree-create-agent-launch'
-import { printLineageSummary } from './worktree-lineage-summary'
+import { formatCrossStoreParentLine, printLineageSummary } from './worktree-lineage-summary'
+import { resolveCreateParentFields, resolveSetParentFields } from './worktree-parent-fields'
 import { projectWorktreePsTerminalVerdict } from '../worktree-ps-terminal-verdict'
 import {
   assertWorkspaceTargetFlagsCompatible,
@@ -196,16 +196,14 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       // CLI activation targets its runtime's desktop, never unrelated paired viewers.
       ...(activate ? { navigation: 'host' as const } : {}),
       ...(setupDecision ? { setupDecision } : {}),
-      parentWorktree: explicitParentWorktree,
-      ...(explicitParentWorkspace ? { parentWorkspace: explicitParentWorkspace } : {}),
-      ...(envParentWorkspace ? { envParentWorkspace } : {}),
-      ...(cwdContext.parentWorktree
-        ? { cwdParentWorktree: cwdContext.parentWorktree.selector }
-        : {}),
-      // Older hosts ignore the observation and keep this first-row cwd parent.
-      ...(cwdContext.parentAmbiguous ? { cwdParentAmbiguous: cwdContext.parentAmbiguous } : {}),
-      noParent,
-      callerTerminalHandle,
+      ...(await resolveCreateParentFields(client, {
+        explicitParent,
+        inferredParent: envParentWorkspace,
+        cwd,
+        cwdContext,
+        callerTerminalHandle,
+        noParent
+      })),
       // Always request CLI provenance, including hand-typed creates without a terminal handle.
       cliProvenanceRequest: callerTerminalHandle ? { callerTerminalHandle } : {}
     }
@@ -239,6 +237,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     })
     const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
     await assertGitLabLinkFlagProjectsMatch(flags, client, { worktree })
+    const parentFields = await resolveSetParentFields(flags, cwd, client)
     const pending = client.call<RuntimeWorktreeSetResult>('worktree.set', {
       worktree,
       displayName: getOptionalStringFlag(flags, 'display-name'),
@@ -248,11 +247,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       comment: getOptionalStringFlagAllowingEmpty(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
       ...readFlags,
-      parentWorktree: await withWorktreeSelectorRecovery(
-        getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client),
-        parentCwdNextSteps(parentSelector),
-        parentSelector
-      ),
+      ...parentFields,
       noParent: flags.get('no-parent') === true
     })
     const result = await withWorktreeSelectorRecovery(
@@ -267,6 +262,11 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     if (!json) {
       for (const warning of result.result.warnings ?? []) {
         console.error(`warning: ${warning.message}`)
+      }
+      // The same-store lineage fields stay null for a parent on another machine.
+      const crossStoreLineage = result.result.worktree.crossStoreLineage
+      if (parentFields.crossStoreParent && crossStoreLineage) {
+        console.error(formatCrossStoreParentLine(crossStoreLineage))
       }
     }
     printResult(result, json, formatWorktreeShow)

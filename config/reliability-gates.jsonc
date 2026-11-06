@@ -8532,7 +8532,7 @@
       "id": "agent-status.pi-hook-liveness",
       "title": "Pi status hooks cannot stall a turn or complete a live runtime",
       "maturity": "experimental",
-      "protection": "partial",
+      "protection": "none",
       "owner": "agent-session",
       "layer": "main-provider-contract",
       "surfaces": [
@@ -8543,9 +8543,9 @@
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
-      "coveredPlatforms": ["macos"],
+      "coveredPlatforms": [],
       "coveredProviders": [],
-      "coverageNotes": "Local macOS execution of the generated Pi/OMP extension plus the shared hook normalizer. WSL fallback behavior is covered with mocked native-fetch failure and Windows curl handoff. Daemon PTYs use the same generated extension without a distinct delivery path. SSH/relay ingest uses the shared normalizer, but no live remote Pi process is exercised.",
+      "coverageNotes": "Audit1598 removes canned hook/terminal/provider projections, fake process/launch inventories and duplicate search fixtures without equivalent replacement coverage. Retained checks cover local HTTP token isolation, disk snapshots and in-process restarts, shell spool files/curl failures, local mux byte boundaries and SQLite/FTS admission/index/publication. WSL children, process probes and provider events remain injected; in-process restart is not crash recovery, seeded recovery is not actual crash proof, and fake budgets do not establish latency. Deleted-source tests with a removeFile collector prove admission; retained integrated indexer coverage separately exercises actual SQL deletion. Historical scope before this audit: Local macOS execution of the generated Pi/OMP extension plus the shared hook normalizer. WSL fallback behavior is covered with mocked native-fetch failure and Windows curl handoff. Daemon PTYs use the same generated extension without a distinct delivery path. SSH/relay ingest uses the shared normalizer, but no live remote Pi process is exercised.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/7791",
         "https://github.com/stablyai/orca/pull/7802",
@@ -8553,43 +8553,10 @@
       ],
       "invariant": "Orca status reporting must return synchronously from every Pi/OMP extension handler, retain at most one active request and one latest pending snapshot, and abandon stalled loopback delivery within one second. A Pi session_shutdown event cannot mark a turn done because Pi also emits it for reload, new, resume, and fork while the PTY remains alive; only agent_end proves turn completion, while real process exit is cleared by PTY teardown.",
       "oracle": "Execute the generated extension with a fetch that remains pending and assert the Pi handler returns before delivery; emit three statuses during the stall and assert exactly one request is active and only the latest pending status is sent next; advance fake time by one second and assert the active signal aborts and the latest status proceeds. Through the shared normalizer, assert session_shutdown yields no status while agent_end still yields done.",
-      "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/pi/agent-status-extension-source.test.ts src/main/agent-hooks/server-pi-normalization.test.ts --maxWorkers=1"
-      ],
-      "testFiles": [
-        "src/main/pi/agent-status-extension-source.test.ts",
-        "src/main/agent-hooks/server-pi-normalization.test.ts"
-      ],
-      "assertionRefs": [
-        {
-          "file": "src/main/pi/agent-status-extension-source.test.ts",
-          "assertions": [
-            "a pending loopback fetch does not keep the Pi event handler unresolved",
-            "three events during a stall produce one active request and one request for only the latest pending status",
-            "the one-second delivery deadline aborts the active request and advances the latest pending status",
-            "the managed status extension does not register session_shutdown as a completion event",
-            "WSL native-fetch failures still hand off to a detached Windows curl process"
-          ]
-        },
-        {
-          "file": "src/main/agent-hooks/server-pi-normalization.test.ts",
-          "assertions": [
-            "session_shutdown normalizes to no status instead of done",
-            "agent_end remains the authoritative Pi/OMP done event"
-          ]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-07-11",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/pi/agent-status-extension-source.test.ts src/main/agent-hooks/server-pi-normalization.test.ts --maxWorkers=1",
-          "result": "passed",
-          "durationSeconds": 1.3,
-          "summary": "2 files and 238 tests passed, including executed generated-extension liveness, latest-only queue bounds, timeout abort, WSL fallback, and Pi shutdown normalization."
-        }
-      ],
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
       "runtimeBudget": {
         "p95Seconds": 10,
         "scope": "generated-extension and shared-normalizer unit gate"
@@ -8612,6 +8579,7 @@
         "Add a live Pi Electron test that stalls or restarts the hook listener during a running turn and proves terminal output continues."
       ],
       "knownGaps": [
+        "Audit1598 removes canned hook/terminal/provider projections, fake process/launch inventories and duplicate search fixtures without equivalent replacement coverage. Retained checks cover local HTTP token isolation, disk snapshots and in-process restarts, shell spool files/curl failures, local mux byte boundaries and SQLite/FTS admission/index/publication. WSL children, process probes and provider events remain injected; in-process restart is not crash recovery, seeded recovery is not actual crash proof, and fake budgets do not establish latency. Deleted-source tests with a removeFile collector prove admission; retained integrated indexer coverage separately exercises actual SQL deletion.",
         "No live model-backed Pi turn or Electron Running-view assertion is automated; the gate executes the exact generated extension and shared normalizer below those surfaces.",
         "An already-running Pi process keeps its previously loaded extension until Pi reloads or restarts.",
         "During receiver unavailability, intermediate status details may be coalesced to the latest snapshot; this is intentional and bounded, but no UI test measures the temporary detail loss.",
@@ -10998,7 +10966,7 @@
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos", "linux"],
       "coveredProviders": ["local", "ssh", "remote-runtime"],
-      "coverageNotes": "Audit1301 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Platform-neutral unit coverage proves the Resource Manager closed badge performs one readiness seed, coalesces unknown spawn signals, skips known-session reattach signals, installs no interval, and re-reads only once per explicit daemon-management kill/restart. AI Vault tab-title sync uses bounded exact identities on the transcript-owning local, SSH, or runtime host and has no access to broad listing; unsupported older hosts retain persisted titles without fallback scans. WSL path translation still needs a Windows integration oracle. Audit1301: src/renderer/src/components/status-bar/use-resource-session-inventory.test.tsx removed. Visibility epochs, event identity fencing, retry and no-polling hook-layer alarms disappear. src/renderer/src/components/status-bar/resource-session-inventory.test.ts reduced. Detached-array/count/noop contracts, authoritative refresh variants, batching cadence, duplicate acknowledgements, error/pause combinations and other identity matrices lose their authored alarms. No equivalent replacement coverage is claimed. Audit1302: src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts: Keep real filesystem/SQLite persistence, reopen/restart hits, changed-file invalidation, legacy/corrupt-cache recovery, concurrent scope replacement and optional-cache write failure isolation. Remove configuration/sidecar copy inventories, write-call-only timing/row counts, a wall-clock polling case with an internally hung parser, synthetic UNC aging/stat inventory and a no-op mock pretending to be failed database deletion. Lose these private configuration/scheduling/sidecar/UNC/fault wiring alarms; no equivalent replacement. Reduced selectors require fresh validation; prior full-suite receipts do not validate removed or changed coverage. No equivalent replacement or physical-provider claim.",
+      "coverageNotes": "Audit1602 removes mocked transport, deletion and ownership inventories, provider metadata projections, private callback and counter checks, and duplicate reader examples without equivalent replacement coverage. Retained tests exercise SQLite/FTS migrations, transcript/cache/sidecar changes, recovery and cursor boundaries, local process/WAL/lock/framing and generated scripts. Remote and WSL failures and some delivery races remain injected; in-process reopen does not prove crash recovery, and counters do not prove latency or memory bounds. Historical scope before this audit: Audit1301 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Platform-neutral unit coverage proves the Resource Manager closed badge performs one readiness seed, coalesces unknown spawn signals, skips known-session reattach signals, installs no interval, and re-reads only once per explicit daemon-management kill/restart. AI Vault tab-title sync uses bounded exact identities on the transcript-owning local, SSH, or runtime host and has no access to broad listing; unsupported older hosts retain persisted titles without fallback scans. WSL path translation still needs a Windows integration oracle. Audit1301: src/renderer/src/components/status-bar/use-resource-session-inventory.test.tsx removed. Visibility epochs, event identity fencing, retry and no-polling hook-layer alarms disappear. src/renderer/src/components/status-bar/resource-session-inventory.test.ts reduced. Detached-array/count/noop contracts, authoritative refresh variants, batching cadence, duplicate acknowledgements, error/pause combinations and other identity matrices lose their authored alarms. No equivalent replacement coverage is claimed. Audit1302: src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts: Keep real filesystem/SQLite persistence, reopen/restart hits, changed-file invalidation, legacy/corrupt-cache recovery, concurrent scope replacement and optional-cache write failure isolation. Remove configuration/sidecar copy inventories, write-call-only timing/row counts, a wall-clock polling case with an internally hung parser, synthetic UNC aging/stat inventory and a no-op mock pretending to be failed database deletion. Lose these private configuration/scheduling/sidecar/UNC/fault wiring alarms; no equivalent replacement. Reduced selectors require fresh validation; prior full-suite receipts do not validate removed or changed coverage. No equivalent replacement or physical-provider claim.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/7002",
         "https://github.com/stablyai/orca/pull/6858",
@@ -11009,14 +10977,13 @@
       "invariant": "Typing, focus, terminal switch, workspace switch, visibility resume, resize, render, per-pane liveness, and tab-title synchronization must not call global pty:listSessions or aiVault.listSessions; they must use targeted APIs or cached provider-owned state.",
       "oracle": "The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): The current executable slice asserts targeted visibility/first-input liveness, resize re-assertion after visibility resume, light tab/active-state resume, SSH/remote skip behavior, and a closed Resource Manager budget of one readiness seed plus one coalesced inventory read only for unknown spawn IDs. AI Vault title sync deterministically accepts only resolveSessionTitles, batches at most 64 exact identities, bounds scanner-service calls at sixteen, routes requests to the transcript-owning local/SSH/runtime host, and proves zero broad scans for unsupported hosts. The full hot-path oracle still needs instrumentation around raw focus, split focus, workspace switch, render ticks, and high-session PTY fixtures.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/main/ai-vault/scan-service/session-scanner-service-client.test.ts src/main/ai-vault/session-titles/session-title-file-reader.test.ts src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts src/main/ipc/ai-vault/ai-vault.test.ts src/main/runtime/rpc/methods/ai-vault.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/main/ai-vault/session-titles/session-title-file-reader.test.ts src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts src/main/ipc/ai-vault/ai-vault.test.ts src/main/runtime/rpc/methods/ai-vault.test.ts",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/pty-startup-barrier-and-listing.test.ts src/renderer/src/components/status-bar/resource-session-inventory.test.ts --maxWorkers=2 --reporter=dot"
       ],
       "testFiles": [
         "src/main/ipc/pty/pty-startup-barrier-and-listing.test.ts",
         "src/renderer/src/components/status-bar/resource-session-inventory.test.ts",
         "src/renderer/src/lib/ai-vault-tab-title-sync.test.ts",
-        "src/main/ai-vault/scan-service/session-scanner-service-client.test.ts",
         "src/main/ai-vault/session-titles/session-title-file-reader.test.ts",
         "src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts",
         "src/main/ipc/ai-vault/ai-vault.test.ts",
@@ -11034,15 +11001,6 @@
             "status pings and worktree path changes do not trigger rereads",
             "title requests are bounded to 64 identities per batch",
             "independent hosts resolve concurrently while each host wire stays serial"
-          ]
-        },
-        {
-          "file": "src/main/ai-vault/scan-service/session-scanner-service-client.test.ts",
-          "assertions": [
-            "the service waits for ready and runs the cache and interactive lanes independently",
-            "active and queued calls are bounded together at sixteen",
-            "cancellation reaches active work and kills a service that ignores it",
-            "service faults restart queued work under a restart circuit that a forced refresh reopens"
           ]
         },
         {
@@ -11091,6 +11049,7 @@
         "Run with enough preserved sessions/providers to make a broad listing observable."
       ],
       "knownGaps": [
+        "Audit1602 removes mocked transport, deletion and ownership inventories, provider metadata projections, private callback and counter checks, and duplicate reader examples without equivalent replacement coverage. Retained tests exercise SQLite/FTS migrations, transcript/cache/sidecar changes, recovery and cursor boundaries, local process/WAL/lock/framing and generated scripts. Remote and WSL failures and some delivery races remain injected; in-process reopen does not prove crash recovery, and counters do not prove latency or memory bounds.",
         "Current commands cover Resource Manager readiness/lifecycle inventory counts; the broader targeted-liveness slice still lives on the pending fix-terminal-reliability stack.",
         "Current coverage includes the closed Resource Manager's no-interval and known-reattach budgets, but not every hot interaction listed in the invariant.",
         "No Electron or IPC-level high-session counter gate yet proves raw focus, workspace switch, render, or high-session typing stay at zero PTY listSessions calls.",
@@ -18394,7 +18353,7 @@
       "id": "agent-status.nested-provider-roster",
       "title": "Nested review CLIs cannot replace the active pane status",
       "maturity": "experimental",
-      "protection": "partial",
+      "protection": "none",
       "owner": "agent-session",
       "layer": "cross-boundary",
       "surfaces": [
@@ -18406,9 +18365,9 @@
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
-      "coveredPlatforms": ["macos", "linux"],
+      "coveredPlatforms": [],
       "coveredProviders": [],
-      "coverageNotes": "Audit1595 removes canned hook/installer/status/capture inventories and fixture-owned command scanners without equivalent replacement coverage. Retained checks cover local filesystem/symlink/shell/pipe and TCP deadlines, ACP timeline/journal failures, naming ownership/races and numeric release helper composition; provider/remote/process inventories remain injected. Native Windows cases are platform-gated; no actual remote deployment, Fastlane/Apple API or native provider identity proof. Historical scope before this audit: Contract tests exercise local HTTP hooks, loopback SSH/WSL relay forwarding and legacy relay snapshots. No live SSH, WSL or Windows Electron execution is claimed. Daemon PTYs use the same hook ingress; folder workspace routing is covered. Hidden macOS Electron validation used the real WorktreeCardAgents component and store in a temporary harness, receiving real hook IPC: 60 nested Codex updates produced zero row mutations, retained 32 children and kept height at 1170px. Screenshots inspected; synthetic hooks, no new model-backed turn. Follow-up hidden Electron verification uses an identified foreground PTY stand-in, retains idle Claude native chat through six nested Codex hooks, reads its transcript through a mobile-scoped paired client, and returns to the terminal without a Codex error. Three recorded macOS runs and three nonrecorded Linux-container runs pass. Linux recording mode timed out during Electron startup before test execution; visual proof is from macOS. The test-value audit deletes the four-case renderer PR-refresh mock registrar and removes its entry-contract caller; nested-resume and tool/assistant registrars remain. Provider-session field projections, replay tables and the weak reminted-settlement boolean are also retired. The retained nested-provider resume case and recorded Jcode normalization-to-store path supply no equivalent replacement for lost alarms. Historical executed commands, counts and results remain historical. Audit1287 removes agent-process-presence-probe.test.ts and the blank-line example from agent-hook-spool-read.test.ts. Supplied observation/identity-callback verdicts and exact blank-line byte-consumption alarms are intentionally lost. The retained UTF8 byte-accounting and spool drain timelines are distinct alarms. Audit1412: src/main/agent-hooks/server-start-failure-lifecycle.test.ts removed. Loses startup coalescing, stop/restart ownership, bind rollback, durable status persistence and subscriber continuity alarms. No equivalent replacement is claimed. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result.",
+      "coverageNotes": "Audit1598 removes canned hook/terminal/provider projections, fake process/launch inventories and duplicate search fixtures without equivalent replacement coverage. Retained checks cover local HTTP token isolation, disk snapshots and in-process restarts, shell spool files/curl failures, local mux byte boundaries and SQLite/FTS admission/index/publication. WSL children, process probes and provider events remain injected; in-process restart is not crash recovery, seeded recovery is not actual crash proof, and fake budgets do not establish latency. Deleted-source tests with a removeFile collector prove admission; retained integrated indexer coverage separately exercises actual SQL deletion. Historical scope before this audit: Audit1595 removes canned hook/installer/status/capture inventories and fixture-owned command scanners without equivalent replacement coverage. Retained checks cover local filesystem/symlink/shell/pipe and TCP deadlines, ACP timeline/journal failures, naming ownership/races and numeric release helper composition; provider/remote/process inventories remain injected. Native Windows cases are platform-gated; no actual remote deployment, Fastlane/Apple API or native provider identity proof. Historical scope before this audit: Contract tests exercise local HTTP hooks, loopback SSH/WSL relay forwarding and legacy relay snapshots. No live SSH, WSL or Windows Electron execution is claimed. Daemon PTYs use the same hook ingress; folder workspace routing is covered. Hidden macOS Electron validation used the real WorktreeCardAgents component and store in a temporary harness, receiving real hook IPC: 60 nested Codex updates produced zero row mutations, retained 32 children and kept height at 1170px. Screenshots inspected; synthetic hooks, no new model-backed turn. Follow-up hidden Electron verification uses an identified foreground PTY stand-in, retains idle Claude native chat through six nested Codex hooks, reads its transcript through a mobile-scoped paired client, and returns to the terminal without a Codex error. Three recorded macOS runs and three nonrecorded Linux-container runs pass. Linux recording mode timed out during Electron startup before test execution; visual proof is from macOS. The test-value audit deletes the four-case renderer PR-refresh mock registrar and removes its entry-contract caller; nested-resume and tool/assistant registrars remain. Provider-session field projections, replay tables and the weak reminted-settlement boolean are also retired. The retained nested-provider resume case and recorded Jcode normalization-to-store path supply no equivalent replacement for lost alarms. Historical executed commands, counts and results remain historical. Audit1287 removes agent-process-presence-probe.test.ts and the blank-line example from agent-hook-spool-read.test.ts. Supplied observation/identity-callback verdicts and exact blank-line byte-consumption alarms are intentionally lost. The retained UTF8 byte-accounting and spool drain timelines are distinct alarms. Audit1412: src/main/agent-hooks/server-start-failure-lifecycle.test.ts removed. Loses startup coalescing, stop/restart ownership, bind rollback, durable status persistence and subscriber continuity alarms. No equivalent replacement is claimed. No equivalent replacement coverage is claimed. Existing exact unaffected receipts remain unchanged and apply only to their unchanged selectors. Changed optional selectors have no new execution result.",
       "motivatingLinks": [
         "User report (2026-10-15): Claude status in nwparker/SSH alternates between a 32-child roster and an empty roster when nested Codex reviews report on the inherited terminal pane.",
         "https://github.com/stablyai/orca/pull/8211",
@@ -18416,95 +18375,10 @@
       ],
       "invariant": "A different provider inheriting an active pane key cannot replace its child roster, main turn, prompt, resume identity, model or freshness, nor mutate the owning provider caches. Same-provider children still update. Hosts advertising process ownership retain an identified idle parent until positive exit or suspension, and unavailable reads preserve ownership. Older hosts retain the previous finished/stale replacement policy; distinct execution hosts/workspaces permit replacement. WSL local and relay transports retain the same owner.",
       "oracle": "Existing exact unchanged-selector receipts remain the only current execution evidence. Changed source selectors have no fresh execution result. Historical prior-source oracle account: Send a full Claude child roster, interleave Codex review lifecycle/tool/approval/completion hooks, and require identical snapshots plus zero publications. A later Claude child event must retain the original prompt and roster, and a real child completion must shrink it. After Claude Stop, keep its mobile transcript and saved resume identity while its identified process remains live or unverifiable; accept the first provider replacement after confirmed exit or suspension. Replay must admit records in order, retain the file on failed admission, and concurrent starts, stop during replay, or a second stop during a queued restart must not leave a listener. Pending owner probes cannot publish or accept an old request after stop, restart, or status disable/re-enable; interrupted replay stays durable.",
-      "commands": [
-        "SKIP_BUILD=1 ORCA_BACKGROUND_LAUNCH=1 xvfb-run -a pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/nested-agent-idle-session-owner.spec.ts --project=electron-headless --workers=1 --repeat-each=3",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/server-idle-process-owner.test.ts src/wsl-guest/relay-idle-process-owner.test.ts tests/e2e/nested-agent-idle-owner.unit.test.ts src/shared/agent-hook-listener/transport/agent-hook-spool-drain.test.ts src/main/agent-hooks/server-agent-presence.test.ts src/wsl-guest/relay-agent-presence.test.ts src/main/agent-hooks/server-nested-agent-roster.test.ts src/main/agent-hooks/server-nested-agent-boundaries.test.ts src/main/agent-hooks/server-nested-agent-consumers.test.ts src/main/agent-hooks/server-nested-agent-model.test.ts src/main/agent-hooks/server-ingest-remote.test.ts src/main/agent-hooks/server-hook-http-ingest.test.ts src/main/agent-hooks/server-status-listener-fanout.test.ts src/main/agent-hooks/terminal-handle-row-identity.test.ts src/renderer/src/store/slices/agent-status/agent-status-entry-contracts.test.ts src/wsl-guest/agent-hook-provider-normalization.test.ts src/main/agent-hooks/server-startup-lifecycle.test.ts src/main/agent-hooks/spool.test.ts src/shared/agent-hook-listener/transport/agent-hook-spool-read.test.ts src/wsl-guest/agent-hook-server.test.ts src/main/agent-hooks/server-http-owner-probe-lifecycle.test.ts src/wsl-guest/relay-http-owner-probe-lifecycle.test.ts --maxWorkers=2",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/server-idle-process-owner.test.ts src/wsl-guest/relay-idle-process-owner.test.ts tests/e2e/nested-agent-idle-owner.unit.test.ts src/shared/agent-hook-listener/transport/agent-hook-spool-drain.test.ts src/main/agent-hooks/server-agent-presence.test.ts src/wsl-guest/relay-agent-presence.test.ts src/main/agent-hooks/server-nested-agent-roster.test.ts src/main/agent-hooks/server-nested-agent-boundaries.test.ts src/main/agent-hooks/server-nested-agent-consumers.test.ts src/main/agent-hooks/server-nested-agent-model.test.ts src/main/agent-hooks/server-ingest-remote.test.ts src/main/agent-hooks/server-hook-http-ingest.test.ts src/main/agent-hooks/server-status-listener-fanout.test.ts src/main/agent-hooks/terminal-handle-row-identity.test.ts src/renderer/src/store/slices/agent-status/agent-status-entry-contracts.test.ts src/wsl-guest/agent-hook-provider-normalization.test.ts src/main/agent-hooks/server-startup-lifecycle.test.ts src/main/agent-hooks/spool.test.ts src/shared/agent-hook-listener/transport/agent-hook-spool-read.test.ts src/wsl-guest/agent-hook-server.test.ts --maxWorkers=2",
-        "ORCA_BACKGROUND_LAUNCH=1 ORCA_E2E_RECORD_VIDEO=1 pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/nested-agent-idle-session-owner.spec.ts --project=electron-headless --workers=1 --repeat-each=3",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/server-idle-process-owner.test.ts src/wsl-guest/relay-idle-process-owner.test.ts tests/e2e/nested-agent-idle-owner.unit.test.ts src/shared/agent-hook-listener/transport/agent-hook-spool-drain.test.ts src/main/agent-hooks/server-startup-lifecycle.test.ts --maxWorkers=2",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/nested-agent-idle-session-owner.spec.ts --project=electron-headless --workers=1",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/server-nested-agent-roster.test.ts src/main/agent-hooks/server-nested-agent-boundaries.test.ts src/main/agent-hooks/server-nested-agent-consumers.test.ts src/main/agent-hooks/server-nested-agent-model.test.ts src/main/agent-hooks/server-ingest-remote.test.ts src/main/agent-hooks/server-hook-http-ingest.test.ts src/main/agent-hooks/server-turn-started-at.test.ts src/main/agent-hooks/server-status-listener-fanout.test.ts src/main/agent-hooks/terminal-handle-row-identity.test.ts src/renderer/src/store/slices/agent-status/agent-status-entry-contracts.test.ts src/renderer/src/store/slices/agent-status/agent-status-provider-session.test.ts src/wsl-guest/agent-hook-provider-normalization.test.ts --maxWorkers=2",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/server-nested-agent-roster.test.ts src/main/agent-hooks/server-nested-agent-model.test.ts src/main/agent-hooks/server-ingest-remote.test.ts src/renderer/src/store/slices/agent-status/agent-status-entry-contracts.test.ts --maxWorkers=2",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/server-nested-agent-roster.test.ts src/main/agent-hooks/server-nested-agent-model.test.ts src/main/agent-hooks/server-ingest-remote.test.ts src/main/agent-hooks/server-agent-presence.test.ts src/renderer/src/store/slices/agent-status/agent-status-entry-contracts.test.ts src/main/agent-hooks/server-hook-http-ingest.test.ts src/wsl-guest/agent-hook-server.test.ts --maxWorkers=2",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/server-nested-agent-roster.test.ts src/main/agent-hooks/server-ingest-remote.test.ts src/main/agent-hooks/server-nested-agent-model.test.ts src/main/agent-hooks/server-hook-http-ingest.test.ts src/main/agent-hooks/server-turn-started-at.test.ts src/main/agent-hooks/server-status-listener-fanout.test.ts src/main/agent-hooks/terminal-handle-row-identity.test.ts src/renderer/src/store/slices/agent-status/agent-status-entry-contracts.test.ts --maxWorkers=2"
-      ],
-      "testFiles": [
-        "src/main/agent-hooks/server-http-owner-probe-lifecycle.test.ts",
-        "src/wsl-guest/relay-http-owner-probe-lifecycle.test.ts",
-        "src/shared/agent-hook-listener/transport/agent-hook-spool-drain.test.ts",
-        "src/main/agent-hooks/server-startup-lifecycle.test.ts",
-        "src/main/agent-hooks/server-idle-process-owner.test.ts",
-        "src/wsl-guest/relay-idle-process-owner.test.ts",
-        "tests/e2e/nested-agent-idle-owner.unit.test.ts",
-        "tests/e2e/nested-agent-idle-session-owner.spec.ts",
-        "src/main/agent-hooks/server-status-listener-fanout.test.ts",
-        "src/main/agent-hooks/terminal-handle-row-identity.test.ts",
-        "src/wsl-guest/agent-hook-provider-normalization.test.ts",
-        "src/main/agent-hooks/server-nested-agent-boundaries.test.ts",
-        "src/main/agent-hooks/server-nested-agent-consumers.test.ts",
-        "src/renderer/src/store/slices/agent-status/agent-status-entry-contracts.test.ts",
-        "src/main/agent-hooks/server-nested-agent-roster.test.ts",
-        "src/main/agent-hooks/server-nested-agent-model.test.ts",
-        "src/main/agent-hooks/server-ingest-remote.test.ts"
-      ],
-      "assertionRefs": [
-        {
-          "file": "src/main/agent-hooks/server-nested-agent-roster.test.ts",
-          "assertions": [
-            "keeps Claude children, prompt and turn stable through Codex review hooks",
-            "rejects a nested working snapshot from an older relay without renewing the parent"
-          ]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-10-15",
-          "runner": "local",
-          "platform": "linux",
-          "command": "SKIP_BUILD=1 ORCA_BACKGROUND_LAUNCH=1 xvfb-run -a pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/nested-agent-idle-session-owner.spec.ts --project=electron-headless --workers=1 --repeat-each=3",
-          "result": "passed",
-          "durationSeconds": 51.3,
-          "summary": "Three hidden Electron runs pass in an isolated Docker Ubuntu24 arm64 container on the final generation-guard build using the actual foreground PTY fixture. Native chat, paired mobile transcript, and Show terminal retain Claude identity. Original CI failure reproduced with the worker-PID fixture; corrected foreground fixture passes. Recording-enabled attempts timed out at fixture startup before test execution; attached video is from macOS."
-        },
-        {
-          "date": "2026-10-15",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 ORCA_E2E_RECORD_VIDEO=1 pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/nested-agent-idle-session-owner.spec.ts --project=electron-headless --workers=1 --repeat-each=3",
-          "result": "passed",
-          "durationSeconds": 52.2,
-          "summary": "Three recorded hidden Electron runs pass using an identified stand-in process in the actual foreground PTY. Claude native chat survives six nested Codex hook types, a paired mobile client reads the same transcript, and Show terminal returns without an error. Screenshots inspected and fresh proof attached. Controlled hooks/transcript; no live model turn."
-        },
-        {
-          "date": "2026-10-15",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 ORCA_E2E_RECORD_VIDEO=1 pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/nested-agent-idle-session-owner.spec.ts --project=electron-headless --workers=1 --repeat-each=3",
-          "result": "passed",
-          "durationSeconds": 32.1,
-          "summary": "Three hidden Electron runs pass. Actual native chat retains the foreground Claude reply after six nested Codex hooks; a mobile-scoped paired client reads that Claude transcript; Show terminal returns without the Codex verification error. Screenshots visually inspected and video attached to PR. Controlled hooks/transcripts with a real OS process identity; no model-backed turn or physical phone."
-        },
-        {
-          "date": "2026-10-15",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/server-nested-agent-roster.test.ts src/main/agent-hooks/server-nested-agent-boundaries.test.ts src/main/agent-hooks/server-nested-agent-consumers.test.ts src/main/agent-hooks/server-nested-agent-model.test.ts src/main/agent-hooks/server-ingest-remote.test.ts src/main/agent-hooks/server-hook-http-ingest.test.ts src/main/agent-hooks/server-turn-started-at.test.ts src/main/agent-hooks/server-status-listener-fanout.test.ts src/main/agent-hooks/terminal-handle-row-identity.test.ts src/renderer/src/store/slices/agent-status-tool-assistant-fields.test.ts src/renderer/src/store/slices/agent-status-provider-session.test.ts src/renderer/src/store/slices/agent-status-nested-resume.test.ts src/wsl-guest/agent-hook-provider-normalization.test.ts --maxWorkers=2",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/server-nested-agent-roster.test.ts src/main/agent-hooks/server-nested-agent-boundaries.test.ts src/main/agent-hooks/server-nested-agent-consumers.test.ts src/main/agent-hooks/server-nested-agent-model.test.ts src/main/agent-hooks/server-ingest-remote.test.ts src/main/agent-hooks/server-hook-http-ingest.test.ts src/main/agent-hooks/server-turn-started-at.test.ts src/main/agent-hooks/server-status-listener-fanout.test.ts src/main/agent-hooks/terminal-handle-row-identity.test.ts src/renderer/src/store/slices/agent-status/agent-status-entry-contracts.test.ts src/renderer/src/store/slices/agent-status/agent-status-provider-session.test.ts src/wsl-guest/agent-hook-provider-normalization.test.ts --maxWorkers=2",
-          "result": "passed",
-          "durationSeconds": 8.75,
-          "summary": "132 tests across 13 files passed after review and CI boundary fixes, including actual mobile transcript selection, renderer Claude resume argv, host/workspace collision replacement, WSL transport equivalence, legacy unstamped local renderer entries, Pi identity-only boundaries, clock rollback and provider-isolated relay HTTP/spool/reconnect/teardown."
-        },
-        {
-          "date": "2026-10-15",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/server-nested-agent-roster.test.ts src/main/agent-hooks/server-ingest-remote.test.ts src/main/agent-hooks/server-nested-agent-model.test.ts src/main/agent-hooks/server-hook-http-ingest.test.ts src/main/agent-hooks/server-turn-started-at.test.ts src/main/agent-hooks/server-status-listener-fanout.test.ts src/main/agent-hooks/terminal-handle-row-identity.test.ts src/renderer/src/store/slices/agent-status-tool-assistant-fields.test.ts --maxWorkers=2",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/server-nested-agent-roster.test.ts src/main/agent-hooks/server-ingest-remote.test.ts src/main/agent-hooks/server-nested-agent-model.test.ts src/main/agent-hooks/server-hook-http-ingest.test.ts src/main/agent-hooks/server-turn-started-at.test.ts src/main/agent-hooks/server-status-listener-fanout.test.ts src/main/agent-hooks/terminal-handle-row-identity.test.ts src/renderer/src/store/slices/agent-status/agent-status-entry-contracts.test.ts --maxWorkers=2",
-          "result": "passed",
-          "durationSeconds": 180.43,
-          "summary": "Final implementation passes 64 tests in six files, including local/relay finished-provider replacement, stale-provider replacement, 32-child ownership, legacy remote snapshots, turn clocks and renderer identity."
-        }
-      ],
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
       "runtimeBudget": {
         "p95Seconds": 30,
         "scope": "Focused local HTTP, relay, legacy snapshot and renderer contracts; excludes package build and machine contention."
@@ -18523,6 +18397,8 @@
       },
       "promotionCriteria": ["Save red/green evidence and CI soak before promotion."],
       "knownGaps": [
+        "No active assertion references remain after this audit; surviving unaffected receipts record historical scope only.",
+        "Audit1598 removes canned hook/terminal/provider projections, fake process/launch inventories and duplicate search fixtures without equivalent replacement coverage. Retained checks cover local HTTP token isolation, disk snapshots and in-process restarts, shell spool files/curl failures, local mux byte boundaries and SQLite/FTS admission/index/publication. WSL children, process probes and provider events remain injected; in-process restart is not crash recovery, seeded recovery is not actual crash proof, and fake budgets do not establish latency. Deleted-source tests with a removeFile collector prove admission; retained integrated indexer coverage separately exercises actual SQL deletion.",
         "Audit1595 removes canned hook/installer/status/capture inventories and fixture-owned command scanners without equivalent replacement coverage. Retained checks cover local filesystem/symlink/shell/pipe and TCP deadlines, ACP timeline/journal failures, naming ownership/races and numeric release helper composition; provider/remote/process inventories remain injected. Native Windows cases are platform-gated; no actual remote deployment, Fastlane/Apple API or native provider identity proof.",
         "A nested CLI started before any owner is observed may still establish the initial pane identity.",
         "Same-provider nested sessions remain governed by the existing process/session ownership rules.",
@@ -18533,7 +18409,10 @@
         "Audit1287 removes agent-process-presence-probe.test.ts and the blank-line example from agent-hook-spool-read.test.ts. Supplied observation/identity-callback verdicts and exact blank-line byte-consumption alarms are intentionally lost. The retained UTF8 byte-accounting and spool drain timelines are distinct alarms.",
         "Audit1287 retires this complete historical receipt after test removals; its old counts/results do not validate the reduced suite. Original receipt verbatim:\n{\n          \"date\": \"2026-10-15\",\n          \"runner\": \"local\",\n          \"platform\": \"macos\",\n          \"command\": \"ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/server-idle-process-owner.test.ts src/wsl-guest/relay-idle-process-owner.test.ts tests/e2e/nested-agent-idle-owner.unit.test.ts src/shared/agent-process-presence-probe.test.ts src/shared/agent-hook-spool-drain.test.ts src/main/agent-hooks/server-agent-presence.test.ts src/wsl-guest/relay-agent-presence.test.ts src/main/agent-hooks/server-nested-agent-roster.test.ts src/main/agent-hooks/server-nested-agent-boundaries.test.ts src/main/agent-hooks/server-nested-agent-consumers.test.ts src/main/agent-hooks/server-nested-agent-model.test.ts src/main/agent-hooks/server-ingest-remote.test.ts src/main/agent-hooks/server-hook-http-ingest.test.ts src/main/agent-hooks/server-status-listener-fanout.test.ts src/main/agent-hooks/terminal-handle-row-identity.test.ts src/renderer/src/store/slices/agent-status-nested-resume.test.ts src/wsl-guest/agent-hook-provider-normalization.test.ts src/main/agent-hooks/server-start-failure-lifecycle.test.ts src/main/agent-hooks/server-startup-lifecycle.test.ts src/main/agent-hooks/spool.test.ts src/shared/agent-hook-spool-read.test.ts src/wsl-guest/agent-hook-server.test.ts src/main/agent-hooks/server-http-owner-probe-lifecycle.test.ts src/wsl-guest/relay-http-owner-probe-lifecycle.test.ts --maxWorkers=2\",\n          \"currentCommand\": \"ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/server-idle-process-owner.test.ts src/wsl-guest/relay-idle-process-owner.test.ts tests/e2e/nested-agent-idle-owner.unit.test.ts src/shared/agent-status/process/agent-process-presence-probe.test.ts src/shared/agent-hook-listener/transport/agent-hook-spool-drain.test.ts src/main/agent-hooks/server-agent-presence.test.ts src/wsl-guest/relay-agent-presence.test.ts src/main/agent-hooks/server-nested-agent-roster.test.ts src/main/agent-hooks/server-nested-agent-boundaries.test.ts src/main/agent-hooks/server-nested-agent-consumers.test.ts src/main/agent-hooks/server-nested-agent-model.test.ts src/main/agent-hooks/server-ingest-remote.test.ts src/main/agent-hooks/server-hook-http-ingest.test.ts src/main/agent-hooks/server-status-listener-fanout.test.ts src/main/agent-hooks/terminal-handle-row-identity.test.ts src/renderer/src/store/slices/agent-status/agent-status-entry-contracts.test.ts src/wsl-guest/agent-hook-provider-normalization.test.ts src/main/agent-hooks/server-start-failure-lifecycle.test.ts src/main/agent-hooks/server-startup-lifecycle.test.ts src/main/agent-hooks/spool.test.ts src/shared/agent-hook-listener/transport/agent-hook-spool-read.test.ts src/wsl-guest/agent-hook-server.test.ts src/main/agent-hooks/server-http-owner-probe-lifecycle.test.ts src/wsl-guest/relay-http-owner-probe-lifecycle.test.ts --maxWorkers=2\",\n          \"result\": \"passed\",\n          \"durationSeconds\": 75.69,\n          \"summary\": \"197 tests across 24 files pass after adversarial review. New regressions cover pending HTTP and process-probe publication after stop/restart/status disable/re-enable, fixed-token relay restarts, interrupted spool durability, and a second stop while a restart is queued.\"\n        }",
         "Audit1287 retires this complete historical receipt after test removals; its old counts/results do not validate the reduced suite. Original receipt verbatim:\n{\n          \"date\": \"2026-10-15\",\n          \"runner\": \"local\",\n          \"platform\": \"macos\",\n          \"command\": \"ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/server-idle-process-owner.test.ts src/wsl-guest/relay-idle-process-owner.test.ts tests/e2e/nested-agent-idle-owner.unit.test.ts src/shared/agent-process-presence-probe.test.ts src/shared/agent-hook-spool-drain.test.ts src/main/agent-hooks/server-agent-presence.test.ts src/wsl-guest/relay-agent-presence.test.ts src/main/agent-hooks/server-nested-agent-roster.test.ts src/main/agent-hooks/server-nested-agent-boundaries.test.ts src/main/agent-hooks/server-nested-agent-consumers.test.ts src/main/agent-hooks/server-nested-agent-model.test.ts src/main/agent-hooks/server-ingest-remote.test.ts src/main/agent-hooks/server-hook-http-ingest.test.ts src/main/agent-hooks/server-status-listener-fanout.test.ts src/main/agent-hooks/terminal-handle-row-identity.test.ts src/renderer/src/store/slices/agent-status-nested-resume.test.ts src/wsl-guest/agent-hook-provider-normalization.test.ts src/main/agent-hooks/server-start-failure-lifecycle.test.ts src/main/agent-hooks/server-startup-lifecycle.test.ts src/main/agent-hooks/spool.test.ts src/shared/agent-hook-spool-read.test.ts src/wsl-guest/agent-hook-server.test.ts --maxWorkers=2\",\n          \"currentCommand\": \"ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/server-idle-process-owner.test.ts src/wsl-guest/relay-idle-process-owner.test.ts tests/e2e/nested-agent-idle-owner.unit.test.ts src/shared/agent-status/process/agent-process-presence-probe.test.ts src/shared/agent-hook-listener/transport/agent-hook-spool-drain.test.ts src/main/agent-hooks/server-agent-presence.test.ts src/wsl-guest/relay-agent-presence.test.ts src/main/agent-hooks/server-nested-agent-roster.test.ts src/main/agent-hooks/server-nested-agent-boundaries.test.ts src/main/agent-hooks/server-nested-agent-consumers.test.ts src/main/agent-hooks/server-nested-agent-model.test.ts src/main/agent-hooks/server-ingest-remote.test.ts src/main/agent-hooks/server-hook-http-ingest.test.ts src/main/agent-hooks/server-status-listener-fanout.test.ts src/main/agent-hooks/terminal-handle-row-identity.test.ts src/renderer/src/store/slices/agent-status/agent-status-entry-contracts.test.ts src/wsl-guest/agent-hook-provider-normalization.test.ts src/main/agent-hooks/server-start-failure-lifecycle.test.ts src/main/agent-hooks/server-startup-lifecycle.test.ts src/main/agent-hooks/spool.test.ts src/shared/agent-hook-listener/transport/agent-hook-spool-read.test.ts src/wsl-guest/agent-hook-server.test.ts --maxWorkers=2\",\n          \"result\": \"passed\",\n          \"durationSeconds\": 8.34,\n          \"summary\": \"187 tests across 22 files pass on the final follow-up, covering idle process ownership, stale suspension/resume/unavailable/exit, legacy hosts, relay cache isolation, saved resume records, concurrent startup and durable ordered spool replay.\"\n        }",
-        "Audit1412: src/main/agent-hooks/server-start-failure-lifecycle.test.ts removed. Loses startup coalescing, stop/restart ownership, bind rollback, durable status persistence and subscriber continuity alarms. No equivalent replacement is claimed. No equivalent replacement coverage is claimed. Historical removed assertion inventory: []"
+        "Audit1412: src/main/agent-hooks/server-start-failure-lifecycle.test.ts removed. Loses startup coalescing, stop/restart ownership, bind rollback, durable status persistence and subscriber continuity alarms. No equivalent replacement is claimed. No equivalent replacement coverage is claimed. Historical removed assertion inventory: []",
+        "Audit1598 retains this receipt as historical scope only after removing the gate’s last active assertion reference. Receipt fields preserved verbatim:\n{\n  \"date\": \"2026-10-15\",\n  \"runner\": \"local\",\n  \"platform\": \"linux\",\n  \"command\": \"SKIP_BUILD=1 ORCA_BACKGROUND_LAUNCH=1 xvfb-run -a pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/nested-agent-idle-session-owner.spec.ts --project=electron-headless --workers=1 --repeat-each=3\",\n  \"result\": \"passed\",\n  \"durationSeconds\": 51.3,\n  \"summary\": \"Three hidden Electron runs pass in an isolated Docker Ubuntu24 arm64 container on the final generation-guard build using the actual foreground PTY fixture. Native chat, paired mobile transcript, and Show terminal retain Claude identity. Original CI failure reproduced with the worker-PID fixture; corrected foreground fixture passes. Recording-enabled attempts timed out at fixture startup before test execution; attached video is from macOS.\"\n}",
+        "Audit1598 retains this receipt as historical scope only after removing the gate’s last active assertion reference. Receipt fields preserved verbatim:\n{\n  \"date\": \"2026-10-15\",\n  \"runner\": \"local\",\n  \"platform\": \"macos\",\n  \"command\": \"ORCA_BACKGROUND_LAUNCH=1 ORCA_E2E_RECORD_VIDEO=1 pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/nested-agent-idle-session-owner.spec.ts --project=electron-headless --workers=1 --repeat-each=3\",\n  \"result\": \"passed\",\n  \"durationSeconds\": 52.2,\n  \"summary\": \"Three recorded hidden Electron runs pass using an identified stand-in process in the actual foreground PTY. Claude native chat survives six nested Codex hook types, a paired mobile client reads the same transcript, and Show terminal returns without an error. Screenshots inspected and fresh proof attached. Controlled hooks/transcript; no live model turn.\"\n}",
+        "Audit1598 retains this receipt as historical scope only after removing the gate’s last active assertion reference. Receipt fields preserved verbatim:\n{\n  \"date\": \"2026-10-15\",\n  \"runner\": \"local\",\n  \"platform\": \"macos\",\n  \"command\": \"ORCA_BACKGROUND_LAUNCH=1 ORCA_E2E_RECORD_VIDEO=1 pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/nested-agent-idle-session-owner.spec.ts --project=electron-headless --workers=1 --repeat-each=3\",\n  \"result\": \"passed\",\n  \"durationSeconds\": 32.1,\n  \"summary\": \"Three hidden Electron runs pass. Actual native chat retains the foreground Claude reply after six nested Codex hooks; a mobile-scoped paired client reads that Claude transcript; Show terminal returns without the Codex verification error. Screenshots visually inspected and video attached to PR. Controlled hooks/transcripts with a real OS process identity; no model-backed turn or physical phone.\"\n}"
       ],
       "demotionRule": "Keep experimental until CI soak; investigate any roster loss or blocked genuine provider replacement without weakening the snapshot and publication assertions."
     }

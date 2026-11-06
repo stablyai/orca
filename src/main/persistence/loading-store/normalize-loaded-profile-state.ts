@@ -7,6 +7,7 @@ import { normalizeOrcadMigrationEvictedReceipts } from '../../../shared/orcad-mi
 import { normalizeOrcadMigrationImportReceipts } from '../../../shared/orcad-migration/orcad-migration-manifest-validation'
 import { normalizeOrcadMigrationStagedCatalogs } from '../../../shared/orcad-migration/orcad-migration-staged-catalog-validation'
 import { normalizeWorkspaceLineageByChildKey } from '../applying-settings/ui-interaction-merge'
+import { normalizeCrossStoreLineageByChildKey } from '../../../shared/worktree/cross-store-lineage-records'
 import {
   normalizeSshRemotePtyLease,
   normalizeSshTarget
@@ -66,6 +67,9 @@ export function normalizeLoadedProfileState(
     ),
     workspaceLineageByChildKey: normalizeWorkspaceLineageByChildKey(
       parsed.workspaceLineageByChildKey
+    ),
+    crossStoreLineageByChildKey: normalizeCrossStoreLineageByChildKey(
+      parsed.crossStoreLineageByChildKey
     ),
     settings: normalizeLoadedGlobalSettings(parsed, terminal, profile),
     ui: normalizeLoadedUiState(

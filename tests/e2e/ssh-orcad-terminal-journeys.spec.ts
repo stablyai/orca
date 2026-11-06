@@ -153,7 +153,18 @@ test('managed tabs restore exactly once, and a tab closed while disconnected sta
     const closedTab = page.locator(`[data-testid="sortable-tab"][data-tab-id="${closed}"]`).first()
     await closedTab.hover()
     await closedTab.getByRole('button', { name: /^Close tab /i }).click()
-    await expect(closedTab).toHaveCount(0, { timeout: 15_000 })
+    const confirm = page.getByRole('button', { name: 'Stop and Close' })
+    await expect
+      .poll(
+        async () => {
+          if (await confirm.isVisible()) {
+            await confirm.click()
+          }
+          return closedTab.count()
+        },
+        { timeout: 15_000, intervals: [50] }
+      )
+      .toBe(0)
     await reconnect(page, seeded.targetId)
     const remaining = expected.filter((id) => id !== closed)
     expect(await settledTabIds(page, seeded.worktreeId)).toEqual(remaining)

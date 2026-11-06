@@ -98,8 +98,11 @@ describe('createRemoteRuntimePtyTransport', () => {
     const transport = createRemoteRuntimePtyTransport('hub-env', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
-      leafId
+      leafId,
+      executionHostId: 'runtime:hub-env'
     })
+    const executionHostChanged = vi.fn()
+    transport.onExecutionHostChange?.(executionHostChanged)
 
     const result = await transport.connect({
       url: '',
@@ -117,6 +120,8 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(transport.getPtyId()).toBe('remote:hub-env@@hub-terminal-1')
     expect(transport.getExecutionHostId?.()).toBe('ssh:hub-private')
     expect(transport.getRemotePlatform?.()).toBe('win32')
+    // The pane's resize model re-resolves on this: the PTY's host is the server's SSH target.
+    expect(executionHostChanged).toHaveBeenCalledOnce()
     expect(runtimeCall).toHaveBeenCalledWith(
       expect.objectContaining({
         selector: 'hub-env',

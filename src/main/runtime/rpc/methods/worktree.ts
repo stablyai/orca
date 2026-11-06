@@ -1,3 +1,5 @@
+import { readCallerStoreInstallationId } from '../../hosts/platform-probe/host-descriptor'
+import { getCanonicalUserDataPath } from '../../../persistence/loading-store/user-data-path'
 import {
   finishAutomationWorkspaceProvenanceRequest,
   releaseAutomationWorkspaceProvenanceRequest,
@@ -26,7 +28,8 @@ import {
   WorktreeResolvePrBase,
   WorktreeSelector,
   WorktreeSortOrder,
-  WorktreeTeardownMissingTerminalsParams
+  WorktreeTeardownMissingTerminalsParams,
+  WorktreeResolveCallerParent
 } from '../../../../shared/rpc-contract/worktree-params'
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
 import { WORKTREE_PROVISIONED_ROOT_METHOD } from './worktree-provisioned-root-method'
@@ -54,8 +57,22 @@ export const WORKTREE_METHODS = [
     params: null,
     handler: async (_params, { runtime }) => ({
       lineage: await runtime.listWorktreeLineage(),
-      workspaceLineage: await runtime.listWorkspaceLineage()
+      workspaceLineage: await runtime.listWorkspaceLineage(),
+      // Older desktops ignore it, so these children stay standalone there.
+      crossStoreLineage: runtime.listCrossStoreLineage(),
+      // Paired clients name this store by it when linking a child on another machine.
+      installationId: await runtime.readStoreInstallationId()
     })
+  }),
+  defineMethod({
+    name: 'worktree.resolveCallerParent',
+    permission: 'workspace',
+    params: WorktreeResolveCallerParent,
+    handler: async (params, { runtime }) =>
+      await runtime.resolveCallerParentForAnotherStore(
+        params,
+        readCallerStoreInstallationId(runtime.getRuntimeId(), getCanonicalUserDataPath())
+      )
   }),
   defineMethod({
     name: 'worktree.show',
