@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { NativeChatMessage } from '../native-chat-types'
+import type { NativeChatMessage, NativeChatToolCallBlock } from '../native-chat-types'
 import {
   nativeChatTurnOpenedPullRequests,
   pullRequestsOpenedBy
@@ -62,7 +62,11 @@ describe('pullRequestsOpenedBy', () => {
   })
 })
 
-function bashTurn(input: unknown, output: string, extra: object = {}): NativeChatMessage {
+function bashTurn(
+  input: unknown,
+  output: string,
+  extra: Pick<NativeChatToolCallBlock, 'state'> = {}
+): NativeChatMessage {
   return {
     id: 'm1',
     role: 'assistant',

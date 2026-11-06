@@ -1,4 +1,12 @@
-import { createContext, useContext, useEffect, useEffectEvent, useRef, useState } from 'react'
+import {
+  createContext,
+  createElement,
+  useContext,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState
+} from 'react'
 import { GitPullRequest } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
@@ -130,7 +138,6 @@ function OpenedPullRequestRow({
   const { githubRepo } = useContext(NativeChatLinkPeekContext)
   const onLinkClick = useNativeChatLinkClick()
   const { item, settled } = usePullRequestDetails(previewLink(githubRepo, pullRequest))
-  const StateIcon = (item && getReviewStateIcon(item.state)) || GitPullRequest
   return (
     <a
       href={pullRequest.url}
@@ -141,13 +148,13 @@ function OpenedPullRequestRow({
       }}
       className="flex min-w-0 items-center gap-2 rounded-md px-1 py-1 text-chat-foreground no-underline hover:bg-chat-code-surface"
     >
-      <StateIcon
-        aria-hidden
-        className={cn(
+      {createElement((item && getReviewStateIcon(item.state)) || GitPullRequest, {
+        'aria-hidden': true,
+        className: cn(
           'size-3.5 shrink-0',
           item ? STATE_TEXT_TONE[item.state] : 'text-chat-foreground-faint'
-        )}
-      />
+        )
+      })}
       <span className="shrink-0 text-chat-foreground-faint">{pullRequestName(pullRequest)}</span>
       {item ? (
         <span className="min-w-0 flex-1 truncate">{item.title}</span>
