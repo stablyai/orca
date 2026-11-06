@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react'
+import { useState, useRef, useMemo, useSyncExternalStore } from 'react'
 import { useTerminalSplitLayout } from './use-terminal-split-layout'
 import { Animated, type ScrollView } from 'react-native'
 import type { MobileTerminalLinkOpenMode } from '../storage/preferences'
@@ -41,7 +41,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const terminalTextScaleRevisionRef = useRef(0)
   const [terminalLinkOpenMode, setTerminalLinkOpenMode] =
     useState<MobileTerminalLinkOpenMode>('orca-browser')
-  const [liveInputCapture, setLiveInputCapture] = useState('')
+  const [liveInputCapture] = useState(createLiveInputCapture)
   const [activeHandle, setActiveHandle] = useState<string | null>(null)
   const [coveredStreamRevision, setCoveredStreamRevision] = useState(0)
   const [activeSessionTabId, setActiveSessionTabId] = useState<string | null>(null)
@@ -96,8 +96,6 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     () => getVisibleTerminalAccessoryKeys(visibleBuiltInIds),
     [visibleBuiltInIds]
   )
-  // Expo edge-to-edge keeps window size on IME open; lift input from keyboard height without resizing the desktop PTY.
-  const [keyboardHeight, setKeyboardHeight] = useState(0)
   const [terminalModes, setTerminalModes] = useState<Map<string, MobileDisplayMode>>(new Map())
   const [terminalKeyboardMetrics, setTerminalKeyboardMetrics] = useState<
     Map<string, TerminalKeyboardAvoidanceMetrics>
@@ -131,7 +129,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     terminalLinkOpenMode,
     setTerminalLinkOpenMode,
     liveInputCapture,
-    setLiveInputCapture,
+    setLiveInputCapture: liveInputCapture.set,
     activeHandle,
     setActiveHandle,
     coveredStreamRevision,
@@ -200,8 +198,6 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     deleteKeyTarget,
     setDeleteKeyTarget,
     visibleBuiltInAccessoryKeys,
-    keyboardHeight,
-    setKeyboardHeight,
     terminalModes,
     setTerminalModes,
     terminalKeyboardMetrics,
@@ -222,6 +218,36 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     toastHideTimerRef,
     toastSeqRef
   }
+}
+
+export type LiveInputCapture = ReturnType<typeof createLiveInputCapture>
+
+// Held outside React state so a keystroke re-renders only the field that reads it, not the session.
+function createLiveInputCapture() {
+  let text = ''
+  const listeners = new Set<() => void>()
+  return {
+    get: () => text,
+    set: (next: string) => {
+      if (next === text) {
+        return
+      }
+      text = next
+      for (const listener of listeners) {
+        listener()
+      }
+    },
+    subscribe: (listener: () => void) => {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    }
+  }
+}
+
+export function useLiveInputCaptureText(capture: LiveInputCapture): string {
+  return useSyncExternalStore(capture.subscribe, capture.get)
 }
 
 export type MobileSessionScreenStateModel = MobileSessionFoundationModel &

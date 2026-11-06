@@ -8,6 +8,7 @@ import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
 import { isMobileTerminalTabRunningAgent } from './mobile-terminal-tab-agent'
 import { useShellTerminalKeyRail } from './shell-terminal-key-rail'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { useMobileSessionKeyboardLift } from './use-mobile-session-keyboard-lift'
 
 const ESC = '\x1b'
 const CTRL_C = '\x03'
@@ -21,21 +22,14 @@ export function useSessionTerminalKeyRail(controller: MobileSessionController): 
   moreKeysVisible: boolean
   closeMoreKeys: () => void
 } {
-  const {
-    activeHandle,
-    activeSessionTab,
-    terminalModes,
-    canSend,
-    keyboardHeight,
-    keyboardLift,
-    directionPadEnabled,
-    dockKeys
-  } = controller
+  const { activeHandle, activeSessionTab, terminalModes, canSend, directionPadEnabled, dockKeys } =
+    controller
   const [moreKeysVisible, setMoreKeysVisible] = useState(false)
   const railShown =
     sessionCommandDockShown(controller) &&
     !controller.showCustomKeyModal &&
     !controller.deleteKeyTarget
+  const { keyboardHeight, keyboardLift } = useMobileSessionKeyboardLift(controller)
   const keyboardVisible = keyboardHeight > 0 || keyboardLift > 0
   const runsAgent =
     activeSessionTab?.type === 'terminal' && isMobileTerminalTabRunningAgent(activeSessionTab)
