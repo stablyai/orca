@@ -1,4 +1,7 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { forkSession, type SessionStoreEntry } from '@anthropic-ai/claude-agent-sdk'
+import { prepareLegacyTranscriptImport } from '../agent-session-journal/journal-legacy-import'
 import capture from '../../claude/__fixtures__/claude-plugin-recovery.json'
 import { expect, it } from 'vitest'
 import { claudeConversationForkBoundary } from '../../claude/claude-conversation-fork-boundary'
@@ -132,32 +135,102 @@ it('cuts Claude forks before a local-command caveat following the response', asy
   ).toBe('ef5b13f9-6a3f-5d82-8452-cb799862efc0')
 })
 
-it('cuts a Claude fork before a recorded task wake and its independent reply', () => {
-  const opener = {
-    ...capture[0]!,
-    uuid: 'prompt',
-    parentUuid: null,
-    origin: { kind: 'human' },
-    message: { role: 'user', content: 'original request' }
-  }
-  const answer = {
-    ...capture[1]!,
-    uuid: 'answer',
-    parentUuid: 'prompt',
-    message: {
-      role: 'assistant',
-      content: [{ type: 'text', text: 'original response' }],
-      stop_reason: 'end_turn'
+it.each([false, true])(
+  'cuts a Claude fork at a recorded task wake, retaining caller-owned results: %s',
+  async (mixed) => {
+    const opener = {
+      ...capture[0]!,
+      uuid: 'prompt',
+      parentUuid: null,
+      origin: { kind: 'human' },
+      message: { role: 'user', content: 'original request' }
     }
-  }
-  const wake = { ...capture[0]!, parentUuid: 'answer' }
-  const following = { ...answer, uuid: 'wake-answer', parentUuid: wake.uuid }
-  expect(
-    claudeConversationForkBoundary([opener, answer, wake, following], {
+    const answer = {
+      ...capture[1]!,
+      uuid: 'answer',
+      parentUuid: 'prompt',
+      message: {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'original response' },
+          ...(mixed
+            ? [{ type: 'tool_use', id: 'toolu_1', name: 'Read', input: { path: 'original' } }]
+            : [])
+        ],
+        stop_reason: mixed ? 'tool_use' : 'end_turn'
+      }
+    }
+    const wake = {
+      ...capture[0]!,
+      parentUuid: 'answer',
+      ...(mixed
+        ? {
+            message: {
+              role: 'user',
+              content: [
+                { type: 'text', text: String(capture[0]!.message.content) },
+                { type: 'tool_result', tool_use_id: 'toolu_1', content: 'real result' }
+              ]
+            }
+          }
+        : {})
+    }
+    const following = { ...answer, uuid: 'wake-answer', parentUuid: wake.uuid }
+    const entries = [opener, answer, wake, following]
+    const checkpoint = {
       selectedItemId: 'response',
       settled: true,
       rootMessage: { sessionId: opener.sessionId, uuid: 'prompt' },
       throughMessage: { sessionId: opener.sessionId, uuid: 'answer' }
+    }
+    const endpoint = claudeConversationForkBoundary(entries, checkpoint)
+    expect(endpoint).toBe(mixed ? wake.uuid : 'answer')
+    expect(claudeConversationForkBoundary(entries, { ...checkpoint, rootMessage: undefined })).toBe(
+      mixed ? wake.uuid : 'answer'
+    )
+    expect(
+      claudeConversationForkBoundary(entries, {
+        ...checkpoint,
+        beforeMessage: { sessionId: opener.sessionId, uuid: wake.uuid }
+      })
+    ).toBe(mixed ? wake.uuid : 'answer')
+    const copied: SessionStoreEntry[] = []
+    const result = await forkSession(opener.sessionId, {
+      upToMessageId: endpoint,
+      sessionStore: {
+        load: async () => entries,
+        append: async (_key, rows) => {
+          copied.push(...rows)
+        }
+      }
     })
-  ).toBe('answer')
-})
+    expect(
+      copied.some(
+        (row) =>
+          (row.forkedFrom as { messageUuid?: string } | undefined)?.messageUuid === 'wake-answer'
+      )
+    ).toBe(false)
+    const path = join(fixture.root, 'fork.jsonl')
+    await writeFile(path, `${copied.map((row) => JSON.stringify(row)).join('\n')}\n`)
+    const prepared = await prepareLegacyTranscriptImport({
+      agent: 'claude',
+      sessionId: result.sessionId,
+      options: { filePath: path }
+    })
+    expect(prepared.ok).toBe(true)
+    if (!prepared.ok) {
+      throw new Error(prepared.error)
+    }
+    expect(
+      prepared.items.filter((row) => row.body.kind === 'message' && row.body.role === 'user')
+    ).toHaveLength(1)
+    expect(JSON.stringify(prepared.items)).not.toContain('<task-notification>')
+    if (mixed) {
+      expect(prepared.items.at(-1)?.body).toMatchObject({
+        kind: 'message',
+        role: 'tool',
+        blocks: [{ type: 'tool-result', callId: 'toolu_1', output: 'real result' }]
+      })
+    }
+  }
+)

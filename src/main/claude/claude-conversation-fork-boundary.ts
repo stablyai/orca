@@ -5,7 +5,13 @@ import { decodeClaudeTranscriptLine } from '../native-chat/transcript-line-decod
 import { isLocalCommandCaveatRow } from './claude-rewind-fork'
 import { claudeSourceBlockId } from './claude-streamed-block-identity'
 import { isClaudeTranscriptRootPrompt } from './claude-transcript-root-prompt'
-import { claudeRecord } from './structured/journal/claude-structured-item-translation'
+import {
+  claudeRecord,
+  claudeToolUses,
+  claudeToolResults,
+  readClaudeMessageEnvelope
+} from './structured/journal/claude-structured-item-translation'
+import { claudeTranscriptPrompt } from './claude-transcript-prompt'
 
 export type ClaudeForkCheckpoint = NonNullable<
   Parameters<NonNullable<StructuredAgentSessionAdapter['copyConversation']>>[0]['checkpoint']
@@ -52,8 +58,38 @@ export function claudeConversationForkBoundary(
     row = typeof parent === 'string' ? byUuid.get(parent) : undefined
   }
   chain.reverse()
+  const boundaryHasCallerResults = (end: number): boolean => {
+    const boundary = chain[end]
+    if (!boundary) {
+      return false
+    }
+    const envelope = readClaudeMessageEnvelope({ ...boundary, session_id: boundary.sessionId })
+    if (
+      !envelope ||
+      !claudeTranscriptPrompt(boundary, envelope, String(boundary.sessionId)).internalTurnStart
+    ) {
+      return false
+    }
+    const calls = new Set<string>()
+    for (let index = end - 1; index >= 0; index -= 1) {
+      const row = chain[index]!
+      if (isClaudeTranscriptRootPrompt(row)) {
+        break
+      }
+      const caller = readClaudeMessageEnvelope({ ...row, session_id: row.sessionId })
+      if (caller?.role === 'assistant') {
+        for (const tool of claudeToolUses(caller)) {
+          calls.add(tool.id)
+        }
+      }
+    }
+    return claudeToolResults(envelope).some((result) => calls.has(result.toolUseId))
+  }
   if (checkpoint.beforeMessage) {
     let next = chain.findIndex((row) => row.uuid === checkpoint.beforeMessage?.uuid)
+    if (boundaryHasCallerResults(next)) {
+      return String(chain[next]!.uuid)
+    }
     while (next > 0 && isLocalCommandCaveatRow(chain[next - 1]!)) {
       next -= 1
     }
@@ -81,7 +117,11 @@ export function claudeConversationForkBoundary(
     return unavailable()
   }
   const next = chain.findIndex((row, index) => index > start && isClaudeTranscriptRootPrompt(row))
-  const root = chain.slice(start, next === -1 ? undefined : next)
+  // Import settles caller-owned results before the hidden task boundary.
+  const root = chain.slice(
+    start,
+    next === -1 ? undefined : next + (boundaryHasCallerResults(next) ? 1 : 0)
+  )
   const endpoint = root.findLast((row) => {
     if (row.type === 'assistant' || row.type === 'user') {
       return !isLocalCommandCaveatRow(row)
