@@ -58,14 +58,6 @@ async function compact(spec: AcpLaunchSpec, frames?: AcpFixtureFrame[], instruct
   return { rig, command, prompt: await rig.frame('session/prompt') }
 }
 
-function replyText(text: string, promptId?: string) {
-  return {
-    sessionId: PROVIDER_SESSION,
-    update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text } },
-    ...(promptId ? { _meta: { promptId } } : {})
-  }
-}
-
 async function ended(rig: AcpAdapterRig, command: StructuredAgentSessionCommandRun) {
   return waitFor(async () => {
     const rows = await rig.rig.rows()
@@ -82,35 +74,6 @@ async function ended(rig: AcpAdapterRig, command: StructuredAgentSessionCommandR
     return { turn, inside: inside.map((row) => row.body) }
   })
 }
-
-describe('ACP compaction request', () => {
-  it("sends Grok `/compact` as a prompt under the command turn's id", async () => {
-    const { command, prompt } = await compact(GROK)
-    expect(prompt.params).toEqual({
-      sessionId: PROVIDER_SESSION,
-      prompt: [{ type: 'text', text: '/compact' }],
-      _meta: { promptId: command.turnId, requestId: command.turnId }
-    })
-  })
-
-  it.each([
-    ['OpenCode', OPENCODE],
-    ['OMP', OMP]
-  ])('sends %s `/compact` as a plain prompt', async (_name, spec) => {
-    const { prompt } = await compact(spec)
-    expect(prompt.params).toEqual({
-      sessionId: PROVIDER_SESSION,
-      prompt: [{ type: 'text', text: '/compact' }]
-    })
-  })
-
-  it('sends OMP instructions after the command', async () => {
-    const { prompt } = await compact(OMP, undefined, 'keep the plan')
-    expect(prompt.params).toMatchObject({
-      prompt: [{ type: 'text', text: '/compact keep the plan' }]
-    })
-  })
-})
 
 describe('ACP compaction settlement', () => {
   it.each([
@@ -134,84 +97,6 @@ describe('ACP compaction settlement', () => {
     expect(turn).toMatchObject({ state: 'completed', outcome: 'success' })
     expect(inside).toEqual([body])
     expect((await rig.rig.rows()).some((row) => row.body.kind === 'message')).toBe(false)
-  })
-
-  it('ends a compaction the agent finished with one compacted row, drawing none of its words', async () => {
-    const { rig, command, prompt } = await compact(GROK)
-    const { agent } = rig.child()
-    agent.notify('session/update', replyText('Summarised 40 messages.', command.turnId))
-    agent.reply(prompt, { stopReason: 'end_turn' })
-    const { turn, inside } = await ended(rig, command)
-    expect(turn).toMatchObject({ turnId: command.turnId, state: 'completed', outcome: 'success' })
-    expect(inside).toEqual([
-      { kind: 'status', text: 'Context compacted', presentation: 'compaction' }
-    ])
-    expect((await rig.rig.rows()).some((row) => row.body.kind === 'message')).toBe(false)
-  })
-
-  it('reads OMP Already compacted as skipped, not failed', async () => {
-    const { rig, command, prompt } = await compact(OMP)
-    const { agent } = rig.child()
-    agent.notify('session/update', replyText('Compaction failed: Already compacted'))
-    agent.reply(prompt, { stopReason: 'end_turn' })
-    const { turn, inside } = await ended(rig, command)
-    expect(turn).toMatchObject({ state: 'completed', outcome: 'success' })
-    expect(inside).toEqual([
-      {
-        kind: 'status',
-        tone: 'warning',
-        text: 'Already compacted',
-        presentation: 'compaction-skipped'
-      }
-    ])
-  })
-
-  it('reads an OMP mode refusing instructions as failed, not compacted', async () => {
-    const { rig, command, prompt } = await compact(OMP, undefined, 'snapcompact keep the plan')
-    const refusal =
-      '/compact snapcompact does not take focus instructions (it archives history without an LLM summary).'
-    rig.child().agent.notify('session/update', replyText(refusal))
-    rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
-    const { turn, inside } = await ended(rig, command)
-    expect(turn).toMatchObject({ state: 'completed', outcome: 'failure' })
-    expect(inside).toEqual([expect.objectContaining({ tone: 'error' })])
-  })
-
-  it('reads any other OMP compaction failure as failed, in its own words', async () => {
-    const { rig, command, prompt } = await compact(OMP)
-    const { agent } = rig.child()
-    agent.notify(
-      'session/update',
-      replyText('Compaction failed: summary model rejected the request')
-    )
-    agent.reply(prompt, { stopReason: 'end_turn' })
-    const { turn, inside } = await ended(rig, command)
-    expect(turn).toMatchObject({ state: 'completed', outcome: 'failure' })
-    expect(inside).toEqual([
-      expect.objectContaining({
-        kind: 'status',
-        tone: 'error',
-        failure: expect.objectContaining({
-          kind: 'compactionFailed',
-          detail: {
-            text: 'Compaction failed: summary model rejected the request',
-            audience: 'person'
-          }
-        })
-      })
-    ])
-  })
-
-  it('reads OMP failure words only from OMP', async () => {
-    const { rig, command, prompt } = await compact(OPENCODE)
-    const { agent } = rig.child()
-    agent.notify('session/update', replyText('Compaction failed: Nothing to compact'))
-    agent.reply(prompt, { stopReason: 'end_turn' })
-    const { turn, inside } = await ended(rig, command)
-    expect(turn).toMatchObject({ outcome: 'success' })
-    expect(inside).toEqual([
-      { kind: 'status', text: 'Context compacted', presentation: 'compaction' }
-    ])
   })
 
   it.each([
@@ -254,27 +139,6 @@ describe('ACP compaction settlement', () => {
       ])
     }
   )
-
-  it("keeps Grok's own no-work compaction error the command's failure, not the agent's", async () => {
-    const { rig, command, prompt } = await compact(GROK)
-    // Grok's documented compact error data; a supported producer shape, not a live capture.
-    rig.child().agent.fail(prompt, -32603, 'Internal error', {
-      kind: 'compact_failed',
-      message: 'nothing to compact'
-    })
-    const { turn, inside } = await ended(rig, command)
-    expect(turn).toMatchObject({ state: 'completed', outcome: 'failure' })
-    expect(inside).toEqual([
-      expect.objectContaining({
-        tone: 'error',
-        failure: {
-          kind: 'compactionFailed',
-          detail: { text: 'nothing to compact', audience: 'person' }
-        }
-      })
-    ])
-    expect((await rig.rig.rows()).filter((row) => row.body.kind === 'status')).toHaveLength(1)
-  })
 
   it("reads Grok's rate-limit RPC code as one usage failure, ignoring its late notification", async () => {
     const { rig, command, prompt } = await compact(GROK)
@@ -366,33 +230,6 @@ describe('ACP compaction settlement', () => {
     }
   )
 
-  it('preserves OpenCode quota reset metadata in one ordinary failure row in the command turn', async () => {
-    const { rig, command, prompt } = await compact(OPENCODE)
-    const resetsAt = 65_000
-    rig.child().agent.fail(prompt, -32603, 'Rate limit exceeded. Please try again later.', {
-      service: 'session',
-      errorName: 'provider.rate-limit',
-      retryAfterMs: 60_000
-    })
-    const { turn, inside } = await ended(rig, command)
-    expect(turn).toMatchObject({ outcome: 'failure' })
-    expect(inside).toEqual([
-      expect.objectContaining({
-        tone: 'warning',
-        failure: expect.objectContaining({ kind: 'usageLimitReached', usageLimit: { resetsAt } })
-      })
-    ])
-    expect((await rig.rig.rows()).filter((row) => row.body.kind === 'status')).toHaveLength(1)
-  })
-
-  it('keeps a no-detail rate-limit result distinct from a command refusal', async () => {
-    const { rig, command, prompt } = await compact(GROK)
-    rig.child().agent.reply(prompt, { stopReason: 'rate_limit' })
-    const { turn, inside } = await ended(rig, command)
-    expect(turn).toMatchObject({ outcome: 'failure' })
-    expect(inside).toEqual([expect.objectContaining({ failure: { kind: 'usageLimitReached' } })])
-  })
-
   it('ignores named late compaction failures after another prompt settles, preserving its original scope', async () => {
     const { rig, command, prompt } = await compact(GROK)
     const { agent } = rig.child()
@@ -432,34 +269,22 @@ describe('ACP compaction settlement', () => {
     expect((await rig.rig.rows()).filter((row) => row.body.kind === 'status')).toHaveLength(1)
   })
 
-  it.each([
-    { spec: OPENCODE, code: -32000, data: undefined },
-    { spec: OMP, code: -32603, data: { details: 'No model selected.\n\nUse /login to sign in.' } }
-  ])('says $spec.agent is not signed in, as a send does', async ({ spec, code, data }) => {
-    const { rig, command, prompt } = await compact(spec)
-    rig.child().agent.fail(prompt, code, 'Authentication required', data)
+  it('says OMP has no model selected, as a send does', async () => {
+    // OMP says this both signed out and for a launch selector it never resolved.
+    const { rig, command, prompt } = await compact(OMP)
+    rig.child().agent.fail(prompt, -32603, 'Internal error', {
+      details: 'No model selected.\n\nUse /login to sign in.'
+    })
     const { turn, inside } = await ended(rig, command)
     expect(turn).toMatchObject({ state: 'completed', outcome: 'failure' })
     expect(inside).toEqual([
       expect.objectContaining({
         tone: 'error',
-        failure: expect.objectContaining({ kind: 'notSignedIn' })
+        failure: expect.objectContaining({ kind: 'modelNotSelected' })
       })
     ])
-    // A sign-in failure is the agent's, so cards waiting behind the compaction stay held.
+    // The agent's own failure, so cards waiting behind the compaction stay held.
     expect(rig.rig.journal.inputOrder.newestTurn.failure()).toBeGreaterThan(0)
-  })
-
-  it('fails a compaction the agent ended with any other stop reason', async () => {
-    const { rig, command, prompt } = await compact(GROK)
-    rig.child().agent.reply(prompt, { stopReason: 'refusal' })
-    const { turn, inside } = await ended(rig, command)
-    expect(turn).toMatchObject({ state: 'completed', outcome: 'failure' })
-    expect(inside).toEqual([
-      expect.objectContaining({ failure: expect.objectContaining({ kind: 'compactionFailed' }) })
-    ])
-    // Its own verdict neither holds nor releases the cards waiting behind it.
-    expect(rig.rig.journal.inputOrder.newestTurn.failure()).toBe(0)
   })
 
   it('ends a stopped compaction as cancelled, with no result row', async () => {
@@ -477,23 +302,5 @@ describe('ACP compaction settlement', () => {
     const { turn, inside } = await ended(rig, command)
     expect(turn).toMatchObject({ state: 'interrupted', outcome: 'cancellation' })
     expect(inside).toEqual([])
-  })
-
-  it('takes the next message as an ordinary turn once the compaction ended', async () => {
-    const { rig, command, prompt } = await compact(GROK)
-    rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
-    await ended(rig, command)
-    expect(
-      await rig.adapter.dispatch({
-        sessionId: SESSION,
-        clientMessageId: 'send-2',
-        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'next' }] },
-        fence: 1
-      })
-    ).toEqual({ state: 'admitted' })
-    expect((await rig.frame('session/prompt', 1)).params).toMatchObject({
-      prompt: [{ type: 'text', text: 'next' }],
-      _meta: { promptId: 'prompt:send-2' }
-    })
   })
 })

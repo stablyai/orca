@@ -1,12 +1,12 @@
-// Follow tab-title-resolution precedence: manual, quick command, semantic, provider, generated, then live title. Reject status/identity/cwd live titles so rows retain message previews.
+// Uses the tab's own name order, then a live title only when it names the conversation, so rows retain message previews.
 import type { AgentType } from '../contracts/agent-status-types'
 import { isClaudeManagementTitle } from '../title/agent-title-core'
 import { stripLeadingAgentTitleDecorationOrEmpty } from '../title/agent-title-decoration'
 import { formatAgentTypeLabel } from './agent-type-label'
 import { isJcodeIdentityTerminalTitle } from '../title/providers/jcode-terminal-title'
-import { isMeaningfulOpenCodeTerminalTitle } from '../title/providers/opencode-terminal-title'
 import { SYNTHETIC_AGENT_TITLE_PROFILES } from '../title/synthetic-agent-title'
 import type { TerminalTab } from '../../workspace-layout/terminal-tab-types'
+import { resolveTabNameSource } from '../../tab-title-resolution'
 
 export type ConversationNameTab = Pick<
   TerminalTab,
@@ -109,33 +109,27 @@ export function getAgentRowConversationName(
   paneLiveTitle?: string | null,
   providerSessionId?: string
 ): string | null {
-  const customTitle = tab.customTitle?.trim()
-  if (customTitle) {
-    return customTitle
-  }
-  const quickCommandLabel = tab.quickCommandLabel?.trim()
-  if (quickCommandLabel) {
-    return quickCommandLabel
-  }
   const liveTitle =
     paneLiveTitle === undefined ? (tab.title?.trim() ?? '') : (paneLiveTitle?.trim() ?? '')
-  if (isMeaningfulOpenCodeTerminalTitle(liveTitle)) {
-    return liveTitle
-  }
   // Provider titles belong to their session, not every pane in the tab.
   const aiVaultTitle = tab.aiVaultTitle
-  const providerTitle = aiVaultTitle?.title.trim()
-  if (
-    aiVaultTitle &&
-    providerTitle &&
-    aiVaultTitle.agent === agentType &&
-    aiVaultTitle.sessionId === providerSessionId
-  ) {
-    return providerTitle
-  }
-  const generatedTitle = generatedTitlesEnabled ? tab.generatedTitle?.trim() : ''
-  if (generatedTitle) {
-    return generatedTitle
+  const named = resolveTabNameSource(
+    {
+      customTitle: tab.customTitle,
+      quickCommandLabel: tab.quickCommandLabel,
+      liveTitle,
+      sessionTitle:
+        aiVaultTitle &&
+        aiVaultTitle.agent === agentType &&
+        aiVaultTitle.sessionId === providerSessionId
+          ? aiVaultTitle
+          : null,
+      generatedTitle: tab.generatedTitle
+    },
+    generatedTitlesEnabled
+  )
+  if (named) {
+    return named
   }
   if (!liveTitle) {
     return null

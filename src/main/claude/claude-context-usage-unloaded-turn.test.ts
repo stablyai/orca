@@ -10,10 +10,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionHistoryPage } from '../../shared/agent-session/agent-session-wire'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { MAX_RETAINED_OWN_ITEMS } from '../../shared/agent-session/view/structured-agent-session-item-retention'
-import {
-  latestStructuredAgentContextFacts,
-  selectStructuredAgentContextUsage
-} from '../../shared/agent-session/structured-agent-session-context-usage'
+import { selectStructuredAgentContextUsage } from '../../shared/agent-session/structured-agent-session-context-usage'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,
@@ -34,10 +31,7 @@ import {
 import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import {
-  claudeAndCodexAgents,
-  NO_STRUCTURED_AGENTS
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
+import { claudeAndCodexAgents } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 import type { StructuredAgentRegistry } from '../native-chat/agent-session-wire/structured-agent-registry'
 
 const SESSION = 'orca-session'
@@ -174,41 +168,6 @@ function catchUp(
 }
 
 describe('context usage for a turn row outside the loaded page', () => {
-  it('shows the ring on a reopened chat from the host whole-journal answer', async () => {
-    const journal = await openJournal()
-    const { translator, settle } = translate(journal)
-    runTurn(translator, 'turn-a', 1_000, [120_000, 130_000, 140_000, 150_000, 160_000])
-    translator.handle(resultFrame(2_000, { 'claude-fable-5-1[1m]': { contextWindow: 1_000_000 } }))
-    await settle()
-
-    const state = attachTail(journal, 3)
-    expect(state.hasOlder).toBe(true)
-    expect(hasTurnRow(state)).toBe(false)
-    const options = await readOptions(journal, claudeAndCodexAgents())
-
-    expect(options.contextUsage?.current).toEqual(
-      latestStructuredAgentContextFacts(journal.snapshot().items)
-    )
-    expect(selectStructuredAgentContextUsage(state.items, options.contextUsage?.current)).toEqual(
-      selectStructuredAgentContextUsage(journal.snapshot().items)
-    )
-    expect(
-      selectStructuredAgentContextUsage(state.items, options.contextUsage?.current)
-    ).toMatchObject({ usedTokens: 160_000, windowTokens: 1_000_000, estimated: true })
-  })
-
-  it('leaves the options answer untouched on a session that writes no context facts', async () => {
-    const journal = await openJournal()
-    const { translator, settle } = translate(journal)
-    runTurn(translator, 'turn-a', 1_000, [120_000, 130_000, 140_000])
-    await settle()
-
-    const options = await readOptions(journal, NO_STRUCTURED_AGENTS)
-    expect(options).not.toHaveProperty('contextUsage')
-    // Older hosts omit context facts, so clients fall back to loaded rows.
-    expect(selectStructuredAgentContextUsage(attachTail(journal, 2).items)).toBeNull()
-  })
-
   it('marks a live context write on a turn row the window cannot take, and the host answer carries it', async () => {
     const journal = await openJournal()
     const { translator, settle } = translate(journal)

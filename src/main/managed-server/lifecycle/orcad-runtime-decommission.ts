@@ -31,6 +31,8 @@ import { RemoteInstallLockBusyError } from '../install/remote-install-lock'
 type ManagedOrcadStopPolicy = {
   isActiveEnvironment: (environmentId: string) => boolean
   retireLocalState: (environmentId: string) => Promise<void> | void
+  /** Runs inside the host's lifecycle, so a Connect queued behind the unlink still wins. */
+  releaseHostTransport: (sshTargetId: string) => Promise<void>
 }
 
 type Refusal = Extract<OrcadManagedStopResult, { outcome: 'refused' }>
@@ -168,6 +170,8 @@ async function unlinkEnvironmentLocally(
   await claims.flush()
   // Clear journals after the fence; stale leftovers are recoverable on later conversion.
   removeOrcadMigrationJournalsForDestination(userDataPath, deployment.sshTargetId, environment.id)
+  // No server serves the host now, and an unserved host never stays connected.
+  await policy.releaseHostTransport(deployment.sshTargetId)
 }
 
 export function cancelManagedOrcadStop(

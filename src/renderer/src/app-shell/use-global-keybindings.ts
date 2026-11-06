@@ -35,6 +35,7 @@ import {
 import type { AppChromeLayout } from './use-app-chrome-layout'
 import type { FloatingWorkspacePanelState } from './use-floating-workspace-panel'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { textInputOwnsComposition } from '../../../shared/text-input-shortcut-policy'
 import { isAgentTerminalPreviewTarget } from '../components/dashboard-popout/agent-terminal-preview-target'
 
 /** Register window listeners once; each key event reads the latest committed shortcut state through a ref. */
@@ -192,17 +193,14 @@ export function useGlobalKeybindings(args: {
         return
       }
 
-      if (
-        globalShortcutTargetYields(input, shortcutPlatform, keybindings, {
-          context,
-          terminalShortcutPolicy
-        })
-      ) {
-        return
-      }
+      const matchOptions = { context, terminalShortcutPolicy }
+      const targetYields = (actionId?: KeybindingActionId): boolean =>
+        globalShortcutTargetYields(input, shortcutPlatform, keybindings, matchOptions, actionId)
+      const matchAppShortcut = (actionId: KeybindingActionId): boolean =>
+        matchShortcut(actionId) && !targetYields(actionId)
 
       // Reviewed plugin chords beat built-in defaults only in app focus; terminal/editor/browser retain their own authority.
-      if (context === 'app') {
+      if (context === 'app' && !targetYields()) {
         const pluginCommand = findPluginCommandForKeybinding(
           pluginCommands,
           input,
@@ -222,26 +220,26 @@ export function useGlobalKeybindings(args: {
       }
 
       const handlers = createAppCommandHandlers(state, input, context)
-      if (matchShortcut('workspace.delete') && handlers.get('workspace.delete')?.()) {
+      if (matchAppShortcut('workspace.delete') && handlers.get('workspace.delete')?.()) {
         return
       }
       if (
-        matchShortcut('sidebar.childWorkspaces.toggle') &&
+        matchAppShortcut('sidebar.childWorkspaces.toggle') &&
         handlers.get('sidebar.childWorkspaces.toggle')?.()
       ) {
         return
       }
-      if (matchShortcut('view.plugins') && handlers.get('view.plugins')?.()) {
+      if (matchAppShortcut('view.plugins') && handlers.get('view.plugins')?.()) {
         return
       }
       for (const actionId of PLUGIN_COMMAND_ALIAS_ACTION_IDS) {
-        if (matchShortcut(actionId) && handlers.get(actionId)?.()) {
+        if (matchAppShortcut(actionId) && handlers.get(actionId)?.()) {
           return
         }
       }
 
       // Run this unbound alias after built-ins; claim it only when unsent review notes exist.
-      if (canRevealRightSidebar && matchShortcut('sourceControl.sendReviewNotes')) {
+      if (canRevealRightSidebar && matchAppShortcut('sourceControl.sendReviewNotes')) {
         if (actions.openDiffNotesSendMenuForActiveWorktree()) {
           input.preventDefault()
           notifyTerminalCapture('sourceControl.sendReviewNotes')
@@ -249,10 +247,14 @@ export function useGlobalKeybindings(args: {
       }
     }
 
-    const onKeyDown = (e: KeyboardEvent): void => {
-      const detected = doubleTapDetector.process(
+    const detectDoubleTap = (e: KeyboardEvent, type: 'keyDown' | 'keyUp') => {
+      if (textInputOwnsComposition(e)) {
+        doubleTapDetector.reset()
+        return null
+      }
+      return doubleTapDetector.process(
         toModifierDoubleTapEvent({
-          type: 'keyDown',
+          type,
           code: e.code,
           key: e.key,
           shift: e.shiftKey,
@@ -263,6 +265,9 @@ export function useGlobalKeybindings(args: {
         }),
         Date.now()
       )
+    }
+    const onKeyDown = (e: KeyboardEvent): void => {
+      const detected = detectDoubleTap(e, 'keyDown')
       if (e.repeat) {
         return
       }
@@ -294,18 +299,7 @@ export function useGlobalKeybindings(args: {
     }
 
     const onKeyUp = (e: KeyboardEvent): void => {
-      doubleTapDetector.process(
-        toModifierDoubleTapEvent({
-          type: 'keyUp',
-          code: e.code,
-          key: e.key,
-          shift: e.shiftKey,
-          control: e.ctrlKey,
-          alt: e.altKey,
-          meta: e.metaKey
-        }),
-        Date.now()
-      )
+      detectDoubleTap(e, 'keyUp')
     }
 
     // Blur must disarm an unfinished gesture.

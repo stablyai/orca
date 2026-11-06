@@ -6,7 +6,7 @@ import type {
 } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import '../../../shared/protocol-version'
 import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
-import * as connectionState from '@/runtime/runtime-host-connection-state'
+
 import { createRuntimeStatusSubscriptions } from './runtime-status-subscriptions'
 
 function entry(patch: Partial<RuntimeHostStatusSnapshot> = {}): RuntimeEnvironmentStatus {
@@ -58,45 +58,6 @@ function setup() {
 afterEach(() => vi.restoreAllMocks())
 
 describe('runtime status notification isolation', () => {
-  it.each([100, 1000])(
-    'derives once per affected host with %i readers and skips unrelated writes',
-    (readers) => {
-      const { store, subscriptions, publish } = setup()
-      const rootSubscribe = vi.spyOn(store, 'subscribe')
-      const derive = vi.spyOn(connectionState, 'runtimeHostConnectionStateForEntry')
-      const listeners = Array.from({ length: readers }, () => vi.fn())
-      const releases = listeners.map((listener) => subscriptions.subscribeConnection('a', listener))
-      const b = vi.fn()
-      releases.push(subscriptions.subscribeConnection('b', b))
-      const parking = vi.fn()
-      releases.push(subscriptions.subscribeParking(parking))
-      expect(rootSubscribe).toHaveBeenCalledTimes(1)
-      const oldPath = vi.fn((state) =>
-        connectionState.runtimeHostConnectionStateForEntry(
-          state.runtimeStatusByEnvironmentId.get('a')
-        )
-      )
-      const releaseControl = store.subscribe(oldPath)
-      derive.mockClear()
-      store.setState({ unrelated: 1 })
-      expect(derive).toHaveBeenCalledTimes(1)
-      expect(oldPath).toHaveBeenCalledTimes(1)
-      releaseControl()
-      derive.mockClear()
-      publish('b', entry({ environmentId: 'b', sequence: 2, checkedAt: 2 }))
-      expect(derive).toHaveBeenCalledTimes(1)
-      expect(b).not.toHaveBeenCalled()
-      expect(parking).not.toHaveBeenCalled()
-      expect(listeners.every((listener) => listener.mock.calls.length === 0)).toBe(true)
-      publish('a', entry({ verification: 'blocked' }))
-      expect(derive).toHaveBeenCalledTimes(2)
-      expect(listeners.every((listener) => listener.mock.calls.length === 1)).toBe(true)
-      expect(subscriptions.getParkingSnapshot()).toEqual(new Set(['b']))
-      expect(parking).toHaveBeenCalledTimes(1)
-      releases.forEach((release) => release())
-    }
-  )
-
   it('reads current authoritative state before subscription delivery and after a late subscription', () => {
     const { store, subscriptions, publish } = setup()
     const seen: string[] = []

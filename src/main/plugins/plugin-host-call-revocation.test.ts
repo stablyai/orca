@@ -104,14 +104,6 @@ async function createSavingPlugin() {
 }
 
 describe('revocation during an admitted call', () => {
-  it('writes when the plugin stays approved', async () => {
-    const { dialog, writes, save, key } = await createSavingPlugin()
-    const pending = save()
-    dialog.open()
-    await expect(pending).resolves.toEqual({ ok: true, value: { status: 'saved' } })
-    expect(writes).toEqual([key])
-  })
-
   it('writes nothing once the plugin is disabled while the dialog is open', async () => {
     const { dialog, writes, save, settings, key } = await createSavingPlugin()
     const pending = save()

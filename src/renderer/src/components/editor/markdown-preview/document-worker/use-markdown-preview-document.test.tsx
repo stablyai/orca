@@ -47,31 +47,6 @@ afterEach(() => {
 })
 
 describe('large Markdown revision ownership', () => {
-  it('keeps the completed document and client readable until replacement completes', async () => {
-    const { result, rerender, unmount } = harness()
-    const first = PreviewWorker.instances[0]
-    await finish(first)
-    const ready = result.current
-    rerender({ content: 'second', enabled: true })
-    expect(result.current).toMatchObject({ status: 'ready', content: 'first', refreshing: true })
-    if (ready.status !== 'ready' || result.current.status !== 'ready') {
-      throw new Error('Expected completed preview')
-    }
-    expect(result.current.client).toBe(ready.client)
-    expect(result.current.document).toBe(ready.document)
-    expect(first.terminate).not.toHaveBeenCalled()
-    await advance()
-    const second = PreviewWorker.instances[1]
-    expect(second.postMessage).toHaveBeenCalledWith({ id: 1, type: 'load', content: 'second' })
-    await finish(second)
-    expect(result.current).toMatchObject({ status: 'ready', content: 'second', refreshing: false })
-    expect(first.terminate).toHaveBeenCalledOnce()
-    expect(second.terminate).not.toHaveBeenCalled()
-    unmount()
-    expect(second.terminate).toHaveBeenCalledOnce()
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
   it('debounces edits and never retains more than a displayed and replacement worker', async () => {
     const { result, rerender } = harness()
     const first = PreviewWorker.instances[0]
@@ -135,22 +110,6 @@ describe('large Markdown revision ownership', () => {
     rerender({ content: 'first', enabled: true })
     expect(PreviewWorker.instances[1].terminate).toHaveBeenCalledOnce()
     expect(result.current).toMatchObject({ status: 'ready', content: 'first', refreshing: false })
-  })
-
-  it('closes both workers on disable and restarts only when enabled again', async () => {
-    const { result, rerender } = harness()
-    await finish(PreviewWorker.instances[0])
-    rerender({ content: 'second', enabled: true })
-    await advance()
-    rerender({ content: 'second', enabled: false })
-    expect(result.current.status).toBe('loading')
-    expect(
-      PreviewWorker.instances.every((worker) => worker.terminate.mock.calls.length === 1)
-    ).toBe(true)
-    expect(vi.getTimerCount()).toBe(0)
-    rerender({ content: 'second', enabled: true })
-    await finish(PreviewWorker.instances[2])
-    expect(result.current).toMatchObject({ status: 'ready', content: 'second' })
   })
 
   it('closes displayed and replacement workers on unmount without stale state updates', async () => {

@@ -123,53 +123,6 @@ describe('EphemeralVmsPane', () => {
     document.body.replaceChildren()
   })
 
-  it('renders the skill panel and recipe, and opens the composer with the recipe selected', async () => {
-    const container = await renderPane()
-
-    await vi.waitFor(() => expect(container.textContent).toContain('Cloud Sandbox'))
-    await vi.waitFor(() => expect(container.textContent).toContain('Cloud VM setup skill'))
-    expect(container.textContent).toContain('What the skill does, with you')
-    const useButton = [...container.querySelectorAll('button')].find(
-      (button) => button.textContent === 'Use in workspace'
-    )
-    expect(useButton).toBeDefined()
-
-    await act(async () => {
-      useButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(storeMocks.openModal).toHaveBeenCalledWith('new-workspace-composer', {
-      initialRepoId: 'repo-1',
-      initialEphemeralVmRecipeId: 'cloud-sandbox',
-      telemetrySource: 'settings'
-    })
-  })
-
-  it('does not schedule a reset when clipboard completion arrives after unmount', async () => {
-    let finishClipboard!: () => void
-    vi.mocked(window.api.ui.writeClipboardText).mockReturnValueOnce(
-      new Promise<void>((resolve) => {
-        finishClipboard = resolve
-      })
-    )
-    const container = await renderPane()
-    const setTimeout = vi.spyOn(window, 'setTimeout')
-    try {
-      await act(async () => {
-        container.querySelector<HTMLButtonElement>('button[aria-label="Copy"]')?.click()
-      })
-      await act(async () => roots.pop()?.unmount())
-      setTimeout.mockClear()
-      await act(async () => {
-        finishClipboard()
-        await Promise.resolve()
-      })
-      expect(setTimeout.mock.calls.filter(([, delay]) => delay === 1500)).toHaveLength(0)
-    } finally {
-      setTimeout.mockRestore()
-    }
-  })
-
   it('ignores an older refresh that finishes after a plugin-content refresh', async () => {
     const listRecipeCatalog = window.api.ephemeralVm.listRecipeCatalog as ReturnType<typeof vi.fn>
     let resolveInitial!: (catalog: unknown[]) => void

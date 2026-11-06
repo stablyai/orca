@@ -1,4 +1,5 @@
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import { recordMobileViewOpened } from '../../../telemetry/mobile-client-telemetry'
 import type {
   NativeChatTranscriptFrame,
   NativeChatTranscriptPage
@@ -129,7 +130,11 @@ export const NATIVE_CHAT_METHODS = [
     name: 'nativeChat.subscribe',
     permission: 'workspace',
     params: NativeChatSession,
-    handler: async (params, { runtime, connectionId, clientKind, signal }, emitAny) => {
+    handler: async (
+      params,
+      { runtime, connectionId, clientKind, pairedDeviceId, signal },
+      emitAny
+    ) => {
       const emit = (frame: NativeChatTranscriptFrame): void => emitAny(frame)
       if (signal?.aborted) {
         return
@@ -255,6 +260,17 @@ export const NATIVE_CHAT_METHODS = [
         })
       }
       unsubscribe = subscription.unsubscribe
+      if (!subscription.watching) {
+        return
+      }
+      recordMobileViewOpened(
+        { clientKind, pairedDeviceId },
+        {
+          surface: 'chat',
+          viewKey: `nativeChat:${params.agent}:${params.sessionId}`,
+          agent: () => params.agent
+        }
+      )
     }
   }),
   defineMethod({

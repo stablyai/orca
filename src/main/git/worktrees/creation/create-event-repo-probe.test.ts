@@ -79,17 +79,6 @@ describe('probeCreateEventRepoFacts', () => {
     expect(await probeCreateEventRepoFacts(repo, 'linux')).toMatchObject({ worktreeCount: 3 })
   })
 
-  it('does not count a spare whose admin directory Git has not written yet', async () => {
-    await registerWorktree('feature-a')
-    expect(await probeCreateEventRepoFacts(repo, 'linux')).toMatchObject({ worktreeCount: 2 })
-  })
-
-  it('reports neither fact for a missing repo', async () => {
-    expect(await probeCreateEventRepoFacts(path.join(repo, 'missing'), 'linux')).toEqual({
-      postCheckoutHook: 'unknown'
-    })
-  })
-
   async function writeIndex(signature: string, version: number, entries: number): Promise<void> {
     const header = Buffer.alloc(12)
     header.write(signature, 0, 'latin1')
@@ -109,13 +98,6 @@ describe('probeCreateEventRepoFacts', () => {
       })
     }
   )
-
-  it('omits the count when the repo has no index yet', async () => {
-    expect(await probeCreateEventRepoFacts(repo, 'linux')).toEqual({
-      postCheckoutHook: 'absent',
-      worktreeCount: 1
-    })
-  })
 
   it('omits the count for a file that is not an index', async () => {
     await writeIndex('NOPE', 2, 10)

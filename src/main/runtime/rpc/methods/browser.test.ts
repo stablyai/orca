@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { setRuntimeBrowserCommandsFactory } from '../../runtime-browser-commands-factory'
+import { setRuntimeBrowserCommandsFactory } from '../../browser/installation/runtime-browser-commands-factory'
 import {
   CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS,
   CLIPBOARD_TEXT_WRITE_MAX_BYTES,

@@ -4,7 +4,7 @@ import type {
 } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { agentSessionOwnerObservationVerdict } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
-import { structuredAgentRuntimeMetadata } from '../../runtime/structured-agent-runtime-metadata'
+import { structuredAgentRuntimeMetadata } from '../../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import {
   keysMayMatch,
   recordConversationKey,

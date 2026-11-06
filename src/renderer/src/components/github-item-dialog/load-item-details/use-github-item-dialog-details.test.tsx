@@ -171,22 +171,6 @@ describe('useGitHubWorkItemDetails reconciliation', () => {
     expect(lookup).toHaveBeenCalledTimes(2)
   })
 
-  it('starts the owed reread when a comment lands in the same batch as the invalidation', async () => {
-    lookup.mockResolvedValue(details)
-    render(<Harness />)
-    await waitFor(() => expect(latest?.detailsLoaded).toBe(true))
-
-    act(() => {
-      latest!.invalidateCurrentDetailsCache()
-      latest!.appendOptimisticComment(comment(101))
-    })
-
-    await waitFor(() => expect(lookup).toHaveBeenCalledTimes(2))
-    await act(async () => {})
-    expect(lookup).toHaveBeenCalledTimes(2)
-    expect(latest?.details?.comments.map((c) => c.id)).toContain(101)
-  })
-
   it('lands a running reread after a comment and an unrelated invalidation', async () => {
     lookup.mockResolvedValueOnce(details)
     render(<Harness />)

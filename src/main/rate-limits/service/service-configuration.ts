@@ -1,3 +1,7 @@
+import {
+  localAccountRuntimeTargetKey,
+  type LocalAccountRuntimeTarget
+} from '../../../shared/local-account-runtime'
 import type { BrowserWindow } from 'electron'
 import { hasMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { hasMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
@@ -67,6 +71,19 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     this.antigravityUsageEnabledResolver = resolver
   }
 
+  setAntigravityFetchTarget(target: LocalAccountRuntimeTarget): void {
+    if (
+      localAccountRuntimeTargetKey(target) ===
+      localAccountRuntimeTargetKey(this.antigravityFetchTarget)
+    ) {
+      return
+    }
+    this.antigravityFetchTarget = { ...target }
+    this.antigravityFetchGeneration += 1
+    this.activeFailureStreakByProvider.antigravity = 0
+    this.updateState({ ...this.state, antigravity: null })
+  }
+
   setNetworkProxySettingsResolver(resolver: () => NetworkProxySettings): void {
     this.networkProxySettingsResolver = resolver
   }
@@ -85,7 +102,7 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     this.detachWindowListeners?.()
     this.mainWindow = mainWindow
     const refreshOnResume = (): void => {
-      void this.refreshIfWindowActive()
+      void this.refreshIfWatched()
     }
     // Replacing windows must also detach the old closed listener.
     const detachWindowListeners = (): void => {
@@ -108,10 +125,25 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     mainWindow.on('restore', refreshOnResume)
     mainWindow.on('closed', onClosed)
     this.detachWindowListeners = detachWindowListeners
+    // Quota probes spawn CLIs/use network; defer past first paint, then show/focus refresh.
+    this.scheduleDeferredStartupRefresh()
+  }
+
+  /** Counts a paired client's usage stream so polls run without a focused window; returns its release. */
+  addUsageViewer(): () => void {
+    this.usageViewers += 1
+    let released = false
+    return () => {
+      if (!released) {
+        released = true
+        this.usageViewers -= 1
+      }
+    }
   }
 
   start(options: { fetchImmediately?: boolean } = {}): void {
     if (options.fetchImmediately !== false) {
+      this.clearDeferredStartupRefresh()
       void this.fetchAll()
     } else {
       this.scheduleDeferredStartupRefresh()

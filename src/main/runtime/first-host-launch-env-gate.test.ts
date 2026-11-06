@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RuntimeAccountController } from './runtime-account-controller'
+import { RuntimeAccountController } from './agent-session/environment/runtime-account-controller'
 import type { HostAccountLaunchEnv } from '../../shared/host-account-launch-env'
 import { FIRST_HOST_LAUNCH_ENV_WAIT_MS } from './first-host-launch-env-gate'
 

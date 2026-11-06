@@ -1,3 +1,4 @@
+import { STRUCTURED_AGENT_SESSION_ACCOUNT_USAGE_METHODS } from './structured-agent-session-account-usage'
 import { STRUCTURED_AGENT_SESSION_USAGE_LIMIT_CONTINUE_METHODS } from './structured-agent-session-usage-limit-continue'
 import { STRUCTURED_AGENT_SESSION_CLOSE_METHOD } from './structured-agent-session-close-method'
 import { clientRequestsCommands } from './structured-agent-session-policy'
@@ -62,6 +63,8 @@ import {
   UnsubscribeParams
 } from './structured-agent-session-schemas'
 import { sendStructuredAgentSessionForClient } from './structured-agent-session-send-compatibility'
+import { recordMobileViewOpened } from '../../../telemetry/mobile-client-telemetry'
+import { runConversationCommandForClient } from './structured-agent-session-conversation-command'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
@@ -87,13 +90,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     name: 'agentSession.conversationCommand',
     permission: 'workspace',
     params: ConversationCommandParams,
-    handler: async (params, ctx) => {
-      requireStructuredCapability(ctx)
-      await ensureHostInstalled(ctx)
-      const host = requireSessionHost(ctx, params.envelope.sessionId)
-      await host.revealSession(params.envelope.sessionId)
-      return host.conversationCommand(callerFor(ctx), { ...params, userSend: true })
-    }
+    handler: runConversationCommandForClient
   }),
   defineMethod({
     name: 'agentSession.createSupport',
@@ -266,7 +263,13 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       })
       if (stream.isClosed()) {
         dispose()
+        return
       }
+      recordMobileViewOpened(ctx, {
+        surface: 'chat',
+        viewKey: `agentSession:${params.sessionId}`,
+        agent: () => host.sessionAgent(params.sessionId)
+      })
     }
   }),
   defineMethod({
@@ -297,5 +300,6 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   ...STRUCTURED_AGENT_SESSION_CONVERSATION_OUTLINE_METHODS,
   ...STRUCTURED_AGENT_SESSION_ITEM_METHODS,
   ...STRUCTURED_AGENT_SESSION_CURRENT_REQUESTS_METHODS,
+  ...STRUCTURED_AGENT_SESSION_ACCOUNT_USAGE_METHODS,
   ...STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS
 ]

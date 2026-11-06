@@ -13,7 +13,7 @@ import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { canEditComment, isResolvableComment } from '../../session/pr-comment-actions'
 import { ConfirmModal } from '../ConfirmModal'
-import { CommentMarkdown } from './CommentMarkdown'
+import { PrMarkdown } from './PrMarkdown'
 import { PRCommentComposer } from './PRCommentComposer'
 import { prCommentsStyles as styles } from './pr-comments-styles'
 
@@ -210,7 +210,7 @@ export const PRCommentCard = memo(function PRCommentCard({
         </View>
       ) : (
         <View style={styles.body}>
-          <CommentMarkdown content={comment.body} />
+          <PrMarkdown content={comment.body} url={comment.url} />
           <Reactions reactions={comment.reactions} />
         </View>
       )}

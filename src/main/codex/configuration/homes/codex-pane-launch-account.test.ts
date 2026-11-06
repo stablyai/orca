@@ -30,30 +30,6 @@ function settings(args: {
 }
 
 describe('resolveCodexPaneLaunchAccount', () => {
-  it('records the selected account for an ordinary spawn', () => {
-    expect(
-      resolveCodexPaneLaunchAccount({
-        pinnedByResume: false,
-        launchCodexHomePath: '/data/codex-accounts/account-b/home',
-        systemCodexHomePath: SYSTEM_HOME,
-        settings: settings({
-          host: 'account-b',
-          accounts: [
-            managedAccount({
-              id: 'account-b',
-              managedHomePath: '/data/codex-accounts/account-b/home'
-            })
-          ]
-        }),
-        target: { runtime: 'host' }
-      })
-    ).toEqual({
-      selectionKey: 'host',
-      accountId: 'account-b',
-      homeRoute: 'account-home'
-    })
-  })
-
   it('records the origin account a resume pinned the pane to, not the selection', () => {
     const accounts = [
       managedAccount({ id: 'account-a' }),

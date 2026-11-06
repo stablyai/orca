@@ -1,10 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { agentSessionFailureSentence } from '../../shared/agent-session/failures/agent-session-failure-words'
-import {
-  agentSessionFailureFact,
-  providerDiagnosticOf
-} from '../../shared/agent-session/failures/agent-session-failure'
+
+import { providerDiagnosticOf } from '../../shared/agent-session/failures/agent-session-failure'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { AcpSignInPromptError } from './acp-errors'
 import { ACP_LAUNCH_SPECS } from './acp-launch-specs'
@@ -114,24 +111,6 @@ it('starts signed out without Orca words when the connection closes for sign-in'
 })
 
 it.each(ACP_LAUNCH_SPECS)(
-  'preserves $agent startup auth classification and its detail',
-  async (spec) => {
-    const detail = 'Sign-in credentials are missing.'
-    const rig = await openAcpAdapterRig({
-      spec,
-      script: (agent) => agent.on('session/new', (frame) => agent.fail(frame, -32000, detail))
-    })
-    await rig.acquire()
-    expect(rig.openFailure()).toMatchObject({ reason: 'notSignedIn' })
-    expect(providerDiagnosticOf(rig.openFailure())).toEqual({ text: detail, audience: 'person' })
-    const fact = agentSessionFailureFact('notSignedIn', {
-      detail: providerDiagnosticOf(rig.openFailure())
-    })
-    expect(agentSessionFailureSentence(fact, 'row', { agentName: spec.agent })).toContain(detail)
-  }
-)
-
-it.each(ACP_LAUNCH_SPECS)(
   "keeps $agent's sign-in words over log lines it wrote before refusing its start",
   async (spec) => {
     const detail = 'Sign-in credentials are missing.'
@@ -154,9 +133,10 @@ it.each([
     'No API key found for anthropic.\n\nUse /login, set an API key environment variable, or create /host/agent.db',
     'notSignedIn'
   ],
+  // OMP says this for an unresolved launch selector as well as when signed out.
   [
     'No model selected.\n\nUse /login, set an API key environment variable, or create /host/agent.db\n\nThen use /model to select a model.',
-    'notSignedIn'
+    'modelNotSelected'
   ],
   ['No model selected', undefined],
   ['Rate limit exceeded', undefined],
@@ -181,5 +161,9 @@ it.each([
     ({ body }) => body.kind === 'status' && body.tone === 'error'
   )
   expect(row?.body.kind === 'status' ? row.body.failure?.kind : undefined).toBe(kind)
-  expect(row?.body.kind === 'status' ? row.body.text : '').toContain(detail)
+  expect(row?.body.kind === 'status' ? row.body.text : '').toContain(
+    kind === 'modelNotSelected'
+      ? 'OMP has no model selected. Check your model selection and OMP sign-in, then send again.'
+      : detail
+  )
 })

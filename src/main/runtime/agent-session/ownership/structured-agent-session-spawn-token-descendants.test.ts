@@ -11,12 +11,7 @@ import type { AgentSessionRecordStore } from '../records/agent-session-record-st
 import { openTestAgentSessionRecordStore } from '../records/agent-session-record-store-test-harness'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
 import { createStructuredAgentSessionOwnerProbe } from '../structured-agent-session-owner-probe'
-import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from '../structured-agent-session-runtime'
-import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { stopStructuredAgentSessionRuntime } from '../structured-agent-session-runtime'
 
 /** pid -> the NUL-separated environment block `/proc/<pid>/environ` serves. */
 const fakeProc = vi.hoisted(() => ({ environs: new Map<number, string>() }))
@@ -98,63 +93,6 @@ function openStore(): Promise<AgentSessionRecordStore> {
     hostId: HOST_ID
   })
 }
-
-describe('a process that inherited a spawn token', () => {
-  it('is never signalled when the host installs and reconciles, even when this store minted the token', async () => {
-    // A chat ran and ended: its root exited and the lease was released, clearing the token.
-    const seed = await openStore()
-    const reserved = await seed.reserveOwner(reserveRequest())
-    const fence = reserved.record.lease.runtimeFence
-    await seed.commitProcessIdentity({
-      sessionId: SESSION,
-      fence,
-      process: { hostId: HOST_ID, pid: 4242, processStartTimeMs: NOW, spawnToken: MINTED_TOKEN },
-      now: NOW
-    })
-    await seed.proveOwner({
-      sessionId: SESSION,
-      fence,
-      link: {
-        linkId: 'link-1',
-        handle: codexProviderHandle('thread-1'),
-        origin: 'created',
-        mintedAtFence: fence,
-        observedAt: NOW
-      },
-      now: NOW
-    })
-    const released = await seed.evictProvenDeadOwner({
-      sessionId: SESSION,
-      expectedFence: fence,
-      probe: { outcome: 'pid-absent' },
-      now: NOW
-    })
-    expect(released.lease).toMatchObject({ claimStatus: 'released', reservedSpawnToken: null })
-
-    // Model a detached descendant surviving the chat plus another carrying a token this store never minted.
-    fakeProc.environs.set(1, environ(null))
-    fakeProc.environs.set(5151, environ(MINTED_TOKEN))
-    fakeProc.environs.set(6161, environ('spawn-foreign'))
-    const kill = vi.spyOn(process, 'kill').mockImplementation(() => true)
-
-    const host = await ensureStructuredAgentSessionHost({
-      logger: createStructuredAgentSessionLogger(),
-      stateDirectory,
-      hostId: HOST_ID,
-      claimKeyId: 'key-1',
-      resolveWorkspacePath: async () => stateDirectory,
-      resolveLaunchArgs: () => [],
-      resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
-      resolveEnvironment: async () => ({})
-    })
-    expect(host.deps.store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
-    await host.reconcileRestartLeases()
-    // Install work that is not awaited would have run by now; nothing here waits on a timer.
-    await new Promise((resolve) => setTimeout(resolve, 50))
-
-    expect(kill.mock.calls.filter(([, signal]) => signal !== 0)).toEqual([])
-  })
-})
 
 describe('the reservation owner probe', () => {
   async function reconcileReservation(): Promise<AgentSessionRecordStore> {

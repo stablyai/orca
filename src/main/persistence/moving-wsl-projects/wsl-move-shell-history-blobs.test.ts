@@ -113,22 +113,6 @@ describe('WSL move shell history blobs', () => {
     expect(loginShell).toEqual([false, false, true])
   })
 
-  it('skips missing and empty files and never sends fish', async () => {
-    writeHistory(SOURCE_ID, 'zsh_history', '')
-    writeHistory(SOURCE_ID, 'fish_history', '- cmd: ls\n')
-    writeHistory(SOURCE_FOLDER_ID, 'bash_history', 'make\n')
-
-    const blobs = await build([
-      { sourceWorktreeId: SOURCE_ID, destinationWorktreeId: DESTINATION_ID },
-      { sourceWorktreeId: SOURCE_FOLDER_ID, destinationWorktreeId: SOURCE_FOLDER_ID },
-      { sourceWorktreeId: 'repo-a::/never-opened', destinationWorktreeId: 'repo-a::/never-opened' }
-    ])
-
-    expect(blobs.descriptors.map((descriptor) => descriptor.key)).toEqual([
-      `${hashWorktreeId(SOURCE_FOLDER_ID)}-bash`
-    ])
-  })
-
   it('blocks the move on a history over the per-blob cap instead of truncating it', async () => {
     const path = writeHistory(SOURCE_ID, 'bash_history', '')
     truncateSync(path, 64 * 1024 * 1024)

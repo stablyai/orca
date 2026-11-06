@@ -123,6 +123,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     }
     const miniMaxGeneration = this.minimaxFetchGeneration
 
+    const antigravityTarget = this.antigravityFetchTarget
     const antigravityFetchAllowed =
       (this.antigravityUsageEnabledResolver?.() ?? true) &&
       (options?.force || !this.shouldSkipAutomatedFetch('antigravity', previousState.antigravity))
@@ -194,7 +195,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     // Hidden meters avoid the CLI spawn; the separate promise keeps other providers responsive.
     const antigravityResultPromise = (
       antigravityFetchAllowed
-        ? fetchAntigravityRateLimits({ signal })
+        ? fetchAntigravityRateLimits({ signal, target: antigravityTarget })
         : Promise.resolve(previousState.antigravity ?? antigravityUsageDisabledSnapshot())
     ).then(
       (value) => ({ status: 'fulfilled', value }) as const,

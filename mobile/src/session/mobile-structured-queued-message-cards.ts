@@ -13,7 +13,6 @@ import {
   queuedMessageReturnedNotice,
   type QueuedMessageCard
 } from '../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
-import { agentMessageAttribution } from './mobile-agent-message-attribution'
 // The shared projection decides each card's hold; this layer words it for the phone.
 
 export type MobileQueuedMessageCard = QueuedMessageCard & {
@@ -22,7 +21,6 @@ export type MobileQueuedMessageCard = QueuedMessageCard & {
   needsAttention: boolean
   // Leave plain waits uncaptioned; the question or queue-pause row already explains the hold.
   caption: string | null
-  attribution: string | null
 }
 
 function queuedMessageCardCaption(
@@ -78,7 +76,6 @@ export function mobileQueuedMessageCards(
       )
     }),
     needsAttention: queuedMessageCardNeedsAttention(card),
-    caption: queuedMessageCardCaption(card, facts.agentName, facts.statedFailures ?? []),
-    attribution: agentMessageAttribution('From', card.from)
+    caption: queuedMessageCardCaption(card, facts.agentName, facts.statedFailures ?? [])
   }))
 }

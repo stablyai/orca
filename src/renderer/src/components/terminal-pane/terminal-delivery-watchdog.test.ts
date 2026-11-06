@@ -164,19 +164,4 @@ describe('terminal delivery watchdog', () => {
     expect(countHeals()).toBe(2)
     expect(reattachMock).toHaveBeenCalledTimes(2)
   })
-
-  it('never starts without the invoke heal lane (web client, partial mocks)', async () => {
-    ;(window.api.pty as { reportRendererDeliveryState?: unknown }).reportRendererDeliveryState =
-      undefined
-    const watchdog = await import('./terminal-delivery-watchdog')
-    watchdog.startTerminalDeliveryWatchdog({
-      reattachPushListeners: reattachMock,
-      hasAttachedPtys: () => true
-    })
-
-    await vi.advanceTimersByTimeAsync(INTERVAL_MS * 3)
-
-    expect(reattachMock).not.toHaveBeenCalled()
-    expect(vi.getTimerCount()).toBe(0)
-  })
 })

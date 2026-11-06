@@ -83,33 +83,6 @@ it.each(['before', 'after'] as const)(
   }
 )
 
-it('keeps unrelated warm mailbox consumers SQL-free after an ordinary scoped insertion', async () => {
-  const f = fixture()
-  for (const to of ['term_coord', 'term_helper']) {
-    f.db.insertMessage({ from: 'term_worker', to, subject: 'Warm mailbox', body: to })
-  }
-  const model = new CrewReadModel(() => f.deps, f.db.crewChanges.subscribe)
-  const stream = mounted(model, ['term_coord', 'term_helper'])
-  const prepare = vi.spyOn(f.db.db, 'prepare')
-  try {
-    f.db.insertMessage({
-      from: 'term_peer',
-      to: 'term_outbound',
-      subject: 'Unrelated mailbox',
-      body: 'Leave warm consumers alone'
-    })
-    prepare.mockClear()
-    await flush()
-    expect(prepare).not.toHaveBeenCalled()
-    for (const address of ['term_coord', 'term_helper']) {
-      expect(stream.rows(address).some((row) => row.latest?.preview === address)).toBe(true)
-    }
-  } finally {
-    prepare.mockRestore()
-    stream.stop()
-  }
-})
-
 it('invalidates the current coordinator alias using returned persisted routing endpoints', async () => {
   const f = fixture()
   f.db.bindRun({

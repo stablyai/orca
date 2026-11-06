@@ -1,3 +1,5 @@
+import type { StructuredAgentSessionConversationCopyInput } from './structured-agent-session-conversation-copy-input'
+import type { CodexAccountUsageRead } from '../../rate-limits/codex-rpc-rate-limit-mapper'
 import type { ClaudeAccountRecipe } from '../../../shared/agent-session/lifecycle/agent-session-acquired-account'
 import type { StructuredAgentSessionAdmitFreshInput } from './structured-agent-session-input-admission'
 import type { AiVaultConversationCopy } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
@@ -14,10 +16,7 @@ import type {
   AgentJournalMessageItem,
   AgentJournalTurnItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type {
-  AgentJournalItemIdentity,
-  AgentSessionJournalIdentity
-} from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type {
@@ -33,6 +32,9 @@ import type {
   AgentSessionCloseObserver,
   StructuredAgentSessionAdapterStop
 } from './structured-agent-session-adapter-stop'
+/** `unknown` (no timely, correlated answer) skips this idle stop and asks again later. */
+export type AgentSessionIdleConfirmation = 'idle' | 'busy' | 'unknown'
+
 export type { AgentSessionCancelOutcome } from './structured-agent-session-adapter-stop'
 export type {
   StructuredAgentSessionChildEndCause,
@@ -43,7 +45,7 @@ import type { AgentSessionExecutionOptions } from '../../../shared/agent-session
 import type { AgentSessionPromptResponse } from '../../../shared/agent-session/agent-session-question-answer'
 import type {
   StructuredAgentSessionStartupAttempt,
-  StructuredAgentSessionAcquisitionReceipt
+  StructuredAgentSessionAcquisitionReceipt as AcquisitionReceipt
 } from './structured-agent-session-startup-attempt-contract'
 import type { AgentSessionCreatePhaseRecorder } from '../../observability/agent-session-instrumentation'
 import type { AgentSessionStartFailure } from './structured-agent-session-start-failure'
@@ -153,6 +155,18 @@ export type StructuredAgentSessionOptionsReportedEvent =
 export type StructuredAgentSessionLifecycleEvent =
   | StructuredAgentSessionEndedEvent
   | StructuredAgentSessionOptionsReportedEvent
+  | StructuredAgentSessionRetiringEvent
+
+/** A logical failure stops input immediately; only a later ended event proves writer death. */
+export type StructuredAgentSessionRetiringEvent = {
+  type: 'retiring'
+  sessionId: string
+  reason: string
+  failure: SubmissionRejectionFact
+  fence: number
+  acquisitionGeneration: string
+  observedAt: number
+}
 
 export type StructuredAgentSessionProviderChildPhase = 'starting' | 'ready'
 
@@ -177,6 +191,7 @@ export type StructuredAgentSessionSetOptionInput = {
 }
 
 export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & {
+  readAccountUsage?(record: AgentSessionRecord, signal: AbortSignal): Promise<CodexAccountUsageRead>
   open: StructuredAgentSessionProviderOpen
   supportsCreate?(location: AgentSessionExecutionLocation, agent: string): boolean
   /** Keep runtime/location support in adapter data for remote enablement. */
@@ -186,7 +201,7 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   /** Reap failed acquisitions; true proves child exit, root-only proof throws AgentSessionAcquisitionRootExitObservedError. */
   releaseAcquisition?(input: { sessionId: string }): Promise<boolean>
   hasOwnedAcquisition?(sessionId: string): boolean
-  stoppedAcquisition?(sessionId: string): StructuredAgentSessionAcquisitionReceipt | undefined
+  stoppedAcquisition?(sessionId: string): AcquisitionReceipt | undefined
   permissionModeRequiresAcquisition?(
     sessionId: string,
     mode: AgentChatPermissionChoice
@@ -259,6 +274,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   }): Promise<{ ok: true } | { ok: false; rejected: string }>
   /** Derive unanswered retained work from the live child; false without one. */
   holdsDispatch?(sessionId: string): boolean
+  /** Fresh answer before an idle stop: provider-declared work keeps the child; undefined has none to ask. */
+  confirmIdle?(sessionId: string): Promise<AgentSessionIdleConfirmation> | undefined
   /** The root turn the live child is running, null when idle; absent when the agent cannot say. */
   liveTurnId?(sessionId: string): string | null | undefined
   /** The live child opened in another approval mode than requested and this input picks another model. */
@@ -327,11 +344,9 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     shouldExecute?: () => boolean
   }): Promise<string | null>
   /** Copy the provider conversation without changing the chat’s ID; omit for CLI-based forks. */
-  copyConversation?(input: {
-    identity: AgentSessionJournalIdentity
-    providerSessionId: string
-    accountHome: AgentSessionAccountHome
-  }): Promise<AiVaultConversationCopy>
+  copyConversation?(
+    input: StructuredAgentSessionConversationCopyInput
+  ): Promise<AiVaultConversationCopy>
   /** Give the agent's own conversation the user's chat name, as the agent's own rename would:
    *  through the live child holding that conversation, otherwise at rest. Best effort. */
   renameProviderSession?(input: {
@@ -354,8 +369,5 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   /** Teardown without requiring a future-resume cursor. */
   disposeSession?(sessionId: string, observeClose?: AgentSessionCloseObserver): Promise<boolean>
   /** Acknowledge only after dead-child, lease and journal ownership release. */
-  acknowledgeSessionRelease?(
-    sessionId: string,
-    acquisition?: StructuredAgentSessionAcquisitionReceipt
-  ): void
+  acknowledgeSessionRelease?(sessionId: string, acquisition?: AcquisitionReceipt): void
 }

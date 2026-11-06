@@ -1,7 +1,7 @@
 import { translate } from '@/i18n/i18n'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
 import type { NativeChatToolCallBlock } from '../../../../shared/native-chat/native-chat-types'
+import { useNativeChatLinkClick } from './native-chat-link-click-context'
 import {
   type NativeChatMcpIdentity,
   formatToolDuration,
@@ -55,12 +55,11 @@ export function NativeChatCommandMetadata({
 }
 
 export function NativeChatSearchResults({
-  results,
-  onLinkClick
+  results
 }: {
   results: NativeChatToolCallBlock['webSearchResults']
-  onLinkClick?: CommentMarkdownLinkClickHandler
 }): React.JSX.Element | null {
+  const onLinkClick = useNativeChatLinkClick()
   const hits = toolWebSearchResults(results)
   if (hits.length === 0) {
     return null
