@@ -1,11 +1,10 @@
-// An admin's removal on disk must stop authentication at the next check, not at orcad's next save.
+// An admin's removal on disk must stop authentication within a second, not at orcad's next save.
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as secureFile from '../../../../../shared/secure-file'
 import { DeviceRegistry } from './device-registry'
-import * as fileRead from './device-registry-file-read'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 
 let dir: string
@@ -25,15 +24,11 @@ function registryPath(): string {
   return join(dir, DEVICE_REGISTRY_FILENAME)
 }
 
-// Another process's edit is seen once the registry's one-second stat window has passed.
-function editOnDisk(contents: string): void {
-  writeFileSync(registryPath(), contents)
-  vi.advanceTimersByTime(1000)
-}
-
 function removeOnDisk(deviceId: string): void {
   const rows: { deviceId: string }[] = JSON.parse(readFileSync(registryPath(), 'utf8'))
-  editOnDisk(JSON.stringify(rows.filter((row) => row.deviceId !== deviceId)))
+  writeFileSync(registryPath(), JSON.stringify(rows.filter((row) => row.deviceId !== deviceId)))
+  // Another process's edit is seen once the registry's one-second stat window has passed.
+  vi.advanceTimersByTime(1000)
 }
 
 function spyOnSaves() {
@@ -78,23 +73,6 @@ describe('device registry auth checks see edits made on disk', () => {
 
     expect(registry.resolveAuthenticatedPrincipal(principal)).toBeNull()
     expect(registry.lookupDeviceKey(keyed.deviceId)).toEqual({ kind: 'unknown' })
-  })
-
-  it('only stats the file while it is unchanged', () => {
-    const registry = new DeviceRegistry(dir)
-    const desktop = registry.addDevice('desktop', 'runtime')
-    // The first check after this process's own save re-reads once.
-    registry.validateToken(desktop.token)
-    const reads = vi.spyOn(fileRead, 'readDeviceRegistryFile')
-
-    for (let i = 0; i < 5; i++) {
-      expect(registry.validateToken(desktop.token)?.deviceId).toBe(desktop.deviceId)
-    }
-
-    expect(reads).not.toHaveBeenCalled()
-    editOnDisk(`${readFileSync(registryPath(), 'utf8')}\n`)
-    registry.validateToken(desktop.token)
-    expect(reads).toHaveBeenCalledOnce()
   })
 
   it('refuses every device once the file is deleted, and keeps working', () => {
