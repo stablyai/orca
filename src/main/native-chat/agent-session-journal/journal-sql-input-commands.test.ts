@@ -23,7 +23,19 @@ import { persistJournalOutcomeRows } from './journal-outcome-table'
 import { ensureJournalOutcomeTables, startJournalOutcomeLog } from './journal-outcome-format'
 import { createJournalReducerState } from './journal-reducer'
 import { journalInputOrder } from './journal-input-order'
-import { journalContextCursor } from './journal-context-cursor'
+import { journalContextCursor, physicalJournalCursor } from './journal-context-cursor'
+import type { JournalRecoveryJournal } from './journal-pending-submission-recovery'
+import {
+  markJournalPendingSubmissionsUnknown,
+  rejectJournalPendingSubmissions,
+  rejectJournalQueuedSubmissions
+} from './journal-pending-submission-recovery'
+import { holdUnsentSends } from './journal-unsent-send-hold'
+import { journalTombstoneRowBuilder } from './journal-row-builders'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import { journalSubmissionSelected } from './journal-submission-selector'
 import { journalSqlLifecycleRows } from './journal-sql-reducer-rows.test-fixture'
 import { createJournalTablesSql } from './journal-database-schema'
 import { JournalSqlCommand } from './journal-sql-command'
@@ -107,7 +119,20 @@ function memoryJournal(database: JournalHostDatabase) {
     enqueue: (build, receipt) => collaborators.rowWriter.enqueue(build, receipt)
   })
   const queue = new JournalWriteQueue('session')
-  return collaborators
+  const recovery: JournalRecoveryJournal = {
+    get inputOrder() {
+      return journalInputOrder(state)
+    },
+    resolveDispatch: (...args) => collaborators.submissionWriter.resolveDispatch(...args),
+    queuedMessages: collaborators.queuedMessages,
+    physicalCursor: () => physicalJournalCursor(state),
+    itemBody: (itemId) => state.items.get(itemId)?.body ?? null
+  }
+  return Object.assign(collaborators, {
+    recovery,
+    cursor: () => journalContextCursor(state),
+    state: () => state
+  })
 }
 
 async function sides() {
@@ -153,7 +178,7 @@ const saved = (db: Database.Database) => ({
 
 async function both<T>(
   side: Awaited<ReturnType<typeof sides>>,
-  memory: (journal: JournalStoreCollaborators) => Promise<T>,
+  memory: (journal: ReturnType<typeof memoryJournal>) => Promise<T>,
   operation: JournalWriterOperation,
   facts?: Partial<JournalWriterHostFacts>
 ) {
@@ -310,4 +335,116 @@ it('asks the host for mail availability and handover answers instead of calling 
     { kind: 'submission', input, consume: { ...consume, owed: true } },
     { ...known, owed: 'owed' }
   )
+})
+
+it('runs recovery procedures with serializable selectors on the writer', async () => {
+  const side = await sides()
+  const settled = (run: Promise<unknown>) => run.then((value) => ({ value }))
+  const send = (id: string) => ({
+    clientMessageId: id,
+    payloadFingerprint: `fp-${id}`,
+    body: text(id),
+    fence: 1,
+    origin: 'client' as const
+  })
+  for (const id of ['send-a', 'send-b', 'send-c']) {
+    await both(side, (j) => j.submissionWriter.append(send(id)), {
+      kind: 'submission',
+      input: send(id)
+    })
+  }
+  const pending = {
+    clientMessageId: 'send-a',
+    state: 'pending' as const,
+    fence: 1,
+    turnScope: { kind: 'thread' as const }
+  }
+  await both(side, (j) => j.submissionWriter.resolveDispatch(pending), {
+    kind: 'dispatch',
+    input: pending
+  })
+  await both(side, (j) => settled(markJournalPendingSubmissionsUnknown(j.recovery, 1)), {
+    kind: 'pending-unknown',
+    fence: 1
+  })
+  const only = { only: { clientMessageId: 'send-b', fence: 1 } }
+  await both(
+    side,
+    (j) =>
+      settled(
+        holdUnsentSends(j.recovery, {
+          fence: 1,
+          hold: { cause: 'chatClosed', which: journalSubmissionSelected(only, j.cursor) }
+        })
+      ),
+    { kind: 'hold-unsent', fence: 1, hold: { cause: 'chatClosed', select: only } }
+  )
+  const rejection = agentSessionFailureWords(agentSessionFailureFact('chatClosed'), {
+    surface: 'rejection'
+  })
+  const except = { except: ['send-c'] }
+  await both(
+    side,
+    (j) =>
+      settled(
+        rejectJournalQueuedSubmissions(
+          j.recovery,
+          1,
+          rejection,
+          journalSubmissionSelected(except, j.cursor)
+        )
+      ),
+    { kind: 'queued-reject', fence: 1, rejection, select: except }
+  )
+  await both(side, (j) => settled(rejectJournalQueuedSubmissions(j.recovery, 1, rejection)), {
+    kind: 'queued-reject',
+    fence: 1,
+    rejection
+  })
+  await both(side, (j) => settled(rejectJournalPendingSubmissions(j.recovery, 1, rejection)), {
+    kind: 'pending-reject',
+    fence: 1,
+    rejection
+  })
+})
+
+it('accepts Stop, claims goal uploads and withdraws a goal with host proofs carried as data', async () => {
+  const side = await sides()
+  const queued = {
+    clientMessageId: 'queued-send',
+    payloadFingerprint: 'fp',
+    body: text('queued'),
+    fence: 1,
+    origin: 'client' as const
+  }
+  await both(side, (j) => j.submissionWriter.append(queued), { kind: 'submission', input: queued })
+  const event = { reason: 'user-stop' } as const
+  await both(side, (j) => j.stops.accept({ event, fence: 1, liveTurnId: () => 'turn-live' }), {
+    kind: 'stop-accept',
+    event,
+    fence: 1,
+    liveTurnId: 'turn-live'
+  })
+  const identity = { provider: 'orca' as const, clientMessageId: 'goal' }
+  const goal = { ...text('goal'), sentAs: 'goal' as const }
+  const options = { fence: 1, turnScope: { kind: 'thread' as const } }
+  await both(side, (j) => j.itemAppender.appendClaimingAttachments(identity, goal, options), {
+    kind: 'item-claiming',
+    identity,
+    body: goal,
+    options
+  })
+  const proofs = side.memory.goalAttachments.snapshot()
+  expect(proofs.goals.map(([id]) => id)).toEqual([agentJournalItemKey(identity)])
+  await both(
+    side,
+    (j) =>
+      j.rowWriter.append(
+        journalTombstoneRowBuilder(j.state, agentJournalItemKey(identity), 1),
+        j.goalAttachments.withdraw(agentJournalItemKey(identity))
+      ),
+    { kind: 'goal-withdraw', identity, fence: 1 },
+    { goals: proofs }
+  )
+  expect(side.memory.goalAttachments.snapshot()).toEqual({ uploads: [], goals: [] })
 })

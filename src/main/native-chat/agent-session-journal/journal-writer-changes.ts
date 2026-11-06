@@ -3,6 +3,7 @@ import type { JournalEntryChange } from './journal-transition-collections'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalWriterEffectResult } from './journal-writer-effects'
 import type { JournalGoalAttachmentSnapshot } from './journal-goal-attachment-inverse'
+import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import type { JournalReducerState } from './journal-reducer'
 
 export type JournalWriterCommit = {
@@ -20,6 +21,8 @@ export type JournalWriterCommit = {
   value?: unknown
   /** The host adopts this copy of its goal attachment proofs after COMMIT. */
   goals?: JournalGoalAttachmentSnapshot
+  /** The host adopts its staged stopped-cut withdrawal only when the writer applied it. */
+  withdrewCut?: UsageLimitContinueIdentity
 }
 
 /** Only identities leave the writer; history bodies are resolved by the reader's capability. */

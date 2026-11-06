@@ -9,7 +9,7 @@ import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/re
 import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session/agent-session-message-source'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
-import type { AgentSessionJournal } from './journal-store'
+import type { JournalRecoveryJournal } from './journal-pending-submission-recovery'
 import type { JournalQueueCardChange } from './journal-queue-events'
 import type { JournalReducerState } from './journal-reducer'
 import type { ResolveDispatchInput } from './journal-store-contracts'
@@ -64,7 +64,7 @@ export function isUnansweredHandedOverSubmission(
 /** Atomically reject each send and keep its card; earlier kept cards lead, then this batch in admission order.
  * Try every row before throwing on write failure; return the latest settled admission cursor. */
 export async function holdUnsentSends(
-  journal: AgentSessionJournal,
+  journal: JournalRecoveryJournal,
   input: {
     fence: number
     hold: UnsentSendHold
@@ -173,7 +173,7 @@ export async function holdUnsentSends(
 
 /** Merge logical places once, then materialize finite ranks with the first successful keep. */
 function headOfQueuePositions(
-  journal: AgentSessionJournal,
+  journal: JournalRecoveryJournal,
   batch: readonly { submission: AgentJournalSubmission; body: AgentJournalMessageItem | null }[],
   unrun: boolean
 ): { placed: Map<string, number>; moves: QueuedMessagePositionMove[] } {

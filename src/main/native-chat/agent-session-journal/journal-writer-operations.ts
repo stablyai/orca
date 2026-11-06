@@ -1,9 +1,14 @@
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import type { AgentSessionQueuedMessageMoveAnchor } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
-import type { JournalRow } from './journal-row-schema'
-import type { JournalOperationReceipt } from './journal-row-writer'
+import type { JournalRow, JournalStopEvent } from './journal-row-schema'
+import { composeJournalOperationReceipts, type JournalOperationReceipt } from './journal-row-writer'
 import type {
+  AgentJournalCursor,
+  AgentJournalItemIdentity
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type {
+  JournalItemAppendOptions,
   JournalSubmissionConsume,
   JournalSubmissionInput,
   ResolveDispatchInput
@@ -18,8 +23,19 @@ import {
 } from './journal-stop-and-resume-rows'
 import { journalTombstoneRowBuilder } from './journal-row-builders'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { QueuedMessageHoldReason } from './queued-message-table'
+import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import {
+  markJournalPendingSubmissionsUnknown,
+  rejectJournalPendingSubmissions,
+  rejectJournalQueuedSubmissions
+} from './journal-pending-submission-recovery'
+import { holdUnsentSends } from './journal-unsent-send-hold'
+import {
+  journalSubmissionSelected,
+  type JournalSubmissionSelector
+} from './journal-submission-selector'
+import { journalSqlFailure, type JournalSqlFailure } from './journal-sql-failure'
 import type { QueuedMessageUpdate } from './queued-message-update'
 
 /** Operations that run today's collaborator code; every host callback became data. */
@@ -46,6 +62,38 @@ export type JournalWriterInputOperation =
   | { kind: 'queue-withdraw'; messageIds: readonly string[] }
   | { kind: 'queue-move'; input: { messageId: string } & AgentSessionQueuedMessageMoveAnchor }
   | { kind: 'queue-reopen-mark'; fence: number; since?: number }
+  | { kind: 'pending-unknown'; fence: number; reason?: string }
+  | { kind: 'pending-reject'; fence: number; rejection: AgentJournalDispatchRejection }
+  | {
+      kind: 'queued-reject'
+      fence: number
+      rejection: AgentJournalDispatchRejection
+      select?: JournalSubmissionSelector
+    }
+  | {
+      kind: 'hold-unsent'
+      fence: number
+      hold: { cause: 'hostRestarted' } | { cause: 'chatClosed'; select?: JournalSubmissionSelector }
+      unrun?: true | JournalSubmissionSelector
+    }
+  | {
+      kind: 'stop-accept'
+      event: Omit<JournalStopEvent, 'at'>
+      fence: number
+      /** The host's current-work answer, read on its lane just before this command. */
+      liveTurnId: string | null
+    }
+  | { kind: 'goal-withdraw'; identity: AgentJournalItemIdentity; fence: number }
+  | {
+      kind: 'item-claiming'
+      identity: AgentJournalItemIdentity
+      body: AgentJournalMessageItem
+      options: JournalItemAppendOptions
+    }
+
+/** Recovery tries every send; earlier settlements stay committed when a later one fails, as they
+ *  do on the host, so a failure is part of the answer rather than a rollback. */
+export type JournalWriterSettled = { value: unknown } | { failure: JournalSqlFailure }
 
 /** Runs one command's operation; `receipt` carries the host-computed effects into its row transaction. */
 export async function runJournalWriterOperation(
@@ -90,6 +138,67 @@ export async function runJournalWriterOperation(
       )
       return since
     }
+    case 'pending-unknown':
+      return settled(
+        markJournalPendingSubmissionsUnknown(session.journal, operation.fence, operation.reason)
+      )
+    case 'pending-reject':
+      return settled(
+        rejectJournalPendingSubmissions(session.journal, operation.fence, operation.rejection)
+      )
+    case 'queued-reject':
+      return settled(
+        rejectJournalQueuedSubmissions(
+          session.journal,
+          operation.fence,
+          operation.rejection,
+          operation.select && journalSubmissionSelected(operation.select, session.cursor)
+        )
+      )
+    case 'hold-unsent': {
+      const { hold, unrun } = operation
+      const which = hold.cause === 'chatClosed' && hold.select
+      return settled(
+        holdUnsentSends(session.journal, {
+          fence: operation.fence,
+          hold:
+            hold.cause === 'chatClosed'
+              ? {
+                  cause: 'chatClosed',
+                  ...(which ? { which: journalSubmissionSelected(which, session.cursor) } : {})
+                }
+              : hold,
+          ...(unrun === undefined
+            ? {}
+            : { unrun: unrun === true || journalSubmissionSelected(unrun, session.cursor) })
+        })
+      )
+    }
+    case 'stop-accept':
+      return collaborators.stops.accept(
+        { event: operation.event, fence: operation.fence, liveTurnId: () => operation.liveTurnId },
+        receipt
+      )
+    case 'goal-withdraw': {
+      const goal = session.goalAttachments.withdraw(agentJournalItemKey(operation.identity))
+      return collaborators.rowWriter.append(
+        journalTombstoneRowBuilder(
+          () => session.state,
+          agentJournalItemKey(operation.identity),
+          operation.fence
+        ),
+        receipt ? composeJournalOperationReceipts(goal, receipt) : goal
+      )
+    }
+    case 'item-claiming':
+      if (receipt) {
+        throw new Error('journal attachment-claiming items carry no receipt')
+      }
+      return collaborators.itemAppender.appendClaimingAttachments(
+        operation.identity,
+        operation.body,
+        operation.options
+      )
     case 'item':
       // Through the appender, so an independent user input claims its uploads as on the host.
       return collaborators.itemAppender.append(
@@ -138,6 +247,13 @@ export async function runJournalWriterOperation(
         receipt
       )
   }
+}
+
+function settled(run: Promise<unknown>): Promise<JournalWriterSettled> {
+  return run.then(
+    (value) => ({ value }),
+    (error: unknown) => ({ failure: journalSqlFailure(error) })
+  )
 }
 
 function cursorOf(rows: readonly JournalRow[]): AgentJournalCursor | null {

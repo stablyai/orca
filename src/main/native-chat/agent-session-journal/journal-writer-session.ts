@@ -33,7 +33,15 @@ import {
   startJournalOutcomeLog
 } from './journal-outcome-format'
 import { persistJournalOutcomeTransition } from './journal-outcome-table'
-import { journalContextCursor, projectJournalRows } from './journal-context-cursor'
+import { journalStoppedUsageLimitCut } from './journal-stopped-usage-limit-cut'
+import { applyJournalWriterEffect } from './journal-writer-effects'
+import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
+import {
+  journalContextCursor,
+  physicalJournalCursor,
+  projectJournalRows
+} from './journal-context-cursor'
+import type { JournalRecoveryJournal } from './journal-pending-submission-recovery'
 
 /** One command's collaborators: today's planning code over SQL state that each write reloads. */
 export class JournalWriterSession {
@@ -44,6 +52,8 @@ export class JournalWriterSession {
   private readonly changes = new JournalWriterChanges()
   private readonly inputKeys = new Map<string, boolean>()
   private written: JournalRow[] = []
+  /** A stopped cut this command's writes withdrew, for the host to adopt its staged record. */
+  withdrewCut: UsageLimitContinueIdentity | undefined
   /** The rows of the write in progress, for effects bound to them. */
   lastRows: readonly JournalRow[] = []
   private inputChanged = false
@@ -51,7 +61,7 @@ export class JournalWriterSession {
 
   constructor(
     private readonly db: Database.Database,
-    stateDirectory: string,
+    private readonly stateDirectory: string,
     private readonly target: JournalWriterTarget,
     private readonly facts: JournalWriterHostFacts,
     savedAt: number
@@ -103,6 +113,11 @@ export class JournalWriterSession {
     return this.current().state
   }
 
+  cursor = () => journalContextCursor(this.current().state)
+
+  /** The command-local journal recovery procedures read and write through. */
+  readonly journal: JournalRecoveryJournal = recoveryJournal(this)
+
   /** Asked by a consume after the writer has validated the card it hands over. */
   owed = (): QueuedMessageOwed => {
     if (this.facts.owed === undefined) {
@@ -126,7 +141,8 @@ export class JournalWriterSession {
       ...this.changes.finish(this.lastScope ?? this.scope(), state),
       inputKeys: [...this.inputKeys],
       rows: this.written,
-      goals: this.goalAttachments.snapshot()
+      goals: this.goalAttachments.snapshot(),
+      ...(this.withdrewCut ? { withdrewCut: this.withdrewCut } : {})
     }
   }
 
@@ -178,15 +194,35 @@ export class JournalWriterSession {
     return reducer
   }
 
+  /** A stopped cut and its withdrawal commit together, so no reader sees it schedulable. */
+  private withdrawStoppedCut(db: Database.Database, rows: readonly JournalRow[]): void {
+    const { facts } = this
+    const cut =
+      facts.withdrawsStoppedCuts && journalStoppedUsageLimitCut(this.current().state, rows)
+    if (!cut) {
+      return
+    }
+    const known = facts.stoppedCut
+    if (known?.cut.turnItemId !== cut.turnItemId || known.cut.resetsAt !== cut.resetsAt) {
+      throw new JournalHostFactsNeededError({ stoppedCut: cut })
+    }
+    if (known.store) {
+      applyJournalWriterEffect(db, this.stateDirectory, known.store)
+    }
+    this.withdrewCut = cut
+  }
+
   private savepoint<T>(run: (db: Database.Database) => T, committed?: (result: T) => void): T {
     const { db } = this
     db.exec('SAVEPOINT journal_write')
+    const withdrewCut = this.withdrewCut
     let result: T
     try {
       result = run(db)
       db.exec('RELEASE journal_write')
     } catch (error) {
       db.exec('ROLLBACK TO journal_write; RELEASE journal_write')
+      this.withdrewCut = withdrewCut
       throw error
     } finally {
       // Planning reads of the next write start from what this one left.
@@ -247,6 +283,7 @@ export class JournalWriterSession {
         state.sessionId,
         this.target.ownerToken
       )
+      this.withdrawStoppedCut(db, rows)
       for (const [key, present] of keys.changes) {
         if (!this.inputKeys.has(key)) {
           this.inputKeys.set(key, present)
@@ -261,5 +298,19 @@ export class JournalWriterSession {
   /** The rows a receipt in this write binds to, in the public context's coordinates. */
   projected(rows: readonly JournalRow[]): JournalRow[] {
     return projectJournalRows(this.current().state, rows)
+  }
+}
+
+function recoveryJournal(session: JournalWriterSession): JournalRecoveryJournal {
+  return {
+    get inputOrder() {
+      return journalInputOrder(session.state)
+    },
+    resolveDispatch: (...args) => session.collaborators.submissionWriter.resolveDispatch(...args),
+    get queuedMessages() {
+      return session.collaborators.queuedMessages
+    },
+    physicalCursor: () => physicalJournalCursor(session.state),
+    itemBody: (itemId) => session.state.items.get(itemId)?.body ?? null
   }
 }
