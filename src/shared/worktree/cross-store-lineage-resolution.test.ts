@@ -9,7 +9,11 @@ import {
   resolveSidebarLineageParentIdentities
 } from '../sidebar-list/worktree-lineage-projection'
 import { getWorktreeHostIdentity } from './host-qualified-identity'
-import type { CrossStoreLineageView, LineageStoreView } from './cross-store-lineage-resolution'
+import {
+  resolveCrossStoreLineageParents,
+  type CrossStoreLineageView,
+  type LineageStoreView
+} from './cross-store-lineage-resolution'
 import type { CrossStoreWorkspaceLineage, WorktreeLineage } from './lineage-types'
 import type { Worktree } from './types'
 
@@ -131,6 +135,31 @@ describe('cross-store parent resolution', () => {
         ])
       )
     ).toEqual({})
+  })
+
+  it('resolves a folder workspace parent by its folder id', () => {
+    const { instanceId: _none, ...folderRow } = row('folder:3b8f6c2e', '')
+    const folderRecords = {
+      'worktree:repo9::/work/fix-login-tests': {
+        ...records['worktree:repo9::/work/fix-login-tests'],
+        parent: {
+          installationId: MAC_INSTALL,
+          workspaceKey: 'folder:3b8f6c2e',
+          instanceId: '3b8f6c2e'
+        }
+      }
+    }
+    const rows = new Map<string, Worktree>(
+      [folderRow, serverChild].map((worktree) => [getWorktreeHostIdentity(worktree), worktree])
+    )
+    const parents = resolveCrossStoreLineageParents(
+      rows,
+      new Map([
+        ['', store(MAC_INSTALL)],
+        ['build-box', store(SERVER_INSTALL, folderRecords)]
+      ])
+    )
+    expect([...parents.values()].map((parent) => parent.id)).toEqual(['folder:3b8f6c2e'])
   })
 
   it('resolves within the child store when both ends share it; a same-store edge wins', () => {

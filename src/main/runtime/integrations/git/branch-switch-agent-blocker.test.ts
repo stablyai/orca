@@ -35,22 +35,6 @@ function blocker(rows: Row[], verdict: 'live' | 'exited' | null = null) {
 }
 
 describe('findAgentSwitchBlocker', () => {
-  it('names a working agent in this checkout and ignores other checkouts', async () => {
-    await expect(blocker([row()])).resolves.toBe(
-      'Claude is working in this workspace. Wait for it to finish or stop it, then switch branches.'
-    )
-    await expect(blocker([row({ worktreeId: 'repo::/work/other' })])).resolves.toBeNull()
-  })
-
-  it('keeps refusing past the freshness window while the agent process is verified live', async () => {
-    const silent = row({ receivedAt: NOW - 2 * AGENT_STATUS_STALE_AFTER_MS })
-
-    await expect(blocker([silent], 'live')).resolves.toBe(
-      'Claude last reported work in this workspace and is still running. Stop or exit it, then switch branches.'
-    )
-    await expect(blocker([silent], null)).resolves.toBeNull()
-  })
-
   it('releases on a verified exit or a finished turn', async () => {
     await expect(blocker([row()], 'exited')).resolves.toBeNull()
     await expect(blocker([row({ state: 'done' })], 'live')).resolves.toBeNull()

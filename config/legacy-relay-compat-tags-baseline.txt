@@ -16,7 +16,6 @@ src/main/ssh/orcad-migration-repository-link.test.ts
 src/main/ssh/orcad-migration-terminal-gate-host-wide.test.ts
 src/main/ssh/orcad-migration-terminal-gate.test.ts
 src/main/ssh/orcad-migration-terminal-gate.ts
-src/main/managed-server/lifecycle/orcad-runtime-conversion.test.ts
 src/main/ssh/ssh-host-server-on-connect.test.ts
 src/main/ssh/ssh-host-server-on-connect.ts
 src/main/ssh/targets/ssh-target-orcad-preflight.ts
