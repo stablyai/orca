@@ -172,8 +172,7 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
           activeTab?.type === 'terminal' ? activeTab : null
         ),
         existing?.tabGroups ?? [],
-        tabs,
-        activeTab?.id ?? null
+        tabs
       ),
       ...(existing?.tabGroupLayout ? { tabGroupLayout: existing.tabGroupLayout } : {}),
       tabs

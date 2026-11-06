@@ -1,5 +1,8 @@
 import { isStructuredAgentSessionHostTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
-import { normalizeMobileSessionTabSelection } from './mobile-session-tab-selection'
+import {
+  normalizeMobileSessionTabSelection,
+  resolveMobileSessionActiveTab
+} from './mobile-session-tab-selection'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as StoredMobileSnapshotHasStalePreservedTabMethods } from './mobile-session-publication-preservation'
 import { OrcaRuntimeWithSyncMobileSessionTabs } from './mobile-session-reconciliation'
 import type {
@@ -31,9 +34,10 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
   >
 
   protected mergePreservedHeadlessMobileSessionTabs(
-    snapshot: RuntimeMobileSessionTabsSnapshot,
+    incoming: RuntimeMobileSessionTabsSnapshot,
     existing: RuntimeMobileSessionTabsSnapshot | undefined
   ): RuntimeMobileSessionTabsSnapshot {
+    const snapshot = preserveLegacyPendingNavigation(incoming, existing)
     if (!existing) {
       return normalizeMobileSessionTabSelection(snapshot)
     }
@@ -43,11 +47,13 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
     }
     const tabs = mergeMobileSessionSnapshotTabs(snapshot.tabs, preservedTabs)
     const activeTab =
-      tabs.find((tab) => tab.id === snapshot.activeTabId) ??
-      tabs.find((tab) => tab.isActive) ??
-      tabs.find((tab) => tab.id === existing?.activeTabId) ??
-      tabs[0] ??
-      null
+      snapshot.tabGroups !== undefined
+        ? resolveMobileSessionActiveTab(snapshot, tabs)
+        : (tabs.find((tab) => tab.id === snapshot.activeTabId) ??
+          tabs.find((tab) => tab.isActive) ??
+          tabs.find((tab) => tab.id === existing.activeTabId) ??
+          tabs[0] ??
+          null)
     const browserTabIds = preservedTabs.filter((tab) => tab.type === 'browser').map((tab) => tab.id)
     const tabGroups = appendChatTabOrder(
       appendBrowserTabOrder(
@@ -62,14 +68,10 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
         collectBrowserGroupAssignment(existing?.tabGroups, browserTabIds)
       ),
       existing?.tabGroups,
-      preservedTabs,
-      activeTab?.id ?? null
+      preservedTabs
     )
     let activeGroupId = snapshot.activeGroupId ?? existing?.activeGroupId ?? null
-    if (
-      snapshot.activeTabId &&
-      !snapshot.tabGroups?.find((group) => group.id === snapshot.activeGroupId)?.activeTabId
-    ) {
+    if (snapshot.tabGroups === undefined && snapshot.activeTabId) {
       const selectedId =
         activeTab?.id === snapshot.activeTabId && activeTab.type === 'terminal'
           ? activeTab.parentTabId
@@ -229,8 +231,7 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
           activeTab?.type === 'terminal' ? activeTab : null
         ),
         existing.tabGroups ?? [],
-        tabs,
-        activeTab?.id ?? null
+        tabs
       ),
       tabs
     })
@@ -241,4 +242,39 @@ function getMobileTerminalLeafPtyIds(tab: RuntimeMobileSessionTerminalTab): stri
   return [tab.ptyId, tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId]].filter(
     (id): id is string => typeof id === 'string'
   )
+}
+
+// Legacy frames have no separate navigation field once unavailable top-level selection becomes null.
+function preserveLegacyPendingNavigation(
+  snapshot: RuntimeMobileSessionTabsSnapshot,
+  existing: RuntimeMobileSessionTabsSnapshot | undefined
+): RuntimeMobileSessionTabsSnapshot {
+  if (
+    snapshot.tabGroups !== undefined ||
+    !snapshot.activeTabId ||
+    resolveMobileSessionActiveTab(snapshot, snapshot.tabs)
+  ) {
+    return snapshot
+  }
+  const pendingId = snapshot.activeTabId
+  const groups = existing?.tabGroups ?? []
+  const prior =
+    groups.find((group) => group.tabOrder.includes(pendingId)) ??
+    groups.find((group) => group.id === snapshot.activeGroupId) ??
+    groups[0]
+  const id =
+    prior?.id ?? snapshot.activeGroupId ?? getHeadlessMobileSessionGroupId(snapshot.worktree)
+  const selected = {
+    ...prior,
+    id,
+    activeTabId: snapshot.activeTabId,
+    tabOrder: prior?.tabOrder.includes(snapshot.activeTabId)
+      ? prior.tabOrder
+      : [...(prior?.tabOrder ?? []), snapshot.activeTabId]
+  }
+  return {
+    ...snapshot,
+    activeGroupId: id,
+    tabGroups: prior ? groups.map((group) => (group === prior ? selected : group)) : [selected]
+  }
 }

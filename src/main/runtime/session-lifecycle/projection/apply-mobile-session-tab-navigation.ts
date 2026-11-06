@@ -170,28 +170,33 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
       ...candidate,
       isActive: candidate.id === activeTab.id
     }))
+    const tabGroups = buildHeadlessMobileSessionTabGroups(
+      worktreeId,
+      tabs,
+      activeTab,
+      snapshot.tabGroups
+    )
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
+      activeGroupId:
+        tabGroups.find((group) => group.tabOrder.includes(activeTab.parentTabId))?.id ??
+        snapshot.activeGroupId,
       publicationEpoch: `headless:${Date.now().toString(36)}`,
       snapshotVersion: snapshot.snapshotVersion + 1,
       activeTabId: activeTab.id,
       activeTabType: 'terminal',
-      tabGroups: buildHeadlessMobileSessionTabGroups(
-        worktreeId,
-        tabs,
-        activeTab,
-        snapshot.tabGroups
-      ),
+      tabGroups,
       tabs
     }
-    this.persistHeadlessTerminalActiveLeaf(worktreeId, activeTab)
+    this.persistHeadlessTerminalActiveLeaf(worktreeId, activeTab, nextSnapshot)
     this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
   }
 
   protected persistHeadlessTerminalActiveLeaf(
     worktreeId: string,
-    tab: RuntimeMobileSessionTerminalTab
+    tab: RuntimeMobileSessionTerminalTab,
+    snapshot: RuntimeMobileSessionTabsSnapshot
   ): void {
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
     if (!session || !this.store?.setWorkspaceSession) {
@@ -214,6 +219,18 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
         ...session.activeTabIdByWorktree,
         [worktreeId]: tab.parentTabId
       },
+      tabGroups: {
+        ...session.tabGroups,
+        [worktreeId]: (snapshot.tabGroups ?? []).map((group) => ({ ...group, worktreeId }))
+      },
+      ...(snapshot.activeGroupId
+        ? {
+            activeGroupIdByWorktree: {
+              ...session.activeGroupIdByWorktree,
+              [worktreeId]: snapshot.activeGroupId
+            }
+          }
+        : {}),
       terminalLayoutsByTabId: nextLayouts
     })
   }

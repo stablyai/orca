@@ -10,7 +10,9 @@ import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTabGroup
 } from '../../../src/shared/runtime-session-contracts'
+import * as selection from '../../../src/main/runtime/session-tabs/mobile-session-tab-selection'
 import { normalizeMobileSessionTabSelection } from '../../../src/main/runtime/session-tabs/mobile-session-tab-selection'
+import { createRuntimeFixture } from './active-tab-publication.test-fixture'
 import { finalizeRuntimeMobileSessionTabsResult } from '../../../src/main/runtime/session-lifecycle/projection/runtime-mobile-session-result-finalization'
 
 function counted<T>(rows: T[]) {
@@ -29,6 +31,25 @@ function counted<T>(rows: T[]) {
     visits: () => visits,
     reset: () => {
       visits = 0
+    }
+  }
+}
+
+function countedIdentities<T extends { id: string }>(rows: T[]) {
+  let reads = 0
+  for (const row of rows) {
+    const id = row.id
+    Object.defineProperty(row, 'id', {
+      get() {
+        reads++
+        return id
+      }
+    })
+  }
+  return {
+    reads: () => reads,
+    reset: () => {
+      reads = 0
     }
   }
 }
@@ -57,7 +78,10 @@ function frame(count: number, version = 1, worktree = WT): RuntimeMobileSessionT
   }
 }
 
-afterEach(() => vi.useRealTimers())
+afterEach(() => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
 
 describe('active-tab selection performance contract', () => {
   it('bounds selection input visits at 50 and 500 rows, including unavailable-target projection', () => {
@@ -116,82 +140,160 @@ describe('active-tab selection performance contract', () => {
       expect(unavailable.activeTabId).toBeNull()
       expect(unavailable.tabs.some((tab) => tab.isActive)).toBe(false)
       expect(rows.visits()).toBeLessThanOrEqual(4 * count)
+      expect(unavailable.tabs[0]).toBe(rows.rows[0])
     }
     expect(measurements[1]).toBeLessThanOrEqual(10 * measurements[0]!)
   })
 
   it('keeps publication scoped to a changed worktree and shared by listeners at N and 10N', async () => {
     vi.useFakeTimers()
+    const normalizations = vi.spyOn(selection, 'normalizeMobileSessionTabSelection')
+    const measurements: number[] = []
     for (const count of [50, 500]) {
-      const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
-      const runtime = new OrcaRuntimeService(runtimeStore)
-      runtime.attachWindow(1)
-      const other = `${WT}-unaffected`
-      runtime.syncWindowGraph(1, {
-        tabs: [],
-        leaves: [],
-        mobileSessionTabs: [frame(count), frame(count, 1, other)]
+      const listenerWork: number[] = []
+      for (const listenerCount of [1, 3]) {
+        const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
+        const runtime = new OrcaRuntimeService(runtimeStore)
+        runtime.attachWindow(1)
+        const other = `${WT}-unaffected`
+        const countedOther = counted(frame(count, 1, other).tabs)
+        runtime.syncWindowGraph(1, {
+          tabs: [],
+          leaves: [],
+          mobileSessionTabs: [frame(count), { ...frame(count, 1, other), tabs: countedOther.rows }]
+        })
+        await vi.runAllTimersAsync()
+        const unaffected = runtime.mobileSessionTabsByWorktree.get(other)
+        const seen: string[][] = Array.from({ length: listenerCount }, () => [])
+        const delivered: unknown[] = []
+        const off = seen.map((events) =>
+          runtime.onMobileSessionTabsChanged((snapshot) => {
+            events.push(snapshot.worktree)
+            delivered.push(snapshot.tabs)
+          })
+        )
+        const changed = frame(count, 2)
+        changed.activeGroupId = 'g-0'
+        changed.activeTabId = 't-0::leaf'
+        changed.tabs = changed.tabs.map((tab, index) => ({ ...tab, isActive: index === 0 }))
+        const countedRows = counted(changed.tabs)
+        changed.tabs = countedRows.rows
+        countedOther.reset()
+        normalizations.mockClear()
+        runtime.syncWindowGraph(1, {
+          tabs: [],
+          leaves: [],
+          mobileSessionTabs: [changed],
+          unchangedMobileSessionWorktrees: [other]
+        })
+        await vi.runAllTimersAsync()
+        expect(seen).toEqual(Array.from({ length: listenerCount }, () => [WT]))
+        expect(delivered.every((result) => result === delivered[0])).toBe(true)
+        expect(countedOther.visits()).toBe(0)
+        expect(normalizations.mock.calls).toHaveLength(2)
+        expect(
+          normalizations.mock.calls.every(
+            ([snapshot]) => 'worktree' in snapshot && snapshot.worktree === WT
+          )
+        ).toBe(true)
+        listenerWork.push(countedRows.visits())
+        const stored = runtime.mobileSessionTabsByWorktree.get(WT)
+        expect(stored?.activeTabId).toBe('t-0::leaf')
+        expect(stored?.tabs).toBe(changed.tabs)
+        expect(stored?.tabGroups).toBe(changed.tabGroups)
+        expect(runtime.mobileSessionTabsByWorktree.get(other)).toBe(unaffected)
+        seen.forEach((events) => (events.length = 0))
+        runtime.syncWindowGraph(1, {
+          tabs: [],
+          leaves: [],
+          mobileSessionTabs: [changed],
+          unchangedMobileSessionWorktrees: [other]
+        })
+        runtime.syncWindowGraph(1, {
+          tabs: [],
+          leaves: [],
+          mobileSessionTabs: [],
+          unchangedMobileSessionWorktrees: [WT, other]
+        })
+        runtime.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(WT, {
+          allowAttachedWindow: true,
+          onlyRuntimeOwnedTerminals: true
+        })
+        await vi.runAllTimersAsync()
+        expect(runtime.mobileSessionTabsByWorktree.get(WT)).toBe(stored)
+        expect(seen.every((events) => events.length === 0)).toBe(true)
+        const chat = {
+          workspaceId: WT,
+          sessionId: 'scale-chat',
+          agent: 'codex' as const,
+          activate: false
+        }
+        await runtime.publishStructuredAgentSessionTab(chat)
+        await vi.runAllTimersAsync()
+        const withChat = runtime.mobileSessionTabsByWorktree.get(WT)
+        seen.forEach((events) => (events.length = 0))
+        await runtime.publishStructuredAgentSessionTab(chat)
+        await vi.runAllTimersAsync()
+        expect(runtime.mobileSessionTabsByWorktree.get(WT)).toBe(withChat)
+        expect(seen.every((events) => events.length === 0)).toBe(true)
+        const listed = await runtime.listMobileSessionTabs(`id:${WT}`)
+        expect(listed.activeTabId).toBe('t-0::leaf')
+        off.forEach((unsubscribe) => unsubscribe())
+      }
+      expect(listenerWork[1]).toBe(listenerWork[0])
+      measurements.push(listenerWork[0]!)
+    }
+    expect(measurements[1]).toBeLessThanOrEqual(10 * measurements[0]!)
+  })
+  it('bounds preserved-chat merge and runtime-owned hydration work at N and 10N', async () => {
+    vi.useFakeTimers()
+    const normalizations = vi.spyOn(selection, 'normalizeMobileSessionTabSelection')
+    const measurements: number[] = []
+    const identityReads: number[] = []
+    for (const count of [50, 500]) {
+      const { runtime } = createRuntimeFixture()
+      await runtime.publishStructuredAgentSessionTab({
+        workspaceId: WT,
+        sessionId: 'scale-chat',
+        agent: 'codex',
+        activate: false
       })
+      const next = frame(count)
+      const priorReads = countedIdentities(next.tabs)
+      runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [next] })
       await vi.runAllTimersAsync()
-      const unaffected = runtime.mobileSessionTabsByWorktree.get(other)
-      const seen: string[][] = [[], [], []]
-      const off = seen.map((events) =>
-        runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot.worktree))
-      )
+      // One hydration, one accepted membership composition and one shared emission can resolve selection.
+      normalizations.mockClear()
       const changed = frame(count, 2)
-      changed.activeGroupId = 'g-0'
-      changed.activeTabId = 't-0::leaf'
-      changed.tabs = changed.tabs.map((tab, index) => ({ ...tab, isActive: index === 0 }))
-      runtime.syncWindowGraph(1, {
-        tabs: [],
-        leaves: [],
-        mobileSessionTabs: [changed],
-        unchangedMobileSessionWorktrees: [other]
-      })
+      const currentReads = countedIdentities(changed.tabs)
+      priorReads.reset()
+      runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [changed] })
       await vi.runAllTimersAsync()
-      expect(seen).toEqual([[WT], [WT], [WT]])
-      const stored = runtime.mobileSessionTabsByWorktree.get(WT)
-      expect(stored?.activeTabId).toBe('t-0::leaf')
-      expect(stored?.tabs).toBe(changed.tabs)
-      expect(stored?.tabGroups).toBe(changed.tabGroups)
-      expect(runtime.mobileSessionTabsByWorktree.get(other)).toBe(unaffected)
-      seen.forEach((events) => (events.length = 0))
-      runtime.syncWindowGraph(1, {
-        tabs: [],
-        leaves: [],
-        mobileSessionTabs: [changed],
-        unchangedMobileSessionWorktrees: [other]
-      })
+      expect(normalizations.mock.calls.length).toBeLessThanOrEqual(3)
+      expect(normalizations.mock.calls.length).toBeGreaterThanOrEqual(2)
+      const selectionRows = normalizations.mock.calls.reduce(
+        (total, [snapshot]) => total + snapshot.tabs.length,
+        0
+      )
+      expect(selectionRows).toBeLessThanOrEqual(3 * (count + 2))
+      measurements.push(selectionRows)
+      identityReads.push(priorReads.reads() + currentReads.reads())
+      expect((await runtime.listMobileSessionTabs(`id:${WT}`)).activeTabId).toBe(
+        `t-${count - 1}::leaf`
+      )
+      normalizations.mockClear()
       runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [],
         mobileSessionTabs: [],
-        unchangedMobileSessionWorktrees: [WT, other]
-      })
-      runtime.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(WT, {
-        allowAttachedWindow: true,
-        onlyRuntimeOwnedTerminals: true
+        unchangedMobileSessionWorktrees: [WT]
       })
       await vi.runAllTimersAsync()
-      expect(runtime.mobileSessionTabsByWorktree.get(WT)).toBe(stored)
-      expect(seen).toEqual([[], [], []])
-      const chat = {
-        workspaceId: WT,
-        sessionId: 'scale-chat',
-        agent: 'codex' as const,
-        activate: false
-      }
-      await runtime.publishStructuredAgentSessionTab(chat)
-      await vi.runAllTimersAsync()
-      const withChat = runtime.mobileSessionTabsByWorktree.get(WT)
-      seen.forEach((events) => (events.length = 0))
-      await runtime.publishStructuredAgentSessionTab(chat)
-      await vi.runAllTimersAsync()
-      expect(runtime.mobileSessionTabsByWorktree.get(WT)).toBe(withChat)
-      expect(seen).toEqual([[], [], []])
-      const listed = await runtime.listMobileSessionTabs(`id:${WT}`)
-      expect(listed.activeTabId).toBe('t-0::leaf')
-      off.forEach((unsubscribe) => unsubscribe())
+      // Rebuild derives selection once even when its equality gate retains the stored object.
+      expect(normalizations.mock.calls).toHaveLength(1)
+      expect(normalizations.mock.calls[0]?.[0].tabs.length).toBe(count + 2)
     }
+    expect(measurements[1]).toBeLessThanOrEqual(10 * measurements[0]!)
+    expect(identityReads[1]).toBeLessThanOrEqual(10 * identityReads[0]!)
   })
 })

@@ -273,11 +273,10 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
       // New epochs retire the prior publisher and reject its later updates.
       publicationEpoch: existing?.publicationEpoch ?? `headless:${Date.now().toString(36)}`,
       snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
-      // Activating the new tab must also focus its requested split group.
       activeGroupId:
-        activate && opts.targetGroupId
-          ? opts.targetGroupId
-          : (existing?.activeGroupId ?? getHeadlessMobileSessionGroupId(worktreeId)),
+        (activate ? tabGroups.find((group) => group.tabOrder.includes(parentTabId))?.id : null) ??
+        existing?.activeGroupId ??
+        getHeadlessMobileSessionGroupId(worktreeId),
       activeTabId: activate ? tab.id : (existing?.activeTabId ?? null),
       activeTabType: activate ? 'terminal' : (existing?.activeTabType ?? null),
       tabGroups,

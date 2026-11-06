@@ -20,9 +20,11 @@ export function resolveMobileSessionActiveTab<T extends Row>(
   snapshot: Selection,
   tabs: readonly T[]
 ): T | null {
-  const declared =
-    snapshot.tabGroups?.find((group) => group.id === snapshot.activeGroupId)?.activeTabId ??
-    snapshot.activeTabId
+  const group = snapshot.tabGroups?.find((candidate) => candidate.id === snapshot.activeGroupId)
+  if (group && group.activeTabId === null) {
+    return null
+  }
+  const declared = group?.activeTabId ?? snapshot.activeTabId
   let exact: T | undefined
   let selected: T | undefined
   let focused: T | undefined

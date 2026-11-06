@@ -309,9 +309,7 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
         return {
           id: group.id,
           activeTabId:
-            group.activeTabId && !tabOrder.includes(group.activeTabId)
-              ? null
-              : group.activeTabId || tabOrder[0] || null,
+            group.activeTabId && tabOrder.includes(group.activeTabId) ? group.activeTabId : null,
           tabOrder,
           ...(recentTabIds && recentTabIds.length > 0 ? { recentTabIds } : {})
         }

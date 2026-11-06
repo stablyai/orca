@@ -119,19 +119,38 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
       }
       return false
     })
-    const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
+    const selected =
+      snapshot.tabGroups?.find((group) => group.id === snapshot.activeGroupId)?.activeTabId ??
+      snapshot.activeTabId
+    const closedSelection =
+      selected === closedParentTabId ||
+      snapshot.tabs.some(
+        (tab) =>
+          tab.type === 'terminal' && tab.parentTabId === closedParentTabId && tab.id === selected
+      )
+    const active =
+      nextTabs.find((candidate) => candidate.isActive) ??
+      (closedSelection ? nextTabs[0] : null) ??
+      null
+    const groups = buildHeadlessMobileSessionTabGroups(
+      worktreeId,
+      nextTabs,
+      active,
+      snapshot.tabGroups
+    )
     // Close is no handover: retain the publisher epoch or clients fence the renderer's next frame.
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
       snapshotVersion: snapshot.snapshotVersion + 1,
+      activeGroupId:
+        closedSelection && active
+          ? (groups.find((group) =>
+              group.tabOrder.includes(active.type === 'terminal' ? active.parentTabId : active.id)
+            )?.id ?? null)
+          : snapshot.activeGroupId,
       activeTabId: active?.id ?? null,
       activeTabType: active?.type ?? null,
-      tabGroups: buildHeadlessMobileSessionTabGroups(
-        worktreeId,
-        nextTabs,
-        active,
-        snapshot.tabGroups
-      ),
+      tabGroups: groups,
       ...(retirementProofs.length > 0
         ? {
             retiredTerminalSurfaces: appendRetiredTerminalSurfaceProofs(

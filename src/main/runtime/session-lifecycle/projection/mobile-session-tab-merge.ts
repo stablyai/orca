@@ -167,10 +167,12 @@ export function mergeMobileSessionTabGroups(
         ...group,
         tabOrder,
         activeTabId:
-          keptActive ??
-          (activeParentId && tabOrder.includes(activeParentId) ? activeParentId : null) ??
-          (groups.length > 0 ? tabOrder[0] : null) ??
-          null
+          groups.length > 0 && group.activeTabId === null
+            ? null
+            : (keptActive ??
+              (activeParentId && tabOrder.includes(activeParentId) ? activeParentId : null) ??
+              (group.activeTabId ? tabOrder[0] : null) ??
+              null)
       }
     })
     .filter((group) => group.tabOrder.length > 0)
@@ -194,8 +196,7 @@ export function keepSnapshotChatTabs(
 export function appendChatTabOrder(
   groups: readonly RuntimeMobileSessionTabGroup[],
   priorGroups: readonly RuntimeMobileSessionTabGroup[] | undefined,
-  tabs: readonly RuntimeMobileSessionSnapshotTab[],
-  activeTabId: string | null = tabs.find((tab) => tab.isActive)?.id ?? null
+  tabs: readonly RuntimeMobileSessionSnapshotTab[]
 ): RuntimeMobileSessionTabGroup[] {
   const chatTabIds = tabs.filter((tab) => tab.type === 'agent-session').map((tab) => tab.id)
   if (chatTabIds.length === 0) {
@@ -214,9 +215,6 @@ export function appendChatTabOrder(
     if (!target.tabOrder.includes(tabId)) {
       const at = chatInsertIndex(target.tabOrder, priorGroup?.tabOrder ?? [], tabId)
       target.tabOrder.splice(at, 0, tabId)
-    }
-    if (!target.activeTabId && tabId === activeTabId) {
-      target.activeTabId = tabId
     }
   }
   return next

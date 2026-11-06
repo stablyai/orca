@@ -152,7 +152,8 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
         : [
             ...new Set([
               ...Object.keys(session.tabsByWorktree ?? {}),
-              ...Object.keys(session.openFilesByWorktree ?? {})
+              ...Object.keys(session.openFilesByWorktree ?? {}),
+              ...Object.keys(session.tabGroups ?? {})
             ])
           ].map((id) => [id, session.tabsByWorktree?.[id] ?? []] as const)
     // Skip removed-repo session keys to avoid phantom workspaces; resolve inventory lazily for parseable keys and preserve unknown inventory as unavailable.
@@ -184,6 +185,7 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
         }
       }
       const existing = this.readRebuildableMobileSessionSnapshot(entryWorktreeId)
+      const currentNavigation = this.mobileSessionTabsByWorktree.get(entryWorktreeId)
       // Windowless hosts have no other row publisher; a filtered seed would suppress the full rebuild.
       const runtimeOwnedOnly =
         options.onlyRuntimeOwnedTerminals === true &&
@@ -210,7 +212,11 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
         ...editorTabs,
         ...browserTabs
       ]
-      if (tabs.length === 0) {
+      if (
+        tabs.length === 0 &&
+        currentNavigation?.tabGroups === undefined &&
+        !session.tabGroups?.[entryWorktreeId]?.length
+      ) {
         continue
       }
       const activeTab = pickHeadlessActiveTerminalTab(terminalTabs)
@@ -235,15 +241,15 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
         .filter((tab) => tab.type === 'browser' || tab.type === 'markdown' || tab.type === 'file')
         .map((tab) => tab.id)
       // Restore persisted split groups or cold rebuilds coalesce them into one.
-      const hasCurrentNavigation = existing?.tabGroups !== undefined
+      const hasCurrentNavigation = currentNavigation?.tabGroups !== undefined
       const navigationGroups = hasCurrentNavigation
-        ? existing.tabGroups
+        ? currentNavigation.tabGroups
         : session.tabGroups?.[entryWorktreeId]
       const navigationLayout = hasCurrentNavigation
-        ? existing.tabGroupLayout
+        ? currentNavigation.tabGroupLayout
         : session.tabGroupLayouts?.[entryWorktreeId]
       const navigationActiveGroupId = hasCurrentNavigation
-        ? existing.activeGroupId
+        ? currentNavigation.activeGroupId
         : session.activeGroupIdByWorktree?.[entryWorktreeId]
       const activeTopLevelId = mergedActiveTab
         ? mergedActiveTab.type === 'terminal'
@@ -286,7 +292,10 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
         tabs: mergedTabs
       })
       // Retain the existing object and version for equal projections so unchanged graph syncs do not fan out.
-      if (existing && headlessMobileSnapshotContentUnchanged(existing, nextSnapshot)) {
+      if (
+        currentNavigation &&
+        headlessMobileSnapshotContentUnchanged(currentNavigation, nextSnapshot)
+      ) {
         continue
       }
       this.storeMobileSessionSnapshot(entryWorktreeId, nextSnapshot)
