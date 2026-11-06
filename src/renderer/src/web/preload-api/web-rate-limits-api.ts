@@ -156,6 +156,8 @@ export function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimi
     fetchInactiveClaudeAccounts: refreshInactive,
     fetchInactiveCodexAccounts: refreshInactive,
     refreshGrok: refresh,
+    // Web client keeps server-owned usage; a manual refresh reuses the shared server slot.
+    refreshOllama: refresh,
     onUpdate: (callback) => {
       listeners.add(callback)
       startStream()

@@ -20,3 +20,13 @@ export function settleSiblingProviderResult(
     status: 'error'
   }
 }
+
+/** Shared tail for sibling fetch promises; keeps each provider block two lines shorter. */
+export function settledProviderResult(
+  fetch: Promise<ProviderRateLimits>
+): Promise<SettledProviderResult> {
+  return fetch.then(
+    (value) => ({ status: 'fulfilled', value }) as const,
+    (reason) => ({ status: 'rejected', reason }) as const
+  )
+}

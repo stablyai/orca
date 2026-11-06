@@ -30,6 +30,11 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     return this.getState()
   }
 
+  async refreshOllama(): Promise<RateLimitState> {
+    await this.ollamaOnlyFetch({ force: true })
+    return this.getState()
+  }
+
   invalidateOpenCodeGoCredentialState(options: { apiKeyCleared?: boolean } = {}): void {
     this.opencodeFetchGeneration += 1
     // Store/env keys survive cookie changes; only clearing the saved override hides its presence.
@@ -66,6 +71,15 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     this.updateState({
       ...this.state,
       zcode: this.withFetchingStatus(null, 'zcode')
+    })
+  }
+
+  invalidateOllamaCredentialState(): void {
+    this.ollamaFetchGeneration += 1
+    // Clear before an old-key fetch can return.
+    this.updateState({
+      ...this.state,
+      ollama: this.withFetchingStatus(null, 'ollama')
     })
   }
 

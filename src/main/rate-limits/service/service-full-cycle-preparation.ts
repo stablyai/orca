@@ -6,6 +6,7 @@ import { readGrokAuthSession } from '../grok-auth'
 import { fetchCursorRateLimits } from '../cursor-fetcher'
 import { readCursorAuthSession } from '../cursor-auth'
 import { fetchZcodeRateLimits } from '../zcode-usage-fetcher'
+import { prepareOllamaResultPromise } from '../../ollama/ollama-usage-cycle-preparation'
 import { fetchAntigravityRateLimits } from '../antigravity-usage-fetcher'
 import { antigravityUsageDisabledSnapshot } from '../antigravity-usage-snapshot'
 import { ZCODE_PLAN_SITE_BASE_URLS } from '../../../shared/zcode-plan-sites'
@@ -39,6 +40,7 @@ export type FetchAllCyclePrepared = {
   miniMaxGeneration: number
   zcodeConfigChanged: boolean
   zcodeGeneration: number
+  ollamaGeneration: number
   antigravityGeneration: number
   claudeFetchGated: boolean
   results: [
@@ -52,6 +54,7 @@ export type FetchAllCyclePrepared = {
   grokResultPromise: Promise<SettledProviderResult>
   cursorResultPromise: Promise<SettledProviderResult>
   zcodeResultPromise: Promise<SettledProviderResult>
+  ollamaResultPromise: Promise<SettledProviderResult>
   antigravityResultPromise: Promise<SettledProviderResult>
 }
 
@@ -139,6 +142,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       this.zcodeFetchGeneration += 1
     }
     const zcodeGeneration = this.zcodeFetchGeneration
+    const ollamaGeneration = this.ollamaFetchGeneration
     const zcodePlanCredential = zcodePlanApiKey
       ? {
           apiKey: zcodePlanApiKey,
@@ -168,7 +172,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       cursor: this.withFetchingStatus(previousState.cursor, 'cursor'),
       zcode: zcodeConfigChanged
         ? this.withFetchingStatus(null, 'zcode')
-        : this.withFetchingStatus(previousState.zcode, 'zcode')
+        : this.withFetchingStatus(previousState.zcode, 'zcode'),
+      ollama: this.withFetchingStatus(previousState.ollama, 'ollama')
     })
 
     // Async Keychain/worker DB reads must not delay other providers.
@@ -190,6 +195,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
     )
+
+    const ollamaResultPromise = prepareOllamaResultPromise(signal)
 
     // Hidden meters avoid the CLI spawn; the separate promise keeps other providers responsive.
     const antigravityResultPromise = (
@@ -298,6 +305,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       miniMaxGeneration,
       zcodeConfigChanged,
       zcodeGeneration,
+      ollamaGeneration,
       antigravityGeneration,
       claudeFetchGated,
       results: [
@@ -311,6 +319,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       grokResultPromise,
       cursorResultPromise,
       zcodeResultPromise,
+      ollamaResultPromise,
       antigravityResultPromise
     }
   }

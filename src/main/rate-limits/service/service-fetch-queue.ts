@@ -1,6 +1,36 @@
 import { RateLimitServiceProviderCycles } from './service-provider-cycles'
 
 export abstract class RateLimitServiceFetchQueue extends RateLimitServiceProviderCycles {
+  /** Shared loop: one cycle, then honor a queued full or same-provider re-run before idling. */
+  private async runSingleProviderDrain(
+    cycle: (signal: AbortSignal) => Promise<void>,
+    queuedFlag: () => boolean,
+    clearQueued: () => void
+  ): Promise<void> {
+    let shouldContinue = true
+    while (shouldContinue) {
+      const signal = await this.runWithFetchAbortSignal(cycle)
+      shouldContinue = false
+      if (signal.aborted) {
+        break
+      }
+      if (this.fullFetchQueued) {
+        this.fullFetchQueued = false
+        const fullSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
+          this.runFetchAllCycle(fetchSignal, { force: true })
+        )
+        if (fullSignal.aborted) {
+          break
+        }
+        continue
+      }
+      if (queuedFlag()) {
+        clearQueued()
+        shouldContinue = true
+      }
+    }
+  }
+
   protected async fetchAll(options?: { force?: boolean }): Promise<void> {
     if (this.isFetching) {
       if (options?.force) {
@@ -53,6 +83,15 @@ export abstract class RateLimitServiceFetchQueue extends RateLimitServiceProvide
             this.runFetchGrokOnlyCycle(fetchSignal)
           )
           if (grokSignal.aborted) {
+            break
+          }
+        }
+        if (this.ollamaOnlyFetchQueued) {
+          this.ollamaOnlyFetchQueued = false
+          const ollamaSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
+            this.runFetchOllamaOnlyCycle(fetchSignal)
+          )
+          if (ollamaSignal.aborted) {
             break
           }
         }
@@ -112,6 +151,15 @@ export abstract class RateLimitServiceFetchQueue extends RateLimitServiceProvide
             this.runFetchGrokOnlyCycle(fetchSignal)
           )
           if (grokSignal.aborted) {
+            break
+          }
+        }
+        if (this.ollamaOnlyFetchQueued) {
+          this.ollamaOnlyFetchQueued = false
+          const ollamaSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
+            this.runFetchOllamaOnlyCycle(fetchSignal)
+          )
+          if (ollamaSignal.aborted) {
             break
           }
         }
@@ -177,6 +225,15 @@ export abstract class RateLimitServiceFetchQueue extends RateLimitServiceProvide
             break
           }
         }
+        if (this.ollamaOnlyFetchQueued) {
+          this.ollamaOnlyFetchQueued = false
+          const ollamaSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
+            this.runFetchOllamaOnlyCycle(fetchSignal)
+          )
+          if (ollamaSignal.aborted) {
+            break
+          }
+        }
       }
     } finally {
       this.isFetching = false
@@ -193,50 +250,37 @@ export abstract class RateLimitServiceFetchQueue extends RateLimitServiceProvide
       return
     }
     this.isFetching = true
-
     try {
-      let shouldContinue = true
-      while (shouldContinue) {
-        const signal = await this.runWithFetchAbortSignal((fetchSignal) =>
-          this.runFetchGrokOnlyCycle(fetchSignal)
-        )
-        shouldContinue = false
-        if (signal.aborted) {
-          break
-        }
-        if (this.fullFetchQueued) {
-          this.fullFetchQueued = false
-          const fullSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
-            this.runFetchAllCycle(fetchSignal, { force: true })
-          )
-          if (fullSignal.aborted) {
-            break
-          }
-          continue
-        }
-        if (this.grokOnlyFetchQueued) {
+      await this.runSingleProviderDrain(
+        (fetchSignal) => this.runFetchGrokOnlyCycle.bind(this)(fetchSignal),
+        () => this.grokOnlyFetchQueued,
+        () => {
           this.grokOnlyFetchQueued = false
-          shouldContinue = true
         }
-        if (this.codexOnlyFetchQueued) {
-          this.codexOnlyFetchQueued = false
-          const codexSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
-            this.runFetchCodexOnlyCycle(fetchSignal)
-          )
-          if (codexSignal.aborted) {
-            break
-          }
-        }
-        if (this.claudeOnlyFetchQueued) {
-          this.claudeOnlyFetchQueued = false
-          const claudeSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
-            this.runFetchClaudeOnlyCycle(fetchSignal, { force: true })
-          )
-          if (claudeSignal.aborted) {
-            break
-          }
-        }
+      )
+    } finally {
+      this.isFetching = false
+      this.resolveFetchIdleWaiters()
+    }
+  }
+
+  protected async ollamaOnlyFetch(options?: { force?: boolean }): Promise<void> {
+    if (this.isFetching) {
+      if (options?.force) {
+        this.ollamaOnlyFetchQueued = true
+        return this.waitForFetchIdle()
       }
+      return
+    }
+    this.isFetching = true
+    try {
+      await this.runSingleProviderDrain(
+        (fetchSignal) => this.runFetchOllamaOnlyCycle.bind(this)(fetchSignal),
+        () => this.ollamaOnlyFetchQueued,
+        () => {
+          this.ollamaOnlyFetchQueued = false
+        }
+      )
     } finally {
       this.isFetching = false
       this.resolveFetchIdleWaiters()

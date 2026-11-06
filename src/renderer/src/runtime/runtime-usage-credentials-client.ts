@@ -1,5 +1,6 @@
 import type { MiniMaxCredentialsStatus } from '../../../shared/minimax-credentials-status'
 import type { ZcodePlanCredentialsStatus } from '../../../shared/zcode-plan-sites'
+import type { OllamaCloudCredentialsStatus } from '../../../shared/ollama-cloud'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { USAGE_CREDENTIALS_RUNTIME_CAPABILITY } from '../../../shared/account-runtime-capabilities'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
@@ -109,5 +110,34 @@ export function callZcodePlanCredentials(
       return callHost(environmentId, 'accounts.zcodePlanSaveApiKey', { apiKey: value })
     case 'clearApiKey':
       return callHost(environmentId, 'accounts.zcodePlanClearApiKey')
+  }
+}
+
+export type OllamaCloudCredentialAction = 'getStatus' | 'saveApiKey' | 'clearApiKey'
+
+export function callOllamaCloudCredentials(
+  owner: RuntimeClientTarget,
+  action: OllamaCloudCredentialAction,
+  value = ''
+): Promise<OllamaCloudCredentialsStatus> {
+  if (owner.kind === 'local') {
+    const api = window.api.ollamaCloudCredentials
+    switch (action) {
+      case 'getStatus':
+        return api.getStatus()
+      case 'saveApiKey':
+        return api.saveApiKey(value)
+      case 'clearApiKey':
+        return api.clearApiKey()
+    }
+  }
+  const { environmentId } = owner
+  switch (action) {
+    case 'getStatus':
+      return callHost(environmentId, 'accounts.ollamaCloudCredentialsStatus')
+    case 'saveApiKey':
+      return callHost(environmentId, 'accounts.ollamaCloudSaveApiKey', { apiKey: value })
+    case 'clearApiKey':
+      return callHost(environmentId, 'accounts.ollamaCloudClearApiKey')
   }
 }

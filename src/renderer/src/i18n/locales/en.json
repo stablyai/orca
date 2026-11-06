@@ -5456,7 +5456,8 @@
           "85457c02fe": "Claude",
           "b2cf4310ce": "Overview",
           "grokUsageTab": "Grok",
-          "trackingSince": "Tracking since {{value0}}"
+          "trackingSince": "Tracking since {{value0}}",
+          "ollamaUsageTab": "Ollama"
         },
         "UsageOverviewPane": {
           "33f7b043d2": "Providers",
@@ -5585,6 +5586,22 @@
         "usageFormatters": {
           "notScannedYet": "Not scanned yet",
           "updatedAt": "Updated {{time}}"
+        },
+        "OllamaUsagePane": {
+          "title": "Ollama cloud usage",
+          "notConfiguredDescription": "Cloud subscription usage from ollama.com (API key from ollama.com/settings/keys). Same source as the status bar.",
+          "setupButton": "Set up in Accounts",
+          "description": "Cloud credits and 30-day usage from ollama.com. Same source as the status bar.",
+          "refreshLabel": "Refresh Ollama usage",
+          "refresh": "Refresh",
+          "includedCredits": "Included credits left",
+          "purchasedCredits": "Purchased credits",
+          "monthSpend": "30-day spend",
+          "periodReset": "Plan period resets",
+          "tokenTotals": "30-day tokens: {{value0}} in · {{value1}} cached · {{value2}} out across {{value3}} requests",
+          "accountSettings": "Ollama cloud account settings",
+          "sessionWindow": "5 hours used",
+          "weeklyWindow": "Weekly used"
         }
       },
       "sparse": {
@@ -9858,6 +9875,16 @@
                 "codingPlan": "coding plan",
                 "rateLimit": "rate limit"
               }
+            },
+            "ollama": {
+              "title": "Ollama Cloud",
+              "description": "Track Ollama cloud subscription usage. Save the API key from ollama.com.",
+              "kw": {
+                "ollama": "ollama",
+                "cloud": "cloud",
+                "usage": "usage",
+                "rateLimit": "rate limit"
+              }
             }
           }
         },
@@ -13752,6 +13779,40 @@
         },
         "SettingsSearchableSelect": {
           "noMatches": "No matches."
+        },
+        "OllamaCloudAccountsSection": {
+          "title": "Ollama Cloud",
+          "subtitle": "Track Ollama cloud subscription usage in the status bar. Save the API key from ollama.com here.",
+          "consoleLink": "Get API key",
+          "detailsUnavailable": "Credential details are only readable on the computer running Orca.",
+          "keyStored": "API key saved",
+          "keyStoredHelp": "Stored locally and sent only to ollama.com for usage refreshes.",
+          "keyStoredOnHostHelp": "Stored on {{host}} and sent from there only to ollama.com for usage refreshes.",
+          "notConfigured": "No Ollama cloud subscription linked",
+          "notConfiguredHelp": "Save the API key from ollama.com below.",
+          "notConfiguredOnHostHelp": "Save the API key from ollama.com below in the desktop app on {{host}}.",
+          "refreshUsage": "Refresh usage",
+          "hostOnly": "Change the API key in the desktop app on the computer running Orca.",
+          "keyTitle": "API key",
+          "keyDescription": "Paste the API key from ollama.com/settings/keys. Stored locally, encrypted when the OS supports it, and sent only to ollama.com for usage refreshes.",
+          "keyOnHostDescription": "Paste the API key from ollama.com/settings/keys. Stored on {{host}} and sent from there only to ollama.com for usage refreshes.",
+          "saved": "Saved",
+          "notSaved": "Not saved",
+          "keyPlaceholder": "Paste your Ollama API key",
+          "save": "Save",
+          "replace": "Replace",
+          "forgetKey": "Forget key",
+          "keyHelp": "The same OLLAMA_API_KEY your launch tools use (ollama launch claude, codex, droid…). Sent only to ollama.com for usage checks.",
+          "keySaved": "Ollama cloud API key saved.",
+          "keySaveFailed": "Ollama cloud credential update failed.",
+          "usageTitle": "Subscription usage",
+          "usageDescription": "Remaining credits and 30-day spend for the linked subscription, refreshed with the status bar usage cycle.",
+          "includedWithLimit": "Included credits: {{value0}} of {{value1}}",
+          "included": "Included credits: {{value0}}",
+          "monthSpend": "30-day cloud spend: ${{value0}} across {{value1}} requests",
+          "planLevel": "Plan: {{value0}}",
+          "purchasedCredits": "Purchased credits: ${{value0}}",
+          "monthTokens": "30-day tokens: {{value0}} in · {{value1}} cached · {{value2}} out"
         }
       },
       "right": {
