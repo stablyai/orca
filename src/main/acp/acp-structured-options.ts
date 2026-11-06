@@ -96,6 +96,20 @@ export class AcpStructuredOptions {
     this.appliedInput.clear()
   }
 
+  matchesNativeRestoredModel(value: string): boolean {
+    if (
+      this.resolvesConfig ||
+      this.picked.has('model') ||
+      (this.dialect.effortChangesModel && this.picked.has('effort'))
+    ) {
+      return false
+    }
+    return (
+      value.length > 0 &&
+      (this.select('model')?.currentValue ?? this.models?.currentModelId) === value
+    )
+  }
+
   notePick(key: string): void {
     this.picked.add(key)
   }
