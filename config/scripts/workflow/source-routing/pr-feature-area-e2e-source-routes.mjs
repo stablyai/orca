@@ -155,5 +155,16 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
       'src/shared/remote-runtime/host-store/runtime-environment-store.ts',
       `${COMPONENTS}sidebar/workspace-card/identity/worktree-card-header-items.tsx`
     ]
+  ),
+  featureRoute(
+    'feature.startup-exec-readiness',
+    ['paired-startup-exec-readiness'],
+    [
+      'src/main/daemon/sessions/session-shell-ready-barrier.ts',
+      'src/main/daemon/shell-readiness/',
+      'src/main/pty/shell-startup/shell-prompt-readiness-probe.ts',
+      'src/main/pty/shell-startup/shell-startup-output-scanner.ts',
+      'src/main/pty/shell-startup/shell-templates.ts'
+    ]
   )
 ]
