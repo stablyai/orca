@@ -21,15 +21,14 @@ export function nativeChatSlotIndexOf(
   slots: readonly NativeChatTranscriptSlot[],
   messageId: string | undefined
 ): number {
-  if (messageId === undefined) {
-    return -1
-  }
-  return slots.findIndex(
-    (slot) =>
-      slot.kind === 'message' &&
-      (slot.message.id === messageId ||
-        slot.workRun?.some((member) => member.id === messageId) === true)
-  )
+  return messageId === undefined
+    ? -1
+    : slots.findIndex(
+        (slot) =>
+          slot.kind === 'message' &&
+          (slot.message.id === messageId ||
+            slot.workRun?.some((member) => member.id === messageId) === true)
+      )
 }
 
 /** Place queued and unjournaled not-sent messages after live activity, outside its turn. */
