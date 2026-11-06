@@ -55,7 +55,7 @@ import {
   shouldUseGlobalWorktreeVisibility
 } from './worktree-visibility-use-global'
 import { createWorktreeVisibilitySourceMutation } from '../sources/worktree-visibility-source-mutation'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
 import { selectDetectedWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export default function WorktreeVisibilityDialog(): React.JSX.Element | null {

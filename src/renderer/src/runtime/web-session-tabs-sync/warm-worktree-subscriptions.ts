@@ -1,5 +1,5 @@
 import { getWindowParkVisible, subscribeWindowParkVisibility } from '@/lib/window-park-visibility'
-import { TERMINAL_WORKTREE_HOT_RETAIN_LIMIT } from '@/components/terminal-pane/terminal-hidden-view-parking'
+import { TERMINAL_WORKTREE_HOT_RETAIN_LIMIT } from '@/components/terminal-pane/parking/retention/terminal-hidden-view-parking'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { useAppStore } from '../../store'
 import type { AppState } from '../../store/types'

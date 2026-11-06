@@ -1,6 +1,6 @@
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import { buildHostIdByWorktreeId } from '@/lib/workspace-session-host-persistence'
-import type { HostIdByWorktreeId } from '@/lib/workspace-session-host-split'
+import { buildHostIdByWorktreeId } from '@/lib/workspace/persistence/workspace-session-host-persistence'
+import type { HostIdByWorktreeId } from '@/lib/workspace/persistence/workspace-session-host-split'
 import type { AppState } from '@/store/types'
 
 /** Whether a paired server mirrors each workspace's layout, so main's frames draw none of it. */

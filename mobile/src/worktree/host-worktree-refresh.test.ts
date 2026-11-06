@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { startHostWorktreeRefresh } from './host-worktree-refresh'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
 const appState = vi.hoisted(() => ({
   currentState: 'active',
@@ -43,14 +44,12 @@ describe('startHostWorktreeRefresh', () => {
   function start(
     sidebarFeed: Parameters<typeof startHostWorktreeRefresh>[0]['sidebarFeed'] = null
   ): void {
-    const client = {
-      subscribe: vi.fn(
-        (_method: string, _params: unknown, listener: (payload: unknown) => void) => {
-          eventListener = listener
-          return unsubscribe
-        }
-      )
-    } satisfies Parameters<typeof startHostWorktreeRefresh>[0]['client']
+    const client = stubRpcClient({
+      subscribe: (_method, _params, listener) => {
+        eventListener = listener
+        return unsubscribe
+      }
+    })
     stop = startHostWorktreeRefresh({
       client,
       fetchWorktrees,

@@ -9,7 +9,7 @@
 // and, for frames, `@/runtime/runtime-layout-client` with `runtimeLayoutClientWithTestFrames`.
 // Imports stay clear of the RPC client at runtime: a mock factory must not reach what it replaces.
 
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
 import { applyLayoutCommand } from '../../../shared/workspace-layout/workspace-layout-commands'
 import type {
   LayoutApplyReply,

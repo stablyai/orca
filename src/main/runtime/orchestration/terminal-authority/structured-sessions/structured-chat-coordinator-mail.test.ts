@@ -5,11 +5,11 @@ import { dispatch as dispatchCommand } from '../../../../../cli/dispatch'
 import { orchestrationTestContext } from '../../../../../cli/handlers/orchestration-handler-test-context'
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import '../../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import '../../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import {
   AgentSessionAcquisitionRefusal,
   AgentSessionPreSpawnError
-} from '../../../../native-chat/agent-session-wire/structured-agent-session-adapter-errors'
+} from '../../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import type { AgentSessionJournal } from '../../../../native-chat/agent-session-journal/journal-store'
 import { currentRunCoordinatorOrcaSessionId } from '../../db/runs/run-coordinator-orca-session'
 import { idOf } from '../../../rpc/orchestration-session-caller-test-fixture'

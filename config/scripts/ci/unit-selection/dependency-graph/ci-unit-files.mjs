@@ -15,6 +15,7 @@ export const UNIT_INCLUDE = [
 
 export const UNIT_SETUP_FILES = [
   'config/scripts/test-runtime/environment/vitest-real-agent-home-write-guard.ts',
+  'config/scripts/test-runtime/environment/vitest-real-agent-cli-guard.ts',
   'config/scripts/test-runtime/environment/vitest-bun-node-builtins.ts',
   'config/scripts/test-runtime/dom/vitest-dom-setup.ts',
   'config/scripts/test-runtime/environment/vitest-host-ports-setup.ts',
@@ -31,8 +32,6 @@ export const UNIT_EXCLUDE = [
   'src/main/providers/local-pty/local-pty-shell-ready-zsh-launch-environment.test.ts',
   'src/main/pty/shell-startup/omp-shell-wrapper-alias-safety.test.ts',
   'src/main/pty/shell-startup/omp-shell-wrapper.node-pty.test.ts',
-  'src/main/pty/shell-startup/shell-startup-feature-channel.test.ts',
-  'src/main/pty/shell-startup/zsh-deferred-startup-line-init.live-shell.test.ts',
   'src/main/pty/history/terminal-history-fish-session.node-pty.test.ts',
   'src/main/pty/shell-startup/zsh-scoped-histfile.live-shell.test.ts',
   'src/main/pty/shell-startup/zsh-startup-hook-user-config-equivalence.live-shell.test.ts',

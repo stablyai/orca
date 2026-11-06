@@ -1,7 +1,5 @@
-import type { RuntimeFilePreviewResult, RuntimeFileReadResult } from '../../../shared/runtime-types'
+import type { RuntimeFilePreviewResult } from '../../../shared/runtime-types'
 import { callRuntimeRpc } from './runtime-rpc-client'
-import { RuntimeRpcCallError } from './runtime-rpc-result'
-import { BINARY_PROBE_BYTES } from '../../../shared/binary-buffer'
 import type {
   RuntimeFileDownloadResult,
   RuntimeFileOperationArgs,
@@ -17,7 +15,7 @@ import {
 } from './runtime-file-routing'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { chatScratchFileAddress } from './runtime-chat-scratch-file-address'
-import { readRemoteRangePreview } from './runtime-file-range-preview'
+import { readRemoteFileContent } from './runtime-remote-file-content'
 import { isAgentSessionAttachmentStorePath } from '../../../shared/agent-session/agent-session-attachments'
 import { decodeSvgBase64, isSvgFilePath } from '../../../shared/svg-document'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
@@ -26,13 +24,7 @@ import {
   readHostFilePreview,
   readHostFileOutsideWorkspaces
 } from './runtime-terminal-artifact-read'
-import {
-  pagedTextFileResult,
-  pinRemoteFileAddress,
-  readRemoteBinaryFile,
-  readRemoteFileInChunks,
-  readRemoteFilePreview
-} from './runtime-paged-file-read'
+import { readRemoteFilePreview } from './runtime-paged-file-read'
 import {
   downloadRemoteFileViaPreview,
   readRemoteDownloadChunk,
@@ -95,7 +87,8 @@ async function readRuntimeFileContentAsStored({
       filePath,
       relativePath,
       grantId: terminalArtifactGrantId,
-      expectedEnvironmentPairingRevision
+      expectedEnvironmentPairingRevision,
+      pageOversizedBinary: pageOversizedBinary === true
     })
   }
   // A workspace path first; a chat's scratch file is the absolute path no workspace contains.
@@ -105,52 +98,14 @@ async function readRuntimeFileContentAsStored({
     throw new Error('Remote file is outside the owning runtime worktree')
   }
 
-  const remote = pinRemoteFileAddress({
-    target,
-    worktree: scratch?.worktreeSelector ?? toRuntimeWorktreeSelector(worktreeId),
-    relativePath: readPath
-  })
-  // Baseline checks discard binary content, so only readers that render bytes mint a stream.
-  const rangePreview = pageOversizedBinary ? await readRemoteRangePreview(remote) : null
-  if (rangePreview) {
-    return rangePreview
-  }
-  let result: RuntimeFileReadResult
-  try {
-    result = await callRuntimeRpc<RuntimeFileReadResult>(
+  return readRemoteFileContent(
+    {
       target,
-      'files.read',
-      { worktree: remote.worktree, relativePath: readPath },
-      {
-        timeoutMs: 15_000,
-        expectedEnvironmentPairingRevision: remote.expectedEnvironmentPairingRevision
-      }
-    )
-  } catch (err) {
-    // Typed binary_file refusal permits base64 preview for PDFs/images; unrelated errors cannot spoof this fallback.
-    if (err instanceof RuntimeRpcCallError && err.message === 'binary_file') {
-      // Why: baseline checks call this too and discard binary content, so paging is opt-in.
-      return readRemoteBinaryFile(remote, { pageOversized: pageOversizedBinary === true })
-    }
-    throw err
-  }
-  // Hosts before content sniffing send an unlisted binary as text; NUL is git's binary signal.
-  if (result.content.slice(0, BINARY_PROBE_BYTES).includes('\0')) {
-    return { content: '', isBinary: true }
-  }
-  if (result.truncated) {
-    // files.read caps replies at 512KiB; page the whole file or later editable saves truncate it.
-    const paged = await readRemoteFileInChunks(remote)
-    if (paged.kind === 'ok') {
-      return pagedTextFileResult(paged.bytes)
-    }
-    throw new Error(
-      paged.kind === 'unsupported'
-        ? 'Remote file is larger than the 512 KB this Orca server can send. Update the server to open it.'
-        : `Remote file is too large to open in the editor (${paged.size} bytes)`
-    )
-  }
-  return { content: result.content, isBinary: false }
+      worktree: scratch?.worktreeSelector ?? toRuntimeWorktreeSelector(worktreeId),
+      relativePath: readPath
+    },
+    { pageOversizedBinary: pageOversizedBinary === true }
+  )
 }
 
 export async function readRuntimeFilePreview(

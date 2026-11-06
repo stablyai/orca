@@ -24,6 +24,7 @@ import { agentSessionFailureSentence } from '../../../../../src/shared/agent-ses
 import { agentSessionRemoteSignInCommand } from '../../../../../src/shared/agent-session/lifecycle/agent-session-sign-in'
 import { nativeChatOrcaStopRowText } from '../../../../../src/shared/native-chat/native-chat-orca-stop-words'
 import {
+  MobileNativeChatForkedFromContext,
   MobileNativeChatNoticeContext,
   type MobileNativeChatNoticeView
 } from '../../mobile-native-chat-notice-context'
@@ -98,6 +99,7 @@ export function MobileNativeChatNoticeRow({
   const detailId = useId()
   const copy = nativeChatNoticeCopy(t)
   const names = useContext(MobileNativeChatNoticeContext)
+  const openForkSource = useContext(MobileNativeChatForkedFromContext)
   const notice = nativeChatNoticeBlock(blocks)
   const aside = [styles.faint, scaledType(typography.bodySize, fontScale)]
   if (!notice) {
@@ -185,6 +187,30 @@ export function MobileNativeChatNoticeRow({
         <View style={styles.divider} accessibilityRole="text" accessibilityLabel={label}>
           <View style={styles.rule} />
           <Text style={styles.dividerLabel}>{label}</Text>
+          <View style={styles.rule} />
+        </View>
+      )
+    }
+    case 'forked-from': {
+      const { sourceName, sourceSessionId } = look
+      return (
+        // No label on the row: it would replace the text and hide the source link from screen readers.
+        <View style={styles.divider}>
+          <View style={styles.rule} />
+          <Text style={styles.dividerLabel}>
+            {copy.forkedFrom}{' '}
+            {openForkSource ? (
+              <Text
+                accessibilityRole="link"
+                style={styles.dividerLink}
+                onPress={() => openForkSource(sourceSessionId)}
+              >
+                {sourceName}
+              </Text>
+            ) : (
+              sourceName
+            )}
+          </Text>
           <View style={styles.rule} />
         </View>
       )
@@ -324,6 +350,9 @@ const styles = themedStyleSheet(() => ({
   dividerLabel: {
     color: colors.textMuted,
     fontSize: typography.metaSize
+  },
+  dividerLink: {
+    textDecorationLine: 'underline'
   },
   faint: {
     color: colors.textMuted

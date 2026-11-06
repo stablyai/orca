@@ -271,6 +271,20 @@ describe('RuntimeFileCommands', () => {
       await expect(readPage(0, 'client-b')).rejects.toThrow()
     })
 
+    it('stats a granted file for its reader until the file changes', async () => {
+      const artifactPath = await tempFile('clip.mp4', '')
+      await writeFile(artifactPath, Buffer.alloc(4096, 0xab))
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      const target = absoluteFileTarget(await resolveTerminalArtifactPath(commands, artifactPath))
+      const stat = () =>
+        commands.statTerminalArtifact('id:wt-1', target.grantId, target.absolutePath, 'client-a')
+
+      await expect(stat()).resolves.toMatchObject({ size: 4096, isDirectory: false })
+      await writeFile(artifactPath, Buffer.alloc(8192, 0xcd))
+      await expect(stat()).rejects.toThrow('terminal_file_grant_stale')
+    })
+
     // Why: files above the digest cap are pinned by stat alone; utimes can restore mtime but never ctime.
     it('rejects a page of a large granted file rewritten in place with its mtime restored', async () => {
       const artifactPath = await tempFile('render.mp4', '')
@@ -506,6 +520,30 @@ describe('RuntimeFileCommands', () => {
         )
       ).rejects.toThrow('binary_file')
       await expect(readFile(artifactPath, 'utf8')).resolves.toBe('%PDF text-looking bytes')
+    })
+
+    // Why: a reader pages a too-large file as text, so a binary must be named before its size.
+    it('names a large unlisted binary as binary, and large text as too large', async () => {
+      const binary = Buffer.alloc(600 * 1024, 0x41)
+      binary[10] = 0
+      const binaryPath = await tempFile('capture.raw', '')
+      const textPath = await tempFile('build.log', '')
+      await writeFile(binaryPath, binary)
+      await writeFile(textPath, Buffer.alloc(600 * 1024, 0x41))
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      const read = async (path: string) => {
+        const target = absoluteFileTarget(await resolveTerminalArtifactPath(commands, path))
+        return commands.readTerminalArtifactFile(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          'client-a'
+        )
+      }
+
+      await expect(read(binaryPath)).rejects.toThrow('binary_file')
+      await expect(read(textPath)).rejects.toThrow('file_too_large')
     })
 
     it('never reads this machine for a native-chat path outside an SSH workspace', async () => {

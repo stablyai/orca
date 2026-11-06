@@ -4,7 +4,7 @@ import type { SpawnDeferralReason } from '../../../../../shared/host-spawn-admis
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { useAppStore } from '@/store/index'
 import { hasWorktreeTeardownStarted } from '@/store/slices/worktree-delete-state-types'
-import { hasPtySerializer } from '../pty-buffer-serializer'
+import { hasPtySerializer } from '../snapshots/pty-buffer-serializer'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 
 import { settleSpawnThatLeftPaneUnbound } from './unbound-pane-spawn-recovery'

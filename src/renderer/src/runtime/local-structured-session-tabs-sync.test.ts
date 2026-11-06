@@ -7,7 +7,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-typ
 import type { Tab } from '../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
-import { buildPersistedUnifiedTabSessionData } from '../lib/workspace-session-unified-tabs'
+import { buildPersistedUnifiedTabSessionData } from '../lib/workspace/persistence/workspace-session-unified-tabs'
 import { buildHydratedTabState } from '../store/slices/tabs-hydration'
 import './local-structured-session-tabs-sync/snapshot-apply'
 import { projectLocalStructuredSessionTabs } from './local-structured-session-tabs-sync/snapshot-projection'

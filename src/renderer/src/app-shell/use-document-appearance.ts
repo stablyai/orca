@@ -14,6 +14,10 @@ import {
   resolveCodeEditorTheme
 } from '../lib/code-editor-theme'
 import { browserColorProbe } from '../lib/plugin-theme-tokens'
+import {
+  TINTED_HOST_PILL_OUTLINE_MIX_TOKEN,
+  tintedSidebarHostPillOutlineMix
+} from '../lib/left-sidebar-appearance'
 import { useCodeEditorThemeStore } from '../store/code-editor-theme'
 import { synthesizeTerminalAppTheme, type TerminalAppTheme } from '../lib/terminal-app-theme'
 import { MATCH_TERMINAL_APP_THEME } from '../../../shared/plugin-theme-settings'
@@ -28,7 +32,7 @@ import { scheduleRuntimeGraphSync } from '../runtime/sync-runtime-graph'
 import { useAppStore } from '../store'
 import { useDocumentDarkTheme, useSettingsDarkTheme } from '@/hooks/use-document-dark-theme'
 import { useReduceVisualEffects } from '@/hooks/use-reduce-visual-effects'
-import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
+import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
 
 /** The Match Terminal app theme while the requested mode's slot selects it, else null. */
 function useTerminalAppTheme(selected: boolean): TerminalAppTheme | null {
@@ -118,6 +122,41 @@ export function useDocumentAppearance(): void {
       appPainted.current = applyPluginAppTheme(appTheme)
     }
   }, [appTheme, ready, theme, dark])
+
+  const sidebarTint = useAppStore(
+    useShallow((s) =>
+      s.settings
+        ? {
+            leftSidebarAppearanceMode: s.settings.leftSidebarAppearanceMode,
+            leftSidebarTintColor: s.settings.leftSidebarTintColor,
+            leftSidebarTintOpacity: s.settings.leftSidebarTintOpacity
+          }
+        : null
+    )
+  )
+  // Why after the paint above: the tinted sidebar is the app's text and background as just painted
+  // (ready too, since loading the list can replace the startup cache's colors).
+  useEffect(() => {
+    if (!theme) {
+      return
+    }
+    const root = document.documentElement
+    const computed = getComputedStyle(root)
+    const outlineMix = tintedSidebarHostPillOutlineMix(
+      sidebarTint,
+      {
+        foreground: computed.getPropertyValue('--foreground').trim(),
+        background: computed.getPropertyValue('--background').trim(),
+        base: dark ? 'dark' : 'light'
+      },
+      browserColorProbe
+    )
+    if (outlineMix === null) {
+      root.style.removeProperty(TINTED_HOST_PILL_OUTLINE_MIX_TOKEN)
+    } else {
+      root.style.setProperty(TINTED_HOST_PILL_OUTLINE_MIX_TOKEN, `${outlineMix}%`)
+    }
+  }, [appTheme, ready, theme, dark, sidebarTint])
 
   // Why gated: the image only shows through translucent terminals and chats, so otherwise it would
   // cost decode and switch terminals to transparent rendering for nothing.

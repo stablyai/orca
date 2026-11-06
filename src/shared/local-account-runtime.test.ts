@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from './constants'
-import { resolveLocalAccountRuntimeTarget } from './local-account-runtime'
+import {
+  resolveLocalAccountRuntimeTarget,
+  resolveLocalAccountUsageTarget
+} from './local-account-runtime'
 
 describe('resolveLocalAccountRuntimeTarget', () => {
   it('honors an explicit host pin', () => {
@@ -60,6 +63,21 @@ describe('resolveLocalAccountRuntimeTarget', () => {
           localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
         },
         'linux'
+      )
+    ).toEqual({ runtime: 'host', wslDistro: null })
+  })
+})
+
+describe('resolveLocalAccountUsageTarget', () => {
+  it('reads the host off Windows even when the setting says wsl', () => {
+    expect(
+      resolveLocalAccountUsageTarget(
+        {
+          ...getDefaultSettings('/tmp'),
+          localAccountRuntime: 'wsl',
+          localAccountWslDistro: 'Ubuntu'
+        },
+        'darwin'
       )
     ).toEqual({ runtime: 'host', wslDistro: null })
   })

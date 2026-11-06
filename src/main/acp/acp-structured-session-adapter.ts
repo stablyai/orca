@@ -11,8 +11,8 @@ import {
   type StructuredAgentSessionAcquireInput,
   type StructuredAgentSessionAdapter as SessionAdapter,
   type StructuredAgentSessionSetOptionInput as SetOptionInput
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { withObservedProviderExit } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
+} from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { withObservedProviderExit } from '../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import { acpAgentName } from './acp-structured-agent-definitions'
 import { acquireAcpStructuredSession } from './acp-structured-acquire'
 import { rejectedAcpDispatch, type AcpStructuredSession } from './acp-structured-session'
@@ -21,16 +21,16 @@ import { waitForAcpExit, type AcpStructuredConnection } from './acp-structured-c
 import { AcpConnectionClosedError } from './acp-errors'
 import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
 import { applyAcpMessageOptions } from './acp-message-execution-options'
-import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
+import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 import * as stop from './acp-structured-stop'
 import { acpDispatchPrompt } from './acp-prompt-content'
 import {
-  ACP_OPTION_WRITE_TIMEOUT_MS,
   ACP_STOP_GRACE_MS,
   type AcpStructuredSessionAdapterDeps
 } from './acp-structured-session-adapter-deps'
 import { readAcpLiveOptions } from './acp-structured-options'
 import { writeAcpSessionOption } from './acp-session-option-write'
+import { acpOptionWriteBound, withAcpModelFallback } from './acp-model-command'
 import { stopAcpChildren, acpChildStopCapabilities } from './acp-structured-child-stop'
 import * as childState from './acp-structured-child'
 import { AcpStructuredChildren } from './acp-structured-child-lifecycle'
@@ -39,7 +39,7 @@ import { AcpTextTasks } from './acp-text-task'
 import { supportsAcpStructuredLocation } from './acp-structured-location-support'
 import { acpAcquireFailure, acpRefusedStart } from './acp-startup-outcome'
 import { openAcpStart } from './acp-structured-start-open'
-import { admitStructuredAgentSessionInput } from '../native-chat/agent-session-wire/structured-agent-session-input-admission'
+import { admitStructuredAgentSessionInput } from '../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
 
 export class AcpStructuredSessionAdapter implements SessionAdapter {
   readonly atRestCommands: AcpStructuredSessionAdapterDeps['atRestCommands']
@@ -195,29 +195,33 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     const { sessionId, fence, signal } = input
     signal?.throwIfAborted()
     input.onInputPreparation?.()
-    const optionsApplied = await applyAcpMessageOptions(
-      session,
-      input.executionOptions,
-      (key, value) => this.setOption({ sessionId, fence, key, value, signal }),
-      () =>
-        this.children.sessions.get(input.sessionId) === session && session.journalClosed === null,
-      signal
-    )
-    if (!optionsApplied) {
-      return rejectedAcpDispatch(session)
-    }
-    input.signal?.throwIfAborted()
-    await input.beforeDispatch?.()
-    input.signal?.throwIfAborted()
-    await admitStructuredAgentSessionInput(input.admitFreshInput, () =>
-      session.turns.dispatch({
-        clientMessageId: input.clientMessageId,
-        prompt,
-        requestedAt: input.requestedAt ?? this.now()
-      })
-    )
-    // Admission precedes provider confirmation of the send.
-    return { state: 'admitted' }
+    return withAcpModelFallback(session, this.writeBound(session, signal), async (fallback) => {
+      const optionsApplied = await applyAcpMessageOptions(
+        session,
+        input.executionOptions,
+        (key, value) => this.setOption({ sessionId, fence, key, value, signal }),
+        () =>
+          this.children.sessions.get(input.sessionId) === session && session.journalClosed === null,
+        signal,
+        fallback.command
+      )
+      if (!optionsApplied) {
+        return rejectedAcpDispatch(session)
+      }
+      input.signal?.throwIfAborted()
+      await input.beforeDispatch?.()
+      input.signal?.throwIfAborted()
+      const commit = fallback.admitting(() =>
+        session.turns.dispatch({
+          clientMessageId: input.clientMessageId,
+          prompt,
+          requestedAt: input.requestedAt ?? this.now()
+        })
+      )
+      await admitStructuredAgentSessionInput(input.admitFreshInput, commit)
+      // Admission precedes provider confirmation of the send.
+      return { state: 'admitted' }
+    })
   }
 
   compact: NonNullable<SessionAdapter['compact']> = async (input) =>
@@ -257,16 +261,13 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     }
     session.options.notePick(input.key)
     // Bound option writes so they cannot hold the session queue indefinitely.
-    await writeAcpSessionOption(session.connection, session.options, write, {
-      key: input.key,
-      value: input.value,
-      agent: session.spec.agent,
-      timeoutMs: this.deps.optionWriteTimeoutMs ?? ACP_OPTION_WRITE_TIMEOUT_MS,
-      ...(input.signal ? { signal: input.signal } : {}),
-      onUncertain: (error) => this.children.connectionLost(session, error)
-    })
+    const bound = { ...this.writeBound(session, input.signal), key: input.key, value: input.value }
+    await writeAcpSessionOption(session.connection, session.options, write, bound)
     return session.options.reported()
   }
+
+  private writeBound = (session: AcpStructuredSession, signal?: AbortSignal) =>
+    acpOptionWriteBound(this.deps, session, signal, (e) => this.children.connectionLost(session, e))
 
   canSetOptionWhileIdle = (input: SetOptionInput): boolean =>
     childState.canSetAcpOptionWhileIdle(this.children.sessions.get(input.sessionId), input)

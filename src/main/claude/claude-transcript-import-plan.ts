@@ -9,23 +9,24 @@ import {
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
-import { journalLifecycleItemMutation } from '../native-chat/agent-session-journal/journal-row-builders'
+import '../native-chat/agent-session-journal/writing/journal-row-builders'
+import { journalLifecycleItemMutation } from '../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 import {
   continuedOutsideNotice,
   continuedOutsideRecordId,
   createHistoryCatchUpBatch,
   HISTORY_CATCH_UP_MAX_OPERATIONS,
   type HistoryCatchUpPlan
-} from '../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
+} from '../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
 import {
   legacyItemBody,
   LEGACY_IMPORT_BLOCK_LIMITS
-} from '../native-chat/agent-session-journal/journal-legacy-import'
+} from '../native-chat/agent-session-journal/history-import/journal-legacy-import'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionItemAppendOptions
-} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { StructuredAgentSessionTransitionJournal } from '../native-chat/agent-session-wire/structured-agent-session-transition'
+} from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionTransitionJournal } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
 import { claudeSourceBlockId } from './claude-streamed-block-identity'
 import {
   claudeMessageIdentity,

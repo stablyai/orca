@@ -5,7 +5,7 @@ import {
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
-} from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { ClaudeStreamJsonConnection } from '../../claude-stream-json-connection'
 import type { ClaudeJournalTranslator } from '../../claude-journal-translator-contract'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'

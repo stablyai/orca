@@ -12,7 +12,10 @@ type StructuredChatController = Pick<
   | 'hasOlder'
   | 'loadingOlder'
   | 'olderHistoryGeneration'
+  | 'initialHistoryAutoLoad'
   | 'loadOlder'
+  | 'retainHistory'
+  | 'trimHistory'
   | 'readCurrent'
 >
 
@@ -44,7 +47,10 @@ export function useStructuredChatLiveSession(
       hasMore: controller.hasOlder && hostReachable,
       loadingEarlier: controller.loadingOlder,
       olderHistoryGeneration: controller.olderHistoryGeneration,
+      initialHistoryAutoLoad: controller.initialHistoryAutoLoad,
       loadEarlier: controller.loadOlder,
+      retainHistory: controller.retainHistory,
+      trimHistory: controller.trimHistory,
       readPhase:
         controller.status === 'loading'
           ? 'loading'
