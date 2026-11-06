@@ -8,6 +8,10 @@ import {
   toPublicDictationMeterState,
   type DictationMeterState
 } from '../../../shared/dictation-audio-meter'
+import {
+  useAudioCaptureStopTail,
+  type StopAudioCaptureOptions
+} from './use-audio-capture-stop-tail'
 
 type BufferedAudioChunk = {
   samples: Float32Array
@@ -28,10 +32,6 @@ type StartAudioCaptureOptions = {
 
 export type StartAudioCaptureResult = {
   fellBackToDefaultMicrophone: boolean
-}
-
-type StopAudioCaptureOptions = {
-  preserveBufferedAudio?: boolean
 }
 
 const MAX_BUFFERED_AUDIO_SECONDS = 30
@@ -327,9 +327,12 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
     [cleanupCaptureResources, resetBufferedAudio, resetMeter]
   )
 
+  const finish = useAudioCaptureStopTail(isCapturingRef, startRequestRef, stop)
+
   return {
     start,
     stop,
+    finish,
     flushBufferedAudio,
     discardBufferedAudio,
     getCapturedChunkCount,
