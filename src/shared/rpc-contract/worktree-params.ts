@@ -142,7 +142,9 @@ export const WorktreeResolveCallerParent = z.object({
   envParentWorkspace: OptionalString,
   callerTerminalHandle: OptionalString,
   cwdParentWorktree: OptionalString,
-  cwdParentAmbiguous: z.literal(true).optional()
+  cwdParentAmbiguous: z.literal(true).optional(),
+  /** The workspace note; a task id in it names its parent as on a same-machine create. */
+  comment: OptionalString
 })
 
 export const WorktreeSet = WorktreeSelector.extend({

@@ -6,7 +6,10 @@ import type {
 } from '../../../../../../shared/worktree/create-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorkspaceKey } from '../../../../../../shared/workspace-scope'
-import type { CrossStoreParentRef } from '../../../../../../shared/worktree/lineage-types'
+import type {
+  CrossStoreInferredSource,
+  CrossStoreParentRef
+} from '../../../../../../shared/worktree/lineage-types'
 import type { TaskSourceContext } from '../../../../../../shared/task-source-context'
 import type {
   ClientAutomationWorkspaceProvenance,
@@ -64,6 +67,8 @@ export type WorktreeCreateAttempt = {
   parentWorkspace?: WorkspaceKey
   /** A parent on another machine, named by its own store before the first attempt. */
   crossStoreParent?: CrossStoreParentRef
+  /** Set when this desktop inferred `crossStoreParent` (a task id in the note) rather than a pick. */
+  crossStoreParentInferredFrom?: CrossStoreInferredSource
   manualOrder?: number
 }
 
@@ -155,9 +160,11 @@ export function buildRuntimeWorktreeCreateParams(
     repo: request.repoId,
     ...sharedCreateFields(request, attempt),
     // Why: the host defaults a bare parent (same- or cross-store) to CLI provenance; app picks are manual.
-    ...(attempt.parentWorkspace || attempt.crossStoreParent
-      ? { parentWorkspaceOrigin: 'manual' }
-      : {}),
+    ...(attempt.crossStoreParentInferredFrom
+      ? { crossStoreParentInferredFrom: attempt.crossStoreParentInferredFrom }
+      : attempt.parentWorkspace || attempt.crossStoreParent
+        ? { parentWorkspaceOrigin: 'manual' }
+        : {}),
     // Switch point: a host lists the window's creation under its id only on the dark path.
     ...(ORCA_SIDEBAR_INPUTS_IS_MAIN && request.creationId
       ? { creationId: request.creationId }
