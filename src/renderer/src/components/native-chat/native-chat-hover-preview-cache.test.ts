@@ -55,4 +55,20 @@ describe('createHoverPreviewCache', () => {
     await cache.load('pr', async () => null)
     expect(cache.read('pr')).toBe('open')
   })
+
+  it('keeps counting an answer against the budget while it is reread', async () => {
+    const cache = createHoverPreviewCache<string>({
+      freshMs: 60_000,
+      maxEntries: 100,
+      budget: { maxBytes: 10, sizeOf: (value) => value.length }
+    })
+    await cache.load('a', async () => 'aaaaaa')
+    cache.expire('a')
+    let failA: (value: null) => void = () => {}
+    const reread = cache.load('a', () => new Promise((resolve) => (failA = resolve)))
+    await cache.load('b', async () => 'bbbbbb')
+    failA(null)
+    await reread
+    expect([cache.read('a'), cache.read('b')]).toEqual([null, 'bbbbbb'])
+  })
 })

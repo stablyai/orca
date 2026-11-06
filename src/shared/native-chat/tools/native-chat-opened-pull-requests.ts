@@ -34,7 +34,7 @@ const COMMAND_SEPARATOR = /&&|\|\||[;|\n]/u
 const LISTS_CHANGE_REQUESTS =
   /\b(?:gh\s+(?:pr\s+(?:list|status)|search\s+prs|api)|glab\s+(?:mr\s+list|api))\b/u
 const URL_LINE = /^[ \t]*(https?:\/\/\S+)[ \t]*$/gmu
-const SHELL_PROGRAM = /^(?:.*[\\/])?(?:ba|z|k|da|fi)?sh(?:\.exe)?$/u
+const SHELL_PROGRAM = /^(?:ba|z|k|da|fi)?sh(?:\.exe)?$/u
 const SHELL_SCRIPT_FLAG = /^-[a-zA-Z]*c$/u
 
 function argvCommand(input: unknown): readonly string[] | null {
@@ -58,14 +58,41 @@ function argvCommand(input: unknown): readonly string[] | null {
   return Array.isArray(argv) && argv.every((part) => typeof part === 'string') ? argv : null
 }
 
+// Codex on Windows runs `"C:\\…\\pwsh.exe" -Command 'script'`; cmd.exe takes `/c script`.
+const WINDOWS_SHELL_WRAPPER =
+  /^\s*(?:"([^"]+)"|(\S+))\s+(?:-(?:NoProfile|NoLogo|NonInteractive)\s+)*(?:-Command|-c|\/d\s+\/s\s+\/c|\/s\s+\/c|\/c)\s+([\s\S]+)$/iu
+const WINDOWS_SHELL_PROGRAM = /^(?:pwsh|powershell|cmd)(?:\.exe)?$/iu
+
+/** The script inside a PowerShell or cmd wrapper, in its own quoting undone. */
+function unwrapWindowsShell(command: string): string | null {
+  const match = WINDOWS_SHELL_WRAPPER.exec(command)
+  const program = (match?.[1] ?? match?.[2])?.split(/[\\/]/).at(-1)
+  if (!match || !program || !WINDOWS_SHELL_PROGRAM.test(program)) {
+    return null
+  }
+  const script = match[3]!.trim()
+  if (script.length >= 2 && script.startsWith("'") && script.endsWith("'")) {
+    return script.slice(1, -1).replaceAll("''", "'")
+  }
+  return script.length >= 2 && script.startsWith('"') && script.endsWith('"')
+    ? script.slice(1, -1)
+    : script
+}
+
 /** The script a tool call ran. An argv `[sh, -lc, script]` keeps its script whole; joining it would
  *  leave the create command after the wrapper instead of at a command start. */
 function commandScript(input: unknown): string | null {
   const argv = argvCommand(input)
-  if (argv?.length === 3 && SHELL_PROGRAM.test(argv[0]) && SHELL_SCRIPT_FLAG.test(argv[1])) {
+  const program = argv?.[0]?.split(/[\\/]/).at(-1) ?? ''
+  if (
+    argv?.length === 3 &&
+    (SHELL_PROGRAM.test(program) || WINDOWS_SHELL_PROGRAM.test(program)) &&
+    (SHELL_SCRIPT_FLAG.test(argv[1]) || /^(?:-Command|\/c)$/iu.test(argv[1]))
+  ) {
     return argv[2]
   }
-  return nativeChatFullCommand(input)
+  const command = nativeChatFullCommand(input)
+  return command === null ? null : (unwrapWindowsShell(command) ?? command)
 }
 
 function createCount(code: string): number {
@@ -195,6 +222,56 @@ export type NativeChatTurnOpenedPullRequests = {
   latestChangeKey: string | undefined
 }
 
+/** What one message's own commands did; a message's blocks never change once written. */
+type MessageEvidence = {
+  opened: readonly NativeChatOpenedPullRequest[]
+  clipped: readonly string[]
+  changeKey: string | undefined
+}
+
+/** Reused across transcript updates so a streaming reply rescans only rows that changed. */
+export type NativeChatOpenedPullRequestsCache = WeakMap<NativeChatMessage, MessageEvidence>
+
+function messageEvidence(
+  message: NativeChatMessage,
+  fullOutputs: ReadonlyMap<string, string | null> | undefined
+): MessageEvidence {
+  const opened: NativeChatOpenedPullRequest[] = []
+  const clipped: string[] = []
+  let changeKey: string | undefined
+  for (const [pairIndex, { call, result }] of pairToolBlocks(message.blocks).entries()) {
+    // A failed call still opened its pull request when it printed one, as in
+    // `gh pr create && gh pr checks --watch` with a failing check.
+    if (!call || !result || call.state === 'running') {
+      continue
+    }
+    const script = commandScript(call.input)
+    if (!script) {
+      continue
+    }
+    const creates = isPullRequestCreateScript(script)
+    if (creates || CHANGES_PULL_REQUEST.test(shellCode(script))) {
+      changeKey = `${message.id}:${pairIndex}`
+    }
+    if (!creates) {
+      continue
+    }
+    let output = result.output
+    if (result.fullOutputItemId) {
+      const whole = fullOutputs?.get(result.fullOutputItemId)
+      if (whole === undefined) {
+        // Evidence past the clipped head can add a pull request or disqualify one; wait for it.
+        clipped.push(result.fullOutputItemId)
+        continue
+      }
+      // Null: the host can't give it whole, so the head is all the evidence there is.
+      output = whole ?? result.output
+    }
+    opened.push(...pullRequestsOpenedBy(script, commandOutputText(output)))
+  }
+  return { opened, clipped, changeKey }
+}
+
 /** Pull requests each turn's own commands opened, in the order they were opened. A partly loaded
  *  turn shows none until its create call is loaded. */
 export function nativeChatTurnOpenedPullRequests(
@@ -202,51 +279,34 @@ export function nativeChatTurnOpenedPullRequests(
   turnKeys: readonly (string | undefined)[],
   options: {
     partialTurnKey?: string
-    /** Full text of clipped results, by `fullOutputItemId`. */
-    fullOutputs?: ReadonlyMap<string, string>
+    /** Clipped results read whole, by `fullOutputItemId`; null when the host can't. */
+    fullOutputs?: ReadonlyMap<string, string | null>
+    /** Valid for one `fullOutputs`; pass a new one when it changes. */
+    cache?: NativeChatOpenedPullRequestsCache
   } = {}
 ): NativeChatTurnOpenedPullRequests {
   const byTurn = new Map<string, NativeChatOpenedPullRequest[]>()
   const clippedCreateOutputs: string[] = []
   let latestChangeKey: string | undefined
   for (const [index, message] of messages.entries()) {
+    let evidence = options.cache?.get(message)
+    if (!evidence) {
+      evidence = messageEvidence(message, options.fullOutputs)
+      options.cache?.set(message, evidence)
+    }
+    latestChangeKey = evidence.changeKey ?? latestChangeKey
     const turnKey = turnKeys[index]
-    for (const [pairIndex, { call, result }] of pairToolBlocks(message.blocks).entries()) {
-      // A failed call still opened its pull request when it printed one, as in
-      // `gh pr create && gh pr checks --watch` with a failing check.
-      if (!call || !result || call.state === 'running') {
-        continue
+    if (!turnKey || turnKey === options.partialTurnKey) {
+      continue
+    }
+    clippedCreateOutputs.push(...evidence.clipped)
+    for (const pullRequest of evidence.opened) {
+      const list = byTurn.get(turnKey) ?? []
+      const key = nativeChatOpenedPullRequestKey(pullRequest)
+      if (!list.some((known) => nativeChatOpenedPullRequestKey(known) === key)) {
+        list.push(pullRequest)
       }
-      const script = commandScript(call.input)
-      if (!script) {
-        continue
-      }
-      if (CHANGES_PULL_REQUEST.test(shellCode(script)) || isPullRequestCreateScript(script)) {
-        latestChangeKey = `${message.id}:${pairIndex}`
-      }
-      if (!turnKey || turnKey === options.partialTurnKey) {
-        continue
-      }
-      const fullOutput = result.fullOutputItemId
-        ? options.fullOutputs?.get(result.fullOutputItemId)
-        : undefined
-      const opened = pullRequestsOpenedBy(script, commandOutputText(fullOutput ?? result.output))
-      // Evidence past the clipped head can add a pull request or disqualify one, so read it whole.
-      if (
-        result.fullOutputItemId &&
-        fullOutput === undefined &&
-        isPullRequestCreateScript(script)
-      ) {
-        clippedCreateOutputs.push(result.fullOutputItemId)
-      }
-      for (const pullRequest of opened) {
-        const list = byTurn.get(turnKey) ?? []
-        const key = nativeChatOpenedPullRequestKey(pullRequest)
-        if (!list.some((known) => nativeChatOpenedPullRequestKey(known) === key)) {
-          list.push(pullRequest)
-        }
-        byTurn.set(turnKey, list)
-      }
+      byTurn.set(turnKey, list)
     }
   }
   return { byTurn, clippedCreateOutputs, latestChangeKey }

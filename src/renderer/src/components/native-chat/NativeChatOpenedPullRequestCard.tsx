@@ -46,10 +46,18 @@ const STATE_TEXT_TONE: Record<GitHubWorkItem['state'], string> = {
   closed: 'text-rose-600 dark:text-rose-300'
 }
 
-function pullRequestName(pullRequest: NativeChatOpenedPullRequest): string {
-  return pullRequest.provider === 'github'
-    ? `${pullRequest.slug.repo}#${pullRequest.number}`
-    : `${pullRequest.slug.path.split('/').at(-1)}!${pullRequest.number}`
+/** `orca#3`, or `owner/other#5` for another repo than the chat's own, which the card can't read. */
+function pullRequestName(
+  pullRequest: NativeChatOpenedPullRequest,
+  githubRepo: NativeChatGitHubRepo | null
+): string {
+  if (pullRequest.provider !== 'github') {
+    return `${pullRequest.slug.path.split('/').at(-1)}!${pullRequest.number}`
+  }
+  const { owner, repo } = pullRequest.slug
+  return githubRepo && !githubLinkBelongsToRepo(githubRepo, pullRequest.slug)
+    ? `${owner}/${repo}#${pullRequest.number}`
+    : `${repo}#${pullRequest.number}`
 }
 
 function previewLink(
@@ -98,9 +106,6 @@ function usePullRequestDetails(target: ReturnType<typeof previewLink>): {
     }
     // The first read may use a fresh cached answer; later ones follow a change and must ask again.
     const fresh = readKey.current !== key
-    if (!fresh && current.item?.state === 'merged') {
-      return
-    }
     readKey.current = key
     void (fresh ? loadGitHubLinkPreview : reloadGitHubLinkPreview)(target.repo, target.link).then(
       onSettled,
@@ -183,10 +188,7 @@ function OpenedPullRequestRow({
         )
       })}
       <span className="shrink-0 text-chat-foreground-faint">
-        {/* Another repo than the chat's own can't be read here, so its full name says which. */}
-        {githubRepo && !target && pullRequest.provider === 'github'
-          ? `${pullRequest.slug.owner}/${pullRequest.slug.repo}#${pullRequest.number}`
-          : pullRequestName(pullRequest)}
+        {pullRequestName(pullRequest, githubRepo)}
       </span>
       {item ? (
         <span className="min-w-0 flex-1 truncate">{item.title}</span>
@@ -210,13 +212,14 @@ export function NativeChatOpenedPullRequestCard({
   pullRequests: readonly NativeChatOpenedPullRequest[]
 }): React.JSX.Element {
   const [first] = pullRequests
+  const { githubRepo } = useContext(NativeChatLinkPeekContext)
   return (
     <div className="group relative rounded-lg border border-chat-code-border p-2 text-sm">
       <div className="flex min-w-0 items-center px-1 pb-1 pr-6 text-xs text-chat-foreground-faint">
         <span className="min-w-0 truncate">
           {pullRequests.length === 1 && first
             ? translate('components.native-chat.openedPullRequests.one', 'Opened {{name}}', {
-                name: pullRequestName(first)
+                name: pullRequestName(first, githubRepo)
               })
             : translate(
                 'components.native-chat.openedPullRequests.many',

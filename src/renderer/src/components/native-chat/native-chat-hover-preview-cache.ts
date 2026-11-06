@@ -57,12 +57,13 @@ export function createHoverPreviewCache<T>({
       ) {
         return cached.promise
       }
-      // A reread carries the last answer, so `read` keeps painting it until a new one arrives.
+      // A reread carries the last answer and its size, so `read` keeps painting it until a new
+      // one arrives and the budget still counts it meanwhile.
       const entry: Entry<T> = {
         promise: Promise.resolve(null),
         settledAt: null,
         value: cached?.value,
-        bytes: 0
+        bytes: cached?.value === undefined ? 0 : cached.bytes
       }
       const forget = (): void => {
         if (entries.get(key) !== entry) {
@@ -73,8 +74,6 @@ export function createHoverPreviewCache<T>({
         } else {
           // A failed reread keeps the last answer, stale, so the next load asks again.
           entry.settledAt = 0
-          entry.bytes = budget?.sizeOf(entry.value) ?? 0
-          totalBytes += entry.bytes
         }
       }
       entry.promise = fetch().then(
@@ -84,6 +83,7 @@ export function createHoverPreviewCache<T>({
           } else if (entries.get(key) === entry) {
             entry.settledAt = Date.now()
             entry.value = value
+            totalBytes -= entry.bytes
             entry.bytes = budget?.sizeOf(value) ?? 0
             totalBytes += entry.bytes
             // Re-insert as newest so the budget evicts older answers, not this one.
@@ -100,6 +100,7 @@ export function createHoverPreviewCache<T>({
       )
       remove(key)
       entries.set(key, entry)
+      totalBytes += entry.bytes
       evictOldest(key)
       return entry.promise
     }

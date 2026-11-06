@@ -123,25 +123,79 @@ describe('nativeChatTurnOpenedPullRequests', () => {
     ).toEqual([38712])
   })
 
+  it("reads each agent's recorded gh pr create call", () => {
+    // Recorded from the renderer on Windows QA of this change: Claude's Bash call, and Codex's
+    // shell call through PowerShell, whose output ends lines in CRLF.
+    const claude = bashTurn(
+      { command: 'gh pr create --fill', description: 'Create a pull request from commit info' },
+      'Creating pull request for brennanb2025/chat-pr-card into main in stablyai/orca\n\nhttps://github.com/stablyai/orca/pull/38750',
+      { state: 'completed' }
+    )
+    const codex = bashTurn(
+      {
+        command:
+          '"C:\\\\Users\\\\neil\\\\AppData\\\\Local\\\\Microsoft\\\\WindowsApps\\\\pwsh.exe" -Command \'gh pr create --fill\'',
+        cwd: 'C:\\Users\\neil\\orca\\workspaces\\orca\\qa-pr-38750-qg'
+      },
+      'Creating pull request for brennanb2025/chat-pr-card into main in stablyai/orca\r\nhttps://github.com/stablyai/orca/pull/38750\r\n',
+      { state: 'completed' }
+    )
+    expect([openedIn(claude), openedIn(codex)]).toEqual([[38750], [38750]])
+    // cmd.exe's own wrapper.
+    expect(
+      openedIn(
+        bashTurn(
+          { command: 'C:\\Windows\\System32\\cmd.exe /d /s /c "gh pr create --fill"' },
+          GH_CREATE_OUTPUT
+        )
+      )
+    ).toEqual([38712])
+  })
+
   it('counts a finished call that failed after opening, but not one still running', () => {
     const chained = { command: 'gh pr create --fill && gh pr checks --watch' }
     expect(openedIn(bashTurn(chained, GH_CREATE_OUTPUT, { state: 'failed' }))).toEqual([38712])
     expect(openedIn(bashTurn(chained, GH_CREATE_OUTPUT, { state: 'running' }))).toEqual([])
   })
 
-  it('asks for a clipped create output whole, and skips a partly loaded turn', () => {
-    const clipped = bashTurn({ command: 'gh pr create --fill' }, 'hook output…', {}, 'item-7')
-    expect(nativeChatTurnOpenedPullRequests([clipped], ['t1']).clippedCreateOutputs).toEqual([
-      'item-7'
-    ])
-    expect(
+  it('decides a clipped create output from its whole text, and skips a partly loaded turn', () => {
+    // The head already holds a URL, but what follows the cut can disqualify it.
+    const clipped = bashTurn({ command: 'gh pr create --fill' }, GH_CREATE_OUTPUT, {}, 'item-7')
+    const pending = nativeChatTurnOpenedPullRequests([clipped], ['t1'])
+    expect(pending.clippedCreateOutputs).toEqual(['item-7'])
+    expect(pending.byTurn.size).toBe(0)
+    const withOutputs = (whole: string | null): number[] =>
       nativeChatTurnOpenedPullRequests([clipped], ['t1'], {
-        fullOutputs: new Map([['item-7', GH_CREATE_OUTPUT]])
-      }).byTurn.get('t1')?.[0]?.number
-    ).toBe(38712)
+        fullOutputs: new Map([['item-7', whole]])
+      })
+        .byTurn.get('t1')
+        ?.map(({ number }) => number) ?? []
+    expect(withOutputs(`${GH_CREATE_OUTPUT}https://github.com/o/r/pull/2\n`)).toEqual([])
+    // A host that can't give it whole leaves the head as the evidence.
+    expect(withOutputs(null)).toEqual([38712])
     const whole = bashTurn({ command: 'gh pr create --fill' }, GH_CREATE_OUTPUT)
     expect(
       nativeChatTurnOpenedPullRequests([whole], ['t1'], { partialTurnKey: 't1' }).byTurn.size
     ).toBe(0)
+  })
+
+  it('rescans only rows it has not seen, so a streaming reply stays cheap', () => {
+    const cache = new WeakMap()
+    const old = bashTurn({ command: 'gh pr create --fill' }, GH_CREATE_OUTPUT)
+    nativeChatTurnOpenedPullRequests([old], ['t1'], { cache })
+    Object.defineProperty(old, 'blocks', {
+      get: () => {
+        throw new Error('an unchanged row was scanned again')
+      }
+    })
+    const streaming: NativeChatMessage = {
+      id: 'm2',
+      role: 'assistant',
+      timestamp: 2,
+      source: 'transcript',
+      blocks: [{ type: 'text', text: 'ok' }]
+    }
+    const again = nativeChatTurnOpenedPullRequests([old, streaming], ['t1', 't1'], { cache })
+    expect(again.byTurn.get('t1')?.map(({ number }) => number)).toEqual([38712])
   })
 })
