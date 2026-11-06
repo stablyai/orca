@@ -52,6 +52,8 @@ export function useMobileMarkdownTree(
   const cache = useRef<MobileMarkdownTreeCache | null>(null)
   const root = useMemo(() => {
     const parsed = parseGrowingMobileMarkdownTree(cache.current, source, growing, chatMath, link)
+    // Safe if this render is discarded: a later parse reuses the cache only for text it prefixes.
+    // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
     cache.current = parsed.cache
     return parsed.root
   }, [source, growing, chatMath, link])
