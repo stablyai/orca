@@ -82,6 +82,7 @@ async function stagedRig(
     antigravity?: boolean
     authConfig?: AntigravityChatAuthConfig
     modeFailure?: boolean
+    deletion?: 'unsupported' | 'stalled'
     proveExit?: boolean
     initialized?: InitializeResponse
     prepare?: () => Promise<Record<string, string>>
