@@ -1,9 +1,7 @@
 import {
   AntigravityChatAuthConfigError,
-  AntigravityChatAuthUnconfirmedError,
-  isAntigravityChatAuthUnconfirmed
+  AntigravityChatAuthUnconfirmedError
 } from '../../../shared/antigravity-chat-auth-config'
-import { unwrapRuntimeRpcResult } from '../../../renderer/src/runtime/runtime-rpc-result'
 import { terminalStartError } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { describe, expect, it } from 'vitest'
 import { mapRuntimeError } from './errors'
@@ -38,21 +36,16 @@ class LineageError extends Error {
 }
 
 describe('mapRuntimeError', () => {
-  it('preserves restart-only Antigravity recovery through the actual RPC client error', () => {
-    for (const [failure, needsRestart] of [
-      [new AntigravityChatAuthUnconfirmedError(), true],
-      [new AntigravityChatAuthConfigError('Incomplete Antigravity settings'), false],
-      [new Error('Host unreachable'), false]
+  it('preserves the distinct Antigravity restart recovery code on the wire', () => {
+    for (const [failure, code] of [
+      [new AntigravityChatAuthUnconfirmedError(), 'antigravity_account_settings_unconfirmed'],
+      [new AntigravityChatAuthConfigError('Incomplete Antigravity settings'), 'runtime_error'],
+      [new Error('Host unreachable'), 'runtime_error']
     ] as const) {
-      const response = mapRuntimeError('auth', { runtimeId: 'host' }, failure)
-      let clientError: unknown
-      try {
-        unwrapRuntimeRpcResult(response)
-      } catch (error) {
-        clientError = error
-      }
-      expect(isAntigravityChatAuthUnconfirmed(clientError)).toBe(needsRestart)
-      expect(clientError).toMatchObject({ message: failure.message })
+      expect(mapRuntimeError('auth', { runtimeId: 'host' }, failure)).toMatchObject({
+        ok: false,
+        error: { code, message: failure.message }
+      })
     }
   })
 
