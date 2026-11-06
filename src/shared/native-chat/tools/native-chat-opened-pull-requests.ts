@@ -30,8 +30,7 @@ const CREATE_RUNS = CREATE_COMMANDS.map(({ provider, command }) => ({
 // only printf.
 const HEREDOC_BODY =
   /<<-?[ \t]*(['"]?)(\w+)\1[^\n]*\n(?:(?:[\s\S]*?\n)?[ \t]*\2[ \t]*(?=\n|$)|[\s\S]*$)/gu
-const QUOTED_OR_COMMENT =
-  /'[^']*'|"(?:\\[\s\S]|[^"\\])*"|(?<=^|[\s;&|(])#[^\n]*|\\\r?\n|\\[\s\S]/gmu
+const QUOTED_OR_COMMENT = /'[^']*'|"(?:\\[\s\S]|[^"\\])*"|(?<=^|[\s;&|(])#[^\n]*|\\\n|\\[\s\S]/gmu
 const COMMAND_SEPARATOR = /&&|\|\||[;|\n]/u
 // Commands that print other change requests' URLs, so output beside them proves nothing.
 const LISTS_CHANGE_REQUESTS =
@@ -44,8 +43,9 @@ function createCount(code: string): number {
 /** The commands a script runs, without the text it carries. */
 function shellCode(script: string): string {
   return script.replace(HEREDOC_BODY, '<<').replace(QUOTED_OR_COMMENT, (text) =>
-    // A line continuation joins lines, as the shell removes it; any other text becomes one word.
-    /^\\\r?\n$/u.test(text) ? '' : "''"
+    // A line continuation (backslash-LF) joins lines, as the shell removes it; any other text,
+    // including a backslash before CR, becomes one word.
+    text === '\\\n' ? '' : "''"
   )
 }
 
