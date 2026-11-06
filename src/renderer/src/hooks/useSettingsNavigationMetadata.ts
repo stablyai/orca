@@ -181,7 +181,6 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       isLinearConnected,
       repos,
       projectGrouping,
-      settings,
       languageRevision
     ]
   )

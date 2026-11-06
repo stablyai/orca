@@ -68,3 +68,31 @@ export function sameRemovalCatalog(left: readonly Repo[], right: readonly Repo[]
     })
   )
 }
+
+/** Removal observes membership only; terminal title frames do not change its consequences. */
+export function createRemovalTabMembership() {
+  type Tabs = Readonly<Record<string, readonly { id: string }[]>>
+  let observed: Tabs | undefined
+  let material: Tabs | undefined
+  return (next: Tabs): Tabs => {
+    if (observed !== next) {
+      if (
+        !material ||
+        Object.keys(material).length !== Object.keys(next).length ||
+        Object.entries(material).some(([id, tabs]) => {
+          const other = next[id]
+          return (
+            !other ||
+            (tabs !== other &&
+              (tabs.length !== other.length ||
+                tabs.some((tab, index) => tab.id !== other[index].id)))
+          )
+        })
+      ) {
+        material = next
+      }
+      observed = next
+    }
+    return material ?? next
+  }
+}

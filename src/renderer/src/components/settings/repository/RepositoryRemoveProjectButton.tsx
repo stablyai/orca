@@ -1,5 +1,6 @@
 import {
   sameRemovalCatalog,
+  createRemovalTabMembership,
   type SettingsProjectRemoval,
   type RemovalContextRepo,
   getRemoveProjectDescription
@@ -289,6 +290,7 @@ export function useSettingsProjectRemovalDescription(
     let previous: readonly unknown[] | undefined
     let observedRepos: AppState['repos'] | undefined
     let materialRepos: AppState['repos'] | undefined
+    const tabMembership = createRemovalTabMembership()
     let value = { description: '', signature: '' }
     return (state: AppState) => {
       if (observedRepos !== state.repos) {
@@ -311,7 +313,7 @@ export function useSettingsProjectRemovalDescription(
         state.removedSshTargetLabels,
         selectWorktreesByRepo(state),
         selectDetectedWorktreesByRepo(state),
-        state.tabsByWorktree,
+        tabMembership(state.tabsByWorktree),
         state.ptyIdsByTabId,
         state.openFiles,
         state.editorDrafts,

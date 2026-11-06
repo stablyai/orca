@@ -1,3 +1,4 @@
+import { getNoticeHostContextLabels } from './host-labels'
 import { projectHostSetupProjectionFromRepos } from '../project-host-setup-projection'
 import { describe, expect, it } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../execution-host'
@@ -507,3 +508,15 @@ it.each(['repository', 'host', 'folder'] as const)(
     }
   }
 )
+
+it('does not visit the host catalog when no notices are eligible', () => {
+  let visits = 0
+  const repos = {
+    [Symbol.iterator]() {
+      visits++
+      return [][Symbol.iterator]()
+    }
+  }
+  expect(getNoticeHostContextLabels([], repos, new Map(), null, undefined)).toBeUndefined()
+  expect(visits).toBe(0)
+})

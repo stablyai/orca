@@ -189,21 +189,27 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       ),
     [orderedHostOptions, setWorkspaceHostOrder, workspaceHostOrder]
   )
+  const revealPending = useAppStore((state) =>
+    Boolean(state.pendingRevealSidebarRow || state.pendingRevealWorktree)
+  )
   const headerRevealPlacements = useMemo(
     () =>
-      collectHeaderRevealPlacements(
-        addHostSectionRows({
-          rows: rowPlan.render(new Set()),
-          hostOptions: orderedHostOptions,
-          workspaceHostScope: args.workspaceHostScope,
-          visibleWorkspaceHostIds: args.visibleWorkspaceHostIds,
-          defaultHostId,
-          localHostLabel: getLocalExecutionHostLabel(),
-          preferProjectGrouping: true
-        }),
-        rowPlan.headerRevealPaths
-      ),
+      revealPending
+        ? collectHeaderRevealPlacements(
+            addHostSectionRows({
+              rows: rowPlan.render(new Set()),
+              hostOptions: orderedHostOptions,
+              workspaceHostScope: args.workspaceHostScope,
+              visibleWorkspaceHostIds: args.visibleWorkspaceHostIds,
+              defaultHostId,
+              localHostLabel: getLocalExecutionHostLabel(),
+              preferProjectGrouping: true
+            }),
+            rowPlan.headerRevealPaths
+          )
+        : undefined,
     [
+      revealPending,
       rowPlan,
       orderedHostOptions,
       args.workspaceHostScope,

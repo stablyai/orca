@@ -357,73 +357,64 @@ it.each(['custom-row', 'palette-store'] as const)(
   }
 )
 
-it.each([100, 1000])(
-  'records placement once for %i headers and reuses it across collapse/reveal and unrelated writes',
-  (count) => {
-    let reads = 0
-    const repos = Array.from({ length: count }, (_, i) => ({
-      ...makeRepo(),
-      get id() {
-        reads++
-        return `repo-${i}`
-      },
-      path: `/repo-${i}`
-    }))
-    const repoMap = new Map(repos.map((repo) => [repo.id, repo]))
-    const project = projectHostSetupProjectionFromRepos(repos)
-    const projectGrouping = { projects: project.projects, projectHostSetups: project.setups }
-    const inputs: SectionRowsArgs = {
-      groupBy: 'repo',
-      sortBy: 'smart',
-      projectOrderBy: 'manual',
-      pinnedDisplayPolicy: 'single-location',
-      defaultHostId: 'local',
-      worktrees: [],
-      repos,
-      repoMap,
-      worktreeMap: new Map(),
-      worktreeLineageById: {},
-      prCache: null,
-      settings,
-      workspaceStatuses,
-      effectiveCollapsedGroups: new Set(),
-      projectGrouping,
-      visibleReposForRows: repos,
-      visibleProjectGroupsForRows: [],
-      visibleFolderWorkspacesForRows: [],
-      importedWorktreesByRepo: new Map(),
-      newExternalWorktreesInboxByRepo: new Map(),
-      filterRepoIds: [],
-      visibleWorkspaceHostIds: null,
-      workspaceHostScope: 'all'
+it('materializes rows once per update until a reveal needs the uncollapsed placement', () => {
+  const previous = useAppStore.getState()
+  useAppStore.setState({ pendingRevealSidebarRow: null, pendingRevealWorktree: null })
+  const original = plans.planSidebarRows
+  const rowRenders = vi.fn()
+  const planned = vi.spyOn(plans, 'planSidebarRows').mockImplementation((...args) => {
+    const plan = original(...args)
+    const render = plan.render
+    plan.render = (...inputs) => {
+      rowRenders()
+      return render(...inputs)
     }
-    const planned = vi.spyOn(plans, 'planSidebarRows')
-    let renders = 0
-    reads = 0
-    const hook = renderHook(
-      ({ collapsed }) => {
-        renders++
-        return useSidebarSectionRows({ ...inputs, effectiveCollapsedGroups: collapsed })
-      },
-      { initialProps: { collapsed: new Set<string>() } }
-    )
-    const placements = hook.result.current.headerRevealPlacements
-    expect(placements.size).toBe(count)
-    expect(reads).toBeLessThan(100 * count)
-    expect(planned).toHaveBeenCalledTimes(1)
-    reads = 0
-    const settled = renders
-    act(() => useAppStore.setState({ activeRepoId: 'unrelated' }))
-    expect(renders).toBe(settled)
-    expect(reads).toBe(0)
-    hook.rerender({ collapsed: new Set(placements.keys()) })
-    expect(hook.result.current.headerRevealPlacements).toBe(placements)
-    expect(planned).toHaveBeenCalledTimes(1)
-    expect(reads).toBeLessThan(10 * count)
-    hook.rerender({ collapsed: new Set() })
-    expect(hook.result.current.headerRevealPlacements).toBe(placements)
-    expect(planned).toHaveBeenCalledTimes(1)
-    hook.unmount()
-    planned.mockRestore()
+    return plan
+  })
+  const repo = makeRepo()
+  const repos = [repo]
+  const repoMap = new Map([[repo.id, repo]])
+  const project = projectHostSetupProjectionFromRepos(repos)
+  const inputs: SectionRowsArgs = {
+    groupBy: 'repo',
+    sortBy: 'smart',
+    projectOrderBy: 'manual',
+    pinnedDisplayPolicy: 'single-location',
+    defaultHostId: 'local',
+    worktrees: [],
+    repos,
+    repoMap,
+    worktreeMap: new Map(),
+    worktreeLineageById: {},
+    prCache: null,
+    settings,
+    workspaceStatuses,
+    effectiveCollapsedGroups: new Set(),
+    projectGrouping: { projects: project.projects, projectHostSetups: project.setups },
+    visibleReposForRows: repos,
+    visibleProjectGroupsForRows: [],
+    visibleFolderWorkspacesForRows: [],
+    importedWorktreesByRepo: new Map(),
+    newExternalWorktreesInboxByRepo: new Map(),
+    filterRepoIds: [],
+    visibleWorkspaceHostIds: null,
+    workspaceHostScope: 'all'
   }
-)
+  try {
+    const hook = renderHook(({ prCache }) => useSidebarSectionRows({ ...inputs, prCache }), {
+      initialProps: { prCache: inputs.prCache }
+    })
+    expect(rowRenders).toHaveBeenCalledTimes(1)
+    hook.rerender({ prCache: {} })
+    expect(rowRenders).toHaveBeenCalledTimes(2)
+    act(() => {
+      useAppStore.getState().revealSidebarRow('repo:repo-1')
+    })
+    expect(hook.result.current.headerRevealPlacements?.size).toBe(1)
+    expect(rowRenders).toHaveBeenCalledTimes(3)
+    hook.unmount()
+  } finally {
+    planned.mockRestore()
+    useAppStore.setState(previous, true)
+  }
+})

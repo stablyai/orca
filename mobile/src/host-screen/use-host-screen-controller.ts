@@ -115,6 +115,8 @@ export function useHostScreenController({
     connState,
     embedded,
     fetchRepoMetadata,
+    fetchLifecycleRepoMetadata: fetchRepoMetadataOnly,
+    pollProjectSections: fetchProjectSections,
     hostCapabilities,
     hostId,
     sidebarFeed: sidebarFeed?.triggers ?? null,

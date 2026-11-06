@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useOwnerProjectSections } from '../worktree/use-owner-project-sections'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
@@ -21,7 +21,9 @@ export function useHostProjectSections(args: {
     client,
     Boolean(client && hostId && !feedCarriesCatalog?.())
   )
+  const answerRef = useRef(answer)
   useEffect(() => {
+    answerRef.current = answer
     if (answer.kind === 'answered' && clientRef.current === client) {
       setServedProjectSections(answer.value)
     }
@@ -32,7 +34,11 @@ export function useHostProjectSections(args: {
         return
       }
       await refresh?.(options.force || options.queueIfInFlight || false)
-      if (ORCA_SIDEBAR_INPUTS_IS_MAIN && !('value' in answer && answer.value?.projectGroups)) {
+      const latestAnswer = answerRef.current
+      if (
+        ORCA_SIDEBAR_INPUTS_IS_MAIN &&
+        !('value' in latestAnswer && latestAnswer.value?.projectGroups)
+      ) {
         const groupReply = await hostProjectGroupsRead.request(client).catch(() => null)
         const groups =
           groupReply && readHostMethodReply(groupReply, hostProjectGroupsRead.interpret)
@@ -41,15 +47,6 @@ export function useHostProjectSections(args: {
         }
       }
     },
-    [
-      client,
-      connState,
-      hostId,
-      feedCarriesCatalog,
-      refresh,
-      answer,
-      clientRef,
-      setHostProjectGroups
-    ]
+    [client, connState, hostId, feedCarriesCatalog, refresh, clientRef, setHostProjectGroups]
   )
 }

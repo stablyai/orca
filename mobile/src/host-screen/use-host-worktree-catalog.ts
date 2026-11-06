@@ -33,6 +33,8 @@ export function useHostWorktreeCatalog(args: {
   connState: ConnectionState
   embedded: boolean
   fetchRepoMetadata: FetchHostRepoMetadata
+  fetchLifecycleRepoMetadata: FetchHostRepoMetadata
+  pollProjectSections: () => Promise<void>
   hostCapabilities: readonly string[]
   hostId: string | undefined
   sidebarFeed: HostSidebarFeedTriggers | null
@@ -44,6 +46,8 @@ export function useHostWorktreeCatalog(args: {
     connState,
     embedded,
     fetchRepoMetadata,
+    fetchLifecycleRepoMetadata,
+    pollProjectSections,
     hostCapabilities,
     hostId,
     sidebarFeed,
@@ -254,7 +258,8 @@ export function useHostWorktreeCatalog(args: {
     return startHostWorktreeRefresh({
       client,
       fetchWorktrees,
-      fetchRepoMetadata,
+      fetchRepoMetadata: fetchLifecycleRepoMetadata,
+      pollProjectSections,
       syncViewSettings: syncViewSettingsFromDesktop,
       sidebarFeed,
       appState: AppState
@@ -263,7 +268,8 @@ export function useHostWorktreeCatalog(args: {
     client,
     connState,
     fetchWorktrees,
-    fetchRepoMetadata,
+    fetchLifecycleRepoMetadata,
+    pollProjectSections,
     syncViewSettingsFromDesktop,
     sidebarFeed
   ])

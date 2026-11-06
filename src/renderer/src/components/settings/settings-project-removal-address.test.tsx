@@ -305,3 +305,36 @@ it('compares the current address disclosure synchronously before accepting and k
   await user.click(screen.getByRole('button', { name: 'Confirm Remove Project' }))
   expect(dispatch).toHaveBeenCalledExactlyOnceWith('r')
 })
+
+it('ignores terminal title ticks while keeping the live removal terminal count current', () => {
+  const { repos, x } = nestedRemovalCatalog()
+  const worktree = makeWorktree({
+    id: 'r::/srv/r/x',
+    repoId: 'r',
+    hostId: 'ssh:x',
+    runtimeOwnerEnvironmentId: 'E'
+  })
+  const tab = makeTab({ id: 'term-x', worktreeId: worktree.id })
+  let visits = 0
+  useAppStore.setState({
+    worktreesByRepo: {
+      get r() {
+        visits++
+        return [worktree]
+      }
+    },
+    tabsByWorktree: { [worktree.id]: [tab] },
+    ptyIdsByTabId: { 'term-x': ['test-pty'] }
+  })
+  const hook = renderHook(() =>
+    useSettingsProjectRemovalDescription(repos[0], 'project', x.selectionKey, x.setups)
+  )
+  expect(hook.result.current.description).toContain('1 open terminal')
+  visits = 0
+  const before = useAppStore.getState().tabsByWorktree
+  act(() => useAppStore.getState().updateTabTitle('term-x', 'Building current project'))
+  expect(useAppStore.getState().tabsByWorktree).not.toBe(before)
+  expect(visits).toBe(0)
+  act(() => useAppStore.setState({ tabsByWorktree: { [worktree.id]: [] } }))
+  expect(hook.result.current.description).not.toContain('open terminal')
+})

@@ -1,3 +1,5 @@
+import { getProjectSectionsResource } from './project-sections-resource'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { startHostWorktreeRefresh } from './host-worktree-refresh'
 
@@ -223,4 +225,54 @@ describe('startHostWorktreeRefresh', () => {
       )
     })
   })
+})
+
+it('keeps one catalog event owner alongside host metadata, polling and explicit refreshes', async () => {
+  vi.useFakeTimers()
+  const events = new Set<(event: unknown) => void>()
+  const catalog = { repos: [], projects: [], setups: [], projectOrderBy: 'manual' }
+  const read = vi.fn(async () => ({ id: 'r', ok: true as const, result: { catalog } }))
+  const client = stubRpcClient({
+    sendRequest: read,
+    subscribe: (_method, _params, listener) => {
+      events.add(listener)
+      return () => {
+        events.delete(listener)
+      }
+    }
+  })
+  const appState = { currentState: 'active', addEventListener: () => ({ remove: () => {} }) }
+  const resource = getProjectSectionsResource(client)
+  const release = resource.subscribe(() => {}, appState)
+  const metadata = vi.fn(async () => {})
+  const stop = startHostWorktreeRefresh({
+    client,
+    appState,
+    fetchWorktrees: async () => {},
+    fetchRepoMetadata: metadata,
+    pollProjectSections: () => resource.refresh(false),
+    syncViewSettings: async () => {}
+  })
+  try {
+    await resource.refresh(false)
+    expect(read).toHaveBeenCalledTimes(1)
+    for (const type of ['reposChanged', 'sshStateChanged']) {
+      for (const listener of events) {
+        listener({ type })
+      }
+      await resource.refresh(false)
+    }
+    expect(read).toHaveBeenCalledTimes(3)
+    expect(metadata).toHaveBeenCalledTimes(3)
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(read).toHaveBeenCalledTimes(3)
+    await resource.refresh()
+    expect(read).toHaveBeenCalledTimes(4)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(read).toHaveBeenCalledTimes(5)
+  } finally {
+    stop()
+    release()
+    vi.useRealTimers()
+  }
 })

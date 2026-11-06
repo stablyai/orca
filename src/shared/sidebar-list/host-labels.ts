@@ -80,6 +80,10 @@ export function getNoticeHostContextLabels(
   projectIndex: ProjectGroupingIndex | null,
   hostLabelById: ReadonlyMap<string, string> | undefined
 ): Map<string, NoticeHostContext> | undefined {
+  const eligible = [...noticeRepos]
+  if (eligible.length === 0) {
+    return undefined
+  }
   const hostsByProject = new Map<string, Set<string>>()
   const retain = (key: string, hostId: ExecutionHostId) => {
     const hosts = hostsByProject.get(key) ?? new Set<string>()
@@ -99,7 +103,7 @@ export function getNoticeHostContextLabels(
     retain(key, host)
   }
   const candidates = new Map<string, { key: string; hostId: ExecutionHostId }>()
-  for (const repo of noticeRepos) {
+  for (const repo of eligible) {
     const hostId = getRepoExecutionHostId(repo)
     const key =
       projectIndex?.groupByRepoHost.get(getRepoHostIdentity(repo))?.key ??

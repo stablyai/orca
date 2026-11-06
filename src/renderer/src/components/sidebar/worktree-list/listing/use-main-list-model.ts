@@ -242,13 +242,18 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
     () => renderSidebarFeedRows(planned, view, effectiveCollapsedGroups, hostDragActive),
     [planned, view, effectiveCollapsedGroups, hostDragActive]
   )
+  const revealPending = useAppStore((state) =>
+    Boolean(state.pendingRevealSidebarRow || state.pendingRevealWorktree)
+  )
   const headerRevealPlacements = useMemo(
     () =>
-      collectHeaderRevealPlacements(
-        renderSidebarFeedRows(planned, view, PLANNED_UNCOLLAPSED).sectionRows,
-        planned.plan.headerRevealPaths
-      ),
-    [planned, view]
+      revealPending
+        ? collectHeaderRevealPlacements(
+            renderSidebarFeedRows(planned, view, PLANNED_UNCOLLAPSED).sectionRows,
+            planned.plan.headerRevealPaths
+          )
+        : undefined,
+    [planned, view, revealPending]
   )
   const sectionRows = useMemo(
     () =>
@@ -270,17 +275,16 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
     [sectionRows]
   )
   const allRepoIds = useMemo(() => repos.map((repo) => repo.id), [repos])
-  const { orderedHostOptions } = planned
   const handleReorderHostSections = useCallback(
     (orderedVisibleHostIds: ExecutionHostId[]) =>
       setWorkspaceHostOrder(
         mergeDraggedHostSectionOrder(
           orderedVisibleHostIds,
           workspaceHostOrder,
-          orderedHostOptions.map((host) => host.id)
+          planned.orderedHostOptions.map((host) => host.id)
         )
       ),
-    [orderedHostOptions, setWorkspaceHostOrder, workspaceHostOrder]
+    [planned.orderedHostOptions, setWorkspaceHostOrder, workspaceHostOrder]
   )
 
   return {
