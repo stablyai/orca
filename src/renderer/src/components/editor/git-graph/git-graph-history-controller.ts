@@ -118,7 +118,7 @@ export class GitGraphHistoryController {
   }
 
   private onRefresh = (event: Event): void => {
-    if ((event as CustomEvent<string>).detail === this.worktreeId) {
+    if (event instanceof CustomEvent && event.detail === this.worktreeId) {
       this.invalidate()
     }
   }

@@ -104,8 +104,10 @@ export function GitGraphRefs({
               </button>
             </PopoverTrigger>
             {open && (
-              <PopoverContent className="max-h-72 space-y-1 overflow-auto scrollbar-sleek">
-                {references.filter((ref) => !inline.includes(ref)).map(badge)}
+              <PopoverContent>
+                <div className="max-h-72 space-y-1 overflow-auto scrollbar-sleek">
+                  {references.filter((ref) => !inline.includes(ref)).map(badge)}
+                </div>
               </PopoverContent>
             )}
           </Popover>

@@ -38,13 +38,26 @@ document.body.appendChild(container)
 let root = createRoot(container)
 const initialState = useAppStore.getState()
 const workspaceId = 'r::/repo'
-const local = {
+const local: Worktree = {
   id: workspaceId,
   repoId: 'r',
   path: '/repo',
   branch: 'refs/heads/main',
-  hostId: 'local'
-} as Worktree
+  hostId: 'local',
+  head: 'a',
+  isBare: false,
+  isMainWorktree: true,
+  displayName: 'repo',
+  comment: '',
+  linkedIssue: null,
+  linkedPR: null,
+  linkedLinearIssue: null,
+  isArchived: false,
+  isUnread: false,
+  isPinned: false,
+  sortOrder: 0,
+  lastActivityAt: 0
+}
 const repo: Repo = {
   id: 'r',
   path: '/repo',
@@ -94,7 +107,7 @@ it('keeps view models on expand and resize, rebuilding when history changes', as
   await act(async () => root.render(render(result)))
   expect(build).toHaveBeenCalledTimes(1)
   await act(async () =>
-    (container.querySelector('[data-testid="git-history-row"]') as HTMLButtonElement).click()
+    container.querySelector<HTMLButtonElement>('[data-testid="git-history-row"]')!.click()
   )
   await act(async () =>
     container
@@ -195,10 +208,13 @@ it.each(['local', 'ssh:A'] as const)(
     })
     const cleanup = attachClosedEditorTabCleanup(useAppStore)
     const original = useAppStore.getState().openFiles
-    const file = {
+    const file: OpenFile = {
       id: `${workspaceId}::git-graph`,
       worktreeId: workspaceId,
       mode: 'git-graph',
+      relativePath: 'Git Graph',
+      language: 'plaintext',
+      isDirty: false,
       filePath: `${workspaceId}::git-graph`,
       operationProvenance: {
         ownershipProjection: 'explicit',
@@ -207,7 +223,7 @@ it.each(['local', 'ssh:A'] as const)(
           runtimeEnvironmentId: null
         })
       }
-    } as OpenFile
+    }
     useAppStore.setState({ openFiles: [...original, file] })
     const render = () => (
       <TooltipProvider>

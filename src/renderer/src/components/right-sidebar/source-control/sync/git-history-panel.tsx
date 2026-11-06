@@ -103,8 +103,11 @@ export function GitHistoryPanel({
     setFilesByCommit(
       Object.fromEntries(Object.entries(filesByCommit).filter(([id]) => ids.has(id)))
     )
-    loadedCommitsRef.current = new Set([...loadedCommitsRef.current].filter((id) => ids.has(id)))
   }
+  useEffect(() => {
+    const ids = new Set(result?.items.map((item) => item.id))
+    loadedCommitsRef.current = new Set([...loadedCommitsRef.current].filter((id) => ids.has(id)))
+  }, [result])
   const scrollRef = useRef<HTMLDivElement>(null)
   const virtualizer = useVirtualizer({
     count: collapsed ? 0 : viewModels.length,

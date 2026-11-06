@@ -77,14 +77,8 @@ export function GitGraphDetails({
               {translate('gitGraph.parents', 'Parents')}
             </span>
             {item.parentIds.map((id) => (
-              <Button
-                key={id}
-                variant="ghost"
-                size="sm"
-                className="h-6 px-1 font-mono text-2xs"
-                onClick={() => onParent(id)}
-              >
-                {id.slice(0, 7)}
+              <Button key={id} variant="ghost" size="xs" onClick={() => onParent(id)}>
+                <span className="font-mono text-2xs">{id.slice(0, 7)}</span>
               </Button>
             ))}
           </div>

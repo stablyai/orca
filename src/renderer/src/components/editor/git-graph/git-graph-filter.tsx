@@ -164,7 +164,7 @@ function GitGraphFilterForOwner({
           </Button>
         </PopoverTrigger>
         <PopoverContent
-          className="w-80 space-y-2"
+          className="w-80"
           align="start"
           onEscapeKeyDown={(event) => {
             event.preventDefault()
@@ -172,41 +172,43 @@ function GitGraphFilterForOwner({
             setSearch(undefined)
           }}
         >
-          <div className="flex gap-2">
-            <Button size="sm" variant="ghost" onClick={() => apply('all')}>
-              {translate('gitGraph.allBranches', 'All branches')}
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => apply('head')}>
-              {translate('gitGraph.currentBranch', 'Current branch')}
-            </Button>
-          </div>
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={translate('gitGraph.searchRefs', 'Search branches and tags')}
-          />
-          {error && <p className="text-xs text-destructive">{error}</p>}
-          <div className="max-h-72 overflow-auto scrollbar-sleek">
-            {refs.map((ref) => (
-              <label
-                key={ref.id}
-                className="flex items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-accent"
-              >
-                <Checkbox
-                  checked={chosen.has(ref.id)}
-                  onCheckedChange={(checked) => {
-                    const next = new Set(chosen)
-                    if (checked) {
-                      next.add(ref.id)
-                    } else {
-                      next.delete(ref.id)
-                    }
-                    setDraft([...next].sort())
-                  }}
-                />
-                <span className="truncate">{ref.name}</span>
-              </label>
-            ))}
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <Button size="sm" variant="ghost" onClick={() => apply('all')}>
+                {translate('gitGraph.allBranches', 'All branches')}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => apply('head')}>
+                {translate('gitGraph.currentBranch', 'Current branch')}
+              </Button>
+            </div>
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={translate('gitGraph.searchRefs', 'Search branches and tags')}
+            />
+            {error && <p className="text-xs text-destructive">{error}</p>}
+            <div className="max-h-72 overflow-auto scrollbar-sleek">
+              {refs.map((ref) => (
+                <label
+                  key={ref.id}
+                  className="flex items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-accent"
+                >
+                  <Checkbox
+                    checked={chosen.has(ref.id)}
+                    onCheckedChange={(checked) => {
+                      const next = new Set(chosen)
+                      if (checked) {
+                        next.add(ref.id)
+                      } else {
+                        next.delete(ref.id)
+                      }
+                      setDraft([...next].sort())
+                    }}
+                  />
+                  <span className="truncate">{ref.name}</span>
+                </label>
+              ))}
+            </div>
           </div>
         </PopoverContent>
       </Popover>
