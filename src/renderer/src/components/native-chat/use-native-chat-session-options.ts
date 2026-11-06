@@ -2,7 +2,10 @@ import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { getAgentSessionOptionCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import { matchNativeChatCatalogModelId } from '../../../../shared/native-chat/input/native-chat-session-option-state'
-import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
+import type {
+  SessionOptionDescriptor,
+  SessionOptionValue
+} from '../../../../shared/native-chat/input/native-chat-session-options'
 import { useAppStore } from '../../store'
 import { sayNativeChatSessionOptionTranslated } from './native-chat-session-option-labels-text'
 import {
@@ -20,6 +23,8 @@ import {
   resolveNativeChatModelDiscoveryContext
 } from './native-chat-session-option-discovery'
 import { readClaudeSessionOptionsFromTerminalScreen } from './claude-terminal-session-options'
+import { readMuseSessionOptionsFromTerminalScreen } from './muse-terminal-session-options'
+import type { CatalogModel } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
 
 import { enqueueSessionOptionSettingsWrite } from './native-chat-session-option-settings-write'
 
@@ -28,6 +33,19 @@ const subscribeEmpty = (): (() => void) => () => {}
 const getEmptySnapshot = (): SessionOptionDescriptor[] => EMPTY_SNAPSHOT
 
 const CLIENT_SETTINGS_TARGET = { kind: 'local' } as const
+
+type TerminalSessionOptionsReader = (
+  screen: string | null | undefined,
+  models?: readonly CatalogModel[]
+) => Record<string, SessionOptionValue> | null
+
+/** Agents whose current model/effort is read off their TUI rather than reported by hooks. */
+function terminalSessionOptionsReader(agent: AgentType): TerminalSessionOptionsReader | null {
+  if (agent === 'claude') {
+    return readClaudeSessionOptionsFromTerminalScreen
+  }
+  return agent === 'muse' ? readMuseSessionOptionsFromTerminalScreen : null
+}
 
 export function useNativeChatSessionOptions(args: {
   agent: AgentType
@@ -75,12 +93,10 @@ export function useNativeChatSessionOptions(args: {
       ? readNativeChatEnrichedModels(agent, discoveryContext.hostKey)
       : null
     const reportedValues =
-      agent === 'claude'
-        ? readClaudeSessionOptionsFromTerminalScreen(
-            readTerminalScreen?.(),
-            discoveredModels ?? undefined
-          )
-        : null
+      terminalSessionOptionsReader(agent)?.(
+        readTerminalScreen?.(),
+        discoveredModels ?? undefined
+      ) ?? null
     return createNativeChatPtySessionOptions({
       agent,
       scopeKey,
@@ -113,7 +129,8 @@ export function useNativeChatSessionOptions(args: {
   ])
 
   useEffect(() => {
-    if (!surface || agent !== 'claude') {
+    const readScreenOptions = terminalSessionOptionsReader(agent)
+    if (!surface || !readScreenOptions) {
       return
     }
     let cancelled = false
@@ -135,10 +152,7 @@ export function useNativeChatSessionOptions(args: {
         ? readNativeChatEnrichedModels(agent, discoveryContext.hostKey)
         : null
       for (const screen of [authoritativeScreen, readTerminalScreen?.() ?? null]) {
-        const reportedValues = readClaudeSessionOptionsFromTerminalScreen(
-          screen,
-          models ?? undefined
-        )
+        const reportedValues = readScreenOptions(screen, models ?? undefined)
         if (!reportedValues) {
           continue
         }

@@ -1,6 +1,6 @@
 import { claudeProfileHistoryDirs } from '../claude-accounts/claude-profile-installed-router'
 import { homedir } from 'node:os'
-import { extname, join } from 'node:path'
+import { basename, extname, join } from 'node:path'
 import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
 import {
   resolveNativeChatTranscriptAgent,
@@ -9,6 +9,8 @@ import {
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
 import { resolveOmpSessionsDir } from '../ai-vault/scanners/omp/omp-session-root'
+import { museSessionIdFromFilePath } from '../ai-vault/scanners/muse/session-scanner-muse-paths'
+import { resolveMuseSessionsDir } from '../../shared/muse-session-log'
 import {
   claudeProjectsHostDirs,
   codexHomeSessionsDir,
@@ -62,6 +64,7 @@ export type ResolveSessionFileOptions = {
   codexSessionsDirs?: string[]
   grokSessionsDir?: string
   ompSessionsDir?: string
+  museSessionsDir?: string
   /** Hook paths are authoritative: Claude filenames may differ from its reported session ID. */
   transcriptPath?: string
   /** Restrict exact-path resolution to this attested guest. */
@@ -184,8 +187,35 @@ async function resolveSessionFileById(
       strictErrors: options.strictErrors
     })
   }
+  if (transcriptAgent === 'muse') {
+    // No WSL tier: the root follows XDG_DATA_HOME, which has no fixed per-home segments.
+    return findMuseSessionFile(
+      resolveMuseSessionsDir(options.museSessionsDir),
+      trimmedId,
+      signal,
+      options.strictErrors
+    )
+  }
   transcriptAgent satisfies never
   return null
+}
+
+/** <root>/YYYY/MM/DD/<id>/session.jsonl; deeper `subagent/<child-id>` logs are pruned. */
+async function findMuseSessionFile(
+  root: string,
+  sessionId: string,
+  signal?: AbortSignal,
+  strictErrors?: boolean
+): Promise<string | null> {
+  const files = await walkSessionFiles(root, 'muse', [], {
+    extensions: new Set(['.jsonl']),
+    filePredicate: (path) =>
+      basename(path) === 'session.jsonl' && museSessionIdFromFilePath(path) === sessionId,
+    directoryPredicate: (name, depth) => depth < 3 || (depth === 3 && name === sessionId),
+    signal,
+    strictErrors
+  })
+  return files[0] ?? null
 }
 
 /** Search preferred host roots, account roots, then running WSL distros. */

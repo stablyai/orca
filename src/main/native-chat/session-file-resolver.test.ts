@@ -118,6 +118,23 @@ describe('resolveSessionFilePath', () => {
     ).resolves.toBe(join(cwdDir, `${stem}.jsonl`))
   })
 
+  it('resolves a Muse session by its date-sharded directory id, never a subagent log', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-muse-')
+    const parentId = '01a1afb3-c489-7951-90e1-4e071e67c6b7'
+    const childId = 'f83b7f66-004d-4d7e-8e6e-6cd22e579579'
+    const sessionDir = join(root, '2026', '11', '05', parentId)
+    await mkdir(join(sessionDir, 'subagent', childId), { recursive: true })
+    await writeFile(join(sessionDir, 'session.jsonl'), '{}\n')
+    await writeFile(join(sessionDir, 'subagent', childId, 'session.jsonl'), '{}\n')
+
+    await expect(resolveSessionFilePath('muse', parentId, { museSessionsDir: root })).resolves.toBe(
+      join(sessionDir, 'session.jsonl')
+    )
+    await expect(
+      resolveSessionFilePath('muse', childId, { museSessionsDir: root })
+    ).resolves.toBeNull()
+  })
+
   it('prefers the hook transcriptPath when it exists (Claude id != file name)', async () => {
     const root = await makeRoot('orca-native-chat-resolve-path-')
     const claudeProjectsDir = join(root, 'claude-projects')

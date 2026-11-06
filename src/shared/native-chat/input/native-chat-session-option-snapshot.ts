@@ -174,7 +174,8 @@ export function withTrackedNativeChatModel(
       id: trackedId,
       label: labelFromModelId(trackedId),
       description: trackedId,
-      options: []
+      // Same options a launch gives an unlisted id; Muse lists no models, so its effort lives here.
+      options: catalog.unknownModelOptions ?? []
     }
   ]
 }
