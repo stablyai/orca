@@ -107,6 +107,11 @@ export function defaultVerbAnswer(
         'native_verb_failed',
         'no PDF viewer exists in this pair'
       )
+    case 'native.image.act':
+      throw new BridgeNativeVerbRefusedError(
+        'native_verb_failed',
+        'no image actions exist in this pair'
+      )
     case 'native.clipboard.write':
       return { written: true }
     case 'native.clipboard.read':
