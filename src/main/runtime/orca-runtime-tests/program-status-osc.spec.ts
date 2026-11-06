@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { committingSpawn } from './bind-first-pane.test-fixture'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
@@ -188,7 +188,12 @@ describe('OSC 7501 program status', () => {
     expect(lifecycle.agentPromptLifecycleByPtyId.get('pty-1')?.status).toBe('working')
   })
 
-  it('reports a signed-out program as blocked on sign-in instead of waiting out tui-idle (#37056)', async () => {
+  it('reports a lasting sign-in block as blocked instead of waiting out tui-idle (#37056, #28348)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
+    vi.setSystemTime(1_000_000)
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-agy' })
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
@@ -208,6 +213,12 @@ describe('OSC 7501 program status', () => {
       `\x1b]7501;state=blocked:kind=auth:app=antigravity:msg=${signIn}\x07Select login method:\r\n> 1. Google OAuth\r\n`,
       Date.now()
     )
+    // agy flashes this at startup before signing itself in, so a fresh block is not yet final.
+    await expect(
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 100 })
+    ).rejects.toThrow('timeout')
+
+    vi.setSystemTime(1_003_001)
     await expect(
       runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
     ).resolves.toMatchObject({ satisfied: false, blockedReason: 'agent-sign-in-prompt' })

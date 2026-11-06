@@ -35,8 +35,11 @@ export type FirstPartyAgentStatus = {
   updatedAt: number
   sessionBoundary?: boolean
   programAtRest?: boolean
-  programSignInRequired?: boolean
+  programSignInRequiredSince?: number
 } | null
+
+/** agy shows its sign-in splash at startup, then signs itself in (#28348); only a lasting block is real. */
+export const PROGRAM_SIGN_IN_BLOCK_PERSIST_MS = 3_000
 
 /** Tier 1: an idle marker the agent put in a title itself. */
 export function hasExplicitIdleTitle(record: TuiIdleEvidenceRecord): boolean {
@@ -193,11 +196,12 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
   }
   // Why fail fast: a signed-out agent (agy's login menu) swallows any prompt sent now and
   // stays blocked until a human signs in, so waiting out the timeout only hides why.
-  if (
-    input.firstPartyStatus?.programSignInRequired &&
-    hasFreshWorkingFirstPartyStatus(input.firstPartyStatus)
-  ) {
-    return { kind: 'blocked', reason: 'agent-sign-in-prompt' }
+  const signInSince = input.firstPartyStatus?.programSignInRequiredSince
+  if (signInSince !== undefined && hasFreshWorkingFirstPartyStatus(input.firstPartyStatus)) {
+    const blockedAt = signInSince + PROGRAM_SIGN_IN_BLOCK_PERSIST_MS
+    return Date.now() >= blockedAt
+      ? { kind: 'blocked', reason: 'agent-sign-in-prompt' }
+      : { kind: 'pending', quietForeground: 'closed', recheckAt: blockedAt }
   }
   // Qoder's title and Hermes's session-start hook can precede input readiness; require the composer.
   if (input.agent === 'qoder' || input.agent === 'qoder-cn' || input.agent === 'hermes') {
