@@ -243,6 +243,10 @@ describe('useTaskPageGitLabLoading', () => {
       repoId: 'server-repo'
     }
     const everyoneKey = gitLabListQueryKey('mrs', 'opened', null, 'server-repo')
+    const initialProps: { involvement: 'authored' | null; nonce: number } = {
+      involvement: null,
+      nonce: 0
+    }
     const { result, rerender } = renderHook(
       ({ involvement, nonce }: { involvement: 'authored' | null; nonce: number }) =>
         useTaskPageGitLabLoading({
@@ -264,7 +268,7 @@ describe('useTaskPageGitLabLoading', () => {
           displayedGitLabItems: [row],
           gitlabListQueryKey: everyoneKey
         }),
-      { initialProps: { involvement: null as 'authored' | null, nonce: 0 } }
+      { initialProps }
     )
 
     rerender({ involvement: null, nonce: 1 })
