@@ -18,6 +18,9 @@ import { agentLaunchQuotingShell } from '../../../../shared/agent-launch/startup
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { withAgentSessionAccountEnv } from '../../agent-session/agent-session-account-env'
 import { resolveWslHostAgentResumeInputs } from '../../terminal/launch/wsl-host-agent-terminal-launch'
+import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { resolveSavedRestoreLaunchRecipe } from './saved-restore-launch-recipe'
 import {
   resolveTuiAgentLaunchRawArgs,
   resolveTuiAgentLaunchEnv
@@ -86,6 +89,26 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
     return Object.keys(options).length > 0 ? options : undefined
   }
 
+  /** A restore of a pane this host recorded; History and other user resumes keep current settings. */
+  private savedRestoreRecipe(
+    worktreeId: string,
+    request: Extract<RuntimeEnsureAgentSessionRequest, { kind: 'explicit' }>
+  ): SleepingAgentLaunchConfig | undefined {
+    const { tabId, leafId } = request.placement ?? {}
+    const paneKey = tabId && leafId ? makePaneKey(tabId, leafId) : null
+    return resolveSavedRestoreLaunchRecipe({
+      agent: request.agent,
+      providerSession: request.providerSession,
+      record: paneKey
+        ? this.getWorkspaceSessionForWorktree(worktreeId)?.sleepingAgentSessionsByPaneKey?.[paneKey]
+        : undefined,
+      liveRow: paneKey
+        ? this.getAgentProviderSessionSnapshotFn?.().find((row) => row.paneKey === paneKey)
+        : undefined,
+      clientAgentArgs: request.agentArgs
+    })
+  }
+
   async ensureAgentSession(
     request: RuntimeEnsureAgentSessionRequest,
     _caller: RuntimeAgentSessionRpcCaller = {}
@@ -134,17 +157,21 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
     const shell = agentLaunchQuotingShell(launchRuntime)
     // Use the resolved PTY route, not display repo metadata that may belong to another host.
     const isRemote = Boolean(workspace.connectionId)
+    const restored =
+      request.resumeOrigin === 'saved' ? this.savedRestoreRecipe(workspace.id, request) : undefined
     const startup = buildAgentResumeStartupPlan(
       resolveWslHostAgentResumeInputs({
         agent: request.agent,
         providerSession: identity.providerSession,
         cmdOverrides: settings.agentCmdOverrides ?? {},
-        agentArgs:
-          request.agentArgs !== undefined
-            ? request.agentArgs
-            : resolveTuiAgentLaunchRawArgs(request.agent, settings, undefined, shell),
-        agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings),
-        ompResumeFilePath: request.ompResumeFilePath,
+        ...(restored ?? {
+          agentArgs:
+            request.agentArgs !== undefined
+              ? request.agentArgs
+              : resolveTuiAgentLaunchRawArgs(request.agent, settings, undefined, shell),
+          agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings)
+        }),
+        ompResumeFilePath: restored?.ompResumeFilePath ?? request.ompResumeFilePath,
         sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
         sessionOptionsOverrideAgentArgs: Boolean(request.launchPreferences),
         platform,
