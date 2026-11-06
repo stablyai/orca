@@ -133,6 +133,35 @@ describe('OpenCode text-generation tool policy', () => {
     })
   })
 
+  it.each([
+    ['object', { providerID: 'x', model: 'y' }, { model: 'x/y' }],
+    [
+      'object with variant',
+      { providerID: 'x', model: 'y', variant: 'v' },
+      { model: 'x/y', variant: 'v' }
+    ],
+    ['string with variant', 'x/y#v', { model: 'x/y', variant: 'v' }]
+  ])('converts a native %s model to the form the agent map honours', (_name, model, selection) => {
+    const content = JSON.stringify({ agents: { build: { model } } })
+    expect(JSON.parse(withOpenCodeTextGenerationPolicy(content))).toEqual({
+      permission,
+      agents: {},
+      agent: { build: { ...selection, permission } }
+    })
+  })
+
+  it('keeps a legacy agent variant and ignores an incomplete model object', () => {
+    const content = JSON.stringify({
+      agents: { build: { model: { providerID: 'x' } } },
+      agent: { build: { model: 'x/y', variant: 'v' } }
+    })
+    expect(JSON.parse(withOpenCodeTextGenerationPolicy(content)).agent.build).toEqual({
+      model: 'x/y',
+      variant: 'v',
+      permission
+    })
+  })
+
   it('pins the policy to the agent recipe args select, keeping only its model', () => {
     const result = planCommitMessageGeneration(
       {

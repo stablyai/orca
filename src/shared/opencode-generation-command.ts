@@ -36,8 +36,8 @@ export function openCodeSelectedAgent(args: readonly string[]): string {
 /**
  * OpenCode applies the last matching rule and evaluates agent rules after top-level ones, so only rules on the selected
  * agent itself beat project agent config and native `permissions`. Inline config outranks project config, but within
- * it `agents` and `mode` entries replace `agent` entries, so theirs are dropped, keeping only a model the run may rely
- * on. Malformed content is replaced, since running without the policy is unsafe.
+ * it `agents` and `mode` entries replace `agent` entries, so theirs are dropped, keeping only the model and variant the
+ * run may rely on. Malformed content is replaced, since running without the policy is unsafe.
  */
 export function withOpenCodeTextGenerationPolicy(
   content: string | undefined,
@@ -50,9 +50,11 @@ export function withOpenCodeTextGenerationPolicy(
     const map = base[key]
     return isRecord(map) ? [[key, map] as const] : []
   })
-  const model = entries
+  const selection = entries
     .map(([, map]) => map[agent])
-    .find((entry) => isRecord(entry) && typeof entry.model === 'string')
+    .filter(isRecord)
+    .map(legacyAgentModel)
+    .find((entry) => entry.model)
   const agentMaps = Object.fromEntries(
     entries.map(([key, map]) => [key, { ...map, [agent]: undefined }])
   )
@@ -63,11 +65,29 @@ export function withOpenCodeTextGenerationPolicy(
     agent: {
       ...agentMaps.agent,
       [agent]: {
-        ...(isRecord(model) ? { model: model.model } : {}),
+        ...selection,
         permission: OPENCODE_TEXT_GENERATION_PERMISSION
       }
     }
   })
+}
+
+/** The `agent` map ignores native selections (`{providerID, model, variant}`, `provider/model#variant`), so convert them. */
+function legacyAgentModel({ model, variant }: Record<string, unknown>): {
+  model?: string
+  variant?: string
+} {
+  const [id, nativeVariant] =
+    typeof model === 'string'
+      ? model.split('#')
+      : isRecord(model) && typeof model.providerID === 'string' && typeof model.model === 'string'
+        ? [`${model.providerID}/${model.model}`, model.variant]
+        : []
+  const selected = nativeVariant ?? variant
+  return {
+    ...(id ? { model: id } : {}),
+    ...(typeof selected === 'string' ? { variant: selected } : {})
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

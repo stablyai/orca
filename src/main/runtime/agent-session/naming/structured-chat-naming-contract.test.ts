@@ -218,7 +218,8 @@ Repair login`
       expect(spawn?.env).toMatchObject({
         XDG_DATA_HOME: '/profiles/recorded/data',
         XDG_STATE_HOME: '/profiles/recorded/state',
-        OPENCODE_AUTH_CONTENT: undefined
+        OPENCODE_AUTH_CONTENT: undefined,
+        OPENCODE_CONFIG_CONTENT: expect.stringContaining('"*":"deny"')
       })
       expect(boundary.account).toHaveBeenCalledWith('opencode', 'recorded')
       // The v2 recording used standalone/argv; these assertions separately cover today's launch.
