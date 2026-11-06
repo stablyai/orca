@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeTerminalChunk } from '../terminal-ansi-normalization'
 import { appendNormalizedToTailBuffer } from './terminal-tail-buffer'
+import { buildRestoredTerminalTailSeed } from './terminal-tail-restore-seed'
 
 import { MAX_TAIL_PARTIAL_CHARS } from './terminal-tail-limits'
 import {
@@ -51,15 +52,27 @@ describe('terminal tail CRLF chunk boundaries', () => {
     const ptyId = 'pty-cr-cr-lf'
     const { runtime, leaf } = runtimeWithLeaf(ptyId)
     try {
-      runtime.onPtyData(ptyId, 'first\r\r\nsecond\r\r\nthird\r', 1)
+      runtime.onPtyData(ptyId, 'first\r\r\nsecond\r\x1b[0m\r\nthird\r', 1)
       runtime.onPtyData(ptyId, '\r', 2)
       runtime.onPtyData(ptyId, '\n', 3)
-      expect(readPtyTail(runtime, ptyId)).toEqual(['first', 'second', 'third'])
-      expect(leaf.tailTranscriptBuffer).toEqual(['first', 'second', 'third'])
+      runtime.onPtyData(ptyId, 'fourth\r', 4)
+      runtime.onPtyData(ptyId, '\x1b[0m', 5)
+      runtime.onPtyData(ptyId, '\r\n', 6)
+      const lines = ['first', 'second', 'third', 'fourth']
+      expect(readPtyTail(runtime, ptyId)).toEqual(lines)
+      expect(leaf.tailTranscriptBuffer).toEqual(lines)
       expect(leaf.tailPendingAnsi).toBe('')
     } finally {
       await runtime.onPtyExit(ptyId, 0)
     }
+  })
+
+  it('restores without a blank first row when the cut lands before CR CR LF', () => {
+    // 256 KiB restore window: the kept suffix starts exactly at CR CR LF.
+    const suffix = `\r\r\nx${'line\n'.repeat(52_428)}`
+    expect(suffix).toHaveLength(256 * 1024)
+    const seed = buildRestoredTerminalTailSeed(`earlier output${suffix}`)
+    expect(seed?.linesTotal).toBe(52_428)
   })
 
   it('does not erase the final partial line on process exit', async () => {

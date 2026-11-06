@@ -62,12 +62,10 @@ export function buildRestoredTerminalTailSeed(text: string): RestoredTerminalTai
   let sliced = false
   if (bounded.length > MAX_RESTORE_TAIL_SEED_CHARS) {
     bounded = bounded.slice(-MAX_RESTORE_TAIL_SEED_CHARS)
-    // A sliced suffix may start mid-escape; restart after CR/LF and consume CRLF together to avoid a phantom blank row.
-    const anchor = bounded.search(/[\r\n]/)
-    if (anchor !== -1) {
-      bounded = bounded.slice(
-        bounded[anchor] === '\r' && bounded[anchor + 1] === '\n' ? anchor + 2 : anchor + 1
-      )
+    // A sliced suffix may start mid-escape; restart after a whole line ending (CRs then LF) to avoid a phantom blank row.
+    const anchor = /\r+\n?|\n/.exec(bounded)
+    if (anchor) {
+      bounded = bounded.slice(anchor.index + anchor[0].length)
     }
     sliced = true
   }
