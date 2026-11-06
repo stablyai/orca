@@ -8,7 +8,7 @@ import { HostDataAuthSchema } from '../../../packages/relay-contract/src/control
 import { RelayAuthSchema } from '../../../packages/relay-contract/src/credential-messages'
 import { RELAY_CLOSE_CODE } from '../../../packages/relay-contract/src/close-codes'
 import { RELAY_PROTOCOL_LIMITS } from '../../../packages/relay-contract/src/protocol-limits'
-import { timingSafeEqualStr } from './bytes'
+import { MESSAGE_TOO_BIG, frameOver, timingSafeEqualStr } from './bytes'
 import type { Env } from './env'
 import { metric } from './metrics'
 import { parseConnId } from './splice-slot'
@@ -23,7 +23,8 @@ type State = {
 }
 type SocketKind = 'phone' | 'data'
 // Per-direction flood guard: bytes forwarded to a peer since that peer last sent anything.
-type GuardAttachment = { silentBytes: number; windowStart: number }
+// place: client ingress '<continent>/<colo>', for metrics.
+type GuardAttachment = { silentBytes: number; windowStart: number; place?: string }
 
 const NO_DEADLINE = Number.MAX_SAFE_INTEGER
 const KEY_PREFIX = 'splice:'
@@ -46,8 +47,9 @@ export class SpliceRelay extends DurableObject<Env> {
       if ((await this.state(connId)) !== undefined) return new Response(null, { status: 409 })
       await this.sweepOrphans()
       this.ctx.acceptWebSocket(server, ['phone', connId])
-      metric(this.env, 'phone_open')
-      server.serializeAttachment({ silentBytes: 0, windowStart: now } satisfies GuardAttachment)
+      const place = request.headers.get('x-edge-place') ?? undefined
+      metric(this.env, 'phone_open', 1, '', [], '', place)
+      server.serializeAttachment({ silentBytes: 0, windowStart: now, place } satisfies GuardAttachment)
       await this.save({
         connId,
         relayHostId: parsed.relayHostId,
@@ -63,7 +65,7 @@ export class SpliceRelay extends DurableObject<Env> {
         return new Response(null, { status: 101, webSocket: client })
       }
       this.ctx.acceptWebSocket(server, ['data', connId])
-      server.serializeAttachment({ silentBytes: 0, windowStart: now } satisfies GuardAttachment)
+      server.serializeAttachment({ silentBytes: 0, windowStart: now, place: request.headers.get('x-edge-place') ?? undefined } satisfies GuardAttachment)
     } else {
       return new Response(null, { status: 404 })
     }
@@ -196,11 +198,15 @@ export class SpliceRelay extends DurableObject<Env> {
   // ---------------- splice ----------------
 
   private forward(from: WebSocket, connId: string, kind: SocketKind, message: string | ArrayBuffer): void {
+    if (frameOver(message, RELAY_PROTOCOL_LIMITS.maxFrameBytes)) {
+      for (const ws of this.ctx.getWebSockets(connId)) this.close(ws, MESSAGE_TOO_BIG, 'frame too large')
+      return
+    }
     const peer = this.socket(connId, kind === 'phone' ? 'data' : 'phone')
     if (!peer) return
     // The sender spoke, so its own inbound direction is evidently being read.
     const fromGuard = from.deserializeAttachment() as GuardAttachment
-    if (fromGuard.silentBytes !== 0) from.serializeAttachment({ silentBytes: 0, windowStart: Date.now() })
+    if (fromGuard.silentBytes !== 0) from.serializeAttachment({ ...fromGuard, silentBytes: 0, windowStart: Date.now() })
     const size = typeof message === 'string' ? message.length : message.byteLength
     const budget = Number(this.env.SPLICE_SILENT_BYTES_MAX ?? '0')
     if (budget > 0) {
@@ -209,8 +215,8 @@ export class SpliceRelay extends DurableObject<Env> {
       const now = Date.now()
       const next =
         now - g.windowStart > windowMs
-          ? { silentBytes: size, windowStart: now }
-          : { silentBytes: g.silentBytes + size, windowStart: g.windowStart }
+          ? { ...g, silentBytes: size, windowStart: now }
+          : { ...g, silentBytes: g.silentBytes + size }
       peer.serializeAttachment(next)
       if (next.silentBytes > budget) {
         for (const ws of this.ctx.getWebSockets(connId)) this.close(ws, RELAY_CLOSE_CODE.LIMIT_EXCEEDED, 'splice flood')
@@ -237,8 +243,9 @@ export class SpliceRelay extends DurableObject<Env> {
     const state = await this.state(id.connId)
     if (!state) return
     const counters = this.traffic.get(id.connId) ?? [0, 0, 0, 0]
-    metric(this.env, 'phone_close', 1, `${id.kind}:${code}`)
-    metric(this.env, 'splice_bytes', counters[0] + counters[2], '', counters)
+    const place = this.place(ws)
+    metric(this.env, 'phone_close', 1, `${id.kind}:${code}`, [], '', place)
+    metric(this.env, 'splice_bytes', counters[0] + counters[2], '', counters, '', place)
     const reason = code === 1000 ? '' : 'peer dropped'
     for (const other of this.ctx.getWebSockets(id.connId)) {
       if (other !== ws) this.close(other, RELAY_CLOSE_CODE.PEER_DROPPED, reason)
@@ -332,9 +339,17 @@ export class SpliceRelay extends DurableObject<Env> {
     }
   }
 
+  private place(ws: WebSocket): string | undefined {
+    try {
+      return (ws.deserializeAttachment() as GuardAttachment | null)?.place
+    } catch {
+      return undefined
+    }
+  }
+
   private close(ws: WebSocket, code: number, reason: string): void {
     const kind = this.identify(ws)?.kind ?? 'splice'
-    metric(this.env, 'refuse', 1, `${kind}:${code}`, [], reason)
+    metric(this.env, 'refuse', 1, `${kind}:${code}`, [], reason, this.place(ws))
     try {
       ws.close(code, reason)
     } catch {

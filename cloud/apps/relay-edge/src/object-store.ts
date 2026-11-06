@@ -4,6 +4,7 @@
 import type { AssignmentSource } from './edge-backend'
 import type { AssignBody, DeviceRow } from './admin'
 import { ObjectSqliteDatabase, type ObjectSql, type RunTransaction } from './object-database'
+import { OBJECT_STORE_SCHEMA } from './object-store-schema.generated'
 
 const ASSIGNMENT_DDL = `CREATE TABLE IF NOT EXISTS edge_assignment (
   id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -22,6 +23,18 @@ const MOVE_DDL = `CREATE TABLE IF NOT EXISTS edge_move (
   frozen_until INTEGER NOT NULL
 )`
 export const EXPORT_FREEZE_MS = 30_000
+
+// Every table an object holds. Changing any of it (including a regenerated credential-store
+// schema) needs OBJECT_SCHEMA_VERSION bumped and the step in MIGRATIONS: existing objects keep
+// their old tables, because CREATE TABLE IF NOT EXISTS never alters them.
+// test/object-store-schema.test.ts pins the version to a hash of this DDL.
+export const OBJECT_SCHEMA_VERSION = 1
+export const MIGRATIONS: Readonly<Record<number, readonly string[]>> = {}
+const META_DDL = `CREATE TABLE IF NOT EXISTS edge_meta (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  schema_version INTEGER NOT NULL
+)`
+export const OBJECT_DDL: readonly string[] = [...OBJECT_STORE_SCHEMA, ASSIGNMENT_DDL, MOVE_DDL]
 
 // Everything the credential store keeps for the host. A host moving onto the edge brings its
 // devices; invites, bases, results and audit rows from an earlier stay (possibly another account
@@ -64,9 +77,7 @@ export class ObjectStore implements AssignmentSource {
     private readonly cellId: string
   ) {
     this.database = new ObjectSqliteDatabase(sql, runTransaction)
-    this.database.applySchema()
-    sql.exec(ASSIGNMENT_DDL)
-    sql.exec(MOVE_DDL)
+    openSchema(sql)
   }
 
   frozen(now = Date.now()): boolean {
@@ -174,4 +185,24 @@ export class ObjectStore implements AssignmentSource {
       this.sql.exec('SELECT count(*) AS n FROM relay_connection_bases WHERE active = 1 AND deadline > ?', now).toArray()[0]?.n ?? 0
     )
   }
+}
+
+// Synchronous, so the object commits it as one write batch. Version 0 is a fresh object, or one
+// from before versioning (it holds version 1's tables). Code older than the object's schema (a
+// rolled-back deploy) refuses it: callers answer 4503 or a failed push, never a wrong read.
+export function openSchema(sql: ObjectSql): void {
+  sql.exec(META_DDL)
+  const stored = Number(sql.exec('SELECT schema_version FROM edge_meta WHERE id = 1').toArray()[0]?.schema_version ?? 0)
+  if (stored === OBJECT_SCHEMA_VERSION) return
+  if (stored > OBJECT_SCHEMA_VERSION) throw new Error('edge_object_schema_newer')
+  if (stored === 0) {
+    for (const statement of OBJECT_DDL) sql.exec(statement)
+  } else {
+    for (let v = stored + 1; v <= OBJECT_SCHEMA_VERSION; v++) {
+      const step = MIGRATIONS[v]
+      if (!step) throw new Error(`edge_object_schema_no_migration_${v}`)
+      for (const statement of step) sql.exec(statement)
+    }
+  }
+  sql.exec('INSERT INTO edge_meta (id, schema_version) VALUES (1, ?) ON CONFLICT (id) DO UPDATE SET schema_version = excluded.schema_version', OBJECT_SCHEMA_VERSION)
 }

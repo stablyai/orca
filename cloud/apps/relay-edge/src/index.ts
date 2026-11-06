@@ -5,13 +5,13 @@ import { SpliceRelay } from './splice-relay'
 import { edgeConfig, type Env } from './env'
 import { HOST_ID, readBearer, verifyRelayJwt } from './jwt'
 import { SPLICE_SLOTS, makeConnId, parseConnId } from './splice-slot'
-import { metric } from './metrics'
+import { metric, requestPlace } from './metrics'
 import { admitPreAuth, notOnEdge } from './preauth'
 import { AssignBodySchema, EraseBodySchema, ExportBodySchema, verifyAdminRequest, type AdminOp } from './admin'
 
 export { HostRelay, SpliceRelay }
 
-const INTERNAL_HEADERS = ['x-edge-claims', 'x-edge-origin', 'x-edge-kind', 'x-edge-conn-id']
+const INTERNAL_HEADERS = ['x-edge-claims', 'x-edge-origin', 'x-edge-kind', 'x-edge-conn-id', 'x-edge-place']
 
 function reject(status: number, retryAfter?: number): Response {
   const headers = retryAfter === undefined ? undefined : { 'retry-after': String(retryAfter) }
@@ -29,6 +29,7 @@ function forward(
   const headers = new Headers(request.headers)
   for (const name of INTERNAL_HEADERS) headers.delete(name)
   headers.set('x-edge-origin', new URL(request.url).origin)
+  headers.set('x-edge-place', requestPlace(request))
   for (const [name, value] of Object.entries(extra)) headers.set(name, value)
   const init = new Request(request.url, { method: 'GET', headers })
   if (target === 'splice') return env.SPLICE_RELAY.get(env.SPLICE_RELAY.idFromName(spliceObject)).fetch(init)
@@ -43,7 +44,7 @@ async function handleAdmin(env: Env, request: Request, op: AdminOp): Promise<Res
     const outcome = ((await response.clone().json().catch(() => ({}))) as { outcome?: unknown }).outcome
     if (typeof outcome === 'string') label = outcome
   }
-  metric(env, 'admin', 1, `${op}:${label}`)
+  metric(env, 'admin', 1, `${op}:${label}`, [], '', requestPlace(request))
   return response
 }
 
@@ -157,7 +158,7 @@ export default {
         .allocateConnId(phone[1])
         .catch(() => makeConnId(phone[1], Math.floor(Math.random() * SPLICE_SLOTS)))
       if (connId === null) {
-        metric(env, 'not_on_edge')
+        metric(env, 'not_on_edge', 1, '', [], '', requestPlace(request))
         return notOnEdge()
       }
       const parsed = parseConnId(connId)!

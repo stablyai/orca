@@ -252,6 +252,17 @@ async function run(host: Host, key: KeyLike, jwksHits: () => number, remote = fa
     const status = await new Promise<number>((res) => bad.on('unexpected-response', (_q, r) => res(r.statusCode ?? 0)))
     record('E1 JWKS fetched from URL; wrong issuer refused 401', status === 401 && jwksHits() >= 1, `status=${status} jwksFetches=${jwksHits()}`)
   }
+  // E12: frames over the cells' limits close 1009 (control 1 MiB; splices 8 MiB).
+  {
+    const big = new WebSocket(`${WS_ORIGIN}/v1/host/control`, { headers: { authorization: `Bearer ${jwt}` }, perMessageDeflate: false })
+    big.on('error', () => {})
+    const code = await new Promise<number>((res) => {
+      big.on('open', () => big.send('x'.repeat(1024 * 1024 + 1)))
+      big.on('close', (c) => res(c))
+      setTimeout(() => res(-1), 8000)
+    })
+    record('E12 control frame over 1 MiB closes 1009', code === 1009, `close=${code}`)
+  }
   {
     const wrong = control(host, jwt, EPOCH - 1)
     const r = await wrong.client.connect().catch((e: Error) => e)

@@ -4,7 +4,7 @@
 import { RELAY_CLOSE_CODE } from '../../../packages/relay-contract/src/close-codes'
 import { RELAY_PROTOCOL_LIMITS } from '../../../packages/relay-contract/src/protocol-limits'
 import type { Env } from './env'
-import { metric } from './metrics'
+import { metric, requestPlace } from './metrics'
 
 // The caller's address as Cloudflare saw it (clients cannot set this header). IPv6 callers are
 // keyed by their /64, which one subscriber usually holds whole.
@@ -27,7 +27,7 @@ export async function admitPreAuth(env: Env, request: Request, kind: 'phone' | '
   if (!env.PREAUTH_LIMITER) return true
   try {
     const { success } = await env.PREAUTH_LIMITER.limit({ key: `${kind}:${sourceKey(request)}` })
-    if (!success) metric(env, 'preauth_limited', 1, kind)
+    if (!success) metric(env, 'preauth_limited', 1, kind, [], '', requestPlace(request))
     return success
   } catch {
     return true

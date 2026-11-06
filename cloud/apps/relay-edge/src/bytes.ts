@@ -36,3 +36,14 @@ export function timingSafeEqualStr(a: string, b: string): boolean {
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
   return diff === 0
 }
+
+// As the cells' ws maxPayload: a frame larger than this closes the sender with 1009.
+export const MESSAGE_TOO_BIG = 1009
+export const CONTROL_MAX_FRAME_BYTES = 1024 * 1024
+
+// UTF-8 size of a frame without encoding it when it is plainly under the limit.
+export function frameOver(message: string | ArrayBuffer, limit: number): boolean {
+  if (typeof message !== 'string') return message.byteLength > limit
+  if (message.length * 3 <= limit) return false
+  return message.length > limit || new TextEncoder().encode(message).byteLength > limit
+}

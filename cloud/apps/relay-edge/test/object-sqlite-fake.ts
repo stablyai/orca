@@ -3,9 +3,8 @@
 import { DatabaseSync } from 'node:sqlite'
 import { ObjectSqliteDatabase, type ObjectSql } from '../src/object-database'
 
-export function openObjectDatabaseOnNodeSqlite(): ObjectSqliteDatabase {
-  const db = new DatabaseSync(':memory:')
-  const sql: ObjectSql = {
+export function nodeObjectSql(db = new DatabaseSync(':memory:')): ObjectSql {
+  return {
     exec(text, ...params) {
       if (/^\s*(BEGIN|SAVEPOINT|COMMIT|ROLLBACK|RELEASE)\b/i.test(text)) throw new Error('use storage.transaction()')
       const statement = db.prepare(text)
@@ -14,6 +13,11 @@ export function openObjectDatabaseOnNodeSqlite(): ObjectSqliteDatabase {
       return { toArray: () => rows }
     }
   }
+}
+
+export function openObjectDatabaseOnNodeSqlite(): ObjectSqliteDatabase {
+  const db = new DatabaseSync(':memory:')
+  const sql = nodeObjectSql(db)
   let open = false
   const database = new ObjectSqliteDatabase(sql, async (operation) => {
     if (open) throw new Error('nested storage transaction')

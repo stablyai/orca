@@ -41,6 +41,38 @@
     "ORPHAN_GRACE_MS": "30000"
   },
   "env": {
+    // Production: the edge hostname. Object backend; real auth JWKS; no debug or reset routes.
+    // Secrets (from stdin): ADMIN_SIGNING_KEY (shared with the director's
+    // ORCA_RELAY_EDGE_ADMIN_SIGNING_KEY), later ERASE_SIGNING_KEY (the erasure job's).
+    // Directors send no host here until their edge cohort is configured.
+    "production": {
+      "name": "orca-relay-edge",
+      "workers_dev": false,
+      "preview_urls": false,
+      "routes": [{ "pattern": "edge.relay.orca.dev", "custom_domain": true }],
+      "durable_objects": {
+        "bindings": [
+          { "name": "HOST_RELAY", "class_name": "HostRelay" },
+          { "name": "SPLICE_RELAY", "class_name": "SpliceRelay" }
+        ],
+        "code_update_strategy": { "mode": "deferred", "max_delay": 300 }
+      },
+      "analytics_engine_datasets": [{ "binding": "METRICS", "dataset": "orca_relay_edge_production" }],
+      "ratelimits": [{ "name": "PREAUTH_LIMITER", "namespace_id": "1002", "simple": { "limit": 600, "period": 60 } }],
+      "vars": {
+        "EDGE_BACKEND": "object",
+        "EDGE_CELL_ID": "edge",
+        "ADMIN_ISSUER": "https://relay.onorca.dev",
+        "ERASE_ISSUER": "orca-account-erasure",
+        "RELAY_JWKS_URL": "https://login.onorca.dev/.well-known/jwks.json",
+        "RELAY_AUTH_ISSUER": "https://login.onorca.dev",
+        "RELAY_JWT_AUDIENCE": "orca-relay",
+        "PING_INTERVAL_MS": "45000",
+        "SILENCE_TIMEOUT_MS": "75000",
+        "ORPHAN_GRACE_MS": "30000",
+        "EDGE_VERSION": "prod-v1"
+      }
+    },
     // Phase 2 on Cloudflare: object backend (no database), test signing key and test JWKS as
     // secrets, workers.dev only, debug routes on. Not for real clients.
     "phase2": {
@@ -103,8 +135,6 @@
       "name": "orca-relay-edge-spike",
       "workers_dev": true,
       "preview_urls": false,
-      // Owner go 2026-11-06: the edge hostname on the spike until the production Worker exists.
-      "routes": [{ "pattern": "edge.relay.orca.dev", "custom_domain": true }],
       "durable_objects": {
         "bindings": [
           { "name": "HOST_RELAY", "class_name": "HostRelay" },

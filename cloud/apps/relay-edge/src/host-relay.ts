@@ -39,7 +39,7 @@ import type { AssignBody, DeviceRow } from './admin'
 import { ObjectStore, type AssignResult, type StoredAssignment } from './object-store'
 import { edgeConfig, type EdgeClaims, type EdgeConfig, type Env } from './env'
 import { controlErrorCode, edgeBackend, type CredentialReservation, type EdgeBackend } from './edge-backend'
-import { b64, b64url, fromB64, hmacSha256, sha256B64url, timingSafeEqualStr } from './bytes'
+import { CONTROL_MAX_FRAME_BYTES, MESSAGE_TOO_BIG, b64, b64url, frameOver, fromB64, hmacSha256, sha256B64url, timingSafeEqualStr } from './bytes'
 
 // Longer than one database operation can take (connect 2 s + query 5 s, edge-database.ts).
 const ASSIGNMENT_CHECK_DEADLINE_MS = 8_000
@@ -62,6 +62,8 @@ type ControlAttachment = {
   lastPongAt?: number
   lastPingAt?: number
   leaseExpiresAt?: number
+  // Client ingress '<continent>/<colo>', for metrics.
+  place?: string
 }
 type Attachment = ControlAttachment
 type Conn = {
@@ -180,6 +182,7 @@ export class HostRelay extends DurableObject<Env> {
     this.ctx.acceptWebSocket(server, ['control'])
     this.attach(server, {
       k: 'control',
+      place: request.headers.get('x-edge-place') ?? undefined,
       phase: 'hello',
       claims,
       origin,
@@ -207,6 +210,10 @@ export class HostRelay extends DurableObject<Env> {
   // ---------------- control ----------------
 
   private async onControl(ws: WebSocket, a: ControlAttachment, message: string | ArrayBuffer): Promise<void> {
+    if (frameOver(message, CONTROL_MAX_FRAME_BYTES)) {
+      this.close(ws, MESSAGE_TOO_BIG, 'frame too large')
+      return
+    }
     if (typeof message !== 'string') {
       if (a.phase !== 'active') this.close(ws, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'binary hello')
       return
@@ -225,7 +232,7 @@ export class HostRelay extends DurableObject<Env> {
     if (a.phase === 'proof') return this.onHostProof(ws, a, type, body)
     if (type === 'pong') {
       a.lastPongAt = Date.now()
-      if (typeof body.t === 'number') metric(this.env, 'pong_rtt_ms', a.lastPongAt - body.t)
+      if (typeof body.t === 'number') metric(this.env, 'pong_rtt_ms', a.lastPongAt - body.t, '', [], '', a.place)
       this.attach(ws, a)
       return
     }
@@ -505,7 +512,7 @@ export class HostRelay extends DurableObject<Env> {
       activeConnIds: activeConnIds.slice(0, 8),
       pendingConns: pendingConns.slice(0, 8)
     })
-    metric(this.env, 'control_active', 1, rebind ? 'rebind' : 'new')
+    metric(this.env, 'control_active', 1, rebind ? 'rebind' : 'new', [], '', a.place)
     await this.reschedule()
   }
 
@@ -716,7 +723,7 @@ export class HostRelay extends DurableObject<Env> {
     if (!a) return
     // During webSocketClose the closing socket is still listed; clear it first so it can't count as live.
     this.attach(ws, null)
-    if (a.k === 'control' && a.phase === 'active') metric(this.env, 'control_close', 1, String(code))
+    if (a.k === 'control' && a.phase === 'active') metric(this.env, 'control_close', 1, String(code), [], '', a.place)
     if (a.k === 'control' && a.phase === 'active' && !this.activeControl()) {
       const session = await this.ctx.storage.get<Session>('session')
       if (session && session.generation === a.generation) {
@@ -757,7 +764,7 @@ export class HostRelay extends DurableObject<Env> {
           continue
         }
         if (now - (a.lastPingAt ?? 0) >= this.config.pingIntervalMs - 50) {
-          if (a.lastPingAt) metric(this.env, 'alarm_lag_ms', Math.max(0, now - (a.lastPingAt + this.config.pingIntervalMs)))
+          if (a.lastPingAt) metric(this.env, 'alarm_lag_ms', Math.max(0, now - (a.lastPingAt + this.config.pingIntervalMs)), '', [], '', a.place)
           this.send(ws, { type: 'ping', t: now })
           a.lastPingAt = now
           this.attach(ws, a)
@@ -859,7 +866,7 @@ export class HostRelay extends DurableObject<Env> {
   }
 
   private close(ws: WebSocket, code: number, reason: string): void {
-    metric(this.env, 'refuse', 1, `control:${code}`, [], reason)
+    metric(this.env, 'refuse', 1, `control:${code}`, [], reason, this.attachment(ws)?.place)
     try {
       ws.close(code, reason)
     } catch {
