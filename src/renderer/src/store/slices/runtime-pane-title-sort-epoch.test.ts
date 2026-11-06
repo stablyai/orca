@@ -6,7 +6,10 @@ vi.mock('@/runtime/sync-runtime-graph', () => ({
 }))
 vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({
   registerEagerPtyBuffer: vi.fn(),
-  ensurePtyDispatcher: vi.fn(),
+  ensurePtyDispatcher: vi.fn()
+}))
+
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension', () => ({
   unregisterPtyDataHandlers: vi.fn()
 }))
 vi.mock('@/components/terminal-pane/shutdown-buffer-captures', () => ({
