@@ -1,4 +1,7 @@
-import { normalizeMobileSessionTabSelection } from './mobile-session-tab-selection'
+import {
+  normalizeMobileSessionTabSelection,
+  restoreLegacyMobileSessionNavigation
+} from './mobile-session-tab-selection'
 import type { OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs as BuildHeadlessMobileSessionBrowserTabsMethods } from '../session-lifecycle/projection/build-headless-mobile-session-browser-tabs'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as StoredMobileSnapshotHasStalePreservedTabMethods } from './mobile-session-publication-preservation'
 import type { OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs as ReconcileHeadlessMobileSessionBrowserTabsMethods } from '../session-lifecycle/projection/reconcile-headless-mobile-session-browser-tabs'
@@ -273,7 +276,7 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
         options.onlyRuntimeOwnedTerminals === true &&
         existing !== undefined &&
         !this.isHeadlessBuiltMobileSessionPublicationBase(existing.publicationEpoch)
-      const nextSnapshot: RuntimeMobileSessionTabsSnapshot = normalizeMobileSessionTabSelection({
+      const rebuiltSnapshot: RuntimeMobileSessionTabsSnapshot = {
         worktree: existing?.worktree ?? entryWorktreeId,
         publicationEpoch: mergedIntoRendererPublication
           ? this.getMergedMobileSessionPublicationEpoch(existing, tabs)
@@ -288,7 +291,11 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
         // Group navigation and topology must come from the same publication.
         ...(navigationLayout !== undefined ? { tabGroupLayout: navigationLayout } : {}),
         tabs: mergedTabs
-      })
+      }
+      const nextSnapshot =
+        currentNavigation && !hasCurrentNavigation
+          ? restoreLegacyMobileSessionNavigation(rebuiltSnapshot, currentNavigation)
+          : normalizeMobileSessionTabSelection(rebuiltSnapshot)
       // Retain the existing object and version for equal projections so unchanged graph syncs do not fan out.
       if (
         currentNavigation &&

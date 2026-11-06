@@ -245,57 +245,66 @@ describe('active-tab selection performance contract', () => {
     }
     expect(measurements[1]).toBeLessThanOrEqual(10 * measurements[0]!)
   })
-  it('bounds preserved-chat merge and runtime-owned hydration work at N and 10N', async () => {
-    vi.useFakeTimers()
-    const normalizations = vi.spyOn(selection, 'normalizeMobileSessionTabSelection')
-    const measurements: number[] = []
-    const identityReads: number[] = []
-    for (const count of [50, 500]) {
-      const { runtime } = createRuntimeFixture()
-      await runtime.publishStructuredAgentSessionTab({
-        workspaceId: WT,
-        sessionId: 'scale-chat',
-        agent: 'codex',
-        activate: false
-      })
-      const next = frame(count)
-      const priorReads = countedIdentities(next.tabs)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [next] })
-      await vi.runAllTimersAsync()
-      // One hydration, one accepted membership composition and one shared emission can resolve selection.
-      normalizations.mockClear()
-      const changed = frame(count, 2)
-      const currentReads = countedIdentities(changed.tabs)
-      priorReads.reset()
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [changed] })
-      await vi.runAllTimersAsync()
-      expect(normalizations.mock.calls.length).toBeLessThanOrEqual(3)
-      expect(normalizations.mock.calls.length).toBeGreaterThanOrEqual(2)
-      const selectionRows = normalizations.mock.calls.reduce(
-        (total, [snapshot]) => total + snapshot.tabs.length,
-        0
-      )
-      expect(selectionRows).toBeLessThanOrEqual(3 * (count + 2))
-      measurements.push(selectionRows)
-      identityReads.push(priorReads.reads() + currentReads.reads())
-      expect((await runtime.listMobileSessionTabs(`id:${WT}`)).activeTabId).toBe(
-        `t-${count - 1}::leaf`
-      )
-      normalizations.mockClear()
-      runtime.syncWindowGraph(1, {
-        tabs: [],
-        leaves: [],
-        mobileSessionTabs: [],
-        unchangedMobileSessionWorktrees: [WT]
-      })
-      await vi.runAllTimersAsync()
-      // Rebuild derives selection once even when its equality gate retains the stored object.
-      expect(normalizations.mock.calls).toHaveLength(1)
-      expect(normalizations.mock.calls[0]?.[0].tabs.length).toBe(count + 2)
+  it.each([false, true])(
+    'bounds preserved-chat merge and runtime-owned hydration at N and 10N (legacy=%s)',
+    async (legacy) => {
+      vi.useFakeTimers()
+      const normalizations = vi.spyOn(selection, 'normalizeMobileSessionTabSelection')
+      const measurements: number[] = []
+      const identityReads: number[] = []
+      for (const count of [50, 500]) {
+        const { runtime } = createRuntimeFixture()
+        await runtime.publishStructuredAgentSessionTab({
+          workspaceId: WT,
+          sessionId: 'scale-chat',
+          agent: 'codex',
+          activate: false
+        })
+        const next = frame(count)
+        if (legacy) {
+          next.tabGroups = undefined
+        }
+        const priorReads = countedIdentities(next.tabs)
+        runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [next] })
+        await vi.runAllTimersAsync()
+        // One hydration, one accepted membership composition and one shared emission can resolve selection.
+        normalizations.mockClear()
+        const changed = frame(count, 2)
+        if (legacy) {
+          changed.tabGroups = undefined
+        }
+        const currentReads = countedIdentities(changed.tabs)
+        priorReads.reset()
+        runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [changed] })
+        await vi.runAllTimersAsync()
+        expect(normalizations.mock.calls.length).toBeLessThanOrEqual(3)
+        expect(normalizations.mock.calls.length).toBeGreaterThanOrEqual(2)
+        const selectionRows = normalizations.mock.calls.reduce(
+          (total, [snapshot]) => total + snapshot.tabs.length,
+          0
+        )
+        expect(selectionRows).toBeLessThanOrEqual(3 * (count + 2))
+        measurements.push(selectionRows)
+        identityReads.push(priorReads.reads() + currentReads.reads())
+        expect((await runtime.listMobileSessionTabs(`id:${WT}`)).activeTabId).toBe(
+          `t-${count - 1}::leaf`
+        )
+        normalizations.mockClear()
+        runtime.syncWindowGraph(1, {
+          tabs: [],
+          leaves: [],
+          mobileSessionTabs: [],
+          unchangedMobileSessionWorktrees: [WT]
+        })
+        await vi.runAllTimersAsync()
+        // Rebuild derives selection once even when its equality gate retains the stored object.
+        expect(normalizations.mock.calls).toHaveLength(1)
+        expect(normalizations.mock.calls[0]?.[0].tabs.length).toBe(count + 2)
+      }
+      expect(measurements[1]).toBeLessThanOrEqual(10 * measurements[0]!)
+      expect(identityReads[1]).toBeLessThanOrEqual(10 * identityReads[0]!)
     }
-    expect(measurements[1]).toBeLessThanOrEqual(10 * measurements[0]!)
-    expect(identityReads[1]).toBeLessThanOrEqual(10 * identityReads[0]!)
-  })
+  )
   it('bounds actual native retirement and shared delivery work at N and 10N', async () => {
     vi.useFakeTimers()
     const reads: number[] = []

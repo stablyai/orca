@@ -1,3 +1,4 @@
+import { getHeadlessMobileSessionGroupId } from '../terminal/surface/mobile-session-layout-projection'
 import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/runtime-mobile-session-tab-contracts'
 import type {
   RuntimeMobileSessionTabsSnapshot,
@@ -162,4 +163,64 @@ export function retireMobileSessionTabSelection(
   return selected && retired.has(selected)
     ? selectMobileSessionTab(next, tabs.find((tab) => tab.isActive) ?? tabs[0] ?? null)
     : normalizeMobileSessionTabSelection(next)
+}
+
+/** Reconstructing membership must retain navigation from a group-less publication. */
+export function restoreLegacyMobileSessionNavigation(
+  snapshot: RuntimeMobileSessionTabsSnapshot,
+  legacy: RuntimeMobileSessionTabsSnapshot
+): RuntimeMobileSessionTabsSnapshot {
+  const selectedId =
+    legacy.activeTabId ?? resolveMobileSessionActiveTab(legacy, legacy.tabs)?.id ?? null
+  const declaration = { ...legacy, activeTabId: selectedId }
+  const active = selectedId ? resolveMobileSessionActiveTab(declaration, snapshot.tabs) : null
+  if (active || !selectedId) {
+    return selectMobileSessionTab(snapshot, active)
+  }
+  return normalizeMobileSessionTabSelection(
+    preserveLegacyPendingNavigation(
+      {
+        ...snapshot,
+        activeGroupId: legacy.activeGroupId,
+        activeTabId: selectedId,
+        tabGroups: undefined
+      },
+      snapshot
+    )
+  )
+}
+
+// Legacy frames have no separate navigation field once unavailable top-level selection becomes null.
+export function preserveLegacyPendingNavigation(
+  snapshot: RuntimeMobileSessionTabsSnapshot,
+  existing: RuntimeMobileSessionTabsSnapshot | undefined
+): RuntimeMobileSessionTabsSnapshot {
+  if (
+    snapshot.tabGroups !== undefined ||
+    !snapshot.activeTabId ||
+    resolveMobileSessionActiveTab(snapshot, snapshot.tabs)
+  ) {
+    return snapshot
+  }
+  const pendingId = snapshot.activeTabId
+  const groups = existing?.tabGroups ?? []
+  const prior =
+    groups.find((group) => group.tabOrder.includes(pendingId)) ??
+    groups.find((group) => group.id === snapshot.activeGroupId) ??
+    groups[0]
+  const id =
+    prior?.id ?? snapshot.activeGroupId ?? getHeadlessMobileSessionGroupId(snapshot.worktree)
+  const selected = {
+    ...prior,
+    id,
+    activeTabId: snapshot.activeTabId,
+    tabOrder: prior?.tabOrder.includes(snapshot.activeTabId)
+      ? prior.tabOrder
+      : [...(prior?.tabOrder ?? []), snapshot.activeTabId]
+  }
+  return {
+    ...snapshot,
+    activeGroupId: id,
+    tabGroups: prior ? groups.map((group) => (group === prior ? selected : group)) : [selected]
+  }
 }

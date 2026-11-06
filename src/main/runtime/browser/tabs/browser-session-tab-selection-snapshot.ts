@@ -39,7 +39,7 @@ export function applyBrowserSessionTabSelection(args: {
   const placedSnapshot = {
     ...snapshot,
     snapshotVersion: snapshot.snapshotVersion + 1,
-    tabGroups: nextGroups
+    ...(snapshot.tabGroups !== undefined ? { tabGroups: nextGroups } : {})
   }
   const nextSnapshot = focusesHost
     ? selectMobileSessionTab(placedSnapshot, snapshot.tabs.find((tab) => tab.id === tabId) ?? null)

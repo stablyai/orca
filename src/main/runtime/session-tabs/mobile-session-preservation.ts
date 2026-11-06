@@ -1,6 +1,7 @@
 import { isStructuredAgentSessionHostTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import {
   normalizeMobileSessionTabSelection,
+  preserveLegacyPendingNavigation,
   resolveMobileSessionActiveTab
 } from './mobile-session-tab-selection'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as StoredMobileSnapshotHasStalePreservedTabMethods } from './mobile-session-publication-preservation'
@@ -245,39 +246,4 @@ function getMobileTerminalLeafPtyIds(tab: RuntimeMobileSessionTerminalTab): stri
   return [tab.ptyId, tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId]].filter(
     (id): id is string => typeof id === 'string'
   )
-}
-
-// Legacy frames have no separate navigation field once unavailable top-level selection becomes null.
-function preserveLegacyPendingNavigation(
-  snapshot: RuntimeMobileSessionTabsSnapshot,
-  existing: RuntimeMobileSessionTabsSnapshot | undefined
-): RuntimeMobileSessionTabsSnapshot {
-  if (
-    snapshot.tabGroups !== undefined ||
-    !snapshot.activeTabId ||
-    resolveMobileSessionActiveTab(snapshot, snapshot.tabs)
-  ) {
-    return snapshot
-  }
-  const pendingId = snapshot.activeTabId
-  const groups = existing?.tabGroups ?? []
-  const prior =
-    groups.find((group) => group.tabOrder.includes(pendingId)) ??
-    groups.find((group) => group.id === snapshot.activeGroupId) ??
-    groups[0]
-  const id =
-    prior?.id ?? snapshot.activeGroupId ?? getHeadlessMobileSessionGroupId(snapshot.worktree)
-  const selected = {
-    ...prior,
-    id,
-    activeTabId: snapshot.activeTabId,
-    tabOrder: prior?.tabOrder.includes(snapshot.activeTabId)
-      ? prior.tabOrder
-      : [...(prior?.tabOrder ?? []), snapshot.activeTabId]
-  }
-  return {
-    ...snapshot,
-    activeGroupId: id,
-    tabGroups: prior ? groups.map((group) => (group === prior ? selected : group)) : [selected]
-  }
 }

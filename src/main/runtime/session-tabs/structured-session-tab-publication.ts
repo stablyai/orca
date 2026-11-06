@@ -145,9 +145,13 @@ export function projectStructuredSessionTab(
       activeGroupId: groupId ?? existing.activeGroupId,
       activeTabId: id,
       activeTabType: 'agent-session',
-      tabGroups: priorGroups.map((group) =>
-        group.id === groupId ? { ...group, activeTabId: id } : group
-      ),
+      ...(existing.tabGroups !== undefined
+        ? {
+            tabGroups: priorGroups.map((group) =>
+              group.id === groupId ? { ...group, activeTabId: id } : group
+            )
+          }
+        : {}),
       tabs: existing.tabs.map((tab) => ({ ...tab, isActive: tab.id === id }))
     }
     if (input.eligible?.() === false) {

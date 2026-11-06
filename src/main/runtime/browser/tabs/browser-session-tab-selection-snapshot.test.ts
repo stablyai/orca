@@ -76,6 +76,26 @@ describe('applyBrowserSessionTabSelection', () => {
     expect(snapshot.tabGroups?.[0]?.activeTabId).toBe('terminal-tab')
   })
 
+  it.each([true, false])(
+    'preserves legacy group absence when selecting a browser (host=%s)',
+    (focusesHost) => {
+      const before = makeSnapshot()
+      delete before.tabGroups
+      before.activeGroupId = null
+
+      const { snapshot } = applyBrowserSessionTabSelection({
+        snapshot: before,
+        tabId: 'page-new',
+        focusesHost
+      })
+
+      const activeId = focusesHost ? 'page-new' : 'terminal-tab'
+      expect(snapshot.tabGroups).toBeUndefined()
+      expect(snapshot.activeTabId).toBe(activeId)
+      expect(snapshot.tabs.filter((tab) => tab.isActive).map((tab) => tab.id)).toEqual([activeId])
+    }
+  )
+
   it('leaves every shared selection alone for a caller-addressed create', () => {
     const before = makeSnapshot()
     const { snapshot } = select({ focusesHost: false })

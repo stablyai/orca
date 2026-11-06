@@ -1,8 +1,7 @@
-import { withOpenedServeBrowserTab } from '../../../src/main/runtime/serve-browser-tab-layout'
+import '../../../src/main/runtime/orca-runtime-tests/runtime-test-module-registration.spec'
 import { applyPtyBinding } from '../../../src/main/persistence/loading-store/pty-binding-session-update'
 import type { RuntimePtyController } from '../../../src/main/runtime/runtime-pty-controller-contract'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import '../../../src/main/runtime/orca-runtime-tests/runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
 import {
   HEADLESS_LEAF_ID,
