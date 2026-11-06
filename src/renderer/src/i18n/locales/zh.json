@@ -16294,7 +16294,8 @@
           "5d2c3e7ae3": "未检测到语音。",
           "micFallback": "所选麦克风不可用。使用系统默认值。",
           "micDisconnected": "麦克风已断开。听写停止了。",
-          "cloudLimitReached": "已达 10 分钟云端上限。听写已停止。"
+          "cloudLimitReached": "已达 10 分钟云端上限。听写已停止。",
+          "stoppedAfterSilence": "静音一分钟后已停止"
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "无法插入听写内容，已复制到剪贴板。",

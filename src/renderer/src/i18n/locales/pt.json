@@ -19224,7 +19224,8 @@
           "5d2c3e7ae3": "Nenhuma fala detectada.",
           "micFallback": "O microfone selecionado não está disponível. Usando o padrão do sistema.",
           "micDisconnected": "Microfone desconectado. O ditado foi interrompido.",
-          "cloudLimitReached": "O ditado foi interrompido no limite de 10 minutos da nuvem."
+          "cloudLimitReached": "O ditado foi interrompido no limite de 10 minutos da nuvem.",
+          "stoppedAfterSilence": "Parou após um minuto de silêncio"
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "Não foi possível inserir o ditado, então ele foi copiado para a área de transferência.",

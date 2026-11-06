@@ -16970,7 +16970,8 @@
           "5d2c3e7ae3": "Keine Sprache erkannt.",
           "micFallback": "Ausgewähltes Mikrofon nicht verfügbar. Systemstandard wird verwendet.",
           "micDisconnected": "Mikrofon getrennt. Diktat gestoppt.",
-          "cloudLimitReached": "Diktat am 10-Minuten-Limit der Cloud gestoppt."
+          "cloudLimitReached": "Diktat am 10-Minuten-Limit der Cloud gestoppt.",
+          "stoppedAfterSilence": "Nach einer Minute Stille beendet"
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "Das Diktat konnte nicht eingefügt werden und wurde in die Zwischenablage kopiert.",

@@ -19,6 +19,7 @@ import { useHoldDictationGesture } from './use-hold-dictation-gesture'
 import { DICTATION_CONTROL_EVENT, type DictationControlAction } from './dictation-control-events'
 import { publishDictationMeter } from './dictation-meter-store'
 import { stopDictationAtAudioLimit } from './dictation-audio-limit-stop'
+import { useDictationSilenceStop } from './use-dictation-silence-stop'
 
 export function DictationController() {
   const dictationState = useAppStore((s) => s.dictationState)
@@ -33,7 +34,8 @@ export function DictationController() {
     finish: finishCapture,
     flushBufferedAudio,
     discardBufferedAudio,
-    getCapturedChunkCount
+    getCapturedChunkCount,
+    getLastSpeechAt
   } = useAudioCapture(publishDictationMeter)
 
   const dictationStateRef = useRef(dictationState)
@@ -318,6 +320,13 @@ export function DictationController() {
     document.addEventListener(DICTATION_CONTROL_EVENT, handleControl)
     return () => document.removeEventListener(DICTATION_CONTROL_EVENT, handleControl)
   }, [settings?.voice?.enabled, startDictation, stopDictation])
+
+  useDictationSilenceStop(
+    dictationState === 'listening',
+    holdGestureActiveRef,
+    getLastSpeechAt,
+    () => void stopDictation()
+  )
 
   useHoldDictationGesture({
     dictationStateRef,

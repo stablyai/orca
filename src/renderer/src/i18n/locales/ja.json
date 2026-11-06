@@ -16294,7 +16294,8 @@
           "5d2c3e7ae3": "音声が検出されませんでした。",
           "micFallback": "選択したマイクが使用できません。システムのデフォルトを使用します。",
           "micDisconnected": "マイクが接続されていません。ディクテーションが停止しました。",
-          "cloudLimitReached": "クラウドの10分の上限に達したため、ディクテーションが停止しました。"
+          "cloudLimitReached": "クラウドの10分の上限に達したため、ディクテーションが停止しました。",
+          "stoppedAfterSilence": "1分間音声がなかったため停止しました。"
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "音声入力を挿入できなかったため、クリップボードにコピーしました。",
