@@ -16975,6 +16975,8 @@
           "noRunUsageYet": "まだ実行の使用量がありません",
           "noWorkspace": "ワークスペースなし",
           "latestSavedOutput": "最新の保存済み出力",
+          "fullOutputUnavailable": "完全な出力を読み込めませんでした。",
+          "retryFullOutput": "再試行",
           "backToList": "すべての自動化",
           "tableName": "名前",
           "tableProject": "プロジェクト",

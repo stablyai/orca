@@ -16975,6 +16975,8 @@
           "noRunUsageYet": "아직 실행 사용량 없음",
           "noWorkspace": "워크스페이스 없음",
           "latestSavedOutput": "최근 저장된 출력",
+          "fullOutputUnavailable": "전체 출력을 불러오지 못했습니다.",
+          "retryFullOutput": "다시 시도",
           "backToList": "모든 자동화",
           "tableName": "이름",
           "tableProject": "프로젝트",

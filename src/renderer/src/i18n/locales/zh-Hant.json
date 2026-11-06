@@ -17398,6 +17398,8 @@
           "noRunUsageYet": "尚無執行用量",
           "noWorkspace": "無工作區",
           "latestSavedOutput": "最近儲存的輸出",
+          "fullOutputUnavailable": "無法載入完整輸出。",
+          "retryFullOutput": "重試",
           "backToList": "全部自動化",
           "tableName": "名稱",
           "tableProject": "專案",

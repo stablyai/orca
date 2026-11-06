@@ -17391,6 +17391,8 @@
           "noRunUsageYet": "Aún no hay uso de ejecución",
           "noWorkspace": "Sin espacio de trabajo",
           "latestSavedOutput": "Última salida guardada",
+          "fullOutputUnavailable": "No se pudo cargar la salida completa.",
+          "retryFullOutput": "Reintentar",
           "backToList": "Todas las automatizaciones",
           "tableName": "Nombre",
           "tableProject": "Proyecto",

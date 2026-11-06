@@ -18042,6 +18042,8 @@
           "noRunUsageYet": "No run usage yet",
           "noWorkspace": "No workspace",
           "latestSavedOutput": "Latest saved output",
+          "fullOutputUnavailable": "Couldn't load the full output.",
+          "retryFullOutput": "Retry",
           "backToList": "All automations",
           "tableName": "Name",
           "tableProject": "Project",
