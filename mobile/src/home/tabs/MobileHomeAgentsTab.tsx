@@ -1,22 +1,28 @@
-import { Bot, ChevronRight, Monitor, Search, SlidersHorizontal, WifiOff } from 'lucide-react-native'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { ScrollView, Text, View } from 'react-native'
+import {
+  Bot,
+  CheckCheck,
+  ChevronRight,
+  Search,
+  SlidersHorizontal,
+  Trash2,
+  WifiOff
+} from 'lucide-react-native'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { ActivityIndicator, ScrollView, Text, View } from 'react-native'
 import {
   AGENT_LIST_GROUP_BY_CHOICES,
+  agentListRowsIn,
   buildAgentList,
   DEFAULT_AGENT_LIST_VIEW,
-  summarizeAgentListHosts,
   type AgentListGroupBy,
   type AgentListSection
 } from '../../agents/agent-list-model'
+import { summarizeAgentListHosts } from '../../agents/agent-list-rows'
 import { loadAgentListView, saveAgentListView } from '../../agents/agent-list-preferences'
 import { MobileAgentListRows, type AgentListRowHandlers } from '../../agents/MobileAgentListRows'
 import type { ActionSheetAction } from '../../components/ActionSheetModal'
 import { MobileSearchField } from '../../components/MobileSearchField'
 import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'
-import { PickerModal, type PickerOption } from '../../components/PickerModal'
-import { hostPickerOptions } from '../../components/use-connected-host-picker'
-import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useResponsiveLayout } from '../../layout/responsive-layout'
 import { useSerializedStoredState } from '../../storage/use-serialized-stored-state'
@@ -29,10 +35,8 @@ import { formatTimeAgo } from '../../worktree/agent-row-display'
 import { homeListStyles } from '../home-list-styles'
 import { MobileHomeSectionHeading } from '../MobileHomeSectionHeading'
 import type { MobileHomeData } from '../use-mobile-home-data'
-import { MobileHomePill } from './MobileHomeHostPill'
+import { AgentsDesktopFilter } from './MobileHomeAgentsDesktopFilter'
 import { MobileHomeTabHeader, MobileHomeTabHeaderButton } from './MobileHomeTabHeader'
-
-const ALL_DESKTOPS = '__all__'
 
 /** Every agent on every paired desktop, grouped the way the user picked. */
 export function MobileHomeAgentsTab(props: {
@@ -56,7 +60,6 @@ export function MobileHomeAgentsTab(props: {
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [pickedHost, setPickedHost] = useState<string | null>(null)
-  const [pickerOpen, setPickerOpen] = useState(false)
   const [menu, setMenu] = useState<'closed' | 'options' | 'group-by'>('closed')
   const optionsRef = useRef<View>(null)
   // An unpaired desktop's filter falls back to every desktop.
@@ -67,6 +70,16 @@ export function MobileHomeAgentsTab(props: {
     [data.agentList, view, hostFilter, query]
   )
   const nameDesktops = hosts.length > 1 && hostFilter === null
+  const listed = useMemo(() => agentListRowsIn(list.sections), [list.sections])
+  const unreadRows = listed.filter((row) => row.unread === true)
+  const clearableRows = listed.filter((row) => row.clearable)
+  const clearFinished = () => props.handlers.onClear(clearableRows)
+  // The Done heading's Clear acts on Done alone; a failed agent under Needs you stays.
+  const clearSection = (section: AgentListSection) => {
+    const rows = agentListRowsIn([section]).filter((row) => row.clearable)
+    return rows.length > 0 ? () => props.handlers.onClear(rows) : undefined
+  }
+  const hostSummaries = useMemo(() => summarizeAgentListHosts(data.agentList), [data.agentList])
   const setView = (next: typeof view) => {
     stored.setValue(next)
     stored.persist(next)
@@ -104,53 +117,111 @@ export function MobileHomeAgentsTab(props: {
               onPress: () => setMenu('group-by')
             },
             {
+              id: 'unread-only',
+              label: t('agents.options.unreadOnly', 'Unread only'),
+              checked: view.unreadOnly,
+              onPress: () => setView({ ...view, unreadOnly: !view.unreadOnly })
+            },
+            {
               id: 'show-workers',
               label: t('agents.options.showWorkers', 'Show worker agents'),
               checked: view.showWorkers,
               onPress: () => setView({ ...view, showWorkers: !view.showWorkers })
             }
+          ],
+          [
+            {
+              id: 'mark-all-read',
+              label: t('agents.options.markAllRead', 'Mark all read'),
+              icon: CheckCheck,
+              disabled: unreadRows.length === 0,
+              onPress: () => props.handlers.onSetRead(unreadRows, true)
+            },
+            {
+              id: 'clear-finished',
+              label: t('agents.options.clearFinished', 'Clear finished'),
+              icon: Trash2,
+              disabled: clearableRows.length === 0,
+              onPress: clearFinished
+            }
           ]
         ]
 
-  const body = !data.hostCatalogLoaded ? null : list.sections.length === 0 ? (
-    <AgentsEmpty
-      title={
-        query.trim()
-          ? t('agents.list.noMatches', 'No agents match “{{query}}”', { query: query.trim() })
-          : t('agents.list.emptyTitle', 'No agents running')
-      }
-      message={
-        query.trim()
-          ? undefined
-          : hosts.length === 0
-            ? t('agents.list.pairDesktop', 'Pair a desktop to see its agents here.')
-            : t('agents.list.emptyBody', 'Start an agent in any workspace and it shows up here.')
-      }
-    />
-  ) : (
-    list.sections.map((section, index) => (
-      <View key={section.key}>
-        <AgentListSectionHeading
-          section={section}
-          host={hosts.find((host) => host.id === section.hostId) ?? null}
-          nameDesktop={nameDesktops}
-          first={index === 0}
-          now={now}
+  const filteredHosts = hosts.filter((host) => hostFilter === null || host.id === hostFilter)
+  // A desktop still connecting, or connected with its first list read pending, may yet have agents.
+  const awaitingDesktop = filteredHosts.some((host) => {
+    const state = data.hostStates[host.id]
+    return state === 'connected'
+      ? !data.worktreeInfo[host.id]?.catalogUnavailable
+      : state === undefined || state === 'connecting' || state === 'handshaking'
+  })
+  const emptyState = (): ReactNode => {
+    const trimmed = query.trim()
+    if (trimmed) {
+      return (
+        <AgentsEmpty
+          title={t('agents.list.noMatches', 'No agents match “{{query}}”', { query: trimmed })}
         />
-        <MobileAgentListRows
-          rows={section.rows}
-          idleRows={section.idleRows}
-          idleKey={view.groupBy}
-          footer={section.footer}
-          nameDesktop={section.nameDesktop}
-          hosts={hosts}
-          now={now}
-          onOpen={props.handlers.onOpen}
-          onLongPress={props.handlers.onLongPress}
+      )
+    }
+    if (hosts.length === 0) {
+      return (
+        <AgentsEmpty
+          title={t('agents.list.emptyTitle', 'No agents running')}
+          message={t('agents.list.pairDesktop', 'Pair a desktop to see its agents here.')}
         />
-      </View>
-    ))
-  )
+      )
+    }
+    // "No agents running" is only true of a desktop that answered.
+    if (!list.anyLive) {
+      return awaitingDesktop ? (
+        <View style={styles.connecting}>
+          <ActivityIndicator size="small" color={colors.textSecondary} />
+        </View>
+      ) : (
+        <AgentsEmpty
+          title={t('agents.list.noDesktopTitle', 'No desktop connected')}
+          message={t('agents.list.noDesktopBody', 'Agents show up here once a desktop connects.')}
+        />
+      )
+    }
+    return (
+      <AgentsEmpty
+        title={t('agents.list.emptyTitle', 'No agents running')}
+        message={t(
+          'agents.list.emptyBody',
+          'Start an agent in any workspace and it shows up here.'
+        )}
+      />
+    )
+  }
+
+  const body = !data.hostCatalogLoaded
+    ? null
+    : list.sections.length === 0
+      ? emptyState()
+      : list.sections.map((section, index) => (
+          <View key={section.key}>
+            <AgentListSectionHeading
+              section={section}
+              host={hosts.find((host) => host.id === section.hostId) ?? null}
+              nameDesktop={nameDesktops}
+              first={index === 0}
+              now={now}
+              onClear={section.kind === 'done' ? clearSection(section) : undefined}
+            />
+            <MobileAgentListRows
+              rows={section.rows}
+              idleRows={section.idleRows}
+              idleKey={view.groupBy}
+              footer={section.footer}
+              nameDesktop={section.nameDesktop}
+              hosts={hosts}
+              now={now}
+              handlers={props.handlers}
+            />
+          </View>
+        ))
 
   return (
     <>
@@ -189,7 +260,12 @@ export function MobileHomeAgentsTab(props: {
       ) : null}
       {hosts.length > 1 ? (
         <View style={styles.filters}>
-          <DesktopFilter hosts={hosts} selected={hostFilter} onOpen={() => setPickerOpen(true)} />
+          <AgentsDesktopFilter
+            hosts={hosts}
+            selected={hostFilter}
+            summaries={hostSummaries}
+            onSelect={setPickedHost}
+          />
         </View>
       ) : null}
       <ScrollView
@@ -209,86 +285,7 @@ export function MobileHomeAgentsTab(props: {
         groups={menuGroups}
         onClose={() => setMenu('closed')}
       />
-      {hosts.length > 1 ? (
-        <PickerModal
-          visible={pickerOpen}
-          title={t('agents.desktops.pickerTitle', 'Show agents on')}
-          options={desktopFilterOptions(hosts, summarizeAgentListHosts(data.agentList), t)}
-          selected={hostFilter ?? ALL_DESKTOPS}
-          onSelect={(value) => setPickedHost(value === ALL_DESKTOPS ? null : value)}
-          onClose={() => setPickerOpen(false)}
-        />
-      ) : null}
     </>
-  )
-}
-
-function desktopFilterOptions(
-  hosts: readonly HostProfile[],
-  summaries: ReturnType<typeof summarizeAgentListHosts>,
-  t: Translate
-): PickerOption[] {
-  const agentCount = (count: number) =>
-    count === 1
-      ? t('agents.desktops.agents_one', '{{count}} agent', { count })
-      : t('agents.desktops.agents_other', '{{count}} agents', { count })
-  const total = summaries.reduce((sum, summary) => sum + summary.agents, 0)
-  const icon = (offline: boolean) => () =>
-    offline ? (
-      <WifiOff size={17} color={colors.textMuted} />
-    ) : (
-      <Monitor size={17} color={colors.textPrimary} />
-    )
-  return [
-    {
-      value: ALL_DESKTOPS,
-      label: t('agents.desktops.all', 'All desktops'),
-      subtitle: agentCount(total),
-      renderIcon: icon(false)
-    },
-    ...hostPickerOptions([...hosts]).map((option) => {
-      const summary = summaries.find((entry) => entry.hostId === option.value)
-      const needsYou = summary?.needsYou ?? 0
-      return {
-        value: option.value,
-        label: option.label,
-        subtitle: summary?.offline
-          ? t('agents.desktops.offline', 'Offline')
-          : [
-              agentCount(summary?.agents ?? 0),
-              needsYou > 0
-                ? needsYou === 1
-                  ? t('agents.desktops.needsYou_one', '{{count}} needs you', { count: needsYou })
-                  : t('agents.desktops.needsYou_other', '{{count}} need you', { count: needsYou })
-                : null
-            ]
-              .filter(Boolean)
-              .join(' · '),
-        renderIcon: icon(summary?.offline ?? false)
-      }
-    })
-  ]
-}
-
-function DesktopFilter(props: {
-  hosts: readonly HostProfile[]
-  selected: string | null
-  onOpen: () => void
-}) {
-  const t = useMobileTranslation()
-  useMobileColorScheme()
-  const selected = props.hosts.find((host) => host.id === props.selected) ?? null
-  const title = useHostDisplay(selected).title
-  const label = selected ? title : t('agents.desktops.all', 'All desktops')
-  return (
-    <MobileHomePill
-      label={label}
-      leading={<Monitor size={14} color={colors.textPrimary} />}
-      accessibilityLabel={t('home.tabs.chooseDesktop', '{{desktop}}, choose another desktop', {
-        desktop: label
-      })}
-      onPress={props.onOpen}
-    />
   )
 }
 
@@ -298,6 +295,8 @@ function AgentListSectionHeading(props: {
   nameDesktop: boolean
   first: boolean
   now: number
+  /** The Done heading's "Clear": the same as Clear finished. */
+  onClear?: () => void
 }) {
   const t = useMobileTranslation()
   const { section } = props
@@ -336,8 +335,9 @@ function AgentListSectionHeading(props: {
     <MobileHomeSectionHeading
       title={titles[section.kind] ?? section.title ?? ''}
       count={counted ? section.rows.length : undefined}
-      aside={aside}
+      aside={props.onClear ? t('agents.sections.clear', 'Clear') : aside}
       asideIcon={seen?.offline ? WifiOff : undefined}
+      onAsidePress={props.onClear}
       first={props.first}
     />
   )
@@ -361,6 +361,7 @@ const styles = themedStyleSheet(() => ({
   search: { marginHorizontal: spacing.lg, marginBottom: spacing.sm },
   filters: { paddingHorizontal: spacing.lg },
   menuValue: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  connecting: { alignItems: 'center', paddingVertical: spacing.xl, marginTop: 32 },
   menuValueText: { fontSize: 15, color: colors.textMuted },
   empty: {
     alignItems: 'center',
