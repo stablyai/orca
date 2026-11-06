@@ -503,6 +503,7 @@ it('drops checking-session models when cancellation wins while start is pending'
 
 it('explicit Enterprise sign-in authenticates the host choice and verifies a usable session', async () => {
   const state = await signInAgainst(async () => '', {
+    realLaunchSources: true,
     authConfig: {
       method: 'oauth-business',
       gcpProject: 'enterprise-project',
