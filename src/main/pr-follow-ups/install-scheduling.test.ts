@@ -32,6 +32,7 @@ function installation(count: number, unresolved = false) {
   const records = new FollowUpStore(db)
   const now = Date.now()
   let enabled = !unresolved
+  let working: { working: boolean; at: number } | 'unknown' = 'unknown'
   let targets: FollowUpTarget[] = Array.from({ length: count }, (_, index) => ({
     worktreeId: `w${index}`,
     instanceId: `i${index}`,
@@ -134,7 +135,7 @@ function installation(count: number, unresolved = false) {
     inventoryComplete: () => true,
     launchInputs: () => ({ key: 'codex:chat', agent: 'codex' }),
     recipe: () => ({ agent: 'codex', surface: 'chat' }),
-    working: () => 'unknown',
+    working: (action) => (action.paneKey === 'pane-w0' ? working : 'unknown'),
     live: vi.fn().mockResolvedValue(true),
     prepare
   }
@@ -207,14 +208,15 @@ function installation(count: number, unresolved = false) {
       observations.set('pr0', next)
       observation(next)
     },
-    status: (working: boolean, at: number) => {
-      targets[0] = { ...targets[0]!, workingAgent: working ? 'Codex' : null }
+    status: (active: boolean, at: number) => {
+      working = { working: active, at }
+      targets[0] = { ...targets[0]!, workingAgent: active ? 'Codex' : null }
       transition({
         kind: 'moved',
         workspace: { worktreeId: 'w0', sshHostId: null },
         paneKey: 'pane-w0',
-        from: working ? 'done' : 'working',
-        to: working ? 'working' : 'done',
+        from: active ? 'done' : 'working',
+        to: active ? 'working' : 'done',
         transition: null,
         at
       })

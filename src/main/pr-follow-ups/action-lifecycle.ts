@@ -46,7 +46,8 @@ export function recordFollowUpActivity(
 export async function reconcileFollowUpActions(
   deps: FollowUpEngineDependencies,
   prKey: string,
-  recordActivity: (action: FollowUpAction, working: boolean | 'unknown', at: number) => boolean
+  recordActivity: (action: FollowUpAction, working: boolean | 'unknown', at: number) => boolean,
+  hasQueuedActivity: (action: FollowUpAction) => boolean
 ): Promise<void> {
   for (const action of deps.store.actions(prKey, true)) {
     if (action.status === 'claimed' || action.status === 'unconfirmed') {
@@ -60,7 +61,12 @@ export async function reconcileFollowUpActions(
       }
       settleFollowUpReceipt(deps, action, receipt)
     }
-    if (action.status === 'accepted' && action.sessionEndedAt === undefined) {
+    // Latest-state reads must not overtake queued timestamped transitions.
+    if (
+      action.status === 'accepted' &&
+      action.sessionEndedAt === undefined &&
+      !hasQueuedActivity(action)
+    ) {
       const live = await deps.live(action).catch(() => 'unknown' as const)
       if (live === false) {
         action.sessionEndedAt = deps.now?.() ?? Date.now()

@@ -11,7 +11,7 @@ export function createFollowUpProjectionState() {
     entries: new Map<string, FollowUpSnapshot['workspaces'][string]>(),
     recoveryDeadlines: new Map<string, { at: number; timer: ReturnType<typeof setTimeout> }>(),
     identityPrKeys: new Map<string, string>(),
-    activityStates: new Map<string, string>(),
+    activityStates: new Map<string, { state: string; queued: number }>(),
     activeKeys: new Set<string>(),
     observations: new Map<string, string>(),
     projections: new Map<string, FollowUpProjection>(),

@@ -132,8 +132,14 @@ export class FollowUpEngine {
   }
 
   private reconcileActions(prKey: string): Promise<void> {
-    return reconcileFollowUpActions(this.deps, prKey, (action, working, at) =>
-      this.activity(action, working, at)
+    return reconcileFollowUpActions(
+      this.deps,
+      prKey,
+      (action, working, at) => this.activity(action, working, at),
+      (action) =>
+        [action.sessionId, action.paneKey, action.terminalPtyId].some(
+          (id) => id && (this.projection.activityStates.get(id)?.queued ?? 0) > 0
+        )
     )
   }
 
@@ -207,24 +213,32 @@ export class FollowUpEngine {
   ): Promise<void> | undefined {
     const key = this.projection.identityPrKeys.get(identity)
     const state = JSON.stringify([working, at])
-    if (!key || this.projection.activityStates.get(identity) === state) {
+    const previous = this.projection.activityStates.get(identity)
+    if (!key || previous?.state === state) {
       return undefined
     }
-    this.projection.activityStates.set(identity, state)
+    this.projection.activityStates.set(identity, { state, queued: (previous?.queued ?? 0) + 1 })
     let changed = false
     return this.enqueue(async () => {
-      for (const action of this.deps.store.actions(key, true)) {
-        if (
-          action.status === 'accepted' &&
-          [action.sessionId, action.paneKey, action.terminalPtyId].includes(identity)
-        ) {
-          changed = this.activity(action, working, at) || changed
+      try {
+        for (const action of this.deps.store.actions(key, true)) {
+          if (
+            action.status === 'accepted' &&
+            [action.sessionId, action.paneKey, action.terminalPtyId].includes(identity)
+          ) {
+            changed = this.activity(action, working, at) || changed
+          }
         }
-      }
-      if (!this.inventory.byWorkspace.has(worktreeId)) {
-        await this.reconcileNow([key])
-      } else if (changed) {
-        this.publish([key])
+        if (!this.inventory.byWorkspace.has(worktreeId)) {
+          await this.reconcileNow([key])
+        } else if (changed) {
+          this.publish([key])
+        }
+      } finally {
+        const activity = this.projection.activityStates.get(identity)
+        if (activity) {
+          activity.queued--
+        }
       }
     })
   }
