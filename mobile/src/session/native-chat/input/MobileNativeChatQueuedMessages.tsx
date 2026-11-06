@@ -1,7 +1,7 @@
 import { MobileNativeChatQueueFrame } from './MobileNativeChatQueueFrame'
 import { DragReorderList } from '../../../components/DragReorderList'
 import type { DragReorderMove } from '../../../components/drag-reorder-positions'
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useImperativeHandle, useLayoutEffect, useRef, useState, type Ref } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight, Pencil, Play, Trash2 } from 'lucide-react-native'
 import { ActionSheetModal } from '../../../components/ActionSheetModal'
@@ -10,6 +10,7 @@ import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useLargeSystemText } from '../../../theme/use-large-system-text'
 import type { MobileQueuedMessageCard } from '../../mobile-structured-queued-message-cards'
+import { headSteerableQueuedMessageCard } from '../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import type { AgentSessionQueuePause } from '../../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import type { MobileQueuedMessageEdit } from '../../use-mobile-structured-queued-message-controls'
 import type { MobileQueuedMessageInlineEditor } from '../../mobile-queued-message-edit-draft'
@@ -23,7 +24,13 @@ import { useMobileNativeChatLowerRegion } from '../mobile-native-chat-lower-regi
 const QUEUE_KEY = '\u0000queue'
 const MOVE_KEY = '\u0000move'
 
+export type MobileNativeChatQueuedMessagesHandle = {
+  /** Steers the head card as its own Steer would; false where that Steer is unavailable. */
+  steerHead: () => boolean
+}
+
 export type MobileNativeChatQueuedMessagesProps = {
+  ref?: Ref<MobileNativeChatQueuedMessagesHandle>
   cards?: MobileQueuedMessageCard[]
   onSend?: (messageId: string) => Promise<boolean>
   onDelete?: (messageId: string) => Promise<boolean>
@@ -40,6 +47,7 @@ export type MobileNativeChatQueuedMessagesProps = {
 }
 
 export function MobileNativeChatQueuedMessages({
+  ref,
   cards,
   onSend,
   onDelete,
@@ -62,12 +70,6 @@ export function MobileNativeChatQueuedMessages({
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(true)
   const largeText = useLargeSystemText()
-  if (!cards || cards.length === 0) {
-    if (!expanded) {
-      setExpanded(true)
-    }
-    return null
-  }
   const run = (
     messageId: string,
     action?: (id: string) => Promise<boolean>,
@@ -88,6 +90,19 @@ export function MobileNativeChatQueuedMessages({
       }
     })()
     return true
+  }
+  useImperativeHandle(ref, () => ({
+    steerHead: () => {
+      const head =
+        cards && agentWorking && !steerHeld ? headSteerableQueuedMessageCard(cards) : null
+      return head !== null && editor?.messageId !== head.messageId && run(head.messageId, onSend)
+    }
+  }))
+  if (!cards || cards.length === 0) {
+    if (!expanded) {
+      setExpanded(true)
+    }
+    return null
   }
   const queueBusy = busyIds.has(QUEUE_KEY)
   const messageIds = cards.map((card) => card.messageId)

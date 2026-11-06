@@ -24,9 +24,9 @@ import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment
 import { MobileNativeChatComposerAttachButton } from './MobileNativeChatComposerAttachButton'
 import {
   MobileNativeChatSessionOptionPickers,
-  type MobileNativeChatPickerPresentation,
   type MobileNativeChatSessionOptionPickersProps
 } from '../input/MobileNativeChatSessionOptionPickers'
+import { useMobileNativeChatPickerPresentation } from '../input/use-mobile-native-chat-picker-presentation'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import {
   mobileNativeChatComposerPasteHandler,
@@ -73,6 +73,8 @@ type Props = MobileNativeChatMicProps & {
   onSend: (text: string, intent?: MobileNativeChatSendIntent) => Promise<boolean>
   /** While the agent works on a host that queues: what a tap on Send does and whether holding it offers the other way; null otherwise. */
   sendFollowUp?: NativeChatSendFollowUp | null
+  /** Steers the head queued card; Cmd/Ctrl+Enter on an empty composer uses it where its other way is steer. */
+  steerHead?: () => boolean
   /** Changes whenever the route focuses a different chat composer surface. */
   sendSurfaceId: string
   /** Reads the retained route's focus generation without forcing a screen render. */
@@ -140,7 +142,8 @@ export function MobileNativeChatComposer({
   skillDiscovery,
   onNeedSkills,
   stop = null,
-  sendFollowUp = null
+  sendFollowUp = null,
+  steerHead
 }: Props): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -148,13 +151,9 @@ export function MobileNativeChatComposer({
   const fieldRef = inputRef ?? fallbackInputRef
   const groupRef = useRef<View>(null)
   const [focused, setFocused] = useState(false)
-  const [picker, setPicker] = useState<MobileNativeChatPickerPresentation | null>(null)
-  const request = sessionOptions?.controller.optionPickerRequest
-  const [lastRequest, setLastRequest] = useState(request)
-  if (request && lastRequest !== request) {
-    setLastRequest(request)
-    setPicker({ page: request.id, refocus: false })
-  }
+  const [picker, setPicker] = useMobileNativeChatPickerPresentation(
+    sessionOptions?.controller.optionPickerRequest
+  )
   const files = structured?.files ?? NO_FILES
   const onWebPaste = mobileNativeChatComposerPasteHandler({
     disabled: disabled || editSession?.locked === true,
@@ -284,6 +283,7 @@ export function MobileNativeChatComposer({
     }
   }
 
+  const followUp = goal.sendFollowUp(sendFollowUp)
   const content = (
     <View ref={groupRef} testID="native-chat-composer-group">
       <MobileNativeChatComposerSuggestions
@@ -310,9 +310,13 @@ export function MobileNativeChatComposer({
               const first = menu.rows[0]
               if (first) {
                 menu.pick(first)
-                return
+              } else if (editSession || value.trim() !== '' || attachmentCount > 0) {
+                void handleSend(editSession ? undefined : { alternate: true }, true)
+              } else if (followUp?.action === 'queue' && followUp.offersChoice) {
+                // Nothing of its own to steer, so the head card goes; never where the chord means queue,
+                // or a second press would steer the card the first one just queued.
+                steerHead?.()
               }
-              void handleSend(editSession ? undefined : { alternate: true }, true)
             }}
             onFocus={() => {
               setFocused(true)
@@ -398,7 +402,7 @@ export function MobileNativeChatComposer({
                 ) : (
                   <MobileNativeChatSendButton
                     canSend={canSend}
-                    sendFollowUp={goal.sendFollowUp(sendFollowUp)}
+                    sendFollowUp={followUp}
                     onSend={(intent) => void handleSend(intent)}
                   />
                 )}

@@ -1,10 +1,19 @@
-import { createElement, Fragment, useMemo, type ReactNode, type RefObject } from 'react'
+import {
+  createElement,
+  Fragment,
+  useCallback,
+  useMemo,
+  useRef,
+  type ReactNode,
+  type RefObject
+} from 'react'
 import type { TextInput } from 'react-native'
 import { MobileNativeChatBackgroundTasks } from '../input/MobileNativeChatBackgroundTasks'
 import { MobileNativeChatDockedTaskList } from '../input/MobileNativeChatDockedTaskList'
 import type { NativeChatTaskList } from '../../../../../src/shared/native-chat/input/native-chat-task-list'
 import {
   MobileNativeChatQueuedMessages,
+  type MobileNativeChatQueuedMessagesHandle,
   type MobileNativeChatQueuedMessagesProps
 } from '../input/MobileNativeChatQueuedMessages'
 import type { MobileStructuredBackgroundTasks } from '../../use-mobile-structured-background-tasks'
@@ -13,6 +22,8 @@ import { useMobileNativeChatQueuedEditFocus } from '../input/use-mobile-native-c
 export type MobileNativeChatComposerTray = {
   content?: ReactNode
   composerInputRef?: RefObject<TextInput | null>
+  /** Steers the head queued card through its own Steer; false where that Steer is unavailable. */
+  steerHead?: () => boolean
 }
 
 export type ComposerTrayProps = {
@@ -35,6 +46,8 @@ export function useMobileNativeChatComposerTray({
   backgroundTasks: MobileStructuredBackgroundTasks | null
 }): MobileNativeChatComposerTray {
   const { composerInputRef, editQueuedMessage } = useMobileNativeChatQueuedEditFocus(queued.onEdit)
+  const queuedRef = useRef<MobileNativeChatQueuedMessagesHandle>(null)
+  const steerHead = useCallback(() => queuedRef.current?.steerHead() ?? false, [])
   const {
     cards,
     onSend,
@@ -69,6 +82,7 @@ export function useMobileNativeChatComposerTray({
           : null,
         createElement(MobileNativeChatQueuedMessages, {
           key: sessionKey,
+          ref: queuedRef,
           cards,
           onSend,
           onDelete,
@@ -82,7 +96,8 @@ export function useMobileNativeChatComposerTray({
           agentWorking
         })
       ),
-      composerInputRef
+      composerInputRef,
+      steerHead
     }),
     [
       taskList,
@@ -99,6 +114,7 @@ export function useMobileNativeChatComposerTray({
       pause,
       sessionKey,
       steerHeld,
+      steerHead,
       agentWorking
     ]
   )

@@ -208,6 +208,21 @@ describe('mobile composer modifier submit in the paired web page', () => {
     expect(document.activeElement).toBe(field())
   })
 
+  it.each([
+    { action: 'queue', offersChoice: true, steers: true },
+    { action: 'steer', offersChoice: true, steers: false },
+    { action: 'queue', offersChoice: false, steers: false }
+  ] as const)(
+    'steers the head card from an empty composer only where the chord means steer: %j',
+    async ({ steers, ...sendFollowUp }) => {
+      const steerHead = vi.fn(() => true)
+      await render({ value: '', sendFollowUp, steerHead })
+      expect((await key({ metaKey: true })).defaultPrevented).toBe(true)
+      expect(steerHead).toHaveBeenCalledTimes(steers ? 1 : 0)
+      expect(onSend).not.toHaveBeenCalled()
+    }
+  )
+
   it('saves a queued edit without alternate intent', async () => {
     await render({ editSession: { cancel: vi.fn(), refuseCommand: () => false, locked: false } })
     expect((await key({ metaKey: true })).defaultPrevented).toBe(true)
