@@ -168,15 +168,6 @@ export function createRecentlyClosedEditorTabs(
               s.unifiedTabsByWorktree?.[activeWorktreeId],
               closedTabOrderIds
             )
-          const nextTabBarOrderByWorktree = s.tabBarOrderByWorktree
-            ? {
-                ...s.tabBarOrderByWorktree,
-                [activeWorktreeId]: (s.tabBarOrderByWorktree[activeWorktreeId] ?? []).filter(
-                  (entryId) => !closedTabOrderIds.has(entryId)
-                )
-              }
-            : s.tabBarOrderByWorktree
-
           const capturedFiles = workspaceEditorFiles(
             records.openFiles,
             records.unifiedTabsByWorktree[activeWorktreeId]
@@ -225,7 +216,7 @@ export function createRecentlyClosedEditorTabs(
             markdownTableOfContentsVisible: newMarkdownTableOfContentsVisible,
             activeFileIdByWorktree: newActiveFileIdByWorktree,
             activeTabTypeByWorktree: newActiveTabTypeByWorktree,
-            tabBarOrderByWorktree: nextTabBarOrderByWorktree,
+            ...closedEditorTabOrder(s, new Map([[activeWorktreeId, closedTabOrderIds]])),
             // Why: clear the one-shot search reveal; keeping it after closing all editors would make a later reopen jump to an old match.
             pendingEditorReveal: null,
             pendingEditorFocusRequest:
