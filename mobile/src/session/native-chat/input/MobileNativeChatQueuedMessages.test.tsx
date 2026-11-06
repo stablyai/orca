@@ -5,7 +5,7 @@ import {
   type MobileQueuedMessageCard
 } from '../../mobile-structured-queued-message-cards'
 
-import { createElement, isValidElement } from 'react'
+import { createElement } from 'react'
 import type * as QueuedCardRowModule from '../../MobileQueuedMessageCardRow'
 import { MobileNativeChatLowerRegion } from '../MobileNativeChatLowerRegion.web'
 import {
@@ -481,13 +481,18 @@ for (const population of [10, 100]) {
     try {
       await act(async () => {
         mounted = create(render(cards), {
-          createNodeMock: (element) =>
-            isValidElement<{ testID?: string }>(element) &&
-            element.props.testID === 'native-chat-lower-scroll'
-              ? { getScrollableNode: () => viewport }
-              : element.type === 'ScrollView'
-                ? { scrollToEnd: () => {} }
-                : content
+          createNodeMock: (element) => {
+            const props = element.props
+            if (
+              typeof props === 'object' &&
+              props !== null &&
+              'testID' in props &&
+              props.testID === 'native-chat-lower-scroll'
+            ) {
+              return { getScrollableNode: () => viewport }
+            }
+            return element.type === 'ScrollView' ? { scrollToEnd: () => {} } : content
+          }
         })
       })
       await act(paint)
