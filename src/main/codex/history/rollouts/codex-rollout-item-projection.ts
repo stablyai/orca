@@ -154,7 +154,7 @@ export function codexRolloutItem(value: unknown): CodexThreadItem | null {
             type: change.type,
             ...(change.move_path == null ? {} : { movePath: change.move_path })
           },
-          diff: change.move_path ? `${diff}\n\nMoved to: ${change.move_path}` : diff
+          diff: change.move_path ? `${String(diff)}\n\nMoved to: ${String(change.move_path)}` : diff
         }
       })
     item.status = item.status ?? 'inProgress'

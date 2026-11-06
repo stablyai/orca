@@ -1,10 +1,12 @@
 import { recordedCodexRollout } from '../../__fixtures__/codex-rollout-recordings'
-import { prepareLegacyTranscriptImport } from '../../../native-chat/agent-session-journal/history-import/journal-legacy-import'
+import {
+  prepareLegacyTranscriptImport,
+  importLegacyTranscriptIntoJournal
+} from '../../../native-chat/agent-session-journal/history-import/journal-legacy-import'
 import { codexNonMessageIdentity } from '../items/codex-thread-item-identity'
 import { codexTurnLifecycleIdentity } from '../journal/codex-structured-journal-translation-turns'
 import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import { writeFile } from 'node:fs/promises'
-import { importLegacyTranscriptIntoJournal } from '../../../native-chat/agent-session-journal/history-import/journal-legacy-import'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { join } from 'node:path'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
