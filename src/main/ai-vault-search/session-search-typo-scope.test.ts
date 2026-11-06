@@ -83,3 +83,15 @@ it('exhausts typo visibility after 1024 postings including excluded tool rows', 
     expect(repair.correct('coalescs', scope)).toBe('coalesces')
   }
 })
+
+it('keeps an exact spelling when excluded postings exhaust its visibility probe', async () => {
+  harness = await openSessionSearchHarness('ss-typo-exhausted-exact')
+  addSyntheticSession(harness.db, { id: 1, role: 'tool', text: 'coalesces', rows: 1023 })
+  addSyntheticSession(harness.db, { id: 2, text: 'coalesces', rows: 2 })
+  addSyntheticSession(harness.db, { id: 3, text: 'coalesce', rows: 2 })
+  for (const scope of ['all', 'conversation'] as const) {
+    const page = harness.engine.search({ query: 'coalesces', scope })
+    expect(page.planner.repairedTerms).toBeUndefined()
+    expect(page.hits.map((hit) => hit.sessionId)).toEqual(['2'])
+  }
+})

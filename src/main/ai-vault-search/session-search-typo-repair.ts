@@ -62,15 +62,21 @@ export class SessionSearchTypoRepair {
     )
   }
 
-  private countRows(term: string, scope: SessionSearchScope): number {
+  private probeVisibility(
+    term: string,
+    scope: SessionSearchScope
+  ): { rows: number; exhausted: boolean } {
     const quoted = quoteFtsTerm(term)
     const row = this.liveRows.get(quoted, scope, scopedExpression(scope, quoted))
-    const rows = Number(row?.rows ?? 0)
-    return rows >= MAX_COUNTED_ROWS || Number(row?.examined) <= MAX_EXAMINED_POSTINGS ? rows : 0
+    return {
+      rows: Number(row?.rows ?? 0),
+      exhausted: Number(row?.examined) > MAX_EXAMINED_POSTINGS
+    }
   }
 
   hasPostings(term: string, scope: SessionSearchScope): boolean {
-    return this.countRows(term, scope) > 0
+    const { rows, exhausted } = this.probeVisibility(term, scope)
+    return rows > 0 || exhausted
   }
 
   correct(term: string, scope: SessionSearchScope): string | null {
@@ -96,7 +102,10 @@ export class SessionSearchTypoRepair {
   private bestVisible(lowered: string, prefix: string, scope: SessionSearchScope): string | null {
     const counted = this.ranked(lowered, prefix)
       .slice(0, MAX_VISIBILITY_PROBES)
-      .map((candidate) => ({ ...candidate, rows: this.countRows(candidate.term, scope) }))
+      .map((candidate) => ({
+        ...candidate,
+        rows: this.probeVisibility(candidate.term, scope).rows
+      }))
       .filter((candidate) => candidate.rows >= MIN_DOC_FREQUENCY)
     if (counted.length === 0) {
       return null
