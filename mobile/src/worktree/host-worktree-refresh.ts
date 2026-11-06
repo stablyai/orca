@@ -4,9 +4,8 @@ import {
 } from '../transport/shared-client-events'
 import type { HostSidebarFeedTriggers } from '../host-screen/host-sidebar-feed-connection'
 
+// Also the floor between change-driven reads: notices arrive per agent step, like Home's.
 const WORKTREE_REFRESH_MS = 3000
-// Change notices arrive per agent step; read the catalog at most this often while shown, like Home.
-const CHANGE_REFRESH_MIN_INTERVAL_MS = 3000
 
 type WorktreeRefreshOptions = { allowDuringModal?: boolean; queueIfInFlight?: boolean }
 type RepoRefreshOptions = { force?: boolean; queueIfInFlight?: boolean }
@@ -42,26 +41,28 @@ export function startHostWorktreeRefresh({
   // A buried or backgrounded page reads nothing on change notices; the foreground refresh catches up.
   let reposOwed = false
   let viewSettingsOwed = false
-  let lastChangeRefreshAt = 0
+  let lastWorktreeReadAt = 0
   let trailingChangeRefresh: ReturnType<typeof setTimeout> | null = null
   const hidden = (): boolean => appState.currentState !== 'active'
 
   const readWorktrees = (options?: WorktreeRefreshOptions): void => {
-    lastChangeRefreshAt = Date.now()
+    lastWorktreeReadAt = Date.now()
     void fetchWorktrees(options)
   }
   const refreshWorktreesOnChange = (): void => {
     if (hidden() || trailingChangeRefresh) {
       return
     }
-    const wait = lastChangeRefreshAt + CHANGE_REFRESH_MIN_INTERVAL_MS - Date.now()
+    const wait = lastWorktreeReadAt + WORKTREE_REFRESH_MS - Date.now()
     if (wait <= 0) {
       readWorktrees()
       return
     }
     trailingChangeRefresh = setTimeout(() => {
       trailingChangeRefresh = null
-      refreshWorktreesOnChange()
+      if (!hidden()) {
+        readWorktrees()
+      }
     }, wait)
   }
   const refreshReposOnChange = (): void => {
@@ -84,7 +85,8 @@ export function startHostWorktreeRefresh({
       return
     }
     sidebarFeed?.refresh()
-    readWorktrees({ allowDuringModal: true })
+    // Queued: a read still in flight was sent before the notices this page skipped.
+    readWorktrees({ allowDuringModal: true, queueIfInFlight: true })
     void fetchRepoMetadata(
       reposOwed ? { force: true, queueIfInFlight: true } : { queueIfInFlight: true }
     )
@@ -106,7 +108,7 @@ export function startHostWorktreeRefresh({
         if (appState.currentState !== 'active') {
           return
         }
-        void fetchWorktrees()
+        readWorktrees()
         // Older hosts emit no reposChanged; retain foreground repo polling, self-throttled to once a minute.
         void fetchRepoMetadata()
       }, WORKTREE_REFRESH_MS)

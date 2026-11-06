@@ -95,7 +95,7 @@ describe('startHostWorktreeRefresh', () => {
     appState.currentState = 'active'
     appState.listener?.('active')
 
-    expect(fetchWorktrees).toHaveBeenCalledWith({ allowDuringModal: true })
+    expect(fetchWorktrees).toHaveBeenCalledWith({ allowDuringModal: true, queueIfInFlight: true })
     expect(fetchRepoMetadata).toHaveBeenCalledWith({ queueIfInFlight: true })
   })
 
@@ -213,7 +213,10 @@ describe('startHostWorktreeRefresh', () => {
 
     appState.currentState = 'active'
     appState.listener?.('active')
-    expect(fetchWorktrees).toHaveBeenCalledExactlyOnceWith({ allowDuringModal: true })
+    expect(fetchWorktrees).toHaveBeenCalledExactlyOnceWith({
+      allowDuringModal: true,
+      queueIfInFlight: true
+    })
     expect(fetchRepoMetadata).toHaveBeenCalledExactlyOnceWith({
       force: true,
       queueIfInFlight: true
