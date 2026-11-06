@@ -1,5 +1,6 @@
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import type SyncDatabase from '../sqlite/sync-database'
+import type { SqliteRow } from '../sqlite/sqlite-statement'
 import { reportSessionSearchBackgroundError, traceSessionSearch } from './session-search-trace'
 
 /** Seek over gaps, then examine at most 256 rowids, including conversation rows in the bound. */
@@ -70,7 +71,7 @@ export class SessionSearchToolPurge {
     }
   }
 
-  private deletePage(ids: { id: unknown }[]): number {
+  private deletePage(ids: SqliteRow[]): number {
     this.db.exec('BEGIN IMMEDIATE')
     try {
       const full = this.db.prepare('DELETE FROM messages_fts WHERE rowid = ?')
