@@ -4,7 +4,7 @@ import { writeAgentJournalTurnRow } from '../../../native-chat/agent-session-tim
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
-} from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { readRecord } from '../../app-server/codex-item-field-readers'
 import type { CodexJournalActiveTurns } from './codex-structured-journal-translation-turn-state'
 import { readCodexTurnId } from '../../app-server/codex-structured-thread-facts'

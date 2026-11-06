@@ -12,7 +12,7 @@ import {
 import { structuredAgentSessionTurnCompletionSubscriptionId } from './structured-agent-session-subscription-id'
 import { bindStructuredAgentSessionStream } from './structured-agent-session-status-stream'
 import { clientReadsStructuredSessionAgent } from './structured-agent-session-policy'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 export const STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS = [
   // Retire delivered attention covered by the journal boundary without installing the host.

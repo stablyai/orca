@@ -284,7 +284,7 @@ it('distinguishes scoped restart, all-open idle and ordinary acquisition end in 
 
 it('preserves first meaningful chronology, disclosure, exact prefix and original envelope through every reader', async () => {
   const { readStructuredAgentSessionHistoryResult } =
-    await import('../../native-chat/agent-session-wire/structured-agent-session-history-result')
+    await import('../../native-chat/agent-session-wire/publication/history/structured-agent-session-history-result')
   const { EMPTY_STRUCTURED_AGENT_SESSION, reduceStructuredAgentSession } =
     await import('../../../shared/agent-session/structured-agent-session-reducer')
   const { projectStructuredItemsToNativeChat } =

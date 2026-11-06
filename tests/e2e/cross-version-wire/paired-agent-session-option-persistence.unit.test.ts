@@ -13,15 +13,15 @@ import { agentModelCatalogFingerprintForRecord } from '../../../src/main/native-
 import { CLIENT_UI_METHODS } from '../../../src/main/runtime/rpc/methods/client-ui'
 import { STATUS_METHODS } from '../../../src/main/runtime/rpc/methods/status'
 import { STRUCTURED_AGENT_SESSION_METHODS } from '../../../src/main/runtime/rpc/methods/structured-agent-session'
+import { createRestTestRig } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+
 import {
-  createRestTestRig,
-  REST_TEST_SESSION
-} from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
-import {
+  HOST_TEST_SESSION as REST_TEST_SESSION,
   hostTestAttachParams,
   hostTestOperationId
-} from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
+} from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+
+import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { GlobalSettings } from '../../../src/shared/global-settings-types'
 import { getDefaultSettings } from '../../../src/shared/constants'

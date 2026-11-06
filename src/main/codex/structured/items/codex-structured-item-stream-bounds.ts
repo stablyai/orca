@@ -5,8 +5,8 @@ import type {
   CodexPendingItemPatch
 } from './codex-structured-item-stream-contracts'
 import type { CodexThreadItem } from './codex-thread-item-identity'
-import type { AgentSessionDeltaSnapshot } from '../../../native-chat/agent-session-wire/agent-session-delta-coalescer'
-import { JOURNAL_RUNNING_PREVIEW_LIMITS } from '../../../native-chat/agent-session-journal/journal-payload-bounds'
+import type { AgentSessionDeltaSnapshot } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
+import { JOURNAL_RUNNING_PREVIEW_LIMITS } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
 import { codexItemRunState } from './codex-item-run-state'
 import {
   codexRunningOutputItem,

@@ -1,4 +1,4 @@
-import { StructuredAgentSessionExitObservation } from '../../../native-chat/agent-session-wire/structured-agent-session-exit-observation'
+import { StructuredAgentSessionExitObservation } from '../../../native-chat/agent-session-wire/termination/structured-agent-session-exit-observation'
 import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
@@ -12,7 +12,7 @@ import type {
   CodexAppServerLaunch,
   openCodexAppServerConnection
 } from '../../app-server/codex-app-server-connection'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 import type {
   CodexStructuredLaunch,

@@ -12,9 +12,9 @@ import {
   createAgentSessionDeltaCoalescer,
   type AgentSessionDeltaCoalescerDeps,
   type AgentSessionDeltaSnapshot
-} from '../agent-session-wire/agent-session-delta-coalescer'
-import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/structured-agent-session-event-sink-estimate'
-import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/structured-agent-session-transition'
+} from '../agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
+import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'
+import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/journal-ingress/structured-agent-session-transition'
 import {
   providerTimelinePlacement,
   type ProviderTimelineStream,

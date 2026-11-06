@@ -14,7 +14,7 @@ import type { CodexStructuredSessionEvent } from '../session-lifecycle/codex-str
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
-} from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { selectStructuredAgentContextUsage } from '../../../../shared/agent-session/structured-agent-session-context-usage'
 
 // Captured app-server 0.161.0 shape.

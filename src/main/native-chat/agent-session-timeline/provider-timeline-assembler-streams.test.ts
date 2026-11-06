@@ -2,7 +2,7 @@ import { AcpStructuredLane } from '../../acp/acp-structured-lane'
 import { GENERIC_ACP_DIALECT } from '../../acp/acp-dialects/acp-dialect'
 import { PiRpcMessages } from '../../pi/rpc-messages'
 import { PiRpcContextUsage } from '../../pi/rpc-context-usage'
-import { testEventSinkLogging } from '../agent-session-wire/structured-agent-session-logger-test-support'
+import { testEventSinkLogging } from '../agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
@@ -144,7 +144,7 @@ it('actual ACP lane flush/dispose saves a skipped tail and session end retains S
   const { AcpStructuredLane } = await import('../../acp/acp-structured-lane')
   const { GROK_ACP_DIALECT } = await import('../../acp/acp-dialects/grok-dialect')
   const { testEventSinkLogging } =
-    await import('../agent-session-wire/structured-agent-session-logger-test-support')
+    await import('../agent-session-wire/host/testing/structured-agent-session-logger-test-support')
   vi.useFakeTimers({ toFake: ['performance', 'setTimeout', 'clearTimeout'] })
   const r = await openProviderTimelineRig()
   const failed = vi.fn()

@@ -1,4 +1,4 @@
-import type { StructuredAgentSessionAcquireInput } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionAcquireInput } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { CodexJournalTranslatorDeps } from '../journal/codex-structured-journal-contracts'
 import type { CodexStructuredNotificationRetry } from '../session-lifecycle/codex-structured-notification-retry'
 import type {

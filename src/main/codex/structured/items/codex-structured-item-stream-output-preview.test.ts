@@ -3,7 +3,7 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { createCodexStructuredItemStreams } from './codex-structured-item-streams'
 
 function outputStream(type: 'commandExecution' | 'fileChange') {

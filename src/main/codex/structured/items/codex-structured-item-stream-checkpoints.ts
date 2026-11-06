@@ -10,7 +10,7 @@ import {
   type AgentSessionDeltaCoalescer,
   type AgentSessionDeltaSnapshot,
   scheduleAgentSessionDeltaFlush
-} from '../../../native-chat/agent-session-wire/agent-session-delta-coalescer'
+} from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
 import type {
   CodexItemStreamDeps,
   CodexStructuredItemStreamAdmission,

@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   codex: vi.fn<(path: string, configFiles: readonly string[]) => Promise<void>>(async () => {}),
   cursor: vi.fn<(path: string, home: string) => void>(),
   copilot: vi.fn<(path: string, home: string) => void>(),
-  antigravity: vi.fn<(path: string, home: string) => void>(),
+  antigravity: vi.fn<(path: string, home: string, guestPath?: string) => void>(),
   qoder: vi.fn<(path: string, home: string) => void>(),
   kimi: vi.fn<(path: string, kimiHome: string) => void>(),
   codexConfigFiles: vi.fn<(agentHome: string) => string[]>(() => CODEX_CONFIG_FILES),
@@ -35,6 +35,7 @@ vi.mock('../../claude/claude-folder-trust-file', async (importOriginal) => {
 })
 
 import { applyAgentWorkspaceTrust, type AgentTrustLaunchContext } from './agent-workspace-trust'
+import { clearWslHomeCache, rememberWslHome } from '../../wsl/discovery/wsl-home-cache'
 import {
   AGENT_TRUST_WRITE_DEADLINE_MS,
   SHORT_AGENT_TRUST_WRITE_DEADLINE_MS
@@ -81,6 +82,34 @@ describe('applyAgentWorkspaceTrust on this machine', () => {
     expect(codexSettled).toBe(true)
     codexWrite.release()
     warn.mockRestore()
+  })
+})
+
+describe('applyAgentWorkspaceTrust in a WSL guest', () => {
+  const guestHome = '\\\\wsl.localhost\\Ubuntu\\home\\u'
+
+  afterEach(() => {
+    clearWslHomeCache()
+  })
+
+  it('writes Antigravity trust under the distro home, keyed by the guest path', async () => {
+    rememberWslHome('Ubuntu', guestHome)
+    await applyAgentWorkspaceTrust('antigravity', `${guestHome}\\repo`, local)
+    await applyAgentWorkspaceTrust('antigravity', 'C:\\src\\app', {
+      ...local,
+      wslDistro: 'ubuntu'
+    })
+    await applyAgentWorkspaceTrust('cursor', `${guestHome}\\repo`, local)
+    expect(mocks.antigravity.mock.calls).toEqual([
+      [`${guestHome}\\repo`, guestHome, '/home/u/repo'],
+      ['C:\\src\\app', guestHome, '/mnt/c/src/app']
+    ])
+    expect(mocks.cursor).not.toHaveBeenCalled()
+  })
+
+  it('leaves Antigravity to ask when the distro home is not known yet', async () => {
+    await applyAgentWorkspaceTrust('antigravity', `${guestHome}\\repo`, local)
+    expect(mocks.antigravity).not.toHaveBeenCalled()
   })
 })
 

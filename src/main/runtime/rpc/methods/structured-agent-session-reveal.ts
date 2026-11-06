@@ -1,4 +1,4 @@
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { StructuredWorkspaceUnavailable } from '../../session-tabs/structured-workspace-authority'
 import type { StructuredSessionWorkspaceRemovedDetails } from '../../../../shared/open-structured-agent-session'
 // Republish an existing host-owned record's tab for history entries holding only session id; unpublished tabs disappear on sync.
@@ -9,8 +9,9 @@ import {
   isAgentSessionRefusalError,
   isAgentSessionWireRefusalCode
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { StructuredAgentSessionReveal } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
-import { refuseAgentSessionMutation } from '../../../native-chat/agent-session-wire/structured-agent-session-mutation-admission'
+import type { StructuredAgentSessionReveal } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
+import '../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-admission'
+import { refuseAgentSessionMutation } from '../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-refusals'
 import { defineMethod } from '../core'
 import {
   ensureStructuredHostInstalled,

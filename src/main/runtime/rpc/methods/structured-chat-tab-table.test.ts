@@ -7,7 +7,7 @@ import {
   HOST_TEST_SESSION,
   hostTestAttachParams,
   hostTestOperationId
-} from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { seedTestAgentSessionStoreFromNewerBuild } from '../../agent-session/records/agent-session-record-store-test-harness'
 import { OrcaRuntimeRpcServer } from '../server/runtime-rpc'
 import { DeviceRegistry } from '../server/pairing/device-registry'

@@ -6,7 +6,7 @@ import type { SenderSnapshotResolver } from './agent-message-sender'
 /** What the structured mailbox lane needs from a chat host: ordinary sends, and reads of what became of them. */
 
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { StructuredSendAnswer } from '../../native-chat/agent-session-wire/structured-agent-session-queued-send-answer'
+import type { StructuredSendAnswer } from '../../native-chat/agent-session-wire/delivery/structured-agent-session-queued-send-answer'
 
 export type StructuredPointerSendOutcome =
   /** The chat's queue took it, as it takes a person's message sent while the agent works. */

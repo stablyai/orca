@@ -1,4 +1,4 @@
-import type * as DeltaCoalescerModule from '../../../native-chat/agent-session-wire/agent-session-delta-coalescer'
+import type * as DeltaCoalescerModule from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,13 +12,13 @@ import { selectStructuredAgentContextUsage } from '../../../../shared/agent-sess
 import type {
   JournalItemRow,
   JournalRow
-} from '../../../native-chat/agent-session-journal/journal-row-schema'
-import { createTrackedJournalOpener } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+} from '../../../native-chat/agent-session-journal/durable-rows/journal-row-schema'
+import { createTrackedJournalOpener } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   createDeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionSinkAdmission
-} from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import {
   createCodexHistoryTranslator,
   createCodexJournalTranslator
@@ -30,7 +30,7 @@ const fullValues = vi.hoisted(() => {
   return state
 })
 vi.mock(
-  '../../../native-chat/agent-session-wire/agent-session-delta-coalescer',
+  '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer',
   async (original) => {
     const actual = await original<typeof DeltaCoalescerModule>()
     const record = (text: string) => {

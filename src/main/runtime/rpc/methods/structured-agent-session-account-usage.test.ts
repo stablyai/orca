@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   createResetCreditLimits,
   createResetRateLimitState
@@ -12,9 +12,9 @@ import {
 import {
   call,
   clearStructuredHostStub,
-  hostStub,
-  SESSION
+  hostStub
 } from './structured-agent-session-rpc.test-fixture'
+import { SESSION } from './structured-agent-session-rpc-client.test-fixture'
 import { CodexUsageApiKeyAuthError } from '../../../rate-limits/codex-rpc-rate-limit-mapper'
 import { sessionAccountUsageOffer } from './structured-agent-session-account-usage'
 
