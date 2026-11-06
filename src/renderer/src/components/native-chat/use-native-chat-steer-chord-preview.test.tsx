@@ -15,6 +15,7 @@ vi.mock('./native-chat-shortcut', () => ({ isMacPlatform: () => true }))
 type Props = {
   alternateSend: NativeChatFollowUpBehavior | undefined
   hasDraft: boolean
+  chordSteersHead: boolean
   steerHead: (() => boolean) | undefined
   send: () => void
   pickerOpen: boolean
@@ -22,10 +23,10 @@ type Props = {
 
 function Composer(props: Props): React.JSX.Element {
   const root = useRef<HTMLDivElement>(null)
-  const { alternateSend, hasDraft, steerHead, send, pickerOpen } = props
+  const { alternateSend, hasDraft, chordSteersHead, steerHead, send, pickerOpen } = props
   const { preview, runPreview } = useNativeChatSteerChordPreview(
     root,
-    { alternateSend, hasDraft },
+    { alternateSend, hasDraft, chordSteersHead },
     steerHead,
     send,
     pickerOpen
@@ -55,6 +56,7 @@ describe('useNativeChatSteerChordPreview', () => {
     const props: Props = {
       alternateSend: 'steer',
       hasDraft: false,
+      chordSteersHead: true,
       steerHead: vi.fn(() => true),
       send: vi.fn(),
       pickerOpen: false,
@@ -120,8 +122,16 @@ describe('useNativeChatSteerChordPreview', () => {
     expect(preview()).toBe('')
   })
 
+  it('previews sending the head card after a Stop, when no turn runs to steer into', () => {
+    const { props, button, hold, preview } = setup({ alternateSend: undefined })
+    hold()
+    expect(preview()).toBe('steer-queued')
+    fireEvent.click(button)
+    expect(props.steerHead).toHaveBeenCalledTimes(1)
+  })
+
   it.each([
-    ['the chord queues', { alternateSend: 'queue' as const }],
+    ['the chord queues', { alternateSend: 'queue' as const, chordSteersHead: false }],
     ['there is no card to steer', { steerHead: undefined }],
     ['a picker takes Enter', { pickerOpen: true }]
   ])('shows nothing on an empty composer where %s', (_case, overrides) => {
