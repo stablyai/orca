@@ -83,7 +83,7 @@ export function MobileQueuedMessageScrollList({
     }
   }
   return (
-    <View style={inlineEditorActive && styles.inline}>
+    <View style={styles.inline}>
       <Animated.ScrollView
         ref={scrollRef}
         style={inlineEditorActive ? styles.inline : styles.scroll}
@@ -117,6 +117,6 @@ export function MobileQueuedMessageScrollList({
 }
 
 const styles = StyleSheet.create({
-  scroll: { maxHeight: QUEUE_LIST_MAX_HEIGHT },
+  scroll: { flexShrink: 1, minHeight: 0, maxHeight: QUEUE_LIST_MAX_HEIGHT },
   inline: { flexShrink: 1, minHeight: 0 }
 })

@@ -138,7 +138,7 @@ export function MobileNativeChatQueuedMessages({
   return (
     <View style={[styles.list, editor && styles.inlineList]}>
       {}
-      <View style={[styles.box, editor && styles.inlineBox]} testID="queued-box">
+      <View style={[styles.box, styles.yielding, editor && styles.inlineBox]} testID="queued-box">
         {/* A polite region, as the app's other notices: React Native has no status role. */}
         <View
           testID="queued-header"

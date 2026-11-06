@@ -10,6 +10,8 @@ const META_LINE_HEIGHT = typography.metaSize + spacing.xs
 
 export const queuedMessageStyles = themedStyleSheet(() => ({
   list: {
+    flexShrink: 1,
+    minHeight: 0,
     marginHorizontal: spacing.lg,
     marginTop: spacing.xs,
     marginBottom: -(COMPOSER_INSET_TOP + COMPOSER_TUCK)
@@ -24,6 +26,7 @@ export const queuedMessageStyles = themedStyleSheet(() => ({
     borderColor: colors.composerBorder,
     overflow: 'hidden'
   },
+  yielding: { flexShrink: 1, minHeight: 0 },
   // Full editors and menus scroll above the ordinary composer instead of tucking under it.
   inlineList: { flexShrink: 1, minHeight: 0, marginBottom: 0 },
   inlineBox: { flexShrink: 1, minHeight: 0, paddingBottom: 0 },
