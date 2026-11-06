@@ -1,14 +1,17 @@
 /** Paired phones send no telemetry of their own; the host they drive records what reaches it. */
 
 import { tuiAgentToAgentKind } from '../../shared/agent-kind'
-import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { track } from './client'
 
 type ClientKind = 'mobile' | 'runtime' | undefined
 
 // Structured provider ids share their names with TUI agents; unknown ids map to other.
 function agentKind(agent: string | null | undefined) {
-  return agent ? tuiAgentToAgentKind(agent as TuiAgent) : undefined
+  if (!agent) {
+    return undefined
+  }
+  return isTuiAgent(agent) ? tuiAgentToAgentKind(agent) : 'other'
 }
 
 /** Desktop windows count their own composer, so only a phone's accepted send counts here. */

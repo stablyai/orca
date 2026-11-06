@@ -9,9 +9,16 @@ beforeEach(() => {
   telemetry.track.mockReset()
 })
 
+function isEventName(name: unknown): name is keyof typeof eventSchemas {
+  return typeof name === 'string' && name in eventSchemas
+}
+
 function trackedPayloads() {
   return telemetry.track.mock.calls.map(([name, props]) => {
-    eventSchemas[name as keyof typeof eventSchemas].parse(props)
+    if (!isEventName(name)) {
+      throw new Error(`unknown event ${String(name)}`)
+    }
+    eventSchemas[name].parse(props)
     return [name, props]
   })
 }
