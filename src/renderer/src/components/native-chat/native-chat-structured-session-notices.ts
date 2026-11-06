@@ -62,6 +62,7 @@ function nativeChatLaunchNotice({
       signIn && isNativeChatSignInFailureKind(failure?.details?.reason, signIn)
         ? {
             label: nativeChatSignInLabel(signIn),
+            primary: true,
             onClick: signIn.signIn,
             disabled: signIn.signingIn
           }

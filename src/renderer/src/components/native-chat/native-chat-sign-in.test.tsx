@@ -23,7 +23,9 @@ vi.mock('@/store', () => ({
     getState: () => state
   })
 }))
-vi.mock('@/lib/launch-agent-tab-order', () => ({ persistAgentLaunchTabOrder: persistOrder }))
+vi.mock('@/lib/agent-session/launch/pane/launch-agent-tab-order', () => ({
+  persistAgentLaunchTabOrder: persistOrder
+}))
 vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminalOnHost: remoteCreate
 }))

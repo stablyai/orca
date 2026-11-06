@@ -3,7 +3,7 @@ import {
   claudeModelFallbackLabels
 } from '../../../../../src/shared/native-chat/claude-model-fallback'
 import { useContext, useId, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react-native'
 import { MobileNativeChatInterruptedContinueButton } from './MobileNativeChatInterruptedContinueButton'
 import {
@@ -43,9 +43,9 @@ import { NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION } from '../../../../../sr
 import { MONO_SIZE, TEXT_SIZE, scaledType } from './mobile-native-chat-message-styles'
 import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import { toolStyles } from './mobile-native-chat-tool-styles'
-import { styles as chatViewStyles } from '../mobile-native-chat-view-styles'
 import { MobileNativeChatUsageLimitStatus } from './MobileNativeChatUsageLimitStatus'
 import { MobileNativeChatNoticeDisclosure } from './MobileNativeChatNoticeDisclosure'
+import { SheetPrimaryButton } from '../../../components/SheetPrimaryButton'
 
 function toneColor(tone: NativeChatNoticeTone): string {
   return { warning: colors.statusAmber, error: colors.statusRed, notice: colors.textMuted }[tone]
@@ -282,23 +282,16 @@ export function MobileNativeChatNoticeRow({
           {continueOffered ? (
             <MobileNativeChatInterruptedContinueButton onPress={continuation.continueNow} />
           ) : signInCommand && runInTerminal ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityHint={t(
-                'chat.notice.signInHint',
-                'Opens a terminal on the computer running this chat'
-              )}
-              onPress={() => runInTerminal(signInCommand)}
-              style={({ pressed }) => [
-                chatViewStyles.retryPill,
-                styles.action,
-                pressed && chatViewStyles.retryPillPressed
-              ]}
-            >
-              <Text style={chatViewStyles.retryPillLabel}>
-                {t('chat.notice.signIn', 'Sign in')}
-              </Text>
-            </Pressable>
+            <View style={styles.action}>
+              <SheetPrimaryButton
+                label={t('chat.notice.signIn', 'Sign in')}
+                accessibilityHint={t(
+                  'chat.notice.signInHint',
+                  'Opens a terminal on the computer running this chat'
+                )}
+                onPress={() => runInTerminal(signInCommand)}
+              />
+            </View>
           ) : null}
           <MobileNativeChatUsageLimitStatus notice={notice} fontScale={fontScale} />
           {detail || payload ? (

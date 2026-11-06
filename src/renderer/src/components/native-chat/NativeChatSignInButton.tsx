@@ -1,4 +1,4 @@
-import { Button } from '@/components/ui/button'
+import { NativeChatActionButton } from './NativeChatActionButton'
 import {
   isNativeChatSignInFailureKind,
   nativeChatSignInLabel,
@@ -22,14 +22,8 @@ function EligibleNativeChatSignInButton({
 }): React.JSX.Element | null {
   const signIn = useNativeChatSignInView()
   return signIn && isNativeChatSignInFailureKind(failureKind, signIn) ? (
-    <Button
-      type="button"
-      variant="outline"
-      size="xs"
-      disabled={signIn.signingIn}
-      onClick={signIn.signIn}
-    >
+    <NativeChatActionButton primary disabled={signIn.signingIn} onClick={signIn.signIn}>
       {nativeChatSignInLabel(signIn)}
-    </Button>
+    </NativeChatActionButton>
   ) : null
 }

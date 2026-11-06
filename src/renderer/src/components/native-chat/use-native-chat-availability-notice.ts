@@ -110,6 +110,7 @@ export function useNativeChatAvailabilityNotice(input: {
       unavailable.reason === 'notSignedIn' && input.signIn
         ? {
             label: nativeChatSignInLabel(input.signIn),
+            primary: true,
             onClick: input.signIn.signIn,
             disabled: input.signIn.signingIn
           }

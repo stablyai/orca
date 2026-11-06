@@ -10,6 +10,7 @@ type SheetPrimaryButtonProps = {
   disabled?: boolean
   busy?: boolean
   testID?: string
+  accessibilityHint?: string
   /** Merge keeps desktop's merge green for the one action that lands a pull request. */
   tone?: 'default' | 'merge'
   icon?: LucideIcon
@@ -22,6 +23,7 @@ export function SheetPrimaryButton({
   disabled = false,
   busy = false,
   testID,
+  accessibilityHint,
   tone = 'default',
   icon: Icon
 }: SheetPrimaryButtonProps) {
@@ -39,6 +41,7 @@ export function SheetPrimaryButton({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled, busy }}
       testID={testID}
     >
