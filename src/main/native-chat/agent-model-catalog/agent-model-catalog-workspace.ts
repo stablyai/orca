@@ -130,7 +130,7 @@ export type AgentModelCatalogListedDefaults = Awaited<
   ReturnType<typeof workspaceKeepsListedDefaults>
 >
 
-/** The workspace's own settings, checked once per setup for every reader sharing it. */
+/** The workspace's own settings, checked once per refresh for every reader sharing it. */
 export function agentModelCatalogListedDefaults(
   deps: AgentModelCatalogWorkspaceDeps,
   agent: string,
@@ -144,15 +144,11 @@ export function agentModelCatalogListedDefaults(
 
 /** One listing serves every folder on the account; the project decides only its own defaults,
  *  and settings that change only the effort leave the account's model standing. */
-export async function projectAgentModelCatalogDefault(
+export function applyAgentModelCatalogDefaults(
   agent: string,
-  binding: () => AgentModelCatalogBinding | undefined,
-  defaults: Promise<AgentModelCatalogListedDefaults | null>
-): Promise<void> {
-  const keeps = await defaults
-  const bound = keeps ? binding() : undefined
-  if (keeps && bound) {
-    bound.keepDefault = independentAgentModelCatalog(agent) ? keeps.model : keeps.effort
-    bound.keepEffort = keeps.effort
-  }
+  bound: AgentModelCatalogBinding,
+  keeps: AgentModelCatalogListedDefaults
+): void {
+  bound.keepDefault = independentAgentModelCatalog(agent) ? keeps.model : keeps.effort
+  bound.keepEffort = keeps.effort
 }

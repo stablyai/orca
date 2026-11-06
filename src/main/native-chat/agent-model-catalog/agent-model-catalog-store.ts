@@ -50,7 +50,7 @@ import {
   refreshAgentModelCatalogListing,
   retireAgentModelCatalogListing,
   type AgentModelCatalogListModels,
-  type AgentModelCatalogListingDemand,
+  type AgentModelCatalogListingBudget,
   type InFlightListing
 } from './agent-model-catalog-lister'
 export type { AgentModelCatalogSessionAccess } from './agent-model-catalog-lister'
@@ -258,12 +258,12 @@ export class AgentModelCatalogStore {
     return entry
   }
 
-  /** One probe per canonical scope; failures resolve null. */
+  /** One probe per canonical scope; failures resolve null. Its starter's budget bounds it. */
   refresh(
     fingerprint: string,
     agent: string,
     listModels: AgentModelCatalogListModels,
-    demand?: AgentModelCatalogListingDemand,
+    budget?: AgentModelCatalogListingBudget,
     selectedModel?: string
   ): Promise<AgentModelCatalogEntry | null> {
     this.isListing(fingerprint)
@@ -275,7 +275,7 @@ export class AgentModelCatalogStore {
       maxTargets: AGENT_MODEL_CATALOG_MAX_ENTRIES,
       targetDue: (model) => this.efforts.due(fingerprint, model),
       targetAttempted: (model) => this.efforts.attempted(fingerprint, agent, model),
-      demand,
+      budget,
       refreshes: this.refreshes,
       failures: this.failures,
       listingWaiters: this.listingWaiters,

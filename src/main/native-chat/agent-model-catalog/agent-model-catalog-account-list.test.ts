@@ -102,6 +102,8 @@ for (const agent of ['claude', 'codex'] as const) {
         await h.service.read({ agent, workspacePath: '/cold', waitForListing: true, deadline })
       ).toMatchObject({ origin: 'unknown' })
       expect(resolveAccountHome).toHaveBeenCalledTimes(1)
+      // The refresh outlives its reader, but not its own budget.
+      await vi.advanceTimersByTimeAsync(30_000)
       home.resolve(HOME)
       await vi.advanceTimersByTimeAsync(0)
       expect(h.resolve).not.toHaveBeenCalled()
@@ -179,7 +181,9 @@ for (const agent of ['claude', 'codex'] as const) {
         if (outcome === 'deadline') {
           await entered.promise
           await check()
+          // Its reader leaves at its deadline; the stalled refresh ends at its own budget.
           await vi.advanceTimersByTimeAsync(50)
+          await vi.advanceTimersByTimeAsync(30_000)
         }
         await demand
         expect(h.resolve).toHaveBeenCalledTimes(lookups + (outcome === 'null' ? 2 : 1))

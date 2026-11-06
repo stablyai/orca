@@ -81,7 +81,7 @@ describe('installed catalog invocation identity', () => {
 
 describe('original operation through actual nested resolution', () => {
   it.each(['overlay', 'environment', 'auth'] as const)(
-    'starts no stage after %s resolves beyond the original deadline',
+    'starts no stage after %s resolves beyond the refresh budget',
     async (held) => {
       vi.useFakeTimers()
       const gate = Promise.withResolvers<void>()
@@ -142,7 +142,9 @@ describe('original operation through actual nested resolution', () => {
         await entered.promise
         const before = [...stages]
         await vi.advanceTimersByTimeAsync(11)
+        // The reader is gone at its own deadline; the refresh it asked for keeps its own budget.
         await demand
+        await vi.advanceTimersByTimeAsync(30_000)
         gate.resolve()
         await vi.advanceTimersByTimeAsync(0)
         expect(stages).toEqual(before)

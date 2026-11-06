@@ -14,7 +14,7 @@ function listing(id: string): AgentModelCatalogSuccess {
 }
 
 function sharedListingHarness() {
-  // Folders under /busy each resolve their own CLI; every other folder shares one listing.
+  // Folders under /busy and /own each resolve their own CLI; every other folder shares one listing.
   const pending = new Map<string, PromiseWithResolvers<AgentModelCatalogSuccess>>()
   const listingFor = (identity: string) => {
     const held = pending.get(identity) ?? Promise.withResolvers<AgentModelCatalogSuccess>()
@@ -33,7 +33,10 @@ function sharedListingHarness() {
       runs.push({ identity, signal, current: operation?.current, deadline: operation?.deadline })
       return new Promise<AgentModelCatalogSuccess>((resolve, reject) => {
         void listingFor(identity).promise.then(resolve)
-        signal?.addEventListener('abort', () => reject(new Error('stopped')), { once: true })
+        // Busy CLIs are slow to stop: they hold their slot until they finish.
+        if (!identity.startsWith('/busy')) {
+          signal?.addEventListener('abort', () => reject(new Error('stopped')), { once: true })
+        }
       }).then((success) => {
         // The production probes check their owning operation before publishing.
         assertStructuredAgentResolutionCurrent(operation)
@@ -57,7 +60,8 @@ function sharedListingHarness() {
           operation?: StructuredAgentResolutionOperation,
           folder?: string
         ) => {
-          const identity = folder?.startsWith('/busy') ? folder : 'codex'
+          const identity =
+            folder?.startsWith('/busy') || folder?.startsWith('/own') ? folder : 'codex'
           return {
             identity,
             run: (signal?: AbortSignal, owner = operation) => run(identity, signal, owner)
@@ -81,6 +85,7 @@ it('finishes a shared listing for a folder that joined before the first reader g
     vi.useRealTimers()
   })
   const h = sharedListingHarness()
+  const started = Date.now()
   void h.service.demand({ agent: 'codex', workspacePath: '/a', deadline: Date.now() + 1_000 })
   await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
   const b = h.service.read({
@@ -92,8 +97,8 @@ it('finishes a shared listing for a folder that joined before the first reader g
   await vi.advanceTimersByTimeAsync(2_000)
   // The first reader is gone, but the listing it started is still running for the folder that joined.
   expect(h.runs[0]?.signal?.aborted).toBe(false)
-  // Its requests carry no reader's deadline, so none times out at the first reader's.
-  expect(h.runs[0]?.deadline).toBeUndefined()
+  // Its requests carry the refresh's own budget, not the first reader's deadline.
+  expect(h.runs[0]?.deadline).toBe(started + 30_000)
   h.discovery.resolve({ ...listing('shared'), complete: true, configured: {} })
   await vi.advanceTimersByTimeAsync(0)
   expect(await b).toMatchObject({ models: [{ id: 'shared' }] })
@@ -120,25 +125,51 @@ it.each(['retired', 'stopped'] as const)(
   }
 )
 
-it('never runs a queued shared listing once every folder that wanted it has given up', async () => {
+it('never starts a queued shared listing once its budget has run out, nor a replacement', async () => {
   vi.useFakeTimers()
   onTestFinished(() => {
     vi.useRealTimers()
   })
   const h = sharedListingHarness()
-  // Two other CLIs hold both discovery slots past the deadlines below.
+  // Two other CLIs hold both discovery slots past every budget below.
   for (const busy of ['/busy-1', '/busy-2']) {
     void h.service.demand({ agent: 'codex', workspacePath: busy })
   }
   await vi.waitFor(() => expect(h.run).toHaveBeenCalledTimes(2))
   void h.service.demand({ agent: 'codex', workspacePath: '/a', deadline: Date.now() + 1_000 })
   void h.service.demand({ agent: 'codex', workspacePath: '/b', deadline: Date.now() + 2_000 })
-  await vi.advanceTimersByTimeAsync(3_000)
+  await vi.advanceTimersByTimeAsync(31_000)
   h.listingFor('/busy-1').resolve(listing('busy'))
   h.listingFor('/busy-2').resolve(listing('busy'))
-  await vi.advanceTimersByTimeAsync(0)
+  await vi.advanceTimersByTimeAsync(60_000)
   expect(h.runs.map((entry) => entry.identity)).toEqual(['/busy-1', '/busy-2'])
 })
+
+it.each([5, 50])(
+  'runs two of %i folders with their own CLIs at a time, starts none after its budget, and leaves nothing behind',
+  async (folders) => {
+    vi.useFakeTimers()
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
+    const h = sharedListingHarness()
+    for (let index = 0; index < folders; index++) {
+      void h.service.demand({ agent: 'codex', workspacePath: `/own-${index}` })
+    }
+    await vi.advanceTimersByTimeAsync(0)
+    expect(h.run).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(h.runs.every((entry) => entry.signal?.aborted)).toBe(true)
+    // No reader asked again, so nothing replaces the expired work.
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(h.run).toHaveBeenCalledTimes(2)
+    for (let index = 0; index < folders; index++) {
+      expect(
+        h.service.snapshot({ agent: 'codex', workspacePath: `/own-${index}` })
+      ).not.toHaveProperty('listingInProgress')
+    }
+  }
+)
 
 it('keeps a queued shared listing for a folder that still wants it after the first gave up', async () => {
   vi.useFakeTimers()
@@ -258,7 +289,7 @@ it("keeps a shared listing for a second chat when the first chat's own request s
   expect(h.run).toHaveBeenCalledOnce()
 })
 
-it('ends a shared claim at its last live reader’s deadline once a longer one cancels', async () => {
+it('settles each reader at its own deadline or cancellation, and stops the listing only at its budget', async () => {
   vi.useFakeTimers()
   onTestFinished(() => {
     vi.useRealTimers()
@@ -276,6 +307,12 @@ it('ends a shared claim at its last live reader’s deadline once a longer one c
   longer.operation.controller.abort()
   await vi.advanceTimersByTimeAsync(1_500)
   expect(settled).toBe(true)
-  // Nobody wants the listing any more, so its process is stopped too.
+  // Nobody waits any more, but the listing belongs to its refresh, not to them.
+  expect(h.runs[0]?.signal?.aborted).toBe(false)
+  await vi.advanceTimersByTimeAsync(28_500)
   expect(h.runs[0]?.signal?.aborted).toBe(true)
+  h.discovery.resolve({ ...listing('late'), complete: true, configured: {} })
+  await vi.advanceTimersByTimeAsync(0)
+  // Its late answer is dropped.
+  expect(h.service.snapshot({ agent: 'codex', workspacePath: '/a' }).origin).toBe('unknown')
 })

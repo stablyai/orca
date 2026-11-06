@@ -17,12 +17,15 @@ import type {
   AgentModelCatalogServiceDeps
 } from './agent-model-catalog-service-contract'
 
+/** A request's resolved scope: lookup and projection data that owns no work. */
 export type AgentModelCatalogBinding = {
   identity: string
-  params: AgentModelCatalogReadParams
+  agent: string
+  legacy?: boolean
+  /** Whether the chat it was resolved for runs on this machine (or it had none). */
+  local: boolean
   workspaceId?: string
   current: () => boolean
-  cancel: () => void
   fingerprint: string
   base: string
   exact: boolean
@@ -136,14 +139,12 @@ export function agentModelCatalogMemoryBinding(
   if (cwd && record.location.executionHostId === 'local' && record.location.wslDistro === null) {
     for (const bound of bindings.values()) {
       if (
-        bound.params.agent === params.agent &&
-        !!bound.params.legacy === !!params.legacy &&
+        bound.agent === params.agent &&
+        !!bound.legacy === !!params.legacy &&
         (bound.workspacePath ?? bound.folder ?? bound.cwd) === cwd &&
-        (!bound.params.sessionId ||
-          deps.getConversation(bound.params.sessionId)?.location.executionHostId === 'local') &&
+        bound.local &&
         bound.base === agentModelCatalogFingerprintForRecord(record, bound.folder) &&
-        bound.current() &&
-        bound.identity === capture(bound.params)
+        bound.current()
       ) {
         return bound
       }
@@ -160,9 +161,10 @@ export function agentModelCatalogMemoryBinding(
   const fingerprint = agentModelCatalogFingerprintForRecord(record)
   return {
     identity: capture(params),
-    params,
+    agent: params.agent,
+    legacy: params.legacy,
+    local: true,
     current: () => true,
-    cancel: () => {},
     fingerprint,
     base: fingerprint,
     exact: false,
@@ -255,49 +257,14 @@ export function projectAgentModelCatalogSnapshot(
   }
 }
 
-export function retireAgentModelCatalogRequests(
-  deps: AgentModelCatalogServiceDeps,
+/** Drops resolved scopes its agent retired, and (named) a workspace's; no work ends with them. */
+export function retireAgentModelCatalogBindings(
   bindings: Map<string, AgentModelCatalogBinding>,
-  claims: Map<
-    string,
-    Set<{
-      identity: string
-      params: AgentModelCatalogReadParams
-      controller: AbortController
-      current: () => boolean
-    }>
-  >,
   workspaceId?: string
 ): void {
-  // Each reader's claim ends on its own request alone.
-  for (const readers of claims.values()) {
-    for (const claim of readers) {
-      if (
-        !claim.current() ||
-        (workspaceId !== undefined &&
-          claim.params.sessionId !== undefined &&
-          deps.getConversation(claim.params.sessionId)?.location.workspaceId === workspaceId)
-      ) {
-        claim.controller.abort()
-        readers.delete(claim)
-      }
-    }
-  }
   for (const [key, bound] of bindings) {
-    // Scope facts outlive the reader that found them while another reader of that scope remains.
-    const survivor =
-      bound.identity === agentModelCatalogScopeIdentity(deps, bound.params)
-        ? bound.params
-        : [...(claims.get(key) ?? [])].find((claim) => claim.identity === bound.identity)?.params
-    if (
-      !bound.current() ||
-      !survivor ||
-      (workspaceId !== undefined && bound.workspaceId === workspaceId)
-    ) {
-      bound.cancel()
+    if (!bound.current() || (workspaceId !== undefined && bound.workspaceId === workspaceId)) {
       bindings.delete(key)
-    } else {
-      bound.params = survivor
     }
   }
 }

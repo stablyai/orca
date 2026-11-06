@@ -7,6 +7,7 @@ import {
 } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import type { AgentModelCatalogEntry } from './agent-model-catalog-entry'
+import type { AgentModelCatalogRefresh } from './agent-model-catalog-refresh'
 
 export const AGENT_MODEL_CATALOG_PICKER_WAIT_MS = 30_000
 
@@ -68,25 +69,39 @@ export class AgentModelCatalogListingWaiters {
   }
 }
 
-/** Compatibility discovery waits share the deadline captured before any scope resolution. */
+/** A reader waits on shared work only until its own deadline or cancellation; it ends nothing. */
+export function waitWithinAgentModelCatalogRead(
+  reader: { deadline?: number; signal: AbortSignal },
+  work: Promise<unknown> | undefined
+): Promise<void> {
+  const remaining = reader.deadline === undefined ? undefined : reader.deadline - Date.now()
+  if (!work || reader.signal.aborted || (remaining !== undefined && remaining <= 0)) {
+    return Promise.resolve()
+  }
+  const cancelled = Promise.withResolvers<void>()
+  const cancel = (): void => cancelled.resolve()
+  reader.signal.addEventListener('abort', cancel, { once: true })
+  const waited = Promise.race([work.then(noop, noop), cancelled.promise])
+  return (remaining === undefined ? waited : withTimeout(waited, remaining, undefined)).finally(
+    () => reader.signal.removeEventListener('abort', cancel)
+  )
+}
+
+const noop = (): void => {}
+
+/** A waiting read follows the refresh it joined, then the listing its scope names. */
 export async function waitForAgentModelCatalogRead(input: {
-  params: AgentModelCatalogReadParams & { deadline: number }
+  params: AgentModelCatalogReadParams
+  reader: { deadline: number; signal: AbortSignal }
   store: AgentModelCatalogStore
-  /** Starts this read's own claim; the read waits on that claim, not another reader's. */
-  resolve: (
-    params: AgentModelCatalogReadParams
-  ) => { ready: Promise<void>; promise: Promise<void>; projecting?: Promise<void> } | undefined
+  refresh: AgentModelCatalogRefresh | undefined
   binding: () => AgentModelCatalogBinding | undefined
 }): Promise<void> {
-  const { params, store } = input
+  const { params, store, refresh } = input
   const wait = async (): Promise<void> => {
-    const claim = input.resolve(params)
-    await claim?.ready
+    await refresh?.listing
+    await (refresh?.defaults ?? input.binding()?.projecting)
     const bound = input.binding()
-    await (claim?.projecting ?? bound?.projecting)
-    if (Date.now() >= params.deadline) {
-      return
-    }
     if (
       bound &&
       (!store.get(bound.fingerprint) ||
@@ -101,13 +116,10 @@ export async function waitForAgentModelCatalogRead(input: {
       )
     }
     if (bound && !store.isListing(bound.fingerprint)) {
-      await claim?.promise
+      await refresh?.done
     }
   }
-  const remaining = params.deadline - Date.now()
-  if (remaining > 0) {
-    await withTimeout(wait(), remaining, undefined)
-  }
+  await waitWithinAgentModelCatalogRead(input.reader, wait())
 }
 
 /** The operation owns its original budget even while a resolver cannot be cancelled. */
