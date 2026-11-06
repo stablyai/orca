@@ -9,11 +9,11 @@ import {
 
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
-import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   findIndexedFolderWorkspaceOwner,
   findIndexedProjectGroupOwner
-} from './worktree-runtime-owner-index'
+} from './workspace/ownership/worktree-runtime-owner-index'
 import { resolveQualifiedIndexedFolderWorkspace } from '@/store/workspace-record-selectors'
 import type { SingleRuntimeLegacyOwnerState } from './single-runtime-legacy-owner'
 import { getPairedWebClientEnvironmentId } from './paired-web-client-host'
@@ -33,8 +33,13 @@ export type FolderWorkspaceRuntimeOwnerState = SingleRuntimeLegacyOwnerState & {
   activeWorkspaceExecutionHostId?: ExecutionHostId | null
 }
 
+type FolderSelectionState = Pick<
+  FolderWorkspaceRuntimeOwnerState,
+  'activeWorktreeId' | 'activeWorkspaceExecutionHostId'
+>
+
 function getPreferredFolderExecutionHostId(
-  state: FolderWorkspaceRuntimeOwnerState,
+  state: FolderSelectionState,
   folderWorkspaceId: string,
   executionHostId?: ExecutionHostId
 ): ExecutionHostId | undefined {
@@ -43,6 +48,17 @@ function getPreferredFolderExecutionHostId(
   }
   return state.activeWorktreeId === folderWorkspaceKey(folderWorkspaceId)
     ? (state.activeWorkspaceExecutionHostId ?? undefined)
+    : undefined
+}
+
+/** A folder id repeats across hosts, so a host-less read takes the copy the user selected; a git id names one host. */
+export function getSelectedFolderTwinHostId(
+  state: FolderSelectionState,
+  workspaceId: string | null | undefined
+): ExecutionHostId | undefined {
+  const scope = workspaceId ? parseWorkspaceKey(workspaceId) : null
+  return scope?.type === 'folder'
+    ? getPreferredFolderExecutionHostId(state, scope.folderWorkspaceId)
     : undefined
 }
 

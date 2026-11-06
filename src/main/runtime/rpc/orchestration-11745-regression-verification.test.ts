@@ -6,7 +6,11 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
 import SyncDatabase from '../../sqlite/sync-database'
-import { OrchestrationDb } from '../orchestration/db'
+import { OrchestrationDb } from '../orchestration/db/orchestration-db'
+import '../orchestration/db/contract-constants'
+import '../orchestration/db/messages/mailbox-routing-page'
+import '../orchestration/db/dispatch-row-writer'
+import '../orchestration/db/attempt-outcome-projection'
 import {
   cleanupLegacyCompatibilityDispatcherHarnesses,
   COORDINATOR_HANDLE,

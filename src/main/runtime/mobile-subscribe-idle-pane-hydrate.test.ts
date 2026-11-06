@@ -4,14 +4,14 @@ import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { RpcDispatcher } from './rpc/dispatcher'
 import type { RpcRequest } from './rpc/core'
-import { TERMINAL_METHODS } from './rpc/methods/terminal'
+import { TERMINAL_METHODS } from './rpc/methods/terminal/terminal'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
   decodeTerminalStreamJson,
   decodeTerminalStreamText
 } from '../../shared/terminal/stream/terminal-stream-protocol'
-import { HeadlessEmulator } from '../daemon/headless-emulator'
+import { HeadlessEmulator } from '../daemon/emulation/headless-emulator'
 
 const WORKTREE_ID = 'repo-1::/tmp/wt'
 const PTY_ID = `${WORKTREE_ID}@@9c8d7e6f`

@@ -149,7 +149,6 @@ describe('main titles agent tabs from its own hook status', () => {
   })
 })
 
-// Main's twins of agent-generated-tab-title.test.ts, which pins the window's own titles.
 describe('main keeps the window’s generated-title rules', () => {
   async function titled(
     statuses: AgentStatusIpcPayload[][],

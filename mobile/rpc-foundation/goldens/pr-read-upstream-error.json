@@ -4,6 +4,54 @@
   "family": "github.pr-read",
   "namedDeltas": [],
   "values": {
+    "0159703ebadf": {
+      "name": "github.prForBranch#2",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prForBranch"
+        },
+        {
+          "name": "params",
+          "value": {
+            "branch": "feature",
+            "currentHeadOid": {
+              "$rpc": "null"
+            },
+            "fallbackPRNumber": {
+              "$rpc": "null"
+            },
+            "linkedPRNumber": {
+              "$rpc": "null"
+            },
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "beforeSend": "[local beforeSend]"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "fetchedAt": 0,
+            "kind": "found",
+            "pr": {
+              "state": "open"
+            }
+          }
+        }
+      }
+    },
     "04c85ffba34f": {
       "pr-for-branch": {
         "error": "The host sent a reply this app could not read (github.prForBranch)",
@@ -37,7 +85,7 @@
       "ordinal": 4,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.prForBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedPRNumber\":null,\"fallbackPRNumber\":null,\"currentHeadOid\":null}}"
     },
-    "302342a5179d": {
+    "2df5868d46c4": {
       "name": "github.prForBranch#1",
       "ordinal": 1,
       "args": [
@@ -64,7 +112,7 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "beforeSend": "[local beforeSend]"
           }
         }
       ],
@@ -89,71 +137,7 @@
         "ok": false
       }
     },
-    "67ff0839185a": {
-      "name": "github.prForBranch#2",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "github.prForBranch"
-        },
-        {
-          "name": "params",
-          "value": {
-            "branch": "feature",
-            "currentHeadOid": {
-              "$rpc": "null"
-            },
-            "fallbackPRNumber": {
-              "$rpc": "null"
-            },
-            "linkedPRNumber": {
-              "$rpc": "null"
-            },
-            "repo": "id:repo-9"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "fetchedAt": 0,
-            "kind": "found",
-            "pr": {
-              "state": "open"
-            }
-          }
-        }
-      }
-    },
-    "7c6cc446e5da": {
-      "name": "github.prForBranch#3",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.prForBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedPRNumber\":null,\"fallbackPRNumber\":null,\"currentHeadOid\":null}}"
-    },
-    "8a5cb8b66303": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "ok": true,
-        "result": {
-          "$rpc": "null"
-        }
-      }
-    },
-    "c75314a70300": {
+    "6ecd2f6475ab": {
       "name": "github.prForBranch#3",
       "ordinal": 5,
       "args": [
@@ -180,7 +164,7 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "beforeSend": "[local beforeSend]"
           }
         }
       ],
@@ -194,6 +178,22 @@
           "result": {
             "$rpc": "null"
           }
+        }
+      }
+    },
+    "7c6cc446e5da": {
+      "name": "github.prForBranch#3",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.prForBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedPRNumber\":null,\"fallbackPRNumber\":null,\"currentHeadOid\":null}}"
+    },
+    "8a5cb8b66303": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "ok": true,
+        "result": {
+          "$rpc": "null"
         }
       }
     },
@@ -213,7 +213,7 @@
       {
         "id": "upstream",
         "observation": {
-          "sender": ["302342a5179d"],
+          "sender": ["2df5868d46c4"],
           "payloads": ["1a108e871484"],
           "settlements": {
             "upstream": "fe9c1046b91d"
@@ -225,7 +225,7 @@
       {
         "id": "malformed",
         "observation": {
-          "sender": ["302342a5179d", "67ff0839185a"],
+          "sender": ["2df5868d46c4", "0159703ebadf"],
           "payloads": ["1a108e871484", "213941c6e0b6"],
           "settlements": {
             "upstream": "fe9c1046b91d",
@@ -238,7 +238,7 @@
       {
         "id": "no-pr",
         "observation": {
-          "sender": ["302342a5179d", "67ff0839185a", "c75314a70300"],
+          "sender": ["2df5868d46c4", "0159703ebadf", "6ecd2f6475ab"],
           "payloads": ["1a108e871484", "213941c6e0b6", "7c6cc446e5da"],
           "settlements": {
             "upstream": "fe9c1046b91d",

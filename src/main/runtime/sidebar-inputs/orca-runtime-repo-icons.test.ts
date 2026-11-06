@@ -1,12 +1,12 @@
 // Runs on plain Node, as orcad does: no encoder, so small images pass through.
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { ALL_RPC_METHODS } from '../rpc/methods'
+import { ALL_RPC_METHODS } from '../rpc/methods/rpc-method-registry'
 import type { RuntimeStore } from '../runtime-store-contract'
 
 import { repoIconId } from './repo-icon-data-urls'
 import { pngHeader } from './repo-icon-image-fixture'
-import { partialRuntimeStore } from '../runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../orca-runtime-tests/runtime-store-partial-fixture'
 
 vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 

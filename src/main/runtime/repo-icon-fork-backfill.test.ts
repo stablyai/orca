@@ -1,21 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
-import * as client from '../github/client'
 import * as repoSlugUpstream from '../github/client/fetch/repo-slug-upstream'
 import { OrcaRuntimeService } from './orca-runtime'
 import { repoTarget } from '../persistence/repo-host-target-matcher.test-fixture'
 
-vi.mock('../github/client', async (importOriginal) => ({
+vi.mock('../github/client/fetch/repo-slug-upstream', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
+  getRepoSlug: vi.fn(),
   getRepoUpstream: vi.fn()
 }))
 
-vi.mock('../github/client/fetch/repo-slug-upstream', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  getRepoSlug: vi.fn()
-}))
-
-const getRepoUpstream = vi.mocked(client.getRepoUpstream)
+const getRepoUpstream = vi.mocked(repoSlugUpstream.getRepoUpstream)
 const getRepoSlug = vi.mocked(repoSlugUpstream.getRepoSlug)
 
 type BackfillInternals = { repositoryForkBackfill: { run(): Promise<void> } }

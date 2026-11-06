@@ -12,7 +12,7 @@ import type { TerminalPaneSplitSource } from '../../../../shared/feature-educati
 import {
   type HttpLinkSourceOwner,
   resolveLocalhostHttpLinkDisplayUrl
-} from '@/lib/http-link-routing'
+} from '@/lib/browser/navigation/http-link-routing'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { PRIMARY_SELECTION_MAX_LENGTH } from '@/lib/primary-selection'
 

@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo } from 'react'
 import { useTerminalSplitLayout } from './use-terminal-split-layout'
+import { createLiveInputCapture } from './live-input-capture'
 import { Animated, type ScrollView } from 'react-native'
 import type { MobileTerminalLinkOpenMode } from '../storage/preferences'
 import type { TerminalKeyboardAvoidanceMetrics } from '../terminal/terminal-webview-contract'
@@ -41,7 +42,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const terminalTextScaleRevisionRef = useRef(0)
   const [terminalLinkOpenMode, setTerminalLinkOpenMode] =
     useState<MobileTerminalLinkOpenMode>('orca-browser')
-  const [liveInputCapture, setLiveInputCapture] = useState('')
+  const [liveInputCapture] = useState(createLiveInputCapture)
   const [activeHandle, setActiveHandle] = useState<string | null>(null)
   const [coveredStreamRevision, setCoveredStreamRevision] = useState(0)
   const [activeSessionTabId, setActiveSessionTabId] = useState<string | null>(null)
@@ -96,8 +97,6 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     () => getVisibleTerminalAccessoryKeys(visibleBuiltInIds),
     [visibleBuiltInIds]
   )
-  // Expo edge-to-edge keeps window size on IME open; lift input from keyboard height without resizing the desktop PTY.
-  const [keyboardHeight, setKeyboardHeight] = useState(0)
   const [terminalModes, setTerminalModes] = useState<Map<string, MobileDisplayMode>>(new Map())
   const [terminalKeyboardMetrics, setTerminalKeyboardMetrics] = useState<
     Map<string, TerminalKeyboardAvoidanceMetrics>
@@ -131,7 +130,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     terminalLinkOpenMode,
     setTerminalLinkOpenMode,
     liveInputCapture,
-    setLiveInputCapture,
+    setLiveInputCapture: liveInputCapture.set,
     activeHandle,
     setActiveHandle,
     coveredStreamRevision,
@@ -200,8 +199,6 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     deleteKeyTarget,
     setDeleteKeyTarget,
     visibleBuiltInAccessoryKeys,
-    keyboardHeight,
-    setKeyboardHeight,
     terminalModes,
     setTerminalModes,
     terminalKeyboardMetrics,

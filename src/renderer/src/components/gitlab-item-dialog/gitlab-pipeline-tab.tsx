@@ -11,7 +11,7 @@ import {
   CHECK_COLOR,
   CHECK_ICON
 } from '@/components/right-sidebar/checks-panel/presentation/check-presentation'
-import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
+import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 
 type Props = {
   item: GitLabWorkItem

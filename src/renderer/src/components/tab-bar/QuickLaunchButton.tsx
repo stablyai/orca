@@ -1,13 +1,13 @@
 import { SubscribedAgentLaunchPickerMenu } from '@/components/agent/AgentLaunchPickerMenu'
 import {
-  agentPickerLaunchInputs,
+  agentPickerFreshLaunchInputs,
   type AgentPickerEntry,
   type AgentPickerDraft
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import React, { useCallback, useRef } from 'react'
 import { toast } from 'sonner'
-import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
+import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import { agentLaunchPromptOwnership, newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 import { activeAgentNotesSendFailureMessage } from '@/lib/active-agent-note-send-result'
@@ -95,7 +95,16 @@ export function useTabAgentMenuLaunch({
             }
           : {}),
         agent,
-        ...(draft ? agentPickerLaunchInputs(draft, pickerEntry) : {}),
+        ...(draft
+          ? agentPickerFreshLaunchInputs(
+              draft,
+              {
+                surface: row.kind === 'chat' ? 'chat' : 'terminal',
+                executionHostId: row.executionHostId
+              },
+              pickerEntry
+            )
+          : {}),
         worktreeId,
         groupId,
         // A caller's prompt (notes) owns the launch; otherwise the picker panel's typed one.

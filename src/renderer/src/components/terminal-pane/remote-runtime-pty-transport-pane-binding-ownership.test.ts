@@ -77,7 +77,7 @@ describe('remote runtime pane binding ownership', () => {
       }
       composedStore = true
       vi.doMock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
-      vi.doMock('@/lib/codex-stale-pane-sweep', () => ({
+      vi.doMock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
         notifyCodexPaneBoundForStaleSweep: vi.fn()
       }))
       const { createTestStore, makeTab, seedStore } =
@@ -159,6 +159,7 @@ describe('remote runtime pane binding ownership', () => {
         },
         activePanePtyBinding: old,
         bindProcessExitState: vi.fn(),
+        windowsPtyModel: { apply: vi.fn() },
         setPanePtyFitBinding: vi.fn(),
         registerSideEffectFactConsumerForPty: vi.fn(),
         syncHiddenRendererPtyDelivery: vi.fn(),

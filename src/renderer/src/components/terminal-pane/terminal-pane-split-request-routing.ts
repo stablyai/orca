@@ -13,13 +13,16 @@ type SplitMountLease = {
 
 const queuedRequests: SplitTerminalPaneDetail[] = []
 const splitMountLeasesByTarget = new Map<string, SplitMountLease>()
+/** Mounts held open until their holder releases them; bounded by the work in flight that holds them. */
+const mountHoldsByTarget = new Map<string, { tabId: string; worktreeId: string; count: number }>()
 const splitMountLeaseListeners = new Set<() => void>()
 let splitMountLeaseTabIds: ReadonlySet<string> = new Set()
 
 function notifySplitMountLeaseChange(): void {
-  splitMountLeaseTabIds = new Set(
-    [...splitMountLeasesByTarget.values()].map((lease) => lease.tabId)
-  )
+  splitMountLeaseTabIds = new Set([
+    ...[...splitMountLeasesByTarget.values()].map((lease) => lease.tabId),
+    ...[...mountHoldsByTarget.values()].map((hold) => hold.tabId)
+  ])
   for (const listener of splitMountLeaseListeners) {
     listener()
   }
@@ -102,6 +105,32 @@ export function queueTerminalPaneSplitRequest(detail: SplitTerminalPaneDetail): 
   acquireSplitMountLease(detail.tabId, detail.worktreeId)
 }
 
+/** Keeps a tab mounted, parked or not, until the returned release runs: work on its live panes
+ *  that outlasts a timed lease must not lose them to cold parking halfway through. */
+export function holdTerminalPaneMount(tabId: string, worktreeId: string): () => void {
+  const key = splitTargetKey(tabId, worktreeId)
+  const hold = mountHoldsByTarget.get(key)
+  if (hold) {
+    hold.count += 1
+  } else {
+    mountHoldsByTarget.set(key, { tabId, worktreeId, count: 1 })
+    notifySplitMountLeaseChange()
+  }
+  let released = false
+  return () => {
+    const current = mountHoldsByTarget.get(key)
+    if (released || !current) {
+      return
+    }
+    released = true
+    current.count -= 1
+    if (current.count === 0) {
+      mountHoldsByTarget.delete(key)
+      notifySplitMountLeaseChange()
+    }
+  }
+}
+
 export function takeQueuedTerminalPaneSplitRequests(
   tabId: string,
   worktreeId?: string
@@ -129,7 +158,7 @@ export function cancelQueuedTerminalPaneSplitRequests(tabId: string, worktreeId?
 }
 
 export function hasTerminalPaneSplitMountLease(tabId: string, worktreeId?: string): boolean {
-  return [...splitMountLeasesByTarget.values()].some(
+  return [...splitMountLeasesByTarget.values(), ...mountHoldsByTarget.values()].some(
     (lease) =>
       lease.tabId === tabId && (worktreeId === undefined || lease.worktreeId === worktreeId)
   )
@@ -186,6 +215,7 @@ export function _resetTerminalPaneSplitRequestRoutingForTests(): void {
     clearTimeout(lease.timer)
   }
   splitMountLeasesByTarget.clear()
+  mountHoldsByTarget.clear()
   splitMountLeaseListeners.clear()
   splitMountLeaseTabIds = new Set()
 }

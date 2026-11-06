@@ -6,8 +6,8 @@ import {
 import type {
   LegacyWorkerRecoveryPorts,
   LegacyWorkerTerminalRecoveryResult
-} from './runtime-legacy-worker-terminal-recovery-types'
-import type { LegacyWorkerTerminalRecoveryPlan } from './orchestration/orchestration-legacy-worker-terminal-recovery'
+} from './orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
+import type { LegacyWorkerTerminalRecoveryPlan } from './orchestration/terminal-authority/release/orchestration-legacy-worker-terminal-recovery'
 import {
   missingWorkspaceRecoveryFixture,
   missingWorkspaceWorker,

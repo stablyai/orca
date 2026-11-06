@@ -11,7 +11,11 @@ import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationManifestSource
 } from '../../../shared/orcad-migration/orcad-migration-manifest'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  normalizeWorkspaceSessionKeyToWorkspaceId,
+  parseWorkspaceKey
+} from '../../../shared/workspace-scope'
+import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   getExecutionHostIdFromWorktreeHostIdentity,
   getWorktreeIdFromHostIdentity,
@@ -185,4 +189,18 @@ export function orcadMigrationOwnerKeyIsAmbiguous(
 
 export function unqualifyOrcadMigrationOwnerKey(value: string): string {
   return isWorktreeHostIdentity(value) ? getWorktreeIdFromHostIdentity(value) : value
+}
+
+/** Uses the child's own host stamp; a shared repo id with none might be this move's, so it counts. */
+export function orcadMigrationMayMoveChild(
+  state: Pick<PersistedState, 'worktreeMeta'>,
+  childKey: string,
+  scope: OrcadMigrationSourceScope
+): boolean {
+  const childHostId =
+    state.worktreeMeta[normalizeWorkspaceSessionKeyToWorkspaceId(childKey)]?.hostId
+  return (
+    orcadMigrationOwnerMatchesScope(childKey, scope, childHostId) ||
+    (childHostId === undefined && orcadMigrationOwnerKeyIsAmbiguous(childKey, scope))
+  )
 }

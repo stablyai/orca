@@ -5,6 +5,7 @@ import {
   GitCompare,
   Globe,
   Loader2,
+  MessageSquare,
   Search,
   Smartphone,
   TerminalSquare
@@ -15,7 +16,7 @@ import { cn } from '@/lib/utils'
 import { FilePathCursorTooltip, FilenameFirstPath } from '@/components/file-path-cursor-tooltip'
 import { translate } from '@/i18n/i18n'
 import { SEARCH_ENGINE_LABELS } from '../../../../shared/browser-url'
-import { formatBrowserHistoryUrl } from '@/lib/browser-history-match'
+import { formatBrowserHistoryUrl } from '@/lib/browser/history/browser-history-match'
 import type { ActiveOption } from './tab-create-entry-active-option'
 import { BrowserFavicon } from '@/components/browser-favicon'
 import { AgentLaunchSetupButton } from '../agent/AgentLaunchSetupButton'
@@ -131,7 +132,7 @@ export function EntryActionRow({
 }
 
 function getOpenTabIcon(option: Extract<ActiveOption, { kind: 'tab' }>['option']): React.ReactNode {
-  if (option.contentType === 'terminal' && option.source === 'workspace' && option.occupantAgent) {
+  if (option.source === 'workspace' && option.occupantAgent) {
     return (
       <span
         className="inline-flex shrink-0"
@@ -154,6 +155,9 @@ function getOpenTabIcon(option: Extract<ActiveOption, { kind: 'tab' }>['option']
   }
   if (contentType === 'editor') {
     return <FileText className="size-3.5 shrink-0" aria-hidden="true" />
+  }
+  if (contentType === 'agent-session') {
+    return <MessageSquare className="size-3.5 shrink-0" aria-hidden="true" />
   }
   return <GitCompare className="size-3.5 shrink-0" aria-hidden="true" />
 }

@@ -160,7 +160,8 @@ describe('createIpcPtyTransport', () => {
 
   it("carries an AI button's launch in its pane's spawn, and says whether the agent started", async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
-    const { awaitAgentLaunchPaneStart } = await import('@/lib/agent-launch-pane-start')
+    const { awaitAgentLaunchPaneStart } =
+      await import('@/lib/agent-session/launch/pane/agent-launch-pane-start')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
     const agentLaunch = { launch: { agent: 'claude' } }
     const pane = { worktreeId: 'wt', tabId: 'tab-launch', leafId: 'leaf-launch' }

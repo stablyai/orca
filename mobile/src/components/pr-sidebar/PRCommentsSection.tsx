@@ -12,7 +12,8 @@ import { canAddRootComment } from '../../session/pr-comment-actions'
 import { isPrSidebarDetailsPlaceholder } from '../../session/mobile-pr-sidebar-state'
 import type { MobilePrCommentActions } from '../../session/use-mobile-pr-comment-actions'
 import { PRSection } from './PRSection'
-import { CommentMarkdown } from './CommentMarkdown'
+import { MobileMarkdown } from '../MobileMarkdown'
+import { MOBILE_MARKDOWN_DOCUMENT_SCALE } from '../mobile-markdown-styles'
 import { PRCommentCard, type PRCommentCardActions } from './PRCommentCard'
 import { PRCommentComposer } from './PRCommentComposer'
 import {
@@ -127,7 +128,7 @@ export function PRCommentsSection({
             )}
           </Text>
         ) : body.trim() ? (
-          <CommentMarkdown content={body} variant="document" />
+          <MobileMarkdown content={body} textScale={MOBILE_MARKDOWN_DOCUMENT_SCALE} />
         ) : (
           <Text style={styles.noDescription}>
             {t('pullRequest.commentsSection.noDescription', 'No description provided.')}

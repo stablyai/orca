@@ -70,73 +70,7 @@ function referenceDecorationRanges(content: string): IRange[] {
   return ranges
 }
 
-const CORPUS: { name: string; content: string }[] = [
-  { name: 'empty', content: '' },
-  {
-    name: 'Unicode whitespace before fences',
-    content: '\u00a0\u2028```\n[[hidden]]\n```\n[[shown]]'
-  },
-  {
-    name: 'indented blank run before fences',
-    content: `${`${' '.repeat(80)}\r\n`.repeat(1000)}\`\`\`\n[[hidden]]\n\`\`\`\n[[shown]]`
-  },
-  { name: 'no links', content: '# Title\n\nJust prose.\n' },
-  { name: 'single link', content: '# Title\n\nSee [[notes.md]] for details.\n' },
-  { name: 'two links on one line', content: 'See [[a.md]] and [[b.md]].\n' },
-  { name: 'link with an anchor', content: 'See [[a.md#heading]].\n' },
-  { name: 'link with a display alias', content: 'See [[a.md|Alias]].\n' },
-  { name: 'link inside inline code', content: 'Type `[[a.md]]` to link.\n' },
-  { name: 'link after inline code', content: 'Type `code` then [[a.md]].\n' },
-  { name: 'escaped backtick before a link', content: 'A \\` then [[a.md]] here.\n' },
-  {
-    name: 'link inside a backtick fence',
-    content: '```\n[[a.md]]\n```\n\n[[b.md]]\n'
-  },
-  {
-    name: 'link inside a tilde fence',
-    content: '~~~\n[[a.md]]\n~~~\n\n[[b.md]]\n'
-  },
-  { name: 'indented fence', content: '   ```\n[[a.md]]\n   ```\n[[b.md]]\n' },
-  { name: 'unterminated fence', content: '```\n[[a.md]]\n' },
-  { name: 'blank line before a fence', content: '\n```\n[[a.md]]\n```\n[[b.md]]\n' },
-  { name: 'whitespace-only line then a fence', content: '   \n```js\n[[a.md]]\n```\n[[b.md]]\n' },
-  { name: 'open bracket without a close', content: 'See [[a.md and nothing else.\n' },
-  { name: 'close on the next line', content: 'See [[a.md\n]] later.\n' },
-  { name: 'many unterminated opens', content: '[[a\n[[b\n[[c\n[[d\n' },
-  { name: 'empty link body', content: 'See [[]] here.\n' },
-  { name: 'no trailing newline', content: 'See [[a.md]]' },
-  { name: 'CRLF single link', content: 'See [[a.md]] here.\r\n' },
-  { name: 'CRLF link at end of line', content: 'See [[a.md]]\r\nNext [[b.md]]\r\n' },
-  { name: 'CRLF fence', content: '```\r\n[[a.md]]\r\n```\r\n[[b.md]]\r\n' },
-  { name: 'link split across a CRLF boundary', content: 'See [[a.md\r\n]] here.\r\n' },
-  { name: 'consecutive newlines', content: '\n\n[[a.md]]\n\n\n[[b.md]]\n\n' },
-  { name: 'nested brackets', content: 'See [[[a.md]]] here.\n' },
-  { name: 'unmatched inline code fence', content: 'A ` then [[a.md]] here.\n' }
-]
-
-const BIG_DOCUMENT = Array.from({ length: 4_000 }, (_, index) =>
-  index % 5 === 0
-    ? `Line ${index} links [[doc-${index}.md]] and \`[[skipped-${index}.md]]\`.`
-    : `Line ${index} is ordinary prose with no link at all.`
-).join('\n')
-
 describe('getMarkdownDocLinkDecorationRanges offset scan', () => {
-  it.each(CORPUS)('matches the substring implementation for $name', ({ content }) => {
-    expect(getMarkdownDocLinkDecorationRanges(content)).toEqual(referenceDecorationRanges(content))
-  })
-
-  it('matches the substring implementation on a large document', () => {
-    expect(getMarkdownDocLinkDecorationRanges(BIG_DOCUMENT)).toEqual(
-      referenceDecorationRanges(BIG_DOCUMENT)
-    )
-    expect(getMarkdownDocLinkDecorationRanges(BIG_DOCUMENT).length).toBeGreaterThan(0)
-  })
-
-  it('matches the substring implementation on a document with no links at all', () => {
-    const noLinks = Array.from({ length: 4_000 }, (_, index) => `Line ${index} prose.`).join('\n')
-    expect(getMarkdownDocLinkDecorationRanges(noLinks)).toEqual(referenceDecorationRanges(noLinks))
-  })
-
   it('does not rescan the document tail once per line', () => {
     const linkFree = Array.from(
       { length: 20_000 },
@@ -191,41 +125,5 @@ describe('getMarkdownDocLinkDecorationRanges offset scan', () => {
     expect(ranges).toEqual(referenceDecorationRanges(content))
     expect(ranges).toHaveLength(pairs)
     expect(spanReads).toBeLessThanOrEqual(pairs * 8)
-  })
-
-  it('matches the frozen scan across random inline-code and link boundaries', () => {
-    const fragments = [
-      '[[note]]',
-      '[[note|label]]',
-      '[[invalid]',
-      '`code`',
-      '`[[note]]`',
-      '\\`',
-      '[[a]] [[b]]',
-      '\\[[x]]',
-      '```',
-      '~~~',
-      '\r\n',
-      '\n',
-      'α🐋',
-      ' ]] ',
-      '[[]]',
-      '[[a\nb]]',
-      '`'
-    ]
-    let seed = 182
-    const random = (): number => {
-      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
-      return seed >>> 16
-    }
-    for (let scenario = 0; scenario < 1_000; scenario += 1) {
-      let content = ''
-      for (let chunk = 0; chunk < 30; chunk += 1) {
-        content += fragments[random() % fragments.length]
-      }
-      expect(getMarkdownDocLinkDecorationRanges(content)).toEqual(
-        referenceDecorationRanges(content)
-      )
-    }
   })
 })

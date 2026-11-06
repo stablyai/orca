@@ -3,7 +3,7 @@ import {
   EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
   scanTerminalReplyQuerySequences
 } from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-scan'
-import type { RuntimeTerminalDataMeta } from '../../../orca-runtime'
+import type { RuntimeTerminalDataMeta } from '../../../terminal/output/runtime-terminal-stream-consumers'
 import type { TerminalMultiplexConnection } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream, TerminalOutputChunk } from './terminal-stream-types'
 import type { TerminalOutputFrameChunk } from '../../terminal-output-frame-chunks'

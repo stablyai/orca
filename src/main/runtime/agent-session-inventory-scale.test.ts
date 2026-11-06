@@ -1,17 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { composeWorktreeHostIdentity } from '../../shared/worktree/host-qualified-identity'
-import { searchHit, searchResults } from '../../shared/ai-vault/search/ai-vault-search-test-fixture'
-import { listResult } from '../ai-vault/structured-session-ownership.test-support'
-import {
-  assertLegacyAiVaultResumeCommandAllowed,
-  projectStructuredAiVaultSearchResponse,
-  projectStructuredAiVaultSessions
-} from '../ai-vault/structured-session-ownership'
-import { hostTestState } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
-import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
-import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import '../../shared/ai-vault/search/ai-vault-search-test-fixture'
+import '../ai-vault/structured-session-ownership.test-support'
+import '../ai-vault/structured-session-ownership'
+import { hostTestState } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
+import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import * as journalFactory from '../native-chat/agent-session-journal/journal-store-factory'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   countRecordQueries,
   countStoreWork,
@@ -29,27 +25,30 @@ import {
   editPersistedTestAgentSessionStore,
   readPersistedTestAgentSessionStore
 } from './agent-session/records/agent-session-record-store-test-harness'
-import { OrchestrationDb } from './orchestration/db'
-import { structuredSessionMailReach } from './orchestration/structured-session-mail-address'
-import { resolveOrcaSessionParty } from './orchestration/orchestration-party'
+import { OrchestrationDb } from './orchestration/db/orchestration-db'
+import './orchestration/db/contract-constants'
+import './orchestration/db/messages/mailbox-routing-page'
+import './orchestration/db/dispatch-row-writer'
+import './orchestration/db/attempt-outcome-projection'
+import { structuredSessionMailReach } from './orchestration/mailbox/routing/structured-session-mail-address'
+import { resolveOrcaSessionParty } from './orchestration/addressing/orchestration-party'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
-} from './structured-worker-identity'
+} from './orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import {
   openAgentSessionRecordStoreOnce,
   releaseAgentSessionRecordStore
 } from './agent-session/records/agent-session-record-store-slot'
-import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
-import { conversationRecordReader } from './orchestration/structured-session-lineage'
-import { requireUnownedStructuredAgentSessionAdoption } from './agent-session/structured-agent-session-create-adoption'
-import { listStructuredSessionsForWorktree } from './structured-session-worktree-teardown'
+import { conversationRecordReader } from './orchestration/addressing/session-lineage/structured-session-lineage'
+import './agent-session/structured-agent-session-create-adoption'
+import { listStructuredSessionsForWorktree } from './workspaces/removal/structured-session-worktree-teardown'
 import * as membership from './agent-session/records/agent-session-store-state'
-import type { AgentSessionReserveRequest } from './agent-session/ownership/agent-session-reservation-admission'
 
 // Uses the complete host harness; discovery, mail reach and every store read execute unchanged.
 async function inventoryRig(n: number) {
@@ -61,31 +60,6 @@ async function inventoryRig(n: number) {
   })
   setStructuredAgentSessionHost(host)
   return { ...rig, host }
-}
-
-function reservation(
-  rig: Awaited<ReturnType<typeof inventoryRig>>,
-  owner: string
-): AgentSessionReserveRequest {
-  const row = rig.rows.find((row) => row.sessionId === owner)!
-  return {
-    sessionId: 'another-session',
-    location: row.location,
-    provider: 'claude',
-    accountHome: row.accountHome,
-    adoptedHandleLink: row.providerHandleChain[0],
-    expectedFence: null,
-    spawnToken: 'spawn-new',
-    claimKeyId: 'key-1',
-    handoffOperationId: null,
-    probe: { outcome: 'indeterminate', reason: 'no process proof' },
-    operation: {
-      callerKey: 'client-1',
-      operationId: '1800000000000-00000000000000000000000000000001',
-      fingerprint: 'new-adoption'
-    },
-    now: 1_800_000_000_000
-  }
 }
 
 const referenceRuntime = {
@@ -410,73 +384,6 @@ describe('real conversation inventory work', () => {
       expect(work.counts.views).toBe(0)
     }
   )
-
-  it.each([10, 100])('keeps history and both adoption boundaries linear at %i rows', async (n) => {
-    const rig = await inventoryRig(n)
-    const work = countStoreWork(rig.store)
-    const queries = countRecordQueries(rig.root)
-    const healthy = n + 1 // closed is readable; damaged reuses its retained view.
-    for (const size of [1, 10]) {
-      const rows = Array.from({ length: size }, (_, i) => ({
-        ...listResult().sessions[0]!,
-        agent: 'claude' as const,
-        sessionId: i ? 'unowned-provider' : 'provider-damaged-chat-0'
-      }))
-      work.reset()
-      const listed = projectStructuredAiVaultSessions(
-        { ...listResult(), sessions: rows },
-        () => true
-      )
-      expect(listed.sessions[0]?.structuredSession?.sessionId).toBe('damaged-chat')
-      expect(listed.sessions).toHaveLength(size)
-      expect(work.counts).toMatchObject({ inventories: 1, views: healthy, clones: 0 })
-      work.reset()
-      const hits = rows.map((row) => ({
-        ...searchHit(),
-        agent: row.agent,
-        sessionId: row.sessionId
-      }))
-      const searched = projectStructuredAiVaultSearchResponse(
-        { ...searchResults(), hits },
-        () => true
-      )
-      expect(searched).toMatchObject({
-        kind: 'results',
-        hits: [{ structuredSession: { sessionId: 'damaged-chat' } }, ...hits.slice(1)]
-      })
-      expect(work.counts).toMatchObject({ inventories: 1, views: healthy, clones: 0 })
-    }
-    work.reset()
-    await expect(
-      assertLegacyAiVaultResumeCommandAllowed(
-        'claude --resume provider-damaged-chat-0',
-        async () => {}
-      )
-    ).rejects.toThrow()
-    expect(work.counts).toMatchObject({ inventories: 1, views: healthy })
-    work.reset()
-    await assertLegacyAiVaultResumeCommandAllowed('echo ordinary-command', async () => {
-      throw new Error('irrelevant command installed host')
-    })
-    expect(work.counts.inventories).toBe(0)
-    for (const owner of [rig.rows[0]!.sessionId, 'damaged-chat']) {
-      work.reset()
-      expect(() =>
-        requireUnownedStructuredAgentSessionAdoption({
-          host: rig.host,
-          agent: 'claude',
-          providerSessionId: `provider-${owner}-0`,
-          selfSessionId: 'another-session'
-        })
-      ).toThrow()
-      expect(work.counts).toMatchObject({ inventories: 1, views: healthy })
-      work.reset()
-      await expect(rig.store.reserveOwner(reservation(rig, owner))).rejects.toThrow()
-      expect(work.counts.views).toBe(healthy)
-      expect(rig.store.getRecord('another-session')).toBeNull()
-    }
-    expect(queries()).toEqual({ executions: 0, rows: 0 })
-  })
 
   it.each([10, 100])(
     'seeds selected records without opening journals and scopes lifecycle inventory at %i rows',

@@ -15,7 +15,7 @@ const { read, detect, probe } = vi.hoisted(() => ({
   probe: vi.fn()
 }))
 vi.mock('../git/remotes/remote-url-probe', () => ({ assertRemoteUrlReadable: probe }))
-vi.mock('./forge-provider', () => ({ getForgeProviderForRepository: detect }))
+vi.mock('./forge-provider-detection', () => ({ getForgeProviderForRepository: detect }))
 let release: () => void
 let repo: Repo
 beforeEach(() => {

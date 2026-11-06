@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisition-starts'
 import { copyAcpConversation } from './acp-conversation-copy'
 import type { AcpStructuredConnection } from './acp-structured-connection'

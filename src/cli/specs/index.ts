@@ -4,6 +4,7 @@ import { BROWSER_ADVANCED_COMMAND_SPECS } from './browser-advanced'
 import { BROWSER_BASIC_COMMAND_SPECS } from './browser-basic'
 import { AUTOMATION_COMMAND_SPECS } from './automations'
 import { CORE_COMMAND_SPECS } from './core'
+import { CHAT_COMMAND_SPECS } from './chat'
 import { FILE_COMMAND_SPECS } from './file'
 import { PROJECT_COMMAND_SPECS } from './project'
 import { ORCHESTRATION_COMMAND_SPECS } from './orchestration'
@@ -45,6 +46,7 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...COMPUTER_COMMAND_SPECS,
   ...AGENT_HOOK_COMMAND_SPECS,
   ...AGENT_LAUNCH_COMMAND_SPECS,
+  ...CHAT_COMMAND_SPECS,
   ...CONNECTOR_COMMAND_SPECS,
   ...DIAGNOSTICS_COMMAND_SPECS,
   ...SPEECH_COMMAND_SPECS,

@@ -4,10 +4,19 @@ import { clearSshHostServerStatus } from '../../ssh/ssh-host-server-status'
 import { isSshConnectionSolelyOwnedBy } from '../../ssh/connection/ssh-connection-attribution'
 import {
   connectInFlight,
+  fenceRunningConnectAttempt,
   invalidateConnectAttempt,
   isCurrentConnectAttempt
 } from './ssh-connect-attempt-registry'
-import { connectionManager, persistedStore, portForwardManager } from './ssh-ipc-context'
+import {
+  connectionManager,
+  getCurrentMainWindow,
+  persistedStore,
+  portForwardManager
+} from './ssh-ipc-context'
+import { broadcastSshTargetRemoved } from './ssh-renderer-broadcast'
+import { clearHostSettingOverride } from '../../../shared/host-setting-overrides'
+import { toSshExecutionHostId } from '../../../shared/execution-host'
 import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
 import { forgetPortForwardRestoreState } from './ssh-managed-port-forward-restore'
 import { errorMessage } from '../../../shared/error-message'
@@ -57,6 +66,22 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
       )
     }
   })
+  // Every removal (Settings, CLI, paired client, a recipe VM's cleanup) ends here: the window
+  // drops the target's live state, and its rename must not outlive it.
+  broadcastSshTargetRemoved(getCurrentMainWindow, targetId)
+  dropRemovedSshTargetDisplayLabel(targetId)
+}
+
+function dropRemovedSshTargetDisplayLabel(targetId: string): void {
+  if (!persistedStore) {
+    return
+  }
+  const settings = persistedStore.getSettings()
+  const current = settings.hostSettingOverrides
+  const next = clearHostSettingOverride(settings, toSshExecutionHostId(targetId), 'displayLabel')
+  if (current && next !== current) {
+    persistedStore.updateSettings({ hostSettingOverrides: next }, { notifyListeners: true })
+  }
 }
 
 export async function teardownSshTargetTransport(targetId: string): Promise<void> {
@@ -80,6 +105,20 @@ export async function teardownSshTargetTransport(targetId: string): Promise<void
   }
   if (disconnect.status === 'rejected') {
     throw disconnect.reason
+  }
+}
+
+/** Caller holds the target lifecycle; the unlink already committed, so a failed hang-up only warns. */
+export async function releaseUnlinkedHostTransport(targetId: string): Promise<void> {
+  // A connect already past the lifecycle would republish the removed server; queued ones run after.
+  if (connectInFlight.has(targetId)) {
+    fenceRunningConnectAttempt(targetId)
+  }
+  clearSshHostServerStatus(targetId)
+  try {
+    await teardownSshTargetTransport(targetId)
+  } catch (err) {
+    console.warn(`[ssh] Failed to disconnect unlinked host ${targetId}: ${errorMessage(err)}`)
   }
 }
 

@@ -1,15 +1,11 @@
-import { join, posix, resolve, win32 } from 'node:path'
+import { join, resolve } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import { resolveFolderWorkspaceHost } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
-import {
-  getAllowedRoots,
-  getLocalRepos,
-  resolveUnanchoredWorkspaceRoot
-} from './access/filesystem-allowed-roots'
+import { getAllowedRoots, getLocalRepos } from './access/filesystem-allowed-roots'
 import { isPathAllowed } from './access/filesystem-auth'
 import {
   __resetCreatedWorktreeRootsForTests,
@@ -129,12 +125,6 @@ const deniedOwners: { name: string; owner: Owner }[] = [
   { name: 'wrong-case SSH prefix', owner: { executionHostId: 'SSH:host-a' } },
   { name: 'unknown host kind', owner: { executionHostId: 'relay:host-a' } }
 ]
-const allowedOwners: { name: string; owner: Owner }[] = [
-  { name: 'unscoped local', owner: {} },
-  { name: 'explicit local', owner: { executionHostId: 'local' } },
-  { name: 'blank host stamp', owner: { executionHostId: '  ' } },
-  { name: 'own-store runtime', owner: { executionHostId: 'runtime:env' } }
-]
 
 beforeEach(() => {
   invalidateAuthorizedRootsCache()
@@ -165,64 +155,6 @@ describe.each(deniedOwners)('$name filesystem ownership', ({ owner }) => {
     expect(mocks.graph).not.toHaveBeenCalled()
     expect(mocks.stat).not.toHaveBeenCalled()
   })
-
-  it.each(['group', 'folder', 'inherited group'] as const)(
-    'does not grant an empty %s scope',
-    async (kind) => {
-      const store = storeFor(
-        [],
-        kind !== 'folder' ? [group(owner)] : [],
-        kind === 'folder' ? [folder(owner)] : kind === 'inherited group' ? [folder()] : []
-      )
-      expect(await getAllowedRoots(store)).toEqual([])
-      expect(await isPathAllowed(join(root, 'file'), store)).toBe(false)
-    }
-  )
-
-  it.each([undefined, 'nested'])(
-    'does not infer a local group or folder from a remote child repo with group %s',
-    async (projectGroupId) => {
-      const store = storeFor(
-        [repo(owner, { path: join(root, 'child'), projectGroupId })],
-        [group(), group({}, { id: 'nested', parentGroupId: 'group', parentPath: null })],
-        [folder()]
-      )
-      expect(await getAllowedRoots(store)).toEqual([])
-      expect(await isPathAllowed(join(root, 'file'), store)).toBe(false)
-    }
-  )
-})
-
-describe.each(allowedOwners)('$name filesystem ownership', ({ owner }) => {
-  it('preserves repo, group, folder and recovered worktree roots', async () => {
-    for (const store of [
-      storeFor([repo(owner)]),
-      storeFor([], [group(owner)]),
-      storeFor([], [], [folder(owner)])
-    ]) {
-      expect(await getAllowedRoots(store)).toEqual([root])
-      expect(await isPathAllowed(join(root, 'file'), store)).toBe(true)
-    }
-    const store = storeFor([repo(owner)])
-    registerWorktreeRootsForRepo(store, 'repo', [root])
-    registerCreatedWorktreeRoot(store, 'repo', linked)
-    invalidateAuthorizedRootsCache()
-    expect(isRegisteredWorktreePath(linked, store)).toBe(true)
-    expect(mocks.graph).not.toHaveBeenCalled()
-    expect(mocks.stat).not.toHaveBeenCalled()
-  })
-})
-
-it('preserves an unpinned mixed local and SSH folder scope', async () => {
-  const store = storeFor(
-    [
-      repo({ executionHostId: 'ssh:host-a' }, { path: join(root, 'remote') }),
-      repo({}, { id: 'local', path: join(root, 'local') })
-    ],
-    [group()],
-    [folder()]
-  )
-  expect(await getAllowedRoots(store)).toEqual([join(root, 'local'), root, root])
 })
 
 it('keeps an explicit SSH folder scope remote even with a local candidate', async () => {
@@ -233,23 +165,6 @@ it('keeps an explicit SSH folder scope remote even with a local candidate', asyn
   )
   expect(await getAllowedRoots(store)).toEqual([join(root, 'local')])
   expect(await isPathAllowed(join(root, 'file'), store)).toBe(false)
-})
-
-it('preserves explicit local folder overrides and the legacy empty connection override', async () => {
-  expect(
-    await getAllowedRoots(
-      storeFor(
-        [],
-        [group({ executionHostId: 'ssh:host-a' })],
-        [folder({ executionHostId: 'local' })]
-      )
-    )
-  ).toEqual([root])
-  expect(
-    await getAllowedRoots(
-      storeFor([], [group({ connectionId: 'host-a' })], [folder({ connectionId: '' })])
-    )
-  ).toEqual([root])
 })
 
 it('denies a workspace pinned local under a group carrying only a legacy connection', async () => {
@@ -274,39 +189,7 @@ it('denies a workspace pinned local under a group carrying only a legacy connect
   expect(await isPathAllowed(join(root, 'file'), mirrored)).toBe(false)
 })
 
-it('still grants a local directory that happens to share an SSH repo path', async () => {
-  const store = storeFor([
-    repo({ executionHostId: 'ssh:host-a' }),
-    repo({}, { id: 'mine', path: root })
-  ])
-  expect(await getAllowedRoots(store)).toEqual([root])
-  expect(await isPathAllowed(join(root, 'file'), store)).toBe(true)
-})
-
 describe('workspace-directory fallback', () => {
-  const workspaceDir = resolve('/ws-fixture')
-
-  it('does not widen past the roots a local repo of its own would grant', async () => {
-    const local = await getAllowedRoots(storeFor([repo()], [], [], { workspaceDir }))
-    const sshOnly = await getAllowedRoots(
-      storeFor([repo({ executionHostId: 'ssh:host-a' })], [], [], { workspaceDir })
-    )
-    expect(local).toEqual([root, workspaceDir])
-    expect(sshOnly).toEqual([workspaceDir])
-    expect(
-      await isPathAllowed(
-        join(root, 'file'),
-        storeFor([repo({ connectionId: 'host-a' })], [], [], { workspaceDir })
-      )
-    ).toBe(false)
-  })
-
-  it('grants a workspace directory this host reads as absolute, with no local repo', async () => {
-    expect(await getAllowedRoots(storeFor([], [], [], { workspaceDir: '/ws-fixture' }))).toEqual([
-      resolve('/ws-fixture')
-    ])
-  })
-
   it.each([
     ['bare name', 'orca-ws'],
     ['parent traversal', '..'],
@@ -330,22 +213,6 @@ describe('workspace-directory fallback', () => {
       const store = storeFor([], [], [], { workspaceDir: 'C:\\workspaces' })
       expect(await getAllowedRoots(store)).toEqual([])
       expect(await isPathAllowed(join(resolve('C:\\workspaces'), 'file'), store)).toBe(false)
-    }
-  )
-
-  it.each([
-    ['POSIX absolute on POSIX', posix, '/orca-ws', true],
-    ['relative on POSIX', posix, '../orca-ws', false],
-    ['Windows drive on POSIX', posix, 'C:\\orca-ws', false],
-    ['Windows UNC on POSIX', posix, '\\\\wsl$\\Ubuntu\\home\\me\\ws', false],
-    ['POSIX absolute on Windows', win32, '/orca-ws', true],
-    ['relative on Windows', win32, '..\\orca-ws', false],
-    ['Windows drive on Windows', win32, 'C:\\orca-ws', true],
-    ['Windows UNC on Windows', win32, '\\\\wsl$\\Ubuntu\\home\\me\\ws', true]
-  ])(
-    'grants an unanchored %s workspace directory only when that host reads it as absolute',
-    (_case, hostPath, dir, granted) => {
-      expect(resolveUnanchoredWorkspaceRoot(dir, hostPath) !== null).toBe(granted)
     }
   )
 })

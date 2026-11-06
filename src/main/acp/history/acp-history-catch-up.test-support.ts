@@ -4,7 +4,7 @@ import {
   parseAgentJournalItemKey
 } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AcpDialect } from '../acp-dialects/acp-dialect'
 import type { AcpHistoryTurnIdentity, AcpLoadHistoryFrame } from './acp-history-replay'
 import {

@@ -19,7 +19,7 @@ import type { SourceControlPullRequestGeneration } from './use-pull-request-gene
 import type { PullRequestGenerationFields } from '@/store/slices/pull-request-generation'
 import { useGenerateBeforeCreatePullRequest } from '../../hosted-review/creation/use-generate-before-create-pull-request'
 import { createdReviewIsForeground } from '../../hosted-review/creation/created-review-foreground'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 /** Already-open and partial-stack failures can leave a real review that still needs linking. */
 export function useSourceControlHostedReviewCreation({
