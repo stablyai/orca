@@ -1,4 +1,4 @@
-import { journalInputSourceBody } from '../../../native-chat/agent-session-journal/journal-input-source'
+import { journalInputSourceBody } from '../../../native-chat/agent-session-journal/input-order/journal-input-source'
 import {
   createQueuedImageWireRecord,
   streamState,
@@ -6,9 +6,10 @@ import {
 } from './structured-agent-session-wire-record.test-fixture'
 import {
   appendTestJournalQueueRow,
-  finishTestJournalHistoricalInputs,
   openTestJournalHostDatabase
-} from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+} from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+
+import { finishTestJournalHistoricalInputs } from '../../../native-chat/agent-session-journal/replay/journal-historical-inputs.test-support'
 import {
   reduceStructuredAgentSession,
   EMPTY_STRUCTURED_AGENT_SESSION
@@ -17,15 +18,17 @@ import { projectStructuredAgentSessionMessages } from '../../../../shared/agent-
 import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest'
 import {
   createQueuedMessageTestRig,
-  eventually,
   type QueuedMessageTestRig
-} from '../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
+
+import { eventually } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
+
+import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
   hostTestOperationId
-} from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import {
   call,
   openStream,

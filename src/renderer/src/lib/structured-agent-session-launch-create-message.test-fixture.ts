@@ -32,7 +32,7 @@ type CreateMessageFixtureMocks = {
   call: Mock<(target: unknown, method: string, params: unknown) => Promise<unknown>>
   supports: Mock<() => Promise<boolean>>
   supportsMode: Mock<() => Promise<boolean>>
-  exactSupport: Mock<() => Promise<boolean>>
+  exactSupport: Mock<(target?: unknown, capability?: string) => Promise<boolean>>
   admit: Mock<() => Promise<HostCreateSupport>>
   inventory: Mock
   settings: Record<string, unknown>
@@ -51,7 +51,7 @@ const mocks: CreateMessageFixtureMocks = vi.hoisted(() => {
     call: vi.fn<(target: unknown, method: string, params: unknown) => Promise<unknown>>(),
     supports: vi.fn<() => Promise<boolean>>(),
     supportsMode: vi.fn<() => Promise<boolean>>(),
-    exactSupport: vi.fn<() => Promise<boolean>>(),
+    exactSupport: vi.fn<(target?: unknown, capability?: string) => Promise<boolean>>(),
     admit: vi.fn<() => Promise<HostCreateSupport>>(),
     inventory: vi.fn(),
     settings,
@@ -72,6 +72,7 @@ vi.mock('@/runtime/structured-agent-session-status-feed', () => {
   const feed = {
     activate: () => () => {},
     subscribe: () => () => {},
+    subscribeSession: () => () => {},
     getSnapshot: () => ({ get: () => (mocks.hostBusy ? working : idle) }),
     getSessionObservation: () => 'live'
   }
@@ -81,7 +82,9 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call,
   supportsStructuredAgentSessionCreateOptionsMode: mocks.supportsMode,
   supportsStructuredAgentSessionCreateMessage: mocks.supports,
-  structuredAgentSessionHostSupports: mocks.exactSupport
+  structuredAgentSessionHostSupports: mocks.exactSupport,
+  structuredAgentSessionHostCapabilityState: async (target: unknown, capability: string) =>
+    (await mocks.exactSupport(target, capability)) ? 'supported' : 'unsupported'
 }))
 vi.mock('./agent-session/launch/structured-agent-session-host-admission', () => ({
   askHostCreateSupport: mocks.admit

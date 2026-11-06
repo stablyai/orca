@@ -22,6 +22,13 @@ export function hostRecordsTerminalExit(
   return !(cause.kind === 'unknown' && cause.reason === 'stop_unverified')
 }
 
+export function hostRecordedExitCode(
+  terminal: HostTerminalExitFacts | null | undefined
+): number | undefined {
+  const cause = terminal?.exitCause
+  return cause?.kind === 'exited' ? cause.exitCode : undefined
+}
+
 /** A same-handle restart shows up only as a new PTY or incarnation, so a known mismatch is a replacement. */
 export function sameWhenBothKnown(
   left: string | null | undefined,

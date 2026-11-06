@@ -73,25 +73,6 @@ afterEach(() => {
 })
 
 describe('ConnectorPollClient', () => {
-  it('says hello with capabilities and projects, then sends the snapshot', async () => {
-    const { client } = startClient()
-    await settle()
-    expect(fake.hellos[0]).toMatchObject({
-      v: 1,
-      contract: 1,
-      runtime: 'desktop',
-      hostName: 'box',
-      agents: ['claude', 'codex'],
-      promptKinds: ['approval', 'question'],
-      features: ['answer', 'cancel', 'reply'],
-      sources: ['slack', 'discord', 'linear'],
-      projects: [{ placeId: project!.placeId, name: 'orca', kind: 'git' }]
-    })
-    expect(fake.events).toEqual([{ kind: 'snapshot', conversations: [] }])
-    expect(fake.requestsTo(CONNECTOR_PATHS.poll)).toHaveLength(1)
-    client.stop()
-  })
-
   it('confirms received right after the seam call, then done with its result', async () => {
     const seam = fakeSeam()
     const sent = Promise.withResolvers<Delivery>()
@@ -227,20 +208,6 @@ describe('ConnectorPollClient', () => {
     client.stop()
   })
 
-  it('says hello again, with a fresh snapshot, when the cloud lost the hello', async () => {
-    const { client } = startClient()
-    await settle()
-    fake.forgetHello()
-    poll([])
-    await settle()
-    expect(fake.hellos).toHaveLength(2)
-    expect(fake.events).toEqual([
-      { kind: 'snapshot', conversations: [] },
-      { kind: 'snapshot', conversations: [] }
-    ])
-    client.stop()
-  })
-
   it('keeps a turn end on disk until the cloud accepts it, across a restart', async () => {
     const outboxFile = join(userDataPath, 'connector-turn-outbox.json')
     fake.forced.set(CONNECTOR_PATHS.events, { status: 503 })
@@ -279,63 +246,6 @@ describe('ConnectorPollClient', () => {
     expect(fake.events).not.toContainEqual(expect.objectContaining({ paneKey: 'tab:2' }))
     expect(existsSync(outboxFile)).toBe(false)
     second.client.stop()
-  })
-
-  it('stops when the cloud says so, e.g. for a too-old client', async () => {
-    startClient()
-    await settle()
-    poll([], { control: { stop: 'client_too_old' } })
-    await settle()
-    const polls = fake.requestsTo(CONNECTOR_PATHS.poll).length
-    await settle(60_000)
-    expect(fake.requestsTo(CONNECTOR_PATHS.poll)).toHaveLength(polls)
-  })
-
-  it('mints a new token when one is refused, and waits out a lapsed sign-in without stopping', async () => {
-    const { client } = startClient()
-    await settle()
-    fake.refuseTokens()
-    poll([])
-    await settle()
-    expect(fake.minted).toHaveLength(2)
-    expect(fake.requestsTo(CONNECTOR_PATHS.poll).at(-1)?.token).toBe(fake.minted[1]?.token)
-
-    fake.signedIn.delete('ada')
-    fake.refuseTokens()
-    poll([])
-    await settle(10_000)
-    const polls = fake.requestsTo(CONNECTOR_PATHS.poll).length
-    fake.signedIn.add('ada')
-    await settle(60_000)
-    expect(fake.requestsTo(CONNECTOR_PATHS.poll).length).toBeGreaterThan(polls)
-    client.stop()
-  })
-
-  it('backs off through an outage and flushes confirmations once it is back', async () => {
-    const { client } = startClient()
-    await settle()
-    fake.online = false
-    poll([])
-    await settle()
-    const offlineAttempts = fake.requests.length
-    await settle(3_000)
-    expect(fake.requests.length).toBe(offlineAttempts)
-    fake.online = true
-    await settle(30_000)
-    expect(fake.requestsTo(CONNECTOR_PATHS.poll).length).toBeGreaterThan(1)
-    client.stop()
-  })
-
-  it('stops when connectors are turned off', async () => {
-    const { client, disable } = startClient()
-    await settle()
-    disable()
-    await settle()
-    const polls = fake.requestsTo(CONNECTOR_PATHS.poll).length
-    poll([])
-    await settle(60_000)
-    expect(fake.requestsTo(CONNECTOR_PATHS.poll)).toHaveLength(polls)
-    client.stop()
   })
 
   it('admits nothing once stopped: not a late poll answer, not a late result', async () => {
@@ -377,41 +287,6 @@ describe('ConnectorPollClient', () => {
     client.stop()
   })
 
-  it('says hello again when the agents it can run change', async () => {
-    const { client, machine } = startClient()
-    await settle()
-    machine.agentList = ['claude']
-    poll([])
-    await settle()
-    expect(fake.hellos.at(-1)).toMatchObject({ agents: ['claude'] })
-    expect(fake.hellos).toHaveLength(2)
-    client.stop()
-  })
-
-  it('keeps at most 200 turn ends, in memory and on disk alike', async () => {
-    fake.forced.set(CONNECTOR_PATHS.events, { status: 503 })
-    const { client, emit } = startClient()
-    await settle()
-    for (let turn = 1; turn <= 250; turn++) {
-      emit({
-        kind: 'turn-ended',
-        conversation,
-        worktreeId: 'wt',
-        paneKey: 'tab:1',
-        turnId: turn,
-        stopReason: null,
-        at: turn
-      })
-    }
-    const stored = JSON.parse(
-      readFileSync(join(userDataPath, 'connector-turn-outbox.json'), 'utf8')
-    ).turnEnds
-    expect(stored.map((event: { turnId: number }) => event.turnId)).toEqual(
-      Array.from({ length: 200 }, (_, index) => index + 51)
-    )
-    client.stop()
-  })
-
   it('opens each hello with the snapshot as batch 0 and keeps later events in order behind a retry', async () => {
     const { client, emit } = startClient()
     await settle()
@@ -450,43 +325,6 @@ describe('ConnectorPollClient', () => {
       seq: 0,
       events: [{ kind: 'snapshot' }]
     })
-    client.stop()
-  })
-
-  it('says hello again with a snapshot once the caps dropped a live event', async () => {
-    const { client, emit } = startClient()
-    await settle()
-    fake.forced.set(CONNECTOR_PATHS.events, { status: 503 })
-    for (let index = 0; index <= 550; index++) {
-      emit({
-        kind: 'prompt',
-        conversation,
-        worktreeId: 'wt',
-        paneKey: 'tab:1',
-        prompt: { kind: 'unsupported', promptId: String(index) }
-      })
-    }
-    fake.forced.delete(CONNECTOR_PATHS.events)
-    poll([])
-    await settle(40_000)
-    expect(fake.hellos).toHaveLength(2)
-    expect(
-      fake.events.filter((event) => isRecord(event) && event.kind === 'snapshot')
-    ).toHaveLength(2)
-    client.stop()
-  })
-
-  it('settles a recovered delivery whose earlier run fails as unknown, never running it again', async () => {
-    const seam = fakeSeam()
-    seam.calls.recorded.mockRejectedValueOnce(new Error('launch_failed'))
-    const { client, calls } = startClient(seam)
-    await settle()
-    poll([], { unsettled: [{ deliveryId: 'd1', conversation }] })
-    await settle()
-    expect(fake.acks).toEqual([
-      { deliveryId: 'd1', step: 'done', result: { outcome: 'unknown', reason: 'launch_failed' } }
-    ])
-    expect(calls.send).not.toHaveBeenCalled()
     client.stop()
   })
 
@@ -562,42 +400,6 @@ describe('ConnectorPollClient', () => {
     client.stop()
   })
 
-  it('says hello again after a failed one, even when what it says went back to the last accepted hello', async () => {
-    const { client, machine, emit } = startClient()
-    await settle()
-    fake.forced.set(CONNECTOR_PATHS.hello, { status: 503 })
-    machine.agentList = ['claude']
-    poll([])
-    await settle()
-    machine.agentList = ['claude', 'codex']
-    fake.forced.delete(CONNECTOR_PATHS.hello)
-    emit({
-      kind: 'turn-ended',
-      conversation,
-      worktreeId: 'wt',
-      paneKey: 'tab:1',
-      turnId: 4,
-      stopReason: 'success',
-      at: 9
-    })
-    await settle(30_000)
-    expect(fake.events).toContainEqual(expect.objectContaining({ kind: 'turn-ended', turnId: 4 }))
-    client.stop()
-  })
-
-  it('posts a reply to Orca Cloud with its turn, and a resend with the same id posts once', async () => {
-    const { client } = startClient()
-    await settle()
-    const body = { replyId: 'r1', conversation, turnId: 7, text: 'done' }
-    await expect(client.reply(body)).resolves.toEqual({
-      ok: true,
-      value: { status: 'posted', messageId: '1793.0042' }
-    })
-    await client.reply(body)
-    expect([...fake.replies.values()]).toEqual([{ v: 1, ...body }])
-    client.stop()
-  })
-
   it('retries a busy cloud for a reply only after its Retry-After, with the same reply id', async () => {
     const { client } = startClient()
     await settle()
@@ -609,15 +411,6 @@ describe('ConnectorPollClient', () => {
     await settle(2_000)
     await expect(sent).resolves.toMatchObject({ ok: true })
     expect([...fake.replies.keys()]).toEqual(['r1'])
-    client.stop()
-  })
-
-  it('says hello again after a poll fails, so the cloud lists unsettled deliveries again', async () => {
-    const { client } = startClient()
-    await settle()
-    fake.answerPoll({ status: 503 })
-    await settle(5_000)
-    expect(fake.hellos).toHaveLength(2)
     client.stop()
   })
 

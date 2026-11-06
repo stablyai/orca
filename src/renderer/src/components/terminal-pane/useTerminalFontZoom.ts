@@ -4,12 +4,16 @@ import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { overridePendingPaneMetricOptions } from '@/lib/pane-manager/pane-metric-options-deferral'
 import { getPaneOwnedActiveHelperTextarea } from './regular-terminal-focus-ownership'
+import {
+  clearTerminalFontSizeOverride,
+  getTerminalFontSizeOverride,
+  setTerminalFontSizeOverride
+} from './terminal-font-size-overrides'
 
 type FontZoomDeps = {
   isActive: boolean
   containerRef: React.RefObject<HTMLElement | null>
   managerRef: React.RefObject<PaneManager | null>
-  paneFontSizesRef: React.RefObject<Map<number, number>>
   settingsRef: React.RefObject<{ terminalFontSize?: number } | null>
 }
 
@@ -17,7 +21,6 @@ export function useTerminalFontZoom({
   isActive,
   containerRef,
   managerRef,
-  paneFontSizesRef,
   settingsRef
 }: FontZoomDeps): void {
   useEffect(() => {
@@ -43,18 +46,18 @@ export function useTerminalFontZoom({
       }
 
       const globalSize = settingsRef.current?.terminalFontSize ?? 14
-      const currentSize = paneFontSizesRef.current.get(pane.id) ?? globalSize
+      const currentSize = getTerminalFontSizeOverride(pane.leafId) ?? globalSize
 
       let nextSize: number
       if (direction === 'reset') {
         nextSize = globalSize
-        paneFontSizesRef.current.delete(pane.id)
-      } else if (direction === 'in') {
-        nextSize = Math.min(MAX_FONT_SIZE, currentSize + FONT_SIZE_STEP)
-        paneFontSizesRef.current.set(pane.id, nextSize)
+        clearTerminalFontSizeOverride(pane.leafId)
       } else {
-        nextSize = Math.max(MIN_FONT_SIZE, currentSize - FONT_SIZE_STEP)
-        paneFontSizesRef.current.set(pane.id, nextSize)
+        nextSize =
+          direction === 'in'
+            ? Math.min(MAX_FONT_SIZE, currentSize + FONT_SIZE_STEP)
+            : Math.max(MIN_FONT_SIZE, currentSize - FONT_SIZE_STEP)
+        setTerminalFontSizeOverride(pane.leafId, nextSize)
       }
 
       pane.terminal.options.fontSize = nextSize
@@ -65,5 +68,5 @@ export function useTerminalFontZoom({
       const percent = Math.round((nextSize / globalSize) * 100)
       dispatchZoomLevelChanged('terminal', percent)
     })
-  }, [containerRef, isActive, managerRef, paneFontSizesRef, settingsRef])
+  }, [containerRef, isActive, managerRef, settingsRef])
 }

@@ -294,6 +294,7 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
     isConnectPending: () => (bridged() ? false : (inner.isConnectPending?.() ?? false)),
     getRuntimeEnvironmentId: () => (bridged() ? null : (inner.getRuntimeEnvironmentId?.() ?? null)),
     getExecutionHostId: () => (bridged() ? null : (inner.getExecutionHostId?.() ?? null)),
+    onExecutionHostChange: (listener) => inner.onExecutionHostChange?.(listener) ?? (() => {}),
     getRemotePlatform: () => (bridged() ? null : (inner.getRemotePlatform?.() ?? null)),
     claimViewport: (cols, rows) =>
       bridged() ? false : (inner.claimViewport?.(cols, rows) ?? false),

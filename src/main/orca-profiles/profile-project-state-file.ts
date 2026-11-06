@@ -118,8 +118,11 @@ export function normalizeProfileProjectState(
   parsed: Partial<PersistedState>
 ): TransferProfileState {
   const defaults = getDefaultPersistedState(homedir())
-  const { uiLanguagePortugueseMigrationApplied: _migrationApplied, ...settingsDefaults } =
-    defaults.settings
+  const {
+    uiLanguagePortugueseMigrationApplied: _migrationApplied,
+    nestedWorkerMaxDepthDefaultedToFour: _depthMigrated,
+    ...settingsDefaults
+  } = defaults.settings
   return rebuildRepoBackedProjectState({
     ...defaults,
     ...parsed,

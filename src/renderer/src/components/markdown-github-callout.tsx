@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import type { GitHubCalloutKind } from '@/lib/remark-github-callouts'
+import type { GitHubCalloutKind } from '../../../shared/github/github-callouts'
 
 const CALLOUT_PRESENTATIONS: Record<
   GitHubCalloutKind,

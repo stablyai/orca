@@ -22,7 +22,7 @@ import type {
   AgentSessionModelOption
 } from '../../../../shared/agent-session/agent-session-wire'
 import { useAppStore } from '@/store/index'
-import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
+import { selectFileListWorktree } from '@/store/selectors'
 
 export type NativeChatModelDiscoveryContext = {
   hostKey: string
@@ -86,7 +86,7 @@ export function resolveWorktreeModelDiscoveryRuntime(
     target,
     prefs: state.settings,
     worktreeId,
-    worktreePath: worktreeId ? (findKnownWorktreeById(state, worktreeId)?.path ?? '') : '',
+    worktreePath: selectFileListWorktree(state, worktreeId)?.path ?? '',
     ...(connectionId ? { connectionId } : {})
   }
 }

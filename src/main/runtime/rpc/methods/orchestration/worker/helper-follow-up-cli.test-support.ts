@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, vi, type MockInstance } from 'vitest'
 import { z } from 'zod'
-import { OrcaRuntimeRpcServer } from '../../../../runtime-rpc'
+import { OrcaRuntimeRpcServer } from '../../../server/runtime-rpc'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { STATUS_METHODS } from '../../status'
 import { TERMINAL_QUERY_METHODS } from '../../terminal/terminal-query-methods'
@@ -13,8 +13,8 @@ import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-s
 import {
   createQueuedMessageTestRig,
   type QueuedMessageTestRig
-} from '../../../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
-import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/structured-agent-session-registry'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
+import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,

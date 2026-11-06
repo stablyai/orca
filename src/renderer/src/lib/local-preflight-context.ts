@@ -10,7 +10,6 @@ import {
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import type { ResolvedAgentBackgroundTarget } from './agent-background-session-contract'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { projectMatchesRepo } from '../../../shared/project-repo-match'
 import { getIndexedRepoMap, getIndexedReposById } from '@/store/worktree-repo-index'
@@ -56,7 +55,10 @@ export function getLocalProjectExecutionRuntimeContext(
   worktreeId?: string | null,
   appPlatform: NodeJS.Platform = getRendererAppPlatform(),
   wslContext: LocalProjectRuntimeWslContext = {},
-  resolvedTarget?: ResolvedAgentBackgroundTarget
+  resolvedTarget?: {
+    worktree: Pick<Worktree, 'repoId' | 'projectId' | 'path' | 'hostId'>
+    repo: Pick<Repo, 'id' | 'path' | 'connectionId' | 'executionHostId'>
+  }
 ): ProjectExecutionRuntimeResolution | undefined {
   if (appPlatform !== 'win32' || worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return undefined

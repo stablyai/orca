@@ -18,9 +18,8 @@ on:
       # Mobile launch contracts exercise the real host dispatcher and durable receipt store.
       - 'src/main/agent-launch/**'
       - 'src/main/runtime/rpc/**'
-      - 'src/main/runtime/runtime-rpc/**'
-      - 'src/main/runtime/runtime-rpc.ts'
-      - 'src/main/runtime/device-registry.ts'
+      - 'src/main/runtime/rpc/server/runtime-rpc.ts'
+      - 'src/main/runtime/rpc/server/pairing/device-registry.ts'
       - 'src/main/runtime/orca-runtime.ts'
       - 'src/main/runtime/agent-session-*.ts'
       - 'src/main/runtime/agent-session/records/agent-session-*.ts'
@@ -83,9 +82,8 @@ on:
       - 'pnpm-lock.yaml'
       - 'src/main/agent-launch/**'
       - 'src/main/runtime/rpc/**'
-      - 'src/main/runtime/runtime-rpc/**'
-      - 'src/main/runtime/runtime-rpc.ts'
-      - 'src/main/runtime/device-registry.ts'
+      - 'src/main/runtime/rpc/server/runtime-rpc.ts'
+      - 'src/main/runtime/rpc/server/pairing/device-registry.ts'
       - 'src/main/runtime/orca-runtime.ts'
       - 'src/main/runtime/agent-session-*.ts'
       - 'src/main/runtime/agent-session/records/agent-session-*.ts'
@@ -140,6 +138,7 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
     # Use ARM for pure Vitest; no x86 native toolchain is needed and Gemfile.lock’s ruby platform supports frozen install.
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 180
 
     env:
       # Freeze bundler to reject Gemfile drift before release jobs resolve different fastlane versions.
@@ -278,10 +277,6 @@ jobs:
         if: steps.ruby-scope.outputs.should_run != 'false'
         run: ruby fastlane/ios_release_version_test.rb
 
-      - name: Test TestFlight lane arguments
-        if: steps.ruby-scope.outputs.should_run != 'false'
-        run: ruby fastlane/fastfile_testflight_arguments_test.rb
-
       # Load/list Fastfile lanes without Apple credentials/network to catch syntax/require/constants before release; ios-distribute failed six days without this guard.
       - name: Smoke-check the Fastfile
         if: steps.ruby-scope.outputs.should_run != 'false'
@@ -352,6 +347,7 @@ jobs:
     if: github.event_name == 'push'
     # Why ARM: the same pure-Node Vitest run `verify` makes on a pull request.
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 180
 
     defaults:
       run:

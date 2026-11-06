@@ -7,7 +7,7 @@ import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-sha
 import type { HostStatusGates } from '../transport/host-status-gates'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
 import type { RpcResponse } from '../transport/types'
-import { WorkspaceServerContext } from '../transport/use-workspace-client'
+import { WorkspaceServerContext } from '../transport/workspace-server-context'
 import { useMobileSessionTerminalWebview } from './use-mobile-session-terminal-webview'
 
 vi.mock('../transport/host-client-hooks', () => ({ useHostClient: vi.fn() }))

@@ -7,7 +7,7 @@ import {
 } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 
 import { OrcaRuntimeService } from '../../orca-runtime'
-import { makeStore } from '../../runtime-rpc-worktree-store-fixtures'
+import { makeStore } from '../../rpc/server/runtime-rpc-worktree-store-fixtures'
 
 const WORKTREE_PATH = '/tmp/worktree-a'
 const PTY_ID = 'pty-prompt'
@@ -78,7 +78,12 @@ describe('agent prompt render gate on a ConPTY host', () => {
   /** Model a closed-loop agent repainting mid-ingest, then going quiet. */
   async function createSettlementRuntime(
     // Continuous noise forces the hard cap so its arithmetic can be measured.
-    agentOutput: { markerDelayMs?: number; noiseUntilMs?: number } = {}
+    agentOutput: {
+      markerDelayMs?: number
+      noiseUntilMs?: number
+      composer?: string
+      noise?: string
+    } = {}
   ): Promise<{
     runtime: OrcaRuntimeService
     handle: string
@@ -98,9 +103,13 @@ describe('agent prompt render gate on a ConPTY host', () => {
           submitTimes.push(Date.now() - startedAt)
         }
         if (data.includes('\x1b[201~')) {
-          setTimeout(() => runtime.onPtyData(PTY_ID, '\x1b[?25h', Date.now()), markerDelayMs)
+          const frame = agentOutput.composer ? `\x1b[H\x1b[2J${agentOutput.composer}` : ''
+          setTimeout(
+            () => runtime.onPtyData(PTY_ID, `${frame}\x1b[?25h`, Date.now()),
+            markerDelayMs
+          )
           for (let at = markerDelayMs + 500; at <= (agentOutput.noiseUntilMs ?? 0); at += 500) {
-            setTimeout(() => runtime.onPtyData(PTY_ID, '.', Date.now()), at)
+            setTimeout(() => runtime.onPtyData(PTY_ID, agentOutput.noise ?? '.', Date.now()), at)
           }
         }
         return true
@@ -158,5 +167,60 @@ describe('agent prompt render gate on a ConPTY host', () => {
     expect(submitTimes[0]).toBeGreaterThanOrEqual(ingestMs + 8_000)
     expect(submitTimes[0]).toBeLessThan(ingestMs + 8_500)
     await stalled
+  })
+
+  describe('with child work repainting forever', () => {
+    const prompt = 'review the background agent output and report'
+    const rule = '\u2500'.repeat(40)
+    // Claude parks the cursor at the end of its composer line.
+    const composer = (text: string): string =>
+      `\x1b[H\x1b[2J${rule}\r\n\u276f ${text}\r\n${rule}\x1b[2;${text.length + 3}H`
+    // A dim suggestion with the cursor parked before it, as Claude paints one in an empty composer.
+    const suggesting = (text: string): string =>
+      `\x1b[H\x1b[2J${rule}\r\n\u276f \x1b[2m${text}\x1b[22m\r\n${rule}\x1b[2;3H`
+
+    async function submitTime(shown: { before: string; after: string }): Promise<number> {
+      const { runtime, handle, submitTimes } = await createSettlementRuntime({
+        noiseUntilMs: 20_000,
+        // A progress row repainting elsewhere leaves the composer and its cursor as they were.
+        noise: '\x1b7\x1b[5;1Hworking\x1b8',
+        composer: shown.after.slice('\x1b[H\x1b[2J'.length)
+      })
+      runtime.onPtyData(PTY_ID, shown.before, Date.now())
+      const submission = runtime.sendTerminalAgentPrompt(handle, prompt, { inputKind: 'driving' })
+      const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')
+      await vi.runAllTimersAsync()
+      await stalled
+      expect(submitTimes).toHaveLength(1)
+      return submitTimes[0]
+    }
+
+    it('submits once an empty composer keeps showing the whole paste', async () => {
+      useHostPlatform('win32')
+      vi.useFakeTimers()
+      // Marker at 100ms plus the settle window, well before the 1.5s quiet window or 8s cap.
+      const at = await submitTime({ before: composer(''), after: composer(prompt) })
+      expect(at).toBeGreaterThanOrEqual(400)
+      expect(at).toBeLessThan(1_500)
+    })
+
+    it.each([
+      [
+        'only the end of the paste is shown',
+        { before: composer(''), after: composer(prompt.slice(8)) }
+      ],
+      [
+        'the composer already held the prompt',
+        { before: composer(prompt), after: composer(prompt) }
+      ],
+      [
+        'a dim suggestion already showed the prompt',
+        { before: suggesting(prompt), after: suggesting(prompt) }
+      ]
+    ])('waits for the cap when %s', async (_case, shown) => {
+      useHostPlatform('win32')
+      vi.useFakeTimers()
+      expect(await submitTime(shown)).toBeGreaterThanOrEqual(8_000)
+    })
   })
 })

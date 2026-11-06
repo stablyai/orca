@@ -4,8 +4,8 @@ import { agentMessageTranscriptText } from './agent-message-display-text'
 import { agentMessageHeading } from './agent-message-presentation'
 import { readAgentMessageSource } from './agent-session-message-source'
 import * as display from './orchestration-mail-display-text'
-import { boundedFrameItem } from '../../main/native-chat/agent-session-wire/agent-session-bounded-frame-item'
-import { measureHistoryItem } from '../../main/native-chat/agent-session-wire/agent-session-history-page-bounds'
+import { boundedFrameItem } from '../../main/native-chat/agent-session-wire/publication/history/agent-session-bounded-frame-item'
+import { measureHistoryItem } from '../../main/native-chat/agent-session-wire/publication/history/agent-session-history-page-bounds'
 
 it('shows exact fields, including multiline subjects and protocol-looking body text, without changing input', () => {
   const body = `  Body 🐋\r\n[Reply: keep this]\n${'─'.repeat(60)}`

@@ -4,18 +4,21 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/jou
 import { expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { activeStructuredAgentSessionTurnId } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
-import { hostTestOperationId } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import {
+  hostTestOperationId,
+  HOST_TEST_SESSION as SESSION,
+  HOST_TEST_THREAD as REST_TEST_THREAD
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   foundRestTestChat,
   REST_TEST_CALLER as CALLER,
-  REST_TEST_SESSION as SESSION,
-  REST_TEST_THREAD,
   restTestSend
-} from '../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+
 import { closeStructuredAgentSessionChild } from '../../agent-session/structured-agent-session-close'
 import { discardStructuredWorkerSession } from './orchestration-structured-worker-session'
-import { claudeAndCodexDeclared } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
+import { claudeAndCodexDeclared } from '../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
 
 import { fixture, call, restingChat } from './structured-agent-session-rest-contract-test-fixture'
 

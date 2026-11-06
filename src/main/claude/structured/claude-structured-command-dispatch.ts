@@ -3,7 +3,7 @@ import { agentSessionCompactCommandText } from '../../../shared/agent-session/ag
 import type {
   AgentSessionCommandAdmission,
   StructuredAgentSessionCommandRun
-} from '../../native-chat/agent-session-wire/structured-agent-session-adapter'
+} from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { dispatchClaudeTurn } from './claude-structured-dispatch'
 import type { ClaudeSession } from './claude-structured-session-state'
 

@@ -5,11 +5,11 @@ import type { PrepareClaudeAuth } from '../../ipc/pty/host-env/types'
 import type {
   RuntimeTerminalAgentStatusEvent,
   RuntimeTerminalProgramStatusFacetEvent
-} from '../runtime-terminal-contracts'
+} from '../terminal/output/terminal-agent-status-events'
 import type { TerminalSideEffectBatch } from '../../../shared/terminal/output/terminal-side-effect-facts'
 import type { ClaudeTerminalEvidence } from '../../../shared/claude-terminal-interrupt'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { StructuredAgentSessionStatusSink } from '../../native-chat/agent-session-wire/structured-agent-session-status-feed'
+import type { StructuredAgentSessionStatusSink } from '../../native-chat/agent-session-wire/observations/structured-agent-session-status-ownership'
 import type { ObservedAgentStatusPaneIdentity } from '../../ipc/agent-status-ipc-boundary'
 import type { AgentHookAuthorityAttestation } from '../../agent-hooks/server/server-types'
 import type {

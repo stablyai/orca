@@ -2,8 +2,10 @@ import { useState } from 'react'
 import { useAppStore } from '../../store'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
+  getTerminalTabActivityFlags,
   resolveTerminalTabActivityStatus,
   resolveTerminalTabProgramProgress,
+  type TerminalTabActivityFlags,
   type TerminalTabActivityStatus
 } from './terminal-tab-activity-status'
 
@@ -21,8 +23,7 @@ function createActivityStatusSelector(): (input: ActivityStatusInput) => Termina
     tabId: string
     title: string
     launchAgent: ActivityStatusInput['tab']['launchAgent']
-    agentStatusByPaneKey: ActivityStatusInput['agentStatusByPaneKey']
-    agentStatusEpoch: ActivityStatusInput['agentStatusEpoch']
+    flags: TerminalTabActivityFlags | undefined
     paneTitles: Record<number, string> | undefined
     ptyIds: string[] | undefined
     layoutRoot: NonNullable<ActivityStatusInput['terminalLayout']>['root'] | undefined
@@ -30,13 +31,16 @@ function createActivityStatusSelector(): (input: ActivityStatusInput) => Termina
   } | null = null
   return (input) => {
     const { id } = input.tab
+    const flags = getTerminalTabActivityFlags(
+      input.agentStatusByPaneKey,
+      input.agentStatusEpoch
+    ).get(id)
     if (
       last &&
       last.tabId === id &&
       last.title === input.tab.title &&
       last.launchAgent === input.tab.launchAgent &&
-      last.agentStatusByPaneKey === input.agentStatusByPaneKey &&
-      last.agentStatusEpoch === input.agentStatusEpoch &&
+      last.flags === flags &&
       last.paneTitles === input.runtimePaneTitlesByTabId?.[id] &&
       last.ptyIds === input.ptyIdsByTabId?.[id] &&
       last.layoutRoot === input.terminalLayout?.root
@@ -48,8 +52,7 @@ function createActivityStatusSelector(): (input: ActivityStatusInput) => Termina
       tabId: id,
       title: input.tab.title,
       launchAgent: input.tab.launchAgent,
-      agentStatusByPaneKey: input.agentStatusByPaneKey,
-      agentStatusEpoch: input.agentStatusEpoch,
+      flags,
       paneTitles: input.runtimePaneTitlesByTabId?.[id],
       ptyIds: input.ptyIdsByTabId?.[id],
       layoutRoot: input.terminalLayout?.root,

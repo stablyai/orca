@@ -1,6 +1,6 @@
 import type { AgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store'
-import { StructuredAgentSessionStatusFeed } from '../../../native-chat/agent-session-wire/structured-agent-session-status-feed'
-import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+import { StructuredAgentSessionStatusFeed } from '../../../native-chat/agent-session-wire/observations/structured-agent-session-status-feed'
+import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
 export const STATUS_SESSION = 'session-status'
 export const STATUS_ITEMS: ReturnType<AgentSessionJournal['snapshot']>['items'] = [

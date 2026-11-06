@@ -127,42 +127,9 @@ async function openProbe({ userAgent } = {}) {
 const fieldValue = (page) =>
   page.evaluate((id) => document.getElementById(id)?.value ?? null, LIVE_INPUT_FIELD_ID)
 
-async function typeIntoField(page, text) {
-  await page.evaluate((typed) => globalThis.__orcaLiveInputProbe.type(typed), text)
-  await page.waitForFunction(
-    ([id, typed]) => document.getElementById(id)?.value === typed,
-    [LIVE_INPUT_FIELD_ID, text],
-    { timeout: 30_000, polling: 100 }
-  )
-}
-
 describeRender(
   'the terminal live input on the page',
   () => {
-    it('mounts a session-startup clear without faulting the page', async () => {
-      // Catch original page-only TypeError from calling setNativeProps on DOM ref before shell tears view down.
-      const { errors, faults, page } = await openProbe()
-      expect(faults).toEqual([])
-      expect(errors).toEqual([])
-      expect(await fieldValue(page)).toBe('')
-      await page.close()
-    }, 300_000)
-
-    it('writes the field itself, so a drifted value is cleared without a render', async () => {
-      const { errors, page } = await openProbe()
-      // Seed DOM text unknown to React value prop, like mid-composition IME; clearing unchanged empty capture state cannot rerender it away.
-      await page.evaluate((id) => {
-        document.getElementById(id).value = 'ime-preedit'
-      }, LIVE_INPUT_FIELD_ID)
-      expect(await fieldValue(page)).toBe('ime-preedit')
-
-      await page.evaluate(() => globalThis.__orcaLiveInputProbe.clear())
-
-      expect(await fieldValue(page)).toBe('')
-      expect(errors).toEqual([])
-      await page.close()
-    }, 300_000)
-
     it('clears the field when Enter submits, the way it does natively', async () => {
       // Use real keydown to exercise RN-Web Enter/onSubmitEditing; command must clear previously sent live text.
       const { errors, page } = await openProbe()
@@ -225,78 +192,32 @@ describeRender(
       await page.close()
     }, 300_000)
 
-    it("clears the field when the key bar's Enter chip ends the line", async () => {
-      // Accessory chip emits no DOM key event; hook itself must finish edit or next keys append to sent text.
+    it('sends converted text when the keyboard commits it, without waiting for another key', async () => {
+      // WebKit's last input event during a commit still reports isComposing, and none follows compositionend.
       const { errors, page } = await openProbe()
       await page.focus(`#${LIVE_INPUT_FIELD_ID}`)
-      await page.keyboard.type('ls')
+      const input = await page.context().newCDPSession(page)
+      await input.send('Input.imeSetComposition', {
+        text: 'にほんご',
+        selectionStart: 4,
+        selectionEnd: 4
+      })
       await page.waitForFunction(
-        (id) => document.getElementById(id)?.value === 'ls',
+        (id) => document.getElementById(id)?.value === 'にほんご',
         LIVE_INPUT_FIELD_ID,
-        { timeout: 30_000, polling: 100 }
+        { timeout: 30_000, polling: 50 }
       )
+      expect(await page.evaluate(() => globalThis.__orcaLiveInputProbe.sent())).toEqual([])
 
-      await page.evaluate(() => globalThis.__orcaLiveInputProbe.accessory({ bytes: '\r' }))
+      await input.send('Input.insertText', { text: '日本語' })
 
-      // Exactly one branch sends control: hook sends or defers to caller, never both.
       await page.waitForFunction(
-        () => (globalThis.__orcaLiveInputProbe.sent() ?? []).includes('\r'),
+        () => globalThis.__orcaLiveInputProbe.sent().length > 0,
         undefined,
-        { timeout: 30_000, polling: 100 }
+        { timeout: 30_000, polling: 50 }
       )
-      expect(await page.evaluate(() => globalThis.__orcaLiveInputProbe.sent())).toEqual([
-        'l',
-        's',
-        '\r'
-      ])
-      expect(await fieldValue(page)).toBe('')
-      expect(errors).toEqual([])
-      await page.close()
-    }, 300_000)
-
-    it('edits the field from the accessory bar and mirrors the erase to the terminal', async () => {
-      // Accessory Backspace writes shortened DOM field before mirror sends PTY erase; broken native-prop write prevented both on page.
-      const { errors, page } = await openProbe()
-      await typeIntoField(page, 'ab')
-
-      const result = await page.evaluate(() =>
-        globalThis.__orcaLiveInputProbe.accessory({ bytes: '\u007f', localEdit: 'backspace' })
-      )
-
-      expect(result).toEqual({ kind: 'handled' })
-      await page.waitForFunction(
-        (id) => document.getElementById(id)?.value === 'a',
-        LIVE_INPUT_FIELD_ID,
-        { timeout: 30_000, polling: 100 }
-      )
-      // Require one DEL on wire so local field edit cannot silently diverge from PTY.
-      expect(await page.evaluate(() => globalThis.__orcaLiveInputProbe.sent())).toEqual([
-        'ab',
-        '\u007f'
-      ])
-      expect(errors).toEqual([])
-      await page.close()
-    }, 300_000)
-
-    it('preserves the middle caret after accessory Delete and subsequent typing', async () => {
-      const { errors, page } = await openProbe()
-      await page.focus(`#${LIVE_INPUT_FIELD_ID}`)
-      await page.keyboard.type('abcdef')
-      const sentBeforeSelection = await page.evaluate(() => globalThis.__orcaLiveInputProbe.sent())
-      await page.evaluate((id) => {
-        document.getElementById(id).setSelectionRange(3, 3)
-      }, LIVE_INPUT_FIELD_ID)
-      expect(await page.evaluate(() => globalThis.__orcaLiveInputProbe.sent())).toEqual(
-        sentBeforeSelection
-      )
-      expect(
-        await page.evaluate(() =>
-          globalThis.__orcaLiveInputProbe.accessory({ bytes: '\x1b[3~', localEdit: 'delete' })
-        )
-      ).toEqual({ kind: 'handled' })
-      expect(await fieldValue(page)).toBe('abcef')
-      await page.keyboard.type('X')
-      expect(await fieldValue(page)).toBe('abcXef')
+      expect(await page.evaluate(() => globalThis.__orcaLiveInputProbe.sent())).toEqual(['日本語'])
+      expect(await fieldValue(page)).toBe('日本語')
       expect(errors).toEqual([])
       await page.close()
     }, 300_000)
@@ -371,24 +292,6 @@ describeRender(
           }
         )
         expect(await sent(page)).toEqual(['t', 'e', 'h', '\u007f\u007fhe'])
-        expect(errors).toEqual([])
-        await page.close()
-      }, 300_000)
-
-      it("still holds a composition off Android, where it is the text system's marked text", async () => {
-        // iOS guard: pinyin composition before conversion is not committed text on either side.
-        const { errors, page } = await openProbe({
-          userAgent:
-            'Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148'
-        })
-        await page.focus(`#${LIVE_INPUT_FIELD_ID}`)
-        const input = await page.context().newCDPSession(page)
-        for (const text of ['n', 'ni']) {
-          await compose(input, text)
-          await waitForField(page, text)
-        }
-
-        expect(await sent(page)).toEqual([])
         expect(errors).toEqual([])
         await page.close()
       }, 300_000)

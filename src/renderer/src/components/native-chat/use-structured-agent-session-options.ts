@@ -167,6 +167,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     conversationCommands: support?.commands ?? [],
     compactInstructions: support?.compactInstructions === true,
     /** Absent unless this host and session can change the goal. */
+    accountUsage: support?.accountUsage,
     threadGoal: support?.threadGoal,
     /** A goal only the agent's own `/goal` changes; absent from a host that predates it. */
     reportedThreadGoal: support?.reportedThreadGoal,
@@ -177,6 +178,8 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     sessionSupport,
     /** Undefined until this fence's options read answers. */
     rewind: support?.fence === fence ? support.rewind : undefined,
+    /** Undefined until this fence's options read answers, or from a host that predates forks. */
+    forkSupport: support?.fence === fence ? support.forkSupport : undefined,
     optionSnapshot,
     optionSurface,
     setStructuredOption,

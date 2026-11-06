@@ -3,7 +3,7 @@ import { committingSpawn } from './bind-first-pane.test-fixture'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import type { RuntimeTerminalAgentStatusEvent } from '../runtime-terminal-contracts'
+import type { RuntimeTerminalAgentStatusEvent } from '../terminal/output/terminal-agent-status-events'
 import {
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
@@ -406,6 +406,7 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  // A restored permission wait is the exception; agent-prompt-restored-permission.test.ts covers it (#35962).
   it('does not treat a restored-unconfirmed hook row as live terminal status', async () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
     const paneKey = makePaneKey('tab-1', leafId)
@@ -413,7 +414,7 @@ describe('OrcaRuntimeService', () => {
       getAgentStatusSnapshot: () => [
         {
           paneKey,
-          state: 'waiting',
+          state: 'working',
           prompt: '',
           agentType: 'codex',
           connectionId: null,

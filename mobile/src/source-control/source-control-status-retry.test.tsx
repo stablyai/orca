@@ -149,10 +149,10 @@ vi.mock('../components/bottom-drawer/BottomDrawer', async () => {
 vi.mock('../components/AutoHeight', () => ({
   AutoHeight: ({ children }: { children: ReactNode }) => children
 }))
-vi.mock('../components/pr-sidebar/CommentMarkdown', async () => {
+vi.mock('../components/MobileMarkdown', async () => {
   const { createElement: element } = await import('react')
   return {
-    CommentMarkdown: ({ content }: { content: string }) => element('CommentMarkdown', { content })
+    MobileMarkdown: ({ content }: { content: string }) => element('MobileMarkdown', { content })
   }
 })
 vi.mock('../components/nav-bar/NavBar', () => ({ NavBar: () => null }))
@@ -630,7 +630,7 @@ it('reuses Source Control across worktrees without loading the old fallback, con
   holding.delete('github.workItemDetails')
   await hub.resolveHeld('github.workItemDetails')
   await settle()
-  expect(tree!.root.find((node) => String(node.type) === 'CommentMarkdown').props.content).toBe(
+  expect(tree!.root.find((node) => String(node.type) === 'MobileMarkdown').props.content).toBe(
     'refreshed body'
   )
   expect(refreshLine()).toHaveLength(1)

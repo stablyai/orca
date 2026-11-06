@@ -2,6 +2,7 @@ import React from 'react'
 import { ChevronDown, Settings2, Terminal } from 'lucide-react'
 import type AgentCombobox from '@/components/agent/AgentCombobox'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
+import { AgentDefaultContextMenu } from '@/components/agent/agent-combobox-items'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -51,7 +52,9 @@ export function NewWorkspaceComposerAgentSection({
   advancedOpen,
   advancedLocked = false,
   agentDraftSection,
-  onToggleAdvanced
+  onToggleAdvanced,
+  defaultTuiAgent,
+  handleSetDefaultAgent
 }: NewWorkspaceComposerAgentSectionProps): React.JSX.Element {
   return (
     <>
@@ -96,12 +99,19 @@ export function NewWorkspaceComposerAgentSection({
           onOpenAgentSettings={onOpenAgentSettings}
           onTriggerEnter={createDisabled ? undefined : onCreate}
           emptyLabel={translate('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
+          defaultAgent={defaultTuiAgent}
+          onSetDefault={handleSetDefaultAgent}
           onPick={(agent, draft, entry) => onQuickAgentChange(agent, draft?.surface, draft, entry)}
         >
-          <DropdownMenuItem onSelect={() => onQuickAgentChange(null)}>
-            <Terminal className="size-3.5" />
-            {translate('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
-          </DropdownMenuItem>
+          <AgentDefaultContextMenu
+            isDefault={defaultTuiAgent === 'blank'}
+            onSetDefault={() => handleSetDefaultAgent('blank')}
+          >
+            <DropdownMenuItem onSelect={() => onQuickAgentChange(null)}>
+              <Terminal className="size-3.5" />
+              {translate('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
+            </DropdownMenuItem>
+          </AgentDefaultContextMenu>
           <DropdownMenuSeparator />
         </AgentLaunchPicker>
       </div>

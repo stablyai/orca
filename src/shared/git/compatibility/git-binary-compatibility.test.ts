@@ -747,19 +747,17 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     await runGit(['-C', worktree, 'update-ref', '-d', backupRef, backupOid])
   })
 
-  it('degrades indexed credential config safely at the Git 2.31 boundary', async () => {
-    const guardEnv = gitCredentialPromptGuardEnv({}, 'linux')
-    await expect(runGit(['status', '--short'], guardEnv)).resolves.toBeDefined()
-
-    try {
-      const result = await runGit(['config', '--get', 'credential.interactive'], guardEnv)
-      expect(supports(2, 31)).toBe(true)
-      expect(result.stdout.trim()).toBe('false')
-    } catch {
-      // Git 2.25 ignores the indexed variables rather than rejecting commands;
-      // the scalar prompt guards still provide the baseline fail-fast behavior.
-      expect(supports(2, 31)).toBe(false)
-    }
+  it('keeps git usable when an agent scrubs credential-shaped env names (#26594)', async () => {
+    // The DeepSeek Harness subprocess filter, recorded in #26594.
+    const sensitiveEnvPattern = /KEY|PASSWORD|SECRET|TOKEN/i
+    const scrubbed = Object.fromEntries(
+      Object.entries(gitCredentialPromptGuardEnv({}, 'linux')).filter(
+        ([key]) => !sensitiveEnvPattern.test(key)
+      )
+    )
+    expect(scrubbed.GIT_TERMINAL_PROMPT).toBe('0')
+    expect(scrubbed.GCM_INTERACTIVE).toBe('never')
+    await expect(runGit(['status', '--short'], scrubbed)).resolves.toBeDefined()
   })
 
   // Git 2.25–2.49 echoes --end-of-options with --symbolic-full-name but consumes it with --verify; git-history skips the echoed line.

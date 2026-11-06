@@ -34,8 +34,8 @@ import {
 import {
   RuntimeMobileNotificationController,
   type MobileNotificationEvent
-} from '../../src/main/runtime/runtime-mobile-notification-controller'
-import { MobileNotificationDismissalStore } from '../../src/main/runtime/mobile-notification-dismissal-store'
+} from '../../src/main/runtime/push/notifications/runtime-mobile-notification-controller'
+import { MobileNotificationDismissalStore } from '../../src/main/runtime/push/notifications/mobile-notification-dismissal-store'
 import { createNotificationDeliveryService } from '../../src/main/notifications/notification-delivery-service'
 import { SESSION } from '../../src/main/runtime/rpc/methods/structured-agent-session-rpc.test-fixture'
 import { makeUnifiedTab, makeWorktree } from '@/store/slices/store-test-helpers'

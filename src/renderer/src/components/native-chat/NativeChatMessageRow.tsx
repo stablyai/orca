@@ -1,6 +1,6 @@
 import { memo, useRef } from 'react'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
+import type { NativeChatForkRowAction } from './use-native-chat-fork'
 import { NativeChatUserMessageRow } from './NativeChatUserMessageRow'
 import { NativeChatAgentMessageCard } from './NativeChatAgentMessageCard'
 import { NativeChatAssistantMessageRow } from './NativeChatAssistantMessageRow'
@@ -12,8 +12,7 @@ import { deriveNativeChatRowContent } from '../../../../shared/native-chat/trans
 import { NativeChatReasoningRow } from './NativeChatReasoningRow'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
 import { nativeChatNoticeBlock } from '../../../../shared/native-chat/native-chat-notice'
-import { nativeChatStoppedBeforeStartLabel } from './native-chat-stopped-before-start-row'
-import { nativeChatBlocksInOwnWords } from '../../../../shared/native-chat/native-chat-stopped-before-start'
+import { nativeChatMessageRowBlocks } from './native-chat-message-row-words'
 import { ProviderFrameRow } from './NativeChatTranscriptChrome'
 import type { NativeChatDiffReveal } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import type {
@@ -55,10 +54,10 @@ export type MessageRowProps = {
   trailingRun?: boolean
   /** Hover controls would overlap the next row. */
   continuesTurn?: boolean
+  /** In a turn: whether this row holds the response's actions (its last words, else its last images). */
+  endsResponse?: boolean
   /** Align this message's top to the top of the scroll viewport. */
   onScrollMessageToTop: (el: HTMLElement) => void
-  onLinkClick?: CommentMarkdownLinkClickHandler
-  allowFileUriLinks?: boolean
   deliveryNotice?: NativeChatDeliveryNotice
   /** On a roster row: its list's state and the subagents whose rows open below it. */
   subagentRoster?: NativeChatSubagentRosterState
@@ -69,6 +68,8 @@ export type MessageRowProps = {
   runtimeContext?: RuntimeFileOperationArgs | null
   /** On a user row: discards it and everything after it. */
   rewind?: NativeChatRewindSurface
+  /** On a finished response of the chat's own agent: forks the chat through its turn. */
+  fork?: NativeChatForkRowAction
   /** All messages in this work run, message first; preserve row identity when a message becomes a run. */
   workRun?: readonly NativeChatMessage[]
 }
@@ -92,15 +93,13 @@ export const MessageRow = memo(function MessageRow(
     agentName,
     activeTurnIsWorking,
     onScrollMessageToTop,
-    onLinkClick,
-    allowFileUriLinks = false,
     deliveryNotice,
     runtimeContext,
     rewind,
     workRun
   } = props
   const rowRef = useRef<HTMLDivElement | null>(null)
-  const blocks = nativeChatBlocksInOwnWords(message.blocks, nativeChatStoppedBeforeStartLabel())
+  const blocks = nativeChatMessageRowBlocks(message)
   // Share content derivation with slot selection so invisible rows cannot reserve transcript gaps.
   const content = deriveNativeChatRowContent(blocks)
   const { markdown, prose } = content
@@ -110,9 +109,7 @@ export const MessageRow = memo(function MessageRow(
   const providerFrame = blocks.find((block) => block.type === 'text' && block.providerFrame)
   const run = useNativeChatWorkRun(workRun, {
     revealedDiff: props.revealedDiff,
-    activeTurnIsWorking,
-    onLinkClick,
-    allowFileUriLinks
+    activeTurnIsWorking
   })
 
   const { scrollToTop, returnToView } = useNativeChatRowNavigation(rowRef, onScrollMessageToTop)
@@ -129,8 +126,6 @@ export const MessageRow = memo(function MessageRow(
           message={message}
           from={message.from}
           runtimeContext={runtimeContext}
-          onLinkClick={onLinkClick}
-          allowFileUriLinks={allowFileUriLinks}
           onRefolded={returnToView}
         />
       </div>
@@ -141,13 +136,7 @@ export const MessageRow = memo(function MessageRow(
   if (notice) {
     return (
       <div ref={rowRef}>
-        <NativeChatNoticeRow
-          block={notice}
-          messageId={message.id}
-          agentName={agentName}
-          onLinkClick={onLinkClick}
-          allowFileUriLinks={allowFileUriLinks}
-        />
+        <NativeChatNoticeRow block={notice} messageId={message.id} agentName={agentName} />
       </div>
     )
   }
@@ -168,8 +157,6 @@ export const MessageRow = memo(function MessageRow(
         prose={prose}
         rowRef={rowRef}
         onRefolded={returnToView}
-        onLinkClick={onLinkClick}
-        allowFileUriLinks={allowFileUriLinks}
         runtimeContext={runtimeContext}
         structuredAttachments={props.structuredAttachments}
         rewind={rewind}
@@ -185,8 +172,6 @@ export const MessageRow = memo(function MessageRow(
           message={message}
           turnIsWorking={activeTurnIsWorking}
           markdown={markdown}
-          onLinkClick={onLinkClick}
-          allowFileUriLinks={allowFileUriLinks}
         />
       </div>
     )

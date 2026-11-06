@@ -1,5 +1,13 @@
-import { useEffect, useRef } from 'react'
-import { Animated, Easing, Modal, Platform, Pressable } from 'react-native'
+import { useEffect, useRef, type ComponentType } from 'react'
+import {
+  Animated,
+  Easing,
+  Modal,
+  Platform,
+  Pressable,
+  type StyleProp,
+  type ViewStyle
+} from 'react-native'
 import { X } from 'lucide-react-native'
 import { useWindowSafeAreaInsets } from '../../../layout/side-safe-area'
 import { colors, feedback, radii, spacing } from '../../../theme/mobile-theme'
@@ -14,6 +22,14 @@ import { useReducedMotionEnabled } from '../../../platform/use-reduced-motion'
 const VIEWER_EASING = Easing.bezier(...SHEET_CURVE)
 const VIEWER_OPEN_MS = 250
 const VIEWER_CLOSE_MS = 200
+// Page Pressables ignore hitSlop, so each round button is itself the 44pt target.
+const BUTTON_SIZE = 44
+
+export type ImageViewerActionsProps = {
+  uri: string
+  buttonStyle: StyleProp<ViewStyle>
+  toastInset: number
+}
 
 /** Full-screen pinch, drag and double-tap zoom for chat and Markdown images, and Mermaid diagrams. */
 export function MobileNativeChatImageViewer({
@@ -21,6 +37,7 @@ export function MobileNativeChatImageViewer({
   label,
   size,
   upscale,
+  actions: Actions,
   onClose
 }: {
   uri: string
@@ -29,6 +46,8 @@ export function MobileNativeChatImageViewer({
   size?: PanZoomSize | null
   /** Let fit enlarge a vector past its natural size. */
   upscale?: boolean
+  /** A button beside Close; passed in so diagrams don't pull the share sheet into their bundle. */
+  actions?: ComponentType<ImageViewerActionsProps>
   onClose: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
@@ -53,6 +72,19 @@ export function MobileNativeChatImageViewer({
         >
           <X size={22} color={colors.textPrimary} strokeWidth={2} />
         </Pressable>
+        {Actions ? (
+          <Actions
+            uri={uri}
+            buttonStyle={[
+              styles.close,
+              {
+                top: insets.top + spacing.sm,
+                right: insets.right + spacing.lg + BUTTON_SIZE + spacing.sm
+              }
+            ]}
+            toastInset={insets.bottom}
+          />
+        ) : null}
       </Animated.View>
     </Modal>
   )
@@ -105,11 +137,10 @@ const styles = themedStyleSheet(() => ({
   stage: {
     flex: 1
   },
-  // Page Pressables ignore hitSlop, so the button itself is the 44pt target.
   close: {
     position: 'absolute',
-    width: 44,
-    height: 44,
+    width: BUTTON_SIZE,
+    height: BUTTON_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radii.pill,
