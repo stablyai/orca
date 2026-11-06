@@ -3,7 +3,7 @@ import type { z } from 'zod'
 import {
   structuredAgentSessionCreateParams,
   type StructuredAgentSessionFirstMessage
-} from '../../../src/shared/structured-agent-session-create'
+} from '../../../src/shared/agent-session/structured-agent-session-create'
 import { CreateIntentParams } from '../../../src/shared/rpc-contract/structured-agent-session-params'
 
 describe('the shared create builder used by mobile', () => {

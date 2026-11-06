@@ -1,6 +1,7 @@
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
-import type { MobileRelayHost } from '../../../src/shared/mobile-relay-hosts-contract'
+import type { MobileRelayHost } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import { useRelayHosts } from '../worktree/relay-hosts-feed'
+import { serverHostDesktopReach, type ServerHostDesktopReach } from '../worktree/server-workspaces'
 import {
   scopeRpcClientToExecutionHost,
   workspaceRouteExecutionHost
@@ -20,6 +21,8 @@ export function useWorkspaceServer(args: {
   server: {
     client: RpcClient | null
     state: ConnectionState
+    name: string | null
+    desktopReach: ServerHostDesktopReach | undefined
     gates: HostStatusGates
     desktopCapabilities: readonly string[]
   } | null
@@ -29,16 +32,24 @@ export function useWorkspaceServer(args: {
   const serverClient = client && routeHost ? scopeRpcClientToExecutionHost(client, routeHost) : null
   // The same feed the host list reads, so the desktop is not polled twice.
   const hosts = useRelayHosts(routeHost ? client : null)
+  const selectedHost = hosts?.find((entry) => entry.hostId === routeHost)
   const state =
-    connState === 'connected' && routeHost && hosts
-      ? serverConnState(hosts.find((entry) => entry.hostId === routeHost))
-      : connState
+    connState === 'connected' && routeHost && hosts ? serverConnState(selectedHost) : connState
   // Use the server’s own state and no desktop hostId so reconnect re-reads server gates without overwriting desktop identity.
   const gates = useHostStatusGates({ hostId: undefined, client: serverClient, connState: state })
   return {
     routeHost,
     server:
-      routeHost === undefined ? null : { client: serverClient, state, gates, desktopCapabilities }
+      routeHost === undefined
+        ? null
+        : {
+            client: serverClient,
+            state,
+            name: selectedHost?.label ?? null,
+            desktopReach: selectedHost ? serverHostDesktopReach(selectedHost) : undefined,
+            gates,
+            desktopCapabilities
+          }
   }
 }
 

@@ -1,3 +1,5 @@
+import type { PreloadApi } from '../../../../preload/api-types'
+import type { WebRuntimeSubscribeOptions } from '../web-runtime-subscription-contract'
 import { parseExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
@@ -6,6 +8,7 @@ import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   getClientForEnvironment,
+  observeWebRuntimeStatus,
   manuallyDisconnectedEnvironmentIds,
   manuallyDisconnectedResponse,
   requireActiveEnvironment,
@@ -120,8 +123,7 @@ export async function callEnvironmentEnvelope<TResult = unknown>(
   params?: unknown,
   timeoutMs?: number,
   expectedEnvironmentPairingRevision?: number,
-  expectedEnvironmentRuntimeId?: string,
-  isActive: () => boolean = () => true
+  expectedEnvironmentRuntimeId?: string
 ): Promise<RuntimeRpcResponse<TResult>> {
   const environment = resolveEnvironment(selector)
   const assertPairing = () => assertEnvironmentPairing(selector, expectedEnvironmentPairingRevision)
@@ -130,9 +132,6 @@ export async function callEnvironmentEnvelope<TResult = unknown>(
     return manuallyDisconnectedResponse(environment)
   }
   const response = await runtimeCallQueuePool.enqueue(environment.id, method, () => {
-    if (!isActive()) {
-      throw new Error('Session search retired')
-    }
     assertPairing()
     if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
       return Promise.resolve(manuallyDisconnectedResponse(environment))
@@ -148,7 +147,6 @@ export async function callEnvironmentEnvelope<TResult = unknown>(
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)
   }
-  assertPairing()
   updateEnvironmentFromResponse(environment, response)
   return response as RuntimeRpcResponse<TResult>
 }
@@ -201,3 +199,47 @@ export function withRuntimeWorktreeOwner<T extends Worktree>(
 export async function getRemoteRuntimeStatus(): Promise<RuntimeStatus> {
   return callRuntimeResult<RuntimeStatus>('status.get', undefined, 15_000)
 }
+
+export function pinnedWebSubscriptionOptions(
+  selector: string,
+  expectedRevision?: number,
+  expectedRuntimeId?: string
+): Pick<WebRuntimeSubscribeOptions, 'expectedEnvironmentRuntimeId' | 'beforeSend'> {
+  return expectedRuntimeId === undefined
+    ? {}
+    : {
+        expectedEnvironmentRuntimeId: expectedRuntimeId,
+        beforeSend: () => {
+          assertEnvironmentPairing(selector, expectedRevision)
+          if (manuallyDisconnectedEnvironmentIds.has(resolveEnvironment(selector).id)) {
+            throw new Error('runtime_manually_disconnected')
+          }
+        }
+      }
+}
+
+export const callWebRuntimeEnvironment: PreloadApi['runtimeEnvironments']['call'] = ({
+  selector,
+  method,
+  params,
+  timeoutMs,
+  expectedEnvironmentPairingRevision,
+  expectedEnvironmentRuntimeId
+}) =>
+  callEnvironmentEnvelope(
+    selector,
+    method,
+    params,
+    timeoutMs,
+    expectedEnvironmentPairingRevision,
+    expectedEnvironmentRuntimeId
+  )
+
+export const getWebRuntimeStatus: PreloadApi['runtimeEnvironments']['getStatus'] = ({
+  selector,
+  timeoutMs,
+  observeOnly
+}) =>
+  observeOnly
+    ? observeWebRuntimeStatus(selector, timeoutMs)
+    : callEnvironmentEnvelope<RuntimeStatus>(selector, 'status.get', undefined, timeoutMs)

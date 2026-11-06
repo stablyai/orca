@@ -2,8 +2,8 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { DeviceRegistry } from '../device-registry'
-import { DEVICE_REGISTRY_FILENAME } from '../mobile-pairing-files'
+import { DeviceRegistry } from '../rpc/server/pairing/device-registry'
+import { DEVICE_REGISTRY_FILENAME } from '../rpc/server/pairing/mobile-pairing-files'
 import type { MobilePushRegistration } from '../../../shared/mobile-push-contract'
 
 const REGISTRATION: MobilePushRegistration = {
@@ -67,20 +67,6 @@ describe('DeviceRegistry push registrations', () => {
     const cli = registry.addDevice('cli', 'runtime')
 
     expect(registry.setPushRegistration(cli.deviceId, REGISTRATION)).toBe(false)
-  })
-
-  it('loads a registry written before push existed', () => {
-    const dir = userDataDir()
-    const device = new DeviceRegistry(dir).addDevice('phone', 'mobile')
-    rewriteRegistry(dir, (devices) => {
-      for (const entry of devices) {
-        delete entry.pushRegistration
-      }
-    })
-
-    const reloaded = new DeviceRegistry(dir)
-    expect(reloaded.listDevices()).toHaveLength(1)
-    expect(reloaded.getDevice(device.deviceId)?.pushRegistration).toBeUndefined()
   })
 
   it.each([

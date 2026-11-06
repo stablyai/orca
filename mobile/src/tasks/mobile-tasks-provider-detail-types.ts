@@ -3,9 +3,9 @@ import type {
   ProviderCheckSummary,
   GitHubOwnerRepo,
   RpcClient,
-  HostedReviewDecision,
   LinearMobileIssue
 } from './mobile-tasks-dependencies'
+import type { HostedReviewDecision } from '../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 
 export type RepoSummary = {
   id: string
@@ -33,12 +33,14 @@ export type GitHubWorkItem = {
   author: string | null
   branchName?: string
   baseRefName?: string
+  headSha?: string
   isCrossRepository?: boolean
   additions?: number
   deletions?: number
   changedFiles?: number
   repoId: string
   repoName: string
+  prRepo?: GitHubOwnerRepo
   reviewDecision?: string | null
   reviewRequests?: GitHubAssignableUser[]
   latestReviews?: GitHubPRReviewSummary[]
@@ -222,6 +224,7 @@ export type GitHubPRFileContents = {
 export type DetailPayload =
   | {
       provider: 'github'
+      targetKey?: string
       body: string
       comments: DetailComment[]
       labels: string[]

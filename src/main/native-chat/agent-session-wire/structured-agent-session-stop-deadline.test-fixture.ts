@@ -1,10 +1,10 @@
 import { expect, vi } from 'vitest'
 import { CLAUDE_STOP_GRACE_MS } from '../../claude/claude-request-end-wait'
-import type { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
+import type { ClaudeStructuredSessionAdapter } from '../../claude/structured/claude-structured-session-adapter'
 import type {
   fakeClaude,
   FakeConnection
-} from '../../claude/claude-structured-session-test-support'
+} from '../../claude/structured/claude-structured-session-test-support'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 
 export function createStoppedClaudeDeadline(deps: {

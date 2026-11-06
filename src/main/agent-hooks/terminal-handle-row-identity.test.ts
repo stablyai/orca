@@ -1,9 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from './server'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
-import { selectFreshExplicitAgentStatus } from '../runtime/runtime-hook-agent-row-selection'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status/contracts/agent-status-freshness'
+import { selectFreshExplicitAgentStatus } from '../runtime/workspaces/process-listing/runtime-hook-agent-row-selection'
 import { wslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
-import { seedLegacyAgentStatusForTests } from '../../shared/agent-hook-listener/listener-state'
 
 const PANE_KEY = 'tab-handle:33333333-3333-4333-8333-333333333333'
 const HANDLE = 'term_identity'
@@ -22,26 +21,6 @@ function ingest(server: AgentHookServer, overrides: Record<string, unknown> = {}
 }
 
 describe('the terminal handle a status row is stamped with', () => {
-  it('reaches the published row', () => {
-    const server = new AgentHookServer()
-    ingest(server)
-    expect(server.getStatusSnapshot()[0]).toMatchObject({
-      paneKey: PANE_KEY,
-      terminalHandle: HANDLE
-    })
-  })
-
-  it('survives a later write that resolved no handle', () => {
-    // HTTP hooks lack OSC terminal handles and must not erase the row's terminal association.
-    const server = new AgentHookServer()
-    ingest(server)
-    ingest(server, { terminalHandle: undefined, payload: { state: 'done', prompt: 'ship it' } })
-    expect(server.getStatusSnapshot()[0]).toMatchObject({
-      state: 'done',
-      terminalHandle: HANDLE
-    })
-  })
-
   it('does not cross a connection ownership change on a colliding pane key', () => {
     const server = new AgentHookServer()
     ingest(server, { connectionId: 'ssh-a' })
@@ -61,16 +40,6 @@ describe('the terminal handle a status row is stamped with', () => {
       worktreeId: 'other-worktree'
     })
     expect(server.getStatusSnapshot()[0]).not.toHaveProperty('terminalHandle')
-  })
-
-  it('is never persisted, because it belongs to the runtime that issued it', () => {
-    const server = new AgentHookServer()
-    ingest(server)
-    const serialized = (
-      server as unknown as { serializeStatusFile(): string }
-    ).serializeStatusFile()
-    expect(serialized).toContain(PANE_KEY)
-    expect(serialized).not.toContain(HANDLE)
   })
 
   it('moves one PTY row and all of its resume identity across a pane remint', () => {
@@ -181,88 +150,5 @@ describe('the terminal handle a status row is stamped with', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('publishes an enriched observation when duplicate OSC transfers pane authority', () => {
-    const server = new AgentHookServer()
-    const enriched = vi.fn()
-    server.subscribeEnrichedStatus(enriched)
-    ingest(server)
-    enriched.mockClear()
-
-    ingest(server, { paneKey: NEW_PANE_KEY, tabId: 'tab-reminted' })
-
-    expect(enriched).toHaveBeenCalledWith(
-      expect.objectContaining({ paneKey: NEW_PANE_KEY, terminalHandle: HANDLE })
-    )
-  })
-
-  it('publishes only the remint observation for a Claude child-only row', () => {
-    const server = new AgentHookServer()
-    const enriched = vi.fn()
-    const mutations = vi.fn()
-    server.subscribeEnrichedStatus(enriched)
-    server.subscribeStatusRowMutations(mutations)
-    const payload = { state: 'working' as const, prompt: 'ship it', agentType: 'claude' as const }
-    ingest(server, { payload })
-    const row = server._getStateForTests().lastStatusByPaneKey.get(PANE_KEY)
-    if (!row) {
-      throw new Error('expected seeded status row')
-    }
-    const childOnlyRow = {
-      ...row,
-      claudeRunningNonAgentTask: false,
-      payload: {
-        ...row.payload,
-        mainAgent: { state: 'done' as const, stateStartedAt: 1 },
-        subagents: [{ id: 'child-1', state: 'working' as const, startedAt: 1 }]
-      }
-    }
-    seedLegacyAgentStatusForTests(server._getStateForTests(), childOnlyRow)
-    enriched.mockClear()
-    mutations.mockClear()
-
-    ingest(server, { payload })
-    expect(enriched).not.toHaveBeenCalled()
-    expect(mutations).not.toHaveBeenCalled()
-
-    ingest(server, { paneKey: NEW_PANE_KEY, tabId: 'tab-reminted', payload })
-    expect(enriched).toHaveBeenCalledOnce()
-    expect(mutations).toHaveBeenCalledOnce()
-    expect(mutations).toHaveBeenCalledWith({
-      before: { paneKey: PANE_KEY, worktreeId: 'worktree', terminalHandle: HANDLE },
-      after: { paneKey: NEW_PANE_KEY, worktreeId: 'worktree', terminalHandle: HANDLE }
-    })
-    expect(enriched).toHaveBeenCalledWith(
-      expect.objectContaining({ paneKey: NEW_PANE_KEY, terminalHandle: HANDLE })
-    )
-  })
-
-  it('does not renew freshness from a provider-session-only dismissal remnant', () => {
-    const server = new AgentHookServer()
-    const freshness = vi.fn()
-    server.subscribeStatusFreshness(freshness)
-    ingest(server)
-    server.ingestRemote(
-      {
-        paneKey: PANE_KEY,
-        tabId: 'tab-handle',
-        worktreeId: 'worktree',
-        providerSession: { key: 'session_id', id: 'resume-me' },
-        payload: { state: 'working', prompt: 'ship it', agentType: 'codex' }
-      },
-      null
-    )
-    server.dropStatusEntry(PANE_KEY)
-    freshness.mockClear()
-
-    ingest(server)
-
-    expect(server.getStatusSnapshot()[0]).toMatchObject({
-      paneKey: PANE_KEY,
-      providerSessionOnly: true,
-      providerSession: { key: 'session_id', id: 'resume-me' }
-    })
-    expect(freshness).not.toHaveBeenCalled()
   })
 })

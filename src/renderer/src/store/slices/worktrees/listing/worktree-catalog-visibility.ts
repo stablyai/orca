@@ -38,6 +38,8 @@ export function areDetectedWorktreeResultsEqual(
     current.source === next.source &&
     current.unavailableReason === next.unavailableReason &&
     current.failureKind === next.failureKind &&
+    current.wslDistroStopped?.distro === next.wslDistroStopped?.distro &&
+    current.wslDistroStopped?.state === next.wslDistroStopped?.state &&
     catalogRowsEqual(current.worktrees, next.worktrees)
   )
 }

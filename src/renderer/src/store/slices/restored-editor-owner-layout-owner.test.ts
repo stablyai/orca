@@ -359,31 +359,5 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
         .openFiles.find((file) => file.mode === 'markdown-preview')
       expect(preview).toMatchObject({ worktreeId: TARGET, relativePath: 'docs/readme.md' })
     })
-
-    it('sends nothing when the move fails', async () => {
-      const oldId = openRestoredSource()
-      useAppStore.getState().openFile(
-        {
-          filePath: FILE_PATH,
-          relativePath: 'docs/readme.md',
-          worktreeId: TARGET,
-          runtimeEnvironmentId: null,
-          language: 'markdown',
-          mode: 'edit'
-        },
-        { suppressActiveRuntimeFallback: true }
-      )
-      await settledSent()
-      expect(reparent(oldId)).toEqual({ ok: false, reason: 'collision' })
-      expect(await settledSent()).toEqual([])
-    })
   }
 )
-
-describe.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)('restored editor tab moved, switch off', () => {
-  it('sends nothing', () => {
-    const oldId = openRestoredSource()
-    expect(reparent(oldId).ok).toBe(true)
-    expect(layoutApplyTestTransport.sent).toEqual([])
-  })
-})

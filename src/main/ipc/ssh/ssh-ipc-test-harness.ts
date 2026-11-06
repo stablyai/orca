@@ -95,7 +95,11 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     mockSshStore.addTarget.mockReset()
     mockSshStore.updateTarget.mockReset()
     mockSshStore.removeTarget.mockReset()
-    mockSshStore.importFromSshConfig.mockReset().mockReturnValue([])
+    mockSshStore.importFromSshConfig
+      .mockReset()
+      .mockResolvedValue({ targets: [], repoReadoptions: [] })
+    mockSshStore.currentSshRouteSnapshot.mockReset().mockReturnValue(null)
+    mockSshStore.refreshSshRouteSnapshot.mockReset().mockResolvedValue(null)
     mockSshStore.lastRepoReadoptions = []
     mockWindow.webContents.send.mockReset()
     mockStore.getSshRemotePtyLeases.mockReset().mockReturnValue([])

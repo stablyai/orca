@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { normalizeRepoSourceControlAiOverrides } from '../source-control-ai'
+import { normalizeRepoSourceControlAiOverrides } from '../source-control/ai/settings/source-control-ai-repo-settings'
 import { normalizeRepoBadgeColor } from '../repo-badge-color'
 import { sanitizeRepoIcon } from '../repo-icon'
 import { normalizeGhAccountBinding } from '../github/account-binding'
@@ -9,6 +9,7 @@ import {
   normalizeWorktreeVisibilitySourcePreferences
 } from '../worktree/visibility-sources'
 import { OptionalFiniteNumber, OptionalString } from './rpc-param-primitives'
+import { editorFormatterSchema } from '../editor-formatter'
 
 export const RepoSourceControlAiOverrides = z
   .unknown()
@@ -51,6 +52,7 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
         .optional(),
       upstream: RepoUpstream,
       hookSettings: z.unknown().optional(),
+      editorFormatter: editorFormatterSchema.optional(),
       worktreeBaseRef: OptionalString,
       worktreeBasePath: OptionalString,
       kind: z.enum(['git', 'folder']).optional(),

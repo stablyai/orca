@@ -1,0 +1,329 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "source-control.history-branch-commits",
+  "family": "git.history-branch-commits",
+  "namedDeltas": [],
+  "values": {
+    "006a91b993e0": {
+      "name": "repo.list#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "2325497ad5bc": {
+      "commitRow": ["first", "aaaaaaa · dev · 1h"],
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "FlatList": 1,
+        "View": 1
+      },
+      "labels": [],
+      "text": []
+    },
+    "337dba1b9080": {
+      "name": "git.history#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.history"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseRef": "origin/main",
+            "branchOnly": true,
+            "limit": 50,
+            "skip": 0,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "branch": {
+              "ahead": 1,
+              "baseRef": {
+                "id": "refs/remotes/origin/main",
+                "name": "origin/main"
+              },
+              "behind": 2,
+              "unpushed": 1
+            },
+            "hasMore": false,
+            "items": [
+              {
+                "author": "dev",
+                "displayId": "aaaaaaa",
+                "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "message": "first\n\nExplains the change.\n\nCo-authored-by: Pair <pair@example.test>",
+                "parentIds": ["bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"],
+                "pushed": false,
+                "statistics": {
+                  "deletions": 1,
+                  "files": 2,
+                  "insertions": 13
+                },
+                "subject": "first",
+                "timestamp": 1767222000000
+              }
+            ],
+            "skip": 0
+          }
+        }
+      }
+    },
+    "3b589774484d": {
+      "name": "worktree.show#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "worktree": {
+              "baseRef": "origin/main"
+            }
+          }
+        }
+      }
+    },
+    "5ad8bfe89483": {
+      "commitRow": "unrendered",
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "ActivityIndicator": 1,
+        "Text": 1,
+        "View": 2
+      },
+      "labels": [],
+      "text": ["Loading commits…"]
+    },
+    "5ff1385fce3c": {
+      "name": "repo.list#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "repos": [
+              {
+                "id": "repo42",
+                "worktreeBaseRef": {
+                  "$rpc": "null"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "62fe63a20a07": {
+      "name": "worktree.show#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "b1d31f6bf592": {
+      "name": "git.history#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"git.history\",\"params\":{\"worktree\":\"id:repo42::/p\",\"limit\":50,\"skip\":0,\"baseRef\":\"origin/main\",\"branchOnly\":true}}"
+    },
+    "c2424f466a69": {
+      "name": "git.history#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.history"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseRef": "origin/main",
+            "branchOnly": true,
+            "limit": 50,
+            "skip": 0,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "d45289c61d23": {
+      "name": "history.open-commit",
+      "ordinal": 7,
+      "value": {
+        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "d64700b9de3b": {
+      "name": "repo.list#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "dfcd2e1792cb": {
+      "name": "worktree.show#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "sc-history-branch-commits",
+    "checkpoints": [
+      {
+        "id": "base-pending",
+        "observation": {
+          "sender": ["62fe63a20a07", "006a91b993e0"],
+          "payloads": ["dfcd2e1792cb", "d64700b9de3b"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "5ad8bfe89483",
+          "effects": []
+        }
+      },
+      {
+        "id": "history-pending",
+        "observation": {
+          "sender": ["3b589774484d", "5ff1385fce3c", "c2424f466a69"],
+          "payloads": ["dfcd2e1792cb", "d64700b9de3b", "b1d31f6bf592"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "5ad8bfe89483",
+          "effects": []
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["3b589774484d", "5ff1385fce3c", "337dba1b9080"],
+          "payloads": ["dfcd2e1792cb", "d64700b9de3b", "b1d31f6bf592"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "open": "eb79a9b3682a"
+          },
+          "state": "2325497ad5bc",
+          "effects": ["d45289c61d23"]
+        }
+      }
+    ]
+  }
+}

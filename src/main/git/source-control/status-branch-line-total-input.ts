@@ -1,12 +1,14 @@
-import type { GitStatusEntry } from '../../../shared/git-status-types'
+import type {
+  GitStatusEntry,
+  GitBranchLineTotal
+} from '../../../shared/git/status/git-status-types'
 import {
   computeGitBranchLineTotal,
   readGitBranchLineTotalMergeBaseParam,
-  GIT_BRANCH_LINE_TOTAL_TIMEOUT_MS,
-  type GitBranchLineTotal
-} from '../../../shared/git-branch-line-total'
-import type { GitRuntimeOptions } from '../git-runtime-options'
-import { gitReadOptionsForWorktree } from '../git-runtime-options'
+  GIT_BRANCH_LINE_TOTAL_TIMEOUT_MS
+} from '../../../shared/git/status/git-branch-line-total'
+
+import { type GitRuntimeOptions, gitReadOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
 import { resolveWorktreeFilesystemPath } from './worktree-filesystem-path'
 import type { GetStatusOptions } from './get-status-options'

@@ -3,13 +3,13 @@ import type { OnMount } from '@monaco-editor/react'
 import { useAppStore } from '@/store'
 import { registerFileSearchSelectedTextProvider } from '@/lib/file-search-selection'
 import { syncContentOnMount } from './monaco-content-sync'
-import { toEditorModelUri } from './editor-model-uri'
+import { toEditorModelUri } from './model-lifetime/identity/editor-model-uri'
 import {
   beginProgrammaticContentSync,
   endProgrammaticContentSync
 } from './monaco-programmatic-sync'
-import { createMarkdownDocLinkDecorationController } from './monaco-markdown-doc-link-decorations'
-import { ensureMarkdownDocCompletionProvider } from './monaco-markdown-doc-completions'
+import { createMarkdownDocLinkDecorationController } from './markdown-source-tools/monaco/monaco-markdown-doc-link-decorations'
+import { ensureMarkdownDocCompletionProvider } from './markdown-source-tools/monaco/monaco-markdown-doc-completions'
 import { clampMonacoAutoHeight } from './monaco-auto-height'
 import { installMonacoE2EProbe } from './monaco-e2e-probe'
 import { matchesPendingEditorFocusRequest } from './pending-editor-focus-request'
@@ -24,7 +24,7 @@ import {
   mayPushTabTextIntoModel,
   requestStaleCacheReload,
   settleStaleCacheReload
-} from './editor-stale-mount-guard'
+} from './model-lifetime/buffer-text/editor-stale-mount-guard'
 
 function ignoreCursorLine(): void {}
 
@@ -56,8 +56,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       contentRef,
       lastSyncedContentRef,
       contentSyncModeRef,
-      isApplyingProgrammaticContentRef,
-      isApplyingLargePasteRef
+      isApplyingProgrammaticContentRef
     },
     decorations: {
       markdownDocLinkDecorationsRef,
@@ -70,7 +69,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       setCommentPopover,
       setSelectionAnnotationTarget
     },
-    gutterMenu: { setGutterMenuOpen, setGutterMenuPoint, setGutterMenuLine }
+    gutterMenu: { setGutterMenuOpen, setGutterMenuPoint, setGutterMenuLine, setGutterMenuSelection }
   } = params
   // Why: retained listeners must follow committed ownership, never an abandoned render.
   const fileIdRef = useRef(fileId)
@@ -119,7 +118,8 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       if (!staleCache) {
         settleStaleCacheReload(fileIdRef.current)
       }
-      const liveTextDiffers = editorInstance.getModel()?.getValue() !== contentRef.current
+      const currentContentSnapshot = editorInstance.getModel()?.getValue()
+      const liveTextDiffers = currentContentSnapshot !== contentRef.current
       if (
         (staleCache && liveTextDiffers) ||
         (liveTextDiffers && !mayPushTabTextIntoModel(fileIdRef.current))
@@ -133,7 +133,14 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
         beginProgrammaticContentSync(modelKey)
         isApplyingProgrammaticContentRef.current = true
         try {
-          if (syncContentOnMount(editorInstance, contentRef.current, contentSyncModeRef.current)) {
+          if (
+            syncContentOnMount(
+              editorInstance,
+              contentRef.current,
+              contentSyncModeRef.current,
+              currentContentSnapshot
+            )
+          ) {
             lastSyncedContentRef.current = contentRef.current
           }
         } finally {
@@ -163,8 +170,6 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
         editorContainerRef,
         propsRef,
         readOnlyRef,
-        lastSyncedContentRef,
-        isApplyingLargePasteRef,
         commentPopoverRef,
         shouldShowMarkdownAnnotationsRef,
         setCommentPopover,
@@ -187,6 +192,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
           e.event.preventDefault()
           e.event.stopPropagation()
           const line = e.target.position?.lineNumber ?? 1
+          setGutterMenuSelection(editorInstance.getSelection())
           editorInstance.setPosition({ lineNumber: line, column: 1 })
           setGutterMenuLine(line)
           setGutterMenuPoint({ x: e.event.posx, y: e.event.posy })
@@ -287,7 +293,6 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       lastSyncedContentRef,
       contentSyncModeRef,
       isApplyingProgrammaticContentRef,
-      isApplyingLargePasteRef,
       markdownDocLinkDecorationsRef,
       conflictDecorationsRef,
       commentPopoverRef,
@@ -296,7 +301,8 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       setSelectionAnnotationTarget,
       setGutterMenuOpen,
       setGutterMenuPoint,
-      setGutterMenuLine
+      setGutterMenuLine,
+      setGutterMenuSelection
     ]
   )
 }

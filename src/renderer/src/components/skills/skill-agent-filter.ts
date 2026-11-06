@@ -1,5 +1,5 @@
 import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../../shared/skills'
-import { AI_VAULT_AGENT_LABELS } from '../../../../shared/ai-vault-types'
+import { AI_VAULT_AGENT_LABELS } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 
 /** Roots like `.agents/skills` that every agent reads, so no single one owns them. */

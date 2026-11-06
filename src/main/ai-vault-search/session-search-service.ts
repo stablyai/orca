@@ -1,9 +1,8 @@
-import type { SessionSearchProjectOwnership } from './session-search-project-ownership'
 import type {
   AiVaultSearchRequest,
   AiVaultSearchResponse,
   AiVaultSearchStatus
-} from '../../shared/ai-vault-search-types'
+} from '../../shared/ai-vault/search/ai-vault-search-types'
 import type { SessionSearchEngine } from './session-search-engine'
 import type { SessionSearchIndexer } from './session-search-indexer'
 import { SessionSearchCursorError } from './session-search-page-cursor'
@@ -11,10 +10,6 @@ import { SessionSearchCursorError } from './session-search-page-cursor'
 /** Host scope bypasses the client path cap; absent scope leaves request filters unchanged. */
 export type SessionSearchHostScope =
   | { kind: 'resolved'; paths: readonly string[] }
-  | {
-      kind: 'canonical'
-      selection: SessionSearchProjectOwnership
-    }
   | { kind: 'unknown' }
 
 export type SessionSearchService = {
@@ -47,15 +42,7 @@ export function createSessionSearchService({
       try {
         const result = engine.search(
           hostScope
-            ? {
-                ...request,
-                filters: {
-                  ...request.filters,
-                  ...(hostScope.kind === 'canonical'
-                    ? { ownership: hostScope.selection }
-                    : { scopePaths: hostScope.paths })
-                }
-              }
+            ? { ...request, filters: { ...request.filters, scopePaths: hostScope.paths } }
             : request
         )
         return {

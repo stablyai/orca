@@ -20,7 +20,7 @@ import {
 } from './shutdown-buffer-captures'
 import { captureTerminalShutdownLayout } from './terminal-shutdown-layout-capture'
 import { resolveLeafScrollbackBuffers } from './leaf-scrollback-resolution'
-import { shouldPreserveTerminalScrollbackBuffers } from '../../../../shared/workspace-session-terminal-buffers'
+import { shouldPreserveTerminalScrollbackBuffers } from '../../../../shared/workspace-session/workspace-session-terminal-buffers'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
 
 export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseController): void {
@@ -116,6 +116,10 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
       setPaneTitleOverlayRects(clearPaneTitleOverlayRects)
       return
     }
+    // Hidden overlays are display:none; keeping their last rects avoids a forced layout and a pane re-render on every workspace switch.
+    if (!isVisible && !shouldMeasureHiddenStartup) {
+      return
+    }
     let frame: number | null = null
     const scheduleSync = (): void => {
       if (frame !== null) {
@@ -147,6 +151,7 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     paneTitles,
     renamingPaneId,
     sessionRestoredBannerPaneIds,
+    shouldMeasureHiddenStartup,
     syncPaneTitleOverlayRects,
     containerRef,
     managerRef,

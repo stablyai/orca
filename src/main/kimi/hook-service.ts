@@ -13,7 +13,10 @@ import { homedir } from 'node:os'
 import { dirname, join, posix as pathPosix } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { SFTPWrapper } from 'ssh2'
-import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type {
+  AgentHookInstallState,
+  AgentHookInstallStatus
+} from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import {
   buildWindowsAgentHookCurlPostCommand,

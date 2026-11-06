@@ -1,13 +1,13 @@
 import React from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import type { OpenFile } from '@/store/slices/editor'
-import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import { ConflictBanner } from './ConflictComponents'
-import { getDiffContentSignature } from './diff-content-signature'
+import { getDiffContentSignature } from './diff/sections/diff-content-signature'
 import { translate } from '@/i18n/i18n'
 
-const DiffViewer = lazy(() => import('./DiffViewer'))
+const DiffViewer = lazy(() => import('./diff/monaco-view/DiffViewer'))
 
 // Render HEAD against the live edit draft so existing dirty tracking, autosave and close prompts keep working without a separate diff tab.
 export function ChangesModeView({
@@ -78,6 +78,7 @@ export function ChangesModeView({
         <DiffViewer
           key={viewStateScopeId}
           modelKey={diffViewStateKey}
+          modelOwnerKey={activeFile.id}
           originalModelKey={originalModelKey}
           originalContent={dc.originalContent}
           modifiedContent={modifiedContent}
@@ -88,6 +89,7 @@ export function ChangesModeView({
           sideBySide={sideBySide}
           editable={true}
           worktreeId={activeFile.worktreeId}
+          noteSource={activeFile}
           onContentChange={onContentChange}
           onSave={onSave}
         />

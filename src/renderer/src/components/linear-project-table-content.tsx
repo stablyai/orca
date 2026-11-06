@@ -8,6 +8,7 @@ import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import type { LinearProjectSummary } from '../../../shared/linear/project-types'
 import {
+  linearProjectBacklogLabel,
   linearProjectDateLabel,
   linearProjectMetadataLabels,
   linearProjectPriorityLabel,
@@ -47,7 +48,7 @@ function LinearProjectStatusBadge({
 }: {
   project: LinearProjectPresentation
 }): React.JSX.Element {
-  const label = linearProjectUnknownText(project.status) ?? 'Backlog'
+  const label = linearProjectUnknownText(project.status) ?? linearProjectBacklogLabel()
   return (
     <Badge variant="outline" className="max-w-full truncate text-[11px] font-medium">
       {label}
@@ -230,7 +231,7 @@ export function LinearProjectTableContent({
                       onOpenProject(project)
                     }}
                     aria-label={translate(
-                      'auto.components.linear.project.view.surfaces.7616c986c6',
+                      'auto.components.linear.project.view.surfaces.openInLinear',
                       'Open {{value0}} in Linear',
                       { value0: project.name }
                     )}

@@ -22,6 +22,7 @@ function repo(id: string, overrides: Partial<Repo> = {}): Repo {
 
 const refusalFor = (target: Repo, canDispatch = true) =>
   describeScheduledRefusal({ target: { ok: true, cwd: target.path, repo: target }, canDispatch })
+    ?.error ?? null
 
 let userDataPath: string
 beforeEach(() => {

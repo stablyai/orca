@@ -1,8 +1,14 @@
-import { structuredAgentSessionRuntimePermission } from './structured-agent-session-ran-options'
-import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
-import { normalizeOptionalField } from '../../../shared/agent-status-field-normalization'
-import { AGENT_MODEL_MAX_LENGTH } from '../../../shared/agent-status-types'
+import {
+  structuredAgentSessionRuntimeModel,
+  structuredAgentSessionRuntimePermission
+} from './structured-agent-session-ran-options'
+import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
+import {
+  normalizeOptionalField,
+  AGENT_MODEL_MAX_LENGTH
+} from '../../../shared/agent-status/contracts/agent-status-field-normalization'
+
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionStatusState } from './structured-agent-session-status-journal-projection'
 import type {
@@ -10,8 +16,8 @@ import type {
   StructuredChatNamingFailure
 } from './structured-agent-session-host-types'
 import { structuredAgentSessionProviderSessionMetadata } from './structured-agent-session-history-result'
-import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session-record-launch-directory'
-import { isAgentChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
+import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session/records/agent-session-record-launch-directory'
+import { isAgentChatPermissionMode } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type {
   StructuredAgentSessionStatusFeedDeps,
   StatusPublication
@@ -26,6 +32,7 @@ export function structuredAgentSessionStatusSummary({
   state,
   stopping,
   starting,
+  usageLimitContinue,
   childWork,
   namingFailure,
   now
@@ -43,6 +50,7 @@ export function structuredAgentSessionStatusSummary({
   record: AgentSessionConversationView | null
   state: StructuredAgentSessionStatusState
   starting?: boolean
+  usageLimitContinue?: AgentSessionStatusSummary['usageLimitContinue']
   stopping: boolean
   childWork: Pick<AgentSessionStatusSummary, 'children' | 'backgroundTasks'>
   namingFailure: StructuredChatNamingFailure | undefined
@@ -53,9 +61,14 @@ export function structuredAgentSessionStatusSummary({
   // Acknowledged record options remain authoritative across model switches.
   const model = normalizeOptionalField(record?.options?.model, AGENT_MODEL_MAX_LENGTH)
   const permissionMode = record?.permissionMode
+  // Published so another device's pick moves the client's option stamp.
+  const effort = record?.options?.effort
+  const fastMode = record?.options?.fastMode
+  const serviceTier = record?.options?.serviceTier
   const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
   return {
     sessionId,
+    ...(usageLimitContinue ? { usageLimitContinue } : {}),
     workspaceId: session.params.location.workspaceId,
     agent: session.params.provider,
     ...(session.child || starting
@@ -73,7 +86,13 @@ export function structuredAgentSessionStatusSummary({
       ? { rewindBlockedReason: 'outcome-unknown' as const }
       : {}),
     ...(model ? { model } : {}),
+    ...(session.params.provider === 'claude' && session.child
+      ? { reportedModel: structuredAgentSessionRuntimeModel(session.child) }
+      : {}),
     ...(isAgentChatPermissionMode(permissionMode) ? { permissionMode } : {}),
+    ...(effort ? { effort } : {}),
+    ...(fastMode ? { fastMode } : {}),
+    ...(serviceTier ? { serviceTier } : {}),
     ...childWork,
     ...(providerSession ? { providerSession } : {}),
     ...(launchDirectory ? { launchDirectory } : {}),
@@ -95,7 +114,11 @@ export function structuredSummaryConversationNaming(
   return failure?.forName === name
     ? {
         conversationName: name,
-        namingError: { message: failure.message, failedAt: failure.failedAt }
+        namingError: {
+          message: failure.message,
+          failedAt: failure.failedAt,
+          ...(failure.messageCode ? { messageCode: failure.messageCode } : {})
+        }
       }
     : { conversationName: name }
 }
@@ -122,4 +145,18 @@ export function retainedStructuredStatusSummaries(
   return [...publications].map(
     ({ summary }) => renamedStructuredStatusSummary(summary, deps, summary.sessionId) ?? summary
   )
+}
+
+export function releasedStructuredStatusSummary(
+  previous: AgentSessionStatusSummary
+): AgentSessionStatusSummary {
+  const {
+    hostExecutionOwned: _hostExecutionOwned,
+    hostExecutionPhase: _hostExecutionPhase,
+    stopping: _stopping,
+    restartResume: _restartResume,
+    reportedModel: _reportedModel,
+    ...retained
+  } = previous
+  return { ...retained, runtimePermission: null }
 }

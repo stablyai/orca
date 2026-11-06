@@ -1,14 +1,22 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { appendReturnedDraftText } from '../../../../shared/returned-draft-text'
-import { subscribeToNativeChatComposerDraft } from './native-chat-composer-draft-store'
+import { withNativeChatComposerDraftAddition } from './native-chat-composer-draft-addition'
+import type { NativeChatDraftAppend } from './native-chat-composer-draft-memory'
+import type { NativeChatComposerDraft } from './native-chat-composer-draft-storage'
 import {
-  readNativeChatDraftCache,
-  subscribeToNativeChatDraftAppend,
-  writeNativeChatDraftCache
-} from './native-chat-draft-cache'
+  subscribeToNativeChatComposerDraft,
+  subscribeToNativeChatComposerDraftAppend,
+  readNativeChatComposerDraft,
+  updateNativeChatComposerDraft
+} from './native-chat-composer-draft-store'
+import { readNativeChatDraftCache, writeNativeChatDraftCache } from './native-chat-draft-cache'
 
 /** Text appended mid-IME-composition: saved at once, shown once the composition settles. */
-type CompositionHold = { scopeKey: string; shown: string; appended: string }
+type CompositionHold = {
+  scopeKey: string
+  shown: string
+  base: NativeChatComposerDraft
+  additions: NativeChatDraftAppend[]
+}
 
 /** Mutate the durable scope store’s current draft, never a composer copy, so unsent text survives toggles, remounts and restarts. */
 export function useNativeChatDraft(
@@ -41,15 +49,16 @@ export function useNativeChatDraft(
 
   useEffect(
     () =>
-      subscribeToNativeChatDraftAppend(scopeKey, (text, previous) => {
+      subscribeToNativeChatComposerDraftAppend(scopeKey, (addition, previous) => {
         if (!isComposing()) {
           return
         }
         const held = holdRef.current?.scopeKey === scopeKey ? holdRef.current : null
         updateHold({
           scopeKey,
-          shown: held ? held.shown : previous,
-          appended: held ? appendReturnedDraftText(held.appended, text) : text
+          shown: held ? held.shown : previous.text,
+          base: held?.base ?? previous,
+          additions: [...(held?.additions ?? []), addition]
         })
       }),
     [isComposing, scopeKey, updateHold]
@@ -63,11 +72,25 @@ export function useNativeChatDraft(
       if (held) {
         updateHold({ ...held, shown: resolved })
       }
-      writeNativeChatDraftCache(
-        scopeKey,
-        held ? appendReturnedDraftText(resolved, held.appended) : resolved,
-        options
-      )
+      if (held) {
+        const current = readNativeChatComposerDraft(scopeKey)
+        const base =
+          current.text === resolved
+            ? current
+            : { ...held.base, text: resolved, document: undefined }
+        const merged = held.additions.reduce<NativeChatComposerDraft>(
+          (draft, addition) => ({
+            ...draft,
+            ...(typeof addition === 'function'
+              ? addition(draft)
+              : withNativeChatComposerDraftAddition(draft, addition))
+          }),
+          base
+        )
+        updateNativeChatComposerDraft(scopeKey, merged, 'deferred')
+      } else {
+        writeNativeChatDraftCache(scopeKey, resolved, options)
+      }
     },
     [scopeKey, updateHold]
   )

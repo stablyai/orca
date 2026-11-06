@@ -1,4 +1,4 @@
-import type { ProtectedSecretPersistence } from '../../protected-secret-persistence'
+import type { ProtectedSecretPersistence } from '../../credentials/protected-secret-persistence'
 
 // Only migration reads the former encrypted settings slot.
 export const LEGACY_OPENCODE_GO_API_KEY_SLOT = 'settings.opencodeGoApiKey'

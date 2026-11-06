@@ -1,12 +1,14 @@
+import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/structured-agent-session-tabs'
+import { parseAgentStatusPaneIdentity } from '../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import { migrationUnsupportedToAgentStatusEntry } from '../../../../shared/migration-unsupported-agent-entry'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { ActivityLiveAgentSnapshot, ActivityEvent } from './activity-thread-types'
-import type { ActivityEventBuildCache } from './activity-event-build-cache'
-import { resolvePaneBuild } from './activity-event-build-cache'
+
+import { type ActivityEventBuildCache, resolvePaneBuild } from './activity-event-build-cache'
 import type { BuildActivityEventsArgs } from './activity-event-builder'
 
 export function appendUnsupportedAndRetainedEvents(context: {
@@ -75,7 +77,14 @@ export function appendUnsupportedAndRetainedEvents(context: {
   }
 
   for (const [paneKey, retained] of Object.entries(args.retainedAgentsByPaneKey)) {
-    if (!parsePaneKey(paneKey)) {
+    if (
+      !parseAgentStatusPaneIdentity(
+        paneKey,
+        args.unifiedTabsByWorktree
+          ? getStructuredAgentSessionTabsByPaneKey(args.unifiedTabsByWorktree).get(paneKey)
+          : undefined
+      )
+    ) {
       continue
     }
     const owner = resolveOwner(

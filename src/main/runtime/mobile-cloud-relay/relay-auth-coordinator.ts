@@ -2,13 +2,15 @@ import {
   RELAY_HOST_CLOSE_REASON,
   type RelayHostCloseReason
 } from '../../../shared/relay-host-close-reason'
-import { relayStatusCellUrl } from '../../../shared/mobile-relay-status'
-import type { RelayBrokerStatus, RelayAccessTokenRefresh } from './relay-session-broker-contract'
+import { relayStatusCellUrl } from '../../../shared/remote-runtime/relay/mobile-relay-status'
+import type * as RelayStatus from '../../../shared/remote-runtime/relay/mobile-relay-status'
+import type { RelayAccessTokenRefresh } from './relay-session-broker-contract'
+
 import { shouldRetryRelayConnectionError } from './relay-http-client'
 import {
   RelayReadinessWaiters,
   relayRetryFloorMs,
-  relayUnavailableReasonFor,
+  relayUnavailableFor,
   type RelayUnavailable
 } from './relay-readiness'
 import { RelayRetrySchedule } from './relay-retry-schedule'
@@ -29,7 +31,7 @@ type RelayAuthCoordinatorOptions = {
     isCurrent: () => boolean
     refreshAccessToken: () => Promise<RelayAccessTokenRefresh>
   }) => Promise<CoordinatedRelayBroker>
-  onStatus: (status: RelayBrokerStatus, cellUrl?: string) => void
+  onStatus: RelayStatus.MobileRelayStatusPublisher
   lingerMs?: number
   random?: () => number
 }
@@ -50,19 +52,17 @@ function authLossCloseReason(context: RelayAuthContext | null): RelayHostCloseRe
 }
 
 export class RelayAuthCoordinator {
-  private readonly options: RelayAuthCoordinatorOptions
   private authEpoch = 0
   private ownership: BrokerOwnership | null = null
   private readonly pendingOwnerships = new Set<BrokerOwnership>()
   private latestReconcile: Promise<void> = Promise.resolve()
   private readonly linger = new RelayLingerTimer()
   private readonly retry: RelayRetrySchedule
-  private unavailableReason: RelayUnavailable['reason'] | null = null
+  private unavailable: Omit<RelayUnavailable, 'retryAt'> = { reason: 'control_not_active' }
   private readonly readinessWaiters = new RelayReadinessWaiters()
   private stopped = false
 
-  constructor(options: RelayAuthCoordinatorOptions) {
-    this.options = options
+  constructor(private readonly options: RelayAuthCoordinatorOptions) {
     this.retry = new RelayRetrySchedule(options.random)
   }
 
@@ -80,9 +80,7 @@ export class RelayAuthCoordinator {
     }
     const epoch = ++this.authEpoch
     this.invalidatePendingOwnerships()
-    const reconcile = this.reconcileEpoch(epoch, expectedIdentityKey)
-    this.latestReconcile = reconcile
-    void reconcile
+    this.latestReconcile = this.reconcileEpoch(epoch, expectedIdentityKey)
   }
 
   // Name only auth loss to phones; quit/relaunch fences retain abrupt, cause-free closure.
@@ -93,17 +91,20 @@ export class RelayAuthCoordinator {
     this.retry.reset()
     this.invalidatePendingOwnerships()
     this.invalidateOwnership(hostCloseReason)
-    this.unavailableReason =
-      hostCloseReason === RELAY_HOST_CLOSE_REASON.SIGNED_OUT ? 'signed_out' : null
+    this.unavailable = {
+      reason:
+        hostCloseReason === RELAY_HOST_CLOSE_REASON.SIGNED_OUT ? 'signed_out' : 'control_not_active'
+    }
     this.readinessWaiters.releaseAll()
     this.publish('offline')
   }
 
   // Derive the cell from ownership so coordinator republishes cannot blank the broker's announced cell.
-  private publish(status: RelayBrokerStatus): void {
+  private publish(status: RelayStatus.MobileRelayStatus): void {
     this.options.onStatus(
       status,
-      relayStatusCellUrl(status, this.ownership?.broker?.endpoint?.cellUrl)
+      relayStatusCellUrl(status, this.ownership?.broker?.endpoint?.cellUrl),
+      status === 'offline' || status === 'connecting' ? this.unavailable.clockOffsetMs : undefined
     )
   }
 
@@ -131,8 +132,9 @@ export class RelayAuthCoordinator {
 
   readiness(): RelayReadiness {
     const broker = this.getLiveBroker()
-    const reason = this.unavailableReason ?? 'control_not_active'
-    return broker ? { ready: true, broker } : { ready: false, reason, retryAt: this.retry.retryAt }
+    return broker
+      ? { ready: true, broker }
+      : { ready: false, ...this.unavailable, retryAt: this.retry.retryAt }
   }
 
   async waitForLiveBroker(): Promise<CoordinatedRelayBroker | null> {
@@ -183,14 +185,14 @@ export class RelayAuthCoordinator {
         this.linger.cancel()
         this.retry.reset()
         this.invalidateOwnership(authLossCloseReason(context))
-        this.unavailableReason = context ? 'not_entitled' : 'signed_out'
+        this.unavailable = { reason: context ? 'not_entitled' : 'signed_out' }
         this.publish('offline')
         return
       }
       const nextIdentityKey = relayIdentityKey(context.identity)
       if (expectedIdentityKey && nextIdentityKey !== expectedIdentityKey) {
         this.retry.reset()
-        this.unavailableReason = 'identity_changed'
+        this.unavailable = { reason: 'identity_changed' }
         this.publish('offline')
         return
       }
@@ -212,7 +214,7 @@ export class RelayAuthCoordinator {
         (this.ownership.broker?.isLive?.() ?? true)
       ) {
         this.retry.reset()
-        this.unavailableReason = null
+        this.unavailable = { reason: 'control_not_active' }
         this.publish('registered')
         return
       }
@@ -246,7 +248,7 @@ export class RelayAuthCoordinator {
       }
       this.ownership = ownership
       this.retry.reset()
-      this.unavailableReason = null
+      this.unavailable = { reason: 'control_not_active' }
       this.publish('registered')
     } catch (error) {
       if (this.isEpochCurrent(epoch)) {
@@ -254,7 +256,7 @@ export class RelayAuthCoordinator {
           '[relay] broker reconcile failed:',
           error instanceof Error ? error.message : String(error)
         )
-        this.unavailableReason = relayUnavailableReasonFor(error)
+        this.unavailable = relayUnavailableFor(error)
         this.publish('offline')
         if (shouldRetryRelayConnectionError(error)) {
           const retryAfterMs = relayRetryFloorMs(error, this.retry.attempts)

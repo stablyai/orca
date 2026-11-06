@@ -1,0 +1,186 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { lstatSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import type * as NodeFs from 'node:fs'
+import type * as NodeOs from 'node:os'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+
+const { homedirMock } = vi.hoisted(() => ({
+  homedirMock: vi.fn<() => string>()
+}))
+
+const { fsMockState } = vi.hoisted(() => ({
+  fsMockState: {
+    failLink: false,
+    failSymlink: false,
+    fakeSymlinks: new Map<string, string>()
+  }
+}))
+
+function isWindowsSymlinkPrivilegeError(error: unknown): boolean {
+  if (process.platform !== 'win32' || !(error instanceof Error)) {
+    return false
+  }
+  const errorWithCode = error as Error & { code?: string }
+  return errorWithCode.code === 'EPERM' || errorWithCode.code === 'EACCES'
+}
+
+vi.mock('node:fs', async () => {
+  const actual = await vi.importActual<typeof NodeFs>('node:fs')
+  return {
+    ...actual,
+    linkSync: (...args: Parameters<typeof actual.linkSync>) => {
+      if (fsMockState.failLink) {
+        throw new Error('hardlink disabled for test')
+      }
+      return actual.linkSync(...args)
+    },
+    lstatSync: ((path: Parameters<typeof actual.lstatSync>[0]) => {
+      const stat = actual.lstatSync(path)
+      if (!fsMockState.fakeSymlinks.has(String(path))) {
+        return stat
+      }
+      // Why: Windows often disallows file symlink creation outside Developer
+      // Mode; tests simulate the link metadata while keeping a real path.
+      return { ...stat, isSymbolicLink: () => true }
+    }) as typeof actual.lstatSync,
+    readlinkSync: ((path: Parameters<typeof actual.readlinkSync>[0]) => {
+      const fakeTarget = fsMockState.fakeSymlinks.get(String(path))
+      if (fakeTarget !== undefined) {
+        return fakeTarget
+      }
+      return actual.readlinkSync(path)
+    }) as typeof actual.readlinkSync,
+    renameSync: (...args: Parameters<typeof actual.renameSync>) => {
+      const [oldPath, newPath] = args
+      const fakeTarget = fsMockState.fakeSymlinks.get(String(oldPath))
+      const result = actual.renameSync(...args)
+      if (fakeTarget !== undefined) {
+        fsMockState.fakeSymlinks.delete(String(oldPath))
+        fsMockState.fakeSymlinks.set(String(newPath), fakeTarget)
+      } else {
+        fsMockState.fakeSymlinks.delete(String(newPath))
+      }
+      return result
+    },
+    rmSync: (...args: Parameters<typeof actual.rmSync>) => {
+      fsMockState.fakeSymlinks.delete(String(args[0]))
+      return actual.rmSync(...args)
+    },
+    symlinkSync: (...args: Parameters<typeof actual.symlinkSync>) => {
+      if (fsMockState.failSymlink) {
+        throw new Error('symlink disabled for test')
+      }
+      try {
+        return actual.symlinkSync(...args)
+      } catch (error) {
+        if (!isWindowsSymlinkPrivilegeError(error)) {
+          throw error
+        }
+        const [target, path] = args
+        fsMockState.fakeSymlinks.set(String(path), String(target))
+        actual.writeFileSync(path, '', 'utf-8')
+      }
+    }
+  }
+})
+
+vi.mock('node:os', async () => {
+  const actual = await vi.importActual<typeof NodeOs>('node:os')
+  return {
+    ...actual,
+    homedir: homedirMock
+  }
+})
+import { syncSystemCodexSessionsIntoManagedHome } from './codex-session-bridge'
+
+let fakeHomeDir: string
+let userDataDir: string
+let previousUserDataPath: string | undefined
+
+function getSystemCodexHomePath(): string {
+  return join(fakeHomeDir, '.codex')
+}
+
+function getRuntimeCodexHomePath(): string {
+  return join(userDataDir, 'codex-runtime-home', 'home')
+}
+
+function writeLegacyCopyMarker(relativePath: string, sourcePath: string, targetPath: string): void {
+  const sourceStat = lstatSync(sourcePath)
+  const targetStat = lstatSync(targetPath)
+  const markerPath = join(getRuntimeCodexHomePath(), '.orca-session-copies', `${relativePath}.json`)
+  mkdirSync(dirname(markerPath), { recursive: true })
+  writeFileSync(
+    markerPath,
+    `${JSON.stringify(
+      {
+        sourcePath,
+        sourceSize: sourceStat.size,
+        sourceMtimeMs: sourceStat.mtimeMs,
+        targetSize: targetStat.size,
+        targetMtimeMs: targetStat.mtimeMs
+      },
+      null,
+      2
+    )}\n`,
+    'utf-8'
+  )
+}
+
+beforeEach(() => {
+  fsMockState.failLink = false
+  fsMockState.failSymlink = false
+  fsMockState.fakeSymlinks.clear()
+  fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-codex-session-home-'))
+  userDataDir = mkdtempSync(join(tmpdir(), 'orca-codex-session-user-data-'))
+  previousUserDataPath = process.env.ORCA_USER_DATA_PATH
+  process.env.ORCA_USER_DATA_PATH = userDataDir
+  homedirMock.mockReturnValue(fakeHomeDir)
+  mkdirSync(getSystemCodexHomePath(), { recursive: true })
+})
+
+afterEach(() => {
+  rmSync(fakeHomeDir, { recursive: true, force: true })
+  rmSync(userDataDir, { recursive: true, force: true })
+  if (previousUserDataPath === undefined) {
+    delete process.env.ORCA_USER_DATA_PATH
+  } else {
+    process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+  }
+  vi.clearAllMocks()
+})
+
+describe('syncSystemCodexSessionsIntoManagedHome', () => {
+  it('does not overwrite runtime-owned session files', () => {
+    const relativeSessionPath = join('sessions', '2026', '05', '26', 'rollout-conflict.jsonl')
+    const systemSessionPath = join(getSystemCodexHomePath(), relativeSessionPath)
+    const runtimeSessionPath = join(getRuntimeCodexHomePath(), relativeSessionPath)
+    mkdirSync(dirname(systemSessionPath), { recursive: true })
+    mkdirSync(dirname(runtimeSessionPath), { recursive: true })
+    writeFileSync(systemSessionPath, '{"id":"system"}\n', 'utf-8')
+    writeFileSync(runtimeSessionPath, '{"id":"runtime"}\n', 'utf-8')
+
+    syncSystemCodexSessionsIntoManagedHome()
+
+    expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"runtime"}\n')
+  })
+
+  it('preserves unchanged legacy copied sessions when relinking fails', () => {
+    const relativeSessionPath = join('2026', '05', '26', 'rollout-legacy-unlinked.jsonl')
+    const systemSessionPath = join(getSystemCodexHomePath(), 'sessions', relativeSessionPath)
+    const runtimeSessionPath = join(getRuntimeCodexHomePath(), 'sessions', relativeSessionPath)
+    mkdirSync(dirname(systemSessionPath), { recursive: true })
+    mkdirSync(dirname(runtimeSessionPath), { recursive: true })
+    writeFileSync(systemSessionPath, '{"id":"legacy"}\n', 'utf-8')
+    writeFileSync(runtimeSessionPath, '{"id":"legacy"}\n', 'utf-8')
+    writeLegacyCopyMarker(relativeSessionPath, systemSessionPath, runtimeSessionPath)
+    fsMockState.failLink = true
+    fsMockState.failSymlink = true
+
+    syncSystemCodexSessionsIntoManagedHome()
+
+    expect(lstatSync(runtimeSessionPath).isSymbolicLink()).toBe(false)
+    expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"legacy"}\n')
+  })
+})

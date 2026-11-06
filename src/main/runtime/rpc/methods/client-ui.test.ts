@@ -7,7 +7,7 @@ import {
   MAX_QUICK_COMMAND_LABEL_LENGTH,
   MAX_QUICK_COMMAND_REPO_ID_LENGTH,
   MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH
-} from '../../../../shared/terminal-quick-commands'
+} from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../../../shared/worktree/card-properties'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -61,7 +61,7 @@ describe('client UI RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: { settings } })
   })
 
-  it('rejects paired attempts to mutate the host-owned structured chat setting', async () => {
+  it('rejects paired attempts to write the retired Chat UI switch', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       updateClientSettings: vi.fn()
@@ -586,6 +586,7 @@ describe('client UI RPC methods', () => {
     ['browserImportHintHidden', { browserImportHintHidden: true }],
     ['mobileEmulatorTabIntroDismissed', { mobileEmulatorTabIntroDismissed: true }],
     ['mobileEmulatorAgentSetupDismissed', { mobileEmulatorAgentSetupDismissed: true }],
+    ['pluginsAlphaNoticeDismissed', { pluginsAlphaNoticeDismissed: true }],
     ['alwaysShowDefaultBranchWorkspace', { alwaysShowDefaultBranchWorkspace: false }]
   ])('accepts %s, which the renderer persists through ui.set', async (_label, payload) => {
     const runtime = {

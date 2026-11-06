@@ -1,4 +1,6 @@
-import type { Dir, Stats } from 'node:fs'
+import type { Dir } from 'node:fs'
+import { isSafeOwnedDirectory } from '../../shared/owned-private-directory'
+export { isSafeOwnedDirectory } from '../../shared/owned-private-directory'
 import { lstat, mkdir, opendir } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
@@ -23,16 +25,6 @@ export function getOwnedTempStagingRoot(tempRoot: string, rootName: string): str
 export async function ensureOwnedTempStagingRoot(stagingRoot: string): Promise<boolean> {
   await mkdir(stagingRoot, { recursive: true, mode: 0o700 })
   return isSafeOwnedDirectory(await lstat(stagingRoot))
-}
-
-export function isSafeOwnedDirectory(stats: Stats): boolean {
-  if (!stats.isDirectory() || stats.isSymbolicLink()) {
-    return false
-  }
-  if (typeof process.getuid !== 'function') {
-    return true
-  }
-  return stats.uid === process.getuid() && (stats.mode & 0o777) === 0o700
 }
 
 export function isDirectChild(parent: string, candidate: string): boolean {

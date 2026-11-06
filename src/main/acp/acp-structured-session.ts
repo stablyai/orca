@@ -1,5 +1,8 @@
-import { agentSessionFailureFact, providerDiagnostic } from '../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
+import {
+  agentSessionFailureFact,
+  providerDiagnostic
+} from '../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
 import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionEndedEvent
@@ -13,6 +16,7 @@ import type { AcpLaunchSpec } from './acp-launch-specs'
 import type { AcpChildStops } from './acp-dialects/acp-dialect'
 import { acpAgentName } from './acp-structured-agent-definitions'
 import type { AcpSessionEvent } from './acp-session-runtime'
+import { absorbsAcpModelCommandOutput } from './acp-model-command'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import type { AcpStructuredLane } from './acp-structured-lane'
 import type { AcpStructuredOptions } from './acp-structured-options'
@@ -58,6 +62,9 @@ export function routeAcpSessionEvent(
     } else if (update.sessionUpdate === 'config_option_update') {
       session.options.adoptConfigOptions(update.configOptions)
     }
+  }
+  if (absorbsAcpModelCommandOutput(session.options, event)) {
+    return
   }
   const { translator } = session.lane
   session.lane.apply(
@@ -137,6 +144,9 @@ export function endAcpStructuredSession(
   const detail = providerDiagnostic([how, stderr].filter(Boolean).join('\n'), 'log')
   onEvent?.({
     type: 'ended',
+    ...(session.connection.lastCloseResult?.killDelivered && !session.connection.exited
+      ? { deathEvidenceKind: 'kill-delivered' as const }
+      : {}),
     sessionId: session.sessionId,
     reason,
     failure: session.closeRequested

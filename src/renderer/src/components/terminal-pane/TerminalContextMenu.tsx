@@ -9,6 +9,7 @@ import {
   Minimize2,
   PanelBottomClose,
   PanelsTopLeft,
+  Quote,
   PanelRightClose,
   Pencil,
   RotateCcw,
@@ -25,7 +26,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { shouldIgnoreTerminalMenuPointerDownOutside } from './terminal-context-menu-dismiss'
-import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
+import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
   formatOptionalPrimaryShortcutLabel,
@@ -38,6 +39,7 @@ import { AgentSessionContextCopyMenuItem } from './AgentSessionContextCopyMenuIt
 import { ClearPaneTitleMenuItem } from './ClearPaneTitleMenuItem'
 import type { TerminalQuickCommandMenuHost } from '@/hooks/use-terminal-quick-command-hosts'
 import { TerminalQuickCommandsSubmenu } from './TerminalQuickCommandsSubmenu'
+import { AddToChatSubmenu } from '../native-chat/AddToChatMenu'
 
 type TerminalContextMenuProps = {
   open: boolean
@@ -45,9 +47,12 @@ type TerminalContextMenuProps = {
   menuPoint: { x: number; y: number }
   menuOpenedAtRef: React.RefObject<number>
   canClosePane: boolean
+  closePaneLabel: string
   canExpandPane: boolean
   menuPaneIsExpanded: boolean
   onCopy: () => void
+  /** The selection to add and the workspace whose chats can take it; null with no selection. */
+  addToChat: { worktreeId: string; quote: string } | null
   onSelectAll: () => void
   onPaste: () => void
   onSplitRight: () => void
@@ -105,7 +110,7 @@ export default function TerminalContextMenu(props: TerminalContextMenuProps): Re
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        className="w-60"
+        className="min-w-60"
         sideOffset={0}
         align="start"
         onCloseAutoFocus={(e) => {
@@ -137,9 +142,11 @@ export default function TerminalContextMenu(props: TerminalContextMenuProps): Re
 function TerminalContextMenuItems({
   onOpenChange,
   canClosePane,
+  closePaneLabel,
   canExpandPane,
   menuPaneIsExpanded,
   onCopy,
+  addToChat,
   onSelectAll,
   onPaste,
   onSplitRight,
@@ -199,6 +206,14 @@ function TerminalContextMenuItems({
         {translate('auto.components.terminal.pane.TerminalContextMenu.f3eeb1de13', 'Copy')}
         <DropdownMenuShortcut>{shortcuts.copy}</DropdownMenuShortcut>
       </DropdownMenuItem>
+      {addToChat ? (
+        <AddToChatSubmenu {...addToChat} launchSource="terminal_context_menu" />
+      ) : (
+        <DropdownMenuItem disabled>
+          <Quote />
+          {translate('components.native-chat.addSelectionToChat', 'Add to chat')}
+        </DropdownMenuItem>
+      )}
       <DropdownMenuItem onSelect={onSelectAll}>
         <TextSelect />
         {translate('auto.components.terminal.pane.TerminalContextMenu.selectAll', 'Select All')}
@@ -335,10 +350,7 @@ function TerminalContextMenuItems({
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onSelect={onClosePane}>
             <X />
-            {translate(
-              'auto.components.terminal.pane.TerminalContextMenu.8c17d6786d',
-              'Close Pane'
-            )}
+            {closePaneLabel}
             <DropdownMenuShortcut>{shortcuts.close}</DropdownMenuShortcut>
           </DropdownMenuItem>
         </>

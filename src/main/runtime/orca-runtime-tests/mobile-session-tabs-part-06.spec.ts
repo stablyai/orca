@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
-import { committingSpawn } from '../bind-first-pane.test-fixture'
+import { committingSpawn } from './bind-first-pane.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
 import {
-  OrcaRuntimeService,
   appendBrowserTabOrder,
   collectBrowserGroupAssignment
-} from '../orca-runtime-test-mocks.spec'
-import type { Tab } from '../orca-runtime-test-mocks.spec'
+} from '../mobile-session-browser-group-projection'
+import type { Tab } from '../../../shared/tab-types'
 import {
   HEADLESS_LEAF_ID,
   TEST_REPO_ID,
@@ -15,7 +16,7 @@ import {
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('keeps split sibling headless mobile terminal leaves when a desktop renderer omits them', async () => {
@@ -339,7 +340,11 @@ describe('OrcaRuntimeService', () => {
     })
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
-    runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab: vi.fn() })
+    runtime.setOffscreenBrowserBackend({
+      createTab: vi.fn(),
+      closeTab: vi.fn(),
+      ownsTab: () => true
+    })
     runtime.setAgentBrowserBridge({
       tabList: vi.fn(() => ({
         tabs: [
@@ -629,6 +634,8 @@ describe('OrcaRuntimeService', () => {
       getWorkspaceSession,
       getWorkspaceSessionHostIds: () => ['local']
     } as never)
+    expect(getWorkspaceSession).toHaveBeenCalledExactlyOnceWith('local')
+    getWorkspaceSession.mockClear()
 
     runtime.syncWindowGraph(1, {
       tabs: [],
@@ -663,6 +670,8 @@ describe('OrcaRuntimeService', () => {
       getWorkspaceSession,
       getWorkspaceSessionHostIds: () => ['local']
     } as never)
+    expect(getWorkspaceSession).toHaveBeenCalledExactlyOnceWith('local')
+    getWorkspaceSession.mockClear()
 
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
 

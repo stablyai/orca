@@ -1,9 +1,10 @@
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { TerminalAgent } from '../../../../shared/terminal-agent'
-import { FilledBellIcon } from '../sidebar/WorktreeCardHelpers'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
+import '../sidebar/workspace-card/activity/worktree-card-empty-inputs'
+import { FilledBellIcon } from '../sidebar/workspace-card/identity/worktree-card-glyphs'
 import { ShellIcon } from './shell-icons'
 import {
   terminalTabActivityToAgentDotState,
@@ -51,8 +52,6 @@ export function TerminalTabLeadingIcon({
   isActive,
   progress
 }: TerminalTabLeadingIconProps): React.JSX.Element {
-  // Reserve activity and identity slots before agent detection as well as status changes.
-  const iconClassName = 'mr-1 inline-flex w-7 shrink-0 items-center gap-1'
   if (showUnreadActivity) {
     return (
       <span
@@ -61,7 +60,7 @@ export function TerminalTabLeadingIcon({
           'auto.components.tab.bar.TerminalTabLeadingIcon.7ab2964bea',
           'Unread agent completion'
         )}
-        className={iconClassName}
+        className="mr-1 inline-flex shrink-0 items-center gap-1"
       >
         <FilledBellIcon className="size-3 text-amber-500 drop-shadow-sm" />
         {agent ? <TerminalTabAgentIdentityIcon agent={agent} isActive={isActive} /> : null}
@@ -76,7 +75,7 @@ export function TerminalTabLeadingIcon({
       <span
         data-testid="tab-agent-activity-indicator"
         data-agent-activity-status={activityStatus}
-        className={iconClassName}
+        className="mr-1 inline-flex shrink-0 items-center gap-1"
       >
         {/* Why: the state glyph is self-describing and the tab title already has a tooltip; hover here stays quiet. */}
         <AgentStateDot state={dotState} size="md" title={null} progress={progress} />
@@ -88,17 +87,13 @@ export function TerminalTabLeadingIcon({
 
   if (agent) {
     return (
-      <TerminalTabAgentIdentityIcon
-        agent={agent}
-        isActive={isActive}
-        className={cn(iconClassName, 'justify-end')}
-      />
+      <TerminalTabAgentIdentityIcon agent={agent} isActive={isActive} className="mr-1 shrink-0" />
     )
   }
 
   return (
     <span
-      className={cn(iconClassName, !isActive && 'opacity-70')}
+      className={`mr-1 inline-flex shrink-0 ${isActive ? '' : 'opacity-70'}`}
       data-shell-icon={shell ?? 'generic'}
       aria-hidden
     >

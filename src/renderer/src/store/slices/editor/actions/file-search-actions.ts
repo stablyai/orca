@@ -1,3 +1,4 @@
+import { shallow } from 'zustand/shallow'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { defaultFileSearchState } from '../search/file-search-state'
@@ -19,11 +20,16 @@ export function createFileSearchActions(
     fileSearchStateByWorktree: {},
     updateFileSearchState: (worktreeId, updates) =>
       set((s) => {
-        const current = s.fileSearchStateByWorktree[worktreeId] || defaultFileSearchState()
+        const existing = s.fileSearchStateByWorktree[worktreeId]
+        const next = { ...(existing || defaultFileSearchState()), ...updates }
+        // Switching workspaces cancels the outgoing idle search; a no-op write would re-notify every subscriber.
+        if (existing && shallow(existing, next)) {
+          return s
+        }
         return {
           fileSearchStateByWorktree: {
             ...s.fileSearchStateByWorktree,
-            [worktreeId]: { ...current, ...updates }
+            [worktreeId]: next
           }
         }
       }),

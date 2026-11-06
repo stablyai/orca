@@ -17,6 +17,10 @@ import {
   browserNavigationLeavesFaviconOrigin,
   pickDisplayableFaviconUrl
 } from '../describe-page/browser-favicon-url'
+import {
+  applyBrowserExtensionPageFavicon,
+  isChromeExtensionPageUrl
+} from './browser-extension-page-favicon'
 import type {
   BrowserPageNavigateEvent,
   BrowserPageRecoveryNavigationValidation,
@@ -157,7 +161,28 @@ export function createBrowserPageWebviewNavigationHandlers({
     })
   }
 
+  const currentGuestUrl = (): string | null => {
+    try {
+      return webview.getURL() || null
+    } catch {
+      return null
+    }
+  }
+  const showExtensionPageFavicon = (): void => {
+    applyBrowserExtensionPageFavicon(
+      browserTabId,
+      () => isChromeExtensionPageUrl(currentGuestUrl()),
+      (icon) => {
+        faviconUrlRef.current = icon
+        onUpdatePageStateRef.current(browserTabId, { faviconUrl: icon })
+      }
+    )
+  }
+
   const handleFullDidNavigate = (event: { url?: string; isMainFrame?: boolean }): void => {
+    if (event.isMainFrame !== false && isChromeExtensionPageUrl(event.url)) {
+      showExtensionPageFavicon()
+    }
     const pendingRecoveryNavigation = recoveryNavigationValidationRef.current
     if (event.isMainFrame !== false && pendingRecoveryNavigation?.started) {
       pendingRecoveryNavigation.committed = true
@@ -186,7 +211,12 @@ export function createBrowserPageWebviewNavigationHandlers({
   }
 
   const handleFaviconUpdate = (event: { favicons?: string[] }): void => {
-    faviconUrlRef.current = pickDisplayableFaviconUrl(event.favicons)
+    const favicon = pickDisplayableFaviconUrl(event.favicons)
+    if (!favicon && isChromeExtensionPageUrl(currentGuestUrl())) {
+      showExtensionPageFavicon()
+      return
+    }
+    faviconUrlRef.current = favicon
     onUpdatePageStateRef.current(browserTabId, { faviconUrl: faviconUrlRef.current })
   }
 

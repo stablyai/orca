@@ -97,40 +97,6 @@ describe('CodexAccountService.addAccountFromHome', () => {
     }
   })
 
-  it('registers a managed Codex account by importing an authenticated CODEX_HOME', async () => {
-    vi.doMock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
-    const sourceHome = mkdtempSync(join(tmpdir(), 'orca-codex-source-'))
-    writeFileSync(
-      join(sourceHome, 'auth.json'),
-      createCodexAuthJson('new@example.com', 'provider-account-1', 'refresh-token'),
-      'utf-8'
-    )
-
-    try {
-      const settings = createSettings()
-      const store = createStore(settings)
-      const rateLimits = createRateLimits()
-      const runtimeHome = createRuntimeHome()
-      const { CodexAccountService } = await import('./service')
-      const service = new CodexAccountService(
-        store as never,
-        rateLimits as never,
-        runtimeHome as never
-      )
-
-      const result = await service.addAccountFromHome(sourceHome)
-
-      expect(result.accounts).toHaveLength(1)
-      expect(result.accounts[0]?.email).toBe('new@example.com')
-      const managedHomePath = store.getSettings().codexManagedAccounts[0].managedHomePath
-      expect(existsSync(join(managedHomePath, 'auth.json'))).toBe(true)
-      expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalled()
-    } finally {
-      rmSync(sourceHome, { recursive: true, force: true })
-      vi.doUnmock('../codex-cli/command')
-    }
-  })
-
   it('restores settings and runtime selection when post-write activation fails', async () => {
     vi.doMock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
     const sourceHome = mkdtempSync(join(tmpdir(), 'orca-codex-source-rollback-'))

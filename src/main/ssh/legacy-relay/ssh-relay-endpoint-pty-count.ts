@@ -1,7 +1,7 @@
 /** Ask via the relay's own bridge/hash when process-table evidence is incomplete. pty.listProcesses needs no owner role and cannot take another desktop's PTYs. */
 import type { SshConnection } from '../connection/ssh-connection'
 import { SshChannelMultiplexer } from '../ssh-channel-multiplexer'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { SHORT_RELAY_SOCKET_DIR_PREFIX } from '../relay-socket-path-limit'
 import { waitForSentinel } from './ssh-relay-sentinel'
 

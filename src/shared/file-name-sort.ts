@@ -12,13 +12,18 @@ export function compareFileNames(a: string, b: string): number {
 }
 
 /** Directories-first, then natural name order — the File Explorer listing contract. */
+export function compareDirEntries(
+  a: { name: string; isDirectory: boolean },
+  b: { name: string; isDirectory: boolean }
+): number {
+  if (a.isDirectory !== b.isDirectory) {
+    return a.isDirectory ? -1 : 1
+  }
+  return compareFileNames(a.name, b.name)
+}
+
 export function sortDirEntries<T extends { name: string; isDirectory: boolean }>(
   entries: T[]
 ): T[] {
-  return entries.sort((a, b) => {
-    if (a.isDirectory !== b.isDirectory) {
-      return a.isDirectory ? -1 : 1
-    }
-    return compareFileNames(a.name, b.name)
-  })
+  return entries.sort(compareDirEntries)
 }

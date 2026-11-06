@@ -1,6 +1,7 @@
 /** Keep source authority until durable destination commit. Verify the fenced export before stage/commit; resolve lost replies by catalog reads and persist journal transitions before returning. Never release a committed destination. */
 import type {
   OrcadMigrationCatalogAbortResult,
+  OrcadMigrationCatalogReference,
   OrcadMigrationCatalogReferenceAbortResult,
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
@@ -9,6 +10,10 @@ import type {
   OrcadMigrationSnapshotChunkRequest,
   OrcadMigrationSnapshotChunkResult
 } from '../../shared/orcad-migration/orcad-migration-scrollback'
+import type {
+  OrcadMigrationBlobChunkRequest,
+  OrcadMigrationBlobChunkResult
+} from '../../shared/orcad-migration/orcad-migration-blob-transfer'
 import type {
   OrcadMigrationSourceCutover,
   OrcadMigrationSourceCutoverPhase
@@ -25,6 +30,11 @@ import {
   transferOrcadMigrationSnapshots,
   type OrcadMigrationSnapshotSource
 } from './orcad-migration-snapshot-coordinator'
+import {
+  exportedOrcadMigrationBlobSource,
+  transferOrcadMigrationBlobs
+} from './orcad-migration-blob-coordinator'
+import type { OrcadMigrationExportedBlob } from './orcad-migration-manifest-export'
 import type { OrcadMigrationPreflightStore } from './targets/ssh-target-orcad-preflight'
 import { sshRelayMigrationCutoverPort } from './orcad-migration-ssh-relay-source'
 import type { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
@@ -36,11 +46,16 @@ export type OrcadMigrationDestinationCatalog = {
   abort: (manifest: OrcadMigrationManifest) => Promise<OrcadMigrationCatalogAbortResult>
   /** Use identity-only abort when the journal's full manifest cannot fit a request. */
   abortByReference: (
-    manifest: OrcadMigrationManifest
+    manifest: OrcadMigrationCatalogReference
   ) => Promise<OrcadMigrationCatalogReferenceAbortResult>
   stageChunk: (
     request: OrcadMigrationSnapshotChunkRequest
   ) => Promise<OrcadMigrationSnapshotChunkResult>
+  /** Read fresh before blobs are sent: each blob kind needs its own capability. */
+  readCapabilities: () => Promise<readonly string[]>
+  stageBlobChunk: (
+    request: OrcadMigrationBlobChunkRequest
+  ) => Promise<OrcadMigrationBlobChunkResult>
 }
 
 export type OrcadMigrationCutoverContext = {
@@ -67,7 +82,7 @@ export async function stageOrcadMigrationDestination(
   if (cutover.phase === 'destination-committed' || cutover.phase === 'source-retired') {
     return cutover
   }
-  assertSourceUnchanged(context, cutover)
+  const blobs = assertSourceUnchanged(context, cutover)
   const { destination } = context
   const read = await destination.readState(cutover.manifest)
   const state =
@@ -85,6 +100,16 @@ export async function stageOrcadMigrationDestination(
       manifest: cutover.manifest,
       state,
       destination: { readState: destination.readState, stageChunk: destination.stageChunk }
+    })
+    await transferOrcadMigrationBlobs({
+      source: exportedOrcadMigrationBlobSource(blobs),
+      manifest: cutover.manifest,
+      blobs: blobs.map((blob) => blob.descriptor),
+      destination: {
+        readCapabilities: destination.readCapabilities,
+        readState: destination.readState,
+        stageChunk: destination.stageBlobChunk
+      }
     })
   }
   return cutover
@@ -163,7 +188,7 @@ export async function abortOrcadMigrationCutover(
 }
 
 /** Committed reads may be unflushed memory; require the idempotent commit acknowledgement to prove durability. */
-async function confirmDurableCommit(
+export async function confirmDurableCommit(
   destination: OrcadMigrationDestinationCatalog,
   manifest: OrcadMigrationManifest
 ): Promise<OrcadMigrationCatalogState> {
@@ -177,8 +202,8 @@ async function confirmDurableCommit(
 function assertSourceUnchanged(
   context: OrcadMigrationCutoverContext,
   cutover: OrcadMigrationSourceCutover
-): void {
-  cutoverSource(context).verifyFence(cutover)
+): OrcadMigrationExportedBlob[] {
+  return cutoverSource(context).verifyFence(cutover)
 }
 
 /** Persist observed state before returning. */
@@ -221,7 +246,8 @@ function recordObservedState(
   return next
 }
 
-async function abortWithRecovery(
+/** Aborts staging; a failed abort is decided by a re-read, never assumed. */
+export async function abortWithRecovery(
   destination: OrcadMigrationDestinationCatalog,
   manifest: OrcadMigrationManifest
 ): Promise<OrcadMigrationCatalogState> {

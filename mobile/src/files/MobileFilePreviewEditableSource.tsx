@@ -4,6 +4,7 @@ import type { MobileFilePreviewLineColumn } from './mobile-file-preview-line-col
 import { textOffsetForLineColumn } from './mobile-file-preview-line-column'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 type Props = {
   title: string
@@ -21,6 +22,7 @@ export function MobileFilePreviewEditableSource({
   onDraftChange
 }: Props) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const selectionTargetKey = lineColumn
     ? `${title}:${lineColumn.line}:${lineColumn.column ?? ''}`
     : ''
@@ -51,7 +53,9 @@ export function MobileFilePreviewEditableSource({
         autoCorrect={false}
         selection={selection ?? undefined}
         onSelectionChange={() => setSelection(null)}
-        accessibilityLabel={`${title} editor`}
+        accessibilityLabel={t('files.filePreviewEditableSource.editorLabel', '{{title}} editor', {
+          title
+        })}
       />
     </View>
   )

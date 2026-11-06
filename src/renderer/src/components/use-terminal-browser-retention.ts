@@ -1,7 +1,10 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../store'
 import { onBrowserGuestPaintRetentionChange } from './browser-pane/host-guest/browser-guest-paint-retention'
-import { browserTabsVetoGuestEviction } from './browser-pane/host-guest/browser-guest-eviction-veto'
+import {
+  browserTabsNeedPaintRetention,
+  browserTabsVetoGuestEviction
+} from './browser-pane/host-guest/browser-guest-eviction-veto'
 import {
   selectBrowserGuestEvictionWorktreeIds,
   touchBrowserGuestWorktreeRecency,
@@ -12,7 +15,19 @@ import { hasLiveBrowserGuest } from './browser-pane/host-guest/webview-registry'
 import { destroyWorktreeBrowserGuests } from '../store/slices/browser-webview-cleanup'
 import type { TerminalParkingFoundation } from './use-terminal-parking-foundation'
 
-export function useTerminalBrowserRetention(controller: TerminalParkingFoundation): void {
+export function useTerminalBrowserRetention(
+  controller: Pick<
+    TerminalParkingFoundation,
+    | 'browserGuestRetentionBudgetEnabled'
+    | 'browserGuestRetentionRevision'
+    | 'browserGuestWorktreeRecencyRef'
+    | 'mountedWorktreeIdsRef'
+    | 'renderedActiveWorktreeId'
+    | 'setBrowserGuestRetentionRevision'
+    | 'workspaceSurfaceIds'
+    | 'workspaceSurfaceIdSet'
+  >
+): void {
   const {
     browserGuestRetentionBudgetEnabled,
     browserGuestRetentionRevision,
@@ -37,10 +52,17 @@ export function useTerminalBrowserRetention(controller: TerminalParkingFoundatio
   }, [setBrowserGuestRetentionRevision])
 
   useEffect(() => {
+    const recency = browserGuestWorktreeRecencyRef.current
+    const state = useAppStore.getState()
+    // A hidden worktree an agent or phone just used counts as recent; otherwise it sorts last and is evicted as soon as its claim lapses.
+    for (const worktreeId of workspaceSurfaceIds) {
+      if (browserTabsNeedPaintRetention(state.browserTabsByWorktree[worktreeId] ?? [])) {
+        touchBrowserGuestWorktreeRecency(recency, worktreeId)
+      }
+    }
     if (!renderedActiveWorktreeId) {
       return
     }
-    const recency = browserGuestWorktreeRecencyRef.current
     touchBrowserGuestWorktreeRecency(recency, renderedActiveWorktreeId)
     for (let index = recency.length - 1; index >= 0; index--) {
       if (!workspaceSurfaceIdSet.has(recency[index])) {
@@ -50,7 +72,6 @@ export function useTerminalBrowserRetention(controller: TerminalParkingFoundatio
     if (!browserGuestRetentionBudgetEnabled) {
       return
     }
-    const state = useAppStore.getState()
     const recencyIds = new Set(recency)
     const orderedWorktreeIds = [
       ...recency,

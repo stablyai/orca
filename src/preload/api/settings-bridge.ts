@@ -1,9 +1,12 @@
 import { ipcRenderer } from 'electron'
-import type { GhosttyImportPreview } from '../../shared/global-settings-types'
+import type {
+  TerminalConfigImportPreview,
+  TerminalConfigImportSource
+} from '../../shared/terminal/appearance/terminal-config-import-preview'
 import type {
   WarpThemeImportPreview,
   WarpThemeImportSource
-} from '../../shared/terminal-custom-themes'
+} from '../../shared/terminal-themes/terminal-custom-themes'
 import type { PreloadApi } from '../api-types'
 
 export const settingsApi = {
@@ -21,8 +24,13 @@ export const settingsApi = {
 
   listFonts: (): Promise<string[]> => ipcRenderer.invoke('settings:listFonts'),
 
-  previewGhosttyImport: (): Promise<GhosttyImportPreview> =>
-    ipcRenderer.invoke('settings:previewGhosttyImport'),
+  previewGhosttyImport: (
+    source?: TerminalConfigImportSource
+  ): Promise<TerminalConfigImportPreview> =>
+    ipcRenderer.invoke('settings:previewGhosttyImport', source),
+
+  previewKittyImport: (source?: TerminalConfigImportSource): Promise<TerminalConfigImportPreview> =>
+    ipcRenderer.invoke('settings:previewKittyImport', source),
 
   previewWarpThemeImport: (source: WarpThemeImportSource): Promise<WarpThemeImportPreview> =>
     ipcRenderer.invoke('settings:previewWarpThemeImport', source),

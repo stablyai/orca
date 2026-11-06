@@ -7,7 +7,7 @@ import { cancelTerminalWriteStallWatch } from './terminal-write-pipeline-health'
 import {
   TERMINAL_OUTPUT_BACKLOG_MIN_CAP_CHARS,
   terminalOutputBacklogCapChars
-} from '../../../../shared/terminal-scrollback-policy'
+} from '../../../../shared/terminal/replay/terminal-scrollback-policy'
 import {
   exposeTerminalOutputSchedulerDebugApi as exposeDebugApi,
   recordTerminalOutputQueueDebugPressure as recordQueueDebugPressure,
@@ -30,6 +30,8 @@ export type WriteTerminalOutputOptions = {
   /** Fire delivery ACK once on parse OR discard; duplicate calls are safe, omission permanently shrinks main’s in-flight window. */
   ackCredit?: () => void
   onBackgroundBacklogDropped?: () => void
+  /** Every backlog replacement: queued bytes vanished behind the warning, leaving a gap in the pane's stream. */
+  onBacklogReplaced?: () => void
   latencySensitive?: boolean
   forceForegroundRefresh?: boolean
   followupForegroundRefresh?: boolean
@@ -71,6 +73,7 @@ export type QueueEntry = {
   chunkIndex: number
   queuedChars: number
   onBackgroundBacklogDropped?: () => void
+  onBacklogReplaced?: () => void
   backgroundBacklogDropped: boolean
   highPriority: boolean
   foregroundHold: boolean
@@ -123,10 +126,10 @@ const backlogRecoveryByTerminal = new WeakMap<
 >()
 let drainTimer: ReturnType<typeof setTimeout> | null = null
 let drainTimerDelayMs: number | null = null
-// MessageChannel avoids Chromium’s nested-timer ~4ms clamp while yielding to input/paint; cancel by generation.
+// MessageChannel avoids Chromium’s nested-timer ~4ms clamp while yielding to input/paint.
 let drainImmediatePending = false
-let drainImmediateGeneration = 0
-let useMessageChannelDrain = typeof MessageChannel !== 'undefined' && !isVitestEnv()
+const drainImmediateGeneration = 0
+const useMessageChannelDrain = typeof MessageChannel !== 'undefined' && !isVitestEnv()
 let drainChannel: MessageChannel | null = null
 // Why indirect: the drain loop lives downstream of this module, so it registers itself here rather than being imported back into the queue state it operates on.
 let runDrain: (() => void) | null = null
@@ -156,16 +159,6 @@ function getDrainChannel(): MessageChannel {
     }
   }
   return drainChannel
-}
-
-function cancelImmediateDrain(): void {
-  drainImmediateGeneration++
-  drainImmediatePending = false
-}
-
-export function setUseMessageChannelDrainForTesting(value: boolean | null): void {
-  cancelImmediateDrain()
-  useMessageChannelDrain = value ?? (typeof MessageChannel !== 'undefined' && !isVitestEnv())
 }
 
 export function isMessageChannelDrainEnabled(): boolean {

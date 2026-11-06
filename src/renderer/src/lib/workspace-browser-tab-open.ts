@@ -26,7 +26,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import type { SearchEngine } from '../../../shared/browser-url'
-import type { BrowserClientHostPlacementPreference } from '../../../shared/browser-client-host-placement'
+import type { BrowserClientHostPlacementPreference } from '../../../shared/browser/client-hosting/browser-client-host-placement'
 import type { TabSplitTarget } from '@/store/slices/tabs/tabs-slice-contract'
 import {
   getClientCreationActionPolicy,

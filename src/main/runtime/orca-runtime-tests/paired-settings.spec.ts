@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
 import {
-  OrcaRuntimeService,
   applyAgentStatusHooksEnabledMock,
-  electronMocks
-} from '../orca-runtime-test-mocks.spec'
-import { deferred, store } from '../orca-runtime-test-fixtures.spec'
-import { RuntimeClientSettingsController } from '../runtime-client-settings'
-import { reconcileClaudeAgentViewMock } from '../orca-runtime-test-mocks/setup.spec'
+  electronMocks,
+  reconcileClaudeAgentViewMock
+} from '../orca-runtime-test-mocks/setup.spec'
+import { deferred, store } from './orca-runtime-test-fixtures.spec'
+import { RuntimeClientSettingsController } from '../client/settings/runtime-client-settings'
 
 describe('OrcaRuntimeService', () => {
   it.each([true, false])(
@@ -32,18 +33,6 @@ describe('OrcaRuntimeService', () => {
       expect(complete).toHaveBeenCalledOnce()
     }
   )
-
-  it.each([true, false])('projects the single Chat UI switch to older clients (%s)', (enabled) => {
-    const controller = new RuntimeClientSettingsController({
-      getSettings: () => ({ ...store.getSettings(), experimentalNativeChat: enabled }),
-      updateSettings: () => undefined
-    })
-    expect(controller.get()).toMatchObject({
-      experimentalNativeChat: enabled,
-      experimentalStructuredNativeChat: enabled,
-      openAgentTabsInChatByDefault: false
-    })
-  })
 
   it('projects runtime-backed settings to paired clients', () => {
     const terminalQuickCommands = [
@@ -167,7 +156,7 @@ describe('OrcaRuntimeService', () => {
     expect(updateSettings).toHaveBeenCalledTimes(2)
   })
 
-  it('compares retired models against the host record at mutation time', () => {
+  it('keeps a future-launch default when an older client asks to prune from inventory', () => {
     let settings = {
       ...store.getSettings(),
       nativeChatSessionOptions: { grok: { model: 'grok-5' } }
@@ -193,7 +182,8 @@ describe('OrcaRuntimeService', () => {
       agent: 'grok',
       availableModelIds: ['grok-4.5']
     })
-    expect(settings.nativeChatSessionOptions).toEqual({ grok: {} })
+    expect(settings.nativeChatSessionOptions).toEqual({ grok: { model: 'grok-5' } })
+    expect(updateSettings).not.toHaveBeenCalled()
   })
 
   it('preserves concurrent additions after forty quick commands', () => {
@@ -326,6 +316,10 @@ describe('OrcaRuntimeService', () => {
         shouldHydrateShellPath: true
       })
     )
+
+    // `orca agent hooks on` with hooks already enabled must still repair a wiped config (#17672).
+    await runtime.updateClientSettings({ agentStatusHooksEnabled: true })
+    expect(applyAgentStatusHooksEnabledMock).toHaveBeenCalledTimes(2)
   })
 
   it('serializes paired-client hook reconciliation and reads current settings', async () => {

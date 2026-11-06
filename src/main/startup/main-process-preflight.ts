@@ -1,5 +1,5 @@
 import { antigravityHookService } from '../antigravity/hook-service'
-import { getRelocatedDaemonHost } from '../daemon/daemon-host-relocation'
+import { getRelocatedDaemonHost } from '../daemon/executable-host/windows/daemon-host-relocation'
 import { app, ipcMain, powerMonitor, session } from 'electron'
 import os from 'node:os'
 import { join } from 'node:path'
@@ -18,7 +18,7 @@ import {
   patchPackagedProcessPath,
   optOutOfHiddenPageWakeUpThrottling
 } from './configure-process'
-import { installServeSupervisorDisconnectQuit } from '../serve-update-handoff'
+import { installServeSupervisorDisconnectQuit } from '../updater/serve-update-handoff'
 import {
   installUncaughtPipeErrorGuard,
   installUnhandledRejectionLogging
@@ -31,7 +31,7 @@ import {
   downloadRemoteServerUpdate,
   installRemoteServerUpdate,
   isQuittingForUpdate
-} from '../updater'
+} from '../updater/updater-service'
 import { getDevInstanceIdentity, shouldApplyPreReadyAppName } from './dev-instance-identity'
 import { enableRendererHeapHeadroom } from './renderer-heap-headroom'
 import { configureLinuxDevShmUsage } from './linux-dev-shm-policy'
@@ -57,7 +57,7 @@ import {
 } from './single-instance-lock'
 import { setAppEnvironment } from '../../shared/app-environment'
 import { ElectronAppEnvironment } from '../host/electron-app-environment'
-import { installMainProcessTreeKillGate } from '../own-chromium-tree-kill-guard'
+import { installMainProcessTreeKillGate } from '../pty/process-retirement/own-chromium-tree-kill-guard'
 import { setSecretStore } from '../../shared/secret-store'
 import { ElectronSecretStore } from '../host/electron-secret-store'
 import { selectLinuxKeyringBackend } from './select-linux-keyring-backend'
@@ -69,12 +69,12 @@ import { electronHttpClient } from '../host/electron-http-client'
 import { setMainHttpClient } from '../network/http-client'
 import { electronSpeechServiceFactories } from '../host/electron-speech-services'
 import { setSpeechServiceFactories } from '../speech/speech-runtime-service'
-import { setWorktreeWatcherRemoval } from '../ipc/worktree-watcher-removal'
+import { setWorktreeWatcherRemoval } from '../workspaces/removal/worktree-watcher-removal'
 import { desktopWorktreeWatcherRemoval } from '../ipc/filesystem/watchers/filesystem-watcher'
 import { setDefaultProxySessionResolver } from '../network/proxy-settings'
-import { initDataPath, getCanonicalUserDataPath } from '../persistence'
-import { applyMacPressAndHoldDefaultAtStartup } from '../macos-press-and-hold-default'
-import { configureSessionParseCachePersistence } from '../ai-vault/session-parse-cache-persistence'
+import { initDataPath, getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
+import { applyMacPressAndHoldDefaultAtStartup } from '../window/desktop-integration/macos-press-and-hold-default'
+import { configureSessionParseCachePersistence } from '../ai-vault/parse-cache/session-parse-cache-persistence'
 import { initOrcaProfilePaths } from '../orca-profiles/profile-index-store'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { recoverPendingProfileProjectMoves } from '../orca-profiles/profile-project-move-intent'
@@ -83,9 +83,8 @@ import { initClaudeUsagePath } from '../claude-usage/store'
 import { initCodexUsagePath } from '../codex-usage/store'
 import { initOpenCodeUsagePath } from '../opencode-usage/store'
 import { initMuseUsagePath } from '../muse-usage/store'
-import { registerDocPreviewSchemePrivileges } from '../browser/doc-preview-protocol'
-import { MEDIA_PREVIEW_CUSTOM_SCHEME } from '../media/media-preview-protocol'
-import { JIRA_IMAGE_CUSTOM_SCHEME } from '../jira/attachments/image-protocol'
+import { registerDocPreviewSchemePrivileges } from '../browser/document-preview/doc-preview-protocol'
+import { PRIVILEGED_CUSTOM_SCHEMES } from './privileged-custom-schemes'
 import { startCrashpadCapture } from '../crash-reporting/crashpad-capture'
 import { CrashReportStore } from '../crash-reporting/crash-report-store'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
@@ -102,8 +101,8 @@ import {
 } from './gpu-lifecycle'
 import { mainProcessState as state } from './main-process-state'
 import { initializeSyntheticTitleRuntime } from './synthetic-title-runtime'
-import { initializeBrowserProcessUserAgent } from '../browser/browser-process-user-agent'
-import { initializeBrowserIdentityModeStore } from '../browser/browser-identity-mode-store'
+import { initializeBrowserProcessUserAgent } from '../browser/identity/browser-process-user-agent'
+import { initializeBrowserIdentityModeStore } from '../browser/identity/browser-identity-mode-store'
 import { acquireProfileStateRuntimeAdmission } from '../persistence/profile-state/profile-state-access'
 import { getActiveProfileStateLocation } from '../persistence/profile-state/profile-state-active-location'
 import {
@@ -309,7 +308,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   initOpenCodeUsagePath()
   initMuseUsagePath()
   // Register preview privileges before ready freezes the table or webviews lose fetch/secure-origin access.
-  registerDocPreviewSchemePrivileges([MEDIA_PREVIEW_CUSTOM_SCHEME, JIRA_IMAGE_CUSTOM_SCHEME])
+  registerDocPreviewSchemePrivileges(PRIVILEGED_CUSTOM_SCHEMES)
   // Install Crashpad before first renderer; earlier CHECK failures have exit-code evidence only.
   startCrashpadCapture()
   state.crashReports = CrashReportStore.fromUserData()

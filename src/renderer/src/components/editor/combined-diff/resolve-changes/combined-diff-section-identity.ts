@@ -1,5 +1,5 @@
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 
 export type CombinedDiffFileTreeMode = 'all' | 'uncommitted' | 'branch' | 'commit'
 export type CombinedDiffFileTreeEntry = GitStatusEntry | GitBranchChangeEntry

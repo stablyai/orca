@@ -7,11 +7,11 @@ import {
 } from './mouse-input-encoding'
 import { oscLinkAtViewportPoint } from './osc-link-tap'
 import { viewportToCell } from './viewport-cell'
-import type { ParsedFileLinkLocation } from '../../../../src/shared/file-link-location'
+import type { ParsedFileLinkLocation } from '../../../../src/shared/file-links/file-link-location'
 import {
   findTerminalFileLinksAtBufferPosition,
   findTerminalHttpLinkAtBufferPosition
-} from '../../../../src/shared/terminal-link-buffer-hit-testing'
+} from '../../../../src/shared/terminal/links/terminal-link-buffer-hit-testing'
 
 export function notifyTerminalSurfaceTap(
   scope: TerminalDocumentScope,
@@ -39,10 +39,10 @@ export function notifyTerminalSurfaceTap(
       notify(scope, { type: 'open-url', url })
       return
     }
-    const candidates = uniqueFileTapCandidates(
-      findTerminalFileLinksAtBufferPosition(buffer, position, term.cols)
-    )
-    if (candidates.length > 0) {
+    const { links, guesses } = findTerminalFileLinksAtBufferPosition(buffer, position, term.cols)
+    // Why: a tap decides now, so only a path as written makes it a file tap; the host checks the guesses.
+    if (links.length > 0) {
+      const candidates = uniqueFileTapCandidates([...links, ...guesses])
       notify(scope, { type: 'terminal-file-tap', candidates })
       return
     }

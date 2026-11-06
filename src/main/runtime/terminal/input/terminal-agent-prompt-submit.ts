@@ -1,5 +1,9 @@
-import type { RuntimeAgentPromptWriteOptions } from '../../runtime-terminal-contracts'
-import type { RuntimeTerminalSend } from '../../../../shared/runtime-types'
+import { agentPromptObservationSignal } from './agent-prompt-signals'
+import type { RuntimeAgentPromptWriteOptions } from './agent-prompt-write-options'
+import type {
+  RuntimeTerminalPromptDelivery,
+  RuntimeTerminalSend
+} from '../../../../shared/runtime-types'
 import type { AgentTransitionDetector } from '../../../agent-hooks/agent-transition-detector'
 import { OrcaRuntimeWithWriteTerminalAgentPrompt } from './terminal-agent-prompt'
 import {
@@ -9,6 +13,19 @@ import {
 
 export abstract class OrcaRuntimeWithSubmitTerminalAgentPrompt extends OrcaRuntimeWithWriteTerminalAgentPrompt {
   abstract readonly agentTransitions: Pick<AgentTransitionDetector, 'subscribe'>
+
+  /** Every prompt write judges a restored permission wait on the screen as it is now (#35962). */
+  protected override writeTerminalAgentPrompt(
+    handle: string,
+    ptyId: string,
+    generation: number,
+    pastePayload: string,
+    options: RuntimeAgentPromptWriteOptions
+  ): Promise<{ submits: number; prompt?: RuntimeTerminalPromptDelivery }> {
+    const write = () =>
+      super.writeTerminalAgentPrompt(handle, ptyId, generation, pastePayload, options)
+    return this.refreshRestoredWait(handle, ptyId)?.then(write) ?? write()
+  }
 
   protected async submitTerminalAgentPrompt(
     handle: string,
@@ -63,6 +80,7 @@ export abstract class OrcaRuntimeWithSubmitTerminalAgentPrompt extends OrcaRunti
         const activity = this.getAgentPromptActivity(handle, ptyId)
         return this.isAgentPromptPermissionBlocked(activity, activity)
       },
+      refresh: () => this.refreshRestoredWait(handle, ptyId),
       ...(paneKey
         ? {
             subscribeStatus: (wake: () => void) =>
@@ -74,7 +92,7 @@ export abstract class OrcaRuntimeWithSubmitTerminalAgentPrompt extends OrcaRunti
           }
         : {}),
       subscribeExit: (exited) => this.subscribeToPtyExit(ptyId, exited),
-      signal: options.signal
+      signal: agentPromptObservationSignal(options)
     })
   }
 }

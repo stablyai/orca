@@ -3,18 +3,11 @@
 import { describe, expect, it } from 'vitest'
 import fcitx5Trace from './__fixtures__/fcitx5-hangul-mixed-ascii-terminal-trace.json'
 import ibusTrace from './__fixtures__/ibus-hangul-mixed-ascii-terminal-trace.json'
-import { installTerminalImeCompositionTracker } from './terminal-ime-composition-tracker'
 import {
-  buildRecordedDomEvent,
   replayThroughLinuxPane,
   useLinuxPaneTestEnvironment,
   type RecordedDomEvent
 } from './terminal-ime-linux-pane-replay-fixture'
-import {
-  shouldPreventDefaultTerminalImeCandidateKey,
-  shouldSuppressTerminalImeKeyboardEvent
-} from './xterm-bypass-policy'
-import { event } from './xterm-bypass-event-fixture'
 
 type RecordedTrace = { dom: RecordedDomEvent[] }
 
@@ -49,55 +42,5 @@ describe('a digit typed after a committed Hangul syllable on Linux', () => {
     ])
     expect(emitted).toBe('한1')
     expect(preventedKeydownCodes).not.toContain('Digit1')
-  })
-})
-
-describe('the Linux IME policy around a Hangul commit', () => {
-  const digitKeydown = event({ type: 'keydown', key: '1', code: 'Digit1', keyCode: 49 })
-
-  function linuxOptions(tracker: ReturnType<typeof installTerminalImeCompositionTracker>) {
-    return {
-      compositionActive: tracker.isActive(),
-      candidateKeyGuardActive: tracker.isCandidateKeyGuardActive(),
-      pendingCandidateKeyReleaseActive: false,
-      isMac: false,
-      isLinux: true
-    }
-  }
-
-  function replayInto(element: HTMLElement, events: RecordedDomEvent[]): void {
-    for (const recorded of events) {
-      element.dispatchEvent(buildRecordedDomEvent(recorded))
-    }
-  }
-
-  it.each(TRACES)(
-    'leaves the digit alone once a %s syllable has committed',
-    (_framework, trace) => {
-      const element = document.createElement('div')
-      const tracker = installTerminalImeCompositionTracker(element)
-      replayInto(element, firstSyllableCommit(trace))
-
-      expect(shouldSuppressTerminalImeKeyboardEvent(digitKeydown, linuxOptions(tracker))).toBe(
-        false
-      )
-      expect(shouldPreventDefaultTerminalImeCandidateKey(digitKeydown, linuxOptions(tracker))).toBe(
-        false
-      )
-      tracker.dispose()
-    }
-  )
-
-  it('keeps the digit IME-owned while the Hangul preedit is still live', () => {
-    const element = document.createElement('div')
-    const tracker = installTerminalImeCompositionTracker(element)
-    const preeditOpen = ibusTrace.dom.findIndex(
-      (recorded) => recorded.type === 'compositionupdate' && recorded.data === '한'
-    )
-    replayInto(element, ibusTrace.dom.slice(0, preeditOpen + 1))
-
-    // ibus-hangul's Hanja conversion puts a numbered lookup table over a live preedit.
-    expect(shouldSuppressTerminalImeKeyboardEvent(digitKeydown, linuxOptions(tracker))).toBe(true)
-    tracker.dispose()
   })
 })

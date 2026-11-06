@@ -1,22 +1,13 @@
-import {
-  launchAgentThroughHost,
-  windowMakesHostLaunchTab,
-  type HostAgentLaunchArgs
-} from '@/lib/agent-launch-through-host'
+import { launchAgentThroughHost, type HostAgentLaunchArgs } from '@/lib/agent-launch-through-host'
 import { pasteAgentLaunchPromptOnceReady } from '@/lib/launch-agent-tab-prompt-paste'
 
-/** AI-button terminal launches start via their own pane spawn while this window pastes. Typed prompts, chat-capable routes and SSH retain main’s launch path; local pane spawn cannot start those SSH sessions. */
+/** Local terminal actions start in their own pane; structured routes resolve earlier and SSH keeps its remote launch path. */
 export function newTabPromptLaunchesThroughHost(args: {
   promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
   pastesPrompt: boolean
   isRemote: boolean
 }): boolean {
-  return (
-    args.promptDelivery === 'submit-after-ready' &&
-    args.pastesPrompt &&
-    !args.isRemote &&
-    windowMakesHostLaunchTab()
-  )
+  return args.promptDelivery === 'submit-after-ready' && args.pastesPrompt && !args.isRemote
 }
 
 /** Observe readiness as soon as the tab PTY exists, but paste only after its pane confirms agent startup; a fast agent may be ready before spawn returns. */

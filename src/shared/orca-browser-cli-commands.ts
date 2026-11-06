@@ -1,5 +1,4 @@
-import { COMMAND_TOKEN_SCAN_MAX_CHARS, getCommandTokenPathBasename } from './command-token-scanner'
-import { tokenizeCommandLine } from './agent-command-line-entrypoint'
+import { orcaCliInvocations } from './orca-cli-invocations'
 
 /** The browser CLI's command keys per handler group. Kept apart from the CLI's
  *  lazy handler imports so the renderer and mobile can read them too. */
@@ -103,34 +102,15 @@ const BROWSER_COMMAND_WORDS = new Set<string>(
   )
 )
 
-// The published launcher names per platform, plus the dev build's.
-const ORCA_CLI_BASENAME = /^orca(?:-dev|-ide)?(?:\.cmd|\.exe)?$/i
-const ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/
-
 export type OrcaBrowserCommand = { pageId: string | null }
 
 /** The first `orca <browser command>` a shell command line runs, with the page it
  *  targets, or null when it runs none. Quoted text is an argument, never a command. */
 export function parseOrcaBrowserCommand(command: string): OrcaBrowserCommand | null {
-  const scanned = command.slice(0, COMMAND_TOKEN_SCAN_MAX_CHARS)
-  for (const segment of splitUnquotedSegments(scanned)) {
-    const tokens = tokenizeCommandLine(segment)
-    let index = 0
-    while (index < tokens.length && ENV_ASSIGNMENT.test(tokens[index])) {
-      index += 1
-    }
-    const binary = tokens[index]
-    const word = tokens[index + 1]
-    if (
-      binary !== undefined &&
-      word !== undefined &&
-      ORCA_CLI_BASENAME.test(getCommandTokenPathBasename(binary)) &&
-      BROWSER_COMMAND_WORDS.has(word)
-    ) {
-      return { pageId: pageFlagValue(tokens.slice(index + 2)) }
-    }
-  }
-  return null
+  const args = orcaCliInvocations(command).find((invocation) =>
+    BROWSER_COMMAND_WORDS.has(invocation[0] ?? '')
+  )
+  return args ? { pageId: pageFlagValue(args.slice(1)) } : null
 }
 
 function pageFlagValue(args: readonly string[]): string | null {
@@ -144,26 +124,4 @@ function pageFlagValue(args: readonly string[]): string | null {
     }
   }
   return null
-}
-
-/** Splits a command line at `&&`, `||`, `;`, `|` and newlines outside quotes. */
-function splitUnquotedSegments(commandLine: string): string[] {
-  const segments: string[] = []
-  let current = ''
-  let quote: '"' | "'" | null = null
-  for (let index = 0; index < commandLine.length; index += 1) {
-    const char = commandLine[index]
-    if (quote === null && (char === '"' || char === "'")) {
-      quote = char
-    } else if (quote === char) {
-      quote = null
-    } else if (quote === null && (char === ';' || char === '|' || char === '&' || char === '\n')) {
-      segments.push(current)
-      current = ''
-      continue
-    }
-    current += char
-  }
-  segments.push(current)
-  return segments
 }

@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import type React from 'react'
-import type { DiffSection } from '../../diff-section-types'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 import { combinedDiffViewPreferences } from '../remember-view/combined-diff-view-memory'
 import { getInitialCombinedDiffSectionLoadIndices } from '../load-sections/combined-diff-initial-section-load'
 import type { CombinedDiffSectionLoadRegistry } from '../load-sections/combined-diff-section-load-registry'
@@ -44,20 +44,26 @@ export function useCombinedDiffViewPreferences({
   )
 
   // Use settings until the first session toolbar choice, then retain that choice over global defaults.
-  useEffect(() => {
+  const [prevDiffDefaultView, setPrevDiffDefaultView] = useState(diffDefaultView)
+  if (prevDiffDefaultView !== diffDefaultView) {
+    setPrevDiffDefaultView(diffDefaultView)
     if (diffDefaultView !== undefined && combinedDiffViewPreferences.sideBySide === null) {
       setSideBySide(diffDefaultView === 'side-by-side')
     }
-  }, [diffDefaultView])
+  }
 
-  useEffect(() => {
+  const [prevFileTreeVisibleByDefault, setPrevFileTreeVisibleByDefault] = useState(
+    combinedDiffFileTreeVisibleByDefault
+  )
+  if (prevFileTreeVisibleByDefault !== combinedDiffFileTreeVisibleByDefault) {
+    setPrevFileTreeVisibleByDefault(combinedDiffFileTreeVisibleByDefault)
     if (
       combinedDiffFileTreeVisibleByDefault !== undefined &&
       combinedDiffViewPreferences.fileTreeCollapsed === null
     ) {
       setFileTreeCollapsedState(combinedDiffFileTreeVisibleByDefault === false)
     }
-  }, [combinedDiffFileTreeVisibleByDefault])
+  }
 
   const setFileTreeCollapsed = useCallback((collapsed: boolean) => {
     combinedDiffViewPreferences.fileTreeCollapsed = collapsed

@@ -1,6 +1,6 @@
 import { defineMethod } from '../core'
 import { normalizeGitLabIssueListArgs } from '../../../gitlab/gitlab-preload-args'
-import { toGitLabJobLogExcerptResult } from '../../../../shared/gitlab-job-log-excerpt'
+import { toGitLabJobLogExcerptResult } from '../../../../shared/source-control/checks/gitlab/gitlab-job-log-excerpt'
 import {
   AddIssueComment,
   AddMRComment,
@@ -11,6 +11,7 @@ import {
   IssuesList,
   JobTrace,
   MergeMr,
+  MergeRequestsList,
   RepoSelector,
   ResolveMRDiscussion,
   RetryJob,
@@ -27,14 +28,15 @@ export const GITLAB_METHODS = [
   defineMethod({
     name: 'gitlab.listMRs',
     permission: 'workspace',
-    params: WorkItemsList,
+    params: MergeRequestsList,
     handler: async (params, { runtime }) =>
       runtime.listGitLabRepoMRs(
         params.repo,
         params.state,
         params.page,
         params.perPage,
-        params.query
+        params.query,
+        params.involvement
       )
   }),
   defineMethod({

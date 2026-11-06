@@ -13,7 +13,9 @@ export type HostRebindAfterExitWatch = {
 /** Fires once the host publishes a provably different live process for an exit-settled pane. */
 export function watchHostRebindAfterExit(
   args: { environmentId: string; worktreeId: string; hostTabId: string; leafId: string },
-  onRebound: (handle: string) => void
+  onRebound: (handle: string) => void,
+  /** A retired surface is absent by definition, so its absence must not end the watch. */
+  options: { surfaceRetired?: boolean } = {}
 ): HostRebindAfterExitWatch {
   let stopped = false
   let exited: { handle: string; incarnationId: string | null } | null = null
@@ -24,7 +26,9 @@ export function watchHostRebindAfterExit(
       return
     }
     if (!update.surfacePresent) {
-      dispose()
+      if (!options.surfaceRetired) {
+        dispose()
+      }
       return
     }
     const next = update.terminalHandle

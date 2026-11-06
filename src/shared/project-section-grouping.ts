@@ -2,8 +2,11 @@
 import type { ExecutionHostId } from './execution-host'
 import { orderProjectSections, type ActivityItem } from './project-section-order'
 import type { ProjectOrderBy } from './ui-chrome-types'
+import { toSshExecutionHostId } from './execution-host'
 import type { Project, ProjectHostSetup } from './project-types'
 import type { Repo } from './repo-types'
+import { parseWslUncPath } from './wsl-paths'
+import { isWindowsAbsolutePathLike, normalizeRuntimePathForComparison } from './cross-platform-path'
 
 /** The project fields grouping reads. */
 export type ProjectSectionProject = Pick<Project, 'id' | 'displayName'>
@@ -29,6 +32,7 @@ export type ProjectSectionModel = {
 export type ProjectGroupingIndex = {
   projectById: Map<string, ProjectSectionProject>
   setupByRepoId: Map<string, ProjectSectionSetup>
+  surfaceKeysRequiringSetupGroups: Set<string>
 }
 
 /** The repo fields section grouping, labelling and ordering read. */
@@ -53,6 +57,40 @@ export type ProjectSectionEntry<Item, R extends ProjectSectionRepo = Repo> = {
 
 const projectGroupingIndexCache = new WeakMap<ProjectSectionModel, ProjectGroupingIndex | null>()
 
+// Why: provisioned and folder setups are not independent Git checkouts.
+function isDistinctUserCheckout(setup: ProjectSectionSetup): boolean {
+  return setup.setupMethod !== 'provisioned' && setup.kind !== 'folder'
+}
+
+// Why: execution target and filesystem namespace independently identify a surface.
+function getProjectSetupSurfaceKey(setup: ProjectSectionSetup): string {
+  return `${setup.projectId}::${setup.hostId}::${getExecutionSurface(setup)}::${getPathSurface(setup)}`
+}
+
+function getExecutionSurface(setup: ProjectSectionSetup): string {
+  const connectionId = setup.connectionId?.trim()
+  if (connectionId) {
+    return toSshExecutionHostId(connectionId)
+  }
+  return setup.executionHostId?.trim() || setup.hostId
+}
+
+// Why: projection twins differ by row identity, not checkout directory.
+function getCheckoutIdentity(setup: ProjectSectionSetup): string {
+  return normalizeRuntimePathForComparison(setup.path.trim()) || setup.repoId || setup.id
+}
+
+function getPathSurface(setup: ProjectSectionSetup): string {
+  const wslPath = parseWslUncPath(setup.path)
+  if (wslPath) {
+    return `wsl:${wslPath.distro.toLowerCase()}`
+  }
+  if (isWindowsAbsolutePathLike(setup.path)) {
+    return 'windows-host'
+  }
+  return 'default'
+}
+
 export function buildProjectGroupingIndex(
   model?: ProjectSectionModel
 ): ProjectGroupingIndex | null {
@@ -69,12 +107,43 @@ export function buildProjectGroupingIndex(
     projectGroupingIndexCache.set(model, null)
     return null
   }
+  const checkoutsByProjectSurface = new Map<string, Set<string>>()
+  for (const setup of projectHostSetups) {
+    if (!isDistinctUserCheckout(setup)) {
+      continue
+    }
+    const key = getProjectSetupSurfaceKey(setup)
+    const existing = checkoutsByProjectSurface.get(key)
+    if (existing) {
+      existing.add(getCheckoutIdentity(setup))
+    } else {
+      checkoutsByProjectSurface.set(key, new Set([getCheckoutIdentity(setup)]))
+    }
+  }
+  const surfaceKeysRequiringSetupGroups = new Set<string>()
+  for (const [surfaceKey, checkouts] of checkoutsByProjectSurface) {
+    if (checkouts.size > 1) {
+      surfaceKeysRequiringSetupGroups.add(surfaceKey)
+    }
+  }
   const index = {
     projectById: new Map(projects.map((project) => [project.id, project])),
-    setupByRepoId: new Map(projectHostSetups.map((setup) => [setup.repoId, setup]))
+    setupByRepoId: new Map(projectHostSetups.map((setup) => [setup.repoId, setup])),
+    surfaceKeysRequiringSetupGroups
   }
   projectGroupingIndexCache.set(model, index)
   return index
+}
+
+// Why: Settings splits projects by this same rule so it matches the sidebar headers.
+export function isCheckoutScopedProjectSetup(
+  setup: ProjectSectionSetup,
+  projectIndex: ProjectGroupingIndex
+): boolean {
+  return (
+    projectIndex.surfaceKeysRequiringSetupGroups.has(getProjectSetupSurfaceKey(setup)) &&
+    isDistinctUserCheckout(setup)
+  )
 }
 
 export type ProjectHeaderRevealTarget<R extends Pick<ProjectSectionRepo, 'displayName'> = Repo> = {
@@ -99,8 +168,16 @@ export function getProjectGroupingForRepo<R extends Pick<ProjectSectionRepo, 'di
       repo
     }
   }
-  // Why: provisioned runtime copies and non-ambiguous checkouts follow project
-  // identity rather than path-scoped setup identity, so they stay in one project.
+  if (projectIndex && isCheckoutScopedProjectSetup(setup, projectIndex)) {
+    // Why: only the ambiguous surface needs checkout-specific headers.
+    return {
+      key: `project:${project.id}::setup:${repoId}`,
+      label: repo?.displayName ?? setup.displayName,
+      repo,
+      projectId: project.id
+    }
+  }
+  // Provisioned copies and unambiguous checkouts share project identity rather than path-scoped setup identity.
   return {
     key: `project:${project.id}`,
     label: project.displayName,

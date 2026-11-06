@@ -1,12 +1,6 @@
-import type { SessionSearchProjectOwnership } from './session-search-project-ownership'
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
-import type { TranscriptMessageRole } from '../ai-vault/session-transcript-consumers'
+import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
+import type { TranscriptMessageRole } from '../ai-vault/transcripts/session-transcript-consumers'
 
-export {
-  SESSION_SEARCH_LIMIT_DEFAULT,
-  SESSION_SEARCH_LIMIT_MAX,
-  resolveSessionSearchLimit
-} from '../../shared/ai-vault-search-limit'
 // Bound planning cost for long queries, including single-token pastes.
 export const SESSION_SEARCH_QUERY_MAX_LENGTH = 512
 
@@ -20,7 +14,6 @@ export type SessionSearchScope = 'conversation' | 'all'
 export type SessionSearchSort = 'relevance' | 'newest'
 
 export type SessionSearchFilters = {
-  ownership?: SessionSearchProjectOwnership
   agents?: readonly AiVaultAgent[]
   /** Only sessions whose cwd is that path or inside it. */
   scopePaths?: readonly string[]

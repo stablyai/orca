@@ -6,17 +6,23 @@ import {
   decodeTerminalStreamFrame,
   decodeTerminalStreamJson,
   encodeTerminalStreamFrame
-} from '../../../../shared/terminal-stream-protocol'
+} from '../../../../shared/terminal/stream/terminal-stream-protocol'
 import { flushAsyncTicks, writeHeadlessTerminal } from './pty-connection-test-async'
 import {
   terminalWriteText,
   createMockTransport,
   createPane,
-  createManager
+  createManager,
+  type ConnectCallbacks,
+  type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import type { ConnectCallbacks, MockTransport } from './pty-connection-test-pane-fixtures'
+
 import type { PtyReplayDataMeta } from './pty-transport-types'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -114,6 +120,8 @@ type HostStream = {
   ackPendingOutput: unknown[]
   ackPendingOutputBytes: number
   ackPendingOutputOverflowed: boolean
+  yieldedQueries: unknown[]
+  outputBatcher: { push: () => void; flush: () => void; dispose: () => void }
 }
 type HostConnection = {
   runtime: HostRuntime
@@ -307,7 +315,9 @@ async function publishHostRecovery(
     ackOutputSourceRanges: false,
     ackPendingOutput: [],
     ackPendingOutputBytes: 0,
-    ackPendingOutputOverflowed: false
+    ackPendingOutputOverflowed: false,
+    yieldedQueries: [],
+    outputBatcher: { push: vi.fn(), flush: vi.fn(), dispose: vi.fn() }
   }
   const connection: HostConnection = {
     runtime: host,
@@ -347,6 +357,7 @@ describe('host-published recovery snapshot onto a live alt screen', () => {
     meta: PtyReplayDataMeta
   ): Promise<PaneEvent[]> {
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const transport = createMockTransport('agent-pty')
     const replay: { current: ConnectCallbacks['onReplayData'] | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
@@ -372,7 +383,9 @@ describe('host-published recovery snapshot onto a live alt screen', () => {
       events.push({ cols, rows })
     })
     const deps = buildPaneConnectionDeps(() => mockStoreState)
-    const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
+    const binding = connectPanePty(
+      ...mockPanePtyArgs(pane, createManager(1), bindPaneAgentTitleMocks(deps, agentTitleMocks))
+    )
     await flushAsyncTicks(8)
     pane.terminal.cols = COLS
     pane.terminal.rows = ROWS

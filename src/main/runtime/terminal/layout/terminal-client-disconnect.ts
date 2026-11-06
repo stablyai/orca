@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithHasRecentTerminalOutputPath } from '../output/terminal-output-path'
-import type { DriverState } from '../../orca-runtime-core'
+import type { RuntimeTerminalDriverState as DriverState } from '../../../../shared/runtime-session-contracts'
 import type { RuntimeFileCommandSurface } from '../../runtime-file-command-surface'
 
 export abstract class OrcaRuntimeWithOnClientDisconnected extends OrcaRuntimeWithHasRecentTerminalOutputPath {
@@ -15,7 +15,6 @@ export abstract class OrcaRuntimeWithOnClientDisconnected extends OrcaRuntimeWit
 
   onClientDisconnected(clientId: string): void {
     this.revokeTerminalFileGrantsForClient(clientId)
-    this.mobileDictation.cancelForClient(clientId)
 
     for (const [ptyId, entry] of this.pendingRestoreTimers) {
       if (entry.clientId === clientId) {

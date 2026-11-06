@@ -3,25 +3,22 @@ import {
   AiVaultSearchResponseSchema,
   AiVaultSearchStatusRequestSchema,
   AiVaultSearchStatusSchema
-} from '../../shared/ai-vault-search-contract'
-import { unavailableSessionSearchStatus } from '../../shared/ai-vault-search-client'
+} from '../../shared/ai-vault/search/ai-vault-search-contract'
+import { unavailableSessionSearchStatus } from '../../shared/ai-vault/search/ai-vault-search-client'
 import { sessionSearchScopeCatalog } from './session-search-scope-catalog'
-import { resolveProjectHostSetupProjection } from '../../shared/project-host-setup-hydration'
-import { getRepoExecutionHostId } from '../../shared/execution-host'
-import {
-  compileSessionSearchProjectOwnership,
-  materializeSessionSearchOwnership
-} from './session-search-project-ownership'
 import { resolveSessionSearchScope } from './session-search-scope-resolution'
-import type { AiVaultSearchResponse, AiVaultSearchStatus } from '../../shared/ai-vault-search-types'
+import type {
+  AiVaultSearchResponse,
+  AiVaultSearchStatus
+} from '../../shared/ai-vault/search/ai-vault-search-types'
 import {
   redactForTransport,
   redactStatusForTransport,
   type SessionSearchTransport
-} from '../../shared/ai-vault-search-transport'
+} from '../../shared/ai-vault/search/ai-vault-search-transport'
 import type { SessionSearchService } from './session-search-service'
-import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
-import { compatibleSearchAgents } from '../../shared/ai-vault-search-agent-compatibility'
+import { AI_VAULT_AGENTS } from '../../shared/ai-vault/contracts/ai-vault-types'
+import { compatibleSearchAgents } from '../../shared/ai-vault/search/ai-vault-search-agent-compatibility'
 
 let service: SessionSearchService | null = null
 
@@ -66,60 +63,20 @@ export async function searchSessionService(
             agents: compatibleAgents
           }
         }
-  const freshness =
-    request.freshness === 'wait-until-current'
-      ? await reconcileWithin(current, freshnessTimeoutMs)
-      : false
-  const canonical = within?.kind === 'project' && within.canonicalProjectKey
-  const catalog = within ? sessionSearchScopeCatalog() : null
-  const input = canonical ? materializeSessionSearchOwnership(catalog) : null
-  const snapshot = JSON.stringify(input)
-  const selection =
-    canonical && catalog && input
-      ? await compileSessionSearchProjectOwnership(catalog, canonical, input)
-      : null
-  const legacy =
-    catalog &&
-    within &&
-    !canonical &&
-    resolveProjectHostSetupProjection(catalog.repos, catalog.projects, catalog.projectHostSetups)
-  const legacyCatalog =
-    catalog && legacy
-      ? {
-          ...catalog,
-          settings: {
-            workspaceDir: catalog.settings.workspaceDir,
-            nestWorkspaces: catalog.settings.nestWorkspaces
-          },
-          projects: legacy.projects,
-          projectHostSetups: legacy.setups.filter(
-            (setup) => setup.hostId === (catalog.executionHostId ?? 'local')
-          ),
-          repos: catalog.repos.filter(
-            (repo) => getRepoExecutionHostId(repo) === (catalog.executionHostId ?? 'local')
-          )
-        }
-      : null
-  const hostScope = selection
-    ? { kind: 'canonical' as const, selection }
-    : within
-      ? resolveSessionSearchScope(within, legacyCatalog)
-      : undefined
+  const hostScope = within
+    ? resolveSessionSearchScope(within, sessionSearchScopeCatalog())
+    : undefined
   const retrievalScope =
     compatibleAgents.length === 0 && hostScope?.kind !== 'unknown'
       ? { kind: 'resolved' as const, paths: [''] }
       : hostScope
-  const moved = () =>
-    snapshot !== JSON.stringify(materializeSessionSearchOwnership(sessionSearchScopeCatalog()))
-  if (canonical && moved()) {
-    return { kind: 'stale-cursor', generation: 0 }
-  }
+  const freshness =
+    request.freshness === 'wait-until-current'
+      ? await reconcileWithin(current, freshnessTimeoutMs)
+      : false
   const result = AiVaultSearchResponseSchema.parse(
     await current.search(compatibleRequest, retrievalScope)
   )
-  if (canonical && moved()) {
-    return { kind: 'stale-cursor', generation: result.kind === 'results' ? result.generation : 0 }
-  }
   if (result.kind !== 'results') {
     return result
   }

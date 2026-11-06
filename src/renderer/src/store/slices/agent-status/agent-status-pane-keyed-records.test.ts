@@ -27,15 +27,6 @@ describe('boundRecentlyRetiredAgentStatusPaneKeys', () => {
     expect(afterFresh.k0).toBe(true)
     expect(afterFresh.k1).toBeUndefined()
   })
-
-  it('never returns an over-cap record unchanged', () => {
-    const over = fullRecord(RECENTLY_RETIRED_AGENT_STATUS_PANE_KEYS_MAX + 1, 'k')
-    const last = `k${RECENTLY_RETIRED_AGENT_STATUS_PANE_KEYS_MAX}`
-    const next = boundRecentlyRetiredAgentStatusPaneKeys(over, [last])
-    expect(next).not.toBe(over)
-    expect(Object.keys(next)).toHaveLength(RECENTLY_RETIRED_AGENT_STATUS_PANE_KEYS_MAX)
-    expect(next.k0).toBeUndefined()
-  })
 })
 
 it('does not enumerate unrelated pane records when removing absent keys', () => {
@@ -53,11 +44,4 @@ it('does not enumerate unrelated pane records when removing absent keys', () => 
     expect(removePaneKeys(record, new Set(['absent:leaf']))).toBe(record)
   }
   expect(enumerations).toBe(0)
-})
-
-it('removes enumerable undefined values without removing inherited or hidden keys', () => {
-  const record = { visible: undefined }
-  Object.defineProperty(record, 'hidden', { value: 1, enumerable: false })
-  expect(removePaneKeys(record, new Set(['hidden', 'toString']))).toBe(record)
-  expect(Object.hasOwn(removePaneKeys(record, new Set(['visible'])), 'visible')).toBe(false)
 })

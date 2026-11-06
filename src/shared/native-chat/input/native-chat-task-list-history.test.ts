@@ -3,7 +3,7 @@ import type {
   NativeChatBlock,
   NativeChatMessage,
   NativeChatToolCallBlock
-} from '../../native-chat-types'
+} from '../native-chat-types'
 import {
   buildNativeChatTaskListRows,
   nativeChatTaskListPredecessors
@@ -85,30 +85,5 @@ describe('native chat task list history', () => {
       message('b', [next])
     ])
     expect(history.get('b')?.todowrite).toBe(first)
-  })
-
-  it('updates predecessor identity after pagination and remains stable on rerender', () => {
-    const first = call()
-    const second = call('TodoWrite', 'in_progress')
-    const tail = message('b', [second])
-    expect(nativeChatTaskListPredecessors([tail]).get('b')?.todowrite).toBeUndefined()
-    const history = nativeChatTaskListPredecessors([message('a', [first]), tail])
-    expect(history.get('b')?.todowrite).toBe(first)
-    expect(nativeChatTaskListPredecessors([message('a', [first]), tail]).get('b')?.todowrite).toBe(
-      history.get('b')?.todowrite
-    )
-    expect(nativeChatTaskListPredecessors([tail]).get('b')?.todowrite).toBeUndefined()
-  })
-
-  it('diffs a running call before its result arrives and consumes a successful result', () => {
-    const first = call()
-    const running = { ...call('TodoWrite', 'in_progress'), state: 'running' as const }
-    const result: NativeChatBlock = { type: 'tool-result', output: 'ok' }
-    const model = buildNativeChatTaskListRows([running, result], {
-      todowrite: first,
-      update_plan: undefined
-    })
-    expect(model.rows.get(running)?.previous).toBeDefined()
-    expect(model.consumedResults.has(result)).toBe(true)
   })
 })

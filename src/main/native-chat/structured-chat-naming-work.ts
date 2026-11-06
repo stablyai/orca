@@ -1,4 +1,4 @@
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 
 export type NamingRequest = { record: AgentSessionRecord; automatic: boolean; firstPrompt?: string }
 type NamingJob = { desired?: NamingRequest; executing?: NamingRequest; preparing: boolean }

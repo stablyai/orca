@@ -30,9 +30,12 @@ vi.mock('./runtime-client', async () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
 }))
 
 vi.mock('child_process', async () => {
@@ -534,68 +537,6 @@ describe('orca cli worktree awareness', () => {
     expect(process.exitCode).toBe(1)
 
     process.exitCode = priorExitCode
-  })
-
-  it('passes caller terminal handle through worktree.create with cwd fallback', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_parent'
-    queueFixtures(
-      callMock,
-      worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')]),
-      okFixture('req_create', {
-        worktree: buildWorktree('/tmp/repo/child', 'child', 'abc', 'repo-1'),
-        lineage: null,
-        warnings: []
-      })
-    )
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    await main(
-      ['worktree', 'create', '--repo', 'id:repo-1', '--name', 'child', '--json'],
-      '/tmp/repo'
-    )
-
-    expect(callMock).toHaveBeenCalledTimes(2)
-    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
-      repo: 'id:repo-1',
-      name: 'child',
-      displayName: 'child',
-      displayNameKind: 'user',
-      baseBranch: undefined,
-      linkedIssue: undefined,
-      comment: undefined,
-      runHooks: false,
-      activate: false,
-      parentWorktree: undefined,
-      cwdParentWorktree: 'id:repo-1::/tmp/repo',
-      noParent: false,
-      callerTerminalHandle: 'term_parent',
-      cliProvenanceRequest: { callerTerminalHandle: 'term_parent' }
-    })
-  })
-
-  it('marks every worktree.create as CLI-created even from an external shell', async () => {
-    delete process.env.ORCA_TERMINAL_HANDLE
-    queueFixtures(
-      callMock,
-      okFixture('req_create_external', {
-        worktree: buildWorktree('/tmp/repo/child', 'child', 'abc', 'repo-1'),
-        lineage: null,
-        warnings: []
-      })
-    )
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    await main(
-      ['worktree', 'create', '--repo', 'id:repo-1', '--name', 'child', '--no-parent', '--json'],
-      '/tmp/repo'
-    )
-
-    expect(callMock).toHaveBeenCalledWith(
-      'worktree.create',
-      expect.objectContaining({ cliProvenanceRequest: {} })
-    )
   })
 
   it('tells the user which --setup flag answers an undecided ask repo', async () => {

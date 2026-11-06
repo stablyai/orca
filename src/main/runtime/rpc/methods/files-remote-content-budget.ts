@@ -3,6 +3,7 @@ import {
   remoteRpcResultExceedsContentBudget
 } from '../../../../shared/remote-rpc-content-budget'
 import type { DirEntry } from '../../../../shared/filesystem-entry-types'
+import { dirListingTooLargeForRemoteMessage } from '../../../../shared/file-dir-page'
 
 export function remoteFileContentBudget(
   clientKind: 'mobile' | 'runtime' | undefined,
@@ -19,7 +20,5 @@ export function assertDirListingWithinRemoteBudget(
   if (maxBytes === undefined || !remoteRpcResultExceedsContentBudget(entries, maxBytes)) {
     return entries
   }
-  throw new Error(
-    `This folder has ${entries.length.toLocaleString('en-US')} entries, too many to list over a remote connection.`
-  )
+  throw new Error(dirListingTooLargeForRemoteMessage(entries.length))
 }

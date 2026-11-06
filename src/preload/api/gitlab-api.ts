@@ -12,6 +12,7 @@ import type {
   GitLabMRInlineCommentInput,
   GitLabMRReviewersUpdateResult,
   GitLabMRUpdate,
+  GitLabMRInvolvement,
   GitLabProjectRef,
   GitLabRetryJobResult,
   GitLabTodo,
@@ -49,6 +50,7 @@ export type GitLabApi = {
       page?: number
       perPage?: number
       query?: string
+      involvement?: GitLabMRInvolvement
     }
   ) => Promise<ListMergeRequestsResult>
   /** The merged filter excludes issues. */
@@ -101,6 +103,8 @@ export type GitLabApi = {
       iid: number
       type: 'issue' | 'mr'
       includeReviewDetails?: boolean
+      /** A checks-panel poll: refused rather than booting a stopped WSL distro. */
+      background?: boolean
     }
   ) => Promise<GitLabWorkItemDetails | null>
   closeMR: (

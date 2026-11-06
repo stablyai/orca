@@ -181,6 +181,9 @@ const LOAD_FAILURE_PIECES: Record<BrowserLoadFailureCopyId, (values: { host: str
     timeoutTitle: (v) => translate('browser.loadFailure.timeoutTitle', COPY.timeoutTitle, v),
     resetTitle: (v) => translate('browser.loadFailure.resetTitle', COPY.resetTitle, v),
     routeDownTitle: () => translate('browser.loadFailure.routeDownTitle', COPY.routeDownTitle),
+    blockedTitle: (v) => translate('browser.loadFailure.blockedTitle', COPY.blockedTitle, v),
+    blockedDescription: () =>
+      translate('browser.loadFailure.blockedDescription', COPY.blockedDescription),
     routeDownDescription: () =>
       translate('browser.loadFailure.routeDownDescription', COPY.routeDownDescription),
     otherTitle: (v) =>

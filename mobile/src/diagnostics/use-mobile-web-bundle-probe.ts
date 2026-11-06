@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useHostClient } from '../transport/host-client-hooks'
-import { fetchMobileWebBundle } from '../transport/mobile-web-bundle-fetch'
-import { readMobileWebBundleErrorCode } from '../transport/mobile-web-bundle-operations'
+import { fetchMobileWebBundle } from '../transport/web-bundle/mobile-web-bundle-fetch'
+import { readMobileWebBundleErrorCode } from '../transport/web-bundle/mobile-web-bundle-operations'
 import { startDiagnosticFetchTimeout } from './diagnostic-fetch-timeout'
 
 // Bound client acquisition so an unopened host cannot leave Connecting… disabled forever; network/request timeouts apply later inside the fetch.

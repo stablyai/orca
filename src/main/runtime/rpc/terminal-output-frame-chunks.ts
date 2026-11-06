@@ -2,8 +2,8 @@ import {
   TerminalStreamOpcode,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
-} from '../../../shared/terminal-stream-protocol'
-import { TERMINAL_STREAM_CHUNK_BYTES } from '../../../shared/terminal-multiplex-flow-control'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
+import { TERMINAL_STREAM_CHUNK_BYTES } from '../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { terminalStreamByteLength } from './terminal-stream-byte-length'
 
 export type TerminalOutputMeta = {
@@ -18,6 +18,8 @@ export type TerminalOutputFrameChunk = {
   displayLength: number
   seq?: number
   opcode?: TerminalStreamOpcode
+  replayedQuery?: { seq: number; data: string }
+  replayedEscapeTail?: true
 }
 
 /** `span` only for subscribers that decode OutputSpan (the multiplex); `text` is the opcode-1 encoding every client reads. */

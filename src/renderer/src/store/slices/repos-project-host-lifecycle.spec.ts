@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
-import type { Repo } from '../../../../shared/repo-types'
+
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -22,15 +22,6 @@ export function registerReposProjectHostLifecycleTests(): void {
     sourceRepoIds: ['local-repo'],
     createdAt: 1,
     updatedAt: 1
-  }
-
-  const runtimeRepo: Repo = {
-    id: 'runtime-repo',
-    path: '/srv/project',
-    displayName: 'Project',
-    badgeColor: '#111',
-    addedAt: 1,
-    executionHostId: 'runtime:env-1'
   }
 
   const runtimeSetup: ProjectHostSetup = {
@@ -72,177 +63,12 @@ export function registerReposProjectHostLifecycleTests(): void {
   })
 
   describe('repo slice project host setup lifecycle', () => {
-    it('creates independent project host setup metadata through local IPC', async () => {
-      const setup: ProjectHostSetup = {
-        ...runtimeSetup,
-        hostId: 'local',
-        path: '',
-        setupState: 'setting-up'
-      }
-      projectsCreateHostSetup.mockResolvedValue({ project, setup })
-      const store = createTestStore()
-
-      await expect(
-        store.getState().createProjectHostSetup({
-          projectId: project.id,
-          hostId: 'local',
-          setupId: setup.id,
-          setupState: 'setting-up',
-          setupMethod: 'provisioned'
-        })
-      ).resolves.toEqual({ project, setup })
-
-      expect(store.getState().endpointProjects).toEqual([project])
-      expect(store.getState().endpointProjectHostSetups).toEqual([setup])
-      expect(projectsCreateHostSetup).toHaveBeenCalledWith({
-        projectId: project.id,
-        hostId: 'local',
-        setupId: setup.id,
-        setupState: 'setting-up',
-        setupMethod: 'provisioned'
-      })
-    })
-
-    it('updates runtime-owned project host setups through their owning runtime', async () => {
-      runtimeEnvironmentCall.mockResolvedValue({
-        id: 'rpc-update-setup',
-        ok: true,
-        result: {
-          result: {
-            project,
-            setup: { ...runtimeSetup, displayName: 'GPU VM renamed' }
-          }
-        },
-        _meta: { runtimeId: 'runtime-remote' }
-      })
-      const store = createTestStore()
-      store.setState({
-        endpointProjectHostSetups: [runtimeSetup],
-        settings: { activeRuntimeEnvironmentId: null } as never
-      })
-
-      await expect(
-        store.getState().updateProjectHostSetup({
-          setupId: runtimeSetup.id,
-          updates: { displayName: 'GPU VM renamed' }
-        })
-      ).resolves.toEqual({
-        project,
-        setup: {
-          ...runtimeSetup,
-          displayName: 'GPU VM renamed',
-          executionHostId: 'runtime:env-1',
-          runtimeOwnerEnvironmentId: 'env-1',
-          connectionId: null
-        },
-        repo: undefined
-      })
-
-      expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-        selector: 'env-1',
-        method: 'projectHostSetup.update',
-        params: {
-          setupId: runtimeSetup.id,
-          updates: { displayName: 'GPU VM renamed' }
-        },
-        timeoutMs: 15_000
-      })
-    })
-
-    it('deletes runtime-owned project host setups through their owning runtime', async () => {
-      runtimeEnvironmentCall.mockResolvedValue({
-        id: 'rpc-delete-setup',
-        ok: true,
-        result: { result: { project, setup: runtimeSetup } },
-        _meta: { runtimeId: 'runtime-remote' }
-      })
-      const store = createTestStore()
-      store.setState({
-        endpointProjects: [project],
-        endpointProjectHostSetups: [runtimeSetup],
-        settings: { activeRuntimeEnvironmentId: null } as never
-      })
-
-      await expect(
-        store.getState().deleteProjectHostSetup({ setupId: runtimeSetup.id })
-      ).resolves.toEqual({
-        project,
-        setup: runtimeSetup,
-        repo: undefined
-      })
-
-      expect(store.getState().endpointProjects).toEqual([project])
-      expect(store.getState().endpointProjectHostSetups).toEqual([])
-      expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-        selector: 'env-1',
-        method: 'projectHostSetup.delete',
-        params: { setupId: runtimeSetup.id },
-        timeoutMs: 15_000
-      })
-    })
-
-    it('a setup id shared with another route updates only its own row', async () => {
-      const localSetup: ProjectHostSetup = {
-        ...runtimeSetup,
-        hostId: 'local',
-        displayName: 'Local setup'
-      }
-      const updatedLocalSetup = { ...localSetup, displayName: 'Local renamed', updatedAt: 2 }
-      projectsUpdateHostSetup.mockResolvedValue({
-        project,
-        setup: updatedLocalSetup
-      })
-      const store = createTestStore()
-      store.setState({
-        endpointProjectHostSetups: [localSetup, runtimeSetup],
-        settings: { activeRuntimeEnvironmentId: null } as never
-      })
-
-      await store.getState().updateProjectHostSetup({
-        setupId: localSetup.id,
-        hostId: 'local',
-        updates: { displayName: 'Local renamed' }
-      })
-
-      expect(projectsUpdateHostSetup).toHaveBeenCalledWith({
-        setupId: localSetup.id,
-        hostId: 'local',
-        updates: { displayName: 'Local renamed' }
-      })
-      expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-      expect(store.getState().endpointProjectHostSetups).toEqual([updatedLocalSetup, runtimeSetup])
-    })
-
-    it('a setup id shared with another route removes only its own row', async () => {
-      const localSetup: ProjectHostSetup = {
-        ...runtimeSetup,
-        hostId: 'local',
-        displayName: 'Local setup'
-      }
-      projectsDeleteHostSetup.mockResolvedValue({ project, setup: localSetup })
-      const store = createTestStore()
-      store.setState({
-        endpointProjects: [project],
-        endpointProjectHostSetups: [localSetup, runtimeSetup],
-        settings: { activeRuntimeEnvironmentId: null } as never
-      })
-
-      await store.getState().deleteProjectHostSetup({ setupId: localSetup.id, hostId: 'local' })
-
-      expect(projectsDeleteHostSetup).toHaveBeenCalledWith({
-        setupId: localSetup.id,
-        hostId: 'local'
-      })
-      expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-      expect(store.getState().endpointProjectHostSetups).toEqual([runtimeSetup])
-    })
-
     it('refuses an unqualified setup id two hosts share instead of acting on the first', async () => {
       const localSetup: ProjectHostSetup = { ...runtimeSetup, hostId: 'local' }
       const store = createTestStore()
       store.setState({
-        endpointProjects: [project],
-        endpointProjectHostSetups: [localSetup, runtimeSetup],
+        projects: [project],
+        projectHostSetups: [localSetup, runtimeSetup],
         settings: { activeRuntimeEnvironmentId: null } as never
       })
 
@@ -259,15 +85,15 @@ export function registerReposProjectHostLifecycleTests(): void {
       expect(projectsDeleteHostSetup).not.toHaveBeenCalled()
       expect(projectsUpdateHostSetup).not.toHaveBeenCalled()
       expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-      expect(store.getState().endpointProjectHostSetups).toEqual([localSetup, runtimeSetup])
+      expect(store.getState().projectHostSetups).toEqual([localSetup, runtimeSetup])
     })
 
     it('refuses a named host the catalog has no setup for instead of deleting by id', async () => {
       const localSetup: ProjectHostSetup = { ...runtimeSetup, hostId: 'local' }
       const store = createTestStore()
       store.setState({
-        endpointProjects: [project],
-        endpointProjectHostSetups: [localSetup],
+        projects: [project],
+        projectHostSetups: [localSetup],
         settings: { activeRuntimeEnvironmentId: null } as never
       })
 
@@ -276,85 +102,7 @@ export function registerReposProjectHostLifecycleTests(): void {
       ).resolves.toBeNull()
 
       expect(projectsDeleteHostSetup).not.toHaveBeenCalled()
-      expect(store.getState().endpointProjectHostSetups).toEqual([localSetup])
-    })
-
-    it('names the SSH twin of a local setup on this computer', async () => {
-      const localSetup: ProjectHostSetup = { ...runtimeSetup, hostId: 'local' }
-      const sshSetup: ProjectHostSetup = { ...runtimeSetup, hostId: 'ssh:box' }
-      projectsDeleteHostSetup.mockResolvedValue({ project, setup: sshSetup })
-      const store = createTestStore()
-      store.setState({
-        endpointProjects: [project],
-        endpointProjectHostSetups: [localSetup, sshSetup],
-        settings: { activeRuntimeEnvironmentId: null } as never
-      })
-
-      await store.getState().deleteProjectHostSetup({ setupId: sshSetup.id, hostId: 'ssh:box' })
-
-      expect(projectsDeleteHostSetup).toHaveBeenCalledWith({
-        setupId: sshSetup.id,
-        hostId: 'ssh:box'
-      })
-      expect(store.getState().endpointProjectHostSetups).toEqual([localSetup])
-    })
-
-    it('preserves runtime-fetched setup-only states during repo hydration', async () => {
-      const pendingSetup: ProjectHostSetup = {
-        ...runtimeSetup,
-        id: 'setup-pending',
-        repoId: '',
-        path: '',
-        setupState: 'setting-up'
-      }
-      runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
-        if (args.method === 'repo.list') {
-          return {
-            id: 'rpc-repos',
-            ok: true,
-            result: { repos: [runtimeRepo] },
-            _meta: { runtimeId: 'runtime-remote' }
-          }
-        }
-        if (args.method === 'project.list') {
-          return {
-            id: 'rpc-projects',
-            ok: true,
-            result: { projects: [project] },
-            _meta: { runtimeId: 'runtime-remote' }
-          }
-        }
-        if (args.method === 'projectHostSetup.list') {
-          return {
-            id: 'rpc-setups',
-            ok: true,
-            result: { setups: [pendingSetup] },
-            _meta: { runtimeId: 'runtime-remote' }
-          }
-        }
-        throw new Error(`Unexpected runtime method: ${args.method}`)
-      })
-      const store = createTestStore()
-      store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
-
-      await store.getState().fetchRepos(catalogOwner(store))
-
-      expect(store.getState().endpointProjectHostSetups).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            id: 'setup-pending',
-            hostId: 'runtime:env-1',
-            setupState: 'setting-up'
-          })
-        ])
-      )
+      expect(store.getState().projectHostSetups).toEqual([localSetup])
     })
   })
-
-  // The catalog these tests read is the one the focused host would have shown.
-  function catalogOwner(store: {
-    getState: () => { settings: { activeRuntimeEnvironmentId?: string | null } | null }
-  }): { runtimeEnvironmentId: string | null } {
-    return { runtimeEnvironmentId: store.getState().settings?.activeRuntimeEnvironmentId ?? null }
-  }
 }

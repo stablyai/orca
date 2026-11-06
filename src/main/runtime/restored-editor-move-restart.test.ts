@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import { ownedEditorFileId } from '../../shared/workspace-session-pane-ownership'
+import { ownedEditorFileId } from '../../shared/workspace-session/workspace-session-pane-ownership'
 import type { Store } from '../persistence/loading-store/store'
 import { WindowSession } from '../persistence/terminal-topology/terminal-topology-window-session-fixture'
 import {

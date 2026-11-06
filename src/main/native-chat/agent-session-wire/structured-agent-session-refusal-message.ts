@@ -1,9 +1,7 @@
-import { terminalOwnerRefusalMessage } from '../../../shared/agent-session-legacy-handoff-lease'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type {
-  AgentSessionAnyRefusalReason,
-  AgentSessionRefusalReference
-} from '../../../shared/agent-session-wire'
+import { terminalOwnerRefusalMessage } from '../../../shared/agent-session/lifecycle/agent-session-legacy-handoff-lease'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionAnyRefusalReason } from '../../../shared/agent-session/failures/agent-session-refusal-details'
+import type { AgentSessionRefusalReference } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 
 function ownerDescription(record: AgentSessionRecord): string {
   const owner = record.lease.ownerProcess
@@ -36,13 +34,23 @@ const SITUATION_MESSAGES: Partial<Record<AgentSessionAnyRefusalReason, string>> 
     "Orca can't read this chat's saved state. If a newer version of Orca saved it, update Orca to open it; otherwise start a new chat."
 }
 
+const HELD_IN_TERMINAL_MESSAGE =
+  'The agent is already running this conversation in another terminal. Quit it there or close that terminal, then try again.'
+
 /** Return situation-specific reason/text, or null to preserve the caller’s wording. */
 export function structuredAgentSessionRefusalMessage(
   emitted: AgentSessionRefusalReference,
   record: AgentSessionRecord | null
 ): { message: string; reference: AgentSessionRefusalReference } | null {
   const reason = emitted.details?.reason
-  const situational = reason ? SITUATION_MESSAGES[reason] : undefined
+  const owner = emitted.details && 'owner' in emitted.details ? emitted.details.owner : undefined
+  // Only a refusal that names the holding chat is another chat's; without one, a terminal holds it.
+  const situational =
+    reason === 'conversationHeldElsewhere' && !owner
+      ? HELD_IN_TERMINAL_MESSAGE
+      : reason
+        ? SITUATION_MESSAGES[reason]
+        : undefined
   if (situational) {
     return { message: situational, reference: emitted }
   }

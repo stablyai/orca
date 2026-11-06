@@ -1,11 +1,5 @@
 /** Run window.__orcaTypingDiagnostic.start(), type ~20s, report(), then stop() on the affected machine. Census links echo lag to rows/listeners/settings/focused agent; input instrumentation exists only between start/stop. */
 import {
-  countMountedAgentRows,
-  readFocusedPaneCensus,
-  readProbeStoreState,
-  readStoreListenerCount
-} from './census-probe'
-import {
   detachPaneEcho,
   discardUndispatchedKeystroke,
   drainTimedOutEchoCandidates,
@@ -13,152 +7,52 @@ import {
   findPaneOwningNode,
   instrumentPaneEcho,
   listProbePanes,
+  noteEchoOutputArrival,
   recordKeystroke,
   type EchoObservation,
   type InstrumentedPane
 } from './echo-instrumentation'
+import { setTerminalOutputArrivalObserver } from '@/lib/pane-manager/terminal-output-arrival-observer'
+import { observeRendererLongTasks } from './renderer-long-tasks'
 import {
-  summarizeLatencySamples,
-  summarizeTypingScaleCensus,
-  typingSampleDurationMs,
-  type LatencyPercentiles,
-  type TypingScaleCensus
-} from './diagnostic-summary'
+  buildTypingLatencyReport,
+  type ProbeState,
+  type TypingLatencyReport
+} from './diagnostic-report'
 import { installTypingLatencyInputEvents } from './input-events'
-import {
-  createInputSourceTally,
-  emptyInputSourceBreakdown,
-  type InputSourceBreakdown,
-  type InputSourceTally
-} from './input-source'
+import { createInputSourceTally } from './input-source'
 import {
   appendExactLatencySample,
   appendTypingLatencySample,
   createExactLatencySampleWindow,
-  type ExactLatencySampleWindow
+  TYPING_LATENCY_SAMPLE_LIMIT
 } from './sample-window'
 
-type AmbiguousBurstState = {
-  inputCounts: number[]
-  firstOutputParseFromFirstDispatchMs: number[]
-  firstOutputParseFromLastDispatchMs: number[]
-  parseToPaintMs: number[]
-  outputBytes: number[]
-  outputWrites: number[]
-}
-
-type ProbeState = {
-  startedAt: number
-  stoppedAt: number | null
-  startedAtIso: string
-  exact: ExactLatencySampleWindow
-  ambiguous: AmbiguousBurstState
-  exactInputs: number
-  ambiguousInputs: number
-  ambiguousBurstCount: number
-  attributionGapBursts: number
-  unmatchedKeystrokes: number
-  keystrokesWithoutTerminalFocus: number
-  instrumentedPaneCount: number
-  panes: InstrumentedPane[]
-  detachInputEvents: () => void
-  byInputSource: InputSourceTally
-}
+export type { TypingLatencyReport } from './diagnostic-report'
 
 let active: ProbeState | null = null
 let lastState: ProbeState | null = null
 let cachedAppVersion: string | null = null
 
-export type TypingLatencyReport = {
-  capturedAt: string
-  sampling: {
-    running: boolean
-    startedAt: string | null
-    durationMs: number | null
-    keystrokesWithoutTerminalFocus: number
-    unmatchedKeystrokes: number
-    exactInputs: number
-    ambiguousInputs: number
-    ambiguousBursts: number
-    attributionGapBursts: number
-    instrumentedPanes: number
-  }
-  exact: {
-    inputToDispatchMs: LatencyPercentiles
-    dispatchToParseMs: LatencyPercentiles
-    parseToPaintMs: LatencyPercentiles
-    inputToPaintMs: LatencyPercentiles
-    outputBytesPerInput: LatencyPercentiles
-    outputWritesPerInput: LatencyPercentiles
-  }
-  ambiguousBursts: {
-    inputCount: LatencyPercentiles
-    firstOutputParseFromFirstDispatchMs: LatencyPercentiles
-    firstOutputParseFromLastDispatchMs: LatencyPercentiles
-    parseToPaintMs: LatencyPercentiles
-    outputBatchBytes: LatencyPercentiles
-    outputBatchWrites: LatencyPercentiles
-  }
-  byInputSource: InputSourceBreakdown
-  census: TypingScaleCensus
-}
-
-function buildReport(state: ProbeState | null, running: boolean): TypingLatencyReport {
-  return {
-    capturedAt: new Date().toISOString(),
-    sampling: {
-      running,
-      startedAt: state?.startedAtIso ?? null,
-      durationMs: typingSampleDurationMs(
-        state?.startedAt ?? null,
-        state?.stoppedAt ?? null,
-        performance.now()
-      ),
-      keystrokesWithoutTerminalFocus: state?.keystrokesWithoutTerminalFocus ?? 0,
-      unmatchedKeystrokes: state?.unmatchedKeystrokes ?? 0,
-      exactInputs: state?.exactInputs ?? 0,
-      ambiguousInputs: state?.ambiguousInputs ?? 0,
-      ambiguousBursts: state?.ambiguousBurstCount ?? 0,
-      attributionGapBursts: state?.attributionGapBursts ?? 0,
-      instrumentedPanes: state?.instrumentedPaneCount ?? 0
-    },
-    exact: {
-      inputToDispatchMs: summarizeLatencySamples(state?.exact.inputToDispatchMs ?? []),
-      dispatchToParseMs: summarizeLatencySamples(state?.exact.dispatchToParseMs ?? []),
-      parseToPaintMs: summarizeLatencySamples(state?.exact.parseToPaintMs ?? []),
-      inputToPaintMs: summarizeLatencySamples(state?.exact.inputToPaintMs ?? []),
-      outputBytesPerInput: summarizeLatencySamples(state?.exact.outputBytes ?? []),
-      outputWritesPerInput: summarizeLatencySamples(state?.exact.outputWrites ?? [])
-    },
-    ambiguousBursts: {
-      inputCount: summarizeLatencySamples(state?.ambiguous.inputCounts ?? []),
-      firstOutputParseFromFirstDispatchMs: summarizeLatencySamples(
-        state?.ambiguous.firstOutputParseFromFirstDispatchMs ?? []
-      ),
-      firstOutputParseFromLastDispatchMs: summarizeLatencySamples(
-        state?.ambiguous.firstOutputParseFromLastDispatchMs ?? []
-      ),
-      parseToPaintMs: summarizeLatencySamples(state?.ambiguous.parseToPaintMs ?? []),
-      outputBatchBytes: summarizeLatencySamples(state?.ambiguous.outputBytes ?? []),
-      outputBatchWrites: summarizeLatencySamples(state?.ambiguous.outputWrites ?? [])
-    },
-    byInputSource: state?.byInputSource.breakdown() ?? emptyInputSourceBreakdown(),
-    census: summarizeTypingScaleCensus({
-      state: readProbeStoreState(),
-      appVersion: cachedAppVersion,
-      livePaneCount: listProbePanes().length,
-      instrumentedPaneCount: state?.instrumentedPaneCount ?? 0,
-      mountedAgentRowCount: countMountedAgentRows(),
-      storeListenerCount: readStoreListenerCount(),
-      focusedPane: readFocusedPaneCensus()
-    })
-  }
-}
-
 function recordObservation(state: ProbeState, observation: EchoObservation): void {
   if (observation.attribution === 'single-input') {
     state.exactInputs += 1
     appendExactLatencySample(state.exact, observation)
+    state.exactSamples.push({
+      startedAt: observation.startedAt,
+      paintedAt: observation.paintedAt,
+      inputToPaintMs: observation.inputToPaintMs,
+      eventToPaintMs: observation.eventToPaintMs,
+      eventToHandlerMs: observation.eventToHandlerMs,
+      inputToDispatchMs: observation.inputToDispatchMs,
+      dispatchToArrivalMs: observation.dispatchToArrivalMs,
+      arrivalToWriteMs: observation.arrivalToWriteMs,
+      writeToParseMs: observation.writeToParseMs,
+      parseToPaintMs: observation.parseToPaintMs
+    })
+    if (state.exactSamples.length > TYPING_LATENCY_SAMPLE_LIMIT) {
+      state.exactSamples.shift()
+    }
   } else {
     state.ambiguousInputs += observation.inputCount
     state.ambiguousBurstCount += 1
@@ -188,6 +82,12 @@ function cacheAppVersion(): void {
     .catch(() => undefined)
 }
 
+/** Composition-end events are synthesized by Orca, so their timestamps say nothing about queueing. */
+function readTrustedEventTime(event: Event, handledAt: number): number | null {
+  const at = event.timeStamp
+  return event.isTrusted && Number.isFinite(at) && at > 0 && at <= handledAt ? at : null
+}
+
 function startProbe(): string {
   if (active) {
     return 'Typing diagnostic already running. Type for ~20s, then run __orcaTypingDiagnostic.report().'
@@ -199,6 +99,8 @@ function startProbe(): string {
     stoppedAt: null,
     startedAtIso: new Date().toISOString(),
     exact: createExactLatencySampleWindow(),
+    exactSamples: [],
+    longTasks: observeRendererLongTasks(),
     ambiguous: {
       inputCounts: [],
       firstOutputParseFromFirstDispatchMs: [],
@@ -222,6 +124,18 @@ function startProbe(): string {
     instrumentPaneEcho(pane, (observation) => recordObservation(state, observation))
   )
   state.instrumentedPaneCount = state.panes.length
+  const paneByTerminal = new Map<unknown, InstrumentedPane>()
+  for (const entry of state.panes) {
+    if (entry.pane?.terminal) {
+      paneByTerminal.set(entry.pane.terminal, entry)
+    }
+  }
+  setTerminalOutputArrivalObserver((terminal) => {
+    const entry = paneByTerminal.get(terminal)
+    if (entry) {
+      noteEchoOutputArrival(entry, performance.now())
+    }
+  })
 
   state.detachInputEvents = installTypingLatencyInputEvents(window, (signal) => {
     const eventTarget = signal.event.target instanceof Node ? signal.event.target : null
@@ -231,7 +145,12 @@ function startProbe(): string {
       return undefined
     }
     const recordedAt = performance.now()
-    const recorded = recordKeystroke(target, recordedAt, signal.source, signal.text)
+    const recorded = recordKeystroke(
+      target,
+      recordedAt,
+      signal.source,
+      readTrustedEventTime(signal.event, recordedAt)
+    )
     state.unmatchedKeystrokes += recorded.unmatched
     if (signal.source === 'ime') {
       return {
@@ -266,6 +185,8 @@ function stopProbe(): string {
   state.instrumentedPaneCount = state.panes.length
   state.detachInputEvents()
   state.detachInputEvents = () => undefined
+  setTerminalOutputArrivalObserver(null)
+  state.longTasks.dispose()
   for (const entry of state.panes) {
     state.unmatchedKeystrokes += detachPaneEcho(entry)
   }
@@ -275,12 +196,13 @@ function stopProbe(): string {
 
 function reportProbe(): TypingLatencyReport {
   if (active) {
+    active.longTasks.flush()
     const now = performance.now()
     for (const entry of active.panes) {
       active.unmatchedKeystrokes += drainTimedOutEchoCandidates(entry, now)
     }
   }
-  const report = buildReport(active ?? lastState, active !== null)
+  const report = buildTypingLatencyReport(active ?? lastState, active !== null, cachedAppVersion)
   console.log('[orca] typing latency diagnostic', report)
   return report
 }

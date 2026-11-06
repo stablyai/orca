@@ -47,6 +47,8 @@ export function pickSpaceWindowState(state: AppState) {
 }
 
 export type SpaceWindowState = ReturnType<typeof pickSpaceWindowState>
+export type SpaceWindowStateUpdate = Omit<SpaceWindowState, 'editorDrafts'> &
+  Partial<Pick<SpaceWindowState, 'editorDrafts'>>
 
 export function selectSpaceWindowAnalysis(
   current: SpaceWindowState['workspaceSpaceAnalysis'],
@@ -66,7 +68,7 @@ export function selectSpaceWindowAnalysis(
   return detailCount(incoming) > detailCount(current) ? incoming : current
 }
 
-export function isSpaceWindowState(value: unknown): value is SpaceWindowState {
+export function isSpaceWindowState(value: unknown): value is SpaceWindowStateUpdate {
   return (
     value !== null &&
     typeof value === 'object' &&

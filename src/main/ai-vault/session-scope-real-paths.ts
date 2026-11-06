@@ -1,11 +1,14 @@
 import { realpath } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
-import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
+import type {
+  AiVaultListResult,
+  AiVaultSession
+} from '../../shared/ai-vault/contracts/ai-vault-types'
 import {
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
 } from '../../shared/cross-platform-path'
-import { sessionFileExecutionNamespace } from '../../shared/ai-vault-scope-cwd-match'
+import { sessionFileExecutionNamespace } from '../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 
 type AiVaultScopeLink = { scopePath: string; realPath: string }
@@ -32,11 +35,8 @@ export async function resolveAiVaultScopeRealPaths(
     }
   }
   const scanScopePaths = [...scopePaths]
-  const seen = new Set(scopePaths.map(normalizeRuntimePathForComparison))
   for (const { realPath } of links) {
-    const key = normalizeRuntimePathForComparison(realPath)
-    if (!seen.has(key)) {
-      seen.add(key)
+    if (!scanScopePaths.some((path) => sameComparisonPath(path, realPath))) {
       scanScopePaths.push(realPath)
     }
   }
