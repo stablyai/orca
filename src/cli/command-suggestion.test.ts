@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { CommandSpec } from './args'
 import { suggestCommands, unknownCommandData } from './command-suggestion'
+import { COMMAND_SPECS } from './specs'
 
 const specs: CommandSpec[] = [
   {
@@ -110,5 +111,23 @@ describe('unknownCommandData', () => {
     const data = unknownCommandData(specs, ['worktree', 'move'])
     expect(data.suggestions).not.toContain('worktree remove')
     expect(data.nextSteps.join(' ')).not.toContain('remove')
+  })
+})
+
+describe('positional terminal handle recovery', () => {
+  it('points target --terminal commands at the flag form but not caller-identity ones', () => {
+    for (const [commandPath, parent] of [
+      [['terminal', 'read', 'term_abc123'], 'terminal read'],
+      [['terminal', 'send', 'term_abc123', 'hello'], 'terminal send'],
+      [['terminal', 'read', 'structworker_abc'], 'terminal read']
+    ] as const) {
+      expect(unknownCommandData(COMMAND_SPECS, [...commandPath])).toEqual({
+        suggestions: [`${parent} --terminal <handle>`],
+        nextSteps: [`Did you mean: orca ${parent} --terminal <handle>`]
+      })
+    }
+    expect(
+      unknownCommandData(COMMAND_SPECS, ['orchestration', 'check', 'term_abc123']).suggestions
+    ).toEqual([])
   })
 })
