@@ -241,7 +241,7 @@ function readAccountFlag(ctx: HandlerContext): string {
  * (null). A name shared by several accounts — one email in two organizations — is
  * refused with their ids rather than guessing which subscription to bill.
  */
-export function resolveAccountId(
+function resolveAccountId(
   label: string,
   accounts: readonly AccountChoice[],
   query: string,
