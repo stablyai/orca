@@ -125,9 +125,13 @@ describe('macOS clipboard image data beside a file URL', () => {
   })
 
   it('does not save malformed native image data or read its accompanying file', async () => {
+    // (#26739) An advertised image whose bytes never decode now rejects loudly
+    // instead of resolving null; null keeps meaning "the clipboard has no image".
     setImage({ width: 0, height: 0 }, true)
     mocks.readBuffer.mockReturnValue(Buffer.from('malformed image'))
-    await expect(invoke('clipboard:saveImageAsTempFile')).resolves.toBeNull()
+    await expect(invoke('clipboard:saveImageAsTempFile')).rejects.toThrow(
+      'Clipboard image could not be read'
+    )
     expect(invoke('clipboard:readImageThumbnail')).toBeNull()
     expect(mocks.toPNG).not.toHaveBeenCalled()
     expect(mocks.writeFile).not.toHaveBeenCalled()
