@@ -1,6 +1,4 @@
-import { isClaudeToolResultContent } from '../../shared/claude-tool-content'
-import { decodeClaudeTranscriptLine } from '../native-chat/transcript-line-decoders-claude'
-import { claudeEnvelopeStopHookFeedbackRow } from './claude-stop-hook-feedback'
+import { claudeTranscriptPrompt } from './claude-transcript-prompt'
 import { readClaudeMessageEnvelope } from './structured/journal/claude-structured-item-translation'
 
 /** Attachments/queued steer and tool results continue the existing root. */
@@ -13,12 +11,10 @@ export function isClaudeTranscriptRootPrompt(row: Record<string, unknown>): bool
     session_id: row.sessionId,
     parent_tool_use_id: null
   })
-  if (
-    !envelope ||
-    claudeEnvelopeStopHookFeedbackRow(envelope) ||
-    !envelope.content.some((part) => !isClaudeToolResultContent(part))
-  ) {
-    return false
-  }
-  return decodeClaudeTranscriptLine(JSON.stringify(row), String(row.uuid))?.role === 'user'
+  const { decoded, ignored, internalTurnStart } = claudeTranscriptPrompt(
+    row,
+    envelope,
+    String(row.sessionId)
+  )
+  return !ignored && (internalTurnStart || decoded?.role === 'user')
 }

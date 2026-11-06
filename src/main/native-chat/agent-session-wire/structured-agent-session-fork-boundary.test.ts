@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises'
+import capture from '../../claude/__fixtures__/claude-plugin-recovery.json'
 import { expect, it } from 'vitest'
 import { claudeConversationForkBoundary } from '../../claude/claude-conversation-fork-boundary'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -129,4 +130,34 @@ it('cuts Claude forks before a local-command caveat following the response', asy
       beforeMessage: { sessionId: 'source', uuid: command.uuid }
     })
   ).toBe('ef5b13f9-6a3f-5d82-8452-cb799862efc0')
+})
+
+it('cuts a Claude fork before a recorded task wake and its independent reply', () => {
+  const opener = {
+    ...capture[0]!,
+    uuid: 'prompt',
+    parentUuid: null,
+    origin: { kind: 'human' },
+    message: { role: 'user', content: 'original request' }
+  }
+  const answer = {
+    ...capture[1]!,
+    uuid: 'answer',
+    parentUuid: 'prompt',
+    message: {
+      role: 'assistant',
+      content: [{ type: 'text', text: 'original response' }],
+      stop_reason: 'end_turn'
+    }
+  }
+  const wake = { ...capture[0]!, parentUuid: 'answer' }
+  const following = { ...answer, uuid: 'wake-answer', parentUuid: wake.uuid }
+  expect(
+    claudeConversationForkBoundary([opener, answer, wake, following], {
+      selectedItemId: 'response',
+      settled: true,
+      rootMessage: { sessionId: opener.sessionId, uuid: 'prompt' },
+      throughMessage: { sessionId: opener.sessionId, uuid: 'answer' }
+    })
+  ).toBe('answer')
 })
