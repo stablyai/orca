@@ -64,9 +64,11 @@ export async function killStaleDaemon(
   let liveOwnerSurvived = false
   // Capture the inspected owner so cleanup cannot remove a later incarnation's record.
   let recordedOwner: ParsedDaemonPid | null = null
+  let malformedRecord = false
   try {
     const parsedPid = parseDaemonPidFile(readFileSync(pidPath, 'utf8'))
     recordedOwner = parsedPid
+    malformedRecord = parsedPid === null
     const identity = parsedPid
       ? await inspectDaemonProcessIdentity(
           parsedPid.pid,
@@ -157,10 +159,11 @@ export async function killStaleDaemon(
 
   // Only publishers replace dead endpoints; this probe is advisory and never removes another daemon's name.
   const endpointOutcome = await probeEndpoint(socketPath)
-  if (endpointOutcome === 'connected') {
+  // A replacement cannot publish over a retained malformed record, so an inconclusive probe declines it.
+  if (endpointOutcome === 'connected' || (malformedRecord && endpointOutcome === 'unknown')) {
     return { killed: killedDaemon, liveOwnerSurvived: true }
   }
-  if (!recordedOwner && endpointIsProvenDead(endpointOutcome)) {
+  if (malformedRecord && endpointIsProvenDead(endpointOutcome)) {
     // A publishing daemon's record is empty until written, so reclaim malformed records only once its endpoint is dead.
     unlinkDaemonPidFileWhen(pidPath, (content) => parseDaemonPidFile(content) === null)
   }
