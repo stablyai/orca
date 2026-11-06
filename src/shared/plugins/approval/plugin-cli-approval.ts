@@ -193,7 +193,9 @@ export function buildPluginApprovalRequest(
     contentIdentity: subject.contentIdentity,
     isDev: subject.isDev,
     grants,
-    why: `It can run code or act in Orca, so Orca does not enable it without an explicit approval bound to exactly these files and this access.${devNote}`,
+    why: pluginNeedsCliApproval(subject.manifest)
+      ? `It can run code or act in Orca, so Orca does not enable it without an explicit approval bound to exactly these files and this access.${devNote}`
+      : 'It now comes from a different repository or folder, so Orca does not keep it on without an explicit approval bound to exactly these files.',
     approveFlag,
     nextSteps: [
       'Approving grants the access listed above. Confirm with your user first unless they already asked for exactly this plugin and access.',

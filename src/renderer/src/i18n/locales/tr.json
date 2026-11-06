@@ -13257,7 +13257,8 @@
           "oneDescription": "Yayıncı: {{value0}}. Siz inceleyene kadar güncellenmeyecek.",
           "manyDescription": "Siz inceleyene kadar güncellenmeyecekler.",
           "review": "İncele",
-          "dismiss": "Kapat"
+          "dismiss": "Kapat",
+          "movedInstalled": "Siz inceleyene kadar kapalı kalır."
         },
         "PluginThemeUseNow": {
           "assignedLight": "{{value0}} açık temanız olarak ayarlandı",
