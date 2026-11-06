@@ -20,9 +20,9 @@ function purgeWithMeta(meta: Record<string, unknown> = {}) {
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the service constructor only reads the store members the fake supplies.
   const runtime = new OrcaRuntimeService(store as never)
-  return (worktreeId: string, hostId?: ExecutionHostId) =>
+  return (worktreeId: string, hostId?: ExecutionHostId, dropAgentTrust = true) =>
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake store covers every member the purge reads.
-    runtime.removeWorktreeMetadataAndHistory(store as never, worktreeId, hostId)
+    runtime.removeWorktreeMetadataAndHistory(store as never, worktreeId, hostId, { dropAgentTrust })
 }
 
 describe('worktree removal drops the workspace trust Orca wrote', () => {
@@ -87,10 +87,12 @@ describe('worktree removal drops the workspace trust Orca wrote', () => {
     })
   })
 
-  it('finds the bare path behind a folder-workspace session id suffix', async () => {
-    await purgeWithMeta()(`${WORKTREE_ID}::workspace:5e8cc6b2-1d3f-4a5b-9c2d-7f6e5a4b3c2d`)
+  it('keeps the folder trust when one folder-workspace session is removed', async () => {
+    const session = `${WORKTREE_ID}::workspace:5e8cc6b2-1d3f-4a5b-9c2d-7f6e5a4b3c2d`
+    await purgeWithMeta()(session, undefined, false)
+    await purgeWithMeta()(session)
 
-    expect(readFileSync(configPath, 'utf-8')).not.toContain(`[projects."${PROJECT}"]`)
+    expect(readFileSync(configPath, 'utf-8')).toContain(`[projects."${PROJECT}"]`)
   })
 
   it('keeps the entry while another host still owns the same path-derived id', async () => {

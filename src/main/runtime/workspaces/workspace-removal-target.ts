@@ -139,10 +139,12 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends Runtim
     removalHostId?: ExecutionHostId
   ): Promise<void> {
     this.clearOptimisticReconcileToken(worktreeId)
+    // Only checkout-deleting paths purge here, so the directory itself is gone.
     const metadataAndHistory = this.removeWorktreeMetadataAndHistory(
       store,
       worktreeId,
-      removalHostId
+      removalHostId,
+      { dropAgentTrust: true }
     )
     this.invalidateResolvedWorktreeCache()
     this.invalidateWorktreeScanCacheForRepo(repoId)
@@ -153,7 +155,9 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends Runtim
   async removeWorktreeMetadataAndHistory(
     store: RuntimeStore,
     worktreeId: string,
-    hostId?: ExecutionHostId
+    hostId?: ExecutionHostId,
+    // Why: folder sessions and forgotten orphans keep the directory on disk for siblings.
+    options: { dropAgentTrust?: boolean } = {}
   ): Promise<void> {
     // Purge history/caches before path-derived ids can name a recreated workspace.
     const persistedHostId = store.getWorktreeMeta(worktreeId)?.hostId
@@ -170,7 +174,9 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends Runtim
     this.dropAgentStatusForRemovedWorktreeFn?.(worktreeId, hostId ?? persistedHostId)
     if (!preservesSameIdOwner) {
       // Why: path-derived ids are reused; a stale pretrust entry would pre-trust the next occupant.
-      const pretrustDrop = dropOrcaCreatedAgentTrustForRemovedWorktree(worktreeId)
+      const pretrustDrop = options.dropAgentTrust
+        ? dropOrcaCreatedAgentTrustForRemovedWorktree(worktreeId)
+        : undefined
       // Do not rescue surviving paired PTYs into a recreated occupant of the same path-derived id.
       for (const ptyId of this.pairedRendererSessionOwnedPtyIds) {
         const ptyWorktreeId = this.ptysById.get(ptyId)?.worktreeId
