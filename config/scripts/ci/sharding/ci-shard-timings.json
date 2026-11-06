@@ -5921,7 +5921,7 @@
       "src/renderer/src/components/browser-pane/workspace-doc/doc-preview-document-actions.test.ts": 327,
       "src/renderer/src/components/browser-pane/workspace-doc/doc-preview-external-link-confirmation.test.ts": 1057,
       "src/renderer/src/components/browser-pane/workspace-doc/doc-preview-webview-attach.test.ts": 200,
-      "src/renderer/src/components/browser-pane/workspace-doc/use-doc-preview-guest-tools.test.ts": 439,
+      "src/renderer/src/components/browser-pane/annotate/use-browser-guest-tools.test.ts": 439,
       "src/renderer/src/components/browser-webauthn-account-dialog.test.tsx": 484,
       "src/renderer/src/components/cmd-j/palette-duplicate-key-ghost-rows.test.tsx": 230,
       "src/renderer/src/components/cmd-j/palette-filter-option-list.test.ts": 44,

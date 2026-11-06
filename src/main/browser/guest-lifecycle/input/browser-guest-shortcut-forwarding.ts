@@ -33,6 +33,7 @@ export function setupGuestShortcutForwarding(args: {
   resolveWorkspaceId?: (browserTabId: string) => string | null
   /** False for plugin frames (see GuestShortcutForwardContext). */
   browserPage?: boolean
+  supportsAnnotations?: (browserTabId: string) => boolean
 }): () => void {
   const {
     browserTabId,
@@ -43,7 +44,8 @@ export function setupGuestShortcutForwarding(args: {
     getKeybindings,
     resolveWorktreeId,
     resolveWorkspaceId,
-    browserPage
+    browserPage,
+    supportsAnnotations
   } = args
   let ctrlTabSwitching = false
   const doubleTapDetector = new ModifierDoubleTapDetector()
@@ -67,7 +69,8 @@ export function setupGuestShortcutForwarding(args: {
     resolveWorktreeId,
     resolveWorkspaceId,
     forwardBrowserPageZoom,
-    browserPage
+    browserPage,
+    supportsAnnotations
   }
 
   const handler = (event: Electron.Event, input: Electron.Input): void => {

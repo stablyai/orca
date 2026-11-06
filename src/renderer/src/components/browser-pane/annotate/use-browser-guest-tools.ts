@@ -10,21 +10,30 @@ import { useGrabMode } from '@/components/browser-pane/annotate/useGrabMode'
 import type { BrowserOverlayViewport } from '@/components/browser-pane/describe-page/browser-annotation-geometry'
 import type { BrowserChromeElementTools } from '@/components/browser-pane/assemble-chrome/browser-chrome-toolbar'
 
-/** Use the stable browser page ID for annotations and tools so replacing the guest grant preserves both. */
-export function useDocPreviewGuestTools({
-  previewId,
+/** Share selection, comments and drawing across locally rendered browser guests. */
+export function useBrowserGuestTools({
+  browserPageId,
   worktreeId,
-  grantId,
+  guestAttached,
   webviewRef,
   containerRef,
-  toolsReady
+  toolsReady,
+  currentUrl,
+  markerIds,
+  documentVersion = 0,
+  annotateShortcut = false
 }: {
-  previewId: string
+  browserPageId: string
   worktreeId: string
-  grantId: string | null
+  /** False until main can resolve a guest for this page: no document exists to pick from. */
+  guestAttached: boolean
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   containerRef: MutableRefObject<HTMLDivElement | null>
   toolsReady: boolean
+  currentUrl?: string
+  markerIds?: readonly string[]
+  documentVersion?: number
+  annotateShortcut?: boolean
 }): {
   grab: ReturnType<typeof useGrabMode>
   markup: ReturnType<typeof useBrowserPageMarkupCapture>
@@ -35,8 +44,7 @@ export function useDocPreviewGuestTools({
   resetBrowserOverlayViewport: () => void
   elementTools: BrowserChromeElementTools
 } {
-  // No tool target exists before the first grant commits; do not queue requests for a page without a document.
-  const toolTargetId = grantId === null ? '' : previewId
+  const toolTargetId = guestAttached ? browserPageId : ''
   const annotationViewportBridgeTokenRef = useRef<string>(undefined!)
   annotationViewportBridgeTokenRef.current ??= createBrowserUuid().replaceAll('-', '')
   const [browserOverlayViewport, setBrowserOverlayViewport] = useState<BrowserOverlayViewport>({
@@ -58,12 +66,13 @@ export function useDocPreviewGuestTools({
     []
   )
 
+  const annotateElementShortcut = useShortcutLabel('browser.annotateElement')
   const grabElementShortcut = useShortcutLabel('browser.grabElement')
   const grab = useGrabMode(toolTargetId)
   const markup = useBrowserPageMarkupCapture(webviewRef)
-  const annotationSend = useBrowserPageAnnotationSend({ browserTabId: previewId, worktreeId })
+  const annotationSend = useBrowserPageAnnotationSend({ browserTabId: browserPageId, worktreeId })
   const grabAnnotations = useBrowserPageGrabAnnotations({
-    browserTabId: previewId,
+    browserTabId: browserPageId,
     toolTargetId,
     isActive: toolsReady,
     grab,
@@ -82,22 +91,34 @@ export function useDocPreviewGuestTools({
     syncGuestAnnotationViewportBridge({
       toolTargetId,
       annotations: browserAnnotations,
+      currentDocument: currentUrl ? { markerIds: markerIds ?? [], url: currentUrl } : undefined,
       pendingPayload: pendingAnnotationPayload,
       surfaceActive: toolsReady,
       token: annotationViewportBridgeTokenRef.current
     })
-  }, [browserAnnotations, pendingAnnotationPayload, toolTargetId, toolsReady])
+  }, [
+    browserAnnotations,
+    pendingAnnotationPayload,
+    toolTargetId,
+    toolsReady,
+    currentUrl,
+    markerIds,
+    documentVersion
+  ])
 
   const elementTools = useMemo<BrowserChromeElementTools>(
     () => ({
       activeIntent: grab.state !== 'idle' ? grabAnnotations.grabIntent : null,
       onStartIntent: grabAnnotations.startGrabIntent,
-      // Nothing has painted on a loading or failed preview, so there is no element to pick.
+      // Unavailable guests have no element to pick.
       disabled: !toolsReady || markup.isActive,
       grabShortcutLabel: grabElementShortcut,
+      annotateShortcutLabel: annotateShortcut ? annotateElementShortcut : undefined,
       annotationCount: browserAnnotations.length
     }),
     [
+      annotateShortcut,
+      annotateElementShortcut,
       browserAnnotations.length,
       grab.state,
       grabAnnotations.grabIntent,

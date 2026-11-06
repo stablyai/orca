@@ -15,6 +15,7 @@ describe('BrowserClientPageAutomationRuntime', () => {
     expect(fixture.registerGuest).toHaveBeenCalledWith({
       browserPageId: 'page-a',
       workspaceId: '',
+      supportsAnnotations: true,
       worktreeId: '',
       sessionProfileId: 'profile-a',
       webContentsId: 42,

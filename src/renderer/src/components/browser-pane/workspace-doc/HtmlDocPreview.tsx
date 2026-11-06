@@ -31,7 +31,7 @@ import { DocPreviewToolbar } from './doc-preview-toolbar'
 import { buildDocPreviewShareControl } from './doc-preview-artifact-share'
 import { useDocPreviewWebviewHistory } from './doc-preview-webview-history'
 import { useDocPreviewGuestFocus } from './use-doc-preview-guest-focus'
-import { useDocPreviewGuestTools } from './use-doc-preview-guest-tools'
+import { useBrowserGuestTools } from '../annotate/use-browser-guest-tools'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
 import { getOpenFileRevealOwner } from '@/lib/reveal-in-file-manager'
@@ -123,10 +123,11 @@ export function HtmlDocPreview({
     handleAnnotationViewportMessage,
     resetBrowserOverlayViewport,
     elementTools
-  } = useDocPreviewGuestTools({
-    previewId,
+  } = useBrowserGuestTools({
+    browserPageId: previewId,
     worktreeId,
-    grantId,
+    // Main binds the grant on first commit; before that no guest answers for this page.
+    guestAttached: grantId !== null,
     webviewRef,
     containerRef,
     toolsReady: state === 'ready' && !isUnavailable
