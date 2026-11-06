@@ -33,6 +33,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   structuredSession: Awaited<ReturnType<typeof createStructuredWorkerSessionForWorktree>> | null
   terminalHandle: string
   coordinatorHandle: string
+  worktreePath?: string
   devMode: boolean | undefined
   requestId: string
   agent: string | null
@@ -65,6 +66,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     taskId: task.id,
     taskSpec: task.spec,
     coordinatorHandle: args.coordinatorHandle,
+    ...(args.worktreePath ? { worktreePath: args.worktreePath } : {}),
     devMode: args.devMode,
     requestId: args.requestId,
     launchedAgent: args.launchedAgent,
