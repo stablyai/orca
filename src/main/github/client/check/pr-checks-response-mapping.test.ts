@@ -4,10 +4,11 @@ import {
   mapRestCheckRun,
   mapRestCommitStatus
 } from './pr-checks-response-mapping'
+import type { GraphQLPRChecksResponse, GraphQLStatusCheckContext } from './pr-checks-graphql-query'
 
 const repo = { owner: 'acme', repo: 'widgets' }
 
-function rollup(contexts: unknown[]) {
+function rollup(contexts: GraphQLStatusCheckContext[]): GraphQLPRChecksResponse {
   return {
     data: {
       repository: {
