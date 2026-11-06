@@ -3,12 +3,11 @@ import { useAppStore } from '@/store'
 import { useAudioCapture } from '@/hooks/use-audio-capture'
 import { toast } from 'sonner'
 import { DictationIndicator } from './DictationIndicator'
+import { captureInsertionTarget, type DictationInsertionTarget } from './dictation-insertion-target'
 import {
-  captureInsertionTarget,
-  insertText,
-  type DictationInsertionTarget
-} from './dictation-insertion-target'
-import { formatFinalTranscriptSegment } from '../../../../shared/dictation-transcript-spacing'
+  createDictationTranscriptDelivery,
+  type DictationTranscriptDelivery
+} from './dictation-transcript-delivery'
 import { recordStoppedSession, waitForStoppedSession } from './dictation-stopped-sessions'
 import { translate } from '@/i18n/i18n'
 import {
@@ -47,7 +46,7 @@ export function DictationController() {
   const stopRequestedDuringStartRef = useRef(false)
   const finalTranscriptReceivedRef = useRef(false)
   const erroredSessionIdsRef = useRef(new Set<string>())
-  const insertedFinalTranscriptRef = useRef('')
+  const deliverTranscriptRef = useRef<DictationTranscriptDelivery | null>(null)
   // Push-to-talk restarts per utterance; report a missing preferred microphone once per preference.
   const micFallbackNotifiedForRef = useRef<string | null>(null)
   const stopDictationRef = useRef<(() => void) | null>(null)
@@ -84,7 +83,6 @@ export function DictationController() {
       }
       insertionTargetRef.current = null
       finalTranscriptReceivedRef.current = false
-      insertedFinalTranscriptRef.current = ''
       stopRequestedDuringStartRef.current = false
       if (activeSessionIdRef.current === sessionId) {
         activeSessionIdRef.current = null
@@ -120,7 +118,7 @@ export function DictationController() {
     stopRequestedDuringStartRef.current = false
     finalTranscriptReceivedRef.current = false
     erroredSessionIdsRef.current.clear()
-    insertedFinalTranscriptRef.current = ''
+    deliverTranscriptRef.current = createDictationTranscriptDelivery()
     dictationStateRef.current = 'starting'
     setDictationState('starting')
     setCaptureLive(false)
@@ -221,7 +219,6 @@ export function DictationController() {
       stopRequestedDuringStartRef.current = false
       finalTranscriptReceivedRef.current = false
       erroredSessionIdsRef.current.clear()
-      insertedFinalTranscriptRef.current = ''
       activeSessionIdRef.current = null
       setPartialTranscript('')
       if (message.includes('dictation_canceled')) {
@@ -344,22 +341,7 @@ export function DictationController() {
       }
       setPartialTranscript('')
       finalTranscriptReceivedRef.current = true
-      const target = insertionTargetRef.current
-      if (target) {
-        const textToInsert = formatFinalTranscriptSegment(
-          data.text,
-          insertedFinalTranscriptRef.current
-        )
-        insertText(textToInsert, target)
-        insertedFinalTranscriptRef.current += textToInsert
-      } else {
-        toast.message(
-          translate(
-            'auto.components.dictation.DictationController.7afff43472',
-            'Dictation finished, but no text field was focused.'
-          )
-        )
-      }
+      deliverTranscriptRef.current?.(data.text, insertionTargetRef.current)
     })
 
     const cleanupStopped = window.api.speech.onStopped((data) => {
@@ -391,7 +373,6 @@ export function DictationController() {
         insertionTargetRef.current = null
         stopRequestedDuringStartRef.current = false
         finalTranscriptReceivedRef.current = false
-        insertedFinalTranscriptRef.current = ''
         dictationStateRef.current = 'idle'
         setDictationState('idle')
         setPartialTranscript('')

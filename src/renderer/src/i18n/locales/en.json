@@ -17337,7 +17337,6 @@
       "dictation": {
         "DictationController": {
           "de136f1199": "Speech error: {{value0}}",
-          "7afff43472": "Dictation finished, but no text field was focused.",
           "55127a3706": "Dictation failed: {{value0}}",
           "bb7f599ee7": "Open Settings",
           "2d5b9fabf9": "Microphone access denied. Grant access in system settings, then restart Orca.",
@@ -17349,6 +17348,11 @@
           "micFallback": "Selected microphone unavailable. Using system default.",
           "micDisconnected": "Microphone disconnected. Dictation stopped.",
           "cloudLimitReached": "Dictation stopped at the 10-minute cloud limit."
+        },
+        "dictation-transcript-delivery": {
+          "copiedAfterFailedInsert": "Dictation couldn't be inserted, so it was copied to the clipboard.",
+          "copiedWithoutTarget": "No text field was focused, so dictation was copied to the clipboard.",
+          "lost": "Dictation couldn't be inserted or copied."
         },
         "DictationIndicator": {
           "335e1bc6cb": "Stop dictation",

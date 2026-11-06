@@ -12,20 +12,22 @@ type HandleTerminalProgrammaticTextPasteArgs = {
   tabId: string
   getManager: () => PaneManager | null
   getPaneTransports: () => Map<number, PtyTransport>
+  focusAfterPaste?: () => boolean
 }
 
 export function handleTerminalProgrammaticTextPaste({
   detail,
   tabId,
   getManager,
-  getPaneTransports
-}: HandleTerminalProgrammaticTextPasteArgs): void {
+  getPaneTransports,
+  focusAfterPaste = () => true
+}: HandleTerminalProgrammaticTextPasteArgs): Promise<boolean> {
   if (!detail?.tabId || detail.tabId !== tabId || !detail.text) {
-    return
+    return Promise.resolve(false)
   }
   const manager = getManager()
   if (!manager) {
-    return
+    return Promise.resolve(false)
   }
   const panes = manager.getPanes()
   const pane =
@@ -33,7 +35,7 @@ export function handleTerminalProgrammaticTextPaste({
       ? (panes.find((candidate) => candidate.id === detail.paneId) ?? null)
       : (manager.getActivePane() ?? panes[0])
   if (!pane) {
-    return
+    return Promise.resolve(false)
   }
   const paneTransports = getPaneTransports()
   const transport = paneTransports.get(pane.id)
@@ -47,7 +49,7 @@ export function handleTerminalProgrammaticTextPaste({
       transport,
       ptyId
     })
-  void pasteTextIntoTerminalPane({
+  return pasteTextIntoTerminalPane({
     pane,
     text: detail.text,
     source: 'programmatic',
@@ -63,9 +65,12 @@ export function handleTerminalProgrammaticTextPaste({
     canContinue: isTargetCurrent
   }).then((result) => {
     if (result.status !== 'pasted') {
-      return
+      return false
     }
     recordTerminalUserInputForLeaf(tabId, pane.leafId)
-    pane.terminal.focus()
+    if (focusAfterPaste()) {
+      pane.terminal.focus()
+    }
+    return true
   })
 }
