@@ -236,6 +236,7 @@ it('keeps default-agent discovery on the captured workspace copy while another c
     resolveDefaultAgentForWorkspace({
       defaultTuiAgent: null,
       detectedAgentIds: choices.detected,
+      disabledTuiAgents: [],
       chatIn: { store: getState(), workspace: target }
     })
   ).toBe('claude')

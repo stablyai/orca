@@ -169,7 +169,7 @@ export async function prepareSkippedOnboardingPreferences({
     }
     // Later confirms the visible page without replacing an unvisited agent choice.
     if (currentStepId === 'agent_surface' || currentStepId === 'agent') {
-      const updates = {
+      const updates: Partial<GlobalSettings> = {
         ...agentSurfaceSettingsUpdate(settings, agentSurface),
         ...(currentStepId === 'agent' ? { defaultTuiAgent: selectedAgent ?? 'blank' } : {})
       }
