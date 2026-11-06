@@ -37,10 +37,22 @@ type HookRowJoin = {
   handles: Iterable<string>
   paneKeys: Iterable<string>
   hookRows: readonly AgentStatusIpcPayload[]
+  /** Lets a restored permission wait stand while the pane's screen could still show its dialog. */
+  screenMayHoldDialog?: () => boolean
 }
 
 function isPermissionState(state: AgentStatusEntry['state']): boolean {
   return mapExplicitAgentStateToRuntimeTerminalStatus(state) === 'permission'
+}
+
+// No input reaches a pane while its runtime is down, so a dialog open at shutdown is still open (#35962).
+function isHeldRestoredPermission(row: AgentStatusIpcPayload, join: HookRowJoin): boolean {
+  return (
+    row.restoredUnconfirmed === true &&
+    row.providerSessionOnly !== true &&
+    isPermissionState(row.state) &&
+    join.screenMayHoldDialog?.() === true
+  )
 }
 
 /** The freshest live hook row for a terminal, joined on any of its handles or pane keys. */
@@ -53,10 +65,12 @@ export function selectFreshExplicitAgentStatusRow(args: HookRowJoin): AgentStatu
     if (!(row.terminalHandle && handles.has(row.terminalHandle)) && !paneKeys.has(row.paneKey)) {
       continue
     }
-    if (!row.state || !isLiveObservation(row) || typeof row.receivedAt !== 'number') {
-      continue
-    }
-    if (now - (row.evidenceObservedAt ?? row.receivedAt) > AGENT_STATUS_STALE_AFTER_MS) {
+    if (
+      !row.state ||
+      typeof row.receivedAt !== 'number' ||
+      now - (row.evidenceObservedAt ?? row.receivedAt) > AGENT_STATUS_STALE_AFTER_MS ||
+      !(isLiveObservation(row) || isHeldRestoredPermission(row, args))
+    ) {
       continue
     }
     if (
@@ -75,6 +89,7 @@ export function selectFreshExplicitAgentStatus(args: {
   handle: string
   paneKey: string | null
   hookRows: readonly AgentStatusIpcPayload[]
+  screenMayHoldDialog?: () => boolean
 }): {
   status: NonNullable<RuntimeTerminalAgentStatus['status']>
   updatedAt: number
@@ -83,7 +98,8 @@ export function selectFreshExplicitAgentStatus(args: {
   const row = selectFreshExplicitAgentStatusRow({
     handles: [args.handle],
     paneKeys: args.paneKey ? [args.paneKey] : [],
-    hookRows: args.hookRows
+    hookRows: args.hookRows,
+    screenMayHoldDialog: args.screenMayHoldDialog
   })
   return row
     ? {

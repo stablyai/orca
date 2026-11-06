@@ -83,10 +83,12 @@ export function MobileHomeScreen() {
     }, [selectTab, tab])
   )
 
+  // Stable handlers keep the memoized Feed sections and desktop rows from redrawing on every Home update.
+  const { router, setHostCatalog } = data
   const openWorktree = useCallback(
     (row: HomeJumpBackInRow) => {
       if (isResumeTargetConfirmedMissing(row, getProvenCachedWorktrees(row.hostId))) {
-        data.router.push(hostRouteWithNotice(row.hostId, 'worktree-missing'))
+        router.push(hostRouteWithNotice(row.hostId, 'worktree-missing'))
         return
       }
       openMobileSession({
@@ -96,33 +98,39 @@ export function MobileHomeScreen() {
         paneKey: row.worktree.paneKey
       })
     },
-    [data.router, openMobileSession]
+    [router, openMobileSession]
   )
 
-  function openHost(host: HostCatalogEntry): void {
-    if (host.credentialStatus === 'missing') {
-      data.router.push('/pair-scan')
-    } else if (host.credentialStatus === 'temporarily-unavailable') {
-      void loadHostCatalog()
-        .then(data.setHostCatalog)
-        .catch(() =>
-          Alert.alert(
-            t('home.screen.pairingCheckFailed', 'Could not check pairing'),
-            t('home.screen.tryAgain', 'Please try again.')
+  const openHost = useCallback(
+    (host: HostCatalogEntry) => {
+      if (host.credentialStatus === 'missing') {
+        router.push('/pair-scan')
+      } else if (host.credentialStatus === 'temporarily-unavailable') {
+        void loadHostCatalog()
+          .then(setHostCatalog)
+          .catch(() =>
+            Alert.alert(
+              t('home.screen.pairingCheckFailed', 'Could not check pairing'),
+              t('home.screen.tryAgain', 'Please try again.')
+            )
           )
-        )
-    } else {
-      data.router.push(`/h/${host.id}`)
-    }
-  }
+      } else {
+        router.push(`/h/${host.id}`)
+      }
+    },
+    [router, setHostCatalog, t]
+  )
 
-  function openHostActions(host: HostCatalogEntry): void {
+  const openHostActions = useCallback((host: HostCatalogEntry) => {
+    triggerMediumImpact()
     if (host.profile) {
       setActionTarget(host.profile)
     } else {
       setConfirmRemove(host)
     }
-  }
+  }, [])
+
+  const openTasks = useCallback((hostId: string) => openMobileTasks(hostId), [openMobileTasks])
 
   async function handleRemove(): Promise<void> {
     if (!confirmRemove) {
@@ -142,7 +150,7 @@ export function MobileHomeScreen() {
     }
   }
 
-  const pairDesktop = () => data.router.push('/pair-scan')
+  const pairDesktop = useCallback(() => router.push('/pair-scan'), [router])
   const actionTargetPath = actionTarget ? data.hostConnections[actionTarget.id]?.path : undefined
   const actionTargetConnected =
     actionTarget != null && data.hostStates[actionTarget.id] === 'connected'
@@ -188,12 +196,9 @@ export function MobileHomeScreen() {
                   bottomInset={contentBottom}
                   onOpenWorktree={openWorktree}
                   onOpenHost={openHost}
-                  onOpenHostActions={(host) => {
-                    triggerMediumImpact()
-                    openHostActions(host)
-                  }}
+                  onOpenHostActions={openHostActions}
                   onPairDesktop={pairDesktop}
-                  onOpenTasks={(hostId) => openMobileTasks(hostId)}
+                  onOpenTasks={openTasks}
                 />
               ) : id === 'usage' ? (
                 <MobileHomeUsageTab

@@ -16,7 +16,7 @@ import {
   type AgentSenderWorkers
 } from './runtime-agent-sender-worker-history'
 import { readAgentSenderGeneration } from './runtime-agent-sender-history-triggers'
-import type { OrchestrationDb } from './orchestration/db'
+import type { OrchestrationDb } from './orchestration/db/orchestration-db'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord

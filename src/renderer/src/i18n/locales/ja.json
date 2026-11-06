@@ -705,7 +705,9 @@
         "cb4d287238": "サーバー名",
         "3affe7de3a": "このブラウザが到達できる Orca サーバーからペアリング URL を貼り付けます。",
         "e3bcd082ac": "Orca に接続",
-        "mobileScopeRejected": "この QR コードでは、モバイル向けの制限付きアクセスのみ利用できます。完全版の Web アプリを使用するには、[設定] → [リモート Orca サーバー] → [この Orca サーバーを共有する] → [新規リンク] から、ブラウザ用アクセスリンクを開いてください。"
+        "mobileScopeRejected": "この QR コードでは、モバイル向けの制限付きアクセスのみ利用できます。完全版の Web アプリを使用するには、[設定] → [リモート Orca サーバー] → [この Orca サーバーを共有する] → [新規リンク] から、ブラウザ用アクセスリンクを開いてください。",
+        "replaceSavedServer": "このリンクは「{{name}}」({{endpoint}}) とは別のサーバーに接続します。下のエンドポイントを信頼できる場合にのみ接続してください。",
+        "keepSavedServer": "保存済みサーバーを維持"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "この実行ホストでは Agent セッション履歴を使用できません。",
@@ -1857,6 +1859,7 @@
         "cb55b0390f": "管理",
         "4f9313984d": "レビュアー",
         "02cbe2de44": "パイプライン",
+        "itemLoadFailed": "この項目を読み込めませんでした。更新して再試行してください。",
         "be3d291837": "ファイル",
         "c996e2962c": "会話",
         "b3c156dd51": "更新",
@@ -2517,7 +2520,6 @@
         "9cd11ba218": "Jira",
         "11a828abf8": "GitLab",
         "acef77f7ca": "GitHub",
-        "524f095d55": "レビュー待ち",
         "7698af5263": "私の",
         "94f0339621": "私に割り当てられた Issue",
         "c2268a9982": "全て",
@@ -2612,6 +2614,8 @@
         "loadGitHubWorkFailed": "GitHub の作業項目を読み込めませんでした。",
         "gitlabViewIssues": "Issue",
         "gitlabViewMrs": "MR",
+        "gitlabInvolvementEveryone": "全員",
+        "gitlabInvolvementReviewing": "レビュー担当",
         "gitlabViewTodos": "自分の ToDo",
         "startWorkspaceFromMr": "MR {{number}} からワークスペースを開始",
         "startWorkspaceFromIssue": "Issue {{number}} からワークスペースを開始",
@@ -7645,7 +7649,6 @@
         "MobileEmulatorSettingsPane": {
           "19d39113b6": "コーディング Agent が Orca CLI コマンドを使用してアクティブなモバイルエミュレータを制御できるようにします。",
           "f2f8d97bb6": "Agent モバイルエミュレータ制御",
-          "143961d031": "デフォルトのデバイス",
           "8aec2f99a0": "エミュレータの利用可能性を更新する",
           "ae1612c58c": "可用性",
           "f9af91ea26": "新規モバイルエミュレータ 操作を表示し、Agent がアクティブなエミュレータに接続できるようにします。",
@@ -7658,9 +7661,7 @@
           "d704fb5023": "設定が必要",
           "06b06429c6": "Android SDK と iOS シミュレーターのサポートを確認しています。",
           "6d1483d4a0": "1 つのエミュレータデバイスが検出されました。",
-          "0a452d4d3b": "{{value0}} エミュレータデバイスが検出されました。",
-          "f62a1bb759": "Orca は、デバイスが検出された後、エミュレータデバイスを自動選択します。",
-          "b2fd62ea75": "新規エミュレータタブと Agent 接続コマンドのデフォルトデバイス。自動選択では、すでに実行中のデバイスが優先されます。"
+          "0a452d4d3b": "{{value0}} エミュレータデバイスが検出されました。"
         },
         "MobileNetworkInterfaceSection": {
           "b2c384cfd6": "インターフェースが見つかりません"
@@ -11281,7 +11282,7 @@
             "terminalRun": "ターミナルでコマンドを実行 (SSH を含む)"
           },
           "decisionFailed": "権限の選択を保存できませんでした。再試行してください。",
-          "fullAccessWarning": "フルアクセス：通常のプログラムとして実行され、ファイルの読み取り、ネットワークの使用、他のプログラムの実行ができます。",
+          "fullAccessWarning": "フルアクセス：通常のプログラムとして実行され、ファイルの読み取り、ネットワークの使用、他のプログラムの実行、ターミナルや Agent を含む Orca の操作ができます。",
           "uiWarning": "ビューを描画するため、公開元のコードを Orca 内で実行します。Orca はアクセスできる範囲を表示し、有効にする前に確認します。"
         },
         "PluginConsentProvenance": {
@@ -15253,7 +15254,6 @@
                 "06e10d7356": "エミュレータをシャットダウンする",
                 "e7a0d1897e": "ホーム",
                 "6bd8dff42a": "回転",
-                "3d836b879c": "エミュレータの選択",
                 "81b3571a07": "接続",
                 "868c0f2938": "処理中…"
               }
@@ -16975,6 +16975,8 @@
           "noRunUsageYet": "まだ実行の使用量がありません",
           "noWorkspace": "ワークスペースなし",
           "latestSavedOutput": "最新の保存済み出力",
+          "fullOutputUnavailable": "完全な出力を読み込めませんでした。",
+          "retryFullOutput": "再試行",
           "backToList": "すべての自動化",
           "tableName": "名前",
           "tableProject": "プロジェクト",
@@ -18644,8 +18646,12 @@
         "notDoneGoalChangeIncomplete": "目標の変更を完了できませんでした。チャットを確認してください。"
       },
       "composer": {
+        "planMode": "計画",
         "send": "送信",
         "alternateSteerHint": "{{shortcut}} で今すぐ送信",
+        "previewQueue": "キューに入れる",
+        "previewSteer": "今すぐ送信",
+        "previewSteerQueued": "次を今すぐ送信",
         "alternateQueueHint": "{{shortcut}} でキューに入れる",
         "noPty": "ライブターミナルがありません - 再接続するには元に切り替えてください。",
         "locked": "入力は別のデバイスによって保持されます。",
@@ -19379,6 +19385,13 @@
         "hostUnavailable": "添付ファイルのホストを利用できません。再接続して再試行してください。",
         "connectionChanged": "接続が変更されました。添付ファイルを閉じてから開き直してください。",
         "readFailed": "ホスト上の添付ファイルを読み取れません。再接続してもう一度お試しください。ファイルが削除または変更された可能性があります。"
+      },
+      "composerWorkspace": {
+        "copyFailed": "コピーできませんでした",
+        "copyIdentity": "{{value0}} をコピー",
+        "folder": "フォルダー",
+        "mainCheckout": "メインチェックアウト",
+        "worktree": "ワークツリー"
       }
     },
     "tab": {

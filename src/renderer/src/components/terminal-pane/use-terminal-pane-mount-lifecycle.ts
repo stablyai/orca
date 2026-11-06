@@ -3,7 +3,7 @@ import { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { configureTerminalOutputBacklogCap } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { e2eConfig } from '@/lib/e2e-config'
-import { useTerminalParkMountIntent } from './use-terminal-park-mount-intent'
+import { isTerminalTabParked } from './parking/output-watchers/terminal-parked-watcher-registry'
 import { prepareTerminalPaneMount } from './terminal-pane-mount-preparation'
 import { createTerminalPaneManagerOptions } from './terminal-pane-manager-options'
 import { restoreTerminalPaneLayout } from './terminal-pane-layout-restore'
@@ -19,7 +19,8 @@ export function useTerminalPaneMountLifecycle(
   deps: UseTerminalPaneLifecycleDeps,
   refs: TerminalPaneLifecycleRefs
 ): void {
-  const mountFollowsTerminalPark = useTerminalParkMountIntent(deps.tabId)
+  // Read park intent during render before watcher disposal; instance caching becomes stale on cwd changes.
+  const mountFollowsTerminalPark = isTerminalTabParked(deps.tabId)
   configureTerminalOutputBacklogCap(deps.settings?.terminalScrollbackRows)
 
   useEffect(() => {
@@ -117,7 +118,8 @@ export function useTerminalPaneMountLifecycle(
         showPaneTitle: deps.showPaneTitle,
         persistLayoutSnapshot: deps.persistLayoutSnapshot,
         syncCanExpandState: preparation.syncCanExpandState,
-        queueResizeAll
+        queueResizeAll,
+        detachPaneToNewTab: deps.detachPaneToNewTab
       },
       ptyDeps
     })

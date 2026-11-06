@@ -1,8 +1,14 @@
 import {
+  finishTranscriptWork,
+  type TranscriptWork
+} from '../../../native-chat/transcript-work-scheduler'
+import { codexMessageBlocksWork } from './codex-message-blocks'
+export { codexMessageBlocks } from './codex-message-blocks'
+import {
   codexCommandOutput,
-  codexReasoningText,
+  codexReasoningTextWork,
   mcpToolArguments,
-  mcpToolOutput
+  mcpToolOutputWork
 } from './codex-item-result-readers'
 import {
   toolExecutionMetadata,
@@ -11,8 +17,8 @@ import {
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
 import { CODEX_ASYNC_QUESTION_TOOL } from '../../../../shared/codex-async-question-input'
-import { journalPayload } from '../../../native-chat/agent-session-journal/journal-payload-bounds'
-import { unhandledProviderFrameJournalItem } from '../../../native-chat/agent-session-wire/unhandled-provider-frame'
+import { journalPayload } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
+import { unhandledProviderFrameJournalItem } from '../../../native-chat/agent-session-wire/providers/unhandled-provider-frame'
 import { codexImageItemBody } from './codex-image-item-translation'
 import { commandActionFacts } from './codex-command-action-class'
 import {
@@ -20,41 +26,13 @@ import {
   type CodexHelperName
 } from './codex-collab-agent-item-translation'
 import { codexItemRunState } from './codex-item-run-state'
-import { readRecord, readString, readTextContent } from '../../app-server/codex-item-field-readers'
+import {
+  readRecord,
+  readString,
+  readTextContentWork
+} from '../../app-server/codex-item-field-readers'
 import type { CodexThreadItem } from './codex-thread-item-identity'
-import { journalReasoningBody } from '../../../native-chat/agent-session-journal/journal-reasoning-row'
-
-export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
-  const text =
-    item.type === 'agentMessage'
-      ? (readString(item, 'text') ?? readTextContent(item, 'content'))
-      : readString(item, 'text')
-  if (text !== null) {
-    return [{ type: 'text', text }]
-  }
-  const content = item.content
-  if (!Array.isArray(content)) {
-    return []
-  }
-  const blocks: NativeChatBlock[] = []
-  for (const part of content) {
-    if (typeof part !== 'object' || part === null) {
-      continue
-    }
-    const partText = readString(part as Record<string, unknown>, 'text')
-    if (partText !== null) {
-      blocks.push({ type: 'text', text: partText })
-      continue
-    }
-    const record = part as Record<string, unknown>
-    if (record.type === 'image' && typeof record.url === 'string') {
-      blocks.push({ type: 'image-ref', url: record.url })
-    } else if (record.type === 'localImage' && typeof record.path === 'string') {
-      blocks.push({ type: 'image-ref', path: record.path })
-    }
-  }
-  return blocks
-}
+import { journalReasoningBody } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-reasoning-row'
 
 /** The message text displays the question; this call block enables replies. */
 function codexAsyncQuestionBlock(item: CodexThreadItem): NativeChatBlock | null {
@@ -106,19 +84,26 @@ function fileChangeToolCall(item: CodexThreadItem, output?: string): CodexJourna
   }
 }
 
-function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
-  const changes = Array.isArray(item.changes)
-    ? item.changes.flatMap((change) => {
-        const record = typeof change === 'object' && change !== null ? readRecord(change) : {}
-        const path = readString(record, 'path')
-        const diff = readString(record, 'diff')
-        return path && diff ? [{ path, diff }] : []
-      })
-    : []
+function* fileChangeItemWork(item: CodexThreadItem): TranscriptWork<CodexJournalItem> {
+  const changes: { path: string; diff: string }[] = []
+  for (const change of Array.isArray(item.changes) ? item.changes : []) {
+    yield 1
+    const record = typeof change === 'object' && change !== null ? readRecord(change) : {}
+    const path = readString(record, 'path')
+    const diff = readString(record, 'diff')
+    if (path && diff) {
+      changes.push({ path, diff })
+    }
+  }
   if (changes.length === 0 || codexItemRunState(item) !== 'completed') {
     return fileChangeToolCall(item)
   }
-  const patch = changes.map((change) => change.diff).join('\n')
+  const parts: string[] = []
+  for (const change of changes) {
+    yield 1
+    parts.push(change.diff)
+  }
+  const patch = parts.join('\n')
   return {
     body: {
       kind: 'diff',
@@ -137,11 +122,11 @@ function mcpToolCallName(item: CodexThreadItem): string {
 }
 
 /** Labels read top-level keys; wrap non-object arguments and omit empty objects. */
-function mcpToolCallItem(item: CodexThreadItem): CodexJournalItem {
+function* mcpToolCallItemWork(item: CodexThreadItem): TranscriptWork<CodexJournalItem> {
   const server = readString(item, 'server')
   const tool = readString(item, 'tool')
   const failure = readString(readRecord(item.error), 'message')
-  const text = mcpToolOutput(item)
+  const text = yield* mcpToolOutputWork(item)
   return {
     body: {
       kind: 'tool-call',
@@ -197,9 +182,20 @@ export function codexJournalItem(
   helperName?: CodexHelperName,
   started?: CodexThreadItem
 ): CodexJournalItem {
+  return finishTranscriptWork(codexJournalItemWork(item, helperName, started))
+}
+
+export function* codexJournalItemWork(
+  item: CodexThreadItem,
+  helperName?: CodexHelperName,
+  started?: CodexThreadItem
+): TranscriptWork<CodexJournalItem> {
   if (item.type === 'userMessage' || item.type === 'agentMessage') {
     const question = codexAsyncQuestionBlock(item)
-    const blocks = question ? [...codexMessageBlocks(item), question] : codexMessageBlocks(item)
+    const blocks = yield* codexMessageBlocksWork(item)
+    if (question) {
+      blocks.push(question)
+    }
     return {
       body:
         blocks.length === 0
@@ -212,10 +208,10 @@ export function codexJournalItem(
     return commandItem(item)
   }
   if (item.type === 'fileChange') {
-    return fileChangeItem(item)
+    return yield* fileChangeItemWork(item)
   }
   if (item.type === 'mcpToolCall') {
-    return mcpToolCallItem(item)
+    return yield* mcpToolCallItemWork(item)
   }
   if (item.type === 'webSearch') {
     return webSearchItem(item)
@@ -228,7 +224,7 @@ export function codexJournalItem(
     return { body: collab, handled: true }
   }
   if (item.type === 'plan') {
-    const text = readTextContent(item, 'text')
+    const text = yield* readTextContentWork(item, 'text')
     return {
       body:
         text === null
@@ -242,7 +238,7 @@ export function codexJournalItem(
     }
   }
   if (item.type === 'reasoning') {
-    const text = codexReasoningText(item)
+    const text = yield* codexReasoningTextWork(item)
     return { body: journalReasoningBody(text), handled: true }
   }
   const unhandled = unhandledProviderFrameJournalItem('codex', `item:${item.type}`, item)

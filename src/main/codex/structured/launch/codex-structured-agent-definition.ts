@@ -1,4 +1,4 @@
-import type { DirectoryAccountAgentDefinition } from '../../../native-chat/agent-session-wire/structured-agent-definition'
+import type { DirectoryAccountAgentDefinition } from '../../../native-chat/agent-session-wire/providers/structured-agent-definition'
 import { CODEX_STRUCTURED_HANDLE_NAMESPACE } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { isCodexTurnOptionKey } from '../turns/codex-turn-option-keys'
 
@@ -9,6 +9,7 @@ export const CODEX_STRUCTURED_AGENT: DirectoryAccountAgentDefinition = {
   capabilities: {
     // A thread with legacy, unpaginated history narrows this to unsupported once it runs.
     rewind: true,
+    fork: 'checkpoint',
     compact: true,
     // A goal change at rest starts the agent first.
     threadGoal: true,

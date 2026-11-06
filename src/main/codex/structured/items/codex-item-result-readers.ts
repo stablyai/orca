@@ -1,8 +1,12 @@
 import {
+  finishTranscriptWork,
+  type TranscriptWork
+} from '../../../native-chat/transcript-work-scheduler'
+import {
   readFirstString,
   readRecord,
   readString,
-  readTextContent
+  readTextContentWork
 } from '../../app-server/codex-item-field-readers'
 import type { CodexThreadItem } from './codex-thread-item-identity'
 
@@ -11,10 +15,14 @@ export function codexCommandOutput(item: CodexThreadItem): string | null {
 }
 
 export function codexReasoningText(item: CodexThreadItem): string | null {
+  return finishTranscriptWork(codexReasoningTextWork(item))
+}
+
+export function* codexReasoningTextWork(item: CodexThreadItem): TranscriptWork<string | null> {
   return (
-    readTextContent(item, 'text') ??
-    readTextContent(item, 'summary') ??
-    readTextContent(item, 'content')
+    (yield* readTextContentWork(item, 'text')) ??
+    (yield* readTextContentWork(item, 'summary')) ??
+    (yield* readTextContentWork(item, 'content'))
   )
 }
 
@@ -26,8 +34,12 @@ export function mcpToolArguments(value: unknown): unknown {
 }
 
 export function mcpToolOutput(item: CodexThreadItem): string | null {
+  return finishTranscriptWork(mcpToolOutputWork(item))
+}
+
+export function* mcpToolOutputWork(item: CodexThreadItem): TranscriptWork<string | null> {
   return (
     readString(readRecord(item.error), 'message') ??
-    readTextContent(readRecord(item.result), 'content')
+    (yield* readTextContentWork(readRecord(item.result), 'content'))
   )
 }

@@ -1370,7 +1370,9 @@
         "cb4d287238": "Server name",
         "3affe7de3a": "Paste a pairing URL from an Orca server that this browser can reach.",
         "e3bcd082ac": "Connect to Orca",
-        "mobileScopeRejected": "This QR code grants limited (mobile) access. To use the full web app, open the browser access link from Settings → Runtime Environments → Share this Orca server → New Link."
+        "mobileScopeRejected": "This QR code grants limited (mobile) access. To use the full web app, open the browser access link from Settings → Runtime Environments → Share this Orca server → New Link.",
+        "replaceSavedServer": "This link connects to a different server than \"{{name}}\" ({{endpoint}}). Connect only if you trust the endpoint below.",
+        "keepSavedServer": "Keep saved server"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "Agent Session History is not available for this execution host.",
@@ -2536,6 +2538,7 @@
         "cb55b0390f": "Manage",
         "4f9313984d": "Reviewers",
         "02cbe2de44": "Pipeline",
+        "itemLoadFailed": "Could not load this item. Refresh to try again.",
         "be3d291837": "Files",
         "c996e2962c": "Conversation",
         "b3c156dd51": "Refresh",
@@ -3253,7 +3256,6 @@
         "9cd11ba218": "Jira",
         "11a828abf8": "GitLab",
         "acef77f7ca": "GitHub",
-        "524f095d55": "Needs review",
         "7698af5263": "Mine",
         "94f0339621": "Assigned to me",
         "c2268a9982": "All",
@@ -3349,6 +3351,8 @@
         "loadGitHubWorkFailed": "Failed to load GitHub work.",
         "gitlabViewIssues": "Issues",
         "gitlabViewMrs": "MRs",
+        "gitlabInvolvementEveryone": "Everyone",
+        "gitlabInvolvementReviewing": "Reviewing",
         "gitlabViewTodos": "My Todos",
         "startWorkspaceFromMr": "Start workspace from MR {{number}}",
         "startWorkspaceFromIssue": "Start workspace from issue {{number}}",
@@ -5280,6 +5284,12 @@
             },
             "mainWorktree": "main worktree",
             "detached": "detached"
+          },
+          "antigravity": {
+            "unknownAccount": "Google account",
+            "accounts": "Saved Antigravity Accounts",
+            "readAgo": "Read {{time}}",
+            "notRead": "Usage unknown: not read yet"
           }
         }
       },
@@ -8575,7 +8585,6 @@
         "MobileEmulatorSettingsPane": {
           "19d39113b6": "Let coding agents control the active mobile emulator with Orca CLI commands.",
           "f2f8d97bb6": "Agent Mobile Emulator Control",
-          "143961d031": "Default Device",
           "8aec2f99a0": "Refresh emulator availability",
           "ae1612c58c": "Availability",
           "f9af91ea26": "Shows the New Mobile Emulator action and allows agents to attach to the active emulator.",
@@ -8588,9 +8597,7 @@
           "d704fb5023": "Needs setup",
           "06b06429c6": "Checking Android SDK and iOS Simulator support.",
           "6d1483d4a0": "1 emulator device detected.",
-          "0a452d4d3b": "{{value0}} emulator devices detected.",
-          "f62a1bb759": "Orca will auto-select an emulator device after devices are detected.",
-          "b2fd62ea75": "Default device for new emulator tabs and agent attach commands. Auto-select prefers an already running device."
+          "0a452d4d3b": "{{value0}} emulator devices detected."
         },
         "MobileNetworkInterfaceSection": {
           "b2c384cfd6": "No interfaces found"
@@ -12214,7 +12221,7 @@
             "agentLaunch": "Start agents in your workspaces, including SSH"
           },
           "decisionFailed": "Could not save the permission decision. Try again.",
-          "fullAccessWarning": "Full access: runs as a normal program and can read your files, use the network and run other programs.",
+          "fullAccessWarning": "Full access: runs as a normal program and can read your files, use the network, run other programs and control Orca, including your terminals and agents.",
           "uiWarning": "Runs the publisher's code inside Orca to draw its view. Orca shows what it can access and asks before enabling it."
         },
         "PluginConsentProvenance": {
@@ -14550,6 +14557,13 @@
                   "title": "{{reviewLabelCap}} not supported here",
                   "body": "This repository provider does not support creating a {{reviewLabel}} from Orca."
                 }
+              },
+              "runTime": {
+                "justNow": "just now",
+                "started": "Started {{time}}",
+                "finished": "Finished {{time}}",
+                "notLatestCommitDetail": "Ran on commit {{sha}}, not the latest commit",
+                "notLatestCommit": "Earlier commit"
               }
             }
           },
@@ -16297,7 +16311,6 @@
                 "06e10d7356": "Shut down emulator",
                 "e7a0d1897e": "Home",
                 "6bd8dff42a": "Rotate",
-                "3d836b879c": "Choose emulator",
                 "81b3571a07": "Connect",
                 "868c0f2938": "Working…"
               }
@@ -18029,6 +18042,8 @@
           "noRunUsageYet": "No run usage yet",
           "noWorkspace": "No workspace",
           "latestSavedOutput": "Latest saved output",
+          "fullOutputUnavailable": "Couldn't load the full output.",
+          "retryFullOutput": "Retry",
           "backToList": "All automations",
           "tableName": "Name",
           "tableProject": "Project",
@@ -19674,6 +19689,8 @@
         "providerExitedAnswer": "{{agent}} has stopped, so your answer was not sent. Send a message to continue.",
         "claudeEffortInvalid": "Claude effort is invalid; choose low, medium, high, xhigh, or max and send again.",
         "modelUnavailable": "{{agent}} couldn't use {{detail}}. Pick another model and send again.",
+        "modelUnavailableUpdate": "{{agent}} couldn't use {{detail}}. Update {{agent}} to {{minimumVersion}} or later to keep it after a restart, or pick another model and send again.",
+        "modelNotSelected": "{{agent}} has no model selected. Check your model selection and {{agent}} sign-in, then send again.",
         "providerRejected": "{{agent}} didn't accept this message.",
         "providerRejectedQuoted": "{{agent}} didn't accept this message: {{detail}}.",
         "attachmentEmpty": "An image on this message is empty, so the message was not sent.",
@@ -19713,6 +19730,7 @@
         "couldNotStopTheAgent": "Couldn't stop the agent.",
         "noTurnToStop": "{{agent}} had no turn running to stop.",
         "answerUnconfirmed": "Your answer was recorded but the agent did not confirm it.",
+        "pluginInputRequired": "{{agent}} stopped because the \"{{plugin}}\" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal.",
         "hostFault": "Orca ran into a problem, so this didn't go through.",
         "hostFaultTryAgain": "Orca ran into a problem, so this didn't go through. Try again.",
         "hostStopped": "{{agent}} never finished starting, so Orca stopped it.",
@@ -19844,7 +19862,9 @@
         "partial": "Partial diff",
         "changedFiles_one": "{{count}} changed file",
         "changedFiles_other": "{{count}} changed files",
-        "showMoreFiles": "Show {{count}} more"
+        "showMoreFiles": "Show {{count}} more",
+        "hide": "Hide",
+        "hidden": "Orca won't show turn diffs anymore"
       },
       "receipt": {
         "unavailable": "Selected answer unavailable",
@@ -19878,11 +19898,18 @@
         "permissionDenied": "{{agent}} denied permission. View details.",
         "safetyReview": "{{agent}} reported a safety review warning. View details.",
         "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
-        "modelFallback": "Claude switched models: {{from}} → {{to}}."
+        "modelFallback": "Claude switched models: {{from}} → {{to}}.",
+        "forkedFrom": "Forked from"
       },
       "composer": {
         "send": "Send",
+        "planMode": "Plan",
+        "moreControls": "More chat controls",
+        "exitPlanMode": "Exit plan mode",
         "alternateSteerHint": "{{shortcut}} to steer",
+        "previewQueue": "Queue",
+        "previewSteer": "Steer",
+        "previewSteerQueued": "Steer queued",
         "alternateQueueHint": "{{shortcut}} to queue",
         "noPty": "No live terminal — toggle back to reconnect.",
         "locked": "Input is held by another device.",
@@ -20161,7 +20188,8 @@
         "stateIdleCount_one": "{{value0}} stopped",
         "stateIdleCount_other": "{{value0}} stopped",
         "stateUnverifiableCount_one": "{{value0}} with status unavailable",
-        "stateUnverifiableCount_other": "{{value0}} with status unavailable"
+        "stateUnverifiableCount_other": "{{value0}} with status unavailable",
+        "showAgent": "Show {{value0}} in the conversation"
       },
       "jumpToLatest": "Jump to latest",
       "find": {
@@ -20622,7 +20650,25 @@
         "cancel": "Don't continue"
       },
       "settings": "Chat settings",
+      "composerWorkspace": {
+        "copyFailed": "Failed to copy",
+        "copyIdentity": "Copy {{value0}}",
+        "folder": "Folder",
+        "mainCheckout": "Main checkout",
+        "worktree": "Worktree"
+      },
       "creationChatNotOpened": "Your worktree is ready, but the chat could not open. Retry to open it with your message.",
+      "fork": {
+        "action": "Fork from this response",
+        "pending": "Forking this chat…",
+        "checking": "Checking whether this chat can fork…",
+        "tooltip": "Fork from this response. The new chat includes this whole response, up to the end of its turn.",
+        "unconfirmed": "{{agent}} couldn't confirm the fork",
+        "unconfirmedDetail": "It may have opened anyway. Check Session History before forking again.",
+        "failed": "{{agent}} couldn't fork this chat",
+        "hostUnsupported": "This host runs an older Orca. Update Orca on the host, then try again.",
+        "failedDetail": "Your chat is unchanged. Try again."
+      },
       "usage": {
         "description": "Show usage for this chat’s Codex account",
         "loading": "Loading Codex usage…",
@@ -20641,6 +20687,18 @@
           "noCredit": "No Codex reset credit is left on this account.",
           "alreadyRedeemed": "That reset credit was already used."
         }
+      },
+      "cardKindHidden": {
+        "description": "You can change this anytime in",
+        "settingsLink": "Settings > Chat UI > Turn activity",
+        "failed": "Couldn't save that. You can turn it off in Settings > Chat UI > Turn activity."
+      },
+      "openedPullRequests": {
+        "one": "Opened {{name}}",
+        "hide": "Don't show opened pull requests",
+        "hidden": "Orca won't show opened pull requests anymore",
+        "many_one": "Opened {{count}} pull request",
+        "many_other": "Opened {{count}} pull requests"
       }
     },
     "tab": {
@@ -21080,7 +21138,16 @@
         "idleStopSearchIdle": "idle",
         "idleStopSearchTimeout": "timeout",
         "idleStopSearchKeepAlive": "keep alive",
-        "idleStopNever": "Never"
+        "idleStopNever": "Never",
+        "openedPullRequestsTitle": "Opened pull requests",
+        "openedPullRequestsCopy": "Shows the pull requests each turn opened, with titles and line counts, below the reply.",
+        "openedPullRequestsSearchPr": "PR",
+        "openedPullRequestsSearchCard": "pull request card",
+        "turnActivityTitle": "Turn activity",
+        "turnDiffsTitle": "Turn diffs",
+        "turnDiffsCopy": "Shows the files each turn changed, with line counts, below the reply.",
+        "turnDiffsSearchChangedFiles": "changed files",
+        "turnDiffsSearchEdits": "edits"
       }
     },
     "agentChildRow": {
@@ -21479,6 +21546,9 @@
       "saveFailed": "Could not turn on Chat UI. Turn it on in Settings → Chat UI.",
       "terminalSaveFailed": "Could not switch to terminal. Turn off Chat UI in Settings → Chat UI.",
       "switched": "Chat UI is now the default for new agents. You can switch back any time in Settings → Chat UI.",
+      "switchedNoteTitle": "New agents will open in Chat UI",
+      "switchedNoteBody": "Prefer the terminal? Switch back anytime: search <term>Chat UI</term> in Settings.",
+      "openSettings": "Open Settings",
       "dismiss": "Dismiss",
       "demoTabTitle": "Explain login",
       "demoPrompt": "Map out how login works",
@@ -22190,7 +22260,9 @@
         "accounts": "accounts"
       },
       "windowsChanged": "The host default account changed. Select a saved account to apply it again.",
-      "windowsSessions": "Select applies and verifies the host default agy credential. Command choices and later account changes are handled by agy. Existing sessions may keep their previous account."
+      "windowsSessions": "Select applies and verifies the host default agy credential. Command choices and later account changes are handled by agy. Existing sessions may keep their previous account.",
+      "lastReading": "{{reading}} · Read {{time}}",
+      "noReading": "Usage unknown: not read yet"
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",
@@ -23812,6 +23884,21 @@
     }
   },
   "emulator": {
+    "opening": {
+      "when": "When opening",
+      "description": "Applies to new emulator tabs on this computer. Existing workspace sessions stay connected.",
+      "lastUsed": "Last used",
+      "ask": "Ask every time",
+      "specific": "Specific device",
+      "fixed": "Default device",
+      "fixedDescription": "Choose an existing device. A missing or unavailable device prompts for another selection instead of starting a different platform.",
+      "choose": "Choose device",
+      "notFound": "Not found",
+      "missing": "The saved device is no longer on this computer. Choose another device.",
+      "unavailable": "The saved device runtime is unavailable. Choose another device or install its runtime.",
+      "askPrompt": "Choose a device to open.",
+      "firstUse": "Choose your first device. Orca will remember successful selections on this computer."
+    },
     "errors": {
       "disabled": "Mobile Emulator is disabled in Settings.",
       "notAvailable": "Mobile Emulator is not available.",
@@ -23845,6 +23932,18 @@
     },
     "settings": {
       "availabilityCheckFailed": "Could not check emulator availability."
+    },
+    "picker": {
+      "choose": "Choose emulator",
+      "search": "Search devices…",
+      "empty": "No matching devices",
+      "used": "Used devices",
+      "other": "Other devices on this computer",
+      "unavailable": "Unavailable runtimes",
+      "runtimeUnavailable": "Runtime unavailable",
+      "running": "Running",
+      "starting": "Starting",
+      "stopped": "Stopped"
     }
   },
   "ephemeralVm": {

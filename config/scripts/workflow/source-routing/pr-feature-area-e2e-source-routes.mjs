@@ -51,11 +51,6 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
     [`${COMPONENTS}floating-terminal/`]
   ),
   featureRoute(
-    'feature.dictation',
-    ['voice-microphone-selection'],
-    [`${COMPONENTS}dictation/`, 'src/main/speech/']
-  ),
-  featureRoute(
     'feature.ai-vault',
     ['ai-vault-panel-search', 'ai-vault-session-delete'],
     [

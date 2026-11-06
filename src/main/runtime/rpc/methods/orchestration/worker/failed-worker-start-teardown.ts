@@ -2,7 +2,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import {
   discardStructuredWorkerSession,
   releaseStructuredWorkerSession
-} from '../../orchestration-structured-worker-session'
+} from '../structured-workers/orchestration-structured-worker-session'
 import type { createStructuredWorkerSessionForWorktree } from './worker-topology'
 
 /** Best-effort structured cleanup hides durable/live chat tabs without replacing the original error.

@@ -36,7 +36,9 @@ import { acquireAgentLaunchChoices, holdChatProgramFacts } from './host-chat-pro
 import * as chat from './host-chat-program'
 import { resolveQuickWorkspaceAgentSelection } from './quick-workspace-agent-selection'
 import { resolveChecksActionAgent, startFixChecksAgent } from './fix-checks-agent-launch'
-vi.mock('./launch-work-item-direct', () => ({ launchWorkItemDirect: rpc.direct }))
+vi.mock('./workspace/creation/work-item/launch-work-item-direct', () => ({
+  launchWorkItemDirect: rpc.direct
+}))
 const CAPS = [CHAT, CATALOG, INSTALL, HEALTH, MODE]
 const workspace = { kind: 'git-worktree', runtimeEnvironmentId: 'B' } as const
 const host = { executionHostId: 'runtime:B', hostCapabilities: CAPS }

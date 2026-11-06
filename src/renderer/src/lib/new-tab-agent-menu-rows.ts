@@ -1,7 +1,7 @@
 import {
   structuredAgentLaunchSupport,
   type AgentLaunchRoutingInput
-} from '@/lib/agent-launch-routing'
+} from '@/lib/agent-session/launch/routing/agent-launch-routing'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY as CATALOG } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import type { HostChatAnswer } from '../../../shared/agent-launch/picker/agent-launch-picker-rows'
 

@@ -81,7 +81,7 @@ vi.mock('@/lib/host-chat-program', () => ({ agentsOfferedForLaunch: () => ['clau
 vi.mock('@/lib/host-chat-program-acquisition', () => ({
   acquireAgentLaunchChoices: async () => ({ detected: ['claude'], offered: ['claude'] })
 }))
-vi.mock('@/lib/launch-agent-in-new-tab', () => ({
+vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
   launchAgentInNewTab: (input: Parameters<typeof launch>[0]) => {
     const terminalCompletion = mocks.launched(input)
     return { surface: { kind: 'host-published' }, terminalCompletion }
@@ -112,7 +112,7 @@ vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
 }))
 
-vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
+vi.mock('@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery', () => ({
   deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
 }))
@@ -125,8 +125,8 @@ vi.mock('sonner', () => ({ toast: { error: mocks.toastError, success: vi.fn() } 
 
 afterEach(() => resetWebSessionCloseIntentForTests())
 
-import { launchAgentInWebHostTab } from '@/lib/launch-agent-web-host-tab'
-import { planLaunchAgentStartupPrompt } from '@/lib/launch-agent-startup-prompt-plan'
+import { launchAgentInWebHostTab } from '@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
+import { planLaunchAgentStartupPrompt } from '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan'
 import { resolveAgentStartupPlanInputs } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { projectAgentLaunchSettings } from '../../../shared/agent-launch/choices/agent-launch-settings'
 import * as preferences from './agent-launch-settings/use-host-agent-launch-preferences'

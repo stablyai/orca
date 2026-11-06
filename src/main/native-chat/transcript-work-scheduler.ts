@@ -31,6 +31,7 @@ export function createTranscriptWorkScheduler(signal?: AbortSignal) {
         }
       }
     } finally {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Closing discards the generator's result.
       work.return(undefined as never)
     }
   }

@@ -2,7 +2,7 @@ import * as StreamJson from 'stream-json/core/parser.js'
 import type { ParserOptions, Token } from 'stream-json/core/parser.js'
 import { none, type Many } from 'stream-chain/defs.js'
 
-// SAFETY: The installed parser exports jsonParser at runtime but omits it from its declarations.
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The installed parser exports jsonParser but omits its declaration.
 const { jsonParser } = StreamJson as typeof StreamJson & {
   jsonParser: (options: ParserOptions) => (input: string | typeof none) => Many<Token> | typeof none
 }

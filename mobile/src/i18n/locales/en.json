@@ -1400,6 +1400,10 @@
         "changedFiles_other": "{{count}} changed files",
         "partial": "Partial diff",
         "showMoreFiles": "Show {{count}} more"
+      },
+      "composer": {
+        "planMode": "Plan",
+        "exitPlanMode": "Exit plan mode"
       }
     }
   },
@@ -2073,6 +2077,7 @@
       "shortcut": "Shortcut",
       "removeShortcutMessage": "Remove this custom shortcut?",
       "renameTerminal": "Rename Terminal",
+      "renameTerminalFailed": "Couldn't rename the terminal. {{reason}}",
       "terminalName": "Terminal name",
       "allowAutoClose": "Allow Auto-Close"
     },
@@ -2522,6 +2527,7 @@
       "backgroundTaskNotStopped": "The background task wasn't stopped.",
       "backgroundTasksNotStopped": "The background tasks weren't stopped.",
       "answerUnconfirmed": "Your answer was recorded but the agent did not confirm it.",
+      "pluginInputRequired": "{{agent}} stopped because the \"{{plugin}}\" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal.",
       "hostFault": "Orca ran into a problem, so this didn't go through.",
       "hostFaultTryAgain": "Orca ran into a problem, so this didn't go through. Try again.",
       "hostStopped": "{{agent}} never finished starting, so Orca stopped it.",
@@ -2546,6 +2552,8 @@
       "providerExitedAnswer": "{{agent}} has stopped, so your answer was not sent. Send a message to continue.",
       "claudeEffortInvalid": "Claude effort is invalid; choose low, medium, high, xhigh, or max and send again.",
       "modelUnavailable": "{{agent}} couldn't use {{detail}}. Pick another model and send again.",
+      "modelUnavailableUpdate": "{{agent}} couldn't use {{detail}}. Update {{agent}} to {{minimumVersion}} or later to keep it after a restart, or pick another model and send again.",
+      "modelNotSelected": "{{agent}} has no model selected. Check your model selection and {{agent}} sign-in, then send again.",
       "providerRejected": "{{agent}} didn't accept this message.",
       "providerRejectedQuoted": "{{agent}} didn't accept this message: {{detail}}.",
       "attachmentEmpty": "An image on this message is empty, so the message was not sent.",
@@ -2956,7 +2964,9 @@
       "responding": "Agent is responding"
     },
     "message": {
-      "copyMessage": "Copy message"
+      "copyMessage": "Copy message",
+      "forkFromResponse": "Fork from this response",
+      "forkFromResponseHint": "A new chat with this whole response, up to the end of its turn"
     },
     "messageActionsSheet": {
       "copyMessage": "Copy message",
@@ -2974,6 +2984,7 @@
       "safetyReview": "{{agent}} reported a safety review warning. View details.",
       "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
       "modelFallback": "Claude switched models: {{from}} → {{to}}.",
+      "forkedFrom": "Forked from",
       "signIn": "Sign in",
       "signInHint": "Opens a terminal on the computer running this chat"
     },
@@ -3217,6 +3228,12 @@
       "messageFromCoordinator": "Message from coordinator",
       "updateFromWorker": "Update from worker",
       "messageFrom": "Message from"
+    },
+    "fork": {
+      "busy": "Another chat or terminal is opening. Wait, then fork the {{agent}} chat again.",
+      "unconfirmed": "{{agent}} couldn't confirm the fork. It may have opened anyway; check Session History before forking again.",
+      "failed": "{{agent}} couldn't fork this chat. {{detail}}",
+      "unsupported": "This host runs an older Orca. Update Orca on the host, then try again."
     },
     "hostOutage": {
       "reconnecting": "{{hostName}} is reconnecting…",
@@ -4555,6 +4572,8 @@
       "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "The original agent pane is unavailable. Saved output remains here.",
       "openAgent": "Open agent",
       "retryHistory": "Retry history",
+      "fullOutputUnavailable": "Couldn't load the full output.",
+      "retryFullOutput": "Retry",
       "loadingRuns": "Loading runs…",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "No matching runs in the loaded history. Load more to continue.",
       "noMatchingRunsYet": "No matching runs yet.",
@@ -4607,7 +4626,11 @@
       "notReported": "Not reported",
       "searchOptions": "Search options",
       "task": "Task",
-      "review": "Review"
+      "review": "Review",
+      "discardChangesTitle": "Discard changes?",
+      "discardChangesMessage": "Unsaved edits to this automation will be lost.",
+      "discard": "Discard",
+      "keepEditing": "Keep editing"
     },
     "orphanIssues": {
       "hostReselection": "Edit this automation and reselect its host before running it.",

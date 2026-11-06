@@ -23,10 +23,21 @@ type HistorySegment = {
   end?: HistoryPosition
 }
 
+export type CodexHistoryRecord = {
+  record: Record<string, unknown> | null
+  segmentId: string
+  paginated: boolean
+  ordinal: number
+  offset: number
+  selected: boolean
+  recordId: string
+}
+
 /** Resolve physical prefixes only; logical fork parents can describe standalone copied files. */
 export async function readCodexLocalHistory(input: {
   filePath: string
   roots?: readonly string[]
+  visitRecord?: (record: CodexHistoryRecord) => void | Promise<void>
   signal?: AbortSignal
   parseRecord?: (line: string) => Promise<Record<string, unknown> | null>
   visit: (
@@ -111,17 +122,26 @@ export async function readCodexLocalHistory(input: {
       ) {
         throw new Error('The conversation history ordinal or byte boundary is invalid.')
       }
+      const payload = asRecord(record?.payload)
+      const item = asRecord(payload?.item)
+      const id = extractString(item?.id) ?? extractString(payload?.id) ?? extractString(record?.id)
+      const recordId = `${segment.rolloutId}:${id ?? `#${ordinal}`}`
+      await input.visitRecord?.({
+        record,
+        segmentId: segment.rolloutId,
+        paginated: segment.paginated,
+        ordinal,
+        offset: offset - raw.byteLength,
+        selected: segment.end === undefined,
+        recordId
+      })
       ordinal += 1
       if (isCodexVisibleHistoryRecord(record, segment.paginated)) {
-        const payload = asRecord(record?.payload)
-        const item = asRecord(payload?.item)
-        const id =
-          extractString(item?.id) ?? extractString(payload?.id) ?? extractString(record?.id)
         await input.visit(
           raw.line,
           transcriptFallbackId(segment.path, offset - raw.byteLength),
           segment.end === undefined,
-          segment.paginated ? `${segment.rolloutId}:${id ?? `#${ordinal - 1}`}` : undefined,
+          segment.paginated ? recordId : undefined,
           record
         )
       }

@@ -25,7 +25,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { translate } from '@/i18n/i18n'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import { copyLinearIssueText } from './linear-issue-clipboard'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function LinearIssueWorkspaceHeader({
   issue,

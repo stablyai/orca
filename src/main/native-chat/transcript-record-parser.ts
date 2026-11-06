@@ -1,6 +1,6 @@
 import { Assembler } from 'stream-json/core/assembler.js'
 import { createJsonTokenReader } from '../../shared/json-token-reader'
-import { asRecord } from '../ai-vault/session-scanner-values'
+import { asRecord } from '../ai-vault/session-scanner-record-value'
 import type { TranscriptWork } from './transcript-work-scheduler'
 
 const PARSE_QUANTUM = 64 * 1024

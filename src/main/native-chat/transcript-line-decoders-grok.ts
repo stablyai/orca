@@ -24,7 +24,8 @@ export function decodeGrokTranscriptRecord(
   return finishTranscriptWork(
     decodeGrokTranscriptRecordWork(record, fallbackId, function* (text) {
       yield 1
-      return JSON.parse(text) as unknown
+      const value: unknown = JSON.parse(text)
+      return value
     })
   )
 }

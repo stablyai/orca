@@ -86,6 +86,7 @@ it('returns refused text, images and files to their origin across teardown, retr
       agent: 'codex',
       sendStructured,
       ...drafts,
+      holdUnconfirmed: () => {},
       onSendError: () => {}
     })
     const images = useMobileNativeChatImageAttachments({
@@ -154,7 +155,7 @@ it('returns refused text, images and files to their origin across teardown, retr
   act(() => {
     sent = full.images.sendNativeChat(full.drafts.composerText)
   })
-  expect(sendStructured.mock.calls.at(-1)).toEqual([
+  expect(sendStructured.mock.calls.at(-1)?.slice(0, 5)).toEqual([
     'complete prompt',
     ['file:///preview.png'],
     expect.any(Number),

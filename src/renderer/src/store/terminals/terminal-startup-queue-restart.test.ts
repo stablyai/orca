@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseWorkspaceSession } from '../../../../shared/workspace-session/workspace-session-schema'
-import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
 import { createTestStore, makeWorktree, seedStore } from '@/store/slices/store-test-helpers'
 
 const WORKTREE_ID = 'repo1::/wt-1'

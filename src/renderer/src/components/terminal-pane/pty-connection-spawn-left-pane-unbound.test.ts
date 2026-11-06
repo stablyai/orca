@@ -53,7 +53,7 @@ vi.mock('@/lib/pane-manager/pane-manager-registry', async (importOriginal) => ({
   resetAndRefreshAllTerminalWebglAtlases
 }))
 
-vi.mock('./terminal-webgl-atlas-recovery', () => ({
+vi.mock('./render-health/terminal-webgl-atlas-recovery', () => ({
   scheduleTerminalWebglAtlasRecovery
 }))
 
@@ -86,7 +86,7 @@ vi.mock('./cache-timer-seeding', () => ({
 
 vi.mock('sonner', () => ({ toast: { info: toastInfo } }))
 
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({
+vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
   notifyCodexPaneBoundForStaleSweep
 }))
 
@@ -98,7 +98,7 @@ vi.mock('react', async (importOriginal) => {
   }
 })
 
-vi.mock('./pty-transport', () => ({
+vi.mock('./pty-transport/ipc/pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
@@ -109,7 +109,7 @@ vi.mock('./pty-transport', () => ({
   })
 }))
 
-vi.mock('./remote-runtime-pty-transport', () => ({
+vi.mock('./pty-transport/remote-runtime/remote-runtime-pty-transport', () => ({
   createRemoteRuntimePtyTransport: vi.fn(
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
@@ -122,7 +122,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
   )
 }))
 
-vi.mock('./pty-dispatcher', async (importOriginal) => {
+vi.mock('./pty-transport/delivery/pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return { ...actual, getEagerPtyBufferHandle: vi.fn(() => undefined) }
 })
@@ -152,7 +152,8 @@ describe('fresh spawn leaves a local pane unbound', () => {
       const { connectPanePty } = await import('./pty-connection')
       const agentTitleMocks =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const { createRemoteRuntimePtyTransport } =
+        await import('./pty-transport/remote-runtime/remote-runtime-pty-transport')
       const local = makeWorktree({ id: 'wt-1', repoId: 'repo1', path: '/local', hostId: 'local' })
       const remote = { ...local, path: '/remote', hostId: 'runtime:server' as const }
       mockStoreState.activeWorktreeId = 'unrelated'

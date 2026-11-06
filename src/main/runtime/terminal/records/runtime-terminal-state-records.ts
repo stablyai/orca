@@ -68,6 +68,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   readonly ptyId: string
   readonly incarnationId: PtyIncarnationId | null
   readonly worktreeId: string
+  /** Set only when no binding named the workspace; worktree-scoped stops never act on a cwd guess (#36716). */
+  readonly worktreeInferredFromCwd?: true
   readonly connectionId: string | null
   runtimeSessionOwned: boolean
   readonly isWsl: boolean | null
@@ -108,6 +110,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
     sessionBoundary?: boolean
     /** OSC 7501 done proves the program awaits input; hook done may occur mid-turn. */
     programAtRest?: boolean
+    /** When OSC 7501 first reported blocked on sign-in: input would go to the login menu. */
+    programSignInRequiredSince?: number
   } | null
   lastAgentStatusStartedAtEpochMs: number | null
   lastAgentStatusRichInvalidatedAtEpochMs: number | null

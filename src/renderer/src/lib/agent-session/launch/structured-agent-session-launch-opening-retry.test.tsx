@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { newAgentLaunchRequestId } from '../../agent-launch-request-id'
+import { newAgentLaunchRequestId } from './routing/agent-launch-request-id'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import {
@@ -12,7 +12,7 @@ import {
   start,
   draft,
   deferred
-} from '../../structured-agent-session-launch-create-message.test-fixture'
+} from './structured-agent-session-launch-create-message.test-fixture'
 import {
   startStructuredAgentLaunch,
   retryStructuredAgentSessionLaunch,

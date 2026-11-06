@@ -29,7 +29,7 @@ vi.mock('@/store', async () => {
     })
   }
 })
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: activate,
   activateAndRevealFolderWorkspace: folderActivate
 }))

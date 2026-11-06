@@ -1,7 +1,7 @@
 import { buildProcessBoundaryGround } from '../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { serializeWithAbsoluteCursor } from '../../../../../shared/terminal/replay/terminal-serialize-absolute-cursor'
 import { isTerminalWritePipelineCertifiedDead } from '@/lib/pane-manager/terminal-write-pipeline-health'
-import { registerPtySerializer, registerPtyTitleSource } from '../pty-buffer-serializer'
+import { registerPtySerializer, registerPtyTitleSource } from '../snapshots/pty-buffer-serializer'
 import {
   discardTerminalOutput,
   waitForTerminalOutputParsed
