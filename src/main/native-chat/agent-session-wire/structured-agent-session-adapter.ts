@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionConversationCopyInput } from './structured-agent-session-conversation-copy-input'
 import type { CodexAccountUsageRead } from '../../rate-limits/codex-rpc-rate-limit-mapper'
 import type { ClaudeAccountRecipe } from '../../../shared/agent-session/lifecycle/agent-session-acquired-account'
 import type { StructuredAgentSessionAdmitFreshInput } from './structured-agent-session-input-admission'
@@ -15,10 +16,7 @@ import type {
   AgentJournalMessageItem,
   AgentJournalTurnItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type {
-  AgentJournalItemIdentity,
-  AgentSessionJournalIdentity
-} from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type {
@@ -346,22 +344,9 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     shouldExecute?: () => boolean
   }): Promise<string | null>
   /** Copy the provider conversation without changing the chat’s ID; omit for CLI-based forks. */
-  copyConversation?(input: {
-    record?: AgentSessionRecord
-    checkpoint?: {
-      selectedItemId: string
-      settled: boolean
-      beforeMessage?: { sessionId: string; uuid: string }
-      throughMessage?: { sessionId: string; uuid: string }
-      rootMessage?: { sessionId: string; uuid: string }
-      turnId?: string
-    }
-    title?: string
-    signal?: AbortSignal
-    identity: AgentSessionJournalIdentity
-    providerSessionId: string
-    accountHome: AgentSessionAccountHome
-  }): Promise<AiVaultConversationCopy>
+  copyConversation?(
+    input: StructuredAgentSessionConversationCopyInput
+  ): Promise<AiVaultConversationCopy>
   /** Give the agent's own conversation the user's chat name, as the agent's own rename would:
    *  through the live child holding that conversation, otherwise at rest. Best effort. */
   renameProviderSession?(input: {
