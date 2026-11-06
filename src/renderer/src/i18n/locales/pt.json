@@ -15004,6 +15004,8 @@
         "loadGitHubWorkFailed": "Falha ao carregar o trabalho do GitHub.",
         "gitlabViewIssues": "Issues",
         "gitlabViewMrs": "MRs",
+        "gitlabInvolvementEveryone": "Todos",
+        "gitlabInvolvementReviewing": "Revisando",
         "gitlabViewTodos": "Minhas tarefas",
         "startWorkspaceFromMr": "Iniciar espaço de trabalho a partir da MR {{number}}",
         "startWorkspaceFromIssue": "Iniciar espaço de trabalho a partir da issue {{number}}",
@@ -20078,6 +20080,9 @@
       "composer": {
         "send": "Enviar",
         "alternateSteerHint": "{{shortcut}} para orientar",
+        "previewQueue": "Colocar na fila",
+        "previewSteer": "Orientar",
+        "previewSteerQueued": "Orientar o próximo",
         "alternateQueueHint": "{{shortcut}} para colocar na fila",
         "noPty": "Nenhum terminal ativo — alterne de volta para reconectar.",
         "locked": "A entrada está retida por outro dispositivo.",

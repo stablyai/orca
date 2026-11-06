@@ -2612,6 +2612,8 @@
         "loadGitHubWorkFailed": "加载 GitHub 工作项失败。",
         "gitlabViewIssues": "议题",
         "gitlabViewMrs": "MR",
+        "gitlabInvolvementEveryone": "所有人",
+        "gitlabInvolvementReviewing": "审阅中",
         "gitlabViewTodos": "我的待办",
         "startWorkspaceFromMr": "从 MR {{number}} 启动工作区",
         "startWorkspaceFromIssue": "从议题 {{number}} 启动工作区",
@@ -18587,6 +18589,9 @@
       "composer": {
         "send": "发送",
         "alternateSteerHint": "{{shortcut}} 立即发送",
+        "previewQueue": "加入队列",
+        "previewSteer": "立即发送",
+        "previewSteerQueued": "立即发送下一条",
         "alternateQueueHint": "{{shortcut}} 加入队列",
         "noPty": "没有实时终端，请切回终端以重新连接。",
         "locked": "输入正被另一台设备占用。",

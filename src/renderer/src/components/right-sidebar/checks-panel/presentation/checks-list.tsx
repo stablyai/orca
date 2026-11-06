@@ -15,6 +15,7 @@ import { observeOffscreenAnimation } from '@/lib/offscreen-animation-pause'
 import { translate } from '@/i18n/i18n'
 import { CHECK_COLOR, CHECK_ICON } from './check-presentation'
 import { CheckRunDetails } from './check-run-details'
+import { CheckRunTime } from './check-run-time'
 import { getCheckStatusLabel } from '../../../../../../shared/source-control/checks/pr-check-status-label'
 import { getCheckStatusLabel as getLocalizedCheckStatusLabel } from '@/components/github/pr-check-presentation'
 import { type ChecksListProps, useChecksListState } from '../refresh/use-checks-list-state'
@@ -152,7 +153,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
                   <div
                     ref={conclusion === 'pending' ? observeOffscreenAnimation : undefined}
                     className={cn(
-                      'group/check-row flex min-w-0 cursor-pointer items-center gap-2 px-3 py-1.5 transition-colors hover:bg-accent/40',
+                      'group/check-row @container flex min-w-0 cursor-pointer items-center gap-2 px-3 py-1.5 transition-colors hover:bg-accent/40',
                       expanded && 'bg-accent/25'
                     )}
                     onClick={() => toggleCheckExpanded(row)}
@@ -170,9 +171,10 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
                         conclusion === 'pending' && 'animate-spin motion-reduce:animate-none'
                       )}
                     />
-                    <span className="flex-1 truncate text-[12px] text-foreground">
+                    <span className="flex-1 truncate @[19rem]:min-w-9 text-[12px] text-foreground">
                       {check.name}
                     </span>
+                    <CheckRunTime check={check} />
                     <span className="flex shrink-0 items-center gap-1">
                       <span className="text-[11px] text-muted-foreground">
                         {getCheckStatusLabel(check)}
@@ -264,14 +266,17 @@ function PipelineCheckRow({ check }: { check: PRCheckDetail }): React.JSX.Elemen
           conclusion === 'pending' && 'animate-spin motion-reduce:animate-none'
         )}
       />
-      <span className="flex-1 truncate text-[12px] text-foreground">{check.name}</span>
+      <span className="flex-1 truncate @[19rem]:min-w-9 text-[12px] text-foreground">
+        {check.name}
+      </span>
+      <CheckRunTime check={check} />
       <span className="text-[11px] text-muted-foreground">
         {getLocalizedCheckStatusLabel(check)}
       </span>
       {check.url && <ExternalLink className="size-3 shrink-0 text-muted-foreground" />}
     </>
   )
-  const className = 'flex min-w-0 items-center gap-2 border-b border-border px-3 py-1.5'
+  const className = '@container flex min-w-0 items-center gap-2 border-b border-border px-3 py-1.5'
   const animationRef = conclusion === 'pending' ? observeOffscreenAnimation : undefined
   return check.url ? (
     <a
