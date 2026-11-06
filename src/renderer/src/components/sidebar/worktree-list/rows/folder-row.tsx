@@ -107,7 +107,7 @@ export function renderFolderWorkspaceVirtualRow(args: {
       data-worktree-id={folderWorktree.id}
       data-worktree-host-identity={folderWorktreeIdentity}
       data-worktree-row-key={folderWorktreeIdentity}
-      data-worktree-lineage-drop-target=""
+      data-worktree-lineage-drop-row=""
       data-worktree-virtual-row
       data-worktree-virtual-row-key={String(vItem.key)}
       data-worktree-virtual-row-start={vItem.start}
