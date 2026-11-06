@@ -11,59 +11,63 @@ const standaloneActivityWorktrees = new Map<string, Worktree>()
 let cachedDisplayNameScope: string | undefined
 
 function buildStandaloneActivityWorktree(
-  worktreeId: string,
-  executionHostId?: ExecutionHostId
+    worktreeId: string,
+    executionHostId?: ExecutionHostId
 ): Worktree {
-  const displayName =
-    worktreeId === FLOATING_TERMINAL_WORKTREE_ID
-      ? translate(
-          'auto.components.activity.standaloneWorktree.floatingTerminal',
-          'Floating terminal'
-        )
-      : translate(
-          'auto.components.activity.standaloneWorktree.standaloneTerminal',
-          'Standalone terminal'
-        )
-  return {
-    id: worktreeId,
-    ...(executionHostId ? { hostId: executionHostId } : {}),
-    repoId: STANDALONE_ACTIVITY_WORKTREE_REPO_ID,
-    path: '',
-    head: '',
-    branch: displayName,
-    isBare: false,
-    isMainWorktree: false,
-    displayName,
-    comment: '',
-    linkedIssue: null,
-    linkedPR: null,
-    linkedLinearIssue: null,
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 0
-  }
+    const displayName =
+        worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+            ? translate(
+                  'auto.components.activity.standaloneWorktree.floatingTerminal',
+                  'Floating terminal'
+              )
+            : translate(
+                  'auto.components.activity.standaloneWorktree.standaloneTerminal',
+                  'Standalone terminal'
+              )
+    return {
+        id: worktreeId,
+        ...(executionHostId ? { hostId: executionHostId } : {}),
+        repoId: STANDALONE_ACTIVITY_WORKTREE_REPO_ID,
+        path: '',
+        head: '',
+        branch: displayName,
+        isBare: false,
+        isMainWorktree: false,
+        displayName,
+        comment: '',
+        linkedIssue: null,
+        linkedPR: null,
+        linkedLinearIssue: null,
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 0,
+        lastActivityAt: 0
+    }
+}
+
+export function isStandaloneActivityWorktree(worktree: Worktree): boolean {
+    return worktree.repoId === STANDALONE_ACTIVITY_WORKTREE_REPO_ID
 }
 
 /** Return a stable synthetic worktree for terminal-only activity. */
 export function standaloneActivityWorktree(
-  worktreeId: string,
-  executionHostId?: ExecutionHostId
+    worktreeId: string,
+    executionHostId?: ExecutionHostId
 ): Worktree {
-  const displayNameScope = `${i18n.language}\0${getTranslationResourceVersion()}`
-  if (cachedDisplayNameScope !== displayNameScope) {
-    cachedDisplayNameScope = displayNameScope
-    standaloneActivityWorktrees.clear()
-  }
-  const cacheKey = `${worktreeId}\0${executionHostId ?? ''}`
-  let worktree = standaloneActivityWorktrees.get(cacheKey)
-  if (!worktree) {
-    if (standaloneActivityWorktrees.size >= STANDALONE_ACTIVITY_WORKTREES_CAP) {
-      standaloneActivityWorktrees.clear()
+    const displayNameScope = `${i18n.language}\0${getTranslationResourceVersion()}`
+    if (cachedDisplayNameScope !== displayNameScope) {
+        cachedDisplayNameScope = displayNameScope
+        standaloneActivityWorktrees.clear()
     }
-    worktree = buildStandaloneActivityWorktree(worktreeId, executionHostId)
-    standaloneActivityWorktrees.set(cacheKey, worktree)
-  }
-  return worktree
+    const cacheKey = `${worktreeId}\0${executionHostId ?? ''}`
+    let worktree = standaloneActivityWorktrees.get(cacheKey)
+    if (!worktree) {
+        if (standaloneActivityWorktrees.size >= STANDALONE_ACTIVITY_WORKTREES_CAP) {
+            standaloneActivityWorktrees.clear()
+        }
+        worktree = buildStandaloneActivityWorktree(worktreeId, executionHostId)
+        standaloneActivityWorktrees.set(cacheKey, worktree)
+    }
+    return worktree
 }

@@ -173,6 +173,12 @@ export function buildActivityEvents(
             }
         }
     }
-    appendCardVisibleLiveAgents({ build: args, liveAgentByPaneKey, paneEntryByPaneKey })
+    appendCardVisibleLiveAgents({
+        build: args,
+        liveAgentByPaneKey,
+        paneEntryByPaneKey,
+        tabHostIndex,
+        ownerCache
+    })
     return { events: capActivityEvents(events), liveAgentByPaneKey, paneEntryByPaneKey }
 }

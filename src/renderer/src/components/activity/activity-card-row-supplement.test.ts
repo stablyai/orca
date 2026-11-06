@@ -103,6 +103,68 @@ describe('activity list card-row supplement', () => {
         )
     })
 
+    it('keeps a supplemented subagent on the hook parent host when worktree ids collide', () => {
+        const local = makeWorktree()
+        const remote = { ...makeWorktree(), path: '/remote/wt-1' }
+        const parent: AgentStatusEntry = {
+            state: 'working',
+            prompt: 'parent',
+            updatedAt: 100_000,
+            stateStartedAt: 90_000,
+            paneKey: PANE_KEY,
+            stateHistory: [],
+            agentType: 'codex',
+            connectionId: 'conn-1',
+            subagents: [{ id: 'child-1', state: 'working', agentType: 'codex', startedAt: 90_000 }]
+        }
+        const repo = makeRepo()
+        const tab = makeTab()
+        const childKey = `${PANE_KEY}\u0000subagent:child-1`
+        const threads = buildAgentPaneThreads(
+            buildActivityEvents({
+                chatNames: new Map(),
+                agentStatusByPaneKey: { [PANE_KEY]: parent },
+                retainedAgentsByPaneKey: {},
+                tabsByWorktree: { [local.id]: [tab] },
+                worktreeMap: new Map([[local.id, local]]),
+                repoMap: new Map([[repo.id, repo]]),
+                acknowledgedAgentsByPaneKey: {},
+                now: 100_000,
+                ptyIdsByTabId: { [tab.id]: ['pty-1'] },
+                runtimePaneTitlesByTabId: { [tab.id]: { 1: 'Codex working' } },
+                terminalLayoutsByTabId: { [tab.id]: layout() },
+                resolveWorktree: (id, host) =>
+                    id === local.id && host === 'ssh:conn-1' ? remote : undefined
+            })
+        )
+
+        expect(threads.find((entry) => entry.paneKey === childKey)?.worktree).toBe(remote)
+    })
+
+    it('omits a supplemented row when its worktree cannot be resolved', () => {
+        const worktree = makeWorktree()
+        const tab = makeTab()
+        const repo = makeRepo()
+        const threads = buildAgentPaneThreads(
+            buildActivityEvents({
+                chatNames: new Map(),
+                agentStatusByPaneKey: {},
+                retainedAgentsByPaneKey: {},
+                tabsByWorktree: { [worktree.id]: [tab] },
+                worktreeMap: new Map(),
+                repoMap: new Map([[repo.id, repo]]),
+                acknowledgedAgentsByPaneKey: {},
+                now: 100_000,
+                ptyIdsByTabId: { [tab.id]: ['pty-1'] },
+                runtimePaneTitlesByTabId: { [tab.id]: { 1: 'Codex working' } },
+                terminalLayoutsByTabId: { [tab.id]: layout() },
+                resolveWorktree: () => undefined
+            })
+        )
+
+        expect(threads).toEqual([])
+    })
+
     it('counts the opened working group, including monitoring, and prefers attention', () => {
         const working = thread({ paneKey: 'working', currentAgentState: 'working' })
         const monitoring = thread({ paneKey: 'monitoring', currentAgentState: 'monitoring' })

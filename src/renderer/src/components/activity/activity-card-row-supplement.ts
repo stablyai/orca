@@ -2,7 +2,12 @@ import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { buildWorktreeAgentRows } from '../sidebar/workspace-card/activity/worktree-agent-rows'
 import type { BuildActivityEventsArgs } from './activity-event-builder'
-import type { ActivityLiveAgentSnapshot, ActivityLiveAgentState } from './activity-thread-types'
+import {
+    resolveActivityEventOwner,
+    type ActivityEventOwner,
+    type ActivityTabHostIndex
+} from './activity-event-builder-context'
+import { isStandaloneActivityWorktree } from './activity-standalone-worktree'
 
 function cardRowLiveState(row: {
     state: string
@@ -17,11 +22,25 @@ function cardRowLiveState(row: {
     return null
 }
 
+function supplementedRowHostEntry(
+    rowEntry: AgentStatusEntry,
+    agentStatusByPaneKey: Record<string, AgentStatusEntry>,
+    paneEntryByPaneKey: Record<string, AgentStatusEntry>
+): AgentStatusEntry {
+    const parentPaneKey = rowEntry.orchestration?.parentPaneKey
+    if (!parentPaneKey) {
+        return rowEntry
+    }
+    return agentStatusByPaneKey[parentPaneKey] ?? paneEntryByPaneKey[parentPaneKey] ?? rowEntry
+}
+
 /** Card rows the hook scan never emits: title-derived sessions and in-process subagents. */
 export function appendCardVisibleLiveAgents(args: {
     build: BuildActivityEventsArgs
     liveAgentByPaneKey: Record<string, ActivityLiveAgentSnapshot>
     paneEntryByPaneKey: Record<string, AgentStatusEntry>
+    tabHostIndex: ActivityTabHostIndex
+    ownerCache: Map<string, ActivityEventOwner>
 }): void {
     const { build } = args
     if (
@@ -61,16 +80,26 @@ export function appendCardVisibleLiveAgents(args: {
         if (!state) {
             continue
         }
-        const worktree =
-            build.worktreeMap.get(row.tab.worktreeId) ?? build.resolveWorktree?.(row.tab.worktreeId)
-        if (!worktree) {
+        const owner = resolveActivityEventOwner(
+            build,
+            { worktreeId: row.tab.worktreeId, tab: row.tab },
+            supplementedRowHostEntry(
+                row.entry,
+                build.agentStatusByPaneKey,
+                args.paneEntryByPaneKey
+            ),
+            row.tab.ptyId,
+            args.tabHostIndex,
+            args.ownerCache
+        )
+        if (!owner.knownWorktree || isStandaloneActivityWorktree(owner.worktree)) {
             continue
         }
         args.liveAgentByPaneKey[row.paneKey] = {
             state,
             timestamp: row.entry.stateStartedAt,
-            worktree,
-            repo: build.repoMap.get(worktree.repoId) ?? null,
+            worktree: owner.worktree,
+            repo: owner.repo,
             entry: row.entry,
             tab: row.tab,
             agentType: row.agentType
