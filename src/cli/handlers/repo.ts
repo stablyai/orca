@@ -106,9 +106,12 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
         if (
           dispatched &&
           error instanceof RuntimeClientError &&
-          ['runtime_unavailable', 'runtime_timeout', 'invalid_runtime_response'].includes(
-            error.code
-          )
+          [
+            'runtime_unavailable',
+            'remote_runtime_unavailable',
+            'runtime_timeout',
+            'invalid_runtime_response'
+          ].includes(error.code)
         ) {
           const uncertain = uncertainBranchDeletion(
             `The runtime reply was lost or could not be verified: ${error.message}`
