@@ -2,7 +2,10 @@ import { GIT_GRAPH_TAB_CAPABILITY } from '../../../shared/source-control/runtime
 import type { TabGroupLayoutNode } from '../../../shared/tab-types'
 import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-published'
 import {
-  applyWorkspaceLayoutRecordChange,
+  applyPublishedLayoutRecordChanges,
+  splitPublishedLayout,
+  joinPublishedLayout,
+  type PublishedLayoutRecords,
   diffPublishedLayouts,
   indexPublishedLayout
 } from '../../../shared/workspace-layout/workspace-layout-records'
@@ -13,6 +16,18 @@ import {
   splitRatioIntentAt,
   withGroupSplitRatios
 } from '../../../shared/workspace-layout/split-ratio-intents'
+
+export const GIT_GRAPH_PLACEMENT_COMMANDS = new Set<WindowLayoutCommand['type']>([
+  'moveTab',
+  'setGroupRatios',
+  'createTerminalTab',
+  'openEditorTab',
+  'openSimulatorTab',
+  'openBrowserTab',
+  'openAgentSessionTab',
+  'movePaneToNewTab',
+  'moveTabToWorkspace'
+])
 
 export function readsGitGraph(capabilities?: readonly string[]): boolean {
   return capabilities?.includes(GIT_GRAPH_TAB_CAPABILITY) === true
@@ -65,8 +80,8 @@ export function projectGitGraphLayout(layout: PublishedWorkspaceLayout): Publish
     layout.tabs.filter((tab) => hidden.has(tab.id)).map((tab) => tab.entityId)
   )
   const groups = layout.groups
+    .filter((group) => !group.tabIds.length || group.tabIds.some((id) => !hidden.has(id)))
     .map((group) => ({ ...group, tabIds: group.tabIds.filter((id) => !hidden.has(id)) }))
-    .filter((group) => group.tabIds.length)
   return {
     ...layout,
     tabs: layout.tabs.filter((tab) => !hidden.has(tab.id)),
@@ -78,7 +93,7 @@ export function projectGitGraphLayout(layout: PublishedWorkspaceLayout): Publish
 
 // Re-diff whole projected layouts: a delta alone may omit the group a hidden tab made empty.
 export function createGitGraphFrameProjection() {
-  const layouts = new Map<string, PublishedWorkspaceLayout>()
+  const layouts = new Map<string, PublishedLayoutRecords>()
   return (frame: WorkspaceLayoutStreamFrame): WorkspaceLayoutStreamFrame => {
     switch (frame.type) {
       case 'end':
@@ -91,12 +106,12 @@ export function createGitGraphFrameProjection() {
         return {
           ...frame,
           workspaces: frame.workspaces.map(({ key, layout }) => {
-            layouts.set(key, layout)
+            layouts.set(key, splitPublishedLayout(layout))
             return { key, layout: projectGitGraphLayout(layout) }
           })
         }
       case 'workspace':
-        layouts.set(frame.key, frame.layout)
+        layouts.set(frame.key, splitPublishedLayout(frame.layout))
         return { ...frame, layout: projectGitGraphLayout(frame.layout) }
       case 'records':
         return {
@@ -107,12 +122,24 @@ export function createGitGraphFrameProjection() {
               layouts.delete(change.key)
               return [change]
             }
-            const after = applyWorkspaceLayoutRecordChange(before, change)!
+            const after =
+              change.change === 'layout'
+                ? splitPublishedLayout(change.layout)
+                : applyPublishedLayoutRecordChanges(before!, change)
             layouts.set(change.key, after)
-            const projected = projectGitGraphLayout(after)
+            if (
+              ![before, after].some((records) =>
+                records?.tabs.some((tab) => tab.kind === 'git-graph')
+              )
+            ) {
+              return [change]
+            }
+            const projected = projectGitGraphLayout(joinPublishedLayout(after))
             const diff = diffPublishedLayouts(
               change.key,
-              before ? indexPublishedLayout(projectGitGraphLayout(before)) : null,
+              before
+                ? indexPublishedLayout(projectGitGraphLayout(joinPublishedLayout(before)))
+                : null,
               indexPublishedLayout(projected),
               projected
             )
@@ -131,6 +158,36 @@ export function translateGitGraphLayoutCommand(
   if (projected === layout) {
     return command
   }
+  if (
+    command.type === 'createTerminalTab' ||
+    command.type === 'openEditorTab' ||
+    command.type === 'openSimulatorTab' ||
+    command.type === 'openBrowserTab' ||
+    command.type === 'openAgentSessionTab' ||
+    command.type === 'movePaneToNewTab' ||
+    command.type === 'moveTabToWorkspace'
+  ) {
+    const canonicalGroupId = projected.groups[0]?.id ?? layout.groups[0]?.id
+    if (canonicalGroupId && 'split' in command && command.split) {
+      const canonicalAnchor = (id: string) =>
+        layout.groups.some((group) => group.id === id) ? id : canonicalGroupId
+      return {
+        ...command,
+        split: {
+          ...command.split,
+          besideGroupId: canonicalAnchor(command.split.besideGroupId),
+          ...(command.split.besideLastGroupId
+            ? { besideLastGroupId: canonicalAnchor(command.split.besideLastGroupId) }
+            : {})
+        }
+      }
+    }
+    const groupId = 'groupId' in command ? command.groupId : undefined
+    if (canonicalGroupId && !projected.groups.some((group) => group.id === groupId)) {
+      return { ...command, groupId: canonicalGroupId }
+    }
+  }
+
   if (command.type === 'moveTab') {
     const fullOrder =
       layout.groups

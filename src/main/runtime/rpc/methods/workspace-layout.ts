@@ -1,5 +1,6 @@
 import {
   readsGitGraph,
+  GIT_GRAPH_PLACEMENT_COMMANDS,
   createGitGraphFrameProjection,
   translateGitGraphLayoutCommand
 } from '../git-graph-layout-projection'
@@ -108,13 +109,16 @@ export const LAYOUT_APPLY_METHODS = [
       const command = params.command
       if (
         readsGitGraph(clientCapabilities) ||
-        (command.type !== 'moveTab' && command.type !== 'setGroupRatios')
+        !GIT_GRAPH_PLACEMENT_COMMANDS.has(command.type) ||
+        !('workspace' in command)
       ) {
         return runtime.applyLayoutCommand(command)
       }
       const { snapshot, unsubscribe } = runtime.subscribeWorkspaceLayouts(() => {})
       unsubscribe()
-      const layout = snapshot.find((entry) => entry.key === command.workspace)?.layout
+      const workspace =
+        command.type === 'moveTabToWorkspace' ? command.toWorkspace : command.workspace
+      const layout = snapshot.find((entry) => entry.key === workspace)?.layout
       return runtime.applyLayoutCommand(
         layout ? translateGitGraphLayoutCommand(params.command, layout) : params.command
       )

@@ -1,3 +1,4 @@
+import { applyLayoutCommand } from '../../../shared/workspace-layout/workspace-layout-commands'
 import { expect, it } from 'vitest'
 import {
   createGitGraphFrameProjection,
@@ -142,4 +143,92 @@ it('preserves hidden tab slots during reorders and translates collapsed split pa
     ]
   })
   expect(split.groupLayout).toMatchObject({ ratio: 0.2 })
+})
+
+it('passes graph-free record deltas through unchanged and preserves existing empty groups', () => {
+  const original = layout()
+  const graphFree = { ...original, tabs: original.tabs.filter((tab) => tab.kind !== 'git-graph') }
+  const project = createGitGraphFrameProjection()
+  project({ type: 'workspace', key: 'w', seq: 1, layout: graphFree })
+  const change = {
+    key: 'w',
+    change: 'records' as const,
+    workspace: { ...graphFree, groups: [{ id: 'g1', tabIds: ['a', 'b', 'c'] }] }
+  }
+  const frame = project({ type: 'records', epoch: 'e', seq: 2, workspaces: [change] })
+  expect(frame.type === 'records' && frame.workspaces[0]).toBe(change)
+  original.groups.push({ id: 'empty', tabIds: [] })
+  expect(projectGitGraphLayout(original).groups).toContainEqual({ id: 'empty', tabIds: [] })
+})
+
+it('opens files into the canonical group when the projected workspace is empty or targets a hidden group', () => {
+  const original = layout()
+  original.tabs = original.tabs.filter((tab) => tab.id === 'graph')
+  original.groups = [{ id: 'g2', tabIds: ['graph'] }]
+  original.groupLayout = { type: 'leaf', groupId: 'g2' }
+  const canonical = {
+    hostId: 'local' as const,
+    records: {},
+    legacy: { terminalRowOwners: {} },
+    workspaces: {
+      w: {
+        worktreeId: 'w',
+        tabs: original.tabs.map((tab) => ({ ...tab, kind: 'git-graph' as const })),
+        groups: [{ id: 'g2', tabOrder: ['graph'] }],
+        groupLayout: original.groupLayout
+      }
+    }
+  }
+  for (const groupId of ['older-client-group', 'g2', undefined]) {
+    const command = translateGitGraphLayoutCommand(
+      {
+        type: 'openEditorTab',
+        workspace: 'w',
+        contentType: 'editor',
+        fileId: '/file',
+        tabId: 'file',
+        groupId
+      },
+      original
+    )
+    if (command.type !== 'openEditorTab') {
+      throw new Error('Expected an editor open command')
+    }
+    const applied = applyLayoutCommand(canonical, command, {
+      mintId: () => 'id',
+      mintLeafId: () => 'leaf',
+      now: () => 0
+    })
+    expect(applied.ok).toBe(true)
+    if (applied.ok) {
+      expect(applied.model.workspaces.w.groups).toEqual([{ id: 'g2', tabOrder: ['graph', 'file'] }])
+    }
+  }
+  const split = translateGitGraphLayoutCommand(
+    {
+      type: 'openEditorTab',
+      workspace: 'w',
+      contentType: 'editor',
+      fileId: '/file',
+      tabId: 'file',
+      groupId: 'new-group',
+      split: { besideGroupId: 'older-client-group', direction: 'right' }
+    },
+    original
+  )
+  if (split.type !== 'openEditorTab') {
+    throw new Error('Expected an editor open command')
+  }
+  const opened = applyLayoutCommand(canonical, split, {
+    mintId: () => 'id',
+    mintLeafId: () => 'leaf',
+    now: () => 0
+  })
+  expect(opened.ok).toBe(true)
+  if (opened.ok) {
+    expect(opened.model.workspaces.w.groups).toEqual([
+      { id: 'g2', tabOrder: ['graph'] },
+      { id: 'new-group', tabOrder: ['file'] }
+    ])
+  }
 })
