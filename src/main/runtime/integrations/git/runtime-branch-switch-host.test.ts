@@ -14,7 +14,8 @@ function row(key: string, worktreeId: string): AgentSwitchRow {
     connectionId: null,
     state: 'working',
     agentType: 'claude',
-    receivedAt: Date.now()
+    // Expired evidence: the cost is the same whichever rows would block.
+    receivedAt: 0
   }
 }
 
@@ -37,8 +38,8 @@ function hostWith(unrelated: number, candidates: number) {
     folders.set(`f-${index}`, `/work/folder-${index}`)
   }
   for (let index = 0; index < candidates; index++) {
-    // Expired evidence and unknown processes: every candidate is judged and none blocks.
-    rows.push({ ...row(`app-${index}`, `repo::${CHECKOUT}`), receivedAt: 0 })
+    // Unknown processes: every candidate is judged and none blocks.
+    rows.push(row(`app-${index}`, `repo::${CHECKOUT}`))
     ptys.push({ ptyId: `pty-app-${index}`, worktreeId: `repo::${CHECKOUT}`, connected: true })
   }
   const counts = {
