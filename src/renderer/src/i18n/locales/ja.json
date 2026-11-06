@@ -404,7 +404,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}} は設定どおりチャットとして開きます。",
       "defaultSurfaceSetAllChat": "すべてチャットにする",
       "defaultSurfaceSetAllTerminal": "すべてターミナルにする",
-      "sameAsChoice": "{{agent}} と同じ · {{choice}}"
+      "sameAsChoice": "{{agent}} と同じ · {{choice}}",
+      "chatUnavailableOnWindows": "{{value0}} Chat はまだ Windows では利用できないため、このホストでは {{value0}} がターミナルで開きます。macOS または Linux ホストでのチャットは引き続き利用できます。"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "シンボリックリンク",
@@ -3734,7 +3735,8 @@
             "agentsLoading": "Agent を読み込んでいます",
             "cliTag": "(CLI)",
             "terminalListNeedsServerUpdate": "ターミナル Agent を一覧表示するには、このサーバーの Orca を更新してください",
-            "terminalListFailed": "このワークスペースのターミナル Agent を一覧表示できませんでした"
+            "terminalListFailed": "このワークスペースのターミナル Agent を一覧表示できませんでした",
+            "chatNotOnWindows": "Windows ではまだチャットを利用できません"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "タブの切り替え",
@@ -19392,7 +19394,8 @@
         "folder": "フォルダー",
         "mainCheckout": "メインチェックアウト",
         "worktree": "ワークツリー"
-      }
+      },
+      "explicitChatWindows": "この Agent のチャットはまだ Windows では利用できません。ターミナルで開いてください。"
     },
     "tab": {
       "bar": {
