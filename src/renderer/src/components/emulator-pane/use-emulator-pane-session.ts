@@ -251,11 +251,9 @@ export function useEmulatorPaneSession({
     ]
   )
 
-  useEffect(() => {
-    if (!selectedUdid && configuredDefaultUdid) {
-      setSelectedUdid(configuredDefaultUdid)
-    }
-  }, [configuredDefaultUdid, selectedUdid])
+  if (!selectedUdid && configuredDefaultUdid) {
+    setSelectedUdid(configuredDefaultUdid)
+  }
 
   const shutdown = useEmulatorPaneShutdown({
     loading,
