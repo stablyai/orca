@@ -4,6 +4,7 @@ import type { NativeChatPickerItem } from '../../../../../src/shared/native-chat
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { COMPOSER_MENU_MAX_HEIGHT } from './mobile-native-chat-composer-menu-size'
 
 export type ComposerMenuRow = NativeChatPickerItem | { kind: 'file'; id: string; path: string }
 
@@ -20,7 +21,7 @@ export function MobileNativeChatComposerMenu({
 }): React.JSX.Element {
   useMobileColorScheme()
   return (
-    <View style={styles.card}>
+    <View testID="native-chat-composer-menu-card" style={styles.card}>
       <ScrollView
         keyboardShouldPersistTaps="always"
         nestedScrollEnabled={nestedScrollEnabled}
@@ -100,7 +101,7 @@ const styles = themedStyleSheet(() => ({
     overflow: 'hidden'
   },
   scroll: {
-    maxHeight: 300
+    maxHeight: COMPOSER_MENU_MAX_HEIGHT
   },
   heading: {
     color: colors.textMuted,

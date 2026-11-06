@@ -3,6 +3,7 @@ import { StyleSheet, TextInput, View, useWindowDimensions } from 'react-native'
 import { useKeyboardOcclusion } from '../../../platform/keyboard-occlusion'
 import { hostOs } from '../../../platform/host-os'
 import { useTextInputContentHeight } from '../../../platform/text-input-content-height'
+import { useTextInputSelectionReveal } from '../../../platform/text-input-selection-reveal.web'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import {
@@ -42,6 +43,7 @@ export function MobileNativeChatComposerField({
   onKeyboardSubmit,
   onKeyPress,
   onWebPaste,
+  allocationMaxHeight,
   ...props
 }: MobileNativeChatComposerFieldProps) {
   useMobileColorScheme()
@@ -49,6 +51,7 @@ export function MobileNativeChatComposerField({
   const [fieldHeight, setFieldHeight] = useState(0)
   const ownRef = useRef<TextInput>(null)
   const input = ref ?? ownRef
+  useTextInputSelectionReveal(input)
   const paste = useEffectEvent((event: ClipboardEvent) => onWebPaste?.(event))
   // react-native-web forwards no paste prop; its TextInput ref is the textarea itself.
   useEffect(() => {
@@ -72,7 +75,9 @@ export function MobileNativeChatComposerField({
   const visibleHeight = Math.min(windowHeight, window.innerHeight - keyboardHeight)
   const sizing = {
     height: Math.max(contentHeight ?? 0, placeholderHeight ?? 0) || undefined,
-    maxHeight: Math.max(MESSAGE_MIN_HEIGHT, Math.round(visibleHeight * MAX_HEIGHT_SHARE))
+    maxHeight:
+      allocationMaxHeight ??
+      Math.max(MESSAGE_MIN_HEIGHT, Math.round(visibleHeight * MAX_HEIGHT_SHARE))
   }
   const copied = Boolean(skillToken || dictationPreview)
   // Keep one tree so adding/removing a skill or dictation cannot remount the field and drop focus.
