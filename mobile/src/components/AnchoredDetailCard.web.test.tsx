@@ -6,7 +6,7 @@ import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-sha
 import { AnchoredDetailCardLayer } from './AnchoredDetailCard'
 import type { AnchoredDetailCardState } from './use-anchored-detail-card'
 
-vi.mock('react-native', () => import('react-native-web'))
+vi.mock('react-native', () => vi.importActual<typeof import('react-native')>('react-native-web'))
 vi.mock('./use-detail-card-motion', () => import('./use-detail-card-motion.web'))
 vi.mock('../theme/use-mobile-color-scheme', () => ({ useMobileColorScheme: () => 'light' }))
 const preference = vi.hoisted((): { enabled: boolean | null } => ({ enabled: false }))

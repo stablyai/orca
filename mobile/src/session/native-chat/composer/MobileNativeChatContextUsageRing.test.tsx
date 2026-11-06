@@ -56,7 +56,12 @@ it('opens context details above the composer in an inset card layer', () => {
       createNodeMock: ({ props }) =>
         mountFixture<View>({
           measureInWindow: (done) => {
-            if (props.testID === 'composer') {
+            if (
+              typeof props === 'object' &&
+              props !== null &&
+              'testID' in props &&
+              props.testID === 'composer'
+            ) {
               composerMeasured = done
             } else {
               layerMeasured = done
