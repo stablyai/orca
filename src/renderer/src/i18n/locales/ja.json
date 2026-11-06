@@ -22988,6 +22988,9 @@
     "actionRefused": "操作は完了しませんでした。",
     "actionUnavailable": "このワークスペースでは操作できなくなりました。Gitグラフを開き直して、もう一度お試しください。",
     "ownerChanged": "ワークスペースのホストが変わりました。Gitグラフを開き直して、もう一度お試しください。",
-    "showAllBranches": "すべてのブランチを表示"
+    "showAllBranches": "すべてのブランチを表示",
+    "actionDirty": "変更をコミットするかスタッシュしてから、もう一度お試しください。",
+    "actionFailed": "Git はコミットを作成しませんでした。作業ツリーを確認して、もう一度お試しください。",
+    "operationInProgress": "進行中の {{operation}} を完了するか中止してから、もう一度お試しください。"
   }
 }

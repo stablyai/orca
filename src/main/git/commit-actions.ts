@@ -132,5 +132,6 @@ export async function recoverSequencer(
       }
       throw error
     }
+    return undefined
   })
 }

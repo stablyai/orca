@@ -1,5 +1,4 @@
-import type { GitGraphHistoryView } from './git-graph-tab-controllers'
-export { gitGraphHistoryForTab, disposeGitGraphHistory } from './git-graph-tab-controllers'
+import type { GitGraphHistoryView } from './git-graph-history-view'
 import { GitGraphCommitActionsController } from './git-graph-commit-actions-controller'
 import { gitGraphOwnerKey, switchGitGraphWorkspace } from './git-graph-workspace-navigation'
 import { createStore } from 'zustand/vanilla'
@@ -145,6 +144,8 @@ export class GitGraphHistoryController {
     return this.retrieve(false, true)
   }
   loadMore = (): Promise<GitHistoryResult | undefined> => this.retrieve(true)
+  settledResult = (): Promise<GitHistoryResult | undefined> =>
+    this.pending ?? (this.dirty ? this.retrieve() : Promise.resolve(this.view.getState().result))
 
   reveal = async (id: string): Promise<number> => {
     const generation = this.generation

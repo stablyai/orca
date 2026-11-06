@@ -1,5 +1,5 @@
 import { refreshGitStatusForWorktree } from '../sync/git-status-refresh'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
@@ -16,6 +16,7 @@ import { GIT_GRAPH_REFRESH_EVENT } from '@/lib/git-graph-tab'
 import { useSourceControlWorktreeContext } from './use-worktree-context'
 import type { GitCommitAction } from '../../../../../../shared/git/commands/git-commit-action'
 import { useAppStore } from '@/store'
+import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
 
 export function SequencerRecoveryControls({
   worktreeId,
@@ -37,12 +38,36 @@ export function SequencerRecoveryControls({
       : translate('gitGraph.cherryPick', 'Cherry-pick')
   const confirm = useConfirmationDialog()
   const [busy, setBusy] = useState(false)
+  const navigation = useRef(0)
+  useEffect(() => {
+    const invalidate = () => {
+      navigation.current++
+    }
+    const unsubscribe = useAppStore.subscribe((state, previous) => {
+      if (
+        state.activeWorktreeId !== previous.activeWorktreeId ||
+        state.activeWorkspaceExecutionHostId !== previous.activeWorkspaceExecutionHostId
+      ) {
+        invalidate()
+      }
+    })
+    return () => {
+      invalidate()
+      unsubscribe()
+    }
+  }, [])
   const run = async (action: 'abort' | 'continue') => {
-    const target = context.activeRepoTarget
+    const copy = resolveWorktreeGitCopyNow(worktreeId)
+    const target = copy?.transport
     const path = context.worktreePath
-    if (busy || disabled || !target || !path || context.activeWorktreeId !== worktreeId) {
+    if (busy || disabled || !copy || !target || !path || context.activeWorktreeId !== worktreeId) {
       return
     }
+    const generation = navigation.current
+    const shouldApply = () =>
+      generation === navigation.current &&
+      useAppStore.getState().activeWorktreeId === worktreeId &&
+      JSON.stringify(resolveWorktreeGitCopyNow(worktreeId)) === JSON.stringify(copy)
     if (
       action === 'abort' &&
       !(await confirm({
@@ -63,19 +88,23 @@ export function SequencerRecoveryControls({
     }
     setBusy(true)
     try {
-      if (!(await gitCommitActionsSupported(target))) {
+      if (!(await gitCommitActionsSupported(target)) || !shouldApply()) {
         return
       }
       const request = {
         target,
         worktreeId,
         worktreePath: path,
-        connectionId: context.activeConnectionId ?? undefined
+        connectionId: copy.connectionId
       }
-      await (action === 'abort' ? sequencerAbortRuntimeGit : sequencerContinueRuntimeGit)(
-        request,
-        operation
-      )
+      const result = await (
+        action === 'abort' ? sequencerAbortRuntimeGit : sequencerContinueRuntimeGit
+      )(request, operation)
+      if (result?.outcome === 'empty') {
+        toast.message(
+          translate('gitGraph.alreadyApplied', 'Already applied, nothing to cherry-pick')
+        )
+      }
     } catch (error) {
       toast.error(
         error instanceof Error
@@ -88,15 +117,18 @@ export function SequencerRecoveryControls({
     } finally {
       setBusy(false)
       const state = useAppStore.getState()
-      void refreshGitStatusForWorktree({
-        worktreeId,
-        worktreePath: path,
-        target,
-        connectionId: context.activeConnectionId ?? undefined,
-        ownerHostId: context.activeRepoExecutionHostId,
-        deps: state
-      }).catch(() => {})
-      window.dispatchEvent(new CustomEvent(GIT_GRAPH_REFRESH_EVENT, { detail: worktreeId }))
+      if (shouldApply()) {
+        void refreshGitStatusForWorktree({
+          worktreeId,
+          worktreePath: path,
+          target,
+          connectionId: copy.connectionId,
+          ownerHostId: copy.hostId,
+          deps: state,
+          request: { shouldApply }
+        }).catch(() => {})
+        window.dispatchEvent(new CustomEvent(GIT_GRAPH_REFRESH_EVENT, { detail: worktreeId }))
+      }
     }
   }
   return (

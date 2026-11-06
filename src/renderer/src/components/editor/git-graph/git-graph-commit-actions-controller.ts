@@ -12,7 +12,11 @@ import { translate } from '@/i18n/i18n'
 import type { GitGraphHistoryController } from './git-graph-history-controller'
 import type { GitHistoryItem } from '../../../../../shared/git/history/git-history-types'
 import type { GitCommitActionResult } from '../../../../../shared/git/commands/git-commit-action'
-import { gitGraphActionOutcome, type GitGraphCommitAction } from './git-graph-commit-action-copy'
+import {
+  gitGraphActionOutcome,
+  gitGraphActionMessage,
+  type GitGraphCommitAction
+} from './git-graph-commit-action-copy'
 
 type PendingCommitAction = {
   action: GitGraphCommitAction
@@ -117,11 +121,12 @@ export class GitGraphCommitActionsController {
     }
     // Only the follow-up view is fenced; the user always hears what the confirmed action did.
     let outside = false
-    if (current() && this.owns(scope)) {
+    if (this.owns(scope)) {
+      const selectResult = current()
       const refreshing = this.history.refresh()
       const afterRefresh = this.history.captureActionView()
       const refreshed = await refreshing
-      if (afterRefresh() && this.owns(scope) && result.commitId) {
+      if (selectResult && afterRefresh() && this.owns(scope) && result.commitId) {
         outside = !refreshed?.items.some((commit) => commit.id === result.commitId)
         if (!outside && this.owns(scope)) {
           this.history.select(result.commitId)
@@ -133,7 +138,7 @@ export class GitGraphCommitActionsController {
       result.outcome === 'landed-with-warning'
         ? gitGraphActionOutcome({ ...result, outcome: 'landed' })
         : '',
-      result.outcome === 'empty' ? '' : result.message
+      result.outcome === 'empty' ? '' : gitGraphActionMessage(result)
     ]
       .filter(Boolean)
       .join('\n')
@@ -164,7 +169,7 @@ export class GitGraphCommitActionsController {
         [this.history.worktreeId]: 'all'
       }
     }))
-    const refreshing = this.history.refresh()
+    const refreshing = this.history.settledResult()
     const current = this.history.captureActionView()
     let result = await refreshing
     if (current() && !result?.items.some((item) => item.id === commitId) && result?.hasMore) {

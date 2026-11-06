@@ -23253,6 +23253,9 @@
     "actionRefused": "İşlem tamamlanmadı.",
     "actionUnavailable": "Bu çalışma alanı artık işlem için kullanılamıyor. Git grafiğini yeniden açıp tekrar deneyin.",
     "ownerChanged": "Çalışma alanının makinesi değişti. Git grafiğini yeniden açıp tekrar deneyin.",
-    "showAllBranches": "Tüm dalları göster"
+    "showAllBranches": "Tüm dalları göster",
+    "actionDirty": "Değişikliklerinizi commit edin veya stash’e alın, ardından yeniden deneyin.",
+    "actionFailed": "Git bir commit oluşturmadı. Çalışma kopyasını kontrol edip yeniden deneyin.",
+    "operationInProgress": "Yeniden denemeden önce devam eden {{operation}} işlemini tamamlayın veya iptal edin."
   }
 }

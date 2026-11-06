@@ -1,3 +1,4 @@
+import { useGitCommitActionsSupport } from '@/runtime/git-commit-actions-capability'
 import { GitHistoryPanel } from '../sync/git-history-panel'
 import { shouldShowSourceControlCompareUnavailableCard } from './header-toolbar'
 import { shouldRenderCommitArea } from '../commit/component-gates'
@@ -80,6 +81,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     visibleTreeRowsBySection
   } = model
 
+  const recovery = useGitCommitActionsSupport(model.activeRepoTarget)
   const hasFilteredUncommittedEntries = displaySections.length > 0
   const hasFilteredBranchEntries = filteredBranchEntries.length > 0
   const showGenericEmptyState =
@@ -126,9 +128,11 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
       {/* Keep CommitArea through clean/mid-commit states (#1448); only active conflict operations replace the action surface. */}
       <SourceControlForkPushNotice pushTarget={activeWorktree.pushTarget ?? null} />
 
-      {shouldRenderCommitArea(unresolvedConflicts.length, conflictOperation) && (
-        <SourceControlCommitSurface {...props} showGenericEmptyState={showGenericEmptyState} />
-      )}
+      {shouldRenderCommitArea(
+        unresolvedConflicts.length,
+        conflictOperation,
+        recovery.supported
+      ) && <SourceControlCommitSurface {...props} showGenericEmptyState={showGenericEmptyState} />}
 
       {hasFilteredUncommittedEntries && (
         <SourceControlUncommittedSections

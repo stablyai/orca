@@ -1,3 +1,4 @@
+import type { GitCommitActionResult } from '../../../../shared/git/commands/git-commit-action'
 import type { PreloadApi } from '../../../../preload/api-types'
 import { callRuntimeResult } from './web-runtime-calls'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
@@ -10,10 +11,13 @@ export function createGitCommitActionsApi(): Pick<
   return {
     sequencerContinue: async ({ worktreePath, operation }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      const result = await callRuntimeResult('git.sequencerContinue', {
-        worktree: toRuntimeWorktreeSelector(worktree.id),
-        operation
-      })
+      const result = await callRuntimeResult<GitCommitActionResult | { ok: boolean }>(
+        'git.sequencerContinue',
+        {
+          worktree: toRuntimeWorktreeSelector(worktree.id),
+          operation
+        }
+      )
       return 'outcome' in result ? result : undefined
     },
     sequencerAbort: async ({ worktreePath, operation }) => {

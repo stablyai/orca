@@ -23270,6 +23270,9 @@
     "actionRefused": "Die Aktion wurde nicht abgeschlossen.",
     "actionUnavailable": "Dieser Arbeitsbereich ist für die Aktion nicht mehr verfügbar. Öffne den Git Graph erneut und versuche es noch einmal.",
     "ownerChanged": "Der Host des Arbeitsbereichs hat sich geändert. Öffne den Git Graph erneut und versuche es noch einmal.",
-    "showAllBranches": "Alle Branches anzeigen"
+    "showAllBranches": "Alle Branches anzeigen",
+    "actionDirty": "Committe oder sichere deine Änderungen im Stash und versuche es erneut.",
+    "actionFailed": "Git hat keinen Commit erstellt. Prüfe den Arbeitsstand und versuche es erneut.",
+    "operationInProgress": "Schließe den laufenden Vorgang {{operation}} ab oder brich ihn ab, bevor du es erneut versuchst."
   }
 }

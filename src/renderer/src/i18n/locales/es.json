@@ -23677,6 +23677,9 @@
     "actionRefused": "La acción no se completó.",
     "actionUnavailable": "Este espacio de trabajo ya no está disponible para la acción. Vuelve a abrir el gráfico de Git e inténtalo de nuevo.",
     "ownerChanged": "El host del espacio de trabajo cambió. Vuelve a abrir el gráfico de Git e inténtalo de nuevo.",
-    "showAllBranches": "Mostrar todas las ramas"
+    "showAllBranches": "Mostrar todas las ramas",
+    "actionDirty": "Confirma o guarda tus cambios en el stash y vuelve a intentarlo.",
+    "actionFailed": "Git no creó un commit. Revisa la copia de trabajo y vuelve a intentarlo.",
+    "operationInProgress": "Finaliza o aborta la operación {{operation}} en curso antes de volver a intentarlo."
   }
 }

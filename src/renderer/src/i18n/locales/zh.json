@@ -22989,6 +22989,9 @@
     "actionRefused": "操作未完成。",
     "actionUnavailable": "此工作区已无法执行该操作。请重新打开 Git 图后重试。",
     "ownerChanged": "工作区主机已更改。请重新打开 Git 图后重试。",
-    "showAllBranches": "显示所有分支"
+    "showAllBranches": "显示所有分支",
+    "actionDirty": "请先提交或暂存更改，然后重试。",
+    "actionFailed": "Git 未创建提交。请检查工作目录，然后重试。",
+    "operationInProgress": "请先完成或中止正在进行的 {{operation}}，然后重试。"
   }
 }

@@ -24017,7 +24017,10 @@
     "actionRefused": "The action did not complete.",
     "actionUnavailable": "This workspace is no longer available for the action. Reopen the Git Graph and try again.",
     "ownerChanged": "The workspace host changed. Reopen the Git Graph and try again.",
-    "showAllBranches": "Show all branches"
+    "showAllBranches": "Show all branches",
+    "actionDirty": "Commit or stash your changes, then try again.",
+    "actionFailed": "Git did not create a commit. Check the checkout and try again.",
+    "operationInProgress": "Finish or abort the {{operation}} in progress before trying again."
   },
   "macosUpdateRequirement": {
     "title": "Orca updates now need macOS {{macos}}",

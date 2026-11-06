@@ -22938,6 +22938,9 @@
     "actionRefused": "操作未完成。",
     "actionUnavailable": "此工作區已無法執行該操作。請重新開啟 Git 圖後再試。",
     "ownerChanged": "工作區主機已變更。請重新開啟 Git 圖後再試。",
-    "showAllBranches": "顯示所有分支"
+    "showAllBranches": "顯示所有分支",
+    "actionDirty": "請先提交或暫存變更，然後再試一次。",
+    "actionFailed": "Git 未建立提交。請檢查工作目錄，然後再試一次。",
+    "operationInProgress": "請先完成或中止進行中的 {{operation}}，然後再試一次。"
   }
 }

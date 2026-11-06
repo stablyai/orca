@@ -2,6 +2,38 @@ import { translate } from '@/i18n/i18n'
 import type { GitCommitActionResult } from '../../../../../shared/git/commands/git-commit-action'
 
 export type GitGraphCommitAction = 'checkout' | 'cherry-pick' | 'revert'
+export function gitGraphActionMessage(result: GitCommitActionResult): string | undefined {
+  if (result.message === 'Commit or stash your changes, then try again.') {
+    return translate('gitGraph.actionDirty', 'Commit or stash your changes, then try again.')
+  }
+  if (result.message === 'Git did not create a commit. Check the checkout and try again.') {
+    return translate(
+      'gitGraph.actionFailed',
+      'Git did not create a commit. Check the checkout and try again.'
+    )
+  }
+  const operation =
+    /^Finish or abort the (merge|rebase|cherry-pick|revert) in progress before trying again\.$/.exec(
+      result.message ?? ''
+    )?.[1]
+  if (operation) {
+    const label =
+      operation === 'merge'
+        ? translate('auto.components.right.sidebar.checks.panel.content.operation.merge', 'Merge')
+        : operation === 'rebase'
+          ? translate(
+              'auto.components.right.sidebar.checks.panel.content.operation.rebase',
+              'Rebase'
+            )
+          : gitGraphActionLabel(operation === 'revert' ? 'revert' : 'cherry-pick')
+    return translate(
+      'gitGraph.operationInProgress',
+      'Finish or abort the {{operation}} in progress before trying again.',
+      { operation: label }
+    )
+  }
+  return result.message
+}
 export function gitGraphActionLabel(action: GitGraphCommitAction): string {
   switch (action) {
     case 'checkout':

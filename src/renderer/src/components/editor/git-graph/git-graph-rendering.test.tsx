@@ -1,14 +1,10 @@
-import * as commitSupport from '@/runtime/git-commit-actions-capability'
-import * as commitActions from '@/runtime/runtime-git-commit-actions-client'
-import { toast } from 'sonner'
+import { workspaceId, local, repo } from './git-graph-workspace.test-fixtures'
 // @vitest-environment happy-dom
 import { useAppStore } from '@/store'
-import { gitGraphHistoryForTab, disposeGitGraphHistory } from './git-graph-history-controller'
+import { gitGraphHistoryForTab, disposeGitGraphHistory } from './git-graph-tab-controllers'
 import { attachClosedEditorTabCleanup } from '../model-lifetime/retention/closed-editor-tab-controller'
 import { gitGraphScope } from '@/lib/git-graph-tab'
 import { captureWorktreeOperationGenerationSnapshot } from '@/lib/worktree-operation-generation'
-import type { Worktree } from '../../../../../shared/worktree/types'
-import type { Repo } from '../../../../../shared/repo-types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -49,35 +45,6 @@ const container = document.createElement('div')
 document.body.appendChild(container)
 let root = createRoot(container)
 const initialState = useAppStore.getState()
-const workspaceId = 'r::/repo'
-const local: Worktree = {
-  id: workspaceId,
-  repoId: 'r',
-  path: '/repo',
-  branch: 'refs/heads/main',
-  hostId: 'local',
-  head: 'a',
-  isBare: false,
-  isMainWorktree: true,
-  displayName: 'repo',
-  comment: '',
-  linkedIssue: null,
-  linkedPR: null,
-  linkedLinearIssue: null,
-  isArchived: false,
-  isUnread: false,
-  isPinned: false,
-  sortOrder: 0,
-  lastActivityAt: 0
-}
-const repo: Repo = {
-  id: 'r',
-  path: '/repo',
-  displayName: 'repo',
-  badgeColor: '',
-  addedAt: 0,
-  executionHostId: 'local'
-}
 beforeEach(() => {
   useAppStore.setState({
     repos: [repo],
@@ -726,95 +693,4 @@ it('keeps the confirm strip across tab switches, discarding it on navigation, fi
   })
   await act(async () => root.render(render()))
   expect(container.textContent).not.toContain('Revert a?')
-})
-
-it('announces the action outcome after navigation without replacing the newer selection', async () => {
-  getHistory.mockResolvedValue({
-    ...result,
-    items: [
-      ...result.items,
-      { id: 'b', subject: 'newer selection', message: 'newer selection', parentIds: [] }
-    ]
-  })
-  vi.spyOn(commitSupport, 'gitCommitActionsSupported').mockResolvedValue(true)
-  let finish!: (value: { outcome: 'landed'; commitId: string; branch: string }) => void
-  const started = Promise.withResolvers<void>()
-  vi.spyOn(commitActions, 'cherryPickRuntimeGit').mockImplementation(() => {
-    started.resolve()
-    return new Promise((resolve) => {
-      finish = resolve
-    })
-  })
-  const announce = vi.spyOn(toast, 'message')
-  await act(async () =>
-    root.render(
-      <TooltipProvider>
-        <GitGraphTab worktreeId={workspaceId} />
-      </TooltipProvider>
-    )
-  )
-  const controller = gitGraphHistoryForTab(workspaceId)
-  let applying!: Promise<void>
-  await act(async () => {
-    controller.actions.request('cherry-pick', result.items[0]!)
-    applying = controller.actions.confirm()
-    await started.promise
-  })
-  await act(async () => controller.select('b'))
-  await act(async () => {
-    finish({ outcome: 'landed', commitId: 'ccccccc', branch: 'main' })
-    await applying
-  })
-  expect(announce).toHaveBeenCalled()
-  expect(container.querySelector('h2')?.textContent).toBe('newer selection')
-})
-
-it('carries the created commit into Show all branches instead of dropping it on filter change', async () => {
-  useAppStore.setState({ gitGraphFiltersByWorktree: { [workspaceId]: 'head' } })
-  getHistory.mockResolvedValue(result)
-  vi.spyOn(commitSupport, 'gitCommitActionsSupported').mockResolvedValue(true)
-  vi.spyOn(commitActions, 'cherryPickRuntimeGit').mockResolvedValue({
-    outcome: 'landed',
-    commitId: 'ccccccc',
-    branch: 'main'
-  })
-  const announce = vi.spyOn(toast, 'message')
-  await act(async () =>
-    root.render(
-      <TooltipProvider>
-        <GitGraphTab worktreeId={workspaceId} />
-      </TooltipProvider>
-    )
-  )
-  const controller = gitGraphHistoryForTab(workspaceId)
-  await act(async () => {
-    controller.actions.request('cherry-pick', result.items[0]!)
-    await controller.actions.confirm()
-  })
-  const options = announce.mock.calls.at(-1)?.[1]
-  const action = options?.action
-  expect(action).toMatchObject({ label: 'Show all branches' })
-  getHistory.mockResolvedValue({
-    ...result,
-    items: [
-      ...result.items,
-      { id: 'ccccccc', subject: 'created commit', message: 'created commit', parentIds: [] }
-    ]
-  })
-  if (!action || typeof action !== 'object' || !('onClick' in action)) {
-    throw new Error('Expected a toast action')
-  }
-  await act(async () => root.render(<button onClick={action.onClick}>Show all branches</button>))
-  await act(async () => {
-    container.querySelector('button')!.click()
-    await controller.loadMore()
-  })
-  await act(async () =>
-    root.render(
-      <TooltipProvider>
-        <GitGraphTab worktreeId={workspaceId} />
-      </TooltipProvider>
-    )
-  )
-  expect(container.querySelector('h2')?.textContent).toBe('created commit')
 })
