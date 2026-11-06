@@ -4,6 +4,12 @@ import { OrcaRuntimeService } from '../orca-runtime'
 import { setPlatform } from '../orca-runtime-test-mocks/setup.spec'
 import type { RuntimeTerminalAgentStatusEvent } from '../terminal/output/terminal-agent-status-events'
 import type { HeadlessEmulator } from '../../daemon/emulation/headless-emulator'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import {
+  declarePendingPaneSerializer,
+  settlePendingPaneSerializer
+} from '../../ipc/pty/pane/serializer-state'
+import { seedHeadlessTerminalFromSpawnResult } from '../../ipc/pty/pane/terminal-spawn-restore'
 
 import {
   TEST_WORKTREE_ID,
@@ -238,6 +244,32 @@ describe('OrcaRuntimeService', () => {
     )
 
     expect(runtime.resolveTerminalFileUriHostname(terminal.handle)).toBe('remote-host')
+  })
+
+  it('retains cold-restored history in hidden-output recovery while renderer serialization is pending', async () => {
+    const runtime = createRuntime()
+    syncSinglePty(runtime, 'cold-pty')
+    const paneKey = makePaneKey('tab-1', '44444444-4444-4444-8444-444444444444')
+    const generation = declarePendingPaneSerializer(paneKey, undefined)
+    try {
+      seedHeadlessTerminalFromSpawnResult(
+        runtime,
+        {
+          id: 'cold-pty',
+          coldRestore: { scrollback: 'restored history\r\n', cwd: '/tmp', cols: 40, rows: 6 }
+        },
+        paneKey
+      )
+      runtime.onPtyData('cold-pty', 'fresh shell prompt $ ', 100)
+
+      const snapshot = await runtime.serializeHiddenOutputRecoveryBuffer('cold-pty', {
+        scrollbackRows: 100
+      })
+      expect(snapshot?.data).toContain('restored history')
+      expect(snapshot?.data).toContain('fresh shell prompt $ ')
+    } finally {
+      settlePendingPaneSerializer(paneKey, generation)
+    }
   })
 
   it('falls back to the renderer snapshot for hidden-output recovery without headless state', async () => {
