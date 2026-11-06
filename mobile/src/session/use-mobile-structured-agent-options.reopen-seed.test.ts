@@ -20,6 +20,7 @@ const SAVED: AgentSessionModelCatalogResult = {
     { id: 'gpt-saved', label: 'GPT Saved', isDefault: true, efforts: [] },
     { id: 'gpt-other', label: 'GPT Other', isDefault: false, efforts: [] }
   ],
+  fetchedAt: 1,
   listingNamesConfiguredModel: false
 }
 
