@@ -5,8 +5,7 @@ import {
   type WorktreeLineage,
   type WorkspaceLineage
 } from '../../../../shared/worktree/lineage-types'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 import {
   type WorkspaceKey,
@@ -17,14 +16,11 @@ import {
 import { sharesResolvedWorktreeLineageBoundary } from '../../../../shared/resolved-worktree-lineage'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import type { RuntimeStore } from '../../runtime-store-contract'
-import {
-  readAllWorktreeMetaForHost,
-  worktreeRowTarget
-} from '../../../persistence/host-qualified-worktree-meta'
+import { worktreeRowTarget } from '../../../persistence/host-qualified-worktree-meta'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
-import { getRepoOwnedWorktreeMeta } from '../../../workspaces/catalog/worktree-metadata-ownership'
 import { readStoreInstallationId } from '../../hosts/platform-probe/host-descriptor'
 import { assertParentInAnotherStore } from './cross-store-parent-store-check'
+import { hasSavedParent, savedInstanceIdReader } from './saved-lineage-reads'
 import { getCanonicalUserDataPath } from '../../../persistence/loading-store/user-data-path'
 import { isWslMoveWorktreeBlocked } from '../../../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import {
@@ -45,31 +41,6 @@ type RuntimeWorktreeLineageDependencies = {
   resolveWorktree(selector: string): Promise<ResolvedWorktree>
   listResolvedWorktrees(): Promise<ResolvedWorktree[]>
   showTerminal(handle: string): Promise<{ worktreeId: string }>
-}
-
-/** Read ownership-scoped metadata without migration; validation must not adopt another host's legacy row. */
-function savedInstanceIdReader(
-  store: RuntimeStore,
-  hostId: ExecutionHostId | undefined
-): (id: string) => string | undefined {
-  if (!hostId) {
-    return (id) => store.getWorktreeMeta(id)?.instanceId
-  }
-  const repos = store.getRepos()
-  const ownerCounts = new Map<string, number>()
-  for (const repo of repos) {
-    ownerCounts.set(repo.id, (ownerCounts.get(repo.id) ?? 0) + 1)
-  }
-  const reposOnHost = new Map(
-    repos.filter((repo) => getRepoExecutionHostId(repo) === hostId).map((repo) => [repo.id, repo])
-  )
-  const metaById = readAllWorktreeMetaForHost(store, hostId)
-  return (id) => {
-    const repo = reposOnHost.get(getRepoIdFromWorktreeId(id))
-    return repo
-      ? getRepoOwnedWorktreeMeta(repo, id, metaById, ownerCounts.get(repo.id) ?? 0)?.instanceId
-      : undefined
-  }
 }
 
 export class RuntimeWorktreeLineageController {
@@ -268,9 +239,7 @@ export class RuntimeWorktreeLineageController {
     }
     for (const worktree of await this.deps.listResolvedWorktrees()) {
       if (
-        store.getWorktreeLineage(worktree.id) ||
-        // An inferred parent must not replace an explicit one on another machine.
-        store.getCrossStoreWorkspaceLineage?.(worktreeWorkspaceKey(worktree.id)) ||
+        hasSavedParent(store, worktree.id) ||
         !worktree.instanceId ||
         isWslMoveWorktreeBlocked(worktree.id, worktree.hostId, worktree.path)
       ) {
@@ -282,6 +251,8 @@ export class RuntimeWorktreeLineageController {
       }
       const candidate = await this.resolveTaskCandidate(taskId)
       if (
+        // A parent set while the task lookup awaited wins over this inferred one.
+        hasSavedParent(store, worktree.id) ||
         !candidate?.parent.instanceId ||
         candidate.parent.type !== 'worktree' ||
         candidate.parent.worktree.id === worktree.id

@@ -19,6 +19,7 @@ import type {
   WorktreeCreateBaseFallback
 } from '../../shared/worktree/create-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type { WorkspaceLineage } from '../../shared/worktree/lineage-types'
 import type {
   AutomationWorkspaceProvenance,
   CliWorkspaceProvenance,
@@ -326,7 +327,7 @@ export function recordWorkspaceLineageForCreatedWorktree(
     return NO_CREATED_WORKTREE_LINEAGE
   }
 
-  const workspaceLineage = store.setWorkspaceLineage({
+  const row: WorkspaceLineage = {
     childWorkspaceKey,
     childInstanceId: worktree.instanceId,
     parentWorkspaceKey: args.parentWorkspace,
@@ -337,7 +338,19 @@ export function recordWorkspaceLineageForCreatedWorktree(
       confidence: 'explicit'
     },
     createdAt
-  })
+  }
+  if (parentScope.type === 'folder') {
+    const target = worktreeRowTarget(store, worktree)
+    const workspaceLineage = (target && store.setFolderParentLineage(target, row)) ?? null
+    if (!workspaceLineage) {
+      console.warn(
+        `[worktree-create] ${worktree.id}'s lineage is held by a same-path workspace on another host; skipping lineage`
+      )
+    }
+    return { lineage, workspaceLineage }
+  }
+  // A recorded worktree link already wrote this row as its workspace projection.
+  const workspaceLineage = lineage ? row : store.setWorkspaceLineage(row)
   return { lineage, workspaceLineage }
 }
 
