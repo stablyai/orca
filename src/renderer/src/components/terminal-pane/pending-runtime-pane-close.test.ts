@@ -42,7 +42,7 @@ it.each(['same-leaf', 'other-tab', 'bound-transport', 'worktree-owner', 'pairing
     p.actions.executeClosePane(1, 'user')
     expect(p.runtimeCall).toHaveBeenCalledWith(expect.objectContaining({ method: 'status.get' }))
     const id = 'remote:env-1@@term_original'
-    const { createIpcPtyTransport } = await import('./pty-transport')
+    const { createIpcPtyTransport } = await import('./pty-transport/ipc/pty-transport')
     const survivor = createIpcPtyTransport({})
     if (owner === 'same-leaf') {
       p.state.terminalLayoutsByTabId[p.tabId].ptyIdsByLeafId = { [p.leafId]: id }

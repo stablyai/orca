@@ -71,7 +71,7 @@ vi.mock('react', async (importOriginal) => {
   }
 })
 
-vi.mock('./pty-transport', () => ({
+vi.mock('./pty-transport/ipc/pty-transport', () => ({
   createIpcPtyTransport: vi.fn(() => {
     const nextTransport = transportFactoryQueue.shift()
     if (!nextTransport) {

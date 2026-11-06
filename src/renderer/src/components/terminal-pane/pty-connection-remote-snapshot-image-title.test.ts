@@ -19,7 +19,7 @@ import {
   buildActiveRuntimeEnvironmentState
 } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
-import type { PtyReplayDataMeta } from './pty-transport-types'
+import type { PtyReplayDataMeta } from './pty-transport/pty-transport-types'
 import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 import {
   installTerminalTestGlobals,
@@ -97,7 +97,7 @@ vi.mock('react', async (importOriginal) => {
   }
 })
 
-vi.mock('./pty-transport', () => ({
+vi.mock('./pty-transport/ipc/pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
@@ -108,7 +108,7 @@ vi.mock('./pty-transport', () => ({
   })
 }))
 
-vi.mock('./remote-runtime-pty-transport', () => ({
+vi.mock('./pty-transport/remote-runtime/remote-runtime-pty-transport', () => ({
   createRemoteRuntimePtyTransport: vi.fn(
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
@@ -121,7 +121,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
   )
 }))
 
-vi.mock('./pty-dispatcher', async (importOriginal) => {
+vi.mock('./pty-transport/delivery/pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,

@@ -96,7 +96,8 @@ describe('hidden query carry vs a following OSC', () => {
         rawLength: HIDDEN_STRAGGLER_ENDING_MID_SGR.length
       })
       isVisibleRef.current = true
-      const { _dispatchPtyModelRestoreNeededForTest } = await import('./pty-model-restore-channel')
+      const { _dispatchPtyModelRestoreNeededForTest } =
+        await import('./pty-transport/delivery/pty-model-restore-channel')
       _dispatchPtyModelRestoreNeededForTest({ id: 'pty-id', reason: 'unhide', markerSeq: 1000 })
       await flushAsyncTicks(40)
       expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)

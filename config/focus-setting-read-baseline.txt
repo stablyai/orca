@@ -173,7 +173,7 @@
 1 src/renderer/src/components/terminal-pane/pty-connection/agent-idle-working-handlers.ts
 1 src/renderer/src/components/terminal-pane/retire-unbound-runtime-terminal-pane.ts
 1 src/renderer/src/components/terminal-pane/terminal-fit-restore.ts
-1 src/renderer/src/components/terminal-pane/terminal-link-open-hints.ts
+1 src/renderer/src/components/terminal-pane/links/terminal-link-open-hints.ts
 2 src/renderer/src/components/terminal-pane/terminal-pane-close-admission.ts
 1 src/renderer/src/components/terminal-pane/terminal-pane-mount-preparation.ts
 2 src/renderer/src/components/terminal-pane/use-terminal-pane-close-actions.ts

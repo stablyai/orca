@@ -27,11 +27,11 @@ vi.mock('@/store/index', async () =>
 )
 // The stdin-after-start paste is pinned by launch-agent-background-session.test.ts.
 vi.mock('@/lib/agent-paste-draft', () => ({ pasteDraftWhenAgentReady: vi.fn() }))
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({
   registerEagerPtyBuffer: vi.fn(),
   subscribeToPtyExit: vi.fn(() => () => {})
 }))
-vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-data-sidecar-subscriptions', () => ({
   subscribeToPtyData: vi.fn(() => () => {})
 }))
 

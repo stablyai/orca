@@ -6,7 +6,7 @@ import { shouldWritePtyOutputForeground } from './foreground-output-scan'
 import { HIDDEN_OUTPUT_RESTORE_FLOOD_SUPPRESS_MS } from './hidden-output-restore-limits'
 import { readE2eHiddenSnapshotOverride } from './e2e-terminal-pty-harness'
 
-import type { PtyBufferSnapshot } from '../pty-transport-types'
+import type { PtyBufferSnapshot } from '../pty-transport/pty-transport-types'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 export type HiddenOutputSnapshotResult =

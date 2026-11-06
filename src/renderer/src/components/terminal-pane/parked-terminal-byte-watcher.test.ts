@@ -528,7 +528,7 @@ describe('startParkedTerminalByteWatcher', () => {
 
   // Why: retained gauges would inflate every later high-water profile.
   it('dispose drops the processor from the pty side-effect census', async () => {
-    await import('./pty-side-effect-pending-census')
+    await import('./pty-transport/output/pty-side-effect-pending-census')
     const { collectRendererMemoryProfileCounts } = await import('@/lib/renderer-memory-profile')
     expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(0)
 

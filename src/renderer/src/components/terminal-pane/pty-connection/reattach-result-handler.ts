@@ -5,7 +5,7 @@ import {
 } from './terminal-launch-result-policy'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
-import type { PtyBufferSnapshot, PtyConnectResult } from '../pty-transport-types'
+import type { PtyBufferSnapshot, PtyConnectResult } from '../pty-transport/pty-transport-types'
 import { warnTerminalLifecycleAnomaly } from '../terminal-lifecycle-diagnostics'
 // Inspect stale-account state only after a concrete PTY attaches.
 import { notifyCodexPaneBoundForStaleSweep } from '@/lib/agent-session/accounts/codex/codex-stale-pane-sweep'
