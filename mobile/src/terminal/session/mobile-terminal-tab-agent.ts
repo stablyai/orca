@@ -135,14 +135,3 @@ export function resolveMobileTerminalTabSmartKeys(
     tab.agentStatus
   )
 }
-
-export function sameSmartKeySet(a: AgentSmartKeySet | null, b: AgentSmartKeySet | null): boolean {
-  return (
-    a === b ||
-    (a !== null &&
-      b !== null &&
-      a.agentId === b.agentId &&
-      a.state === b.state &&
-      a.keys.map((key) => key.id).join() === b.keys.map((key) => key.id).join())
-  )
-}

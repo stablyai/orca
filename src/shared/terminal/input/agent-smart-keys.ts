@@ -47,9 +47,8 @@ export type AgentSmartKey = {
 }
 
 export type AgentSmartKeySet = {
-  /** The tab's own agent, e.g. openclaude, for its icon; `agent` is the TUI whose keys apply. */
+  /** The tab's own agent, e.g. openclaude, for its icon. */
   readonly agentId: string
-  readonly agent: AgentSmartKeyAgent
   readonly state: AgentSmartKeyState
   readonly keys: readonly AgentSmartKey[]
 }
@@ -144,6 +143,7 @@ export function resolveAgentSmartKeys(
 ): AgentSmartKeySet | null {
   const transcriptAgent = resolveNativeChatTranscriptAgent(agentId)
   if (
+    !agentId ||
     !row ||
     (transcriptAgent !== 'claude' && transcriptAgent !== 'codex' && transcriptAgent !== 'opencode')
   ) {
@@ -153,8 +153,7 @@ export function resolveAgentSmartKeys(
   const withKeys = (
     state: AgentSmartKeyState,
     keys: readonly AgentSmartKey[] | null | undefined
-  ): AgentSmartKeySet | null =>
-    agentId && keys && keys.length > 0 ? { agentId, agent, state, keys } : null
+  ): AgentSmartKeySet | null => (keys && keys.length > 0 ? { agentId, state, keys } : null)
   const phase = hookRowAgentPhase(row)
   if (phase === 'working') {
     return withKeys('working', STATE_KEYS[agent].working)
@@ -166,4 +165,17 @@ export function resolveAgentSmartKeys(
     return withKeys('permission', STATE_KEYS[agent].permission)
   }
   return agent === 'claude' ? withKeys('question', questionKeys(row)) : null
+}
+
+/** Whether two sets draw the same keys, so a fresh status object doesn't redraw the row. */
+export function sameSmartKeySet(a: AgentSmartKeySet | null, b: AgentSmartKeySet | null): boolean {
+  return (
+    a === b ||
+    (a !== null &&
+      b !== null &&
+      a.agentId === b.agentId &&
+      a.state === b.state &&
+      a.keys.length === b.keys.length &&
+      a.keys.every((key, index) => key.id === b.keys[index]?.id))
+  )
 }

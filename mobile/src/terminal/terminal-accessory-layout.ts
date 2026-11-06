@@ -244,37 +244,30 @@ export function getVisibleTerminalAccessoryKeys(
   })
 }
 
-export async function loadTerminalAccessoryLayout(
+// Throws only when the store can't be read; a malformed value reads as the defaults.
+async function readTerminalAccessoryLayout(
+  directionPadAvailable: boolean
+): Promise<TerminalAccessoryLayoutPreference> {
+  const raw = await AsyncStorage.getItem(TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY)
+  let stored: unknown = null
+  try {
+    stored = raw ? JSON.parse(raw) : null
+  } catch {}
+  return normalizeTerminalAccessoryLayoutPreference(stored, builtInIds(), directionPadAvailable)
+}
+
+export function loadTerminalAccessoryLayout(
   directionPadAvailable = false
 ): Promise<TerminalAccessoryLayoutPreference> {
-  try {
-    const raw = await AsyncStorage.getItem(TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY)
-    if (!raw) {
-      return defaultPreference(builtInIds(), directionPadAvailable)
-    }
-    return normalizeTerminalAccessoryLayoutPreference(
-      JSON.parse(raw),
-      builtInIds(),
-      directionPadAvailable
-    )
-  } catch {
-    return defaultPreference(builtInIds(), directionPadAvailable)
-  }
+  return readTerminalAccessoryLayout(directionPadAvailable).catch(() =>
+    defaultPreference(builtInIds(), directionPadAvailable)
+  )
 }
 
 export async function saveTerminalAccessoryLayout(layout: TerminalAccessoryLayout): Promise<void> {
   const preference = createTerminalAccessoryLayoutPreference(layout)
   const value = JSON.stringify(preference)
   await persistMirrored(TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY, value)
-}
-
-// A malformed value may be replaced; only a failed read must stop the write.
-function parseStoredLayout(raw: string | null): unknown {
-  try {
-    return raw ? JSON.parse(raw) : null
-  } catch {
-    return null
-  }
 }
 
 // Serialize read-modify-write so quick toggles land in order.
@@ -287,12 +280,7 @@ export function saveTerminalSmartRail(
 ): Promise<void> {
   const run = layoutWriteTurn.then(async () => {
     // A failed read must not save defaults over the user's layout.
-    const raw = await AsyncStorage.getItem(TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY)
-    const layout = normalizeTerminalAccessoryLayoutPreference(
-      parseStoredLayout(raw),
-      builtInIds(),
-      directionPadAvailable
-    )
+    const layout = await readTerminalAccessoryLayout(directionPadAvailable)
     await saveTerminalAccessoryLayout({ ...layout, smartRail: enabled })
   })
   layoutWriteTurn = run.catch(() => {})

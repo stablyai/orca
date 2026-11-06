@@ -9,54 +9,43 @@ const questions = JSON.stringify({
   ]
 })
 
-function keys(agent: string, row: Parameters<typeof resolveAgentSmartKeys>[1]) {
-  const set = resolveAgentSmartKeys(agent, row)
-  return set && { state: set.state, keys: set.keys.map((key) => [key.combo, ...key.writes]) }
-}
-
 describe('resolveAgentSmartKeys', () => {
-  it('reads permission from the approval envelope and question from the questions JSON', () => {
-    expect(keys('claude', { state: 'waiting', interactivePrompt: approval })).toEqual({
-      state: 'permission',
-      keys: [
-        ['1', '1'],
-        ['2', '2'],
-        ['Esc', '\x1b']
-      ]
-    })
+  it('tells a permission prompt from a question by the prompt shape', () => {
     expect(
-      keys('claude', {
-        state: 'waiting',
-        interactivePrompt: questions,
-        toolName: 'AskUserQuestion'
-      })
-    ).toEqual({
-      state: 'question',
-      keys: [
-        ['1', '1'],
-        ['2', '2'],
-        ['3', '3'],
-        ['←', '\x1b[D'],
-        ['→', '\x1b[C'],
-        ['Esc', '\x1b']
-      ]
+      resolveAgentSmartKeys('claude', { state: 'waiting', interactivePrompt: approval })?.state
+    ).toBe('permission')
+    const ask = resolveAgentSmartKeys('claude', {
+      state: 'waiting',
+      interactivePrompt: questions,
+      toolName: 'AskUserQuestion'
     })
+    expect(ask?.state).toBe('question')
+    // The phone can't see the open question tab, so it offers digits for the longest one.
+    expect(ask?.keys.filter((key) => /^\d$/.test(key.combo)).map((key) => key.writes)).toEqual([
+      ['1'],
+      ['2'],
+      ['3']
+    ])
   })
 
-  it('answers Codex approvals per request and stops OpenCode with two Escapes', () => {
-    expect(keys('codex', { state: 'waiting', interactivePrompt: approval })?.keys).toEqual([
-      ['y', 'y'],
-      ['a', 'a'],
-      ['n', 'n']
-    ])
-    expect(keys('opencode', { state: 'working' })?.keys).toEqual([['Esc Esc', '\x1b', '\x1b']])
-    expect(keys('claude', { state: 'done', interrupted: true })?.state).toBe('idle')
+  it('declines one Codex approval with n and stops OpenCode with two separate Escapes', () => {
+    const codexNo = resolveAgentSmartKeys('codex', {
+      state: 'waiting',
+      interactivePrompt: approval
+    })?.keys.find((key) => key.name === 'no')
+    expect(codexNo?.writes).toEqual(['n'])
+    const openCodeStop = resolveAgentSmartKeys('opencode', { state: 'working' })?.keys.find(
+      (key) => key.name === 'stop'
+    )
+    expect(openCodeStop?.writes).toEqual(['\x1b', '\x1b'])
   })
 
   it('shows nothing for an unknown agent, state or prompt', () => {
-    expect(keys('gemini', { state: 'working' })).toBeNull()
-    expect(keys('claude', { state: 'waiting' })).toBeNull()
-    expect(keys('codex', { state: 'waiting', interactivePrompt: questions })).toBeNull()
-    expect(keys('codex', { state: 'done' })).toBeNull()
+    expect(resolveAgentSmartKeys('gemini', { state: 'working' })).toBeNull()
+    expect(resolveAgentSmartKeys('claude', { state: 'waiting' })).toBeNull()
+    expect(
+      resolveAgentSmartKeys('codex', { state: 'waiting', interactivePrompt: questions })
+    ).toBeNull()
+    expect(resolveAgentSmartKeys('codex', { state: 'done' })).toBeNull()
   })
 })

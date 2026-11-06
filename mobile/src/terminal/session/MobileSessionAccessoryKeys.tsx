@@ -26,7 +26,7 @@ import {
   type AgentSmartKey
 } from '../../../../src/shared/terminal/input/agent-smart-keys'
 import type { TerminalAccessoryKey } from '../terminal-accessory-keys'
-import { resolveMobileTerminalTabSmartKeys, sameSmartKeySet } from './mobile-terminal-tab-agent'
+import { resolveMobileTerminalTabSmartKeys } from './mobile-terminal-tab-agent'
 import { MobileSessionSmartKeys } from './MobileSessionSmartKeys'
 import { MobileSessionLatchKeys } from './MobileSessionLatchKeys'
 import { isAccessibilityClick, useTerminalKeyRowTouch } from './use-terminal-key-row-touch'
@@ -64,7 +64,7 @@ export function MobileSessionAccessoryKeys({
     smartRailEnabled
   } = controller
   const keyboardLift = useMobileSessionKeyboardLift(controller.dockBottomInset)
-  const accessoryPresses = useRef(new Map<string, { press: PreparedPress; chord: boolean }>())
+  const accessoryPresses = useRef(new Map<string, PreparedPress>())
   const scrollRef = useRef<ScrollView>(null)
   const latestSmartKeys = useMemo(
     () =>
@@ -74,7 +74,6 @@ export function MobileSessionAccessoryKeys({
   const touch = useTerminalKeyRowTouch({
     scrollRef,
     latest: latestSmartKeys,
-    sameShown: sameSmartKeySet,
     cancelAccessoryRepeat
   })
   const smartKeys = touch.shown
@@ -98,12 +97,24 @@ export function MobileSessionAccessoryKeys({
   ]
   const sendKeyLabel = (label: string) =>
     t('session.accessoryKeys.sendKey', 'Send {{label}}', { label })
-  // Held Shift, Ctrl or Alt turn a key into its combo; keys that take none send as they are.
-  const prepareBuiltInPress = (key: TerminalAccessoryKey) => {
+  // Held Shift, Ctrl or Alt turn a key into its combo and are used up when it sends; keys that take none send as they are.
+  const prepareBuiltInPress = (key: TerminalAccessoryKey): PreparedPress => {
     const chord = dockKeys.chordInput(key.id)
+    const press = prepareAccessoryPress(chord ?? createTerminalLiveAccessoryInput(key))
+    const takeChord = () => {
+      if (chord) {
+        dockKeys.takeModifiers()
+      }
+    }
     return {
-      press: prepareAccessoryPress(chord ?? createTerminalLiveAccessoryInput(key)),
-      chord: chord !== null
+      tap: () => {
+        takeChord()
+        return press.tap()
+      },
+      hold: (firstRepeatDelayMs) => {
+        takeChord()
+        press.hold(firstRepeatDelayMs)
+      }
     }
   }
   // Later writes belong to the same press, so a scroll after release mustn't drop them; a tab switch does.
@@ -222,7 +233,7 @@ export function MobileSessionAccessoryKeys({
             <Text style={styles.keyText}>{t('session.accessoryKeys.paste', 'Paste')}</Text>
           </Pressable>
         )}
-        {builtInKeys.length === 0 || latchIndex === 0 ? latchKeys : null}
+        {latchIndex === 0 ? latchKeys : null}
         {builtInKeys.flatMap((key, index) => [
           <Pressable
             key={key.id}
@@ -237,10 +248,7 @@ export function MobileSessionAccessoryKeys({
               const prepared = prepareBuiltInPress(key)
               accessoryPresses.current.set(key.id, prepared)
               if (event.type === 'keydown') {
-                if (prepared.chord) {
-                  dockKeys.takeModifiers()
-                }
-                prepared.press.hold(TERMINAL_ACCESSORY_REPEAT_DELAY_MS)
+                prepared.hold(TERMINAL_ACCESSORY_REPEAT_DELAY_MS)
               }
             }}
             onPressOut={() => {
@@ -256,24 +264,14 @@ export function MobileSessionAccessoryKeys({
                   accessoryPresses.current.get(key.id)) ||
                 prepareBuiltInPress(key)
               accessoryPresses.current.delete(key.id)
-              touch.fire(key.id, event, () => {
-                if (prepared.chord) {
-                  dockKeys.takeModifiers()
-                }
-                void prepared.press.tap()
-              })
+              touch.fire(key.id, event, () => void prepared.tap())
             }}
             onLongPress={
               key.repeatable
                 ? () => {
-                    const prepared = accessoryPresses.current.get(key.id)
-                    if (!touch.stillArmed(key.id)) {
-                      return
+                    if (touch.stillArmed(key.id)) {
+                      accessoryPresses.current.get(key.id)?.hold()
                     }
-                    if (prepared?.chord) {
-                      dockKeys.takeModifiers()
-                    }
-                    prepared?.press.hold()
                   }
                 : undefined
             }
