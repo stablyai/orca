@@ -73,6 +73,7 @@ function claudeContentBlock(record: Record<string, unknown>): NativeChatBlock | 
       const text = extractString(record.thinking) ?? extractString(record.text)
       return text ? { type: 'text', text } : null
     }
+    case 'server_tool_use':
     case 'tool_use': {
       const name = extractString(record.name) ?? 'tool'
       const callId = extractString(record.id)
@@ -83,7 +84,9 @@ function claudeContentBlock(record: Record<string, unknown>): NativeChatBlock | 
     case 'image':
       return imageRefBlock(record)
     default:
-      return null
+      return typeof record.type === 'string' && record.type.endsWith('_tool_result')
+        ? toolResultBlock(record)
+        : null
   }
 }
 

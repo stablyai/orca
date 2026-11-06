@@ -20,6 +20,8 @@ import {
 import {
   claudeRecord,
   claudeText,
+  isClaudeToolResultType,
+  isClaudeToolUseType,
   type ClaudeMessageEnvelope
 } from '../journal/claude-structured-item-translation'
 import { claudeResultOutcome } from '../../claude-result-outcome'
@@ -103,10 +105,10 @@ export function isModeledClaudeContent(value: unknown): boolean {
     // Local attachments replay with the base64 or file source Orca sent.
     return source?.type === 'base64' || source?.type === 'file'
   }
-  if (part.type === 'tool_use') {
+  if (isClaudeToolUseType(part.type)) {
     return claudeText(part.id) !== null && claudeText(part.name) !== null
   }
-  if (part.type === 'tool_result') {
+  if (isClaudeToolResultType(part.type)) {
     return claudeText(part.tool_use_id) !== null
   }
   // Redacted thinking arrives as an empty string plus a signature.
