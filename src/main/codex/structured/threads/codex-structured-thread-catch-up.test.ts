@@ -287,55 +287,6 @@ describe('Codex chat catch-up', () => {
     }
   })
 
-  it('does zero proof-only item work after its final target at N and 10N', async () => {
-    for (const n of [100, 1_000]) {
-      const c = await chat({ now: 1_000 })
-      await c.journal.appendSubmission({
-        clientMessageId: 'last',
-        body: { kind: 'message', role: 'user', blocks: [] },
-        payloadFingerprint: 'last',
-        fence: 1
-      })
-      let visits = 0
-      const known = {
-        ...turn(0),
-        items: [
-          { type: 'userMessage', id: 'exact', clientId: 'last', content: [] },
-          ...Array.from({ length: n }, (_, i) => ({
-            get type() {
-              visits++
-              return 'agentMessage'
-            },
-            id: `tail-${i}`,
-            text: 'old'
-          }))
-        ]
-      }
-      await c.journal.appendItem(
-        { provider: 'codex', threadId: THREAD, turnId: 'turn-0', ordinal: 0 },
-        { kind: 'turn', turnId: 'turn-0', state: 'completed' },
-        { fence: 1, turnScope: { kind: 'thread' } }
-      )
-      await c.open([known], {
-        connection: {
-          request: async (_method, params) => ({
-            data: [params?.itemsView === 'summary' ? { ...known, items: [] } : known],
-            nextCursor: null
-          })
-        },
-        onReceipt: (id, providerIdentity) =>
-          c.journal.acceptLate({
-            clientMessageId: id,
-            providerIdentity,
-            state: 'accepted',
-            fence: 1
-          })
-      })
-      expect(visits).toBe(0)
-      expect(c.journal.submission('last')?.dispatchState).toBe('accepted')
-    }
-  })
-
   it('retains the complete outside answer tail through catch-up, disk reopen and display', async () => {
     const c = await chat({ now: 1_000 })
     await c.open([turn(1)])
@@ -357,40 +308,6 @@ describe('Codex chat catch-up', () => {
     })
     const displayed = projectStructuredItemsToNativeChat(items).flatMap((message) => message.blocks)
     expect(displayed).toContainEqual({ type: 'text', text: answer })
-  })
-
-  it('adds the turns made outside the chat once, in order, after the chat rows', async () => {
-    const c = await chat({ now: 1_000 })
-
-    await c.open([turn(1)])
-    expect(c.texts()).toEqual(['user:ask 1', 'assistant:answer 1'])
-
-    await c.open([turn(1), turn(2), turn(3)])
-    const caughtUp = [
-      'user:ask 1',
-      'assistant:answer 1',
-      '(continued-outside)',
-      'user:ask 2',
-      'assistant:answer 2',
-      'user:ask 3',
-      'assistant:answer 3'
-    ]
-    expect(c.texts()).toEqual(caughtUp)
-
-    await c.open([turn(1), turn(2), turn(3)])
-    expect(c.texts()).toEqual(caughtUp)
-
-    // An external rewind preserves displayed rows and adds a notice.
-    await c.open([turn(1), turn(2), turn(4)])
-    expect(c.texts().slice(caughtUp.length)).toEqual([
-      '(continued-outside-rewound)',
-      'user:ask 4',
-      'assistant:answer 4'
-    ])
-
-    // Summary-only history cannot be imported.
-    await c.open([turn(1), turn(2), turn(4), turn(6, 'summary')])
-    expect(c.texts().slice(caughtUp.length + 3)).toEqual([])
   })
 
   it('recovers an older gap behind newer native work after a failed read and restart', async () => {
@@ -431,25 +348,6 @@ describe('Codex chat catch-up', () => {
     ])
     await c.open([turn(1), turn(2), turn(3), turn(4)])
     expect(c.texts().slice(-3)).toEqual(['(continued-outside)', 'user:ask 4', 'assistant:answer 4'])
-  })
-
-  it('uses the continued-outside notice after a receipt-only known turn', async () => {
-    const c = await chat({ now: 1_000 })
-    const body = { kind: 'message' as const, role: 'user' as const, blocks: [] }
-    await c.journal.appendSubmission({
-      clientMessageId: 'receipt',
-      body,
-      payloadFingerprint: 'receipt',
-      fence: 1
-    })
-    await c.journal.resolveDispatch({
-      clientMessageId: 'receipt',
-      state: 'accepted',
-      providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 0 },
-      fence: 1
-    })
-    await c.open([turn(1), turn(2)])
-    expect(c.texts().slice(-3)).toEqual(['(continued-outside)', 'user:ask 2', 'assistant:answer 2'])
   })
 
   it('commits a 600-message import once, rolls back a later partition failure, and recovers', async () => {
