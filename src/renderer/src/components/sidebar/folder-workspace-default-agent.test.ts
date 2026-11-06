@@ -2,19 +2,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { AgentLaunchChoiceCancelled } from '@/lib/host-chat-program-acquisition'
 import {
+  detectFolderRepoAgents,
   directCreateDetectionTarget,
   resolveDirectCreateAgent
 } from './folder-workspace-default-agent'
 
-const mocks = vi.hoisted(() => ({
-  ensureAgentLaunchPreferences: vi.fn(),
-  acquireAgentLaunchChoices: vi.fn(),
-  ensureDetectedAgentsForTarget: vi.fn(),
-  awaitStructuredRouteHostAnswer: vi.fn(),
-  agentChoiceMayOpenAsChat: vi.fn(),
-  loadProjectLaunchContext: vi.fn(),
-  revision: { current: 1 as number | undefined }
-}))
+const mocks = vi.hoisted(() => {
+  const revision: { current: number | undefined } = { current: 1 }
+  return {
+    ensureAgentLaunchPreferences: vi.fn(),
+    acquireAgentLaunchChoices: vi.fn(),
+    ensureDetectedAgentsForTarget: vi.fn(),
+    awaitStructuredRouteHostAnswer: vi.fn(),
+    agentChoiceMayOpenAsChat: vi.fn(),
+    loadProjectLaunchContext: vi.fn(),
+    revision
+  }
+})
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({ settings: {} }) } }))
 vi.mock('@/runtime/agent-launch-settings/use-host-agent-launch-preferences', () => ({
