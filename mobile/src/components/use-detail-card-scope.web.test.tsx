@@ -132,6 +132,14 @@ it('keeps outside actions and finite focus order while releasing a retained visu
     render(false, true)
     expect(node('card').inert).toBe(true)
     expect(node('opener')).toBe(opener)
+    render(false)
+    node('terminal').focus()
+    render(true)
+    node('terminal').dispatchEvent(
+      new PointerEvent('pointerdown', { pointerType: 'touch', bubbles: true, cancelable: true })
+    )
+    expect(dismiss).toHaveBeenCalledTimes(6)
+    expect(document.activeElement).toBe(node('terminal'))
     act(() => renderer.unmount())
     expect(host?.isConnected).toBe(false)
   } finally {
