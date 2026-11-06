@@ -1,27 +1,21 @@
 import { nativeChatFullCommand } from './native-chat-tool-input-text'
+import {
+  powershellAnalysisScript,
+  powershellInvocationScript,
+  powershellWords
+} from './native-chat-powershell-script'
 import { posixShellWords } from './native-chat-tool-preview-prefix'
 
-// Decodes the script a shell tool call ran into POSIX-readable text for command analysis. PowerShell
-// is lexed in its own quoting first, so its strings, escapes and comments can't pass for commands.
+// Decodes the script a shell tool call ran into POSIX-readable text for command analysis, reading each
+// launch line in the quoting of what ran it.
 
 const SHELL_PROGRAM = /^(?:ba|z|k|da|fi)?sh(?:\.exe)?$/iu
 const SHELL_SCRIPT_FLAG = /^-[a-zA-Z]*c$/u
 const POWERSHELL_PROGRAM = /^(?:pwsh|powershell)(?:\.exe)?$/iu
 const CMD_PROGRAM = /^cmd(?:\.exe)?$/iu
-// The common pattern's PowerShell launch options: flags, and options that take one value.
-const POWERSHELL_FLAGS = new Set(['-mta', '-nologo', '-noninteractive', '-noprofile', '-sta'])
-const POWERSHELL_OPTIONS_WITH_VALUE = new Set([
-  '-configurationname',
-  '-executionpolicy',
-  '-inputformat',
-  '-outputformat',
-  '-version',
-  '-windowstyle',
-  '-workingdirectory'
-])
+const CMD_FLAG = /^\/[ds]$/iu
+// Node's Windows shell form, in cmd's own quoting: `C:\Windows\System32\cmd.exe /d /s /c "script"`.
 const CMD_WRAPPER = /^(?:\/d\s+)?(?:\/s\s+)?\/c\s+([\s\S]+)$/iu
-// Characters that open or close text in POSIX analysis; they never survive inside a literal.
-const QUOTE_CHARACTERS = /['"`]/gu
 
 function programName(path: string): string {
   return path.split(/[\\/]/).at(-1) ?? ''
@@ -48,176 +42,95 @@ function argvCommand(input: unknown): readonly string[] | null {
   return Array.isArray(argv) && argv.every((part) => typeof part === 'string') ? argv : null
 }
 
-/** A PowerShell literal as POSIX analysis should see it: one quoted word, its text kept. */
-function neutralLiteral(text: string): string {
-  return `'${text.replace(QUOTE_CHARACTERS, '')}'`
-}
-
-/** PowerShell's script read in PowerShell's own quoting, with every string, here-string and comment
- *  rewritten as POSIX-neutral text. Null for input it can't read whole, which then opens nothing. */
-export function powershellAnalysisScript(script: string): string | null {
-  let out = ''
-  let index = 0
-  const at = (offset = 0): string => script[index + offset] ?? ''
-  while (index < script.length) {
-    const char = at()
-    // Here-strings run from `@'` or `@"` at a line's end to the same quote and `@` opening a line.
-    if (
-      char === '@' &&
-      (at(1) === "'" || at(1) === '"') &&
-      /^\r?\n/u.test(script.slice(index + 2))
-    ) {
-      const quote = at(1)
-      const close = new RegExp(`\\r?\\n${quote}@`, 'u').exec(script.slice(index + 2))
-      if (!close) {
-        return null
-      }
-      out += neutralLiteral(script.slice(index + 2, index + 2 + close.index))
-      index += 2 + close.index + close[0].length
-      continue
-    }
-    if (char === "'") {
-      // Single quotes: `''` is a quote and a backtick is literal.
-      let text = ''
-      index += 1
-      for (;;) {
-        if (index >= script.length) {
-          return null
-        }
-        if (at() === "'" && at(1) === "'") {
-          text += "'"
-          index += 2
-        } else if (at() === "'") {
-          index += 1
-          break
-        } else {
-          text += at()
-          index += 1
-        }
-      }
-      out += neutralLiteral(text)
-      continue
-    }
-    if (char === '"') {
-      // Double quotes: a backtick escapes the next character and `""` is a quote. A `$(…)` inside
-      // still runs, but stays text here: a create inside one is missed rather than guessed at.
-      let text = ''
-      index += 1
-      for (;;) {
-        if (index >= script.length) {
-          return null
-        }
-        if (at() === '`') {
-          text += at(1)
-          index += 2
-        } else if (at() === '"' && at(1) === '"') {
-          text += '"'
-          index += 2
-        } else if (at() === '"') {
-          index += 1
-          break
-        } else {
-          text += at()
-          index += 1
-        }
-      }
-      out += neutralLiteral(text)
-      continue
-    }
-    if (char === '<' && at(1) === '#') {
-      const end = script.indexOf('#>', index + 2)
-      if (end === -1) {
-        return null
-      }
-      out += ' '
-      index = end + 2
-      continue
-    }
-    if (char === '#' && (index === 0 || /[\s;|&(]/u.test(script[index - 1] ?? ''))) {
-      while (index < script.length && at() !== '\n') {
-        index += 1
+/** A script split at command separators that sit outside quotes. */
+export function shellSegments(script: string): string[] {
+  const segments: string[] = []
+  let current = ''
+  let quote: string | null = null
+  for (let index = 0; index < script.length; index++) {
+    const char = script[index]
+    if (quote !== null) {
+      current += char
+      if (char === '\\' && quote === '"') {
+        current += script[++index] ?? ''
+      } else if (char === quote) {
+        quote = null
       }
       continue
     }
-    if (char === '`') {
-      // Bare text: an escaped character is never a separator or a quote; a line end continues.
-      out += at(1) === '\n' || at(1) === '\r' ? ' ' : '_'
-      index += at(1) === '\r' && at(2) === '\n' ? 3 : 2
+    if (char === "'" || char === '"') {
+      quote = char
+    }
+    if (char === '\\') {
+      current += char + (script[++index] ?? '')
       continue
     }
-    out += char
-    index += 1
+    const pair = script.slice(index, index + 2)
+    if (pair === '&&' || pair === '||' || char === ';' || char === '|' || char === '\n') {
+      segments.push(current)
+      current = ''
+      if (pair === '&&' || pair === '||') {
+        index++
+      }
+      continue
+    }
+    current += char
   }
-  return out
+  segments.push(current)
+  return segments
 }
 
-/** The script a PowerShell launch runs, from its argv. Null when it isn't a plain `-Command`. */
-function powershellInvocationScript(argv: readonly string[]): string | null {
-  for (let index = 1; index < argv.length; index += 1) {
-    const option = argv[index]!.toLowerCase()
-    if (option === '-command' || option === '-c') {
-      const script = argv.slice(index + 1).join(' ')
-      return script ? powershellAnalysisScript(script) : null
-    }
-    if (POWERSHELL_OPTIONS_WITH_VALUE.has(option)) {
+/** The script a decoded launch line runs, PowerShell's or cmd's: null when it can't be read whole,
+ *  undefined when the line launches neither. */
+function launchedScript(words: readonly string[]): string | null | undefined {
+  const program = programName(words[0] ?? '')
+  if (POWERSHELL_PROGRAM.test(program)) {
+    return powershellInvocationScript(words)
+  }
+  if (CMD_PROGRAM.test(program)) {
+    let index = 1
+    while (CMD_FLAG.test(words[index] ?? '')) {
       index += 1
-    } else if (!POWERSHELL_FLAGS.has(option)) {
-      // -File, -EncodedCommand and anything unknown: nothing here to read as a command.
+    }
+    return /^\/c$/iu.test(words[index] ?? '') && index + 1 < words.length
+      ? words.slice(index + 1).join(' ')
+      : undefined
+  }
+  return undefined
+}
+
+/** A POSIX command list with each PowerShell or cmd launch in it read as the script it runs, as in
+ *  `pwsh -Command 'gh pr create --fill' && echo done`. Each command's words are undone as POSIX
+ *  quoting, which Codex also joins argv in (`"C:\\…\\pwsh.exe" -Command 'script'` on Windows). */
+function posixCommandListScript(command: string): string | null {
+  let launches = false
+  const commands: string[] = []
+  for (const segment of shellSegments(command)) {
+    const words = posixShellWords(segment.trim())
+    const script = words ? launchedScript(words) : undefined
+    if (script === null) {
       return null
     }
+    launches ||= script !== undefined
+    commands.push(script ?? segment)
   }
-  return null
+  return launches ? commands.join('\n') : command
 }
 
-/** A PowerShell command line's words: `'…'` (with `''`), `"…"` (with `""` or a backtick escape), and
- *  a bare backtick escape. */
-function powershellWords(command: string): string[] | null {
-  const words: string[] = []
-  let word: string | null = null
-  let index = 0
-  while (index < command.length) {
-    const char = command[index]!
-    if (/\s/u.test(char)) {
-      if (word !== null) {
-        words.push(word)
-      }
-      word = null
-      index += 1
-      continue
-    }
-    word ??= ''
-    if (char === "'" || char === '"') {
-      index += 1
-      for (;;) {
-        if (index >= command.length) {
-          return null
-        }
-        if (command[index] === char && command[index + 1] === char) {
-          word += char
-          index += 2
-        } else if (command[index] === char) {
-          index += 1
-          break
-        } else if (char === '"' && command[index] === '`' && index + 1 < command.length) {
-          word += command[index + 1]
-          index += 2
-        } else {
-          word += command[index]
-          index += 1
-        }
-      }
-    } else if (char === '`' && index + 1 < command.length) {
-      word += command[index + 1]
-      index += 2
-    } else {
-      word += char
-      index += 1
-    }
+/** The script of Node's Windows shell form, which a bare Windows path can't be read as POSIX for. */
+function cmdShellFormScript(command: string): string | null {
+  const first = /^\s*(?:"([^"]+)"|(\S+))/u.exec(command)
+  if (!first || !CMD_PROGRAM.test(programName(first[1] ?? first[2] ?? ''))) {
+    return null
   }
-  if (word !== null) {
-    words.push(word)
+  const wrapped = CMD_WRAPPER.exec(command.slice(first.index + first[0].length).trim())
+  const script = wrapped?.[1]?.trim()
+  if (!script) {
+    return null
   }
-  return words
+  return script.length >= 2 && script.startsWith('"') && script.endsWith('"')
+    ? script.slice(1, -1)
+    : script
 }
 
 /** The script a shell tool call ran, as POSIX-readable text; null when there is none to read.
@@ -225,41 +138,30 @@ function powershellWords(command: string): string[] | null {
  *  after the wrapper instead of at a command start. */
 export function nativeChatToolCallScript(name: string, input: unknown): string | null {
   const argv = argvCommand(input)
-  const program = programName(argv?.[0] ?? '')
-  if (argv && POWERSHELL_PROGRAM.test(program)) {
-    return powershellInvocationScript(argv)
-  }
-  if (argv?.length === 3 && SHELL_PROGRAM.test(program) && SHELL_SCRIPT_FLAG.test(argv[1]!)) {
-    return argv[2]!
-  }
-  if (argv?.length === 3 && CMD_PROGRAM.test(program) && /^\/c$/iu.test(argv[1]!)) {
-    return argv[2]!
+  if (argv) {
+    const launched = launchedScript(argv)
+    if (launched !== undefined) {
+      return launched
+    }
+    if (
+      argv.length === 3 &&
+      SHELL_PROGRAM.test(programName(argv[0]!)) &&
+      SHELL_SCRIPT_FLAG.test(argv[1]!)
+    ) {
+      return argv[2]!
+    }
   }
   const command = nativeChatFullCommand(input)
   if (command === null) {
     return null
   }
-  const powershellTool = name.trim().toLowerCase() === 'powershell'
-  // The launch line is in the language of what ran it: PowerShell for a PowerShell tool, otherwise
-  // POSIX, which Codex joins argv in (`"C:\\…\\pwsh.exe" -Command 'script'` on Windows).
-  const words = powershellTool ? powershellWords(command) : posixShellWords(command)
-  if (words && POWERSHELL_PROGRAM.test(programName(words[0] ?? ''))) {
-    return powershellInvocationScript(words)
+  if (name.trim().toLowerCase() !== 'powershell') {
+    const script = posixCommandListScript(command)
+    return script === command ? (cmdShellFormScript(command) ?? command) : script
   }
-  const first = /^\s*(?:"([^"]+)"|(\S+))/u.exec(command)
-  const launched = programName(first?.[1] ?? first?.[2] ?? '')
-  if (CMD_PROGRAM.test(launched) && first) {
-    const wrapped = CMD_WRAPPER.exec(command.slice(first.index + first[0].length).trim())
-    if (wrapped) {
-      const script = wrapped[1]!.trim()
-      return script.length >= 2 && script.startsWith('"') && script.endsWith('"')
-        ? script.slice(1, -1)
-        : script
-    }
-  }
-  // A tool that is PowerShell itself runs any other command as a PowerShell script.
-  if (powershellTool) {
-    return powershellAnalysisScript(command)
-  }
-  return command
+  // A tool that is PowerShell itself reads its line in PowerShell's quoting, and runs any command
+  // that launches nothing as a PowerShell script.
+  const words = powershellWords(command)
+  const launched = words ? launchedScript(words) : undefined
+  return launched !== undefined ? launched : powershellAnalysisScript(command)
 }

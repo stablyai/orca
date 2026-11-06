@@ -1,7 +1,7 @@
 import { parseGitHubIssueOrPRLink, type RepoSlug } from '../../github/links'
 import { parseGitLabIssueOrMRLink, type ProjectSlug } from '../../new-workspace/gitlab-links'
 import type { NativeChatMessage } from '../native-chat-types'
-import { nativeChatToolCallScript } from './native-chat-tool-call-script'
+import { nativeChatToolCallScript, shellSegments } from './native-chat-tool-call-script'
 import { pairToolBlocks } from './native-chat-tool-pairs'
 
 export type NativeChatOpenedPullRequest =
@@ -41,44 +41,6 @@ function createCount(code: string): number {
 /** The commands a script runs, without the text it carries. */
 function shellCode(script: string): string {
   return script.replace(HEREDOC_BODY, '<<').replace(QUOTED_OR_COMMENT, "''")
-}
-
-/** A script split at command separators that sit outside quotes. */
-function shellSegments(script: string): string[] {
-  const segments: string[] = []
-  let current = ''
-  let quote: string | null = null
-  for (let index = 0; index < script.length; index++) {
-    const char = script[index]
-    if (quote !== null) {
-      current += char
-      if (char === '\\' && quote === '"') {
-        current += script[++index] ?? ''
-      } else if (char === quote) {
-        quote = null
-      }
-      continue
-    }
-    if (char === "'" || char === '"') {
-      quote = char
-    }
-    if (char === '\\') {
-      current += char + (script[++index] ?? '')
-      continue
-    }
-    const pair = script.slice(index, index + 2)
-    if (pair === '&&' || pair === '||' || char === ';' || char === '|' || char === '\n') {
-      segments.push(current)
-      current = ''
-      if (pair === '&&' || pair === '||') {
-        index++
-      }
-      continue
-    }
-    current += char
-  }
-  segments.push(current)
-  return segments
 }
 
 /** One pull request however its URL was printed (`/pull/12` and `/pull/12/files`). */

@@ -291,6 +291,11 @@ describe('PowerShell create commands', () => {
     expect(
       opened('powershell.exe -ExecutionPolicy "Bypass" -Command \'gh pr create --fill\'')
     ).toEqual([38712])
+    // A launch inside a command list, and cmd as Codex's argv join writes it.
+    expect(opened("pwsh -Command 'gh pr create --fill' && echo done")).toEqual([38712])
+    expect(opened(String.raw`"C:\\Windows\\System32\\cmd.exe" /c 'gh pr create --fill'`)).toEqual([
+      38712
+    ])
   })
 
   it('keeps the evidence that disqualifies a create, and reads nothing it cannot lex', () => {
