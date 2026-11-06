@@ -6,6 +6,10 @@ import {
   store,
   WORKTREE_FEATURE_PATH,
   discardChangesMock,
+  getStatusMock,
+  readFileMock,
+  statMock,
+  openMock,
   resetFilesystemIpcMocks
 } from './filesystem-test-harness'
 
@@ -110,6 +114,7 @@ vi.mock(
 )
 
 import { registerFilesystemHandlers } from './filesystem'
+import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 
 describe('registerFilesystemHandlers', () => {
@@ -130,5 +135,26 @@ describe('registerFilesystemHandlers', () => {
     ).rejects.toThrow('Access denied: git file path escapes the selected worktree')
 
     expect(discardChangesMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects direct SSH status and reads before any local access', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the existing fixture supplies the store API exercised by these handlers.
+    registerFilesystemHandlers(store as never)
+    await expect(
+      handlers.get('git:status')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH,
+        connectionId: 'ssh-unserved'
+      })
+    ).rejects.toThrow(SshHostNotServedError)
+    await expect(
+      handlers.get('fs:readFile')!(null, {
+        filePath: `${WORKTREE_FEATURE_PATH}/a.ts`,
+        connectionId: 'ssh-unserved'
+      })
+    ).rejects.toThrow(SshHostNotServedError)
+    expect(getStatusMock).not.toHaveBeenCalled()
+    expect(readFileMock).not.toHaveBeenCalled()
+    expect(statMock).not.toHaveBeenCalled()
+    expect(openMock).not.toHaveBeenCalled()
   })
 })

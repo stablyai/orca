@@ -142,7 +142,6 @@ function setup(state: {
         displayName: 'Remote',
         path: '/remote',
         kind: 'git',
-        connectionId: 'nested-ssh',
         executionHostId: 'runtime:env-1'
       }
     ],
@@ -242,9 +241,15 @@ it.each(['explicit', 'repository'] as const)(
       0,
       ownership === 'explicit'
         ? { hostId: 'runtime:env-1', runtimeOwnerEnvironmentId: 'env-1' }
-        : { hostId: 'ssh:nested-ssh' }
+        : { hostId: undefined }
     )
     setup({ children: [runtimeChild] })
+    useAppStore.setState({
+      settings: {
+        ...useAppStore.getState().settings!,
+        activeRuntimeEnvironmentId: 'selected-elsewhere'
+      }
+    })
     await render()
     expect(watchWorktree).not.toHaveBeenCalled()
     expect(runtimeStreams.map((stream) => [stream.args.selector, stream.args.method])).toEqual([
@@ -310,3 +315,27 @@ it('keeps ordinary warm watches, shares roots and releases only section-owned on
       .sort()
   )
 })
+
+it.each(['direct', 'nested'] as const)(
+  'does not claim a watch for unserved %s SSH',
+  async (route) => {
+    const child = worktreeRow('rrepo', '/remote/child', 0, { hostId: 'ssh:nested-ssh' })
+    setup({ children: [child] })
+    useAppStore.setState({
+      repos: useAppStore.getState().repos.map((repo) =>
+        repo.id === 'rrepo'
+          ? {
+              ...repo,
+              connectionId: 'nested-ssh',
+              executionHostId: route === 'nested' ? 'runtime:env-1' : 'ssh:nested-ssh'
+            }
+          : repo
+      )
+    })
+    await render()
+    expect(watchWorktree).not.toHaveBeenCalled()
+    expect(runtimeStreams).toEqual([])
+    // Scheduling is preserved; unsupported SSH status still reaches the original remote rejection boundary.
+    expect(probes.status.mock.calls.map(([request]) => request.worktreeId)).toEqual([child.id])
+  }
+)

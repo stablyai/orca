@@ -21,7 +21,7 @@ import {
 import { useWorktreeGitStatusObservation } from './source-control/sync/useGitStatusPolling'
 import { useSourceControlWatchConsumer } from '@/hooks/source-control-watch-consumers'
 import { useSectionOnScreen } from './source-control/panel/section-viewport-presence'
-import { resolveWorktreeOperationRouteForHost } from '@/lib/worktree-operation-route'
+import { resolveOwner } from '@/lib/resolve-owner'
 const EMPTY_ENTRIES: readonly unknown[] = []
 
 type SectionProps = {
@@ -67,19 +67,22 @@ const WorktreeSection = memo(
     if (bodyActive && !bodyMounted) {
       setBodyMounted(true)
     }
-    const watchRuntimeEnvironmentId = useAppStore(
-      (state) =>
-        resolveWorktreeOperationRouteForHost(state, id, owner.executionHostId)
-          ?.runtimeEnvironmentId ?? null
-    )
-    // Every mounted section's badge follows file events, collapsed or off screen; huge repos keep their poll-only pause.
-    // Why no SSH without a runtime owner: local IPC has no SSH filesystem transport, so it would watch nothing.
+    const watchRuntimeEnvironmentId = useAppStore((state) => {
+      const ownerMatch = resolveOwner(state, {
+        workspaceId: id,
+        ...(owner.worktree.hostId ? { hostId: owner.executionHostId } : {})
+      })
+      // A runtime proxy to nested SSH cannot watch that filesystem either.
+      if (ownerMatch.kind !== 'resolved' || ownerMatch.owner.at !== 'local') {
+        return undefined
+      }
+      const endpoint = ownerMatch.owner.endpoint
+      return endpoint.kind === 'environment' ? endpoint.environmentId : null
+    })
+    // Only local or served-runtime roots have the existing watch transport; huge repos keep their pause.
     useSourceControlWatchConsumer(
       attachedWorktreeOwnerKey(owner),
-      connected &&
-        !huge &&
-        !isFolderRepo(owner.repo) &&
-        (!owner.repo.connectionId || watchRuntimeEnvironmentId !== null)
+      connected && !huge && !isFolderRepo(owner.repo) && watchRuntimeEnvironmentId !== undefined
         ? {
             worktreeId: id,
             worktreePath: owner.worktree.path,
