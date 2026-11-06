@@ -1,5 +1,6 @@
 import type { WorktreeDragGroup } from './worktree-manual-order'
-import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
+import { isFolderLaneSectionKey } from '../../../../../../shared/sidebar-list/folder-workspace-occurrences'
+import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
 import { getNaturalWorktreeKeys } from '../listing/natural-worktree-keys'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -22,31 +23,27 @@ type WorktreeDragUnitRow =
   | { type: 'pending-creation' }
   | { type: 'folder-workspace' }
 
-/** Unit members are host identities, matching getWorktreeDragGroups: each row joins its own
- * section's group, and a unit is a row with the deeper rows under it. A folder workspace's children
- * start at depth 1 under a folder row that joins no group, so depth is relative to the unit's root. */
+/** Unit members are host identities, matching getWorktreeDragGroups. */
 export function getWorktreeDragUnitGroups(
   rows: readonly WorktreeDragUnitRow[]
 ): WorktreeDragUnitGroup[] {
   const groups: WorktreeDragUnitGroup[] = []
-  const unitsByKey = new Map<
-    string,
-    (WorktreeDragUnitGroup['units'][number] & { depth: number })[]
-  >()
-  const groupUnits = (key: string) => {
-    let units = unitsByKey.get(key)
-    if (!units) {
-      units = []
-      unitsByKey.set(key, units)
-      groups.push({ key, units, worktreeIds: [] })
-    }
-    return units
-  }
+  let current: { key: string; units: WorktreeDragUnitGroup['units'] } | null = null
+  const folderLanes = new Map<string, { key: string; units: WorktreeDragUnitGroup['units'] }>()
+  // A folder workspace row joins no unit, so the rows nested under it start their own units; within
+  // them, a unit is a row plus the deeper rows below it.
+  let folderChildUnit: { units: WorktreeDragUnitGroup['units']; depth: number } | null = null
   const naturalWorktreeKeys = getNaturalWorktreeKeys(rows)
 
   for (const row of rows) {
     if (row.type === 'header') {
-      groupUnits(row.key)
+      folderChildUnit = null
+      current = { key: row.key, units: [] }
+      groups.push({
+        key: current.key,
+        units: current.units,
+        worktreeIds: current.units.map((unit) => unit.worktreeId)
+      })
       continue
     }
     if (
@@ -56,25 +53,56 @@ export function getWorktreeDragUnitGroups(
       row.type === 'pending-creation' ||
       row.type === 'folder-workspace'
     ) {
+      if (row.type === 'folder-workspace') {
+        folderChildUnit = { units: [], depth: Number.POSITIVE_INFINITY }
+      }
       continue
     }
     const worktreeKey = composeWorktreeHostIdentity(row.worktree.hostId, row.worktree.id)
     if (row.sectionKey === PINNED_GROUP_KEY && naturalWorktreeKeys.has(worktreeKey)) {
       continue
     }
-    const units = groupUnits(row.sectionKey)
-    const last = units.at(-1)
-    if (last && row.depth > last.depth) {
-      last.worktreeIds.push(worktreeKey)
+    let target = current
+    if (isFolderLaneSectionKey(row.sectionKey)) {
+      target = folderLanes.get(row.sectionKey) ?? null
+      if (!target) {
+        target = { key: row.sectionKey, units: [] }
+        folderLanes.set(row.sectionKey, target)
+        groups.push({ key: target.key, units: target.units, worktreeIds: [] })
+      }
+    } else if (!current) {
+      current = { key: ALL_GROUP_KEY, units: [] }
+      groups.push({
+        key: current.key,
+        units: current.units,
+        worktreeIds: current.units.map((unit) => unit.worktreeId)
+      })
+      target = current
+    }
+    if (!target) {
       continue
     }
-    units.push({ worktreeId: worktreeKey, worktreeIds: [worktreeKey], depth: row.depth })
+    if (folderChildUnit && row.depth > 0) {
+      const last = target.units.at(-1)
+      if (last && folderChildUnit.units === target.units && row.depth > folderChildUnit.depth) {
+        last.worktreeIds.push(worktreeKey)
+        continue
+      }
+      folderChildUnit = { units: target.units, depth: row.depth }
+      target.units.push({ worktreeId: worktreeKey, worktreeIds: [worktreeKey] })
+      continue
+    }
+    folderChildUnit = null
+    if (row.depth > 0 && target.units.length > 0) {
+      target.units.at(-1)!.worktreeIds.push(worktreeKey)
+      continue
+    }
+    target.units.push({ worktreeId: worktreeKey, worktreeIds: [worktreeKey] })
   }
 
   return groups
     .map((group) => ({
-      key: group.key,
-      units: group.units.map(({ worktreeId, worktreeIds }) => ({ worktreeId, worktreeIds })),
+      ...group,
       worktreeIds: group.units.map((unit) => unit.worktreeId)
     }))
     .filter((group) => group.worktreeIds.length > 0)

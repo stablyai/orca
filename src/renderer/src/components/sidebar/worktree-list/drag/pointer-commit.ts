@@ -128,7 +128,8 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
       })
       ctx.clearReorderedWorktreeParents({
         draggedIds: drag.draggedIds,
-        sourceGroupKey: drag.sourceGroupKey
+        sourceGroupKey: drag.sourceGroupKey,
+        pickedCopies: drag.pickedCopies
       })
     } else if (ctx.scrollRef.current) {
       const currentPreview = preferredStatusTarget.status

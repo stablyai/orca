@@ -1,29 +1,23 @@
-import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
+import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
 import { getNaturalWorktreeKeys } from '../listing/natural-worktree-keys'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import type { WorktreeDragGroup } from './worktree-manual-order'
+import { isFolderLaneSectionKey } from '../../../../../../shared/sidebar-list/folder-workspace-occurrences'
 
 /** Group members are host identities: same-id copies on two machines are separate cards to reorder.
- * Each row joins its own section's group, as getWorktreeDragIndexes keys it: rows nested under a
- * folder workspace sit in that folder's lane, not the header above it. */
+ * Rows nested under a folder workspace group by their folder's lane, as getWorktreeDragIndexes keys
+ * them; every other row groups under the header above it. */
 export function getWorktreeDragGroups(rows: HostSectionRow[]): WorktreeDragGroup[] {
   const groups: WorktreeDragGroup[] = []
-  const idsByKey = new Map<string, string[]>()
-  const groupIds = (key: string): string[] => {
-    let ids = idsByKey.get(key)
-    if (!ids) {
-      ids = []
-      idsByKey.set(key, ids)
-      groups.push({ key, worktreeIds: ids })
-    }
-    return ids
-  }
+  let current: { key: string; ids: string[] } | null = null
+  const folderLaneIds = new Map<string, string[]>()
   const naturalWorktreeKeys = getNaturalWorktreeKeys(rows)
 
   for (const row of rows) {
     if (row.type === 'header') {
-      groupIds(row.key)
+      current = { key: row.key, ids: [] }
+      groups.push({ key: current.key, worktreeIds: current.ids })
       continue
     }
     if (
@@ -39,7 +33,21 @@ export function getWorktreeDragGroups(rows: HostSectionRow[]): WorktreeDragGroup
     if (row.sectionKey === PINNED_GROUP_KEY && naturalWorktreeKeys.has(worktreeKey)) {
       continue
     }
-    groupIds(row.sectionKey).push(worktreeKey)
+    if (isFolderLaneSectionKey(row.sectionKey)) {
+      let ids = folderLaneIds.get(row.sectionKey)
+      if (!ids) {
+        ids = []
+        folderLaneIds.set(row.sectionKey, ids)
+        groups.push({ key: row.sectionKey, worktreeIds: ids })
+      }
+      ids.push(worktreeKey)
+      continue
+    }
+    if (!current) {
+      current = { key: ALL_GROUP_KEY, ids: [] }
+      groups.push({ key: current.key, worktreeIds: current.ids })
+    }
+    current.ids.push(worktreeKey)
   }
 
   return groups.filter((group) => group.worktreeIds.length > 0)

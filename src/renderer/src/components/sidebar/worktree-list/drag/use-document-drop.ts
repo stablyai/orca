@@ -82,7 +82,8 @@ export function useWorktreeDocumentDrop(args: {
       })
       ctx.clearReorderedWorktreeParents({
         draggedIds: session.draggedIds,
-        sourceGroupKey: session.sourceGroupKey
+        sourceGroupKey: session.sourceGroupKey,
+        pickedCopies: session.pickedCopies
       })
       clearWorktreeDrag()
     }

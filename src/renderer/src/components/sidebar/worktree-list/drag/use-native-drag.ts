@@ -243,7 +243,8 @@ export function useWorktreeNativeDrag(args: {
       })
       ctx.clearReorderedWorktreeParents({
         draggedIds: dragSession.draggedIds,
-        sourceGroupKey: dragSession.sourceGroupKey
+        sourceGroupKey: dragSession.sourceGroupKey,
+        pickedCopies: dragSession.pickedCopies
       })
       clearWorktreeDrag()
     },

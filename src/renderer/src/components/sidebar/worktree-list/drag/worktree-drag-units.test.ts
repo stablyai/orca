@@ -36,4 +36,24 @@ describe('getWorktreeDragUnitGroups', () => {
       }
     ])
   })
+  it('starts a new unit at a folder workspace in a flat list', () => {
+    expect(
+      getWorktreeDragUnitGroups([
+        item('other', 0, 'all'),
+        { type: 'folder-workspace' },
+        item('a', 1, 'all'),
+        item('b', 1, 'all')
+      ])
+    ).toEqual([
+      {
+        key: 'all',
+        worktreeIds: ['local|other', 'local|a', 'local|b'],
+        units: [
+          { worktreeId: 'local|other', worktreeIds: ['local|other'] },
+          { worktreeId: 'local|a', worktreeIds: ['local|a'] },
+          { worktreeId: 'local|b', worktreeIds: ['local|b'] }
+        ]
+      }
+    ])
+  })
 })

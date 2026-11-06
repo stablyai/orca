@@ -155,7 +155,11 @@ export function useWorktreeLineageDropCommit(args: {
   )
 
   const clearReorderedWorktreeParents = useCallback(
-    (unnestArgs: { draggedIds: readonly string[]; sourceGroupKey: string }) => {
+    (unnestArgs: {
+      draggedIds: readonly string[]
+      sourceGroupKey: string
+      pickedCopies?: DraggedWorktreeCopies
+    }) => {
       const sourceGroup = worktreeDragGroups.find(
         (group) => group.key === unnestArgs.sourceGroupKey
       )
@@ -170,24 +174,22 @@ export function useWorktreeLineageDropCommit(args: {
         worktreeMap,
         cyclicLineageIds
       })
-      // A row nested under a folder workspace unnests the same way.
-      for (const identity of sourceGroup.worktreeIds) {
-        const id = getWorktreeIdFromHostIdentity(identity)
+      // A row nested under a folder workspace unnests the same way, named by its own host.
+      const folderChildren = (unnestArgs.pickedCopies ?? []).filter((copy) => {
+        const identity = getWorktreeHostIdentity(copy)
         const parent = parentIdentities?.get(identity)
-        if (
-          unnestArgs.draggedIds.includes(id) &&
-          !ids.includes(id) &&
+        return (
+          !ids.includes(copy.id) &&
+          sourceGroup.worktreeIds.includes(identity) &&
           parent !== undefined &&
           parseWorkspaceKey(getWorktreeIdFromHostIdentity(parent))?.type === 'folder'
-        ) {
-          ids.push(id)
-        }
-      }
-      if (ids.length === 0) {
+        )
+      })
+      if (ids.length === 0 && folderChildren.length === 0) {
         return
       }
       // Why: dropping a nested card on a reorder line is the un-nest escape hatch; clear only the dragged children.
-      void unnestWorktrees(ids, updateWorktreeLineage)
+      void unnestWorktrees([...ids, ...folderChildren], updateWorktreeLineage)
     },
     [
       cyclicLineageIds,

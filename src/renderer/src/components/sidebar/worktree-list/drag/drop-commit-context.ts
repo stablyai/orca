@@ -56,6 +56,8 @@ export type WorktreeDropCommitContext = {
   clearReorderedWorktreeParents: (args: {
     draggedIds: readonly string[]
     sourceGroupKey: string
+    /** Host-qualified, so a folder workspace's child unnests on its own machine. */
+    pickedCopies?: DraggedWorktreeCopies
   }) => void
   clearWorktreeDrag: () => void
   onMoveWorktreesToStatus: (
