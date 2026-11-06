@@ -20,7 +20,7 @@ import {
 } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeDragGroup } from './worktree-manual-order'
 import type { WorktreeSidebarLineageDropTarget } from './row-state'
-import { useFolderParentEligibility } from '../../workspace-actions/parenting/use-eligible-folder-parents'
+import { getEligibleFolderParentsInState } from '../../workspace-actions/parenting/use-eligible-folder-parents'
 
 export type WorktreeLineageDropCommit = ReturnType<typeof useWorktreeLineageDropCommit>
 
@@ -36,7 +36,6 @@ export function useWorktreeLineageDropCommit(args: {
   const assignWorktreeParent = useAppStore((s) => s.assignWorktreeParent)
   const assignCrossStoreWorktreeParent = useAppStore((s) => s.assignCrossStoreWorktreeParent)
   const updateWorktreeLineage = useAppStore((s) => s.updateWorktreeLineage)
-  const folderParentsOf = useFolderParentEligibility()
   const cyclicLineageIds = useMemo(
     () => getCyclicProjectedWorktreeLineageIds(worktreeLineageById, worktreeMap),
     [worktreeLineageById, worktreeMap]
@@ -79,7 +78,7 @@ export function useWorktreeLineageDropCommit(args: {
           }
         } else {
           // A folder workspace parent, when Set Parent would offer it to this child.
-          parent = folderParentsOf?.(child).find(
+          parent = getEligibleFolderParentsInState(useAppStore.getState(), child).find(
             (folder) => getWorktreeHostIdentity(folder) === parentIdentity
           )
           if (!parent) {
@@ -92,7 +91,6 @@ export function useWorktreeLineageDropCommit(args: {
     },
     [
       cyclicLineageIds,
-      folderParentsOf,
       parentIdentities,
       repoMap,
       rowsByIdentity,
