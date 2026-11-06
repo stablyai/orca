@@ -11,6 +11,7 @@ import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
 import { openAcpAdapterRig, sendHello } from '../acp/acp-structured-adapter.test-support'
 import {
   closeProviderTimelineRigs,
+  messageText,
   SESSION
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { OPENCODE_ACP_DIALECT } from '../acp/acp-dialects/opencode-dialect'
@@ -32,6 +33,7 @@ async function fixture(
   native: unknown,
   options: {
     stale?: boolean
+    start?: boolean
     unavailable?: boolean
     readGate?: Promise<void>
     readStarted?: () => void
@@ -110,7 +112,9 @@ async function fixture(
     db.close()
     rmSync(directory, { recursive: true, force: true })
   })
-  await connection.start({ cwd: directory, mcpServers: [] })
+  if (options.start !== false) {
+    await connection.start({ cwd: directory, mcpServers: [] })
+  }
   return { connection, readFailure, dbPath, agent, child, cwd: directory }
 }
 
@@ -178,7 +182,10 @@ describe('OpenCode ACP native failure recovery', () => {
     if (!spec) {
       throw new Error('OpenCode 2 launch specification missing')
     }
-    const { connection, agent, cwd } = await fixture({ ...quota, retryAfterMs: 60_000 })
+    const { connection, agent, cwd } = await fixture(
+      { ...quota, retryAfterMs: 60_000 },
+      { start: false }
+    )
     const rig = await openAcpAdapterRig({
       spec,
       launch: { cwd },
@@ -202,10 +209,22 @@ describe('OpenCode ACP native failure recovery', () => {
       })
     )
     expect((await rig.rig.turns())[0]?.outcome).toBe('failure')
-    agent.on('session/prompt', (frame) => agent.reply(frame, { stopReason: 'end_turn' }))
+    agent.on('session/prompt', (frame) => {
+      agent.notify('session/update', {
+        sessionId: 'ses-own',
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          content: { type: 'text', text: 'reply after failure' }
+        }
+      })
+      agent.reply(frame, { stopReason: 'end_turn' })
+    })
     await sendHello(rig, 'second')
     await rig.settle()
     expect((await rig.rig.turns()).map((turn) => turn.outcome)).toEqual(['failure', 'success'])
+    expect((await rig.rig.rows()).map((row) => messageText(row.body))).toContain(
+      'reply after failure'
+    )
   })
 
   it.each([
