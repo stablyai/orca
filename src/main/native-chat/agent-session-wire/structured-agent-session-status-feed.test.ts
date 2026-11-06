@@ -1,4 +1,5 @@
 import { savedStructuredAgentSessionStatus } from './structured-agent-session-saved-status'
+import { releasedStructuredStatusSummary } from './structured-agent-session-status-summary'
 import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -147,7 +148,7 @@ describe('the status sink sees the roster the broadcast cache deliberately lacks
 
 it('publishes a saved mode-only change without journal activity and retains it in reconnect summaries', async () => {
   const journal = await openJournal()
-  const sessions = new Map<string, Indexed>([[SESSION, { journal }]])
+  const sessions = new Map<string, Parameters<typeof indexed>[0]>([[SESSION, { journal }]])
   const record: Partial<AgentSessionRecord> = { options: {} }
   const { feed, events, dispose } = feedFor(sessions, record)
   const cursor = journal.cursor()
