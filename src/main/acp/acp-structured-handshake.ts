@@ -24,6 +24,7 @@ import type { AcpStructuredOptions } from './acp-structured-options'
 import type { AcpStructuredPrompts } from './acp-structured-prompts'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 import { AcpStructuredTurns, type AcpStructuredTurnsDeps } from './acp-structured-turns'
+import { acpNoModelSelected } from './acp-model-command'
 import {
   assertAcpStartingSession,
   isAcpReadySession,
@@ -146,6 +147,10 @@ export async function initializeAcpStructuredSession(
       started.kind === 'new' ? 'new' : 'loaded'
     )
   }
+  // A load restores the conversation's own model, so only a new session runs the launch choice.
+  if (started.kind === 'new' && launch.launchModel) {
+    options.adoptLaunchModel(launch.launchModel)
+  }
   const link: AgentSessionProviderHandleLink = {
     linkId:
       deps.mintLinkId?.() ?? `${spec.agent}-${acquire.fence}-${started.sessionId}`.slice(0, 128),
@@ -188,7 +193,8 @@ export async function initializeAcpStructuredSession(
       agentName,
       now,
       settle: onSettled,
-      sessionLost: input.onSessionLost
+      sessionLost: input.onSessionLost,
+      modelRefusal: (error) => acpNoModelSelected(spec.dialect, options, error)
     })
   })
   if (!isAcpReadySession(child)) {

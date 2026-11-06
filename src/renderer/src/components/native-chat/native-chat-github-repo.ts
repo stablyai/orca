@@ -14,6 +14,7 @@ import { FILE_LINK_CONTEXT_INPUT_KEYS } from './native-chat-file-link'
 import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId, isUnresolvedOwnerHostId } from '../../../../shared/execution-host'
 import {
+  githubHostFromIdentityKey,
   githubRepoIdentityKey,
   repoUpstreamIdentityKey
 } from '../../../../shared/github/repository-identity-key'
@@ -24,7 +25,7 @@ import {
 
 export type NativeChatGitHubRepo = {
   repo: Repo
-  /** Origin then upstream identity keys; main only answers for these remotes. */
+  /** Origin then upstream identity keys; main answers previews for any repo on their hosts. */
   identityKeys: readonly string[]
   /** Where bare `#123` points: upstream unless the repo prefers origin. github.com only. */
   referenceRepo: GitHubRepoReference | null
@@ -138,4 +139,13 @@ export function githubLinkBelongsToRepo(
   slug: { owner: string; repo: string; host?: string }
 ): boolean {
   return repo.identityKeys.includes(githubRepoIdentityKey(slug))
+}
+
+/** A link to any repo on a host the chat repo's remotes use, which main answers previews for. */
+export function githubLinkOnRepoHost(
+  repo: NativeChatGitHubRepo,
+  slug: { owner: string; repo: string; host?: string }
+): boolean {
+  const host = githubHostFromIdentityKey(githubRepoIdentityKey(slug))
+  return repo.identityKeys.some((key) => githubHostFromIdentityKey(key) === host)
 }

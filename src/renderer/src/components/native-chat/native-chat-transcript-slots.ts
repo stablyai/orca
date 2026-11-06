@@ -21,6 +21,7 @@ import {
 } from './native-chat-row-height-estimate'
 import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat/native-chat-resolution-receipt'
 import type { NativeChatTurnDiff } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
+import type { NativeChatOpenedPullRequest } from '../../../../shared/native-chat/tools/native-chat-opened-pull-requests'
 import {
   NO_NATIVE_CHAT_SUBAGENT_CHOICES,
   NO_NATIVE_CHAT_SUBAGENT_SECTIONS,
@@ -73,6 +74,8 @@ export type NativeChatMessageSlot = {
    *  subagent sections. */
   endsResponse?: boolean
   turnDiff: NativeChatTurnDiff | undefined
+  /** Pull requests this row's turn opened, drawn after it. */
+  openedPullRequests?: readonly NativeChatOpenedPullRequest[]
   /** A closed roster list hides child sections regardless of their individual expansion state. */
   subagentRoster: NativeChatSubagentRosterState | undefined
   /** Subagent sections this row sits inside; 0 is the conversation. */
@@ -95,6 +98,7 @@ export type NativeChatTranscriptSlotsInput = {
     completedByTurn: Readonly<Record<string, NativeChatTurnStatus>>
   }
   turnDiffs: ReadonlyMap<string, NativeChatTurnDiff>
+  openedPullRequests?: ReadonlyMap<string, readonly NativeChatOpenedPullRequest[]>
   /** Turns the reader opened. Everything else with a duration stays folded. */
   expandedTurnKeys: ReadonlySet<string>
   isWorking: boolean
@@ -118,6 +122,7 @@ export function buildNativeChatTranscriptSlots(
     receipts,
     turnStatuses,
     turnDiffs,
+    openedPullRequests: openedPullRequestsByTurn,
     expandedTurnKeys,
     isWorking,
     lifecycleWorking,
@@ -168,15 +173,15 @@ export function buildNativeChatTranscriptSlots(
     const receipt = receipts.get(message.id)
     const bar = turnKey === undefined ? undefined : bars.get(turnKey)
     // A turn's bar draws at its first row, so a message folded into it (a steer) carries none.
-    const candidateStatus =
+    const status =
       turnKey === undefined || bar?.index !== index
         ? undefined
         : turnKey === liveTurnKey
-          ? turnStatuses.active
-          : turnStatuses.completedByTurn[turnKey]
-    const status = candidateStatus ?? undefined
-    const turnDiff =
-      turnKey && lastRowByTurn.get(turnKey) === index ? turnDiffs.get(turnKey) : undefined
+          ? (turnStatuses.active ?? undefined)
+          : (turnStatuses.completedByTurn[turnKey] ?? undefined)
+    const endsTurn = turnKey !== undefined && lastRowByTurn.get(turnKey) === index
+    const turnDiff = endsTurn ? turnDiffs.get(turnKey) : undefined
+    const openedPullRequests = endsTurn ? openedPullRequestsByTurn?.get(turnKey) : undefined
     const folded = foldedRows.has(index)
     // Exclude nondrawing folded rows so virtualized estimates cannot leave empty gaps.
     const activeTurnIsWorking = isNativeChatRowInLiveWorkingTurn(
@@ -191,7 +196,12 @@ export function buildNativeChatTranscriptSlots(
         (message.agentStart || nativeChatRowRendersContent(message.blocks)) &&
         message.id !== liveReasoningId)
     const roster = sectionSlots.rosterAt(message.id)
-    if (drawsRow || status !== undefined || turnDiff !== undefined) {
+    if (
+      drawsRow ||
+      status !== undefined ||
+      turnDiff !== undefined ||
+      openedPullRequests !== undefined
+    ) {
       slots.push({
         kind: 'message',
         message,
@@ -205,6 +215,7 @@ export function buildNativeChatTranscriptSlots(
         drawsMessage: drawsRow,
         turnFolds: turnKey !== undefined && foldableTurnKeys.has(turnKey),
         turnDiff,
+        openedPullRequests,
         subagentRoster: roster,
         depth: 0,
         estimatedHeight: estimateNativeChatRowHeight(
@@ -214,6 +225,7 @@ export function buildNativeChatTranscriptSlots(
             hasStatus: status !== undefined,
             hasTurnDiff: turnDiff !== undefined,
             turnDiffFileCount: turnDiff?.files.length,
+            openedPullRequestCount: openedPullRequests?.length,
             folded
           },
           typography
@@ -287,15 +299,14 @@ export function nativeChatSlotIndexOf(
   slots: readonly NativeChatTranscriptSlot[],
   messageId: string | undefined
 ): number {
-  if (messageId === undefined) {
-    return -1
-  }
-  return slots.findIndex(
-    (slot) =>
-      slot.kind === 'message' &&
-      (slot.message.id === messageId ||
-        slot.workRun?.some((member) => member.id === messageId) === true)
-  )
+  return messageId === undefined
+    ? -1
+    : slots.findIndex(
+        (slot) =>
+          slot.kind === 'message' &&
+          (slot.message.id === messageId ||
+            slot.workRun?.some((member) => member.id === messageId) === true)
+      )
 }
 
 /** Place queued and unjournaled not-sent messages after live activity, outside its turn. */

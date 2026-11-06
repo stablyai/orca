@@ -705,7 +705,9 @@
         "cb4d287238": "서버 이름",
         "3affe7de3a": "이 브라우저가 연결할 수 있는 Orca 서버의 페어링 URL을 붙여넣습니다.",
         "e3bcd082ac": "Orca에 연결",
-        "mobileScopeRejected": "이 QR 코드는 제한된(모바일) 액세스 권한만 제공합니다. 전체 웹 앱을 사용하려면 설정 → 원격 Orca 서버 → 이 Orca 서버 공유 → 새 링크에서 브라우저 액세스 링크를 여세요."
+        "mobileScopeRejected": "이 QR 코드는 제한된(모바일) 액세스 권한만 제공합니다. 전체 웹 앱을 사용하려면 설정 → 원격 Orca 서버 → 이 Orca 서버 공유 → 새 링크에서 브라우저 액세스 링크를 여세요.",
+        "replaceSavedServer": "이 링크는 \"{{name}}\"({{endpoint}})과(와) 다른 서버에 연결합니다. 아래 엔드포인트를 신뢰하는 경우에만 연결하세요.",
+        "keepSavedServer": "저장된 서버 유지"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "이 실행 호스트에서는 Agent 세션 기록을 사용할 수 없습니다.",
@@ -2517,7 +2519,6 @@
         "9cd11ba218": "Jira",
         "11a828abf8": "GitLab",
         "acef77f7ca": "GitHub",
-        "524f095d55": "리뷰 필요",
         "7698af5263": "내 항목",
         "94f0339621": "나에게 할당됨",
         "c2268a9982": "모두",
