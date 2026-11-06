@@ -100,6 +100,7 @@ jobs:
   comparison:
     needs: [bundle, measure]
     runs-on: ubuntu-slim
+    timeout-minutes: 180
     permissions:
       contents: read
       actions: read
