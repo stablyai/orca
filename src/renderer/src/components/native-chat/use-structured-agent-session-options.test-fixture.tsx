@@ -12,7 +12,7 @@ type OptionsFixtureMocks = {
   enqueue: Mock
   pick: Mock
   target: RuntimeClientTarget
-  agent: 'codex' | 'claude' | 'pi' | 'antigravity' | 'opencode2'
+  agent: 'codex' | 'claude' | 'pi' | 'antigravity' | 'opencode2' | 'omp'
   hold: Mock<
     (
       sessionId: string,
@@ -30,7 +30,7 @@ type OptionsFixtureMocks = {
 const mocks: OptionsFixtureMocks = vi.hoisted(() => {
   const selection: {
     target: RuntimeClientTarget
-    agent: 'codex' | 'claude' | 'pi' | 'antigravity' | 'opencode2'
+    agent: 'codex' | 'claude' | 'pi' | 'antigravity' | 'opencode2' | 'omp'
   } = {
     target: { kind: 'local' },
     agent: 'codex'
@@ -68,7 +68,9 @@ vi.mock('@/runtime/structured-agent-session-host-capability', async () => {
       capability: string
     ) => {
       const state = actual.useStructuredAgentSessionHostCapabilityState(target, capability)
-      return mocks.effortDiscovery && capability === 'agent-session.model-catalog.model-efforts.v1'
+      return target &&
+        mocks.effortDiscovery &&
+        capability === 'agent-session.model-catalog.model-efforts.v1'
         ? 'supported'
         : state
     },
@@ -181,7 +183,7 @@ type RenderProps = {
   hidden?: boolean
   launchSeedOptions?: Record<string, string>
   worktree?: string
-  agent?: 'claude' | 'codex' | 'pi' | 'antigravity' | 'opencode2'
+  agent?: 'claude' | 'codex' | 'pi' | 'antigravity' | 'opencode2' | 'omp'
   providerStarting?: boolean
   paired?: boolean
   /** Pass the production presentation scope, which is closed while transport is disabled. */

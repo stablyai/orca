@@ -12,6 +12,10 @@ import { AcpScriptedAgent } from './acp-scripted-agent.test-support'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import { openCodeAcpAccountBinding } from '../opencode/opencode-structured-account-home'
 import recordedEfforts from './fixtures/opencode-v2.0.21-model-efforts.json'
+import {
+  SetSessionConfigOptionRequestSchema,
+  type SessionConfigOption
+} from './generated/acp-protocol.generated'
 // Bypass the app's managed-account service for this fixture.
 const OPENCODE: AcpLaunchSpec = {
   ...acpLaunchSpecFor('opencode')!,
@@ -100,6 +104,78 @@ function scriptedOpenCode2(canDelete: boolean): {
 }
 
 describe('ACP model catalog probes', () => {
+  it('discovers the selected OMP model menu without borrowing the startup model menu', async () => {
+    const { agent, deps } = scriptedOpenCode2(false)
+    const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-omp-efforts-'))
+    const config = (model: string): SessionConfigOption[] => [
+      {
+        id: 'model',
+        name: 'Model',
+        category: 'model',
+        type: 'select',
+        currentValue: model,
+        options: ['provider/default', 'provider/target', 'provider/other'].map((value) => ({
+          value,
+          name: value
+        }))
+      },
+      {
+        id: 'thinking',
+        name: 'Thinking',
+        category: 'thought_level',
+        type: 'select',
+        currentValue: 'low',
+        options: (model === 'provider/target'
+          ? ['off', 'auto', 'low', 'medium', 'high', 'xhigh', 'max']
+          : ['low', 'high', 'max']
+        ).map((value) => ({ value, name: value }))
+      }
+    ]
+    agent.on('session/new', (frame) =>
+      agent.reply(frame, { sessionId: 'probe-session', configOptions: config('provider/default') })
+    )
+    agent.on('session/set_config_option', (frame) => {
+      const { value } = SetSessionConfigOptionRequestSchema.parse(frame.params)
+      agent.reply(frame, { configOptions: config(String(value)) })
+    })
+    try {
+      const probe = createAcpModelCatalogProbe(acpLaunchSpecFor('omp')!, {
+        ...deps,
+        dataDirectory,
+        resolveCommand: () => '/opt/omp/bin/omp',
+        probeVersion: async () => ({ version: '18.17.0' })
+      })
+      const home = { variable: 'PI_CODING_AGENT_DIR', path: '/homes/omp' }
+      const initial = await probe(home, { workspacePath: '/work/project' })
+      expect(initial.models.find((model) => model.id === 'provider/target')).toMatchObject({
+        efforts: [],
+        effortsKnown: false
+      })
+      const selected = await probe(home, {
+        workspacePath: '/work/project',
+        selectedModels: ['provider/target']
+      })
+      const target = selected.models.find((model) => model.id === 'provider/target')!
+      expect(target.efforts.map((effort) => effort.value)).toEqual([
+        'off',
+        'auto',
+        'low',
+        'medium',
+        'high',
+        'xhigh',
+        'max'
+      ])
+      expect(target.effortsKnown).toBeUndefined()
+      expect(selected.models.find((model) => model.id === 'provider/other')).toMatchObject({
+        efforts: [],
+        effortsKnown: false
+      })
+      expect(await readdir(join(dataDirectory, 'acp-listing-sessions', 'omp'))).toEqual([])
+    } finally {
+      await rm(dataDirectory, { recursive: true, force: true })
+    }
+  })
+
   it('keeps a slow startup listing when effort discovery uses its full budget', async () => {
     vi.useFakeTimers()
     try {

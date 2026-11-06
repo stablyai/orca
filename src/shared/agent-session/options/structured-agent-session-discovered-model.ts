@@ -10,12 +10,15 @@ export function structuredModelEfforts(
   return [...model.efforts, ...(model.chatEfforts ?? [])]
 }
 
+/** Builds the effort picker, withholding empty menus and unconfirmed model-specific choices. */
 function effortOption(
   model: AgentSessionOptionsResult['models'][number],
   agent: AgentType
 ): CatalogOption | null {
-  // Pi menus are exact; other agents (OMP's recorded menus) still offer unconfirmed choices.
-  if ((agent === 'pi' && model.effortsKnown === false) || model.efforts.length === 0) {
+  if (
+    ((agent === 'pi' || usesModelSpecificAcpEfforts(agent)) && model.effortsKnown === false) ||
+    model.efforts.length === 0
+  ) {
     return null
   }
   return {

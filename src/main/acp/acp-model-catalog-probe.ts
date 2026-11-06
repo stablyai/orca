@@ -37,6 +37,7 @@ import type {
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 import { AcpAgentError } from './acp-errors'
 import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
+import { usesModelSpecificAcpEfforts } from '../../shared/agent-session/options/agent-model-catalog-ownership'
 
 /** Session-free capability boundary: no session methods are exposed. */
 export type AcpModelCatalogConnection = {
@@ -149,7 +150,7 @@ export function createAcpModelCatalogProbe(
               workspace,
               operation,
               options?.selectedModels,
-              spec.dialect.effortChangesModel ? ready : undefined
+              usesModelSpecificAcpEfforts(spec.agent) ? ready : undefined
             ),
           run
         )
@@ -190,6 +191,7 @@ export function createAcpModelCatalogProbe(
 const folderlessListing = (spec: AcpLaunchSpec) =>
   new AgentModelCatalogListingStoppedError(`${spec.agent} lists in a chat's folder`)
 
+/** Lists models from a disposable session and resolves unknown effort menus for selected targets. */
 async function readSessionModels(
   spec: AcpLaunchSpec,
   listing: AcpSessionModelDiscovery,
@@ -223,9 +225,13 @@ async function readSessionModels(
   let models = options.read().models
   const attemptedModels: string[] = []
   try {
-    if (spec.dialect.effortChangesModel) {
+    if (usesModelSpecificAcpEfforts(spec.agent)) {
       const byId = new Map(models.map((model) => [model.id, model]))
-      const targets = selectedModels ? selectedModels.flatMap((id) => byId.get(id) ?? []) : models
+      const targets = selectedModels
+        ? selectedModels.flatMap((id) => byId.get(id) ?? [])
+        : spec.dialect.effortChangesModel
+          ? models
+          : []
       const sweep = async () => {
         for (const model of targets) {
           if (stopped) {
