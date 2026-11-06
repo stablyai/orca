@@ -191,3 +191,26 @@ it('commits the original-message digest when a drained conversation ends with on
     db.close()
   }
 })
+
+it('opens a cold reader and searches committed rows while a writer batch remains uncommitted', async () => {
+  root = await mkdtemp(join(tmpdir(), 'ss-reader-independent-'))
+  const path = join(root, 'index.sqlite')
+  const { SessionSearchStore } = await import('./session-search-store')
+  const { addSyntheticSession } = await import('./session-search-engine-test-fixture')
+  const writer = new SessionSearchStore(path)
+  try {
+    addSyntheticSession(writer.connection, { id: 1, text: 'independentneedle' })
+    writer.connection.exec('BEGIN IMMEDIATE')
+    writer.connection.prepare("UPDATE sessions SET title = 'uncommitted' WHERE id = 1").run()
+    readers = new SessionSearchReaders(path, null)
+    expect((await readers.query({ query: 'independentneedle' })).result).toMatchObject({
+      kind: 'results',
+      hits: [{ sessionId: '1', title: 'fixture' }]
+    })
+  } finally {
+    if (writer.connection.isTransaction) {
+      writer.connection.exec('ROLLBACK')
+    }
+    writer.close()
+  }
+})
