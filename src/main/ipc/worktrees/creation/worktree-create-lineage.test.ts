@@ -116,14 +116,26 @@ describe('recordWorkspaceLineageForCreatedWorktree', () => {
   })
   it('nests under the task parent a note names when no parent was picked', () => {
     const store = createStore({})
-    const parent = createdWorktree({ id: PARENT_ID, instanceId: 'parent-instance' })
+    const parent = {
+      ...createdWorktree({ id: PARENT_ID, instanceId: 'parent-instance', path: '/repos/parent' }),
+      parentWorktreeId: null,
+      childWorktreeIds: [],
+      lineage: null,
+      git: {
+        path: '/repos/parent',
+        head: 'abc123',
+        branch: 'refs/heads/parent',
+        isBare: false,
+        isMainWorktree: false
+      }
+    }
 
     const result = record(store, { comment: 'review task_7Kq2' }, createdWorktree(), {
       kind: 'lineage',
       parent: {
         type: 'worktree',
         workspaceKey: worktreeWorkspaceKey(PARENT_ID),
-        worktree: parent as never,
+        worktree: parent,
         instanceId: 'parent-instance'
       },
       origin: 'orchestration',
