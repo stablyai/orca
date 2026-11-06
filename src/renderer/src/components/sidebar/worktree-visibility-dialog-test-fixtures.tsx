@@ -8,6 +8,7 @@ import { type Root, createRoot } from 'react-dom/client'
 
 import { afterEach, beforeEach, expect, vi, type Mock } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
+import type { RepoSlice } from '@/store/repos/repo-state'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -20,8 +21,8 @@ type VisibilityDialogMocks = {
     closeModal: Mock
     openSettingsTarget: Mock
     openSettingsPage: Mock
-    repos: unknown[]
-    updateRepo: Mock
+    repos: Repo[]
+    updateRepo: Mock<RepoSlice['updateRepo']>
     fetchWorktrees: Mock
     detectedWorktreesByRepo: Record<string, unknown>
     settings: Record<string, unknown>
@@ -29,19 +30,19 @@ type VisibilityDialogMocks = {
   }
 }
 
-const mocks: VisibilityDialogMocks = vi.hoisted(() => ({
+const mocks = vi.hoisted((): VisibilityDialogMocks => ({
   state: {
-    activeModal: 'worktree-visibility' as string | null,
-    modalData: { repoId: 'repo-1' } as Record<string, unknown>,
+    activeModal: 'worktree-visibility',
+    modalData: { repoId: 'repo-1' },
     closeModal: vi.fn(),
     openSettingsTarget: vi.fn(),
     openSettingsPage: vi.fn(),
-    repos: [] as unknown[],
-    updateRepo: vi.fn(),
+    repos: [],
+    updateRepo: vi.fn<RepoSlice['updateRepo']>(),
     fetchWorktrees: vi.fn(),
-    detectedWorktreesByRepo: {} as Record<string, unknown>,
-    settings: {} as Record<string, unknown>,
-    worktreeVisibilityDefaultsByHost: {} as Record<string, unknown>
+    detectedWorktreesByRepo: {},
+    settings: {},
+    worktreeVisibilityDefaultsByHost: {}
   }
 }))
 
@@ -128,7 +129,7 @@ export function makeWorktree(overrides: Partial<DetectedWorktree> = {}): Detecte
     selectedCheckout: false,
     visible: false,
     ...overrides
-  } as DetectedWorktree
+  }
 }
 
 export function makeDetected(
@@ -155,22 +156,20 @@ beforeEach(() => {
   mocks.state.detectedWorktreesByRepo = { 'repo-1': makeDetected() }
   mocks.state.settings = {}
   mocks.state.worktreeVisibilityDefaultsByHost = {}
-  mocks.state.updateRepo.mockImplementation(
-    async (repoId: string, updates: Record<string, unknown>) => {
-      const repo = (mocks.state.repos as Repo[]).find((candidate) => candidate.id === repoId)
-      if (!repo) {
-        return false
-      }
-      for (const [key, value] of Object.entries(updates)) {
-        if (value === null) {
-          delete (repo as unknown as Record<string, unknown>)[key]
-        } else {
-          ;(repo as unknown as Record<string, unknown>)[key] = value
-        }
-      }
-      return true
+  mocks.state.updateRepo.mockImplementation(async (repoId, updates) => {
+    const repo = mocks.state.repos.find((candidate) => candidate.id === repoId)
+    if (!repo) {
+      return false
     }
-  )
+    for (const [key, value] of Object.entries(updates)) {
+      if (value === null) {
+        Reflect.deleteProperty(repo, key)
+      } else {
+        Object.assign(repo, { [key]: value })
+      }
+    }
+    return true
+  })
   mocks.state.fetchWorktrees.mockResolvedValue(true)
   container = document.createElement('div')
   document.body.appendChild(container)
@@ -204,13 +203,13 @@ export function deferred<T>() {
 
 export function buttonWithText(text: string): HTMLButtonElement {
   // Recovery buttons share labels with source segments; exclude source controls.
-  const button = [...document.querySelectorAll('button:not([data-visibility])')].find(
-    (candidate) => (candidate.textContent ?? '').trim() === text
-  )
+  const button = [
+    ...document.querySelectorAll<HTMLButtonElement>('button:not([data-visibility])')
+  ].find((candidate) => (candidate.textContent ?? '').trim() === text)
   if (!button) {
     throw new Error(`No button with text "${text}"`)
   }
-  return button as HTMLButtonElement
+  return button
 }
 
 export function sourceSegment(label: string, visibility: 'show' | 'hide'): HTMLButtonElement {

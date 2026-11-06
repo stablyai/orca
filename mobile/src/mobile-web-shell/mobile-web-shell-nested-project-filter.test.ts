@@ -6,7 +6,7 @@ import {
 } from '../../../src/shared/endpoint-catalog-adoption'
 import { buildProjectGroupingIndex } from '../../../src/shared/project-section-grouping'
 import { buildMobileProjectSectionCatalog } from '../../../src/shared/mobile-project-sections-contract'
-import { publishMobileProjectSections } from '@project-grouping-test-host/main/runtime/mobile-project-sections-snapshot'
+import { publishMobileProjectSections } from '@project-grouping-test-host/main/runtime/sidebar-inputs/mobile-project-sections-snapshot'
 import { readServedProjectSections } from '../worktree/project-sections-operations'
 import { buildProjectSectionCatalog } from '../worktree/project-section-catalog'
 import { filterWorktrees } from '../worktree/workspace-list-sections'
