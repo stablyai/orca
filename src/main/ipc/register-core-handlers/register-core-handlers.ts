@@ -62,11 +62,9 @@ import { registerShellHandlers } from '../shell'
 import { registerPetHandlers } from '../pets/pet'
 import { registerPluginHandlers } from '../plugins'
 import { registerUIHandlers, setTrustedUIRendererWebContentsId } from '../ui'
-import { registerEmulatorFrameStreamHandlers } from '../emulator-frame-stream'
-import { registerEmulatorVideoStreamHandlers } from '../emulator-video-stream'
-import { registerEmulatorScrcpyTouchHandler } from '../emulator-scrcpy-touch'
-import { registerEmulatorScrcpyKeyboardHandler } from '../emulator-scrcpy-keyboard'
+import { registerEmulatorHandlers } from './register-emulator-handlers'
 import { registerSpeechHandlers } from '../speech'
+import { registerVoiceControlHandlers } from '../voice-control'
 import { registerTerminalRenderDesyncEvidenceHandler } from '../terminal-render-desync-evidence'
 import { registerOrcaProfileHandlers } from '../profiles/orca-profiles'
 import { registerCodexAccountHandlers } from '../codex-accounts'
@@ -250,10 +248,7 @@ export function registerCoreHandlers(
   registerPetHandlers()
   registerSessionHandlers(store, runtime)
   registerUIHandlers(store, { isDashboardPopoutRenderer })
-  registerEmulatorFrameStreamHandlers()
-  registerEmulatorVideoStreamHandlers()
-  registerEmulatorScrcpyTouchHandler()
-  registerEmulatorScrcpyKeyboardHandler()
+  registerEmulatorHandlers()
   registerWorkspaceSpaceHandlers(store)
   registerWorkspacePortHandlers(store)
   registerLinkPreviewHandlers()
@@ -307,4 +302,5 @@ export function registerCoreHandlers(
   })
   registerUpdaterHandlers(store)
   registerSpeechHandlers(store)
+  registerVoiceControlHandlers(store, runtime)
 }

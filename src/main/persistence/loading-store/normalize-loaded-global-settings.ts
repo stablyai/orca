@@ -1,6 +1,9 @@
 import { normalizeAgentDefaultSurface } from '../../../shared/native-chat/native-chat-providers'
 import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat/native-chat-appearance-settings'
-import { getDefaultVoiceSettings } from '../../../shared/constants'
+import {
+  getDefaultVoiceControlSettings,
+  getDefaultVoiceSettings
+} from '../../../shared/constants'
 import { normalizePRBotAuthorOverrides } from '../../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { normalizeTerminalQuickCommands } from '../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { normalizeOpenInApplications } from '../../../shared/open-in-applications'
@@ -181,7 +184,11 @@ export function normalizeLoadedGlobalSettings(
     ),
     voice: {
       ...getDefaultVoiceSettings(),
-      ...parsed.settings?.voice
+      ...parsed.settings?.voice,
+      control: {
+        ...getDefaultVoiceControlSettings(),
+        ...parsed.settings?.voice?.control
+      }
     }
   }
 }

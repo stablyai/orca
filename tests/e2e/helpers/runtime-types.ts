@@ -69,6 +69,10 @@ declare global {
   interface Window {
     __store?: AppStore
     __dictationMeterE2E?: { publish(meter: DictationMeterState): void }
+    // Why: voice-control-session.ts exposes the realtime client event channel as a
+    // build-gated seam (same idiom as __dictationMeterE2E) so specs can inject
+    // synthetic provider events without a live microphone.
+    __voiceControlE2E?: { sendClientEvent(event: Record<string, unknown>): void }
     __paneManagers?: Map<string, PaneManagerLike>
     __REACT_DEVTOOLS_GLOBAL_HOOK__?: ReactCommitHook
     __tabsRenderedPerCommit?: number[]
