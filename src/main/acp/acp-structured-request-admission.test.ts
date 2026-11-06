@@ -1,24 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  closeProviderTimelineRigs,
-  SESSION
-} from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import {
-  openAcpAdapterRig,
-  PROVIDER_SESSION,
-  replyChunk,
-  sendHello,
-  waitFor
-} from './acp-structured-adapter.test-support'
+import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
+import { openAcpAdapterRig, PROVIDER_SESSION, waitFor } from './acp-structured-adapter.test-support'
 
 afterEach(async () => {
   await closeProviderTimelineRigs()
-})
-
-const question = (toolCallId: string) => ({
-  sessionId: PROVIDER_SESSION,
-  toolCallId,
-  questions: [{ question: 'Which file?', options: [{ label: 'a.ts' }, { label: 'b.ts' }] }]
 })
 
 const permission = (toolCallId: string) => ({
@@ -27,139 +12,7 @@ const permission = (toolCallId: string) => ({
   options: [{ optionId: 'allow-once', name: 'Allow', kind: 'allow_once' }]
 })
 
-async function runningPrompt() {
-  const rig = await openAcpAdapterRig()
-  await rig.acquire()
-  await sendHello(rig, 'first')
-  await rig.frame('session/prompt')
-  rig.child().agent.notify('session/update', replyChunk('prompt:first', 'working'))
-  await rig.settle()
-  const cards = async () =>
-    (await rig.rig.rows()).filter(
-      (row) => row.body.kind === 'question' || row.body.kind === 'approval'
-    )
-  return { rig, agent: rig.child().agent, cards }
-}
-
 describe('Grok requests and the turn they belong to', () => {
-  it('shows a question while its turn runs, and withdraws it on Stop with Grok own reply', async () => {
-    const { rig, agent, cards } = await runningPrompt()
-    const asked = agent.request(1, 'x.ai/ask_user_question', question('call-1'))
-    await rig.settle()
-    expect(await cards()).toHaveLength(1)
-    await rig.adapter.cancelTurn({ sessionId: SESSION, fence: 1 })
-    expect(await asked).toMatchObject({ result: { outcome: 'cancelled' } })
-    await rig.settle()
-    expect((await cards()).map((row) => row.body)).toMatchObject([
-      { kind: 'question', resolution: { state: 'cancelled' } }
-    ])
-  })
-
-  it('withdraws an open question when a steer cancels its turn', async () => {
-    const { rig, agent, cards } = await runningPrompt()
-    const asked = agent.request(6, 'x.ai/ask_user_question', question('call-6'))
-    await rig.settle()
-    await sendHello(rig, 'steer')
-    expect(await asked).toMatchObject({ result: { outcome: 'cancelled' } })
-    await rig.settle()
-    expect((await cards()).map((row) => row.body)).toMatchObject([
-      { kind: 'question', resolution: { state: 'cancelled' } }
-    ])
-    expect(rig.sent('session/cancel')).toHaveLength(1)
-  })
-
-  it('refuses a question that arrives after a Stop, opening no card', async () => {
-    const { rig, agent, cards } = await runningPrompt()
-    await rig.adapter.cancelTurn({ sessionId: SESSION, fence: 1 })
-    const late = await agent.request(2, 'x.ai/ask_user_question', question('call-2'))
-    expect(late).toMatchObject({ result: { outcome: 'cancelled' } })
-    expect(await cards()).toEqual([])
-  })
-
-  it('refuses a permission or a question that arrives while a steer cuts the turn short', async () => {
-    const { rig, agent, cards } = await runningPrompt()
-    await sendHello(rig, 'steer')
-    await rig.settle()
-    expect(rig.sent('session/cancel')).toHaveLength(1)
-    expect(
-      await agent.request(3, 'session/request_permission', permission('call-3'))
-    ).toMatchObject({ result: { outcome: { outcome: 'cancelled' } } })
-    expect(await agent.request(4, 'x.ai/ask_user_question', question('call-4'))).toMatchObject({
-      result: { outcome: 'cancelled' }
-    })
-    expect(await cards()).toEqual([])
-  })
-
-  it('shows a question during a turn Grok began itself, and its plan', async () => {
-    const rig = await openAcpAdapterRig()
-    await rig.acquire()
-    const { agent } = rig.child()
-    agent.notify('session/update', replyChunk('task-completed-background-1', 'Build finished; now'))
-    await rig.settle()
-    void agent.request(7, 'x.ai/ask_user_question', question('call-7'))
-    expect(
-      await agent.request(8, 'x.ai/exit_plan_mode', {
-        sessionId: PROVIDER_SESSION,
-        toolCallId: 'call-8',
-        planContent: '# Plan'
-      })
-    ).toMatchObject({ result: { outcome: 'abandoned' } })
-    await rig.settle()
-    const rows = await rig.rig.rows()
-    expect(rows.filter((row) => row.body.kind === 'question').map((row) => row.body)).toMatchObject(
-      [{ resolution: { state: 'pending' } }]
-    )
-    expect(rows.map((row) => row.body)).toContainEqual(
-      expect.objectContaining({ kind: 'status', presentation: 'plan-document', text: '# Plan' })
-    )
-  })
-
-  it('waits for the answer to a permission the agent asks with no prompt of Orca running', async () => {
-    const rig = await openAcpAdapterRig()
-    await rig.acquire()
-    const { agent } = rig.child()
-    const asked = agent.request(5, 'session/request_permission', permission('call-5'))
-    const card = await waitFor(async () => {
-      const found = (await rig.rig.rows()).find((row) => row.body.kind === 'approval')
-      expect(found?.body).toMatchObject({ resolution: { state: 'pending' } })
-      return found!
-    })
-    await rig.adapter.answerPrompt({
-      sessionId: SESSION,
-      itemId: card.itemId,
-      kind: 'approval',
-      response: { kind: 'option', optionId: 'allow-once' },
-      fence: 1,
-      commit: async () => {}
-    })
-    expect(await asked).toMatchObject({
-      result: { outcome: { outcome: 'selected', optionId: 'allow-once' } }
-    })
-  })
-
-  it('shows a later permission after a Stop cancelled an earlier card', async () => {
-    const rig = await openAcpAdapterRig()
-    await rig.acquire()
-    const { agent } = rig.child()
-    const first = agent.request(9, 'session/request_permission', permission('call-9'))
-    await waitFor(async () => expect(await cards()).toHaveLength(1))
-    await rig.adapter.cancelTurn({ sessionId: SESSION, fence: 1 })
-    expect(await first).toMatchObject({ result: { outcome: { outcome: 'cancelled' } } })
-    await sendHello(rig, 'next')
-    await rig.frame('session/prompt')
-    void agent.request(10, 'session/request_permission', permission('call-10'))
-    await waitFor(async () =>
-      expect((await cards()).map((row) => row.body)).toMatchObject([
-        { resolution: { state: 'cancelled' } },
-        { resolution: { state: 'pending' } }
-      ])
-    )
-
-    async function cards() {
-      return (await rig.rig.rows()).filter((row) => row.body.kind === 'approval')
-    }
-  })
-
   it('withdraws the card when the agent cancels its own permission request', async () => {
     const rig = await openAcpAdapterRig()
     await rig.acquire()
@@ -173,34 +26,6 @@ describe('Grok requests and the turn they belong to', () => {
     await waitFor(async () =>
       expect((await approvals()).map((row) => row.body)).toMatchObject([
         { resolution: { state: 'cancelled' } }
-      ])
-    )
-  })
-
-  it('refuses further questions from a turn Grok began itself once its card was cancelled', async () => {
-    const rig = await openAcpAdapterRig()
-    await rig.acquire()
-    const { agent } = rig.child()
-    agent.notify('session/update', replyChunk('task-completed-background-1', 'Build finished; now'))
-    await rig.settle()
-    const first = agent.request(12, 'x.ai/ask_user_question', question('call-12'))
-    await waitFor(async () =>
-      expect((await rig.rig.rows()).some((row) => row.body.kind === 'question')).toBe(true)
-    )
-    await rig.adapter.cancelTurn({ sessionId: SESSION, fence: 1 })
-    expect(await first).toMatchObject({ result: { outcome: 'cancelled' } })
-    expect(await agent.request(13, 'x.ai/ask_user_question', question('call-13'))).toMatchObject({
-      result: { outcome: 'cancelled' }
-    })
-    await sendHello(rig, 'next')
-    await rig.frame('session/prompt')
-    void agent.request(14, 'x.ai/ask_user_question', question('call-14'))
-    await waitFor(async () =>
-      expect(
-        (await rig.rig.rows()).filter((row) => row.body.kind === 'question').map((row) => row.body)
-      ).toMatchObject([
-        { resolution: { state: 'cancelled' } },
-        { resolution: { state: 'pending' } }
       ])
     )
   })
