@@ -10,6 +10,11 @@ const PE = Uint8Array.of(0x4d, 0x5a, 0x90, 0)
 const PDF = new TextEncoder().encode('%PDF-1.7\n')
 const PNG = Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d)
 const UTF16 = Uint8Array.of(0xff, 0xfe, 0x57, 0, 0x72, 0)
+const ZIP = Uint8Array.of(0x50, 0x4b, 0x03, 0x04, 0x14, 0, 0, 0)
+// Archive headers with no NUL byte in view: content must still not read as text.
+const ZIP_NO_NUL = Uint8Array.of(0x50, 0x4b, 0x03, 0x04, 0x14, 0x08, 0x08, 0x08)
+const GZIP_NO_NUL = Uint8Array.of(0x1f, 0x8b, 0x08, 0x08, 0x41, 0x42, 0x43, 0x44)
+const BZIP2 = new TextEncoder().encode('BZh91AY&SY')
 
 type Row = [
   platform: NodeJS.Platform,
@@ -41,6 +46,34 @@ describe('classifyLinkedFile', () => {
     ['darwin', ['/x/disk.dmg'], 'file', 0o644, Uint8Array.of(0x78, 0x01, 0, 0), 'reveal'],
     ['linux', ['/x/tool.AppImage'], 'file', 0o755, ELF, 'reveal'],
     ['linux', ['/x/index.ts'], 'file', 0o644, Uint8Array.of(0x47, 0, 0x11), 'reveal'],
+    // Archives and packages are revealed rather than unpacked by the OS default app.
+    ['darwin', ['/x/build.zip'], 'file', 0o644, ZIP, 'reveal'],
+    ['darwin', ['/x/build.ZIP'], 'file', 0o644, TEXT, 'reveal'],
+    ['linux', ['/x/src.tar'], 'file', 0o644, TEXT, 'reveal'],
+    ['linux', ['/x/src.tar.gz'], 'file', 0o644, GZIP_NO_NUL, 'reveal'],
+    ['linux', ['/x/src.tgz'], 'file', 0o644, GZIP_NO_NUL, 'reveal'],
+    ['linux', ['/x/src.tar.bz2'], 'file', 0o644, BZIP2, 'reveal'],
+    ['linux', ['/x/src.tbz2'], 'file', 0o644, BZIP2, 'reveal'],
+    ['linux', ['/x/src.tar.xz'], 'file', 0o644, ZIP, 'reveal'],
+    ['linux', ['/x/src.txz'], 'file', 0o644, ZIP, 'reveal'],
+    ['linux', ['/x/src.tar.zst'], 'file', 0o644, ZIP, 'reveal'],
+    ['win32', ['C:\\x\\files.7z'], 'file', 0o644, ZIP, 'reveal'],
+    ['win32', ['C:\\x\\files.rar'], 'file', 0o644, ZIP, 'reveal'],
+    ['win32', ['C:\\x\\files.cab'], 'file', 0o644, ZIP, 'reveal'],
+    ['win32', ['C:\\x\\files.zip. .'], 'file', 0o644, ZIP, 'reveal'],
+    ['linux', ['/x/app.jar'], 'file', 0o644, ZIP, 'reveal'],
+    ['linux', ['/x/app.war'], 'file', 0o644, ZIP, 'reveal'],
+    ['darwin', ['/x/app.ipa'], 'file', 0o644, ZIP, 'reveal'],
+    ['darwin', ['/x/ext.vsix'], 'file', 0o644, ZIP, 'reveal'],
+    ['win32', ['C:\\x\\pkg.nupkg'], 'file', 0o644, ZIP, 'reveal'],
+    ['darwin', ['/x/notes.txt', '/x/real/build.zip'], 'file', 0o644, ZIP, 'reveal'],
+    // Archive content under a script name or an extensionless +x name is not shown as text.
+    ['darwin', ['/x/run.sh'], 'file', 0o644, ZIP_NO_NUL, 'reveal'],
+    ['linux', ['/x/build.mjs'], 'file', 0o644, GZIP_NO_NUL, 'reveal'],
+    ['darwin', ['/x/bin/bundle'], 'file', 0o755, ZIP_NO_NUL, 'reveal'],
+    ['darwin', ['/x/bin/bundle'], 'file', 0o755, BZIP2, 'reveal'],
+    // Archive content under a document name opens by that name, as before.
+    ['darwin', ['/x/report.docx'], 'file', 0o644, ZIP, 'open'],
     // Executable bit: content decides for extensionless files.
     ['darwin', ['/x/bin/tool'], 'file', 0o755, MACH_O, 'reveal'],
     ['darwin', ['/x/bin/deploy'], 'file', 0o755, SHEBANG, 'view-as-text'],

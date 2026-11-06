@@ -30,6 +30,34 @@ const SCRIPT_SOURCE_EXTENSIONS: ReadonlySet<string> = new Set([
   'tcl'
 ])
 
+// Archives and packages: the OS default app unpacks them next to the file, so they are revealed instead.
+const ARCHIVE_EXTENSIONS: ReadonlySet<string> = new Set([
+  'zip',
+  'tar',
+  'gz',
+  'tgz',
+  'bz2',
+  'tbz',
+  'tbz2',
+  'xz',
+  'txz',
+  'zst',
+  'lz',
+  'lzma',
+  'z',
+  '7z',
+  'rar',
+  'cab',
+  'war',
+  'ear',
+  'apk',
+  'ipa',
+  'xpi',
+  'crx',
+  'vsix',
+  'nupkg'
+])
+
 function fileExtension(name: string, platform: NodeJS.Platform): string {
   if (platform === 'win32') {
     // Windows ignores trailing dots/spaces, and `a.exe:stream` still has the base file's type.
@@ -83,17 +111,35 @@ function isNativeExecutable(head: Uint8Array): boolean {
   ].some((magic) => startsWith(head, magic))
 }
 
+/** zip (and zip-based packages), gzip, bzip2, xz, zstd, 7z and rar. tar and cab headers carry NULs. */
+function isArchiveContent(head: Uint8Array): boolean {
+  const bzip2 = startsWith(head, [0x42, 0x5a, 0x68]) && head[3] >= 0x31 && head[3] <= 0x39
+  return (
+    bzip2 ||
+    [
+      [0x50, 0x4b, 0x03, 0x04],
+      [0x50, 0x4b, 0x05, 0x06],
+      [0x50, 0x4b, 0x07, 0x08],
+      [0x1f, 0x8b],
+      [0xfd, 0x37, 0x7a, 0x58, 0x5a, 0x00],
+      [0x28, 0xb5, 0x2f, 0xfd],
+      [0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c],
+      [0x52, 0x61, 0x72, 0x21, 0x1a, 0x07]
+    ].some((magic) => startsWith(head, magic))
+  )
+}
+
 function isTextContent(head: Uint8Array): boolean {
   // UTF-16 text (common for .ps1/.reg on Windows) is full of NUL bytes but is still text.
   if (startsWith(head, [0xff, 0xfe]) || startsWith(head, [0xfe, 0xff])) {
     return true
   }
-  return !head.includes(0) && !isNativeExecutable(head)
+  return !head.includes(0) && !isNativeExecutable(head) && !isArchiveContent(head)
 }
 
 /**
  * Decide what a link click does. Opening in Orca's editor never runs anything, so a launchable
- * file that is readable text is shown there; launchable binaries and bundles are revealed.
+ * file that is readable text is shown there; launchable binaries, bundles and archives are revealed.
  */
 export function classifyLinkedFile(
   { names, isFile, isDirectory, mode, head }: LinkedFileFacts,
@@ -109,6 +155,9 @@ export function classifyLinkedFile(
     return launchableByName ? 'reveal' : 'open'
   }
   if (!isFile) {
+    return 'reveal'
+  }
+  if (extensions.some((extension) => ARCHIVE_EXTENSIONS.has(extension))) {
     return 'reveal'
   }
   if (launchableByName) {
