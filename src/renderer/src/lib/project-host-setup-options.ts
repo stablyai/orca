@@ -205,15 +205,8 @@ function buildNeedsSetupOptions({
     })
 }
 
-function isEphemeralVmProjectHost(host: ExecutionHostRegistryEntry | undefined): boolean {
+export function isEphemeralVmProjectHost(host: ExecutionHostRegistryEntry | undefined): boolean {
   return host?.kind === 'runtime' && isEphemeralVmRuntimeEnvironment(host)
-}
-
-/** Hosts the composer may create on; per-workspace VMs are never Run on rows, so creation must not resolve to them either. */
-export function getComposerActionableHostIds(
-  hosts: readonly ExecutionHostRegistryEntry[]
-): Set<ExecutionHostId> {
-  return new Set(hosts.filter((host) => !isEphemeralVmProjectHost(host)).map((host) => host.id))
 }
 
 // Runtime-owned ephemeral SSH setups lack host-registry rows; check raw hostId to keep them out of run targets.

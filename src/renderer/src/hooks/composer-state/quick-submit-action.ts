@@ -32,6 +32,7 @@ type QuickSubmitActionInput = Pick<
   | 'resolvePendingSmartGitHubSubmit'
   | 'selectedRepo'
   | 'selectedRepoRequiresConnection'
+  | 'selectedTargetNeedsVisibleHost'
   | 'selectedWorkspaceTarget'
   | 'setCreateError'
   | 'setCreating'
@@ -61,6 +62,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
     resolvePendingSmartGitHubSubmit,
     selectedRepo,
     selectedRepoRequiresConnection,
+    selectedTargetNeedsVisibleHost,
     selectedWorkspaceTarget,
     setCreateError,
     setCreating,
@@ -97,6 +99,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
         !workspaceNameSeed ||
         sourceIntentBlocksCreate ||
         selectedRepoRequiresConnection ||
+        selectedTargetNeedsVisibleHost ||
         (requiresExplicitSetupChoice && !setupDecision) ||
         sparseError !== null
       ) {
@@ -214,6 +217,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
       resolvePendingSmartGitHubSubmit,
       selectedRepo,
       selectedRepoRequiresConnection,
+      selectedTargetNeedsVisibleHost,
       selectedWorkspaceTarget,
       setCreateError,
       setCreating,
