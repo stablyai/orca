@@ -5,19 +5,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { extractAgentProviderSession } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import { getAgentResumeArgv } from '../../shared/agent-launch/startup/agent-resume-argv'
 import type * as SessionScannerDiscovery from '../ai-vault/session-scanner-discovery'
-import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
+import { forEachSessionFile } from '../ai-vault/session-scanner-discovery'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import { createAgentStatusExtensionHarness } from './agent-status-extension-test-harness'
 
 vi.mock('../ai-vault/session-scanner-discovery', async (importOriginal) => {
   const actual = await importOriginal<typeof SessionScannerDiscovery>()
-  return { ...actual, walkSessionFiles: vi.fn(actual.walkSessionFiles) }
+  return { ...actual, forEachSessionFile: vi.fn(actual.forEachSessionFile) }
 })
 
 let root: string
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-omp-metadata-'))
-  vi.mocked(walkSessionFiles).mockClear()
+  vi.mocked(forEachSessionFile).mockClear()
 })
 afterEach(async () => {
   await rm(root, { recursive: true, force: true })
@@ -58,7 +58,7 @@ describe.each([
         })
       ).resolves.toBe(file)
     }
-    expect(walkSessionFiles).not.toHaveBeenCalled()
+    expect(forEachSessionFile).not.toHaveBeenCalled()
     expect(harness.fsMock.existsSync).not.toHaveBeenCalled()
   })
 
@@ -73,16 +73,16 @@ describe.each([
     expect(session.transcriptPath).toBe(file)
     const options = { transcriptPath: session.transcriptPath, ompSessionsDir: join(root, 'empty') }
     await expect(resolveSessionFilePath('omp', session.id, options)).resolves.toBeNull()
-    expect(walkSessionFiles).toHaveBeenCalledTimes(1)
+    expect(forEachSessionFile).toHaveBeenCalledTimes(1)
     await writeFile(file, '{}\n')
-    vi.mocked(walkSessionFiles).mockClear()
+    vi.mocked(forEachSessionFile).mockClear()
     await expect(resolveSessionFilePath('omp', session.id, options)).resolves.toBe(file)
-    expect(walkSessionFiles).not.toHaveBeenCalled()
+    expect(forEachSessionFile).not.toHaveBeenCalled()
     const controller = new AbortController()
     controller.abort()
     await expect(
       resolveSessionFilePath('omp', session.id, options, controller.signal)
     ).rejects.toThrow()
-    expect(walkSessionFiles).not.toHaveBeenCalled()
+    expect(forEachSessionFile).not.toHaveBeenCalled()
   })
 })
