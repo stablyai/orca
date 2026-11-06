@@ -25,4 +25,32 @@ describe('project prompt template config owner', () => {
     expect(getProjectPromptTemplateOwner(project, setups.toReversed(), [])).toBe('runtime:a')
     expect(getProjectPromptTemplateOwner(project, [], [])).toBeUndefined()
   })
+
+  it.each(['local', 'ssh:other', 'runtime:a'] as const)(
+    'ignores a duplicate repo ID belonging to another project on %s',
+    (hostId) => {
+      const remoteProject = { id: 'github:remote/app', sourceRepoIds: ['same-id'] }
+      const setups = [
+        { projectId: 'github:other/app', hostId },
+        { projectId: remoteProject.id, hostId: 'runtime:server' as const }
+      ]
+      const repo = {
+        id: 'same-id',
+        path: '/repo',
+        displayName: 'Repo',
+        badgeColor: '',
+        addedAt: 1
+      }
+      expect(
+        getProjectPromptTemplateOwner(remoteProject, setups, [
+          { ...repo, executionHostId: hostId, upstream: { owner: 'other', repo: 'app' } },
+          {
+            ...repo,
+            executionHostId: 'runtime:server',
+            upstream: { owner: 'remote', repo: 'app' }
+          }
+        ])
+      ).toBe('runtime:server')
+    }
+  )
 })
