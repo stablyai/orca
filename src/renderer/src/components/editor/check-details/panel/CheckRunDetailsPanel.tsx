@@ -13,7 +13,7 @@ import { CheckRunJobs } from './CheckRunJobs'
 import { CheckRunCopyButton } from './CheckRunCopyButton'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useCheckDetailsReadingPosition } from '../reading/use-check-details-reading-position'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 function formatCheckTimestamp(value: string | null | undefined): string | null {
   if (!value) {

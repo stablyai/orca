@@ -31,6 +31,10 @@ export class RelayPendingRequests {
     }
   }
 
+  hasWritten(): boolean {
+    return [...this.pending.values()].some((request) => request.written)
+  }
+
   settle(response: RpcResponse): boolean {
     const request = this.pending.get(response.id)
     if (!request) {

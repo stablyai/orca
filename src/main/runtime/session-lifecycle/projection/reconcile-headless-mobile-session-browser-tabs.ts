@@ -13,7 +13,7 @@ import type {
   RuntimeMobileSessionTerminalTab
 } from '../../../../shared/runtime-types'
 import { headlessBrowserTabsUnchanged } from '../../mobile-session-browser-equality'
-import { appendBrowserTabOrder } from '../../mobile-session-browser-group-projection'
+import { withReconciledBrowserTabs } from '../../mobile-session-browser-group-projection'
 import { parseAppSshPtyId, toComparableRelaySshPtyId } from '../../../../shared/ssh-pty-id'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -90,30 +90,10 @@ export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs e
     }
     const nonBrowserTabs = existing.tabs.filter((tab) => tab.type !== 'browser')
     const nextTabs: RuntimeMobileSessionSnapshotTab[] = [...nonBrowserTabs, ...liveBrowserTabs]
-    const liveIdSet = new Set(liveIds)
-    const tabGroups = appendBrowserTabOrder(
-      (existing.tabGroups ?? []).map((group) => ({
-        ...group,
-        // Drop closed browser ids; appendBrowserTabOrder re-adds the live ones.
-        tabOrder: group.tabOrder.filter(
-          (id) => liveIdSet.has(id) || !existingBrowserIds.includes(id)
-        )
-      })),
-      liveIds
+    this.storeMobileSessionSnapshot(
+      worktreeId,
+      withReconciledBrowserTabs(existing, nextTabs, liveIds, new Set(existingBrowserIds))
     )
-    const activeStillPresent = nextTabs.some((tab) => tab.id === existing.activeTabId)
-    const active = activeStillPresent
-      ? null
-      : (nextTabs.find((tab) => tab.isActive) ?? nextTabs[0] ?? null)
-    this.storeMobileSessionSnapshot(worktreeId, {
-      ...existing,
-      snapshotVersion: existing.snapshotVersion + 1,
-      ...(activeStillPresent
-        ? {}
-        : { activeTabId: active?.id ?? null, activeTabType: active?.type ?? null }),
-      tabGroups,
-      tabs: nextTabs
-    })
   }
 
   // Why: offscreen live pages replace only headless-owned rows; unmounted renderer tabs stay.
@@ -157,28 +137,10 @@ export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs e
         (!existingHeadlessBrowserIds.has(tab.id) && !liveIdSet.has(tab.id))
     )
     const nextTabs: RuntimeMobileSessionSnapshotTab[] = [...retainedTabs, ...liveBrowserTabs]
-    const tabGroups = appendBrowserTabOrder(
-      (existing.tabGroups ?? []).map((group) => ({
-        ...group,
-        tabOrder: group.tabOrder.filter(
-          (id) => liveIdSet.has(id) || !existingHeadlessBrowserIds.has(id)
-        )
-      })),
-      liveIds
+    this.storeMobileSessionSnapshot(
+      worktreeId,
+      withReconciledBrowserTabs(existing, nextTabs, liveIds, existingHeadlessBrowserIds)
     )
-    const activeStillPresent = nextTabs.some((tab) => tab.id === existing.activeTabId)
-    const active = activeStillPresent
-      ? null
-      : (nextTabs.find((tab) => tab.isActive) ?? nextTabs[0] ?? null)
-    this.storeMobileSessionSnapshot(worktreeId, {
-      ...existing,
-      snapshotVersion: existing.snapshotVersion + 1,
-      ...(activeStillPresent
-        ? {}
-        : { activeTabId: active?.id ?? null, activeTabType: active?.type ?? null }),
-      tabGroups,
-      tabs: nextTabs
-    })
   }
 
   protected isServeOwnedPtyId(ptyId: string | null | undefined): boolean {

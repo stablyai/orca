@@ -7,7 +7,7 @@ import {
   deferred,
   createParams,
   created
-} from '../../structured-agent-session-launch-create-message.test-fixture'
+} from './structured-agent-session-launch-create-message.test-fixture'
 import { startStructuredAgentLaunch } from './structured-agent-session-launch'
 import { readStructuredAgentLaunchRecord } from './structured-agent-session-launch-persistence'
 import { restorePersistedStructuredLaunchState } from './structured-agent-session-launch-reload'

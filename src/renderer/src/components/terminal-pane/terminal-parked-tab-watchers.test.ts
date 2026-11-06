@@ -40,13 +40,13 @@ const subscribeToPtyExit = vi.fn(
   }
 )
 
-vi.mock('./pty-dispatcher', () => ({
+vi.mock('./pty-transport/delivery/pty-dispatcher', () => ({
   subscribeToPtyExit: (ptyId: string, callback: (code: number) => void) =>
     subscribeToPtyExit(ptyId, callback)
 }))
 
 const consumePreHandlerPtyState = vi.fn()
-vi.mock('./pty-pre-handler-buffer', () => ({
+vi.mock('./pty-transport/delivery/pty-pre-handler-buffer', () => ({
   discardPreHandlerPtyState: (ptyId: string) => consumePreHandlerPtyState(ptyId),
   hasPreHandlerPtyExit: (ptyId: string) => unownedExitPtyIds.has(ptyId)
 }))

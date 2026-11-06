@@ -8,7 +8,7 @@ import { translate } from '@/i18n/i18n'
 import { linearCreateIssue } from '@/runtime/runtime-linear-issue-mutations'
 import { useAppStore } from '@/store'
 import { defaultScopeSource } from '@/lib/default-creation-host'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function useTaskPageLinearIssueCreation(model: TaskPageLinearProjectCreationModel) {
   const {
     settings,

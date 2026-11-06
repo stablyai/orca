@@ -32,7 +32,7 @@ import {
   automationRuntimePairingRevision,
   groupReposByAutomationAuthority
 } from './automation-authority-identity'
-import { resolveIndexedWorktreeOwner } from '@/lib/worktree-runtime-owner-index'
+import { resolveIndexedWorktreeOwner } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import {
   createRepoRowExecutionHostLookup,
   resolveWorktreeExecutionHost

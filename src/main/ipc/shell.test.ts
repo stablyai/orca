@@ -53,6 +53,7 @@ vi.mock('../../shared/windows-batch-spawn', () => ({
 
 import { registerShellHandlers } from './shell'
 import type { SshTarget } from '../../shared/ssh-types'
+import type { OpenInApplication } from '../../shared/ui-chrome-types'
 expect.objectContaining({
   detached: true,
   stdio: 'ignore',
@@ -94,7 +95,10 @@ function createSshTarget(overrides: Partial<SshTarget> = {}): SshTarget {
 }
 
 describe('registerShellHandlers', () => {
-  const settings = { activeRuntimeEnvironmentId: null as string | null }
+  const settings: {
+    activeRuntimeEnvironmentId: string | null
+    openInApplications: OpenInApplication[]
+  } = { activeRuntimeEnvironmentId: null, openInApplications: [] }
   const sshTargets = new Map<string, SshTarget>()
   const store = {
     getSettings: () => settings,
@@ -111,6 +115,7 @@ describe('registerShellHandlers', () => {
     spawnMock.mockReset()
     statMock.mockReset()
     settings.activeRuntimeEnvironmentId = null
+    settings.openInApplications = []
     sshTargets.clear()
     openPathMock.mockResolvedValue('')
     resolveCliCommandMock.mockReturnValue('editor-cli')
@@ -132,6 +137,36 @@ describe('registerShellHandlers', () => {
   }
 
   describe('shell:openInExternalEditor', () => {
+    it.skipIf(process.platform === 'win32')(
+      'launches only editors main resolves from settings or built-ins',
+      async () => {
+        settings.openInApplications = [{ id: 'mine', label: 'Mine', command: 'my-editor --wait' }]
+        const handler = getHandler('shell:openInExternalEditor')
+        const local = { path: '/tmp/project', ownerHostId: 'local' }
+
+        for (const request of [
+          { openInApplicationId: 'unknown' },
+          { builtInEditorId: 'unknown' },
+          { command: 'touch /tmp/pwned' }
+        ]) {
+          await expect(handler({}, { ...local, ...request })).resolves.toEqual({
+            ok: false,
+            reason: 'launch-failed'
+          })
+        }
+        expect(spawnMock).not.toHaveBeenCalled()
+
+        await expect(handler({}, { ...local, openInApplicationId: 'mine' })).resolves.toEqual({
+          ok: true
+        })
+        expect(spawnMock).toHaveBeenLastCalledWith(
+          '/bin/sh',
+          ['-c', 'my-editor --wait /tmp/project'],
+          expect.anything()
+        )
+      }
+    )
+
     it('rejects missing and runtime-owned SSH targets', async () => {
       const handler = getHandler('shell:openInExternalEditor')
 

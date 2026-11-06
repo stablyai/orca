@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { RpcDispatcher } from './rpc/dispatcher'
 import type { RpcRequest } from './rpc/core'
-import { TERMINAL_METHODS } from './rpc/methods/terminal'
+import { TERMINAL_METHODS } from './rpc/methods/terminal/terminal'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,

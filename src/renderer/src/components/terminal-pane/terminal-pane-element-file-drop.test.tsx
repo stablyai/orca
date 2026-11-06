@@ -8,7 +8,7 @@ import type { PreparedDroppedPaths } from '../../../../shared/native-file-drop-p
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
 import { collectPublicPanes, toPublicPane } from '@/lib/pane-manager/pane-public-view'
-import type { PtyTransport } from './pty-transport-types'
+import type { PtyTransport } from './pty-transport/pty-transport-types'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
 import {
   NativeChatPaneFileDropSurface,

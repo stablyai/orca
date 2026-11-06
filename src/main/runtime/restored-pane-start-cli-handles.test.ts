@@ -19,7 +19,7 @@ await import('./rpc/unused-default-rpc-methods.test-fixture')
 const { RpcDispatcher } = await import('./rpc/dispatcher')
 const { MOBILE_TERMINAL_SURFACE_TIMEOUT_MS } =
   await import('./terminal/view/terminal-surface-deadlines')
-const { TERMINAL_METHODS } = await import('./rpc/methods/terminal')
+const { TERMINAL_METHODS } = await import('./rpc/methods/terminal/terminal')
 
 type Runtime = ReturnType<typeof surfaceRuntime>['runtime']
 

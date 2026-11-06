@@ -3,7 +3,10 @@ import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 import { toast } from 'sonner'
 import { mergePRCommentIntoList } from '@/store/github/pr-comment-cache'
 import { githubProjectHost } from '../../../../../../shared/github/project-identity'
-import { setReactionOnSubject, restoreReactionOnSubject } from '@/lib/pr-comment-reactions'
+import {
+  setReactionOnSubject,
+  restoreReactionOnSubject
+} from '@/lib/source-control/review/comments/pr-comment-reactions'
 import { buildPRCommentConversationReplyBody } from './pr-comment-fixing-reply-body'
 import {
   attachPRReviewReplyParent,

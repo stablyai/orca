@@ -28,7 +28,7 @@ vi.mock('./runtime-gitlab-issue-source-remote', () => ({
 
 import { resolveRuntimeGitLabWorktreeBase } from './runtime-gitlab-worktree-base'
 import { RpcDispatcher } from '../../rpc/dispatcher'
-import { WORKTREE_METHODS } from '../../rpc/methods/worktree'
+import { WORKTREE_METHODS } from '../../rpc/methods/workspaces/worktree'
 
 const WSL_REPO: Repo = {
   id: 'repo-1',

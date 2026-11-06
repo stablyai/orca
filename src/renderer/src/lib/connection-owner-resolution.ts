@@ -1,9 +1,9 @@
 import type { AppState } from '@/store/types'
 import {
   findIndexedRepoOwnerForHost,
-  resolveIndexedRepoOwner,
-  resolveIndexedWorktreeOwner
-} from './worktree-runtime-owner-index'
+  resolveIndexedRepoOwner
+} from './workspace/ownership/repo-owner-index'
+import { resolveIndexedWorktreeOwner } from './workspace/ownership/worktree-runtime-owner-index'
 import { resolveWorktreeExecutionHost } from '../../../shared/worktree-execution-host-resolution'
 import { getRepoExecutionHostId, getRepoSshConnectionId } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'

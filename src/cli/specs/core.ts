@@ -54,6 +54,16 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'worktree']
   },
   {
+    path: ['worktree', 'activate'],
+    summary: 'Open a worktree on its host, waking a sleeping recipe VM behind it',
+    usage: 'orca worktree activate --worktree <selector> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree'],
+    notes: [
+      'With --environment naming a recipe VM that is asleep, Orca on this computer wakes the VM first and waits for it.'
+    ],
+    examples: ['orca worktree activate --worktree branch:fix-login --environment sandbox']
+  },
+  {
     path: ['worktree', 'current'],
     summary: 'Show the Orca-managed worktree for the current directory',
     usage: 'orca worktree current [--json]',

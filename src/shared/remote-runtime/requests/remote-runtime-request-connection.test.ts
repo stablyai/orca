@@ -1,4 +1,4 @@
-import { federationRelayPrefix } from '../../../main/runtime/orchestration/federation-relay-prefix'
+import { federationRelayPrefix } from '../../../main/runtime/orchestration/federation/relay/federation-relay-prefix'
 import * as memoryLimits from '../remote-runtime-memory-limits'
 import { sendRemoteRuntimeRequest } from '../remote-runtime-client'
 import {

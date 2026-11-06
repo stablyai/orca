@@ -1,7 +1,11 @@
-import type { MessagePriority, MessageType, OrchestrationDb } from '../../../../orchestration/db'
+import type {
+  MessagePriority,
+  MessageType
+} from '../../../../orchestration/db/orchestration-records'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { encodeFederatedControlMessage } from '../../../../orchestration/federation-control-message'
+import { encodeFederatedControlMessage } from '../../../../orchestration/federation/relay/federation-control-message'
 import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../../../shared/protocol-version'
 import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
 import type { SendParams } from '../schemas'

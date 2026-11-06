@@ -11,12 +11,14 @@ import { resolveExactWorktreeRoute } from './worktree-owner-route'
 import {
   findIndexedDetectedWorktrees,
   findIndexedWorktrees,
-  findIndexedRepoOwnerForHost,
-  findIndexedWorktreeOwners,
+  findIndexedWorktrees as findIndexedWorktreeOwners,
   hasIndexedDetectedWorktree,
-  resolveIndexedRepoOwner,
   resolveIndexedWorktreeOwner
-} from './worktree-runtime-owner-index'
+} from './workspace/ownership/worktree-runtime-owner-index'
+import {
+  findIndexedRepoOwnerForHost,
+  resolveIndexedRepoOwner
+} from './workspace/ownership/repo-owner-index'
 import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
 import { onPairedWebClientHost } from './paired-web-client-host'
 import {

@@ -7,7 +7,7 @@ import { OrchestrationDb } from '../orchestration-db'
 import { SCHEMA_VERSION, federatedStubHomeRunId } from '../contract-constants'
 import { migrateV40 } from './migrate-v40'
 import { DROP_REMOVED_WORK_TRIGGERS_SQL } from '../reset/removed-orchestration-work-store'
-import { importFederatedControlMessage } from '../../federation-control-message'
+import { importFederatedControlMessage } from '../../federation/relay/federation-control-message'
 
 describe('federated home Run migration', () => {
   let db: OrchestrationDb

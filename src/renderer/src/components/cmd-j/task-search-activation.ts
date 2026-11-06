@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { getPaletteWorktreeExecutionHostId } from '@/lib/palette-repo-resolution'
+import { getPaletteWorktreeExecutionHostId } from '@/lib/workspace/search/palette-repo-resolution'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import {
   getProvenWorkspaceReferenceIdentity,

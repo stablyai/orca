@@ -4,6 +4,9 @@ import type { DeviceEntry } from './device-entry'
 import { isMissingFileError, quarantineCorruptRegistry } from './device-registry-corruption'
 import { readDeviceRegistryFile, type DeviceRegistryFileRead } from './device-registry-file-read'
 
+// Phones recheck auth on every frame and request; one stat a second bounds a disk revoke's lag.
+const EXTERNAL_EDIT_CHECK_INTERVAL_MS = 1000
+
 /**
  * What a save may write over the file as it is now on disk. Another writer (an admin removing a
  * device, the pairing CLI adding one) may have changed it since this process loaded it, so:
@@ -41,6 +44,7 @@ export class DeviceRegistryWriter {
   private quarantinedUntilWritten = false
   /** Stat identity of the file when this process last read it; null forces the next re-read. */
   private readStamp: string | null = null
+  private checkedAt = Number.NEGATIVE_INFINITY
 
   constructor(private readonly registryPath: string) {}
 
@@ -58,11 +62,27 @@ export class DeviceRegistryWriter {
 
   /**
    * `current` merged over the file when another writer changed it since this process last read it,
-   * else null. Costs one stat when unchanged. An unreadable or corrupt file, or our own quarantine's
-   * absence, proves nothing about removals, so it changes nothing.
+   * else null. Stats at most once per interval unless `fresh` or right after our own save. An
+   * unreadable or corrupt file, or our own quarantine's absence, proves nothing about removals, so
+   * it changes nothing.
    */
-  adoptExternalEdits(current: readonly DeviceEntry[]): DeviceEntry[] | null {
-    if (this.quarantinedUntilWritten || fileStamp(this.registryPath) === this.readStamp) {
+  adoptExternalEdits(
+    current: readonly DeviceEntry[],
+    options: { fresh?: boolean } = {}
+  ): DeviceEntry[] | null {
+    if (this.quarantinedUntilWritten) {
+      return null
+    }
+    const now = performance.now()
+    if (
+      !options.fresh &&
+      this.readStamp !== null &&
+      now - this.checkedAt < EXTERNAL_EDIT_CHECK_INTERVAL_MS
+    ) {
+      return null
+    }
+    this.checkedAt = now
+    if (fileStamp(this.registryPath) === this.readStamp) {
       return null
     }
     const disk = this.read()

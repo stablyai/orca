@@ -1,18 +1,18 @@
-import { conversationRecordReader } from '../../../orchestration/structured-session-lineage'
+import { conversationRecordReader } from '../../../orchestration/addressing/session-lineage/structured-session-lineage'
 /** Queue the chat assignee's task as a composer card while busy; derive operation id from Dispatch so repeat sends replay instead of duplicating cards. */
 
 import { createHash } from 'node:crypto'
 import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
-import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { observeChatAssignee } from '../../../orchestration/chat-assignee'
-import type { OrchestrationDb } from '../../../orchestration/db'
+import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { observeChatAssignee } from '../../../orchestration/workers/lifecycle/chat-assignee'
+import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 import { exposeUtcTimestamp } from '../../../orchestration/db/utc-timestamp'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
-import { sendAgentTurn } from '../../../orchestration/send-agent-turn'
-import { structuredPointerCallerKey } from '../../../orchestration/structured-mailbox-pointer-host'
-import type { DispatchContextRow } from '../../../orchestration/types'
-import { preambleDispatchState } from '../orchestration-structured-worker-session'
+import { sendAgentTurn } from '../../../orchestration/turn-delivery/send-agent-turn'
+import { structuredPointerCallerKey } from '../../../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host'
+import type { DispatchContextRow } from '../../../orchestration/db/orchestration-records'
+import { preambleDispatchState } from './structured-workers/orchestration-structured-worker-session'
 
 /** Handed over in every case: started, still starting its agent, or held as a card. */
 export type ChatTaskDelivery = 'accepted' | 'pending' | 'queued'

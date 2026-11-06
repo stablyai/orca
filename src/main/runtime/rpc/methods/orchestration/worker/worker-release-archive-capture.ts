@@ -1,11 +1,11 @@
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../../shared/orchestration-session-caller-codes'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import {
   captureWorkerOutputArchive,
   type WorkerOutputArchiveCapture
-} from '../../../../orchestration/worker-output-archive'
-import type { WorkerTerminalResourceRow } from '../../../../orchestration/worker-terminal-ownership'
+} from '../../../../orchestration/workers/archives/worker-output-archive'
+import type { WorkerTerminalResourceRow } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import { releaseUnknownRecovery, type WorkerReleaseReceipt } from './worker-release-completion'
 import { archiveSummary } from './worker-terminal-resource-presentation'
 import { captureWorkerResumeSession } from './worker-resume-session-capture'
