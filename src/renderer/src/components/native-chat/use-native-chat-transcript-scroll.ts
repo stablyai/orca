@@ -1,3 +1,5 @@
+import { useNativeChatReaderReturn } from './use-native-chat-reader-return'
+import { useNativeChatTranscriptResize } from './use-native-chat-transcript-resize'
 // Virtualizer measurements move content without reader input; route pin writes through it and detach only on reader gestures/row jumps.
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -33,10 +35,13 @@ export function useNativeChatTranscriptScroll({
   scrollToEnd,
   restoreScrollOffset,
   consumeProgrammaticScroll,
-  reconcileReaderScroll
+  reconcileReaderScroll,
+  onLeaveEnd,
+  onReturnToEnd
 }: NativeChatTranscriptScrollOptions): NativeChatTranscriptScroll {
   const [showJump, setShowJump] = useState(false)
   const followingRef = useRef(true)
+  const readerReturn = useNativeChatReaderReturn(scrollRef, followingRef)
   const detachedScrollTopRef = useRef<number | null>(null)
   const isVisibleRef = useRef(isVisible)
   const previousIsVisibleRef = useRef(isVisible)
@@ -96,6 +101,7 @@ export function useNativeChatTranscriptScroll({
   const readerLeavesEnd = useCallback(() => {
     clearForwardedScroll()
     followingRef.current = false
+    onLeaveEnd?.()
     const element = scrollRef.current
     if (element) {
       previousDistanceFromEndRef.current = distanceFromBottom(geometryOf(element))
@@ -103,7 +109,7 @@ export function useNativeChatTranscriptScroll({
     // Replace a pending virtualizer target before the browser applies the gesture.
     reconcileReaderScroll(true)
     syncScrollState()
-  }, [clearForwardedScroll, reconcileReaderScroll, scrollRef, syncScrollState])
+  }, [clearForwardedScroll, onLeaveEnd, reconcileReaderScroll, scrollRef, syncScrollState])
 
   const observeForwardedMovement = useCallback(
     (geometry: ScrollGeometry, programmatic: boolean) => {
@@ -198,11 +204,16 @@ export function useNativeChatTranscriptScroll({
       reconcileReaderScroll(false)
       previousDistanceFromEndRef.current = distanceFromBottom(geometry)
       syncScrollState()
+      if (followingRef.current && readerReturn.readerReturned(geometry, programmatic)) {
+        onReturnToEnd?.()
+      }
     },
     [
       consumeProgrammaticScroll,
       isAlignPending,
       observeForwardedMovement,
+      onReturnToEnd,
+      readerReturn,
       reconcileReaderScroll,
       scrollRef,
       syncScrollState
@@ -222,31 +233,29 @@ export function useNativeChatTranscriptScroll({
     }
   }, [clearForwardedScroll, scrollRef, scrollToEnd])
 
-  const scrollToBottom = useCallback(() => {
-    // A hidden pane is not where the reader is; it keeps its position for their return.
-    if (!isVisibleRef.current) {
-      return
-    }
-    clearForwardedScroll()
-    followingRef.current = true
-    scrollToEndWhenMeasurable()
-    setShowJump(false)
-  }, [clearForwardedScroll, scrollToEndWhenMeasurable])
-
-  const readerAtEnd = useCallback(() => {
-    const element = scrollRef.current
-    return (
-      followingRef.current || (hasMeasurableViewport(element) && isNearBottom(geometryOf(element)))
-    )
-  }, [scrollRef])
+  const scrollToBottom = useCallback(
+    (reason?: 'send') => {
+      // A hidden pane is not where the reader is; it keeps its position for their return.
+      if (!isVisibleRef.current) {
+        return
+      }
+      clearForwardedScroll()
+      followingRef.current = true
+      scrollToEndWhenMeasurable()
+      setShowJump(false)
+      onReturnToEnd?.(reason)
+    },
+    [clearForwardedScroll, onReturnToEnd, scrollToEndWhenMeasurable]
+  )
 
   const scrollMessageToTop = useCallback(
     (element: HTMLElement) => {
       clearForwardedScroll()
       followingRef.current = false
+      onLeaveEnd?.()
       alignToViewportTop(element)
     },
-    [alignToViewportTop, clearForwardedScroll]
+    [alignToViewportTop, clearForwardedScroll, onLeaveEnd]
   )
 
   useLayoutEffect(() => {
@@ -286,35 +295,22 @@ export function useNativeChatTranscriptScroll({
     syncScrollState
   ])
 
-  useEffect(() => {
-    const element = scrollRef.current
-    if (!element || typeof ResizeObserver === 'undefined') {
-      return
-    }
-    const observer = new ResizeObserver(() => {
-      if (!isVisibleRef.current) {
-        return
-      }
-      previousGeometryRef.current = geometryOf(element)
-      // Growth, an opened row included, keeps a following reader at the end.
-      if (followingRef.current) {
-        scrollToEndWhenMeasurable()
-      }
-      syncScrollState()
-    })
-    // Observe content growth as well as viewport reflows; fixed viewport size misses streaming height changes.
-    observer.observe(element)
-    if (contentRef.current) {
-      observer.observe(contentRef.current)
-    }
-    return () => observer.disconnect()
-  }, [clearForwardedScroll, contentRef, scrollRef, scrollToEndWhenMeasurable, syncScrollState])
+  useNativeChatTranscriptResize({
+    scrollRef,
+    contentRef,
+    isVisibleRef,
+    previousGeometryRef,
+    followingRef,
+    scrollToEndWhenMeasurable,
+    syncScrollState
+  })
 
   return {
     showJump,
+    recordReaderScroll: readerReturn.recordReaderScroll,
     onScroll,
     scrollToBottom,
-    readerAtEnd,
+    readerAtEnd: readerReturn.readerAtEnd,
     scrollMessageToTop,
     readerLeavesEnd,
     forwardedGesture

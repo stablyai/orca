@@ -36,7 +36,7 @@ export function nativeChatWorkRunMember(
   ) {
     return null
   }
-  return content.markdown.length > 0 || content.hasImages ? 'lead' : 'tool'
+  return content.hasText || content.hasImages ? 'lead' : 'tool'
 }
 
 /** One row of a transcript as the run boundaries read it. */

@@ -36,6 +36,7 @@ import {
 } from './native-chat-transcript-slots'
 import { useNativeChatTranscriptSlots } from './use-native-chat-transcript-slots'
 import { useNativeChatTranscriptWindow } from './use-native-chat-transcript-window'
+import { useNativeChatHistoryRetention } from './use-native-chat-history-retention'
 import { useNativeChatSubagentSections } from './use-native-chat-subagent-sections'
 import { toggleNativeChatExpandedKey } from './native-chat-expanded-keys'
 import { useNativeChatTurnMembership } from './use-native-chat-turn-membership'
@@ -140,6 +141,12 @@ export function NativeChatMessageList({
   }, [])
 
   const { hasMore, loadingEarlier, loadEarlier } = session
+  const historyRetention = useNativeChatHistoryRetention({
+    ...session,
+    isVisible,
+    root: contentRef,
+    sourceKey: `${session.agent}:${session.sessionId}`
+  })
   // Pending/failed reads cannot page; recovery remounts the sentinel to recheck its range.
   const showOlderHistory = hasMore && session.readPhase === 'ready'
 
@@ -240,15 +247,20 @@ export function NativeChatMessageList({
     scrollToEnd: transcriptWindow.scrollToEnd,
     restoreScrollOffset: transcriptWindow.restoreScrollOffset,
     consumeProgrammaticScroll: transcriptWindow.consumeProgrammaticScroll,
-    reconcileReaderScroll: transcriptWindow.reconcileReaderScroll
+    reconcileReaderScroll: transcriptWindow.reconcileReaderScroll,
+    onLeaveEnd: historyRetention.leaveEnd,
+    onReturnToEnd: historyRetention.returnToEnd
   })
   const { showJump, onScroll, scrollToBottom, readerAtEnd, scrollMessageToTop, readerLeavesEnd } =
     transcriptScroll
+  const { recordReaderScroll } = transcriptScroll
   const olderHistory = useNativeChatOlderHistoryAutoload({
     scrollRef,
     historyKey: `${session.agent}:${session.sessionId ?? ''}:${session.olderHistoryGeneration}`,
     isVisible,
     hasMore: showOlderHistory,
+    autoLoad: historyRetention.autoLoadHistory,
+    onManualLoad: readerLeavesEnd,
     loadingEarlier,
     loadEarlier
   })
@@ -302,8 +314,12 @@ export function NativeChatMessageList({
     beginNavigation()
     scrollToBottom()
   }, [beginNavigation, scrollToBottom])
+  const onReaderScroll = useCallback(() => {
+    beginNavigation()
+    recordReaderScroll()
+  }, [beginNavigation, recordReaderScroll])
   const readerInput = useNativeChatReaderScrollInput(scrollRef, {
-    onReaderScroll: beginNavigation,
+    onReaderScroll,
     onTakeScroll: transcriptWindow.cancelAlign,
     onLeaveEnd: readerLeavesEnd,
     onScrollGesture: transcriptScroll.forwardedGesture
@@ -314,9 +330,10 @@ export function NativeChatMessageList({
       if (!nativeChatScrollsToLatestOnSend(useAppStore.getState().settings) && !readerWasAtEnd) {
         return
       }
-      jumpToLatest()
+      beginNavigation()
+      scrollToBottom('send')
     },
-    [jumpToLatest, readerAtEnd]
+    [beginNavigation, readerAtEnd, scrollToBottom]
   )
   useNativeChatMessageListHandle(
     ref,
