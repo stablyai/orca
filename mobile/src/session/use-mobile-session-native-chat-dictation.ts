@@ -223,13 +223,11 @@ export function useMobileSessionNativeChatDictation(
   }, [dictation, startDictation])
 
   const handleDictationPressOut = useCallback(() => {
-    if (dictation.isRecording) {
+    // Speech is held from the press, so a release while starting finishes once the host answers.
+    if (dictation.isStarting || dictation.isRecording) {
       stopDictation()
-    } else if (dictation.isStarting) {
-      // Released before recording began: cancel so we don't leave a live mic.
-      cancelDictation()
     }
-  }, [cancelDictation, dictation, stopDictation])
+  }, [dictation, stopDictation])
 
   const dictationSettingsReadRef = useRef(0)
   const refreshDictationMode = useCallback(async () => {
