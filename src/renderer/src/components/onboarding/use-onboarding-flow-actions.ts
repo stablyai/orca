@@ -118,6 +118,23 @@ export function useOnboardingFlowActions({
       trackTaskSourcesSnapshot
     ]
   )
+  const complete = useCallback(
+    async (
+      workspaceExecutionHostId: Parameters<typeof launchOnboardingCompletionAgent>[2],
+      path: 'workspace' | 'add_project_modal',
+      agent?: TuiAgent | null
+    ): Promise<boolean> => {
+      const closed = await closeWith('completed', ONBOARDING_FINAL_STEP, path)
+      if (closed && !worktreeId && path === 'add_project_modal') {
+        openModal('add-repo')
+      } else if (closed && worktreeId) {
+        await launchOnboardingCompletionAgent(worktreeId, agent, workspaceExecutionHostId)
+      }
+      return closed
+    },
+    [closeWith, openModal, worktreeId]
+  )
+
   const next = useCallback(
     async (advancedVia: 'button' | 'keyboard' = 'button') => {
       if (nextInFlightRef.current || busyLabel) {
@@ -141,16 +158,11 @@ export function useOnboardingFlowActions({
                     'Opening Add Project...'
                   )
             )
-            const closed = await closeWith(
-              'completed',
-              ONBOARDING_FINAL_STEP,
-              worktreeId ? 'workspace' : 'add_project_modal'
+            await complete(
+              workspaceExecutionHostId,
+              worktreeId ? 'workspace' : 'add_project_modal',
+              agent
             )
-            if (closed && !worktreeId) {
-              openModal('add-repo')
-            } else if (closed && worktreeId && agent) {
-              launchOnboardingCompletionAgent(worktreeId, agent, workspaceExecutionHostId)
-            }
             return
           }
           const nextIndex = getNextStepIndex(stepIndex)
@@ -180,14 +192,13 @@ export function useOnboardingFlowActions({
     },
     [
       busyLabel,
-      closeWith,
+      complete,
       currentStep.id,
       currentStep.stepNumber,
       getNextStepIndex,
       worktreeId,
       selectedAgent,
       onOnboardingChange,
-      openModal,
       persistCurrentStep,
       stepIndex,
       trackCurrentStepCompleted,
@@ -197,36 +208,34 @@ export function useOnboardingFlowActions({
   )
 
   const setUpLater = useCallback(async () => {
-    if (busyLabel) {
+    if (nextInFlightRef.current || busyLabel || currentStep.id === 'notifications') {
       return
     }
-    setError(null)
-    if (currentStep.id === 'notifications') {
-      return
-    }
+    nextInFlightRef.current = true
+    const workspaceExecutionHostId = worktreeId
+      ? getExecutionHostIdForWorktree(useAppStore.getState(), worktreeId)
+      : undefined
+    const agent = currentStep.id === 'agent' ? selectedAgent : undefined
     const durationMs = consumeStepDurationMs()
-    const preferencesSaved = await prepareSkippedOnboardingPreferences({
-      currentStepId: currentStep.id,
-      lookBeforePreview: themeLookBaseline ? captureThemeLookSettings(themeLookBaseline) : null,
-      settingsTheme: settings?.theme,
-      selectedAgent,
-      agentSurface,
-      settings,
-      setTheme,
-      applyTheme: applyDocumentTheme,
-      updateSettings,
-      setError
-    })
-    if (!preferencesSaved) {
-      return
-    }
     const stepId = currentStep.id
     const stepNumber = currentStep.stepNumber
     const valueKind = currentStep.valueKind
+    setError(null)
     setBusyLabel(translate('components.onboarding.flow.actions.continue', 'Continue'))
     try {
-      const closed = await closeWith('completed', ONBOARDING_FINAL_STEP, 'workspace')
-      if (!closed) {
+      const preferencesSaved = await prepareSkippedOnboardingPreferences({
+        currentStepId: stepId,
+        lookBeforePreview: themeLookBaseline ? captureThemeLookSettings(themeLookBaseline) : null,
+        settingsTheme: settings?.theme,
+        selectedAgent,
+        agentSurface,
+        settings,
+        setTheme,
+        applyTheme: applyDocumentTheme,
+        updateSettings,
+        setError
+      })
+      if (!preferencesSaved || !(await complete(workspaceExecutionHostId, 'workspace', agent))) {
         return
       }
       track('onboarding_step_skipped', {
@@ -251,10 +260,11 @@ export function useOnboardingFlowActions({
       }
     } finally {
       setBusyLabel(null)
+      nextInFlightRef.current = false
     }
   }, [
     busyLabel,
-    closeWith,
+    complete,
     consumeStepDurationMs,
     currentStep.id,
     currentStep.stepNumber,
@@ -267,12 +277,13 @@ export function useOnboardingFlowActions({
     setBusyLabel,
     setError,
     setTheme,
-    themeLookBaseline
+    themeLookBaseline,
+    worktreeId
   ])
 
   const dismissOnboarding = useCallback(
     async (advancedVia: 'button' | 'keyboard' = 'button'): Promise<boolean> => {
-      if (busyLabel) {
+      if (nextInFlightRef.current || busyLabel) {
         return false
       }
       setError(null)
