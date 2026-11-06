@@ -1,4 +1,7 @@
-import { terminateWindowsProcessTree, type WindowsTreeKiller } from '../windows-process-tree-kill'
+import {
+  terminateWindowsProcessTree,
+  type WindowsTreeKiller
+} from '../pty/process-retirement/windows-process-tree-kill'
 
 // Hard-killing during rotating-token refresh can invalidate auth.json; request shutdown, then allow a bounded drain.
 

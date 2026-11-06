@@ -13,7 +13,7 @@ import {
   getTerminalScrollbackSnapshotPath,
   getTerminalScrollbackSnapshotRoot,
   type TerminalScrollbackSnapshotStorage
-} from '../../terminal-scrollback-snapshots'
+} from '../../pty/scrollback/terminal-scrollback-snapshots'
 import {
   appendOrcadMigrationStagedChunk,
   ensureOrcadMigrationDirectory,

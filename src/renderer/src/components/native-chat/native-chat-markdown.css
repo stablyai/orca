@@ -1,5 +1,6 @@
 /* Shared markdown also renders sidebar comments, so chat styling stays opt-in. */
-.native-chat-markdown :is(h1, h2, h3, h4, h5, h6, [role='heading'], strong) {
+/* :where keeps this below the link-label rule, so bold link text takes the link color. */
+.native-chat-markdown :where(h1, h2, h3, h4, h5, h6, [role='heading'], strong) {
   color: var(--chat-foreground-strong);
 }
 
@@ -18,8 +19,13 @@
 .native-chat-markdown a {
   word-break: normal;
   overflow-wrap: anywhere;
-  color: var(--chat-foreground-strong);
+  color: var(--chat-link);
   text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+}
+
+/* File links wrap inline code, so formatted labels follow the link color. */
+.native-chat-markdown a :is(code, strong) {
+  color: inherit;
 }
 
 .native-chat-markdown :is(th, td) {

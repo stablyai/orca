@@ -186,50 +186,6 @@ describe('worktree lineage state', () => {
     })
   })
 
-  it('stamps the owning runtime host onto worktrees returned by a remote lineage update', async () => {
-    const store = createTestStore()
-    const lineage = makeLineage({
-      worktreeId: 'repo-remote::/remote/child',
-      parentWorktreeId: 'repo-remote::/remote/parent'
-    })
-    const child = makeWorktree({
-      id: lineage.worktreeId,
-      repoId: 'repo-remote',
-      path: '/remote/child'
-    })
-    // Why: the remote returns the updated worktree from its own perspective, so it arrives with the default local host.
-    const updatedChild = { ...child, hostId: 'local' as const, lineage }
-    store.setState({
-      repos: [
-        {
-          id: 'repo-remote',
-          path: '/home/dvic/src/omarchy-dotfiles',
-          displayName: 'omarchy-dotfiles',
-          badgeColor: '#000',
-          addedAt: 0,
-          executionHostId: 'runtime:env-1'
-        }
-      ],
-      worktreesByRepo: { 'repo-remote': [child] }
-    } as Partial<AppState>)
-    runtimeEnvironmentCall.mockResolvedValueOnce({
-      id: 'rpc-remote-lineage',
-      ok: true,
-      result: { worktree: updatedChild },
-      _meta: { runtimeId: 'runtime-remote' }
-    })
-
-    await store.getState().updateWorktreeLineage(lineage.worktreeId, {
-      parentWorktreeId: lineage.parentWorktreeId
-    })
-
-    expect(store.getState().worktreesByRepo['repo-remote']?.[0]).toEqual({
-      ...updatedChild,
-      hostId: 'runtime:env-1',
-      runtimeOwnerEnvironmentId: 'env-1'
-    })
-  })
-
   it('assigns a parent through the worktree owner runtime when host-stamped', async () => {
     const store = createTestStore()
     const lineage = makeLineage()
@@ -253,6 +209,45 @@ describe('worktree lineage state', () => {
 
     await store.getState().assignWorktreeParent(lineage.worktreeId, {
       parentWorktreeId: lineage.parentWorktreeId
+    })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'owner-env',
+      method: 'worktree.set',
+      params: {
+        worktree: `id:${lineage.worktreeId}`,
+        parentWorktree: `id:${lineage.parentWorktreeId}`
+      },
+      timeoutMs: 15_000
+    })
+  })
+
+  it("assigns a parent on the clicked twin's own host, not its same-id twin", async () => {
+    const store = createTestStore()
+    const lineage = makeLineage()
+    const localTwin = makeWorktree({
+      id: lineage.worktreeId,
+      repoId: 'repo1',
+      path: '/local/child',
+      hostId: LOCAL_EXECUTION_HOST_ID
+    })
+    const serverTwin = makeWorktree({
+      id: lineage.worktreeId,
+      repoId: 'repo1',
+      path: '/remote/child',
+      hostId: 'runtime:owner-env'
+    })
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-twin-assign-parent',
+      ok: true,
+      result: { worktree: { ...serverTwin, lineage } },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({ worktreesByRepo: { repo1: [localTwin, serverTwin] } })
+
+    await store.getState().assignWorktreeParent(lineage.worktreeId, {
+      parentWorktreeId: lineage.parentWorktreeId,
+      executionHostId: 'runtime:owner-env'
     })
 
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({

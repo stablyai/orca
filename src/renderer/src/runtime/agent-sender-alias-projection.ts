@@ -8,10 +8,13 @@ import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
 } from '../../../shared/agent-session/view/structured-agent-session-projection'
-import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '../../../shared/terminal-surface-id'
+import {
+  isWebTerminalSurfaceTabId,
+  toHostSessionTabId
+} from '../../../shared/workspace-layout/terminal-surface-id'
 import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 
 const key = (host: string, address: string) => JSON.stringify([host, address])
 

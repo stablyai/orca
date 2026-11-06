@@ -1,7 +1,7 @@
 import type { StructuredAgentDefinition } from '../native-chat/agent-session-wire/structured-agent-definition'
 import type { AcpLaunchSpec } from './acp-launch-specs'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/tui-agent-display-names'
-import { isTuiAgent } from '../../shared/tui-agent-config'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/agent-launch/catalog/tui-agent-display-names'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 
 export function acpAgentName(agent: string): string {
   return isTuiAgent(agent) ? TUI_AGENT_DISPLAY_NAMES[agent] : agent

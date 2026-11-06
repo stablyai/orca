@@ -22,7 +22,7 @@ import {
   type MutationPlan
 } from './structured-agent-session-mutation-plans'
 import type { CommandReceiptResult } from '../agent-session-journal/command-receipt-schema'
-import { structuredQueueHold } from './structured-agent-session-queued-messages'
+import { structuredQueueHold } from './structured-agent-session-queued-gate'
 import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { queuedMessageOwed } from './structured-agent-session-queued-mail'
 import { resumeStructuredQueue } from './structured-agent-session-queued-pause'
@@ -48,7 +48,7 @@ function submissionFor(
   ctx: AgentSessionTurnContext,
   clientMessageId: string
 ): AgentJournalSubmission | undefined {
-  return ctx.journal.submissions().find((entry) => entry.clientMessageId === clientMessageId)
+  return ctx.journal.submission(clientMessageId)
 }
 
 function submissionRowReceipt(
@@ -178,7 +178,7 @@ export function sendQueuedStructuredAgentMessage(
     replay: (ctx, _outcome, receipt) => {
       const submission =
         receipt?.kind === 'journal-row' && receipt.epoch === ctx.journal.epoch
-          ? ctx.journal.submissions().find((entry) => entry.submittedSequence === receipt.sequence)
+          ? ctx.journal.inputOrder.submissionAt(receipt.sequence)
           : undefined
       return submission?.queuedMessageId === messageId
         ? { clientMessageId: submission.clientMessageId, submission }

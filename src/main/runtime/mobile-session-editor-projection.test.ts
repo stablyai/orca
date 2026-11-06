@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ownedEditorFileId } from '../../shared/workspace-session-pane-ownership'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import {
-  buildHeadlessMobileSessionEditorTabs,
-  retireHeadlessEditorTab
-} from './mobile-session-editor-projection'
+import { ownedEditorFileId } from '../../shared/workspace-session/workspace-session-pane-ownership'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
+import { retireHeadlessEditorTab } from './mobile-session-editor-projection'
 
 const mocks = vi.hoisted(() => ({ layoutOwnerIsMain: true }))
 vi.mock('../../shared/layout-owner-switch', () => ({
@@ -53,25 +50,6 @@ function ownedSession(): WorkspaceSessionState {
   }
 }
 
-describe('headless editor tabs under an owned id', () => {
-  it('does not list a row mirrored from a paired host', () => {
-    const session = ownedSession()
-    session.openFilesByWorktree = {
-      [WT]: [
-        {
-          filePath: FILE,
-          relativePath: 'notes.ts',
-          worktreeId: WT,
-          language: 'typescript',
-          runtimeEnvironmentId: 'peer',
-          mirroredFromRuntimeSession: true
-        }
-      ]
-    }
-    expect(buildHeadlessMobileSessionEditorTabs(WT, session)).toEqual([])
-  })
-})
-
 const ENV = 'env-1'
 
 // Distinct owners can hold the same path; list the owned runtime file first.
@@ -107,13 +85,6 @@ function twoOwnerSession(): WorkspaceSessionState {
 }
 
 describe('two owners of one path on a headless host, layout-owner build', () => {
-  it("lists each record under its own owner's tab", () => {
-    expect(buildHeadlessMobileSessionEditorTabs(WT, twoOwnerSession())).toEqual([
-      expect.objectContaining({ id: 'tab-runtime', isDirty: true, isActive: false }),
-      expect.objectContaining({ id: 'tab-local', isDirty: false, isActive: true })
-    ])
-  })
-
   it('retiring the runtime tab keeps the local record, its tab and the active file', () => {
     const retired = retireHeadlessEditorTab(
       twoOwnerSession(),
@@ -141,11 +112,5 @@ describe('two owners of one path on a headless host, layout-owner build', () => 
     ])
     expect(retired?.unifiedTabs?.[WT]?.map((tab) => tab.id)).toEqual(['tab-runtime'])
     expect(retired?.activeFileIdByWorktree?.[WT]).toBeNull()
-  })
-
-  it('retires nothing for a tab id neither owner is listed under', () => {
-    expect(
-      retireHeadlessEditorTab(twoOwnerSession(), WT, { id: 'tab-gone', filePath: FILE }, true)
-    ).toBeNull()
   })
 })

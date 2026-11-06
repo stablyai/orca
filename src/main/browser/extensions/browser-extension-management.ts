@@ -3,15 +3,15 @@ import type {
   BrowserExtensionActionResult,
   BrowserExtensionListResult,
   InstalledBrowserExtension
-} from '../../../shared/browser-extension-types'
-import { browserSessionRegistry } from '../browser-session-registry'
+} from '../../../shared/browser/extensions/browser-extension-types'
+import { browserSessionRegistry } from '../sessions/browser-session-registry'
 import { openBrowserExtensionOptionsPage } from './api/runtime'
-import { getBrowserExtensionInstallStore } from './browser-extension-install-store'
-import { reloadBrowserExtensionWhereEnabled } from './browser-extension-profile-reload'
+import { getBrowserExtensionInstallStore } from './installation/browser-extension-install-store'
+import { reloadBrowserExtensionWhereEnabled } from './profile-sessions/browser-extension-profile-reload'
 import {
   readBrowserExtensionIconDataUrl,
   readBrowserExtensionManifest
-} from './browser-extension-manifest'
+} from './installation/browser-extension-manifest'
 import {
   getBrowserExtensionSessionForProfile,
   listBrowserExtensionSessions,
@@ -19,27 +19,30 @@ import {
   loadBrowserExtensionIntoProfile,
   unloadBrowserExtensionEverywhere,
   unloadBrowserExtensionFromProfile
-} from './browser-extension-session-loader'
-import { clearBrowserExtensionSessionData } from './browser-extension-data-removal'
+} from './profile-sessions/browser-extension-session-loader'
+import { clearBrowserExtensionSessionData } from './profile-storage/browser-extension-data-removal'
 import {
   forgetHeldBrowserExtensionUpdate,
   getHeldBrowserExtensionUpdate
-} from './browser-extension-held-updates'
-import { browserExtensionIdForUnpackedFolder } from './browser-extension-load-directory'
+} from './web-store/browser-extension-held-updates'
+import { browserExtensionIdForUnpackedFolder } from './installation/browser-extension-load-directory'
 import {
   forgetBrowserExtensionLoadFailures,
   getBrowserExtensionLoadFailure
-} from './browser-extension-load-errors'
-import { notifyBrowserExtensionListChanged } from './browser-extension-list-changes'
-import { reviewHeldBrowserExtensionUpdate } from './browser-extension-webstore-updater'
-import { withBrowserExtensionLock } from './browser-extension-webstore-install'
+} from './profile-sessions/browser-extension-load-errors'
+import { notifyBrowserExtensionListChanged } from './installation/browser-extension-list-changes'
+import { reviewHeldBrowserExtensionUpdate } from './web-store/browser-extension-webstore-updater'
+import { withBrowserExtensionLock } from './installation/browser-extension-webstore-install'
 import { isBrowserExtensionSupportEnabled } from './browser-extension-support'
-import { withExtensionEnabled, withoutExtension } from './browser-extension-profile-enablement'
-import { forgetPinnedBrowserExtension } from './browser-extension-toolbar-pins'
-import { getBrowserExtensionProfileStateStore } from './browser-extension-profile-state-store'
-import { getBrowserExtensionSyncStorageStore } from './browser-extension-sync-storage-store'
-import { getBrowserExtensionDnrStore } from './browser-extension-dnr-store'
-import { notifyChromeWebStoreUninstalled } from './browser-extension-webstore-events'
+import {
+  withExtensionEnabled,
+  withoutExtension
+} from './profile-sessions/browser-extension-profile-enablement'
+import { forgetPinnedBrowserExtension } from './actions/browser-extension-toolbar-pins'
+import { getBrowserExtensionProfileStateStore } from './profile-storage/browser-extension-profile-state-store'
+import { getBrowserExtensionSyncStorageStore } from './profile-storage/browser-extension-sync-storage-store'
+import { getBrowserExtensionDnrStore } from './declarative-net-request/session/browser-extension-dnr-store'
+import { notifyChromeWebStoreUninstalled } from './web-store/browser-extension-webstore-events'
 
 /** Settings actions. Each returns a result instead of throwing so the renderer can show the reason. */
 

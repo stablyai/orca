@@ -8,7 +8,10 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { SettingsSegmentedControl, SettingsSwitch } from '../settings/SettingsFormControls'
+import {
+  SettingsSegmentedControl,
+  SettingsSwitch
+} from '../settings/form-controls/SettingsFormControls'
 import type { AgentDashboardMode } from '../../../../shared/ui-chrome-types'
 import { translate } from '@/i18n/i18n'
 import { canOpenAgentDashboardPopout } from './agent-dashboard-open-mode'

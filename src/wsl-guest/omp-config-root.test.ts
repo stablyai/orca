@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PluginOverlayManager } from './plugin-overlay'
 import { resolveOmpConfigDirName, resolvePiSourceAgentDir } from './plugin-overlay-env'
-import { __resetShellStartupEnvCache } from '../main/pty/shell-startup-env'
+import { __resetShellStartupEnvCache } from '../main/pty/shell-startup/shell-startup-env'
 import { resetLoginShellEnvironmentCacheForTests } from '../main/startup/login-shell-environment'
 
 describe('relay OMP config root', () => {

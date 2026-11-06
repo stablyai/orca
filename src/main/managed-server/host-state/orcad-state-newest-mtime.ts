@@ -1,4 +1,4 @@
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 import { orcadWindowsHostOpCommand } from '../install/orcad-remote-windows-node'
 import { ORCAD_SNAPSHOT_MEMBERS } from './orcad-state-snapshot-members'

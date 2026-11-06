@@ -6,8 +6,8 @@ import {
   type LocalAccountRuntimeTarget
 } from '../../shared/local-account-runtime'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
-import { isWslDistroRunning } from '../wsl-background-distro-gate'
+import { getWslHomeAsync, listWslDistrosAsync } from '../wsl/discovery/distro-catalog'
+import { isWslDistroRunning } from '../wsl/discovery/wsl-background-distro-gate'
 
 export type KimiHomeResolution = LocalAccountRuntimeTarget & {
   /** null when the distro is missing or stopped, or its home could not be probed. */

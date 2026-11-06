@@ -7,7 +7,7 @@ import {
   isCliFeatureTipCompleted
 } from '../components/feature-tips/feature-tip-startup-gate'
 import {
-  isChatUiLaunchTipHeldOut,
+  shouldSuppressAutomaticChatUiLaunchTip,
   trackChatUiFeatureTipExposure,
   trackChatUiFeatureTipShown,
   trackCmdJPaletteFeatureTipShown,
@@ -145,7 +145,7 @@ export function useOnboardingAndFeatureTips() {
 
     if (featureTipsDecision.tipId === 'chat-ui-here' && chatUiLaunchTipVariant) {
       trackChatUiFeatureTipExposure(chatUiLaunchTipVariant, settings ?? null)
-      if (isChatUiLaunchTipHeldOut(settings ?? null)) {
+      if (shouldSuppressAutomaticChatUiLaunchTip(settings ?? null)) {
         // Suppressed profiles leave this launch available for the next pending tip.
         actions.markFeatureTipsSeen(['chat-ui-here'])
         return
@@ -162,11 +162,7 @@ export function useOnboardingAndFeatureTips() {
     }
     // Mark seen when shown so a crash before dismissal cannot repeat the tip.
     actions.markFeatureTipsSeen([featureTipsDecision.tipId])
-    if (
-      featureTipsDecision.tipId === 'chat-ui-here' &&
-      chatUiLaunchTipVariant === 'chat-ui-off' &&
-      settings?.telemetry?.chatUiLaunchTipCohort !== 'treatment-center'
-    ) {
+    if (featureTipsDecision.tipId === 'chat-ui-here' && chatUiLaunchTipVariant === 'chat-ui-off') {
       // Terminal-default profiles get the nonblocking card; chat users still acknowledge the modal.
       setChatUiHereCornerCardOpen(true)
       return

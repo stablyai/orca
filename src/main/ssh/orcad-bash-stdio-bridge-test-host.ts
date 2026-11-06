@@ -2,7 +2,7 @@
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 
 function commandPath(name: string): string {
   return spawnSync('sh', ['-c', `command -v ${name}`], { encoding: 'utf8' }).stdout.trim()

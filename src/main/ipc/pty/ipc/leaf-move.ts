@@ -6,7 +6,7 @@ import {
   isTerminalLeafMoveRequest,
   type TerminalLeafMoveRequest,
   type TerminalLeafMoveResult
-} from '../../../../shared/terminal-leaf-move'
+} from '../../../../shared/workspace-layout/terminal-leaf-move'
 
 /** Durable move first; agent-status and orchestration keys follow only a committed move. */
 export async function commitLeafMoveAndRekey(

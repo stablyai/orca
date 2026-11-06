@@ -3,12 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 afterEach(() => vi.restoreAllMocks())
 import { registerReposCatalogNotificationsTests } from './repos-catalog-notifications.spec'
 import { registerReposStaleFetchTests } from './repos-stale-fetch.spec'
-import { registerReposSharedProjectBadgeColorTests } from './repos-shared-project-badge-color.spec'
+
 import { registerReposAllHostsFolderWorkspacesTests } from './repos-all-hosts-folder-workspaces.spec'
 
 describe('repos-catalog-notifications', registerReposCatalogNotificationsTests)
 describe('repos-stale-fetch', registerReposStaleFetchTests)
-describe('repos-shared-project-badge-color', registerReposSharedProjectBadgeColorTests)
+
 describe('repos-all-hosts-folder-workspaces', registerReposAllHostsFolderWorkspacesTests)
 
 import { createTestStore, TEST_REPO } from './store-test-helpers'

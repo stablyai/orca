@@ -1,5 +1,3 @@
-// Write typed facts with legacy text/reason sentences that released clients print directly. Set provider detail only at composition; later strings cannot prove authorship.
-
 import type { AgentSessionAccountKind } from '../agent-session-availability'
 import {
   readAgentSessionArgumentProblem,
@@ -9,7 +7,6 @@ import {
   readAgentSessionUsageLimit,
   type AgentSessionUsageLimit
 } from './agent-session-usage-limit'
-
 import {
   readAgentSessionRequestTimeout,
   type AgentSessionRequestTimeout
@@ -19,6 +16,7 @@ import {
   readAgentSessionRefusalReference,
   type AgentSessionRefusalReference
 } from './agent-session-wire-refusals'
+// Write typed facts with legacy text/reason sentences that released clients print directly. Set provider detail only at composition; later strings cannot prove authorship.
 
 /** One per situation with its own honest next step; a new one needs copy before it compiles. */
 export const AGENT_SESSION_FAILURE_KINDS = [
@@ -49,6 +47,7 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'providerExited',
   'restartFailed',
   'providerRejected',
+  'pluginInputRequired',
   'modelUnavailable',
   'claudeEffortInvalid',
   'attachmentInvalid',
@@ -62,6 +61,7 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'chatClosed',
   'hostRestarted',
   'notDelivered',
+  'unconfirmed',
   /** A conversation command the chat's state refused when its turn to run came. */
   'commandRefused',
   'compactionFailed',
@@ -168,7 +168,7 @@ export type AgentSessionProviderRetry = {
 export type AgentSessionFailureFact = {
   kind: AgentSessionFailureKind
   account?: AgentSessionAccountKind
-  /** Provider diagnostic, the rejected model ID on `modelUnavailable`, or the host error on `launchPreparationFailed`; never Orca's sentence. */
+  /** Provider diagnostic, rejected model/plugin identity, or the host error on `launchPreparationFailed`; never Orca's sentence. */
   detail?: ProviderDiagnostic
   /** On `restartFailed` and `startFailed`: the refusal that kept the agent from starting. On
    *  `commandRefused`: the refusal that kept the command from running. */
@@ -370,13 +370,4 @@ export function withProviderDiagnostic<TError extends Error>(
   return diagnostic ? Object.assign(error, { providerDiagnostic: diagnostic }) : error
 }
 
-/** The detail behind a failure's Details: provider words, or a log tail such as a CLI's startup stderr.
- *  A retry's log is the raw frame its row already shows. */
-export function agentSessionFailureDetailText(
-  fact: AgentSessionFailureFact | undefined
-): string | undefined {
-  const detail = fact?.detail
-  return detail && !(detail.audience === 'log' && fact.kind === 'providerRetrying')
-    ? detail.text
-    : undefined
-}
+export { agentSessionFailureDetailText } from './agent-session-failure-quoted-detail'

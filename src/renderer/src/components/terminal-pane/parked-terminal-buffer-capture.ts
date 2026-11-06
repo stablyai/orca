@@ -1,7 +1,7 @@
 import {
   shouldPreserveTerminalScrollbackBuffers,
   type RepoConnection
-} from '../../../../shared/workspace-session-terminal-buffers'
+} from '../../../../shared/workspace-session/workspace-session-terminal-buffers'
 import { captureTerminalShutdownBuffersBestEffort } from './shutdown-buffer-captures'
 
 type ParkedTerminalCaptureArgs = {

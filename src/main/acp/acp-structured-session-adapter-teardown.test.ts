@@ -13,6 +13,7 @@ import {
 } from './acp-structured-adapter.test-support'
 import { framesOf, openAttachedHostRig, send } from './acp-structured-host.test-support'
 import { ACP_STOP_GRACE_MS } from './acp-structured-session-adapter-deps'
+import { PROVIDER_EXIT_OUTPUT_DRAIN_MS } from '../provider-process/provider-exit-output-drain'
 
 afterEach(async () => {
   vi.useRealTimers()
@@ -147,7 +148,10 @@ describe('ACP teardown with nothing to cancel', () => {
       return proves
     }
     child.agent.stdin.destroy()
-    await vi.waitFor(() => expect(child.closes).toBe(1))
+    // The running prompt may still be answered, so the broken connection closes after the drain.
+    await vi.waitFor(() => expect(child.closes).toBe(1), {
+      timeout: PROVIDER_EXIT_OUTPUT_DRAIN_MS + 1_000
+    })
     proves = true
     await expect(rig.adapter.closeSession(SESSION)).resolves.toBe(true)
     expect(cancel).not.toHaveBeenCalled()

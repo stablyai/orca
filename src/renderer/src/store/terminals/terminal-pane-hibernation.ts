@@ -1,5 +1,5 @@
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   restorePtyDataHandlersAfterFailedShutdown,
   unregisterPtyDataHandlers

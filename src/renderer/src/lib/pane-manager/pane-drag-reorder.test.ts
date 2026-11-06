@@ -3,7 +3,7 @@ import type { ManagedPaneInternal } from './pane-manager-types'
 import type * as PaneTreeOpsModule from './pane-tree-ops'
 import { attachPaneDrag } from './pane-drag-pointer'
 import { createDragReorderState } from './pane-drag-reorder'
-import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
+import type { TerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 
 const detachPaneFromTree = vi.hoisted(() => vi.fn())
 const insertPaneNextTo = vi.hoisted(() => vi.fn())

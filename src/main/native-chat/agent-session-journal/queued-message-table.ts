@@ -1,11 +1,10 @@
-// Derive cards from journal rows; read the legacy table only for import. Handoff outcomes return
-// refusals, requeue proven non-delivery, and spend uncertain or accepted sends.
-
 import type { UnreadAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
+// Derive cards from journal rows; read the legacy table only for import. Handoff outcomes return
+// refusals, requeue proven non-delivery, and spend uncertain or accepted sends.
 
 export type QueuedMessageState = 'waiting' | 'dispatched' | 'returned' | 'withdrawn'
 
@@ -33,7 +32,9 @@ export type QueuedMessageRow = {
   returnedRejection: UnreadAgentSessionFailureFact | null
   /** Host-only handoff link; clear on proven withdrawal, retain on return. Clients use queuedMessageId. */
   consumedAs: string | null
-  /** Legacy null predates any Stop; otherwise compare enqueue cursor against the pause. */
+  recovers?: string
+  /** Where the journal stood when it was queued: a Stop's pause holds only cards queued before
+   *  it. Null on cards from builds before it was recorded, which read as queued before any Stop. */
   queuedAt: AgentJournalCursor | null
   options?: AgentSessionExecutionOptions
 }

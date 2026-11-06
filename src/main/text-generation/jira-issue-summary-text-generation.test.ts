@@ -9,8 +9,8 @@ import type {
 } from './source-control-text-generation-types'
 import { getAgentModelProbeSpec } from '../../shared/agent-model-probe-spec'
 import { planModelDiscovery } from './commit-message-model-discovery-policy'
-import { planCommitMessageGeneration } from '../../shared/commit-message-plan'
-import type { CommitMessagePlan } from '../../shared/commit-message-plan'
+import { planCommitMessageGeneration } from '../../shared/source-control/ai/generation/commit-message-plan'
+import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
 import { generateJiraIssueSummaryFromContext } from './jira-issue-summary-text-generation'
 
 function remoteTarget(execute: (plan: CommitMessagePlan) => Promise<string>) {

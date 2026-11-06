@@ -1,9 +1,9 @@
-import { continueMainAgentStatus } from '../../agent-lead-status-fold'
+import { continueMainAgentStatus } from '../../agent-status/lifecycle/agent-lead-status-fold'
 import {
   normalizeAgentStatusPayload,
-  type AgentMainAgentStatus,
   type ParsedAgentStatusPayload
-} from '../../agent-status-types'
+} from '../../agent-status/contracts/agent-status-types'
+import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-agent-status'
 import type { HookListenerState } from '../listener-state'
 import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'

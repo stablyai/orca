@@ -13,8 +13,8 @@ import type {
   VisibleWorkspaceHostIds,
   WorkspaceHostOrder
 } from '../../../shared/ui-chrome-types'
-import type { WorkspaceCleanupDismissal } from '../../../shared/workspace-cleanup'
-import { getWorkspaceCleanupHostIdentity } from '../../../shared/workspace-cleanup-host-identity'
+import type { WorkspaceCleanupDismissal } from '../../../shared/workspace-cleanup/workspace-cleanup'
+import { getWorkspaceCleanupHostIdentity } from '../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { resolveVisibleWorkspaceHostIds } from '../../../shared/workspace-view/workspace-host-visibility'
 import {
   composeWorktreeHostIdentity,

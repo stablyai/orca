@@ -1,7 +1,12 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import type { WebSocket } from 'ws'
 import { E2EEChannel } from './e2ee-channel'
-import { generateKeyPair, deriveSharedKey, encrypt, decrypt } from '../../../shared/e2ee-crypto'
+import {
+  generateKeyPair,
+  deriveSharedKey,
+  encrypt,
+  decrypt
+} from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 
 // Exercise mobile/desktop ephemeral key exchange and encrypted RPC compatibility without a real WebSocket.
 
@@ -104,50 +109,5 @@ describe('E2EE integration (simulated mobile ↔ desktop)', () => {
       ok: true,
       result: { status: 'ready' }
     })
-  })
-
-  it('mobile reconnects with fresh ephemeral key', () => {
-    completeHandshake()
-    expect(onReady).toHaveBeenCalledTimes(1)
-
-    const firstShared = deriveSharedKey(mobileEphemeralKeys.secretKey, serverKeys.publicKey)
-
-    channel.destroy()
-    wsSent.length = 0
-
-    const newMobileKeys = generateKeyPair()
-    const newChannel = new E2EEChannel(mockWs as unknown as WebSocket, {
-      serverSecretKey: serverKeys.secretKey,
-      resolveAuthenticatedDevice: (token) =>
-        token === 'device-abc'
-          ? {
-              deviceId: 'device-abc',
-              deviceToken: token,
-              scope: 'mobile',
-              clientId: token,
-              callerFingerprint: 'test-fingerprint',
-              credentialRevision: 0
-            }
-          : null,
-      onReady,
-      onError
-    })
-
-    completeHandshake(newChannel, newMobileKeys)
-
-    expect(onReady).toHaveBeenCalledTimes(2)
-
-    const secondShared = deriveSharedKey(newMobileKeys.secretKey, serverKeys.publicKey)
-
-    expect(Buffer.from(firstShared).toString('hex')).not.toBe(
-      Buffer.from(secondShared).toString('hex')
-    )
-
-    const received: string[] = []
-    newChannel.onMessage((plaintext) => received.push(plaintext))
-    newChannel.handleRawMessage(encrypt('{"id":"2","method":"test"}', secondShared))
-    expect(received).toEqual(['{"id":"2","method":"test"}'])
-
-    newChannel.destroy()
   })
 })

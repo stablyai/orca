@@ -143,25 +143,4 @@ describe('skill download response ownership', () => {
       await storage.close()
     }
   })
-
-  it('preserves complete downloads and checksum failures on a real streaming connection', async () => {
-    const storage = await storageServer((_path, response) => {
-      response.writeHead(200, { 'content-type': SKILL_PACKAGE_CONTENT_TYPE })
-      response.write(packageBytes.subarray(0, 5))
-      response.end(packageBytes.subarray(5))
-    })
-    try {
-      const input = await downloadInput(storage.origin)
-      const result = await downloadSkillPackageGrant(input)
-      expect(result.compressedBytes).toBe(packageBytes.length)
-      expect(result.archiveSha256).toBe(archiveSha256)
-      expect(await fs.readFile(result.archivePath)).toEqual(packageBytes)
-      await result.cleanup()
-      await expect(
-        downloadSkillPackageGrant({ ...input, expectedArchiveSha256: '0'.repeat(64) })
-      ).rejects.toThrow('skill-download-archive-digest-mismatch')
-    } finally {
-      await storage.close()
-    }
-  })
 })

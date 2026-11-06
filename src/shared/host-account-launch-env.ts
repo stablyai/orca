@@ -1,7 +1,7 @@
 /** Desktop-selected accounts are pushed to owned WSL orcad hosts without account services (D10).
  * Host-originated CLI/orchestration/automation/chat/generation/bare launches use the same per-distro account environment as desktop-originated launches. */
 import { z } from 'zod'
-import { AgentLaunchAccountEnv } from './agent-launch-account-env'
+import { AgentLaunchAccountEnv } from './agent-launch/startup/agent-launch-account-env'
 
 export const HostAccountLaunchEnvParams = z
   .object({

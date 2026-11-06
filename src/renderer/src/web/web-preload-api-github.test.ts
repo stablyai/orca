@@ -1,5 +1,5 @@
 import { GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY } from '../../../shared/task-source-runtime-capabilities'
-import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY } from '../../../shared/source-control-runtime-capabilities'
+import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY } from '../../../shared/source-control/runtime/source-control-runtime-capabilities'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'

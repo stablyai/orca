@@ -3,8 +3,8 @@
 import {
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
   type AgentChatPermissionMode
-} from '../../agent-chat-permission-mode'
-import { agentChatPermissionModes } from '../../agent-chat-permission-support'
+} from '../../agent-launch/permissions/agent-chat-permission-mode'
+import { agentChatPermissionModes } from '../../agent-launch/permissions/agent-chat-permission-support'
 import type { StructuredAgentSessionOptionRecord } from './structured-agent-session-option-state'
 import type { SessionOptionDescriptor } from '../../native-chat/input/native-chat-session-options'
 

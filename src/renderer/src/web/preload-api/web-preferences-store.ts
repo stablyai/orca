@@ -12,7 +12,7 @@ import type { PersistedUIState } from '../../../../shared/persisted-ui-state-typ
 import {
   applyPRBotAuthorOverride,
   normalizePRBotAuthorOverrides
-} from '../../../../shared/pr-bot-author-overrides'
+} from '../../../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { readStoredWebRuntimeEnvironment } from '../web-runtime-environment'
 import {
   mergeSettings,

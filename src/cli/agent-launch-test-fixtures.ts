@@ -1,4 +1,4 @@
-import { AGENT_LAUNCH_RUNTIME_CAPABILITIES } from '../shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITIES } from '../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { okFixture } from './test-fixtures'
 
 export function agentLaunchHostFixture() {

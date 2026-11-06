@@ -7,7 +7,7 @@ import { wslMoveScopeRootPaths } from './wsl-move-scope-roots'
 import {
   listWslDriveUncConversions,
   type WslDriveUncConversion
-} from '../../wsl/wsl-drive-unc-conversion-journal'
+} from '../../wsl/filesystem/wsl-drive-unc-conversion-journal'
 
 export type WslMoveScopeIds = {
   repoIds: ReadonlySet<string>

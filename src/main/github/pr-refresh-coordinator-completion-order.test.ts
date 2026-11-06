@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PRRefreshOutcome } from '../../shared/github/pull-request-refresh-types'
-import { runCoalescedProbe, type CoalescedProbes } from '../git/coalesced-probe'
+import { runCoalescedProbe, type CoalescedProbes } from '../git/remotes/coalesced-probe'
 import { makeCandidate, makePR } from './pr-refresh-coordinator-test-harness'
 
 const { coordinatorMocks, moduleMocks } = await vi.hoisted(async () => {

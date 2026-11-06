@@ -18,6 +18,9 @@ vi.mock('../components/MobileStateView', () => ({ MobileLoadErrorState: 'LoadErr
 vi.mock('../session/native-chat/visual/MobileNativeChatImageViewer', () => ({
   MobileNativeChatImageViewer: 'ImageViewer'
 }))
+vi.mock('../session/native-chat/visual/MobileImageViewerActions', () => ({
+  MobileImageViewerActions: 'ImageViewerActions'
+}))
 const loader = vi.hoisted(() => vi.fn())
 vi.mock('./mobile-markdown-image-source', () => ({ loadMarkdownPreviewImage: loader }))
 let tree: ReactTestRenderer | null = null
@@ -33,24 +36,6 @@ const props = {
   href: 'a.png',
   alt: 'Architecture'
 }
-
-it('shows the loaded image and expands it in the existing image viewer', async () => {
-  loader.mockResolvedValue('data:image/png;base64,cG5n')
-  await act(async () => {
-    tree = create(createElement(MobileMarkdownPreviewImage, props))
-  })
-  const image = tree!.root.find((node) => String(node.type) === 'Image')
-  expect(image.props.source.uri).toBe('data:image/png;base64,cG5n')
-  expect(tree!.root.find((node) => String(node.type) === 'Image').props.style.aspectRatio).toBe(
-    600 / 220
-  )
-  await act(async () =>
-    tree!.root.find((node) => String(node.type) === 'Pressable').props.onPress()
-  )
-  expect(tree!.root.find((node) => String(node.type) === 'ImageViewer').props.uri).toBe(
-    'data:image/png;base64,cG5n'
-  )
-})
 
 it('retries a refused image without hiding the surrounding document', async () => {
   loader

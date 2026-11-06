@@ -15,7 +15,7 @@ vi.mock('electron', () => ({
   },
   shell: {}
 }))
-vi.mock('../local-file-access-resolution', () => ({
+vi.mock('./access/local-file-access-resolution', () => ({
   resolveLocalWriteRequestPath: async (path: string) => path
 }))
 vi.mock('./filesystem-mutations', () => ({ registerFilesystemMutationHandlers: vi.fn() }))

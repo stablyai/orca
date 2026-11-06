@@ -9,7 +9,7 @@ import {
   type WslMoveCutover
 } from '../../../shared/wsl-move/wsl-move-cutover'
 import type { WslMoveUseLocallyResult } from '../../../shared/wsl-move/wsl-moved-project'
-import { wslHostsServing } from '../../wsl/wsl-host-gate'
+import { wslHostsServing } from '../../wsl/host-lifecycle/wsl-host-gate'
 import { isWslMoveRunning } from './wsl-move-running-moves'
 import {
   listWslMoveCutoverChain,

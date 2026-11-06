@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
-import '../../../../shared/workspace-doc-history'
+import '../../../../shared/workspace-session/workspace-doc-history'
 
 createStoreCascadesMockApi()
 const WT = 'repo1::/path/wt1'

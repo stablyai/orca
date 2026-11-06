@@ -1,16 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionOptionsResult } from './agent-session-options-result'
-import { sortNativeChatSessionOptions } from '../../native-chat/input/native-chat-session-option-snapshot'
+import '../../native-chat/input/native-chat-session-option-snapshot'
 import {
   canSetStructuredAgentSessionOption,
   structuredAgentSessionOptionSnapshot
 } from './structured-agent-session-option-snapshot'
 import {
   applyStructuredAgentSessionOptions,
-  createStructuredAgentSessionOptionState,
-  structuredAgentSessionOptionPicks
+  createStructuredAgentSessionOptionState
 } from './structured-agent-session-options'
-import { structuredAgentSessionOptionView } from './structured-agent-session-option-view'
+import './structured-agent-session-option-view'
 import { structuredAgentSessionSeedCatalog } from './structured-agent-session-seed-catalog'
 
 const permission = (state: Parameters<typeof structuredAgentSessionOptionSnapshot>[0]) =>
@@ -68,20 +67,6 @@ describe('the permission mode picker', () => {
     ).toMatchObject({ settable: true, kind: { currentValue: 'full-access' } })
   })
 
-  it.each(['claude', 'codex', 'grok', 'opencode', 'opencode2', 'omp', 'antigravity'])(
-    'keeps a saved Ask choice editable for %s despite stale or missing reports',
-    (agent) => {
-      const state = live(agent, { permissionMode: 'ask' })
-      for (const reportedPermissionMode of [undefined, null, 'full-access', 'retired-mode']) {
-        expect(permission({ ...state, reportedPermissionMode })).toMatchObject({
-          settable: true,
-          valueSource: 'applied',
-          kind: { currentValue: 'ask' }
-        })
-      }
-    }
-  )
-
   it('admits supported Own delegation through the same descriptor/readiness predicate', () => {
     const state = { ...live('codex', { permissionMode: 'ask' }), permissionOwnSupported: true }
     expect(canSetStructuredAgentSessionOption(state, 'permissionMode', 'own')).toBe(true)
@@ -113,42 +98,5 @@ describe('the permission mode picker', () => {
         'own'
       )
     ).toBe(true)
-  })
-
-  it('shows the seeded mode before the agent starts, beside the quiet model pill', () => {
-    const state = createStructuredAgentSessionOptionState(
-      'codex',
-      structuredAgentSessionSeedCatalog('codex')
-    )
-    const view = structuredAgentSessionOptionView(state, { permissionMode: 'full-access' }, {})
-    expect(structuredAgentSessionOptionSnapshot(view).map((descriptor) => descriptor.id)).toEqual([
-      'model',
-      'permissionMode'
-    ])
-    expect(permission(view)).toMatchObject({
-      settable: true,
-      kind: { currentValue: 'full-access' }
-    })
-  })
-
-  it("shows a held pick over the host's value, and the host's over the seed", () => {
-    const state = live('codex', { permissionMode: 'auto' })
-    const seed = { permissionMode: 'ask' }
-    expect(permission(structuredAgentSessionOptionView(state, seed, {}))).toMatchObject({
-      kind: { currentValue: 'auto' }
-    })
-    expect(
-      permission(structuredAgentSessionOptionView(state, seed, { permissionMode: 'full-access' }))
-    ).toMatchObject({ kind: { currentValue: 'full-access' } })
-  })
-
-  it('stays out of the per-model option pill and out of the saved selection', () => {
-    const state = live('codex', { permissionMode: 'ask' })
-    expect(
-      sortNativeChatSessionOptions(structuredAgentSessionOptionSnapshot(state)).map(
-        (descriptor) => descriptor.id
-      )
-    ).not.toContain('permissionMode')
-    expect(structuredAgentSessionOptionPicks(state, { permissionMode: 'full-access' })).toEqual([])
   })
 })

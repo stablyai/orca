@@ -13,29 +13,28 @@ import { clearProviderPtyState } from '../ipc/pty/provider/state-cleanup'
 import { agentHookServer } from '../agent-hooks/server'
 import { toAgentStatusIpcPayload } from '../agent-hooks/server/server-status-identity'
 import { browserManager } from '../browser/browser-manager'
-import { browserSessionRegistry } from '../browser/browser-session-registry'
+import { browserSessionRegistry } from '../browser/sessions/browser-session-registry'
 import { loadAgentSessionClaimSigner } from '../runtime/agent-session/ownership/agent-session-claim-identity'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
-import { codexAiVaultSessionResumePreparation } from '../codex/codex-ai-vault-session-resume'
+import { codexAiVaultSessionResumePreparation } from '../codex/history/resume/codex-ai-vault-session-resume'
 import { prepareCodexPinnedLaunchHome } from './codex-session-resume-launch'
-import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
+import { resolveHostCodexSessionSourceHome } from '../codex/history/rollouts/codex-session-source-home'
 import { agentHookRuntimeDeps } from '../agent-hooks/agent-hook-runtime-deps'
-import { getDaemonProvider } from '../daemon/daemon-provider-state'
-import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
-import type { OrchestrationEnvironmentTransport } from '../runtime/orchestration/environment-transport'
-import { resolveEnvironment } from '../../shared/runtime-environment-store'
-import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
-import { getPreferredPairedRuntimeConnection } from '../../shared/runtime-environments'
-import { pairedOrchestrationPeers } from '../runtime/orchestration/environment-transport'
+import { getDaemonProvider } from '../daemon/providers/lifecycle/daemon-provider-state'
+import type { TerminalSideEffectBatch } from '../../shared/terminal/output/terminal-side-effect-facts'
+import { resolveTuiAgentLaunchEnv } from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
+import { createOrchestrationEnvironmentTransport } from '../ipc/runtime-environments/orchestration-environment-transport'
 import { mainProcessState as state } from './main-process-state'
 import { suspendEphemeralVmWorkspace } from '../ephemeral-vm/workspace-suspend'
+import { resumeEphemeralVmWorkspace } from '../ephemeral-vm/workspace-resume'
+import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
 import { installWslOrcadAccountShim } from './wsl-orcad-account-env-wiring'
 import {
   codexStructuredLaunchHomeResolvers,
   prepareCodexRuntimeHomeForLaunch
 } from './codex-launch-preparation'
-import { resolveHostAgentBaseEnvironment } from '../runtime/structured-agent-shell-environment'
+import { resolveHostAgentBaseEnvironment } from '../runtime/agent-session/environment/structured-agent-shell-environment'
 import type { RuntimeDesktopWindowStatus } from '../../shared/runtime-types'
 import { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
 import { SkillCloudService } from '../skills/skill-cloud-service'
@@ -48,7 +47,7 @@ import { startAgentStateRulesLiveUpdates } from '../runtime/agent-state-rules/ag
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { getRuntimeEnvironmentRegistryRoot } from '../ipc/runtime-environments/runtime-environment-registry-root'
-import { openOffscreenBrowserPageLink } from '../runtime/browser/offscreen-browser-page-link'
+import { openOffscreenBrowserPageLink } from '../runtime/browser/commands/offscreen-browser-page-link'
 
 export function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
   const activation = state.desktopActivationGate
@@ -64,28 +63,6 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   const stats = state.stats
   if (!store || !stats) {
     throw new Error('Store and stats must be initialized before runtime')
-  }
-  const orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport = {
-    resolve: (selector) => {
-      const environment = resolveEnvironment(getRuntimeEnvironmentRegistryRoot(), selector)
-      const connection = getPreferredPairedRuntimeConnection(environment)
-      return {
-        environmentId: environment.id,
-        name: environment.name,
-        ...pairedOrchestrationPeers(connection.hostPublicKeyB64, connection.credential.deviceToken),
-        pairingRevision: environment.pairingRevision ?? environment.createdAt
-      }
-    },
-    call: (selector, method, params, timeoutMs, envelope, expectedPairingRevision) =>
-      callRuntimeEnvironment(
-        getRuntimeEnvironmentRegistryRoot(),
-        selector,
-        method,
-        params,
-        timeoutMs,
-        expectedPairingRevision,
-        envelope
-      )
   }
   // Process-scope subscription covers desktop, headless serve and fleet status.
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
@@ -131,7 +108,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
         homePath,
         resolveTuiAgentLaunchEnv('codex', store.getSettings())
       ),
-    orchestrationEnvironmentTransport,
+    orchestrationEnvironmentTransport: createOrchestrationEnvironmentTransport(),
     workspaceSleepPlatform: {
       callEnvironment: (environmentId, method, params, timeoutMs) =>
         callRuntimeEnvironment(
@@ -141,7 +118,10 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
           params,
           timeoutMs
         ),
-      suspendVm: (workspaceId) => suspendEphemeralVmWorkspace(store, workspaceId)
+      ownsVm: (workspaceId) =>
+        findWorkspaceEphemeralVmRuntime(app.getPath('userData'), workspaceId) !== undefined,
+      suspendVm: (workspaceId) => suspendEphemeralVmWorkspace(store, workspaceId),
+      resumeVm: (workspaceId) => resumeEphemeralVmWorkspace(store, workspaceId)
     },
     // Paired/local settings writes must reconcile the scanner child through the same path.
     applySessionSearchSettings: applySessionSearchSettingsChange,

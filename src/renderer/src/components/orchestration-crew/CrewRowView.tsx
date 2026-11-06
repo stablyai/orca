@@ -127,7 +127,7 @@ export const CrewRowView = memo(function CrewRowView({
         </p>
       ) : null}
       {expanded ? (
-        <div className="col-span-2 pt-2">
+        <div className="col-span-2 min-w-0 pt-2">
           <CrewRowDetails row={row} />
         </div>
       ) : null}

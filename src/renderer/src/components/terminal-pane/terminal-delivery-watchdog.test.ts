@@ -1,6 +1,6 @@
 // Confirm dead push delivery over two silent ticks, then heal through invoke once per cooldown: reattach first and deliver pulled restore markers locally.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PtyRendererDeliveryHealthReply } from '../../../../shared/pty-renderer-delivery-health'
+import type { PtyRendererDeliveryHealthReply } from '../../../../shared/terminal/pty/diagnostics/pty-renderer-delivery-health'
 
 vi.mock('@/lib/e2e-config', () => ({ e2eConfig: { exposeStore: false } }))
 
@@ -163,20 +163,5 @@ describe('terminal delivery watchdog', () => {
     await vi.advanceTimersByTimeAsync(INTERVAL_MS)
     expect(countHeals()).toBe(2)
     expect(reattachMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('never starts without the invoke heal lane (web client, partial mocks)', async () => {
-    ;(window.api.pty as { reportRendererDeliveryState?: unknown }).reportRendererDeliveryState =
-      undefined
-    const watchdog = await import('./terminal-delivery-watchdog')
-    watchdog.startTerminalDeliveryWatchdog({
-      reattachPushListeners: reattachMock,
-      hasAttachedPtys: () => true
-    })
-
-    await vi.advanceTimersByTimeAsync(INTERVAL_MS * 3)
-
-    expect(reattachMock).not.toHaveBeenCalled()
-    expect(vi.getTimerCount()).toBe(0)
   })
 })

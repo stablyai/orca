@@ -102,6 +102,10 @@ export class AgentSenderLineageGraph {
     return this.nodes.get(id)?.row
   }
 
+  resource(id: string): WorkerTerminalResourceRow | undefined {
+    return this.nodes.get(id)?.resource
+  }
+
   resolve(id: string): Lineage {
     const node = this.nodes.get(id)
     if (!node) {

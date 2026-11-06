@@ -1,16 +1,17 @@
 import { getMobilePrimaryActionHint } from './mobile-source-control-actions'
 import { getMobilePrimaryActionLabel } from './mobile-source-control-primary-action-label'
 import { getMobileForcePushBlockedReason } from './mobile-source-control-review-copy'
-import type { SourceControlPrimaryActionDecisionInputs } from '../../../src/shared/source-control-primary-action-decision-types'
-import {
-  resolveSourceControlCommitAreaPrimaryActionDecision,
-  type SourceControlCommitAreaPrimaryActionDecision,
-  type SourceControlRemoteOpKind
-} from '../../../src/shared/source-control-primary-action-decision'
+import type {
+  SourceControlPrimaryActionDecisionInputs,
+  SourceControlCommitAreaPrimaryActionDecision,
+  SourceControlRemoteOpKind
+} from '../../../src/shared/source-control/decisions/source-control-primary-action-decision-types'
+import { resolveSourceControlCommitAreaPrimaryActionDecision } from '../../../src/shared/source-control/decisions/source-control-primary-action-decision'
+
 import {
   hasResolvableHostedReviewPushTargetLink,
   resolveHostedReviewPushTargetForActions
-} from '../../../src/shared/hosted-review-push-target'
+} from '../../../src/shared/source-control/hosted-review/hosted-review-push-target'
 import type { PRState } from '../../../src/shared/github/pull-request-types'
 import type { GitPushTarget } from '../../../src/shared/worktree/types'
 import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'

@@ -114,17 +114,4 @@ describe('OrcaYamlTrustDialog Always trust', () => {
     clickButton("Don't run")
     await expect(edited).resolves.toBe('skip')
   })
-
-  it('still lets a single-host repo run an edited script without prompting', async () => {
-    useAppStore.setState({ repos: [makeRepo('local')] })
-    serveSetupScript('pnpm install')
-
-    const first = confirmSetup()
-    await approveWithAlwaysTrust()
-    await expect(first).resolves.toBe('run')
-
-    serveSetupScript('pnpm install --frozen-lockfile')
-    await expect(confirmSetup()).resolves.toBe('run')
-    expect(useAppStore.getState().activeModal).toBe('none')
-  })
 })

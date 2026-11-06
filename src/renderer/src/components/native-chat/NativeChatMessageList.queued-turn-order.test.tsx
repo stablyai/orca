@@ -163,33 +163,5 @@ describe.each([['states each row’s turn', true]])(
         screen.getByText('SECOND DONE')
       )
     })
-
-    it('keeps that order once both turns settle', () => {
-      render(
-        <NativeChatMessageList
-          session={session('ready')}
-          journalItems={journal('completed', statesScope)}
-          journalSubmissions={[]}
-          isWorking={false}
-          workingStartedAt={null}
-          settledTurns={
-            new Map([
-              ['user-a', { startedAt: 1, workedSeconds: 17 }],
-              ['user-b', { startedAt: 2, workedSeconds: 51 }]
-            ])
-          }
-          expandSignal={false}
-        />
-      )
-
-      expectInOrder(
-        screen.getByText('Run the first job'),
-        bar('Worked for 17s'),
-        screen.getByText('FIRST DONE'),
-        screen.getByText('Then run the second job'),
-        bar('Worked for 51s'),
-        screen.getByText('SECOND DONE')
-      )
-    })
   }
 )

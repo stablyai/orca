@@ -32,7 +32,7 @@ import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-iden
 import {
   _pendingWslStoppedWorktreeRescanCount,
   holdWslStoppedWorktreeRescan
-} from '../../wsl-stopped-worktree-rescan-registry'
+} from '../../wsl/discovery/wsl-stopped-worktree-rescan-registry'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 
 const at = (id: string, hostId: ExecutionHostId) => hostWorktreeTarget({ id, hostId })

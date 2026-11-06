@@ -1,4 +1,4 @@
-import { deleteBranchOfUnregisteredWorktree } from '../../git/worktree-removal'
+import { deleteBranchOfUnregisteredWorktree } from '../../git/worktrees/removal/worktree-removal'
 import {
   isRecordedCheckout,
   registeredRemovalCheckout,

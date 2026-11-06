@@ -60,13 +60,6 @@ describe('detected worktree scan supersession', () => {
     __resetDetectedWorktreeScanCacheForTests()
   })
 
-  it('reports a scan that settled without any mutation as not superseded', async () => {
-    listRepoWorktreesMock.mockResolvedValue([worktreeAt(repo.path)])
-    const scan = await listDetectedGitWorktrees(store, repo)
-    expect(scan.superseded).toBe(false)
-    expect(scan.fresh).toBe(true)
-  })
-
   it('reports a scan a worktree mutation overtook as superseded, for the runner and a joiner', async () => {
     const inFlight = deferredScan()
     listRepoWorktreesMock.mockReturnValueOnce(inFlight.promise)

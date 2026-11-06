@@ -5,14 +5,14 @@ import { findKnownWorktreeById } from './detected-worktree-meta'
 import {
   makeFolderWorkspace,
   makeProjectGroup
-} from '../../../../components/sidebar/folder-workspace-composer-submit-fixtures'
+} from '../../../../components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import { findFolderWorkspaceOwner } from '@/lib/folder-workspace-runtime-owner'
 import { selectWorkspaceByHostTarget } from '../../../workspace-record-selectors'
 import { resolveWorkspaceDirectory } from '@/lib/workspace-directory'
-import { resolveQualifiedFolderWorkspaceResult } from '../../../../../../shared/folder-workspace-execution-host'
+import { resolveQualifiedFolderWorkspaceResult } from '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { findIndexedFolderWorkspaceOwner } from '@/lib/worktree-runtime-owner-index'
-import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { resolveNotificationTabOwner } from '@/attention/notification-subject-owner'
 import { getWorktreeDeleteStateKey } from '../teardown/worktree-delete-state'
 

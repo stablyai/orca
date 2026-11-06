@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { PREFLIGHT_METHODS } from '../runtime/rpc/methods/preflight'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { GlobalWindowsRuntimeDefault } from '../../shared/project-execution-runtime'
 import type { Project } from '../../shared/project-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
@@ -20,7 +20,7 @@ import {
   detectProjectLaunchContext,
   type WorkspaceAgentDetectionStore
 } from './workspace-agent-detection'
-import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl'
+import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl/discovery/distro-catalog'
 
 const { detectInstalledMock, refreshMock } = vi.hoisted(() => ({
   detectInstalledMock: vi.fn(),
@@ -28,7 +28,7 @@ const { detectInstalledMock, refreshMock } = vi.hoisted(() => ({
 }))
 
 // These cases cover a running distro; the E9 stopped-distro gate has its own suite.
-vi.mock('../wsl/wsl-background-exec-gate', () => ({
+vi.mock('../wsl/discovery/wsl-background-exec-gate', () => ({
   assertWslDistroRunningForExec: async () => {},
   runAsWslExecUserAct: async (_distro: unknown, act: () => Promise<unknown>) => act()
 }))

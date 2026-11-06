@@ -5,7 +5,7 @@ import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionCancelResult } from '../../../../shared/agent-session/agent-session-wire'
-import type { AgentChildWorkView } from '../../../../shared/agent-status-child-work-view'
+import type { AgentChildWorkView } from '../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { structuredSessionBackgroundTasksView } from '../../../../shared/structured-session-background-tasks-view'
 import { NativeChatStructuredSessionStatus } from './NativeChatStructuredSessionStatus'
 
@@ -41,11 +41,13 @@ describe('NativeChatStructuredSessionStatus', () => {
         sessionId="session-1"
         paneKey="pane-1"
         isVisible
-        backgroundTasks={structuredSessionBackgroundTasksView(
-          { state: 'monitoring', supportsTaskStop: true, children },
-          null
-        )}
-        stopBackgroundTask={stopBackgroundTask}
+        tasks={{
+          backgroundTasks: structuredSessionBackgroundTasksView(
+            { state: 'monitoring', supportsTaskStop: true, children },
+            null
+          ),
+          stopBackgroundTask
+        }}
       />
     )
     const { rerender } = render(strip([helper({ invocationId: 'turn-1', generation: 1 })]))

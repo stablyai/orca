@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { RemoteInstallTransport } from './remote-install-transport'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { execHostCommand } from '../../ssh/remote-exec/remote-host-exec'
 import { isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec/remote-exec-command'
 import {

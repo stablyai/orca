@@ -64,7 +64,7 @@ export function continuingStructuredAgentSessionInput(
 }
 
 export function markStructuredAgentSessionInputUnadmitted(
-  journal: Pick<AgentSessionJournal, 'submissions'>,
+  journal: Pick<AgentSessionJournal, 'submissions' | 'submission'>,
   clientMessageId: string,
   owner: () => void,
   unadmitted: boolean,
@@ -77,10 +77,7 @@ export function markStructuredAgentSessionInputUnadmitted(
       unadmitted,
       compilerPermission,
       signal,
-      pending: () =>
-        journal
-          .submissions()
-          .some((s) => s.clientMessageId === clientMessageId && s.dispatchState === 'pending')
+      pending: () => journal.submission(clientMessageId)?.dispatchState === 'pending'
     })
   }
 }

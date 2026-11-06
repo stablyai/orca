@@ -1,6 +1,6 @@
 /** Same repo/path IDs can belong to two hosts; removing remote copy must preserve local shells, tabs and dirty drafts. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { registerPendingEditorFlush } from '@/components/editor/editor-pending-flush'
+import { registerPendingEditorFlush } from '@/components/editor/save/flush/editor-pending-flush'
 import { confirmUnsavedDiscard } from './worktrees/teardown/removed-workspace-unsaved-files'
 import {
   createTestStore,

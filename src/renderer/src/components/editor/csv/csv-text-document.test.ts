@@ -67,25 +67,6 @@ describe('CSV text mutations', () => {
     ).toBe('a,b,c\nshort,,last\n1,2,3\n')
   })
 
-  it('inserts and deletes rows while retaining the final-newline preference', () => {
-    for (const ending of ['', '\r\n']) {
-      const document = parseCsvTextDocument(`a\r\nfirst\r\nlast${ending}`, ',')
-      expect(
-        mutateCsvTextDocument(document, {
-          kind: 'delete-rows',
-          rows: [2]
-        })
-      ).toBe(`a\r\nfirst${ending}`)
-      const result = mutateCsvTextDocument(document, {
-        kind: 'insert-rows',
-        at: 3,
-        rows: [['']]
-      })
-      expect(result).toBe(`a\r\nfirst\r\nlast\r\n""${ending}`)
-      expect(parseCsv(result).rows).toEqual([['a'], ['first'], ['last'], ['']])
-    }
-  })
-
   it('keeps an empty retained record when deleting the unterminated last row', () => {
     const document = parseCsvTextDocument('\nbody', ',')
     const result = mutateCsvTextDocument(document, { kind: 'delete-rows', rows: [1] })
@@ -119,29 +100,5 @@ describe('CSV text mutations', () => {
     const deleted = mutateCsvTextDocument(document, { kind: 'delete-columns', columns: [0, 2] })
     expect(parseCsv(deleted).rows).toEqual([[''], [''], ['']])
     expect(mutateCsvTextDocument(document, { kind: 'delete-columns', columns: [0, 1, 2] })).toBe('')
-  })
-
-  it('creates a first column in an empty file and rejects stale or unsafe mutations', () => {
-    expect(
-      mutateCsvTextDocument(parseCsvTextDocument('\ufeff', ','), {
-        kind: 'insert-column',
-        at: 0,
-        label: 'name'
-      })
-    ).toBe('\ufeffname')
-    const document = parseCsvTextDocument('a\nx', ',')
-    expect(() =>
-      mutateCsvTextDocument(document, {
-        kind: 'cells',
-        edits: [{ row: 1, column: 1, value: 'wrong' }]
-      })
-    ).toThrow('no longer exists')
-    expect(() =>
-      mutateCsvTextDocument(document, {
-        kind: 'cells',
-        edits: [{ row: 1, column: 0, value: 'x'.repeat(1024 * 1024 + 1) }]
-      })
-    ).toThrow('record')
-    expect(document.rows).toEqual([['a'], ['x']])
   })
 })

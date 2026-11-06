@@ -2,8 +2,8 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, truncateSync, writeFileS
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { encodePairingOffer } from '../../shared/pairing'
-import { PAIRING_OFFER_VERSION } from '../../shared/mobile-relay-pairing-offer'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import {
   getEphemeralVmRuntimeStorePath,
   listEphemeralVmRuntimes,

@@ -7,7 +7,7 @@ import type {
   WorktreeBaseWatchTarget
 } from './worktree-base-directory-event-filter'
 import { startBasePoller } from './worktree-base-directory-marker-poller'
-import { startGitCommonWatch } from '../../worktree-git-common-watch'
+import { startGitCommonWatch } from '../git/worktree-git-common-watch'
 
 export type WorktreeBasePollEvent = { type: 'create' | 'update' | 'delete'; path: string }
 

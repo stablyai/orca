@@ -6,7 +6,7 @@ import {
   createClaudeStructuredLaunchResolver,
   createCodexStructuredLaunchResolver,
   createPiRpcLaunchResolver
-} from '../runtime/structured-agent-launch-composition.test-support'
+} from '../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
 import { buildPiRpcLaunch } from '../pi/rpc-launch'
 

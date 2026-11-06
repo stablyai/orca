@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
+import type { ParsedAgentStatusPayload } from '../../shared/agent-status/contracts/agent-status-types'
 import { FOREGROUND_COMMAND_READS } from '../../shared/foreground-command-settle'
 import { OpenCodeRunLifetimeStatus } from './opencode-run-lifetime-status'
 

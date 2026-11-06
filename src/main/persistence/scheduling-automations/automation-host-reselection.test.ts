@@ -4,10 +4,16 @@ import type { Automation, AutomationUpdateInput } from '../../../shared/automati
 import type { Repo } from '../../../shared/repo-types'
 import {
   createAutomation,
+  listAutomations,
   updateAutomation,
   type AutomationDefinitionOperations
 } from './automation-definition-operations'
 import { automationOwnerPrecondition } from './automation-owner-projection'
+import * as launchSource from '../../../shared/automation-launch-setup-source'
+import {
+  automationWithLaunchSetup,
+  automationCanonicalDefinition
+} from '../../../shared/automation-launch-setup'
 
 const destination = { selector: { kind: 'ssh', targetId: 'box', targetGeneration: 7 } } as const
 const expectedOwner = { selector: { kind: 'orphan' } } as const
@@ -276,7 +282,34 @@ describe('same-record host reselection transaction', () => {
       schedulerOwner: 'ssh_bridge'
     })
     expect(state.automationRuns).toBe(history)
-    expect(state.automations).toEqual([updated])
+    expect(state.automations.map(automationWithLaunchSetup)).toEqual([updated])
+    expect(state.automations[0]).not.toHaveProperty('launchSetup')
     expect(operations.flush).toHaveBeenCalledTimes(1)
   })
+})
+
+it('projects a modern automation list once per record at N and 10N without rewriting storage', () => {
+  const { state, current } = fixture()
+  const project = vi.spyOn(launchSource, 'automationLegacyArguments')
+  try {
+    for (const population of [10, 100]) {
+      state.automations = Array.from({ length: population }, (_, index) => ({
+        ...automationCanonicalDefinition(current),
+        id: `modern-${index}`,
+        launchPreferences: { model: 'gpt-5.5', options: { effort: 'high' } },
+        extraAgentArgs: '--add-dir docs'
+      }))
+      const saved = JSON.stringify(state.automations)
+      project.mockClear()
+      const listed = listAutomations(state)
+      expect(listed).toHaveLength(population)
+      expect(project).toHaveBeenCalledTimes(population)
+      expect(listed.every((automation) => automation.extraAgentArgs?.includes('gpt-5.5'))).toBe(
+        true
+      )
+      expect(JSON.stringify(state.automations)).toBe(saved)
+    }
+  } finally {
+    project.mockRestore()
+  }
 })

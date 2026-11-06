@@ -6,7 +6,7 @@ import type { WorkspaceSource } from '../../../shared/workspace-source'
 import { isTelemetryEnabled, track } from '../../telemetry/client'
 import { getCohortAtEmit } from '../../telemetry/cohort-classifier'
 import { classifyWorkspaceCreateError } from '../../ipc/workspace-create-error-classifier'
-import { probeCreateEventRepoFacts } from '../../git/create-event-repo-probe'
+import { probeCreateEventRepoFacts } from '../../git/worktrees/creation/create-event-repo-probe'
 import {
   createWorktreeCreateTimingRecorder,
   type WorktreeCreateTimingRecorder

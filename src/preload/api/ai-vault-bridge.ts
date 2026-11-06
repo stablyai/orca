@@ -1,24 +1,27 @@
-import { createSessionSearchClient } from '../../shared/ai-vault-search-client'
-import type { AiVaultSearchRequest, AiVaultSearchStatus } from '../../shared/ai-vault-search-types'
+import { createSessionSearchClient } from '../../shared/ai-vault/search/ai-vault-search-client'
+import type {
+  AiVaultSearchRequest,
+  AiVaultSearchStatus
+} from '../../shared/ai-vault/search/ai-vault-search-types'
 import type { ExecutionHostId, ExecutionHostScope } from '../../shared/execution-host'
 import { ipcRenderer } from 'electron'
 import type {
   AiVaultDeleteSessionArgs,
   AiVaultDeleteSessionResult
-} from '../../shared/ai-vault-session-deletion'
+} from '../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import type {
   AiVaultFirstUserPromptArgs,
   AiVaultListArgs,
   AiVaultSubagentListArgs
-} from '../../shared/ai-vault-types'
-import type { AiVaultSessionTitlesArgs } from '../../shared/ai-vault-session-title'
-import type { AiVaultPrepareSessionResumeRequest } from '../../shared/ai-vault-resume-preparation'
+} from '../../shared/ai-vault/contracts/ai-vault-types'
+import type { AiVaultSessionTitlesArgs } from '../../shared/ai-vault/contracts/ai-vault-session-title'
+import type { AiVaultPrepareSessionResumeRequest } from '../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import type { PreloadApi } from '../api-types'
 import {
   AI_VAULT_SCAN_PROGRESS_CHANNEL,
   type AiVaultScanProgress,
   type AiVaultScanProgressUpdate
-} from '../../shared/ai-vault-scan-progress'
+} from '../../shared/ai-vault/scanning/ai-vault-scan-progress'
 
 function searchClient(
   executionHostScope?: ExecutionHostScope

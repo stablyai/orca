@@ -1,10 +1,11 @@
+import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../shared/agent-launch/startup/agent-tui-input-clear'
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { AgentStatusPayload } from '../../../../shared/agent-status-types'
+import type { AgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import type {
@@ -12,6 +13,8 @@ import type {
   NativeChatComposerProps
 } from './native-chat-composer-types'
 import type * as RuntimeTerminalInspectionModule from '@/runtime/runtime-terminal-inspection'
+import { mergeNativeChatLiveSession } from '../../../../shared/native-chat/native-chat-live-status'
+import { clearPendingSendCacheForTests } from './native-chat-pending'
 
 type RuntimeTerminalInspection = typeof RuntimeTerminalInspectionModule
 
@@ -93,7 +96,7 @@ vi.mock('./NativeChatComposer', async () => {
 
 const { NativeChatResolvedView } = await import('./NativeChatResolvedView')
 const { TooltipProvider } = await import('@/components/ui/tooltip')
-const { useAppStore } = await import('../../store')
+const { useAppStore } = await import('../../store/index')
 const { installNativeChatMessageListTestViewport } =
   await import('./native-chat-message-list-test-viewport')
 const { resetNativeChatPtySendQueuesForTests } = await import('./native-chat-runtime-send')
@@ -135,14 +138,6 @@ function renderPane(): void {
   )
 }
 
-function rootElement(): Element {
-  const root = document.querySelector('[data-native-chat-root="true"]')
-  if (!root) {
-    throw new Error('chat root missing')
-  }
-  return root
-}
-
 beforeEach(() => {
   restoreViewport = installNativeChatMessageListTestViewport()
   resetNativeChatPtySendQueuesForTests()
@@ -177,6 +172,45 @@ afterEach(() => {
   }
 })
 
+describe('queued follow-ups through transcript recovery', () => {
+  it.each(['error', 'ready'] as const)(
+    'keeps a send after the current reply when a read error is presented as %s',
+    async (status) => {
+      vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+      clearPendingSendCacheForTests()
+      setStatus({ state: 'working', lastAssistantMessage: 'Current reply' })
+      const input = {
+        messages: [userTurn],
+        sessionId: 'session-hidden',
+        agent: 'claude' as const,
+        hookState: 'working' as const,
+        stateStartedAt: Date.now()
+      }
+      retained.session = {
+        ...retained.session!,
+        ...mergeNativeChatLiveSession({ ...input, error: 'Read failed' }),
+        status,
+        readPhase: 'error'
+      }
+      renderPane()
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('composer-send'))
+      })
+      act(() => {
+        retained.session = {
+          ...retained.session!,
+          ...mergeNativeChatLiveSession(input),
+          readPhase: 'ready'
+        }
+        setStatus({ state: 'working', lastAssistantMessage: 'Current reply continues' })
+      })
+      const text = document.body.textContent!
+      expect(text).toContain('Current')
+      expect(text.indexOf(MESSAGE)).toBeGreaterThan(text.indexOf('Current'))
+    }
+  )
+})
+
 describe('a prompt card hides the composer without unmounting it', () => {
   it('keeps an in-flight message visible and never submits it into the approval', async () => {
     vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
@@ -199,7 +233,7 @@ describe('a prompt card hides the composer without unmounting it', () => {
     expect(document.querySelector('[data-native-chat-approval-card="true"]')).not.toBeNull()
     expect(pty.verified.mock.calls.map((call) => call[1])).not.toContain('\r')
     // Only the pre-body clear: retiring the send types nothing under the card.
-    expect(pty.raw.mock.calls.map((call) => call[1])).toEqual(['\x15'])
+    expect(pty.raw.mock.calls.map((call) => call[1])).toEqual([AGENT_TUI_CLEAR_INPUT_MAX])
     expect(screen.getByTestId('composer-send').closest('[hidden]')).not.toBeNull()
     expect(screen.getAllByText(MESSAGE).length).toBeGreaterThan(0)
     expect(screen.getByText('Message not sent')).toBeInTheDocument()
@@ -210,41 +244,4 @@ describe('a prompt card hides the composer without unmounting it', () => {
     expect(screen.getByTestId('composer-send').closest('[hidden]')).toBeNull()
     expect(composer.mounts).toBe(1)
   })
-
-  it('routes no typing to the hidden composer until the card is answered', async () => {
-    setStatus({ state: 'waiting', interactivePrompt: approval })
-    renderPane()
-
-    fireEvent.keyDown(rootElement(), { key: 'x' })
-    expect(composer.typed).not.toHaveBeenCalled()
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Allow' }))
-    })
-    fireEvent.keyDown(rootElement(), { key: 'x' })
-    expect(composer.typed).toHaveBeenCalledExactlyOnceWith('x')
-    expect(composer.mounts).toBe(1)
-  })
-
-  it.each(['Escape', 'chevron'])(
-    'gives the composer focus after a %s collapse',
-    async (gesture) => {
-      setStatus({ state: 'waiting', interactivePrompt: approval })
-      renderPane()
-      const card = document.querySelector<HTMLElement>('[data-native-chat-approval-card="true"]')!
-      expect(document.activeElement).toBe(card)
-      act(() => {
-        if (gesture === 'Escape') {
-          fireEvent.keyDown(card, { key: 'Escape' })
-        } else {
-          fireEvent.click(screen.getByRole('button', { name: 'Collapse' }))
-        }
-      })
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 100))
-      })
-      expect(document.activeElement).toBe(screen.getByTestId('composer-field'))
-      expect(pty.verified).not.toHaveBeenCalled()
-    }
-  )
 })

@@ -9,20 +9,23 @@ import { readAllWorktreeMetaForHost } from '../persistence/host-qualified-worktr
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { splitWorktreeIdForFilesystem, worktreeIdsEqual } from '../../shared/worktree/id'
 import { getWorktreeHostIdentity } from '../../shared/worktree/host-qualified-identity'
-import { folderWorkspaceToWorktree } from '../../shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktree } from '../../shared/folder-workspaces/folder-workspace-worktree'
 import {
   getWorkspaceAttachments,
   matchesLegacyWorkspaceAttachment
-} from '../../shared/workspace-attachments'
-import { legacyWorkspaceAttachments } from '../../shared/workspace-attachment-legacy'
-import { getWorkspaceReferenceIdentity } from '../../shared/workspace-reference-identity'
+} from '../../shared/workspace-attachments/workspace-attachments'
+import { legacyWorkspaceAttachments } from '../../shared/workspace-attachments/workspace-attachment-legacy'
+import { getWorkspaceReferenceIdentity } from '../../shared/workspace-attachments/workspace-reference-identity'
 import {
   isPathInsideOrEqual,
   isWslUncPathForCallerLinuxPath,
   isWslUncPathForLinuxMountedPath
 } from '../../shared/cross-platform-path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
-import { branchSelectorMatches, runtimePathsEqual } from './runtime-worktree-path-identity'
+import {
+  branchSelectorMatches,
+  runtimePathsEqual
+} from './workspaces/catalog/runtime-worktree-path-identity'
 
 export function listReferenceWorkspaces(
   store: Pick<

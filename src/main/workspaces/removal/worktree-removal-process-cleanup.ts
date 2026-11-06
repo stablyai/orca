@@ -1,7 +1,7 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { advertisedUrlWatcher } from '../../ports/advertised-url-watcher'
 import { localhostWorktreeLabelProxy } from '../../ports/workspace-labels/localhost-worktree-label-proxy'
-import { deleteWorktreeHistoryDir } from '../../terminal-history-deletion'
+import { deleteWorktreeHistoryDir } from '../../pty/history/terminal-history-deletion'
 import { recordWorkspaceCleanupRemovalSnapshotPrune } from '../cleanup/workspace-cleanup-removal-snapshot-prune'
 import { pruneWorkspaceCleanupScanSnapshot } from '../cleanup/workspace-cleanup-scan-snapshot'
 import { pruneWorkspaceSpaceAnalysisSnapshot } from '../space-analysis/workspace-space-analysis-snapshot'

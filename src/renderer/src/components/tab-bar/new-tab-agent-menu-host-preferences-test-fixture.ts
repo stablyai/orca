@@ -6,9 +6,9 @@ import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environmen
 import { clearRuntimeCompatibilityCache } from '@/runtime/runtime-compatibility-cache'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { measureSettingsWork } from '../../../../shared/global-settings-test-fixture'
-import * as profile from '../../../../shared/tui-agent-launch-defaults'
-import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
-import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
+import * as profile from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { projectAgentLaunchSettings } from '../../../../shared/agent-launch/choices/agent-launch-settings'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY as CLIENT
@@ -18,7 +18,7 @@ import {
   makeWorktree,
   TEST_REPO
 } from '@/store/slices/worktrees-slice-test-fixtures'
-import { clearHostAgentMenuSettingsForTests } from '../settings/use-host-agent-launch-preferences'
+import { clearHostAgentMenuSettingsForTests } from '../../runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 
 const rpc: { call: Mock; supports: Mock } = vi.hoisted(() => ({
   call: vi.fn(),
@@ -77,7 +77,11 @@ export function status(runtimeId = 'runtime-1'): RuntimeEnvironmentStatus {
 beforeEach(() => {
   clearRuntimeCompatibilityCache()
   Object.assign(payloadWork, { entries: 0, bytes: 0, count: 0 })
-  rpc.call.mockReset().mockImplementation(() => payload())
+  rpc.call
+    .mockReset()
+    .mockImplementation((_target, method) =>
+      method === 'settings.get' ? { settings: raw } : payload()
+    )
   rpc.supports.mockReset().mockResolvedValue(true)
   replaceRuntimeEnvironmentRevisions([{ id: 'alpha', createdAt: 7 }])
   setLocalRuntimeCapabilitiesForTests([CHAT, CLIENT])

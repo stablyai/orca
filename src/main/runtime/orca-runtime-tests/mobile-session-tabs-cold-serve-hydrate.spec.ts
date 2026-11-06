@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
-import type { WorkspaceSessionState } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
@@ -8,7 +9,7 @@ import {
   makeHeadlessTerminalLayout,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 const SERVE_PTY_ID = 'serve-mobile-created-pty'
 const DAEMON_PTY_ID = 'daemon-agent-launch-pty'

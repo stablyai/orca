@@ -5,7 +5,7 @@ import {
   decrypt,
   encrypt,
   publicKeyToBase64
-} from '../../../../shared/e2ee-crypto'
+} from '../../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import { AttachmentTextSource } from '../../../../shared/attachment-text-source'
 import {
   installBrowserGlobals,

@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useTerminalWatcherEffects } from './use-terminal-watcher-effects'
 import type { ParkedTerminalTabWatcherSyncEntry } from './terminal-pane/terminal-parked-tab-watchers'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 
 type WatcherController = Parameters<typeof useTerminalWatcherEffects>[0]
 

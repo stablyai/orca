@@ -7,7 +7,7 @@ import type {
 } from '../../../../orchestration/worker-terminal-ownership'
 import { summarizeWorkerOutputArchive } from '../../../../orchestration/worker-output-archive'
 import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
-import { describeUnconfirmedAgentStop } from '../../../../../../shared/pty-liveness-verdict'
+import { describeUnconfirmedAgentStop } from '../../../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { inspectWorkerTerminal } from './worker-observation'
 import { orchestrationTimestampToMs } from './worker-output'
 import { archiveSummary } from './worker-terminal-resource-presentation'

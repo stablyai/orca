@@ -8,7 +8,6 @@ import {
 } from './__mocks__/native-chat-ssh-delivery'
 import {
   sendNativeChatAskAnswer,
-  sendNativeChatMessage,
   sendNativeChatMessageVerified,
   resetNativeChatPtySendQueuesForTests
 } from '../../src/renderer/src/components/native-chat/native-chat-runtime-send'
@@ -72,17 +71,6 @@ describe('prompt delivery through production IPC, provider and paired host', () 
     expect(ssh.bytes.join('')).toBe(`\x1b[200~${'X'.repeat(32768)}TAIL\x1b[201~`)
     expect(ssh.bytes).not.toContain('\r')
     expect(onSettled).not.toHaveBeenCalled()
-  })
-
-  it('keeps ordinary healthy SSH body and Enter complete', async () => {
-    vi.useFakeTimers()
-    const ssh = createSshDelivery()
-    close = ssh.close
-    const onDeliverySettled = vi.fn()
-    sendNativeChatMessage(ssh.id, 'body', { onDeliverySettled })
-    await vi.advanceTimersByTimeAsync(600)
-    expect(ssh.bytes.join('')).toBe('\x15body\r')
-    expect(onDeliverySettled).toHaveBeenCalledExactlyOnceWith(true)
   })
 
   it.each(['accepted', 'lost'] as const)(

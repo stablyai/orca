@@ -6,8 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   __resetPersistedWindowsPathCacheForTests,
   mergePersistedWindowsPathAsync
-} from '../pty/windows-environment-path'
-import { __setWindowsPathRegistryLoaderForTests } from '../pty/windows-path-registry-reader'
+} from '../pty/environment/windows-environment-path'
+import { __setWindowsPathRegistryLoaderForTests } from '../pty/environment/windows-path-registry-reader'
 import { execLocalPreflightCommandOrThrow } from './preflight-command-exec'
 
 describe.runIf(process.platform === 'win32')('Windows preflight Path refresh reproduction', () => {

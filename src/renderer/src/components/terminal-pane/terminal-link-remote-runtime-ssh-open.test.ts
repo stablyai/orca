@@ -42,7 +42,7 @@ vi.mock('@/lib/connection-context', () => ({
 }))
 
 vi.mock('./terminal-remote-file-download-open', () => ({
-  downloadAndOpenRemoteTerminalFile: vi.fn()
+  downloadAndOpenRemoteTerminalFile: vi.fn(async () => true)
 }))
 
 vi.mock('@/lib/file-preview', () => ({
@@ -232,7 +232,8 @@ describe('handleOscLink', () => {
     expect(openFileMock).not.toHaveBeenCalled()
     expect(downloadAndOpenRemoteTerminalFile).toHaveBeenCalledWith(
       expect.objectContaining({ connectionId: 'ssh-1' }),
-      '/home/me/repo/report.html'
+      '/home/me/repo/report.html',
+      expect.objectContaining({ grant: null })
     )
   })
 

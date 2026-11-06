@@ -1,6 +1,6 @@
 import { lstat } from 'node:fs/promises'
-import { getErrorCode } from '../../git/worktree-operation-options'
-import { areWorktreePathsEqual } from '../../git/worktree-path-comparison'
+import { getErrorCode } from '../../git/worktrees/worktree-operation-options'
+import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import { writeWorktreeRemovalRecords, type WorktreeRemovalRecord } from './worktree-removal-records'
 
 export const pendingWorktreeRemovals = new Map<string, WorktreeRemovalRecord>()

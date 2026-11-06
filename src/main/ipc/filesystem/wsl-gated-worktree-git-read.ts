@@ -7,7 +7,7 @@ import {
   noteWslDistroWokenForPath,
   runAsWslUserAct,
   wslDistroForPath
-} from '../../wsl/wsl-unc-access-gate'
+} from '../../wsl/filesystem/wsl-unc-access-gate'
 
 /**
  * Resolves a registered worktree and runs its Git read, refusing first when that would boot a

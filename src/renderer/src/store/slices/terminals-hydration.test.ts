@@ -90,7 +90,7 @@ const mockApi = {
 // @ts-expect-error -- mocked browser preload API
 globalThis.window = { api: mockApi }
 
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import '../../../../shared/constants'
 import '../../../../shared/workspace-scope'
 import { createTestStore, makeLayout, makeTab, makeWorktree, seedStore } from './store-test-helpers'

@@ -1,24 +1,29 @@
 import {
   createSessionSearchClient,
   unavailableSessionSearchStatus
-} from '../../../../shared/ai-vault-search-client'
+} from '../../../../shared/ai-vault/search/ai-vault-search-client'
 import type { PreloadApi } from '../../../../preload/api-types'
 import type {
   AiVaultPrepareSessionResumeRequest,
   AiVaultPrepareSessionResumeResult
-} from '../../../../shared/ai-vault-resume-preparation'
-import type { AiVaultDeleteSessionArgs } from '../../../../shared/ai-vault-session-deletion'
+} from '../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
+import type { AiVaultDeleteSessionArgs } from '../../../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import type {
   AiVaultSessionTitlesArgs,
   AiVaultSessionTitlesResult
-} from '../../../../shared/ai-vault-session-title'
-import type { AiVaultListArgs, AiVaultListResult } from '../../../../shared/ai-vault-types'
+} from '../../../../shared/ai-vault/contracts/ai-vault-session-title'
+import type {
+  AiVaultListArgs,
+  AiVaultListResult
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   normalizeExecutionHostId,
   normalizeExecutionHostScope,
-  toRuntimeExecutionHostId
+  toRuntimeExecutionHostId,
+  type ExecutionHostId,
+  type ExecutionHostScope
 } from '../../../../shared/execution-host'
-import type { ExecutionHostId, ExecutionHostScope } from '../../../../shared/execution-host'
+
 import {
   assertEnvironmentPairing,
   callRuntimeEnvelope,
@@ -27,7 +32,7 @@ import {
 import {
   readRuntimeAiVaultDeleteSessionResponse,
   runtimeAiVaultDeleteSessionParams
-} from '../../../../shared/ai-vault-runtime-session-delete'
+} from '../../../../shared/ai-vault/contracts/ai-vault-runtime-session-delete'
 import { requireActiveEnvironment } from './web-runtime-session'
 import { noopUnsubscribe } from './web-storage'
 import { translate } from '@/i18n/i18n'

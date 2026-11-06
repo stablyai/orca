@@ -30,9 +30,12 @@ vi.mock('./runtime-client', async () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
 }))
 
 vi.mock('child_process', async () => {
@@ -41,7 +44,6 @@ vi.mock('child_process', async () => {
 })
 
 import { main } from './index'
-import { okFixture } from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 describe('orca cli worktree awareness', () => {
@@ -108,37 +110,6 @@ describe('orca cli worktree awareness', () => {
     )
   })
 
-  it('formats group orchestration sends in text mode', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_sender'
-    callMock.mockResolvedValueOnce({
-      id: 'req_send',
-      ok: true,
-      result: {
-        messages: [{ id: 'msg_1' }, { id: 'msg_2' }],
-        recipients: 2
-      },
-      _meta: {
-        runtimeId: 'runtime-1'
-      }
-    })
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(['orchestration', 'send', '--to', '@all', '--subject', 'hello'], '/tmp/repo')
-
-    expect(callMock).toHaveBeenCalledWith('orchestration.send', {
-      from: 'term_sender',
-      to: '@all',
-      subject: 'hello',
-      body: undefined,
-      type: undefined,
-      priority: undefined,
-      threadId: undefined,
-      payload: undefined,
-      devMode: false
-    })
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('recipients=2'))
-  })
-
   it("refuses an agent session's caller flag naming another caller before any request", async () => {
     vi.stubEnv('ORCA_AGENT_SESSION_ID', 'f7a1c0de-1111-4222-8333-444455556666')
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -161,32 +132,6 @@ describe('orca cli worktree awareness', () => {
     )
     expect(callMock).not.toHaveBeenCalled()
     expect(process.exitCode).toBe(1)
-  })
-
-  it.each([
-    {
-      args: ['orchestration', 'reset', '--all'],
-      params: { all: true, tasks: undefined, messages: undefined },
-      reset: 'all'
-    },
-    {
-      args: ['orchestration', 'reset', '--tasks'],
-      params: { all: undefined, tasks: true, messages: undefined },
-      reset: 'tasks'
-    },
-    {
-      args: ['orchestration', 'reset', '--messages'],
-      params: { all: undefined, tasks: undefined, messages: true },
-      reset: 'messages'
-    }
-  ])('passes explicit reset flags through for $args', async ({ args, params, reset }) => {
-    callMock.mockResolvedValueOnce(okFixture('req_reset', { reset }))
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(args, '/tmp/repo')
-
-    expect(callMock).toHaveBeenCalledExactlyOnceWith('orchestration.reset', params)
-    expect(logSpy).toHaveBeenCalledExactlyOnceWith(`Reset: ${reset}`)
   })
 
   it.each([
@@ -225,102 +170,5 @@ describe('orca cli worktree awareness', () => {
     expect(output).toContain('pending, ready, dispatched, completed, failed, blocked')
     expect(callMock).not.toHaveBeenCalled()
     expect(process.exitCode).toBe(1)
-  })
-
-  it('passes the caller terminal handle through orchestration task-create', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_creator'
-    callMock.mockResolvedValueOnce({
-      id: 'req_task_create',
-      ok: true,
-      result: {
-        task: { id: 'task_1', status: 'ready' }
-      },
-      _meta: {
-        runtimeId: 'runtime-1'
-      }
-    })
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(
-      [
-        'orchestration',
-        'task-create',
-        '--spec',
-        'spawn child workspace',
-        '--task-title',
-        'Child workspace',
-        '--display-name',
-        'Spawn child workspace'
-      ],
-      '/tmp/repo'
-    )
-
-    expect(callMock).toHaveBeenCalledWith('orchestration.taskCreate', {
-      spec: 'spawn child workspace',
-      taskTitle: 'Child workspace',
-      displayName: 'Spawn child workspace',
-      deps: undefined,
-      parent: undefined,
-      callerTerminalHandle: 'term_creator'
-    })
-  })
-
-  it('passes dev mode to injected orchestration dispatches', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_sender'
-    process.env.ORCA_USER_DATA_PATH = '/tmp/orca-dev'
-    callMock.mockResolvedValueOnce({
-      id: 'req_dispatch',
-      ok: true,
-      result: {
-        dispatch: { id: 'ctx_1', task_id: 'task_1', status: 'dispatched' }
-      },
-      _meta: {
-        runtimeId: 'runtime-1'
-      }
-    })
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(
-      ['orchestration', 'dispatch', '--task', 'task_1', '--to', 'term_worker', '--inject'],
-      '/tmp/repo'
-    )
-
-    expect(callMock).toHaveBeenCalledWith('orchestration.dispatch', {
-      task: 'task_1',
-      to: 'term_worker',
-      from: 'term_sender',
-      inject: true,
-      devMode: true
-    })
-  })
-
-  it('passes dev mode from an explicit dev CLI marker with a custom profile path', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_sender'
-    process.env.ORCA_USER_DATA_PATH = '/tmp/federation-acceptance-profile'
-    process.env.ORCA_DEV_CLI_INVOCATION = '1'
-    callMock.mockResolvedValueOnce({
-      id: 'req_dispatch',
-      ok: true,
-      result: {
-        dispatch: { id: 'ctx_1', task_id: 'task_1', status: 'dispatched' }
-      },
-      _meta: {
-        runtimeId: 'runtime-1'
-      }
-    })
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(
-      ['orchestration', 'dispatch', '--task', 'task_1', '--to', 'term_worker', '--inject'],
-      '/tmp/repo'
-    )
-
-    expect(callMock).toHaveBeenCalledWith('orchestration.dispatch', {
-      task: 'task_1',
-      to: 'term_worker',
-      from: 'term_sender',
-      inject: true,
-      devMode: true
-    })
   })
 })

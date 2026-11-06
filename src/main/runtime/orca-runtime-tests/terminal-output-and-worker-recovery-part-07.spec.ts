@@ -1,6 +1,8 @@
-import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
+import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService, getDefaultWorkspaceSession } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
@@ -12,7 +14,7 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal,
   store,
   withPlatform
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('keeps current-generation tab and leaf identity across a host restart', async () => {

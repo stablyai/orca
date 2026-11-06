@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }

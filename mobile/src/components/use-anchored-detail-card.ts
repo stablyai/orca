@@ -1,64 +1,31 @@
-import { useCallback, useLayoutEffect, useReducer, useRef, useState, type RefObject } from 'react'
+import { useCallback, useLayoutEffect, useReducer, useRef, useState } from 'react'
 import { useWindowDimensions, type LayoutChangeEvent, type View } from 'react-native'
-import type { DetailCardAnchor } from './AnchoredDetailCard'
+import type { DetailCardAnchor, DetailCardPlacement } from './AnchoredDetailCard'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
 
-export type DetailCardSource = {
-  key: string
-  anchorRef: RefObject<Pick<View, 'measureInWindow'> | null>
-  barRef: RefObject<View | null>
-  openerRef: RefObject<View | null>
-  geometry: 'dismiss' | 'refresh'
+type State = {
+  serial: number
+  request: number | null
+  visual: { anchor: DetailCardAnchor; target: 0 | 1; motion: number } | null
 }
-type Request = { id: number; source: DetailCardSource }
-type Visual = { anchor: DetailCardAnchor; target: 0 | 1; motion: number; source: DetailCardSource }
-type State = { serial: number; request: Request | null; visual: Visual | null }
 type Action =
-  | { type: 'toggle'; eligible: boolean; source: DetailCardSource }
+  | { type: 'toggle'; eligible: boolean }
   | { type: 'close'; request?: number }
-  | { type: 'remove'; key: string }
-  | { type: 'refresh'; source?: DetailCardSource }
-  | { type: 'geometry' }
   | { type: 'measured'; request: number; anchor: DetailCardAnchor }
+  | { type: 'moved'; anchor: DetailCardAnchor }
   | { type: 'settled'; motion: number }
 
 function reduce(state: State, action: Action): State {
   const { visual, request, serial } = state
-  const source = request?.source ?? (visual?.target === 1 ? visual.source : null)
   switch (action.type) {
     case 'toggle':
-      if (!action.eligible) {
-        return state
+      if (request === null && visual?.target !== 1) {
+        return action.eligible ? { ...state, serial: serial + 1, request: serial + 1 } : state
       }
-      return source?.key === action.source.key
-        ? reduce(state, { type: 'close' })
-        : { ...state, serial: serial + 1, request: { id: serial + 1, source: action.source } }
-    case 'geometry':
-      return source?.geometry === 'refresh'
-        ? reduce(state, { type: 'refresh' })
-        : reduce(state, { type: 'close' })
-    case 'refresh':
-      if (
-        !source ||
-        (!action.source && source.geometry !== 'refresh') ||
-        (action.source && action.source.key !== source.key)
-      ) {
-        return state
-      }
-      return {
-        ...state,
-        serial: serial + 1,
-        request: { id: serial + 1, source: action.source ?? source }
-      }
-    case 'remove':
-      return source?.key === action.key
-        ? reduce(state, { type: 'close' })
-        : visual?.source.key === action.key
-          ? { ...state, visual: null }
-          : state
+      return reduce(state, { type: 'close' })
     case 'close':
-      if (action.request !== undefined && action.request !== request?.id) {
+      if (action.request !== undefined && action.request !== request) {
         return state
       }
       return visual?.target === 1
@@ -69,24 +36,21 @@ function reduce(state: State, action: Action): State {
             visual: { ...visual, target: 0, motion: serial + 1 }
           }
         : { ...state, request: null }
-    case 'measured':
-      if (action.request !== request?.id) {
+    case 'measured': {
+      if (action.request !== request) {
         return state
       }
+      const { anchor } = action
       return {
         serial: serial + 1,
         request: null,
-        visual: {
-          anchor: action.anchor,
-          source: request.source,
-          target: 1,
-          // Reposition an open card without restarting its entry animation.
-          motion:
-            visual?.target === 1 && visual.source.key === request.source.key
-              ? visual.motion
-              : serial + 1
-        }
+        visual: { anchor, target: 1, motion: serial + 1 }
       }
+    }
+    case 'moved':
+      return visual?.target === 1
+        ? { ...state, visual: { ...visual, anchor: action.anchor } }
+        : state
     case 'settled':
       return visual?.target === 0 && visual.motion === action.motion
         ? { ...state, visual: null }
@@ -94,99 +58,136 @@ function reduce(state: State, action: Action): State {
   }
 }
 
-export function useAnchoredDetailCard(placement: string, obscured: boolean) {
+/** Reports window coordinates, or null when the anchor is gone or hidden. */
+export type DetailCardMeasure = (place: (placement: DetailCardPlacement | null) => void) => void
+
+/** Open, measure, animate and dismiss state for an AnchoredDetailCard; any change to `geometry`
+ *  closes it, while a change to `follow` moves an open card to its anchor's new place. */
+export function useAnchoredDetailCard({
+  geometry: placementGeometry = '',
+  follow = '',
+  obscured,
+  measure
+}: {
+  geometry?: string
+  follow?: string
+  obscured: boolean
+  measure: DetailCardMeasure
+}) {
   const layerRef = useRef<View>(null)
+  const openerRef = useRef<View>(null)
   const contentRef = useRef<View>(null)
   const backRef = useRef<View>(null)
   const boundaryRefs = useRef<unknown[]>([])
-  const sources = useRef(new Map<string, DetailCardSource>())
-  const [state, dispatch] = useReducer(reduce, { serial: 0, request: null, visual: null })
+  const measureRef = useRef(measure)
+  useLayoutEffect(() => {
+    measureRef.current = measure
+  }, [measure])
+  const [state, dispatch] = useReducer(reduce, {
+    serial: 0,
+    request: null,
+    visual: null
+  })
   const [size, setSize] = useState({ width: 0, height: 0 })
   const window = useWindowDimensions()
   const insets = useWindowSafeAreaInsets()
-  const geometry = [
-    window.width,
-    insets.top,
-    insets.left,
-    insets.right,
-    placement,
-    size.width
-  ].join(':')
+  const { top, left, right } = insets
+  const generation = useRef(0)
+  const geometry = [window.width, top, left, right, size.width, placementGeometry].join(':')
   const dismiss = useCallback(() => dispatch({ type: 'close' }), [])
-  const removeSource = useCallback((key: string) => dispatch({ type: 'remove', key }), [])
   const onSettled = useCallback((motion: number) => dispatch({ type: 'settled', motion }), [])
-  const toggleSource = useCallback(
-    (source: DetailCardSource) => dispatch({ type: 'toggle', source, eligible: !obscured }),
-    [obscured]
-  )
-  const refreshSource = useCallback(
-    (source?: DetailCardSource) => dispatch({ type: 'refresh', source }),
-    []
-  )
-  const onAnchorLayout = useCallback(() => dispatch({ type: 'geometry' }), [])
-  const registerSource = useCallback(
-    (source: DetailCardSource) => {
-      sources.current.set(source.key, source)
-      refreshSource(source)
-      return () => {
-        if (sources.current.get(source.key) === source) {
-          sources.current.delete(source.key)
-          refreshSource(source)
+  const toggle = useCallback(() => dispatch({ type: 'toggle', eligible: !obscured }), [obscured])
+  const onAnchorLayout = useCallback(() => {
+    generation.current += 1
+    dismiss()
+  }, [dismiss])
+  useLayoutEffect(() => {
+    dismiss()
+    return () => {
+      generation.current += 1
+    }
+  }, [dismiss, geometry, obscured])
+  // Calls back with null when the card's views are gone.
+  const measureAnchor = useCallback(
+    (done: (anchor: DetailCardAnchor | null) => void): (() => void) => {
+      const layer = layerRef.current
+      if (!layer) {
+        done(null)
+        return () => {}
+      }
+      let disposed = false
+      const current = generation.current
+      let origin: DetailCardAnchor['origin'] | undefined
+      let placement: DetailCardPlacement | null | undefined
+      const finish = () => {
+        if (disposed || current !== generation.current || placement === undefined) {
+          return
+        }
+        if (placement === null) {
+          disposed = true
+          done(null)
+        } else if (origin) {
+          disposed = true
+          done(
+            placement.side === 'below'
+              ? {
+                  side: 'below',
+                  left: placement.left - origin.x,
+                  top: placement.top - origin.y,
+                  origin
+                }
+              : {
+                  side: 'above',
+                  right: placement.right - origin.x,
+                  bottom: placement.bottom - origin.y,
+                  origin
+                }
+          )
         }
       }
-    },
-    [refreshSource]
-  )
-  useLayoutEffect(() => {
-    if (obscured) {
-      dismiss()
-    } else {
-      onAnchorLayout()
-    }
-  }, [dismiss, onAnchorLayout, geometry, obscured])
-  const { request, visual } = state
-  useLayoutEffect(() => {
-    if (!request || obscured) {
-      return
-    }
-    const { source, id } = request
-    const layer = layerRef.current
-    const anchor = source.anchorRef.current
-    const bar = source.barRef.current
-    if (!layer || !anchor || !bar || sources.current.get(source.key) !== source) {
-      // A tab may be between placements during rotation; attachment resumes its request.
-      if (source.geometry === 'dismiss') {
-        dispatch({ type: 'close', request: id })
-      }
-      return
-    }
-    let disposed = false
-    layer.measureInWindow((rootX, rootY) => {
-      anchor.measureInWindow((x, y, width, height) => {
-        bar.measureInWindow((_x, barY, _width, barHeight) => {
-          if (
-            !disposed &&
-            sources.current.get(source.key) === source &&
-            source.anchorRef.current === anchor
-          ) {
-            dispatch({
-              type: 'measured',
-              request: id,
-              anchor: {
-                trigger: { x: x - rootX, y: y - rootY, width, height },
-                top: barY + barHeight - rootY,
-                origin: { x: rootX, y: rootY }
-              }
-            })
-          }
-        })
+      layer.measureInWindow((x, y) => {
+        origin = { x, y }
+        finish()
       })
-    })
-    return () => {
-      disposed = true
+      measureRef.current((next) => {
+        placement = next
+        finish()
+      })
+      return () => {
+        disposed = true
+      }
+    },
+    []
+  )
+  const request = state.request
+  useLayoutEffect(() => {
+    if (request === null || obscured) {
+      return
     }
-  }, [request, obscured])
-  const onLayout = useCallback((event: LayoutChangeEvent) => setSize(event.nativeEvent.layout), [])
+    return measureAnchor((anchor) =>
+      dispatch(anchor ? { type: 'measured', request, anchor } : { type: 'close', request })
+    )
+  }, [request, geometry, obscured, measureAnchor])
+  const shown = state.visual?.target === 1 && !obscured
+  // A height-only resize (split screen) moves a bottom anchor too.
+  const followKey = [follow, window.height, size.height].join(':')
+  const followed = useRef(followKey)
+  useLayoutEffect(() => {
+    if (followed.current === followKey) {
+      return
+    }
+    followed.current = followKey
+    if (!shown) {
+      return
+    }
+    return measureAnchor((anchor) =>
+      dispatch(anchor ? { type: 'moved', anchor } : { type: 'close' })
+    )
+  }, [followKey, shown, measureAnchor])
+  const onLayout = useCallback((event: LayoutChangeEvent) => {
+    setSize(event.nativeEvent.layout)
+  }, [])
+  const { visual } = state
   const requestedOpen = request !== null || visual?.target === 1
   const closeFirst = () => {
     if (!requestedOpen || obscured) {
@@ -199,6 +200,7 @@ export function useAnchoredDetailCard(placement: string, obscured: boolean) {
   const origin = visual?.anchor.origin ?? { x: 0, y: 0 }
   return {
     layerRef,
+    openerRef,
     contentRef,
     backRef,
     boundaryRefs,
@@ -206,16 +208,13 @@ export function useAnchoredDetailCard(placement: string, obscured: boolean) {
     active: visual?.target === 1 && !obscured,
     visual,
     requestedOpen,
-    requestedKey: request?.source.key ?? (visual?.target === 1 ? visual.source.key : null),
     present: visual !== null,
     dismiss,
-    removeSource,
     onSettled,
     onLayout,
     onAnchorLayout,
-    toggleSource,
-    refreshSource,
-    registerSource,
+    toggle,
+    layerHeight: size.height,
     bounds: {
       left: Math.max(0, insets.left - origin.x),
       top: Math.max(0, insets.top - origin.y),
@@ -225,12 +224,4 @@ export function useAnchoredDetailCard(placement: string, obscured: boolean) {
   }
 }
 
-export type AnchoredDetailCardController = ReturnType<typeof useAnchoredDetailCard>
-
-export function useDetailCardSource(
-  controller: Pick<AnchoredDetailCardController, 'registerSource'>,
-  source: DetailCardSource
-) {
-  const { registerSource } = controller
-  useLayoutEffect(() => registerSource(source), [registerSource, source])
-}
+export type AnchoredDetailCardState = ReturnType<typeof useAnchoredDetailCard>

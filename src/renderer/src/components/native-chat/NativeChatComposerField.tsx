@@ -6,7 +6,6 @@ import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import type { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { cn } from '@/lib/utils'
-import { useNotificationCardComposerClearance } from '@/lib/notification-card-composer-clearance'
 import type { ComposerAutocomplete } from '../../../../shared/native-chat/input/native-chat-composer-autocomplete'
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import { NativeChatMentionMenu, NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
@@ -14,7 +13,7 @@ import type { NativeChatMentionFiles } from './use-native-chat-mention-files'
 import { NativeChatComposerActions } from './NativeChatComposerActions'
 import { NativeChatComposerNotices } from './NativeChatComposerNotices'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
-import type { NativeChatContextUsageSummary } from './native-chat-context-usage-summary'
+import type { NativeChatContextUsageSummary } from '../../../../shared/native-chat/native-chat-context-usage-summary'
 import {
   nativeChatComposerPlaceholder,
   type NativeChatAfterStopSend
@@ -30,6 +29,7 @@ import { translate } from '@/i18n/i18n'
 import { useNativeChatComposerDraftUnsaved } from './use-native-chat-draft-unsaved'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { NativeChatFollowUpBehavior } from '../../../../shared/native-chat/input/native-chat-follow-up-behavior'
+import type { NativeChatSteerChordPreview } from './use-native-chat-steer-chord-preview'
 
 function noop(): void {}
 
@@ -85,6 +85,9 @@ export type NativeChatComposerFieldProps = {
   onDictationHoldStart: () => void
   onDictationHoldEnd: () => void
   onSend: () => void
+  /** Held Cmd/Ctrl: Send shows, and a click runs, what Cmd/Ctrl+Enter would do. */
+  steerPreview?: NativeChatSteerChordPreview | null
+  onSteerPreview?: () => void
   onStop?: () => void
   sessionOptionsSurface: SessionOptionsSurface | null
   sessionOptionsSnapshot: SessionOptionDescriptor[]
@@ -171,6 +174,8 @@ export function NativeChatComposerField({
   onDictationHoldStart,
   onDictationHoldEnd,
   onSend,
+  steerPreview = null,
+  onSteerPreview,
   onStop,
   sessionOptionsSurface,
   sessionOptionsSnapshot,
@@ -246,6 +251,7 @@ export function NativeChatComposerField({
   const dictationHoldStart = useLatestHandler(onDictationHoldStart)
   const dictationHoldEnd = useLatestHandler(onDictationHoldEnd)
   const send = useLatestHandler(onSend)
+  const runSteerPreview = useLatestHandler(onSteerPreview ?? noop)
   const stop = useLatestHandler(onStop ?? noop)
   const exitGoalMode = useLatestHandler(goalMode?.exit ?? noop)
 
@@ -271,16 +277,11 @@ export function NativeChatComposerField({
   const focusComposer = useCallback(() => textareaRef.current?.focus(), [textareaRef])
   // A launch prompt sits in a popover, so it takes the app's surface instead of the chat's.
   const launch = launchPrompt !== undefined
-  const paneRef = useRef<HTMLDivElement>(null)
-  const columnRef = useRef<HTMLDivElement>(null)
-  // A launch prompt's popover never covers notification cards, so it needs no clearance.
-  useNotificationCardComposerClearance(paneRef, columnRef, editSession === undefined && !launch)
 
   return (
-    <div ref={paneRef} className={launch ? undefined : 'shrink-0 bg-chat-pane'}>
+    <div className={launch ? undefined : 'shrink-0 bg-chat-pane'}>
       <div className={launch ? undefined : 'px-3 pt-2 pb-4 sm:px-4'}>
         <div
-          ref={columnRef}
           className={cn('relative w-full', !launch && 'mx-auto max-w-(--chat-content-max-width)')}
         >
           {autocomplete.mode === 'slash' ? (
@@ -417,6 +418,8 @@ export function NativeChatComposerField({
                 onDictationHoldStart={dictationHoldStart}
                 onDictationHoldEnd={dictationHoldEnd}
                 onSend={send}
+                steerPreview={steerPreview}
+                onSteerPreview={runSteerPreview}
                 onStop={onStop ? stop : undefined}
                 sessionOptionsSurface={sessionOptionsSurface}
                 sessionOptionsSnapshot={sessionOptionsSnapshot}

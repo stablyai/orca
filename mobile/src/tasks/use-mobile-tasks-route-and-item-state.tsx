@@ -1,3 +1,4 @@
+import { useMobileTasksSelection } from './github-task-identity'
 import {
   type GitHubIssueSourceError,
   type GitHubIssueSourceFallback,
@@ -47,7 +48,6 @@ import {
   getTaskPresetQuery
 } from './mobile-tasks-legacy-foundation'
 import { useMobileTasksItemState } from './use-mobile-tasks-item-state'
-import { useMobileTasksItemSelection } from './use-mobile-tasks-item-selection'
 import { useMobileJiraConnectionState } from './use-mobile-jira-connection-state'
 import type { JiraIssueFilter } from '../../../src/shared/jira/jira-types'
 
@@ -178,7 +178,12 @@ export function useMobileTasksRouteAndItemState() {
     client: null
   })
   const [error, setError] = useState('')
-  const itemSelection = useMobileTasksItemSelection()
+  const itemState = useMobileTasksItemState()
+  const itemSelection = useMobileTasksSelection(
+    client,
+    itemState.readDetailPayload,
+    itemState.reconcilePrFileConnection
+  )
   const [mergeMethodTaskItem, setMergeMethodTaskItem] = useState<
     Extract<TaskItem, { provider: 'github' }> | Extract<TaskItem, { provider: 'gitlab' }> | null
   >(null)
@@ -188,7 +193,6 @@ export function useMobileTasksRouteAndItemState() {
     useState<PendingProjectGitHubMerge | null>(null)
   const [pendingHostedStateChange, setPendingHostedStateChange] =
     useState<PendingHostedStateChange | null>(null)
-  const itemState = useMobileTasksItemState()
   return {
     hostId,
     taskSource,
