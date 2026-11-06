@@ -526,8 +526,11 @@ it.each([
       const beforeRequests = requests.length
       await expect(
         call('orchestration.taskCreate', { spec: task + '\n'.repeat(100000), run: run.id })
-      ).rejects.toThrow()
-      expect(rejectedFrames).toBe(1)
+      ).rejects.toMatchObject({
+        code: 'invalid_argument',
+        data: { effectsApplied: false }
+      })
+      expect(rejectedFrames).toBe(0)
       expect(requests).toHaveLength(beforeRequests)
       expect(db.listTasks({ runId: run.id })).toHaveLength(beforeWrites)
     }
