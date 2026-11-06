@@ -631,9 +631,7 @@
 1 test-no-wall-clock:src/cli/runtime/status-caller.test.ts
 1 test-no-wall-clock:src/main/acp/acp-structured-mail-admission.test.ts
 2 test-no-wall-clock:src/main/agent-hooks/managed-hook-timeout.test.ts
-2 test-no-wall-clock:src/main/agent-hooks/manual-compact-hook-stream.test.ts
 2 test-no-wall-clock:src/main/agent-hooks/posix-hook-json-stdin-reader.test.ts
-1 test-no-wall-clock:src/main/agent-hooks/restored-status-dead-terminal-sweep.test.ts
 1 test-no-wall-clock:src/main/agent-hooks/server-codex-capacity.test.ts
 1 test-no-wall-clock:src/main/agent-hooks/server-endpoint-file-lifecycle.test.ts
 2 test-no-wall-clock:src/main/agent-hooks/server-hook-http-ingest.test.ts
