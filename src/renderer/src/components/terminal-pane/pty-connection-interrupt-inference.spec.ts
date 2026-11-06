@@ -370,7 +370,7 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
       })
     })
 
-    it('marks bracketed paste as stale after acknowledged Ctrl+C input', async () => {
+    it('keeps bracketed paste for single-line text after acknowledged Ctrl+C input', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const agentTitleMocks6 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
@@ -401,7 +401,7 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
       await flushAsyncTicks()
       pasteTerminalText(pane.terminal as never, 'a69ce28e1d092e0c8825cd1a109ac36409962bc1')
 
-      expect(observedIgnoreValues).toEqual([true])
+      expect(observedIgnoreValues).toEqual([false])
       expect(pane.terminal.options.ignoreBracketedPasteMode).toBe(false)
     })
 
