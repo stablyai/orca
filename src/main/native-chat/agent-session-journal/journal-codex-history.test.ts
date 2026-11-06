@@ -1,4 +1,4 @@
-import './journal-legacy-import-worker.mock-fixture'
+import './journal-legacy-import-worker-mock-test-fixture'
 import { appendFile, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'

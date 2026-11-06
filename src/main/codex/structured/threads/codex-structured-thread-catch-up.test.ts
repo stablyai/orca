@@ -1,4 +1,4 @@
-import '../../../native-chat/agent-session-journal/journal-legacy-import-worker.mock-fixture'
+import '../../../native-chat/agent-session-journal/journal-legacy-import-worker-mock-test-fixture'
 import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { writeFile } from 'node:fs/promises'
 import { importLegacyTranscriptIntoJournal } from '../../../native-chat/agent-session-journal/journal-legacy-import'

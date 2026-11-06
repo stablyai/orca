@@ -1,4 +1,4 @@
-import '../../native-chat/agent-session-journal/journal-legacy-import-worker.mock-fixture'
+import '../../native-chat/agent-session-journal/journal-legacy-import-worker-mock-test-fixture'
 import '../rpc/unused-default-rpc-methods.test-fixture'
 import { scriptedCodexCatalogSession } from '../scripted-codex-model-catalog.test-fixture'
 // Exercise shipped RPC, schemas, capability gate, stores, lease and adapter; only the Codex app-server child is fake.

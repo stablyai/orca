@@ -1,4 +1,4 @@
-import './agent-session-journal/journal-legacy-import-worker.mock-fixture'
+import './agent-session-journal/journal-legacy-import-worker-mock-test-fixture'
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
