@@ -3,8 +3,9 @@ import { createNotificationDeliveryService } from '../notifications/notification
 
 // Exercise delivery admission without Electron or a native banner.
 describe('automatic follow-up notifications', () => {
-  it('suppresses an automatic start in any focused workspace, even when normal focus suppression is off', async () => {
+  it('suppresses only the desktop banner while focused and still dispatches the automatic start to phones', async () => {
     let focused = true
+    const dispatchMobileNotification = vi.fn()
     const deliverNative = vi.fn(() => ({ delivered: true }))
     const service = createNotificationDeliveryService({
       readNotificationSettings: () => ({
@@ -23,7 +24,7 @@ describe('automatic follow-up notifications', () => {
       isWindowVisible: () => true,
       setTrayAttention: vi.fn(),
       isNotificationSupported: () => true,
-      dispatchMobileNotification: null,
+      dispatchMobileNotification,
       readAuthorizationStatus: async () => 'authorized',
       recordDeliveryOutcome: vi.fn(),
       deliverNative,
@@ -31,9 +32,17 @@ describe('automatic follow-up notifications', () => {
       now: () => 1700000000000
     })
     expect(
-      await service.dispatch({ source: 'pr-followup-started', isActiveWorktree: false })
+      await service.dispatch({
+        source: 'pr-followup-started',
+        isActiveWorktree: false,
+        terminalTitle: 'codex',
+        prNumber: 42,
+        failedCheckCount: 2,
+        worktreeLabel: 'fix-checks'
+      })
     ).toEqual({ delivered: false, reason: 'suppressed-focus' })
     expect(deliverNative).not.toHaveBeenCalled()
+    expect(dispatchMobileNotification).toHaveBeenCalledOnce()
     focused = false
     expect(
       await service.dispatch({ source: 'pr-followup-started', isActiveWorktree: false })

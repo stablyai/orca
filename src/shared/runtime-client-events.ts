@@ -22,6 +22,8 @@ export type RuntimeClientEvent =
   | { type: 'prFollowUpsChanged' }
   | {
       type: 'prFollowUpStarted'
+      prNumber?: number
+      failedCheckCount: number
       worktreeId: string
       paneKey?: string
       surface?: 'chat' | 'terminal'

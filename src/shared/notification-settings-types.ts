@@ -90,6 +90,8 @@ export type NotificationDispatchRequest = {
   worktreeLabel?: string
   /** Legacy senders may still provide this; project labels are now always shown. */
   hasMultipleActiveRepos?: boolean
+  prNumber?: number
+  failedCheckCount?: number
   terminalTitle?: string
   isActiveWorktree?: boolean
   agentType?: AgentType

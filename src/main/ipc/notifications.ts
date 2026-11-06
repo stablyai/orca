@@ -163,6 +163,8 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       if (event.type === 'prFollowUpStarted') {
         void deliveryService.dispatch({
           source: 'pr-followup-started',
+          prNumber: event.prNumber,
+          failedCheckCount: event.failedCheckCount,
           worktreeId: event.worktreeId,
           paneKey: event.paneKey,
           terminalTitle: event.agent,

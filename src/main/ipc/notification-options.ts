@@ -30,8 +30,8 @@ export function buildNotificationOptions(
 
   if (args.source === 'pr-followup-started') {
     return {
-      title: `${formatAgentTypeLabel(args.terminalTitle)} started automatically`,
-      body: `Fixing checks in ${args.worktreeLabel ?? 'your workspace'}.`
+      title: `${formatAgentTypeLabel(args.terminalTitle)} is fixing checks${args.prNumber ? ` on #${args.prNumber}` : ''}`,
+      body: `${args.failedCheckCount ?? 0} checks failed in ${args.worktreeLabel ?? 'your workspace'}. Orca started an agent.`
     }
   }
 

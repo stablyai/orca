@@ -32,6 +32,10 @@ export function installPrFollowUps(
       inputs.started?.(action)
       emit({
         type: 'prFollowUpStarted',
+        prNumber:
+          inputs.workspaces().find((workspace) => workspace.instanceId === action.instanceId)
+            ?.prNumber ?? undefined,
+        failedCheckCount: action.failingNames.length,
         worktreeId: action.worktreeId,
         paneKey: action.paneKey,
         surface: action.surface,
