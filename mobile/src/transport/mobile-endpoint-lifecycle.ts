@@ -10,7 +10,11 @@ import {
   writeMobileRelayCredentialBundle
 } from './mobile-relay-credential-bundle'
 import { setRelayRouting } from './host-store'
-import { lastGoodPathWasDirectHere, recordHostGoodPath } from './host-path-memory'
+import {
+  lastGoodPathWasDirectHere,
+  readLocalNetworkFingerprint,
+  recordHostGoodPath
+} from './host-path-memory'
 import { upgradeDirectMobileRelay } from './mobile-relay-direct-upgrade'
 import { directPathForEndpoint } from './mobile-direct-endpoint-probe'
 import { MobileRelayDirectUpgradeController } from './mobile-relay-direct-upgrade-controller'
@@ -109,6 +113,7 @@ function createSupervisor(
     setRelayRouting,
     lastGoodPathWasDirectHere,
     recordGoodPath: recordHostGoodPath,
+    readLocalNetwork: readLocalNetworkFingerprint,
     onLog,
     now: Date.now,
     randomBytes: ExpoCrypto.getRandomBytes,

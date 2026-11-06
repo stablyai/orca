@@ -1,10 +1,14 @@
 import { openAuthenticatedDirectEndpoint } from './mobile-direct-endpoint-probe'
-import type { MobileEndpointHysteresis } from './mobile-endpoint-hysteresis'
+import { ARRIVAL_OBSERVATION_MS, type MobileEndpointHysteresis } from './mobile-endpoint-hysteresis'
 import type { RpcClient } from './rpc-client'
 import type { ScheduleTimer } from './timer-scheduler'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 
 const DIRECT_PROBE_INTERVAL_MS = 15_000
+// A reachable LAN authenticates well inside this; a longer bound only holds the probe mutex while away.
+const DIRECT_PROBE_TIMEOUT_MS = 4_000
+// After a network change the relay redial holds the mutex for about a second.
+const ARRIVAL_BLOCKED_RETRY_MS = 500
 
 export class DirectReturnProbe {
   private timer: ReturnType<typeof setTimeout> | null = null
@@ -35,7 +39,7 @@ export class DirectReturnProbe {
     }
   ) {}
 
-  schedule(delayMs = DIRECT_PROBE_INTERVAL_MS): void {
+  schedule(delayMs = this.intervalMs()): void {
     if (this.stopped || !this.hooks.canSchedule() || this.timer) {
       return
     }
@@ -43,6 +47,17 @@ export class DirectReturnProbe {
       this.timer = null
       void this.probe()
     }, delayMs)
+  }
+
+  // A dial begun on the previous network can only time out, so drop it uncounted and probe now.
+  arrive(): void {
+    if (this.stopped || !this.hooks.canSchedule()) {
+      return
+    }
+    this.hooks.hysteresis.recordNetworkArrival()
+    this.activeProbe?.abort()
+    this.clear()
+    this.schedule(0)
   }
 
   clear(): void {
@@ -63,7 +78,7 @@ export class DirectReturnProbe {
       return
     }
     if (!this.hooks.canAttempt() || !this.hooks.hysteresis.canProbe(this.deps.now())) {
-      this.schedule()
+      this.schedule(this.hooks.hysteresis.isArrival() ? ARRIVAL_BLOCKED_RETRY_MS : undefined)
       return
     }
     const controller = new AbortController()
@@ -73,10 +88,10 @@ export class DirectReturnProbe {
     try {
       successful = await openAuthenticatedDirectEndpoint(
         this.deps.openDirect,
-        12_000,
+        DIRECT_PROBE_TIMEOUT_MS,
         controller.signal
       )
-      if (this.stopped) {
+      if (this.stopped || controller.signal.aborted) {
         return
       }
       if (!successful) {
@@ -110,5 +125,9 @@ export class DirectReturnProbe {
       this.hooks.afterProbe()
       this.schedule()
     }
+  }
+
+  private intervalMs(): number {
+    return this.hooks.hysteresis.isArrival() ? ARRIVAL_OBSERVATION_MS : DIRECT_PROBE_INTERVAL_MS
   }
 }

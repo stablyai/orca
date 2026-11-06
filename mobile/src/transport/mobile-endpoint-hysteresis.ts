@@ -1,20 +1,20 @@
-export type EndpointHysteresisOptions = {
-  directSuccessesRequired: number
-  directObservationMs: number
-  failureCooldownMs: number
-  minimumDwellMs: number
-}
+// Timer probes need 3 successes over 30 s and a 60 s dwell, which keeps a flaky LAN from flapping.
+const TIMER_SUCCESSES_REQUIRED = 3
+const TIMER_OBSERVATION_MS = 30_000
+const MINIMUM_DWELL_MS = 60_000
+const FAILURE_COOLDOWN_MS = 60_000
+// Joining a new Wi-Fi network is fresh evidence, so 2 successes 3 s apart are enough.
+const ARRIVAL_SUCCESSES_REQUIRED = 2
+export const ARRIVAL_OBSERVATION_MS = 3_000
 
 export class MobileEndpointHysteresis {
   private consecutiveDirectSuccesses = 0
   private directObservationStartedAt: number | null = null
   private cooldownUntil = 0
   private lastMigrationAt: number
+  private arrived = false
 
-  constructor(
-    startedAt: number,
-    private readonly options: EndpointHysteresisOptions
-  ) {
+  constructor(startedAt: number) {
     this.lastMigrationAt = startedAt
   }
 
@@ -22,31 +22,52 @@ export class MobileEndpointHysteresis {
     if (now < this.cooldownUntil) {
       return false
     }
-    if (this.consecutiveDirectSuccesses === 0) {
-      this.directObservationStartedAt = now
-    }
+    this.directObservationStartedAt ??= now
     this.consecutiveDirectSuccesses += 1
+    const observedMs = now - this.directObservationStartedAt
+    if (this.arrived) {
+      // Arrival waives the dwell: reconnecting to the relay after a network change also counts as a migration.
+      const ready =
+        this.consecutiveDirectSuccesses >= ARRIVAL_SUCCESSES_REQUIRED &&
+        observedMs >= ARRIVAL_OBSERVATION_MS
+      this.arrived = !ready
+      return ready
+    }
     return (
-      this.consecutiveDirectSuccesses >= this.options.directSuccessesRequired &&
-      this.directObservationStartedAt !== null &&
-      now - this.directObservationStartedAt >= this.options.directObservationMs &&
-      now - this.lastMigrationAt >= this.options.minimumDwellMs
+      this.consecutiveDirectSuccesses >= TIMER_SUCCESSES_REQUIRED &&
+      observedMs >= TIMER_OBSERVATION_MS &&
+      now - this.lastMigrationAt >= MINIMUM_DWELL_MS
     )
   }
 
   recordDirectFailure(now: number): void {
-    this.consecutiveDirectSuccesses = 0
-    this.directObservationStartedAt = null
-    this.cooldownUntil = now + this.options.failureCooldownMs
+    this.arrived = false
+    this.resetProgress()
+    this.cooldownUntil = now + FAILURE_COOLDOWN_MS
   }
 
   recordMigration(now: number): void {
     this.lastMigrationAt = now
-    this.consecutiveDirectSuccesses = 0
-    this.directObservationStartedAt = null
+    this.resetProgress()
+  }
+
+  // Lasts until the next direct failure or upgrade.
+  recordNetworkArrival(): void {
+    this.arrived = true
+    this.cooldownUntil = 0
+    this.resetProgress()
+  }
+
+  isArrival(): boolean {
+    return this.arrived
   }
 
   canProbe(now: number): boolean {
     return now >= this.cooldownUntil
+  }
+
+  private resetProgress(): void {
+    this.consecutiveDirectSuccesses = 0
+    this.directObservationStartedAt = null
   }
 }

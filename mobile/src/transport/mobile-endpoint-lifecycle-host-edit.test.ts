@@ -34,7 +34,8 @@ vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Arr
 vi.mock('expo-secure-store', () => secureStoreMock)
 vi.mock('./host-path-memory', () => ({
   lastGoodPathWasDirectHere: async () => true,
-  recordHostGoodPath: async () => {}
+  recordHostGoodPath: async () => {},
+  readLocalNetworkFingerprint: async () => null
 }))
 vi.mock('./rpc-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./rpc-client')>()),

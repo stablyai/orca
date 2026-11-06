@@ -223,6 +223,7 @@ function dependencies(
     setRelayRouting: vi.fn(async () => {}),
     lastGoodPathWasDirectHere: vi.fn(async () => true),
     recordGoodPath: vi.fn(async () => {}),
+    readLocalNetwork: vi.fn(async () => null),
     directPath: 'lan',
     now: Date.now,
     randomBytes: (length: number) => new Uint8Array(length),

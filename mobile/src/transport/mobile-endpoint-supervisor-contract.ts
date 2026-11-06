@@ -24,6 +24,7 @@ export type MobileEndpointSupervisorDependencies = {
   setRelayRouting: (hostId: string, relay: MobileRelayEndpoint) => Promise<void>
   lastGoodPathWasDirectHere: (hostId: string) => Promise<boolean>
   recordGoodPath: (hostId: string, path: HostGoodPath) => Promise<void>
+  readLocalNetwork: () => Promise<string | null>
   now: () => number
   randomBytes: (length: number) => Uint8Array
   setTimer: ScheduleTimer
