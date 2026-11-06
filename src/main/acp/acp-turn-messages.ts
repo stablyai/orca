@@ -28,12 +28,12 @@ export class AcpTurnMessages {
     private readonly read?: AcpOwnershipReader
   ) {}
 
-  isSettled(turn: string): boolean {
-    return this.owners.settled(turn) || this.read?.settled(turn) === true
-  }
-
   /** Keep trailing chunks on the provider message's original turn. */
-  owner(turn: string | undefined, update: SessionUpdate): AcpMessageOwner {
+  owner(
+    turn: string | undefined,
+    update: SessionUpdate,
+    settled: (turn: string) => boolean
+  ): AcpMessageOwner {
     if (
       (update.sessionUpdate !== 'agent_message_chunk' &&
         update.sessionUpdate !== 'agent_thought_chunk') ||
@@ -42,18 +42,27 @@ export class AcpTurnMessages {
       return { turn }
     }
     const key = `message:${providerTimelineKeyPart(update.messageId)}`
-    const owner = this.owners.get(key) ?? this.read?.message(update.messageId)
+    const owner = this.owners.get(key)
     if (owner) {
-      return owner
+      return { ...owner, settled: owner.settled || settled(owner.turn) }
     }
-    if (turn !== undefined) {
-      if (this.isSettled(turn)) {
-        this.owners.remember(key, turn)
-        return { turn, settled: true }
+    return (
+      this.read?.message(update.messageId) ?? {
+        turn,
+        settled: turn !== undefined && settled(turn)
       }
-      this.owners.remember(key, turn)
+    )
+  }
+
+  observe(turn: string | undefined, update: SessionUpdate | undefined): void {
+    if (
+      turn !== undefined &&
+      (update?.sessionUpdate === 'agent_message_chunk' ||
+        update?.sessionUpdate === 'agent_thought_chunk') &&
+      update.messageId
+    ) {
+      this.owners.remember(`message:${providerTimelineKeyPart(update.messageId)}`, turn)
     }
-    return { turn }
   }
 
   rejection(

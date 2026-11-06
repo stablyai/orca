@@ -114,7 +114,7 @@ describe('ACP ownership resource contract', () => {
     expect(probes - beforeMiss).toBeLessThanOrEqual(3)
     vi.restoreAllMocks()
     // Existing 128-entry start cache uses two maps; ownership keeps only the last two keys.
-    expect(retainedEntries(lane)).toBeLessThanOrEqual(262)
+    expect(retainedEntries(lane)).toBeLessThanOrEqual(258)
     expect(permission(lane, `item-${turns - 1}`)[0]).toMatchObject({
       join: { turn: `prompt:send-${turns - 1}` }
     })
@@ -234,7 +234,8 @@ describe('ACP ownership resource contract', () => {
         }
         lane.publication()?.()
       }
-      expect(retainedEntries(lane)).toBeLessThanOrEqual(264)
+      // Two 128-entry start maps, one live turn descriptor and its anonymous position.
+      expect(retainedEntries(lane)).toBeLessThanOrEqual(258)
       lane.dispose()
     }
   )

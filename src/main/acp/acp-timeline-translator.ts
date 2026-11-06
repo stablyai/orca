@@ -83,7 +83,7 @@ export class AcpTimelineTranslator {
     }
     const prompt = this.prompts.open(clientMessageId, at, compactionTurn)
     if (this.prompts.current?.opened) {
-      this.ownership.open(prompt.promptId)
+      this.ownership.operation().open(prompt.promptId)
     }
     return prompt
   }
@@ -197,11 +197,9 @@ export class AcpTimelineTranslator {
       extension?.started === true
     const offeredTurn =
       providerTurn ?? (this.prompts.current?.opened ? this.prompts.current.turn : this.activeTurn)
-    if (offeredTurn && opens && this.canOpen(offeredTurn)) {
-      this.ownership.open(offeredTurn)
-    }
+    const operation = this.ownership.operation()
     const owner = update
-      ? this.ownership.messages.owner(offeredTurn, update)
+      ? this.ownership.messages.owner(offeredTurn, update, operation.settled)
       : { turn: offeredTurn }
     // Host command IDs cannot join provider-keyed turns, even when their late frames outlive `last`.
     const settledCommand =
@@ -209,13 +207,15 @@ export class AcpTimelineTranslator {
     const turn = this.prompts.compacting(owner.turn) || settledCommand ? undefined : owner.turn
     const drop = this.ownership.messages.rejection(update, owner, this.options.sessionId, turn)
     if (drop) {
+      this.ownership.messages.observe(owner.turn, update)
       this.options.onTextDropped?.(drop)
       return []
     }
     const events: ProviderTimelineEvent[] = []
     if (turn && opens) {
-      events.push(...this.start(turn, extension?.at ?? at))
+      events.push(...this.start(turn, extension?.at ?? at, operation))
     }
+    this.ownership.messages.observe(owner.turn, update)
     const join = {
       thread: this.options.sessionId,
       ...(turn === undefined ? {} : { turn }),
@@ -297,21 +297,21 @@ export class AcpTimelineTranslator {
     return events
   }
 
-  private canOpen(turn: string): boolean {
-    return (
-      !this.ownership.messages.isSettled(turn) &&
-      (this.prompts.current?.turn === turn || !this.started.has(turn))
-    )
-  }
-
-  protected start(turn: string, at: number): ProviderTimelineEvent[] {
-    if (!this.canOpen(turn)) {
+  protected start(
+    turn: string,
+    at: number,
+    operation = this.ownership.operation()
+  ): ProviderTimelineEvent[] {
+    if (
+      operation.settled(turn) ||
+      (this.prompts.current?.turn !== turn && this.started.has(turn))
+    ) {
       return []
     }
     if (this.activeTurn && this.activeTurn !== turn) {
       this.end(this.activeTurn)
     }
-    this.ownership.open(turn)
+    operation.open(turn)
     if (turn === this.prompts.current?.turn) {
       const events = this.prompts.start(turn, at)
       // Late frames must not reopen or retarget this prompt.

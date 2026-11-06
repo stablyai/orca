@@ -9,14 +9,32 @@ export class AcpTimelineOwnership {
   readonly messages: AcpTurnMessages
   disposed = false
 
-  constructor(read?: AcpOwnershipReader) {
+  constructor(private readonly read?: AcpOwnershipReader) {
     this.tools = new AcpToolTimeline(this.items, read)
     this.messages = new AcpTurnMessages(this.items, read)
   }
 
-  open(turn: string): void {
-    if (!this.disposed && !this.messages.isSettled(turn)) {
-      this.items.open(turn)
+  operation(): { settled: (turn: string) => boolean; open: (turn: string) => void } {
+    const durable = new Map<string, boolean>()
+    const settled = (turn: string): boolean => {
+      if (this.items.settled(turn)) {
+        return true
+      }
+      const known = durable.get(turn)
+      if (known !== undefined) {
+        return known
+      }
+      const value = this.read?.settled(turn) === true
+      durable.set(turn, value)
+      return value
+    }
+    return {
+      settled,
+      open: (turn) => {
+        if (!this.disposed && !settled(turn)) {
+          this.items.open(turn)
+        }
+      }
     }
   }
 
