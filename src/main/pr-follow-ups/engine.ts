@@ -67,7 +67,7 @@ export class FollowUpEngine {
   }
 
   private async reconcileActions(prKey: string): Promise<void> {
-    for (const action of this.deps.store.actions(prKey)) {
+    for (const action of this.deps.store.metadata(prKey, true)) {
       if (action.status === 'claimed' || action.status === 'unconfirmed') {
         settleFollowUpReceipt(this.deps, action, await this.deps.recover(action))
       }
@@ -75,7 +75,7 @@ export class FollowUpEngine {
         const live = await this.deps.live(action).catch(() => 'unknown' as const)
         if (live === false) {
           action.sessionEndedAt = this.now()
-          this.deps.store.saveAction(action)
+          this.deps.store.saveActionMetadata(action)
         }
       }
     }
@@ -117,7 +117,7 @@ export class FollowUpEngine {
       pendingRead: false,
       state: observation.state
     }
-    if (observation.observedAt < pr.lastSeenAt) {
+    if (observation.observedAt < (pr.lastReadAt ?? pr.lastSeenAt)) {
       return
     }
     for (const target of this.deps.targets().filter((target) => target.prKey === pr.prKey)) {
@@ -137,11 +137,13 @@ export class FollowUpEngine {
     }
     if (!observation.readComplete) {
       // Reconciliations of a held observation are not additional failed reads.
-      if (observation.observedAt > pr.lastSeenAt) {
+      if (!cached && observation.observedAt > (pr.lastReadAt ?? pr.lastSeenAt)) {
         pr.consecutiveReadFailures += 1
       }
       pr.pendingRead = true
-      pr.lastSeenAt = observation.observedAt
+      if (!cached) {
+        pr.lastReadAt = observation.observedAt
+      }
       store.savePr(pr)
       return
     }
@@ -150,7 +152,7 @@ export class FollowUpEngine {
       pr.consecutiveReadFailures = 0
     }
     if (pr.headSha !== observation.headSha) {
-      const actions = store.actions(pr.prKey)
+      const actions = store.metadata(pr.prKey)
       const attributed = this.deps.source
         .pullRequestActionsFor?.(pr.prKey)
         .some(
@@ -176,7 +178,10 @@ export class FollowUpEngine {
       pr.handled = []
       pr.baselineNames = []
     }
-    pr.lastSeenAt = observation.observedAt
+    if (!cached) {
+      pr.lastSeenAt = observation.observedAt
+      pr.lastReadAt = observation.observedAt
+    }
     if (pr.needsBaseline) {
       pr.baselineAt = observation.observedAt
       pr.needsBaseline = false
@@ -206,20 +211,24 @@ export class FollowUpEngine {
       }
       this.deps.store.savePr(pr)
     }
-    return this.reconcile()
+    this.deps.changed?.()
+    void this.reconcile().catch((error: unknown) =>
+      console.error('[pr-follow-ups] stop reconciliation failed', error)
+    )
+    return Promise.resolve()
   }
 
   sessionEnded(identity: string, endedAt: number): Promise<void> {
     return this.enqueue(async () => {
       for (const pr of this.deps.store.prs()) {
-        for (const action of this.deps.store.actions(pr.prKey)) {
+        for (const action of this.deps.store.metadata(pr.prKey, true)) {
           if (
             action.status === 'accepted' &&
             action.sessionEndedAt === undefined &&
             [action.sessionId, action.terminalPtyId].includes(identity)
           ) {
             action.sessionEndedAt = endedAt
-            this.deps.store.saveAction(action)
+            this.deps.store.saveActionMetadata(action)
           }
         }
       }
@@ -241,7 +250,7 @@ export class FollowUpEngine {
       return null
     }
     const fixing = this.deps.store
-      .actions(target.prKey)
+      .metadata(target.prKey, true)
       .some(
         (action) =>
           action.worktreeId === worktreeId &&
@@ -249,7 +258,11 @@ export class FollowUpEngine {
           action.sessionEndedAt === undefined &&
           this.deps.working(action)
       )
-    return { prKey: target.prKey, view: this.view(target.prKey), fixing }
+    return {
+      prKey: target.prKey,
+      view: followUpView(this.deps, target.prKey, this.windowHolds.has(target.prKey), target),
+      fixing
+    }
   }
 
   view(prKey: string): FollowUpView {

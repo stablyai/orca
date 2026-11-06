@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 export const ClientEventsSubscribeParams = z.object({
+  prFollowUpsOnly: z.boolean().optional(),
   // Only the desktop renderer opts in; main-process relays on the same socket cannot answer host requests.
   browserHostRequests: z.boolean().optional()
 })

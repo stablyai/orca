@@ -1,6 +1,7 @@
 import type { AgentLaunchParams } from '../../shared/rpc-contract/agent-launch-params'
 import type {
   FollowUpAction,
+  FollowUpActionMetadata,
   FollowUpObservation,
   FollowUpObservationSource,
   FollowUpTarget
@@ -38,11 +39,11 @@ export type FollowUpEngineDependencies = {
     target: FollowUpTarget
   ): Promise<AgentLaunchParams>
   recipe(target: FollowUpTarget): { agent: string; surface: 'terminal' | 'chat' }
-  working(action: FollowUpAction): boolean
+  working(action: FollowUpActionMetadata): boolean
   canPublishAgentLaunchTab(): boolean
   launch(params: AgentLaunchParams): Promise<FollowUpReceipt>
-  recover(action: FollowUpAction): Promise<FollowUpReceipt>
-  live(action: FollowUpAction): Promise<boolean | 'unknown'>
+  recover(action: FollowUpActionMetadata): Promise<FollowUpReceipt>
+  live(action: FollowUpActionMetadata): Promise<boolean | 'unknown'>
   started?(action: FollowUpAction): void
   changed?(): void
   now?(): number

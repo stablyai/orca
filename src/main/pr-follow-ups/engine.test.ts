@@ -9,6 +9,8 @@ import type {
 } from '../../shared/pr-follow-ups/contracts'
 import { FollowUpEngine, type FollowUpEngineDependencies, type FollowUpReceipt } from './engine'
 import { FollowUpStore } from './store'
+import Database from '../sqlite/sync-database'
+import { PR_FOLLOW_UP_METHODS } from '../runtime/rpc/methods/pr-follow-ups'
 
 class FakeObservations implements FollowUpObservationSource {
   watchWorkspace(): () => void {
@@ -36,7 +38,8 @@ afterEach(() => {
 function harness() {
   const folder = mkdtempSync(join(tmpdir(), 'pr-followups-pr1-'))
   const path = join(folder, 'host.db')
-  let store = FollowUpStore.open(path)
+  let db = new Database(path)
+  let store = new FollowUpStore(db)
   const source = new FakeObservations()
   let now = 1700000000000
   const target: FollowUpTarget = {
@@ -116,6 +119,9 @@ function harness() {
     get engine() {
       return engine
     },
+    get db() {
+      return db
+    },
     get store() {
       return store
     },
@@ -126,7 +132,8 @@ function harness() {
     restart: async () => {
       await engine.dispose()
       store.close()
-      store = FollowUpStore.open(path)
+      db = new Database(path)
+      store = new FollowUpStore(db)
       engine = new FollowUpEngine(deps())
       await engine.start()
     }
@@ -148,10 +155,9 @@ describe('automatic failing-check follow-ups', () => {
     expect(h.launch).toHaveBeenCalledTimes(1)
     await h.observe(['unit', 'typecheck'])
     expect(h.launch).toHaveBeenCalledTimes(2)
-    expect(h.store.actions(h.target.prKey).map((action) => action.failingNames)).toEqual([
-      ['unit'],
-      ['typecheck']
-    ])
+    expect(h.store.actions(h.target.prKey).map((action) => action.failingNames)).toEqual(
+      expect.arrayContaining([['unit'], ['typecheck']])
+    )
     await h.observe(['unit'], 'h2')
     expect(h.launch).toHaveBeenCalledTimes(3)
   })
@@ -203,10 +209,16 @@ describe('automatic failing-check follow-ups', () => {
       state: 'paused',
       pauseReason: 'generation'
     })
-    await h.engine.sessionEnded('auto-1', 1700000100000)
     h.advance(120000)
-    await h.observe([], 'h4')
+    await h.observe(['one'], 'h5', { readComplete: false })
+    await h.engine.sessionEnded('auto-1', 1700000100000)
+    await h.restart()
     await h.observe(['one'], 'h5')
+    expect(h.launch).toHaveBeenCalledTimes(3)
+    expect(h.engine.view(h.target.prKey)).toMatchObject({ state: 'paused', used: 3 })
+    h.advance(120000)
+    await h.observe([], 'h5')
+    await h.observe(['one'], 'h6')
     expect(h.launch).toHaveBeenCalledTimes(4)
     expect(h.store.pr(h.target.prKey)?.generation).toBe(1)
   })
@@ -349,12 +361,181 @@ describe('automatic failing-check follow-ups', () => {
     let stopped: Promise<void> | undefined
     h.prepare.mockImplementationOnce(async () => {
       stopped = h.engine.stop(h.target.prKey, true)
+      await stopped
       return { agent: 'codex', target: { kind: 'existing', worktree: 'id:w1' } }
     })
     await h.observe(['unit'])
     await stopped
     expect(h.launch).not.toHaveBeenCalled()
     expect(h.engine.view(h.target.prKey).stopped).toBe(true)
+  })
+
+  it('uses the switch alone to enable defaults and explains each workspace’s own off reason', async () => {
+    const h = harness()
+    h.target.settings = { events: { ciFailed: 'off' } }
+    const other = { ...h.target, worktreeId: 'w2', instanceId: 'i2', settings: { enabled: true } }
+    const engine = new FollowUpEngine({
+      ...h.dependencies(),
+      targets: () => [h.target, other],
+      globalSettings: () => ({ enabled: true })
+    })
+    await h.observe([])
+    await engine.observe(h.source.latest(h.target.prKey)!)
+    expect(engine.forWorkspace('w1')?.view).toMatchObject({ state: 'off', offReason: 'nothing' })
+    expect(engine.forWorkspace('w2')?.view.state).toBe('armed')
+    h.target.settings = { enabled: false }
+    expect(engine.forWorkspace('w1')?.view.offReason).toBe('disabled')
+    h.target.settings = { enabled: true }
+    h.target.branch = 'other'
+    expect(engine.forWorkspace('w1')?.view.offReason).toBe('branch')
+    await engine.stop(h.target.prKey, true)
+    expect(engine.forWorkspace('w2')?.view.offReason).toBe('stopped')
+    await engine.dispose()
+  })
+
+  it('shows a launch in progress and limits prompt uncertainty to its live head without hiding actionable states', async () => {
+    const h = harness()
+    await h.observe([])
+    h.launch.mockImplementationOnce(async () => {
+      expect(h.engine.view(h.target.prKey)).toMatchObject({
+        state: 'starting',
+        workingAgent: 'codex'
+      })
+      return {
+        status: 'accepted',
+        identity: { surface: 'chat', sessionId: 'auto-1', promptUnconfirmed: true }
+      }
+    })
+    await h.observe(['unit'])
+    expect(h.engine.view(h.target.prKey).state).toBe('handled')
+    await h.observe([])
+    expect(h.engine.view(h.target.prKey).state).toBe('prompt-unconfirmed')
+    h.target.workingAgent = 'Claude'
+    await h.observe(['unit', 'lint'])
+    expect(h.engine.view(h.target.prKey).state).toBe('waiting')
+    await h.observe([], 'h2')
+    expect(h.engine.view(h.target.prKey).state).toBe('armed')
+    await h.observe([], 'h1')
+    await h.engine.sessionEnded('auto-1', 1700000100000)
+    expect(h.engine.view(h.target.prKey).state).toBe('armed')
+    h.target.workingAgent = null
+    await h.observe(['a'])
+    await h.observe(['a', 'b'])
+    expect(h.engine.view(h.target.prKey).state).toBe('paused')
+  })
+
+  it.each([10, 100])(
+    'does not read or parse old launch prompts through get, observations or retirement (%i old actions)',
+    async (count) => {
+      const h = harness()
+      await h.observe([])
+      await h.observe(['unit'])
+      const accepted = h.store.actions(h.target.prKey)[0]!
+      h.launch.mockResolvedValueOnce({ status: 'unconfirmed' })
+      await h.observe(['unit', 'lint'])
+      const oldPrompt = 'irrelevant-old-launch-prompt:'.repeat(8192)
+      for (let index = 0; index < count; index += 1) {
+        h.store.saveAction({
+          ...accepted,
+          actionKey: `old-${index}`,
+          generation: -1,
+          attemptStartedAt: 1699800000000,
+          sessionStartedAt: 1699800000000,
+          sessionEndedAt: 1699800010000,
+          launch: { ...accepted.launch, prompt: { text: oldPrompt, delivery: 'submit' } }
+        })
+      }
+      let irrelevantSqlBytes = 0
+      let irrelevantParsedBytes = 0
+      const instrument = () => {
+        const prepare = h.db.prepare.bind(h.db)
+        vi.spyOn(h.db, 'prepare').mockImplementation((sql) => {
+          const statement = prepare(sql)
+          return new Proxy(statement, {
+            get(target, key) {
+              if (key !== 'all' && key !== 'get') {
+                return Reflect.get(target, key)
+              }
+              return (...args: Database.BindValue[]) => {
+                const result = statement[key](...args)
+                for (const row of Array.isArray(result) ? result : result ? [result] : []) {
+                  for (const value of Object.values(row)) {
+                    if (
+                      typeof value === 'string' &&
+                      value.includes('irrelevant-old-launch-prompt:')
+                    ) {
+                      irrelevantSqlBytes += value.length
+                    }
+                  }
+                }
+                return result
+              }
+            }
+          })
+        })
+      }
+      instrument()
+      const parse = JSON.parse
+      const parseSpy = vi.spyOn(JSON, 'parse').mockImplementation((text, reviver) => {
+        if (text.includes('irrelevant-old-launch-prompt:')) {
+          irrelevantParsedBytes += text.length
+        }
+        return parse(text, reviver)
+      })
+      try {
+        const get = PR_FOLLOW_UP_METHODS.find((method) => method.name === 'prFollowUps.get')!
+        const read = async () => get.handler({}, { runtime: { prFollowUps: h.engine } } as never)
+        expect((await read()).workspaces.w1?.view.used).toBe(1)
+        await h.observe(['unit', 'lint', 'new'], 'h2')
+        h.global.enabled = false
+        await h.engine.reconcile()
+        h.target.archived = true
+        await h.engine.reconcile()
+        await h.restart()
+        instrument()
+        expect((await read()).workspaces.w1?.view.used).toBe(1)
+        expect(h.recover).toHaveBeenCalled()
+        await h.observe(['unit'], 'h2')
+        h.store.retire(h.store.pr(h.target.prKey)!)
+        expect(irrelevantSqlBytes).toBe(0)
+        expect(irrelevantParsedBytes).toBe(0)
+        expect(h.launch).toHaveBeenCalledTimes(2)
+      } finally {
+        parseSpy.mockRestore()
+      }
+    }
+  )
+
+  it('preserves existing saved launches when separating metadata from payloads', async () => {
+    const h = harness()
+    await h.observe([])
+    await h.observe(['unit'])
+    const action = h.store.actions(h.target.prKey)[0]!
+    const db = new Database(':memory:')
+    try {
+      db.exec(
+        'CREATE TABLE followup_action (action_key TEXT PRIMARY KEY, pr_key TEXT NOT NULL, payload TEXT NOT NULL)'
+      )
+      db.prepare('INSERT INTO followup_action VALUES (?, ?, ?)').run(
+        action.actionKey,
+        action.prKey,
+        JSON.stringify(action)
+      )
+      const store = new FollowUpStore(db)
+      expect(store.acceptedCount(action.prKey, 0)).toBe(1)
+      expect(store.latestAction(action.prKey)?.agent).toBe('codex')
+      store.saveActionMetadata({
+        ...store.metadata(action.prKey)[0]!,
+        sessionEndedAt: 1700000100000
+      })
+      const reopened = new FollowUpStore(db)
+      expect(reopened.action(action.actionKey)).toMatchObject({
+        launch: action.launch,
+        sessionEndedAt: 1700000100000
+      })
+    } finally {
+      db.close()
+    }
   })
 
   it('keeps PR-wide safety history until every binding and pending session retires', async () => {

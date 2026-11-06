@@ -1,3 +1,4 @@
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -11,7 +12,7 @@ import type { FollowUpView } from '../../../../shared/pr-follow-ups/contracts'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
-import { usePrFollowUps } from './follow-up-resource'
+import { usePrFollowUpWorkspace, usePrFollowUpFixing } from './follow-up-resource'
 
 function stateText(view: FollowUpView): string {
   if (view.stopped) {
@@ -19,7 +20,11 @@ function stateText(view: FollowUpView): string {
   }
   switch (view.state) {
     case 'off':
-      return 'Off · Turn on in Project settings'
+      return view.offReason === 'nothing'
+        ? 'Off · Checks fail is set to Nothing'
+        : view.offReason === 'branch'
+          ? 'Off · This branch doesn’t match the PR'
+          : 'Off · Automatic follow-ups are switched off'
     case 'armed':
       return 'Armed for new failing checks'
     case 'waiting':
@@ -30,7 +35,7 @@ function stateText(view: FollowUpView): string {
       return 'Handled for this commit'
     case 'paused':
       if (view.pauseReason === 'generation') {
-        return `Auto follow-ups paused (${view.used} of ${view.limit} used). A new push from you resets it.`
+        return `Auto follow-ups paused (${view.used} of ${view.limit} used). A new push from you resets it once no automatic agent is still working there`
       }
       if (view.pauseReason === 'daily') {
         return `Auto follow-ups paused (6 in 24 h). Resumes at ${new Date(view.resumesAt!).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.`
@@ -38,6 +43,8 @@ function stateText(view: FollowUpView): string {
       return 'Paused'
     case 'baseline':
       return 'Already failing when follow-ups were turned on'
+    case 'starting':
+      return `Starting ${formatAgentTypeLabel(view.workingAgent)}…`
     case 'unconfirmed':
       return 'Couldn’t confirm the agent started'
     case 'prompt-unconfirmed':
@@ -54,11 +61,10 @@ export function PrFollowUpRow({
   repo: Repo | null
   onFixChecks(): void
 }): React.JSX.Element | null {
-  const snapshot = usePrFollowUps()
-  const current = snapshot.workspaces[worktreeId]
+  const current = usePrFollowUpWorkspace(worktreeId)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  if (!snapshot.available || !current) {
+  if (!current) {
     return null
   }
   const { view } = current
@@ -148,8 +154,8 @@ export function PrFollowUpRow({
 }
 
 export function PrFollowUpBadge({ worktreeId }: { worktreeId: string }): React.JSX.Element | null {
-  const snapshot = usePrFollowUps()
-  return snapshot.available && snapshot.workspaces[worktreeId]?.fixing ? (
+  const fixing = usePrFollowUpFixing(worktreeId)
+  return fixing ? (
     <Badge variant="outline" className="h-4 shrink-0 px-1.5 text-[9px] text-primary">
       Fixing checks · auto
     </Badge>

@@ -23,15 +23,22 @@ export const CLIENT_EVENT_METHODS = [
       { runtime, connectionId, clientKind, pairedDeviceId, clientCapabilities },
       emit
     ) => {
+      if (params.prFollowUpsOnly && !runtime.prFollowUps) {
+        emit({ type: 'end' })
+        return
+      }
       await new Promise<void>((resolve) => {
         // Mobile discards terminalSideEffects; filter per-OSC batch frames before they cross the relay.
         const unsubscribe = runtime.onClientEvent(
           (event) => {
-            emit(event)
+            if (!params.prFollowUpsOnly || event.type === 'prFollowUpsChanged') {
+              emit(event)
+            }
           },
-          { consumesTerminalSideEffects: clientKind !== 'mobile' }
+          { consumesTerminalSideEffects: !params.prFollowUpsOnly && clientKind !== 'mobile' }
         )
         const unregisterHostVolunteer =
+          !params.prFollowUpsOnly &&
           params.browserHostRequests === true &&
           clientKind === 'runtime' &&
           pairedDeviceId &&
@@ -52,6 +59,10 @@ export const CLIENT_EVENT_METHODS = [
           connectionId
         )
 
+        if (params.prFollowUpsOnly) {
+          emit({ type: 'ready', subscriptionId })
+          return
+        }
         // Listen before snapshotting to close the subscribe race and replay sleep state missed during disconnect.
         for (const event of runtime.getTerminalSleepClientEventSnapshot?.() ?? []) {
           emit(event)

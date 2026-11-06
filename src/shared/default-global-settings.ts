@@ -310,7 +310,7 @@ export function buildDefaultSettings(args: {
       customAgentCommand: ''
     },
     sourceControlAi: getDefaultSourceControlAiSettings(),
-    prFollowUps: { enabled: false, events: { ciFailed: 'off' }, maxAutoRunsPerPr: 3 },
+    prFollowUps: { enabled: false, events: { ciFailed: 'new-agent' }, maxAutoRunsPerPr: 3 },
     voice: args.voice
   }
 }

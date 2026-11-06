@@ -1,6 +1,7 @@
 import { canonicalAgentSessionDigest } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type {
   FollowUpAction,
+  FollowUpActionMetadata,
   FollowUpObservation,
   FollowUpPr,
   FollowUpTarget
@@ -36,7 +37,7 @@ export async function dispatchFollowUp(
   if (!names.length) {
     return
   }
-  const actions = store.actions(pr.prKey)
+  const actions = store.metadata(pr.prKey)
   if (actions.some((action) => action.status === 'claimed' || action.status === 'unconfirmed')) {
     return
   }
@@ -121,7 +122,7 @@ export async function dispatchFollowUp(
 
 export function settleFollowUpReceipt(
   deps: FollowUpEngineDependencies,
-  action: FollowUpAction,
+  action: FollowUpAction | FollowUpActionMetadata,
   receipt: FollowUpReceipt
 ): void {
   deps.store.transaction(() => {
@@ -130,7 +131,11 @@ export function settleFollowUpReceipt(
       Object.assign(action, receipt.identity)
       action.sessionStartedAt ??= action.attemptStartedAt
     }
-    deps.store.saveAction(action)
+    if ('launch' in action) {
+      deps.store.saveAction(action)
+    } else {
+      deps.store.saveActionMetadata(action)
+    }
     if (receipt.status === 'absent') {
       const pr = deps.store.pr(action.prKey)
       if (pr?.headSha === action.headSha) {

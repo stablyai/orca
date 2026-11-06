@@ -11,7 +11,7 @@ describe('PR follow-up settings', () => {
     })
     expect(resolvePrFollowUps(undefined)).toEqual({
       enabled: false,
-      ciFailed: 'off',
+      ciFailed: 'new-agent',
       maxAutoRunsPerPr: 3
     })
     const raw = {
@@ -19,6 +19,10 @@ describe('PR follow-up settings', () => {
       events: { ciFailed: 'future-action', reviewComment: 'send-owner' }
     }
     expect(resolvePrFollowUps(raw).ciFailed).toBe('off')
+    expect(patchPrFollowUps(raw, { path: 'enabled', value: false })).toEqual({
+      enabled: false,
+      events: { ciFailed: 'future-action', reviewComment: 'send-owner' }
+    })
     const patched = patchPrFollowUps(raw, { path: 'events.ciFailed', value: 'new-agent' })
     expect(patched).toEqual({
       enabled: true,

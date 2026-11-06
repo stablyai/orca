@@ -53,7 +53,7 @@ export function resolvePrFollowUps(
   global: PrFollowUpsSettings | undefined,
   repo?: PrFollowUpsSettings
 ): { enabled: boolean; ciFailed: 'new-agent' | 'off'; maxAutoRunsPerPr: number } {
-  const action = repo?.events?.ciFailed ?? global?.events?.ciFailed
+  const action = repo?.events?.ciFailed ?? global?.events?.ciFailed ?? 'new-agent'
   const cap = repo?.maxAutoRunsPerPr ?? global?.maxAutoRunsPerPr ?? 3
   return {
     enabled: (repo?.enabled ?? global?.enabled) === true,

@@ -75,12 +75,16 @@ export type FollowUpAction = {
   sessionEndedAt?: number
 }
 
+export type FollowUpActionMetadata = Omit<FollowUpAction, 'launch'> & { agent: string }
+
 export type FollowUpPr = {
   prKey: string
   baselineAt: number | null
   needsBaseline: boolean
   headSha: string
+  // Only complete, non-cached observations advance the head provenance boundary.
   lastSeenAt: number
+  lastReadAt?: number
   handled: string[]
   baselineNames: string[]
   generation: number
@@ -101,10 +105,12 @@ export type FollowUpView = {
     | 'paused'
     | 'baseline'
     | 'unconfirmed'
+    | 'starting'
     | 'prompt-unconfirmed'
   used: number
   limit: number
   stopped: boolean
+  offReason?: 'disabled' | 'nothing' | 'branch' | 'stopped'
   pauseReason?: 'generation' | 'daily' | 'reads' | 'comments'
   resumesAt?: number
   workingAgent?: string

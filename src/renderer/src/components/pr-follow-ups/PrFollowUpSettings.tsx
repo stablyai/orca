@@ -16,7 +16,7 @@ import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { Label } from '../ui/label'
 import { Switch } from '../ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
-import { usePrFollowUps } from './follow-up-resource'
+import { usePrFollowUpsAvailable } from './follow-up-resource'
 
 export function PrFollowUpSettings({
   global,
@@ -25,7 +25,7 @@ export function PrFollowUpSettings({
   global?: PrFollowUpsSettings
   repo?: Repo
 }): React.JSX.Element | null {
-  const { available } = usePrFollowUps()
+  const available = usePrFollowUpsAvailable()
   const focusedHost = useAppStore((state) => getSettingsFocusedExecutionHostId(state.settings))
   const [saved, setSaved] = useState<{
     owner: string

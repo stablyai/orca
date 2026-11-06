@@ -28,14 +28,10 @@ export function followUpPause(
   pr: FollowUpPr,
   limit: number
 ): Pick<FollowUpView, 'pauseReason' | 'resumesAt'> | undefined {
-  const accepted = deps.store.actions(pr.prKey).filter((action) => action.status === 'accepted')
-  if (accepted.filter((action) => action.generation === pr.generation).length >= limit) {
+  if (deps.store.acceptedCount(pr.prKey, pr.generation) >= limit) {
     return { pauseReason: 'generation' }
   }
-  const recent = accepted
-    .map((action) => action.sessionStartedAt ?? action.attemptStartedAt)
-    .filter((startedAt) => startedAt > (deps.now?.() ?? Date.now()) - DAY)
-    .sort((a, b) => a - b)
+  const recent = deps.store.recentAcceptedStarts(pr.prKey, (deps.now?.() ?? Date.now()) - DAY)
   if (recent.length >= 6) {
     return { pauseReason: 'daily', resumesAt: recent.at(-6)! + DAY }
   }
@@ -51,26 +47,31 @@ export function followUpPause(
 export function followUpView(
   deps: FollowUpEngineDependencies,
   prKey: string,
-  waitingForWindow: boolean
+  waitingForWindow: boolean,
+  workspaceTarget?: FollowUpTarget
 ): FollowUpView {
-  const target = eligibleFollowUpTargets(deps, prKey)[0]
+  const target = workspaceTarget ?? eligibleFollowUpTargets(deps, prKey)[0]
   const settings = resolvePrFollowUps(deps.globalSettings(), target?.settings)
   const pr = deps.store.pr(prKey)
-  const actions = deps.store.actions(prKey)
-  const used = actions.filter(
-    (action) => action.status === 'accepted' && action.generation === pr?.generation
-  ).length
+  const used = pr ? deps.store.acceptedCount(prKey, pr.generation) : 0
   const base = {
     used,
     limit: settings.maxAutoRunsPerPr,
     stopped: pr?.stoppedAt !== null && pr?.stoppedAt !== undefined
   }
-  if (!target || !pr || base.stopped) {
-    return { ...base, state: 'off' }
+  const offReason = base.stopped
+    ? 'stopped'
+    : !settings.enabled
+      ? 'disabled'
+      : settings.ciFailed === 'off'
+        ? 'nothing'
+        : target && (target.archived || target.branch !== deps.source.latest(prKey)?.headRefName)
+          ? 'branch'
+          : undefined
+  if (!target || !pr || offReason) {
+    return { ...base, state: 'off', offReason }
   }
-  const latestAction = actions
-    .filter((action) => action.status !== 'absent')
-    .sort((a, b) => b.attemptStartedAt - a.attemptStartedAt)[0]
+  const latestAction = deps.store.latestAction(prKey)
   const action = latestAction
     ? {
         worktreeId: latestAction.worktreeId,
@@ -79,11 +80,11 @@ export function followUpView(
         surface: latestAction.surface
       }
     : undefined
-  if (latestAction?.status === 'unconfirmed' || latestAction?.status === 'claimed') {
-    return { ...base, state: 'unconfirmed', action }
+  if (latestAction?.status === 'claimed') {
+    return { ...base, state: 'starting', workingAgent: latestAction.agent, action }
   }
-  if (latestAction?.status === 'accepted' && latestAction.promptUnconfirmed) {
-    return { ...base, state: 'prompt-unconfirmed', action }
+  if (latestAction?.status === 'unconfirmed') {
+    return { ...base, state: 'unconfirmed', action }
   }
   const pause = followUpPause(deps, pr, base.limit)
   if (pause) {
@@ -104,9 +105,20 @@ export function followUpView(
   if (observation?.failingCheckNames.some((name) => pr.baselineNames.includes(name))) {
     return { ...base, state: 'baseline' }
   }
+  if (observation?.failingCheckNames.length && !fresh) {
+    return { ...base, state: 'handled', action }
+  }
+  if (
+    latestAction?.status === 'accepted' &&
+    latestAction.promptUnconfirmed &&
+    latestAction.headSha === observation?.headSha &&
+    latestAction.sessionEndedAt === undefined
+  ) {
+    return { ...base, state: 'prompt-unconfirmed', action }
+  }
   return {
     ...base,
-    state: observation?.failingCheckNames.length && !fresh ? 'handled' : 'armed',
+    state: 'armed',
     action
   }
 }
