@@ -53,14 +53,15 @@ export class CompactJournalItems {
   readonly work = { pointers: 0, inline: 0, inlineBytes: 0, payloadMs: 0, metadataMs: 0 }
   constructor(
     private readonly state: JournalReducerState,
-    private readonly provenance: JournalOutcomeItemProvenance
+    private readonly provenance: JournalOutcomeItemProvenance,
+    private readonly options: { diagnostics?: boolean } = {}
   ) {}
 
   *records(): Generator<{ table: 'domain_items'; values: SqliteBindings }> {
     let ordinal = 0
     for (const [id, item] of memoryJournalMap(this.state.items)) {
       ordinal++
-      const started = performance.now()
+      const started = this.options.diagnostics === false ? 0 : performance.now()
       const key = JSON.stringify(id)
       const source = this.provenance.source(item, key)
       let inline: string | null = null
@@ -74,15 +75,19 @@ export class CompactJournalItems {
         this.work.inline++
         this.work.inlineBytes += bytes
       }
-      this.work.payloadMs += performance.now() - started
-      const metadataStarted = performance.now()
+      if (this.options.diagnostics !== false) {
+        this.work.payloadMs += performance.now() - started
+      }
+      const metadataStarted = this.options.diagnostics === false ? 0 : performance.now()
       const identity = parseAgentJournalItemKey(id)
       const hidden =
         identity?.provider === 'orca' &&
         this.state.inputs.rejections.has(identity.clientMessageId) &&
         !this.state.inputs.presentations.has(identity.clientMessageId)
       const metadata = journalSqlItemMetadata(item, bytes)
-      this.work.metadataMs += performance.now() - metadataStarted
+      if (this.options.diagnostics !== false) {
+        this.work.metadataMs += performance.now() - metadataStarted
+      }
       yield {
         table: 'domain_items',
         values: [

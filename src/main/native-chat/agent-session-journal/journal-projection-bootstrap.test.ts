@@ -321,6 +321,20 @@ it.each(['raw', 'prefix', 'marker5', 'outcome'] as const)(
     expect([...readCompactJournalItems(compactScope)]).toEqual([
       ...memoryJournalMap(ordinary.state.items)
     ])
+    const plainEncoder = new CompactJournalItems(tracked.state, provenance, { diagnostics: false })
+    expect([...plainEncoder.records()]).toEqual([
+      ...new CompactJournalItems(tracked.state, provenance).records()
+    ])
+    const plainScope = new JournalSqlScope(database.db, sessionId, 'compact-plain')
+    await stageJournalProjectionRecords(
+      plainScope,
+      plainEncoder.records(),
+      compactJournalItemColumns,
+      { maxRows: 2, diagnostics: false }
+    )
+    expect([...readCompactJournalItems(plainScope)]).toEqual([
+      ...readCompactJournalItems(compactScope)
+    ])
     const direct = new DirectJournalControl(tracked.state, provenance)
     await stageDirectJournalRecords(
       new JournalSqlScope(database.db, sessionId, 'direct'),

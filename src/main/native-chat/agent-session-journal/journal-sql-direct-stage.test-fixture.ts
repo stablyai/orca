@@ -10,7 +10,12 @@ import {
 export async function stageDirectJournalRecords(
   scope: JournalSqlScope,
   records: Iterable<DirectJournalRecord>,
-  options: { maxRows?: number; maxBytes?: number; acknowledge?: () => Promise<void> } = {}
+  options: {
+    maxRows?: number
+    maxBytes?: number
+    diagnostics?: boolean
+    acknowledge?: () => Promise<void>
+  } = {}
 ) {
   return stageJournalProjectionRecords(scope, records, directJournalColumns, options)
 }
@@ -19,7 +24,12 @@ export async function stageJournalProjectionRecords<T extends string>(
   scope: JournalSqlScope,
   records: Iterable<{ table: T; values: SqliteBindings }>,
   columnsByTable: Readonly<Record<T, string>>,
-  options: { maxRows?: number; maxBytes?: number; acknowledge?: () => Promise<void> } = {}
+  options: {
+    maxRows?: number
+    maxBytes?: number
+    diagnostics?: boolean
+    acknowledge?: () => Promise<void>
+  } = {}
 ) {
   const statements = new Map<string, SqliteStatement>()
   const work = {
@@ -27,6 +37,8 @@ export async function stageJournalProjectionRecords<T extends string>(
     bytes: 0,
     chunks: 0,
     maxChunkBytes: 0,
+    maxChunkMs: 0,
+    maxTransactionMs: 0,
     oversized: 0,
     serializationMs: 0,
     deserializationMs: 0,
@@ -81,7 +93,7 @@ export async function stageJournalProjectionRecords<T extends string>(
       }
       for (const [table, group] of groups) {
         const family = work.families.get(table) ?? { rows: 0, bytes: 0, insertsMs: 0 }
-        const familyStarted = performance.now()
+        const familyStarted = options.diagnostics === false ? 0 : performance.now()
         const width = group[0].values.length + 2
         const bound = Math.max(1, Math.floor(30000 / width))
         for (let offset = 0; offset < group.length; offset += bound) {
@@ -102,13 +114,17 @@ export async function stageJournalProjectionRecords<T extends string>(
           }
           statement.run(...parameters)
         }
-        family.insertsMs += performance.now() - familyStarted
+        if (options.diagnostics !== false) {
+          family.insertsMs += performance.now() - familyStarted
+        }
         family.rows += group.length
-        for (const record of group) {
-          family.bytes += record.values.reduce<number>(
-            (bytes, value) => bytes + (typeof value === 'string' ? Buffer.byteLength(value) : 8),
-            0
-          )
+        if (options.diagnostics !== false) {
+          for (const record of group) {
+            family.bytes += record.values.reduce<number>(
+              (bytes, value) => bytes + (typeof value === 'string' ? Buffer.byteLength(value) : 8),
+              0
+            )
+          }
         }
         work.families.set(table, family)
         work.rows += group.length
@@ -117,6 +133,7 @@ export async function stageJournalProjectionRecords<T extends string>(
       const commitStarted = performance.now()
       scope.db.exec('COMMIT')
       work.commitsMs += performance.now() - commitStarted
+      work.maxTransactionMs = Math.max(work.maxTransactionMs, performance.now() - insertStarted)
     } catch (error) {
       scope.db.exec('ROLLBACK')
       throw error
@@ -128,6 +145,7 @@ export async function stageJournalProjectionRecords<T extends string>(
       peakMemory[key] = Math.max(peakMemory[key], memory[key])
     }
     await options.acknowledge?.()
+    work.maxChunkMs = Math.max(work.maxChunkMs, performance.now() - before)
   }
   for (const record of records) {
     const estimate =
