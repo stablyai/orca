@@ -22360,7 +22360,8 @@
     },
     "chart": {
       "folderSizes": "Tamanhos das pastas",
-      "clickToZoom": "Clique em um espaço de trabalho para ampliar"
+      "clickToZoom": "Clique em um espaço de trabalho para ampliar",
+      "moreItems": "Mais {{value0}}"
     },
     "window": {
       "errorTitle": "O Space encontrou um erro.",

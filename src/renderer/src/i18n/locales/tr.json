@@ -21973,7 +21973,8 @@
     },
     "chart": {
       "folderSizes": "Klasör boyutları",
-      "clickToZoom": "Yakınlaştırmak için bir çalışma alanına tıklayın"
+      "clickToZoom": "Yakınlaştırmak için bir çalışma alanına tıklayın",
+      "moreItems": "{{value0}} tane daha"
     },
     "window": {
       "errorTitle": "Space bir hatayla karşılaştı.",

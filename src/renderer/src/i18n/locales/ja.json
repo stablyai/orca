@@ -21812,7 +21812,8 @@
     },
     "chart": {
       "folderSizes": "フォルダーのサイズ",
-      "clickToZoom": "ワークスペースをクリックしてズームします"
+      "clickToZoom": "ワークスペースをクリックしてズームします",
+      "moreItems": "ほか {{value0}} 件"
     },
     "delete": {
       "unavailable": "このワークスペースは保護されているか、使用できません。",

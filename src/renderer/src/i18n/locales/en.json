@@ -22439,7 +22439,8 @@
     },
     "chart": {
       "folderSizes": "Folder sizes",
-      "clickToZoom": "Click a workspace to zoom"
+      "clickToZoom": "Click a workspace to zoom",
+      "moreItems": "{{value0}} more"
     },
     "window": {
       "errorTitle": "Space hit an error.",

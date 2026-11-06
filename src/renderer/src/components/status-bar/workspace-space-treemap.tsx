@@ -4,9 +4,15 @@ import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-
 import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
 import { formatBytes } from './workspace-space-format'
-import { buildTreemapLayout, type TreemapRect } from './workspace-space-layout'
+import {
+  buildTreemapLayout,
+  groupSmallTreemapItems,
+  resolveTreemapLabelTier,
+  type TreemapRect
+} from './workspace-space-layout'
 import { getWorkspaceSpaceWorktreeIdentity } from './workspace-space-delete-selection'
 import { translate } from '@/i18n/i18n'
+import { useElementSize } from '@/hooks/use-element-size'
 
 const TREEMAP_FILLS = [
   'color-mix(in srgb, var(--chart-2) 58%, var(--card))',
@@ -45,6 +51,11 @@ export function WorkspaceSpaceTreemap({
     selectedWorktree.status === 'ok' &&
     selectedWorktree.topLevelItems.length > 0
   const isZoomed = !!zoomedWorktree
+  const { ref: boxAreaRef, size: boxAreaSize } = useElementSize<HTMLDivElement>()
+  const boxAreaAspectRatio =
+    boxAreaSize && boxAreaSize.width > 0 && boxAreaSize.height > 0
+      ? boxAreaSize.width / boxAreaSize.height
+      : 1
   const inspectWorkspace = (worktreeId: string): void => {
     onSelect(worktreeId)
     onZoomChange(worktreeId)
@@ -52,28 +63,30 @@ export function WorkspaceSpaceTreemap({
   const rects = useMemo(
     () =>
       buildTreemapLayout(
-        zoomedWorktree
-          ? zoomedWorktree.topLevelItems
-              .filter((item) => item.sizeBytes > 0)
-              .map((item) => ({
+        groupSmallTreemapItems(
+          zoomedWorktree
+            ? zoomedWorktree.topLevelItems.map((item) => ({
                 id: item.path,
                 label: item.name,
                 sizeBytes: item.sizeBytes
               }))
-          : rows
-              .filter((row) => row.status === 'ok' && row.sizeBytes > 0)
-              .map((row) => ({
-                id: getWorkspaceSpaceWorktreeIdentity(row),
-                label: row.displayName,
-                sizeBytes: row.sizeBytes
-              }))
+            : rows
+                .filter((row) => row.status === 'ok')
+                .map((row) => ({
+                  id: getWorkspaceSpaceWorktreeIdentity(row),
+                  label: row.displayName,
+                  sizeBytes: row.sizeBytes
+                })),
+          zoomedWorktree ? null : selectedWorktreeId
+        ),
+        boxAreaAspectRatio
       ),
-    [rows, zoomedWorktree]
+    [rows, zoomedWorktree, selectedWorktreeId, boxAreaAspectRatio]
   )
 
   if (rects.length === 0) {
     return (
-      <div className="relative flex h-[clamp(7rem,18vh,11rem)] items-center justify-center rounded-lg border border-dashed border-border/70 bg-muted/20 text-sm text-muted-foreground">
+      <div className="relative flex h-full min-h-[clamp(7rem,18vh,11rem)] items-center justify-center rounded-lg border border-dashed border-border/70 bg-muted/20 text-sm text-muted-foreground">
         {zoomedWorktree ? (
           <Button
             variant="outline"
@@ -107,7 +120,7 @@ export function WorkspaceSpaceTreemap({
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-card">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card">
       <div className="flex min-h-8 items-center justify-between gap-2 border-b border-border/70 bg-background/80 px-2.5 py-1">
         <div className="min-w-0 truncate text-xs font-medium text-foreground">
           {zoomedWorktree
@@ -143,35 +156,55 @@ export function WorkspaceSpaceTreemap({
           ) : null}
         </div>
       </div>
-      <div className="relative h-[clamp(7rem,18vh,11rem)] overflow-hidden">
+      <div
+        ref={boxAreaRef}
+        className="relative min-h-[clamp(7rem,18vh,11rem)] flex-1 overflow-hidden"
+      >
         {rects.map((rect) => {
-          const area = rect.width * rect.height
+          const labelTier = boxAreaSize
+            ? resolveTreemapLabelTier(
+                (rect.width / 100) * boxAreaSize.width,
+                (rect.height / 100) * boxAreaSize.height
+              )
+            : 'none'
+          const groupedLabels = rect.groupedLabels
+          const isGroup = !!groupedLabels
+          const label = groupedLabels
+            ? translate('workspaceSpace.chart.moreItems', '{{value0}} more', {
+                value0: groupedLabels.length
+              })
+            : rect.label
           const selected = !isZoomed && rect.id === selectedWorktreeId
           const rectStyle = {
             left: `${rect.x}%`,
             top: `${rect.y}%`,
             width: `${rect.width}%`,
             height: `${rect.height}%`,
-            background: getTreemapFill(rect, selected)
+            background: isGroup ? undefined : getTreemapFill(rect, selected)
           }
           const rectContent =
-            area >= 80 ? (
-              <span className="block min-w-0 text-[11px] font-medium leading-tight text-foreground">
-                <span className="block truncate">{rect.label}</span>
-                {area >= 180 ? (
+            labelTier === 'none' ? null : (
+              <span className="block min-w-0 text-2xs font-medium leading-tight text-foreground">
+                <span className="block truncate">{label}</span>
+                {labelTier === 'name-and-size' ? (
                   <span className="mt-0.5 block truncate text-muted-foreground">
                     {formatBytes(rect.sizeBytes)}
                   </span>
                 ) : null}
               </span>
-            ) : null
+            )
 
-          if (isZoomed) {
+          if (isZoomed || isGroup) {
             return (
               <div
                 key={rect.id}
-                title={`${rect.label} • ${formatBytes(rect.sizeBytes)}`}
-                className="absolute overflow-hidden border border-background/90 p-2 text-left"
+                title={[`${label} • ${formatBytes(rect.sizeBytes)}`, ...(groupedLabels ?? [])].join(
+                  '\n'
+                )}
+                className={cn(
+                  'absolute overflow-hidden border border-background/90 p-2 text-left',
+                  isGroup && 'bg-muted'
+                )}
                 style={rectStyle}
               >
                 {rectContent}
@@ -187,8 +220,8 @@ export function WorkspaceSpaceTreemap({
               title={`${rect.label} • ${formatBytes(rect.sizeBytes)}`}
               onClick={() => inspectWorkspace(rect.id)}
               className={cn(
-                'absolute overflow-hidden border border-background/90 p-2 text-left transition-[filter,outline] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                selected && 'ring-2 ring-ring ring-offset-1 ring-offset-background'
+                'absolute overflow-hidden border border-background/90 p-2 text-left transition-[filter,outline] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                selected && 'ring-2 ring-inset ring-ring'
               )}
               style={rectStyle}
             >
