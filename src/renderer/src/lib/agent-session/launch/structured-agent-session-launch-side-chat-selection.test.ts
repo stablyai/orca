@@ -9,6 +9,7 @@ import {
 } from '../../structured-agent-session-launch-create-message.test-fixture'
 import { startStructuredAgentLaunch } from './structured-agent-session-launch'
 import { newAgentLaunchRequestId } from '../../agent-launch-request-id'
+import { CreateIntentParams } from '../../../../../shared/rpc-contract/structured-agent-session-params'
 
 it('does not seed a side chat from unrelated new-chat defaults on exact-selection hosts', async () => {
   const restore = resetCreateMessageFixture()
@@ -44,7 +45,7 @@ it('opens independent concurrent side questions with their own permission picks'
         throw new Error(`Unexpected RPC ${method}`)
       }
       await release.promise
-      return created(params as Parameters<typeof created>[0])
+      return created(CreateIntentParams.parse(params))
     })
     const open = (prompt: string, launchOptions?: Record<string, string>) =>
       startStructuredAgentLaunch('workspace-1', 'codex', {

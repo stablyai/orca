@@ -5,7 +5,6 @@ import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-sha
 import type { ActionSheetAction } from '../components/ActionSheetModal'
 
 const sheets = vi.hoisted(() => ({
-  labelsByTitle: new Map<string, string[]>(),
   actionsByTitle: new Map<string, ActionSheetAction[]>()
 }))
 
@@ -25,10 +24,6 @@ vi.mock('../platform/haptics', () => ({ triggerSuccess: () => {}, triggerError: 
 vi.mock('../components/ActionSheetModal', () => ({
   ActionSheetModal: ({ title, actions }: { title: string; actions: ActionSheetAction[] }) => {
     sheets.actionsByTitle.set(title, actions)
-    sheets.labelsByTitle.set(
-      title,
-      actions.map((action) => action.label)
-    )
     return null
   }
 }))
@@ -41,6 +36,7 @@ vi.mock('../components/MobileDictationSetupSheet', () => ({
 vi.mock('./MobileSessionTerminalLayoutSheet', () => ({
   MobileSessionTerminalLayoutSheet: () => null
 }))
+vi.mock('./MobileTerminalRenameModal', () => ({ MobileTerminalRenameModal: () => null }))
 vi.mock('./QuickCommandsSheet', () => ({ QuickCommandsSheet: () => null }))
 vi.mock('./MobileBrowserTabActionSheet', () => ({ MobileBrowserTabActionSheet: () => null }))
 vi.mock('./mobile-terminal-action-sheet-actions', () => ({

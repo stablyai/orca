@@ -1,4 +1,4 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/floating-workspace-worktree'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { resolveStructuredSideChatSource } from './structured-side-chat-source'
 import {
@@ -76,7 +76,7 @@ it('keeps a floating side chat in the source’s pinned directory', async () => 
       id === HOST_TEST_SESSION ? { ...parent, location, launchDirectory: undefined } : getRecord(id)
     )
     expect(() => resolveStructuredSideChatSource({ ...source(), location })).toThrow(
-      'This chat has no conversation available for a side chat.'
+      'agent_session_identity_required'
     )
   } finally {
     read.mockRestore()

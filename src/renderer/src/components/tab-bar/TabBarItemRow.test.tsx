@@ -26,16 +26,19 @@ const sideStatus = vi.hoisted(() => ({
   names: new Map<string, AgentSessionConversationName>(),
   listeners: new Set<() => void>()
 }))
+function subscribeToTestStatus(listener: () => void) {
+  sideStatus.listeners.add(listener)
+  return () => sideStatus.listeners.delete(listener)
+}
+
 vi.mock('@/runtime/structured-agent-session-status-feed', async (importOriginal) => ({
   ...(await importOriginal<typeof StatusFeedModule>()),
   getStructuredAgentSessionStatusFeed: () => ({
     activate: () => () => {},
     getSnapshot: () => sideStatus.rows,
     getNamingSnapshot: () => sideStatus.names,
-    subscribe: (listener: () => void) => {
-      sideStatus.listeners.add(listener)
-      return () => sideStatus.listeners.delete(listener)
-    }
+    subscribe: subscribeToTestStatus,
+    subscribeSession: (_sessionId: string, listener: () => void) => subscribeToTestStatus(listener)
   })
 }))
 

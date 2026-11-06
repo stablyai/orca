@@ -42,8 +42,8 @@ on:
       # Recorded phone transcripts exercise these host decoders and their runtime dependencies.
       - 'src/main/native-chat/*transcript*.ts'
       - 'src/main/native-chat/subagent-entry-id-bounds.ts'
-      - 'src/main/native-chat/agent-session-journal/journal-payload-bounds.ts'
-      - 'src/main/native-chat/agent-session-journal/journal-reasoning-row.ts'
+      - 'src/main/native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds.ts'
+      - 'src/main/native-chat/agent-session-journal/item-lifecycle/journal-reasoning-row.ts'
       - 'src/main/claude/claude-internal-message-content.ts'
       - 'src/main/claude/claude-stop-hook-feedback.ts'
       - 'src/main/claude/structured/journal/**'
@@ -130,8 +130,8 @@ on:
       # Recorded phone transcripts exercise these host decoders and their runtime dependencies.
       - 'src/main/native-chat/*transcript*.ts'
       - 'src/main/native-chat/subagent-entry-id-bounds.ts'
-      - 'src/main/native-chat/agent-session-journal/journal-payload-bounds.ts'
-      - 'src/main/native-chat/agent-session-journal/journal-reasoning-row.ts'
+      - 'src/main/native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds.ts'
+      - 'src/main/native-chat/agent-session-journal/item-lifecycle/journal-reasoning-row.ts'
       - 'src/main/claude/claude-internal-message-content.ts'
       - 'src/main/claude/claude-stop-hook-feedback.ts'
       - 'src/main/claude/structured/journal/**'
