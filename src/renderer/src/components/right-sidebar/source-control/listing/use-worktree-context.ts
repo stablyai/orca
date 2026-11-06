@@ -9,7 +9,7 @@ import { getConnectionId } from '@/lib/connection-context'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import { resolveRepoWorktreeLaunchPlatform } from '@/lib/execution-host-facts'
 import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
-import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { getWorktreeMapFromState, selectRepoByIdForActiveWorkspace } from '@/store/selectors'
 import { getGitHubPRCacheKey } from '../../../../../../shared/github/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
@@ -21,6 +21,21 @@ import {
   selectReviewCacheData,
   selectReviewCacheEntry
 } from '../review/review-cache-entry-selection'
+
+// Render inputs only; commands read current settings at their mutation boundary.
+const SOURCE_CONTROL_SETTINGS = [
+  'sourceControlAi',
+  'commitMessageAi',
+  'defaultTuiAgent',
+  'disabledTuiAgents',
+  'agentCmdOverrides',
+  'agentDefaultArgs',
+  'terminalWindowsShell',
+  'sourceControlViewMode',
+  'sourceControlGroupOrder',
+  'sourceControlCompareAgainstUpstream',
+  'activeRuntimeEnvironmentId'
+] as const satisfies readonly (keyof NonNullable<AppState['settings']>)[]
 
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
 const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []
@@ -37,13 +52,13 @@ export function useSourceControlWorktreeContext() {
         ) ?? null)
       : null
   )
-  const selectedWorktreeId = useSourceControlState((s) => s.activeWorktreeId)
+  const selectedWorktreeId = useSourceControlState((s) => (scope ? null : s.activeWorktreeId))
   const activeWorktree = scopeOwner?.worktree ?? selectedWorktree
   const activeWorktreeId = scope?.worktreeId ?? selectedWorktreeId
   const activeWorktreeInstanceId = activeWorktree?.instanceId
   const placementWorkspaceId = scope?.placementWorkspaceId ?? activeWorktreeId
   const activeGroupId = useSourceControlState((s) =>
-    placementWorkspaceId ? s.activeGroupIdByWorktree[placementWorkspaceId] : undefined
+    !scope && placementWorkspaceId ? s.activeGroupIdByWorktree[placementWorkspaceId] : undefined
   )
   const scopeWorktreeId = scope?.worktreeId
   const scopedWorktrees = useMemo(
@@ -110,7 +125,21 @@ export function useSourceControlWorktreeContext() {
   const isRemoteOperationActive = useSourceControlState((s) => s.isRemoteOperationActive)
   const isRemoteOperationInAnotherWorktree =
     isRemoteOperationActive && inFlightRemoteOpKind === null
-  const settings = useSourceControlState((s) => s.settings)
+  const selectSettings = useMemo(() => {
+    let previous: AppState['settings'] = null
+    return ({ settings }: AppState) => {
+      if (
+        previous &&
+        settings &&
+        SOURCE_CONTROL_SETTINGS.every((key) => Object.is(previous?.[key], settings[key]))
+      ) {
+        return previous
+      }
+      previous = settings
+      return settings
+    }
+  }, [])
+  const settings = useSourceControlState(selectSettings)
   const hostedReviewCacheKey =
     activeRepo && branchName
       ? getHostedReviewCacheKey(
@@ -169,10 +198,11 @@ export function useSourceControlWorktreeContext() {
       : (getConnectionId(activeWorktreeId) ?? activeRepoConnectionId)
     : null
   // Quote for the workspace owner's OS, where agents run (#27971).
-  const activeSourceControlLaunchPlatform =
+  const activeSourceControlLaunchPlatform = useSourceControlState((state) =>
     activeWorktree && activeRepo
-      ? resolveRepoWorktreeLaunchPlatform(useAppStore.getState(), activeRepo, activeWorktree)
+      ? resolveRepoWorktreeLaunchPlatform(state, activeRepo, activeWorktree)
       : undefined
+  )
   // Mounted hidden sidebars and collapsed/off-screen sections keep their view but poll nothing.
   const isBranchVisible = rightSidebarTab === 'source-control' && rightSidebarOpen && sectionActive
   const hasUncommittedEntries = entries.length > 0

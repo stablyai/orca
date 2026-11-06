@@ -1,7 +1,11 @@
+import {
+  useAppStateViewActive,
+  useAppViewExternalStore,
+  useAppStateValue
+} from '@/store/app-state-view'
 import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-permission-modes-capability'
 import type { StructuredAgentSessionHostCapabilityState } from '../../../shared/agent-session/structured-agent-session-host-capability'
-import { useEffect, useState, useSyncExternalStore } from 'react'
-import { useAppStore } from '@/store'
+import { useEffect, useState } from 'react'
 import { AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY } from '../../../shared/agent-session/lifecycle/agent-session-stop-capabilities'
 import {
   AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY,
@@ -36,10 +40,11 @@ export type { StructuredAgentSessionHostCapabilityState }
 export function useStructuredAgentSessionOwnPermissionState(
   target: RuntimeClientTarget | null
 ): StructuredAgentSessionHostCapabilityState {
+  const viewActive = useAppStateViewActive()
   const capability = AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY
   const environmentId = target?.kind === 'environment' ? target.environmentId : null
   // Select the verdict, not the map: unrelated host flips must not rerender every chat.
-  const remote = useAppStore((state): StructuredAgentSessionHostCapabilityState => {
+  const remote = useAppStateValue((state): StructuredAgentSessionHostCapabilityState => {
     if (environmentId === null) {
       return 'unknown'
     }
@@ -51,16 +56,16 @@ export function useStructuredAgentSessionOwnPermissionState(
         : 'unsupported'
       : 'unknown'
   })
-  const local = useSyncExternalStore(
+  const local = useAppViewExternalStore(
     subscribeLocalRuntimeCapabilityObservation,
     () => localCapabilityState(capability),
     () => 'unknown' as const
   )
   useEffect(() => {
-    if (target?.kind === 'local') {
+    if (viewActive && target?.kind === 'local') {
       void ensureLocalRuntimeCapabilities()
     }
-  }, [target?.kind])
+  }, [target?.kind, viewActive])
   return !target ? 'unknown' : environmentId === null ? local : remote
 }
 

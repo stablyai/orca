@@ -1,3 +1,4 @@
+import { useSourceControlState } from '../panel/worktree-scope'
 import type {
   AgentPickerDraft,
   AgentPickerEntry
@@ -14,8 +15,7 @@ import {
 import { captureSourceControlActionSelection } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import { useCallback, useMemo, useState } from 'react'
 import { resolveSourceControlLaunchAgentScope } from '../../../../../../shared/source-control/ai/source-control-launch-agent-selection'
-import { useAppStore } from '@/store/index'
-import { useRepoById } from '@/store/selectors'
+import { selectRepoByIdForActiveWorkspace } from '@/store/selectors'
 import { renderSourceControlActionCommandTemplate } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
@@ -55,8 +55,10 @@ export function useSourceControlAgentActionDialog({
   onLaunched,
   onStart
 }: SourceControlAgentActionDialogProps): UseSourceControlAgentActionDialogResult {
-  const settings = useAppStore((state) => state.settings)
-  const repo = useRepoById(repoId ?? null)
+  const settings = useSourceControlState((state) => state.settings)
+  const repo = useSourceControlState((state) =>
+    selectRepoByIdForActiveWorkspace(state, repoId ?? null)
+  )
   const [currentSelection, setCurrentSelection] = useState<CurrentActionSelection>(
     () =>
       initialSelection ??

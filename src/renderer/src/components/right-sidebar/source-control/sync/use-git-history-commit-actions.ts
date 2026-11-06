@@ -52,8 +52,6 @@ export function useGitHistoryCommitActions({
   const executionHostId = scope?.executionHostId
   const placementWorkspaceId = scope?.placementWorkspaceId
   const runtimeEnvironmentId = scope?.runtimeOwnerEnvironmentId
-  const openCommitAllDiffs = useAppStore((s) => s.openCommitAllDiffs)
-  const openCommitDiff = useAppStore((s) => s.openCommitDiff)
 
   // Share compare results across expansion and diff opening to avoid a second round-trip.
   const commitCompareCacheRef = useRef<Map<string, GitCommitCompareResult>>(new Map())
@@ -109,15 +107,17 @@ export function useGitHistoryCommitActions({
         if (!cached) {
           return
         }
-        openCommitAllDiffs(
-          activeWorktreeId,
-          worktreePath,
-          cached.summary,
-          cached.entries,
-          item.subject,
-          item.message,
-          { placementWorkspaceId, runtimeEnvironmentId, executionHostId }
-        )
+        useAppStore
+          .getState()
+          .openCommitAllDiffs(
+            activeWorktreeId,
+            worktreePath,
+            cached.summary,
+            cached.entries,
+            item.subject,
+            item.message,
+            { placementWorkspaceId, runtimeEnvironmentId, executionHostId }
+          )
       } catch (error) {
         toast.error(
           error instanceof Error
@@ -132,7 +132,6 @@ export function useGitHistoryCommitActions({
     [
       activeWorktreeId,
       loadCommitFiles,
-      openCommitAllDiffs,
       placementWorkspaceId,
       executionHostId,
       runtimeEnvironmentId,
@@ -154,7 +153,7 @@ export function useGitHistoryCommitActions({
         return
       }
       const targetGroupId = resolveSplitTargetGroupId(event)
-      openCommitDiff(
+      useAppStore.getState().openCommitDiff(
         activeWorktreeId,
         worktreePath,
         entry,
@@ -178,7 +177,6 @@ export function useGitHistoryCommitActions({
     },
     [
       activeWorktreeId,
-      openCommitDiff,
       placementWorkspaceId,
       executionHostId,
       resolveSplitTargetGroupId,

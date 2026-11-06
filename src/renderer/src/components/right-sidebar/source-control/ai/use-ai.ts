@@ -181,7 +181,10 @@ export function useSourceControlAi({
         worktreeId: activeWorktreeId,
         placementWorkspaceId: scope?.placementWorkspaceId,
         initialCwd: scope ? (worktreePath ?? undefined) : undefined,
-        groupId: activeGroupId,
+        groupId:
+          (scope
+            ? useAppStore.getState().activeGroupIdByWorktree[scope.placementWorkspaceId]
+            : undefined) ?? activeGroupId,
         connectionId: activeConnectionId,
         repoId: activeRepo?.id,
         launchPlatform: activeSourceControlLaunchPlatform

@@ -30,7 +30,11 @@ afterEach(() => {
   useAppStore.setState(initialAppState, true)
 })
 
-function sectionWrapper(worktreeId: string, executionHostId: ExecutionHostId) {
+function sectionWrapper(
+  worktreeId: string,
+  executionHostId: ExecutionHostId,
+  isActive = () => true
+) {
   const worktree = makeWorktree(worktreeId, worktreeId, { instanceId: 'instance-1' })
   const repo = {
     ...makeRepo(),
@@ -46,7 +50,9 @@ function sectionWrapper(worktreeId: string, executionHostId: ExecutionHostId) {
     placementWorkspaceId: 'folder:feature'
   }
   return ({ children }: { children: ReactNode }) => (
-    <SourceControlScopeProvider owner={owner}>{children}</SourceControlScopeProvider>
+    <SourceControlScopeProvider owner={owner} active={isActive()}>
+      {children}
+    </SourceControlScopeProvider>
   )
 }
 
@@ -101,16 +107,17 @@ it('keeps a slow commit latched after collapse so the re-expanded section cannot
         finishCommit = resolve
       })
   )
-  const wrapper = sectionWrapper('wt-slow', 'local')
+  let active = true
+  const wrapper = sectionWrapper('wt-slow', 'local', () => active)
   const first = renderHook(() => useCommitSection('wt-slow'), { wrapper })
   act(() => first.result.current.updateCommitDraft('feat: slow'))
   let pending: Promise<boolean> | undefined
   act(() => {
     pending = first.result.current.handleCommit()
   })
-  first.unmount()
-
-  const reexpanded = renderHook(() => useCommitSection('wt-slow'), { wrapper })
+  active = false
+  first.rerender()
+  const reexpanded = first
   expect(reexpanded.result.current.isCommitting).toBe(true)
   await act(async () => {
     expect(await reexpanded.result.current.handleCommit()).toBe(false)
@@ -121,6 +128,11 @@ it('keeps a slow commit latched after collapse so the re-expanded section cannot
     finishCommit({ success: true })
     expect(await pending).toBe(true)
   })
+  expect(reexpanded.result.current.operationStore.getState().isCommitting).toBe(false)
+  expect(reexpanded.result.current.isCommitting).toBe(true)
+  expect(reexpanded.result.current.commitMessage).toBe('feat: slow')
+  active = true
+  first.rerender()
   expect(reexpanded.result.current.isCommitting).toBe(false)
   expect(reexpanded.result.current.commitMessage).toBe('')
 })

@@ -233,7 +233,10 @@ export async function runSourceControlAgentActionStart({
       groupId:
         placementWorkspaceId && !inPlace
           ? (store.activeGroupIdByWorktree[worktreeId] ?? worktreeId)
-          : (groupId ?? placementWorkspaceId ?? worktreeId),
+          : ((inPlace ? store.activeGroupIdByWorktree[inPlace] : undefined) ??
+            groupId ??
+            placementWorkspaceId ??
+            worktreeId),
       ...((!placementWorkspaceId || inPlace) && initialCwd ? { initialCwd } : {}),
       prompt: trimmedCommandInput,
       agentArgs: launchAgentArgs,

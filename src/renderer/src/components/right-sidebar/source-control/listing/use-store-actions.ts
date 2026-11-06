@@ -8,6 +8,73 @@ import {
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 
+const commands = {
+  allocateCommitMessageGenerationRequestId: (
+    ...args: Parameters<AppState['allocateCommitMessageGenerationRequestId']>
+  ) => useAppStore.getState().allocateCommitMessageGenerationRequestId(...args),
+  allocatePullRequestGenerationRequestId: (
+    ...args: Parameters<AppState['allocatePullRequestGenerationRequestId']>
+  ) => useAppStore.getState().allocatePullRequestGenerationRequestId(...args),
+  beginGitBranchCompareRequest: (...args: Parameters<AppState['beginGitBranchCompareRequest']>) =>
+    useAppStore.getState().beginGitBranchCompareRequest(...args),
+  clearDiffComments: (...args: Parameters<AppState['clearDiffComments']>) =>
+    useAppStore.getState().clearDiffComments(...args),
+  clearDiffCommentsForFile: (...args: Parameters<AppState['clearDiffCommentsForFile']>) =>
+    useAppStore.getState().clearDiffCommentsForFile(...args),
+  deleteDiffComment: (...args: Parameters<AppState['deleteDiffComment']>) =>
+    useAppStore.getState().deleteDiffComment(...args),
+  enqueueGitHubPRRefresh: (...args: Parameters<AppState['enqueueGitHubPRRefresh']>) =>
+    useAppStore.getState().enqueueGitHubPRRefresh(...args),
+  ensureHostedReviewPushTarget: (...args: Parameters<AppState['ensureHostedReviewPushTarget']>) =>
+    useAppStore.getState().ensureHostedReviewPushTarget(...args),
+  fastForwardBranch: (...args: Parameters<AppState['fastForwardBranch']>) =>
+    useAppStore.getState().fastForwardBranch(...args),
+  fetchBranch: (...args: Parameters<AppState['fetchBranch']>) =>
+    useAppStore.getState().fetchBranch(...args),
+  fetchUpstreamStatus: (...args: Parameters<AppState['fetchUpstreamStatus']>) =>
+    useAppStore.getState().fetchUpstreamStatus(...args),
+  openModal: (...args: Parameters<AppState['openModal']>) =>
+    useAppStore.getState().openModal(...args),
+  openSettingsPage: (...args: Parameters<AppState['openSettingsPage']>) =>
+    useAppStore.getState().openSettingsPage(...args),
+  openSettingsTarget: (...args: Parameters<AppState['openSettingsTarget']>) =>
+    useAppStore.getState().openSettingsTarget(...args),
+  pullBranch: (...args: Parameters<AppState['pullBranch']>) =>
+    useAppStore.getState().pullBranch(...args),
+  pushBranch: (...args: Parameters<AppState['pushBranch']>) =>
+    useAppStore.getState().pushBranch(...args),
+  rebaseFromBase: (...args: Parameters<AppState['rebaseFromBase']>) =>
+    useAppStore.getState().rebaseFromBase(...args),
+  setCommitMessageGenerationRecord: (
+    ...args: Parameters<AppState['setCommitMessageGenerationRecord']>
+  ) => useAppStore.getState().setCommitMessageGenerationRecord(...args),
+  setGitBranchCompareResult: (...args: Parameters<AppState['setGitBranchCompareResult']>) =>
+    useAppStore.getState().setGitBranchCompareResult(...args),
+  setGitStatus: (...args: Parameters<AppState['setGitStatus']>) =>
+    useAppStore.getState().setGitStatus(...args),
+  setPullRequestGenerationRecord: (
+    ...args: Parameters<AppState['setPullRequestGenerationRecord']>
+  ) => useAppStore.getState().setPullRequestGenerationRecord(...args),
+  setRightSidebarOpen: (...args: Parameters<AppState['setRightSidebarOpen']>) =>
+    useAppStore.getState().setRightSidebarOpen(...args),
+  setRightSidebarTab: (...args: Parameters<AppState['setRightSidebarTab']>) =>
+    useAppStore.getState().setRightSidebarTab(...args),
+  setUpstreamStatus: (...args: Parameters<AppState['setUpstreamStatus']>) =>
+    useAppStore.getState().setUpstreamStatus(...args),
+  syncBranch: (...args: Parameters<AppState['syncBranch']>) =>
+    useAppStore.getState().syncBranch(...args),
+  updateCommitMessageGenerationRecord: (
+    ...args: Parameters<AppState['updateCommitMessageGenerationRecord']>
+  ) => useAppStore.getState().updateCommitMessageGenerationRecord(...args),
+  updatePullRequestGenerationRecord: (
+    ...args: Parameters<AppState['updatePullRequestGenerationRecord']>
+  ) => useAppStore.getState().updatePullRequestGenerationRecord(...args),
+  updateSettings: (...args: Parameters<AppState['updateSettings']>) =>
+    useAppStore.getState().updateSettings(...args),
+  updateWorktreeGitIdentity: (...args: Parameters<AppState['updateWorktreeGitIdentity']>) =>
+    useAppStore.getState().updateWorktreeGitIdentity(...args)
+}
+
 /** Read fixed-identity actions via getState; key section wrappers on primitive routing so store writes never rebuild them. */
 export function useSourceControlStoreActions() {
   const scope = useSourceControlScope()
@@ -17,14 +84,13 @@ export function useSourceControlStoreActions() {
 
   return useMemo(() => {
     const options = { placementWorkspaceId, executionHostId, runtimeEnvironmentId }
-    const state = useAppStore.getState()
     const createHostedReview: AppState['createHostedReview'] = (path, input) =>
-      state.createHostedReview(path, {
+      useAppStore.getState().createHostedReview(path, {
         ...input,
         ...(executionHostId ? { repoOwnerExecutionHostId: executionHostId } : {})
       })
     const createStackedHostedReview: AppState['createStackedHostedReview'] = (path, input) =>
-      state.createStackedHostedReview(path, {
+      useAppStore.getState().createStackedHostedReview(path, {
         ...input,
         ...(executionHostId ? { repoOwnerExecutionHostId: executionHostId } : {})
       })
@@ -33,47 +99,47 @@ export function useSourceControlStoreActions() {
       branch,
       options
     ) =>
-      state.fetchHostedReviewForBranch(path, branch, {
+      useAppStore.getState().fetchHostedReviewForBranch(path, branch, {
         ...options,
         ...(executionHostId ? { repoOwnerExecutionHostId: executionHostId } : {})
       })
     const fetchPRForBranch: AppState['fetchPRForBranch'] = (path, branch, options) =>
-      state.fetchPRForBranch(path, branch, {
+      useAppStore.getState().fetchPRForBranch(path, branch, {
         ...options,
         ...(executionHostId ? { repoOwnerExecutionHostId: executionHostId } : {})
       })
     const getHostedReviewCreationEligibility: AppState['getHostedReviewCreationEligibility'] = (
       args
     ) =>
-      state.getHostedReviewCreationEligibility({
+      useAppStore.getState().getHostedReviewCreationEligibility({
         ...args,
         ...(executionHostId ? { repoOwnerExecutionHostId: executionHostId } : {})
       })
     const openAllDiffs: AppState['openAllDiffs'] = (id, path, alternate, filter, entries) =>
-      state.openAllDiffs(id, path, alternate, filter, entries, options)
+      useAppStore.getState().openAllDiffs(id, path, alternate, filter, entries, options)
     const openBranchAllDiffs: AppState['openBranchAllDiffs'] = (id, path, compare, alternate) =>
-      state.openBranchAllDiffs(id, path, compare, alternate, options)
+      useAppStore.getState().openBranchAllDiffs(id, path, compare, alternate, options)
     const openConflictReview: AppState['openConflictReview'] = (id, path, entries, source) =>
-      state.openConflictReview(id, path, entries, source, options)
+      useAppStore.getState().openConflictReview(id, path, entries, source, options)
     const updateRepo: AppState['updateRepo'] = (id, updates, options) =>
-      state.updateRepo(id, updates, {
+      useAppStore.getState().updateRepo(id, updates, {
         ...options,
         ...(executionHostId ? { hostId: executionHostId } : {})
       })
     const updateWorktreeMeta: AppState['updateWorktreeMeta'] = (id, updates, options) =>
-      state.updateWorktreeMeta(id, updates, {
+      useAppStore.getState().updateWorktreeMeta(id, updates, {
         ...options,
         ...(executionHostId ? { executionHostId } : {})
       })
     const revealInExplorer: AppState['revealInExplorer'] = (id, path) => {
       if (!placementWorkspaceId) {
-        state.revealInExplorer(id, path)
+        useAppStore.getState().revealInExplorer(id, path)
         return
       }
       const latest = useAppStore.getState()
       const groupId = latest.activeGroupIdByWorktree[placementWorkspaceId]
       const root = latest.getKnownWorktreeById(id, executionHostId)?.path ?? null
-      state.openFile(
+      useAppStore.getState().openFile(
         {
           filePath: path,
           relativePath: getRelativePathInsideRoot(path, root) ?? basename(path),
@@ -90,45 +156,45 @@ export function useSourceControlStoreActions() {
       )
     }
     return {
-      allocateCommitMessageGenerationRequestId: state.allocateCommitMessageGenerationRequestId,
-      allocatePullRequestGenerationRequestId: state.allocatePullRequestGenerationRequestId,
-      beginGitBranchCompareRequest: state.beginGitBranchCompareRequest,
-      clearDiffComments: state.clearDiffComments,
-      clearDiffCommentsForFile: state.clearDiffCommentsForFile,
+      allocateCommitMessageGenerationRequestId: commands.allocateCommitMessageGenerationRequestId,
+      allocatePullRequestGenerationRequestId: commands.allocatePullRequestGenerationRequestId,
+      beginGitBranchCompareRequest: commands.beginGitBranchCompareRequest,
+      clearDiffComments: commands.clearDiffComments,
+      clearDiffCommentsForFile: commands.clearDiffCommentsForFile,
       createHostedReview,
       createStackedHostedReview,
-      deleteDiffComment: state.deleteDiffComment,
-      enqueueGitHubPRRefresh: state.enqueueGitHubPRRefresh,
-      ensureHostedReviewPushTarget: state.ensureHostedReviewPushTarget,
-      fastForwardBranch: state.fastForwardBranch,
-      fetchBranch: state.fetchBranch,
+      deleteDiffComment: commands.deleteDiffComment,
+      enqueueGitHubPRRefresh: commands.enqueueGitHubPRRefresh,
+      ensureHostedReviewPushTarget: commands.ensureHostedReviewPushTarget,
+      fastForwardBranch: commands.fastForwardBranch,
+      fetchBranch: commands.fetchBranch,
       fetchHostedReviewForBranch,
       fetchPRForBranch,
-      fetchUpstreamStatus: state.fetchUpstreamStatus,
+      fetchUpstreamStatus: commands.fetchUpstreamStatus,
       getHostedReviewCreationEligibility,
       openAllDiffs,
       openBranchAllDiffs,
       openConflictReview,
-      openModal: state.openModal,
-      openSettingsPage: state.openSettingsPage,
-      openSettingsTarget: state.openSettingsTarget,
-      pullBranch: state.pullBranch,
-      pushBranch: state.pushBranch,
-      rebaseFromBase: state.rebaseFromBase,
+      openModal: commands.openModal,
+      openSettingsPage: commands.openSettingsPage,
+      openSettingsTarget: commands.openSettingsTarget,
+      pullBranch: commands.pullBranch,
+      pushBranch: commands.pushBranch,
+      rebaseFromBase: commands.rebaseFromBase,
       revealInExplorer,
-      setCommitMessageGenerationRecord: state.setCommitMessageGenerationRecord,
-      setGitBranchCompareResult: state.setGitBranchCompareResult,
-      setGitStatus: state.setGitStatus,
-      setPullRequestGenerationRecord: state.setPullRequestGenerationRecord,
-      setRightSidebarOpen: state.setRightSidebarOpen,
-      setRightSidebarTab: state.setRightSidebarTab,
-      setUpstreamStatus: state.setUpstreamStatus,
-      syncBranch: state.syncBranch,
-      updateCommitMessageGenerationRecord: state.updateCommitMessageGenerationRecord,
-      updatePullRequestGenerationRecord: state.updatePullRequestGenerationRecord,
+      setCommitMessageGenerationRecord: commands.setCommitMessageGenerationRecord,
+      setGitBranchCompareResult: commands.setGitBranchCompareResult,
+      setGitStatus: commands.setGitStatus,
+      setPullRequestGenerationRecord: commands.setPullRequestGenerationRecord,
+      setRightSidebarOpen: commands.setRightSidebarOpen,
+      setRightSidebarTab: commands.setRightSidebarTab,
+      setUpstreamStatus: commands.setUpstreamStatus,
+      syncBranch: commands.syncBranch,
+      updateCommitMessageGenerationRecord: commands.updateCommitMessageGenerationRecord,
+      updatePullRequestGenerationRecord: commands.updatePullRequestGenerationRecord,
       updateRepo,
-      updateSettings: state.updateSettings,
-      updateWorktreeGitIdentity: state.updateWorktreeGitIdentity,
+      updateSettings: commands.updateSettings,
+      updateWorktreeGitIdentity: commands.updateWorktreeGitIdentity,
       updateWorktreeMeta
     }
   }, [executionHostId, placementWorkspaceId, runtimeEnvironmentId])

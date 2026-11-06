@@ -221,7 +221,10 @@ export async function launchSourceControlRecoveryAgentWithDefault({
     groupId:
       placementWorkspaceId && !inPlace
         ? (liveStore.activeGroupIdByWorktree[activeWorktreeId] ?? activeWorktreeId)
-        : (activeGroupId ?? placementWorkspaceId ?? activeWorktreeId),
+        : ((inPlace ? liveStore.activeGroupIdByWorktree[inPlace] : undefined) ??
+          activeGroupId ??
+          placementWorkspaceId ??
+          activeWorktreeId),
     ...((!placementWorkspaceId || inPlace) && initialCwd ? { initialCwd } : {}),
     prompt: commandInput,
     ...projection,

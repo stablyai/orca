@@ -1,4 +1,4 @@
-import { useSourceControlScope } from '../panel/worktree-scope'
+import { useSourceControlState, useSourceControlScope } from '../panel/worktree-scope'
 import type React from 'react'
 import { Copy, Globe, Hash, Sparkles } from 'lucide-react'
 import {
@@ -8,7 +8,6 @@ import {
 } from '@/components/ui/context-menu'
 import { translate } from '@/i18n/i18n'
 import type { GitHistoryItem } from '../../../../../../shared/git/history/git-history-types'
-import { useAppStore } from '@/store'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 
 export type GitHistoryCommitAction = 'open-remote' | 'copy-hash' | 'copy-message' | 'explain'
@@ -21,7 +20,7 @@ export function GitHistoryCommitContextMenu({
   onAction: (action: GitHistoryCommitAction, item: GitHistoryItem) => void
 }): React.JSX.Element {
   const scope = useSourceControlScope()
-  const managedBrowserCreationEnabled = useAppStore(
+  const managedBrowserCreationEnabled = useSourceControlState(
     (state) =>
       getClientCreationActionPolicy(state, scope?.worktreeId ?? state.activeWorktreeId)[
         'managed-browser'

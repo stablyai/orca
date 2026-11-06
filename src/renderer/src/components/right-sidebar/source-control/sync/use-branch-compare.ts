@@ -40,9 +40,6 @@ export function useSourceControlBranchCompare({
   remoteStatus: GitUpstreamStatus | undefined
 }) {
   const scope = useSourceControlScope()
-  const beginGitBranchCompareRequest = useAppStore((s) => s.beginGitBranchCompareRequest)
-  const setGitBranchCompareResult = useAppStore((s) => s.setGitBranchCompareResult)
-  const clearGitBranchCompare = useAppStore((s) => s.clearGitBranchCompare)
   const branchCompareInFlightRef = useRef(false)
   const branchCompareRerunRef = useRef<BranchCompareRefreshKind | null>(null)
   const branchCompareRunPromiseRef = useRef<Promise<void> | null>(null)
@@ -64,9 +61,11 @@ export function useSourceControlBranchCompare({
       }
       const requestKey = `${activeWorktreeId}:${compareBaseRef}:${Date.now()}`
       const summary = useAppStore.getState().gitBranchCompareSummaryByWorktree[activeWorktreeId]
-      beginGitBranchCompareRequest(activeWorktreeId, requestKey, compareBaseRef, {
-        preserveExistingSummary: !!summary && summary.baseRef === compareBaseRef
-      })
+      useAppStore
+        .getState()
+        .beginGitBranchCompareRequest(activeWorktreeId, requestKey, compareBaseRef, {
+          preserveExistingSummary: !!summary && summary.baseRef === compareBaseRef
+        })
       try {
         const result = await getRuntimeGitBranchCompare(
           {
@@ -79,9 +78,9 @@ export function useSourceControlBranchCompare({
           compareBaseRef,
           kind === 'interval' ? 'background' : 'interactive'
         )
-        setGitBranchCompareResult(activeWorktreeId, requestKey, result)
+        useAppStore.getState().setGitBranchCompareResult(activeWorktreeId, requestKey, result)
       } catch (error) {
-        setGitBranchCompareResult(activeWorktreeId, requestKey, {
+        useAppStore.getState().setGitBranchCompareResult(activeWorktreeId, requestKey, {
           summary: {
             ...createLoadingBranchCompareSummary(compareBaseRef),
             compareRef: branchName,
@@ -92,17 +91,7 @@ export function useSourceControlBranchCompare({
         })
       }
     },
-    [
-      scope,
-      activeRepoTarget,
-      activeWorktreeId,
-      beginGitBranchCompareRequest,
-      branchName,
-      compareBaseRef,
-      isFolder,
-      setGitBranchCompareResult,
-      worktreePath
-    ]
+    [scope, activeRepoTarget, activeWorktreeId, branchName, compareBaseRef, isFolder, worktreePath]
   )
 
   const clearBranchComparePollTimer = useCallback((): void => {
@@ -274,8 +263,8 @@ export function useSourceControlBranchCompare({
     ) {
       return
     }
-    clearGitBranchCompare(activeWorktreeId)
-  }, [activeWorktreeId, clearGitBranchCompare, compareBaseRef, isFolder, remoteStatus])
+    useAppStore.getState().clearGitBranchCompare(activeWorktreeId)
+  }, [activeWorktreeId, compareBaseRef, isFolder, remoteStatus])
 
   return { refreshBranchCompare, refreshBranchCompareRef }
 }

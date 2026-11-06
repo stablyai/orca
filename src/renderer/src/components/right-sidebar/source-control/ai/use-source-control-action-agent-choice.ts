@@ -1,10 +1,10 @@
+import { useAppStateView } from '@/store/app-state-view'
 import {
   buildAgentLaunchRouteInput,
   workspaceKindForWorktreeId
 } from '@/lib/agent-launch-route-input'
 import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { useMemo } from 'react'
-import { useAppStore } from '@/store/index'
 import { isCustomAgentId } from '../../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { pickSourceControlLaunchAgent } from '../../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import type { SelectedSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
@@ -43,6 +43,7 @@ export function useSourceControlActionAgentChoice(args: {
   livePick: AgentLaunchSurface | undefined
   terminalOnly?: boolean
 }) {
+  const store = useAppStateView()
   const { recipe } = args
   const worktreeDetectionTarget = useAgentDetectionTargetForWorktree(args.worktreeId ?? null)
   const rows = useMemo(
@@ -102,7 +103,7 @@ export function useSourceControlActionAgentChoice(args: {
       selectedAgent &&
       !isSourceControlAgentDetectedAndEnabled(selectedAgent, detectedAgents, disabledAgents)
     )
-  const route = buildAgentLaunchRouteInput(useAppStore.getState(), {
+  const route = buildAgentLaunchRouteInput(store.getState(), {
     agent: selectedAgent ?? 'claude',
     workspace: args.worktreeId
       ? { worktreeId: args.worktreeId, kind: workspaceKindForWorktreeId(args.worktreeId) }

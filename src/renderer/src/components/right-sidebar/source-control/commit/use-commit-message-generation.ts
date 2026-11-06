@@ -1,7 +1,12 @@
+import {
+  useSourceControlStoreView,
+  useSourceControlState,
+  sourceControlConnectionId,
+  useSourceControlScope
+} from '../panel/worktree-scope'
 import { textGenerationCopyText } from '@/lib/text-generation-error-copy'
 import { useCallback, useEffect } from 'react'
 import { useStore } from 'zustand'
-import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
 import {
   cancelRuntimeGenerateCommitMessage,
   generateRuntimeCommitMessage
@@ -60,14 +65,15 @@ export function useSourceControlCommitMessageGeneration({
     worktreePath
   )
   // Select only this owner's record so another worktree's generation cannot re-render this panel.
-  const activeCommitMessageGenerationRecord: CommitMessageGenerationRecord | null = useAppStore(
-    (s) =>
+  const activeCommitMessageGenerationRecord: CommitMessageGenerationRecord | null =
+    useSourceControlState((s) =>
       activeCommitMessageGenerationKey
         ? (s.commitMessageGenerationRecords[activeCommitMessageGenerationKey] ?? null)
         : null
-  )
-  const generateInFlight = useStore(operationStore, (s) => s.generateInFlight)
-  const ownerGenerateError = useStore(operationStore, (s) => s.generateError)
+    )
+  const operationView = useSourceControlStoreView(operationStore)
+  const generateInFlight = useStore(operationView, (s) => s.generateInFlight)
+  const ownerGenerateError = useStore(operationView, (s) => s.generateError)
   const isGenerating = activeCommitMessageGenerationRecord?.status === 'running' || generateInFlight
   const generateError = activeCommitMessageGenerationRecord?.error ?? ownerGenerateError
 

@@ -92,6 +92,7 @@ const WorktreeSection = memo(
           }
         : null
     )
+    const panel = useMemo(() => <SourceControlPanel />, [])
     const identity = getWorktreeGitIdentityDisplay(owner.worktree)
     return (
       <section
@@ -174,7 +175,7 @@ const WorktreeSection = memo(
           // A read error renders the body's existing failure banner with Retry.
           <div hidden={!bodyShown}>
             <SourceControlScopeProvider owner={owner} active={bodyActive}>
-              <SourceControlPanel />
+              {panel}
             </SourceControlScopeProvider>
           </div>
         )}

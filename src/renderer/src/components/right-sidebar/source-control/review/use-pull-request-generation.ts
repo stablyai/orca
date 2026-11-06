@@ -1,7 +1,11 @@
+import {
+  useSourceControlState,
+  sourceControlConnectionId,
+  useSourceControlScope
+} from '../panel/worktree-scope'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import { getWorkspaceJiraIssueKey } from '../../../../../../shared/jira/jira-review-title'
 import { useCallback } from 'react'
-import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
 import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
 import {
   cancelRuntimeGeneratePullRequestFields,
@@ -65,7 +69,7 @@ export function useSourceControlPullRequestGeneration({
     branch: branchName
   })
   // Select only this owner's record so another worktree's generation cannot re-render this panel.
-  const activePullRequestGenerationRecordCandidate = useAppStore((s) =>
+  const activePullRequestGenerationRecordCandidate = useSourceControlState((s) =>
     activePullRequestGenerationKey
       ? (s.pullRequestGenerationRecords[activePullRequestGenerationKey] ?? null)
       : null

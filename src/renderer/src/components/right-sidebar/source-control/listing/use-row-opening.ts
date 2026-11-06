@@ -1,4 +1,5 @@
 import {
+  useSourceControlState,
   sourceControlScopeRuntimeEnvironmentId,
   useSourceControlScope
 } from '../panel/worktree-scope'
@@ -6,6 +7,7 @@ import { useCallback, useMemo } from 'react'
 import { detectLanguage } from '@/lib/language-detect'
 import { openUncommittedEntry } from './open-uncommitted-entry'
 import { useAppStore } from '@/store'
+import { openFileIndex } from '@/store/slices/editor/tabs/workspace-editor-files'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary
@@ -39,14 +41,6 @@ export function useSourceControlRowOpening({
   const placementWorkspaceId = scope?.placementWorkspaceId
   const placementId = placementWorkspaceId ?? activeWorktreeId
   const runtimeEnvironmentId = sourceControlScopeRuntimeEnvironmentId(scope)
-  const activeGroupIdByWorktree = useAppStore((s) => s.activeGroupIdByWorktree)
-  const groupsByWorktree = useAppStore((s) => s.groupsByWorktree)
-  const createEmptySplitGroup = useAppStore((s) => s.createEmptySplitGroup)
-  const trackConflictPath = useAppStore((s) => s.trackConflictPath)
-  const openConflictFile = useAppStore((s) => s.openConflictFile)
-  const openDiff = useAppStore((s) => s.openDiff)
-  const openFile = useAppStore((s) => s.openFile)
-  const openBranchDiff = useAppStore((s) => s.openBranchDiff)
 
   // Modifier-click opens a right split to preserve the current pane.
   const resolveSplitTargetGroupId = useCallback(
@@ -54,28 +48,23 @@ export function useSourceControlRowOpening({
       if (!event || !activeWorktreeId || !isSourceControlSplitOpenModifier(event, isMac)) {
         return undefined
       }
+      const state = useAppStore.getState()
       const sourceGroupId =
-        activeGroupIdByWorktree[placementId ?? activeWorktreeId] ??
-        groupsByWorktree[placementId ?? activeWorktreeId]?.[0]?.id
+        state.activeGroupIdByWorktree[placementId ?? activeWorktreeId] ??
+        state.groupsByWorktree[placementId ?? activeWorktreeId]?.[0]?.id
       if (!sourceGroupId) {
         return undefined
       }
       return (
-        createEmptySplitGroup(placementId ?? activeWorktreeId, sourceGroupId, 'right') ?? undefined
+        state.createEmptySplitGroup(placementId ?? activeWorktreeId, sourceGroupId, 'right') ??
+        undefined
       )
     },
-    [
-      placementId,
-      activeGroupIdByWorktree,
-      activeWorktreeId,
-      createEmptySplitGroup,
-      groupsByWorktree,
-      isMac
-    ]
+    [placementId, activeWorktreeId, isMac]
   )
 
   // Use a primitive signature so unrelated store writes do not rerender; return null for non-editor tabs.
-  const activeOpenFileSignature = useAppStore((s) => {
+  const activeOpenFileSignature = useSourceControlState((s) => {
     if (
       !activeWorktreeId ||
       s.activeTabTypeByWorktree?.[placementId ?? activeWorktreeId] !== 'editor'
@@ -86,10 +75,8 @@ export function useSourceControlRowOpening({
     if (!activeFileId) {
       return null
     }
-    const activeFile = s.openFiles?.find(
-      (file) => file.id === activeFileId && file.worktreeId === activeWorktreeId
-    )
-    return activeFile
+    const activeFile = openFileIndex(s.openFiles).get(activeFileId)
+    return activeFile?.worktreeId === activeWorktreeId
       ? buildActiveOpenFileSignature(
           activeFile.diffSource,
           activeFile.relativePath,
@@ -117,19 +104,13 @@ export function useSourceControlRowOpening({
       }
       const targetGroupId = resolveSplitTargetGroupId(event)
       const openAsPreview = shouldOpenSourceControlRowAsPreview(event, targetGroupId)
-      openUncommittedEntry(
-        { trackConflictPath, openConflictFile, openFile, openDiff },
-        activeWorktreeId,
-        worktreePath,
-        entry,
-        {
-          targetGroupId,
-          preview: openAsPreview,
-          placementWorkspaceId,
-          executionHostId,
-          runtimeEnvironmentId
-        }
-      )
+      openUncommittedEntry(useAppStore.getState(), activeWorktreeId, worktreePath, entry, {
+        targetGroupId,
+        preview: openAsPreview,
+        placementWorkspaceId,
+        executionHostId,
+        runtimeEnvironmentId
+      })
     },
     [
       placementWorkspaceId,
@@ -137,11 +118,7 @@ export function useSourceControlRowOpening({
       runtimeEnvironmentId,
       activeWorktreeId,
       worktreePath,
-      resolveSplitTargetGroupId,
-      trackConflictPath,
-      openConflictFile,
-      openDiff,
-      openFile
+      resolveSplitTargetGroupId
     ]
   )
 
@@ -156,20 +133,22 @@ export function useSourceControlRowOpening({
         return
       }
       const targetGroupId = resolveSplitTargetGroupId(event)
-      openBranchDiff(
-        activeWorktreeId,
-        worktreePath,
-        entry,
-        branchSummary,
-        detectLanguage(entry.path),
-        {
-          targetGroupId,
-          preview: shouldOpenSourceControlRowAsPreview(event, targetGroupId),
-          placementWorkspaceId,
-          executionHostId,
-          runtimeEnvironmentId
-        }
-      )
+      useAppStore
+        .getState()
+        .openBranchDiff(
+          activeWorktreeId,
+          worktreePath,
+          entry,
+          branchSummary,
+          detectLanguage(entry.path),
+          {
+            targetGroupId,
+            preview: shouldOpenSourceControlRowAsPreview(event, targetGroupId),
+            placementWorkspaceId,
+            executionHostId,
+            runtimeEnvironmentId
+          }
+        )
     },
     [
       placementWorkspaceId,
@@ -177,7 +156,6 @@ export function useSourceControlRowOpening({
       runtimeEnvironmentId,
       activeWorktreeId,
       branchSummary,
-      openBranchDiff,
       resolveSplitTargetGroupId,
       worktreePath
     ]

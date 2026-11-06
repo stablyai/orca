@@ -1,5 +1,6 @@
-import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react'
-import { useStore } from 'zustand'
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import type { StoreApi } from 'zustand'
+import { AppStateViewContext, useAppStateValue } from '@/store/app-state-view'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { getConnectionId } from '@/lib/connection-context'
@@ -22,8 +23,6 @@ const WorktreeScope = createContext<SourceControlScopeRouting | null>(null)
 const WorktreeScopeOwner = createContext<SourceControlScope | null>(null)
 // Why default true: the selected workspace's panel has no section gate, as on main.
 const SectionActive = createContext(true)
-const SectionStore =
-  createContext<Pick<typeof useAppStore, 'getState' | 'getInitialState' | 'subscribe'>>(useAppStore)
 const mountedScopeCounts = new Map<string, number>()
 
 /** Whether a folder section for this worktree is on screen, so its row actions can still apply. */
@@ -48,9 +47,14 @@ export function SourceControlScopeProvider({
     const snapshot = useAppStore.getState()
     return { getState: () => snapshot, getInitialState: () => snapshot, subscribe: () => () => {} }
   }, [active])
-  const { worktreeId, repoId, executionHostId, placementWorkspaceId } = owner
-  const connectionId = owner.repo.connectionId ?? null
-  const runtimeOwnerEnvironmentId = owner.worktree.runtimeOwnerEnvironmentId
+  const [visibleOwner, setVisibleOwner] = useState(owner)
+  if (active && visibleOwner !== owner) {
+    setVisibleOwner(owner)
+  }
+  const currentOwner = active ? owner : visibleOwner
+  const { worktreeId, repoId, executionHostId, placementWorkspaceId } = currentOwner
+  const connectionId = currentOwner.repo.connectionId ?? null
+  const runtimeOwnerEnvironmentId = currentOwner.worktree.runtimeOwnerEnvironmentId
   const routing = useMemo(
     () => ({
       worktreeId,
@@ -81,10 +85,10 @@ export function SourceControlScopeProvider({
     }
   }, [worktreeId])
   return (
-    <WorktreeScopeOwner.Provider value={owner}>
+    <WorktreeScopeOwner.Provider value={currentOwner}>
       <WorktreeScope.Provider value={routing}>
         <SectionActive.Provider value={active}>
-          <SectionStore.Provider value={store}>{children}</SectionStore.Provider>
+          <AppStateViewContext.Provider value={store}>{children}</AppStateViewContext.Provider>
         </SectionActive.Provider>
       </WorktreeScope.Provider>
     </WorktreeScopeOwner.Provider>
@@ -130,5 +134,19 @@ export function sourceControlConnectionId(
 
 /** Body context subscriptions stop while hidden; actions still read the live app store. */
 export function useSourceControlState<T>(selector: (state: AppState) => T): T {
-  return useStore(useContext(SectionStore), selector)
+  return useAppStateValue(selector)
+}
+
+/** Pause a retained body's operation display without suspending the operation's owner. */
+export function useSourceControlStoreView<T>(
+  store: Pick<StoreApi<T>, 'getState' | 'getInitialState' | 'subscribe'>
+) {
+  const active = useSourceControlSectionActive()
+  return useMemo(() => {
+    if (active) {
+      return store
+    }
+    const snapshot = store.getState()
+    return { getState: () => snapshot, getInitialState: () => snapshot, subscribe: () => () => {} }
+  }, [active, store])
 }

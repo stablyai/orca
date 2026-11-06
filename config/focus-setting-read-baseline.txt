@@ -181,7 +181,7 @@
 1 src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.ts
 1 src/renderer/src/components/terminal-pane/use-terminal-pane-mount-lifecycle.ts
 1 src/renderer/src/components/terminal/terminal-tab-actions.ts
-4 src/renderer/src/components/terminal/terminal-tab-bulk-actions.ts
+2 src/renderer/src/components/terminal/terminal-tab-bulk-actions.ts
 2 src/renderer/src/components/terminal/terminal-tab-create.ts
 2 src/renderer/src/components/use-new-linear-issue-projects.ts
 4 src/renderer/src/components/task-page/jira/use-task-page-jira-creation-metadata.ts
