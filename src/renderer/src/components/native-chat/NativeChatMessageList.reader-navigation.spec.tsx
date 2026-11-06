@@ -216,6 +216,7 @@ describe('reader navigation', () => {
 
     function sendFrom(
       readerTop: (scroller: HTMLElement) => number,
+      expected: { admitted: boolean; releases: number },
       replyRowsBeforeSend = 0
     ): HTMLElement {
       const release = vi.fn()
@@ -240,6 +241,7 @@ describe('reader navigation', () => {
       paint(container)
       // A structured send reads the reader at the press; its echo lands before the host admits it.
       const readerWasAtEnd = handle.current?.readerAtEnd()
+      expect(readerWasAtEnd).toBe(expected.admitted)
       const sentAt = TRANSCRIPT_LENGTH + reply.length
       const sent = [...transcript, ...reply, userMessage(sentAt, 'follow-up question')]
       rerender(view(sent))
@@ -247,18 +249,21 @@ describe('reader navigation', () => {
       act(() => handle.current?.revealLatest(readerWasAtEnd))
       rerender(view([...sent, marker(sentAt + 1)]))
       paint(container)
-      expect(release).toHaveBeenCalledTimes(readerWasAtEnd ? 1 : 0)
+      expect(release).toHaveBeenCalledTimes(expected.releases)
       return container
     }
 
     it('leaves a reader who scrolled up where they were', () => {
-      const container = sendFrom(() => 1000)
+      const container = sendFrom(() => 1000, { admitted: false, releases: 0 })
       expect(scrollRoot(container).scrollTop).toBe(1000)
       expect(offersJumpToLatest()).toBe(true)
     })
 
     it('still follows the reply for a reader who stopped just short of the end', () => {
-      const container = sendFrom((scroller) => scroller.scrollHeight - scroller.clientHeight - 40)
+      const container = sendFrom((scroller) => scroller.scrollHeight - scroller.clientHeight - 40, {
+        admitted: true,
+        releases: 1
+      })
       expect(distanceFromBottom(container)).toBe(0)
       expect(offersJumpToLatest()).toBe(false)
     })
@@ -266,6 +271,7 @@ describe('reader navigation', () => {
     it('leaves a reader in place once output has grown past them', () => {
       const container = sendFrom(
         (scroller) => scroller.scrollHeight - scroller.clientHeight - 20,
+        { admitted: false, releases: 0 },
         10
       )
       expect(distanceFromBottom(container)).toBeGreaterThan(ROW_PX * 10)
