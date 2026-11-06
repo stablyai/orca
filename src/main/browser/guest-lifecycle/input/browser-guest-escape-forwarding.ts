@@ -1,7 +1,5 @@
 import { isAgentInjectingInput } from '../../cdp/input/agent-input-injection'
 
-export const BROWSER_GUEST_ESCAPE_CHANNEL = 'browser:guestEscape'
-
 type GuestEscapeTarget = { browserPageId: string; renderer: Electron.WebContents }
 
 // A focused page keeps its keys, so Orca modes over it (grab, find, password list) never see Escape.
@@ -33,7 +31,7 @@ export function setupGuestEscapeForwarding(args: {
     if (hasActiveGrabOp(target.browserPageId)) {
       event.preventDefault()
     }
-    target.renderer.send(BROWSER_GUEST_ESCAPE_CHANNEL, { browserPageId: target.browserPageId })
+    target.renderer.send('browser:guestEscape', { browserPageId: target.browserPageId })
   }
   guest.on('before-input-event', handler)
   return () => {

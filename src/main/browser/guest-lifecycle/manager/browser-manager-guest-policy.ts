@@ -14,8 +14,6 @@ import { setupGuestEscapeForwarding } from '../input/browser-guest-escape-forwar
 import { installGuestDevToolsCloseShortcut } from '../browser-guest-devtools-close-shortcut'
 
 export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestCleanup {
-  abstract hasActiveGrabOp(browserPageId: string): boolean
-
   attachGuestPolicies(
     guest: Electron.WebContents,
     inheritedOwnerContext: PopupOwnerContext | null = null,

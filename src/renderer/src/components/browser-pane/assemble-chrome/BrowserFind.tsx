@@ -4,6 +4,7 @@ import { ChevronUp, ChevronDown, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { getFindRequestQuery } from '@/lib/find-query-bounds'
+import { useGuestEscape } from '../host-guest/use-guest-escape'
 
 type BrowserFindProps = {
   browserPageId: string
@@ -169,17 +170,8 @@ export default function BrowserFind({
     setResult(null)
   }
 
-  // Like Chrome, Escape typed in the page closes the bar; main hands it over from the focused guest.
-  useEffect(() => {
-    if (!isOpen) {
-      return
-    }
-    return window.api.browser.onGuestEscape(({ browserPageId: escapedPageId }) => {
-      if (escapedPageId === browserPageId) {
-        onClose()
-      }
-    })
-  }, [browserPageId, isOpen, onClose])
+  // Like Chrome, Escape typed in the page closes the bar.
+  useGuestEscape(browserPageId, isOpen, onClose)
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

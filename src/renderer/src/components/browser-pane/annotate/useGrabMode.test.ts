@@ -21,6 +21,7 @@ function createReactHookHarness() {
       useEffect: (effect: () => void | (() => void), deps?: readonly unknown[]) => {
         effects.push({ effect, deps })
       },
+      useEffectEvent: <T extends (...args: never[]) => unknown>(callback: T): T => callback,
       useLayoutEffect: () => {},
       useRef: <T>(initialValue: T): { current: T } => {
         const index = refIndex
