@@ -382,7 +382,25 @@ describe('orca cli browser page targeting', () => {
       expect.anything()
     )
     expect(errorSpy).toHaveBeenCalledWith(
-      "This terminal's workspace repo::/tmp/repo/deleted is no longer an Orca workspace on this host. Pass --worktree <selector>, or --worktree all for the workspace focused in Orca."
+      "This terminal's workspace repo::/tmp/repo/deleted is not listed by Orca on this host. Run the command from a workspace directory or pass --worktree <selector> (or all) where the command accepts it."
+    )
+  })
+
+  it('keeps the runtime default for the floating terminal, which has no workspace row', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo/other', 'other')]),
+      okFixture('req_tab_create', { browserPageId: 'page-1' })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.stubEnv('ORCA_WORKTREE_ID', 'global-floating-terminal')
+
+    await main(['tab', 'create', '--url', 'https://example.com', '--json'], '/tmp/scratch')
+
+    expect(callMock).toHaveBeenLastCalledWith(
+      'browser.tabCreate',
+      { url: 'https://example.com', worktree: undefined },
+      { timeoutMs: 60_000 }
     )
   })
 
