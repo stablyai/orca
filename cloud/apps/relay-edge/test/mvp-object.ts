@@ -2,13 +2,15 @@
 // assignments pushed by the director over signed admin calls). No Postgres. Drives the SHIPPED
 // desktop control client and the shipped phone hello parser in local workerd.
 //   npx tsx test/mvp-object.ts
+// Against a deployed phase-2 Worker (test JWKS = spike/.keys.json, test signing key from a file):
+//   MVP_URL=https://<worker> MVP_KEY_FILE=<path> MVP_ISSUER=<ADMIN_ISSUER> npx tsx test/mvp-object.ts
 import { spawn, type ChildProcess } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import { createServer } from 'node:http'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { SignJWT, exportJWK, generateKeyPair, type KeyLike } from 'jose'
+import { SignJWT, exportJWK, generateKeyPair, importJWK, type KeyLike } from 'jose'
 import nacl from 'tweetnacl'
 import WebSocket from 'ws'
 import { RelayControlClient } from '../../../../src/main/runtime/mobile-cloud-relay/relay-control-client'
@@ -16,9 +18,11 @@ import { CloudRelayTransport } from '../../../../src/main/runtime/rpc/relay-tran
 import { RelayPhoneHelloSchema } from '../../../../src/shared/remote-runtime/relay/mobile-relay-phone-protocol'
 
 const PORT = 8789
-const ORIGIN = `http://127.0.0.1:${PORT}`
-const SIGNING_KEY = randomBytes(36).toString('base64url')
-const DIRECTOR = 'https://director.test.invalid'
+const REMOTE = process.env.MVP_URL?.replace(/\/$/, '')
+const ORIGIN = REMOTE ?? `http://127.0.0.1:${PORT}`
+const WS_ORIGIN = ORIGIN.replace(/^http/, 'ws')
+const SIGNING_KEY = process.env.MVP_KEY_FILE ? readFileSync(process.env.MVP_KEY_FILE, 'utf8').trim() : randomBytes(36).toString('base64url')
+const DIRECTOR = process.env.MVP_ISSUER ?? 'https://director.test.invalid'
 const ISSUER = 'https://auth.test.invalid'
 const EPOCH = 7
 const USER = 'user-mvp'
@@ -52,7 +56,7 @@ function newHost(): Host {
 
 async function mint(key: KeyLike, relayHostId: string, issuer = ISSUER): Promise<string> {
   return new SignJWT({ purpose: 'host-control', prof: `prof-${USER}`, relayHostId })
-    .setProtectedHeader({ alg: 'ES256', kid: 'mvp' })
+    .setProtectedHeader({ alg: 'ES256', kid: REMOTE ? 'spike' : 'mvp' })
     .setSubject(USER)
     .setIssuer(issuer)
     .setAudience('orca-relay')
@@ -97,7 +101,7 @@ function control(host: Host, jwt: string, epoch = EPOCH) {
 }
 
 function phone(relayHostId: string, credential: string) {
-  const ws = new WebSocket(`ws://127.0.0.1:${PORT}/v1/connect/${relayHostId}`, { perMessageDeflate: false })
+  const ws = new WebSocket(`${WS_ORIGIN}/v1/connect/${relayHostId}`, { perMessageDeflate: false })
   const state = { hello: null as Record<string, unknown> | null, closed: null as number | null, reason: '' }
   ws.on('open', () => ws.send(JSON.stringify({ type: 'relay-auth', v: 1, mode: 'connect', credential })))
   ws.on('message', (raw) => {
@@ -135,7 +139,18 @@ async function adminCall(op: string, body: unknown, opts: { key?: string; tokenO
 const assign = (relayHostId: string, cellId: string, assignmentEpoch: number, devices?: unknown[]) =>
   adminCall('assign', { userId: USER, relayHostId, cellId, assignmentEpoch, ...(devices ? { devices } : {}) })
 
+async function mainRemote(): Promise<void> {
+  // Deployed Worker: inline test JWKS (spike keys), no issuer check, no local dev server.
+  const keys = JSON.parse(readFileSync(new URL('../spike/.keys.json', import.meta.url), 'utf8'))
+  const privateKey = (await importJWK(keys.privateJwk, 'ES256')) as KeyLike
+  await run(newHost(), privateKey, () => 1, true)
+  const failed = results.filter((r) => !r.ok)
+  console.log(`\n${results.length - failed.length}/${results.length} passed (${ORIGIN})`)
+  if (failed.length) process.exitCode = 1
+}
+
 async function main(): Promise<void> {
+  if (REMOTE) return mainRemote()
   const host = newHost()
   const { publicKey, privateKey } = await generateKeyPair('ES256', { extractable: true })
   const jwk = { ...(await exportJWK(publicKey)), kid: 'mvp', alg: 'ES256', use: 'sig' }
@@ -193,7 +208,7 @@ async function main(): Promise<void> {
   if (failed.length) process.exitCode = 1
 }
 
-async function run(host: Host, key: KeyLike, jwksHits: () => number): Promise<void> {
+async function run(host: Host, key: KeyLike, jwksHits: () => number, remote = false): Promise<void> {
   const jwt = await mint(key, host.relayHostId)
   const id = host.relayHostId
 
@@ -215,9 +230,10 @@ async function run(host: Host, key: KeyLike, jwksHits: () => number): Promise<vo
     record('P2 push applied; retry unchanged; older epoch 409 stale; same epoch other cell 409', ok.json?.outcome === 'applied' && again.json?.outcome === 'unchanged' && stale.status === 409 && stale.json?.outcome === 'stale' && conflict.status === 409, `${ok.json?.outcome}/${again.json?.outcome}/${stale.status}:${stale.json?.outcome}/${conflict.status}`)
   }
 
-  // E1: fetched JWKS + issuer; wrong issuer is 401 before the upgrade.
-  {
-    const bad = new WebSocket(`ws://127.0.0.1:${PORT}/v1/host/control`, {
+  // E1: fetched JWKS + issuer; wrong issuer is 401 before the upgrade (local only: the deployed
+  // test Worker uses an inline JWKS without an issuer).
+  if (!remote) {
+    const bad = new WebSocket(`${WS_ORIGIN}/v1/host/control`, {
       headers: { authorization: `Bearer ${await mint(key, id, 'https://evil.invalid')}` }
     })
     const status = await new Promise<number>((res) => bad.on('unexpected-response', (_q, r) => res(r.statusCode ?? 0)))

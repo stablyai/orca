@@ -38,6 +38,32 @@
     "ORPHAN_GRACE_MS": "30000"
   },
   "env": {
+    // Phase 2 on Cloudflare: object backend (no database), test signing key and test JWKS as
+    // secrets, workers.dev only, debug routes on. Not for real clients.
+    "phase2": {
+      "name": "orca-relay-edge-phase2",
+      "workers_dev": true,
+      "preview_urls": false,
+      "durable_objects": {
+        "bindings": [
+          { "name": "HOST_RELAY", "class_name": "HostRelay" },
+          { "name": "SPLICE_RELAY", "class_name": "SpliceRelay" }
+        ],
+        "code_update_strategy": { "mode": "deferred", "max_delay": 300 }
+      },
+      "analytics_engine_datasets": [{ "binding": "METRICS", "dataset": "orca_relay_edge_phase2" }],
+      "vars": {
+        "EDGE_BACKEND": "object",
+        "EDGE_CELL_ID": "edge",
+        "ADMIN_ISSUER": "https://director.phase2-test.invalid",
+        "RELAY_JWT_AUDIENCE": "orca-relay",
+        "PING_INTERVAL_MS": "45000",
+        "SILENCE_TIMEOUT_MS": "75000",
+        "ORPHAN_GRACE_MS": "30000",
+        "SPIKE_DEBUG": "1",
+        "EDGE_VERSION": "phase2-v1"
+      }
+    },
     // R6/R8 staging: staging Cloud SQL through Hyperdrive over a Workers VPC tunnel. workers.dev
     // only; test JWKS inline (synthetic hosts), debug routes on. Not for real clients.
     "staging": {
