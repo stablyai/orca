@@ -1,10 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test-fixture'
 import { launchHeadlessAutomationAgent } from './headless-automation-agent-launch'
-import { AutomationRunLaunchError } from './headless-dispatch'
 
-function runtimeDelivering(deliverStartupFollowup: () => Promise<boolean>) {
-  return {
+function launch(deliverStartupFollowup: () => Promise<boolean>) {
+  const runtime = {
     requireStore: () => ({ getSettings: () => ({ nativeChatProviders: EVERY_AGENT_CHAT }) }),
     resolveManagedTerminalWorkspaceTarget: vi.fn(async () => ({
       managedWorktree: { displayName: 'repo' },
@@ -21,15 +20,9 @@ function runtimeDelivering(deliverStartupFollowup: () => Promise<boolean>) {
     getPtyExecutionHostMetadata: vi.fn(() => ({ executionHostId: 'local' })),
     deliverStartupFollowup: vi.fn(deliverStartupFollowup)
   }
-}
-
-function launch(
-  deliver: () => Promise<boolean>,
-  onTargetPublished?: (target: Record<string, unknown>) => void
-) {
   return launchHeadlessAutomationAgent(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the existing-workspace launch reads only these runtime members.
-    runtimeDelivering(deliver) as never,
+    runtime as never,
     {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only these automation fields are read.
       automation: {
@@ -42,48 +35,33 @@ function launch(
       run: { id: 'run-1', title: 'Nightly', scheduledFor: 1, trigger: 'scheduled' },
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the repo is read.
       target: { ok: true, repo: { id: 'repo-1', path: '/repo', displayName: 'repo' } } as never,
-      runs: [],
-      ...(onTargetPublished ? { onTargetPublished } : {})
+      runs: []
     }
   )
 }
 
 describe('headless automation agent launch', () => {
-  it('publishes the run terminal while its prompt delivery is still pending', async () => {
-    let finishDelivery: (delivered: boolean) => void = () => {}
-    const onTargetPublished = vi.fn()
-    const launched = launch(
-      () => new Promise<boolean>((resolve) => (finishDelivery = resolve)),
-      onTargetPublished
-    )
-
-    await vi.waitFor(() =>
-      expect(onTargetPublished).toHaveBeenCalledWith({
-        workspaceId: 'wt-1',
-        workspaceDisplayName: 'repo',
-        terminalSessionId: 'tab-1',
-        terminalPaneKey: 'tab-1:leaf-1',
-        terminalPtyId: 'pty-1'
-      })
-    )
-    finishDelivery(true)
-    await expect(launched).resolves.toMatchObject({ terminalHandle: 'term-1' })
-  })
-
   it.each([
-    ['is refused', async () => false],
+    ['is refused', async () => false, "Aider started, but Orca could not send this run's prompt."],
     [
       'throws',
       async () => {
         throw new Error('writer broke')
-      }
+      },
+      'writer broke'
     ]
-  ])('fails the run and keeps its terminal when prompt delivery %s', async (_, deliver) => {
-    const failure = await launch(deliver).catch((error: unknown) => error)
+  ])(
+    'opens the terminal and reports the prompt undelivered when delivery %s',
+    async (_, deliver, error) => {
+      const opened = await launch(deliver)
 
-    expect(failure).toBeInstanceOf(AutomationRunLaunchError)
-    expect(failure).toMatchObject({
-      target: { terminalHandle: 'term-1', terminalPaneKey: 'tab-1:leaf-1', terminalPtyId: 'pty-1' }
-    })
-  })
+      expect(opened).toMatchObject({
+        terminalHandle: 'term-1',
+        terminalSessionId: 'tab-1',
+        terminalPaneKey: 'tab-1:leaf-1',
+        terminalPtyId: 'pty-1'
+      })
+      await expect(opened.delivery).resolves.toEqual({ error })
+    }
+  )
 })

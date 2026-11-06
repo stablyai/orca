@@ -175,6 +175,13 @@ export async function requestAutomationDispatch(
     automation,
     run,
     target,
+    // The status check and the store write share one synchronous step, so a settled run stays settled.
+    transition: (result) => {
+      const current = readRun()
+      return current.status === 'dispatching'
+        ? { applied: true, run: ctx.runs.updateRun({ runId: run.id, ...result }) }
+        : { applied: false, run: returnDurable(current) }
+    },
     dispatcher: (request) => {
       if (readRun().status !== 'dispatching') {
         throw new AutomationDispatchCancelledError('The run changed before its agent could launch.')
@@ -191,21 +198,7 @@ export async function requestAutomationDispatch(
       if (latestRefusal) {
         throw new AutomationDispatchRefusedError(latestRefusal)
       }
-      const { onTargetPublished } = request
-      return dispatcher({
-        ...request,
-        target: latestTarget,
-        // A run cancelled or settled meanwhile keeps its status; only a live dispatch links its terminal.
-        ...(onTargetPublished
-          ? {
-              onTargetPublished: (published) => {
-                if (readRun().status === 'dispatching') {
-                  onTargetPublished(published)
-                }
-              }
-            }
-          : {})
-      })
+      return dispatcher({ ...request, target: latestTarget })
     }
   })
 }

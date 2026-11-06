@@ -16,6 +16,8 @@ export type HeadlessAutomationDispatchLaunch = {
   terminalSessionId: string | null
   terminalPaneKey?: string | null
   terminalPtyId?: string | null
+  /** Settles once a newly opened terminal's prompt is handed over, or with why it was not; never rejects. */
+  delivery?: Promise<{ error: string | null }>
   completion?: Promise<
     {
       status: 'completed' | 'dispatch_failed'
@@ -29,8 +31,6 @@ export type HeadlessAutomationDispatcher = (request: {
   automation: Automation
   run: AutomationRun
   target: Extract<AutomationRunTargetResult, { ok: true }>
-  /** Called once the run's terminal opens, before its prompt is delivered. */
-  onTargetPublished?: (target: HeadlessAutomationDispatchLaunch) => void
 }) => Promise<HeadlessAutomationDispatchLaunch>
 
 export class AutomationRunLaunchError extends Error {

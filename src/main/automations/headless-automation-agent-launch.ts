@@ -4,7 +4,7 @@ import { getRepoExecutionHostId } from '../../shared/execution-host'
 // Automations observe PTYs, so launch terminal agents regardless of the chat default.
 
 import type { AgentLaunchSurfaceExecution } from '../agent-launch/agent-launch-execution'
-import { executeAgentLaunch } from '../agent-launch/agent-launch-executor'
+import { openAgentLaunch } from '../agent-launch/agent-launch-executor'
 import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent-display-names'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
@@ -38,7 +38,6 @@ export async function launchHeadlessAutomationAgent(
     run: Pick<AutomationRun, 'id' | 'title' | 'scheduledFor' | 'trigger'>
     target: Extract<AutomationRunTargetResult, { ok: true }>
     runs: readonly AutomationRun[]
-    onTargetPublished?: (target: HeadlessAutomationDispatchLaunch) => void
   }
 ): Promise<HeadlessAutomationAgentLaunch> {
   const { automation, run, target } = request
@@ -70,8 +69,6 @@ export async function launchHeadlessAutomationAgent(
       return reused
     }
   }
-  let workspace: { id: string; displayName: string | null } | undefined
-  let terminal: LaunchedTerminal | undefined
   const execution: AgentLaunchSurfaceExecution = {
     runtime,
     intent: {
@@ -103,19 +100,22 @@ export async function launchHeadlessAutomationAgent(
           startupAgent,
           ...(startupPrompt ? { startupPrompt } : {})
         })
-        workspace = {
-          id: created.worktree.id,
-          displayName: created.worktree.displayName ?? null
-        }
         const startup = created.startupTerminal
         if (!startup?.handle) {
-          // A terminal that started before a later startup step failed still belongs to the run.
-          terminal = startupTerminalCreation
-          throw new Error(
+          const message =
             created.warning || 'Automation workspace was created, but no agent terminal started.'
-          )
+          // A terminal that started before a later startup step failed still belongs to the run.
+          throw startupTerminalCreation
+            ? new AutomationRunLaunchError(
+                message,
+                runTargetOf(
+                  startupTerminalCreation,
+                  created.worktree.id,
+                  created.worktree.displayName ?? null
+                )
+              )
+            : new Error(message)
         }
-        terminal = { ...startup, handle: startup.handle }
         return {
           worktreeId: created.worktree.id,
           startupTerminalHandle: startup.handle,
@@ -153,8 +153,6 @@ export async function launchHeadlessAutomationAgent(
             folderWorkspace: selectedTarget?.scope.folderWorkspace ?? undefined
           }
         )
-        terminal = launched
-        workspace = { id: launched.worktreeId, displayName: resolved.displayName ?? null }
         return {
           handle: launched.handle,
           terminalCreation: launched,
@@ -166,47 +164,44 @@ export async function launchHeadlessAutomationAgent(
         runtime.deliverStartupFollowup(handle, { agent, prompt: prompt.text }, { terminalCreation })
     }
   }
-  const launched = (): HeadlessAutomationAgentLaunch | null =>
-    workspace && terminal
-      ? {
-          workspaceId: workspace.id,
-          workspaceDisplayName: workspace.displayName,
-          terminalHandle: terminal.handle,
-          terminalSessionId: terminal.tabId ?? null,
-          terminalPaneKey: terminal.paneKey ?? null,
-          terminalPtyId: terminal.ptyId ?? null
-        }
-      : null
-  let result: Awaited<ReturnType<typeof executeAgentLaunch>>
-  try {
-    result = await executeAgentLaunch({
-      ...execution,
-      onSurfacePublished: () => {
-        const opened = launched()
-        if (opened) {
-          const { terminalHandle: _handle, ...published } = opened
-          request.onTargetPublished?.(published)
-        }
-      }
-    })
-  } catch (error) {
-    const opened = launched()
-    // Once its terminal exists, the run keeps it so the user can open what happened.
-    throw opened
-      ? new AutomationRunLaunchError(error instanceof Error ? error.message : String(error), opened)
-      : error
+  const opened = await openAgentLaunch(execution)
+  const { outcome, worktreeId } = opened.surface
+  if (outcome.kind !== 'terminal') {
+    throw new Error(TERMINAL_ONLY_MESSAGE)
   }
-  const opened = launched()
-  if (!opened) {
-    throw new Error('Automation agent launch did not report its terminal.')
+  return {
+    ...runTargetOf(
+      { paneKey: outcome.paneKey, ...opened.terminalCreation, handle: outcome.handle },
+      worktreeId,
+      selectedWorkspace?.displayName ?? null
+    ),
+    delivery: opened.settlement.then((settled) => ({
+      error:
+        settled.status === 'rejected'
+          ? settled.reason instanceof Error
+            ? settled.reason.message
+            : String(settled.reason)
+          : settled.value.prompt?.outcome === 'not-delivered'
+            ? `${tuiAgentDisplayName(agent)} started, but Orca could not send this run's prompt.`
+            : null
+    }))
   }
-  if (result.prompt?.outcome === 'not-delivered') {
-    throw new AutomationRunLaunchError(
-      `${tuiAgentDisplayName(agent)} started, but Orca could not send this run's prompt.`,
-      opened
-    )
+}
+
+/** A null display name lets the run store resolve it from the workspace's metadata. */
+function runTargetOf(
+  terminal: LaunchedTerminal,
+  workspaceId: string,
+  workspaceDisplayName: string | null
+): HeadlessAutomationAgentLaunch {
+  return {
+    workspaceId,
+    workspaceDisplayName,
+    terminalHandle: terminal.handle,
+    terminalSessionId: terminal.tabId ?? null,
+    terminalPaneKey: terminal.paneKey ?? null,
+    terminalPtyId: terminal.ptyId ?? null
   }
-  return opened
 }
 
 async function sendToReusableSession(
