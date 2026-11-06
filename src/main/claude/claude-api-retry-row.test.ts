@@ -87,4 +87,16 @@ describe('a Claude api_retry frame', () => {
     expect(row).not.toHaveProperty('providerFrame')
     expect(row.failure?.detail?.text).toContain('"attempt":3')
   })
+
+  it('hides unmodeled system frames even when their payload names an error', async () => {
+    const unknown = {
+      type: 'system',
+      subtype: 'future_notice',
+      error: 'rate_limit',
+      session_id: 'provider-1',
+      uuid: 'future-1'
+    }
+    const rows = await statusRowsFor([unknown])
+    expect(rows).toEqual([])
+  })
 })

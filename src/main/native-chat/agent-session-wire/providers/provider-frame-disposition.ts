@@ -168,6 +168,13 @@ function itemKind(kind: string): string | null {
   return kind.startsWith('item:') ? kind.slice('item:'.length) : null
 }
 
+export function isUnmodeledClaudeSystemFrame(kind: string): boolean {
+  return (
+    (kind === 'message:system' || kind.startsWith('message:system:')) &&
+    !Object.hasOwn(PROVIDER_FRAME_CLASSIFICATIONS.claude, kind)
+  )
+}
+
 export function isDeltaProviderFrameKind(kind: string): boolean {
   return notificationKind(kind).toLowerCase().endsWith('delta')
 }
@@ -178,7 +185,7 @@ const CLAUDE_FRAME_CLASSIFICATIONS: Readonly<Record<string, ProviderFrameClassif
   PROVIDER_FRAME_CLASSIFICATIONS.claude
 
 /** Classify failures only from declared kinds/outcome fields; nested statuses can describe unrelated work.
- * Unlisted frames retain visible fallback rows. */
+ * Unlisted non-system frames retain visible fallback rows. */
 const PROVIDER_FRAME_CATALOGS: ReadonlyMap<
   string,
   (kind: string, payload: unknown) => ProviderFrameClassification | undefined
@@ -212,6 +219,9 @@ const PROVIDER_FRAME_CATALOGS: ReadonlyMap<
         return isProviderRecord(payload) && payload.outcome === 'error'
           ? 'error-surface'
           : 'suppressed-benign'
+      }
+      if (isUnmodeledClaudeSystemFrame(kind)) {
+        return 'suppressed-benign'
       }
       if (kind === 'message:auth_status') {
         const error = isProviderRecord(payload) ? payload.error : undefined
