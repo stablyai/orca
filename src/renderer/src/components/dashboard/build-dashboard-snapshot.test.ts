@@ -131,6 +131,126 @@ function baseState(overrides: Partial<DashboardSnapshotState>): DashboardSnapsho
 }
 
 describe('buildDashboardSnapshot', () => {
+  it.each(['local', undefined] as const)(
+    'routes a local chat with tab owner %s when the workspace has no host stamp',
+    (executionHostId) => {
+      const snapshot = buildDashboardSnapshot(
+        baseState({
+          agentStatusByPaneKey: { [PANE_KEY]: entry({}) },
+          unifiedTabsByWorktree: {
+            w1: [
+              {
+                id: TAB_ID,
+                entityId: 'chat-local',
+                groupId: 'group',
+                worktreeId: 'w1',
+                ...(executionHostId ? { executionHostId } : {}),
+                contentType: 'agent-session',
+                agentSessionAgent: 'claude',
+                label: 'Chat',
+                customLabel: null,
+                color: null,
+                sortOrder: 0,
+                createdAt: NOW
+              }
+            ]
+          },
+          ptyIdsByTabId: { [TAB_ID]: [] }
+        }),
+        NOW
+      )
+      expect(snapshot.cards[0]?.executionHostId).toBe('local')
+      expect(snapshot.cards[0]?.chatSession).toEqual({
+        sessionId: 'chat-local',
+        target: { kind: 'local' }
+      })
+    }
+  )
+
+  it('omits an unstamped structured preview when two hosts publish the same workspace', () => {
+    const local = {
+      id: 'r1',
+      path: '/r1',
+      displayName: 'Repo One',
+      badgeColor: '#000',
+      addedAt: NOW,
+      executionHostId: 'local' as const
+    }
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        repos: [local],
+        worktreesByRepo: { r1: [worktree(), { ...worktree(), hostId: 'runtime:server-a' }] },
+        agentStatusByPaneKey: { [PANE_KEY]: entry({}) },
+        unifiedTabsByWorktree: {
+          w1: [
+            {
+              id: TAB_ID,
+              entityId: 'chat-1',
+              groupId: 'group',
+              worktreeId: 'w1',
+              contentType: 'agent-session',
+              agentSessionAgent: 'claude',
+              label: 'Chat',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: NOW
+            }
+          ]
+        },
+        ptyIdsByTabId: { [TAB_ID]: [] }
+      }),
+      NOW
+    )
+    expect(snapshot.cards[0]).toBeDefined()
+    expect(snapshot.cards.map((card) => card.chatSession)).toEqual([undefined, undefined])
+  })
+
+  it.each([false, true])(
+    'routes a runtime chat only to its host card, with a local twin: %s',
+    (withLocalTwin) => {
+      const snapshot = buildDashboardSnapshot(
+        baseState({
+          worktreesByRepo: {
+            r1: [
+              ...(withLocalTwin ? [worktree()] : []),
+              { ...worktree(), hostId: 'runtime:server-a' }
+            ]
+          },
+          agentStatusByPaneKey: { [PANE_KEY]: entry({}) },
+          unifiedTabsByWorktree: {
+            w1: [
+              {
+                id: TAB_ID,
+                entityId: 'chat-1',
+                groupId: 'group',
+                worktreeId: 'w1',
+                executionHostId: 'runtime:server-a',
+                contentType: 'agent-session',
+                agentSessionAgent: 'claude',
+                label: 'Chat',
+                customLabel: null,
+                color: null,
+                sortOrder: 0,
+                createdAt: NOW
+              }
+            ]
+          },
+          ptyIdsByTabId: { [TAB_ID]: [] }
+        }),
+        NOW
+      )
+      const runtimeSession = {
+        sessionId: 'chat-1',
+        target: { kind: 'environment', environmentId: 'server-a' }
+      }
+      expect(snapshot.cards.map((card) => card.chatSession)).toEqual(
+        withLocalTwin ? [undefined, runtimeSession] : [runtimeSession]
+      )
+      expect(snapshot.cards.at(-1)?.ptyId).toBeNull()
+    }
+  )
+
   it('names each pane of a split tab from its own title', () => {
     const siblingPaneKey = makePaneKey(TAB_ID, SPLIT_SIBLING_LEAF_ID)
     const snapshot = buildDashboardSnapshot(

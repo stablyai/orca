@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from 'react'
+import { lazy, Suspense, useEffect, useId, useRef } from 'react'
 import { SquareArrowOutUpRight, XIcon } from 'lucide-react'
 import { AgentTypeIcon } from '@/lib/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
@@ -14,6 +14,8 @@ import { AgentTerminalPreview } from './AgentTerminalPreview'
 import { terminalPreviewUnavailableMessage } from './terminal-preview-unavailable-message'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+
+const AgentChatPreview = lazy(() => import('./AgentChatPreview'))
 
 /** Routing payload for focusing an agent's pane in the main window. */
 export type AgentRevealArgs = DashboardRevealAgentArgs
@@ -33,6 +35,7 @@ type AgentTerminalFrameProps = Omit<AgentTerminalDialogProps, 'card'> & {
   previewClassName?: string
 }
 
+/** Preview the card's validated session and preserve its host/tab identity when handing off to the workspace. */
 function AgentTerminalFrame({
   card,
   title,
@@ -74,7 +77,16 @@ function AgentTerminalFrame({
           <span className="sr-only">{translate('dashboardPopout.terminal.close', 'Close')}</span>
         </Button>
       </div>
-      {card.ptyId ? (
+      {card.chatSession ? (
+        <Suspense fallback={<div className="min-h-0 flex-1" />}>
+          <AgentChatPreview
+            key={JSON.stringify(card.chatSession)}
+            session={card.chatSession}
+            agentName={formatAgentTypeLabel(card.agentType)}
+            className={previewClassName}
+          />
+        </Suspense>
+      ) : card.ptyId ? (
         <AgentTerminalPreview
           ptyId={card.ptyId}
           terminalInput={card.terminalInput ?? null}
