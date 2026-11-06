@@ -222,6 +222,11 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
     <div className="flex w-full items-center justify-between gap-2 text-chat-foreground-faint">
       <div className="flex min-w-0 items-center gap-0.5">
         {attach}
+        <NativeChatInteractionModeToggle
+          surface={sessionOptionsSurface}
+          snapshot={sessionOptionsSnapshot}
+          focusComposer={focusComposer}
+        />
         <NativeChatComposerPermissionPicker
           surface={sessionOptionsSurface}
           snapshot={sessionOptionsSnapshot}
@@ -236,11 +241,6 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
           snapshot={sessionOptionsSnapshot}
           isWorking={isWorking}
           pickerRequest={sessionOptionsPickerRequest}
-          focusComposer={focusComposer}
-        />
-        <NativeChatInteractionModeToggle
-          surface={sessionOptionsSurface}
-          snapshot={sessionOptionsSnapshot}
           focusComposer={focusComposer}
         />
         {contextUsage ? <NativeChatContextUsageRing usage={contextUsage} /> : null}
