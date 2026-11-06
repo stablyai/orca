@@ -74,6 +74,7 @@ function detectPairedE2EENativeCodec(): PairedE2EENativeCodec | null {
           return null
         }
       },
+      // Why: like decodeBase64, never hand libsodium a zero-length buffer.
       encodeBase64: (bytes) =>
         bytes.length === 0 ? '' : sodium.toBase64(wholeBuffer(bytes), SODIUM_BASE64_ORIGINAL),
       openSecretbox: (box, nonce, key) => {

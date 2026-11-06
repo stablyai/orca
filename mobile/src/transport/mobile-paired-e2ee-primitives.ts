@@ -9,6 +9,11 @@ import {
 import { pairedE2EENativeCodec } from './paired-e2ee-native-codec'
 import * as e2ee from './e2ee'
 
+export function decodeMobileCanonicalBase64(value: string): Uint8Array | null {
+  const native = pairedE2EENativeCodec()
+  return native ? native.decodeBase64(value) : decodeCanonicalBase64Bytes(value)
+}
+
 // Resolve per call so partial e2ee mocks remain loadable in transport tests.
 export const MOBILE_PAIRED_E2EE_PRIMITIVES: PairedE2EEPrimitives = {
   generateKeyPair: () => e2ee.generateKeyPair(),
@@ -31,10 +36,7 @@ export const MOBILE_PAIRED_E2EE_PRIMITIVES: PairedE2EEPrimitives = {
     const native = pairedE2EENativeCodec()
     return native ? native.sealSecretbox(message, nonce, key) : nacl.secretbox(message, nonce, key)
   },
-  decodeCanonicalBase64: (value) => {
-    const native = pairedE2EENativeCodec()
-    return native ? native.decodeBase64(value) : decodeCanonicalBase64Bytes(value)
-  },
+  decodeCanonicalBase64: decodeMobileCanonicalBase64,
   decodeUtf8: (bytes) =>
     pairedE2EENativeCodec()?.decodeUtf8(bytes) ?? new TextDecoder().decode(bytes),
   deriveV2KeySchedule: derivePairedE2EEV2KeySchedule

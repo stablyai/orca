@@ -1,4 +1,4 @@
-import { MOBILE_PAIRED_E2EE_PRIMITIVES } from './mobile-paired-e2ee-primitives'
+import { decodeMobileCanonicalBase64 } from './mobile-paired-e2ee-primitives'
 
 // Opt into our react-native patch: binary messages then arrive as `{ base64 }`, skipping base64-js.
 export function receiveBinaryAsBase64(socket: WebSocket): WebSocket {
@@ -7,7 +7,7 @@ export function receiveBinaryAsBase64(socket: WebSocket): WebSocket {
 
 export async function websocketPayloadToUint8(value: unknown): Promise<Uint8Array | null> {
   if (isBase64Binary(value)) {
-    return MOBILE_PAIRED_E2EE_PRIMITIVES.decodeCanonicalBase64?.(value.base64) ?? null
+    return decodeMobileCanonicalBase64(value.base64)
   }
   if (value instanceof Uint8Array) {
     return value
