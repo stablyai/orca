@@ -205,6 +205,16 @@ is refused on `create`. Folder-based repos can store numeric links, but missing
 source/remote identity prevents URL validation and may leave provider links unavailable.
 Old runtimes that predate these existing fields may ignore them; verify with `worktree show --json`.
 
+### Standalone local branch deletion
+
+`ORCA repo delete-branch --repo id:<repoId> --repo-host-id local --ref refs/heads/<branch> --expected-oid <fullOid> --anchor-ref refs/remotes/<remote>/<default> --anchor-oid <fullOid> --json`
+
+Use only after the caller's fresh protected-main, review/task/deferred/recovery/completion/idle checks and bounded cleanup policy. Connect directly to the execution host (`--environment` for a paired server); `local` is relative to that server. Folder and indirect SSH targets refuse. Old servers refuse with `unsupported_operation` before dispatch; there is no legacy fallback or force option.
+
+The anchor must be the configured source remote's symbolic HEAD, at exactly the reviewed OID. All configured remotes must have a verifiable symbolic HEAD (at most 32 remotes); shallow or grafted history is refused. The runtime must have no inherited Git repository, namespace, shallow/graft, or configuration overrides; Git must identify the registered common directory. Git ancestry must prove the branch integrated; squash-only evidence is refused. The host checks all worktrees and operation reservations, then compares the branch and anchor in one Git ref transaction. It never fetches, deletes remote refs, or alters stashes. Success returns `deleted: true`, `ref`, `oid`, `anchorRef`, and `anchorOid`; `invalid_argument` rejects malformed or incomplete requests; `capability_unsupported` rejects unserved host targets; `branch_deletion_failed` reports verification, Git, or recovery failure. Errors and lost replies require fresh inventory before retrying. Branch configuration is retained.
+
+Repository cleanup is serialized within this runtime. External Git operations do not honor Orca locks: checkout attachment cannot be made atomic with ref deletion on Git 2.25. A detected attachment race attempts compare-and-create restoration and returns an error; restoration can also fail, so an error does not prove the ref exists. Callers needing an absolute no-attachment-race guarantee must keep standalone cleanup report-only.
+
 ## Terminals
 
 Common commands:

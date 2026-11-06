@@ -1,3 +1,4 @@
+import { REPO_BRANCH_DELETION_METHODS } from './repo-branch-deletion'
 import { defineMethod } from '../core'
 import { resolveReplySnapshot } from '../content-snapshot-id'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
@@ -215,6 +216,7 @@ export const REPO_METHODS = [
     params: RepoReorder,
     handler: async (params, { runtime }) => runtime.reorderRepos(params.orderedIds)
   }),
+  ...REPO_BRANCH_DELETION_METHODS,
   defineMethod({
     name: 'repo.setBaseRef',
     permission: 'workspace',

@@ -61,6 +61,11 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   pr: '--pr <number|null>     Linked GitHub pull request number; null clears on set',
   prompt: '--prompt <text>        Prompt text for agent-backed commands',
   query: '--query <text>        Search text for matching refs',
+  'repo-host-id': '--repo-host-id local   Repository host relative to the selected Orca server',
+  'expected-oid': '--expected-oid <oid>    Expected current full local branch commit OID',
+  'anchor-ref':
+    '--anchor-ref <ref>      Full remote-tracking default branch ref reviewed for integration',
+  'anchor-oid': '--anchor-oid <oid>      Expected current full integration anchor commit OID',
   ref: '--ref <ref>            Base ref to persist for the repo',
   repo: '--repo <selector>      Repo selector such as id:<id>, name:<name>, or path:<path>',
   'restore-window': '--restore-window     Bring the target app/window forward before the operation',

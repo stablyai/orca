@@ -1,3 +1,10 @@
+import { StandaloneBranchDeletionError } from '../../../shared/standalone-branch-deletion'
+import { isRepoOnCatalogHost } from '../../../shared/execution-host'
+import {
+  deleteStandaloneBranch,
+  type StandaloneBranchDeletion
+} from '../../git/standalone-branch-deletion'
+import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { commitProvenRepoKindChange } from '../../workspaces/catalog/folder-repo-git-conversion'
 import type { Repo } from '../../../shared/repo-types'
@@ -81,6 +88,29 @@ export class RuntimeRepositorySettingsController {
 
   async show(repoSelector: RuntimeRepoSelector): Promise<Repo> {
     return await this.deps.resolveRepo(repoSelector)
+  }
+
+  async deleteBranch(repoSelector: RuntimeRepoSelector, request: StandaloneBranchDeletion) {
+    const store = this.requireStore()
+    const repo = await this.deps.resolveRepo(repoSelector)
+    assertWslMoveRepoWritable(store, repo)
+    if (isFolderRepo(repo)) {
+      throw new Error('Folder mode does not support branch deletion.')
+    }
+    if (!isRepoOnCatalogHost(repo)) {
+      throw new StandaloneBranchDeletionError(
+        'Connect directly to the repository host with a capable Orca server.',
+        'capability_unsupported'
+      )
+    }
+    const result = await deleteStandaloneBranch(
+      repo.path,
+      request,
+      getLocalProjectWorktreeGitOptions(store, repo),
+      repo.worktreeBaseRef
+    )
+    this.deps.invalidateWorktreeScan(repo.id)
+    return result
   }
 
   async setBaseRef(repoSelector: string, baseRef: string): Promise<Repo> {

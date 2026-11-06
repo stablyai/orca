@@ -117,3 +117,14 @@ export const RepoSparsePresetSave = RepoSelector.extend({
   name: requiredString('Missing preset name'),
   directories: z.array(z.string())
 })
+
+export const RepoDeleteBranch = z
+  .object({
+    repo: z.string().regex(/^id:[^\s]+$/),
+    repoHostId: z.literal('local'),
+    ref: z.string().startsWith('refs/heads/'),
+    expectedOid: z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/),
+    anchorRef: z.string().startsWith('refs/remotes/'),
+    anchorOid: z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/)
+  })
+  .strict()

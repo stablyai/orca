@@ -9,7 +9,10 @@ import { withSpan } from '../../../observability/tracer'
 import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
-import { deleteBranchAfterWorktreeRemoval } from './worktree-branch-removal'
+import {
+  deleteBranchAfterWorktreeRemoval,
+  runWithLocalBranchCleanup
+} from './worktree-branch-removal'
 import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/wsl-linked-worktree-git-routing'
 import type { RemoveWorktreeOptions } from '../worktree-operation-options'
 import {
@@ -25,9 +28,6 @@ import { runUnderWorktreeDeleteLimit } from './worktree-delete-limit'
 import { removeWindowsCheckout, usesNativeWindowsRemoval } from './windows-worktree-removal'
 import { listWorktreesStrict } from '../catalog/worktree-listing'
 import { isWorktreePathMissing } from '../../../workspaces/removal/worktree-removal-safety'
-import { runKeyedSerializedOperation } from '../../../cli/keyed-promise-queue'
-
-const branchCleanupQueueByRepo = new Map<string, Promise<void>>()
 
 export async function removeWorktree(
   repoPath: string,
@@ -127,7 +127,7 @@ function deleteBranchOfRemovedWorktree(
   options: RemoveWorktreeOptions
 ): Promise<RemoveWorktreeResult> {
   // Time network-capable branch cleanup separately and serialize per repo to avoid ref-lock races.
-  return runKeyedSerializedOperation(branchCleanupQueueByRepo, repoPath, () =>
+  return runWithLocalBranchCleanup(repoPath, options, () =>
     withSpan('worktree.remove.branch_delete', () =>
       deleteBranchAfterWorktreeRemoval(repoPath, branchName, branchHead, options)
     )

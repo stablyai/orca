@@ -1,3 +1,6 @@
+import { realpath } from 'node:fs/promises'
+import { resolveGitCommonDirectory } from '../../../../shared/git/metadata/git-common-directory'
+import { runWithGitOperationLock } from '../../../../shared/git/commands/git-operation-lock'
 import { pruneGitWorktrees } from './worktree-prune-guard'
 import {
   branchHasNoUnmergedChangesWithLazyTargetRefresh,
@@ -144,11 +147,13 @@ export async function forceDeleteLocalBranch(
   repoPath: string,
   branchName: string,
   expectedHead: string,
-  runGit: (args: string[], cwd: string) => Promise<{ stdout: string; stderr: string }> = (
-    args,
-    cwd
-  ) => gitExecFileAsync(args, gitExecOptions(cwd, options)),
-  options: GitWorktreeExecOptions = {}
+  runGit: (
+    args: string[],
+    cwd: string,
+    stdin?: string
+  ) => Promise<{ stdout: string; stderr: string }> = (args, cwd, stdin) =>
+    gitExecFileAsync(args, { ...gitExecOptions(cwd, options), ...(stdin ? { stdin } : {}) }),
+  options: GitWorktreeExecOptions & { integrationAnchor?: { ref: string; oid: string } } = {}
 ): Promise<void> {
   if (!branchName || branchName.includes('\0')) {
     throw new Error('Invalid branch name')
@@ -165,11 +170,19 @@ export async function forceDeleteLocalBranch(
   try {
     // Wait out packed-refs rewrites instead of killing the pack.
     await withRepoRefMaintenancePaused('branch-delete', () =>
-      runGit(['update-ref', '-d', `refs/heads/${branchName}`, expectedHead], repoPath)
+      options.integrationAnchor
+        ? runGit(
+            ['update-ref', '--no-deref', '--stdin'],
+            repoPath,
+            `verify ${options.integrationAnchor.ref} ${options.integrationAnchor.oid}\ndelete refs/heads/${branchName} ${expectedHead}\n`
+          )
+        : runGit(['update-ref', '-d', `refs/heads/${branchName}`, expectedHead], repoPath)
     )
   } catch {
     throw new Error(
-      `Local branch "${branchName}" changed after the workspace was deleted. Review it before deleting it.`
+      options.integrationAnchor
+        ? `Branch deletion transaction failed for "${branchName}". Re-inventory before retrying.`
+        : `Local branch "${branchName}" changed after the workspace was deleted. Review it before deleting it.`
     )
   }
   try {
@@ -178,7 +191,16 @@ export async function forceDeleteLocalBranch(
     }
   } catch (error) {
     try {
-      await runGit(['update-ref', `refs/heads/${branchName}`, expectedHead, ''], repoPath)
+      await runGit(
+        [
+          'update-ref',
+          ...(options.integrationAnchor ? ['--no-deref'] : []),
+          `refs/heads/${branchName}`,
+          expectedHead,
+          ''
+        ],
+        repoPath
+      )
     } catch (restoreError) {
       console.warn(
         `[git] Failed to restore local branch "${branchName}" after concurrent checkout`,
@@ -186,6 +208,9 @@ export async function forceDeleteLocalBranch(
       )
     }
     throw error
+  }
+  if (options.integrationAnchor) {
+    return
   }
   try {
     await runGit(['config', '--remove-section', `branch.${branchName}`], repoPath)
@@ -196,12 +221,25 @@ async function isLocalBranchCheckedOut(
   repoPath: string,
   branchName: string,
   runGit: (args: string[], cwd: string) => Promise<{ stdout: string; stderr: string }>,
-  options: GitWorktreeExecOptions
+  options: GitWorktreeExecOptions & { integrationAnchor?: { ref: string; oid: string } }
 ): Promise<boolean> {
   const { stdout } = await runGit(['worktree', 'list', '--porcelain'], repoPath)
   const worktrees = parseWorktreeList(stdout)
+  if (options.integrationAnchor && !worktrees.length) {
+    throw new Error('Cannot verify worktree attachments after branch deletion.')
+  }
   return (
     worktrees.some((worktree) => normalizeLocalBranchRef(worktree.branch) === branchName) ||
     isBranchReservedByWorktreeOperation(repoPath, branchName, worktrees, options)
   )
+}
+
+export async function runWithLocalBranchCleanup<T>(
+  repoPath: string,
+  options: GitWorktreeExecOptions,
+  run: () => Promise<T>
+): Promise<T> {
+  const commonDir = await resolveGitCommonDirectory(repoPath, options).catch(() => null)
+  const key = await realpath(commonDir ?? repoPath).catch(() => repoPath)
+  return runWithGitOperationLock(key, options.signal, run)
 }

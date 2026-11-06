@@ -44,6 +44,28 @@ export const REPO_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'repo', 'ref']
   },
   {
+    path: ['repo', 'delete-branch'],
+    destructive: true,
+    summary:
+      'Delete an unattached local branch proven integrated at an exact remote default anchor',
+    usage:
+      'orca repo delete-branch --repo id:<repoId> --repo-host-id local --ref refs/heads/<branch> --expected-oid <fullOid> --anchor-ref refs/remotes/<remote>/<default> --anchor-oid <fullOid> [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'repo',
+      'repo-host-id',
+      'ref',
+      'expected-oid',
+      'anchor-ref',
+      'anchor-oid'
+    ],
+    notes: [
+      'Connect directly to the execution host (use --environment for a paired server); repo-host-id local means local to that server. SSH proxy targets and old hosts refuse this operation.',
+      'Requires a configured source remote, verifiable symbolic HEADs for all remotes (maximum 32), complete ungrafted history, exact current OIDs, ancestry integration, and no worktree checkout or rebase/bisect reservation. Default and reserved branches are refused. No force, fetch, remote deletion or stash mutation.',
+      'Caller owns fresh review, protected-main and activity checks. Squash-only integration is refused. Git compares both refs in one transaction; external Git attachments do not honor Orca locks. A detected attachment race attempts compare-and-create restoration and returns an error. After any error or lost reply, re-inventory before retrying.'
+    ]
+  },
+  {
     path: ['repo', 'search-refs'],
     summary: 'Search branch/tag refs within a repo',
     usage: 'orca repo search-refs --repo <selector> --query <text> [--limit <n>] [--json]',
