@@ -43,8 +43,11 @@ async function handleAdmin(env: Env, request: Request, op: AdminOp): Promise<Res
     const body = AssignBodySchema.safeParse(verified.body)
     if (!body.success) return reject(400)
     try {
-      const { outcome } = await host(body.data.relayHostId).adminAssign(body.data)
-      return Response.json({ outcome }, { status: outcome === 'stale' ? 409 : 200 })
+      const id = env.HOST_RELAY.idFromName(body.data.relayHostId)
+      const stub = body.data.locationHint ? env.HOST_RELAY.get(id, { locationHint: body.data.locationHint }) : env.HOST_RELAY.get(id)
+      const result = await stub.adminAssign(body.data)
+      const ok = result.outcome === 'applied' || result.outcome === 'unchanged'
+      return Response.json(result, { status: ok ? 200 : 409 })
     } catch (error) {
       return Response.json({ error: (error as Error).message }, { status: 409 })
     }
@@ -52,7 +55,8 @@ async function handleAdmin(env: Env, request: Request, op: AdminOp): Promise<Res
   if (op === 'export') {
     const body = ExportBodySchema.safeParse(verified.body)
     if (!body.success) return reject(400)
-    return Response.json(await host(body.data.relayHostId).adminExport())
+    const result = await host(body.data.relayHostId).adminExport()
+    return Response.json(result, { status: result.outcome === 'exported' ? 200 : 409 })
   }
   const body = EraseBodySchema.safeParse(verified.body)
   if (!body.success) return reject(400)

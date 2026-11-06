@@ -35,7 +35,7 @@ import { verifyRelayJwt } from './jwt'
 import { SPLICE_SLOTS, makeConnId, parseConnId } from './splice-slot'
 import { metric } from './metrics'
 import type { AssignBody, DeviceRow } from './admin'
-import { ObjectStore, type AssignOutcome, type StoredAssignment } from './object-store'
+import { ObjectStore, type AssignResult, type StoredAssignment } from './object-store'
 import { edgeConfig, type EdgeClaims, type EdgeConfig, type Env } from './env'
 import { controlErrorCode, edgeBackend, type CredentialReservation, type EdgeBackend } from './edge-backend'
 import { b64, b64url, fromB64, hmacSha256, sha256B64url, timingSafeEqualStr } from './bytes'
@@ -119,18 +119,25 @@ export class HostRelay extends DurableObject<Env> {
 
   // ---------------- director admin (phase 2; the Worker verified the signed request) ----------------
 
-  async adminAssign(body: AssignBody): Promise<{ outcome: AssignOutcome }> {
-    const outcome = await this.store.applyAssignment(body)
-    if (outcome === 'applied' && body.cellId !== this.config.cellId) {
+  async adminAssign(body: AssignBody): Promise<AssignResult> {
+    const result = await this.store.applyAssignment(body)
+    if (result.outcome === 'applied' && body.cellId !== this.config.cellId) {
       // Moved away: like an old cell, send the desktop and its phones back to the director.
       for (const ws of this.ctx.getWebSockets('control')) this.close(ws, RELAY_CLOSE_CODE.WRONG_CELL, 'host moved')
       await this.closeSplices(() => true, RELAY_CLOSE_CODE.WRONG_CELL, 'host moved')
     }
-    return { outcome }
+    return result
   }
 
-  async adminExport(): Promise<{ assignment: StoredAssignment | null; devices: DeviceRow[] }> {
-    return { assignment: this.store.assignment(), devices: this.store.exportDevices() }
+  // The director's move away: refused while the desktop is connected (it alone can change
+  // devices); otherwise the host is frozen (hello and phones get WRONG_CELL) and snapshotted.
+  async adminExport(): Promise<
+    { outcome: 'busy' } | { outcome: 'exported'; assignment: StoredAssignment | null; devices: DeviceRow[] }
+  > {
+    if (this.ctx.getWebSockets('control').length > 0) return { outcome: 'busy' }
+    const devices = this.store.freezeForExport()
+    await this.closeSplices(() => true, RELAY_CLOSE_CODE.WRONG_CELL, 'host moving')
+    return { outcome: 'exported', assignment: this.store.assignment(), devices }
   }
 
   // Erasure: refused while the host is live, as today's guard; otherwise every byte of the object goes.

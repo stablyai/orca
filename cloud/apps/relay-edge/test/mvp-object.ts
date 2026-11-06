@@ -274,15 +274,28 @@ async function run(host: Host, key: KeyLike, jwksHits: () => number, remote = fa
   await waitFor(() => unknown.state.closed !== null, 2000)
   record('E2 unknown credential: relay-hello{ok:false,4401} and close 4401', unknown.state.hello?.code === 4401 && unknown.state.closed === 4401, `close=${unknown.state.closed}`)
 
-  // P3: credentials survive a move away and back (director exports, then re-pushes).
+  // P3: credentials survive a move away and back. The director exports (refused while the desktop
+  // is connected; freezes the host), writes Postgres, places the host, then fences the edge.
+  const leftover = await main.client.createInvite('device-b').catch((e: Error) => e)
+  const busyExport = await adminCall('export', { relayHostId: id })
+  record('P3 export refused 409 busy while the desktop is connected', busyExport.status === 409 && busyExport.json?.outcome === 'busy', `${busyExport.status}:${busyExport.json?.outcome}`)
+  main.client.closeNow()
+  await sleep(800)
   const exported = await adminCall('export', { relayHostId: id })
   const devices = (exported.json?.devices ?? []) as { relay_device_id: string; current_hash: string }[]
-  record('P3 export returns the installed device', devices.length === 1 && devices[0].relay_device_id === 'device-a' && devices[0].current_hash === sha(resumeToken), JSON.stringify(devices.map((d) => d.relay_device_id)))
+  record('P3 export returns the installed device', exported.json?.outcome === 'exported' && devices.length === 1 && devices[0].relay_device_id === 'device-a' && devices[0].current_hash === sha(resumeToken), JSON.stringify(devices.map((d) => d.relay_device_id)))
+  const frozenHello = control(host, jwt)
+  const fh = await frozenHello.client.connect().catch((e: Error) => e)
+  await waitFor(() => frozenHello.events.closes.length > 0, 3000)
+  const frozenPhone = await phoneOutcome(id, resumeToken)
+  await waitFor(() => frozenPhone.state.closed !== null, 2000)
+  record('P3 while frozen: hello 4409, phone 4409 (nothing changes after the snapshot)', fh instanceof Error && frozenHello.events.closes.includes(4409) && frozenPhone.state.closed === 4409, `hello=${frozenHello.events.closes} phone=${frozenPhone.state.closed}`)
   const away = await assign(id, 'c10', EPOCH + 1)
-  await waitFor(() => main.events.closes.length > 0 && resumePhone.state.closed !== null, 3000)
   const movedPhone = await phoneOutcome(id, resumeToken)
   await waitFor(() => movedPhone.state.closed !== null, 2000)
-  record('P3 move away: live control and phone closed 4409; new phone 4409', away.json?.outcome === 'applied' && main.events.closes.includes(4409) && resumePhone.state.closed === 4409 && movedPhone.state.closed === 4409, `control=${main.events.closes} phone=${resumePhone.state.closed} new=${movedPhone.state.closed}`)
+  record('P3 fence to another cell applied; phone 4409', away.json?.outcome === 'applied' && movedPhone.state.closed === 4409, `${away.json?.outcome} phone=${movedPhone.state.closed}`)
+  const behind = await assign(id, 'edge', EPOCH)
+  record('P3 a push below the edge epoch is 409 stale and names the edge epoch', behind.status === 409 && behind.json?.outcome === 'stale' && behind.json?.assignmentEpoch === EPOCH + 1, JSON.stringify(behind.json))
   const backPush = await assign(id, 'edge', EPOCH + 2, devices)
   const back = control(host, jwt, EPOCH + 2)
   const ack2 = await back.client.connect()
@@ -290,6 +303,11 @@ async function run(host: Host, key: KeyLike, jwksHits: () => number, remote = fa
   const returned = await phoneOutcome(id, resumeToken)
   record('P3 move back with the exported devices: hello ok, same resume token admitted', backPush.json?.outcome === 'applied' && returned.state.hello?.credentialKind === 'resume', JSON.stringify(returned.state.hello))
   returned.ws.close()
+  if (!(leftover instanceof Error)) {
+    const stalePhone = await phoneOutcome(id, leftover.inviteToken)
+    await waitFor(() => stalePhone.state.closed !== null, 2000)
+    record('P3 an invite from the earlier stay is void after the move back (4401)', stalePhone.state.closed === 4401, `close=${stalePhone.state.closed}`)
+  }
 
   // E2: revoke; the revoked token is refused.
   const revoked = await back.client.revokeDevice('device-a').then(() => 'ok').catch((e: Error) => e.message)

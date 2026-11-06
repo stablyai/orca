@@ -14,6 +14,27 @@ const ASSIGNMENT_DDL = `CREATE TABLE IF NOT EXISTS edge_assignment (
   updated_at INTEGER NOT NULL
 )`
 
+// Set by an export (the director is moving the host away): until it lapses or a push lands, the
+// host's hello and its phones are told WRONG_CELL, so nothing can change after the snapshot. A
+// director that dies mid-move leaves the host where its row still says, once this lapses.
+const MOVE_DDL = `CREATE TABLE IF NOT EXISTS edge_move (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  frozen_until INTEGER NOT NULL
+)`
+export const EXPORT_FREEZE_MS = 30_000
+
+// Everything the credential store keeps for the host, except the audit trail. A host moving onto
+// the edge brings its devices; invites, bases and command results from an earlier stay are void.
+const HOST_DATA_TABLES = [
+  'relay_devices',
+  'relay_invites',
+  'relay_connection_bases',
+  'relay_direct_authorizations',
+  'relay_install_results',
+  'relay_confirm_results',
+  'relay_rate_windows'
+] as const
+
 const DEVICE_COLUMNS = [
   'user_id',
   'relay_host_id',
@@ -29,7 +50,8 @@ const DEVICE_COLUMNS = [
 ] as const
 
 export type StoredAssignment = { userId: string; relayHostId: string; cellId: string; assignmentEpoch: number }
-export type AssignOutcome = 'applied' | 'unchanged' | 'stale'
+export type AssignOutcome = 'applied' | 'unchanged' | 'stale' | 'conflict'
+export type AssignResult = { outcome: AssignOutcome; assignmentEpoch: number }
 
 export class ObjectStore implements AssignmentSource {
   readonly database: ObjectSqliteDatabase
@@ -42,6 +64,12 @@ export class ObjectStore implements AssignmentSource {
     this.database = new ObjectSqliteDatabase(sql, runTransaction)
     this.database.applySchema()
     sql.exec(ASSIGNMENT_DDL)
+    sql.exec(MOVE_DDL)
+  }
+
+  frozen(now = Date.now()): boolean {
+    const row = this.sql.exec('SELECT frozen_until FROM edge_move WHERE id = 1').toArray()[0]
+    return row !== undefined && Number(row.frozen_until) > now
   }
 
   assignment(): StoredAssignment | null {
@@ -57,25 +85,33 @@ export class ObjectStore implements AssignmentSource {
 
   async verifyAssignment(userId: string, relayHostId: string, assignmentEpoch: number): Promise<boolean> {
     const a = this.assignment()
+    if (this.frozen()) return false
     return a !== null && a.userId === userId && a.relayHostId === relayHostId && a.cellId === this.cellId && a.assignmentEpoch === assignmentEpoch
   }
 
   async assignedElsewhere(userId: string, relayHostId: string): Promise<boolean> {
     const a = this.assignment()
-    return a !== null && a.userId === userId && a.relayHostId === relayHostId && a.cellId !== this.cellId
+    return a !== null && a.userId === userId && a.relayHostId === relayHostId && (a.cellId !== this.cellId || this.frozen())
   }
 
   // Epochs only move forward. A host that moves onto the edge brings its full device set, which
-  // replaces the object's (the director exported the edge's set back before any earlier move away).
-  async applyAssignment(body: AssignBody, now = Date.now()): Promise<AssignOutcome> {
+  // replaces the object's host data (the director exported the edge's set before any move away).
+  // Stale and conflict answers carry the edge's epoch so the director can mint above it.
+  async applyAssignment(body: AssignBody, now = Date.now()): Promise<AssignResult> {
     return this.runTransaction(async () => {
       const current = this.assignment()
       if (current && current.relayHostId !== body.relayHostId) throw new Error('edge_assignment_host_mismatch')
-      if (current && body.assignmentEpoch < current.assignmentEpoch) return 'stale'
+      if (current && body.assignmentEpoch < current.assignmentEpoch) return { outcome: 'stale', assignmentEpoch: current.assignmentEpoch }
       if (current && body.assignmentEpoch === current.assignmentEpoch) {
         // A retried push. Same epoch must mean the same placement.
-        if (current.cellId !== body.cellId || current.userId !== body.userId) throw new Error('edge_assignment_epoch_conflict')
-        return 'unchanged'
+        if (current.cellId !== body.cellId || current.userId !== body.userId) {
+          return { outcome: 'conflict', assignmentEpoch: current.assignmentEpoch }
+        }
+        // The move's first push may have landed without the director committing; its retry
+        // carries the snapshot again. The director never re-pushes once the host is live here.
+        if (body.cellId === this.cellId && body.devices) this.replaceHostData(body.devices)
+        this.sql.exec('DELETE FROM edge_move')
+        return { outcome: 'unchanged', assignmentEpoch: current.assignmentEpoch }
       }
       this.sql.exec(
         `INSERT INTO edge_assignment (id, user_id, relay_host_id, cell_id, assignment_epoch, updated_at)
@@ -88,20 +124,31 @@ export class ObjectStore implements AssignmentSource {
         body.assignmentEpoch,
         now
       )
-      if (body.cellId === this.cellId && body.devices) this.replaceDevices(body.relayHostId, body.devices)
-      return 'applied'
+      if (body.cellId === this.cellId && body.devices) this.replaceHostData(body.devices)
+      this.sql.exec('DELETE FROM edge_move')
+      return { outcome: 'applied', assignmentEpoch: body.assignmentEpoch }
     })
   }
 
-  private replaceDevices(relayHostId: string, devices: DeviceRow[]): void {
-    this.sql.exec('DELETE FROM relay_devices WHERE relay_host_id = ?', relayHostId)
+  // The director's move away, step 1: freeze, then snapshot. The caller refuses while the host's
+  // control is live (only a live host can change devices).
+  freezeForExport(now = Date.now()): DeviceRow[] {
+    this.sql.exec(
+      'INSERT INTO edge_move (id, frozen_until) VALUES (1, ?) ON CONFLICT (id) DO UPDATE SET frozen_until = excluded.frozen_until',
+      now + EXPORT_FREEZE_MS
+    )
+    return this.exportDevices()
+  }
+
+  private replaceHostData(devices: DeviceRow[]): void {
+    for (const table of HOST_DATA_TABLES) this.sql.exec(`DELETE FROM ${table}`)
     const marks = DEVICE_COLUMNS.map(() => '?').join(', ')
     for (const device of devices) {
       this.sql.exec(`INSERT INTO relay_devices (${DEVICE_COLUMNS.join(', ')}) VALUES (${marks})`, ...DEVICE_COLUMNS.map((c) => device[c]))
     }
   }
 
-  // What the director writes back to Postgres before moving the host away.
+  // Read-only snapshot (tests, erasure checks).
   exportDevices(): DeviceRow[] {
     return this.sql
       .exec(`SELECT ${DEVICE_COLUMNS.join(', ')} FROM relay_devices ORDER BY relay_device_id`)

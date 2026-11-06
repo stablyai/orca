@@ -2,7 +2,7 @@
 // director's assignment signing key, with its own purpose and audience (desktops never receive one)
 // and the SHA-256 of the exact request body, so a token cannot authorise a different payload.
 //   POST /__admin/assign  { userId, relayHostId, cellId, assignmentEpoch, devices? }
-//   POST /__admin/export  { relayHostId }
+//   POST /__admin/export  { relayHostId }  freezes the host for the move away (409 while connected)
 //   POST /__admin/erase   { userId, relayHostId }
 import { jwtVerify } from 'jose'
 import { z } from 'zod'
@@ -13,6 +13,7 @@ export const ADMIN_PURPOSE = 'edge-admin'
 export type AdminOp = 'assign' | 'export' | 'erase'
 
 const HOST_ID = /^[A-Za-z0-9_-]{16}$/
+const ADMIN_BODY_MAX = 256 * 1024
 
 // One row of relay_devices, as the director reads it from Postgres (numbers as numbers).
 export const DeviceRowSchema = z
@@ -40,7 +41,9 @@ export const AssignBodySchema = z
     assignmentEpoch: z.number().int().positive(),
     // Moving onto the edge: the host's complete device set (replaces the object's). Omitted when
     // the host moves away.
-    devices: z.array(DeviceRowSchema).max(64).optional()
+    devices: z.array(DeviceRowSchema).max(64).optional(),
+    // Where to create the host's object on its first push (objects never move). Ignored afterwards.
+    locationHint: z.enum(['wnam', 'enam', 'sam', 'weur', 'eeur', 'apac', 'oc', 'afr', 'me']).optional()
   })
   .strict()
   .refine((b) => (b.devices ?? []).every((d) => d.user_id === b.userId && d.relay_host_id === b.relayHostId), {
@@ -68,8 +71,10 @@ export async function verifyAdminRequest(
   const auth = request.headers.get('authorization') ?? ''
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
   if (!token) return null
+  const declared = Number(request.headers.get('content-length') ?? NaN)
+  if (!(declared >= 0 && declared <= ADMIN_BODY_MAX)) return null
   const raw = await request.arrayBuffer()
-  if (raw.byteLength > 256 * 1024) return null
+  if (raw.byteLength > ADMIN_BODY_MAX) return null
   try {
     const { payload } = await jwtVerify(token, new TextEncoder().encode(env.ASSIGNMENT_SIGNING_KEY), {
       algorithms: ['HS256'],
