@@ -20,6 +20,8 @@ const mocks = vi.hoisted(() => ({
 }))
 import { useAppStore } from '@/store'
 import { registerAgentStartupTerminalBinding } from '@/lib/agent-startup-tab-binding'
+import { installSleepingRecordAccess } from '@/components/terminal-pane/pty-connection/sleeping-record-access'
+import type { ConnectPanePtySession } from '@/components/terminal-pane/pty-connection/connect-pane-pty-session'
 import { installPanePtyVisibilityBind } from '@/components/terminal-pane/pty-connection/pane-pty-visibility-bind'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from '@/components/terminal-pane/remote-runtime-pty-recovery-limits'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../shared/draft-paste-ready-timeout'
@@ -379,6 +381,30 @@ it('tokenless effective configuration registration is not proof that the pending
   mocks.ready.mockReturnValue(ready.promise)
   const pending = deliver()
   await vi.waitFor(() => expect(mocks.ready).toHaveBeenCalledOnce())
+  const replacement = {
+    cacheKey: `tab-1:${leafId}`,
+    runtimeEnvironmentId: 'env',
+    paneStartup: undefined,
+    pane: { id: 1, leafId },
+    deps: { tabId: 'tab-1', worktreeId: 'wt' },
+    transport: { getPtyId: () => ptyId }
+  } as unknown as ConnectPanePtySession
+  installSleepingRecordAccess(replacement)
+  expect(replacement.launchToken).toBeUndefined()
+  replacement.registerEffectiveLaunchConfig(
+    {
+      agentCommand: 'codex',
+      agentArgs: '--model host-model',
+      agentEnv: {}
+    },
+    {}
+  )
+  expect(
+    useAppStore.getState().agentLaunchConfigByPaneKey[`tab-1:${leafId}`]?.identity
+  ).toMatchObject({
+    launchToken: 'launch-1',
+    terminalHandle: 'pty-1'
+  })
   useAppStore.getState().registerAgentLaunchConfig(
     `tab-1:${leafId}`,
     {

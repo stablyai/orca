@@ -168,7 +168,17 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
     const persistedLaunchAgent = recognizeAgentProcessFromCommandLine(
       effectiveLaunchConfig.agentCommand
     )?.agent
-    const effectiveToken = metadata?.launchToken ?? session.launchToken
+    const effectiveToken =
+      metadata?.launchToken ??
+      session.launchToken ??
+      (session.runtimeEnvironmentId
+        ? registeredAgentStartupLaunchToken(
+            useAppStore.getState(),
+            session.deps.tabId,
+            session.pane.leafId,
+            session.transport.getPtyId() ?? ''
+          )
+        : undefined)
     const registered = useAppStore.getState().agentLaunchConfigByPaneKey[session.cacheKey]
     useAppStore.getState().registerAgentLaunchConfig(session.cacheKey, effectiveLaunchConfig, {
       agentType:
@@ -176,9 +186,7 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
         session.paneStartup?.launchAgent ??
         session.paneStartup?.initialAgentStatus?.agent ??
         persistedLaunchAgent,
-      ...((metadata?.launchToken ?? session.launchToken)
-        ? { launchToken: metadata?.launchToken ?? session.launchToken }
-        : {}),
+      ...(effectiveToken ? { launchToken: effectiveToken } : {}),
       tabId: session.deps.tabId,
       leafId: session.pane.leafId,
       ...(registered?.identity.launchToken === effectiveToken && registered?.identity.terminalHandle
