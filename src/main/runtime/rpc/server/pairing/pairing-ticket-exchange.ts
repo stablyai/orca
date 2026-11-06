@@ -1,4 +1,5 @@
 import type { DeviceEntry } from './device-entry'
+import { mintDeviceCredential } from './device-credential'
 import { devicePrincipalOf } from './device-principal'
 
 /**
@@ -94,4 +95,32 @@ export function isExchangeSignIn(
   token: string
 ): device is DeviceEntry & { exchangeToken: string } {
   return device.exchangeToken !== undefined && device.exchangeToken === token
+}
+
+/**
+ * A browser that moved its pairing onto a saved device key has its own credential, so its first
+ * key sign-in retires the pairing token (forks stay anchored to the row). Session-only keys are
+ * re-registered from the pairing token on every page load, so they never retire it.
+ */
+export function planForkedTicketRetirement(
+  devices: readonly DeviceEntry[],
+  signedInDeviceId: string
+): DeviceEntry[] | null {
+  const fork = devices.find((device) => device.deviceId === signedInDeviceId)
+  if (fork?.credentialKind !== 'device-key' || fork.ephemeral || fork.forkedFrom === undefined) {
+    return null
+  }
+  const ticket = devices.find((device) => device.deviceId === fork.forkedFrom)
+  if (ticket?.ticket !== true || ticket.token === undefined || ticket.parentDeviceId) {
+    return null
+  }
+  const { ticket: _ticket, exchangeToken: _exchange, ...rest } = ticket
+  const retired: DeviceEntry = {
+    ...rest,
+    // Nobody holds this value; the row stays only as the fork's anchor.
+    token: mintDeviceCredential().token,
+    callerFingerprint: devicePrincipalOf(ticket).callerFingerprint,
+    credentialRevision: (ticket.credentialRevision ?? 0) + 1
+  }
+  return devices.map((device) => (device === ticket ? retired : device))
 }

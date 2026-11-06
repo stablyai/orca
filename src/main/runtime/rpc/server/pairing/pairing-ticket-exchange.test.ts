@@ -185,4 +185,57 @@ describe('pairing ticket exchange', () => {
     registry.validateToken(REPLACEMENT)
     expect(registry.validateToken(offer.token)).toBeNull()
   })
+
+  it('retires a runtime link once a browser signs in with its saved key, but not a session-only key', () => {
+    const registry = new DeviceRegistry(dir)
+    const link = registry.getOrCreatePendingDevice('Runtime', 'runtime')
+    registry.updateLastSeen(link.deviceId)
+    const sessionOnly = registry.forkDeviceKey(
+      link.deviceId,
+      Buffer.alloc(32, 1).toString('base64'),
+      'Tab',
+      {
+        ephemeral: true
+      }
+    )
+    registry.retireForkedTicket(sessionOnly.deviceId)
+    expect(registry.validateToken(link.token)?.deviceId).toBe(link.deviceId)
+
+    const saved = registry.forkDeviceKey(
+      link.deviceId,
+      Buffer.alloc(32, 2).toString('base64'),
+      'Chrome'
+    )
+    // Registration alone does not retire it: a lost reply is retried with the link.
+    expect(registry.validateToken(link.token)?.deviceId).toBe(link.deviceId)
+    registry.retireForkedTicket(saved.deviceId)
+
+    expect(registry.validateToken(link.token)).toBeNull()
+    expect(registry.lookupDeviceKey(saved.deviceId).kind).toBe('found')
+    expect(registry.lookupDeviceKey(sessionOnly.deviceId).kind).toBe('found')
+    expect(devicePrincipalOf(registry.getDevice(link.deviceId)!).callerFingerprint).toBe(
+      fingerprintAuthenticatedPairingCredential(link.token)
+    )
+    expect(new DeviceRegistry(dir).validateToken(link.token)).toBeNull()
+  })
+
+  it('leaves pre-ticket rows usable after a browser key sign-in', () => {
+    writeFileSync(
+      join(dir, DEVICE_REGISTRY_FILENAME),
+      JSON.stringify([
+        {
+          deviceId: 'old',
+          name: 'Link',
+          token: 'old-token',
+          scope: 'runtime',
+          pairedAt: 1,
+          lastSeenAt: 2
+        }
+      ])
+    )
+    const registry = new DeviceRegistry(dir)
+    const saved = registry.forkDeviceKey('old', Buffer.alloc(32, 3).toString('base64'), 'Chrome')
+    registry.retireForkedTicket(saved.deviceId)
+    expect(registry.validateToken('old-token')?.deviceId).toBe('old')
+  })
 })
