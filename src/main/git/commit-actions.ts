@@ -89,7 +89,7 @@ export async function applyCommit(
       ['diff', '--name-only', '--diff-filter=U'],
       execution
     )
-    if (conflicts.trim()) {
+    if (conflicts.trim() && (await detectConflictOperation(worktreePath, options)) === operation) {
       return { outcome: 'conflicted' }
     }
     return {

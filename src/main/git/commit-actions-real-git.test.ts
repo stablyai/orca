@@ -88,17 +88,28 @@ describe('commit actions', () => {
     expect(await git('log', '-1', '--format=%s')).toBe('diverged')
     expect(await git('status', '--porcelain')).toBe('')
   })
-  for (const inProgress of ['merge', 'rebase', 'cherry-pick', 'revert'] as const) {
+  for (const inProgress of ['merge', 'rebase', 'cherry-pick', 'revert', 'stash'] as const) {
     it(`refuses both commit actions during an existing ${inProgress} conflict`, async () => {
+      if (inProgress === 'stash') {
+        await writeFile(join(directory, 'file.txt'), 'stashed\n')
+        await git('stash', 'push', '-m', 'saved changes')
+      }
       await commit('different\n', 'diverged')
-      await expect(git(inProgress, topic)).rejects.toThrow()
+      await expect(
+        inProgress === 'stash' ? git('stash', 'pop') : git(inProgress, topic)
+      ).rejects.toThrow()
       for (const operation of ['cherry-pick', 'revert'] as const) {
         expect(await applyCommit(directory, operation, topic)).toEqual({
           outcome: 'refused',
-          message: `Finish or abort the ${inProgress} in progress before trying again.`
+          message:
+            inProgress === 'stash'
+              ? 'Git did not create a commit. Check the checkout and try again.'
+              : `Finish or abort the ${inProgress} in progress before trying again.`
         })
       }
-      expect(await detectConflictOperation(directory)).toBe(inProgress)
+      expect(await detectConflictOperation(directory)).toBe(
+        inProgress === 'stash' ? 'unknown' : inProgress
+      )
       expect(await git('diff', '--name-only', '--diff-filter=U')).toBe('file.txt')
     })
   }
