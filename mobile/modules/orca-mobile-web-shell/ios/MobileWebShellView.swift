@@ -11,6 +11,35 @@ private let networkBlockRules = """
   ]
   """
 
+/// Compiled once per launch and shared by every view, so later mounts load without waiting; main thread only.
+private enum NetworkBlockRuleList {
+  private static var compiled: WKContentRuleList?
+
+  /// Synchronous once compiled in this process; nil means isolation is unavailable.
+  static func load(_ completion: @escaping (WKContentRuleList?) -> Void) {
+    if let compiled {
+      completion(compiled)
+      return
+    }
+    // Optional chaining would skip completion when the store is absent, leaving loading forever; fail closed instead.
+    guard let store = WKContentRuleListStore.default() else {
+      completion(nil)
+      return
+    }
+    store.compileContentRuleList(
+      forIdentifier: networkBlockIdentifier,
+      encodedContentRuleList: networkBlockRules
+    ) { ruleList, _ in
+      DispatchQueue.main.async {
+        if let ruleList {
+          compiled = ruleList
+        }
+        completion(ruleList)
+      }
+    }
+  }
+}
+
 /// CSP fences fetch/XHR; document-start script blocks unobservable WebSocket and service-worker APIs.
 /// Match Android; both non-configurable and non-writable prevent page replacement.
 private let networkApiBlocker = """
@@ -397,31 +426,20 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   }
 
   private func installNetworkBlock(into controller: WKUserContentController) {
-    guard let store = WKContentRuleListStore.default() else {
-      // Optional chaining skips completion when the store is absent, leaving loading forever; fail closed instead.
-      isolationFailed = true
-      pendingDocumentUrl = nil
-      return
-    }
-    store.compileContentRuleList(
-      forIdentifier: networkBlockIdentifier,
-      encodedContentRuleList: networkBlockRules
-    ) { [weak self] ruleList, _ in
-      DispatchQueue.main.async {
-        guard let self else { return }
-        guard let ruleList else {
-          self.isolationFailed = true
-          self.pendingDocumentUrl = nil
-          // Rule compilation can finish after refusal; the state machine prevents a second terminal reason.
-          if self.appliedSessionId != nil {
-            self.failPropUpdate(.isolationUnavailable)
-          }
-          return
+    NetworkBlockRuleList.load { [weak self] ruleList in
+      guard let self else { return }
+      guard let ruleList else {
+        self.isolationFailed = true
+        self.pendingDocumentUrl = nil
+        // Rule compilation can finish after refusal; the state machine prevents a second terminal reason.
+        if self.appliedSessionId != nil {
+          self.failPropUpdate(.isolationUnavailable)
         }
-        controller.add(ruleList)
-        self.isolationReady = true
-        self.loadWhenIsolated()
+        return
       }
+      controller.add(ruleList)
+      self.isolationReady = true
+      self.loadWhenIsolated()
     }
   }
 
