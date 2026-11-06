@@ -138,7 +138,8 @@ it.each([100, 1000])(
     })
     expect(hasTranscript).toHaveBeenCalledWith({
       providerSessionId: THREAD,
-      claudeConfigDir: fixture.rig.root
+      claudeConfigDir: fixture.rig.root,
+      cwd: registered
     })
     expect(fixture.rig.adapter.acquire).not.toHaveBeenCalled()
     expect(probe).toHaveBeenCalledOnce()

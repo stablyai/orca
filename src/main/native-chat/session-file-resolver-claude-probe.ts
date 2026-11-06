@@ -90,5 +90,7 @@ export async function findClaudeSessionFile(
       return candidate
     }
   }
+  // A listing with no project folders probes nothing, so check cancellation before reporting a miss.
+  options.signal?.throwIfAborted()
   return null
 }
