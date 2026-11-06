@@ -177,6 +177,7 @@ export type TerminalActions = {
       leafId: string
       ptyId: string
       expectedRuntimePtyId?: string
+      restoreOnTabOpenOnly?: boolean
     }
   ) => Promise<void>
   suppressPtyExit: (ptyId: string) => void

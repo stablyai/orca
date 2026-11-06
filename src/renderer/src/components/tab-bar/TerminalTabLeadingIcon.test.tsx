@@ -85,4 +85,23 @@ describe('TerminalTabLeadingIcon', () => {
     expect(markup).toContain('data-agent-icon="codex"')
     expect(markup).not.toContain('data-testid="tab-agent-activity-indicator"')
   })
+
+  it('renders a moon indicator alongside dimmed agent icon when isSleeping is true', () => {
+    const markup = renderToStaticMarkup(
+      <TerminalTabLeadingIcon
+        agent="codex"
+        activityStatus="inactive"
+        shell={undefined}
+        showUnreadActivity={false}
+        isActive={false}
+        isSleeping={true}
+      />
+    )
+
+    expect(markup).toContain('data-testid="tab-sleeping-indicator"')
+    expect(markup).toContain('lucide-moon')
+    expect(markup).toContain('data-agent-icon="codex"')
+    expect(markup).toContain('opacity-60')
+    expect(markup).not.toContain('data-testid="tab-agent-activity-indicator"')
+  })
 })

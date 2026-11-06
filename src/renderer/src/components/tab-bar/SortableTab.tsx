@@ -39,6 +39,7 @@ import type { NativeChatTabSession } from './tab-session-history-switch'
 import type { StructuredChatTabNamingFailure } from '@/runtime/structured-conversation-name'
 import { useNativeChatNamingFailure } from './use-native-chat-naming-failure'
 import { NativeChatNamingErrorBlock, NativeChatNamingFailedDialog } from './NativeChatNamingFailure'
+import { isTerminalTabSleeping } from './use-tab-hibernation'
 
 /** What the strip draws for a terminal or native chat tab; never a source of agent identity. */
 type SortableTabModel = Pick<
@@ -121,6 +122,7 @@ export default function SortableTab({
       unreadAgentCompletionPanes: s.unreadAgentCompletionPanes
     })
   )
+  const isSleeping = useAppStore((s) => isTerminalTabSleeping(s, tab.id))
   const { activityStatus, programProgress } = useTerminalTabActivity(tab)
 
   // Why: shellOverride is stamped at create time, so changing the default shell later won't repaint existing tabs.
@@ -206,6 +208,7 @@ export default function SortableTab({
       data-tab-id={tab.id}
       data-tab-title={tabTitle}
       data-pinned={isPinned ? 'true' : 'false'}
+      data-sleeping={isSleeping ? 'true' : 'false'}
       // Expose rendered selection so E2E catches visual regressions missed by store-only assertions.
       data-active={isActive ? 'true' : 'false'}
       data-agent-activity-status={activityStatus}
@@ -254,6 +257,7 @@ export default function SortableTab({
         showUnreadActivity={showUnreadActivity}
         isActive={isActive}
         progress={programProgress}
+        isSleeping={isSleeping}
       />
       {isPinned && !isEditing && (
         <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
@@ -385,6 +389,7 @@ export default function SortableTab({
                   showUnreadActivity={false}
                   isActive
                   progress={programProgress}
+                  isSleeping={isSleeping}
                 />
               }
               alert={
