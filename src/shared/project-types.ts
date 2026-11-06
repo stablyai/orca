@@ -1,3 +1,4 @@
+import type { PrFollowUpsSettings } from './pr-follow-ups/settings'
 import type { ExecutionHostId } from './execution-host'
 import type { RepoIcon } from './repo-icon'
 import type { GitRemoteIdentity } from './git/remotes/git-remote-identity'
@@ -63,6 +64,7 @@ export type ProjectHostSetup = {
   setupState: ProjectHostSetupState
   setupMethod: ProjectHostSetupMethod
   sourceControlAi?: RepoSourceControlAiOverrides
+  prFollowUps?: PrFollowUpsSettings
   createdAt: number
   updatedAt: number
 }

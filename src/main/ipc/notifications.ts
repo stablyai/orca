@@ -160,6 +160,18 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
   stopRuntimeAttentionEvents?.()
   stopRuntimeAttentionEvents = runtime?.onClientEvent?.(
     (event) => {
+      if (event.type === 'prFollowUpStarted') {
+        void deliveryService.dispatch({
+          source: 'pr-followup-started',
+          prNumber: event.prNumber,
+          failedCheckCount: event.failedCheckCount,
+          worktreeId: event.worktreeId,
+          paneKey: event.paneKey,
+          terminalTitle: event.agent,
+          surface: event.surface === 'chat' ? 'agent-session' : 'terminal',
+          worktreeLabel: store.getWorktreeMeta(event.worktreeId)?.displayName
+        })
+      }
       if (event.type === 'notificationAttentionAcknowledged') {
         acknowledge(event.acknowledgement)
       }

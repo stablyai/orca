@@ -1,3 +1,7 @@
+import { installPrFollowUpAdapter } from '../pr-follow-ups/adapter'
+import { installRuntimePrFollowUps } from '../pr-follow-ups/install'
+import type { FollowUpHostInputs as HostInputs } from '../../shared/pr-follow-ups/contracts'
+import type { FollowUpObservationSource as ObservationSource } from '../../shared/pr-follow-ups/contracts'
 import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
 import { conversationRecordReader } from './orchestration/addressing/session-lineage/structured-session-lineage'
 import type { RuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
@@ -182,6 +186,46 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     return this.structuredAgentAvailability.subscribe(read)
   }
 
+  override startPullRequestWatches(): void {
+    if (!this.followUpHost) {
+      installPrFollowUpAdapter(this, this.requireStore(), {
+        worktrees: () => this.projectCachedWorktrees().worktrees,
+        load: () => this.listResolvedWorktrees()
+      })
+    }
+    super.startPullRequestWatches()
+  }
+
+  stopPrFollowUps(): Promise<void> {
+    const host = this.followUpHost
+    this.followUpHost = undefined
+    return host?.dispose() ?? Promise.resolve()
+  }
+
+  private followUpHost?: ReturnType<typeof installRuntimePrFollowUps>
+
+  get prFollowUps() {
+    return this.followUpHost?.engine
+  }
+
+  installPrFollowUpSource(source: ObservationSource, inputs: HostInputs): () => Promise<void> {
+    if (this.followUpHost) {
+      throw new Error('PR follow-up source already installed')
+    }
+    const host = installRuntimePrFollowUps(this, source, inputs, this.graphSyncCallbacks, (event) =>
+      this.emitClientEvent(event)
+    )
+    this.followUpHost = host
+    this.emitClientEvent({ type: 'prFollowUpsChanged' })
+    return async () => {
+      if (this.followUpHost === host) {
+        this.followUpHost = undefined
+      }
+      await host.dispose()
+      this.emitClientEvent({ type: 'prFollowUpsChanged' })
+    }
+  }
+
   /** Whether a layout-owning window can show a tab before process creation. */
   canPublishAgentLaunchTab(): boolean {
     return Boolean(this.notifier?.publishAgentLaunchTab && this.getAvailableAuthoritativeWindow())
@@ -213,6 +257,8 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   /** Startup settled; opening still waits for a launch-capable client. */
   noteAgentLaunchStartupSettled(): void {
     this.agentLaunchRecordWarmup.startupSettled()
+    // Desktop and serve: CI-line watches start here, past first paint, chat or no chat.
+    this.startPullRequestWatches()
   }
 
   /** Warm up before the first client launch so that launch does not open the record. */

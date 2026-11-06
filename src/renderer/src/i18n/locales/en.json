@@ -699,6 +699,10 @@
         "changedFilesSummaryDescription": "Shows the files each turn changed, with line counts, below the reply.",
         "changedFilesSummaryKeywordDiff": "diff",
         "changedFilesSummaryKeywordEdits": "edits",
+        "ciResultLines": "CI result lines",
+        "ciResultLinesDescription": "A line in the chat when CI finishes on a pull request the agent opened or pushed to.",
+        "ciResultLinesKeywordChecks": "checks",
+        "ciResultLinesKeywordPr": "pull request",
         "comfortable": "Comfortable",
         "wide": "Wide",
         "full": "Full",
@@ -20696,6 +20700,13 @@
         "description": "You can change this anytime in",
         "settingsLink": "Settings › Chat",
         "failed": "Could not save that setting."
+      },
+      "ciResultLine": {
+        "failingLead": "CI failing on",
+        "greenLead": "CI green on",
+        "at": "at",
+        "hide": "Don't show CI result lines",
+        "hideFailed": "Couldn't hide CI result lines. Try again, or turn off CI result lines in Settings › Chat UI."
       },
       "openedPullRequests": {
         "one": "Opened {{name}}",

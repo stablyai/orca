@@ -87,6 +87,7 @@ export type RuntimeApi = {
     onClientHostedBrowserRowsChanged: (
       callback: (event: ClientHostedBrowserRowsEvent) => void
     ) => () => void
+    onPrFollowUpsChanged?: (callback: () => void) => () => void
     onSidebarInputsChanged: (callback: (event: SidebarInputsChangedEvent) => void) => () => void
   }
   runtimeEnvironments: {

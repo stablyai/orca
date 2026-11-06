@@ -152,7 +152,9 @@ function installWillQuitHandler(): void {
     stopCodexAccountSessionBridges()
     // Stamp resume reasons before stopping sessions; an update restart was not a user quit.
     setStructuredAgentSessionTeardownTrigger(updateQuitInProgress ? 'update' : 'quit')
-    const structuredAgentSessionShutdown = stopStructuredAgentSessionRuntime()
+    const structuredAgentSessionShutdown = (
+      state.runtime?.stopPrFollowUps() ?? Promise.resolve()
+    ).then(() => stopStructuredAgentSessionRuntime())
     state.pluginService = null
     setUnreadDockBadgeCount(0)
     // Wait briefly for ref maintenance instead of killing mid-prune and stranding its lock; an orphan can finish safely.

@@ -14,7 +14,7 @@ import {
   enqueuePRRefresh,
   refreshPRNow,
   reportVisiblePRRefreshCandidates,
-  setPRRefreshOutcomeObserver,
+  addPRRefreshOutcomeObserver,
   setPRRefreshRegistrationCheck
 } from '../../github/pr-refresh-coordinator'
 import type { Store } from '../../persistence/loading-store/store'
@@ -45,7 +45,7 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
     }
   }
 
-  setPRRefreshOutcomeObserver((candidate, outcome) => {
+  addPRRefreshOutcomeObserver((candidate, outcome) => {
     const repo =
       store.getRepos().find((entry) => entry.id === candidate.repoId) ??
       store.getRepos().find((entry) => resolve(entry.path) === resolve(candidate.repoPath))

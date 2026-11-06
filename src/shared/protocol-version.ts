@@ -47,6 +47,7 @@ export const MIN_COMPATIBLE_RUNTIME_SERVER_VERSION = 2
 export * from './browser-runtime-capabilities'
 export * from './files-runtime-capabilities'
 export * from './host-runtime-capabilities'
+export { PR_FOLLOW_UPS_CAPABILITY } from './pr-follow-ups/settings'
 
 export * from './mobile-runtime-capabilities'
 export * from './preflight-runtime-capabilities'

@@ -1,3 +1,4 @@
+import type { PrFollowUpsGlobalSettings } from './pr-follow-ups/settings'
 import type { BrowserExtensionGlobalSettings } from './browser/extensions/browser-extension-settings'
 import type { ClaudeAgentViewSettings } from './claude-agent-view'
 import type { BrowserLinkOpeningSettings } from './browser-link-opening-settings'
@@ -39,4 +40,5 @@ export type GlobalSettingsBase = ClaudeAgentViewSettings &
   WindowMaterialSettings &
   EditorSaveSettings &
   BrowserPasswordsGlobalSettings &
-  NestedWorkerDepthSettings
+  NestedWorkerDepthSettings &
+  PrFollowUpsGlobalSettings

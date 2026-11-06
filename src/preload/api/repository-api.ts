@@ -1,3 +1,4 @@
+import type { PrFollowUpsPatch } from '../../shared/pr-follow-ups/settings'
 import type { RepoCreateFailure } from '../../shared/repo-create-failure-copy'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { GhAccountBinding } from '../../shared/github/account-binding'
@@ -70,6 +71,7 @@ export type RepositoryApi = {
     > & {
       externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
       agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
+      prFollowUpsPatch?: PrFollowUpsPatch
       sourceControlAi?: Repo['sourceControlAi'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       ghAccount?: GhAccountBinding | null

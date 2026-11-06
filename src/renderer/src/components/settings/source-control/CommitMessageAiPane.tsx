@@ -1,3 +1,4 @@
+import { PrFollowUpSettings } from '../../pr-follow-ups/PrFollowUpSettings'
 import { useRef } from 'react'
 import type React from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
@@ -316,6 +317,7 @@ export function CommitMessageAiPane({
         <p className="text-xs text-muted-foreground">{ownership.description}</p>
       </div>
       {sections}
+      <PrFollowUpSettings global={settings.prFollowUps} />
     </div>
   )
 }

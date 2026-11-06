@@ -1,4 +1,5 @@
 import {
+  nativeChatShowsCiResultLines,
   nativeChatShowsTurnDiffSummary,
   normalizeNativeChatAppearanceSettings,
   resetNativeChatAppearanceSettings,
@@ -49,6 +50,7 @@ export function AppearanceChatSection({
   const decrease = formatPrimaryShortcutLabel('zoom.out', keybindings)
   const entries = getChatAppearanceEntriesByKey({ increase, decrease })
   const changedFilesSummary = nativeChatShowsTurnDiffSummary(settings)
+  const ciResultLines = nativeChatShowsCiResultLines(settings)
   const update = (updates: NativeChatAppearanceSettings): void => {
     void writeNativeChatAppearance(
       (current) => normalizeNativeChatAppearanceSettings({ ...current, ...updates }),
@@ -139,6 +141,19 @@ export function AppearanceChatSection({
         />
       </SearchableSetting>
       <SearchableSetting
+        id={entries.ciResultLines.targetSectionId}
+        {...entries.ciResultLines}
+        forceVisible={forceVisiblePrimary}
+      >
+        <SettingsSwitchRow
+          label={entries.ciResultLines.title}
+          description={entries.ciResultLines.description}
+          checked={ciResultLines}
+          ariaLabel={entries.ciResultLines.title}
+          onChange={() => updateSettings({ nativeChatCiResultLines: !ciResultLines })}
+        />
+      </SearchableSetting>
+      <SearchableSetting
         id={entries.reset.targetSectionId}
         {...entries.reset}
         forceVisible={forceVisiblePrimary}
@@ -155,6 +170,9 @@ export function AppearanceChatSection({
                 // The changed files card is a separate key, but Reset restores every row above it.
                 if (!changedFilesSummary) {
                   updateSettings({ nativeChatTurnDiffSummary: true })
+                }
+                if (!ciResultLines) {
+                  updateSettings({ nativeChatCiResultLines: true })
                 }
               }}
             >

@@ -1,3 +1,4 @@
+import { PrFollowUpsPatch } from './pr-follow-up-params'
 import { z } from 'zod'
 import { isTaskProvider } from '../task-providers'
 import type { TaskProvider } from '../task-providers'
@@ -86,6 +87,7 @@ export const GitHubProjectSettings = z
 
 export const SettingsUpdate = z
   .object({
+    prFollowUpsPatch: PrFollowUpsPatch.optional(),
     machineName: z.string().trim().max(MACHINE_NAME_MAX_LENGTH).optional(),
     worktreeVisibilityDefaults: WorktreeVisibilityDefaultsUpdate.optional(),
     defaultTuiAgent: z

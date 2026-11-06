@@ -1,3 +1,4 @@
+import { patchPrFollowUps, type PrFollowUpsPatch } from '../../../shared/pr-follow-ups/settings'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -116,6 +117,7 @@ export class RepoUpdatePersistenceOperations {
     > & {
       externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
       agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
+      prFollowUpsPatch?: PrFollowUpsPatch
       sourceControlAi?: Repo['sourceControlAi'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       ghAccount?: GhAccountBinding | null
@@ -132,6 +134,10 @@ export class RepoUpdatePersistenceOperations {
     assertKindChangeKeepsFolderWorkspaces(repo, updates.kind, this.state.worktreeMeta)
     const previousGhAccount = repo.ghAccount
     const sanitizedUpdates = sanitizeRepoUpdatesForPersistence(updates)
+    if (sanitizedUpdates.prFollowUpsPatch) {
+      repo.prFollowUps = patchPrFollowUps(repo.prFollowUps, sanitizedUpdates.prFollowUpsPatch)
+      delete sanitizedUpdates.prFollowUpsPatch
+    }
     if (
       'executionHostId' in updates &&
       getRepoExecutionHostId({ ...repo, ...updates }) !== getRepoExecutionHostId(repo)

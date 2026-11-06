@@ -39,7 +39,11 @@ export type NotificationSettings = {
   notifyHiddenWorkspaces: boolean
 }
 
-export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'
+export type NotificationEventSource =
+  | 'agent-task-complete'
+  | 'terminal-bell'
+  | 'pr-followup-started'
+  | 'test'
 
 export type StructuredNotificationRead = StructuredAttentionRead & {
   paneKey: string
@@ -86,6 +90,8 @@ export type NotificationDispatchRequest = {
   worktreeLabel?: string
   /** Legacy senders may still provide this; project labels are now always shown. */
   hasMultipleActiveRepos?: boolean
+  prNumber?: number
+  failedCheckCount?: number
   terminalTitle?: string
   isActiveWorktree?: boolean
   agentType?: AgentType

@@ -1,3 +1,4 @@
+import { PrFollowUpRow } from '../../../pr-follow-ups/PrFollowUpRow'
 import { ImeInput } from '@/lib/ime-text-field'
 import React from 'react'
 import { Check, LoaderCircle, Pencil, X } from 'lucide-react'
@@ -135,6 +136,13 @@ export function ChecksPanelActiveContent({
           onLinkAnotherReview={handleLinkAnotherReview}
         />
 
+        {activeReview.provider === 'github' && activeWorktreeId && (
+          <PrFollowUpRow
+            worktreeId={activeWorktreeId}
+            repo={repo}
+            onFixChecks={() => void handleFixChecksWithAI()}
+          />
+        )}
         {detachedHeadDisplay && <DetachedHeadBadge display={detachedHeadDisplay} side="bottom" />}
 
         {activeReview.provider === 'github' && pr?.stack ? (

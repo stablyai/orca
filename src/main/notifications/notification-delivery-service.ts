@@ -164,10 +164,9 @@ export function createNotificationDeliveryService(
 
       const browserWindow = deps.findActiveWindow()
       if (
-        settings.suppressWhenFocused &&
-        request.isActiveWorktree &&
-        browserWindow &&
-        browserWindow.isFocused()
+        browserWindow?.isFocused() &&
+        (request.source === 'pr-followup-started' ||
+          (settings.suppressWhenFocused && request.isActiveWorktree))
       ) {
         return { delivered: false, reason: 'suppressed-focus' }
       }

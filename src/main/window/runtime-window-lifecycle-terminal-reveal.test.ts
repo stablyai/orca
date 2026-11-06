@@ -38,6 +38,7 @@ function attachWindow(id: number): {
     }
   }
   const runtime = {
+    onClientEvent: () => () => {},
     attachWindow: vi.fn(),
     markGraphReloadFailed: vi.fn(),
     setNotifier: (next: RuntimeNotifier | null) => {

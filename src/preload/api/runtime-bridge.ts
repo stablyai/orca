@@ -15,6 +15,11 @@ import type { PreloadApi } from '../api-types'
 export const runtimeApi = {
   syncWindowGraph: (graph: RuntimeRendererSyncWindowGraph): Promise<RuntimeSyncWindowGraphResult> =>
     ipcRenderer.invoke('runtime:syncWindowGraph', graph),
+  onPrFollowUpsChanged: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('runtime:prFollowUpsChanged', listener)
+    return () => ipcRenderer.removeListener('runtime:prFollowUpsChanged', listener)
+  },
   getStatus: (): Promise<RuntimeStatus> => ipcRenderer.invoke('runtime:getStatus'),
   call: (args: { method: string; params?: unknown }): Promise<RuntimeRpcResponse<unknown>> =>
     ipcRenderer.invoke('runtime:call', args),

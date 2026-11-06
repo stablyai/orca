@@ -28,6 +28,13 @@ export function buildNotificationOptions(
     }
   }
 
+  if (args.source === 'pr-followup-started') {
+    return {
+      title: `${formatAgentTypeLabel(args.terminalTitle)} is fixing checks${args.prNumber ? ` on #${args.prNumber}` : ''}`,
+      body: `${args.failedCheckCount ?? 0} ${args.failedCheckCount === 1 ? 'check' : 'checks'} failed in ${args.worktreeLabel ?? 'your workspace'}. Orca started an agent.`
+    }
+  }
+
   if (args.source === 'test') {
     return {
       title: translate('notifications.test.title', 'Orca notifications are on'),

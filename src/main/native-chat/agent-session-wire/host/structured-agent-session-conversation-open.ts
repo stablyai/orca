@@ -20,6 +20,7 @@ import '../termination/structured-agent-session-dead-generation-settlement'
 import { settleStaleStructuredAgentSessionState } from '../termination/structured-agent-session-stale-state-settlement'
 import { structuredAgentSessionFailureWordsContext } from '../operations/structured-agent-session-send-preparation'
 import { markStructuredQueueReopen } from '../delivery/structured-agent-session-queued-pause'
+import { deliverPendingPullRequestEvents } from '../../../github/pr-watch/pr-event-delivery'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
@@ -133,6 +134,21 @@ export async function openStructuredAgentSessionConversationJournal(
   // No local child writes unopened journals; settle the gone generation before readers/new children.
   if (!options.acquisition) {
     await settleGoneGeneration(deps, record, journal)
+  }
+  try {
+    // CI lines that landed while the chat was closed go in before any new turn can start.
+    await deliverPendingPullRequestEvents({
+      database: deps.journalDatabase,
+      journal,
+      sessionId,
+      fence
+    })
+  } catch (error) {
+    deps.logger.warn('appending CI lines on open failed', {
+      scope: 'open-pr-events',
+      sessionId,
+      error
+    })
   }
   return { session: { journal, params, child: null } }
 }
