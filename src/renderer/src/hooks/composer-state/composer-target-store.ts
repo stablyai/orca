@@ -1,7 +1,3 @@
-import {
-  selectCanonicalProjects,
-  selectCanonicalProjectHostSetups
-} from '@/store/project-host-setup-selector'
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
@@ -33,6 +29,7 @@ export type ComposerStateInput = {
   initialWorkspaceTarget?: WorkspaceCreationTargetHint | null
   initialWorkspaceStatus?: WorkspaceStatus
   initialBaseBranch?: string
+  initialParentWorktreeId?: string
   persistDraft: boolean
   onCreated?: () => void
   isSubmissionCancelled?: () => boolean
@@ -56,6 +53,7 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
     initialWorkspaceTarget = null,
     initialWorkspaceStatus,
     initialBaseBranch,
+    initialParentWorktreeId,
     persistDraft,
     onCreated,
     isSubmissionCancelled = NEVER_CANCEL_COMPOSER_SUBMIT,
@@ -98,11 +96,11 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
 
   const repos = useAppStore((s) => s.repos)
 
-  const projects = useAppStore((s) => selectCanonicalProjects(s))
+  const projects = useAppStore((s) => s.projects)
 
   const projectGroups = useAppStore((s) => s.projectGroups)
 
-  const projectHostSetups = useAppStore((s) => selectCanonicalProjectHostSetups(s))
+  const projectHostSetups = useAppStore((s) => s.projectHostSetups)
 
   const activeRepoId = useAppStore((s) => s.activeRepoId)
 
@@ -174,6 +172,7 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
     initialWorkspaceTarget,
     initialWorkspaceStatus,
     initialBaseBranch,
+    initialParentWorktreeId,
     persistDraft,
     onCreated,
     isSubmissionCancelled,

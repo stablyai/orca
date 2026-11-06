@@ -3,7 +3,7 @@ import { Text } from 'react-native'
 import {
   NATIVE_CHAT_MESSAGE_FULL_TIME_FORMAT,
   NATIVE_CHAT_MESSAGE_TIME_FORMAT
-} from '../../../../../src/shared/native-chat-message-time'
+} from '../../../../../src/shared/native-chat/transcript/native-chat-message-time'
 import { colors, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'

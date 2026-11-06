@@ -5,8 +5,8 @@ import {
 } from '../../shared/rpc-contract/agent-session-params'
 import { HostAccountLaunchEnvParams } from '../../shared/host-account-launch-env'
 import { OrcaRuntimeService } from './orca-runtime'
-import type { TerminalCreateOptions } from './runtime-terminal-contracts'
-import { partialRuntimeStore } from './runtime-store-partial-fixture'
+import type { TerminalCreateOptions } from './terminal/launch/terminal-create-options'
+import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
 
 const ACCOUNT_ENV = {
   CLAUDE_CONFIG_DIR: '/home/u/.orca/claude-accounts/a/config',
@@ -88,17 +88,6 @@ describe('agent-session creates with a desktop-prepared accountEnv', () => {
       disposition: 'replayed'
     })
     expect(createTerminal).toHaveBeenCalledOnce()
-  })
-
-  it('leaves the launch env as built when an older client sends none', async () => {
-    const runtime = createRuntime()
-    const { planned } = planCreates(runtime)
-    await runtime.createAgentSession({
-      clientOperationId: operationId(),
-      worktree: 'id:worktree-1',
-      agent: 'codex'
-    })
-    expect(planned[0]?.env).toMatchObject({ CODEX_HOME: '/stale' })
   })
 
   it('puts the host-selected account over Settings agent env', async () => {

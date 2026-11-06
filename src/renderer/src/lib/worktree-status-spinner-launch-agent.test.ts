@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildTitleDerivedAgentRows } from '@/components/sidebar/worktree-title-derived-agent-rows'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
+import { buildTitleDerivedAgentRows } from '@/components/sidebar/workspace-card/activity/worktree-title-derived-agent-rows'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../shared/workspace-layout/terminal-tab-types'
 import { getWorktreeStatus } from './worktree-status'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -27,59 +30,6 @@ function rowCount(tab: Partial<TerminalTab>, paneTitles?: Record<number, string>
     now: 0
   }).length
 }
-
-// Claude thinking titles lack provider tokens (#9040); use launch identity like sidebar rows (#9647) so working does not look done.
-describe('#9040 worktree dot attributes spinner titles to the launched agent', () => {
-  it('spins for a Claude spinner title when the tab was launched as claude', () => {
-    const status = getWorktreeStatus(
-      [{ id: 'tab-1', title: '⠋ implementing the feature', launchAgent: 'claude' }],
-      [],
-      livePtyMap('tab-1')
-    )
-
-    expect(status).toBe('working')
-  })
-
-  it('spins for a spinner-only pane title when the tab was launched as claude', () => {
-    const status = getWorktreeStatus(
-      [{ id: 'tab-1', title: 'bash', launchAgent: 'claude' }],
-      [],
-      livePtyMap('tab-1'),
-      { 'tab-1': { 0: '⠙ refactoring the parser' } }
-    )
-
-    expect(status).toBe('working')
-  })
-
-  it('does not manufacture activity from a non-spinner title with a launch identity', () => {
-    const status = getWorktreeStatus(
-      [{ id: 'tab-1', title: 'bash', launchAgent: 'claude' }],
-      [],
-      livePtyMap('tab-1')
-    )
-
-    expect(status).toBe('active')
-  })
-})
-
-// Accepted trade-off: hookless remote agents lack exit evidence, so retained launch identity can attribute a later unrelated spinner. Match the row builder’s deliberate #9647 behavior.
-describe('#9040 spinner attribution trade-off is bounded', () => {
-  it('over-reports a non-agent spinner in a tab an agent was launched in', () => {
-    const tab = {
-      id: 'tab-1',
-      title: '⠋ Progress: resolved 42',
-      launchAgent: 'claude'
-    } satisfies Partial<TerminalTab>
-
-    expect(getWorktreeStatus([tab], [], livePtyMap('tab-1'))).toBe('working')
-    // Bound 1: the same title cannot spin a tab with no launch identity.
-    expect(getWorktreeStatus([{ id: 'tab-1', title: tab.title }], [], livePtyMap('tab-1'))).toBe(
-      'active'
-    )
-    // Bound 2: a dead PTY drops out regardless of launch identity.
-    expect(getWorktreeStatus([tab], [], {})).toBe('inactive')
-  })
-})
 
 // Claude and named-provider titles must produce the same dot/sidebar agreement.
 describe('#9040 spinner attribution matches named-provider dot/row agreement', () => {

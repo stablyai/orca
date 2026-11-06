@@ -1,41 +1,15 @@
 import type { Repo } from '../../../src/shared/repo-types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../src/shared/execution-host'
 import {
-  projectHostSetupProjectionFromRepos,
+  getProjectIdentityKey,
   getProjectProviderIdentity
 } from '../../../src/shared/project-host-setup-projection'
-import { getRepoHostIdentity } from '../../../src/shared/repo-host-identity'
 import { getHostContextLabel } from '../../../src/shared/worktree/host-context-labels'
 
 type WorkspaceRepo = Pick<Repo, 'id' | 'displayName' | 'path'> &
   Partial<
-    Pick<
-      Repo,
-      | 'connectionId'
-      | 'executionHostId'
-      | 'upstream'
-      | 'repoIcon'
-      | 'gitRemoteIdentity'
-      | 'addedAt'
-      | 'projectHostSetupMethod'
-      | 'kind'
-    >
+    Pick<Repo, 'connectionId' | 'executionHostId' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
   >
-
-export function getNewWorkspaceProjectIds(
-  repos: readonly WorkspaceRepo[]
-): ReadonlyMap<string, string> {
-  const projection = projectHostSetupProjectionFromRepos(
-    repos.map((repo) => ({
-      badgeColor: '',
-      addedAt: 0,
-      ...repo
-    }))
-  )
-  return new Map(
-    projection.setups.map((setup, index) => [getRepoHostIdentity(repos[index]), setup.projectId])
-  )
-}
 
 export type NewWorkspaceProjectOption<TRepo extends WorkspaceRepo> = {
   id: string
@@ -53,16 +27,12 @@ export type NewWorkspaceRunTargetOption<TRepo extends WorkspaceRepo> = {
 }
 
 export function buildNewWorkspaceProjectOptions<TRepo extends WorkspaceRepo>(
-  repos: readonly TRepo[],
-  projectIds = getNewWorkspaceProjectIds(repos)
+  repos: readonly TRepo[]
 ): NewWorkspaceProjectOption<TRepo>[] {
   const options = new Map<string, NewWorkspaceProjectOption<TRepo>>()
   const hostIdsByProject = new Map<string, Set<string>>()
   for (const repo of repos) {
-    if (!repo.path) {
-      continue
-    }
-    const id = projectIds.get(getRepoHostIdentity(repo))!
+    const id = getProjectIdentityKey(repo)
     const hostIds = hostIdsByProject.get(id) ?? new Set<string>()
     hostIds.add(getRepoExecutionHostId(repo))
     hostIdsByProject.set(id, hostIds)
@@ -110,15 +80,14 @@ export function buildNewWorkspaceRunTargetOptions<TRepo extends WorkspaceRepo>(
   repos: readonly TRepo[],
   projectId: string | null,
   localPlatform: NodeJS.Platform | null = null,
-  hostLabelById?: ReadonlyMap<ExecutionHostId, string>,
-  projectIds = getNewWorkspaceProjectIds(repos)
+  hostLabelById?: ReadonlyMap<ExecutionHostId, string>
 ): NewWorkspaceRunTargetOption<TRepo>[] {
   if (!projectId) {
     return []
   }
   const options = new Map<string, NewWorkspaceRunTargetOption<TRepo>>()
   for (const repo of repos) {
-    if (!repo.path || projectIds.get(getRepoHostIdentity(repo)) !== projectId) {
+    if (getProjectIdentityKey(repo) !== projectId) {
       continue
     }
     const hostId = getRepoExecutionHostId(repo)

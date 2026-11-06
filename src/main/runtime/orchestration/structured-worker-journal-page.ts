@@ -1,6 +1,6 @@
 /** Share newest-first journal reads; filter to the worker's own conversation before limiting so child bursts cannot crowd it out. */
 
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 
 export const STRUCTURED_JOURNAL_PAGE_LIMIT = 200

@@ -1,6 +1,7 @@
 import { hookScreenMount } from '../mounted-screen-tree'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
+import type * as MobileNativeChatSessionModule from '../../../session/native-chat/use-mobile-native-chat-session'
 
 const SOURCE_IDENTITY = 'host-1::repo-1::/work/feature'
 const AGENT = 'claude'
@@ -13,9 +14,9 @@ export function nativeChatPagingMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'session.native-chat-page': ({ client, effect }) => {
-      const useMobileNativeChatSession = modules.load<
-        typeof import('../../../session/use-mobile-native-chat-session')
-      >('mobile/src/session/use-mobile-native-chat-session.ts').useMobileNativeChatSession
+      const useMobileNativeChatSession = modules.load<typeof MobileNativeChatSessionModule>(
+        'mobile/src/session/native-chat/use-mobile-native-chat-session.ts'
+      ).useMobileNativeChatSession
       let value: ReturnType<typeof useMobileNativeChatSession> | undefined
       const screen = hookScreenMount(() => {
         value = useMobileNativeChatSession({

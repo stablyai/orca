@@ -9,7 +9,7 @@ import {
   findRegisteredTerminalTab,
   type RegisteredTerminalTab
 } from '../mounted-terminal-tab-registry'
-import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 
 export function narrowRecordByKeys<T>(
   source: Record<string, T> | undefined,
@@ -138,6 +138,7 @@ export function canReuseMobileSessionSnapshot(
   next: MobileSessionWorktreeInputs
 ): boolean {
   return (
+    narrowedEntriesEqual(previous.hostTabIds, next.hostTabIds) &&
     previous.worktreeId === next.worktreeId &&
     previous.worktreeInstanceId === next.worktreeInstanceId &&
     previous.terminalTabs === next.terminalTabs &&

@@ -1,12 +1,12 @@
 import {
   getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment
-} from '../../shared/runtime-environments'
+} from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import { sendRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'
-import { verifyRemotePairingRuntimeStatus } from '../../shared/remote-pairing-verification'
+import { verifyRemotePairingRuntimeStatus } from '../../shared/remote-runtime/pairing/remote-pairing-verification'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import type { RuntimeStatus } from '../../shared/runtime-types'
-import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 
 export const RUNTIME_IDENTITY_MISMATCH_MESSAGE =
   'The endpoint does not match this paired runtime identity.'

@@ -1,4 +1,4 @@
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { markdownFileIdCandidates } from '../../orca-profiles/profile-session-markdown-transfer'
 import { removeWorkspaceSessionOwners } from '../restoring-sessions/session-owner-removal'
 import {

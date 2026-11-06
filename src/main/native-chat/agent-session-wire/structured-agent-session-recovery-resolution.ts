@@ -6,11 +6,11 @@ import {
   isProvenAliveProbe,
   isProvenDeadProbe,
   type AgentSessionOwnerProbe
-} from '../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+} from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../../provider-process/provider-process-supervisor'
 import { releaseUnprovenAgentSessionOwner } from '../../runtime/agent-session/ownership/agent-session-lease-transitions'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 
 export type StructuredSessionRecoveryStopSignal = 'SIGTERM' | 'SIGKILL'
 

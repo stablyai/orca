@@ -1,12 +1,15 @@
 import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
-import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type {
+  StructuredAgentSessionForkSource,
+  StructuredAgentSessionResumeSource
+} from '../../../shared/agent-session/structured-agent-session-create'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   isLocalExecutionHost,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { StructuredAgentSessionOwnerUnresolvedError } from '@/lib/launch-structured-agent-session'
@@ -29,7 +32,7 @@ import {
   type StructuredAgentLaunchHooks,
   type StructuredAgentLaunchSettlement
 } from '@/lib/structured-agent-launch-settlement'
-import type { StructuredAgentLaunchOptions } from '@/lib/structured-agent-session-launch'
+import type { StructuredAgentLaunchOptions } from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
 import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { relearnHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { awaitLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
@@ -41,15 +44,20 @@ export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
   requestedSurface?: AgentLaunchSurface
   selectedExecutionHostId?: ExecutionHostId
   resumeFrom?: StructuredAgentSessionResumeSource
+  forkFrom?: StructuredAgentSessionForkSource
   onPromptDelivered?: () => void
   /** The caller keeps the prompt's text if it does not go out (notes), so no composer gets it. */
   promptKeptByCaller?: true
   /** Options this launch asks for over the saved chat defaults, e.g. an action's model. */
   launchOptions?: Readonly<Record<string, string>>
+  chatLaunchOptions?: Readonly<Record<string, string>>
 }
 
 /** Carry the decided route and delivery fields in memory so post-create launches and same-session retries reuse them without re-resolving. */
-export type AgentSessionLaunchVerdict = {
+export type AgentSessionLaunchVerdict = Pick<
+  StructuredAgentLaunchOptions,
+  'promptAttachments' | 'promptSkills' | 'preparePrompt'
+> & {
   route: AgentLaunchRoute
   requestedSurface?: AgentLaunchSurface
   requestId: AgentLaunchRequestId
@@ -59,9 +67,12 @@ export type AgentSessionLaunchVerdict = {
   prompt?: string
   promptDelivery?: NativeChatLaunchPromptDelivery
   resumeFrom?: StructuredAgentSessionResumeSource
+  forkFrom?: StructuredAgentSessionForkSource
   onPromptDelivered?: () => void
   promptKeptByCaller?: true
+  draftFromScope?: string
   launchOptions?: Readonly<Record<string, string>>
+  chatLaunchOptions?: Readonly<Record<string, string>>
 }
 
 export type AgentSessionStructuredFeasibilityRequest = AgentLaunchRouteArgs & {
@@ -94,12 +105,19 @@ function structuredLaunchOptions(verdict: AgentSessionLaunchVerdict): Structured
   return {
     requestId: verdict.requestId,
     ...(verdict.prompt !== undefined ? { prompt: verdict.prompt } : {}),
+    ...(verdict.promptAttachments?.length ? { promptAttachments: verdict.promptAttachments } : {}),
+    ...(verdict.promptSkills?.length ? { promptSkills: verdict.promptSkills } : {}),
+    ...(verdict.preparePrompt ? { preparePrompt: verdict.preparePrompt } : {}),
     ...(verdict.promptDelivery ? { promptDelivery: verdict.promptDelivery } : {}),
     ...(verdict.resumeFrom ? { resumeFrom: verdict.resumeFrom } : {}),
+    ...(verdict.forkFrom ? { forkFrom: verdict.forkFrom } : {}),
     ...(verdict.onPromptDelivered ? { onPromptDelivered: verdict.onPromptDelivered } : {}),
     ...(verdict.promptKeptByCaller ? { promptKeptByCaller: true as const } : {}),
+    ...(verdict.draftFromScope ? { draftFromScope: verdict.draftFromScope } : {}),
     ...(verdict.executionHostId ? { executionHostId: verdict.executionHostId } : {}),
-    ...(verdict.launchOptions ? { launchOptions: verdict.launchOptions } : {})
+    ...(verdict.chatLaunchOptions !== undefined || verdict.launchOptions !== undefined
+      ? { launchOptions: verdict.chatLaunchOptions ?? verdict.launchOptions }
+      : {})
   }
 }
 
@@ -146,6 +164,13 @@ function beginStructuredPlanLaunch(
 export function adoptAgentSessionLaunchVerdict(
   verdict: AgentSessionLaunchVerdict
 ): AgentSessionLaunchPlan {
+  verdict = {
+    ...verdict,
+    ...(verdict.launchOptions !== undefined ? { launchOptions: { ...verdict.launchOptions } } : {}),
+    ...(verdict.chatLaunchOptions !== undefined
+      ? { chatLaunchOptions: { ...verdict.chatLaunchOptions } }
+      : {})
+  }
   return {
     ...verdict,
     begin: (hooks, target) => beginStructuredPlanLaunch(verdict, hooks, target),
@@ -289,8 +314,12 @@ export function planAgentSessionLaunch(
     ...(request.prompt !== undefined ? { prompt: request.prompt } : {}),
     ...(request.promptDelivery ? { promptDelivery: request.promptDelivery } : {}),
     ...(request.resumeFrom ? { resumeFrom: request.resumeFrom } : {}),
+    ...(request.forkFrom ? { forkFrom: request.forkFrom } : {}),
     ...(request.onPromptDelivered ? { onPromptDelivered: request.onPromptDelivered } : {}),
     ...(request.promptKeptByCaller ? { promptKeptByCaller: true as const } : {}),
-    ...(request.launchOptions ? { launchOptions: request.launchOptions } : {})
+    ...(request.launchOptions ? { launchOptions: request.launchOptions } : {}),
+    ...(request.chatLaunchOptions !== undefined
+      ? { chatLaunchOptions: request.chatLaunchOptions }
+      : {})
   })
 }

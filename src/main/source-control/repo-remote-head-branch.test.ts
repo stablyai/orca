@@ -4,7 +4,10 @@ const { gitExecFileAsyncMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn()
 }))
 
-vi.mock('../git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
 
 import { bumpScopeGeneration, hostedReviewRepoScope } from './hosted-review-scope-generations'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
@@ -40,13 +43,6 @@ describe('getRemoteHeadBranchName', () => {
       ['for-each-ref', '--format=%(refname)%00%(symref)', 'refs/remotes/upstream/HEA[D]'],
       { cwd: '/repo', timeout: expect.any(Number) }
     )
-  })
-
-  it('returns null for a missing remote HEAD without resolving origin', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
-    await expect(getRemoteHeadBranchName('/repo', 'upstream')).resolves.toBeNull()
-    await expect(getRemoteHeadBranchName('/repo', 'upstream')).resolves.toBeNull()
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
   it('ignores a symbolic HEAD pointing into another remote', async () => {

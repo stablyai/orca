@@ -1,8 +1,17 @@
 import type { OpenInApplication } from './ui-chrome-types'
 
 export const OPEN_IN_APPLICATIONS_MAX = 8
+export const BUILT_IN_EDITOR_COMMANDS = {
+  vscode: 'code',
+  cursor: 'cursor',
+  zed: 'zed',
+  // Devin Desktop (formerly Windsurf) installs this launcher; `devin` is the Devin CLI agent.
+  'devin-desktop': 'devin-desktop'
+} as const
+export type BuiltInEditorId = keyof typeof BUILT_IN_EDITOR_COMMANDS
+
 export const DEFAULT_OPEN_IN_APPLICATIONS: OpenInApplication[] = [
-  { id: 'vscode', label: 'VS Code', command: 'code' }
+  { id: 'vscode', label: 'VS Code', command: BUILT_IN_EDITOR_COMMANDS.vscode }
 ]
 
 type NormalizeOpenInApplicationsOptions = {

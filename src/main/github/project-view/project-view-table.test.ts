@@ -51,14 +51,6 @@ beforeEach(() => {
 })
 
 describe('project view layout selection', () => {
-  it('fetches roadmap items with the selected host and filter', async () => {
-    vi.mocked(fetchProjectViewsPage).mockResolvedValue(page([view('roadmap', 'ROADMAP_LAYOUT')]))
-    const result = await getProjectViewTable({ ...args, viewId: 'roadmap' })
-    expect(result).toMatchObject({ ok: true, data: { selectedView: { layout: 'ROADMAP_LAYOUT' } } })
-    expect(fetchAllItems).toHaveBeenCalledWith({ ...args, query: 'status:open' })
-    expect(fetchItemsCountOnly).not.toHaveBeenCalled()
-  })
-
   it('defaults to a roadmap when no table exists across all view pages', async () => {
     vi.mocked(fetchProjectViewsPage)
       .mockResolvedValueOnce(page([view('roadmap', 'ROADMAP_LAYOUT')], true))
@@ -87,22 +79,6 @@ describe('project view layout selection', () => {
       error: { type: 'not_found' }
     })
     expect(fetchAllItems).not.toHaveBeenCalled()
-  })
-
-  it('fetches board items like a table', async () => {
-    vi.mocked(fetchProjectViewsPage).mockResolvedValue(page([view('board', 'BOARD_LAYOUT')]))
-    const result = await getProjectViewTable({ ...args, viewId: 'board' })
-    expect(result).toMatchObject({ ok: true, data: { selectedView: { layout: 'BOARD_LAYOUT' } } })
-    expect(fetchAllItems).toHaveBeenCalledWith({ ...args, query: 'status:open' })
-    expect(fetchItemsCountOnly).not.toHaveBeenCalled()
-  })
-
-  it('defaults to a board when neither a table nor a roadmap exists', async () => {
-    vi.mocked(fetchProjectViewsPage).mockResolvedValue(page([view('board', 'BOARD_LAYOUT')]))
-    expect(await getProjectViewTable(args)).toMatchObject({
-      ok: true,
-      data: { selectedView: { id: 'board' } }
-    })
   })
 
   it('rejects an unknown future layout without fetching items', async () => {

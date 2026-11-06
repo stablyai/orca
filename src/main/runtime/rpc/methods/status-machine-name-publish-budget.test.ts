@@ -2,9 +2,9 @@ import os from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { normalizeMachineName } from '../../../../shared/machine-name'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import { MACHINE_NAME_PUBLISH_WAIT_MS } from '../../runtime-machine-name'
+import { MACHINE_NAME_PUBLISH_WAIT_MS } from '../../hosts/platform-probe/runtime-machine-name'
 import { STATUS_METHODS } from './status'
-import { partialRuntimeStore } from '../../runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
 
 // Use a fresh process before its memoized scutil lookup completes; control completion to exercise the publish deadline.
 const runProcessMock = vi.hoisted(() => vi.fn())
@@ -17,6 +17,7 @@ vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp') }
 }))
 
+const SCUTIL = '/usr/sbin/scutil'
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
 
 describe('status.get publish budget', () => {
@@ -30,18 +31,20 @@ describe('status.get publish budget', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     vi.useFakeTimers()
     let finishLookup: ((value: unknown) => void) | undefined
-    runProcessMock.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          finishLookup = resolve
-        })
+    // Hold only scutil; the hardware probe that shares this mock fails fast.
+    runProcessMock.mockImplementation((spec: { program: string }) =>
+      spec.program === SCUTIL
+        ? new Promise((resolve) => {
+            finishLookup = resolve
+          })
+        : Promise.resolve({ code: 1, signal: null, stdout: '', stderr: '', timedOut: false })
     )
     const runtime = new OrcaRuntimeService(partialRuntimeStore({ getSettings: () => ({}) }))
     expect(finishLookup).toBeTypeOf('function')
     const hostname = normalizeMachineName(os.hostname())
 
     // The lookup outlives the budget: the answer is the hostname, not a probe that reads as "down".
-    const pending = STATUS_METHODS[0].handler(undefined, { runtime })
+    const pending = STATUS_METHODS[0].handler({}, { runtime })
     await vi.advanceTimersByTimeAsync(MACHINE_NAME_PUBLISH_WAIT_MS)
     await expect(pending).resolves.toMatchObject({ machineName: hostname })
 
@@ -53,9 +56,9 @@ describe('status.get publish budget', () => {
       stderr: '',
       timedOut: false
     })
-    await expect(STATUS_METHODS[0].handler(undefined, { runtime })).resolves.toMatchObject({
+    await expect(STATUS_METHODS[0].handler({}, { runtime })).resolves.toMatchObject({
       machineName: 'Friendly Name'
     })
-    expect(runProcessMock).toHaveBeenCalledTimes(1)
+    expect(runProcessMock.mock.calls.filter(([spec]) => spec.program === SCUTIL)).toHaveLength(1)
   })
 })

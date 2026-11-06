@@ -1,4 +1,3 @@
-import { isRepoBackedProjectHostSetup } from '../persistence/tracking-repos/project-host-compatibility'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../shared/constants'
@@ -11,7 +10,7 @@ import { carryProjectStateThroughIdentityChange } from '../../shared/project-ide
 import type { PersistedState } from '../../shared/persisted-state-types'
 import type { Project, ProjectHostSetup } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type { SparsePreset } from '../../shared/worktree/create-types'
 import type { RetiredNameRegistry } from '../../shared/worktree/retired-name-registry'
 import { getOrcaProfileDataFile, getOrcaProfileStateDatabaseFile } from './profile-index-store'
@@ -119,8 +118,11 @@ export function normalizeProfileProjectState(
   parsed: Partial<PersistedState>
 ): TransferProfileState {
   const defaults = getDefaultPersistedState(homedir())
-  const { uiLanguagePortugueseMigrationApplied: _migrationApplied, ...settingsDefaults } =
-    defaults.settings
+  const {
+    uiLanguagePortugueseMigrationApplied: _migrationApplied,
+    nestedWorkerMaxDepthDefaultedToFour: _depthMigrated,
+    ...settingsDefaults
+  } = defaults.settings
   return rebuildRepoBackedProjectState({
     ...defaults,
     ...parsed,
@@ -220,12 +222,16 @@ export function writeSerializedProfileState(
   }
 }
 
+function isRepoBackedProjectHostSetup(
+  setup: ProjectHostSetup,
+  currentRepoIds: ReadonlySet<string>
+): boolean {
+  return Boolean(setup.repoId && currentRepoIds.has(setup.repoId))
+}
+
 export function rebuildRepoBackedProjectState(state: TransferProfileState): TransferProfileState {
   const projection = projectHostSetupProjectionFromRepos(state.repos)
-  const succession = carryProjectStateThroughIdentityChange(projection.projects, state.projects, {
-    previous: state.projectHostSetups,
-    current: projection.setups
-  })
+  const succession = carryProjectStateThroughIdentityChange(projection.projects, state.projects)
   const currentRepoIds = new Set(state.repos.map((repo) => repo.id))
   const projectedProjectIds = new Set(projection.projects.map((project) => project.id))
   const projectedSetupIds = new Set(projection.setups.map((setup) => setup.id))

@@ -1,4 +1,4 @@
-import type { NativeChatBlock, NativeChatMessage } from '../native-chat-types'
+import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 
 type ProviderFrameTextBlock = Extract<NativeChatBlock, { type: 'text' }>
 

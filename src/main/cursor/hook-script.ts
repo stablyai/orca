@@ -14,7 +14,7 @@ import {
   buildPosixGrokReplayGuardLines,
   buildWindowsGrokReplayGuardLines
 } from '../agent-hooks/grok-replay-guard'
-import { quoteStartupArg } from '../../shared/tui-agent-startup-shell'
+import { quoteStartupArg } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { getCursorHookResponse, type CursorEvent } from './hook-events'
 
 const CURSOR_HOOK_RESPONSE_ENV = 'ORCA_CURSOR_HOOK_RESPONSE'

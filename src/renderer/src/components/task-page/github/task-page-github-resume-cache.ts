@@ -7,6 +7,7 @@ export const TASK_PAGE_GITHUB_RESUME_FRESH_MS = 30_000
 type CachedPage<T> = {
   items: readonly T[]
   cachedAt: number
+  owners: readonly number[]
   lastAccessedAt: number
 }
 
@@ -30,7 +31,14 @@ export function buildTaskPageGitHubResumeContextKey(args: {
 
 export function createTaskPageResumePageCache<T>(options: TaskPageResumePageCacheOptions = {}): {
   read: (contextKey: string, page: number, now?: number) => TaskPageResumeCachedPage<T> | null
-  write: (contextKey: string, page: number, items: readonly T[], now?: number) => void
+  write: (
+    contextKey: string,
+    page: number,
+    items: readonly T[],
+    now?: number,
+    owners?: readonly number[]
+  ) => void
+  retireOwner: (owner: number) => void
   clear: () => void
   size: () => number
 } {
@@ -59,17 +67,24 @@ export function createTaskPageResumePageCache<T>(options: TaskPageResumePageCach
       entries.set(key, { ...entry, lastAccessedAt: now })
       return { items: [...entry.items], cachedAt: entry.cachedAt }
     },
-    write(contextKey, page, items, now = Date.now()) {
+    write(contextKey, page, items, now = Date.now(), owners = []) {
       pruneExpired(now)
       const key = keyFor(contextKey, page)
       entries.delete(key)
-      entries.set(key, { items: [...items], cachedAt: now, lastAccessedAt: now })
+      entries.set(key, { items: [...items], cachedAt: now, lastAccessedAt: now, owners })
       while (entries.size > maxEntries) {
         const oldestKey = entries.keys().next().value
         if (oldestKey === undefined) {
           break
         }
         entries.delete(oldestKey)
+      }
+    },
+    retireOwner(owner) {
+      for (const [key, entry] of entries) {
+        if (entry.owners.includes(owner)) {
+          entries.delete(key)
+        }
       }
     },
     clear() {

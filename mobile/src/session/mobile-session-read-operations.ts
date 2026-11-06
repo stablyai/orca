@@ -1,5 +1,6 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { terminalComposerDraftSchema } from '../terminal/terminal-reply-schema'
 import {
   detectedAgentsSchema,
   markdownTabDocumentSchema,
@@ -12,6 +13,16 @@ import {
   terminalQuickCommandsSchema,
   workspaceFilePathsSchema
 } from './session-read-reply-schema'
+
+export const nativeChatTerminalDraftRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'terminal.native-chat-draft',
+    method: 'terminal.read',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('terminal-composer-draft', terminalComposerDraftSchema)
+  })
+)
 
 // Skip refused inventories as no news; an empty list would erase the existing strip.
 export const sessionTerminalListRead = bindDeferredRpcOperation(

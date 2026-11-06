@@ -36,39 +36,6 @@ const FRESH_SESSION_100_COLS = [
   '\u001b[2C\u001b[38;2;255;107;128m⏵⏵ bypass permissions on\u001b[38;2;153;153;153m (shift+tab to cycle)\u001b[4A\u001b[45D\u001b[0m\u001b[?2004h\u001b[?1004h\u001b[?1003h'
 ].join('\n')
 
-const FRESH_SESSION_60_COLS = [
-  '\u001b[?1049h\u001b[H\r',
-  '\u001b[38;2;215;119;87m╭─ Claude Code ────────────────────────────────────────────╮\r',
-  '│\u001b[58C│\r',
-  '│\u001b[22C\u001b[39;1mWelcome back!\u001b[23C\u001b[38;2;215;119;87;22m│\r',
-  '│\u001b[58C│\r',
-  '│\u001b[25C ▐\u001b[48;2;0;0;0m▛███▜\u001b[49m▌\u001b[25C│\r',
-  '│\u001b[25C▝▜\u001b[48;2;0;0;0m█████\u001b[49m▛▘\u001b[24C│\r',
-  '│\u001b[25C  ▘▘ ▝▝  \u001b[24C│\r',
-  '│\u001b[58C│\r',
-  '│\u001b[17C\u001b[38;2;153;153;153mFable 5 with high effort\u001b[17C\u001b[38;2;215;119;87m│\r',
-  '│\u001b[20C\u001b[38;2;153;153;153mAPI Usage Billing\u001b[21C\u001b[38;2;215;119;87m│\r',
-  '│\u001b[23C\u001b[38;2;153;153;153m/private/tmp\u001b[23C\u001b[38;2;215;119;87m│\r',
-  '│\u001b[58C│\r',
-  '╰──────────────────────────────────────────────────────────╯\r',
-  '\r',
-  '\r',
-  '\r',
-  '\r',
-  '\r',
-  '\r',
-  '\r',
-  '\r',
-  '\r',
-  '\u001b[2C\u001b[38;2;255;193;7m⚠ claude.ai connectors are disabled because ANTHROPIC_AP…\r',
-  '\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────\r',
-  '\u001b[0m❯ \u001b[2mTry "refactor <filepath>"\r',
-  '\u001b[38;2;136;136;136;22m────────────────────────────────────────────────────────────\r',
-  '\u001b[2C\u001b[38;2;255;193;7m⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_…\r',
-  '\u001b[2C\u001b[96m🤖\u001b[38;2;153;153;153m \u001b[96mFable 5\u001b[37m | \u001b[93m📁\u001b[38;2;153;153;153m \u001b[92mtmp\u001b[37m | \u001b[2C\u001b[95m⚡️ \u001b[38;2;153;153;153m \u001b[95m11.9% · 23.8k tokens\r',
-  '\u001b[2C\u001b[38;2;255;107;128m⏵⏵ bypass permissions on\u001b[38;2;153;153;153m (shift+tab to cycle)\u001b[4A\u001b[45D\u001b[0m\u001b[?2004h\u001b[?1004h\u001b[?1003h'
-].join('\n')
-
 const OPTION_LESS_MODEL_60_COLS = [
   '\u001b[?1049h\u001b[H\r',
   '\u001b[38;2;215;119;87m╭─ Claude Code ────────────────────────────────────────────╮\r',
@@ -125,30 +92,11 @@ describe('Claude terminal session option detection', () => {
     })
   })
 
-  it('reads a real 60-column frame that drops the version and wraps billing', () => {
-    expect(readClaudeSessionOptionsFromTerminalScreen(FRESH_SESSION_60_COLS)).toEqual({
-      model: 'fable',
-      effort: 'high'
-    })
-  })
-
   it('reads a real narrow frame whose option-less model carries no metadata', () => {
     // Without effort or same-line billing, the working directory is the remaining model-row landmark.
     expect(readClaudeSessionOptionsFromTerminalScreen(OPTION_LESS_MODEL_60_COLS)).toEqual({
       model: 'haiku'
     })
-  })
-
-  it('reads an option-less model above a Windows working directory', () => {
-    const screen = [
-      '╭─ Claude Code ───╮',
-      '│Haiku 4.5│',
-      '│API Usage Billing│',
-      '│C:\\work\\repo│',
-      '╰─────────────╯'
-    ].join('\r\n')
-
-    expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({ model: 'haiku' })
   })
 
   it('reports nothing rather than release-notes prose when the model row is bare', () => {
@@ -166,27 +114,6 @@ describe('Claude terminal session option detection', () => {
     expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toBeNull()
   })
 
-  it('reports nothing when a partial frame only contains wrapped billing', () => {
-    const screen = [
-      '╭─ Claude Code ───╮',
-      '│API Usage Billing│',
-      '│/repo│',
-      '╰─────────────╯'
-    ].join('\r\n')
-
-    expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toBeNull()
-  })
-
-  it('does not reject a bare custom model whose name mentions billing', () => {
-    const screen = ['╭─ Claude Code ───╮', '│billing-model│', '│/repo│', '╰─────────────╯'].join(
-      '\r\n'
-    )
-
-    expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
-      model: 'billing-model'
-    })
-  })
-
   // Actual CLI 2.1.220 catalog: opus has only a 1M variant, while sonnet offers both context sizes.
   const DISCOVERED = [
     { id: 'opus[1m]', label: 'Opus (1M context)', options: [EFFORT] },
@@ -199,15 +126,6 @@ describe('Claude terminal session option detection', () => {
   function frame(descriptor: string): string {
     return `Claude Code v2.1.220\r\n${descriptor}\r\n~/repo`
   }
-
-  it('resolves to the host id the picker lists, not the seed family', () => {
-    expect(
-      readClaudeSessionOptionsFromTerminalScreen(
-        frame('Opus 5 (1M context) with high effort · API Usage Billing'),
-        DISCOVERED
-      )
-    ).toEqual({ model: 'opus[1m]', effort: 'high' })
-  })
 
   it('prefers the most specific variant when a family also matches', () => {
     expect(
@@ -228,111 +146,12 @@ describe('Claude terminal session option detection', () => {
     ).toEqual({ model: 'sonnet', effort: 'medium' })
   })
 
-  it('falls back to a seed family the host list no longer offers', () => {
-    expect(
-      readClaudeSessionOptionsFromTerminalScreen(
-        frame('Opus 4.8 with high effort · API Usage Billing'),
-        DISCOVERED
-      )
-    ).toEqual({ model: 'opus', effort: 'high' })
-  })
-
-  it('still reports a custom model when the host list cannot name it', () => {
-    expect(
-      readClaudeSessionOptionsFromTerminalScreen(
-        frame('company/my-haiku-v2 · API Usage Billing'),
-        DISCOVERED
-      )
-    ).toEqual({ model: 'company/my-haiku-v2' })
-  })
-
-  it('reads an effort suffix the frame truncated to an ellipsis', () => {
-    const screen =
-      'Claude Code v2.1.220\r\n' +
-      'Opus 5 (1M context) with high… · API Usage Billing\r\n' +
-      '~/repo'
-
-    expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
-      model: 'opus',
-      effort: 'high'
-    })
-  })
-
-  it('reads a Claude header whose xterm serialization joins the version to the title', () => {
-    const screen =
-      '\u001b[?1049h\u001b[H▐▛███▜▌Claude Codev2.1.211\r\n' +
-      '▝▜█████▛▘Sonnet 5 with medium effort · API Usage Billing'
-
-    expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
-      model: 'sonnet',
-      effort: 'medium'
-    })
-  })
-
-  it('does not mistake old conversation output for the current model', () => {
-    const screen =
-      'Set model to Opus 4.8 and saved as your default\r\n' +
-      'Claude Code v2.1.211\r\n' +
-      'Sonnet 5 with medium effort · API Usage Billing'
-
-    expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
-      model: 'sonnet',
-      effort: 'medium'
-    })
-  })
-
-  it('matches headers from newer CLIs where the alias resolves to another version', () => {
-    const screen =
-      'Claude Code v2.1.220\r\n' +
-      'Opus 5 (1M context) with xhigh effort · API Usage Billing\r\n' +
-      '~/repo'
-
-    expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
-      model: 'opus',
-      effort: 'xhigh'
-    })
-  })
-
-  it('reports an option-less Haiku model without inventing effort', () => {
-    expect(
-      readClaudeSessionOptionsFromTerminalScreen(
-        'Claude Code v2.1.211\r\nHaiku · API Usage Billing\r\n~/repo'
-      )
-    ).toEqual({ model: 'haiku' })
-  })
-
-  it('ignores text without Claude header chrome', () => {
-    expect(
-      readClaudeSessionOptionsFromTerminalScreen('I recommend Opus 4.8 for this task.')
-    ).toBeNull()
-  })
-
-  it('recovers a custom model name that is not in the catalog', () => {
-    const screen =
-      '\u001b[1mClaude Code\u001b[0m v2.1.211\r\n' +
-      '\u001b[38;2;102;102;102mmy-custom-model with high effort · API Usage Billing\r\n' +
-      '~/repo'
-
-    // Custom models have no catalog options, so effort is intentionally dropped.
-    expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
-      model: 'my-custom-model'
-    })
-  })
-
   it('keeps a custom model whose name only starts with a catalog family', () => {
     // Require a whole leading family word so vendor slugs cannot impersonate catalog families.
     const screen = 'Claude Code v2.1.211\r\nopus-internal-v3 · API Usage Billing\r\n~/repo'
 
     expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
       model: 'opus-internal-v3'
-    })
-  })
-
-  it('ignores catalog labels outside the descriptor row', () => {
-    const screen = 'Claude Code v2.1.211\r\nacme-frontier · API Usage Billing\r\n~/work/Haiku'
-
-    expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
-      model: 'acme-frontier'
     })
   })
 

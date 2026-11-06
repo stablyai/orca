@@ -1,4 +1,4 @@
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
 // Retain spawn-time pane keys so teardown can release agent-hook caches.
 export const ptyPaneKey = new Map<string, string>()

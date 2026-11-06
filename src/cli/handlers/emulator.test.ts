@@ -69,24 +69,6 @@ describe('orca emulator CLI handlers', () => {
     })
   })
 
-  it('uses a wider client timeout for emulator attach recovery', async () => {
-    queueFixtures(
-      callMock,
-      okFixture('req_attach', {
-        attached: true,
-        info: { deviceUdid: 'device-1', streamUrl: 'http://127.0.0.1:3102/stream.mjpeg' }
-      })
-    )
-
-    await main(['emulator', 'attach', 'device-1', '--worktree', 'all'], '/repo/project')
-
-    expect(callMock).toHaveBeenCalledWith(
-      'emulator.attach',
-      { device: 'device-1', worktree: undefined, focus: false },
-      { timeoutMs: 180_000 }
-    )
-  })
-
   it('uses the folder workspace exported by the current Orca terminal', async () => {
     process.env.ORCA_WORKSPACE_ID = 'folder:folder-1'
     delete process.env.ORCA_WORKTREE_ID
@@ -103,7 +85,7 @@ describe('orca emulator CLI handlers', () => {
     expect(callMock).toHaveBeenCalledWith(
       'emulator.attach',
       { device: 'device-1', worktree: 'folder:folder-1', focus: false },
-      { timeoutMs: 180_000 }
+      { timeoutMs: 240_000 }
     )
   })
 
@@ -123,7 +105,7 @@ describe('orca emulator CLI handlers', () => {
     expect(callMock).toHaveBeenCalledWith(
       'emulator.attach',
       { device: 'device-1', worktree: 'repo-1::/repo/project ', focus: false },
-      { timeoutMs: 180_000 }
+      { timeoutMs: 240_000 }
     )
   })
 

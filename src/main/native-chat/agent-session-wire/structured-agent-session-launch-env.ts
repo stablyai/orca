@@ -1,6 +1,6 @@
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
-import { isLegacyAgentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import { isLegacyAgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 
 type LaunchEnvResolver = (
   provider: AgentSessionRecord['provider']

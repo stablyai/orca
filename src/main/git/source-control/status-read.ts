@@ -3,25 +3,26 @@ import type {
   GitStatusEntry,
   GitStatusResult,
   GitUpstreamStatus
-} from '../../../shared/git-status-types'
-import { StatusPorcelainParser } from '../../../shared/git-status-porcelain-parser'
-import { resolveGitStatusLimit } from '../../../shared/git-status-limit'
+} from '../../../shared/git/status/git-status-types'
+import { StatusPorcelainParser } from '../../../shared/git/status/git-status-porcelain-parser'
+import { resolveGitStatusLimit } from '../../../shared/git/status/git-status-limit'
 import { stableInFlightKey } from '../../../shared/in-flight-promise-dedupe'
+import { beginGitStatusLineStatsCacheWrite } from '../../../shared/git/status/git-status-line-stats-write-token'
 import {
-  beginGitStatusLineStatsCacheWrite,
   clearGitStatusLineStatsCacheKey,
   reuseOrRecomputeGitStatusLineStats
-} from '../../../shared/git-status-line-stats-cache'
-import { resolveWorktreeHostPath } from '../../../shared/git-metadata-path'
+} from '../../../shared/git/status/git-status-line-stats-cache'
+import { resolveWorktreeHostPath } from '../../../shared/git/metadata/git-metadata-path'
+import { readGitCommandFailureStderr } from '../../../shared/git/commands/git-command-failure-text'
 import { gitOptionalLocksDisabledEnv, gitStreamStdout } from '../runner'
 import {
   findExistingWorktreeSymlinkPaths,
   getSafeRelativePath
-} from '../worktree-symlink-detection'
+} from '../worktrees/content-paths/worktree-symlink-detection'
 import type { GetStatusOptions } from './get-status-options'
 import { statusReadLeaseOwner } from './git-read-cache-invalidation'
 import { detectConflictOperation } from './git-conflict-operation'
-import { parseUnmergedEntry } from '../../../shared/git-status-conflict-entries'
+import { parseUnmergedEntry } from '../../../shared/git/status/git-status-conflict-entries'
 import { getEffectiveUpstreamStatusCacheKey } from './effective-upstream-status-cache'
 import {
   getShortBranchName,
@@ -34,6 +35,7 @@ import {
   getStatusLineStatsCacheKey
 } from './status-branch-line-total-input'
 import { reconcileDriveCheckoutSuspects } from './drive-checkout-suspect-status'
+import { markRecursiveSubmoduleRestores } from './submodule-restore-recurse'
 
 export async function getStatus(
   worktreePath: string,
@@ -100,6 +102,15 @@ async function dropSharedSymlinkUntrackedEntries(
   }
 }
 
+// Git's stderr is unbounded and travels to remote clients; the first lines say what failed.
+const STATUS_READ_ERROR_MAX_LENGTH = 1_000
+
+function describeStatusReadError(error: unknown): string {
+  const stderr = readGitCommandFailureStderr(error)?.trim()
+  const text = stderr || (error instanceof Error ? error.message : String(error))
+  return text.slice(0, STATUS_READ_ERROR_MAX_LENGTH)
+}
+
 async function runGetStatus(
   worktreePath: string,
   options: GetStatusOptions = {}
@@ -109,6 +120,7 @@ async function runGetStatus(
     options.includeLineStats === false ? null : beginGitStatusLineStatsCacheWrite(lineStatsCacheKey)
   let effectiveUpstreamStatus: GitUpstreamStatus | undefined
   let statusSucceeded = false
+  let readError: string | undefined
   const limit = resolveGitStatusLimit(options.limit)
 
   const conflictPromise = detectConflictOperation(worktreePath, options)
@@ -161,6 +173,7 @@ async function runGetStatus(
     if (options.signal?.aborted) {
       throw error
     }
+    readError = describeStatusReadError(error)
   }
 
   let entries: GitStatusEntry[] = []
@@ -185,6 +198,9 @@ async function runGetStatus(
 
   if (statusSucceeded && !didHitLimit) {
     entries = await reconcileDriveCheckoutSuspects(worktreePath, entries, options)
+  }
+  if (statusSucceeded) {
+    entries = await markRecursiveSubmoduleRestores(worktreePath, entries, options)
   }
   await dropSharedSymlinkUntrackedEntries(worktreePath, entries, options)
 
@@ -251,6 +267,7 @@ async function runGetStatus(
     conflictOperation,
     head,
     branch,
+    ...(readError !== undefined ? { readError } : {}),
     ...(options.includeIgnored ? { ignoredPaths: parser.ignoredPaths } : {}),
     ...(branchLineTotal ? { branchLineTotal } : {}),
     ...(branchLineTotalUnavailable ? { branchLineTotalUnavailable } : {}),

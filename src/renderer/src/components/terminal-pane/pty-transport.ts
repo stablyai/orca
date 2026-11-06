@@ -6,7 +6,7 @@ import { createPtyInputWriteQueue } from './pty-input-write-queue'
 import { createPtyOutputProcessor } from './pty-output-processor'
 import { createPtyPreconnectInputBuffer } from './pty-preconnect-input-buffer'
 import type { IpcPtyTransportOptions, PtyTransport } from './pty-transport-types'
-import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
 
 export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTransport {
   const {
@@ -218,6 +218,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     sendInput(data, inputKind) {
+      if (!destroyed && inputKind === 'driving') {
+        opts.onDrivingInputAttempt?.(ptyId)
+      }
       if (!destroyed && preconnectInputBuffer?.isBuffering()) {
         return preconnectInputBuffer.enqueue(data, 'ordinary', inputKind, opts.onPreconnectInput)
       }
@@ -244,6 +247,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       ? {}
       : {
           async sendInputAccepted(data: string, inputKind: TerminalInputKind): Promise<boolean> {
+            if (!destroyed && inputKind === 'driving') {
+              opts.onDrivingInputAttempt?.(ptyId)
+            }
             if (!destroyed && preconnectInputBuffer?.isBuffering()) {
               return preconnectInputBuffer.enqueueAccepted(data, inputKind, opts.onPreconnectInput)
             }

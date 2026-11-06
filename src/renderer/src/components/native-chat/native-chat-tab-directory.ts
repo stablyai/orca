@@ -2,7 +2,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 import { resolveWorkspaceDirectory, type WorkspaceDirectoryState } from '@/lib/workspace-directory'
 import type { StructuredSessionLaunchDirectory } from '@/store/slices/structured-session-launch-directories'
-import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
+import { firstRegisteredStructuredChatTab } from '@/lib/structured-chat-tab-index'
 
 type NativeChatDirectoryTab = {
   id: string
@@ -31,9 +31,7 @@ export function resolveNativeChatTabDirectoryResolution(
 ): NativeChatTabDirectoryResolution {
   const structuredTab = isFloatingWorkspaceId(worktreeId)
     ? // The status bridge's own predicate, so no tab waits on a pin it never mirrors.
-      state.unifiedTabsByWorktree?.[worktreeId]?.find(
-        (tab) => tab.id === tabId && isStructuredTab(tab)
-      )
+      firstRegisteredStructuredChatTab(state.unifiedTabsByWorktree?.[worktreeId], tabId)
     : undefined
   if (!structuredTab) {
     const directory = resolveWorkspaceDirectory(state, worktreeId, executionHostId)

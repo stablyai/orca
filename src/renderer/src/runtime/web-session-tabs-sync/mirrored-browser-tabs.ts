@@ -12,6 +12,7 @@ import { sameStringArray } from './state-equality-core'
 import { collectLayoutGroupIds } from './tab-group-layout-tree'
 import { buildBrowserUnifiedTab } from './tab-builders'
 import { isReadyBrowserTab } from './terminal-surfaces'
+import { isBrowserPageOfAnotherHost } from './mirror-row-ownership'
 
 export function findBrowserWorkspaceForRemotePage(
   state: WebSessionTabsSyncState,
@@ -37,6 +38,28 @@ export function findBrowserWorkspaceForRemotePage(
     }
   }
   return null
+}
+
+/** A row naming our own or a live peer's page is an echo from a server we serve, not its tab (#38136). */
+function namesTabOfAnotherHost(
+  state: WebSessionTabsSyncState,
+  worktreeId: string,
+  environmentId: string,
+  tab: RuntimeMobileSessionBrowserTab
+): boolean {
+  const workspaces = state.browserTabsByWorktree[worktreeId] ?? []
+  const page = workspaces
+    .flatMap((workspace) => state.browserPagesByWorkspace[workspace.id] ?? [])
+    .find((candidate) => candidate.id === tab.browserPageId)
+  if (page) {
+    return isBrowserPageOfAnotherHost(state, page, environmentId)
+  }
+  return (
+    workspaces.some((workspace) => workspace.id === tab.browserWorkspaceId) &&
+    (state.browserPagesByWorkspace[tab.browserWorkspaceId] ?? []).some((candidate) =>
+      isBrowserPageOfAnotherHost(state, candidate, environmentId)
+    )
+  )
 }
 
 export function browserWorkspaceHasRemoteEnvironmentPage(
@@ -125,13 +148,16 @@ export function buildMirroredBrowserTabs(
   const clientGroupIds = new Set(
     (state.groupsByWorktree[snapshot.worktree] ?? []).map((group) => group.id)
   )
-  return snapshot.tabs.filter(isReadyBrowserTab).map((tab, index) => {
+  return snapshot.tabs.filter(isReadyBrowserTab).flatMap((tab, index) => {
     const existing = findBrowserWorkspaceForRemotePage(
       state,
       snapshot.worktree,
       environmentId,
       tab.browserPageId
     )
+    if (!existing && namesTabOfAnotherHost(state, snapshot.worktree, environmentId, tab)) {
+      return []
+    }
     const workspaceId = existing?.workspace.id ?? tab.browserWorkspaceId
     const pageId = existing?.page.id ?? tab.browserPageId
     const createdAt = existing?.page.createdAt ?? now + sortOffset + index

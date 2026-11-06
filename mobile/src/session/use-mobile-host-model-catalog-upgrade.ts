@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
-import type { AgentSessionModelCatalogResult } from '../../../src/shared/agent-session-wire'
-import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-session-option-catalog'
-import type { StructuredAgentSessionOptionRecord } from '../../../src/shared/structured-agent-session-option-state'
-import type { StructuredAgentSessionOptionState } from '../../../src/shared/structured-agent-session-options'
+import type { AgentSessionModelCatalogResult } from '../../../src/shared/agent-session/agent-session-wire'
+import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-session/options/agent-session-option-catalog-types'
+import type { StructuredAgentSessionOptionRecord } from '../../../src/shared/agent-session/options/structured-agent-session-option-state'
+import type { StructuredAgentSessionOptionState } from '../../../src/shared/agent-session/options/structured-agent-session-options'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   isHostModelListingWaitInFlight,
   joinHostModelListingWait
 } from '../../../src/shared/host-model-listing-waits'
 import { callAgentSession } from './mobile-structured-agent-session-rpc'
+import { usesModelSpecificAcpEfforts } from '../../../src/shared/agent-session/options/agent-model-catalog-ownership'
 
 // The host answers a waiting read when its first listing lands, within its own 30s picker wait.
 const LISTING_WAIT_TIMEOUT_MS = 45_000
@@ -16,6 +17,7 @@ const LISTING_WAIT_TIMEOUT_MS = 45_000
 // Show host model listings as they arrive without waiting for session attach; unsupported hosts retain a nameless built-in list until options load.
 export function useMobileHostModelCatalogUpgrade(args: {
   agent: string | null
+  selectedModel?: string
   client: RpcClient | null
   sessionId: string | null
   enabled: boolean
@@ -54,13 +56,19 @@ export function useMobileHostModelCatalogUpgrade(args: {
     receiver.current = args.receiveCatalog
   }, [args.receiveCatalog])
   const [rereads, setRereads] = useState(0)
+  const selectedModel = usesModelSpecificAcpEfforts(agent ?? '') ? args.selectedModel : undefined
   const recheck = useCallback(() => setRereads((count) => count + 1), [])
   useEffect(() => {
     if (!client || !sessionId || !enabled || !agent || !optionCatalog) {
       return
     }
     let stale = false
-    const params = { agent, sessionId, ...(newLaunch && worktree ? { worktree } : {}) }
+    const params = {
+      agent,
+      sessionId,
+      ...(selectedModel ? { selectedModel } : {}),
+      ...(newLaunch && worktree ? { worktree } : {})
+    }
     const read = (waitForListing: boolean): Promise<AgentSessionModelCatalogResult> =>
       waitForListing
         ? callAgentSession(
@@ -110,6 +118,11 @@ export function useMobileHostModelCatalogUpgrade(args: {
       )
     }
     if (isHostModelListingWaitInFlight(key, client)) {
+      if (selectedModel) {
+        void read(false)
+          .then((catalog) => apply(catalog))
+          .catch(() => {})
+      }
       wait()
     } else {
       void read(false)
@@ -138,6 +151,7 @@ export function useMobileHostModelCatalogUpgrade(args: {
     onListingLanded,
     optionCatalog,
     sessionId,
+    selectedModel,
     updateOptionState,
     worktree,
     rereads

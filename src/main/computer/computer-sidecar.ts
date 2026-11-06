@@ -1,6 +1,8 @@
 import { computerProviderUnavailableMessage } from './computer-provider-unavailable-message'
 import { currentComputerProvider, shutdownComputerProviders } from './computer-provider-lifecycle'
 import { RuntimeClientError } from './runtime-client-error'
+import { ComputerTreeBaselines } from './computer-snapshot-tree-diff'
+import type { ComputerProviderCapabilities } from '../../shared/runtime-types'
 
 type SidecarRequest = {
   id: number
@@ -19,6 +21,8 @@ process.once('SIGINT', () => {
   process.exit(130)
 })
 process.once('beforeExit', shutdownProviders)
+
+const treeBaselines = new ComputerTreeBaselines()
 
 process.on('message', (message: unknown) => {
   void handleMessage(message)
@@ -49,7 +53,7 @@ async function dispatch(method: string, params: Record<string, unknown>): Promis
 
   switch (method) {
     case 'capabilities': {
-      return await provider.capabilities()
+      return withTreeDiffCapability(await provider.capabilities())
     }
     case 'listApps': {
       return await provider.listApps()
@@ -58,40 +62,50 @@ async function dispatch(method: string, params: Record<string, unknown>): Promis
       return await provider.listWindows(params)
     }
     case 'getAppState': {
-      return await provider.snapshot(params)
+      return treeBaselines.apply(params, await provider.snapshot(params))
     }
     case 'click': {
-      return await provider.action('click', params)
+      return treeBaselines.apply(params, await provider.action('click', params))
     }
     case 'performSecondaryAction': {
-      return await provider.action('performSecondaryAction', params)
+      return treeBaselines.apply(params, await provider.action('performSecondaryAction', params))
     }
     case 'scroll': {
-      return await provider.action('scroll', params)
+      return treeBaselines.apply(params, await provider.action('scroll', params))
     }
     case 'drag': {
-      return await provider.action('drag', params)
+      return treeBaselines.apply(params, await provider.action('drag', params))
     }
     case 'typeText': {
-      return await provider.action('typeText', params)
+      return treeBaselines.apply(params, await provider.action('typeText', params))
     }
     case 'pressKey': {
-      return await provider.action('pressKey', params)
+      return treeBaselines.apply(params, await provider.action('pressKey', params))
     }
     case 'hotkey': {
-      return await provider.action('hotkey', params)
+      return treeBaselines.apply(params, await provider.action('hotkey', params))
     }
     case 'pasteText': {
-      return await provider.action('pasteText', params)
+      return treeBaselines.apply(params, await provider.action('pasteText', params))
     }
     case 'setValue': {
-      return await provider.action('setValue', params)
+      return treeBaselines.apply(params, await provider.action('setValue', params))
     }
     default:
       throw new RuntimeClientError(
         'invalid_argument',
         `unknown computer sidecar method '${method}'`
       )
+  }
+}
+
+function withTreeDiffCapability(
+  capabilities: ComputerProviderCapabilities
+): ComputerProviderCapabilities {
+  const { supports } = capabilities
+  return {
+    ...capabilities,
+    supports: { ...supports, observation: { ...supports.observation, treeDiff: true } }
   }
 }
 

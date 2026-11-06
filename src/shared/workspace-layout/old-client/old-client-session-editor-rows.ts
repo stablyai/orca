@@ -136,32 +136,10 @@ export function diffTabRow(
     language: file.language,
     mode: 'diff',
     ...(diffSource === 'staged' || diffSource === 'unstaged' ? { diffSource } : {}),
+    ...(diffSource === 'staged' && editorView.view.branchOldPath
+      ? { oldPath: editorView.view.branchOldPath }
+      : {}),
     // The model holds no unsaved edit of a diff's modified side; the window's row it lists wins.
-    isDirty: false,
-    ...tabRowProps(tab, scope),
-    ...editorRowHost(file)
-  }
-}
-
-/** Publish conflict/check-detail views as plain file rows like buildMobileFileTab so older clients keep seeing them without window-published rows. */
-export function reviewTabRow(
-  tab: LayoutContentTab & { kind: 'conflict-review' | 'check-details' },
-  scope: EditorRowScope
-): RuntimeMobileSessionFileTab | null {
-  const editorView = scope.workspace.editorViews?.[tab.id]
-  if (editorView?.view.mode !== tab.kind) {
-    return null
-  }
-  const { file } = editorView
-  return {
-    type: 'file',
-    id: tab.id,
-    title: fileName(file.relativePath, 'File'),
-    filePath: file.filePath,
-    relativePath: file.relativePath,
-    language: file.language,
-    mode: 'edit',
-    // The model holds no unsaved edit of a review; the window's row it lists wins.
     isDirty: false,
     ...tabRowProps(tab, scope),
     ...editorRowHost(file)

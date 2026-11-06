@@ -17,6 +17,14 @@ export function claudeSessionIdForRewind(sessionId: string, rewindOperationId: s
   return stableUuid(`orca-claude:${sessionId}:rewind:${rewindOperationId}`)
 }
 
+/** Fresh submissions have fresh keys; only provably unwritten input may reuse one. */
+export function claudePromptUuidForSubmission(
+  sessionId: string,
+  submissionItemKey: string
+): string {
+  return stableUuid(JSON.stringify(['orca-claude:prompt', sessionId, submissionItemKey]))
+}
+
 function stableUuid(identity: string): string {
   const bytes = createHash('sha256').update(identity).digest().subarray(0, 16)
   bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40

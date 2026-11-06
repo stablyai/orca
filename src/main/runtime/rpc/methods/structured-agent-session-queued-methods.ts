@@ -1,4 +1,4 @@
-// Do not gate queued-card actions on queued-messages.v1: hosts without it still publish unsent cards. Older pre-queue/edit hosts lack the methods.
+// Do not gate queued-card actions on queued-messages.v2: hosts without it still publish unsent cards. Older pre-queue/edit hosts lack the methods.
 
 import { defineMethod } from '../core'
 import {

@@ -29,9 +29,14 @@ const POSIX_CLAUDE = `claude '${SKIP}'`
 const posix = { command: `${POSIX_CLAUDE} 'don'"'"'t stop'`, agentCommand: POSIX_CLAUDE }
 const powershell = { command: `${POSIX_CLAUDE} 'don''t stop'`, agentCommand: POSIX_CLAUDE }
 const CODEX = "codex '--dangerously-bypass-approvals-and-sandbox'"
+const CODEX_LAUNCH =
+  "codex '-c' 'check_for_update_on_startup=false' '-c' 'disable_paste_burst=true' '--dangerously-bypass-approvals-and-sandbox'"
 const AGENT_COMMAND = {
-  codex: { command: `${CODEX} 'don'"'"'t stop'`, agentCommand: CODEX },
-  aider: { command: "aider '--yes-always'", agentCommand: "aider '--yes-always'" }
+  codex: { command: `${CODEX_LAUNCH} 'don'"'"'t stop'`, agentCommand: CODEX },
+  aider: {
+    command: "aider '--yes-always' '--no-check-update' '--no-show-release-notes'",
+    agentCommand: "aider '--yes-always'"
+  }
 } as const
 const ZSH = { shellOverride: '/bin/zsh' }
 const PWSH = { shellOverride: 'powershell.exe', terminalWindowsWslDistro: null }
@@ -101,6 +106,7 @@ export function automationSpawnRequest(c: AutomationLaunchCase): Record<string, 
     ...(c.request.shellOverride ? { shellOverride: c.request.shellOverride } : {}),
     ...(c.agent === 'codex' ? { startupCommandDelivery: 'shell-ready' } : {}),
     env: {
+      ...(c.agent === 'claude' ? { DISABLE_AUTOUPDATER: '1' } : {}),
       ORCA_PANE_KEY: `${LAUNCH_TAB_ID}:${LAUNCH_LEAF_ID}`,
       ORCA_TAB_ID: LAUNCH_TAB_ID,
       ORCA_WORKTREE_ID: worktreeId,

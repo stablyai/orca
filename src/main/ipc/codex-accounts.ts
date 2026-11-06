@@ -3,8 +3,11 @@ import type { CodexAccountAddTarget, CodexAccountService } from '../codex-accoun
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import { broadcastCodexPendingLoginUrl } from './codex-pending-login-url-broadcast'
 import { openAccountSignInLink } from './account-sign-in-link-opener'
-import { listRecordedCodexPaneLanes } from '../codex/codex-pane-account-registry'
-import { forgetStaleCodexPanes, listStaleCodexPanes } from '../codex/codex-stale-pane-accounts'
+import { listRecordedCodexPaneLanes } from '../codex/configuration/homes/codex-pane-account-registry'
+import {
+  forgetStaleCodexPanes,
+  listStaleCodexPanes
+} from '../codex/configuration/homes/codex-stale-pane-accounts'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 
 export function registerCodexAccountHandlers(

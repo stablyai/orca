@@ -19,8 +19,9 @@ export {
 
 export function getStructuredAgentSessionReadOwner(
   sessionId: string,
-  target: RuntimeClientTarget
+  target: RuntimeClientTarget | null,
+  unroutableHost = ''
 ): StructuredAgentSessionReadOwner {
-  const key = structuredReadOwnerKey(sessionId, target)
+  const key = structuredReadOwnerKey(sessionId, target, unroutableHost)
   return getOrCreateStructuredReadOwner(key, () => createReadOwner(key, sessionId, target))
 }

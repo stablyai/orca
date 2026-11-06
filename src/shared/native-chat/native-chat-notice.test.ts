@@ -1,46 +1,65 @@
-import { describe, expect, it } from 'vitest'
-import { nativeChatNoticeBlock, nativeChatNoticeLook } from './native-chat-notice'
-import type { NativeChatTextBlock } from '../native-chat-types'
+import { expect, it } from 'vitest'
+import { nativeChatNoticeLook } from './native-chat-notice'
 
-const block = (fields: Partial<NativeChatTextBlock>): NativeChatTextBlock => ({
-  type: 'text',
-  text: 'words',
-  ...fields
+it.each([
+  { provider: 'codex', kind: 'notification:warning' },
+  { provider: 'codex', kind: 'item/autoApprovalReview/completed' },
+  { provider: 'claude', kind: 'request:canUseTool' },
+  { provider: 'claude', kind: 'notification:guardianWarning' }
+])('does not infer settled permission state from other frame kinds (%j)', (frame) => {
+  expect(
+    nativeChatNoticeLook({
+      type: 'text',
+      text: 'Permission denied automatically',
+      tone: 'error',
+      providerFrame: {
+        ...frame,
+        payload: {
+          head: '{"status":"denied"}',
+          byteLength: 19,
+          digest: 'synthetic',
+          truncated: false
+        }
+      }
+    })
+  ).toEqual({ kind: 'line', tone: 'error' })
 })
 
-describe('nativeChatNoticeLook', () => {
-  it.each([
-    [{ presentation: 'compaction' }, { kind: 'divider', label: 'compaction' }],
-    [{ presentation: 'context-cleared' }, { kind: 'divider', label: 'contextCleared' }],
-    [{ presentation: 'command-output' }, { kind: 'command-output' }],
-    [
-      { presentation: 'history-repaired' },
-      { kind: 'host-status', presentation: 'history-repaired' }
-    ],
-    [{ presentation: 'plan-document' }, { kind: 'plan' }],
-    [{ presentation: 'stopped-before-start' }, { kind: 'aside' }],
-    // Stored red for clients that predate the orca-stop row; Orca stopped it, nothing failed.
-    [
-      { presentation: 'orca-stop', tone: 'error' },
-      { kind: 'line', tone: 'notice' }
-    ],
-    [
-      { presentation: 'compaction-skipped', tone: 'warning' },
-      { kind: 'line', tone: 'warning' }
-    ],
-    [{ tone: 'error' }, { kind: 'line', tone: 'error' }],
-    [{ tone: 'loud' }, { kind: 'line', tone: null }]
-  ] as const)('reads %j as %j', (fields, look) => {
-    expect(nativeChatNoticeLook(block(fields))).toEqual(look)
-  })
-})
+it.each([
+  { failure: { kind: 'usageLimitReached' } },
+  { presentation: 'orca-stop' },
+  { presentation: 'plan-document' },
+  { orcaStop: { cause: 'quit' } }
+] as const)(
+  'keeps special presentations and typed failures ahead of permission disclosure (%j)',
+  (special) => {
+    expect(
+      nativeChatNoticeLook({
+        type: 'text',
+        text: 'Existing behavior',
+        tone: 'error',
+        ...special,
+        providerFrame: {
+          provider: 'codex',
+          kind: 'notification:guardianWarning',
+          payload: { head: '{}', byteLength: 2, digest: 'synthetic', truncated: false }
+        }
+      }).kind
+    ).not.toBe('settled-permission')
+  }
+)
 
-describe('nativeChatNoticeBlock', () => {
-  it('finds the block with a presentation or tone, and none in plain words', () => {
-    const notice = block({ tone: 'warning' })
-    expect(nativeChatNoticeBlock([block({}), notice])).toBe(notice)
-    const presentation = block({ presentation: 'context-cleared' })
-    expect(nativeChatNoticeBlock([block({}), presentation])).toBe(presentation)
-    expect(nativeChatNoticeBlock([block({})])).toBeUndefined()
+it('draws the forked-from row as a divider naming and linking its source', () => {
+  expect(
+    nativeChatNoticeLook({
+      type: 'text',
+      text: 'Forked from Fix the login flow',
+      presentation: 'forked-from',
+      forkedFrom: { sessionId: 'claude_source' }
+    })
+  ).toEqual({
+    kind: 'forked-from',
+    sourceSessionId: 'claude_source',
+    sourceName: 'Fix the login flow'
   })
 })

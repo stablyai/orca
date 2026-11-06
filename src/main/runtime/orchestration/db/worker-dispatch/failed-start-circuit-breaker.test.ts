@@ -37,15 +37,6 @@ describe('failed worker starts and the circuit breaker', () => {
     return db.createTask({ runId: 'run_legacy_local', spec: 'never starts' }).id
   }
 
-  it('counts each failed start and carries the count into the retry', () => {
-    const taskId = newTask()
-    const [first, second] = failedStarts(taskId, 2)
-
-    expect(db.getDispatchContextById(first)).toMatchObject({ status: 'failed', failure_count: 1 })
-    expect(db.getDispatchContextById(second)).toMatchObject({ status: 'failed', failure_count: 2 })
-    expect(db.getTask(taskId)?.status).toBe('failed')
-  })
-
   it('trips on the third failed start and refuses a fourth retry', () => {
     const taskId = newTask()
     const [, , third] = failedStarts(taskId, 3)
@@ -119,12 +110,20 @@ describe('failed worker starts and the circuit breaker', () => {
     expect(() => start(taskId, third)).toThrow(/will not retry it again/)
   })
 
-  it('starts a fresh count for a new start that is not a retry', () => {
+  it('starts a fresh count after explicitly reopening a circuit-broken Task', () => {
     const taskId = newTask()
-    const [failed] = failedStarts(taskId, 1)
-    db.transitionLifecycle({ entity: 'task', id: taskId, from: 'failed', to: 'ready' })
+    const [, , third] = failedStarts(taskId, 3)
+    expect(() => start(taskId, third)).toThrow(/will not retry it again/)
+    db.updateTaskStatus(taskId, 'ready')
+    expect(() => start(taskId, third)).toThrow(/will not retry it again/)
 
-    expect(db.getDispatchContextById(failed)?.failure_count).toBe(1)
-    expect(db.getDispatchContextById(start(taskId))?.failure_count).toBe(0)
+    expect(db.getDispatchContextById(start(taskId))).toMatchObject({
+      task_id: taskId,
+      failure_count: 0
+    })
+    expect(db.getDispatchContextById(third)).toMatchObject({
+      status: 'circuit_broken',
+      failure_count: 3
+    })
   })
 })

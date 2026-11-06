@@ -8,8 +8,11 @@ vi.mock('node:net', () => ({ connect: io.connect }))
 vi.mock('../emulator-probe', () => ({ emulatorProbe: vi.fn(), emulatorProbeError: vi.fn() }))
 
 class TestSocket extends EventEmitter {
+  destroyed = false
   destroy = vi.fn()
   setTimeout = vi.fn()
+  setNoDelay = vi.fn()
+  write = vi.fn()
 }
 
 function packet(size: number, meta = 123n): Buffer {
@@ -43,7 +46,7 @@ async function startSession() {
   const started = ScrcpyStreamSession.start(
     {
       runner,
-      sdk: { sdkRoot: 'sdk', adb: 'adb', emulator: 'emulator', avdmanager: 'avdmanager' },
+      sdk: { sdkRoot: 'sdk', adb: 'adb', emulator: 'emulator' },
       serial: 'test-device',
       localJarPath: 'server.jar'
     },
@@ -97,22 +100,6 @@ describe('ScrcpyStreamSession video buffering', () => {
       { config: false, keyFrame: false, pts: 123n, data: Buffer.alloc(4, 7) },
       { config: false, keyFrame: false, pts: 456n, data: Buffer.alloc(6, 7) }
     ])
-    session.close()
-  })
-
-  it('emits initial metadata and frames before startup resolves', async () => {
-    const { video, callbacks, started } = await startSession()
-    const events: string[] = []
-    callbacks.onMeta.mockImplementation(() => events.push('meta'))
-    callbacks.onFrame.mockImplementation(() => events.push('frame'))
-    const ready = started.then((session) => {
-      events.push('ready')
-      return session
-    })
-    video.emit('data', Buffer.concat([handshake(), packet(3), packet(5)]))
-    expect(events).toEqual(['meta', 'frame', 'frame'])
-    const session = await ready
-    expect(events).toEqual(['meta', 'frame', 'frame', 'ready'])
     session.close()
   })
 
@@ -176,6 +163,26 @@ describe('ScrcpyStreamSession video buffering', () => {
     expect(Buffer.isBuffer(data)).toBe(true)
     expect(data.equals(frame.subarray(12))).toBe(true)
     expect(concatenatedBytes).toBeLessThanOrEqual(frame.length * 2)
+  })
+})
+
+describe('ScrcpyStreamSession control', () => {
+  it('tracks the video size control messages must carry across encoder restarts', async () => {
+    const { video, callbacks, started } = await startSession()
+    video.emit('data', handshake())
+    const session = await started
+    expect(session.videoSize()).toEqual({ width: 1080, height: 2400 })
+
+    // A rotation restarts the encoder; only the new SPS (here 600x1280) carries the new size.
+    const sps = Buffer.from('000000016742c01fd900980a1e5f011000000300100000030320f1832480', 'hex')
+    const config = Buffer.alloc(12)
+    config.writeBigUInt64BE(1n << 63n, 0)
+    config.writeUInt32BE(sps.length, 8)
+    video.emit('data', Buffer.concat([config, sps]))
+
+    expect(session.videoSize()).toEqual({ width: 600, height: 1280 })
+    expect(callbacks.onFrame).toHaveBeenCalledWith(expect.objectContaining({ config: true }))
+    session.close()
   })
 })
 

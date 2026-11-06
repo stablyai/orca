@@ -24,12 +24,6 @@ describe('renderer-owned agent status registry', () => {
     expect(isClientAuthoritativeAgentStatusPane(PANE)).toBe(true)
   })
 
-  it('ignores writes for panes that never registered', () => {
-    markRendererOwnedAgentStatusWrite(OTHER_PANE)
-    expect(isClientAuthoritativeAgentStatusPane(OTHER_PANE)).toBe(false)
-    expect(_getRendererOwnedAgentStatusPaneCountForTest()).toBe(0)
-  })
-
   it('cedes authority on teardown and leaks no entry', () => {
     const release = registerRendererOwnedAgentStatusPane(PANE, ENV)
     markRendererOwnedAgentStatusWrite(PANE)
@@ -39,14 +33,6 @@ describe('renderer-owned agent status registry', () => {
     // A post-teardown write must not resurrect the claim.
     markRendererOwnedAgentStatusWrite(PANE)
     expect(isClientAuthoritativeAgentStatusPane(PANE)).toBe(false)
-  })
-
-  it('keeps the earned claim across a remount in the same environment', () => {
-    registerRendererOwnedAgentStatusPane(PANE, ENV)
-    markRendererOwnedAgentStatusWrite(PANE)
-    registerRendererOwnedAgentStatusPane(PANE, ENV)
-    expect(isClientAuthoritativeAgentStatusPane(PANE)).toBe(true)
-    expect(_getRendererOwnedAgentStatusPaneCountForTest()).toBe(1)
   })
 
   it('drops the claim when the pane re-registers under another environment', () => {

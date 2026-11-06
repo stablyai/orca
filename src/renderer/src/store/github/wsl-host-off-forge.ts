@@ -4,7 +4,7 @@
  * failing a request per badge. Connecting, reconnecting or unverifiable hosts are not off: their
  * calls proceed (or fail) as usual.
  */
-import { isWslHostRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import { isWslHostRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { WslHostStatus } from '../../../../shared/wsl-host-types'
 import type { AppState } from '../types'
 import type { PRRefreshState } from './pr-refresh-state'

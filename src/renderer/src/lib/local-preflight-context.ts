@@ -1,5 +1,3 @@
-import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
-import { getProjectHostSetupProjectionFromState } from '@/store/project-host-setup-selector'
 import type { AppState } from '@/store/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
@@ -12,24 +10,19 @@ import {
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
+import type { ResolvedAgentBackgroundTarget } from './agent-background-session-contract'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { projectMatchesRepo } from '../../../shared/project-repo-match'
-import { getIndexedRepoMap } from '@/store/worktree-repo-index'
+import { getIndexedRepoMap, getIndexedReposById } from '@/store/worktree-repo-index'
 import { defaultScopeHost } from './default-creation-host'
-import {
-  getLocalPreflightProjectId,
-  getLocalProjectRuntimeWorkspace,
-  type LocalProjectRuntimeState
-} from './local-project-runtime-workspace'
+import { getLocalProjectRuntimeWorkspace } from './local-project-runtime-workspace'
 import { getActiveWorkspaceOwnerTarget } from './resolved-worktree-execution-host'
 import { getEnvironmentRuntimeContextKey } from './provider-runtime-context'
 import { getRendererAppPlatform } from './renderer-app-platform'
 import {
-  getCachedWindowsTerminalCapabilities,
-  hasCachedWindowsTerminalCapabilities
-} from './windows-terminal-capabilities'
-import {
   getProjectRuntimePreflightContext,
+  getCachedLocalProjectRuntimeWslContext,
+  type LocalProjectRuntimeWslContext,
   getWslPreflightContext,
   type LocalPreflightContext
 } from './local-preflight-context-cache'
@@ -44,15 +37,16 @@ export {
   resetLocalPreflightContextCachesForTests
 } from './local-preflight-context-cache'
 
-// Why: the shared indexes are WeakMap-keyed on slice identity, so a fresh `{}`
-// or `[]` fallback would miss the cache on every read.
+type LocalProjectRuntimeState = Pick<
+  AppState,
+  'activeRepoId' | 'activeWorktreeId' | 'projects' | 'repos' | 'settings' | 'worktreesByRepo'
+> &
+  Partial<Pick<AppState, 'folderWorkspaces' | 'projectGroups'>>
+
+// Reuse fallback identities so WeakMap slice indexes hit instead of rebuilding on every read.
 const EMPTY_REPOS: AppState['repos'] = []
 
-type LocalProjectRuntimeWslContext = {
-  wslAvailable?: boolean
-  availableWslDistros?: readonly string[] | null
-}
-
+/** Extracts a WSL distribution name from supported UNC path forms. */
 export function getWslDistroFromPath(path?: string | null): string | null {
   return path ? (parseWslUncPath(path)?.distro ?? null) : null
 }
@@ -61,23 +55,26 @@ export function getLocalProjectExecutionRuntimeContext(
   state: LocalProjectRuntimeState,
   worktreeId?: string | null,
   appPlatform: NodeJS.Platform = getRendererAppPlatform(),
-  wslContext: LocalProjectRuntimeWslContext = {}
+  wslContext: LocalProjectRuntimeWslContext = {},
+  resolvedTarget?: ResolvedAgentBackgroundTarget
 ): ProjectExecutionRuntimeResolution | undefined {
   if (appPlatform !== 'win32' || worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return undefined
   }
-  const worktree = getLocalProjectRuntimeWorkspace(state, worktreeId)
+  const worktree = resolvedTarget?.worktree ?? getLocalProjectRuntimeWorkspace(state, worktreeId)
   if (
     !worktree &&
     parseWorkspaceKey(worktreeId ?? state.activeWorktreeId ?? '')?.type === 'folder'
   ) {
     return undefined
   }
-  const repo = getLocalRuntimeRepoForWorktree(state, worktree)
+  const repo = resolvedTarget?.repo ?? getLocalRuntimeRepoForWorktree(state, worktree)
   if (!isLocalRuntimeRepo(repo) || !isLocalRuntimeWorktree(worktree)) {
     return undefined
   }
-  const projectId = getLocalPreflightProjectId(state, worktreeId)
+  const projectId = resolvedTarget
+    ? (resolvedTarget.worktree.projectId ?? resolvedTarget.worktree.repoId)
+    : getLocalPreflightProjectId(state, worktreeId)
   const project = getLocalRuntimeProject(state, projectId, repo.id)
   const projectRuntimePreference = getWorkspaceRuntimePreference(
     project?.localWindowsRuntimePreference,
@@ -154,7 +151,7 @@ export function getLocalRepoProjectExecutionRuntimeContext(
 }
 
 export function getLocalPreflightContext(
-  state: LocalProjectRuntimeState & WorktreeRuntimeOwnerState,
+  state: AppState,
   appPlatform: NodeJS.Platform = getRendererAppPlatform(),
   wslContext: LocalProjectRuntimeWslContext = getCachedLocalProjectRuntimeWslContext()
 ): LocalPreflightContext {
@@ -177,7 +174,7 @@ export function getLocalPreflightContext(
 }
 
 export function getLocalAgentPreflightContext(
-  state: LocalProjectRuntimeState & WorktreeRuntimeOwnerState,
+  state: AppState,
   appPlatform: NodeJS.Platform = getRendererAppPlatform(),
   wslContext: LocalProjectRuntimeWslContext = getCachedLocalProjectRuntimeWslContext(),
   worktreeId?: string | null
@@ -255,28 +252,14 @@ export function getLocalAgentPreflightContext(
   return undefined
 }
 
-function isActiveWorkspaceOnAnotherHost(
-  state: LocalProjectRuntimeState & WorktreeRuntimeOwnerState
-): boolean {
+function isActiveWorkspaceOnAnotherHost(state: AppState): boolean {
   const activeWorktree = getLocalProjectRuntimeWorkspace(state, undefined)
   const repo = getLocalRuntimeRepoForWorktree(state, activeWorktree)
   return Boolean(repo) && (!isLocalRuntimeRepo(repo) || !isLocalRuntimeWorktree(activeWorktree))
 }
 
-function getCachedLocalProjectRuntimeWslContext(): LocalProjectRuntimeWslContext {
-  // Synchronous selectors may reuse capabilities but must not launch WSL probes during store reads.
-  if (!hasCachedWindowsTerminalCapabilities()) {
-    return {}
-  }
-  const capabilities = getCachedWindowsTerminalCapabilities()
-  return {
-    wslAvailable: capabilities.wslAvailable,
-    availableWslDistros: capabilities.wslDistros
-  }
-}
-
 function getLocalPreflightWslDistro(
-  state: LocalProjectRuntimeState & WorktreeRuntimeOwnerState,
+  state: LocalProjectRuntimeState,
   worktreeId?: string | null
 ): string | null {
   const activeWorktree = getLocalProjectRuntimeWorkspace(state, worktreeId)
@@ -290,22 +273,25 @@ function getLocalPreflightWslDistro(
 
 function getLocalRuntimeRepoForWorktree(
   state: LocalProjectRuntimeState,
-  worktree?: Pick<Worktree, 'repoId'> | null
+  worktree?: Pick<Worktree, 'repoId' | 'hostId'> | null
 ): Pick<Repo, 'id' | 'path' | 'connectionId' | 'executionHostId'> | undefined {
   if (!worktree && parseWorkspaceKey(state.activeWorktreeId ?? '')?.type === 'folder') {
     return undefined
   }
   const repoId = worktree?.repoId ?? state.activeRepoId
+  if (worktree) {
+    const repos = getIndexedReposById(state.repos ?? EMPTY_REPOS, worktree.repoId).filter(
+      (repo) => !worktree.hostId || getRepoExecutionHostId(repo) === worktree.hostId
+    )
+    return repos.length === 1 ? repos[0] : undefined
+  }
   return repoId ? getIndexedRepoMap(state.repos ?? EMPTY_REPOS).get(repoId) : undefined
 }
 
 function isLocalRuntimeRepo(
   repo?: Pick<Repo, 'connectionId' | 'executionHostId'> | null
 ): repo is Pick<Repo, 'id' | 'path' | 'connectionId' | 'executionHostId'> {
-  if (!repo) {
-    return false
-  }
-  return getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
+  return !!repo && getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
 }
 
 function isLocalRuntimeWorktree(worktree?: Pick<Worktree, 'hostId'> | null): boolean {
@@ -317,9 +303,17 @@ function getLocalRuntimeProject(
   projectId: string,
   repoId: string
 ) {
-  const { projects } = getProjectHostSetupProjectionFromState(state)
+  return state.projects?.find(
+    (entry) => entry.id === projectId || projectMatchesRepo(entry, repoId)
+  )
+}
+
+function getLocalPreflightProjectId(
+  state: LocalProjectRuntimeState,
+  worktreeId?: string | null
+): string {
+  const activeWorktree = getLocalProjectRuntimeWorkspace(state, worktreeId)
   return (
-    projects.find((entry) => entry.id === projectId) ??
-    projects.find((entry) => projectMatchesRepo(entry, repoId))
+    activeWorktree?.projectId ?? activeWorktree?.repoId ?? state.activeRepoId ?? 'local-project'
   )
 }

@@ -3,14 +3,15 @@ import { dirname, join } from 'node:path'
 import type {
   AgentSessionModelOption,
   AgentSessionOptionChoice
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import {
   agentModelCatalogEntry,
+  serializedAgentModelCatalogListing,
   type AgentModelCatalogEntry,
   type AgentModelCatalogListing
 } from './agent-model-catalog-entry'
-import { isStructuredAgentId } from '../../../shared/agent-session-provider-handle-encoding'
-import { isRecord } from '../../../shared/agent-status-child-work-value-guards'
+import { isStructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { isRecord } from '../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 
 // Older catalogs lack serviceTiers and cannot safely construct Fast requests.
 const SCHEMA_VERSION = 3
@@ -19,7 +20,7 @@ const SAVE_COALESCE_MS = 500
 export type AgentModelCatalogPersistence = {
   load: () => Promise<AgentModelCatalogEntry[]>
   /** Coalesce saves; failures leave the in-memory store authoritative. */
-  save: (entries: readonly AgentModelCatalogEntry[]) => void
+  save: (snapshot: () => readonly AgentModelCatalogEntry[]) => void
   /** Flush at quit because the delayed-save timer is unref'd. */
   flush: () => Promise<void>
 }
@@ -77,7 +78,14 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
     ...(typeof row.supportsAutoMode === 'boolean'
       ? { supportsAutoMode: row.supportsAutoMode }
       : {}),
-    ...(serviceTiers ? { serviceTiers } : {})
+    ...(serviceTiers ? { serviceTiers } : {}),
+    ...(Array.isArray(row.chatEfforts)
+      ? {
+          chatEfforts: row.chatEfforts
+            .map(parseChoice)
+            .filter((choice): choice is AgentSessionOptionChoice => choice !== null)
+        }
+      : {})
   }
 }
 
@@ -152,8 +160,8 @@ function persistedEntry(entry: AgentModelCatalogEntry): unknown {
   return {
     agent: entry.agent,
     fingerprint: entry.fingerprint,
-    discovered: entry.discovered,
-    live: entry.live,
+    discovered: serializedAgentModelCatalogListing(entry.discovered),
+    live: serializedAgentModelCatalogListing(entry.live),
     ...(entry.configured ? { configured: entry.configured } : {})
   }
 }
@@ -162,7 +170,7 @@ export function createAgentModelCatalogFilePersistence(
   directory: string
 ): AgentModelCatalogPersistence {
   const filePath = join(directory, 'agent-model-catalog.json')
-  let pending: readonly AgentModelCatalogEntry[] | null = null
+  let pending: (() => readonly AgentModelCatalogEntry[]) | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
   let writing = Promise.resolve()
 
@@ -171,11 +179,12 @@ export function createAgentModelCatalogFilePersistence(
       clearTimeout(timer)
       timer = null
     }
-    const entries = pending
+    const snapshot = pending
     pending = null
-    if (!entries) {
+    if (!snapshot) {
       return writing
     }
+    const entries = snapshot()
     writing = writing.then(async () => {
       try {
         await mkdir(dirname(filePath), { recursive: true })
@@ -211,8 +220,8 @@ export function createAgentModelCatalogFilePersistence(
         return []
       }
     },
-    save(entries) {
-      pending = [...entries]
+    save(snapshot) {
+      pending = snapshot
       if (timer === null) {
         timer = setTimeout(flush, SAVE_COALESCE_MS)
         timer.unref?.()

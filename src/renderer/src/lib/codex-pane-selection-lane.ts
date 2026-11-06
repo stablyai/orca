@@ -1,4 +1,3 @@
-import type { ProjectCatalogReadState } from '@/store/project-host-setup-selector'
 import type { AppState } from '@/store'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
@@ -14,8 +13,8 @@ import {
   type LocalWindowsTerminalRuntimeOptions
 } from '../../../shared/local-windows-terminal-runtime'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
-import { resolveTerminalStartupCwd } from '../../../shared/terminal-startup-cwd'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import { resolveTerminalStartupCwd } from '../../../shared/shell/launch/terminal-startup-cwd'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 import { getLocalProjectExecutionRuntimeContext } from './local-preflight-context'
@@ -32,12 +31,12 @@ type CodexPaneLaneState = Pick<
   | 'activeRepoId'
   | 'activeWorktreeId'
   | 'folderWorkspaces'
+  | 'projects'
   | 'repos'
   | 'runtimeEnvironments'
   | 'settings'
   | 'worktreesByRepo'
-> &
-  ProjectCatalogReadState
+>
 
 /** Foreign machines have independent credentials; assign distinct lanes so local host/WSL account switches cannot mute their panes. */
 const RUNTIME_ENVIRONMENT_LANE_PREFIX = 'env:'

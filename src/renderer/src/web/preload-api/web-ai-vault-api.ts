@@ -1,75 +1,56 @@
 import {
   createSessionSearchClient,
   unavailableSessionSearchStatus
-} from '../../../../shared/ai-vault-search-client'
+} from '../../../../shared/ai-vault/search/ai-vault-search-client'
 import type { PreloadApi } from '../../../../preload/api-types'
 import type {
   AiVaultPrepareSessionResumeRequest,
   AiVaultPrepareSessionResumeResult
-} from '../../../../shared/ai-vault-resume-preparation'
-import type { AiVaultDeleteSessionArgs } from '../../../../shared/ai-vault-session-deletion'
+} from '../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
+import type { AiVaultDeleteSessionArgs } from '../../../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import type {
   AiVaultSessionTitlesArgs,
   AiVaultSessionTitlesResult
-} from '../../../../shared/ai-vault-session-title'
-import type { AiVaultListArgs, AiVaultListResult } from '../../../../shared/ai-vault-types'
+} from '../../../../shared/ai-vault/contracts/ai-vault-session-title'
+import type {
+  AiVaultListArgs,
+  AiVaultListResult
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   normalizeExecutionHostId,
   normalizeExecutionHostScope,
-  toRuntimeExecutionHostId
+  toRuntimeExecutionHostId,
+  type ExecutionHostId,
+  type ExecutionHostScope
 } from '../../../../shared/execution-host'
-import type { ExecutionHostId, ExecutionHostScope } from '../../../../shared/execution-host'
+
 import {
   assertEnvironmentPairing,
   callRuntimeEnvelope,
-  callRuntimeResult,
-  callEnvironmentEnvelope
+  callRuntimeResult
 } from './web-runtime-calls'
 import {
   readRuntimeAiVaultDeleteSessionResponse,
   runtimeAiVaultDeleteSessionParams
-} from '../../../../shared/ai-vault-runtime-session-delete'
+} from '../../../../shared/ai-vault/contracts/ai-vault-runtime-session-delete'
 import { requireActiveEnvironment } from './web-runtime-session'
 import { noopUnsubscribe } from './web-storage'
 import { translate } from '@/i18n/i18n'
 
 export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault']> {
+  const search = createSessionSearchClient(
+    (method, params) => callRuntimeResult(method, params),
+    'relay'
+  )
   return {
     // A browser searches only its selected paired runtime.
-    searchSessions: (request, executionHostScope, isActive = () => true) => {
-      if (!addressesOwnRuntime(executionHostScope)) {
-        return Promise.resolve({ kind: 'unavailable', reason: 'no-service' })
-      }
-      const environment = requireActiveEnvironment()
-      const pairingRevision = environment.pairingRevision ?? environment.createdAt
-      const runtimeId = environment.runtimeId ?? undefined
-      const active = () => isActive() && requireActiveEnvironment().id === environment.id
-      const search = createSessionSearchClient(async (method, params) => {
-        if (!active()) {
-          throw new Error('Session search retired')
-        }
-        const response = await callEnvironmentEnvelope(
-          environment.id,
-          method,
-          params,
-          undefined,
-          pairingRevision,
-          runtimeId,
-          active
-        )
-        if (!response.ok) {
-          throw Object.assign(new Error(response.error.message), { code: response.error.code })
-        }
-        return response.result
-      }, 'relay')
-      return search.searchSessions(request, active)
-    },
+    searchSessions: (request, executionHostScope) =>
+      addressesOwnRuntime(executionHostScope)
+        ? search.searchSessions(request)
+        : Promise.resolve({ kind: 'unavailable', reason: 'no-service' }),
     searchStatus: (executionHostScope) =>
       addressesOwnRuntime(executionHostScope)
-        ? createSessionSearchClient(
-            (method, params) => callRuntimeResult(method, params),
-            'relay'
-          ).searchStatus()
+        ? search.searchStatus()
         : Promise.resolve(unavailableSessionSearchStatus()),
     // Host-index consent requires the desktop operator’s settings surface.
     setSearchEnabled: () => Promise.reject(new Error('unsupported')),
@@ -89,11 +70,11 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
       return callRuntimeResult<AiVaultListResult>('aiVault.listSessions', {
         includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions,
         limit: args?.limit,
+        unlimited: args?.unlimited,
         force: args?.force,
         ...(requestedScope === executionHostId && args?.afterFingerprint !== undefined
           ? { afterFingerprint: args.afterFingerprint }
           : {}),
-        historyOwnership: args?.historyOwnership,
         scopePaths: args?.scopePaths,
         executionHostId
       }).then((result) =>

@@ -12,9 +12,9 @@ import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStore
-} from './agent-session-record-store-test-harness'
+} from './agent-session/records/agent-session-record-store-test-harness'
 import { hostTestMessage } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 
 // Width, link count and malformed bytes vary independently; no clock-dependent budget.
 describe('SQLite conversation reopen work', () => {

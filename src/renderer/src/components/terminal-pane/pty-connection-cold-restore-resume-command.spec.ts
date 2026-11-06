@@ -1,6 +1,6 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
   expectNoWindowStart,
@@ -17,7 +17,11 @@ import {
   createManager,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -72,6 +76,8 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
 
       try {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const paneKey = makePaneKey('tab-1', LEAF_2)
         let activePtyId: string | null = 'restored-session'
         const transport = createMockTransport('restored-session')
@@ -130,7 +136,9 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
           .mockResolvedValueOnce(1)
           .mockResolvedValueOnce(2)
 
-        connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+        connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks))
+        )
         await flushAsyncTicks(20)
         for (const fn of pendingTimeouts) {
           fn()
@@ -151,7 +159,7 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
         expect(transport.connect).toHaveBeenNthCalledWith(
           2,
           expect.objectContaining({
-            command: "codex 'resume' 'codex-session-1'",
+            command: "codex '-c' 'disable_paste_burst=true' 'resume' 'codex-session-1'",
             env: expect.objectContaining({
               ORCA_PANE_KEY: paneKey,
               ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
@@ -162,7 +170,11 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
         expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'restored-session')
         expect(deps.syncPanePtyLayoutBinding).not.toHaveBeenCalledWith(2, 'restored-session')
         expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'fresh-resume-pty')
-        expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+        expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
+          paneKey,
+          origin: 'quit',
+          restoreOnTabOpenOnly: true
+        })
         expect(window.api.pty.clearPendingPaneSerializer).toHaveBeenCalledWith(paneKey, 1)
       } finally {
         globalThis.setTimeout = originalSetTimeout
@@ -190,6 +202,8 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
 
       try {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks2 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const paneKey = makePaneKey('tab-1', LEAF_2)
         let activePtyId: string | null = 'restored-session'
         const transport = createMockTransport('restored-session')
@@ -255,7 +269,13 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
           .mockResolvedValueOnce(1)
           .mockResolvedValueOnce(2)
 
-        connectPanePty(...mockPanePtyArgs(createPane(2), createManager(2), deps))
+        connectPanePty(
+          ...mockPanePtyArgs(
+            createPane(2),
+            createManager(2),
+            bindPaneAgentTitleMocks(deps, agentTitleMocks2)
+          )
+        )
         await flushAsyncTicks(20)
         for (const fn of pendingTimeouts) {
           fn()
@@ -296,6 +316,8 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
       state: 'working' | 'done'
     ): Promise<void> {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const paneKey = makePaneKey('tab-1', LEAF_2)
       const transport = createMockTransport('restored-session')
       transport.connect.mockResolvedValue({
@@ -333,7 +355,9 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
         restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' }
       })
 
-      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+      connectPanePty(
+        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks3))
+      )
       await flushAsyncTicks(20)
 
       expect(transport.connect).toHaveBeenCalledTimes(1)
@@ -350,6 +374,8 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
 
     it('keeps a contentless reattach when a live status supersedes passive sleep evidence', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const paneKey = makePaneKey('tab-1', LEAF_2)
       const transport = createMockTransport('restored-session')
       transport.connect.mockResolvedValue({
@@ -398,7 +424,9 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
         restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' }
       })
 
-      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+      connectPanePty(
+        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks4))
+      )
       await flushAsyncTicks(20)
 
       expect(transport.connect).toHaveBeenCalledTimes(1)

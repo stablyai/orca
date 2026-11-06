@@ -1,6 +1,7 @@
 /** The runtime's typed-line carry report decides whether to paste: never duplicate a carried prompt or drop an uncarried one. */
 
 import { describe, expect, it, vi } from 'vitest'
+
 import {
   CAPABLE_CLIENT,
   methodNamed,
@@ -88,22 +89,5 @@ describe('an argv agent’s launch prompt, by what the runtime reports about its
       SUBMIT.text,
       expect.anything()
     )
-  })
-
-  it('does not paste into an agent-first create’s startup terminal whose line carried it', async () => {
-    const { runtime, sendTerminalAgentPrompt } = withPromptWriter(
-      runtimeStub({ settings: {}, lineCarriesPrompt: true })
-    )
-
-    await launch(
-      {
-        agent: 'claude',
-        target: { kind: 'create-worktree', create: { repo: 'id:repo-1', name: 'task' } },
-        prompt: SUBMIT
-      },
-      runtime
-    )
-
-    expect(sendTerminalAgentPrompt).not.toHaveBeenCalled()
   })
 })

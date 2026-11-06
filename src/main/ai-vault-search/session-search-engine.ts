@@ -1,14 +1,13 @@
 import type SyncDatabase from '../sqlite/sync-database'
-import type { TranscriptMessageRole } from '../ai-vault/session-transcript-consumers'
+import type { TranscriptMessageRole } from '../ai-vault/transcripts/session-transcript-consumers'
 import { sliceAtCodeUnitLimit } from '../ai-vault/session-scanner-text-normalization'
 import {
   hasAiVaultSearchQueryOperators,
   splitAiVaultSearchQuery,
   type AiVaultSearchQuerySplit
-} from '../../shared/ai-vault-search-query-operators'
-import { matchesAiVaultQueryOperators } from '../../shared/ai-vault-session-filters'
+} from '../../shared/ai-vault/search/ai-vault-search-query-operators'
+import { matchesAiVaultQueryOperators } from '../../shared/ai-vault/session-display/ai-vault-session-filters'
 import {
-  resolveSessionSearchLimit,
   SESSION_SEARCH_QUERY_MAX_LENGTH,
   type SessionSearchHit,
   type SessionSearchRequest,
@@ -16,6 +15,7 @@ import {
   type SessionSearchScope,
   type SessionSearchSourcePresence
 } from './session-search-engine-types'
+import { resolveSessionSearchLimit } from '../../shared/ai-vault/search/ai-vault-search-limit'
 import { readIndexGeneration, readIndexIncarnation } from './session-search-index-generation'
 import {
   rankSessionHits,
@@ -38,8 +38,6 @@ import {
 import { sessionRowFilter } from './session-search-row-filter'
 import { ensureSessionSearchQuerySchema } from './session-search-query-schema'
 import { EMPTY_SNIPPET, sessionSearchSnippet } from './session-search-snippet'
-import { sessionSearchProjectOwns } from './session-search-project-ownership'
-import type { SessionSearchProjectOwnership } from './session-search-project-ownership'
 import { sessionSourcePresence } from './session-search-source-presence'
 
 /** Candidate-limit tuning and measurements: docs/reference/agent-session-search-query-tuning.md. */
@@ -62,22 +60,11 @@ export type SessionSearchEngineOptions = {
 export class SessionSearchEngine {
   private readonly retrieval: SessionSearchRetrieval
   private readonly candidateLimit: number
-  private ownership?: SessionSearchProjectOwnership
 
   constructor(
     private readonly db: SyncDatabase,
     private readonly options: SessionSearchEngineOptions = {}
   ) {
-    this.db.function('canonical_project_owns', { deterministic: true }, (cwd, filePath) =>
-      Number(
-        Boolean(
-          this.ownership &&
-          typeof cwd === 'string' &&
-          typeof filePath === 'string' &&
-          sessionSearchProjectOwns(this.ownership, cwd, filePath)
-        )
-      )
-    )
     this.candidateLimit = options.sessionCandidateLimit ?? SESSION_SEARCH_CANDIDATE_LIMIT_DEFAULT
     // Install tables and generation triggers before preparing retrieval or accepting writes.
     ensureSessionSearchQuerySchema(this.db)
@@ -89,7 +76,6 @@ export class SessionSearchEngine {
   }
 
   search(request: SessionSearchRequest): SessionSearchResponse {
-    this.ownership = request.filters?.ownership
     const startedAt = performance.now()
     ensureSessionSearchQuerySchema(this.db)
     const generation = readIndexGeneration(this.db)
@@ -108,13 +94,7 @@ export class SessionSearchEngine {
     // Reject invalid cursors before paying for retrieval.
     const pageKey = sessionSearchPageKey(request)
     const offset = request.cursor
-      ? decodeSessionSearchCursor(
-          request.cursor,
-          generation,
-          pageKey,
-          incarnation,
-          this.ownership?.fingerprint
-        )
+      ? decodeSessionSearchCursor(request.cursor, generation, pageKey, incarnation)
       : 0
 
     const plan = planSessionSearchQuery(split.text)
@@ -141,13 +121,7 @@ export class SessionSearchEngine {
       page: {
         hasMore,
         cursor: hasMore
-          ? encodeSessionSearchCursor(
-              generation,
-              offset + limit,
-              pageKey,
-              incarnation,
-              this.ownership?.fingerprint
-            )
+          ? encodeSessionSearchCursor(generation, offset + limit, pageKey, incarnation)
           : null
       },
       truncated: {

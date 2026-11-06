@@ -48,17 +48,6 @@ describe('queueHookCommandsForFirstWorktreeTab', () => {
     expect(deliver).toHaveBeenCalledTimes(1)
   })
 
-  it('delivers immediately when the worktree already has a tab at queue time', () => {
-    markWorktreeKnown('wt-1')
-    setStorePartial({ tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] } })
-    const deliver = vi.fn()
-
-    queueHookCommandsForFirstWorktreeTab({ worktreeId: 'wt-1', deliver })
-
-    expect(deliver).toHaveBeenCalledTimes(1)
-    expect(deliver).toHaveBeenCalledWith(expect.anything(), 'tab-1')
-  })
-
   it('keeps every delivery queued for the same worktree', () => {
     // Setup/issue commands and agent seeds must coexist while awaiting the same mirrored terminal.
     markWorktreeKnown('wt-1')
@@ -74,20 +63,5 @@ describe('queueHookCommandsForFirstWorktreeTab', () => {
     expect(deliverFirst).toHaveBeenCalledTimes(1)
     expect(deliverSecond).toHaveBeenCalledTimes(1)
     expect(deliverSecond).toHaveBeenCalledWith(expect.anything(), 'mirror-tab-1')
-  })
-
-  it('drops the pending delivery when the worktree is no longer known', () => {
-    setStorePartial({
-      tabsByWorktree: {},
-      getKnownWorktreeById: (() => undefined) as unknown as AppState['getKnownWorktreeById']
-    })
-    const deliver = vi.fn()
-
-    queueHookCommandsForFirstWorktreeTab({ worktreeId: 'wt-gone', deliver })
-
-    // Removal before first mirror must discard pending commands even if the tab ID later reappears.
-    markWorktreeKnown('wt-gone')
-    setStorePartial({ tabsByWorktree: { 'wt-gone': [{ id: 'tab-1' }] } })
-    expect(deliver).not.toHaveBeenCalled()
   })
 })

@@ -6,6 +6,7 @@ import {
   resolveIssueGitHubApiRepositorySource
 } from './github-api-repository'
 import { acquire, classifyGhError, ghExecFileAsync, release } from './gh-utils'
+import { codeHostFailure, classifiedFailure } from '../../shared/code-host-failure-copy'
 
 // An explicit target keeps replies bound to the conversation; otherwise use the selected source.
 export async function addIssueComment(
@@ -33,7 +34,7 @@ export async function addIssueComment(
     localGitOptions
   )
   if (!ownerRepo) {
-    return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
+    return codeHostFailure('github.repoUnresolved')
   }
   await acquire()
   try {
@@ -57,7 +58,7 @@ export async function addIssueComment(
       html_url?: string
     }
     if (typeof data.id !== 'number' || !Number.isSafeInteger(data.id) || data.id < 1) {
-      return { ok: false, error: 'Unexpected response from GitHub' }
+      return codeHostFailure('github.unexpectedResponse')
     }
     const comment: PRComment = {
       id: data.id,
@@ -72,7 +73,7 @@ export async function addIssueComment(
     return { ok: true, comment }
   } catch (err) {
     const stderr = err instanceof Error ? err.message : String(err)
-    return { ok: false, error: classifyGhError(stderr).message }
+    return classifiedFailure(classifyGhError(stderr))
   } finally {
     release()
   }

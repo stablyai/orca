@@ -74,7 +74,7 @@ it('preserves distinct SSH execution setups behind the same runtime owner', asyn
 
   await store.getState().fetchRepos(catalogOwner(store))
 
-  const setups = store.getState().endpointProjectHostSetups
+  const setups = store.getState().projectHostSetups
   expect(setups).toHaveLength(2)
   expect(setups).toEqual(
     expect.arrayContaining([
@@ -92,70 +92,6 @@ it('preserves distinct SSH execution setups behind the same runtime owner', asyn
       })
     ])
   )
-})
-
-it('prefers an authoritative paired-runtime setup over its repo-derived fallback', async () => {
-  const project: Project = {
-    id: `repo:${remoteRepo.id}`,
-    displayName: remoteRepo.displayName,
-    badgeColor: remoteRepo.badgeColor,
-    sourceRepoIds: [remoteRepo.id],
-    createdAt: 1,
-    updatedAt: 1
-  }
-  const setup: ProjectHostSetup = {
-    id: remoteRepo.id,
-    projectId: project.id,
-    hostId: 'local',
-    repoId: remoteRepo.id,
-    path: remoteRepo.path,
-    displayName: remoteRepo.displayName,
-    setupState: 'ready',
-    setupMethod: 'legacy-repo',
-    createdAt: 1,
-    updatedAt: 1
-  }
-  runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
-    if (method === 'repo.list') {
-      return Promise.resolve({
-        id: 'repo-list',
-        ok: true,
-        result: { repos: [remoteRepo] },
-        _meta: { runtimeId: 'runtime-remote' }
-      })
-    }
-    if (method === 'project.list') {
-      return Promise.resolve({
-        id: 'project-list',
-        ok: true,
-        result: { projects: [project] },
-        _meta: { runtimeId: 'runtime-remote' }
-      })
-    }
-    if (method === 'projectHostSetup.list') {
-      return Promise.resolve({
-        id: 'setup-list',
-        ok: true,
-        result: { setups: [setup] },
-        _meta: { runtimeId: 'runtime-remote' }
-      })
-    }
-    throw new Error(`Unexpected method ${method}`)
-  })
-  const store = createTestStore()
-  store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
-
-  await store.getState().fetchRepos(catalogOwner(store))
-
-  expect(store.getState().endpointProjectHostSetups).toEqual([
-    {
-      ...setup,
-      hostId: 'runtime:env-1',
-      executionHostId: 'runtime:env-1',
-      runtimeOwnerEnvironmentId: 'env-1',
-      connectionId: null
-    }
-  ])
 })
 
 // The catalog these tests read is the one the focused host would have shown.

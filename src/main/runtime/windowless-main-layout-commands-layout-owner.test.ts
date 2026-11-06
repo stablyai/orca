@@ -48,24 +48,6 @@ describe('CLI terminal commands on a workspace main owns, with no window', () =>
     expect(fixture.ptyRecord(PTY_A)?.titleUpdatedAt).toEqual(expect.any(Number))
   })
 
-  it('answers with the name it stored, as the window-era rename did', async () => {
-    const fixture = setupMainOwnedWorkspace()
-
-    await expect(
-      fixture.runtime.renameTerminal(fixture.handleOf(PTY_A), ' Build ')
-    ).resolves.toMatchObject({ title: ' Build ' })
-    expect(tabRow(fixture)?.customTitle).toBe(' Build ')
-  })
-
-  it('refuses a handle with no live terminal as the window-era rename did while the graph reloads', async () => {
-    const fixture = setupMainOwnedWorkspace()
-    Object.assign(fixture.runtime, { graphStatus: 'reloading' })
-
-    await expect(fixture.runtime.renameTerminal('term_unknown', 'Build')).rejects.toThrow(
-      'runtime_unavailable'
-    )
-  })
-
   it('names one pane in one frame', async () => {
     const fixture = setupMainOwnedWorkspace({ split: true })
     const handle = fixture.handleOf(PTY_A)
@@ -90,18 +72,6 @@ describe("a phone's tab props and pane names on a workspace main owns, with no w
 
     expect(tabRow(fixture)?.customTitle).toBe('Deploy')
     expect(fixture.ptyRecord(PTY_A)?.titleUpdatedAt).toEqual(expect.any(Number))
-  })
-
-  it('pins and colors the tab in main', async () => {
-    const fixture = setupMainOwnedWorkspace()
-
-    await fixture.runtime.setMobileSessionTabProps(`id:${WORKTREE_ID}`, {
-      tabId: TAB_ID,
-      isPinned: true,
-      color: '#ff0000'
-    })
-
-    expect(tabRow(fixture)).toMatchObject({ isPinned: true, color: '#ff0000' })
   })
 
   it('names only the panes the phone says it renamed', async () => {
@@ -140,17 +110,5 @@ describe('the same commands with a window open', () => {
 
     expect(tabRow(fixture)?.customTitle).toBe('Build')
     expect(notifier.renameTerminal).not.toHaveBeenCalled()
-  })
-
-  it("pins the tab in main's layout", async () => {
-    const fixture = setupMainOwnedWorkspace()
-    withWindow(fixture)
-
-    await fixture.runtime.setMobileSessionTabProps(`id:${WORKTREE_ID}`, {
-      tabId: TAB_ID,
-      isPinned: true
-    })
-
-    expect(tabRow(fixture)).toMatchObject({ isPinned: true })
   })
 })

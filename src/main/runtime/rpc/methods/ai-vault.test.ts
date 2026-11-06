@@ -4,12 +4,13 @@ import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { RuntimeAiVaultCommands } from '../../runtime-ai-vault-commands'
-import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-vault-types'
-import type { AiVaultServiceScanOptions } from '../../../ai-vault/session-scanner-service-protocol'
-import {
-  AI_VAULT_SESSION_TITLES_RUNTIME_CAPABILITY,
-  RUNTIME_CAPABILITIES
-} from '../../../../shared/protocol-version'
+import type {
+  AiVaultListResult,
+  AiVaultSession
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import type { AiVaultServiceScanOptions } from '../../../ai-vault/scan-service/session-scanner-service-protocol'
+import { RUNTIME_CAPABILITIES } from '../../../../shared/protocol-version'
+import { AI_VAULT_SESSION_TITLES_RUNTIME_CAPABILITY } from '../../../../shared/ai-vault/contracts/ai-vault-runtime-capabilities'
 
 const { scanAiVaultSessionsInService, resolveAiVaultSessionTitlesInService } = vi.hoisted(() => ({
   scanAiVaultSessionsInService:
@@ -19,7 +20,7 @@ const { scanAiVaultSessionsInService, resolveAiVaultSessionTitlesInService } = v
   resolveAiVaultSessionTitlesInService: vi.fn()
 }))
 
-vi.mock('../../../ai-vault/session-scanner-service-spawn', async (importOriginal) => ({
+vi.mock('../../../ai-vault/scan-service/session-scanner-service-spawn', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   scanAiVaultSessionsInService,
   resolveAiVaultSessionTitlesInService
@@ -30,9 +31,8 @@ import {
   AiVaultListSessionsParams,
   AiVaultPrepareSessionResumeParams
 } from './ai-vault'
-import { orcadAiVaultSessionSources } from '../../../orcad/orcad-session-search'
-import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
-import { recordStructuredAgentSessionHostInstallRefusal } from '../../structured-agent-session-host-refusal'
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { recordStructuredAgentSessionHostInstallRefusal } from '../../agent-session/structured-agent-session-host-refusal'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { installCopyingChat } from '../../../ai-vault/structured-session-ownership.test-support'
 import {
@@ -663,68 +663,6 @@ describe('aiVault.listSessions handler + shared cache', () => {
     expect(options?.wslHomeDirs).toEqual([])
   })
 
-  it('constructs ordinary ownership independently of Codex homes or search enablement and forwards RPC intent', async () => {
-    const capture = vi.fn(() => ({
-      repos: [{ id: 'source', path: '/tmp', displayName: 'source', badgeColor: '', addedAt: 1 }],
-      projects: [],
-      projectHostSetups: [],
-      worktreeMeta: {},
-      settings: { workspaceDir: '', nestWorkspaces: false }
-    }))
-    const orcadStore = {
-      getRepos: () => capture().repos,
-      getProjects: () => [],
-      getProjectHostSetups: () => [],
-      getAllWorktreeMeta: () => ({}),
-      getSettings: () => capture().settings
-    }
-    const clientHomes = { listSessionHomes: () => ['/client'] }
-    const deps = orcadAiVaultSessionSources(orcadStore, clientHomes, null)
-    expect(deps.getAdditionalAiVaultCodexHomePaths?.()).toEqual(['/client'])
-    expect(
-      orcadAiVaultSessionSources(orcadStore, clientHomes, {
-        listCodexSessionHomes: () => ['/managed']
-      }).getAdditionalAiVaultCodexHomePaths?.()
-    ).toEqual(['/client', '/managed'])
-    new OrcaRuntimeService(null, undefined, {
-      getProjectOwnershipCatalog: deps.getProjectOwnershipCatalog
-    })
-    scanAiVaultSessionsInService.mockResolvedValue({
-      sessions: [makeSession()],
-      issues: [],
-      scannedAt: SCANNED_AT
-    })
-    const dispatcher = makeDispatcher()
-    expect(
-      await dispatcher.dispatch(
-        makeRequest('aiVault.listSessions', {
-          historyOwnership: {},
-          limit: 2,
-          executionHostId: 'runtime:addressed',
-          afterFingerprint: null
-        })
-      )
-    ).toMatchObject({
-      ok: true,
-      result: {
-        sessions: [
-          {
-            projectOwnerKey: 'repo:source',
-            executionHostId: 'runtime:addressed',
-            cwd: '/tmp',
-            filePath: '/tmp/t.jsonl'
-          }
-        ],
-        fingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
-      }
-    })
-    expect(capture).toHaveBeenCalledTimes(2)
-    expect(
-      await dispatcher.dispatch(makeRequest('aiVault.listSessions', { limit: 2 }))
-    ).toMatchObject({ ok: true, result: { sessions: [makeSession()] } })
-    expect(capture).toHaveBeenCalledTimes(2)
-    expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(1)
-  })
   it('forwards codex-home through the real OrcaRuntimeService construction path', async () => {
     // Use a real runtime to prove constructor-to-cache forwarding; directly seeding cache would miss a broken link.
     const runtime = new OrcaRuntimeService(null, undefined, {

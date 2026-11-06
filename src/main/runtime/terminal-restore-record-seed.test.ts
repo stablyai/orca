@@ -1,15 +1,15 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
-import { bindPaneFirst } from './bind-first-pane.test-fixture'
+import { bindPaneFirst } from './orca-runtime-tests/bind-first-pane.test-fixture'
 import type {
   RuntimePtyTabCloseAuthority,
   HeadlessSeedMetadata,
   RuntimeTerminalBufferSnapshot
-} from './runtime-terminal-state-records'
+} from './terminal/records/runtime-terminal-state-records'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../shared/runtime-session-contracts'
 import type { PtyProviderBufferSnapshot } from '../providers/pty-provider-contract'
 
@@ -243,8 +243,12 @@ describe('terminal query dispatch characterization', () => {
       if (!pty) {
         throw new Error('missing_test_pty')
       }
-      pty.tabId = 'tab'
-      pty.paneKey = makePaneKey('tab', '00000000-0000-4000-8000-000000000001')
+      this.terminalIdentity.setRecordedSurface(
+        pty,
+        'tab',
+        makePaneKey('tab', '00000000-0000-4000-8000-000000000001'),
+        undefined
+      )
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         // Main's layout is the only answer to which pane holds the terminal; it needs a session.
         Reflect.set(this, 'store', {})
@@ -607,19 +611,30 @@ describe('terminal view promise characterization', () => {
     await expect(runtime.writeTerminalPreviewInput('view-pty', '')).resolves.toBe(false)
     expect(initialDriver).not.toHaveBeenCalled()
     const receivers: OrcaRuntimeService[] = []
-    runtime['writeTerminalInputChunks'] = async function (this: OrcaRuntimeService, ...args) {
+    const writeChunks = runtime['writeTerminalInputChunks']
+    const currentDriver = vi.fn(function (this: OrcaRuntimeService, _ptyId: string) {
       receivers.push(this)
-      expect(args.length).toBe(3)
-      expect(args[2].inputKind).toBe('driving')
-      runtime.getDriver = function (this: OrcaRuntimeService) {
-        receivers.push(this)
-        return { kind: 'mobile', clientId: 'phone' }
-      }
-      await args[2].beforeWrite?.(args[0])
-      return undefined
-    }
+      return { kind: 'mobile' as const, clientId: 'phone' }
+    })
+    runtime['writeTerminalInputChunks'] = vi.fn(function (
+      this: OrcaRuntimeService,
+      ...args: Parameters<typeof writeChunks>
+    ) {
+      receivers.push(this)
+      runtime.getDriver = currentDriver
+      return writeChunks.apply(this, args)
+    })
     await expect(runtime.writeTerminalPreviewInput('view-pty', 'paste')).resolves.toBe(false)
-    expect(initialDriver).toHaveBeenCalledOnce()
+    expect(runtime['writeTerminalInputChunks']).toHaveBeenCalledExactlyOnceWith(
+      'view-pty',
+      'paste',
+      {
+        inputKind: 'driving',
+        inputSource: 'desktop'
+      }
+    )
+    expect(initialDriver).not.toHaveBeenCalled()
+    expect(currentDriver).toHaveBeenCalledExactlyOnceWith('view-pty')
     expect(receivers).toEqual([runtime, runtime])
   })
 })

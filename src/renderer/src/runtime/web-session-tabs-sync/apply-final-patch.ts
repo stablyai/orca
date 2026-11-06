@@ -2,6 +2,7 @@ import { collectCollidingRetractionPaneKeys } from './retraction-pane-ownership'
 import type { WebSessionTabsSyncState } from './state'
 import type { applyActiveStateUpdates } from './apply-active-state'
 import { buildMirroredAgentStatusPatch } from './agent-status-patch'
+import { buildMirroredRuntimePaneTitlePatch } from './runtime-pane-title-patch'
 import {
   buildRemirroredClosedTabMarkerLiftPatch,
   buildRetractedMirroredTabSweepPatch
@@ -65,6 +66,16 @@ export function buildWebSessionTabsFinalPatch(
     worktreeId,
     batchContext
   )
+  const runtimePaneTitlePatch =
+    context.options?.terminalPtyMode === 'local'
+      ? null
+      : buildMirroredRuntimePaneTitlePatch(
+          state,
+          mirroredTerminalTabs,
+          terminalSurfaceTabs,
+          now,
+          batchContext
+        )
   const agentStatusPatch = buildMirroredAgentStatusPatch(
     state,
     currentTerminalTabs,
@@ -107,6 +118,7 @@ export function buildWebSessionTabsFinalPatch(
         )
 
   const patch: Partial<WebSessionTabsSyncState> = {
+    ...runtimePaneTitlePatch,
     ...agentStatusPatch,
     ...retractedTabSweepPatch,
     ...remirroredClosedTabLiftPatch,

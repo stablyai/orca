@@ -21,6 +21,11 @@ import {
 import { getRuntimeTargetHostId } from '../../runtime/runtime-client-target'
 import { mergeFetchedHostProjectCatalog } from '../../../../shared/project-compatibility-host-merge'
 import { scheduleSafeAutoForkSync } from './safe-auto-fork-sync'
+import { noteLiveRepoCatalogApplied } from './saved-host-catalog-rows'
+import {
+  withWslMovedRepoIds,
+  withWslMovedSetupScriptDismissals
+} from './wsl-moved-repo-ui-retention'
 
 export function createRuntimeRepoCatalogActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -57,9 +62,9 @@ export function createRuntimeRepoCatalogActions(
           const validRepoHostIdentities = new Set(finalizedRepos.map(getRepoHostIdentity))
           const mergedProjectCompatibility = mergeFetchedHostProjectCatalog({
             previous: {
-              projects: s.endpointProjects,
+              projects: s.projects,
               projectHostSetups: filterSetupsForPrunedRepoRows(
-                s.endpointProjectHostSetups,
+                s.projectHostSetups,
                 result.repos,
                 finalizedRepos
               )
@@ -105,18 +110,30 @@ export function createRuntimeRepoCatalogActions(
                 : {}
               : {}),
             pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
-            ...reconcileFetchedCatalogWorktreeState(s, catalog, finalizedRepos),
-            endpointProjects: mergedProjectCompatibility.projects,
-            endpointProjectHostSetups: mergedProjectCompatibility.projectHostSetups,
+            ...reconcileFetchedCatalogWorktreeState(
+              s,
+              catalog,
+              finalizedRepos,
+              reconciliation.pendingReadoptions
+            ),
+            ...mergedProjectCompatibility,
             activeRepoId:
               s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
-            filterRepoIds: retainValidFilterRepoIds(s.filterRepoIds, validRepoIds),
-            setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
+            filterRepoIds: retainValidFilterRepoIds(
+              s.filterRepoIds,
+              withWslMovedRepoIds(validRepoIds, s.wslMovedProjects)
+            ),
+            setupScriptPromptDismissedRepoIds: withWslMovedSetupScriptDismissals(
               s.setupScriptPromptDismissedRepoIds,
-              validRepoHostIdentities
+              filterSetupScriptPromptDismissalsToValidRepos(
+                s.setupScriptPromptDismissedRepoIds,
+                validRepoHostIdentities
+              ),
+              s.wslMovedProjects
             )
           }
         })
+        noteLiveRepoCatalogApplied(get, targetHostId)
         scheduleSafeAutoForkSync(finalizedHostRepos)
         return finalizedHostRepos
       } catch (err) {

@@ -225,6 +225,12 @@ export function createSsh2Module(): Ssh2ModuleMock {
   }
 }
 
+/** Factory for vi.mock('../ssh2-module-load'): product code requires ssh2 lazily, past vi.mock('ssh2'). */
+export function createSsh2LoaderModule(): { loadSsh2: () => Ssh2ModuleMock } {
+  const ssh2 = createSsh2Module()
+  return { loadSsh2: () => ssh2 }
+}
+
 export function resetSsh2ClientState(): void {
   for (const client of clientInstances) {
     client.clearPendingTimers()

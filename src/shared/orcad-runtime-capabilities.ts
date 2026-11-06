@@ -22,10 +22,14 @@ export const HOST_ACCOUNT_LAUNCH_ENV_RUNTIME_CAPABILITY = 'accounts.host-launch-
 // Older orcads reject --reclaim-stale-lock; without this capability offer manual instructions.
 export const ORCAD_STALE_LOCK_RECLAIM_RUNTIME_CAPABILITY = 'orcad.stale-lock-reclaim.v1' as const
 
+// A WSL host's Remove asks host.peerDesktops before ending a server other desktops may share.
+export const ORCAD_PEER_DESKTOPS_RUNTIME_CAPABILITY = 'orcad.peer-desktops.v1' as const
+
 export const ORCAD_RUNTIME_CAPABILITIES = [
   ORCAD_STALE_LOCK_RECLAIM_RUNTIME_CAPABILITY,
   ORCAD_TERMINAL_CENSUS_RUNTIME_CAPABILITY,
   ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY,
   ORCAD_MIGRATION_CATALOG_ABORT_BY_REFERENCE_RUNTIME_CAPABILITY,
-  HOST_ACCOUNT_LAUNCH_ENV_RUNTIME_CAPABILITY
+  HOST_ACCOUNT_LAUNCH_ENV_RUNTIME_CAPABILITY,
+  ORCAD_PEER_DESKTOPS_RUNTIME_CAPABILITY
 ] as const

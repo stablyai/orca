@@ -2,6 +2,7 @@
 
 import {
   AgentSessionPreSpawnError,
+  launchPreparationFailure,
   type StructuredAgentSessionAcquireInput
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
@@ -29,7 +30,7 @@ export async function prepareAcpLaunch<
   closedBeforeSpawn: () => void
 ): Promise<Launch> {
   const { spec } = deps
-  const launch = await resolve().catch(preSpawnFailure)
+  const launch = await resolve().catch(preparationFailure)
   closedBeforeSpawn()
   // Only a missed lookup returns the bare command; explicit Command settings resolve or fail.
   if (spec.managedRuntime && launch.command === spec.command) {
@@ -40,12 +41,12 @@ export async function prepareAcpLaunch<
   }
   const { prepare } = spec.account
   if (prepare) {
-    await prepare(launch.env).catch(preSpawnFailure)
+    await prepare(launch.env).catch(preparationFailure)
     closedBeforeSpawn()
   }
   return launch
 }
 
-function preSpawnFailure(error: unknown): never {
-  throw new AgentSessionPreSpawnError(error)
+function preparationFailure(error: unknown): never {
+  throw launchPreparationFailure(error)
 }

@@ -1,10 +1,10 @@
+import { nativeChatComposerDestination } from './native-chat-composer-destination'
 import { useCallback, useEffect } from 'react'
 import type { RefObject } from 'react'
 import { toast } from 'sonner'
 import { isEditableTarget } from '@/lib/editable-target'
 import {
   NativeChatPasteRequest,
-  findNativeChatAnswerField,
   findNativeChatPasteField,
   nativeChatPasteUnavailableNotice,
   NATIVE_CHAT_PASTE_REQUEST_EVENT
@@ -18,11 +18,14 @@ type NativeChatPasteBridgeRefs = {
   rootRef: RefObject<HTMLDivElement | null>
   composerRef: RefObject<NativeChatComposerHandle | null>
   /** Paste here while the question card owns input and the composer is unmounted. */
-  questionAnswerInputRef?: RefObject<HTMLInputElement | null>
+  questionAnswerInputRef?: RefObject<HTMLInputElement | HTMLTextAreaElement | null>
 }
 
 /** Text-only on purpose: an answer input takes no image attachments. */
-function pasteClipboardTextInto(input: HTMLInputElement, stillTarget: () => boolean): void {
+function pasteClipboardTextInto(
+  input: HTMLInputElement | HTMLTextAreaElement,
+  stillTarget: () => boolean
+): void {
   void (async () => {
     const text = await window.api.ui
       .readClipboardText({ maxBytes: TEXT_CONTROL_PASTE_MAX_BYTES })
@@ -40,18 +43,9 @@ export function useNativeChatPasteBridge({
   rootRef,
   composerRef,
   questionAnswerInputRef
-}: NativeChatPasteBridgeRefs): (origin?: HTMLTextAreaElement | HTMLInputElement) => void {
+}: NativeChatPasteBridgeRefs): (origin?: HTMLTextAreaElement) => void {
   const pasteClipboardIntoComposer = useCallback(
-    (
-      origin?: HTMLTextAreaElement | HTMLInputElement,
-      mode: 'paste' | 'paste-and-match-style' = 'paste'
-    ) => {
-      if (origin instanceof HTMLInputElement) {
-        if (findNativeChatAnswerField(origin, rootRef.current) === origin) {
-          pasteClipboardTextInto(origin, () => origin.isConnected)
-        }
-        return
-      }
+    (origin?: HTMLTextAreaElement, mode: 'paste' | 'paste-and-match-style' = 'paste') => {
       if (origin) {
         if (findNativeChatPasteField(origin, rootRef.current) === origin) {
           origin.focus({ preventScroll: true })
@@ -65,8 +59,8 @@ export function useNativeChatPasteBridge({
         }
         return
       }
-      if (composerRef.current) {
-        composerRef.current.pasteFromClipboard()
+      if (nativeChatComposerDestination(rootRef.current, composerRef.current)) {
+        nativeChatComposerDestination(rootRef.current, composerRef.current)?.pasteFromClipboard()
         return
       }
       const answerInput = questionAnswerInputRef?.current
@@ -88,12 +82,19 @@ export function useNativeChatPasteBridge({
         return
       }
       if (isEditableTarget(event.target)) {
-        if (event.target instanceof Node && composerRef.current?.contains(event.target)) {
-          composerRef.current.handlePasteEvent(event)
+        if (
+          event.target instanceof Node &&
+          nativeChatComposerDestination(rootRef.current, composerRef.current)?.contains(
+            event.target
+          )
+        ) {
+          nativeChatComposerDestination(rootRef.current, composerRef.current)?.handlePasteEvent(
+            event
+          )
         }
         return
       }
-      const composer = composerRef.current
+      const composer = nativeChatComposerDestination(rootRef.current, composerRef.current)
       if (composer) {
         composer.handlePasteEvent(event)
         event.preventDefault()
@@ -126,7 +127,10 @@ export function useNativeChatPasteBridge({
     }
     // Named-pane paste requests carry no clipboard event data.
     const onPasteRequest = (event: Event): void => {
-      if (composerRef.current || questionAnswerInputRef?.current) {
+      if (
+        nativeChatComposerDestination(rootRef.current, composerRef.current) ||
+        questionAnswerInputRef?.current
+      ) {
         event.preventDefault()
         pasteClipboardIntoComposer()
       }
@@ -150,7 +154,9 @@ export function useNativeChatPasteBridge({
       }
       if (
         isEditableTarget(activeElement) &&
-        !composerRef.current?.contains(activeElement) &&
+        !nativeChatComposerDestination(rootRef.current, composerRef.current)?.contains(
+          activeElement
+        ) &&
         activeElement !== questionAnswerInputRef?.current
       ) {
         return

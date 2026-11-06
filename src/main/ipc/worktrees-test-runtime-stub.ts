@@ -1,6 +1,6 @@
-import { _resetPendingWorktreeRemovalsForTests } from '../worktree-background-removal'
+import { _resetPendingWorktreeRemovalsForTests } from '../workspaces/removal/worktree-background-removal'
 import { vi } from 'vitest'
-import { WorkspaceLifecycleQueue } from '../runtime/workspaces/workspace-lifecycle-queue'
+import { WorkspaceLifecycleQueue } from '../runtime/workspaces/lifecycle/workspace-lifecycle-queue'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
 
 export type WorktreeRuntimeStub = {
@@ -15,6 +15,7 @@ export type WorktreeRuntimeStub = {
   clearOptimisticReconcileToken: ReturnType<typeof vi.fn>
   releaseRemovedWorktreeHostSessions: ReturnType<typeof vi.fn>
   resolveManagedMrBase: ReturnType<typeof vi.fn>
+  getSetupTerminalTitle: ReturnType<typeof vi.fn>
   createTerminal: ReturnType<typeof vi.fn>
   invalidateWorktreeCatalog: ReturnType<typeof vi.fn>
   splitTerminal: ReturnType<typeof vi.fn>
@@ -26,7 +27,7 @@ export type WorktreeRuntimeStub = {
   workspaceLifecycle: WorkspaceLifecycleQueue | null
 }
 
-/** Minimal create-flow runtime; fetch-remote-cache.test.ts covers actual fetch caching. */
+/** Minimal create-flow runtime. */
 export function createWorktreeRuntimeStub(mainWindow?: {
   webContents: { send: (channel: string, ...args: unknown[]) => unknown }
 }): WorktreeRuntimeStub {
@@ -45,6 +46,7 @@ export function createWorktreeRuntimeStub(mainWindow?: {
     clearOptimisticReconcileToken: vi.fn(),
     releaseRemovedWorktreeHostSessions: vi.fn(),
     resolveManagedMrBase: vi.fn().mockResolvedValue({ baseBranch: 'origin/mr-branch' }),
+    getSetupTerminalTitle: vi.fn().mockReturnValue('Setup'),
     createTerminal: vi.fn().mockResolvedValue({
       handle: 'term-startup',
       worktreeId: 'repo-1::/workspace/improve-dashboard',

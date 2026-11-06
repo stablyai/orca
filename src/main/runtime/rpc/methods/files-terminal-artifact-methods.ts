@@ -2,6 +2,7 @@ import { defineMethod } from '../core'
 import { remoteFileContentBudget } from './files-remote-content-budget'
 import {
   TerminalArtifactFile,
+  TerminalArtifactFileChunk,
   TerminalArtifactFileWrite
 } from '../../../../shared/rpc-contract/files-terminal-artifact-params'
 
@@ -39,6 +40,20 @@ export const FILE_TERMINAL_ARTIFACT_METHODS = [
             budget
           )
     }
+  }),
+  defineMethod({
+    name: 'files.readTerminalArtifactChunk',
+    permission: 'workspace',
+    params: TerminalArtifactFileChunk,
+    handler: async (params, { runtime, clientId }) =>
+      runtime.readTerminalArtifactChunk(
+        params.worktree,
+        params.grantId,
+        params.absolutePath,
+        params.offset,
+        params.length,
+        clientId
+      )
   }),
   defineMethod({
     name: 'files.writeTerminalArtifact',

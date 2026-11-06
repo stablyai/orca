@@ -1,4 +1,7 @@
-import { hasSleptAgentToWake, type SleepingAgentSessionRecord } from './agent-session-resume'
+import {
+  hasSleptAgentToWake,
+  type SleepingAgentSessionRecord
+} from './agent-session/lifecycle/agent-session-resume'
 import type { ExecutionHostId } from './execution-host'
 
 /** A host that runs part of a workspace: this desktop's main, or a paired server. */
@@ -90,4 +93,11 @@ export function phoneWakeReport(
       record.state !== 'done'
   )
   return mainResumes ? 'requested' : 'not-applicable'
+}
+
+/** Refusal for an automatic spawn into a worktree whose terminals the host has put to sleep. */
+export const WORKTREE_TERMINALS_SLEEPING_ERROR = 'worktree_terminals_sleeping'
+
+export function isWorktreeTerminalsSleepingError(error: unknown): boolean {
+  return error instanceof Error && error.message === WORKTREE_TERMINALS_SLEEPING_ERROR
 }

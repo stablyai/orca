@@ -1,8 +1,6 @@
-import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
-import {
-  runtimeHostConnectionStateForEntry,
-  type RuntimeHostConnectionState
-} from '@/runtime/runtime-host-connection-state'
+import type { RuntimeEnvironmentStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
+import type { RuntimeHostConnectionState } from '../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import { createPairedRuntimeParkingEnvironmentIdsSelector } from '@/components/terminal-pane/paired-runtime-parking-capabilities'
 
 type RuntimeStatusState = {

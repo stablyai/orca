@@ -1,6 +1,6 @@
 import type { OrcaRuntimeWithBindPtyIncarnationHandle as BindPtyIncarnationHandleMethods } from '../terminal/identity/terminal-handle-bindings'
 import { OrcaRuntimeWithTouchMobileSessionTabsForWorktree } from './mobile-session-membership'
-import type { RetiredTerminalSurface } from '../mobile-session-terminal-retirement'
+import type { RetiredTerminalSurface } from '../terminal/surface/mobile-session-terminal-retirement'
 import type { RuntimeMobileSessionRetiredTerminalSurface } from '../../../shared/runtime-types'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
@@ -10,9 +10,9 @@ import {
   forgetClosedPaneOfExit,
   type ClosedPaneOfExit
 } from '../terminal/lifecycle/closed-pane-of-exited-pty'
-import { retireTerminalSurfaceFromPersistence } from '../mobile-session-terminal-persistence-retirement'
-import { retireTerminalSurfacesFromSnapshot } from '../mobile-session-terminal-retirement'
-import { attachRetirementProofsToSnapshot } from '../mobile-session-terminal-retirement-proof'
+import { retireTerminalSurfaceFromPersistence } from '../terminal/surface/mobile-session-terminal-persistence-retirement'
+import { retireTerminalSurfacesFromSnapshot } from '../terminal/surface/mobile-session-terminal-retirement'
+import { attachRetirementProofsToSnapshot } from '../terminal/surface/mobile-session-terminal-retirement-proof'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 
 export abstract class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends OrcaRuntimeWithTouchMobileSessionTabsForWorktree {
@@ -134,6 +134,14 @@ export abstract class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends O
     }
     // One repo epoch may cover many exits; preserve surfaces rebound to other PTYs/incarnations.
     const removableRetiredSurfaces = [...staged.accepted, ...staged.unpersisted]
+    if (removableRetiredSurfaces.length > 0) {
+      console.info(
+        `[runtime] exit of pty ${ptyId} retires ${removableRetiredSurfaces.length} terminal surface(s) (${staged.kept.length} kept):`,
+        removableRetiredSurfaces.map(
+          (surface) => `${surface.worktreeId} ${surface.parentTabId}:${surface.leafId}`
+        )
+      )
+    }
     for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
       // Exit itself attests retirement even if the renderer already removed persistence; withholding proof strands mirrors on quiet workspaces.
       const retirementProofs = terminalHandle

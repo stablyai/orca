@@ -1,11 +1,11 @@
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 import type { Worktree, WorkspaceAttachment } from '../../../../shared/worktree/types'
-import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
-import { getLegacyWorkspaceReviewSelectionUpdates } from '../../../../shared/workspace-attachment-legacy'
+import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachments/workspace-attachment-mutation'
+import { getLegacyWorkspaceReviewSelectionUpdates } from '../../../../shared/workspace-attachments/workspace-attachment-legacy'
 import {
   WORKTREE_LINKED_ITEMS_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY
-} from '../../../../shared/workspace-attachment-capabilities'
+} from '../../../../shared/workspace-attachments/workspace-attachment-capabilities'
 import type { PreloadApi } from '../../../../preload/api-types'
 import type {
   ForceDeleteWorktreeBranchResult,
@@ -97,7 +97,10 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
           : {}),
         parentWorkspace: args.parentWorkspace,
         // Why: every create through this API is an in-app action, never the CLI's parent flag.
-        ...(args.parentWorkspace ? { parentWorkspaceOrigin: 'manual' } : {}),
+        ...(args.parentWorkspace || args.crossStoreParent
+          ? { parentWorkspaceOrigin: 'manual' }
+          : {}),
+        ...(args.crossStoreParent ? { crossStoreParent: args.crossStoreParent } : {}),
         workspaceStatus: args.workspaceStatus,
         manualOrder: args.manualOrder,
         automationProvenanceRequest: args.automationProvenanceRequest,
@@ -122,21 +125,37 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         baseBranch
       })
     },
-    resolvePrBase: async ({ repoId, prNumber, headRefName, baseRefName, isCrossRepository }) =>
+    resolvePrBase: async ({
+      repoId,
+      prNumber,
+      headRefName,
+      baseRefName,
+      isCrossRepository,
+      wakeWslDistro
+    }) =>
       callRuntimeResult('worktree.resolvePrBase', {
         repo: repoId,
         prNumber,
         headRefName,
         baseRefName,
-        isCrossRepository
+        isCrossRepository,
+        ...(wakeWslDistro ? { wakeWslDistro } : {})
       }),
-    resolveMrBase: async ({ repoId, mrIid, sourceBranch, targetBranch, isCrossRepository }) =>
+    resolveMrBase: async ({
+      repoId,
+      mrIid,
+      sourceBranch,
+      targetBranch,
+      isCrossRepository,
+      wakeWslDistro
+    }) =>
       callRuntimeResult('worktree.resolveMrBase', {
         repo: repoId,
         mrIid,
         sourceBranch,
         targetBranch,
-        isCrossRepository
+        isCrossRepository,
+        ...(wakeWslDistro ? { wakeWslDistro } : {})
       }),
     // Each workspace sleeps on the paired host, which runs its terminals, chats and VM.
     sleep: async ({ targets, markChatsAsleep }) =>
@@ -232,6 +251,8 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
       await callRuntimeResult<{
         lineage: Record<string, WorktreeLineage>
         workspaceLineage?: Record<string, WorkspaceLineage>
+        crossStoreLineage?: Record<string, unknown>
+        installationId?: string
       }>('worktree.lineageList'),
     updateLineage: async ({ worktreeId, parentWorktreeId, noParent }) => {
       invalidateRuntimeWorktreeCaches()

@@ -1,9 +1,9 @@
 import { ipcMain } from 'electron'
-import { getLocalWorktreeCatalogVersion } from '../../../local-worktree-scan-generation'
+import { getLocalWorktreeCatalogVersion } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { withWorktreeSpan } from '../../../observability/instrumentation'
-import { areWorktreePathsEqual } from '../../../git/worktree-path-comparison'
+import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
 import { parseWorktreeId } from '../../worktree-logic'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
@@ -20,15 +20,15 @@ import { resolveRepoForExecutionHost } from '../repo-host-ownership'
 import {
   finishAcceptedWorktreeRemoval,
   waitForPendingWorktreeRemoval
-} from '../../../worktree-background-removal'
-import { runSerializedWorktreeRemovalAcceptance } from '../../../worktree-removal-acceptance-queue'
+} from '../../../workspaces/removal/worktree-background-removal'
+import { runSerializedWorktreeRemovalAcceptance } from '../../../workspaces/removal/worktree-removal-acceptance-queue'
 import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import {
   deleteLostContact,
   observeTerminals,
   runWorkspaceLifecycleCommand,
   workspaceLifecycleKey
-} from '../../../runtime/workspaces/workspace-lifecycle-commands'
+} from '../../../runtime/workspaces/lifecycle/workspace-lifecycle-commands'
 
 export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): void {
   const { store, options, worktreeRemovalsInFlight } = context

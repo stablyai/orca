@@ -3,7 +3,7 @@ import type { SessionRestoredBannerReason } from '../session-restored-banner-pan
 import { hasPtySerializer } from '../pty-buffer-serializer'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
-import { isExpectedAgentProcess } from '../../../../../shared/agent-process-recognition'
+import { isExpectedAgentProcess } from '../../../../../shared/agent-status/process/agent-process-recognition'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../../../shared/draft-paste-ready-timeout'
 import { createDraftPasteReadyScanner } from '../../../../../shared/draft-paste-ready-scanner'
 import { sendAgentDraftPasteContent } from '@/lib/agent-draft-paste-content'

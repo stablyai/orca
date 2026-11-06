@@ -21,6 +21,7 @@ import type { useWorkItemSourceSearch } from './use-work-item-source-search'
 import type { useSmartWorkspaceFieldFocusControls } from './use-smart-workspace-field-focus-controls'
 import { useAppStore } from '@/store'
 import type { useWorkItemSourcePresentation } from './use-work-item-source-presentation'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 type Foundation = ReturnType<typeof useWorkItemSourceSearch> &
   SmartWorkspaceNameFieldProps &
@@ -119,7 +120,7 @@ export function useSmartWorkspaceNameFieldActions(
   )
   const openSelectedSource = useCallback((): void => {
     if (selectedSource?.url) {
-      void window.api.shell.openUrl(selectedSource.url)
+      openAppHttpLink(selectedSource.url)
     }
   }, [selectedSource?.url])
   const applyEmojiReplacement = useCallback(

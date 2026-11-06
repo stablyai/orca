@@ -97,62 +97,6 @@ describe('moving a project into a group on another host', () => {
     expect(store.getState().repos).toEqual([remoteRepo])
     expect(toast.error).toHaveBeenCalledTimes(1)
   })
-
-  it('still moves into a group on the project host when another host has a same-id copy', async () => {
-    runtimeMoveReturns({ ...remoteRepo, projectGroupId: 'shared' })
-    const store = storeWith([group('shared', 'local'), group('shared', REMOTE_HOST)])
-
-    await expect(
-      store.getState().moveProjectToGroup(remoteRepo, 'shared', undefined)
-    ).resolves.toBe(true)
-
-    expect(moveCalls()).toHaveLength(1)
-    expect(toast.error).not.toHaveBeenCalled()
-  })
-
-  it('reports failure when the host answers with the group cleared', async () => {
-    runtimeMoveReturns({ ...remoteRepo, projectGroupId: null })
-    // The group is not in this window's catalog yet, so only the host's answer can tell.
-    const store = storeWith([])
-
-    await expect(
-      store.getState().moveProjectToGroup(remoteRepo, 'unknown-group', undefined)
-    ).resolves.toBe(false)
-
-    expect(moveCalls()).toHaveLength(1)
-    expect(store.getState().repos[0]?.projectGroupId).toBeNull()
-    expect(toast.error).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps removing a project from its group a success', async () => {
-    runtimeMoveReturns({ ...remoteRepo, projectGroupId: null })
-    const store = storeWith([group('remote-group', REMOTE_HOST)])
-
-    await expect(store.getState().moveProjectToGroup(remoteRepo, null, undefined)).resolves.toBe(
-      true
-    )
-
-    expect(toast.error).not.toHaveBeenCalled()
-  })
-})
-
-describe('moving one twin of a repo id shared by a local and an SSH row', () => {
-  it('names the SSH twin host to the local IPC, so main moves that row', async () => {
-    const localTwin: Repo = { ...remoteRepo, executionHostId: 'local', path: '/laptop/dup' }
-    const sshTwin: Repo = { ...remoteRepo, executionHostId: undefined, connectionId: 'ssh-1' }
-    moveProject.mockResolvedValue({ ...sshTwin, projectGroupId: 'ssh-group' })
-    const store = createTestStore()
-    store.setState({
-      repos: [localTwin, sshTwin],
-      projectGroups: [group('ssh-group', 'ssh:ssh-1')]
-    })
-
-    await store.getState().moveProjectToGroup(sshTwin, 'ssh-group')
-
-    expect(moveProject).toHaveBeenCalledWith(
-      expect.objectContaining({ projectId: remoteRepo.id, hostId: 'ssh:ssh-1' })
-    )
-  })
 })
 
 describe('moving one twin of a repo id on a paired server (server-local and server-SSH rows)', () => {

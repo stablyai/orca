@@ -4,7 +4,7 @@ import {
   getTerminalInputByteLength,
   isTerminalInputTooLargeWithDeferredMeasurement,
   iterateTerminalInputChunks
-} from '../../../../shared/terminal-input'
+} from '../../../../shared/terminal/input/terminal-input'
 
 export type RemoteRuntimePtyBatcher = {
   push: (data: string) => boolean

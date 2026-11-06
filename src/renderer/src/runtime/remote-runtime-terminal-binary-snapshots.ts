@@ -1,10 +1,10 @@
-import { RELEASE_SYNCHRONIZED_OUTPUT } from '../../../shared/terminal-mode-reset-profiles'
+import { RELEASE_SYNCHRONIZED_OUTPUT } from '../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamText,
   type TerminalStreamFrame
-} from '../../../shared/terminal-stream-protocol'
-import { TERMINAL_MULTIPLEX_STREAM_LIMIT_ERROR } from '../../../shared/terminal-multiplex-flow-control'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
+import { TERMINAL_MULTIPLEX_STREAM_LIMIT_ERROR } from '../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { recordE2eRemoteTerminalInitialSnapshotTruncated } from './remote-runtime-terminal-e2e-control'
 import { RemoteRuntimeTerminalResponseController } from './remote-runtime-terminal-response-controller'
 import {
@@ -92,6 +92,7 @@ export abstract class RemoteRuntimeTerminalBinarySnapshots extends RemoteRuntime
           kittyKeyboardFlags: info?.kittyKeyboardFlags,
           alternateScreen: info?.alternateScreen,
           terminalOwner: info?.terminalOwner,
+          lastTitle: info?.lastTitle,
           // Replay at host grid dimensions because wraps/cursor moves depend on it; pushes must carry the same dimensions as requests.
           cols: info?.cols,
           rows: info?.rows,
@@ -123,6 +124,7 @@ export abstract class RemoteRuntimeTerminalBinarySnapshots extends RemoteRuntime
               kittyKeyboardFlags: info?.kittyKeyboardFlags,
               alternateScreen: info?.alternateScreen,
               terminalOwner: info?.terminalOwner,
+              lastTitle: info?.lastTitle,
               pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi,
               // The host folds the normal buffer into `data` (see terminal-snapshot-publication.ts).
               carriesNormalBuffer: true

@@ -1,7 +1,7 @@
 import { rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   createBoundRun,
   createDatabase,
@@ -13,6 +13,7 @@ import {
   temporaryDirectories
 } from './orchestration-mailbox-notification-test-harness'
 import { USER_INPUT_HOLD_CAP_MS } from './claude-open-dialog-hold'
+import { settledWriteStub } from '../providers/settled-pty-write-stub'
 
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => tmpdir()), isPackaged: false },
@@ -102,6 +103,7 @@ describe('mailbox delivery into a pane awaiting the user', () => {
       })
       const run = createBoundRun(db, 'Claude Run')
       await runtime.listTerminals()
+      runtime.terminalRunFacts.recordSpawnCommit({ id: PTY_ID })
 
       runtime.onPtyData(PTY_ID, `\x1b]0;✳ Claude Code\x07${'─'.repeat(40)}\r\n❯ `, 1)
       runtime.terminalRunFacts.recordInput(PTY_ID, inputKind, 'please refactor the auth')
@@ -122,4 +124,109 @@ describe('mailbox delivery into a pane awaiting the user', () => {
       db.close()
     }
   )
+
+  it("delivers past the agent's dim prompt suggestion right after the user typed (#38015)", async () => {
+    vi.useFakeTimers()
+    const db = createDatabase('orca-prompt-suggestion-delivery-')
+    const { runtime, write } = createRuntime(db, {
+      getAgentStatusSnapshot: () => [claudeHookRow('done')],
+      checkHookAgentPresence: async () => 'live',
+      launchAgent: 'claude'
+    })
+    const run = createBoundRun(db, 'Claude Run')
+    await runtime.listTerminals()
+
+    runtime.terminalRunFacts.recordInput(PTY_ID, 'driving', 'add a second line\r')
+    runtime.onPtyData(
+      PTY_ID,
+      `\x1b]0;✳ Claude Code\x07${'─'.repeat(40)}\r\n❯ \x1b7\x1b[2madd a timestamp line\x1b[22m\x1b8\r\n${'─'.repeat(40)}\x1b[1A\x1b[3G`,
+      1
+    )
+    await vi.advanceTimersByTimeAsync(200)
+    insertDirectRunMessage(db, run.id, 'Worker heartbeat')
+    runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    expect(write.mock.calls.map(([, data]) => data)).toEqual([
+      expect.stringContaining('You have 1 orchestration message'),
+      '\r'
+    ])
+    db.close()
+  })
+
+  it.each([
+    ['a draft typed before the restart', 'please refactor the auth'],
+    // Orca died between typing a pointer and its Enter: the new pointer follows it and both submit.
+    [
+      "Orca's own unsent pointer",
+      'You have 1 orchestration message. Run `orca orchestration check`.'
+    ]
+  ] as const)(
+    'after an Orca restart reattaches the agent, holds mail behind %s until the cap',
+    async (_label, composerText) => {
+      vi.useFakeTimers()
+      const db = createDatabase('orca-restored-draft-delivery-hold-')
+      const { runtime, write } = createRuntime(db, {
+        getAgentStatusSnapshot: () => [claudeHookRow('done')],
+        checkHookAgentPresence: async () => 'live',
+        launchAgent: 'claude'
+      })
+      const run = createBoundRun(db, 'Claude Run')
+      await runtime.listTerminals()
+
+      runtime.onPtyData(PTY_ID, `\x1b]0;✳ Claude Code\x07${'─'.repeat(40)}\r\n❯ ${composerText}`, 1)
+      await vi.advanceTimersByTimeAsync(200)
+      insertDirectRunMessage(db, run.id, 'Worker heartbeat')
+      runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(write).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(USER_INPUT_HOLD_CAP_MS)
+      expect(write.mock.calls.map(([, data]) => data)).toEqual([
+        expect.stringContaining('You have 1 orchestration message'),
+        '\r'
+      ])
+      db.close()
+    }
+  )
+
+  it('after an Orca restart, holds mail while the restored screen is still loading', async () => {
+    vi.useFakeTimers()
+    const db = createDatabase('orca-restoring-screen-delivery-hold-')
+    const { runtime } = createRuntime(db, {
+      getAgentStatusSnapshot: () => [claudeHookRow('done')],
+      checkHookAgentPresence: async () => 'live',
+      launchAgent: 'claude'
+    })
+    let finishRestore = (_screen: string): void => {}
+    const write = vi.fn((_ptyId: string, _data: string) => true)
+    runtime.setPtyController({
+      write,
+      writeWithSettlement: settledWriteStub(write),
+      kill: vi.fn(),
+      getForegroundProcess: async () => null,
+      hasRendererSerializer: () => true,
+      serializeBuffer: () =>
+        new Promise((resolve) => {
+          finishRestore = (data) => resolve({ data, cols: 80, rows: 24 })
+        })
+    })
+    const run = createBoundRun(db, 'Claude Run')
+    await runtime.listTerminals()
+
+    runtime.onPtyData(PTY_ID, '\x1b]0;✳ Claude Code\x07', 1)
+    await vi.advanceTimersByTimeAsync(200)
+    insertDirectRunMessage(db, run.id, 'Worker heartbeat')
+    runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(write).not.toHaveBeenCalled()
+
+    finishRestore(`${'─'.repeat(40)}\r\n❯ `)
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(write.mock.calls.map(([, data]) => data)).toEqual([
+      expect.stringContaining('You have 1 orchestration message'),
+      '\r'
+    ])
+    db.close()
+  })
 })

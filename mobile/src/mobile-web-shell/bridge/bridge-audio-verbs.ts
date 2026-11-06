@@ -1,11 +1,11 @@
 import { z } from 'zod'
-import { MOBILE_DICTATION_MAX_PENDING_AUDIO_BYTES } from '../../hooks/mobile-dictation-pending-audio-budget'
+import { MAX_DICTATION_AUDIO_CHUNK_BYTES } from '../../../../src/shared/rpc-contract/speech-params'
 
 // The shell owns microphone PCM and its wake lock; the page owns dictation state/RPCs. Pull from the ring through existing request/reply rather than adding a push frame.
 // Keep verb grant segments lowercase: a camel-cased audio.readChunk would fail manifest grammar and reject the whole bundle.
 
-// Use the page’s pending-audio budget; a larger shell ring would hand the page bytes its own queue refuses.
-export const BRIDGE_AUDIO_RING_MAX_BYTES = MOBILE_DICTATION_MAX_PENDING_AUDIO_BYTES
+// A full ring drain goes to the host as one chunk, so stay within its chunk cap; shipped shells validate maxBytes against this.
+export const BRIDGE_AUDIO_RING_MAX_BYTES = MAX_DICTATION_AUDIO_CHUNK_BYTES
 
 // Base64 uses four chars per three bytes; a full ring drain fits the message cap.
 export const BRIDGE_AUDIO_READ_MAX_BASE64_CHARS = Math.ceil(BRIDGE_AUDIO_RING_MAX_BYTES / 3) * 4

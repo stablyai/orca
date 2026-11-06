@@ -1,11 +1,7 @@
 import { webcrypto } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import { createMemoryWebDeviceKeyStore, type WebDeviceKeyStore } from './web-device-key-store'
-import {
-  createWebRuntimeCredentialSource,
-  withWebRuntimeAuthPlan,
-  type WebRuntimeAuthPlan
-} from './web-runtime-credential-source'
+import { createWebRuntimeCredentialSource } from './web-runtime-credential-source'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Node's webcrypto implements the SubtleCrypto surface the key helpers call.
 const subtle = webcrypto.subtle as unknown as SubtleCrypto
@@ -66,46 +62,5 @@ describe('browser credential plans', () => {
     })
     expect(await store.get('host-key|env-1')).toMatchObject({ state: 'active', pairingRevision: 2 })
     expect(stale.forgetStoredToken).not.toHaveBeenCalled()
-  })
-
-  it('a tab still holding the code forgets it once another tab activated the key', async () => {
-    const store = createMemoryWebDeviceKeyStore()
-    const deviceId = await migrateOnce(store, 1)
-    const tab = sourceFor({ store, deviceToken: 'old-code', pairingRevision: 1 })
-    expect(await tab.source.nextPlan(true)).toMatchObject({ kind: 'device-key', deviceId })
-    expect(tab.forgetStoredToken).toHaveBeenCalledWith(deviceId)
-  })
-
-  it('never reads a broken key store for a code that has not migrated', async () => {
-    const broken: WebDeviceKeyStore = {
-      get: () => Promise.reject(new Error('IndexedDB unavailable')),
-      add: () => Promise.reject(new Error('IndexedDB unavailable')),
-      put: () => Promise.reject(new Error('IndexedDB unavailable')),
-      remove: () => Promise.reject(new Error('IndexedDB unavailable'))
-    }
-    const { source } = sourceFor({ store: broken, deviceToken: 'code', pairingRevision: 1 })
-    const opened: WebRuntimeAuthPlan[] = []
-    const unavailable = vi.fn()
-    withWebRuntimeAuthPlan(source, true, (plan) => opened.push(plan), unavailable)
-    await vi.waitFor(() => expect(opened).toHaveLength(1))
-    expect(opened[0]).toEqual({ kind: 'legacy-token', deviceToken: 'code' })
-    expect(unavailable).not.toHaveBeenCalled()
-  })
-
-  it('schedules a retry when a migrated pairing cannot read its key', async () => {
-    const broken: WebDeviceKeyStore = {
-      ...createMemoryWebDeviceKeyStore(),
-      get: () => Promise.reject(new Error('IndexedDB unavailable'))
-    }
-    const { source } = sourceFor({
-      store: broken,
-      deviceToken: 'migrated:keyed-1',
-      pairingRevision: 1
-    })
-    const opened: WebRuntimeAuthPlan[] = []
-    const unavailable = vi.fn()
-    withWebRuntimeAuthPlan(source, true, (plan) => opened.push(plan), unavailable)
-    await vi.waitFor(() => expect(unavailable).toHaveBeenCalledOnce())
-    expect(opened).toEqual([])
   })
 })

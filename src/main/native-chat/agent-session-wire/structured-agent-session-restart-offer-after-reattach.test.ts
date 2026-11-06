@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
-import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
-import { AGENT_SESSION_RESTART_CONTINUATION_MESSAGE } from '../../../shared/agent-session-restart-continuation'
+import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session/records/agent-session-recovery-capsule'
+import { AGENT_SESSION_RESTART_CONTINUATION_MESSAGE } from '../../../shared/agent-session/lifecycle/agent-session-restart-continuation'
 import { restartContinuationBody } from './structured-agent-session-restart-continuation-envelope'
 import { interruptedRestart } from './structured-agent-session-restart-interruption-test-harness'
 import {

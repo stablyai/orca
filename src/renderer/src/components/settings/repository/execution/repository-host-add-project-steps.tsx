@@ -134,7 +134,7 @@ export function HostSetupExistingFolderStep({
           onClick={onSubmit}
         >
           {isSettingUp
-            ? translate('auto.components.settings.RepositoryPane.settingUpHost', 'Adding...')
+            ? translate('auto.components.settings.RepositoryPane.addingProject', 'Adding...')
             : translate('auto.components.settings.RepositoryPane.setupHost', 'Add project')}
         </Button>
       </div>

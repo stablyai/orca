@@ -1,31 +1,33 @@
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   type AgentProviderSessionMetadata,
   agentProviderSessionsEqual
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionHistoryResult
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   oldestStructuredAgentSessionCursor,
   reduceStructuredAgentSession,
   type StructuredAgentSessionAction
-} from '../../../../shared/structured-agent-session-reducer'
+} from '../../../../shared/agent-session/structured-agent-session-reducer'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import { NATIVE_CHAT_INITIAL_LIMIT, type NativeChatOlderPageResult } from './native-chat-pagination'
-import {
-  OLDER_PAGE_ANCHOR_ATTEMPTS,
-  readStructuredAgentSessionOlderPage
-} from './structured-agent-session-older-page-read'
+import { NATIVE_CHAT_INITIAL_LIMIT } from './native-chat-pagination'
+import { OLDER_PAGE_ANCHOR_ATTEMPTS } from './structured-agent-session-older-page-read'
 import { startStructuredAgentSessionReadTransport } from './structured-agent-session-read-transport'
 import { createStructuredAgentSessionPRLinkObserver } from './structured-agent-session-pr-link-observer'
+
+import { createStructuredAgentSessionReadActivity } from './structured-agent-session-read-activity'
+import { createStructuredAgentSessionOlderPageLoader } from './structured-agent-session-older-page-loader'
 import type {
   StructuredAgentSessionReadSnapshot,
-  StructuredAgentSessionReadOwner
+  StructuredAgentSessionReadOwner,
+  StructuredAgentSessionReadEffects
 } from './structured-agent-session-read-owner-contract'
+
 import {
   adoptStructuredReadOwner,
   forgetStructuredReadOwner
@@ -38,7 +40,7 @@ export function countsTowardInitialHistory(item: AgentJournalRenderItem): boolea
 export function createReadOwner(
   key: string,
   sessionId: string,
-  target: RuntimeClientTarget
+  target: RuntimeClientTarget | null
 ): StructuredAgentSessionReadOwner {
   let snapshot: StructuredAgentSessionReadSnapshot = {
     state: EMPTY_STRUCTURED_AGENT_SESSION,
@@ -49,9 +51,17 @@ export function createReadOwner(
   let stopActiveRun: (() => void) | null = null
   const retiredHistoryRead = (): boolean => true
   let captureActiveHistoryReadGuard = (): (() => boolean) => retiredHistoryRead
-  const activations = new Set<symbol>()
+  const activations = new Map<symbol, StructuredAgentSessionReadEffects>()
   const listeners = new Set<() => void>()
-  const observePRLinks = createStructuredAgentSessionPRLinkObserver(sessionId, target)
+  const commandListeners = new Set<() => void>()
+  let disposed = false
+  const activity = createStructuredAgentSessionReadActivity(
+    () => !disposed,
+    () => snapshot.state
+  )
+  const observePRLinks = target
+    ? createStructuredAgentSessionPRLinkObserver(sessionId, target)
+    : () => {}
 
   const emit = (): void => {
     for (const listener of listeners) {
@@ -67,6 +77,12 @@ export function createReadOwner(
   }
   const apply = (action: StructuredAgentSessionAction): void => {
     const state = reduceStructuredAgentSession(snapshot.state, action, Date.now())
+    if (
+      state.submissions !== snapshot.state.submissions ||
+      state.queuedMessages !== snapshot.state.queuedMessages
+    ) {
+      activity.observe(state)
+    }
     // Published even when the frame changed nothing: a caught-up resume is an empty batch.
     const current =
       snapshot.current ||
@@ -87,11 +103,6 @@ export function createReadOwner(
       setSnapshot({ ...snapshot, providerSession })
     }
   }
-  const clearLoadingOlder = (): void => {
-    if (snapshot.loadingOlder) {
-      setSnapshot({ ...snapshot, loadingOlder: false })
-    }
-  }
   const invalidateOlderPages = (): void => {
     setSnapshot({
       ...snapshot,
@@ -100,6 +111,9 @@ export function createReadOwner(
     })
   }
   const hydrate = async (shouldStop: () => boolean): Promise<void> => {
+    if (!target) {
+      return
+    }
     const result = await callStructuredAgentSession<AgentSessionHistoryResult>(
       target,
       'agentSession.history',
@@ -175,20 +189,27 @@ export function createReadOwner(
     }
   }
 
-  let olderPage: {
-    shouldStop: () => boolean
-    promise: Promise<NativeChatOlderPageResult>
-  } | null = null
-
-  const start = (): void => {
+  const start = (effects: StructuredAgentSessionReadEffects): void => {
+    if (!target) {
+      return
+    }
     if (snapshot.state.epoch === null) {
       apply({ type: 'loading' })
     }
     const transport = startStructuredAgentSessionReadTransport({
+      subscribeRetryNow: effects.subscribeRetryNow,
       applyRequests: apply,
       applyEvent: (event, options) => {
+        const lostCommands =
+          snapshot.state.commands != null && 'commands' in event && event.commands === null
         apply({ type: 'event', event, ...options })
-        observePRLinks(event)
+        if (
+          event.type !== 'end' &&
+          (event.commandsChanged || options?.opensSubscription || lostCommands)
+        ) {
+          commandListeners.forEach((listener) => listener())
+        }
+        observePRLinks(event, effects.getState)
       },
       applyError: (message, refusal) => {
         // After loading, transport failures retain history while retrying; host refusals are explicit answers to show.
@@ -215,23 +236,40 @@ export function createReadOwner(
 
   let owner: StructuredAgentSessionReadOwner
   const deleteIfUnused = (): void => {
-    if (activations.size === 0 && listeners.size === 0) {
+    const subscriptions = activations.size + listeners.size + commandListeners.size
+    if (subscriptions === 0 && !activity.retained()) {
       forgetStructuredReadOwner(key, owner)
     }
   }
+  const subscribeTo = (collection: Set<() => void>, listener: () => void): (() => void) => {
+    if (disposed) {
+      return () => {}
+    }
+    adoptStructuredReadOwner(key, owner)
+    collection.add(listener)
+    return () => {
+      collection.delete(listener)
+      deleteIfUnused()
+    }
+  }
   owner = {
+    trackSend: activity.trackSend,
+    admit: activity.admit,
     publishCreated: (page) => {
       if (snapshot.state.epoch === null) {
         apply({ type: 'history-page', page })
       }
     },
-    activate: () => {
+    activate: (effects) => {
+      if (disposed) {
+        return () => {}
+      }
       // Remounts and StrictMode re-run setup on an owner whose cleanup just forgot it.
       adoptStructuredReadOwner(key, owner)
       const token = Symbol(sessionId)
-      activations.add(token)
+      activations.set(token, effects)
       if (activations.size === 1) {
-        start()
+        start(effects)
       }
       return () => {
         activations.delete(token)
@@ -242,59 +280,32 @@ export function createReadOwner(
       }
     },
     resync: () => {
-      if (activations.size === 0) {
+      const effects = activations.values().next().value
+      if (!effects) {
         return
       }
       stopActiveRun?.()
-      start()
+      start(effects)
     },
     dispose: () => {
+      disposed = true
+      activity.dispose()
       activations.clear()
       listeners.clear()
+      commandListeners.clear()
       stopActiveRun?.()
     },
     getSnapshot: () => snapshot,
-    loadOlder: () => {
-      // Share concurrent page requests so another caller’s refusal cannot look like exhaustion.
-      if (olderPage && !olderPage.shouldStop()) {
-        return olderPage.promise
-      }
-      const shouldStop = captureActiveHistoryReadGuard()
-      if (shouldStop()) {
-        return Promise.resolve('superseded')
-      }
-      if (!oldestStructuredAgentSessionCursor(snapshot.state) || !snapshot.state.hasOlder) {
-        return Promise.resolve('exhausted')
-      }
-      setSnapshot({ ...snapshot, loadingOlder: true })
-      const promise = readStructuredAgentSessionOlderPage({
-        target,
-        sessionId,
-        getState: () => snapshot.state,
-        apply,
-        shouldStop
-      })
-      const page = { shouldStop, promise }
-      olderPage = page
-      void page.promise.finally(() => {
-        if (olderPage !== page) {
-          return
-        }
-        olderPage = null
-        if (!shouldStop()) {
-          clearLoadingOlder()
-        }
-      })
-      return page.promise
-    },
-    subscribe: (listener) => {
-      adoptStructuredReadOwner(key, owner)
-      listeners.add(listener)
-      return () => {
-        listeners.delete(listener)
-        deleteIfUnused()
-      }
-    }
+    subscribeCommandsChanged: (listener) => subscribeTo(commandListeners, listener),
+    loadOlder: createStructuredAgentSessionOlderPageLoader({
+      target,
+      sessionId,
+      getSnapshot: () => snapshot,
+      setSnapshot,
+      apply,
+      captureHistoryReadGuard: () => captureActiveHistoryReadGuard()
+    }),
+    subscribe: (listener) => subscribeTo(listeners, listener)
   }
   return owner
 }

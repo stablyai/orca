@@ -6,7 +6,7 @@ import { runProcess } from '@orca/process-host'
 import { resetLoginShellEnvironmentCacheForTests } from '../../src/main/startup/login-shell-environment'
 import { PluginOverlayManager } from '../../src/wsl-guest/plugin-overlay'
 import { resolveOmpConfigDirName } from '../../src/wsl-guest/plugin-overlay-env'
-import { __resetShellStartupEnvCache } from '../../src/main/pty/shell-startup-env'
+import { __resetShellStartupEnvCache } from '../../src/main/pty/shell-startup/shell-startup-env'
 const fixture = { home: '', shell: '' }
 const shells = ['bash', 'zsh', 'fish'].map((name) => {
   const path = (process.env.PATH ?? '')

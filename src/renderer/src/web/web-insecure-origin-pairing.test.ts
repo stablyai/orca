@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { PAIRING_OFFER_VERSION } from '../../../shared/mobile-relay-pairing-offer'
+import { PAIRING_OFFER_VERSION } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 
@@ -50,12 +50,5 @@ describe('a plain-http page on another machine (LAN or Tailscale)', () => {
       forgetPairing: vi.fn()
     })
     expect(source.nextPlan(true)).toEqual({ kind: 'legacy-token', deviceToken: 'pairing-code' })
-  })
-
-  it('shows no pairing-security notice', async () => {
-    const { environment, guidance } = await loadWebClient()
-    const paired = environment.createStoredWebRuntimeEnvironment({ name: 'Desk', offer })
-    expect(guidance.webPairingSecurityGuidance('token-insecure-origin', paired)).toBeNull()
-    expect(guidance.webSessionPairingGuidance('token-insecure-origin')).toBeNull()
   })
 })

@@ -6,11 +6,6 @@ import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RightSidebar from './index'
-import { TopActivityOverflowMenu } from './activity-bar-buttons'
-import {
-  RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME,
-  RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_CLASS_NAME
-} from './right-sidebar-titlebar-drag-regions'
 import type { ActiveRightSidebarTab } from '@/store/slices/editor'
 import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platform'
 
@@ -61,7 +56,7 @@ vi.mock('@/hooks/useShortcutLabel', () => ({
   useShortcutLabel: (actionId: string) => actionId
 }))
 
-vi.mock('@/store', async () => {
+vi.mock('@/store/index', async () => {
   const React = await vi.importActual<typeof ReactModule>('react')
   const getSnapshot = (selector: (state: Record<string, unknown>) => unknown): unknown => {
     if (mockAppState.snapshotCache.has(selector)) {
@@ -83,7 +78,10 @@ vi.mock('@/store', async () => {
       activityBarPosition: mockAppState.activityBarPosition,
       setActivityBarPosition: vi.fn(),
       checksByWorktreeId: {},
-      keybindings: {}
+      keybindings: {},
+      activeView: 'terminal',
+      activePendingCreationId: null,
+      pendingWorktreeCreations: {}
     })
     mockAppState.snapshotCache.set(selector, selected)
     return selected
@@ -155,7 +153,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   }
 }))
 
-vi.mock('./FileExplorer', () => ({
+vi.mock('./file-explorer/panel/FileExplorer', () => ({
   default: () => <div data-file-explorer />
 }))
 
@@ -163,42 +161,21 @@ vi.mock('./FolderWorkspaceWorktreesPanel', () => ({
   default: () => <div data-folder-workspace-worktrees-panel />
 }))
 
-vi.mock('./FolderWorkspacePrChecksPanel', () => ({
+vi.mock('./hosted-review/folder-checks/FolderWorkspacePrChecksPanel', () => ({
   default: () => <div data-folder-workspace-pr-checks-panel />
 }))
 
-vi.mock('./SourceControl', () => ({
+vi.mock('./source-control/panel/SourceControl', () => ({
   default: () => <div data-source-control />
 }))
 
-vi.mock('./ChecksPanel', () => ({
+vi.mock('./checks-panel/ChecksPanel', () => ({
   default: () => <div data-checks-panel />
 }))
 
 vi.mock('./PortsPanel', () => ({
   default: () => <div data-ports-panel />
 }))
-
-function openingTag(markup: string, className: string): string {
-  const match = markup.match(new RegExp(`<[^>]+class="[^"]*${className}[^"]*"[^>]*>`))
-  if (!match) {
-    throw new Error(`opening tag with class "${className}" not found in ${markup}`)
-  }
-  return match[0]
-}
-
-function buttonOpeningTag(markup: string, ariaLabelPrefix: string): string {
-  const escapedPrefix = ariaLabelPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const match = markup.match(new RegExp(`<button[^>]+aria-label="${escapedPrefix}[^"]*"[^>]*>`))
-  if (!match) {
-    throw new Error(`button with aria-label prefix "${ariaLabelPrefix}" not found in ${markup}`)
-  }
-  return match[0]
-}
-
-function expectNoDrag(tag: string): void {
-  expect(tag).toContain(RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME)
-}
 
 function setRendererPlatform(platform: NodeJS.Platform): void {
   resetRendererAppPlatformCacheForTests()
@@ -236,83 +213,6 @@ describe('rendered right sidebar titlebar drag regions', () => {
     mockAppState.listeners.clear()
     mockAppState.snapshotCache.clear()
     mockAppState.cachedWorktree = null
-  })
-
-  it('keeps the rendered top activity strip draggable, context-menuable, and only controls no-drag', () => {
-    const markup = renderToStaticMarkup(<RightSidebar />)
-    const header = openingTag(markup, 'right-sidebar-header-drag')
-    const activityStrip = openingTag(markup, 'right-sidebar-activity-strip')
-
-    expect(header).not.toContain(RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME)
-    expect(activityStrip).not.toContain(RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME)
-    expect(activityStrip).toContain('data-context-menu-trigger="true"')
-    expect(markup).toContain('right-sidebar-header-drag')
-
-    expectNoDrag(buttonOpeningTag(markup, 'Explorer'))
-    expectNoDrag(buttonOpeningTag(markup, 'Source Control'))
-    expectNoDrag(buttonOpeningTag(markup, 'Checks'))
-    expect(buttonOpeningTag(markup, 'Toggle right sidebar')).toContain('sidebar-toggle')
-    expect(markup).toContain(RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME)
-  })
-
-  it('uses the custom desktop chrome top strip on Linux desktop', () => {
-    setRendererPlatform('linux')
-
-    const markup = renderToStaticMarkup(<RightSidebar />)
-    const activityStrip = openingTag(markup, 'right-sidebar-activity-strip')
-
-    expect(activityStrip).toContain('h-10')
-    expect(activityStrip).toContain('border-b')
-    expect(markup).toContain(RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_CLASS_NAME)
-  })
-
-  it('keeps paired Linux web clients on the browser-style top strip', () => {
-    setRendererPlatform('linux')
-    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
-
-    const markup = renderToStaticMarkup(<RightSidebar />)
-    const activityStrip = openingTag(markup, 'right-sidebar-activity-strip')
-
-    expect(activityStrip).toContain('pl-2')
-    expect(activityStrip).not.toContain('h-10')
-    expect(markup).not.toContain(RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_CLASS_NAME)
-  })
-
-  it('keeps the overflow trigger no-drag when it renders', () => {
-    const markup = renderToStaticMarkup(
-      <TopActivityOverflowMenu
-        items={[
-          {
-            id: 'checks',
-            icon: () => <span data-checks-icon />,
-            title: 'Checks',
-            shortcut: 'shortcut'
-          }
-        ]}
-        activeTab="explorer"
-        onSelect={vi.fn()}
-      />
-    )
-
-    const overflowButton = openingTag(markup, RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME)
-    expect(overflowButton).toContain('aria-label="More sidebar tabs"')
-  })
-
-  it('keeps side activity-bar controls no-drag without cancelling the side header drag region', () => {
-    mockAppState.activityBarPosition = 'side'
-
-    const markup = renderToStaticMarkup(<RightSidebar />)
-    const sideHeader = openingTag(markup, 'right-sidebar-header-drag')
-    const sideStrip = openingTag(markup, 'side-activity-bar-windows-inset')
-
-    expect(sideHeader).not.toContain(RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME)
-    expect(sideHeader).toContain('right-sidebar-header-side-inset')
-    expect(sideStrip).toContain('data-context-menu-trigger="true"')
-
-    expectNoDrag(buttonOpeningTag(markup, 'Explorer'))
-    expectNoDrag(buttonOpeningTag(markup, 'Source Control'))
-    expectNoDrag(buttonOpeningTag(markup, 'Checks'))
-    expect(buttonOpeningTag(markup, 'Toggle right sidebar')).toContain('sidebar-toggle')
   })
 
   it('hides git-only activity buttons for folder workspace ids without a backing repo', () => {

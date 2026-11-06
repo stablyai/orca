@@ -1,4 +1,5 @@
-import { normalizeBrowserNavigationUrl } from '../../../../../shared/browser-url'
+import { publishNativeChatVisualGuestTheme } from '@/components/native-chat/NativeChatVisualGuestThemePublisher'
+import { normalizeBrowserGuestSrc } from '../../../../../shared/browser/extensions/browser-extension-url'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import { parkBrowserPageViewport } from './browser-page-viewport'
 import { subscribeBrowserSystemResume } from './browser-system-resume'
@@ -155,9 +156,10 @@ export function bindBrowserPageWebviewListeners({
   webview.addEventListener('console-message', handleAnnotationViewportMessage)
 
   if (needsInitialNavigation) {
+    publishNativeChatVisualGuestTheme()
     // Why: set src only after listeners attach so a fast localhost failure isn't missed.
     const initialUrl =
-      normalizeBrowserNavigationUrl(initialBrowserUrlRef.current) ?? ORCA_BROWSER_BLANK_URL
+      normalizeBrowserGuestSrc(initialBrowserUrlRef.current) ?? ORCA_BROWSER_BLANK_URL
     lastKnownWebviewUrlRef.current = initialUrl
     webview.src = initialUrl
   } else if (isPaintableRef.current) {

@@ -1,5 +1,8 @@
-import type { RuntimeEnvironmentStatus } from './runtime-status'
-import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-status'
+import type {
+  RuntimeEnvironmentStatus,
+  RuntimeHostStatusSnapshot
+} from '../../../../shared/remote-runtime/host-status/runtime-host-status'
+
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'

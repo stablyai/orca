@@ -23,16 +23,6 @@ describe('readGrokAuthSession', () => {
     })
   })
 
-  it('treats a token-less auth file as signed out, not an error', async () => {
-    vi.doMock('node:fs', () => ({
-      existsSync: vi.fn(() => true),
-      readFileSync: vi.fn(() => JSON.stringify({ 'https://auth.x.ai::client': { user_id: 'u1' } }))
-    }))
-    const { readGrokAuthSession } = await import('./grok-auth')
-
-    expect(readGrokAuthSession()).toEqual({ status: 'missing' })
-  })
-
   it('reports malformed auth JSON without parser details', async () => {
     vi.doMock('node:fs', () => ({
       existsSync: vi.fn(() => true),

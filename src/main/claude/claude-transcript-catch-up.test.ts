@@ -1,22 +1,28 @@
-// Real disk tail → isolated translator → deferred sink → on-disk journal contracts.
 import { describe, expect, it, vi } from 'vitest'
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
-import * as sessionFileResolver from '../native-chat/session-file-resolver'
-import * as transcriptTail from './claude-transcript-tail'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 import {
   isStructuredRewindTarget,
   structuredRewindCut
 } from '../native-chat/agent-session-wire/structured-rewind-cut'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { readAgentSessionHistory } from '../native-chat/agent-session-wire/agent-session-history-page'
 import { projectJournalBatch } from '../native-chat/agent-session-wire/agent-session-journal-batch'
-import { replacePage, mergeItems } from '../../shared/structured-agent-session-history-state'
-import { AgentJournalRenderItemSchema } from '../../shared/agent-session-journal-schemas'
-import { projectStructuredItemToNativeChat } from '../../shared/structured-agent-session-projection'
+import {
+  replacePage,
+  mergeItems
+} from '../../shared/agent-session/view/structured-agent-session-history-state'
+import { AgentJournalRenderItemSchema } from '../../shared/agent-session/journal/agent-session-journal-schemas'
+import { agentSessionSendBodyFingerprint } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { dispatchClaudeTurn } from './structured/claude-structured-dispatch'
+import { claudePromptUuidForSubmission } from './structured/claude-structured-session-id'
+import {
+  childExited,
+  sessionFor,
+  userMessage
+} from './structured/claude-structured-dispatch-test-support'
 import {
   SESSION,
   SID,
-  at,
   prompt,
   reply,
   attachment,
@@ -25,8 +31,87 @@ import {
   outsideTurn,
   chat
 } from './claude-transcript-catch-up-test-support'
+// Real disk tail → isolated translator → deferred sink → on-disk journal contracts.
+import * as transcriptTail from './claude-transcript-tail'
 
 describe('Claude chat catch-up', () => {
+  it.each([false, true])(
+    'recognizes an unacknowledged local prompt; equal external input: %s',
+    async (outside) => {
+      const c = await chat()
+      await c.live()
+      const body = userMessage([{ type: 'text', text: 'same prompt' }])
+      const clientMessageId = 'unacknowledged'
+      await c.journal.appendSubmission({
+        clientMessageId,
+        body,
+        fence: 1,
+        payloadFingerprint: agentSessionSendBodyFingerprint(SESSION, body)
+      })
+      const send = vi.fn().mockResolvedValue(undefined)
+      const session = sessionFor(send)
+      session.providerSessionId = SID
+      await dispatchClaudeTurn(session, { sessionId: SESSION, clientMessageId, body })
+      const uuid = String(send.mock.calls[0]![0].uuid)
+      childExited(session)
+      await c.journal.resolveDispatch({
+        clientMessageId,
+        fence: 1,
+        state: 'unknown',
+        reason: 'provider_closed_before_acknowledgement'
+      })
+      const before = c.journal.snapshot()
+      await c.journal.close()
+      const reopened = await c.replay()
+      c.deferred.bind({ journal: reopened, fence: 1, publish: () => {} })
+      const queued = {
+        ...attachment('queued', 'a1'),
+        attachment: {
+          type: 'queued_command',
+          source_uuid: uuid,
+          commandMode: 'prompt',
+          origin: { kind: 'human' },
+          humanTurn: true,
+          prompt: 'same prompt'
+        }
+      }
+      await c.write([
+        ...chatTurn,
+        outside ? queued : prompt(uuid, 'a1', 'same prompt', 3),
+        reply(
+          'recovered',
+          outside ? 'queued' : uuid,
+          'msg_recovered',
+          { type: 'text', text: 'reply' },
+          4
+        ),
+        ...(outside ? [prompt('external', 'recovered', 'same prompt', 5)] : [])
+      ])
+      expect(await c.open('a1')).toBe(true)
+      const after = reopened.snapshot()
+      expect(
+        after.items
+          .filter((item) => item.body.kind !== 'turn')
+          .map((item) => (item.body.kind === 'message' ? item.body.role : item.body.kind))
+      ).toEqual(['user', 'assistant', 'user', 'status', 'assistant', ...(outside ? ['user'] : [])])
+      expect(after.submissions).toEqual(before.submissions)
+      expect(reopened.receiptFor(clientMessageId)).toBeNull()
+      const key = agentJournalItemKey({ provider: 'claude', sessionId: SID, uuid })
+      expect(reopened.canonicalItemId(key)).toBe(key)
+      expect(
+        structuredRewindCut(reopened, {
+          itemId: agentJournalItemKey({ provider: 'orca', clientMessageId }),
+          provider: 'claude',
+          nativeId: SID
+        })
+      ).toBeNull()
+      expect(await c.open('a1')).toBe(true)
+      expect(reopened.snapshot()).toEqual(after)
+      expect((await c.replay()).snapshot()).toEqual(after)
+      expect(c.warn).not.toHaveBeenCalled()
+    }
+  )
+
   it.each(['a1', 'missing-parent'])(
     'keeps an unresolved queued prompt visible without inventing a turn after %s',
     async (parent) => {
@@ -122,102 +207,17 @@ describe('Claude chat catch-up', () => {
     }
   )
 
-  it('keeps outside message times and order without splitting queued work', async () => {
-    const c = await chat()
-    await c.live()
-    await c.write([
-      ...chatTurn,
-      prompt('p2', 'a1', 'outside request', 3),
-      reply(
-        'a2',
-        'p2',
-        'msg_b',
-        { type: 'tool_use', id: 'toolu_time', name: 'Read', input: {} },
-        4
-      ),
-      {
-        ...attachment('queued-row', 'a2'),
-        timestamp: at(5),
-        attachment: {
-          type: 'queued_command',
-          source_uuid: 'cmd-1',
-          commandMode: 'prompt',
-          origin: { kind: 'human' },
-          humanTurn: true,
-          prompt: 'follow up'
-        }
-      },
-      reply('a3', 'queued-row', 'msg_c', { type: 'text', text: 'finished' }, 6),
-      {
-        ...prompt('r-time', 'a3', '', 7),
-        message: {
-          role: 'user',
-          content: [{ type: 'tool_result', tool_use_id: 'toolu_time', content: 'done' }]
-        }
-      },
-      {
-        ...reply('a5', 'r-time', 'msg_missing', { type: 'text', text: 'no source time' }, 8),
-        timestamp: undefined
-      }
-    ])
-    expect(await c.open('a1')).toBe(true)
-    const key = (uuid: string) =>
-      agentJournalItemKey(
-        uuid === 'toolu_time'
-          ? { provider: 'orca', clientMessageId: `claude-tool:${SID}:${uuid}` }
-          : { provider: 'claude', sessionId: SID, uuid }
-      )
-    const queued = c.journal.item(key('cmd-1'))
-    expect(queued?.turnScope).toEqual(c.journal.item(key('toolu_time'))?.turnScope)
-    expect(queued?.turnScope).toMatchObject({ kind: 'turn' })
-    expect(c.journal.item(key('block:msg_c:0'))?.turnScope).toEqual(queued?.turnScope)
-    expect(c.journal.snapshot().items.filter((row) => row.body.kind === 'turn')).toHaveLength(2)
-    expect(isStructuredRewindTarget(c.journal, key('cmd-1'))).toBe(false)
-    expect(isStructuredRewindTarget(c.journal, key('p2'))).toBe(true)
-    const items = c.journal
-      .snapshot()
-      .items.filter((item) =>
-        ['p2', 'toolu_time', 'cmd-1', 'block:msg_c:0', 'block:msg_missing:0'].some(
-          (uuid) => item.itemId === key(uuid)
-        )
-      )
-    expect(items.map((item) => [item.itemId, item.observedAt])).toEqual([
-      [key('p2'), Date.parse(at(3))],
-      [key('toolu_time'), Date.parse(at(4))],
-      [key('cmd-1'), Date.parse(at(5))],
-      [key('block:msg_c:0'), Date.parse(at(6))],
-      [key('block:msg_missing:0'), 1_000]
-    ])
-    expect(items.map((item) => projectStructuredItemToNativeChat(item)?.timestamp)).toEqual(
-      items.map((item) => item.observedAt)
-    )
-    expect(new Set(items.map((item) => item.sequence)).size).toBe(1)
-    const imported = c.journal.snapshot().items
-    expect(await c.open('a1')).toBe(true)
-    expect(c.journal.snapshot().items).toEqual(imported)
-    expect((await c.replay()).snapshot().items).toEqual(imported)
-  })
   it.each([
-    ['-work', '/work', false],
-    ['-work-caf-', '/work/cafe\u0301', false],
-    ['-old-work', '/moved-work', true]
+    ['-work', '/work'],
+    ['-work-caf-', '/work/cafe\u0301'],
+    ['-old-work', '/moved-work']
   ] as const)(
     'uses the selected-home bucket, retaining moved-project fallback: %s',
-    async (project, cwd, fallback) => {
+    async (project, cwd) => {
       const c = await chat(project, cwd)
       await c.write([...chatTurn, ...outsideTurn])
-      const resolve = vi.spyOn(sessionFileResolver, 'resolveSessionFilePath')
       expect(await c.open('a1')).toBe(true)
       expect(c.rows()).toContain('assistant:answer 2')
-      expect(resolve).toHaveBeenCalledTimes(fallback ? 1 : 0)
-      if (fallback) {
-        expect(resolve).toHaveBeenCalledWith(
-          'claude',
-          SID,
-          expect.objectContaining({ claudeProjectsDir: expect.any(String) }),
-          expect.any(AbortSignal)
-        )
-      }
     }
   )
 
@@ -322,20 +322,6 @@ describe('Claude chat catch-up', () => {
     live.dispose()
   })
 
-  it('cancels fallback discovery and cannot commit a late result', async () => {
-    const c = await chat('-old-work', '/new-work')
-    await c.write([...chatTurn, ...outsideTurn])
-    const lookup = Promise.withResolvers<string | null>()
-    const resolve = vi
-      .spyOn(sessionFileResolver, 'resolveSessionFilePath')
-      .mockReturnValueOnce(lookup.promise)
-    expect(await c.open('a1', { timeoutMs: 5 })).toBe(false)
-    expect(resolve.mock.calls[0]?.[3]?.aborted).toBe(true)
-    lookup.resolve(null)
-    await new Promise<void>((done) => setImmediate(done))
-    expect(c.rows()).toEqual([])
-  })
-
   it('shows the turns made outside the chat once, in order, under one divider', async () => {
     const c = await chat()
     await c.live()
@@ -365,27 +351,9 @@ describe('Claude chat catch-up', () => {
     expect(c.warn).not.toHaveBeenCalled()
   })
 
-  it('imports a later outside batch from the retained leaf without reusing its old divider', async () => {
-    const c = await chat()
-    await c.live()
-    await c.write([...chatTurn, ...outsideTurn])
-    expect(await c.open('a1')).toBe(true)
-    const before = c.rows()
-    await c.write([
-      prompt('p3', 'a3', 'ask 3', 7),
-      reply('a4', 'p3', 'msg_d', { type: 'text', text: 'answer 3' }, 8)
-    ])
-    expect(await c.open('a1')).toBe(true)
-    expect(c.rows()).toEqual([...before, '(continued-outside)', 'user:ask 3', 'assistant:answer 3'])
-    const imported = c.journal.snapshot().items
-    expect(await c.open('a1')).toBe(true)
-    expect(c.journal.snapshot().items).toEqual(imported)
-    expect(c.warn).not.toHaveBeenCalled()
-  })
-
-  // P known prompts and J reduced items grow independently; this ceiling retains the P×J cost.
+  // P saved aliases plus P unacknowledged queued prompts: two J-item indexes, not P×J scans.
   it.each([10, 100].flatMap((prompts) => [1_000, 10_000].map((items) => ({ prompts, items }))))(
-    'bounds retained-leaf work for $prompts known prompts and $items journal items',
+    'bounds retained-leaf work for $prompts aliases and local misses over $items journal items',
     async ({ prompts, items }) => {
       const c = await chat()
       await c.live()
@@ -421,11 +389,25 @@ describe('Claude chat catch-up', () => {
         fence: 1,
         mutations: Array.from({ length: items - c.journal.snapshot().items.length }, (_, n) => ({
           kind: 'item' as const,
-          identity: { provider: 'claude' as const, sessionId: SID, uuid: `padding${n}` },
-          body: { kind: 'message' as const, role: 'assistant' as const, blocks: [] },
+          identity: { provider: 'orca' as const, clientMessageId: `padding${n}` },
+          body: { kind: 'message' as const, role: 'user' as const, blocks: [] },
           turnScope: { kind: 'thread' as const }
         }))
       })
+      for (let n = 0; n < prompts; n++) {
+        const key = agentJournalItemKey({ provider: 'orca', clientMessageId: `padding${n}` })
+        await c.write([
+          {
+            ...attachment(`queued${n}`, n ? `queued${n - 1}` : `outside-a${prompts - 1}`),
+            attachment: {
+              type: 'queued_command',
+              source_uuid: claudePromptUuidForSubmission(SESSION, key),
+              commandMode: 'prompt',
+              prompt: 'local'
+            }
+          }
+        ])
+      }
       const before = c.journal.snapshot()
       const itemCount = before.items.length
       expect(itemCount).toBe(items)
@@ -447,7 +429,8 @@ describe('Claude chat catch-up', () => {
       )
       c.journal.visitItems(() => {})
       c.journal.visitItemsWithLinkage(() => {})
-      expect([associationVisits, viewVisits]).toEqual([itemCount, itemCount])
+      // visitItems delegates to the linked visitor, so this calibration exercises it twice.
+      expect([associationVisits, viewVisits]).toEqual([itemCount, 2 * itemCount])
       associationVisits = viewVisits = 0
       const committed = vi.fn()
       c.journal.observeCommits(committed)
@@ -461,8 +444,9 @@ describe('Claude chat catch-up', () => {
       expect(c.journal.canonicalItemId(alias)).toBe(canonical)
       expect(committed).not.toHaveBeenCalled()
       expect(c.warn).not.toHaveBeenCalled()
-      expect(associationVisits).toBeLessThanOrEqual(prompts * itemCount)
-      expect(viewVisits).toBeLessThanOrEqual(2 * itemCount)
+      expect(associationVisits).toBeLessThanOrEqual(2 * itemCount)
+      // The linked visitor also counts the association passes; bound the extra view work.
+      expect(viewVisits - associationVisits).toBeLessThanOrEqual(2 * itemCount)
       console.info('retained-leaf operation counts', {
         prompts,
         itemCount,
@@ -587,22 +571,6 @@ describe('Claude chat catch-up', () => {
       true
     )
     expect(c.warn).not.toHaveBeenCalled()
-  })
-
-  it('marks turns that continue from an earlier message than the chat last showed', async () => {
-    const c = await chat()
-    await c.live()
-    await c.write([
-      ...chatTurn,
-      prompt('p3', 'p1', 'ask 1, edited', 7),
-      reply('a4', 'p3', 'msg_d', { type: 'text', text: 'answer 1, edited' }, 8)
-    ])
-    await c.open('a1')
-    expect(c.rows().slice(2)).toEqual([
-      '(continued-outside-rewound)',
-      'user:ask 1, edited',
-      'assistant:answer 1, edited'
-    ])
   })
 
   it('reads an outside reply that spans many read chunks whole', async () => {

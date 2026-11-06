@@ -1,4 +1,5 @@
 import type { AppState } from '../../store'
+import type { RetiredTerminalTabSweepState } from '../../store/slices/retired-terminal-tab-state-sweep'
 import type {
   RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionBrowserTab,
@@ -15,7 +16,10 @@ import type {
   BrowserWorkspace
 } from '../../../../shared/browser-workspace-types'
 import type { Tab } from '../../../../shared/tab-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { OpenFile } from '../../store/slices/editor'
 import type { RuntimeBrowserPlacement } from '../../../../shared/runtime-browser-placement'
 
@@ -225,26 +229,19 @@ export type WebSessionTabsSyncState = Pick<
   | 'unreadTerminalTabs'
   | 'sortEpoch'
 > &
+  Partial<RetiredTerminalTabSweepState> &
   Partial<
     Pick<
       AppState,
-      | 'acknowledgedAgentsByPaneKey'
-      | 'activityClearedAtByPaneKey'
-      | 'agentLaunchConfigByPaneKey'
+      | 'agentSenderPublicationsByHost'
       | 'automaticAgentResumeClaimsByTabId'
       // Client draft proves dirty-flag ownership (#21392); without one, follow host save state.
       | 'editorDrafts'
       // Why: the live index carries sticky detachments; absent here, views resolve by identity.
       | 'editorBufferIdOf'
       | 'localOnlyScrollbackByTabId'
-      | 'migrationUnsupportedByPtyId'
-      | 'manuallyUnreadTurnsByPaneKey'
-      | 'paneForegroundAgentByPaneKey'
       | 'pendingStartupByTabId'
-      | 'recentlyClosedAgentStatusTabIds'
-      | 'recentlyRetiredAgentStatusPaneKeys'
-      | 'retainedAgentsByPaneKey'
-      | 'retentionSuppressedPaneKeys'
+      | 'runtimePaneTitlesByTabId'
     >
   >
 
@@ -265,6 +262,7 @@ export type WebSessionTabsBatchRecordKey =
   | 'pendingStartupByTabId'
   | 'ptyIdsByTabId'
   | 'remoteBrowserPageHandlesByPageId'
+  | 'runtimePaneTitlesByTabId'
   | 'tabBarOrderByWorktree'
   | 'tabsByWorktree'
   | 'terminalLayoutsByTabId'
@@ -276,6 +274,7 @@ export type WebSessionOpenFilesIndex = {
   byWorktree: Map<string, OpenFile[]>
 }
 export type WebSessionTabsBatchContext = {
+  changedAgentPaneKeys?: Set<string>
   retractionPaneKeysByRecord?: WeakMap<object, Map<string, Set<string>>>
   agentPaneKeysByTabId: Map<string, Set<string>> | null
   changedRecords: Set<WebSessionTabsBatchRecordKey>

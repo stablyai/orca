@@ -1,11 +1,11 @@
 import { createContext, useMemo, useState } from 'react'
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../../src/shared/native-chat/native-chat-streaming'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import {
   createNativeChatReplyRevealTracker,
   trackNativeChatReplyRows,
   type NativeChatReplyReveals
-} from '../../../../../src/shared/native-chat-reply-reveals'
+} from '../../../../../src/shared/native-chat/transcript/native-chat-reply-reveals'
 import { useReducedMotionEnabled } from '../../../platform/use-reduced-motion'
 
 // Retain reveal state above list remounts/view toggles so replies resume instead of replaying.

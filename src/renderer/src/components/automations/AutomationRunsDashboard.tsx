@@ -16,6 +16,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { AutomationListRow } from './automation-list-row-identity'
 import {
   countAutomationRunOutcomes,
@@ -66,6 +67,7 @@ export function AutomationRunsDashboard({
   onRefresh: () => void
   onOpenRun: (entry: AutomationRunsDashboardEntry) => void
 }): React.JSX.Element {
+  const languageRevision = useUiLanguageRevision()
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const [status, setStatus] = useState<AutomationRunsStatusFilter>('all')
@@ -84,7 +86,8 @@ export function AutomationRunsDashboard({
       )
     }
     return [...options].map(([key, label]) => ({ key, label }))
-  }, [rows])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+  }, [rows, languageRevision])
   const hostEntries = useMemo(
     () => filterAutomationRunsDashboardEntries({ entries, status: 'all', query: '', hostKeys }),
     [entries, hostKeys]
@@ -254,16 +257,15 @@ export function AutomationRunsDashboard({
             <div className="mb-3 flex items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-foreground">
               <AlertCircle className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
               <span>
-                {visibleFailures.length === 1
-                  ? translate(
-                      'auto.components.automations.AutomationRunsDashboard.historyUnavailableOne',
-                      'Run history is unavailable for 1 automation. Counts include available history only.'
-                    )
-                  : translate(
-                      'auto.components.automations.AutomationRunsDashboard.historyUnavailableMany',
-                      'Run history is unavailable for {{count}} automations. Counts include available history only.',
-                      { count: visibleFailures.length }
-                    )}
+                {translate(
+                  'auto.components.automations.AutomationRunsDashboard.historyUnavailable',
+                  'Run history is unavailable for {{count}} automations. Counts include available history only.',
+                  {
+                    count: visibleFailures.length,
+                    defaultValue_one:
+                      'Run history is unavailable for {{count}} automation. Counts include available history only.'
+                  }
+                )}
               </span>
             </div>
           ) : null}
