@@ -210,6 +210,7 @@ async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchW
     }
     case 'finish': {
       const entry = writes.get(c.handle)
+      entry?.write.addPrepared!([], c.hash)
       accepted = !!entry && entry.write.commit(c.outcome)
       writes.delete(c.handle)
       if (accepted) {

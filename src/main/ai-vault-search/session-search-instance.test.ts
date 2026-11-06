@@ -1,6 +1,7 @@
 import './session-search-worker.test-fixture'
 import { existsSync } from 'node:fs'
 import { utimes } from 'node:fs/promises'
+import * as fileRemoval from '../../shared/windows-transient-lock-removal'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { resetSessionParseCacheForTests } from '../ai-vault/parse-cache/session-parse-cache-store'
@@ -187,11 +188,34 @@ it('propagates query failures while status remains available without a reader', 
 it('rejects a failed clear and keeps the transition chain usable for another clear', async () => {
   const subject = newInstance()
   const remove = vi
-    .spyOn(searchSchema, 'removeSessionSearchDatabase')
-    .mockImplementationOnce(() => {
-      throw new Error('unlink denied')
-    })
+    .spyOn(searchSchema, 'removeSessionSearchDatabaseAsync')
+    .mockRejectedValueOnce(new Error('unlink denied'))
   await expect(subject.clear()).rejects.toThrow('unlink denied')
   await expect(subject.clear()).resolves.toBeUndefined()
   expect(remove).toHaveBeenCalledTimes(2)
+})
+
+it('keeps serving while an asynchronous clear deletion outlives its deadline', async () => {
+  const subject = newInstance()
+  let reject!: (error: Error) => void
+  const blocked = new Promise<void>((_resolve, fail) => {
+    reject = fail
+  })
+  const remove = vi.spyOn(fileRemoval, 'removeTree').mockReturnValue(blocked)
+  vi.useFakeTimers()
+  try {
+    const clear = expect(subject.clear()).rejects.toThrow('Could not complete')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(remove).toHaveBeenCalled()
+    expect(await subject.status()).toMatchObject({ enabled: false })
+    await vi.advanceTimersByTimeAsync(10_000)
+    await clear
+    expect(await subject.search({ query: 'responsive' })).toMatchObject({ reason: 'disabled' })
+    reject(new Error('file remains locked'))
+    await subject.close()
+    expect(errors).toContainEqual(new Error('file remains locked'))
+  } finally {
+    vi.useRealTimers()
+    remove.mockRestore()
+  }
 })

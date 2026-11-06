@@ -74,7 +74,6 @@ export class SessionSearchWorkerStore extends SessionSearchWorkerStoreBase {
               }
             }
             this.speculative.delete(candidate.file.path)
-            this.onWriteInvalidated()
           } else if (response.accepted === false && !failed) {
             cancelled = true
             owner.abort()
@@ -187,7 +186,7 @@ export class SessionSearchWorkerStore extends SessionSearchWorkerStoreBase {
           contentHash: hash
         }
         this.speculative.set(candidate.file.path, speculative)
-        void post({ op: 'finish', handle, outcome })
+        void post({ op: 'finish', handle, outcome, hash })
           .then(() => {
             if (this.speculative.get(candidate.file.path) === speculative) {
               this.speculative.delete(candidate.file.path)

@@ -162,3 +162,32 @@ it(
   // Why: these start real writer and reader worker threads (tsx-loaded) and stream multi-MiB transcripts.
   30_000
 )
+
+it('commits the original-message digest when a drained conversation ends with only tool rows', async () => {
+  root = await mkdtemp(join(tmpdir(), 'ss-worker-hash-tail-'))
+  const path = join(root, 'index.sqlite')
+  store = new SessionSearchWorkerStore(path, (error) => {
+    throw error
+  })
+  await store.prepare()
+  const write = store.beginWrite(syntheticCandidate(), 'replace', 0, undefined, true)!
+  write.add({ role: 'user', text: 'prompt', timestamp: null })
+  await write.drain!()
+  await store.flush()
+  write.add({ role: 'tool', text: 'tooltail', timestamp: null })
+  const { syntheticSession } = await import('./session-search-index-test-fixture')
+  expect(write.commit({ session: syntheticSession(), byteOffset: 4096, incomplete: false })).toBe(
+    true
+  )
+  await store.flush()
+  const db = new SyncDatabase(path, { readonly: true })
+  try {
+    expect(db.prepare('SELECT content_hash, content_hash_count FROM sessions').get()).toEqual({
+      content_hash: '20d617e013f1dbefe8ce6afe43ad44ec558ae2e087d44804ce2f789cc04538a8',
+      content_hash_count: 2
+    })
+    expect(db.prepare('SELECT count(*) AS n FROM messages').get()).toEqual({ n: 1 })
+  } finally {
+    db.close()
+  }
+})

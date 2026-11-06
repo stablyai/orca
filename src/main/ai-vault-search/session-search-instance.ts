@@ -9,7 +9,7 @@ import type { AiVaultSearchSettings } from '../../shared/ai-vault/search/ai-vaul
 import { SessionSearchIndexer } from './session-search-indexer'
 import { SessionSearchReaders } from './session-search-readers'
 import { sessionSearchHistoryCutoffMs } from './session-search-retention-policy'
-import { removeSessionSearchDatabase } from './session-search-schema'
+import { removeSessionSearchDatabaseAsync } from './session-search-schema'
 import type { SessionSearchScanRoots } from './session-search-scan-roots'
 import type { SessionSearchIndexerOptions } from './session-search-indexer-options'
 import type { SessionSearchHostScope } from './session-search-service'
@@ -64,7 +64,7 @@ export class SessionSearchInstance {
       await retired
       await this.closeLive()
       if (clear) {
-        removeSessionSearchDatabase(this.options.databasePath)
+        await removeSessionSearchDatabaseAsync(this.options.databasePath)
       }
       if (!settings.enabled) {
         return

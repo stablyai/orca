@@ -38,7 +38,7 @@ export type SearchWorkerCommand =
       hash: SessionContentHash
       identity: TranscriptSessionIdentity | null
     }
-  | { op: 'finish'; handle: number; outcome: TranscriptReadOutcome }
+  | { op: 'finish'; handle: number; outcome: TranscriptReadOutcome; hash: SessionContentHash }
   | { op: 'discard'; handle: number }
   | { op: 'state'; path: string; state: SessionSearchFileState; mtime?: number }
   | { op: 'remove'; path: string }

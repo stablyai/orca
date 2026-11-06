@@ -73,9 +73,6 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
       })
     await this.initialization
   }
-  protected onWriteInvalidated(): void {
-    this.onInvalidated()
-  }
   protected update(response: SearchWorkerResponse): void {
     if (response.snapshot) {
       if (this.invalidations.size) {

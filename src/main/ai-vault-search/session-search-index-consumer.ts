@@ -1,3 +1,5 @@
+import { inSessionParseFileLane } from '../ai-vault/parse-cache/session-parse-file-lane'
+import { requestWholeTranscriptRead } from '../ai-vault/transcripts/session-transcript-reader'
 import { traceSessionSearch } from './session-search-trace'
 import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
 import {
@@ -67,6 +69,12 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
       if (!cursor || cursor.byteOffset !== start.previousByteOffset) {
         const recoverable = this.store.resumableCursor(candidate)
         if (recoverable && recoverable.byteOffset < start.previousByteOffset) {
+          if (start.indexing) {
+            // Why: invalidate after this lane saves its resume point, before the next read acquires it.
+            void inSessionParseFileLane(candidate.file.path, async () =>
+              requestWholeTranscriptRead(candidate.file.path)
+            ).catch(() => undefined)
+          }
           return null
         }
         // A missing span or partial cursor requires a whole read; appending would preserve an index hole.

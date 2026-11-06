@@ -1,3 +1,4 @@
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { randomUUID } from 'node:crypto'
 import type SyncDatabase from '../sqlite/sync-database'
 import {
@@ -111,4 +112,14 @@ export function addSessionSearchPrefixHashColumn(db: SyncDatabase): void {
 
 export function removeSessionSearchDatabase(path: string): void {
   removeVersionedCacheDatabase(path)
+}
+
+/** Async lock retries keep scanner/server deadlines responsive after all workers have retired. */
+export async function removeSessionSearchDatabaseAsync(path: string): Promise<void> {
+  if (path === ':memory:') {
+    return
+  }
+  for (const suffix of ['', '-wal', '-shm', '-journal']) {
+    await removeTree(`${path}${suffix}`)
+  }
 }
