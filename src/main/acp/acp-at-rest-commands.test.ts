@@ -15,6 +15,9 @@ import {
   ompRecord
 } from './acp-command-discovery.test-fixture'
 import { deferred, tick } from './acp-scripted-agent.test-support'
+import { acpLaunchSpecFor } from './acp-launch-specs'
+import { readAcpForkSupport } from './acp-fork-support'
+import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof fs>()
@@ -484,4 +487,56 @@ it('takes an OMP context out of the legacy queue for a capable menu while joinin
     gate.resolve()
     catalog.dispose()
   }
+})
+
+it('lists OpenCode 2 commands from a session it then deletes, and never starts OpenCode 1.x', async () => {
+  const openCodeRecord = (provider: 'opencode' | 'opencode2') =>
+    agentSessionRecordFixture({
+      sessionId: `chat-${provider}`,
+      provider,
+      accountHome: { kind: 'opencode', locator: { kind: 'unmanaged' } },
+      location: { workspaceId: 'workspace-1', workspaceKind: 'folder' }
+    })
+  // Recorded from `opencode acp` 2.1.2 with a global command/itx-plan.md.
+  const reported = {
+    sessionUpdate: 'available_commands_update',
+    availableCommands: [
+      { name: 'init', description: 'guided AGENTS.md setup' },
+      { name: 'itx-plan', description: 'Plan an implementation' },
+      { name: 'compact', description: 'Compact the session' }
+    ]
+  }
+  const deleted: unknown[] = []
+  const v2 = await rig(
+    (child) => {
+      child.agent.on('initialize', (frame) =>
+        child.agent.reply(frame, {
+          protocolVersion: 1,
+          agentCapabilities: { sessionCapabilities: { delete: {}, fork: {} } }
+        })
+      )
+      child.agent.on('session/new', (frame) => {
+        child.agent.reply(frame, { sessionId: DISCOVERY_SESSION })
+        child.agent.notify('session/update', { sessionId: DISCOVERY_SESSION, update: reported })
+      })
+      child.agent.on('session/delete', (frame) => {
+        deleted.push(frame.params)
+        child.agent.reply(frame, {})
+      })
+    },
+    { probeVersion: async () => ({ version: '2.1.2' }) },
+    acpLaunchSpecFor('opencode2')!
+  )
+  const listed = await v2.catalog.settled(openCodeRecord('opencode2'), 1_000)
+  expect(listed?.map((command) => command.name)).toEqual(['init', 'itx-plan', 'compact'])
+  expect(deleted).toEqual([{ sessionId: DISCOVERY_SESSION }])
+  expect(readAcpForkSupport('opencode2')).toBe('supported')
+
+  const v1 = await rig(
+    undefined,
+    { probeVersion: async () => ({ version: '1.19.5' }) },
+    acpLaunchSpecFor('opencode')!
+  )
+  expect(await v1.catalog.settled(openCodeRecord('opencode'), 1_000)).toBeUndefined()
+  expect(v1.children).toHaveLength(0)
 })

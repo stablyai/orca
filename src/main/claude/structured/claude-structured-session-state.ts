@@ -3,18 +3,16 @@ import type { ClaudeStartupOutcome } from './claude-structured-startup-outcome'
 import type { ClaudeCliFlagCheck, ClaudeCliFlagFact } from '../claude-cli-flag-support'
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
-import type { SubmissionRejectionFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type * as SessionAdapter from '../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type {
   ClaudeStreamJsonConnection,
   openClaudeStreamJsonConnection
 } from '../claude-stream-json-connection'
 import type { ClaudeStructuredLaunch } from './launch/claude-structured-launch-resolution'
-import type { StructuredLaunchRequest } from '../../runtime/structured-agent-launch-composition'
+import type { StructuredLaunchRequest } from '../../runtime/agent-session/launch/structured-agent-launch-composition'
 import type { ClaudeJournalTranslator } from '../claude-journal-translator-contract'
-import type { ClaudePendingPrompt, ClaudePromptRegistry } from '../claude-prompt-registry'
+import type { ClaudePromptRegistry } from '../claude-prompt-registry'
 import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
 import type { AgentSessionFastModeState } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
@@ -28,56 +26,11 @@ import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle
 import type { ClaudeNamingInputs } from '../claude-naming-invocation'
 import type { ClaudeInitializeFacts } from './claude-structured-session-startup'
 
-export type ClaudeAuthDiagnostic = {
-  apiKeySourceConfigured: boolean
-  baseUrlConfigured: boolean
-  authTokenConfigured: boolean
-  apiKeyConfigured: boolean
-  settingSources: readonly string[]
-}
-
-export type ClaudeStructuredSessionEvent =
-  | {
-      type: 'message'
-      sessionId: string
-      message: Record<string, unknown>
-      /** Present when an acknowledged replay opens a turn; folded replays only settle delivery. */
-      startsTurn?: true
-      /** Submission time for the acknowledged dispatch, absent when its send is unknown. */
-      requestedAt?: number
-      /** The submission this replay acknowledged, which opens the turn. */
-      clientMessageId?: string
-      /** On any other frame: the send the CLI started and has not echoed, whose turn output opens. */
-      startedSend?: ClaudeStartedSend
-      /** Host clock at receipt; stamped on turn boundaries only. */
-      observedAt?: number
-    }
-  | { type: 'provider-frame'; sessionId: string; kind: string; payload: unknown }
-  | { type: 'prompt'; sessionId: string; prompt: ClaudePendingPrompt }
-  | { type: 'prompt-cancelled'; sessionId: string; promptKey: string }
-  | { type: 'options'; sessionId: string; models: unknown[] }
-  | {
-      type: 'handle'
-      sessionId: string
-      providerSessionId: string
-      leafUuid: string | null
-      fence: number
-    }
-  | { type: 'auth-diagnostic'; sessionId: string; diagnostic: ClaudeAuthDiagnostic }
-  | SessionAdapter.StructuredAgentSessionOptionsReportedEvent
-  | {
-      type: 'ended'
-      sessionId: string
-      reason: string
-      failure?: SubmissionRejectionFact
-      deathEvidenceKind?: 'kill-delivered'
-      /** Present for first-hand child exits so the host can fence recovery. */
-      cause?: 'unexpected-exit' | 'requested-close'
-      fence?: number
-      acquisitionGeneration?: string
-      /** Host clock when the end was observed. */
-      observedAt?: number
-    }
+export type {
+  ClaudeAuthDiagnostic,
+  ClaudeStructuredSessionEvent
+} from './claude-structured-session-event'
+import type { ClaudeStructuredSessionEvent } from './claude-structured-session-event'
 
 export type ClaudeStartedSend = { clientMessageId: string; requestedAt?: number }
 

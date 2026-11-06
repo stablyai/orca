@@ -12,7 +12,7 @@ import {
 } from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
-import type { OrcaRuntimeRpcServer } from '../runtime-rpc'
+import type { OrcaRuntimeRpcServer } from '../rpc/server/runtime-rpc'
 
 export const TARGET = 'runtime:env-1'
 export type Frame = Record<string, unknown>

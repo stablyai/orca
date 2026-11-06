@@ -4,16 +4,21 @@ import {
 } from '../../../../shared/protocol-version'
 import { BrowserClientPageMetadataParams } from '../../../../shared/browser/client-hosting/browser-client-page-metadata-protocol'
 import {
+  BROWSER_CLIENT_HOST_REQUEST_CAPABILITY,
+  BrowserClientHostRequestResultParams
+} from '../../../../shared/browser/client-hosting/browser-client-host-request-protocol'
+import {
   BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE,
   BrowserClientHostAttachParams,
   BrowserClientHostCommandResultParams
 } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { BrowserError } from '../../../browser/browser-error'
-import { getBrowserHostLeaseRegistry } from '../../browser-host/browser-host-lease-registry-instance'
-import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
-import { adoptRuntimeBrowserClientPagesFromInventory } from '../../runtime-browser-client-page-adoption'
-import { recoverUnavailableRuntimeBrowserClientPages } from '../../runtime-browser-client-page-recovery'
-import { releaseRuntimeBrowserClientPageRecord } from '../../runtime-browser-client-page-release'
+import { getBrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry-instance'
+import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
+import { adoptRuntimeBrowserClientPagesFromInventory } from '../../browser/client-pages/runtime-browser-client-page-adoption'
+import { recoverUnavailableRuntimeBrowserClientPages } from '../../browser/client-pages/runtime-browser-client-page-recovery'
+import { releaseRuntimeBrowserClientPageRecord } from '../../browser/client-pages/runtime-browser-client-page-release'
+import { getBrowserHostRequestRegistry } from '../../browser-host/leases/browser-host-request-registry'
 import { defineMethod, defineStreamingMethod } from '../core'
 
 export const BROWSER_CLIENT_HOST_METHODS = [
@@ -190,6 +195,22 @@ export const BROWSER_CLIENT_HOST_METHODS = [
         params
       )
       return { accepted }
+    }
+  }),
+  defineMethod({
+    name: 'browser.clientHost.requestResult',
+    permission: 'workspace',
+    params: BrowserClientHostRequestResultParams,
+    handler: (params, { runtime, pairedDeviceId, clientKind, clientCapabilities }) => {
+      if (clientKind !== 'runtime' || !pairedDeviceId) {
+        throw new Error('authenticated_browser_client_host_required')
+      }
+      if (!clientCapabilities?.includes(BROWSER_CLIENT_HOST_REQUEST_CAPABILITY)) {
+        throw new Error('browser_client_host_request_capability_required')
+      }
+      return {
+        accepted: getBrowserHostRequestRegistry(runtime).settle({ pairedDeviceId }, params)
+      }
     }
   }),
   defineMethod({

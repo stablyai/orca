@@ -6,6 +6,8 @@ export type AgentSenderAssociation = {
   paneKey: string
   worktreeId: string
   sessionId?: string
+  /** The addressed Dispatch still has its own proved live invocation. Transient display only. */
+  dispatchActor?: true
 }
 /** Which host publication a delivery was cut from: the publishing runtime's epoch and the content
  *  revision the whole host, or one worktree's scope, last changed at. In memory only. */

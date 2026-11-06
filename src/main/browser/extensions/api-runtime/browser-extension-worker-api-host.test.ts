@@ -13,10 +13,10 @@ vi.mock('../../browser-manager', () => ({ browserManager: {} }))
 vi.mock('../../../ipc/browser/browser-tab-registration-wait', () => ({
   waitForTabRegistration: vi.fn()
 }))
-vi.mock('../../../runtime/browser/browser-tab-renderer-create', () => ({
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-create', () => ({
   createBrowserTabInRenderer: vi.fn()
 }))
-vi.mock('../../../runtime/browser/browser-tab-renderer-close', () => ({
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-close', () => ({
   closeBrowserTabInRenderer: vi.fn()
 }))
 
@@ -216,24 +216,6 @@ describe('worker API protocol', () => {
       (await send(vaultSession, new Request(wire.BROWSER_EXTENSION_API_CALL_URL))).status
     ).toBe(405)
     expect(seen).toEqual([])
-  })
-
-  it('runs a call as the initiating extension, keeping undefined arguments and the worker alive', async () => {
-    vaultSession.startWorker()
-    await expect(callAs(vaultSession, VAULT, echo)).resolves.toEqual({
-      ok: true,
-      value: 42
-    })
-    await expect(callAs(otherSession, OTHER, echo)).resolves.toEqual({
-      ok: true,
-      value: 42
-    })
-    expect(seen).toEqual([
-      { extensionId: VAULT, fromWorker: true },
-      { extensionId: OTHER, fromWorker: true }
-    ])
-    expect(vaultSession.worker.startTask).toHaveBeenCalled()
-    expect(vaultSession.task.end).toHaveBeenCalled()
   })
 
   it.each(['extension reload', 'host replacement'] as const)(

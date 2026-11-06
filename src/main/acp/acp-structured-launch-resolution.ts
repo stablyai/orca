@@ -1,3 +1,5 @@
+import { checkAcpLaunchVersion } from './acp-launch-version'
+export { checkAcpLaunchVersion } from './acp-launch-version'
 import {
   assertStructuredAgentResolutionCurrent,
   resolveAgainAfterRefreshOnMissingProgram,
@@ -10,19 +12,11 @@ import {
 
 import { delimiter } from 'node:path'
 import { homedir } from 'node:os'
-import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import {
-  agentSessionProviderHandleChainHead,
-  type AgentSessionProviderHandleChain
-} from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionProviderHandleChainHead } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { agentSessionProviderHandleKey } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { resolveCliCommand } from '../../shared/node-cli-command-resolution'
-import {
-  checkAgentCliVersion,
-  type AgentCliVersionCheck,
-  type AgentCliVersionReader
-} from '../agent-launch/preflight/agent-cli-version-probe'
+import type { AgentCliVersionReader } from '../agent-launch/preflight/agent-cli-version-probe'
 import { AgentCliInstallationError } from '../native-chat/agent-cli-installation-error'
 import {
   copyBesidePinnedMembers,
@@ -31,20 +25,16 @@ import {
 import { hasExplicitTuiLaunchCommand } from '../../shared/agent-launch/startup/tui-agent-launch-command-override'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { JournalLoad } from '../native-chat/agent-session-journal/journal-open'
-import {
-  isProviderTimelineTurnInNamespace,
-  providerTimelineKeyPart,
-  spelledProviderTimelineItemKey
-} from '../native-chat/agent-session-timeline/provider-timeline-identity'
-import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
-import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
+import { isProviderTimelineTurnInNamespace } from '../native-chat/agent-session-timeline/provider-timeline-identity'
+import type { StructuredAgentLaunchPartResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition'
+import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/agent-session/environment/structured-session-child-env'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV,
   withNativeChatVisualsEnv
 } from '../native-chat/native-chat-visuals-delivery'
 import type { AcpLaunchSpec } from './acp-launch-specs'
-import { acpSessionNotRestoredItem } from './acp-session-reopen-failure'
+import { acpUnannouncedLosses } from './acp-session-reopen-failure'
 import { loadAcpVisualsSkill, type AcpLaunchVisualsDeps } from './acp-structured-launch-visuals'
 
 export type AcpStructuredLaunch = StructuredAgentCommand & {
@@ -55,6 +45,8 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
   env: Record<string, string>
   envToDelete: string[]
   fullAccess: boolean
+  /** The saved model the launch line carries. */
+  launchModel?: string
   resume: {
     sessionId: string
     key: string
@@ -130,22 +122,6 @@ export function resolveAcpLaunchCommand(
   const { command } = resolve(pathEnv)
   const pinned = command !== spec.command && copyBesidePinnedMembers(command, pin)
   return { command: pinned || spec.command, prefixArgs: [] }
-}
-
-export async function checkAcpLaunchVersion(
-  spec: AcpLaunchSpec,
-  launch: Pick<AcpStructuredLaunch, 'command' | 'prefixArgs' | 'cwd' | 'env'>,
-  wantVersion: boolean,
-  read?: AgentCliVersionReader
-): Promise<AgentCliVersionCheck> {
-  if (!spec.minimumVersions && !wantVersion) {
-    return { status: 'unknown', version: null }
-  }
-  return checkAgentCliVersion(
-    { program: launch.command, prefixArgs: launch.prefixArgs, cwd: launch.cwd, env: launch.env },
-    spec.minimumVersions ?? [],
-    read
-  )
 }
 
 /** Resolve chats and probes consistently; optionally refresh once after a missing-program lookup. */
@@ -228,13 +204,18 @@ export function acpStructuredLaunchPart(
       : null
     const fullAccess = basis.permissionMode === 'full-access'
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
+    // A load restores the conversation's own model, and a stale role there would stop the agent
+    // before it opens; resumed chats apply their model through the session instead.
+    const model = spec.launchesWithModel && !head ? record.options?.model : undefined
+    const args = spec.args({ fullAccess, pluginDir: skill?.pluginDir ?? null, model })
     return {
       launch: {
         spec,
         command,
         prefixArgs,
-        args: [...prefixArgs, ...spec.args({ fullAccess, pluginDir: skill?.pluginDir ?? null })],
+        args: [...prefixArgs, ...args],
         fullAccess,
+        ...(model ? { launchModel: model } : {}),
         resume: head
           ? {
               sessionId: head.handle.nativeId,
@@ -243,7 +224,11 @@ export function acpStructuredLaunchPart(
                 head.origin === 'created' &&
                 nothingExchangedOn(deps.readJournal, identity.sessionId, head.handle.nativeId),
               unannouncedLosses: () =>
-                unannouncedLosses(deps.readJournal, identity.sessionId, record.providerHandleChain)
+                acpUnannouncedLosses(
+                  deps.readJournal,
+                  identity.sessionId,
+                  record.providerHandleChain
+                )
             }
           : null
       },
@@ -284,41 +269,4 @@ function nothingExchangedOn(
     }
   }
   return true
-}
-
-/** Retry missing loss-warning rows on successful starts; unreadable journals suppress new warnings. */
-function unannouncedLosses(
-  readJournal: AcpStructuredLaunchPartDeps['readJournal'],
-  sessionId: string,
-  chain: AgentSessionProviderHandleChain
-): string[] {
-  const lost = chain.flatMap((link) =>
-    link.replaces?.reason === 'restore-failed' ? [link.replaces.key] : []
-  )
-  if (lost.length === 0) {
-    return []
-  }
-  let load: JournalLoad | null
-  try {
-    load = readJournal(sessionId)
-  } catch {
-    return []
-  }
-  if (!load) {
-    return lost
-  }
-  if (load.damage || load.newer) {
-    return []
-  }
-  const written = new Set<string>()
-  for (const itemId of load.state.items.keys()) {
-    const identity = parseAgentJournalItemKey(itemId)
-    const spelled =
-      identity?.provider === 'legacy' ? spelledProviderTimelineItemKey(identity.recordId) : null
-    if (spelled !== null) {
-      written.add(spelled)
-    }
-  }
-  // Warnings survive even if the replacement session that wrote them is superseded.
-  return lost.filter((key) => !written.has(providerTimelineKeyPart(acpSessionNotRestoredItem(key))))
 }

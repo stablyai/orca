@@ -1,34 +1,34 @@
 import { OrcaRuntimeWithAgentPromptRequestCorrelation } from '../../orca-runtime-agent-prompt-request-correlation'
-import type { RuntimeTerminalAgentStatusSnapshot } from '../../runtime-terminal-agent-status-query'
+import type { RuntimeTerminalAgentStatusSnapshot } from '../query/runtime-terminal-agent-status-query'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/runtime-terminal-contracts'
 import {
   detectExplicitIdleStatusFromTitle,
   detectTerminalWaitBlockedReason
-} from '../../terminal-wait-detection'
+} from './terminal-wait-detection'
 import { isOpenCodeNativeTitle } from '../../../../shared/agent-status/title/providers/opencode-terminal-title'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type {
   RuntimePtyWorktreeRecord,
   RuntimeVisibleTerminalState
-} from '../../runtime-terminal-state-records'
-import { renewRuntimeMobileAgentStatusFromPtyTitle } from '../../runtime-mobile-agent-status-projection'
-import { getDisplayPromptLifecycle } from '../../runtime-worktree-status-projection'
-import { createTerminalInputReservation } from '../../terminal-input-admission'
-import type { RuntimeTerminalWriteOptions } from '../../runtime-terminal-writer'
+} from '../records/runtime-terminal-state-records'
+import { renewRuntimeMobileAgentStatusFromPtyTitle } from '../../session-lifecycle/projection/runtime-mobile-agent-status-projection'
+import { getDisplayPromptLifecycle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
+import { createTerminalInputReservation } from '../input/terminal-input-admission'
+import type { RuntimeTerminalWriteOptions } from '../input/runtime-terminal-writer'
 import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import { resolvePtyWriteHostPlatform } from '../input/pty-write-host-platform'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
-import type { AgentPromptActivity } from '../../agent-prompt-submission-verification'
-import { hasExplicitIdleTitle } from '../../tui-idle-evidence'
+import type { AgentPromptActivity } from '../input/agent-prompt-submission-verification'
+import { hasExplicitIdleTitle } from './tui-idle-evidence'
 import {
   readTuiIdleHookTurn,
   retainedTailIncludes,
   type TuiIdleHookTurn
-} from '../../tui-idle-hook-lane'
-import { selectFreshExplicitAgentStatusRow } from '../../runtime-hook-agent-row-selection'
+} from './tui-idle-hook-lane'
+import { selectFreshExplicitAgentStatusRow } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { isClaudeDialogHoldingPane } from '../../claude-open-dialog-hold'
 
 import type { OrcaRuntimeWithStopExactTerminalsForWorktree } from '../stop/worktree-terminal-stop-targets'
@@ -102,7 +102,7 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
       ptyId,
       observed ? screen.lines.join('\n') : undefined
     )
-    const explicitStatus = this.getFreshExplicitAgentStatusForHandle(handle)
+    const explicitStatus = this.getFreshExplicitAgentStatusForHandle(handle, ptyId)
     return {
       terminal,
       explicitStatus,

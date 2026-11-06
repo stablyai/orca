@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
 import { resolveClaudeStructuredInvocation } from '../claude/structured/launch/claude-structured-launch-resolution'
 import { resolveClaudeStructuredLaunchHome } from '../claude/structured/launch/claude-structured-launch-home'
-import { resolveStructuredClaudeAccountHomePath } from '../runtime/structured-agent-account-home'
+import { resolveStructuredClaudeAccountHomePath } from '../runtime/agent-session/environment/structured-agent-account-home'
 import {
   installClaudeProfileRouter,
   withClaudeProfileTerminalEnv

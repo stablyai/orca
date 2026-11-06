@@ -11,7 +11,7 @@ export const NATIVE_COMPAT_ENTRY_POINTS = [
 // These files configure or support tests; additions/deletions still require qualification.
 const MODIFIED_TEST_INPUTS = new Set([
   'config/reliability-gates.jsonc',
-  'src/main/daemon/serialize-grid-variant-scope.ts',
+  'src/main/daemon/emulation/testing/serialize-grid-variant-scope.ts',
   'config/scripts/vitest-sqlite-database-runtime-files.mjs',
   'src/main/native-chat/agent-session-journal/journal-host-database-test-support.ts'
 ])
@@ -84,7 +84,7 @@ function isTestInput({ status, file }) {
   // Build policy and process-host fixtures can be read without a static import.
   if (
     file.startsWith('src/packages/') ||
-    /^config\/scripts\/(?:desktop-distribution\/linux\/|native-build\/windows\/|native-build\/composition\/|orcad-distribution\/prebuilds\/|orcad-distribution\/template\/|orcad-distribution\/server-bundle\/|desktop-distribution\/runtime-verification\/|native-build\/node-addons\/|orcad-distribution\/qualification\/|native-build\/linux\/)?(?:test-runtime\/node-worker\/|test-runtime\/sqlite-admission\/|test-runtime\/environment\/)?[^/]*(?:orcad|node-server|node-pty|native|glibc|pinned-node|node-runtime|workspace-source-exports|script-module-dependencies)[^/]*$|^config\/scripts\/(?:ci\/workflow-contracts|node-server\/qualification|test-fixtures\/script-copy-closure|node-runtime\/archive-identity|workflow\/source-routing|workspace\/source-exports)\/[^/]*(?:orcad|node-server|node-pty|native|glibc|pinned-node|node-runtime|workspace-source-exports|script-module-dependencies)[^/]*$/.test(
+    /^config\/scripts\/(?:desktop-distribution\/runtime-verification\/|ci\/unit-selection\/|release\/workflow-contracts\/|runtime-verification\/desktop-transport\/|orcad-distribution\/qualification\/)?(?:node-runtime\/pin-policy\/|runtime-verification\/native-chat-rendering\/|static-analysis\/process-boundaries\/)?(?:performance\/native-chat\/|performance\/terminal-stream\/)?(?:desktop-distribution\/linux\/|native-build\/windows\/|native-build\/composition\/|orcad-distribution\/prebuilds\/|orcad-distribution\/template\/|orcad-distribution\/server-bundle\/|desktop-distribution\/runtime-verification\/|native-build\/node-addons\/|orcad-distribution\/qualification\/|native-build\/linux\/)?(?:test-runtime\/node-worker\/|test-runtime\/sqlite-admission\/|test-runtime\/environment\/)?[^/]*(?:orcad|node-server|node-pty|native|glibc|pinned-node|node-runtime|workspace-source-exports|script-module-dependencies)[^/]*$|^config\/scripts\/(?:desktop-distribution\/runtime-verification\/|ci\/unit-selection\/|release\/workflow-contracts\/|runtime-verification\/desktop-transport\/|orcad-distribution\/qualification\/)?(?:node-runtime\/pin-policy\/|runtime-verification\/native-chat-rendering\/|static-analysis\/process-boundaries\/)?(?:performance\/native-chat\/|performance\/terminal-stream\/)?(?:ci\/workflow-contracts|node-server\/qualification|test-fixtures\/script-copy-closure|node-runtime\/archive-identity|workflow\/source-routing|workspace\/source-exports)\/[^/]*(?:orcad|node-server|node-pty|native|glibc|pinned-node|node-runtime|workspace-source-exports|script-module-dependencies)[^/]*$/.test(
       file
     )
   ) {

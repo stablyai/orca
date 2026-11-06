@@ -18,6 +18,8 @@ export type StructuredAgentSessionOptionsArgs = {
   hostOptionStamp?: string
   fence: number | null
   turnId: string | null
+  /** The chat has a turn or a send: its value picks keep the remembered new-chat model. */
+  hasTurn?: boolean
   unloadedTurnRevisions: number | undefined
   capturePresentation?: CaptureStructuredAgentSessionPresentation
   mutate: StructuredAgentSessionMutate
@@ -36,6 +38,8 @@ export type StructuredSessionConversationSupport = {
   contextUsage: AgentSessionOptionsResult['contextUsage']
   acceptsImages: boolean | undefined
   rewind: AgentSessionRewindSupport
+  /** Whether the installed agent copies its conversation natively; absent means unknown. */
+  forkSupport?: AgentSessionOptionsResult['forkSupport']
   /** The fence the read answered for; rewind support is only that runtime's. */
   fence: number | null
 }

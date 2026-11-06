@@ -33,7 +33,8 @@ export function emitNativeChatMessageSent(args: {
 }): void {
   track('native_chat_message_sent', {
     agent_kind: resolveAgentKind(args.agent),
-    runtime: args.runtime
+    runtime: args.runtime,
+    client: 'desktop'
   })
 }
 

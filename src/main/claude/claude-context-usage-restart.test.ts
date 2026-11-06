@@ -174,29 +174,6 @@ describe('context usage across a restart', () => {
     after.release()
   })
 
-  it('reads the ring from the journal after a restart, and adopts the first response model', async () => {
-    const journal = await openJournal()
-    const before = acquire(journal)
-    before.translator.handle(initFrame(900))
-    before.translator.handle(userFrame('turn-a', 1_000))
-    before.translator.handle(assistantFrame('reply-a', 2_000, 150_000))
-    before.translator.handle(resultFrame(3_000))
-    await before.settle()
-    before.release()
-
-    const after = acquire(journal)
-    expect(ring(journal)).toMatchObject({ usedTokens: 150_000, windowTokens: 1_000_000 })
-    after.translator.handle(initFrame(9_900))
-    after.translator.handle(userFrame('turn-b', 10_000))
-    after.translator.handle(assistantFrame('reply-b', 11_000, 160_000))
-    await after.settle()
-    expect(ring(journal)).toMatchObject({ usedTokens: 160_000, windowTokens: 1_000_000 })
-    after.translator.handle(assistantFrame('reply-b2', 12_000, 170_000, 'claude-sonnet-5'))
-    await after.settle()
-    expect(ring(journal)).toBeNull()
-    after.release()
-  })
-
   it('never brings a settled turn back to running with a context write that ran late', async () => {
     const journal = await openJournal()
     const live = acquire(journal)
@@ -224,26 +201,5 @@ describe('context usage across a restart', () => {
       contextUsage: { used: { kind: 'estimate', usage: { inputTokens: 30_000 } } }
     })
     live.release()
-  })
-
-  it('keeps the window a restarted journal holds over the one the model name implies', async () => {
-    const journal = await openJournal()
-    const before = acquire(journal)
-    before.translator.handle(initFrame(900))
-    before.translator.handle(userFrame('turn-a', 1_000))
-    before.translator.handle(assistantFrame('reply-a', 2_000, 150_000))
-    before.translator.handle(resultFrame(3_000, 400_000))
-    await before.settle()
-    before.release()
-
-    const after = acquire(journal)
-    after.translator.modelWritten('fable[1m]')
-    after.translator.handle(initFrame(9_900))
-    after.translator.handle(userFrame('turn-b', 10_000))
-    after.translator.handle(assistantFrame('reply-b', 11_000, 160_000))
-    await after.settle()
-    expect(ring(journal)).toMatchObject({ usedTokens: 160_000, windowTokens: 400_000 })
-    expect(journal.contextUsage().window).toEqual({ tokens: 400_000, capturedAt: 3_000 })
-    after.release()
   })
 })

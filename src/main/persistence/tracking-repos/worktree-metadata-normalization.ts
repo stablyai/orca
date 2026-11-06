@@ -78,6 +78,7 @@ export function gcStaleWorktreeMeta(state: PersistedState): number {
     delete state.worktreeMeta[key]
     delete state.worktreeLineageById[key]
     delete state.workspaceLineageByChildKey[worktreeWorkspaceKey(key)]
+    delete state.crossStoreLineageByChildKey?.[worktreeWorkspaceKey(key)]
     // Remove identity aliases too or future worktrees at the same path could inherit dead metadata.
     removeWorktreeMetadataForHost(state, key, LOCAL_EXECUTION_HOST_ID)
     removed++

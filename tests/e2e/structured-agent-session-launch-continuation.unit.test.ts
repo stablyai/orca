@@ -18,7 +18,7 @@ import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import { prepareStructuredAgentSessionCreateForWorktree } from '../../src/main/runtime/rpc/methods/structured-agent-session-create'
 import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
-import { structuredAgentRuntimeMetadata } from '../../src/main/runtime/structured-agent-runtime-metadata'
+import { structuredAgentRuntimeMetadata } from '../../src/main/runtime/agent-session/installation/structured-agent-runtime-metadata'
 import { claudeStructuredSpawnOptions } from '../../src/main/claude/structured/launch/claude-structured-spawn-options'
 import { openCodexThread } from '../../src/main/codex/structured/threads/codex-structured-thread-open'
 import { resolvedCodexMessageOptions } from '../../src/main/codex/structured/turns/codex-structured-message-options'
@@ -49,7 +49,10 @@ vi.mock('@/runtime/structured-agent-session-host-capability', async (original) =
   useStructuredAgentSessionOwnPermissionState: () => 'supported'
 }))
 vi.mock('@/components/native-chat/StructuredAgentSessionStatusBridge', () => ({
-  useStructuredAgentSessionStatusSummary: () => ({ summary: null, observation: 'live' })
+  useStructuredAgentSessionPermissionStatus: () => ({
+    permissionReport: false,
+    observation: 'live'
+  })
 }))
 vi.mock('../../src/main/agent-launch/trust/agent-workspace-trust', () => ({
   applyAgentWorkspaceTrust: vi.fn(async () => ({}))

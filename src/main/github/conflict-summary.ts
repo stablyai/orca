@@ -7,7 +7,7 @@ import { gitExecFileAsync } from '../git/runner'
 import { gitOptionsForWorktree, type GitRuntimeOptions } from '../git/git-runtime-options'
 import { createLocalGitObjectQuarantine } from '../git/local-git-object-quarantine'
 import { _resetCanonicalRepoKeyCacheForTests } from '../git/canonical-repo-key'
-import { RuntimeRemoteFetchController } from '../runtime/runtime-remote-fetch-controller'
+import { RuntimeRemoteFetchController } from '../runtime/repositories/runtime-remote-fetch-controller'
 import {
   clearGitCapabilityStateForTests,
   withLocalGitCapabilityCacheForExecution
