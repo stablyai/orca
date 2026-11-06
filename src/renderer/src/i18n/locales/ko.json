@@ -10576,7 +10576,10 @@
               "micInput": "입력",
               "micDevice": "장치",
               "micAirpods": "에어팟",
-              "micDefault": "시스템 기본값"
+              "micDefault": "시스템 기본값",
+              "dictationLanguageTitle": "받아쓰기 언어",
+              "dictationLanguageDescription": "음성 모델에 말하는 언어를 알려 줍니다.",
+              "dictationLanguageKeyword": "언어"
             }
           }
         },
@@ -19809,6 +19812,15 @@
         "idleStopSearchTimeout": "시간 제한",
         "idleStopSearchKeepAlive": "연결 유지",
         "idleStopNever": "사용 안 함"
+      },
+      "voice": {
+        "dictationLanguage": {
+          "ignored": "{{model}}은(는) 지원하는 언어만 받아쓰므로 이 설정을 사용하지 않습니다.",
+          "unsupported": "{{model}}은(는) {{language}}을(를) 지원하지 않아 언어를 자동으로 감지합니다.",
+          "description": "말하는 언어입니다. 자동 감지를 선택하면 모델이 매번 언어를 판단합니다.",
+          "title": "받아쓰기 언어",
+          "auto": "자동 감지"
+        }
       }
     },
     "agentChildRow": {

@@ -11621,7 +11621,10 @@
               "micInput": "ввод",
               "micDevice": "устройство",
               "micAirpods": "airpods",
-              "micDefault": "системное по умолчанию"
+              "micDefault": "системное по умолчанию",
+              "dictationLanguageTitle": "Язык диктовки",
+              "dictationLanguageDescription": "Сообщите речевой модели, на каком языке вы говорите.",
+              "dictationLanguageKeyword": "язык"
             }
           }
         },
@@ -21195,6 +21198,15 @@
         "idleStopSearchTimeout": "тайм-аут",
         "idleStopSearchKeepAlive": "поддерживать активным",
         "idleStopNever": "Никогда"
+      },
+      "voice": {
+        "dictationLanguage": {
+          "ignored": "{{model}} распознаёт только языки, для которых создана, поэтому не использует эту настройку.",
+          "unsupported": "{{model}} не поддерживает язык «{{language}}», поэтому определяет язык сама.",
+          "description": "Язык, на котором вы говорите. При автоопределении модель каждый раз определяет его сама.",
+          "title": "Язык диктовки",
+          "auto": "Автоопределение"
+        }
       }
     },
     "agentChildRow": {

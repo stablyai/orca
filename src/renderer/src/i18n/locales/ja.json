@@ -10613,7 +10613,10 @@
               "micInput": "入力",
               "micDevice": "デバイス",
               "micAirpods": "エアポッド",
-              "micDefault": "システムのデフォルト"
+              "micDefault": "システムのデフォルト",
+              "dictationLanguageTitle": "音声入力の言語",
+              "dictationLanguageDescription": "話す言語を音声モデルに伝えます。",
+              "dictationLanguageKeyword": "言語"
             }
           }
         },
@@ -19809,6 +19812,15 @@
         "idleStopSearchTimeout": "タイムアウト",
         "idleStopSearchKeepAlive": "キープアライブ",
         "idleStopNever": "しない"
+      },
+      "voice": {
+        "dictationLanguage": {
+          "ignored": "{{model}} は対応する言語しか文字起こしできないため、この設定は使われません。",
+          "unsupported": "{{model}} は{{language}}に対応していないため、言語を自動で判定します。",
+          "description": "話す言語です。自動検出では、モデルが毎回言語を判定します。",
+          "title": "音声入力の言語",
+          "auto": "自動検出"
+        }
       }
     },
     "agentChildRow": {

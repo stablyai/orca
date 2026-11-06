@@ -63,7 +63,7 @@ const localModel: SpeechModelManifest = {
   label: 'Local Model',
   description: 'Runs offline',
   provider: 'local',
-  language: 'en',
+  dictationLanguage: 'auto',
   type: 'transducer',
   streaming: true,
   sampleRate: 16000,

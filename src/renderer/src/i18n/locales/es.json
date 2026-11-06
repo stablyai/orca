@@ -10870,7 +10870,10 @@
               "micInput": "aporte",
               "micDevice": "dispositivo",
               "micAirpods": "airpods",
-              "micDefault": "valor predeterminado del sistema"
+              "micDefault": "valor predeterminado del sistema",
+              "dictationLanguageTitle": "Idioma de dictado",
+              "dictationLanguageDescription": "Indica al modelo de voz qué idioma hablas.",
+              "dictationLanguageKeyword": "idioma"
             }
           }
         },
@@ -20315,6 +20318,15 @@
           "scrollback": "historial",
           "snap": "ajustar",
           "position": "posición"
+        }
+      },
+      "voice": {
+        "dictationLanguage": {
+          "ignored": "{{model}} solo transcribe los idiomas para los que fue creado, así que ignora este ajuste.",
+          "unsupported": "{{model}} no admite {{language}}, así que detecta el idioma por sí mismo.",
+          "description": "El idioma que hablas. Con Detectar automáticamente, el modelo lo deduce cada vez.",
+          "title": "Idioma de dictado",
+          "auto": "Detectar automáticamente"
         }
       }
     },

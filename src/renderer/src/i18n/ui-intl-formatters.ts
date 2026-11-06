@@ -52,3 +52,11 @@ export function uiCollator(options: Intl.CollatorOptions): Intl.Collator {
     (locale) => new Intl.Collator(locale, options)
   )
 }
+
+export function languageDisplayName(locale: string): string {
+  try {
+    return new Intl.DisplayNames(getIntlLocale(), { type: 'language' }).of(locale) ?? locale
+  } catch {
+    return locale
+  }
+}

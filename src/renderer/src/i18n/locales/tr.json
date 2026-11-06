@@ -11251,7 +11251,10 @@
               "micInput": "giriş",
               "micDevice": "cihaz",
               "micAirpods": "airpods",
-              "micDefault": "sistem varsayılanı"
+              "micDefault": "sistem varsayılanı",
+              "dictationLanguageTitle": "Dikte dili",
+              "dictationLanguageDescription": "Konuşma modeline hangi dili konuştuğunuzu söyleyin.",
+              "dictationLanguageKeyword": "dil"
             }
           }
         },
@@ -20492,6 +20495,15 @@
         "idleStopSearchTimeout": "zaman aşımı",
         "idleStopSearchKeepAlive": "canlı tut",
         "idleStopNever": "Asla"
+      },
+      "voice": {
+        "dictationLanguage": {
+          "ignored": "{{model}} yalnızca kendisi için hazırlandığı dilleri yazıya döker, bu yüzden bu ayarı yok sayar.",
+          "unsupported": "{{model}} {{language}} dilini desteklemiyor, bu yüzden dili kendisi algılar.",
+          "description": "Konuştuğunuz dil. Otomatik algılama seçiliyse model dili her seferinde kendisi belirler.",
+          "title": "Dikte dili",
+          "auto": "Otomatik algıla"
+        }
       }
     },
     "agentChildRow": {

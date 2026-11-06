@@ -72,7 +72,8 @@ export type VoiceSettings = {
   enabled: boolean
   sttModel: string
   modelsDir: string
-  language: string
+  /** 'auto' or an ISO-639-1 code. Not `language`: its stored 'en' default never came from the user. */
+  dictationLanguage: string
   dictationMode: DictationMode
   terminalConfirmBeforeInsert: boolean
   userModels: UserModelConfig[]
