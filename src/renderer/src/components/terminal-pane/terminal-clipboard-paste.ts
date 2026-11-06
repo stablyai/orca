@@ -1,4 +1,5 @@
 import {
+  isClipboardTextReadUnresponsiveError,
   isClipboardTextTooLargeError,
   type ReadClipboardTextOptions
 } from '../../../../shared/clipboard-text'
@@ -29,6 +30,7 @@ export type TerminalClipboardPasteResult =
   | {
       status: 'skipped'
       reason:
+        | 'clipboard-unresponsive'
         | 'empty'
         | 'image-paste-failed'
         | 'image-paste-rejected'
@@ -54,6 +56,12 @@ export async function pasteTerminalClipboard({
     if (isClipboardTextTooLargeError(error)) {
       onTextPasteError?.(error)
       return { status: 'skipped', reason: 'text-too-large' }
+    }
+    if (isClipboardTextReadUnresponsiveError(error)) {
+      // The image fallback asks for pasteboard data too; probing it after an owner
+      // that never delivered would block the app a second time (#23913).
+      onTextPasteError?.(error)
+      return { status: 'skipped', reason: 'clipboard-unresponsive' }
     }
     // Image-only clipboards can reject text reads; still try the screenshot path.
   }

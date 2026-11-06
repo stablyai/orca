@@ -411,6 +411,36 @@ describe('registerClipboardHandlers', () => {
     expect(clipboardWriteBufferMock).not.toHaveBeenCalled()
   })
 
+  it('accepts object-form write-file requests carrying a file path', async () => {
+    // The file explorer copies with {filePath, connectionId}; the object form must
+    // reach the same path resolution as the plain string form.
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    registerClipboardHandlers({} as never)
+
+    const handlers = getRegisteredHandlers()
+    await expect(
+      handlers.get('clipboard:writeFile')?.(makeClipboardEvent(), {
+        filePath: '/tmp/copied-file.txt'
+      })
+    ).resolves.toEqual({ ok: true })
+
+    expect(fsStatMock).toHaveBeenCalledWith('/tmp/copied-file.txt')
+  })
+
+  it('answers object-form SSH requests with the not-served error instead of invalid-path', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    registerClipboardHandlers({} as never)
+
+    const handlers = getRegisteredHandlers()
+    expect(() =>
+      handlers.get('clipboard:writeFile')?.(makeClipboardEvent(), {
+        filePath: '/tmp/copied-file.txt',
+        connectionId: 'ssh-target'
+      })
+    ).toThrow('Remote connection dropped')
+    expect(fsStatMock).not.toHaveBeenCalled()
+  })
+
   it('rejects unauthorized local files before touching the OS clipboard', async () => {
     resolveAuthorizedPathMock.mockRejectedValue(
       new Error(
@@ -461,6 +491,7 @@ describe('registerClipboardHandlers', () => {
   })
 
   it('rejects oversized text clipboard IPC reads without returning clipboard contents', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     clipboardReadTextMock.mockImplementation((clipboardType?: string) =>
       clipboardType === 'selection' ? 'selection secret' : 'standard secret'
     )
@@ -478,6 +509,7 @@ describe('registerClipboardHandlers', () => {
 
   it('yields while measuring large accepted text clipboard IPC reads', async () => {
     vi.useFakeTimers()
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     const text = 'é'.repeat(300_000)
     clipboardReadTextMock.mockReturnValue(text)
 
