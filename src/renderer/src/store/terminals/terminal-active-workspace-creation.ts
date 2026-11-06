@@ -1,8 +1,9 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { TabSplitTarget } from '../slices/tabs'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import {
   resolveWorktreeOperationRouteResult,
@@ -56,12 +57,21 @@ export async function openNewTerminalTabInWorkspace(
   if (worktreeRoute && worktreeRoute.kind !== 'resolved') {
     return
   }
-  const selectedHost = parseExecutionHostId(executionHostId)
+  const selectedOwner =
+    !worktreeRoute && executionHostId
+      ? runtimeEnvironmentIdForWorkspaceOwner(state, {
+          workspaceId: worktreeId,
+          hostId: executionHostId
+        })
+      : undefined
+  if (selectedOwner?.kind === 'ambiguous') {
+    return
+  }
   const runtimeEnvironmentId = worktreeRoute
     ? worktreeRoute.route.runtimeEnvironmentId
     : executionHostId
-      ? selectedHost?.kind === 'runtime'
-        ? selectedHost.environmentId
+      ? selectedOwner?.kind === 'resolved'
+        ? selectedOwner.environmentId
         : null
       : worktreeId === FLOATING_TERMINAL_WORKTREE_ID
         ? null

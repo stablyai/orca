@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { createTestStore, makeTab, makeWorktree, seedStore } from './store-test-helpers'
@@ -244,3 +245,35 @@ it.each([undefined, 'pwsh.exe'])(
     expect(store.getState().tabsByWorktree[id]?.[0]?.shellOverride).toBe(shellOverride)
   }
 )
+
+it('creates a selected SSH-folder terminal through its paired server', async () => {
+  vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+  remoteCreate.mockClear()
+  try {
+    const store = createTestStore()
+    seedStore(store, {
+      runtimeEnvironments: [{ id: 'paired-server' } as PublicKnownRuntimeEnvironment],
+      activeWorktreeId: 'another-workspace',
+      activeWorkspaceExecutionHostId: 'local',
+      folderWorkspaces: [{ ...MIXED_FOLDER, connectionId: 'box', executionHostId: 'ssh:box' }],
+      projectGroups: [MIXED_GROUP]
+    })
+    await store
+      .getState()
+      .openNewTerminalTabInActiveWorkspace('folder-group', 'folder:notes-1', 'ssh:box', 'bash')
+    expect(remoteCreate).toHaveBeenCalledWith(
+      {
+        worktreeId: 'folder:notes-1',
+        environmentId: 'paired-server',
+        targetGroupId: 'folder-group',
+        activate: true,
+        selectWorktree: true,
+        shell: 'bash'
+      },
+      { userAct: true }
+    )
+    expect(store.getState().tabsByWorktree['folder:notes-1'] ?? []).toEqual([])
+  } finally {
+    vi.unstubAllGlobals()
+  }
+})
