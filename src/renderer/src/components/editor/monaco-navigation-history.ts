@@ -131,6 +131,7 @@ const updateEditorLocation = (params: EditorParams, recording: RecordingState): 
   }
 
   const location = { ...previous, ...viewport }
+
   recording.location = location
   historyFor(location.file.worktreeId).update(location)
 }
