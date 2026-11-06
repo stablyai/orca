@@ -6,6 +6,10 @@ const { glabApiWithHeadersMock } = vi.hoisted(() => ({ glabApiWithHeadersMock: v
 vi.mock('./gl-utils', async () => ({
   ...(await vi.importActual<typeof GlabApiResponse>('./glab-api-response')),
   glabApiWithHeaders: glabApiWithHeadersMock,
+  // Serves single-request fetches from the same pipeline, so a reverted fix fails on row counts.
+  glabExecFileAsync: async (args: string[]) => ({
+    stdout: (await glabApiWithHeadersMock(args.slice(1))).body
+  }),
   glabHostnameArgs: vi.fn(() => []),
   glabRepoExecOptions: vi.fn(() => ({}))
 }))
@@ -13,13 +17,18 @@ vi.mock('./gl-utils', async () => ({
 import { fetchPipelineJobs } from './pipeline-job-graph'
 
 /** Serves `/jobs` and `/bridges` 100 per page with GitLab's x-next-page header. */
-function servePipeline(jobCount: number, bridgeCount: number): void {
+function servePipeline(jobCount: number, bridgeCount: number, failingJobPage?: number): void {
   glabApiWithHeadersMock.mockImplementation(async (args: string[]) => {
-    const match = /pipelines\/7\/(jobs|bridges)\?per_page=100&page=(\d+)$/.exec(args.at(-1) ?? '')
+    const match = /pipelines\/7\/(jobs|bridges)\?per_page=100(?:&page=(\d+))?$/.exec(
+      args.at(-1) ?? ''
+    )
     if (!match) {
       throw new Error(`unexpected endpoint ${args.at(-1)}`)
     }
-    const page = Number(match[2])
+    const page = Number(match[2] ?? 1)
+    if (match[1] === 'jobs' && page === failingJobPage) {
+      throw new Error('503 upstream unavailable')
+    }
     const total = match[1] === 'jobs' ? jobCount : bridgeCount
     const start = (page - 1) * 100
     const items = Array.from({ length: Math.max(0, Math.min(100, total - start)) }, (_, i) =>
@@ -42,7 +51,8 @@ describe('fetchPipelineJobs', () => {
   it.each([
     // One request per started 100-item page on each endpoint.
     { jobs: 130, bridges: 101, requests: 4 },
-    { jobs: 1300, bridges: 1010, requests: 24 }
+    { jobs: 1300, bridges: 1010, requests: 24 },
+    { jobs: 5001, bridges: 0, requests: 52 }
   ])(
     'collects $jobs jobs and $bridges bridges in $requests requests',
     async ({ jobs, bridges, requests }) => {
@@ -55,4 +65,12 @@ describe('fetchPipelineJobs', () => {
       expect(glabApiWithHeadersMock).toHaveBeenCalledTimes(requests)
     }
   )
+
+  it('keeps earlier pages when a later page fails', async () => {
+    servePipeline(250, 0, 2)
+
+    const rows = await fetchPipelineJobs('/repo', { host: 'gitlab.com', path: 'g/p' }, 7)
+
+    expect(rows.filter((row) => row.name.startsWith('job-'))).toHaveLength(100)
+  })
 })

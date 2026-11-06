@@ -91,14 +91,16 @@ async function fetchPipelineBridges(
   projectRef: ProjectRef,
   pipelineId: number,
   connectionId: string | null | undefined,
-  localGitOptions: LocalGitExecOptions
+  localGitOptions: LocalGitExecOptions,
+  signal: AbortSignal
 ): Promise<GitLabRawBridge[]> {
   return fetchAllGitLabPages<GitLabRawBridge>(
     repoPath,
     projectRef,
     `projects/${encodedProject(projectRef.path)}/pipelines/${pipelineId}/bridges`,
     connectionId,
-    localGitOptions
+    localGitOptions,
+    signal
   )
 }
 
@@ -159,11 +161,23 @@ export async function fetchPipelineJobs(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabPipelineJob[]> {
+  // A parent failure rejects the whole graph; stop bridge pages nobody will read.
+  const parentFailed = new AbortController()
   const [parentJobs, bridges] = await Promise.all([
-    fetchPipelineJobList(repoPath, projectRef, pipelineId, connectionId, localGitOptions),
-    fetchPipelineBridges(repoPath, projectRef, pipelineId, connectionId, localGitOptions).catch(
-      () => [] as GitLabRawBridge[]
-    )
+    fetchPipelineJobList(repoPath, projectRef, pipelineId, connectionId, localGitOptions).catch(
+      (error: unknown) => {
+        parentFailed.abort()
+        throw error
+      }
+    ),
+    fetchPipelineBridges(
+      repoPath,
+      projectRef,
+      pipelineId,
+      connectionId,
+      localGitOptions,
+      parentFailed.signal
+    ).catch(() => [] as GitLabRawBridge[])
   ])
 
   const bridgeRows = bridges.map((bridge) => mapBridgeAsJob(bridge, pipelineId))
