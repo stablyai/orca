@@ -215,7 +215,11 @@ function AuthForm({
         }
       })
   }
-  const commitText = () => void save(draft())
+  const commitText = () => {
+    if (edited.current) {
+      void save(draft())
+    }
+  }
   const commitOnEnter = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter' && !event.nativeEvent.isComposing && event.keyCode !== 229) {
       event.preventDefault()
