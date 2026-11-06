@@ -5,6 +5,7 @@ import { SpliceRelay } from './splice-relay'
 import { edgeConfig, type Env } from './env'
 import { HOST_ID, readBearer, verifyRelayJwt } from './jwt'
 import { SPLICE_SLOTS, makeConnId, parseConnId } from './splice-slot'
+import { AssignBodySchema, EraseBodySchema, ExportBodySchema, verifyAdminRequest, type AdminOp } from './admin'
 
 export { HostRelay, SpliceRelay }
 
@@ -32,6 +33,33 @@ function forward(
   return env.HOST_RELAY.get(env.HOST_RELAY.idFromName(relayHostId)).fetch(init)
 }
 
+// Director → edge (phase 2). 401 for any token problem; 400 for a body that fails its schema.
+async function handleAdmin(env: Env, request: Request, op: AdminOp): Promise<Response> {
+  if (request.method !== 'POST' || edgeConfig(env).backend !== 'object') return reject(404)
+  const verified = await verifyAdminRequest(env, request, op)
+  if (!verified) return reject(401)
+  const host = (relayHostId: string) => env.HOST_RELAY.get(env.HOST_RELAY.idFromName(relayHostId))
+  if (op === 'assign') {
+    const body = AssignBodySchema.safeParse(verified.body)
+    if (!body.success) return reject(400)
+    try {
+      const { outcome } = await host(body.data.relayHostId).adminAssign(body.data)
+      return Response.json({ outcome }, { status: outcome === 'stale' ? 409 : 200 })
+    } catch (error) {
+      return Response.json({ error: (error as Error).message }, { status: 409 })
+    }
+  }
+  if (op === 'export') {
+    const body = ExportBodySchema.safeParse(verified.body)
+    if (!body.success) return reject(400)
+    return Response.json(await host(body.data.relayHostId).adminExport())
+  }
+  const body = EraseBodySchema.safeParse(verified.body)
+  if (!body.success) return reject(400)
+  const { outcome } = await host(body.data.relayHostId).adminErase(body.data.userId)
+  return Response.json({ outcome }, { status: outcome === 'erased' ? 200 : 409 })
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     // Fails every request (500) on a misconfigured deploy rather than running with a wrong backend.
@@ -41,6 +69,8 @@ export default {
       return Response.json({ ok: true, connectionCapacityProtocol: 2 })
     }
     if (url.search) return reject(400)
+    const admin = url.pathname.match(/^\/__admin\/(assign|export|erase)$/)
+    if (admin) return handleAdmin(env, request, admin[1] as AdminOp)
     // Spike-only: force the object to reset (simulates eviction / runtime restart).
     const abort = url.pathname.match(/^\/__spike\/abort\/([^/]+)$/)
     if (abort && env.SPIKE_ADMIN === '1') {

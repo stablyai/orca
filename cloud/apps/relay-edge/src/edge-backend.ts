@@ -1,6 +1,7 @@
-// What the edge needs from the relay database, behind one interface:
-// - postgres: the cells' own RelayCredentialStore (cloud/apps/relay/src/credential-store.ts),
-//   imported unchanged, over Hyperdrive; plus the two assignment reads the cells make.
+// What the edge needs from the relay database, behind one interface. Both real backends run the
+// cells' own RelayCredentialStore (cloud/apps/relay/src/credential-store.ts) unchanged:
+// - object (phase 2): on the HostRelay's own SQLite; the assignment is what the director pushed.
+// - postgres (phase 1, staging): over Hyperdrive; plus the two assignment reads the cells make.
 // - spike: no database (load tests on workers.dev); stub credentials from env, no epoch check.
 //
 // The store's background pieces stay off here: cleanup()/HeapWindowReaper is only called by
@@ -18,6 +19,7 @@ import {
   type RelayIdentity
 } from '../../relay/src/credential-store'
 import { metric } from './metrics'
+import type { RelayDatabase } from '../../relay/src/database'
 import { EdgePostgresDatabase, isEdgeDatabaseTransientError } from './edge-database'
 import { edgeConfig, type Env } from './env'
 
@@ -55,14 +57,14 @@ export interface EdgeBackend {
   revoke(identity: RelayIdentity, relayDeviceId: string): Promise<void>
 }
 
-class PostgresBackend implements EdgeBackend {
-  private readonly database: EdgePostgresDatabase
-  private readonly store: RelayCredentialStore
+// Where the hello check and the missing-seat answer read the host's assignment from.
+export interface AssignmentSource {
+  verifyAssignment(userId: string, relayHostId: string, assignmentEpoch: number): Promise<boolean>
+  assignedElsewhere(userId: string, relayHostId: string): Promise<boolean>
+}
 
-  constructor(connectionString: string, private readonly cellId: string, onOp?: (ms: number, outcome: 'ok' | 'transient' | 'error') => void) {
-    this.database = new EdgePostgresDatabase(connectionString, onOp)
-    this.store = new RelayCredentialStore(this.database)
-  }
+class PostgresAssignments implements AssignmentSource {
+  constructor(private readonly database: RelayDatabase, private readonly cellId: string) {}
 
   // Same read as AssignmentStore.verifyCellAssignment on a cell (no unassigned bootstrap).
   async verifyAssignment(userId: string, relayHostId: string, assignmentEpoch: number): Promise<boolean> {
@@ -81,7 +83,21 @@ class PostgresBackend implements EdgeBackend {
     )
     return rows[0] !== undefined && rows[0].cell_id !== this.cellId
   }
+}
 
+export class StoreBackend implements EdgeBackend {
+  private readonly store: RelayCredentialStore
+
+  constructor(database: RelayDatabase, private readonly assignments: AssignmentSource) {
+    this.store = new RelayCredentialStore(database)
+  }
+
+  verifyAssignment(userId: string, relayHostId: string, assignmentEpoch: number): Promise<boolean> {
+    return this.assignments.verifyAssignment(userId, relayHostId, assignmentEpoch)
+  }
+  assignedElsewhere(userId: string, relayHostId: string): Promise<boolean> {
+    return this.assignments.assignedElsewhere(userId, relayHostId)
+  }
   lookupResume(relayHostId: string, token: string) {
     return this.store.lookupResume(relayHostId, token)
   }
@@ -190,11 +206,16 @@ class SpikeBackend implements EdgeBackend {
   }
 }
 
-export function edgeBackend(env: Env): EdgeBackend {
+// `objectStore` is the HostRelay's own store (object backend); other backends ignore it.
+export function edgeBackend(env: Env, objectStore?: { database: RelayDatabase; assignments: AssignmentSource }): EdgeBackend {
   const config = edgeConfig(env)
-  return config.backend === 'spike'
-    ? new SpikeBackend(env)
-    : new PostgresBackend(env.HYPERDRIVE!.connectionString, config.cellId, (ms, outcome) => metric(env, 'db_op', ms, outcome))
+  if (config.backend === 'spike') return new SpikeBackend(env)
+  if (config.backend === 'object') {
+    if (!objectStore) throw new Error('relay_edge_object_store_missing')
+    return new StoreBackend(objectStore.database, objectStore.assignments)
+  }
+  const database = new EdgePostgresDatabase(env.HYPERDRIVE!.connectionString, (ms, outcome) => metric(env, 'db_op', ms, outcome))
+  return new StoreBackend(database, new PostgresAssignments(database, config.cellId))
 }
 
 // Control command failures, as the cells report them (host-session-registry controlErrorCode):

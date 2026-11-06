@@ -34,6 +34,8 @@ import { relayHostCloseReasonFrom } from '../../../packages/relay-contract/src/h
 import { verifyRelayJwt } from './jwt'
 import { SPLICE_SLOTS, makeConnId, parseConnId } from './splice-slot'
 import { metric } from './metrics'
+import type { AssignBody, DeviceRow } from './admin'
+import { ObjectStore, type AssignOutcome, type StoredAssignment } from './object-store'
 import { edgeConfig, type EdgeClaims, type EdgeConfig, type Env } from './env'
 import { controlErrorCode, edgeBackend, type CredentialReservation, type EdgeBackend } from './edge-backend'
 import { b64, b64url, fromB64, hmacSha256, sha256B64url, timingSafeEqualStr } from './bytes'
@@ -104,8 +106,43 @@ export class HostRelay extends DurableObject<Env> {
   }
 
   private get backend(): EdgeBackend {
-    this.backendCache ??= edgeBackend(this.env)
+    this.backendCache ??= edgeBackend(this.env, this.config.backend === 'object' ? { database: this.store.database, assignments: this.store } : undefined)
     return this.backendCache
+  }
+
+  // Phase 2: this host's credential tables and pushed assignment, in the object's own SQLite.
+  private storeCache: ObjectStore | null = null
+  private get store(): ObjectStore {
+    this.storeCache ??= new ObjectStore(this.ctx.storage.sql, (operation) => this.ctx.storage.transaction(() => operation()), this.config.cellId)
+    return this.storeCache
+  }
+
+  // ---------------- director admin (phase 2; the Worker verified the signed request) ----------------
+
+  async adminAssign(body: AssignBody): Promise<{ outcome: AssignOutcome }> {
+    const outcome = await this.store.applyAssignment(body)
+    if (outcome === 'applied' && body.cellId !== this.config.cellId) {
+      // Moved away: like an old cell, send the desktop and its phones back to the director.
+      for (const ws of this.ctx.getWebSockets('control')) this.close(ws, RELAY_CLOSE_CODE.WRONG_CELL, 'host moved')
+      await this.closeSplices(() => true, RELAY_CLOSE_CODE.WRONG_CELL, 'host moved')
+    }
+    return { outcome }
+  }
+
+  async adminExport(): Promise<{ assignment: StoredAssignment | null; devices: DeviceRow[] }> {
+    return { assignment: this.store.assignment(), devices: this.store.exportDevices() }
+  }
+
+  // Erasure: refused while the host is live, as today's guard; otherwise every byte of the object goes.
+  async adminErase(userId: string): Promise<{ outcome: 'erased' | 'busy' | 'mismatch' }> {
+    const assignment = this.store.assignment()
+    if (assignment && assignment.userId !== userId) return { outcome: 'mismatch' }
+    if (this.ctx.getWebSockets('control').length > 0 || this.store.activeBases() > 0) return { outcome: 'busy' }
+    await this.ctx.storage.deleteAlarm()
+    await this.ctx.storage.deleteAll()
+    this.storeCache = null
+    this.backendCache = null
+    return { outcome: 'erased' }
   }
 
   async fetch(request: Request): Promise<Response> {

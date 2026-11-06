@@ -33,6 +33,9 @@ export interface Env {
   // Version label baked in per deploy (--var EDGE_VERSION:<tag>), reported by metrics and debug.
   EDGE_VERSION?: string
   METRICS?: AnalyticsEngineDataset
+  // Phase 2 admin calls: the director's assignment signing key (secret) and its public URL (iss).
+  ASSIGNMENT_SIGNING_KEY?: string
+  ADMIN_ISSUER?: string
 }
 
 export type EdgeClaims = {
@@ -44,7 +47,7 @@ export type EdgeClaims = {
 }
 
 export type EdgeConfig = {
-  backend: 'postgres' | 'spike'
+  backend: 'object' | 'postgres' | 'spike'
   cellId: string
   pingIntervalMs: number
   silenceTimeoutMs: number
@@ -65,7 +68,11 @@ export function edgeConfig(env: Env): EdgeConfig {
   const cached = configs.get(env)
   if (cached) return cached
   const backend = env.EDGE_BACKEND ?? 'postgres'
-  if (backend !== 'postgres' && backend !== 'spike') throw new Error('relay_edge_config_backend')
+  if (backend !== 'object' && backend !== 'postgres' && backend !== 'spike') throw new Error('relay_edge_config_backend')
+  // Phase 2: assignments arrive only through signed director pushes.
+  if (backend === 'object' && (!env.ASSIGNMENT_SIGNING_KEY || env.ASSIGNMENT_SIGNING_KEY.length < 32 || !env.ADMIN_ISSUER)) {
+    throw new Error('relay_edge_config_admin')
+  }
   if (backend === 'postgres' && !env.HYPERDRIVE) throw new Error('relay_edge_config_hyperdrive')
   if (backend === 'spike' && env.SPIKE_DEBUG !== '1' && env.SPIKE_ADMIN !== '1') {
     throw new Error('relay_edge_config_spike_backend_outside_spike')
