@@ -4,6 +4,7 @@ import type { OrcaRuntimeService } from '../orca-runtime'
 import { defineMethod, defineStreamingMethod, type RpcResponse } from './core'
 import { RpcDispatcher } from './dispatcher'
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: These test methods only read the runtime ID; optional runtime hooks are absent.
 const runtime = { getRuntimeId: () => 'test-runtime' } as OrcaRuntimeService
 
 describe('object and JSON stream transports', () => {
