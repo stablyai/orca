@@ -47,7 +47,7 @@ const suggestions = { query: '1799', currentJql: 'ORDER BY updated DESC' }
 
 beforeEach(() => {
   vi.resetAllMocks()
-  getClients.mockReturnValue([entry()])
+  getClients.mockResolvedValue([entry()])
 })
 
 describe('numeric Jira issue suggestions', () => {
@@ -82,7 +82,7 @@ describe('numeric Jira issue suggestions', () => {
   })
 
   it('hydrates matching keys on their own site and uses the Data Center API paths', async () => {
-    getClients.mockReturnValue([entry('cloud'), entry('dc', true)])
+    getClients.mockResolvedValue([entry('cloud'), entry('dc', true)])
     jiraRequest.mockImplementation(async (_client: JiraClientForSite, path: string) => {
       if (path.includes('/issue/picker?')) {
         return { sections: [{ issues: [{ key: 'ALP-1799' }] }] }
@@ -120,6 +120,33 @@ describe('numeric Jira issue suggestions', () => {
       maxResults: 2
     })
   })
+
+  it.each([
+    [12, 'TEXT-10'],
+    [50, 'TEXT-48']
+  ] as const)(
+    'keeps exact keys ahead of newer text matches across sites (limit %i)',
+    async (limit, lastTextKey) => {
+      getClients.mockResolvedValue([entry('cloud'), entry('dc', true)])
+      const exact = ['A-1799', 'B-1799'].map((key, index) => ({
+        ...issue(key),
+        fields: { summary: key, updated: `2025-01-0${index + 1}T00:00:00Z` }
+      }))
+      const text = Array.from({ length: limit }, (_, index) => issue(`TEXT-${index + 1}`))
+      jiraRequest.mockImplementation(async (client: JiraClientForSite, path: string) => {
+        if (path.includes('/issue/picker?')) {
+          return { sections: [{ issues: client.site.id === 'cloud' ? exact : [] }] }
+        }
+        return { issues: client.site.id === 'cloud' ? exact : text }
+      })
+
+      const result = await searchIssues(fallback, limit, 'all', undefined, false, suggestions)
+
+      expect(result).toHaveLength(limit)
+      expect(result.slice(0, 3).map(({ key }) => key)).toEqual(['B-1799', 'A-1799', 'TEXT-1'])
+      expect(result.at(-1)?.key).toBe(lastTextKey)
+    }
+  )
 
   it('rejects candidate overflow rather than silently omitting matches', async () => {
     jiraRequest
