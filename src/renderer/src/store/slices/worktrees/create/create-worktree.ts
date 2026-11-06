@@ -45,8 +45,10 @@ import {
   type WorktreeCreateRequest
 } from './worktree-create-payload'
 import { holdCreatedSidebarWorkspace } from '@/lib/sidebar-pending-layer'
-import { inferNoteCrossStoreParent } from './worktree-create-note-parent'
-import { buildCrossStoreParentRef } from '../metadata/cross-store-parent-ref'
+import {
+  resolveCreateCrossStoreParent,
+  withoutRefusedInferredParent
+} from './worktree-create-cross-store-parent'
 import {
   lostRequestedParent,
   notifyWorktreeParentDropped,
@@ -92,6 +94,10 @@ async function runCreateAttempt(
   try {
     return { result: await create(attempt.parentWorkspace), droppedParent: false }
   } catch (error) {
+    const unnested = withoutRefusedInferredParent(attempt, error)
+    if (unnested) {
+      return await runCreateAttempt(request, unnested, target, clientCreateSettings)
+    }
     if (!attempt.parentWorkspace || !isRuntimeLineageParentMissingError(error)) {
       throw error
     }
@@ -211,24 +217,12 @@ export function createCreateWorktree(
       if (parent.staleBeforeCreate) {
         warnParentDroppedOnce()
       }
-      // A picked parent refuses the whole create (older Orca, unconfirmed parent) rather than create it
-      // unnested; the active folder fallback keeps its old behaviour there: create unnested and warn.
-      const crossStoreParent = parent.crossStoreParentRow
-        ? await buildCrossStoreParentRef(get(), target, parent.crossStoreParentRow).catch(
-            (error: unknown) => {
-              if (!parent.crossStoreParentIsActiveFolder) {
-                throw error
-              }
-              warnParentDroppedOnce()
-              return undefined
-            }
-          )
-        : undefined
-      // Nothing else names a parent: a task id in the note may, through this desktop's own Orca.
-      const noteParent =
-        crossStoreParent || parent.parentWorkspace || options?.parentWorktreeId
-          ? undefined
-          : await inferNoteCrossStoreParent(get(), target, options?.note)
+      const crossStoreParent = await resolveCreateCrossStoreParent(get(), target, {
+        pick: parent,
+        requestedParentWorktreeId: options?.parentWorktreeId,
+        note: options?.note,
+        warnParentDropped: warnParentDroppedOnce
+      })
       if (
         target.kind === 'environment' &&
         (options?.linkedWorkItem?.provider === 'jira' ||
@@ -260,8 +254,7 @@ export function createCreateWorktree(
                 ? getClientWorktreeCreateCandidate(branchNameOverride, attempt)
                 : undefined,
               parentWorkspace: parent.parentWorkspace,
-              crossStoreParent,
-              ...noteParent,
+              ...crossStoreParent,
               manualOrder
             },
             target,
