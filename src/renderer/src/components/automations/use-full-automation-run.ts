@@ -32,18 +32,19 @@ export function useFullAutomationRun(
           run.outputSnapshot?.capturedAt
         ])
       : null
-  const latest = useRef({ authority, expectedOwner, run })
+  const latest = useRef({ authority, expectedOwner })
   useLayoutEffect(() => {
-    latest.current = { authority, expectedOwner, run }
+    latest.current = { authority, expectedOwner }
   })
   const [full, setFull] = useState<{ key: string; run: AutomationRun } | null>(null)
+  const loaded = full?.key === key
+  // A failed read keeps the preview, marked truncated; the next history read of the row retries.
   useEffect(() => {
-    const { authority, expectedOwner, run } = latest.current
-    if (!key || !authority || !expectedOwner) {
+    const { authority, expectedOwner } = latest.current
+    if (!key || loaded || !authority || !expectedOwner) {
       return
     }
     let current = true
-    // A failed read keeps the preview, which is marked truncated.
     readFullAutomationRun(authority, expectedOwner, run).then(
       (row) => {
         if (current && row) {
@@ -55,6 +56,6 @@ export function useFullAutomationRun(
     return () => {
       current = false
     }
-  }, [key])
-  return full?.key === key ? full.run : run
+  }, [key, loaded, run])
+  return loaded ? full.run : run
 }

@@ -16,16 +16,18 @@ export function useFullAutomationRun(
   const key = run.outputSnapshot?.truncated
     ? JSON.stringify([run.id, run.status, run.outputSnapshot.capturedAt, expectedOwner ?? null])
     : null
-  const latest = useRef({ run, expectedOwner })
+  const latest = useRef(expectedOwner)
   useLayoutEffect(() => {
-    latest.current = { run, expectedOwner }
+    latest.current = expectedOwner
   })
   const [full, setFull] = useState<{ key: string; run: MobileAutomationRun } | null>(null)
+  const loaded = full?.key === key
+  // A failed read keeps the preview, marked truncated; a reconnect or the next history read of the row retries.
   useEffect(() => {
-    if (!key || !client || !connected) {
+    if (!key || loaded || !client || !connected) {
       return
     }
-    const { run, expectedOwner } = latest.current
+    const expectedOwner = latest.current
     const generation = client.getGeneration?.()
     let current = true
     automationRunRead
@@ -42,11 +44,10 @@ export function useFullAutomationRun(
           setFull({ key, run: read })
         }
       })
-      // A failed read keeps the preview, which is marked truncated.
       .catch(() => {})
     return () => {
       current = false
     }
-  }, [client, connected, key])
-  return full?.key === key ? full.run : run
+  }, [client, connected, key, loaded, run])
+  return loaded ? full.run : run
 }
