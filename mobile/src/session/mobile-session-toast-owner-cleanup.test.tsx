@@ -1,4 +1,4 @@
-import { createContext, createElement, StrictMode } from 'react'
+import { createElement, StrictMode } from 'react'
 import { act, create } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 
@@ -55,18 +55,12 @@ vi.mock('../terminal/terminal-copy-gutter-preference', () => ({
   useTerminalCopyTrimsGutter: () => ({ current: false })
 }))
 vi.mock('./mobile-session-styles', () => ({ styles: { container: {}, kavInner: {} } }))
-vi.mock('../transport/use-workspace-client', () => ({
-  WorkspaceServerContext: createContext(undefined)
-}))
-vi.mock('../components/AnchoredDetailCard', () => ({ AnchoredDetailCard: () => null }))
-vi.mock('./MobileSessionTabCardFooter', () => ({ MobileSessionTabCardFooter: () => null }))
+vi.mock('../components/AnchoredDetailCard', () => ({ AnchoredDetailCardLayer: () => null }))
 vi.mock('../layout/responsive-layout', () => ({
   useResponsiveLayout: () => ({ isLandscapePhone: false })
 }))
 vi.mock('../layout/use-shell-side-rail', () => ({ useShellSideRail: () => false }))
-vi.mock('./use-session-title-card', () => ({
-  useSessionTitleCard: () => ({ active: false, visual: null, tabId: null, missingTab: false })
-}))
+vi.mock('./use-session-title-card', () => ({ useSessionTitleCard: () => ({ anchor: null }) }))
 vi.mock('./MobileSessionHeader', () => ({ MobileSessionHeader: () => null }))
 vi.mock('./MobileSessionContentRow', () => ({ MobileSessionContentRow: () => null }))
 vi.mock('./MobileSessionSheets', () => ({ MobileSessionSheets: () => null }))

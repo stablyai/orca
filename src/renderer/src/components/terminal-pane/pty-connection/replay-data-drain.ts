@@ -178,8 +178,6 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       if (!isCurrentPayload()) {
         continue
       }
-      // Rebuild WebGL after replay parses so an atlas attached to an empty buffer gains current glyphs.
-      session.manager.rebuildPaneWebgl(session.pane.id)
       appliedCurrentPayload = true
     }
     return appliedCurrentPayload

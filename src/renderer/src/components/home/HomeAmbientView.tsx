@@ -5,7 +5,7 @@ import { AgentTypeIcon } from '@/lib/agent-type-icon'
 import { Button } from '../ui/button'
 import { barColor } from '../status-bar/tooltip'
 import { getTightestUsageSection } from '../status-bar/UsageRosterPanel'
-import { getProviderDisplayName } from '../status-bar/usage-error-copy'
+import { getProviderDisplayName } from '../../../../shared/usage-provider-windows'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import {
   clampUsedPercent,

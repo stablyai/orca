@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest'
-import { withPlatform } from './orca-runtime-test-fixtures.spec'
-import { createHydrationRuntime, PTY_ID } from './headless-hydration-ownership-test-fixture'
+import { afterEach, describe, expect, it } from 'vitest'
+import { setSshTargetRegistryHandlers } from '../ssh/targets/ssh-target-registry'
+import { withPlatform } from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
+import {
+  createHydrationRuntime,
+  PTY_ID
+} from './orca-runtime-tests/headless-hydration-ownership-test-fixture'
 
 const HISTORY = Array.from({ length: 60 }, (_, i) => `H${i}`).join('\r\n')
 
@@ -36,5 +40,29 @@ describe("main's copy of a local pane", () => {
     expect(
       await scrollbackAfterShrinkAndGrow('win32', 'ssh:target-1@@relay-pty-9')
     ).toBeLessThanOrEqual(0)
+  })
+})
+
+describe("main's copy of an SSH pane", () => {
+  afterEach(() => setSshTargetRegistryHandlers({ connect: null, getState: null }))
+
+  // A Windows SSH target runs its relay PTY through its own ConPTY, whatever this machine is.
+  it('grows rows the ConPTY way when the SSH target is Windows', async () => {
+    setSshTargetRegistryHandlers({
+      connect: null,
+      getState: (targetId) =>
+        targetId === 'target-1'
+          ? {
+              targetId,
+              status: 'connected',
+              error: null,
+              reconnectAttempt: 0,
+              remotePlatform: 'win32'
+            }
+          : undefined
+    })
+    expect(
+      await scrollbackAfterShrinkAndGrow('darwin', 'ssh:target-1@@relay-pty-9')
+    ).toBeGreaterThan(0)
   })
 })

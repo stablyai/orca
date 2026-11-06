@@ -67,6 +67,22 @@ export async function handleStructuredAgentSessionCreate(
       reason: 'requestMalformed'
     })
   }
+  if ('worktree' in params && params.forkFrom) {
+    await ensureHostInstalled(ctx, params.agent)
+    return requireHost(ctx, params.agent).serializeCreateIntent(
+      callerFor(ctx).callerKey,
+      params.envelope,
+      () => resolveAndCommitStructuredAgentSessionCreate(params, ctx, capture)
+    )
+  }
+  return resolveAndCommitStructuredAgentSessionCreate(params, ctx, capture)
+}
+
+async function resolveAndCommitStructuredAgentSessionCreate(
+  params: z.infer<typeof CreateParams>,
+  ctx: RpcContext,
+  capture?: (surface: StructuredSessionSurface) => void
+) {
   // Before attach, return refusals instead of throwing so clients can distinguish no effects from unknown outcomes.
   const prepared = await resolveUncommittedStructuredCreate(async () => {
     if ('worktree' in params) {
@@ -89,11 +105,13 @@ export async function handleStructuredAgentSessionCreate(
         caller: callerFor(ctx),
         structuredAgentCliSourceEvidence: ctx.structuredAgentCliSourceEvidence,
         ...(params.resumeFrom ? { resumeFrom: params.resumeFrom } : {}),
+        ...(params.forkFrom ? { forkFrom: params.forkFrom } : {}),
         ...(params.tabId ? { tabId: params.tabId } : {}),
         ...(params.optionsMode ? { optionsMode: params.optionsMode } : {}),
         ...(params.options ? { options: params.options } : {}),
         ...(params.firstMessage ? { firstMessage: params.firstMessage } : {}),
         atRest: Boolean(
+          params.forkFrom ||
           params.firstMessage ||
           ctx.clientCapabilities?.includes(AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY)
         )
@@ -101,7 +119,7 @@ export async function handleStructuredAgentSessionCreate(
     }
     const { host, attachParams } = await resolveClientSuppliedAttach(params, ctx)
     return { host, attachParams, tab: null }
-  })
+  }, params.agent)
   if ('refusal' in prepared) {
     return { ok: false, refusal: prepared.refusal }
   }

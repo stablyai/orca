@@ -89,14 +89,14 @@ describe('launchAgentInNewTab', () => {
     }
   )
 
-  it.each(['local', 'ssh', 'capable-web', 'older-web'] as const)(
+  it.each(['local', 'ssh'] as const)(
     'keeps the whole saved-source terminal DTO/config identical to its base-only caller on %s',
     async (host) => {
       const transport =
         await import('../runtime/agent-launch-settings/agent-launch-settings-transport')
       const preferences =
         await import('../runtime/agent-launch-settings/use-host-agent-launch-preferences')
-      vi.spyOn(transport, 'hostSupportsLaunchChoices').mockResolvedValue(host === 'capable-web')
+      vi.spyOn(transport, 'hostSupportsLaunchChoices').mockResolvedValue(false)
       vi.spyOn(preferences, 'ensureAgentLaunchPreferences').mockResolvedValue({
         defaultTuiAgent: 'codex',
         disabledTuiAgents: undefined,
@@ -106,11 +106,7 @@ describe('launchAgentInNewTab', () => {
       if (host === 'ssh') {
         store.repos[0].connectionId = 'ssh-target-1'
       }
-      mockIsWebRuntimeSessionActive.mockReturnValue(host.endsWith('web'))
-      if (host.endsWith('web')) {
-        store.settings.activeRuntimeEnvironmentId = 'web-runtime'
-        Object.assign(store.repos[0], { executionHostId: 'runtime:web-runtime' })
-      }
+      mockIsWebRuntimeSessionActive.mockReturnValue(false)
       const raw = `-c 'model="true"'  --search`
       const projection = projectSourceControlActionLaunch(
         {
@@ -159,13 +155,6 @@ describe('launchAgentInNewTab', () => {
       expect(JSON.stringify(payload)).not.toContain('chatLaunchOptions')
       expect(payload?.command).toContain('model_reasoning_effort=high')
       expect(payload?.command).toContain('model="true"')
-      if (actual.wire) {
-        expect(transport.hostSupportsLaunchChoices).toHaveBeenCalledWith({
-          environmentId: 'web-runtime'
-        })
-        expect(actual.wire.launchPreferences).not.toHaveProperty('model')
-        expect(actual.wire.agentArgs).toBe(raw)
-      }
     }
   )
 

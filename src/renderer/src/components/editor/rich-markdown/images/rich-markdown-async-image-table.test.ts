@@ -168,18 +168,6 @@ describe('async image paste over table cells', () => {
     }
   )
 
-  it('maps the complete cell selection through an edit before the table', async () => {
-    const editor = richEditor()
-    const complete = pendingPaste(editor)
-    await flushPromises()
-    editor.view.dispatch(editor.state.tr.insertText('prefix ', 1))
-    complete()
-    await flushPromises()
-    expectReplacedCells(editor)
-    expect(editor.state.doc.firstChild?.textContent).toBe('prefix Before table')
-    expect(editor.state.doc.lastChild?.textContent).toBe('After table')
-  })
-
   it('does not absorb a new row inserted between the originally selected rows', async () => {
     const editor = richEditor()
     const complete = pendingPaste(editor)

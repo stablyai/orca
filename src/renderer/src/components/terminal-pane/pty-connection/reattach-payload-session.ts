@@ -32,4 +32,5 @@ export type ReattachPayloadSession = Pick<
   | 'writeInputModeGround'
   | 'writeReplayEpilogue'
   | 'writeReplayData'
+  | 'streamPosition'
 >

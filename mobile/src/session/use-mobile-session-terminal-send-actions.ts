@@ -51,6 +51,7 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     getSendCompletionGeneration,
     getLiveInteractionGeneration,
     handleLiveInputAccessoryBytes,
+    handleLiveInputCompositionEnd,
     handleLiveInputSubmit,
     canSend,
     scheduleDelayedAction,
@@ -93,7 +94,8 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       }
       void handleAccessoryKey(input)
       return true
-    }
+    },
+    handleLiveInputCompositionEnd
   )
 
   async function handleAccessoryKey(

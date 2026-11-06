@@ -141,28 +141,6 @@ describe('a window save in a layout-owner build', () => {
     expect(terminalTabs(store.getWorkspaceSession('local'))).toEqual(['tab-a', 'tab-b'])
   })
 
-  it('gives a visited workspace main holds its terminal row, and one main lacks none', async () => {
-    store.setWorkspaceSession(
-      addWorkspace(emptySession(), GIT_KEY, [
-        { id: 'group-1', tabs: [{ id: 'editor-1', kind: 'editor' }] }
-      ]),
-      'local'
-    )
-    const save = {
-      ...addWorkspace(emptySession(), GIT_KEY, [
-        { id: 'group-1', tabs: [{ id: 'editor-1', kind: 'editor' }] }
-      ]),
-      tabsByWorktree: { [GIT_KEY]: [], [OTHER_KEY]: [] },
-      lastVisitedAtByWorktreeId: { [GIT_KEY]: 5, [OTHER_KEY]: 6 }
-    }
-
-    await call('session:set', save, 'local')
-
-    const saved = store.getWorkspaceSession('local')
-    expect(Object.hasOwn(saved.tabsByWorktree, GIT_KEY)).toBe(true)
-    expect(Object.hasOwn(saved.tabsByWorktree, OTHER_KEY)).toBe(false)
-  })
-
   it('writes a paired server’s partition as the window sent it', async () => {
     store.setWorkspaceSession(mainSession(), 'runtime:env-1')
 

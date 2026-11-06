@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
   NESTED_WORKER_MAX_DEPTH_DEFAULT,
+  migrateNestedWorkerMaxDepthDefault,
   nestedWorkerDepthExceededMessage,
   resolveNestedWorkerMaxDepth
 } from './nested-worker-depth'
 
 describe('resolveNestedWorkerMaxDepth', () => {
-  it('defaults to 1 when unset', () => {
-    expect(resolveNestedWorkerMaxDepth(undefined)).toBe(1)
-    expect(resolveNestedWorkerMaxDepth(null)).toBe(1)
-    expect(resolveNestedWorkerMaxDepth({})).toBe(1)
+  it('defaults to 4 when unset', () => {
+    expect(resolveNestedWorkerMaxDepth(undefined)).toBe(4)
+    expect(resolveNestedWorkerMaxDepth(null)).toBe(4)
+    expect(resolveNestedWorkerMaxDepth({})).toBe(4)
   })
 
   it('accepts whole numbers at or above 1', () => {
@@ -35,10 +36,36 @@ describe('resolveNestedWorkerMaxDepth', () => {
   })
 })
 
+describe('migrateNestedWorkerMaxDepthDefault', () => {
+  it('moves the old default of 1 to 4 once', () => {
+    expect(migrateNestedWorkerMaxDepthDefault({ nestedWorkerMaxDepth: 1 })).toEqual({
+      nestedWorkerMaxDepth: 4,
+      nestedWorkerMaxDepthDefaultedToFour: true
+    })
+    expect(migrateNestedWorkerMaxDepthDefault(undefined).nestedWorkerMaxDepth).toBe(4)
+  })
+
+  it('keeps a deliberate value above 1', () => {
+    expect(
+      migrateNestedWorkerMaxDepthDefault({ nestedWorkerMaxDepth: 2 }).nestedWorkerMaxDepth
+    ).toBe(2)
+  })
+
+  it('keeps 1 once the guard is stamped', () => {
+    expect(
+      migrateNestedWorkerMaxDepthDefault({
+        nestedWorkerMaxDepth: 1,
+        nestedWorkerMaxDepthDefaultedToFour: true
+      }).nestedWorkerMaxDepth
+    ).toBe(1)
+  })
+})
+
 describe('depth-exceeded message', () => {
-  it('names both depths and tells the worker to finish the task itself', () => {
-    const message = nestedWorkerDepthExceededMessage(2, 1)
-    expect(message).toContain('depth 2 (max 1)')
-    expect(message).toContain('Complete this task yourself')
+  it('names the cap and the refused depth, and says to finish here', () => {
+    const message = nestedWorkerDepthExceededMessage(5, 4)
+    expect(message).toContain('at most 4 levels deep')
+    expect(message).toContain('(depth 5)')
+    expect(message).toContain('Finish this task here')
   })
 })

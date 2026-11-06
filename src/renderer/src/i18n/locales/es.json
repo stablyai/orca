@@ -713,7 +713,9 @@
         "cb4d287238": "Nombre del servidor",
         "3affe7de3a": "Pega una URL de emparejamiento de un servidor Orca accesible desde este navegador.",
         "e3bcd082ac": "Conectar con Orca",
-        "mobileScopeRejected": "Este código QR solo da acceso limitado para móvil. Para usar la app web completa, abre el enlace para navegador desde Ajustes → Servidores remotos de Orca → Comparte este servidor Orca → Nuevo enlace."
+        "mobileScopeRejected": "Este código QR solo da acceso limitado para móvil. Para usar la app web completa, abre el enlace para navegador desde Ajustes → Servidores remotos de Orca → Comparte este servidor Orca → Nuevo enlace.",
+        "replaceSavedServer": "Este enlace se conecta a un servidor distinto de \"{{name}}\" ({{endpoint}}). Conéctate solo si confías en la dirección de abajo.",
+        "keepSavedServer": "Mantener servidor guardado"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "El historial de sesiones de Agents no está disponible para este host de ejecución.",
@@ -2555,7 +2557,6 @@
         "9cd11ba218": "Jira",
         "11a828abf8": "GitLab",
         "acef77f7ca": "GitHub",
-        "524f095d55": "Necesita revisión",
         "7698af5263": "Mío",
         "94f0339621": "Asignado a mí",
         "c2268a9982": "Todo",
@@ -2652,6 +2653,8 @@
         "loadGitHubWorkFailed": "No se pudo cargar el trabajo de GitHub.",
         "gitlabViewIssues": "Issues",
         "gitlabViewMrs": "MRs",
+        "gitlabInvolvementEveryone": "Todos",
+        "gitlabInvolvementReviewing": "Revisando",
         "gitlabViewTodos": "Mis tareas pendientes",
         "startWorkspaceFromMr": "Iniciar espacio de trabajo desde MR {{number}}",
         "startWorkspaceFromIssue": "Iniciar espacio de trabajo desde issue {{number}}",
@@ -3272,7 +3275,6 @@
             "e8b3741ff7": "ignorado",
             "a9957007eb": "Ignorar {{value0}}",
             "bef0adef9b": "Rama",
-            "0b1766738a": "Repositorio",
             "bbb1ab6a6f": "Selecciona {{value0}}",
             "b771c92598": "Eliminar seleccionados",
             "7eee951968": "Verificando seguridad del espacio de trabajo",
@@ -3281,7 +3283,6 @@
             "b2c1331844": "Eliminar espacios de trabajo inactivos",
             "7f451a3e2c": "No se pudo ignorar la sugerencia de limpieza",
             "662b8ec3f8": "Falló el escaneo de limpieza del espacio de trabajo",
-            "4d0b72481c": "Ignorar",
             "9cc26c019d": "Eliminar",
             "0e2d235c63": "Escaneo del espacio de trabajo inactivo listo",
             "4a35c08764": "Revisar",
@@ -3289,9 +3290,6 @@
             "1d3503357d": "Puedes cerrar esto y volver mientras la eliminación continúa.",
             "4c2990886e": "{{value0}}/{{value1}} eliminados",
             "86ba852118": "{{value0}}, {{value1}} fallidos",
-            "deletingCount": "Eliminando espacios de trabajo: {{value0}}",
-            "deleteCount": "¿Eliminar espacios de trabajo: {{value0}}?",
-            "selectedForDeletionCount": "Seleccionados para eliminar: {{value0}}",
             "deleteButtonCount": "Eliminar {{value0}}",
             "archivedStatus": "Archivado",
             "74f6c16279": "Atrás"
@@ -3306,7 +3304,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "Confirmaciones",
             "contextLabel": "Contexto",
             "flagsLabel": "Indicadores",
             "collapseDetails": "Contraer detalles",
@@ -5637,9 +5634,6 @@
           "hiding_one": "Ocultando {{count}} worktree detectado",
           "hiding_other": "Ocultando {{count}} worktrees detectados",
           "hiding_many": "Ocultando {{count}} worktrees detectados",
-          "hidingInRepo_one": "Ocultando {{count}} worktree detectado en {{repo}}",
-          "hidingInRepo_other": "Ocultando {{count}} worktrees detectados en {{repo}}",
-          "hidingInRepo_many": "Ocultando {{count}} worktrees detectados en {{repo}}",
           "keepHiddenAriaLabel_one": "Mantener oculto {{count}} worktree detectado de {{repo}}; recupéralo desde el menú del proyecto",
           "keepHiddenAriaLabel_other": "Mantener ocultos {{count}} worktrees detectados de {{repo}}; recupéralos desde el menú del proyecto",
           "keepHiddenAriaLabel_many": "Mantener ocultos {{count}} worktrees detectados de {{repo}}; recupéralos desde el menú del proyecto",
@@ -11574,7 +11568,7 @@
             "terminalRun": "Ejecutar comandos en tus terminales, incluso SSH"
           },
           "decisionFailed": "No se pudo guardar la decisión sobre los permisos. Inténtalo de nuevo.",
-          "fullAccessWarning": "Acceso total: se ejecuta como un programa normal y puede leer tus archivos, usar la red y ejecutar otros programas.",
+          "fullAccessWarning": "Acceso total: se ejecuta como un programa normal y puede leer tus archivos, usar la red, ejecutar otros programas y controlar Orca, incluidas tus terminales y agentes.",
           "uiWarning": "Ejecuta el código del autor dentro de Orca para dibujar su vista. Orca muestra a qué puede acceder y pregunta antes de activarlo."
         },
         "PluginConsentProvenance": {
@@ -14777,7 +14771,6 @@
           "ff92d15436": "Orca te notificará cuando los agentes terminen o necesiten ayuda.",
           "b054332836": "Configurar notificaciones",
           "f396db9f20": "Haz que te sientas como en casa",
-          "322fc50a18": "Orca funciona con cualquier agente CLI. Elige el que más usarás. Puedes cambiarlo en cualquier momento.",
           "198b148b3c": "Elija su agente predeterminado",
           "windowsTerminalTitle": "Configura los valores predeterminados de la terminal de Windows",
           "windowsTerminalSubtitle": "Elige la Shell predeterminada para los paneles nuevos y cómo se comporta el clic derecho en la terminal.",
@@ -15233,8 +15226,6 @@
           "AiCommitPrSettingsCard": {
             "8d4152701a": "p. ej. ollama run llama3.1 {{value0}}",
             "9ee54037a4": "Comando personalizado",
-            "4b2fc4b80c": "Esfuerzo de razonamiento",
-            "be8917699e": "Modelo",
             "560d4feb00": "Personalizado",
             "29d119fe95": "Agente",
             "f9382b48a1": "Habilitar autor de IA",
@@ -16888,6 +16879,8 @@
               "25349b66fc": "Nuevo archivo Markdown",
               "784812ca24": "Abre una pestaña del navegador en el workspace activo.",
               "892bfa9339": "Nueva pestaña del navegador",
+              "splitChatRight": "Dividir chat a la derecha",
+              "splitChatDown": "Dividir chat abajo",
               "verbs": {
                 "newBrowser": "nuevo navegador",
                 "newBrowserTab": "nueva pestaña del navegador",
@@ -16901,6 +16894,10 @@
                 "newTerminal": "nueva terminal",
                 "newTerminalTab": "nueva pestaña de terminal",
                 "newShell": "nuevo shell",
+                "splitChatRight": "dividir chat a la derecha",
+                "splitChatDown": "dividir chat abajo",
+                "chatPaneRight": "panel de chat a la derecha",
+                "chatPaneBelow": "panel de chat abajo",
                 "terminalTab": "pestaña de terminal",
                 "createWorktree": "crear worktree",
                 "addWorktree": "agregar worktree",
@@ -16910,18 +16907,8 @@
                 "removeWorktree": "quitar worktree",
                 "trashWorktree": "mandar worktree a la papelera",
                 "addQuickCommand": "agregar comando rápido",
-                "newQuickCommand": "nuevo comando rápido",
-                "splitChatRight": "dividir chat a la derecha",
-                "newChatRight": "nuevo chat a la derecha",
-                "chatPaneRight": "panel de chat a la derecha",
-                "splitChatDown": "dividir chat abajo",
-                "newChatBelow": "nuevo chat abajo",
-                "chatPaneBelow": "panel de chat abajo"
-              },
-              "splitChatRight": "Dividir chat a la derecha",
-              "splitChatRightDescription": "Abre un chat nuevo en un panel dividido a la derecha.",
-              "splitChatDown": "Dividir chat abajo",
-              "splitChatDownDescription": "Abre un chat nuevo en un panel dividido abajo."
+                "newQuickCommand": "nuevo comando rápido"
+              }
             }
           },
           "palette": {
@@ -17752,6 +17739,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "El host de ejecución guardado ya no coincide con esta configuración del proyecto."
+        },
+        "launchSettings": {
+          "needsFreshSession": "La configuración de inicio del agente requiere una sesión nueva en cada ejecución."
         }
       },
       "agent": {
@@ -19077,6 +19067,9 @@
         "imageUnavailable": "Vista previa no disponible",
         "send": "Enviar",
         "alternateSteerHint": "{{shortcut}} para enviar ahora",
+        "previewQueue": "Poner en cola",
+        "previewSteer": "Enviar ahora",
+        "previewSteerQueued": "Enviar el siguiente ahora",
         "alternateQueueHint": "{{shortcut}} para poner en cola",
         "noPty": "No hay terminal activa: vuelva a alternar para volver a conectarse.",
         "locked": "La entrada está retenida por otro dispositivo.",
@@ -19585,8 +19578,6 @@
       },
       "turnDiff": {
         "partial": "Diff parcial",
-        "showDiff": "Mostrar diferencias",
-        "hideDiff": "Ocultar diferencias",
         "changedFiles_one": "{{count}} archivo modificado",
         "changedFiles_other": "{{count}} archivos modificados",
         "changedFiles_many": "{{count}} archivos modificados"
@@ -19902,6 +19893,13 @@
         "hostUnavailable": "El host del archivo adjunto no está disponible. Vuelve a conectarte y a intentarlo.",
         "connectionChanged": "La conexión cambió. Cierra este archivo adjunto y vuelve a abrirlo.",
         "readFailed": "No se pudo leer este archivo adjunto en su host. Vuelve a conectarte y a intentarlo. Es posible que el archivo se haya eliminado o modificado."
+      },
+      "composerWorkspace": {
+        "copyFailed": "No se pudo copiar",
+        "copyIdentity": "Copiar {{value0}}",
+        "folder": "Carpeta",
+        "mainCheckout": "Checkout principal",
+        "worktree": "Worktree"
       }
     },
     "tab": {
@@ -20041,9 +20039,7 @@
           },
           "noSizes": "Aún no se han medido los tamaños de los espacios de trabajo.",
           "noSizesDescription": "Los tamaños aparecen después de medir el uso de disco.",
-          "measureSizes": "Escanear",
           "measureSizesTitle": "Escanear tamaños de espacios de trabajo",
-          "measureSizesDescription": "Escanea el uso de disco para comparar, ordenar y filtrar espacios de trabajo por tamaño.",
           "sizeOnDisk": "Tamaño en disco: {{value0}}",
           "checkingGitRow": "Comprobando estado de Git",
           "searchPlaceholder": "Buscar nombre, repositorio, rama, ruta, host",
@@ -20263,6 +20259,9 @@
     "settings": {
       "nativeChat": {
         "followUpBehaviorTitle": "Poner mensajes de seguimiento en cola",
+        "scrollToLatestOnSendTitle": "Desplazar a lo último al enviar",
+        "scrollToLatestOnSendCopy": "Enviar con el chat desplazado hacia arriba salta al último mensaje y sigue la respuesta. Desactívalo para mantener tu posición.",
+        "scrollToLatestOnSendSearchPosition": "posición",
         "followUpBehaviorCopy": "Los mensajes enviados mientras el agente trabaja esperan como tarjetas hasta que termina el turno, en lugar de entrar en el turno en curso. Cmd/Ctrl+Intro hace lo contrario para un mensaje.",
         "inlineVisualsTitle": "Elementos visuales inline",
         "inlineVisualsCopy": "Permite que el agente muestre gráficos, diagramas y maquetas dentro de sus respuestas. Se aplica a los chats nuevos.",
@@ -20279,7 +20278,13 @@
         "usageLimitContinueCopy": "Orca envía \"Continue where you left off.\" cuando se restablece el límite. Se aplica a todos los chats con una hora de restablecimiento conocida.",
         "usageLimitContinueSearchLimit": "límite de uso",
         "usageLimitContinueSearchReset": "restablecer",
-        "usageLimitContinueToggleLabel": "Activar o desactivar la continuación de chats al restablecerse un límite de uso"
+        "usageLimitContinueToggleLabel": "Activar o desactivar la continuación de chats al restablecerse un límite de uso",
+        "idleStopTitle": "Detener agentes inactivos tras",
+        "idleStopCopy": "Cierra el agente de un chat cuando el chat lleva este tiempo inactivo, para liberar memoria. El chat se conserva y tu siguiente mensaje vuelve a iniciar el agente. Elige Nunca para agentes que siguen trabajando en segundo plano entre turnos.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "tiempo de espera",
+        "idleStopSearchKeepAlive": "mantener activo",
+        "idleStopNever": "Nunca"
       },
       "TerminalInteraction": {
         "copyTrimsGutter": "Recortar margen al copiar",
@@ -20530,7 +20535,10 @@
       "workerAutoClose": {
         "running": "Trabajador temporal de orquestación · Se cierra 2 minutos después de terminar",
         "finished": "Trabajador temporal de orquestación finalizado · Se cierra en {{countdown}}",
-        "keepOpen": "Mantener abierto"
+        "keepOpen": "Mantener abierto",
+        "bannerRunning": "Trabajador de orquestación · Se cierra 2 minutos después de terminar",
+        "bannerFinished": "Trabajador de orquestación finalizado · Se cierra en {{countdown}}",
+        "temporaryBadge": "Temporal"
       }
     },
     "wslHostMark": {
@@ -20982,10 +20990,8 @@
       "offTerminal": "¿Prefieres el terminal? Sigue teniendo soporte completo. Tus agentes seguirán abriéndose allí hasta que elijas Chat.",
       "onIntro": "La interfaz de chat ya no es experimental y ahora forma parte de Orca. Tus agentes siguen abriéndose como chats, con mensajes enriquecidos, elementos visuales e imágenes.",
       "onTerminal": "El terminal también sigue teniendo soporte completo. Puedes volver a cambiar cualquier agente cuando quieras.",
-      "changeInSettings": "Cámbialo cuando quieras en <link>Configuración → Agentes</link>.",
       "stayInTerminal": "Seguir en el terminal",
       "cta": "Usar la interfaz de chat",
-      "saveFailed": "No se pudo activar la interfaz de chat. Elige Chat en Configuración → Agentes.",
       "demoTabTitle": "Explicar el inicio de sesión",
       "demoPrompt": "Explica cómo funciona el inicio de sesión",
       "demoReply": "El inicio de sesión empieza en {{file}}: el navegador envía a /login, el servidor comprueba la contraseña y crea una sesión, y luego te redirige a la app. Este es el flujo:",

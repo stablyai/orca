@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionFailureFact } from './agent-session-failure'
+import { AgentSessionFailureFactSchema } from './agent-session-failure-fact-schema'
 import type { AgentJournalSubmission } from '../journal/agent-session-journal-types'
 import { agentSessionWriteNoticeEnglish } from './agent-session-refusal-notice'
 import {
@@ -55,5 +56,45 @@ describe('the line under a recorded rejection', () => {
 
   it('says only that it was not sent when a loaded row already states the reason', () => {
     expect(line('Written by the host.', signedOut)).toBe('Your message was not sent.')
+  })
+})
+
+// Clients reword a recorded rejection from its fact and their own `{ agentName }` alone.
+describe('an agent update the refused model needs', () => {
+  const rejected = (rejection: unknown) =>
+    agentSessionWriteNoticeEnglish(
+      structuredAgentSessionRecordedRejectionParts(
+        {
+          clientMessageId: 'sent',
+          fence: 1,
+          payloadFingerprint: 'sent',
+          dispatchState: 'rejected',
+          providerItemId: null,
+          reason: 'Written by the host.',
+          submittedAt: 1,
+          resolvedAt: 2,
+          rejection: AgentSessionFailureFactSchema.parse(rejection)
+        } satisfies AgentJournalSubmission,
+        { agentName: 'OMP' },
+        []
+      )
+    )
+  const fact = (agentUpdate?: string) => ({
+    kind: 'modelUnavailable',
+    detail: { text: '@worker_be', audience: 'log' },
+    ...(agentUpdate === undefined ? {} : { agentUpdate })
+  })
+
+  it('survives the journal and names the release to update to', () => {
+    expect(rejected(fact('18.1.9'))).toContain(
+      "OMP couldn't use @worker_be. Update OMP to 18.1.9 or later to keep it after a restart, or pick another model and send again."
+    )
+    expect(rejected(fact())).toContain(
+      "OMP couldn't use @worker_be. Pick another model and send again."
+    )
+  })
+
+  it("keeps the host's sentence when the release is not a version this reader can place", () => {
+    expect(rejected(fact('latest'))).toContain('Written by the host.')
   })
 })

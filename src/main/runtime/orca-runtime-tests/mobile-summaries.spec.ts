@@ -1,11 +1,10 @@
-import { makeRuntimeOrchestrationDb } from '../runtime-orchestration-db.test-fixture'
+import { makeRuntimeOrchestrationDb } from './runtime-orchestration-db.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
-import {
-  OrcaRuntimeService,
-  createRootDispatch,
-  listWorktrees
-} from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import {
   HEADLESS_LEAF_ID,
   TEST_FOLDER_PROJECT_GROUP_ID,
@@ -23,7 +22,7 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal,
   store,
   syncSinglePty
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('resolves files through a source-visible linked-checkout worktree', async () => {

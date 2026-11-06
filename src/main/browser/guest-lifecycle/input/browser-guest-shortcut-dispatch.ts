@@ -159,6 +159,10 @@ export function forwardGuestShortcutInput(
     } else {
       renderer.send('ui:closeActiveTab')
     }
+  } else if (
+    keybindingMatchesAction('sidebar.projects.toggleCollapse', input, process.platform, keybindings)
+  ) {
+    renderer.send('ui:toggleProjectsCollapse')
   } else if (action?.type === 'toggleWorktreePalette') {
     renderer.send('ui:toggleWorktreePalette')
   } else if (action?.type === 'openQuickOpen') {

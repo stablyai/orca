@@ -51,8 +51,9 @@ describe('session search runtime RPC', () => {
         throw new Error('Expected successful RPC')
       }
       const text = JSON.stringify(response.result)
-      expect(text.includes('/host/transcript.jsonl')).toBe(clientKind === undefined)
-      expect(text.includes('resumeCommand')).toBe(clientKind === undefined)
+      // A paired desktop resumes hits like its session list rows; only phones get the redacted view.
+      expect(text.includes('/host/transcript.jsonl')).toBe(clientKind !== 'mobile')
+      expect(text.includes('resumeCommand')).toBe(clientKind !== 'mobile')
       expect(service.search).toHaveBeenCalledExactlyOnceWith(
         {
           query: 'needle',
@@ -220,29 +221,31 @@ describe('session search consent over the runtime RPC', () => {
     expect(response).toMatchObject({ ok: true, result: { enabled: true, generation: 7 } })
   })
 
-  it('withholds host roots from a paired client, as searchStatus does', async () => {
-    setSessionSearchService({
-      ...fakeSearchService(),
-      status: async () => ({
-        enabled: true,
-        phase: 'degraded' as const,
-        filesIndexed: 0,
-        filesDue: 0,
-        filesFailed: 1,
-        degradedRoots: [{ root: '/Users/someone/.claude', reason: 'unreadable' }],
-        lastReconcileAt: null,
-        lastSweepCompletedAt: null,
-        generation: 3
+  it.each(['runtime', 'mobile'] as const)(
+    'shows host roots to client kind %s exactly as searchStatus does',
+    async (clientKind) => {
+      setSessionSearchService({
+        ...fakeSearchService(),
+        status: async () => ({
+          enabled: true,
+          phase: 'degraded' as const,
+          filesIndexed: 0,
+          filesDue: 0,
+          filesFailed: 1,
+          degradedRoots: [{ root: '/Users/someone/.claude', reason: 'unreadable' }],
+          lastReconcileAt: null,
+          lastSweepCompletedAt: null,
+          generation: 3
+        })
       })
-    })
-    const { call } = consentDispatcher()
-    const response = await call(
-      { enabled: false },
-      { pairedDeviceId: 'device-7', clientKind: 'runtime' }
-    )
+      const { call } = consentDispatcher()
+      const response = await call({ enabled: false }, { pairedDeviceId: 'device-7', clientKind })
 
-    expect(JSON.stringify(response)).not.toContain('/Users/someone/.claude')
-  })
+      expect(JSON.stringify(response).includes('/Users/someone/.claude')).toBe(
+        clientKind === 'runtime'
+      )
+    }
+  )
 
   it('reports the host refusal when this runtime has no settings store', async () => {
     const runtime = new OrcaRuntimeService()

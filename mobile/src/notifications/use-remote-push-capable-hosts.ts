@@ -37,12 +37,14 @@ export function useRemotePushCapableHosts(): RemotePushHostSupport {
   const clients = useAllHostClients(hostIds)
 
   // Remove votes from unpaired hosts because their pushes cannot reach this phone.
-  useEffect(() => {
+  const [prunedForHostIds, setPrunedForHostIds] = useState(hostIds)
+  if (prunedForHostIds !== hostIds) {
+    setPrunedForHostIds(hostIds)
     setSupportedByHostId((previous) => {
       const kept = Object.entries(previous).filter(([hostId]) => hostIds.includes(hostId))
       return kept.length === Object.keys(previous).length ? previous : Object.fromEntries(kept)
     })
-  }, [hostIds])
+  }
 
   // Diff client identities: useAllHostClients rebuilds its array on every tick, which must not restart unchanged probes.
   useEffect(() => {

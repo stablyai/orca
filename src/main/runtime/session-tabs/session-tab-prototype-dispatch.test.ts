@@ -10,7 +10,7 @@ import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/runtime-mo
 import type { TabGroupLayoutNode } from '../../../shared/tab-types'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
 
 function snapshot(): RuntimeMobileSessionTabsSnapshot {
   return {
@@ -362,7 +362,8 @@ describe('session runtime reentry', () => {
     expect(project).toHaveBeenCalledExactlyOnceWith({
       ...input,
       tabId: 'structured-agent-session-session',
-      eligible: expect.any(Function)
+      eligible: expect.any(Function),
+      savedOrder: undefined
     })
     expect(project.mock.calls[0]?.[0].eligible?.()).toBe(true)
   })

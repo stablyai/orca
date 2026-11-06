@@ -1,8 +1,11 @@
 import { useCallback, useSyncExternalStore } from 'react'
+import { sameHostMachine, type HostMachine } from '../../../src/shared/host-machine-line'
 
 export type HostMachineDescriptor = {
   machineName: string | null
   platform: NodeJS.Platform | null
+  /** Absent reads as null: the desktop predates machine info. */
+  machine?: HostMachine | null
 }
 
 // Live descriptor state complements stored lastKnown fields; host-descriptor-recorder writes both.
@@ -14,7 +17,8 @@ export function recordHostDescriptor(hostId: string, descriptor: HostMachineDesc
   const previous = descriptorByHostId.get(hostId)
   if (
     previous?.machineName === descriptor.machineName &&
-    previous.platform === descriptor.platform
+    previous.platform === descriptor.platform &&
+    sameHostMachine(previous.machine ?? null, descriptor.machine ?? null)
   ) {
     return
   }

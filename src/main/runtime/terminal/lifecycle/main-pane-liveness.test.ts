@@ -8,9 +8,10 @@ vi.mock('../../../../shared/layout-owner-switch', () => ({
   }
 }))
 
-await import('../../orca-runtime-test-mocks.spec')
-await import('../../orca-runtime-test-lifecycle.spec')
-const { OrcaRuntimeService } = await import('../../orca-runtime-test-mocks.spec')
+await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+await import('../../orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('../../orca-runtime')
 const { toAppSshPtyId } = await import('../../../../shared/ssh-pty-id')
 const {
   HEADLESS_LEAF_ID,
@@ -24,9 +25,9 @@ const {
   makeHeadlessTerminalLayout,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} = await import('../../orca-runtime-test-fixtures.spec')
+} = await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
 
-const { registerBoundPty } = await import('../../bind-first-pane.test-fixture')
+const { registerBoundPty } = await import('../../orca-runtime-tests/bind-first-pane.test-fixture')
 
 const SSH_PTY = toAppSshPtyId('ssh-target', 'relay-pty')
 

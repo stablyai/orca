@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import {
+  readClaudeSettingsEffort,
+  readClaudeSettingsApplied
+} from './launch/claude-structured-session-options'
 import { ClaudeControlRequestTimeoutError } from '../claude-agent-sdk-control-requests'
 import recordedUltracodeSettings from '../__fixtures__/ultracode-settings.json'
 import {
@@ -11,6 +15,24 @@ import {
 } from './claude-structured-session-test-support'
 
 describe('Claude effort reporting', () => {
+  it('distinguishes old CLI omissions from native no-effort and malformed responses', () => {
+    expect(readClaudeSettingsEffort({ effective: { effortLevel: 'high' } })).toBe('high')
+    expect(readClaudeSettingsEffort({ applied: {}, effective: { effortLevel: 'high' } })).toBe(
+      'high'
+    )
+    expect(
+      readClaudeSettingsEffort({ applied: { effort: null }, effective: { effortLevel: 'high' } })
+    ).toBeNull()
+    expect(
+      readClaudeSettingsEffort({ applied: { effort: 42 }, effective: { effortLevel: 'high' } })
+    ).toBeUndefined()
+    expect(
+      readClaudeSettingsEffort({ applied: null, effective: { effortLevel: 'high' } })
+    ).toBeUndefined()
+    expect(readClaudeSettingsApplied(recordedUltracodeSettings.configured)?.effort).toBe('xhigh')
+    expect(readClaudeSettingsEffort(recordedUltracodeSettings.configured)).toBe('ultracode')
+  })
+
   it('keeps a configured workflow at launch without confirming saved ordinary XHigh', async () => {
     const claude = fakeClaude({
       settings: { applied: { effort: 'xhigh', ultracode: true }, effective: {} }

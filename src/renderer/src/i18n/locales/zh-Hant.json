@@ -1110,7 +1110,9 @@
         "cb4d287238": "伺服器名稱",
         "3affe7de3a": "貼上來自該瀏覽器可以存取的 Orca 伺服器的配對 URL。",
         "e3bcd082ac": "連線到 Orca",
-        "mobileScopeRejected": "此 QR Code 僅授予受限（行動版）存取權限。若要使用完整網頁應用程式，請從設定 → 執行環境 → 分享此 Orca 伺服器 → 新連結開啟瀏覽器存取連結。"
+        "mobileScopeRejected": "此 QR Code 僅授予受限（行動版）存取權限。若要使用完整網頁應用程式，請從設定 → 執行環境 → 分享此 Orca 伺服器 → 新連結開啟瀏覽器存取連結。",
+        "replaceSavedServer": "此連結會連線到與「{{name}}」({{endpoint}}) 不同的伺服器。只有在你信任下方端點時才連線。",
+        "keepSavedServer": "保留已儲存的伺服器"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "此執行主機不支援代理程式工作階段歷史記錄。",
@@ -2971,7 +2973,6 @@
         "9cd11ba218": "Jira",
         "11a828abf8": "GitLab",
         "acef77f7ca": "GitHub",
-        "524f095d55": "待審查",
         "7698af5263": "我的",
         "94f0339621": "指派給我",
         "c2268a9982": "全部",
@@ -3066,6 +3067,8 @@
         "loadGitHubWorkFailed": "無法載入 GitHub 工作項目。",
         "gitlabViewIssues": "議題",
         "gitlabViewMrs": "MR",
+        "gitlabInvolvementEveryone": "所有人",
+        "gitlabInvolvementReviewing": "審閱中",
         "gitlabViewTodos": "我的待辦事項",
         "startWorkspaceFromMr": "從 MR {{number}} 啟動工作區",
         "startWorkspaceFromIssue": "從議題 {{number}} 啟動工作區",
@@ -3668,7 +3671,6 @@
             "e8b3741ff7": "被忽略",
             "a9957007eb": "忽略 {{value0}}",
             "bef0adef9b": "分支",
-            "0b1766738a": "存放庫",
             "bbb1ab6a6f": "選擇{{value0}}",
             "b771c92598": "刪除所選內容",
             "7eee951968": "掃描工作區",
@@ -3677,7 +3679,6 @@
             "b2c1331844": "刪除閒置工作區",
             "7f451a3e2c": "無法忽略清理建議",
             "662b8ec3f8": "工作區清理掃描失敗",
-            "4d0b72481c": "忽略",
             "9cc26c019d": "移除",
             "0e2d235c63": "工作區掃描就緒",
             "4a35c08764": "檢視",
@@ -3685,9 +3686,6 @@
             "1d3503357d": "刪除作業會繼續進行，您可以先關閉此視窗，稍後再回來。",
             "4c2990886e": "已刪除 {{value0}}/{{value1}}",
             "86ba852118": "{{value0}}，{{value1}} 個失敗",
-            "deletingCount": "正在刪除工作區：{{value0}}",
-            "deleteCount": "刪除工作區：{{value0}}？",
-            "selectedForDeletionCount": "已選擇刪除：{{value0}}",
             "deleteButtonCount": "刪除 {{value0}}",
             "archivedStatus": "已封存",
             "74f6c16279": "返回"
@@ -3702,7 +3700,6 @@
           },
           "candidateRow": {
             "gitLabel": "Git",
-            "commitsLabel": "提交",
             "contextLabel": "上下文",
             "flagsLabel": "標記",
             "collapseDetails": "收起詳情",
@@ -5887,8 +5884,6 @@
           "expandAriaLabel": "展開 {{repo}} 中隱藏的工作樹",
           "hiding_one": "已隱藏 {{count}} 個偵測到的工作樹",
           "hiding_other": "已隱藏 {{count}} 個偵測到的工作樹",
-          "hidingInRepo_one": "已隱藏 {{repo}} 中的 {{count}} 個偵測到的工作樹",
-          "hidingInRepo_other": "已隱藏 {{repo}} 中的 {{count}} 個偵測到的工作樹",
           "keepHiddenAriaLabel_one": "讓 {{repo}} 中的 {{count}} 個偵測到的工作樹保持隱藏；可從專案選單恢復顯示",
           "keepHiddenAriaLabel_other": "讓 {{repo}} 中的 {{count}} 個偵測到的工作樹保持隱藏；可從專案選單恢復顯示",
           "keepHiddenTooltip": "保持隱藏，可從專案選單恢復顯示",
@@ -11739,7 +11734,7 @@
             "terminalRun": "在你的終端機中執行命令，包括 SSH"
           },
           "decisionFailed": "無法儲存權限決定。請重試。",
-          "fullAccessWarning": "完整存取：以一般程式執行，可以讀取你的檔案、使用網路並執行其他程式。",
+          "fullAccessWarning": "完整存取：以一般程式執行，可以讀取你的檔案、使用網路、執行其他程式，並控制 Orca（包括你的終端機和代理）。",
           "uiWarning": "在 Orca 內執行發布者的程式碼來繪製其畫面。Orca 會顯示它能存取的內容，並在啟用前先詢問你。"
         },
         "PluginConsentProvenance": {
@@ -14850,7 +14845,6 @@
           "ff92d15436": "Orca 會在代理程式完成工作或需要協助時發出通知。",
           "b054332836": "設定通知",
           "f396db9f20": "讓這裡有家的感覺",
-          "322fc50a18": "Orca 支援所有 CLI 代理程式。選擇你最常用的一個，隨時可切換。",
           "198b148b3c": "選擇預設代理程式",
           "windowsTerminalTitle": "設定 Windows 終端機預設值",
           "windowsTerminalSubtitle": "為新窗格選擇預設 Shell，以及終端機中右鍵按一下的行為。",
@@ -15306,8 +15300,6 @@
           "AiCommitPrSettingsCard": {
             "8d4152701a": "例如 ollama run llama3.1 {{value0}}",
             "9ee54037a4": "自訂命令",
-            "4b2fc4b80c": "思考強度",
-            "be8917699e": "模型",
             "560d4feb00": "自訂",
             "29d119fe95": "代理程式",
             "f9382b48a1": "啟用 AI 作者",
@@ -16927,6 +16919,8 @@
               "25349b66fc": "新的 Markdown 檔案",
               "784812ca24": "在使用中的工作區中開啟瀏覽器分頁。",
               "892bfa9339": "新瀏覽器分頁",
+              "splitChatRight": "向右分割聊天",
+              "splitChatDown": "向下分割聊天",
               "verbs": {
                 "newBrowser": "新瀏覽器",
                 "newBrowserTab": "新的瀏覽器分頁",
@@ -16940,6 +16934,10 @@
                 "newTerminal": "新終端機",
                 "newTerminalTab": "新的終端機分頁",
                 "newShell": "新 shell",
+                "splitChatRight": "向右分割聊天",
+                "splitChatDown": "向下分割聊天",
+                "chatPaneRight": "聊天窗格右側",
+                "chatPaneBelow": "下面的聊天窗格",
                 "terminalTab": "終端機分頁",
                 "createWorktree": "建立工作樹",
                 "addWorktree": "新增工作樹",
@@ -16949,18 +16947,8 @@
                 "removeWorktree": "刪除工作樹",
                 "trashWorktree": "將工作樹移至垃圾桶",
                 "addQuickCommand": "新增快速命令",
-                "newQuickCommand": "新的快速命令",
-                "splitChatRight": "向右分割聊天",
-                "newChatRight": "在右側新增聊天",
-                "chatPaneRight": "聊天窗格右側",
-                "splitChatDown": "向下分割聊天",
-                "newChatBelow": "在下方新增聊天",
-                "chatPaneBelow": "下面的聊天窗格"
-              },
-              "splitChatRight": "向右分割聊天",
-              "splitChatRightDescription": "在右側的分割窗格中開啟新聊天。",
-              "splitChatDown": "向下分割聊天",
-              "splitChatDownDescription": "在下方的分割窗格中開啟新聊天。"
+                "newQuickCommand": "新的快速命令"
+              }
             }
           },
           "palette": {
@@ -17767,6 +17755,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "儲存的執行主機與此專案設定不再相符。"
+        },
+        "launchSettings": {
+          "needsFreshSession": "代理程式啟動設定要求每次執行都使用新工作階段。"
         }
       },
       "agent": {
@@ -18913,6 +18904,8 @@
         "providerExitedRejection": "{{agent}} 在傳送此訊息前已停止。",
         "providerExitedAnswer": "{{agent}} 已停止，因此您的回答未傳送。傳送訊息以繼續。",
         "modelUnavailable": "{{agent}} 無法使用 {{detail}}。請選擇其他模型並重新傳送。",
+        "modelUnavailableUpdate": "{{agent}} 無法使用 {{detail}}。請將 {{agent}} 更新到 {{minimumVersion}} 或更新版本，以便重新啟動後繼續使用；或選擇其他模型並重新傳送。",
+        "modelNotSelected": "{{agent}} 沒有選擇模型。請檢查模型選擇和 {{agent}} 登入狀態，然後重新傳送。",
         "providerRejected": "{{agent}} 未接受此訊息。",
         "providerRejectedQuoted": "{{agent}} 未接受此訊息：{{detail}}。",
         "attachmentEmpty": "此訊息中的一張圖片為空，因此訊息未傳送。",
@@ -19078,8 +19071,6 @@
       },
       "turnDiff": {
         "partial": "部分差異",
-        "showDiff": "顯示差異",
-        "hideDiff": "隱藏差異",
         "changedFiles_other": "{{count}} 個已變更的檔案"
       },
       "receipt": {
@@ -19118,6 +19109,9 @@
       "composer": {
         "send": "傳送",
         "alternateSteerHint": "{{shortcut}} 引導",
+        "previewQueue": "加入佇列",
+        "previewSteer": "引導",
+        "previewSteerQueued": "引導下一則",
         "alternateQueueHint": "{{shortcut}} 加入佇列",
         "noPty": "沒有作用中的終端機，請切回終端機以重新連線。",
         "locked": "輸入正被另一台裝置佔用。",
@@ -19789,6 +19783,13 @@
         "hostUnavailable": "附件所在的主機無法使用。請重新連線後重試。",
         "connectionChanged": "連線已變更。請關閉並重新開啟此附件。",
         "readFailed": "無法在主機上讀取此附件。請重新連線後再試一次。檔案可能已被移除或變更。"
+      },
+      "composerWorkspace": {
+        "copyFailed": "複製失敗",
+        "copyIdentity": "複製 {{value0}}",
+        "folder": "資料夾",
+        "mainCheckout": "主要工作副本",
+        "worktree": "工作樹"
       }
     },
     "tab": {
@@ -19837,9 +19838,7 @@
         "browse": {
           "noSizes": "尚未測量工作區大小。",
           "noSizesDescription": "測量磁碟用量後會顯示大小。",
-          "measureSizes": "掃描",
           "measureSizesTitle": "掃描工作區大小",
-          "measureSizesDescription": "掃描磁碟用量，以依大小比較、排序與篩選工作區。",
           "sizeOnDisk": "磁碟用量：{{value0}}",
           "checkingGitRow": "正在檢查 Git 狀態",
           "searchPlaceholder": "搜尋名稱、存放庫、分支、路徑、主機",
@@ -20176,6 +20175,9 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "將後續訊息加入佇列",
+        "scrollToLatestOnSendTitle": "傳送時捲動到最新訊息",
+        "scrollToLatestOnSendCopy": "向上捲動時傳送訊息會跳到最新訊息並跟隨回覆。關閉後會保留目前位置。",
+        "scrollToLatestOnSendSearchPosition": "位置",
         "inlineVisualsTitle": "內嵌視覺化",
         "inlineVisualsCopy": "允許代理程式在其回覆中顯示圖表、示意圖和原型圖。適用於新啟動的聊天。",
         "inlineVisualsToggleLabel": "切換內嵌視覺化",
@@ -20187,7 +20189,13 @@
         "queueSearchSteer": "立即傳送",
         "shellEnvSearchVariables": "環境變數",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "代理"
+        "shellEnvSearchProxy": "代理",
+        "idleStopTitle": "閒置多久後停止代理",
+        "idleStopCopy": "聊天閒置達到此時長後，結束該聊天的代理以釋放記憶體。聊天會保留，你傳送下一則訊息時代理會重新啟動。如果代理在輪次之間仍會在背景繼續工作，請選擇「永不」。",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "逾時",
+        "idleStopSearchKeepAlive": "保持運作",
+        "idleStopNever": "永不"
       }
     },
     "agentChildRow": {
@@ -20324,7 +20332,10 @@
       "workerAutoClose": {
         "running": "暫時的協作工作者 · 完成後 2 分鐘關閉",
         "finished": "暫時的協作工作者已完成 · {{countdown}}後關閉",
-        "keepOpen": "保持開啟"
+        "keepOpen": "保持開啟",
+        "bannerRunning": "協作工作者 · 完成後 2 分鐘關閉",
+        "bannerFinished": "協作工作者已完成 · {{countdown}}後關閉",
+        "temporaryBadge": "暫時"
       }
     },
     "wslHostMark": {
@@ -20514,10 +20525,8 @@
       "offTerminal": "比較喜歡終端機？終端機仍會獲得完整支援。在您選擇聊天之前，代理程式都會繼續在終端機中開啟。",
       "onIntro": "聊天介面已結束實驗階段，正式成為 Orca 的一部分。您的代理程式會繼續以聊天方式開啟，支援豐富訊息、視覺內容和圖片。",
       "onTerminal": "終端機同樣會獲得完整支援。您隨時可以把任何代理程式切換回終端機。",
-      "changeInSettings": "隨時可在<link>設定 → 代理程式</link>中變更。",
       "stayInTerminal": "繼續使用終端機",
       "cta": "使用聊天介面",
-      "saveFailed": "無法開啟聊天介面。請在「設定 → 代理程式」中選擇聊天。",
       "demoTabTitle": "說明登入流程",
       "demoPrompt": "說明登入是怎麼運作的",
       "demoReply": "登入從 {{file}} 開始：瀏覽器送出到 /login，伺服器檢查密碼並建立工作階段，然後將您重新導向到應用程式。流程如下：",

@@ -1,9 +1,9 @@
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ParsedAgentStatusPayload } from '../../shared/agent-status/contracts/agent-status-types'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
-import type { HeadlessEmulator } from '../daemon/headless-emulator'
+import type { HeadlessEmulator } from '../daemon/emulation/headless-emulator'
 import { findTerminalWaitBlockedSignal } from './agent-state-rules/blocked-text-layer'
-import type { LaunchedAgentForeground } from './launched-agent-foreground'
+import type { LaunchedAgentForeground } from './terminal/wait/launched-agent-foreground'
 
 // Cell-diff painters (Claude's Ink) replace spaces with cursor moves, so match one word, not the phrase.
 const TRUST_KEYWORD_RE = /trust/i
