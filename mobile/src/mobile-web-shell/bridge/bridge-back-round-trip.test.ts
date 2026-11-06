@@ -108,6 +108,29 @@ describe('a Back press crossing from the shell to the page', () => {
   })
 })
 
+describe('a page control pressing Back', () => {
+  it('reaches the same consumer a shell Back press does', async () => {
+    const pair = await opened()
+    const took = vi.fn(() => true)
+    pair.client.claimBack(took)
+    await pair.flush()
+    expect(pair.client.pressBack()).toBe(true)
+    expect(took).toHaveBeenCalledTimes(1)
+    expect(pair.backPops).toEqual([])
+    expect(pair.diagnostics).not.toContainEqual({ kind: 'back-unclaimed' })
+  })
+
+  it('asks the shell to pop when nothing on the page takes it', async () => {
+    const pair = await opened()
+    pair.host.receive(JSON.stringify({ v: BRIDGE_PROTOCOL_VERSION, type: 'ready' }))
+    await pair.flush()
+    expect(pair.client.pressBack()).toBe(true)
+    await pair.flush()
+    expect(pair.backPops).toEqual(['popped'])
+    expect(pair.diagnostics).not.toContainEqual({ kind: 'back-unclaimed' })
+  })
+})
+
 describe('the Back lane with no negotiation', () => {
   it('hands a press to any page it serves, whose ready declares nothing', async () => {
     const pair = await opened()

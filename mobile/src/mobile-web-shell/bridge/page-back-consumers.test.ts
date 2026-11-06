@@ -58,6 +58,18 @@ describe('who in the page is holding the device Back key', () => {
   })
 
   // A claim can become stale while the press crosses; return unclaimed presses to native navigation instead of swallowing them.
+  it('lets a page control take the same walk without handing an unclaimed press to the shell', () => {
+    const { stack, unclaimed } = consumers()
+    expect(stack.dispatch()).toBe(false)
+    expect(unclaimed).not.toHaveBeenCalled()
+    stack.claim(() => true)
+    expect(stack.dispatch()).toBe(true)
+    expect(unclaimed).not.toHaveBeenCalled()
+    stack.claim(() => false)
+    expect(stack.dispatch()).toBe(true)
+    expect(unclaimed).not.toHaveBeenCalled()
+  })
+
   it('hands a press nothing took back to the shell rather than dropping it', () => {
     const { stack, unclaimed } = consumers()
     stack.press()

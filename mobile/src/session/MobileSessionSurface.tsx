@@ -15,6 +15,10 @@ import { WorkspaceServerContext } from '../transport/workspace-server-context'
 import { useSessionTitleCard } from './use-session-title-card'
 import { useDetailCardScope } from '../components/use-detail-card-scope'
 import { useShellSideRail } from '../layout/use-shell-side-rail'
+import { useReleasedSideInset } from '../layout/released-side-inset'
+import { sideStripPadding } from './session-side-strip-inset'
+import { DuoRailBackButton } from './DuoRailBackButton'
+import { useSessionRailBack } from './use-duo-rail-back'
 
 export function MobileSessionSurface({ controller }: { controller: MobileSessionController }) {
   useMobileColorScheme()
@@ -23,6 +27,7 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
   const server = useContext(WorkspaceServerContext)
   const layout = useResponsiveLayout()
   const sideRail = useShellSideRail()
+  const releasedStrip = useReleasedSideInset()
   const hasTabs = controller.visibleTabs.length > 0
   const besideTabs = (layout.isLandscapePhone || sideRail) && hasTabs
   const titleVisible =
@@ -54,13 +59,25 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
   // Only a proven local record belongs to this route's desktop or server.
   const hostName =
     controller.worktreeHostId === 'local' ? (server ? server.name : controller.hostName) : null
+  const onRailBack = useSessionRailBack(() => {
+    if (!details.closeFirst()) {
+      controller.requestLeaveSession()
+    }
+  })
   return (
     <View ref={setMobileSessionRootRef} style={styles.container}>
       <View style={styles.kavInner}>
         <MobileSessionHeader controller={controller} details={details} />
-        <MobileWorkerAutoCloseStrip controller={controller} />
+        <View style={sideStripPadding(releasedStrip)}>
+          <MobileWorkerAutoCloseStrip controller={controller} />
+        </View>
         <MobileSessionContentRow controller={controller} />
       </View>
+      <DuoRailBackButton
+        chatVisible={controller.showNativeChat}
+        keyboardInset={controller.keyboardHeight}
+        onBack={onRailBack}
+      />
       <AnchoredDetailCardLayer
         card={details}
         obscured={obscured}

@@ -29,6 +29,18 @@ afterEach(() => {
 })
 
 describe('bridge client handshake', () => {
+  it('asks for a session immediately and declares the storage keys it can read', () => {
+    const page = createPageClient()
+    expect(page.frames()).toEqual([
+      {
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: 'ready',
+        storageKeys: ['orca:terminalSplitLayout', 'orca:duoChatExpanded'],
+        connectionPathFrames: true
+      }
+    ])
+  })
+
   it('stops asking once init lands', () => {
     const page = createPageClient()
     page.start()
