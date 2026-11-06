@@ -58,7 +58,20 @@ beforeEach(() => {
     clearTimeout: globalThis.clearTimeout
   })
   useAppStore.setState({
-    tabsByWorktree: { wt: [{ id: 'tab-1', ptyId: ptyId }] },
+    tabsByWorktree: {
+      wt: [
+        {
+          id: 'tab-1',
+          ptyId,
+          worktreeId: 'wt',
+          title: 'Codex',
+          customTitle: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 0
+        }
+      ]
+    },
     pendingStartupByTabId: {},
     agentLaunchConfigByPaneKey: {},
     terminalLayoutsByTabId: {},
@@ -66,7 +79,7 @@ beforeEach(() => {
     seedNativeChatLaunchDraft: mocks.draft,
     seedNativeChatLaunchPrompt: mocks.prompt,
     markNativeChatLaunchPromptFailed: mocks.failed
-  } as never)
+  })
   mocks.write.mockResolvedValue(true)
 })
 afterEach(() => {
@@ -115,8 +128,10 @@ it('recovers consumed startup after an unknown-liveness retirement and remount',
     sampleVisiblePaneForegroundAgent: vi.fn(),
     resolveExpectedLaunchTuiAgent: () => null
   }
-  installPanePtyVisibilityBind(session as never)
-  ;(session as unknown as { bindActivePanePty: (pty: string) => void }).bindActivePanePty(ptyId)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies the bindings used by the visibility and exit installers; unrelated pane-manager and terminal internals are not exercised.
+  const paneSession = session as unknown as ConnectPanePtySession
+  installPanePtyVisibilityBind(paneSession)
+  paneSession.bindActivePanePty(ptyId)
   expect(useAppStore.getState().agentLaunchConfigByPaneKey[`tab-1:${leafId}`]?.identity).toEqual(
     expect.objectContaining({ launchToken: 'launch-1', terminalHandle: 'pty-1' })
   )
@@ -205,14 +220,14 @@ it('recovers consumed startup after an unknown-liveness retirement and remount',
     setCacheTimerStartedAt: vi.fn(),
     onPtyExitRef: { current: exit }
   })
-  const exitSession = Object.assign(session, {
+  const exitSession = Object.assign(paneSession, {
     runtimeEnvironmentId: 'env',
     resetRendererOrderedSeqForPtyExit: vi.fn(),
     dropSideEffectFactConsumer: vi.fn(),
     releaseHiddenRendererPtyDelivery: vi.fn(),
     manager: { setPaneGpuRendering: vi.fn() },
     agentCompletionCoordinator: { dispose: vi.fn() }
-  }) as unknown as ConnectPanePtySession
+  })
   installPtyExitHibernate(exitSession)
   useAppStore
     .getState()
@@ -477,14 +492,16 @@ it('tokenless effective configuration registration is not proof that the pending
   mocks.ready.mockReturnValue(ready.promise)
   const pending = deliver()
   await vi.waitFor(() => expect(mocks.ready).toHaveBeenCalledOnce())
-  const replacement = {
+  const replacementFixture = {
     cacheKey: `tab-1:${leafId}`,
     runtimeEnvironmentId: 'env',
     paneStartup: undefined,
     pane: { id: 1, leafId },
     deps: { tabId: 'tab-1', worktreeId: 'wt' },
     transport: { getPtyId: () => ptyId }
-  } as unknown as ConnectPanePtySession
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: effective-config registration reads only this fixture's pane identity, startup and transport; other session installers are not invoked.
+  const replacement = replacementFixture as unknown as ConnectPanePtySession
   installSleepingRecordAccess(replacement)
   expect(replacement.launchToken).toBeUndefined()
   replacement.registerEffectiveLaunchConfig(

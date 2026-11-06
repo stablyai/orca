@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, vi } from 'vitest'
 import type { Mock } from 'vitest'
+import type { Repo } from '../../../shared/repo-types'
 import type * as TuiAgentSelectionModule from '../../../shared/agent-launch/catalog/tui-agent-selection'
 import type * as TuiAgentStartupModule from '../../../shared/agent-launch/startup/tui-agent-startup'
 import type * as DirectAgentRoutingModule from '@/lib/launch-work-item-direct-agent-routing'
@@ -23,7 +24,7 @@ type DirectLaunchMocks = DirectLaunchStoreActions & {
   openModalFallback: Mock
   resolvePrBase: Mock
   getConnectionId: Mock
-  store: Record<string, unknown> & DirectLaunchStoreActions
+  store: Record<string, unknown> & DirectLaunchStoreActions & { repos?: Partial<Repo>[] }
 }
 
 type HostMocks = {
@@ -205,9 +206,7 @@ beforeEach(() => {
   })
   mocks.updateWorktreeMeta.mockResolvedValue(undefined)
   mocks.activateAndRevealWorktree.mockImplementation(() =>
-    (mocks.store.repos as { executionHostId?: string }[]).some((repo) =>
-      repo.executionHostId?.startsWith('runtime:')
-    )
+    mocks.store.repos?.some((repo) => repo.executionHostId?.startsWith('runtime:'))
       ? { primaryTabId: null, startupAccepted: true }
       : { primaryTabId: 'tab-1' }
   )

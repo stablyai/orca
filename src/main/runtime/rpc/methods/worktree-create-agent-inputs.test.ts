@@ -114,7 +114,7 @@ it('drops original picks after disabled-agent substitution through worktree.crea
         )
     })
   )
-  const runtime = {
+  const runtimeFixture = {
     getRuntimeId: () => 'test-runtime',
     dedupeWorktreeCreate: passthroughDedupe,
     showRepo: async () => ({ ...repo, executionHostId: 'local' }),
@@ -124,7 +124,9 @@ it('drops original picks after disabled-agent substitution through worktree.crea
       await compose(args)
       return { worktree: { id: 'wt' } }
     }
-  } as unknown as OrcaRuntimeService
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this RPC fixture supplies the runtime methods invoked by worktree.create; unrelated service internals are intentionally absent.
+  const runtime = runtimeFixture as unknown as OrcaRuntimeService
   const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
   const response = await dispatcher.dispatch(
     makeRequest('worktree.create', {

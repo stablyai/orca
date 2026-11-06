@@ -9,12 +9,19 @@ import { openBackgroundDeclinedTerminal } from './worktree-creation-background-m
 import { seedAgentTabStateAfterWorktreeCreate } from './worktree-creation-agent-seeds'
 import { resetWebRuntimeWakeTerminalRespawnForTests } from '@/runtime/web-runtime-wake-terminal-respawn'
 
-const mocks = vi.hoisted(() => ({
-  launch: vi.fn(),
-  seedOptions: vi.fn(),
-  seedDraft: vi.fn(),
-  agent: 'claude' as 'claude' | 'codex'
-}))
+const mocks = vi.hoisted(
+  (): {
+    launch: ReturnType<typeof vi.fn>
+    seedOptions: ReturnType<typeof vi.fn>
+    seedDraft: ReturnType<typeof vi.fn>
+    agent: 'claude' | 'codex'
+  } => ({
+    launch: vi.fn(),
+    seedOptions: vi.fn(),
+    seedDraft: vi.fn(),
+    agent: 'claude'
+  })
+)
 vi.mock('@/lib/launch-agent-web-host-tab', () => ({ launchAgentInWebHostTab: mocks.launch }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   runtimeEnvironmentIdOrLocalUnlessTwin: () => 'host'
