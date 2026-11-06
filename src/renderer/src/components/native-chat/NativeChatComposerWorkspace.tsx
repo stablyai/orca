@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Folder, GitBranch, GitCommitHorizontal, Laptop } from 'lucide-react'
+import { Folder, GitBranch, GitCommitHorizontal, Server } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -67,7 +67,7 @@ export function NativeChatComposerWorkspace({
               : 'hidden min-w-0 max-w-40 shrink items-center gap-1 @sm:flex'
           }
         >
-          <Laptop className="size-3.5 shrink-0" aria-hidden />
+          <Server className="size-3.5 shrink-0" aria-hidden />
           {hostId === 'local' ? (
             <LocalMachineName name={machine ?? ''} />
           ) : (
