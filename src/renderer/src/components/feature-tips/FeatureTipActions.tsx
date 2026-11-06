@@ -1,4 +1,4 @@
-import type { JSX, Ref } from 'react'
+import type { JSX, MouseEventHandler, Ref } from 'react'
 import { Loader2 } from 'lucide-react'
 import type { FeatureTip, FeatureTipAction } from '../../../../shared/feature-tips'
 import { Button } from '@/components/ui/button'
@@ -29,7 +29,7 @@ export function FeatureTipActions({
 }: {
   currentTip: FeatureTip
   primaryBusy: boolean
-  onPrimaryAction: () => void
+  onPrimaryAction: MouseEventHandler<HTMLButtonElement>
   onSkip: () => void
   showSkip?: boolean
   swapButtons?: boolean

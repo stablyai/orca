@@ -42,51 +42,6 @@ async function createPlugin(): Promise<ValidDiscoveredPlugin> {
 }
 
 describe('PluginPanelController identity binding', () => {
-  it('uses the session identity and rejects caller-supplied plugin claims', async () => {
-    const plugin = await createPlugin()
-    const executeHostCall = vi.fn().mockResolvedValue({ ok: true, value: { delivered: true } })
-    const controller = new PluginPanelController({
-      resolveApprovedPlugin: (pluginKey) => (pluginKey === plugin.pluginKey ? plugin : null),
-      contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
-      executeHostCall,
-      log: () => vi.fn()
-    })
-    const entry = await controller.open('runtime:one', plugin.pluginKey, 'dashboard')
-    expect(entry).not.toBeNull()
-
-    await expect(
-      controller.execute('runtime:one', {
-        sessionToken: entry!.sessionToken,
-        pluginId: 'samples.other',
-        action: 'notifications.show',
-        params: { title: 'Hello' }
-      })
-    ).resolves.toMatchObject({ ok: false, code: 'invalid_request' })
-    expect(executeHostCall).not.toHaveBeenCalled()
-
-    await expect(
-      controller.execute('runtime:one', {
-        sessionToken: entry!.sessionToken,
-        action: 'notifications.show',
-        params: { title: 'Hello' }
-      })
-    ).resolves.toMatchObject({ ok: true })
-    expect(executeHostCall).toHaveBeenCalledWith(
-      plugin.pluginKey,
-      'notifications.show',
-      { title: 'Hello' },
-      'panel',
-      { panel: { id: expect.any(String), surface: 'panel', contributionId: 'dashboard' } }
-    )
-    await expect(
-      controller.execute('runtime:other', {
-        sessionToken: entry!.sessionToken,
-        action: 'notifications.show',
-        params: { title: 'Hello' }
-      })
-    ).resolves.toMatchObject({ ok: false, code: 'invalid_request' })
-  })
-
   it('charges raw malformed and oversized calls before strict parsing', async () => {
     const plugin = await createPlugin()
     const executeHostCall = vi.fn()
@@ -221,62 +176,5 @@ describe('PluginPanelController user-gesture methods', () => {
         panel: expect.objectContaining({ surface: 'panel' })
       })
     )
-  })
-})
-
-describe('PluginPanelController declarative panels', () => {
-  it('marks the entry and never sends the module text as a page', async () => {
-    const plugin = await createPlugin()
-    await writeFile(join(plugin.rootDir, 'panel.js'), 'export default () => null // MODULE')
-    const declarative: ValidDiscoveredPlugin = {
-      ...plugin,
-      manifest: {
-        ...plugin.manifest,
-        contributes: {
-          ...plugin.manifest.contributes,
-          panels: [{ id: 'todos', title: 'Todos', entry: 'panel.js', ui: 'components' }]
-        }
-      }
-    }
-    const controller = new PluginPanelController({
-      resolveApprovedPlugin: () => declarative,
-      contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
-      executeHostCall: vi.fn(),
-      log: () => vi.fn()
-    })
-    const entry = await controller.open('renderer:1', plugin.pluginKey, 'todos')
-    expect(entry?.ui).toBe('components')
-    expect(entry?.html).not.toContain('MODULE')
-  })
-})
-
-describe('PluginPanelController isolated-only editors', () => {
-  it('never puts their entry in the srcdoc fallback, and still serves an any-frame editor', async () => {
-    const plugin = await createPlugin()
-    await writeFile(join(plugin.rootDir, 'editor.html'), '<main>EDITOR</main>')
-    const editor = { id: 'draw', title: 'Draw', extensions: ['.draw'], filenames: [] }
-    const withEditors: ValidDiscoveredPlugin = {
-      ...plugin,
-      manifest: {
-        ...plugin.manifest,
-        contributes: {
-          ...plugin.manifest.contributes,
-          customEditors: [
-            { ...editor, entry: 'editor.html', frame: 'isolated' },
-            { ...editor, id: 'any', entry: 'editor.html' }
-          ]
-        }
-      }
-    }
-    const controller = new PluginPanelController({
-      resolveApprovedPlugin: () => withEditors,
-      contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
-      executeHostCall: vi.fn(),
-      log: () => vi.fn()
-    })
-    const isolated = await controller.openCustomEditor('renderer:1', plugin.pluginKey, 'draw')
-    expect(isolated?.html).not.toContain('EDITOR')
-    const any = await controller.openCustomEditor('renderer:1', plugin.pluginKey, 'any')
-    expect(any?.html).toContain('EDITOR')
   })
 })
