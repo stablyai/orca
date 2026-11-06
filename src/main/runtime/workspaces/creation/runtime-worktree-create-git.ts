@@ -177,7 +177,8 @@ export async function listExistingWorktreeCandidateNames(
       ...stdout.split(/\r?\n/).filter(Boolean),
       ...worktrees.map((worktree) => basename(worktree.path))
     ]
-  } catch {
+  } catch (error) {
+    console.warn('[worktree-create] could not list existing worktree candidate names:', error)
     return []
   }
 }
