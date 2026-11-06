@@ -7,7 +7,7 @@ import type {
 } from '../../shared/pr-follow-ups/contracts'
 import type { PrFollowUpsSettings } from '../../shared/pr-follow-ups/settings'
 import { resolvePrFollowUps } from '../../shared/pr-follow-ups/settings'
-import type { FollowUpEngineDependencies } from './engine-contract'
+import type { FollowUpEngineContext } from './engine-contract'
 
 export const FOLLOW_UP_DAY = 24 * 60 * 60 * 1000
 
@@ -22,7 +22,7 @@ export type FollowUpProjection = {
 }
 
 export function eligibleFollowUpTargets(
-  deps: FollowUpEngineDependencies,
+  deps: FollowUpEngineContext,
   prKey: string
 ): FollowUpTarget[] {
   return deps
@@ -32,7 +32,7 @@ export function eligibleFollowUpTargets(
       return (
         target.prKey === prKey &&
         !target.archived &&
-        target.branch === deps.source.latest(prKey)?.headRefName &&
+        target.branch === deps.observation(prKey)?.headRefName &&
         settings.enabled &&
         settings.ciFailed === 'new-agent'
       )

@@ -1,6 +1,6 @@
 import { AGENT_SESSION_MAX_OPERATION_REPLAY_AGE_MS } from '../../shared/agent-session/agent-session-host-authority'
-import type { FollowUpSnapshot } from '../../shared/pr-follow-ups/contracts'
-import type { FollowUpEngineDependencies } from './engine-contract'
+import type { FollowUpSnapshot, FollowUpObservation } from '../../shared/pr-follow-ups/contracts'
+import type { FollowUpEngineContext } from './engine-contract'
 import { followUpView, FOLLOW_UP_DAY, type FollowUpProjection } from './follow-up-state'
 import { readFollowUpActivity } from './action-lifecycle'
 
@@ -10,7 +10,7 @@ export function createFollowUpProjectionState() {
     publishedInventory: '',
     entries: new Map<string, FollowUpSnapshot['workspaces'][string]>(),
     recoveryDeadlines: new Map<string, { at: number; timer: ReturnType<typeof setTimeout> }>(),
-    observations: new Map<string, string>(),
+    observations: new Map<string, FollowUpObservation>(),
     projections: new Map<string, FollowUpProjection>(),
     published: new Map<string, string>(),
     windowHolds: new Map<string, string>()
@@ -18,7 +18,7 @@ export function createFollowUpProjectionState() {
 }
 
 export function publishFollowUpProjection(
-  deps: FollowUpEngineDependencies,
+  deps: FollowUpEngineContext,
   state: ReturnType<typeof createFollowUpProjectionState>,
   keys: Iterable<string>,
   reconcile: (keys: string[]) => Promise<void>
@@ -31,7 +31,7 @@ export function publishFollowUpProjection(
     const pr = store.pr(key)
     const projection: FollowUpProjection = {
       pr,
-      observation: deps.source.latest(key),
+      observation: deps.observation(key),
       latestAction: store.latestAction(key),
       pending: store.actions(key, true),
       used: pr ? store.acceptedCount(key, pr.generation) : 0,

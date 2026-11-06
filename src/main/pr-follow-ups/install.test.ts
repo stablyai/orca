@@ -195,7 +195,6 @@ it.each([10, 100])(
     } as unknown as RuntimeStore
     const registrations: { prNumber: number | null; unregister: ReturnType<typeof vi.fn> }[] = []
     const source: FollowUpObservationSource = {
-      latest: (key) => observations.get(key),
       registerPRWatch: (watch) => {
         const registration = { prNumber: watch.prNumber, unregister: vi.fn() }
         registrations.push(registration)
@@ -208,6 +207,9 @@ it.each([10, 100])(
       },
       subscribePRObservations: (listener) => {
         observationListener = listener
+        for (const value of observations.values()) {
+          listener(value)
+        }
         return () => {}
       }
     }

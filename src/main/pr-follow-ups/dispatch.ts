@@ -8,7 +8,11 @@ import type {
 } from '../../shared/pr-follow-ups/contracts'
 import { followUpFailureCopy } from './failure'
 import { resolvePrFollowUps } from '../../shared/pr-follow-ups/settings'
-import type { FollowUpEngineDependencies, FollowUpReceipt } from './engine-contract'
+import type {
+  FollowUpEngineContext,
+  FollowUpEngineDependencies,
+  FollowUpReceipt
+} from './engine-contract'
 import { eligibleFollowUpTargets, followUpPause, FOLLOW_UP_DAY } from './follow-up-state'
 
 export function followUpActionKey(prKey: string, headSha: string, names: string[]): string {
@@ -25,7 +29,7 @@ export function followUpOperationId(actionKey: string, attempt: number, startedA
 }
 
 export async function dispatchFollowUp(
-  deps: FollowUpEngineDependencies,
+  deps: FollowUpEngineContext,
   observation: FollowUpObservation,
   pr: FollowUpPr,
   target: FollowUpTarget,
@@ -91,7 +95,7 @@ export async function dispatchFollowUp(
     stage = 'prepare'
     launch = await deps.prepare(observation, names, target)
     // Prompt/log loading can await network I/O; all launch authority is read again after it.
-    const latest = deps.source.latest(pr.prKey)
+    const latest = deps.observation(pr.prKey)
     const current = eligibleFollowUpTargets(deps, pr.prKey)[0]
     const saved = store.pr(pr.prKey)
     const original = deps.targets(pr.prKey).find((item) => item.worktreeId === target.worktreeId)

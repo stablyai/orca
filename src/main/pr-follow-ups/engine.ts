@@ -8,7 +8,7 @@ import type {
   FollowUpView,
   FollowUpTarget
 } from '../../shared/pr-follow-ups/contracts'
-import type { FollowUpEngineDependencies } from './engine-contract'
+import type { FollowUpEngineDependencies, FollowUpEngineContext } from './engine-contract'
 export type { FollowUpEngineDependencies, FollowUpReceipt } from './engine-contract'
 import { eligibleFollowUpTargets, followUpView } from './follow-up-state'
 
@@ -20,6 +20,14 @@ export class FollowUpEngine {
   private readonly inventory: FollowUpTargetIndex
   private readonly activityRouter: FollowUpActivityRouter
   private readonly projection = createFollowUpProjectionState()
+  observation(prKey: string): FollowUpObservation | undefined {
+    return this.projection.observations.get(prKey)
+  }
+
+  target(worktreeId: string): FollowUpTarget | undefined {
+    return this.inventory.byWorkspace.get(worktreeId)
+  }
+
   activePrKeys(): string[] {
     return this.activityRouter.activeKeys()
   }
@@ -32,16 +40,20 @@ export class FollowUpEngine {
     return this.projection.windowHolds.size > 0
   }
 
-  private readonly deps: FollowUpEngineDependencies
+  private readonly deps: FollowUpEngineContext
   constructor(host: FollowUpEngineDependencies) {
     this.activityRouter = new FollowUpActivityRouter(host.store)
     host.store.actionCommitted = (action) => this.activityRouter.committed(action)
-    this.inventory = new FollowUpTargetIndex(host, this.projection)
     this.deps = {
       ...host,
+      observation: (key) => this.projection.observations.get(key),
       targets: (key) =>
         key ? (this.inventory.byPr.get(key) ?? []) : [...this.inventory.byWorkspace.values()]
     }
+    this.inventory = new FollowUpTargetIndex(
+      { ...host, observation: this.deps.observation },
+      this.projection
+    )
     this.refreshInventory()
   }
 
@@ -69,16 +81,25 @@ export class FollowUpEngine {
     ) {
       return Promise.resolve()
     }
-    const key = JSON.stringify(observation)
-    if (this.projection.observations.get(observation.prKey) === key) {
+    if (
+      JSON.stringify(this.projection.observations.get(observation.prKey)) ===
+      JSON.stringify(observation)
+    ) {
       return Promise.resolve()
     }
-    this.projection.observations.set(observation.prKey, key)
+    this.projection.observations.set(observation.prKey, observation)
     return this.enqueue(async () => {
       await this.reconcileActions(observation.prKey)
       await this.evaluate(observation)
       this.publish([observation.prKey])
+      if (!this.deps.store.pr(observation.prKey)) {
+        this.forgetObservation(observation.prKey)
+      }
     })
+  }
+
+  forgetObservation(prKey: string): boolean {
+    return this.projection.observations.delete(prKey)
   }
 
   // Status and configuration changes re-derive held work; receipts have a finite recovery deadline.
@@ -111,13 +132,15 @@ export class FollowUpEngine {
     }
     for (const key of keys) {
       await this.reconcileActions(key)
-      const observation = this.deps.source.latest(key)
+      const observation = this.deps.observation(key)
       if (observation) {
         await this.evaluate(observation, true)
       }
       const pr = this.deps.store.pr(key)
       if (pr) {
-        this.deps.store.retire(pr)
+        if (this.deps.store.retire(pr)) {
+          this.forgetObservation(key)
+        }
       }
     }
     this.publish(keys)
@@ -177,7 +200,9 @@ export class FollowUpEngine {
       for (const key of keys) {
         const pr = this.deps.store.pr(key)
         if (pr) {
-          this.deps.store.retire(pr)
+          if (this.deps.store.retire(pr)) {
+            this.forgetObservation(key)
+          }
         }
       }
       this.publish(keys)
@@ -239,5 +264,6 @@ export class FollowUpEngine {
       clearTimeout(deadline.timer)
     }
     this.projection.recoveryDeadlines.clear()
+    this.projection.observations.clear()
   }
 }

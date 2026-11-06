@@ -142,6 +142,7 @@ export class FollowUpInventory {
     for (const key of this.engine.targetsChanged(updates, removals)) {
       affected.add(key)
     }
+    this.forgetUnwatched(affected)
     this.workspaces = next
     this.targetSnapshot = targets
     return affected
@@ -157,6 +158,20 @@ export class FollowUpInventory {
       }
     }
     return affected
+  }
+
+  private forgetUnwatched(keys: Iterable<string>): void {
+    for (const key of keys) {
+      if (![...(this.byPr.get(key) ?? [])].some((id) => this.registrations.has(id))) {
+        if (this.engine.forgetObservation(key)) {
+          const pr = this.records.pr(key)
+          if (pr && !pr.needsBaseline) {
+            pr.needsBaseline = true
+            this.records.savePr(pr)
+          }
+        }
+      }
+    }
   }
 
   sync(keys: readonly string[] = [...this.byPr.keys()]): void {
@@ -193,6 +208,7 @@ export class FollowUpInventory {
         }
       }
     }
+    this.forgetUnwatched(keys)
   }
 
   dispose(): void {

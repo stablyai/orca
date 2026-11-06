@@ -35,7 +35,6 @@ export type FollowUpObservationSource = {
     reason: 'pr-follow-ups'
   }): { unregister(): void }
   subscribePRObservations(onObservation: (observation: FollowUpObservation) => void): () => void
-  latest(prKey: string): FollowUpObservation | undefined
   pullRequestActionsFor?(prKey: string): readonly {
     headSha: string | null
     chatId: string

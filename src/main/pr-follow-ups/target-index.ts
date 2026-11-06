@@ -1,5 +1,5 @@
 import type { FollowUpTarget } from '../../shared/pr-follow-ups/contracts'
-import type { FollowUpEngineDependencies } from './engine-contract'
+import type { FollowUpEngineContext } from './engine-contract'
 import type { createFollowUpProjectionState } from './projection'
 import { resolvePrFollowUps } from '../../shared/pr-follow-ups/settings'
 
@@ -10,7 +10,7 @@ export class FollowUpTargetIndex {
   readonly byPr = new Map<string, FollowUpTarget[]>()
   readonly byWorkspace = new Map<string, FollowUpTarget>()
   constructor(
-    private readonly host: FollowUpEngineDependencies,
+    private readonly host: FollowUpEngineContext,
     private readonly state: ReturnType<typeof createFollowUpProjectionState>
   ) {}
 
@@ -20,7 +20,7 @@ export class FollowUpTargetIndex {
       !target.archived &&
       settings.enabled &&
       settings.ciFailed === 'new-agent' &&
-      target.branch === this.host.source.latest(target.prKey)?.headRefName
+      target.branch === this.host.observation(target.prKey)?.headRefName
     )
   }
 

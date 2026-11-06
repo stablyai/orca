@@ -6,6 +6,46 @@ import { PR_FOLLOW_UP_METHODS } from '../runtime/rpc/methods/automations/pr-foll
 import { harness } from './engine.test-fixture'
 
 describe('automatic failing-check follow-ups', () => {
+  it('waits for streamed observations and fences preparation with the latest received head', async () => {
+    const h = harness()
+    await h.engine.start()
+    await h.engine.reconcile()
+    expect(h.prepare).not.toHaveBeenCalled()
+    expect(h.launch).not.toHaveBeenCalled()
+    const green = {
+      prKey: h.target.prKey,
+      state: 'open' as const,
+      headSha: 'h1',
+      headRefName: 'fix',
+      checksFinal: true,
+      failingCheckNames: [],
+      readComplete: true,
+      observedAt: h.now
+    }
+    h.source.publish(green)
+    await h.engine.reconcile([])
+    h.prepare.mockImplementationOnce(async () => {
+      h.source.publish({ ...green, headSha: 'h2', observedAt: h.now + 2 })
+      return { agent: 'codex', target: { kind: 'existing', worktree: 'id:w1' } }
+    })
+    h.source.publish({ ...green, failingCheckNames: ['unit'], observedAt: h.now + 1 })
+    await h.engine.reconcile([])
+    await h.engine.reconcile([])
+    expect(h.prepare).toHaveBeenCalledOnce()
+    expect(h.launch).not.toHaveBeenCalled()
+    h.engine.forgetObservation(h.target.prKey)
+    await h.engine.reconcile()
+    expect(h.prepare).toHaveBeenCalledOnce()
+    h.source.publish({
+      ...green,
+      headSha: 'h2',
+      failingCheckNames: ['unit'],
+      observedAt: h.now + 3
+    })
+    await h.engine.reconcile([])
+    expect(h.launch).toHaveBeenCalledOnce()
+  })
+
   it('baselines existing failures and fires once for each new failing name on a head, including after restart', async () => {
     const h = harness()
     await h.observe(['old'])
@@ -192,8 +232,10 @@ describe('automatic failing-check follow-ups', () => {
       canPublishAgentLaunchTab: () => available
     })
     await h.observe([])
+    await engine.observe(h.source.latest(h.target.prKey)!)
     h.target.workingAgent = 'Claude'
     await h.observe(['unit'])
+    await engine.observe(h.source.latest(h.target.prKey)!)
     h.target.workingAgent = null
     await engine.reconcile()
     expect(engine.view(h.target.prKey).state).toBe('waiting-window')
@@ -205,6 +247,7 @@ describe('automatic failing-check follow-ups', () => {
     surface = 'chat'
     h.target.workingAgent = 'Claude'
     await h.observe(['unit', 'lint'])
+    await engine.observe(h.source.latest(h.target.prKey)!)
     h.target.workingAgent = null
     await engine.reconcile()
     expect(h.launch).toHaveBeenCalledTimes(2)

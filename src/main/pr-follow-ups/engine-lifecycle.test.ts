@@ -159,6 +159,8 @@ describe('follow-up recovery and instance lifecycle', () => {
     expect(h.store.acceptedCount(h.target.prKey, 0)).toBe(1)
     h.controls.targets = [{ ...h.target, instanceId: 'replacement', archived: true }]
     h.controls.liveIds = new Set(['replacement', 'archived-disconnected'])
+    h.engine.refreshInventory()
+    await h.observe(['unit'])
     await h.engine.reconcile()
     expect(
       h.db
@@ -219,8 +221,9 @@ describe('follow-up recovery and instance lifecycle', () => {
       const green = { ...h.source.latest(h.target.prKey)!, prKey: other.prKey }
       h.source.observations.set(other.prKey, green)
       await engine.observe(green)
+      await engine.observe({ ...green, prKey: h.target.prKey })
       for (const target of [h.target, other]) {
-        h.source.observations.set(target.prKey, {
+        await engine.observe({
           ...green,
           prKey: target.prKey,
           failingCheckNames: ['unit'],

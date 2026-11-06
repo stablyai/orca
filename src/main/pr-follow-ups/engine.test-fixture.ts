@@ -18,8 +18,16 @@ class FakeObservations implements FollowUpObservationSource {
   observations = new Map<string, FollowUpObservation>()
   pushes: NonNullable<ReturnType<NonNullable<FollowUpObservationSource['pullRequestActionsFor']>>> =
     []
-  subscribePRObservations(): () => void {
-    return () => undefined
+  private listener?: (observation: FollowUpObservation) => void
+  subscribePRObservations(listener: (observation: FollowUpObservation) => void): () => void {
+    this.listener = listener
+    return () => {
+      this.listener = undefined
+    }
+  }
+  publish(observation: FollowUpObservation): void {
+    this.observations.set(observation.prKey, observation)
+    this.listener?.(observation)
   }
   latest(key: string): FollowUpObservation | undefined {
     return this.observations.get(key)

@@ -172,9 +172,11 @@ export function installation(
       handles.push(unregister)
       return { unregister }
     },
-    latest: (key) => observations.get(key),
     subscribePRObservations: (listener) => {
       observation = listener
+      for (const value of observations.values()) {
+        listener(value)
+      }
       return () => {}
     }
   }

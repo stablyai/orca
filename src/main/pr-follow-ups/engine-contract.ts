@@ -53,3 +53,7 @@ export type FollowUpEngineDependencies = {
   changed?(keys: readonly string[]): void
   now?(): number
 }
+
+export type FollowUpEngineContext = FollowUpEngineDependencies & {
+  observation(prKey: string): FollowUpObservation | undefined
+}

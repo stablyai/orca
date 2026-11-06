@@ -24,6 +24,22 @@ it('reconciles unresolved discovery watches through global and project settings 
   expect(h.handles[1]).toHaveBeenCalledOnce()
 })
 
+it('drops an unregistered watch’s observation and waits for a fresh activation baseline', async () => {
+  const h = installation(1)
+  await h.flush()
+  h.global(false)
+  await h.flush()
+  h.global(true)
+  await h.flush()
+  expect(h.prepare).not.toHaveBeenCalled()
+  h.observe(['unit'])
+  await h.flush()
+  expect(launchFollowUp).not.toHaveBeenCalled()
+  h.observe(['unit', 'lint'])
+  await h.flush()
+  expect(launchFollowUp).toHaveBeenCalledOnce()
+})
+
 it.each([10, 100])(
   'coalesces reevaluation during awaited preparation without dropping %i spaced activity transitions',
   async (count) => {

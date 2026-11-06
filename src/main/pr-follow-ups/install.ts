@@ -30,7 +30,9 @@ export function installPrFollowUps(
       inputs.started?.(action)
       emit({
         type: 'prFollowUpStarted',
-        prNumber: inventory.byInstance.get(action.instanceId)?.prNumber ?? undefined,
+        prNumber:
+          inventory.byInstance.get(action.instanceId)?.prNumber ??
+          (Number(action.prKey.slice(action.prKey.lastIndexOf('#') + 1)) || undefined),
         failedCheckCount: action.failingNames.length,
         worktreeId: action.worktreeId,
         paneKey: action.paneKey,
@@ -179,9 +181,18 @@ export function installPrFollowUps(
     ),
     store.onSettingsChanged?.((updates) => {
       if (
-        !['prFollowUps', 'sourceControlAi', 'defaultTuiAgent', 'nativeChatProviders'].some(
-          (key) => key in updates
-        )
+        ![
+          'prFollowUps',
+          'sourceControlAi',
+          'defaultTuiAgent',
+          'nativeChatProviders',
+          'agentCmdOverrides',
+          'agentDefaultEnv',
+          'agentDefaultArgs',
+          'agentLaunchChoices',
+          'nativeChatSessionOptions',
+          'nativeChatPermissionMode'
+        ].some((key) => key in updates)
       ) {
         return
       }
@@ -219,4 +230,29 @@ export function installPrFollowUps(
       await engine.dispose()
     }
   }
+}
+
+export function installRuntimePrFollowUps(
+  runtime: OrcaRuntimeService,
+  source: FollowUpObservationSource,
+  inputs: FollowUpHostInputs,
+  graphSyncCallbacks: (() => void)[],
+  emit: (event: RuntimeClientEvent) => void
+): ReturnType<typeof installPrFollowUps> {
+  return installPrFollowUps(
+    runtime,
+    runtime.requireStore(),
+    source,
+    inputs,
+    (listener) => {
+      graphSyncCallbacks.push(listener)
+      return () => {
+        const index = graphSyncCallbacks.indexOf(listener)
+        if (index !== -1) {
+          graphSyncCallbacks.splice(index, 1)
+        }
+      }
+    },
+    emit
+  )
 }

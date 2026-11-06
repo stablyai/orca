@@ -1,5 +1,7 @@
-import { installPrFollowUps, type FollowUpHostInputs } from '../pr-follow-ups/install'
-import type { FollowUpObservationSource } from '../../shared/pr-follow-ups/contracts'
+import { installPrFollowUpAdapter } from '../pr-follow-ups/adapter'
+import { installRuntimePrFollowUps } from '../pr-follow-ups/install'
+import type { FollowUpHostInputs as HostInputs } from '../../shared/pr-follow-ups/contracts'
+import type { FollowUpObservationSource as ObservationSource } from '../../shared/pr-follow-ups/contracts'
 import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
 import { conversationRecordReader } from './orchestration/addressing/session-lineage/structured-session-lineage'
 import type { RuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
@@ -184,35 +186,34 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     return this.structuredAgentAvailability.subscribe(read)
   }
 
-  private followUpHost?: ReturnType<typeof installPrFollowUps>
+  override startPullRequestWatches(): void {
+    if (!this.followUpHost) {
+      installPrFollowUpAdapter(this, this.requireStore(), {
+        worktrees: () => this.projectCachedWorktrees().worktrees,
+        worktree: (id) => this.buildResolvedWorktreeFromId(id) ?? undefined
+      })
+    }
+    super.startPullRequestWatches()
+  }
+
+  stopPrFollowUps(): Promise<void> {
+    const host = this.followUpHost
+    this.followUpHost = undefined
+    return host?.dispose() ?? Promise.resolve()
+  }
+
+  private followUpHost?: ReturnType<typeof installRuntimePrFollowUps>
 
   get prFollowUps() {
     return this.followUpHost?.engine
   }
 
-  /** The reader installs only once its observation and workspace projections are ready. */
-  installPrFollowUpSource(
-    source: FollowUpObservationSource,
-    inputs: FollowUpHostInputs
-  ): () => Promise<void> {
+  installPrFollowUpSource(source: ObservationSource, inputs: HostInputs): () => Promise<void> {
     if (this.followUpHost) {
       throw new Error('PR follow-up source already installed')
     }
-    const host = installPrFollowUps(
-      this,
-      this.requireStore(),
-      source,
-      inputs,
-      (listener) => {
-        this.graphSyncCallbacks.push(listener)
-        return () => {
-          const index = this.graphSyncCallbacks.indexOf(listener)
-          if (index !== -1) {
-            this.graphSyncCallbacks.splice(index, 1)
-          }
-        }
-      },
-      (event) => this.emitClientEvent(event)
+    const host = installRuntimePrFollowUps(this, source, inputs, this.graphSyncCallbacks, (event) =>
+      this.emitClientEvent(event)
     )
     this.followUpHost = host
     this.emitClientEvent({ type: 'prFollowUpsChanged' })

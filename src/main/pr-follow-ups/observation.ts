@@ -1,10 +1,10 @@
 import type { FollowUpObservation } from '../../shared/pr-follow-ups/contracts'
-import type { FollowUpEngineDependencies } from './engine-contract'
+import type { FollowUpEngineContext } from './engine-contract'
 import { eligibleFollowUpTargets } from './follow-up-state'
 import { dispatchFollowUp } from './dispatch'
 
 export async function evaluateFollowUpObservation(
-  deps: FollowUpEngineDependencies,
+  deps: FollowUpEngineContext,
   observation: FollowUpObservation,
   cached: boolean,
   lifecycle: {
