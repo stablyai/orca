@@ -182,6 +182,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       setDraft,
       setCaret,
       setActiveSuggestion,
+      draftTarget: { paneKey, transport: structuredTransport },
       targetKey: JSON.stringify([
         paneKey,
         targetPtyId,

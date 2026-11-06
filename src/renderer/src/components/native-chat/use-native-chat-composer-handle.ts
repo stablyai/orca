@@ -1,6 +1,9 @@
 import { useCallback, useImperativeHandle, type ForwardedRef } from 'react'
 import type { ClipboardEventLike } from './native-chat-clipboard-payload'
-import type { NativeChatComposerHandle } from './native-chat-composer-types'
+import type {
+  NativeChatComposerHandle,
+  NativeChatStructuredComposerTransport
+} from './native-chat-composer-types'
 import {
   useNativeChatComposerPaste,
   type UseNativeChatComposerPasteArgs
@@ -11,6 +14,14 @@ import type { NativeChatComposerInput } from './native-chat-composer-input'
 
 type UseNativeChatComposerHandleArgs = Parameters<typeof useNativeChatTypedInsertion>[0] &
   Omit<UseNativeChatComposerPasteArgs, 'insertTypedText'> & {
+    /** Stable pane/session identity, excluding the replaceable PTY. */
+    draftTarget?: {
+      paneKey: string
+      transport?: Pick<
+        NativeChatStructuredComposerTransport,
+        'sessionId' | 'worktreeId' | 'runtimeEnvironmentId'
+      >
+    }
     /** Intake only: captured with the paste action, never consulted during settlement. */
     resend?: NativeChatComposerHandle['resend']
     /** A structured chat's editor while it shows this scope, where a long paste saved as a file lands. */
@@ -57,12 +68,24 @@ export function useNativeChatComposerHandle(
     insertCommentText
   })
 
+  const target = args.draftTarget
+  const draftKey = args.attachmentScopeKey
+    ? JSON.stringify([
+        args.attachmentScopeKey,
+        ...(target
+          ? [
+              target.paneKey,
+              target.transport?.sessionId,
+              target.transport?.worktreeId,
+              target.transport?.runtimeEnvironmentId
+            ]
+          : [args.targetKey])
+      ])
+    : undefined
   useImperativeHandle(
     ref,
     () => ({
-      draftKey: args.attachmentScopeKey
-        ? JSON.stringify([args.attachmentScopeKey, args.targetKey])
-        : undefined,
+      draftKey,
       insertAgentReferences: (references) => {
         const input = textareaRef.current
         if (!input || input.disabled || !input.insertAgentReferences || isComposing()) {
@@ -85,8 +108,7 @@ export function useNativeChatComposerHandle(
       contains
     }),
     [
-      args.attachmentScopeKey,
-      args.targetKey,
+      draftKey,
       textareaRef,
       isComposing,
       focus,
