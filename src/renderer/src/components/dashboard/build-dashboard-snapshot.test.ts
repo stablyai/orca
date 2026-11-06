@@ -170,38 +170,50 @@ describe('buildDashboardSnapshot', () => {
     expect(snapshot.cards.map((card) => card.chatSession)).toEqual([undefined, undefined])
   })
 
-  it('routes structured previews to the tab session and its recorded runtime', () => {
-    const snapshot = buildDashboardSnapshot(
-      baseState({
-        agentStatusByPaneKey: { [PANE_KEY]: entry({}) },
-        unifiedTabsByWorktree: {
-          w1: [
-            {
-              id: TAB_ID,
-              entityId: 'chat-1',
-              groupId: 'group',
-              worktreeId: 'w1',
-              executionHostId: 'runtime:server-a',
-              contentType: 'agent-session',
-              agentSessionAgent: 'claude',
-              label: 'Chat',
-              customLabel: null,
-              color: null,
-              sortOrder: 0,
-              createdAt: NOW
-            }
-          ]
-        },
-        ptyIdsByTabId: { [TAB_ID]: [] }
-      }),
-      NOW
-    )
-    expect(snapshot.cards[0]?.chatSession).toEqual({
-      sessionId: 'chat-1',
-      target: { kind: 'environment', environmentId: 'server-a' }
-    })
-    expect(snapshot.cards[0]?.ptyId).toBeNull()
-  })
+  it.each([false, true])(
+    'routes a runtime chat only to its host card, with a local twin: %s',
+    (withLocalTwin) => {
+      const snapshot = buildDashboardSnapshot(
+        baseState({
+          worktreesByRepo: {
+            r1: [
+              ...(withLocalTwin ? [worktree()] : []),
+              { ...worktree(), hostId: 'runtime:server-a' }
+            ]
+          },
+          agentStatusByPaneKey: { [PANE_KEY]: entry({}) },
+          unifiedTabsByWorktree: {
+            w1: [
+              {
+                id: TAB_ID,
+                entityId: 'chat-1',
+                groupId: 'group',
+                worktreeId: 'w1',
+                executionHostId: 'runtime:server-a',
+                contentType: 'agent-session',
+                agentSessionAgent: 'claude',
+                label: 'Chat',
+                customLabel: null,
+                color: null,
+                sortOrder: 0,
+                createdAt: NOW
+              }
+            ]
+          },
+          ptyIdsByTabId: { [TAB_ID]: [] }
+        }),
+        NOW
+      )
+      const runtimeSession = {
+        sessionId: 'chat-1',
+        target: { kind: 'environment', environmentId: 'server-a' }
+      }
+      expect(snapshot.cards.map((card) => card.chatSession)).toEqual(
+        withLocalTwin ? [undefined, runtimeSession] : [runtimeSession]
+      )
+      expect(snapshot.cards.at(-1)?.ptyId).toBeNull()
+    }
+  )
 
   it('names each pane of a split tab from its own title', () => {
     const siblingPaneKey = makePaneKey(TAB_ID, SPLIT_SIBLING_LEAF_ID)
