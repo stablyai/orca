@@ -1,3 +1,4 @@
+import { WorktreePreparationLockOwnershipError } from './worktree-preparation-lock'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import { sharedPromiseSettlementWaiters } from '../../../../shared/promise-settlement-waiters'
 import { GIT_READ_TIMEOUT_MS } from '../../../../shared/git/commands/git-command-timeout'
@@ -158,6 +159,9 @@ export class WorktreePreparationOperation {
         await Promise.allSettled(this.writers)
         this.signal.throwIfAborted()
       } catch (error) {
+        if (error instanceof WorktreePreparationLockOwnershipError) {
+          this.setDiscard(undefined)
+        }
         this.controller.abort(error)
         throw error
       } finally {

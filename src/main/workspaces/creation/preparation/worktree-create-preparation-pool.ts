@@ -12,7 +12,6 @@ import {
   prepareWorktreeCreateCheckout,
   discardPreparedWorktree
 } from '../../../git/worktrees/creation/worktree-create-preparation'
-import { WorktreePreparationLockOwnershipError } from '../../../git/worktrees/creation/worktree-preparation-lock'
 import { queuePreparedWorktreeTipRefresh } from './worktree-preparation-refresh-queue'
 import { toHostFilesystemPath } from '../../../filesystem/host-tree-removal'
 import { createPreparationActivity } from './worktree-create-preparation-activity'
@@ -259,22 +258,15 @@ function startBackgroundPreparation({
     await operation.trackWriter(mkdir(toHostFilesystemPath(preparationRoot), { recursive: true }))
     signal.throwIfAborted()
     entry.checkoutStarted = true
-    try {
-      await prepareWorktreeCreateCheckout(
-        repoPath,
-        preparedPath,
-        canonicalBase,
-        lockReason,
-        { ...options, signal },
-        beforeMaterialization,
-        operation
-      )
-    } catch (error) {
-      if (error instanceof WorktreePreparationLockOwnershipError) {
-        entry.checkoutStarted = false
-      }
-      throw error
-    }
+    await prepareWorktreeCreateCheckout(
+      repoPath,
+      preparedPath,
+      canonicalBase,
+      lockReason,
+      { ...options, signal },
+      beforeMaterialization,
+      operation
+    )
   })
   preparations.set(key, entry)
   entry.activity.track(entry.ready)
