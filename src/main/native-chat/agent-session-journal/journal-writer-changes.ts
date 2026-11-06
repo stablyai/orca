@@ -2,6 +2,7 @@ import type { AgentJournalCursor } from '../../../shared/agent-session/journal/a
 import type { JournalEntryChange } from './journal-transition-collections'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalWriterEffectResult } from './journal-writer-effects'
+import type { JournalGoalAttachmentSnapshot } from './journal-goal-attachment-inverse'
 import type { JournalReducerState } from './journal-reducer'
 
 export type JournalWriterCommit = {
@@ -15,6 +16,10 @@ export type JournalWriterCommit = {
   /** First presence before this command changed a submission key; captures ignore older cursors. */
   inputKeys: [string, boolean][]
   effects: JournalWriterEffectResult[]
+  /** The operation's own serializable answer (a cursor, card, update or move result). */
+  value?: unknown
+  /** The host adopts this copy of its goal attachment proofs after COMMIT. */
+  goals?: JournalGoalAttachmentSnapshot
 }
 
 /** Only identities leave the writer; history bodies are resolved by the reader's capability. */

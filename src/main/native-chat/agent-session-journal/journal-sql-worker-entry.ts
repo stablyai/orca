@@ -98,15 +98,15 @@ async function drain(): Promise<void> {
         throw fault
       }
       assertJournalWritable(readOnly, 'database')
-      const result = batch.run<WriteRequest, CommitResponse>(
+      const result = await batch.run<WriteRequest, CommitResponse>(
         writes.map((request) => ({
           command: request,
           normal: request.command.type === 'write' && executor.streamed(request.command.command)
         })),
-        (request) => {
+        async (request) => {
           const { command, id } = request
           return command.type === 'write'
-            ? { type: 'committed', id, commit: executor.apply(command.command, Date.now()) }
+            ? { type: 'committed', id, commit: await executor.apply(command.command, Date.now()) }
             : {
                 type: 'effects',
                 id,
@@ -173,4 +173,11 @@ async function drain(): Promise<void> {
     }
   }
   scheduled = false
+  // Requests admitted while this drain awaited its commands start the next drain.
+  if (queue.length > 0 && db) {
+    scheduled = true
+    setImmediate(() => {
+      void drain()
+    })
+  }
 }

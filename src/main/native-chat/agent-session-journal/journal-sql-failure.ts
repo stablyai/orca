@@ -3,6 +3,14 @@ import { JournalDamageError, JournalUnreleasedSchemaError } from './journal-open
 import { CommandReceiptExistsError } from './command-receipt-transaction'
 import { AgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
 import {
+  JournalHostFactsNeededError,
+  type JournalHostFactsNeeded
+} from './journal-writer-host-facts'
+import {
+  QueuedMessageNotConsumableError,
+  QueuedMessageNotOwedError
+} from './queued-message-consume-error'
+import {
   AgentSessionRefusalError,
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
@@ -15,6 +23,9 @@ export type JournalSqlFailure = {
   receipt?: CommandReceiptExistsError['result']
   refusal?: AgentSessionWireRefusal
   expired?: AgentSessionAttachmentExpiredError['expired']
+  needs?: JournalHostFactsNeeded
+  /** Queue refusals keep their identity for the host's retry and refusal paths. */
+  queued?: { messageId: string; expected?: 'waiting' | 'returned'; owed?: 'stale' | 'unavailable' }
 }
 
 export function journalSqlFailure(error: unknown): JournalSqlFailure {
@@ -31,7 +42,14 @@ export function journalSqlFailure(error: unknown): JournalSqlFailure {
         : undefined,
     receipt: error instanceof CommandReceiptExistsError ? error.result : undefined,
     refusal: error instanceof AgentSessionRefusalError ? error.refusal : undefined,
-    expired: error instanceof AgentSessionAttachmentExpiredError ? error.expired : undefined
+    expired: error instanceof AgentSessionAttachmentExpiredError ? error.expired : undefined,
+    needs: error instanceof JournalHostFactsNeededError ? error.needs : undefined,
+    queued:
+      error instanceof QueuedMessageNotConsumableError
+        ? { messageId: error.messageId, expected: error.expected }
+        : error instanceof QueuedMessageNotOwedError
+          ? { messageId: error.messageId, owed: error.owed }
+          : undefined
   }
 }
 
@@ -45,6 +63,15 @@ export function restoreJournalSqlFailure(error: JournalSqlFailure): Error {
   }
   if (error.refusal) {
     return new AgentSessionRefusalError(error.refusal)
+  }
+  if (error.needs) {
+    return new JournalHostFactsNeededError(error.needs)
+  }
+  if (error.queued?.expected) {
+    return new QueuedMessageNotConsumableError(error.queued.messageId, error.queued.expected)
+  }
+  if (error.queued?.owed) {
+    return new QueuedMessageNotOwedError(error.queued.messageId, error.queued.owed)
   }
   switch (error.name) {
     case 'JournalDamageError':

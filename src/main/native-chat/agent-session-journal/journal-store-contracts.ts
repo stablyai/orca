@@ -16,7 +16,7 @@ import type {
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentSessionMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
-import type { JournalHostDatabase } from './journal-host-database'
+import type { JournalHostDatabase, JournalTransactionalDatabase } from './journal-host-database'
 import type { JournalLifecycleMutationInput } from './journal-row-builders'
 import type { JournalRowsRead } from './journal-read-row'
 import type { JournalReducerState } from './journal-reducer'
@@ -156,7 +156,7 @@ export type JournalItemAppendInput = {
 export type JournalQueuedMessagesDeps = {
   sessionId: string
   serialize: <T>(run: JournalWriteBody<T>) => Promise<T>
-  database: () => JournalHostDatabase
+  database: () => JournalTransactionalDatabase
   readOnly: () => boolean
   state: () => JournalReducerState
   /** Fallback pause boundary when this handle could not write its reopen mark. */
@@ -165,4 +165,6 @@ export type JournalQueuedMessagesDeps = {
   /** Notify after legacy deletion that appends no row. */
   committed: () => void
   claimAttachments: JournalAttachmentClaim
+  /** The SQL writer receives the host's edit holds as data; otherwise this handle's leases. */
+  editHeld?: (messageId: string) => boolean
 }

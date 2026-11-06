@@ -16,6 +16,7 @@ import { JournalSqlScope } from './journal-sql-scope'
 import { journalSqlLifecycleRows } from './journal-sql-reducer-rows.test-fixture'
 import { journalInputOrder } from './journal-input-order'
 import { ensureCommandReceiptsTable } from './command-receipt-schema'
+import { ensureQueuedMessagesTable } from './queued-message-schema'
 
 /** Seeds a published projection without pretending to exercise actual-open reconstruction. */
 export function seedJournalSqlCommands(db: Database.Database) {
@@ -24,6 +25,7 @@ export function seedJournalSqlCommands(db: Database.Database) {
   )
   ensureJournalOutcomeTables(db)
   ensureCommandReceiptsTable(db)
+  ensureQueuedMessagesTable(db)
   publishJournalSessionEpoch(db, { sessionId: 'session', workspaceId: 'workspace' }, 'epoch')
   const source = startJournalOutcomeLog(db, 'session', 'epoch', 0, 100)
   const initial = journalSqlLifecycleRows()[0]!

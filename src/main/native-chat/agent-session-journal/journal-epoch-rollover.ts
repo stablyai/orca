@@ -5,7 +5,7 @@ import { publishJournalOutcomeEpoch } from './journal-outcome-write'
 import { journalRowSchemaVersion } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import type { JournalHostDatabase } from './journal-host-database'
+import type { JournalTransactionalDatabase } from './journal-host-database'
 import type { JournalLoad } from './journal-open'
 import { applyJournalRow, createJournalReducerState } from './journal-reducer'
 import { buildJournalQueueRow, type JournalQueueCardChange } from './journal-queue-events'
@@ -19,7 +19,7 @@ import type { AgentJournalEpochReason, JournalRow } from './journal-row-schema'
 import { AgentSessionJournalError } from './journal-write-guards'
 
 export function publishNewEpoch(input: {
-  database: JournalHostDatabase
+  database: JournalTransactionalDatabase
   identity: AgentSessionJournalIdentity
   epoch: string
   reason: AgentJournalEpochReason

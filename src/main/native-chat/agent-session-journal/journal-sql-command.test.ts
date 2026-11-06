@@ -9,7 +9,11 @@ import { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlCommand } from './journal-sql-command'
 import { JournalSqlBatch } from './journal-sql-batch'
 import { planJournalWriterRows } from './journal-writer-plan'
-import type { JournalWriterCommand, JournalWriterOperation } from './journal-writer-command'
+import type {
+  JournalWriterCommand,
+  JournalWriterCoreOperation,
+  JournalWriterOperation
+} from './journal-writer-command'
 import { journalInputOrder } from './journal-input-order'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { CommandReceipt } from './command-receipt-schema'
@@ -24,7 +28,7 @@ afterEach(() => {
 const target = { sessionId: 'session', epoch: 'epoch', ownerToken: 'open-token' }
 const identity = { provider: 'codex', threadId: 'thread', turnId: 'turn', ordinal: 0 } as const
 const itemId = agentJournalItemKey(identity)
-const item = (text: string, fence = 1): JournalWriterOperation => ({
+const item = (text: string, fence = 1): JournalWriterCoreOperation => ({
   kind: 'item',
   identity,
   body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] },
@@ -45,7 +49,7 @@ function fixture() {
   }
 }
 
-it('assigns revisions after preceding successes and rolls back failed command projections and receipts', () => {
+it('assigns revisions after preceding successes and rolls back failed command projections and receipts', async () => {
   const { db, engine, batch, initial, source } = fixture()
   // A logical context boundary retains the physical epoch for ownership and log lookup.
   persistJournalOutcomeTransition(
@@ -79,7 +83,7 @@ it('assigns revisions after preceding successes and rolls back failed command pr
     ...command(item('must roll back')),
     effects: [{ kind: 'receipt', scope: { kind: 'global' }, receipt, row: 'last' }]
   }
-  const results = batch.run(
+  const results = await batch.run(
     [accepted, duplicate, command(item('second')), command(item('stale', 0))].map((entry) => ({
       command: entry,
       normal: engine.streamed(entry)
@@ -110,7 +114,7 @@ it('assigns revisions after preceding successes and rolls back failed command pr
   })
 })
 
-it('keeps exact saved records across command shells and publishes metadata without item bodies', () => {
+it('keeps exact saved records across command shells and publishes metadata without item bodies', async () => {
   const { db, source, initial, engine, batch } = fixture()
   const oracle = new Database(':memory:')
   databases.push(oracle)
@@ -124,7 +128,7 @@ it('keeps exact saved records across command shells and publishes metadata witho
     true,
     (state) => journalInputOrder(state).cards.ensure(state)
   ).adopt()
-  const operations: JournalWriterOperation[] = [
+  const operations: JournalWriterCoreOperation[] = [
     item('one'),
     item('two'),
     {
@@ -159,8 +163,10 @@ it('keeps exact saved records across command shells and publishes metadata witho
     memory = persistJournalOutcomeRows(oracle, memory, source, rows, 100, false, (state) =>
       journalInputOrder(state).cards.ensure(state)
     ).adopt()
-    const result = batch.run([{ command: command(operation), normal: false }], (entry) =>
-      engine.apply(entry, 100)
+    const result = (
+      await batch.run([{ command: command(operation), normal: false }], (entry) =>
+        engine.apply(entry, 100)
+      )
     ).outcomes[0]!
     expect(result.committed).toBe(true)
   }
@@ -170,8 +176,10 @@ it('keeps exact saved records across command shells and publishes metadata witho
     format, ordinal, value_json, deleted FROM journal_outcomes ORDER BY seq, field, entry_key`)
       .all()
   expect(records(db)).toEqual(records(oracle))
-  const final = batch.run([{ command: command(item('after deletion')), normal: false }], (entry) =>
-    engine.apply(entry, 100)
+  const final = (
+    await batch.run([{ command: command(item('after deletion')), normal: false }], (entry) =>
+      engine.apply(entry, 100)
+    )
   ).outcomes[0]!
   expect(final).toMatchObject({
     committed: true,
@@ -180,10 +188,10 @@ it('keeps exact saved records across command shells and publishes metadata witho
   expect(JSON.stringify(final)).not.toContain('after deletion')
 })
 
-it('chooses NORMAL only for proven text revisions and retains FULL for settlements and effects', () => {
+it('chooses NORMAL only for proven text revisions and retains FULL for settlements and effects', async () => {
   const { db, engine, batch } = fixture()
   expect(engine.streamed(command(item('first')))).toBe(false)
-  batch.run([{ command: command(item('first')), normal: false }], (entry) =>
+  await batch.run([{ command: command(item('first')), normal: false }], (entry) =>
     engine.apply(entry, 100)
   )
   const revision = command(item('next'))
@@ -201,7 +209,7 @@ it('chooses NORMAL only for proven text revisions and retains FULL for settlemen
   ).toBe(false)
   expect(engine.streamed(command({ kind: 'queue-resume', fence: 1 }))).toBe(false)
   let synchronous = -1
-  batch.run([{ command: revision, normal: engine.streamed(revision) }], (entry) => {
+  await batch.run([{ command: revision, normal: engine.streamed(revision) }], (entry) => {
     synchronous = Number(db.pragma('synchronous', { simple: true }))
     return engine.apply(entry, 100)
   })
@@ -209,17 +217,18 @@ it('chooses NORMAL only for proven text revisions and retains FULL for settlemen
   expect(Number(db.pragma('synchronous', { simple: true }))).toBe(2)
 })
 
-it('refuses stale ownership, changed epochs and log coverage even for an empty plan', () => {
+it('refuses stale ownership, changed epochs and log coverage even for an empty plan', async () => {
   const { db, engine, batch } = fixture()
   const noOp = command({
     kind: 'dispatch',
     input: { clientMessageId: 'missing', state: 'unknown', fence: 1 },
     onlyIfUnsettled: true
   })
-  const run = (entry = noOp) =>
-    batch.run([{ command: entry, normal: false }], (value) => engine.apply(value, 100)).outcomes[0]!
+  const run = async (entry = noOp) =>
+    (await batch.run([{ command: entry, normal: false }], (value) => engine.apply(value, 100)))
+      .outcomes[0]!
   expect(
-    run({
+    await run({
       ...noOp,
       effects: [
         {
@@ -236,11 +245,11 @@ it('refuses stale ownership, changed epochs and log coverage even for an empty p
     })
   ).toMatchObject({ committed: true, value: { inputChanged: false, effects: [] } })
   expect(db.prepare('SELECT 1 FROM agent_session_operations').get()).toBeUndefined()
-  expect(run({ ...noOp, target: { ...target, ownerToken: 'old' } }).committed).toBe(false)
+  expect((await run({ ...noOp, target: { ...target, ownerToken: 'old' } })).committed).toBe(false)
   db.prepare('UPDATE journal_sessions SET epoch=?').run('another-epoch')
-  expect(run().committed).toBe(false)
+  expect((await run()).committed).toBe(false)
   db.prepare('UPDATE journal_sessions SET epoch=?').run('epoch')
   db.prepare('UPDATE journal_outcome_epochs SET through_seq=2').run()
-  expect(run().committed).toBe(false)
+  expect((await run()).committed).toBe(false)
   expect(db.prepare('SELECT through_seq FROM journal_proj_meta').get()?.through_seq).toBe(1)
 })

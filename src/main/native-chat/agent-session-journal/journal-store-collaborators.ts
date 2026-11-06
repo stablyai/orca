@@ -5,7 +5,7 @@ import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { JournalHostDatabase } from './journal-host-database'
+import type { JournalTransactionalDatabase } from './journal-host-database'
 import { JournalContextController } from './journal-context-controller'
 import { JournalEpochController } from './journal-epoch-controller'
 import { JournalItemAppender } from './journal-item-appender'
@@ -42,15 +42,18 @@ export type JournalStoreHost = {
   now: () => number
   mintEpoch: () => string
   serialize: <T>(run: JournalWriteBody<T>) => Promise<T>
-  database: () => JournalHostDatabase
+  database: () => JournalTransactionalDatabase
   state: () => JournalReducerState
   readOnly: () => boolean
   cursor: () => AgentJournalCursor
   adopt: (loaded: JournalLoad) => void
   prepare: NonNullable<ConstructorParameters<typeof JournalRowWriter>[0]['prepare']>
   commit: ConstructorParameters<typeof JournalRowWriter>[0]['commit']
-  journal: () => AgentSessionJournal
+  journal: () => Pick<AgentSessionJournal, 'reopenFloor' | 'appendItem'>
   enqueue: JournalRowWriter['enqueue']
+  /** Host-memory facts the SQL writer receives as data with each command. */
+  editHeld?: (messageId: string) => boolean
+  goalAttachments?: JournalGoalAttachmentInverse
 }
 
 export type JournalStoreCollaborators = {
@@ -69,7 +72,8 @@ export type JournalStoreCollaborators = {
 }
 
 export function createJournalStoreCollaborators(host: JournalStoreHost): JournalStoreCollaborators {
-  const goalAttachments = new JournalGoalAttachmentInverse(host.identity.sessionId)
+  const goalAttachments =
+    host.goalAttachments ?? new JournalGoalAttachmentInverse(host.identity.sessionId)
   const claimAttachments: JournalAttachmentClaim = (db, body, required, previous, goalId) => {
     const claim = claimAgentSessionAttachmentsInTransaction(db, {
       stateDirectory: host.database().stateDirectory,
@@ -106,7 +110,8 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     reopenFloor: () => host.journal().reopenFloor(),
     writer: rowWriter,
     committed: host.notifyCommitted,
-    claimAttachments
+    claimAttachments,
+    ...(host.editHeld ? { editHeld: host.editHeld } : {})
   })
   const rewindReceipt = (rows: readonly JournalRow[], receipt?: JournalOperationReceipt) => {
     const state = host.state()

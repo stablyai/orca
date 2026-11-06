@@ -1,6 +1,6 @@
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { JournalReducerState } from './journal-reducer'
-import type { JournalWriterOperation } from './journal-writer-command'
+import type { JournalWriterCoreOperation } from './journal-writer-command'
 import type { JournalRow } from './journal-row-schema'
 import {
   journalDispatchRowBuilder,
@@ -18,7 +18,7 @@ import { journalDispatchRowApplies } from './journal-dispatch-settlement'
 /** State-dependent planning runs inside the command SAVEPOINT, after earlier surviving commands. */
 export function planJournalWriterRows(
   state: JournalReducerState,
-  operation: JournalWriterOperation
+  operation: JournalWriterCoreOperation
 ): ((seq: number, ts: number) => JournalRow)[] {
   const current = () => state
   switch (operation.kind) {

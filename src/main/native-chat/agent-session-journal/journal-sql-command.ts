@@ -1,26 +1,13 @@
 import type Database from '../../sqlite/sync-database'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalWriterCommand } from './journal-writer-command'
 import type { JournalWriterCommit } from './journal-writer-changes'
-import { JournalWriterChanges } from './journal-writer-changes'
-import { applyJournalWriterEffect } from './journal-writer-effects'
-import { JournalSqlReducer } from './journal-sql-reducer'
-import { JournalSqlScope } from './journal-sql-scope'
-import { readJournalSqlMeta } from './journal-sql-meta'
+import { applyJournalWriterEffect, type JournalWriterEffectResult } from './journal-writer-effects'
+import { JournalWriterSession } from './journal-writer-session'
+import { runJournalWriterOperation } from './journal-writer-operations'
 import { planJournalWriterRows } from './journal-writer-plan'
-import { journalInputOrder } from './journal-input-order'
-import { journalInputAcceptance } from './journal-input-provenance'
-import {
-  advanceJournalOutcomeSource,
-  journalOutcomeSource,
-  startJournalOutcomeLog
-} from './journal-outcome-format'
-import { persistJournalOutcomeTransition } from './journal-outcome-table'
-import { assertJournalFence } from './journal-write-guards'
-import { journalContextCursor, projectJournalRows } from './journal-context-cursor'
-import {
-  isJournalOutputRevision,
-  isJournalStreamedTextRevision
-} from './journal-streamed-text-revision'
+import type { JournalOperationReceipt } from './journal-row-writer'
+import { isJournalStreamedTextRevision } from './journal-streamed-text-revision'
 
 export class JournalSqlCommand {
   constructor(
@@ -34,105 +21,71 @@ export class JournalSqlCommand {
       return false
     }
     try {
-      const { reducer } = this.load(command)
-      const row = planJournalWriterRows(reducer.state, command.operation)[0]!(
-        reducer.state.lastSequence + 1,
-        0
-      )
-      return isJournalStreamedTextRevision(reducer.state, row)
+      const { state } = this.session(command, 0)
+      const row = planJournalWriterRows(state, command.operation)[0]!(state.lastSequence + 1, 0)
+      return isJournalStreamedTextRevision(state, row)
     } catch {
       // A stale/invalid command fails its own SAVEPOINT; it must not downgrade the batch.
       return false
     }
   }
 
-  apply(command: JournalWriterCommand, savedAt: number): JournalWriterCommit {
+  async apply(command: JournalWriterCommand, savedAt: number): Promise<JournalWriterCommit> {
     if (!this.db.isTransaction) {
       throw new Error('journal SQL command requires its transaction')
     }
-    const { scope, reducer } = this.load(command)
-    const { state } = reducer
-    const rows = planJournalWriterRows(state, command.operation).map((build, index) =>
-      build(state.lastSequence + index + 1, savedAt)
-    )
-    for (const row of rows) {
-      assertJournalFence(row.fence, state.highestFence)
-    }
-    const inputChanged =
-      rows.length > 0 &&
-      (Boolean(command.effects?.length) || rows.some((row) => !isJournalOutputRevision(state, row)))
-    const changes = new JournalWriterChanges()
-    const abort = new AbortController()
-    const inputKeys = journalInputOrder(state).captureKeys(new Set(), abort.signal)
-    try {
-      if (rows.length > 0) {
-        const previous = journalOutcomeSource(this.db, state.sessionId, state.epoch)
-        const source =
-          previous ??
-          startJournalOutcomeLog(this.db, state.sessionId, state.epoch, state.lastSequence, savedAt)
-        if (source.through !== state.lastSequence) {
-          throw new Error('journal outcome writer has stale coverage')
-        }
-        const transition = reducer.transition()
-        persistJournalOutcomeTransition(
-          this.db,
-          {
-            ...transition,
-            changes: (reset) => {
-              const entries = transition.changes(reset)
-              changes.record(entries)
-              return entries
+    const session = this.session(command, command.savedAt ?? savedAt)
+    const effects: JournalWriterEffectResult[] = []
+    const receipt: JournalOperationReceipt | undefined = command.effects?.length
+      ? {
+          write: (db) => {
+            const rows = session.projected(session.lastRows)
+            for (const effect of command.effects!) {
+              effects.push(applyJournalWriterEffect(db, this.stateDirectory, effect, rows))
             }
           },
-          source,
-          rows,
-          savedAt,
-          !previous || previous.format < 2,
-          (next) => journalInputOrder(next).cards.ensure(next)
-        )
-        advanceJournalOutcomeSource(this.db, state.sessionId, state.epoch, state.lastSequence)
-      }
-      const projected = projectJournalRows(state, rows)
-      const effects = (rows.length === 0 ? [] : (command.effects ?? [])).map((effect) =>
-        applyJournalWriterEffect(this.db, this.stateDirectory, effect, projected)
-      )
-      this.db
-        .prepare(`UPDATE journal_proj_meta SET through_seq=?
-        WHERE session_id=? AND owner_token=?`)
-        .run(state.lastSequence, state.sessionId, command.target.ownerToken)
-      return {
-        cursor: journalContextCursor(state),
-        inputChanged,
-        ...changes.finish(scope, state),
-        inputKeys: [...inputKeys.changes],
-        effects
-      }
-    } finally {
-      abort.abort()
+          committed: () => undefined
+        }
+      : undefined
+    const value = await runJournalWriterOperation(session, command.operation, receipt)
+    const { rows: _rows, goals, ...commit } = await session.finish()
+    return {
+      ...commit,
+      effects,
+      ...(value === undefined ? {} : { value }),
+      ...(command.facts?.goals ? { goals } : {})
     }
   }
 
-  private load(command: JournalWriterCommand) {
-    const meta = readJournalSqlMeta(this.db, command.target)
-    const source = journalOutcomeSource(this.db, command.target.sessionId, command.target.epoch)
-    const through =
-      source?.through ??
-      Number(
-        this.db
-          .prepare(`SELECT MAX(seq) AS sequence
-      FROM journal_rows WHERE session_id=? AND epoch=?`)
-          .get(command.target.sessionId, command.target.epoch)?.sequence ?? 0
-      )
-    if (through !== meta.through) {
-      throw new Error('journal projection no longer covers the saved chat')
-    }
-    const scope = new JournalSqlScope(this.db, command.target.sessionId, meta.generation)
-    const reducer = new JournalSqlReducer(scope, command.target.epoch, (id) =>
-      journalInputAcceptance(this.db, command.target.sessionId, id)
+  private session(command: JournalWriterCommand, savedAt: number): JournalWriterSession {
+    return new JournalWriterSession(
+      this.db,
+      this.stateDirectory,
+      command.target,
+      command.facts ?? { identity: unidentified(command.target.sessionId) },
+      savedAt
     )
-    if (reducer.state.lastSequence !== meta.through) {
-      throw new Error('journal projection writer has stale coverage')
+  }
+}
+
+/** Core row commands never read the provider identity; reading it is a protocol bug. */
+function unidentified(sessionId: string): AgentSessionJournalIdentity {
+  const missing = (): never => {
+    throw new Error('journal SQL command omitted its identity facts')
+  }
+  return {
+    sessionId,
+    get workspaceId() {
+      return missing()
+    },
+    get hostId() {
+      return missing()
+    },
+    get agent() {
+      return missing()
+    },
+    get providerHandle() {
+      return missing()
     }
-    return { scope, reducer }
   }
 }

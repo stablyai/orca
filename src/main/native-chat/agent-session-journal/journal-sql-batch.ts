@@ -1,5 +1,4 @@
 import type Database from '../../sqlite/sync-database'
-import type { JournalWriteResult } from './journal-write-queue'
 
 export type JournalSqlBatchOutcome<Value> =
   | { committed: true; value: Value }
@@ -32,14 +31,15 @@ export class JournalSqlBatch {
     return this.failure
   }
 
-  run<Command, Value>(
+  /** Commands may await only microtasks: the worker owns the connection while one is open. */
+  async run<Command, Value>(
     commands: readonly { command: Command; normal: boolean }[],
-    apply: (command: Command) => JournalWriteResult<Value>
-  ): JournalSqlBatchResult<JournalWriteResult<Value>> {
+    apply: (command: Command) => Value | Promise<Value>
+  ): Promise<JournalSqlBatchResult<Value>> {
     if (this.failure) {
       throw new JournalSqlBatchError('not-dispatched', this.failure)
     }
-    const outcomes: JournalSqlBatchOutcome<JournalWriteResult<Value>>[] = []
+    const outcomes: JournalSqlBatchOutcome<Value>[] = []
     if (commands.length === 0) {
       return { outcomes }
     }
@@ -60,7 +60,7 @@ export class JournalSqlBatch {
       for (const { command } of drain) {
         this.db.exec('SAVEPOINT journal_command')
         try {
-          const value = apply(command)
+          const value = await apply(command)
           this.db.exec('RELEASE journal_command')
           outcomes.push({ committed: true, value })
         } catch (error) {

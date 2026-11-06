@@ -102,7 +102,8 @@ export class JournalQueuedMessages {
       state: this.inputState(),
       floor: this.deps.reopenFloor(),
       get: (messageId) => this.get(messageId),
-      editHeld: (messageId) => automatic && this.editLeases.isHeld(messageId),
+      editHeld: (messageId) =>
+        automatic && (this.deps.editHeld ?? ((id) => this.editLeases.isHeld(id)))(messageId),
       revisions: [this.revision(), automatic ? this.editLeases.version() : -1],
       unavailable: this.mailUnavailable,
       steer
