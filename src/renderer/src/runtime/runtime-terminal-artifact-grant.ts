@@ -1,6 +1,10 @@
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import { TERMINAL_ARTIFACT_CHUNK_RUNTIME_CAPABILITY } from '../../../shared/files-runtime-capabilities'
 import {
+  SSH_OUTSIDE_WORKSPACE_UNSUPPORTED_MESSAGE,
+  TERMINAL_ARTIFACT_IN_PLACE_MAX_BYTES,
   TERMINAL_PATH_ABSOLUTE_FILES_RUNTIME_CAPABILITY,
+  TERMINAL_PATH_IN_PLACE_FILES_RUNTIME_CAPABILITY,
   type RuntimeTerminalPathResolution
 } from '../../../shared/runtime-file-contracts'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
@@ -37,7 +41,14 @@ export function isRenewableGrantError(error: unknown): boolean {
   return error instanceof RuntimeRpcCallError && RENEWABLE_GRANT_ERRORS.has(error.message)
 }
 
-export type RenewedTerminalArtifactGrant = { grantId: string; readOnly: boolean }
+export type RenewedTerminalArtifactGrant = {
+  grantId: string
+  readOnly: boolean
+  /** The file's size when granted; older hosts omit it. */
+  byteLength?: number
+  /** Set when the grant can't serve the file as text. */
+  binary?: true
+}
 
 /** A grant for a restored tab's host file, which never kept its grant; rejects when the host lacks it. */
 export async function renewRestoredHostFileGrant(
@@ -59,7 +70,14 @@ export async function renewTerminalArtifactGrant(
   if (granted && granted.absolutePath !== args.absolutePath) {
     throw new Error(`The host no longer grants ${args.absolutePath}`)
   }
-  return granted ? { grantId: granted.grantId, readOnly: granted.readOnly } : null
+  return granted
+    ? {
+        grantId: granted.grantId,
+        readOnly: granted.readOnly,
+        ...(granted.byteLength === undefined ? {} : { byteLength: granted.byteLength }),
+        ...(granted.binary ? { binary: true as const } : {})
+      }
+    : null
 }
 
 /** First acquisition adopts the canonical path the host bound to its grant. */
@@ -84,7 +102,9 @@ export async function acquireTerminalArtifactGrant(
     return {
       absolutePath: openTarget.absolutePath,
       grantId: openTarget.grantId,
-      readOnly: openTarget.readOnly === true
+      readOnly: openTarget.readOnly === true,
+      ...(openTarget.byteLength === undefined ? {} : { byteLength: openTarget.byteLength }),
+      ...(openTarget.binary ? { binary: true as const } : {})
     }
   }
   if (!resolved.exists) {
@@ -114,6 +134,49 @@ export async function hostSavesGrantedFiles(environmentId: string): Promise<bool
     )
   } catch {
     // Why: an unanswered probe must not block opening; the tab just opens read-only.
+    return false
+  }
+}
+
+/** Whether this host reports what a grant can serve, so a file another workspace holds may open in place; rejects when unanswered. */
+export function hostOpensGrantedFilesInPlace(environmentId: string): Promise<boolean> {
+  return runtimeEnvironmentSupportsCapability(
+    environmentId,
+    TERMINAL_PATH_IN_PLACE_FILES_RUNTIME_CAPABILITY,
+    15_000
+  )
+}
+
+/**
+ * Whether a grant can stand in for the workspace holding its file: it reads and saves only small
+ * text, while the holder pages large files, stages large saves and serves bytes editors.
+ */
+export function grantServesInPlace(grant: { byteLength?: number; binary?: true }): boolean {
+  return (
+    grant.byteLength !== undefined &&
+    grant.byteLength <= TERMINAL_ARTIFACT_IN_PLACE_MAX_BYTES &&
+    !grant.binary
+  )
+}
+
+/** The host's refusal to grant outside its SSH workspaces; any other failure may be transient. */
+export function isSshWorkspaceGrantRefusal(error: unknown): boolean {
+  return (
+    error instanceof RuntimeRpcCallError &&
+    error.code === 'runtime_error' &&
+    error.message === SSH_OUTSIDE_WORKSPACE_UNSUPPORTED_MESSAGE
+  )
+}
+
+/** Older hosts read a granted file only whole and as text, so it opens in Orca instead of downloading. */
+export async function hostStreamsGrantedFiles(environmentId: string): Promise<boolean> {
+  try {
+    return await runtimeEnvironmentSupportsCapability(
+      environmentId,
+      TERMINAL_ARTIFACT_CHUNK_RUNTIME_CAPABILITY,
+      15_000
+    )
+  } catch {
     return false
   }
 }

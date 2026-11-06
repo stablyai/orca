@@ -1,5 +1,5 @@
-import { parseTerminalKittyKeyboardFlags } from '../../../src/shared/terminal-kitty-keyboard-flags'
-import type { ParsedFileLinkLocation } from '../../../src/shared/file-link-location'
+import { parseTerminalKittyKeyboardFlags } from '../../../src/shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
+import type { ParsedFileLinkLocation } from '../../../src/shared/file-links/file-link-location'
 import { translate } from '../i18n/mobile-i18n'
 import {
   parseTerminalKeyboardAvoidanceMetrics,

@@ -7,7 +7,7 @@ import { PiRpcTurns } from './rpc-turns'
 import { PiRpcOptionObservations, readPiRpcSessionOptions } from './rpc-options'
 import { piRpcStateSchema } from './rpc-protocol'
 import { piRpcFailureFact } from './rpc-prompt-delivery'
-import { agentSessionFailureSentence } from '../../shared/agent-session-failure-words'
+import { agentSessionFailureSentence } from '../../shared/agent-session/failures/agent-session-failure-words'
 import { piRpcDialogPresentation } from './rpc-extension-dialogs'
 import {
   closeProviderTimelineRigs,

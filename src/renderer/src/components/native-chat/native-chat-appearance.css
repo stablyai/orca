@@ -32,3 +32,57 @@
   inherits: false;
   initial-value: 0px;
 }
+
+/* Over a theme image (main.css) a chat that fills its pane paints the canvas once and the layers
+   under it go clear. The canvas follows Background Opacity, floored at 0.8 so body text stays near
+   4.5:1 even over white or black pixels. A chat split beside terminals stays opaque, since the pane
+   manager paints the terminal color under every pane of the split. */
+:root[data-theme-background] [data-terminal-chat-view]:not(.has-multiple-panes) {
+  /* Beats the pane manager's inline split paint (pane-divider.ts applyRootBackground). */
+  background: transparent !important;
+}
+
+:root[data-theme-background]
+  [data-terminal-chat-view]:not(.has-multiple-panes)
+  .native-chat-pane-shell {
+  background-color: transparent;
+}
+
+/* The opaque cover used to hide the terminal and its banners (layers below its z-10); overlays
+   above it stay. Opacity, not visibility, so the covered terminal can still take focus handoffs. */
+:root[data-theme-background]
+  [data-terminal-chat-view]:not(.has-multiple-panes)
+  .pane
+  > :is(.xterm-container, .session-restored-banner, .pane-top-banner) {
+  opacity: 0;
+}
+
+:root[data-theme-background]
+  :is(
+    [data-terminal-chat-view]:not(.has-multiple-panes),
+    [data-structured-agent-session-overlay-tab-id]
+  )
+  [data-native-chat-root] {
+  --chat-pane: transparent;
+  /* Text-bearing surfaces keep an opaque base, as in the light scheme. */
+  --chat-code-surface: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-code-mix),
+    var(--chat-canvas)
+  );
+  --chat-inline-code-surface: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-inline-code-mix),
+    var(--chat-canvas)
+  );
+  --chat-composer-surface: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-composer-mix),
+    var(--chat-canvas)
+  );
+  background-color: color-mix(
+    in srgb,
+    var(--chat-canvas) calc(max(var(--orca-theme-background-surface-opacity), 0.8) * 100%),
+    transparent
+  );
+}

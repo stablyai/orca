@@ -28,17 +28,14 @@ export const TASK_RECEIPT_VIEW: OrchestrationAgentView<
 }
 
 export const TASK_LIST_VIEW: OrchestrationAgentView<TaskListResult, Record<string, unknown>> = {
-  // Rows also carry creator identity and timestamps that no next command takes.
+  // Specs and results are free text that grows with the Run; --full keeps them.
   fields: (r) => ({
     tasks: r.tasks.map((task) => ({
       id: task.id,
       status: task.status,
-      title: task.display_name ?? task.task_title ?? undefined,
-      spec: task.spec,
-      specTruncated: task.spec_truncated || undefined,
+      title: task.display_name ?? task.task_title ?? task.spec.slice(0, 60),
       deps: task.deps && task.deps !== '[]' ? task.deps : undefined,
       parentId: task.parent_id ?? undefined,
-      result: task.result ?? undefined,
       dispatchId: task.dispatch_id ?? undefined,
       assignee: task.assignee_handle ?? undefined
     })),

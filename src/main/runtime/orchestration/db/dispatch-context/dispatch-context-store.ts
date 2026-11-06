@@ -1,6 +1,6 @@
 import type { DispatchContextRow } from '../../types'
 import { OrchestrationError } from '../../orchestration-error'
-import { parsePaneKey } from '../../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { CURRENT_CONTRACT_VERSION } from '../contract-constants'
 import { generateId } from '../generated-id'
 import { paneKeyMatchSuffix } from '../pane-key-match'

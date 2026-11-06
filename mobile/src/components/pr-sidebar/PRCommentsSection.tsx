@@ -4,7 +4,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import type { PRState } from '../../../../src/shared/github/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
 import type { GitHubPrRepoSlug } from '../../session/github-pr-rpc'
-import { colors } from '../../theme/mobile-theme'
+import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -12,14 +12,15 @@ import { canAddRootComment } from '../../session/pr-comment-actions'
 import { isPrSidebarDetailsPlaceholder } from '../../session/mobile-pr-sidebar-state'
 import type { MobilePrCommentActions } from '../../session/use-mobile-pr-comment-actions'
 import { PRSection } from './PRSection'
-import { CommentMarkdown } from './CommentMarkdown'
+import { MobileMarkdown } from '../MobileMarkdown'
+import { MOBILE_MARKDOWN_DOCUMENT_SCALE } from '../mobile-markdown-styles'
 import { PRCommentCard, type PRCommentCardActions } from './PRCommentCard'
 import { PRCommentComposer } from './PRCommentComposer'
 import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
   type PRCommentAudienceFilter
-} from '../../../../src/shared/pr-comment-audience'
+} from '../../../../src/shared/source-control/review-comments/pr-comment-audience'
 import {
   getPRCommentGroupCount,
   getPRCommentGroupId,
@@ -27,7 +28,7 @@ import {
   groupPRComments,
   isResolvedPRCommentGroup,
   type PRCommentGroup
-} from '../../../../src/shared/pr-comment-groups'
+} from '../../../../src/shared/source-control/review-comments/pr-comment-groups'
 import { prCommentsStyles as styles } from './pr-comments-styles'
 import { mobilePrSidebarStyles as shared } from './mobile-pr-sidebar-styles'
 import { useNow } from '../../hooks/use-now'
@@ -86,24 +87,7 @@ export function PRCommentsSection({
   )
   const isPr = details != null && !detailsFailed && details.item.type === 'pr'
 
-  // Memoize stable per-card callback bundles so unrelated timeline updates skip cards.
-  const cardActions = useMemo<PRCommentCardActions | undefined>(
-    () =>
-      actions && isPr
-        ? {
-            reply: actions.reply,
-            toggleResolve: actions.toggleResolve,
-            editComment: actions.editComment,
-            deleteComment: actions.deleteComment,
-            isReplyBusy: actions.isReplyBusy,
-            isResolveBusy: actions.isResolveBusy,
-            isEditBusy: actions.isEditBusy,
-            isDeleteBusy: actions.isDeleteBusy,
-            prRepo: prRepo ?? null
-          }
-        : undefined,
-    [actions, isPr, prRepo]
-  )
+  const cardActions = usePRCommentCardActions(isPr ? actions : undefined, prRepo)
   const canComment = isPr && actions !== undefined && canAddRootComment(prState)
 
   const [filter, setFilter] = useState<PRCommentAudienceFilter>('all')
@@ -144,7 +128,7 @@ export function PRCommentsSection({
             )}
           </Text>
         ) : body.trim() ? (
-          <CommentMarkdown content={body} variant="document" />
+          <MobileMarkdown content={body} textScale={MOBILE_MARKDOWN_DOCUMENT_SCALE} />
         ) : (
           <Text style={styles.noDescription}>
             {t('pullRequest.commentsSection.noDescription', 'No description provided.')}
@@ -186,7 +170,11 @@ export function PRCommentsSection({
                       return (
                         <Pressable
                           key={tab.value}
-                          style={[styles.audienceTab, active && styles.audienceTabActive]}
+                          style={({ pressed }) => [
+                            styles.audienceTab,
+                            active && styles.audienceTabActive,
+                            pressed && pressedStyle
+                          ]}
                           onPress={() => selectFilter(tab.value)}
                           accessibilityRole="button"
                           accessibilityState={{ selected: active }}
@@ -220,7 +208,7 @@ export function PRCommentsSection({
                     ))}
                     {remaining > 0 ? (
                       <Pressable
-                        style={styles.showMore}
+                        style={({ pressed }) => [styles.showMore, pressed && pressedStyle]}
                         onPress={() => setLimit((l) => l + COMMENT_PAGE)}
                         accessibilityRole="button"
                       >
@@ -262,7 +250,32 @@ export function PRCommentsSection({
   )
 }
 
-function CommentGroupView({
+// Memoize stable per-card callback bundles so unrelated timeline updates skip cards.
+export function usePRCommentCardActions(
+  actions: MobilePrCommentActions | undefined,
+  prRepo: GitHubPrRepoSlug | null | undefined
+): PRCommentCardActions | undefined {
+  return useMemo<PRCommentCardActions | undefined>(
+    () =>
+      actions
+        ? {
+            reply: actions.reply,
+            toggleResolve: actions.toggleResolve,
+            editComment: actions.editComment,
+            deleteComment: actions.deleteComment,
+            isReplyBusy: actions.isReplyBusy,
+            isResolveBusy: actions.isResolveBusy,
+            isEditBusy: actions.isEditBusy,
+            isDeleteBusy: actions.isDeleteBusy,
+            prRepo: prRepo ?? null
+          }
+        : undefined,
+    [actions, prRepo]
+  )
+}
+
+/** One standalone comment or thread; resolved threads collapse. The diff screen shows threads under their line with it. */
+export function CommentGroupView({
   group,
   actions,
   now
@@ -302,7 +315,10 @@ function CommentGroupView({
   return (
     <View style={styles.group}>
       <Pressable
-        style={styles.resolvedHeader}
+        style={({ pressed }) => [
+          styles.resolvedHeader,
+          pressed && { backgroundColor: colors.translucentFill }
+        ]}
         onPress={() => setExpanded((v) => !v)}
         accessibilityRole="button"
       >

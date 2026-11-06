@@ -28,7 +28,7 @@ import {
 test.describe('native chat on a WSL host', () => {
   test.skip(!SUPPORTED, 'the Claude stub wrapper is POSIX-only')
 
-  test('admits, streams, offers Start for a stopped distro, and continues after Start or a focus boot', async ({
+  test('admits, streams, offers Start for a stopped distro, continues after Start, and never boots it on a project switch', async ({
     orcaPage: hub,
     claudeStub
   }, testInfo) => {
@@ -124,7 +124,7 @@ test.describe('native chat on a WSL host', () => {
               ),
             { timeout: 30_000 }
           )
-          .toContain('Ubuntu was stopped')
+          .toContain('Ubuntu is stopped')
         return connects
       }
       const stoppedNotice = chat.getByText('Ubuntu is stopped', { exact: true })
@@ -148,16 +148,21 @@ test.describe('native chat on a WSL host', () => {
       const connectsBeforeStop = await stopDistro()
       await expect(stoppedNotice).toBeVisible({ timeout: 30_000 })
 
-      // Switching away and back is the user acting on the host: that boots it and the chat goes on.
+      // Switching away and back is navigation, not a start: the distro stays stopped (#36688).
       await page.evaluate(() => window.__store?.getState().setActiveWorktree(null))
-      // The whole stopped window, up to the focus, booted nothing.
+      await expect.poll(() => focusProject(page, projectPath), { timeout: 30_000 }).toBeTruthy()
+      await expect(chat).toBeVisible({ timeout: 60_000 })
+      await expect(stoppedNotice).toBeVisible({ timeout: 30_000 })
+      // ast-grep-ignore: test-no-real-time-wait -- the claim is that the switch boots nothing over time
+      await page.waitForTimeout(5_000)
       expect(fakeWslConnects(connectLogFile)).toHaveLength(connectsBeforeStop)
       expect(readDistroState(distrosFile)).toBe('stopped')
-      await expect.poll(() => focusProject(page, projectPath), { timeout: 30_000 }).toBeTruthy()
+      // Start is what boots it, once, and the chat goes on.
+      await start.click()
       await expect
         .poll(() => fakeWslConnects(connectLogFile).length, { timeout: 60_000 })
-        .toBeGreaterThan(connectsBeforeStop)
-      await expect(chat).toBeVisible({ timeout: 60_000 })
+        .toBe(connectsBeforeStop + 1)
+      await expect(stoppedNotice).toBeHidden({ timeout: 60_000 })
       await send('after the distro restarted')
       await expectReplyAfter('after the distro restarted')
       await page.screenshot({ path: testInfo.outputPath('wsl-host-chat-after-boot.png') })
@@ -382,7 +387,7 @@ test.describe('native chat on a WSL host', () => {
             ),
           { timeout: 30_000 }
         )
-        .toContain('Ubuntu was stopped')
+        .toContain('Ubuntu is stopped')
       const stoppedNotice = chat.getByText('Ubuntu is stopped', { exact: true })
       await expect(stoppedNotice).toBeVisible({ timeout: 30_000 })
       // Send waits for Start rather than failing against a stopped distro; while held, the button is

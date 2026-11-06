@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
-import * as environmentStore from '../../../shared/runtime-environment-store'
+import * as environmentStore from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { AtomicSnapshotWriter } from '../../persistence/atomic-snapshot-writer'
 import { desktopChatCreationHistory } from '../../runtime/desktop-chat-creation-history'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
@@ -78,6 +78,7 @@ vi.mock('./runtime-environment-request-connections', async () => {
 })
 
 import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
+import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
 import { channelHandlerLookup, pairingCode } from './runtime-environments-ipc-test-harness'
 
 const handler = channelHandlerLookup(handleMock)
@@ -88,6 +89,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   let store: {
     getSettings: () => { activeRuntimeEnvironmentId: string | null }
     updateSettings: ReturnType<typeof vi.fn>
+    setHostRepoCatalogSnapshot: ReturnType<typeof vi.fn>
   }
 
   beforeEach(() => {
@@ -95,6 +97,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     activeRuntimeEnvironmentId = null
     store = {
       getSettings: () => ({ activeRuntimeEnvironmentId }),
+      setHostRepoCatalogSnapshot: vi.fn(),
       updateSettings: vi.fn((updates: { activeRuntimeEnvironmentId: string | null }) => {
         activeRuntimeEnvironmentId = updates.activeRuntimeEnvironmentId
       })
@@ -206,6 +209,8 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
     )
     expect(sendRemoteRuntimeConnectionRequestMock).not.toHaveBeenCalled()
+    // Only WSL hosts keep a saved project list; a paired server is listed live.
+    expect(store.setHostRepoCatalogSnapshot).not.toHaveBeenCalled()
   })
 
   it('falls back to one-shot RPC when the saved runtime lacks shared-control support', async () => {
@@ -694,6 +699,79 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'session.tabs.list'
     ])
     expect(sendRemoteRuntimeSharedControlRequestMock).toHaveBeenCalledTimes(11)
+  })
+
+  describe('federation sync tick transport', () => {
+    const tick = [
+      ['orchestration.federationPull', { dispatchId: 'dispatch-1', afterSequence: 0, limit: 50 }],
+      ['orchestration.federationAck', { dispatchId: 'dispatch-1', throughSequence: 4 }],
+      ['orchestration.federationImport', { dispatchId: 'dispatch-1', items: [] }]
+    ] as const
+    // The import's batch-prefix selection must reach whichever socket sends it.
+    const prepareImport = vi.fn(({ params, envelope }) => ({ params, envelope }))
+
+    async function runTick(capabilities: string[]): Promise<string[]> {
+      sendRemoteRuntimeRequestMock.mockImplementation(async (_pairing, method) => ({
+        id: method,
+        ok: true,
+        result: method === 'status.get' ? { runtimeId: 'runtime-remote', capabilities } : {},
+        _meta: { runtimeId: 'runtime-remote' }
+      }))
+      sendRemoteRuntimeSharedControlRequestMock.mockImplementation(
+        async (_id, _pairing, method) => ({
+          id: method,
+          ok: true,
+          result: {},
+          _meta: { runtimeId: 'runtime-remote' }
+        })
+      )
+      getRemoteRuntimeSharedControlDiagnosticsMock.mockReturnValue({ state: 'ready' })
+      const environment = environmentStore.addEnvironmentFromPairingCode(userDataPath, {
+        name: 'worker',
+        pairingCode: pairingCode()
+      })
+      for (const [method, params] of tick) {
+        await callRuntimeEnvironment(
+          userDataPath,
+          environment.id,
+          method,
+          params,
+          15_000,
+          undefined,
+          {
+            orchestrationContractVersion: 1,
+            orchestrationRequestId: `request-${method}`
+          },
+          method === 'orchestration.federationImport'
+            ? { prepareRequest: prepareImport }
+            : undefined
+        )
+      }
+      return tick.map(([method]) => method)
+    }
+
+    it('opens no one-shot socket per tick once shared control is advertised', async () => {
+      const methods = await runTick([REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY])
+
+      expect(sendRemoteRuntimeRequestMock.mock.calls.map((entry) => entry[1])).toEqual([
+        'status.get'
+      ])
+      expect(sendRemoteRuntimeSharedControlRequestMock.mock.calls.map((entry) => entry[2])).toEqual(
+        methods
+      )
+      expect(sendRemoteRuntimeSharedControlRequestMock.mock.calls.at(-1)?.[7]).toBe(prepareImport)
+    })
+
+    it('keeps the whole tick on one-shot sockets when the host lacks shared control', async () => {
+      const methods = await runTick([])
+
+      expect(sendRemoteRuntimeRequestMock.mock.calls.map((entry) => entry[1])).toEqual([
+        'status.get',
+        ...methods
+      ])
+      expect(sendRemoteRuntimeRequestMock.mock.calls.at(-1)?.[7]).toBe(prepareImport)
+      expect(sendRemoteRuntimeSharedControlRequestMock).not.toHaveBeenCalled()
+    })
   })
 
   it('limits background one-shot RPCs without blocking foreground runtime calls', async () => {

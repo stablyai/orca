@@ -366,28 +366,6 @@
         }
       }
     },
-    "3a9cf9068351": {
-      "name": "jiraConnection",
-      "ordinal": 50,
-      "value": {
-        "connected": false,
-        "credentialError": {
-          "$rpc": "null"
-        },
-        "selection": {
-          "$rpc": "null"
-        },
-        "sites": [],
-        "unavailableReason": {
-          "$rpc": "null"
-        }
-      }
-    },
-    "3b25063bc6c4": {
-      "name": "taskStateHydrated",
-      "ordinal": 49,
-      "value": false
-    },
     "3c66c971fe96": {
       "name": "showGitHubProjectViewPicker",
       "ordinal": 17,
@@ -524,6 +502,11 @@
         "prBotAuthorOverrides": ["bot-user"],
         "visibleTaskProviders": ["github", "linear"]
       }
+    },
+    "55e20c109a3f": {
+      "name": "taskStateHydrated",
+      "ordinal": 51,
+      "value": false
     },
     "56e3850d33ae": {
       "name": "selectedLinearWorkspaceId",
@@ -818,6 +801,14 @@
       "name": "showGitHubProjectPicker",
       "ordinal": 16,
       "value": false
+    },
+    "970e3e98b8da": {
+      "name": "tasksSupportState",
+      "ordinal": 50,
+      "value": {
+        "client": "logical-client",
+        "kind": "unknown"
+      }
     },
     "97f4ab9fea94": {
       "name": "appliedQuery",
@@ -1256,6 +1247,23 @@
         "$rpc": "undefined"
       }
     },
+    "ec1e559a467d": {
+      "name": "jiraConnection",
+      "ordinal": 51,
+      "value": {
+        "connected": false,
+        "credentialError": {
+          "$rpc": "null"
+        },
+        "selection": {
+          "$rpc": "null"
+        },
+        "sites": [],
+        "unavailableReason": {
+          "$rpc": "null"
+        }
+      }
+    },
     "ecd76e86b480": {
       "name": "preflight.check#1",
       "ordinal": 41,
@@ -1305,6 +1313,14 @@
       "ordinal": 23,
       "value": {
         "$rpc": "null"
+      }
+    },
+    "fcd85cc8ccd3": {
+      "name": "tasksSupportState",
+      "ordinal": 49,
+      "value": {
+        "client": "logical-client",
+        "kind": "unknown"
       }
     },
     "fd295e8e49f8": {
@@ -1734,7 +1750,8 @@
             "effded4d3336",
             "2141fc3d6fbb",
             "9cfa4dbebadd",
-            "3b25063bc6c4"
+            "fcd85cc8ccd3",
+            "5e8e3f4c00f0"
           ]
         }
       },
@@ -1798,8 +1815,9 @@
             "effded4d3336",
             "2141fc3d6fbb",
             "9cfa4dbebadd",
-            "3b25063bc6c4",
-            "3a9cf9068351"
+            "fcd85cc8ccd3",
+            "5e8e3f4c00f0",
+            "ec1e559a467d"
           ]
         }
       },
@@ -1863,7 +1881,8 @@
             "effded4d3336",
             "2141fc3d6fbb",
             "2d93d51cbfcd",
-            "3b25063bc6c4"
+            "fcd85cc8ccd3",
+            "5e8e3f4c00f0"
           ]
         }
       },
@@ -1927,8 +1946,9 @@
             "effded4d3336",
             "2141fc3d6fbb",
             "2d93d51cbfcd",
-            "3b25063bc6c4",
-            "3a9cf9068351"
+            "fcd85cc8ccd3",
+            "5e8e3f4c00f0",
+            "ec1e559a467d"
           ]
         }
       },
@@ -1992,7 +2012,8 @@
             "effded4d3336",
             "2141fc3d6fbb",
             "9cfa4dbebadd",
-            "3b25063bc6c4"
+            "fcd85cc8ccd3",
+            "5e8e3f4c00f0"
           ]
         }
       },
@@ -2056,8 +2077,9 @@
             "effded4d3336",
             "2141fc3d6fbb",
             "9cfa4dbebadd",
-            "3b25063bc6c4",
-            "3a9cf9068351"
+            "fcd85cc8ccd3",
+            "5e8e3f4c00f0",
+            "ec1e559a467d"
           ]
         }
       },
@@ -2122,7 +2144,8 @@
             "2141fc3d6fbb",
             "a5448c585b0a",
             "d50d8c834240",
-            "5e8e3f4c00f0"
+            "970e3e98b8da",
+            "55e20c109a3f"
           ]
         }
       },
@@ -2188,7 +2211,8 @@
             "2141fc3d6fbb",
             "a5448c585b0a",
             "cb6b543790f6",
-            "5e8e3f4c00f0"
+            "970e3e98b8da",
+            "55e20c109a3f"
           ]
         }
       },
@@ -2254,7 +2278,8 @@
             "2141fc3d6fbb",
             "a5448c585b0a",
             "2a72cf4af5bb",
-            "5e8e3f4c00f0"
+            "970e3e98b8da",
+            "55e20c109a3f"
           ]
         }
       }

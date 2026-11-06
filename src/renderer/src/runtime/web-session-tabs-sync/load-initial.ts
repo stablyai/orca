@@ -21,6 +21,7 @@ import {
 } from './state'
 import { applyWebSessionTabsSnapshots } from './snapshot-api'
 import { applyWebSessionTabsStorePatch } from './store-patch'
+import { applyReceivedAgentSenderPublications } from './received-agent-sender-publications'
 import { isHostMirroredWorktree } from './visibility-types'
 
 export type InitialSessionTabsLoadArgs = {
@@ -85,6 +86,7 @@ export function loadInitialWebSessionTabs({
           'bootstrap'
         )
       )
+      applyReceivedAgentSenderPublications(environmentId, result.snapshots, runtimeId)
       const recovered = await Promise.all(
         result.snapshots.map((snapshot) =>
           recoverMirroredTerminalOrphansBeforeApply(

@@ -5,7 +5,7 @@ import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import {
   TERMINAL_INPUT_CHUNK_MAX_BYTES,
   TERMINAL_INPUT_MAX_BYTES
-} from '../../../shared/terminal-input'
+} from '../../../shared/terminal/input/terminal-input'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../shared/clipboard-text'
 import { PtyWriteUnavailableError } from '../../providers/pty-write-unavailable-error'
 import { wslHookRelayManager } from '../../agent-hooks/wsl-hook-relay-manager'
@@ -31,8 +31,10 @@ vi.mock('../../agent-hooks/server', () =>
 vi.mock('../../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
-vi.mock('../../wsl', async (importOriginal) =>
+vi.mock('../../pty/shell-startup/pwsh', () =>
+  import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
+)
+vi.mock('../../wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../../telemetry/client', () =>
@@ -50,10 +52,10 @@ vi.mock('../../memory/pty-registry', () =>
 vi.mock('../../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
-vi.mock('../../codex/codex-pane-account-registry', () =>
+vi.mock('../../codex/configuration/homes/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
-vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
+vi.mock('../../codex/history/index/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
@@ -110,6 +112,23 @@ describe('registerPtyHandlers', () => {
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:writeUnavailable', {
       id: result.id
     })
+  })
+  it('tells the runtime about a daemon endpoint loss even with no window', () => {
+    let fanout: ((payload: { id: string }) => void) | undefined
+    installDaemonTestProvider({
+      onWriteUnavailable: vi.fn((callback: (payload: { id: string }) => void) => {
+        fanout = callback
+        return () => {}
+      })
+    })
+    const runtime = new OrcaRuntimeService()
+    const notePtyEndpointLoss = vi.spyOn(runtime, 'notePtyEndpointLoss')
+    registerPtyHandlers(mainWindow as never, runtime)
+    mainWindow.webContents.isDestroyed.mockReturnValue(true)
+
+    fanout?.({ id: 'pane-1' })
+
+    expect(notePtyEndpointLoss).toHaveBeenCalledWith('pane-1')
   })
   it('rejects malformed and cross-window pty write IPC before provider writes', async () => {
     const mockProc = createMockProc()

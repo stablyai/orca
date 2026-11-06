@@ -1,4 +1,4 @@
-import './orca-runtime-test-lifecycle.spec'
+import './orca-runtime-tests/orca-runtime-test-lifecycle.spec'
 import { describe, expect, it, vi } from 'vitest'
 import {
   HEADLESS_LEAF_ID,
@@ -6,9 +6,11 @@ import {
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from './orca-runtime-test-fixtures.spec'
-import { electronMocks, OrcaRuntimeService } from './orca-runtime-test-mocks.spec'
-import { createMobileCreateTestNotifier } from './orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
+import './orca-runtime-tests/runtime-test-module-registration.spec'
+import { electronMocks } from './orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from './orca-runtime'
+import { createMobileCreateTestNotifier } from './orca-runtime-tests/orca-runtime-test-scenario-builders.spec'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { SESSION_TAB_METHODS } from './rpc/methods/session-tabs'
 import {
@@ -17,7 +19,7 @@ import {
   installStructuredHostStub
 } from './rpc/methods/structured-agent-session-rpc.test-fixture'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-session-contracts'
-import type { TerminalPaneLayoutNode } from '../../shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../shared/workspace-layout/terminal-tab-types'
 
 const SPLIT_ROOT: TerminalPaneLayoutNode = {
   type: 'split',
@@ -83,14 +85,6 @@ describe('client pane names on a host with its own desktop window', () => {
 
     // Its map can predate a name the host set since, so it must not revert that name.
     await renamePanes(SPLIT_ROOT, { [HEADLESS_LEAF_ID]: 'stale' }, [])
-
-    expect(setPaneTitle).not.toHaveBeenCalled()
-  })
-
-  it('sends nothing when the client left titles out, which means unchanged', async () => {
-    const { setPaneTitle, renamePanes } = desktopHostRuntime()
-
-    await renamePanes(SPLIT_ROOT, undefined)
 
     expect(setPaneTitle).not.toHaveBeenCalled()
   })

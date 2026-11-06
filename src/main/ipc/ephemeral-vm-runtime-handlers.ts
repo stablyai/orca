@@ -9,7 +9,7 @@ import {
   getEphemeralVmRecipeResultConnection,
   getEphemeralVmRecipeResultPairingCode
 } from '../../shared/ephemeral-vm-recipes'
-import { updateEnvironmentFromPairingCode } from '../../shared/runtime-environment-store'
+import { updateEnvironmentFromPairingCode } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { releaseEphemeralVmRuntimeEnvironments } from '../ephemeral-vm/runtime-environment-release'
 import {
   cleanupEphemeralVmRuntime,

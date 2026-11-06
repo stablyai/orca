@@ -1,7 +1,7 @@
 import {
   classifyTerminalCreationFailure,
   readTerminalStartFailure
-} from '../../shared/terminal-start-failure'
+} from '../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawnWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import {
@@ -12,7 +12,7 @@ import {
   PTY,
   WORKTREE
 } from './pty-inventory-lifecycle-fixture'
-import { registerBoundPty } from './bind-first-pane.test-fixture'
+import { registerBoundPty } from './orca-runtime-tests/bind-first-pane.test-fixture'
 
 const TAB = '40000000-0000-4000-8000-000000000001'
 const LEAF = '40000000-0000-4000-8000-000000000002'

@@ -1,4 +1,4 @@
-import { newChatPermissionModeForSettings } from '../../../shared/agent-chat-permission-mode'
+import { newChatPermissionModeForSettings } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { homedir } from 'node:os'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState } from '../../../shared/constants'
@@ -7,8 +7,8 @@ import { prepareLoadedTerminalSettings } from './prepare-loaded-terminal-setting
 import { prepareLoadedProfileSettings } from './prepare-loaded-profile-settings'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import { resolveAgentPermission } from '../../../shared/tui-agent-permission-choice'
-import { resolveTuiAgentLaunchArgs } from '../../../shared/tui-agent-launch-defaults'
+import { resolveAgentPermission } from '../../../shared/agent-launch/permissions/tui-agent-permission-choice'
+import { resolveTuiAgentLaunchArgs } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 
 function normalizeLegacyProfile(overrides: Record<string, unknown>): PersistedState['settings'] {
   const defaults = getDefaultPersistedState(homedir())
@@ -275,6 +275,40 @@ it('migrates a shipped split chat/terminal profile using terminal choices while 
   expect(normalized.nativeChatSessionOptions?.claude).toEqual({
     model: 'opus',
     valuesByModel: { opus: { effort: 'high' } }
+  })
+})
+
+describe('pre-#10561 shared terminal color overrides', () => {
+  const overrides = { background: '#101010' }
+  const legacy = { terminalColorOverridesSplit: undefined, terminalColorOverrides: overrides }
+
+  it.each([
+    { theme: 'system', terminalUseSeparateLightTheme: true },
+    { theme: 'light', terminalUseSeparateLightTheme: true },
+    { theme: 'system', terminalUseSeparateLightTheme: undefined }
+  ])('keep painting both modes when the light slot could show them (%o)', (appearance) => {
+    const normalized = normalizeLegacyProfile({ ...legacy, ...appearance })
+    expect(normalized.terminalColorOverrides).toEqual(overrides)
+    expect(normalized.terminalColorOverridesLight).toEqual(overrides)
+    expect(normalized.terminalColorOverridesSplit).toBe(true)
+  })
+
+  it.each([
+    { theme: 'dark', terminalUseSeparateLightTheme: true },
+    { theme: 'light', terminalUseSeparateLightTheme: false }
+  ])('stay on the dark slot otherwise (%o)', (appearance) => {
+    const normalized = normalizeLegacyProfile({ ...legacy, ...appearance })
+    expect(normalized.terminalColorOverrides).toEqual(overrides)
+    expect(normalized.terminalColorOverridesLight).toBeUndefined()
+  })
+
+  it('never re-split once migrated, so a cleared light slot stays clear', () => {
+    const normalized = normalizeLegacyProfile({
+      terminalColorOverrides: overrides,
+      theme: 'light',
+      terminalUseSeparateLightTheme: true
+    })
+    expect(normalized.terminalColorOverridesLight).toBeUndefined()
   })
 })
 

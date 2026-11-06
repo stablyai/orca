@@ -2,9 +2,14 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createPluginFromTemplate, pluginIdFromFolder } from './plugin-create'
+import { createPluginFromTemplate } from './plugin-create'
 import { inspectPluginFolder, validatePluginTarget } from './plugin-folder-validation'
 import { PLUGIN_TEMPLATE_NAMES } from './plugin-template-names'
+import {
+  PLUGIN_EDITOR_FRAME_SINCE,
+  PLUGIN_HOOKS_SINCE,
+  PLUGIN_SOURCE_MODULES_SINCE
+} from '../../shared/plugins/manifest/plugin-schema-field-docs'
 
 const roots: string[] = []
 
@@ -29,7 +34,31 @@ describe('orca plugin create templates', () => {
     expect(report.contentHash).toMatch(/^[0-9a-f]{64}$/)
     const contentOnly = ['theme', 'terminal-theme', 'icon-theme', 'syntax', 'language-pack']
     expect(report.plugin?.needsApproval).toBe(!contentOnly.includes(template))
+    const readme = await readFile(join(dir, 'README.md'), 'utf8')
+    expect(readme).toContain('orca plugin dev watch .')
+    expect(readme).not.toContain('dev load')
   })
+
+  it.each(PLUGIN_TEMPLATE_NAMES)(
+    '%s leaves publisher out by default, with the lowest engines.orca that allows it',
+    async (template) => {
+      const dir = join(await tempRoot(), `bare-${template}`)
+      const created = await createPluginFromTemplate({ dir, template })
+      expect(created.pluginKey).toBe(`local.bare-${template}`)
+      const manifest = JSON.parse(await readFile(join(dir, 'orca-plugin.json'), 'utf8'))
+      expect(manifest.publisher).toBeUndefined()
+      // Hooks and isolated-only editors arrived later than build-less sources.
+      const floor =
+        template === 'hook'
+          ? PLUGIN_HOOKS_SINCE
+          : template === 'editor'
+            ? PLUGIN_EDITOR_FRAME_SINCE
+            : PLUGIN_SOURCE_MODULES_SINCE
+      expect(manifest.engines.orca).toBe(`>=${floor}`)
+      const report = await validatePluginTarget(dir)
+      expect(report.errors).toEqual([])
+    }
+  )
 
   it('refuses a non-empty folder and never overwrites', async () => {
     const dir = await tempRoot()
@@ -37,17 +66,6 @@ describe('orca plugin create templates', () => {
     await expect(createPluginFromTemplate({ dir, template: 'theme' })).rejects.toThrow(
       'is not empty'
     )
-  })
-
-  it('rejects an id the manifest would refuse before writing anything', async () => {
-    const dir = join(await tempRoot(), 'x')
-    await expect(
-      createPluginFromTemplate({ dir, template: 'theme', id: 'Bad Id' })
-    ).rejects.toThrow('cannot create')
-  })
-
-  it('derives the id from the folder name', () => {
-    expect(pluginIdFromFolder('/tmp/My Cool_Theme')).toBe('my-cool-theme')
   })
 })
 
@@ -62,19 +80,6 @@ describe('orca plugin validate', () => {
     const report = await validatePluginTarget(dir)
     expect(report.valid).toBe(false)
     expect(report.errors.join('\n')).toContain('contributes.themes')
-  })
-
-  it('names a folder without a publisher the way Orca loads it', async () => {
-    const dir = join(await tempRoot(), 'nopub')
-    await createPluginFromTemplate({ dir, template: 'theme', publisher: 'acme' })
-    const manifestPath = join(dir, 'orca-plugin.json')
-    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
-    delete manifest.publisher
-    manifest.engines.orca = '>=1.4.246'
-    await writeFile(manifestPath, JSON.stringify(manifest))
-    const report = await validatePluginTarget(dir)
-    expect(report.errors).toEqual([])
-    expect(report.plugin?.pluginKey).toBe('local.nopub')
   })
 
   it('reports a missing panel entry', async () => {

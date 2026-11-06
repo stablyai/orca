@@ -119,6 +119,14 @@ const COPY: Record<BrowserCookieImportFailureCode, (values: Values) => string | 
   },
   safariFullDiskAccess: () =>
     translate('browser.cookieImport.errors.safariFullDiskAccess', EN.safariFullDiskAccess),
+  macFullDiskAccess: ({ text }) => {
+    const browser = text('browser')
+    return browser === null
+      ? null
+      : translate('browser.cookieImport.errors.macFullDiskAccess', EN.macFullDiskAccess, {
+          browser
+        })
+  },
   connectionEnded: () =>
     translate('browser.cookieImport.errors.connectionEnded', EN.connectionEnded),
   serverRepaired: () => translate('browser.cookieImport.errors.serverRepaired', EN.serverRepaired)

@@ -1,12 +1,12 @@
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../src/shared/agent-session-journal-types'
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionQueuedMessage,
-  AgentSessionQueuePause,
-  AgentSessionSubscribeEvent
-} from '../../../src/shared/agent-session-wire'
+  AgentSessionQueuePause
+} from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
+import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session/agent-session-wire'
 import type { RpcResponse } from '../transport/types'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 

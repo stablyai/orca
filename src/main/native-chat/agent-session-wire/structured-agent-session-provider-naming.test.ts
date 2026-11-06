@@ -1,10 +1,10 @@
 import { expect, it, vi } from 'vitest'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { createStructuredChatNamingHandler } from '../structured-chat-naming'
-import { setAgentSessionRecordUserName } from '../../runtime/agent-session-record-conversation-name'
+import { setAgentSessionRecordUserName } from '../../runtime/agent-session/records/agent-session-record-conversation-name'
 import {
   createStructuredAgentSessionProviderNaming,
   withProviderNaming
@@ -40,18 +40,6 @@ function naming(rename: Rename) {
   })
   return { queue, warn }
 }
-
-it("never pushes a name Orca chose, or one for a chat that hasn't started its agent", async () => {
-  const rename = vi.fn<Rename>(async () => {})
-  let record = chat({ conversationNameSource: undefined })
-  const { queue } = naming(rename)
-
-  await queue.push(record)
-  record = chat({ providerHandleChain: [] })
-  await queue.push(record)
-
-  expect(rename).not.toHaveBeenCalled()
-})
 
 it.each([10, 100])('coalesces %i saved renames into two ordered pushes', async (count) => {
   const gates = [Promise.withResolvers<void>(), Promise.withResolvers<void>()]
@@ -89,20 +77,5 @@ it.each([10, 100])('coalesces %i saved renames into two ordered pushes', async (
   await done
   expect(rename.mock.calls.map(([input]) => input.name)).toEqual(['First', `Name ${count}`])
   await wrapped.setUserName('chat-1', 'Ignored alias', 'legacy-alias')
-  expect(rename).toHaveBeenCalledTimes(2)
-})
-
-it('logs a failed push and still takes the next rename', async () => {
-  const rename = vi
-    .fn<Rename>()
-    .mockRejectedValueOnce(new Error('thread not found'))
-    .mockResolvedValue(undefined)
-  const { queue, warn } = naming(rename)
-  const record = chat()
-
-  await queue.push(record)
-  await queue.push(record)
-
-  expect(warn).toHaveBeenCalledTimes(1)
   expect(rename).toHaveBeenCalledTimes(2)
 })

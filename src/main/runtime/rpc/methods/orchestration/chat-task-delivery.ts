@@ -2,7 +2,7 @@ import { conversationRecordReader } from '../../../orchestration/structured-sess
 /** Queue the chat assignee's task as a composer card while busy; derive operation id from Dispatch so repeat sends replay instead of duplicating cards. */
 
 import { createHash } from 'node:crypto'
-import type { AgentJournalMessageItem } from '../../../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { observeChatAssignee } from '../../../orchestration/chat-assignee'

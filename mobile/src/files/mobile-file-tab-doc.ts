@@ -17,6 +17,7 @@ export type MobileFileTabDoc =
   | { status: 'ready'; kind: 'diff'; lines: MobileDiffLine[]; truncated: boolean }
   | { status: 'ready'; kind: 'image'; dataUri: string }
   | { status: 'ready'; kind: 'html'; content: string }
+  | { status: 'ready'; kind: 'svg'; content: string; truncated: boolean; byteLength: number }
 
 export type MobileFileTabDocRequest = {
   worktreeId: string
@@ -75,7 +76,7 @@ export async function resolveMobileFileTabDoc(
   }
   return {
     status: 'ready',
-    kind: 'file',
+    kind: artifactKind === 'vector' ? 'svg' : 'file',
     content: result.content,
     truncated: result.truncated,
     byteLength: result.byteLength

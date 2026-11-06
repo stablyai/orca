@@ -1,12 +1,10 @@
 import {
   runtimeEnvironmentStatusFromSnapshot,
-  type RuntimeHostStatusSnapshot
-} from '../../../../shared/runtime-host-status'
-import type {
-  RuntimeEnvironmentStatus,
-  RuntimeStatusSlice,
-  RuntimeStatusStoreState
-} from './runtime-status-types'
+  type RuntimeHostStatusSnapshot,
+  type RuntimeEnvironmentStatus
+} from '../../../../shared/remote-runtime/host-status/runtime-host-status'
+import type { RuntimeStatusSlice, RuntimeStatusStoreState } from './runtime-status-types'
+
 import { ensureBrowserClientHostsForRestoredPages } from '@/runtime/restored-client-hosted-browser-host-attach'
 import { replayClientHostedBrowserCloseIntents } from '@/runtime/client-hosted-browser-close-intent-replay'
 

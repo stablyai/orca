@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
+import type { AgentHookRelayEnvelope } from '../shared/agent-hook-listener/transport/agent-hook-relay'
 import { RelayAgentHookServer } from './agent-hook-server'
 import { AgentHookServer } from '../main/agent-hooks/server'
 

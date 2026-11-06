@@ -23,6 +23,7 @@ export function createQueueEntry(
     chunkIndex: 0,
     queuedChars: 0,
     onBackgroundBacklogDropped: options.onBackgroundBacklogDropped,
+    onBacklogReplaced: options.onBacklogReplaced,
     backgroundBacklogDropped: false,
     highPriority: true,
     foregroundHold: false,

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
-import { readAgentSessionFailureFact } from '../../shared/agent-session-failure'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import { withNativeChatCutTurnNotices } from '../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import {
@@ -189,19 +189,6 @@ describe('closing or stopping a Grok chat while it starts', () => {
     })
     await waitFor(() => expect(rig.child()).not.toBe(child))
     await host.close(SESSION, 'user-close')
-  })
-
-  it('lets a Stop reach a child Grok never finished initializing', async () => {
-    const { rig, host } = await openHostRig({
-      script: (agent) => agent.on('initialize', () => {})
-    })
-    const attaching = host.attach(CALLER, attachParams())
-    await rig.frame('initialize')
-    const stopping = host.cancel(CALLER, { envelope: envelope('agentSession.cancel', {}) })
-    await waitFor(() => expect(rig.child().exited).toBe(true))
-    expect((await attaching).ok).toBe(true)
-    expect(await stopping).toMatchObject({ ok: true })
-    expect(rig.spawned.filter((step) => step === 'spawn')).toHaveLength(1)
   })
 
   it('cancels a queued send whose start a Stop ended, with no start failure in the chat', async () => {

@@ -1,4 +1,4 @@
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
+import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { readTranscriptSlice, wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
 import {
   CLAUDE_CWD_BUCKET_LAYOUT,
@@ -9,12 +9,15 @@ import {
 import type { FileWithMtime, SessionFileCandidate } from './session-scanner-types'
 import { asRecord } from './session-scanner-record-value'
 import { extractString, parseJsonObject } from './session-scanner-values'
-import { clineManifestCwd } from './session-scanner-cline-parser'
-import { cursorChatMetaUnavailable, readCursorChatMeta } from './session-scanner-cursor-chat-meta'
-import { rovoSessionCwd } from './session-scanner-graph-parsers'
-import { grokSessionCwd } from './session-scanner-grok-parser'
-import { listedKiroMetadata } from './session-scanner-kiro-parser'
-import { openCodeSessionCwd } from './session-scanner-opencode-parser'
+import { clineManifestCwd } from './scanners/cline/session-scanner-cline-parser'
+import {
+  cursorChatMetaUnavailable,
+  readCursorChatMeta
+} from './scanners/cursor/session-scanner-cursor-chat-meta'
+import { rovoSessionCwd } from './scanners/session-scanner-graph-parsers'
+import { grokSessionCwd } from './scanners/grok/session-scanner-grok-parser'
+import { listedKiroMetadata } from './scanners/kiro/session-scanner-kiro-parser'
+import { openCodeSessionCwd } from './scanners/opencode/session-scanner-opencode-parser'
 
 type HeadRecord = Record<string, unknown>
 

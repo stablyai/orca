@@ -15,6 +15,7 @@ import { stripGitLabDraftTitlePrefix } from './merge-request-draft-title'
 import { withProjectRef } from './merge-request-project-resolution'
 import { tryMarkMRReady } from './merge-request-ready'
 import { codeHostFailure, classifiedFailure } from '../../shared/code-host-failure-copy'
+import { invalidateReviewLookupsAfterPRMutation } from '../github/pr-mutation-review-invalidation'
 
 export async function updateMR(
   repoPath: string,
@@ -133,6 +134,8 @@ export async function updateMR(
         return classifiedFailure(classifyGlabError(msg))
       } finally {
         release()
+        // Even a failed write may have landed; later reads must not reuse an answer from before it.
+        invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
       }
     },
     codeHostFailure('gitlab.projectUnresolved'),

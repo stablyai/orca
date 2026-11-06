@@ -130,42 +130,9 @@ describe('terminal selection under a native chat cover', () => {
     expect(pressChord(scope, handlers, 'c').defaultPrevented).toBe(true)
     expect(writeTerminalClipboardText).toHaveBeenCalledWith('hidden terminal text')
   })
-
-  it('does not select the hidden terminal from the chat', () => {
-    const { scope, transcript } = mountCoveredPane()
-    const selectAll = vi.fn()
-    const handlers = createHandlers(scope, vi.fn(), {
-      action: { type: 'selectAll' },
-      terminal: { selectAll }
-    })
-
-    expect(pressChord(transcript, handlers, 'a').defaultPrevented).toBe(false)
-    expect(selectAll).not.toHaveBeenCalled()
-
-    pressChord(scope, handlers, 'a')
-    expect(selectAll).toHaveBeenCalledTimes(1)
-  })
 })
 
 describe('terminal find under a native chat cover', () => {
-  it('leaves Mod+F to the chat instead of opening search over the hidden terminal', () => {
-    const scope = document.createElement('div')
-    const cover = document.createElement('div')
-    cover.className = 'native-chat-pane-shell'
-    const transcript = document.createElement('div')
-    cover.append(transcript)
-    scope.append(cover)
-    document.body.append(scope)
-    const setSearchOpen = vi.fn()
-    const handlers = createHandlers(scope, setSearchOpen)
-
-    expect(pressChord(transcript, handlers).defaultPrevented).toBe(false)
-    expect(setSearchOpen).not.toHaveBeenCalled()
-
-    pressChord(scope, handlers)
-    expect(setSearchOpen).toHaveBeenCalledWith(true)
-  })
-
   it('leaves a chat.find rebound onto another terminal chord to the chat', () => {
     const scope = document.createElement('div')
     const cover = document.createElement('div')

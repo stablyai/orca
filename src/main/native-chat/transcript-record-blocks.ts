@@ -2,7 +2,7 @@ import type {
   NativeChatBlock,
   NativeChatImageRefBlock,
   NativeChatToolResultBlock
-} from '../../shared/native-chat-types'
+} from '../../shared/native-chat/native-chat-types'
 import { asRecord, extractString } from '../ai-vault/session-scanner-values'
 
 export function toolResultOutput(value: unknown): string {

@@ -1,6 +1,6 @@
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
-import { getDeleteStateForWorktreeHost } from '@/components/sidebar/worktree-delete-state-host-match'
+import { getDeleteStateForWorktreeHost } from '@/components/sidebar/workspace-actions/deletion/worktree-delete-state-host-match'
 import { useAppStore } from '../../store'
 import {
   UNFINISHED_WORKTREE_REMOVAL_ERROR,

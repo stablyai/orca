@@ -24,8 +24,8 @@ export function isDefaultBranchWorkspace(
   if (!worktree.isMainWorktree || worktree.ephemeralVmCheckoutMode === 'provisioned-root') {
     return false
   }
-  // Folder roots have no branch; empty branches on Git mains may be detached/offline and must stay visible.
-  return worktree.branch.trim() !== '' || (repo !== undefined && isFolderRepo(repo))
+  // Folder roots have no default branch; an empty git branch is detached or offline.
+  return worktree.branch.trim() !== '' && (repo === undefined || !isFolderRepo(repo))
 }
 
 export function isAutomationGeneratedWorkspace(

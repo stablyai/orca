@@ -6,7 +6,7 @@ import {
 } from '@/lib/worker-auto-close'
 import { NativeChatWorkerLifetimeStrip } from './NativeChatWorkerLifetimeStrip'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 /** A temporary orchestration worker chat says when it closes, with Keep open, on its composer. */
 export function NativeChatStructuredWorkerLifetimeStrip({

@@ -18,7 +18,7 @@ import { scheduleEditorLineReveal } from '@/store/slices/editor/focus/editor-foc
 import {
   captureFileExplorerOperationGuard,
   getFileExplorerOperationOwner
-} from './right-sidebar/file-explorer-operation-owner'
+} from './right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
 import { translate } from '@/i18n/i18n'
 
 export async function openQuickOpenFile(

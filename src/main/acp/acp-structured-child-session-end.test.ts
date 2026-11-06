@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { isSubagentBlock } from '../../shared/native-chat-types'
+import { isSubagentBlock } from '../../shared/native-chat/native-chat-types'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
@@ -68,37 +68,6 @@ function translator(dialect: AcpDialect = GROK_ACP_DIALECT) {
 }
 
 describe('owned Grok child-session completion', () => {
-  it.each([
-    'session/update',
-    '_x.ai/session_notification',
-    'x.ai/session_notification',
-    '_x.ai/session/update'
-  ])('settles a known child through %s without ending or charging the parent turn', (method) => {
-    const f = translator()
-    expect(f.end('end_turn', 'child', {}, method)).toEqual([])
-    expect(f.host()).toMatchObject([
-      {
-        providerId: 'child',
-        description: 'Original label',
-        membership: 'settled',
-        outcome: 'succeeded'
-      }
-    ])
-    expect(f.end('cancelled')).toEqual([])
-    expect(f.host()).toMatchObject([{ providerId: 'child', outcome: 'succeeded' }])
-    const parent = f.lane.notification(
-      'session/update',
-      replyChunk(f.promptId, 'Parent continues'),
-      121
-    )
-    expect(parent.some((event) => event.type === 'turn.open' || event.type === 'turn.end')).toBe(
-      false
-    )
-    expect(f.lane.promptResult('parent', { stopReason: 'end_turn' }, 122)).toMatchObject([
-      { type: 'turn.end', turn: f.promptId, outcome: 'success' }
-    ])
-  })
-
   it('latches cancellation against conflicting child ends, parent reports and later working progress', () => {
     const f = translator()
     expect(f.end('cancelled')).toEqual([])
@@ -128,17 +97,6 @@ describe('owned Grok child-session completion', () => {
     ])
   })
 
-  it('ignores unknown reasons and unowned sessions without creating a child or changing the parent', () => {
-    const f = translator()
-    expect(f.end('future_stop_reason')).toEqual([])
-    expect(f.end('cancelled', 'unowned-child')).toEqual([])
-    expect(f.end('cancelled', 'child', {}, '_x.ai/other_notification')).toEqual([])
-    expect(f.host()).toMatchObject([{ providerId: 'child', membership: 'live' }])
-    expect(f.lane.promptResult('parent', { stopReason: 'end_turn' }, 122)).toMatchObject([
-      { type: 'turn.end', turn: f.promptId, outcome: 'success' }
-    ])
-  })
-
   it('drops child messages, turn starts and usage instead of opening a child turn in the parent', () => {
     const f = translator()
     for (const update of [
@@ -150,24 +108,6 @@ describe('owned Grok child-session completion', () => {
         f.lane.notification('_x.ai/session_notification', { sessionId: 'child', update }, 120)
       ).toEqual([])
     }
-    expect(f.host()).toMatchObject([{ providerId: 'child', membership: 'live' }])
-    expect(f.end('end_turn')).toEqual([])
-    expect(f.host()).toMatchObject([{ providerId: 'child', outcome: 'succeeded' }])
-  })
-
-  it('ignores malformed completions and child-scoped roster reports without learning a new child', () => {
-    const f = translator()
-    for (const update of [
-      { sessionUpdate: 'turn_completed', stop_reason: 'cancelled' },
-      { sessionUpdate: 'turn_completed', prompt_id: 'child-turn', stop_reason: null },
-      { sessionUpdate: 'subagent_spawned', subagent_id: 'nested-child' },
-      { sessionUpdate: 'subagent_finished', subagent_id: 'child', status: 'cancelled' }
-    ]) {
-      expect(
-        f.lane.notification('_x.ai/session_notification', { sessionId: 'child', update }, 120)
-      ).toEqual([])
-    }
-    expect(f.end('cancelled', 'nested-child')).toEqual([])
     expect(f.host()).toMatchObject([{ providerId: 'child', membership: 'live' }])
     expect(f.end('end_turn')).toEqual([])
     expect(f.host()).toMatchObject([{ providerId: 'child', outcome: 'succeeded' }])

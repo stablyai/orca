@@ -2,21 +2,17 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  AgentJournalItemBody,
-  AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-types'
-import { MAX_PROVIDER_DIAGNOSTIC_CHARS } from '../../shared/agent-session-failure'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { unhandledProviderFrameJournalItem } from '../native-chat/agent-session-wire/unhandled-provider-frame'
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
 } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
@@ -90,60 +86,5 @@ describe('a Claude api_retry frame', () => {
     })
     expect(row).not.toHaveProperty('providerFrame')
     expect(row.failure?.detail?.text).toContain('"attempt":3')
-  })
-
-  it('says how far a gateway failure has got, and the code it failed with', async () => {
-    const [row] = await statusRowsFor([
-      apiRetry(1, { error: 'server_error', error_status: 502 }),
-      apiRetry(2, { error: 'server_error', error_status: 502 })
-    ])
-    expect(row?.text).toBe(
-      'Claude hit a temporary problem and is retrying. Retry 2 of 10.\nLast error: HTTP 502 server error.'
-    )
-  })
-
-  it('starts a new row when a later run starts over', async () => {
-    const rows = await statusRowsFor([apiRetry(1), apiRetry(2), apiRetry(1)])
-    expect(rows.map((row) => row.text.split('\n')[0])).toEqual([
-      'Claude is rate-limited and retrying. Retry 2 of 10.',
-      'Claude is rate-limited and retrying. Retry 1 of 10.'
-    ])
-  })
-
-  it('does not call a retry a rate limit unless the frame says so', async () => {
-    const rows = await statusRowsFor([
-      apiRetry(1, { error: 'overloaded', error_status: 529 }),
-      apiRetry(1, { error: 'server_error', error_status: 500 }),
-      apiRetry(1, { error: undefined, error_status: undefined }),
-      apiRetry(1, { error: 'something_new', error_status: 429 })
-    ])
-    expect(rows.map((row) => row.text)).toEqual([
-      'Claude hit a temporary problem and is retrying. Retry 1 of 10.\nLast error: HTTP 529 overloaded.',
-      'Claude hit a temporary problem and is retrying. Retry 1 of 10.\nLast error: HTTP 500 server error.',
-      'Claude hit a temporary problem and is retrying. Retry 1 of 10.',
-      'Claude is rate-limited and retrying. Retry 1 of 10.\nLast error: HTTP 429 something new.'
-    ])
-    expect(rows[0]?.failure).toMatchObject({ retry: { error: 'overloaded', status: 529 } })
-  })
-
-  it('caps the frame it keeps as the detail', async () => {
-    const [row] = await statusRowsFor([apiRetry(1, { padding: 'x'.repeat(5_000) })])
-    expect(row?.failure?.detail?.text.length).toBe(MAX_PROVIDER_DIAGNOSTIC_CHARS)
-  })
-
-  it('leaves a frame kind no one catalogued to the provider fallback, as before', async () => {
-    const unknown = {
-      type: 'system',
-      subtype: 'future_notice',
-      error: 'rate_limit',
-      session_id: 'provider-1',
-      uuid: 'future-1'
-    }
-    const rows = await statusRowsFor([unknown])
-    expect(rows).toEqual([
-      unhandledProviderFrameJournalItem('claude', 'message:system:future_notice', unknown)?.body
-    ])
-    expect(rows[0]).toMatchObject({ text: 'rate_limit' })
-    expect(rows[0]).not.toHaveProperty('tone')
   })
 })

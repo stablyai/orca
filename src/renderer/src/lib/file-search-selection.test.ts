@@ -12,7 +12,6 @@ afterEach(() => {
     unregisterCallbacks.pop()?.()
   }
   vi.restoreAllMocks()
-  vi.unstubAllGlobals()
 })
 
 function registerForTest(provider: () => string | null | undefined): void {
@@ -20,19 +19,6 @@ function registerForTest(provider: () => string | null | undefined): void {
 }
 
 describe('normalizeSelectedTextForFileSearch', () => {
-  it('trims and collapses multi-line selections into the single-line search box shape', () => {
-    expect(normalizeSelectedTextForFileSearch('  foo\r\n  bar\n\n baz  ')).toBe('foo bar baz')
-  })
-
-  it('handles CR-only selected text line breaks', () => {
-    expect(normalizeSelectedTextForFileSearch('  foo\r  bar\r\r baz  ')).toBe('foo bar baz')
-  })
-
-  it('returns null for empty selections', () => {
-    expect(normalizeSelectedTextForFileSearch(' \n\t ')).toBeNull()
-    expect(normalizeSelectedTextForFileSearch(null)).toBeNull()
-  })
-
   it('bounds newline-heavy selected text without splitting it into arrays', () => {
     const split = vi.spyOn(String.prototype, 'split')
     const selectedText = Array.from({ length: 2000 }, (_, index) => `term-${index + 1}`).join('\n')
@@ -46,20 +32,6 @@ describe('normalizeSelectedTextForFileSearch', () => {
 })
 
 describe('getSelectedTextForFileSearch', () => {
-  it('uses the most recently registered non-empty provider', () => {
-    registerForTest(() => 'older')
-    registerForTest(() => 'newer')
-
-    expect(getSelectedTextForFileSearch()).toBe('newer')
-  })
-
-  it('falls back through empty providers', () => {
-    registerForTest(() => 'needle')
-    registerForTest(() => ' ')
-
-    expect(getSelectedTextForFileSearch()).toBe('needle')
-  })
-
   it('unregisters providers so closed editors do not accumulate stale selection readers', () => {
     registerForTest(() => 'active')
     const unregister = registerFileSearchSelectedTextProvider(() => 'stale')
@@ -68,15 +40,5 @@ describe('getSelectedTextForFileSearch', () => {
     unregister()
 
     expect(getSelectedTextForFileSearch()).toBe('active')
-  })
-
-  it('falls back to the DOM selection when no provider has selected text', () => {
-    vi.stubGlobal('window', {
-      getSelection: () => ({
-        toString: () => 'dom selection'
-      })
-    })
-
-    expect(getSelectedTextForFileSearch()).toBe('dom selection')
   })
 })

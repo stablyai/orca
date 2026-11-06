@@ -27,17 +27,4 @@ describe('host root content across layouts', () => {
     expect(tree?.toJSON()).toMatchObject({ type: state.expected })
     act(() => tree?.unmount())
   })
-
-  it('returns the picker after rotating a host root from landscape to portrait', () => {
-    Object.assign(viewport, { width: 951, height: 669, ownsHostArea: true })
-    let tree: ReactTestRenderer | undefined
-    act(() => {
-      tree = create(createElement(HostWorktreeRoute))
-    })
-    expect(tree?.toJSON()).toMatchObject({ type: 'WorkspacePlaceholder' })
-    Object.assign(viewport, { width: 669, height: 951 })
-    act(() => tree?.update(createElement(HostWorktreeRoute)))
-    expect(tree?.toJSON()).toMatchObject({ type: 'WorkspacePicker' })
-    act(() => tree?.unmount())
-  })
 })

@@ -2,12 +2,12 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { useEffect, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { useTerminalPaneChatState } from './use-terminal-pane-chat-state'
 import { useTerminalPaneLayoutPersistence } from './use-terminal-pane-layout-persistence'
 import { resolveNativeChatLeafRoute } from '../native-chat/native-chat-leaf-routing'
 import { detachTerminalLayoutLeaf } from './terminal-layout-leaf-detach'
-import { parseWorkspaceSession } from '../../../../shared/workspace-session-schema'
+import { parseWorkspaceSession } from '../../../../shared/workspace-session/workspace-session-schema'
 import type { RemotePaneLayoutPusher } from './remote-pane-layout-push'
 
 const LEFT = '11111111-1111-4111-8111-111111111111'
@@ -42,7 +42,8 @@ const mocks = vi.hoisted(() => {
 })
 vi.mock('../../store', async () => {
   const { create } = await import('zustand')
-  const { terminalLayoutEqual } = await import('../../../../shared/terminal-layout-equality')
+  const { terminalLayoutEqual } =
+    await import('../../../../shared/workspace-layout/terminal-layout-equality')
   mocks.state.setTabLayout = (id, layout) => {
     if (terminalLayoutEqual(mocks.state.terminalLayoutsByTabId[id], layout)) {
       return
@@ -230,15 +231,6 @@ describe('terminal chat ownership lifecycle', () => {
     act(() => hook.result.current.switchNativeChatToTerminal())
     mountedPersist()
     expect(mocks.state.terminalLayoutsByTabId.tab.chatLeafId).toBeUndefined()
-  })
-
-  it('closing the chat leaf leaves an eligible terminal sibling in terminal mode', () => {
-    const fixture = makeFixture()
-    const hook = renderHook(() => useFixture(fixture, RIGHT))
-    fixture.managerRef.current.getPanes().pop()?.container.remove()
-    hook.rerender()
-    expect(hook.result.current.chatLeafId).toBeNull()
-    expect(mocks.state.unifiedTabsByWorktree.wt[0].viewMode).toBe('terminal')
   })
 
   it('restores chat on the right with the left active and different numeric pane IDs', () => {

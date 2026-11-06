@@ -1,5 +1,5 @@
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
-import type { WorkerStartModeReceipt } from '../../orchestration-worker-start-mode'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import type { OrchestrationWorkerLaunchReceipt } from './worker-launch-preferences'
 import type { WorkerStartInput } from './worker-start-schema'
 import type { RunRow } from '../../../../orchestration/types'
@@ -15,7 +15,8 @@ export function createLocalWorkerStartDispatch(
     callerSession,
     existingTask,
     orchestrationMutation,
-    helperCreator
+    helperCreator,
+    followUp
   }: Parameters<typeof startLocalWorker>[0],
   {
     params,
@@ -78,6 +79,9 @@ export function createLocalWorkerStartDispatch(
     retryOf: params.retryOf,
     startOptions,
     runtimeEpoch: runtime.getRuntimeId(),
-    mutationReceipt: orchestrationMutation
+    mutationReceipt: orchestrationMutation,
+    followUpOf: followUp?.of,
+    acceptedBy: followUp?.acceptedBy,
+    takesMailOf: followUp?.takesMailOf
   })
 }

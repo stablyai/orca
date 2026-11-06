@@ -3,11 +3,11 @@ import {
   browserExtensionHostWarning,
   browserExtensionPermissionWarning,
   type BrowserExtensionPermissionWarning
-} from '../../../shared/browser-extension-permission-warnings'
+} from '../../../shared/browser/extensions/browser-extension-permission-warnings'
 import {
   unsupportedBrowserExtensionFeatures,
   type UnsupportedBrowserExtensionFeature
-} from '../../../shared/browser-extension-unsupported-features'
+} from '../../../shared/browser/extensions/browser-extension-unsupported-features'
 
 /** Plain-language wording for the shared warning rules (browser-extension-permission-warnings). */
 

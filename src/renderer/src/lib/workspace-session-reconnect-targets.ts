@@ -1,4 +1,4 @@
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { isOwnedSshTargetId } from '../../../shared/execution-host'
 import type { WorkspaceSessionSnapshot } from './workspace-session'

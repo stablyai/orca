@@ -1,4 +1,4 @@
-import type { AgentStatus } from '../../../shared/agent-detection'
+import type { AgentStatus } from '../../../shared/agent-status/title/agent-title-core'
 import type { OrchestrationDb } from './db'
 
 /** A live terminal mail pointers are typed into, keyed by its PTY rather than any window pane. */
@@ -104,15 +104,21 @@ export class OrchestrationMailboxOwner {
     return !requestedMailbox || requestedMailbox === terminalHandle ? terminalHandle : null
   }
 
-  /** The terminal's mailbox, then every other Run it coordinates, so an input edge wakes each with mail. */
+  /** The terminal's mailbox, then every other Run it coordinates that has mail, so an input edge wakes each. */
   resolveAll(terminal: OrchestrationMailboxTerminal): string[] {
     const mailboxHandle = this.resolve(terminal)
     if (!mailboxHandle) {
       return []
     }
     const db = this.deps.getDb()
-    const runs = db ? this.runsBoundToTerminal(db, terminal) : []
-    return [...new Set([mailboxHandle, ...runs.map((run) => `run:${run.id}`)])]
+    const others = db
+      ? this.runsBoundToTerminal(db, terminal)
+          .map((run) => `run:${run.id}`)
+          .filter((handle) => handle !== mailboxHandle)
+      : []
+    // One query instead of probing every finished Run; a Run without mail has nothing to deliver.
+    const withMail = db && others.length > 0 ? db.getMailboxesWithPointerWork(others) : new Set()
+    return [mailboxHandle, ...new Set(others.filter((handle) => withMail.has(handle)))]
   }
 
   private runsBoundToTerminal(db: OrchestrationDb, terminal: OrchestrationMailboxTerminal) {

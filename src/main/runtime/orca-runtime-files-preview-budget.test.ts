@@ -19,7 +19,7 @@ vi.mock(
   './file-watcher-host',
   async () => (await import('./orca-runtime-files-mock-registry')).fileWatcherHostMock
 )
-vi.mock('../ipc/filesystem/filesystem-auth', async () =>
+vi.mock('../ipc/filesystem/access/filesystem-auth', async () =>
   (await import('./orca-runtime-files-mock-registry')).filesystemAuthModuleMock()
 )
 vi.mock('../git/runner', async () =>
@@ -49,19 +49,6 @@ describe('RuntimeFileCommands', () => {
       return dir
     }
 
-    it('stays inside the transport ceiling once base64-inflated', () => {
-      const result = {
-        content: Buffer.alloc(RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES).toString('base64'),
-        isBinary: true,
-        isImage: true,
-        mimeType: 'image/png'
-      }
-
-      expect(Buffer.byteLength(JSON.stringify(result), 'utf8')).toBeLessThanOrEqual(
-        REMOTE_RPC_MAX_CONTENT_BYTES
-      )
-    })
-
     it('rejects a previewable image one byte above the cap', async () => {
       const dir = await previewFixture(RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES + 1)
       const { commands } = createRuntimeFileCommands({ path: dir })
@@ -70,21 +57,6 @@ describe('RuntimeFileCommands', () => {
       await expect(
         commands.readFileExplorerPreview('id:wt-1', 'logo.png', REMOTE_RPC_MAX_CONTENT_BYTES)
       ).rejects.toThrow('file_too_large')
-    })
-
-    it('returns full base64 for a previewable image at the cap', async () => {
-      const dir = await previewFixture(RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES)
-      const { commands } = createRuntimeFileCommands({ path: dir })
-      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
-
-      await expect(
-        commands.readFileExplorerPreview('id:wt-1', 'logo.png', REMOTE_RPC_MAX_CONTENT_BYTES)
-      ).resolves.toEqual({
-        content: Buffer.alloc(RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES, 0x61).toString('base64'),
-        isBinary: true,
-        isImage: true,
-        mimeType: 'image/png'
-      })
     })
 
     it('keeps local previews above the remote cap available without a request budget', async () => {

@@ -127,3 +127,67 @@ export const gitCancelGenerateCommitMessageRun = bindDeferredRpcOperation(
     read: rpcResultVariant('cancel-accepted', unreadPayload)
   })
 )
+
+export type MobileGeneratedPullRequestFields = {
+  base: string
+  title: string
+  body: string
+  draft: boolean
+}
+
+export type MobileGeneratePullRequestFieldsResult =
+  | { success: true; fields: MobileGeneratedPullRequestFields }
+  | ({ success: false; canceled?: boolean } & TextGenerationFailureFields)
+
+const NO_FIELDS_GENERATED = 'No pull request description generated'
+
+const generatedPullRequestFieldsSchema: z.ZodType<MobileGeneratePullRequestFieldsResult, unknown> =
+  z
+    .union([
+      z
+        .object({
+          success: z.literal(true),
+          fields: z.object({
+            base: z.string(),
+            title: z.string(),
+            body: z.string(),
+            draft: z.boolean()
+          })
+        })
+        .transform((value): MobileGeneratePullRequestFieldsResult => ({
+          success: true,
+          fields: value.fields
+        })),
+      z
+        .object({
+          success: z.literal(false),
+          error: z.string().min(1).catch(NO_FIELDS_GENERATED),
+          canceled: z.unknown().optional()
+        })
+        .transform((value): MobileGeneratePullRequestFieldsResult => ({
+          success: false,
+          error: value.error,
+          ...(value.canceled ? { canceled: true } : {})
+        }))
+    ])
+    .catch({ success: false, error: NO_FIELDS_GENERATED })
+
+export const gitGeneratePullRequestFieldsRun = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'git.generate-pull-request-fields',
+    method: 'git.generatePullRequestFields',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('generated-pull-request-fields', generatedPullRequestFieldsSchema)
+  })
+)
+
+export const gitCancelGeneratePullRequestFieldsRun = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'git.cancel-generate-pull-request-fields-or-skip',
+    method: 'git.cancelGeneratePullRequestFields',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('cancel-accepted', unreadPayload)
+  })
+)

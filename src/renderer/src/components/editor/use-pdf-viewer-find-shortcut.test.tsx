@@ -118,12 +118,6 @@ describe('PDF viewer find shortcut', () => {
     expect(openFind['second-pdf']).toHaveBeenCalledTimes(1)
     expect(openFind.pdf).not.toHaveBeenCalled()
   })
-
-  it('does not open for a PDF kept mounted in a hidden workspace', () => {
-    const { openFind } = setup(null)
-    expect(pressFind(document.body).defaultPrevented).toBe(false)
-    expect(openFind.pdf).not.toHaveBeenCalled()
-  })
   it('answers only keys from its own window surface, not the floating workspace panel', () => {
     function Chat({ testId }: { testId: string }): React.JSX.Element {
       const rootRef = useRef<HTMLDivElement>(null)

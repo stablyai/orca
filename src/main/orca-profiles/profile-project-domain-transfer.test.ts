@@ -258,6 +258,7 @@ describe('profile domain transfers', () => {
               settings: {
                 uiLanguage: plugin,
                 uiLanguagePortugueseMigrationApplied: marker,
+                nestedWorkerMaxDepth: 1,
                 futureSetting: { retained: true }
               }
             })
@@ -273,21 +274,20 @@ describe('profile domain transfers', () => {
           marker !== undefined
         )
         expect(settings.futureSetting).toEqual({ retained: true })
-        vi.useFakeTimers()
+        expect(Object.hasOwn(settings, 'nestedWorkerMaxDepthDefaultedToFour')).toBe(false)
         const loaded = new Store({
           dataFile: join(root, 'profiles', id, 'orca-data.json'),
           profileStateAuthority: new ProfileStateSqliteAuthority(dbPath(id), id)
         })
         try {
-          vi.advanceTimersByTime(5000)
-          await loaded.waitForPendingWrite()
+          await loaded.flushPendingOrThrowAsync()
           expect(JSON.parse(raw(id).json).settings).toMatchObject({
             uiLanguage: marker === true ? plugin : 'pt',
-            uiLanguagePortugueseMigrationApplied: true
+            uiLanguagePortugueseMigrationApplied: true,
+            nestedWorkerMaxDepth: 4
           })
         } finally {
           await loaded.freezeWritesAsync()
-          vi.useRealTimers()
         }
         const reopened = new Store({
           dataFile: join(root, 'profiles', id, 'orca-data.json'),
@@ -432,6 +432,29 @@ describe('profile domain transfers', () => {
       )
     }
   )
+
+  it('refuses to move a project whose workspace is nested under another machine', () => {
+    const source = normalizeProfileProjectState({
+      repos: [{ id: 'repo-1', path: '/src/app', displayName: 'app', badgeColor: '', addedAt: 1 }],
+      worktreeMeta: {},
+      // Unreadable by this build, yet still a link the move would drop.
+      crossStoreLineageByChildKey: { 'worktree:repo-1::/src/app-fix': { fromANewerBuild: true } }
+    })
+    const sourceRepo = source.repos[0]
+    if (!sourceRepo) {
+      throw new Error('Missing source repo')
+    }
+    expect(() =>
+      createTransferPayload({
+        sourceState: source,
+        sourceRepo,
+        targetRepo: sourceRepo,
+        includeSessions: true
+      })
+    ).toThrow(
+      '"app-fix" is nested under a workspace on another machine. Remove its parent, then move the project. Nothing was changed.'
+    )
+  })
 
   it('journals only changed domains and replays target-first with exact revisions', () => {
     const { intent, sourceAfter, targetAfter } = preparedMove()

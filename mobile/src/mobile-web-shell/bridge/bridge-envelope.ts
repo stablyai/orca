@@ -5,6 +5,7 @@ import { NODE_PLATFORM_NAMES } from '../../transport/mobile-runtime-host-platfor
 import { RpcEnvelopeFieldsSchema } from '../../transport/rpc-envelope-fields'
 import { isRpcResponse } from '../../transport/rpc-response-shape'
 import type { RpcResponse } from '../../transport/types'
+import { BridgeConnectionSnapshotSchema } from './bridge-connection-snapshot'
 import { BridgeErrorCaptureSchema } from './bridge-error-capture'
 import { BridgeInitRouteSchema, type BridgeInitRoute } from './bridge-init-route'
 import { BridgePageRouteGrantsSchema } from './bridge-page-route-grants'
@@ -21,6 +22,11 @@ import {
 } from './bridge-terminal-key'
 import { BRIDGE_ID_PATTERN, idSchema, methodSchema, versionSchema } from './bridge-frame-fields'
 
+export {
+  BRIDGE_CONNECTION_STATES,
+  BridgeConnectionSnapshotSchema,
+  type BridgeConnectionSnapshot
+} from './bridge-connection-snapshot'
 export {
   BRIDGE_EXTERNAL_LINK_GRANT,
   BRIDGE_FAULT_GRANT,
@@ -46,27 +52,7 @@ import {
   type BridgeRead
 } from './bridge-caps'
 
-export const BRIDGE_CONNECTION_STATES = [
-  'connecting',
-  'handshaking',
-  'connected',
-  'disconnected',
-  'reconnecting',
-  'auth-failed'
-] as const
-
 export const BRIDGE_BINARY_FORMATS = ['jpeg', 'png'] as const
-
-// Send whole connection snapshots so lost frames cannot leave partial state; generation detects snapshots that need repair.
-export const BridgeConnectionSnapshotSchema = z.object({
-  state: z.enum(BRIDGE_CONNECTION_STATES),
-  reconnectAttempt: z.number().int().nonnegative(),
-  lastConnectedAt: z.number().nullable(),
-  lastInboundAt: z.number().nullable(),
-  generation: z.number().int().nonnegative().nullable()
-})
-
-export type BridgeConnectionSnapshot = z.infer<typeof BridgeConnectionSnapshotSchema>
 
 export const BridgeGrantsSchema = z.object({
   rpc: z.object({
@@ -162,7 +148,9 @@ const BridgeClientMessageSchema = z.discriminatedUnion('type', [
       .array(z.string().min(1).max(PAGE_STORAGE_MAX_KEY_CHARS))
       .max(PAGE_STORAGE_MAX_ENTRIES)
       .optional()
-      .catch(undefined)
+      .catch(undefined),
+    // Pages that read `connectionPath` frames say so; older pages never receive one.
+    connectionPathFrames: z.literal(true).optional().catch(undefined)
   }),
   z.object({
     v: versionSchema,
@@ -240,6 +228,12 @@ const BridgeHostMessageSchema = z.union([
     type: z.literal('state'),
     connection: BridgeConnectionSnapshotSchema
   }),
+  // The same snapshot after a path-only change; unlike `state`, it is not a connection transition.
+  z.object({
+    v: versionSchema,
+    type: z.literal('connectionPath'),
+    connection: BridgeConnectionSnapshotSchema
+  }),
   // Back names no destination; only the native stack knows what screen lies beneath.
   z.object({ v: versionSchema, type: z.literal(BRIDGE_BACK_FRAME) }),
   // One press on the shell's key rail. Sent only to a page granted the rail, which knows the frame.
@@ -283,6 +277,9 @@ const BridgeHostMessageSchema = z.union([
     // Older pages strip this key; a locale this page does not ship is salvaged rather than refusing init.
     uiLocale: salvagedOptional('uiLocale', BridgeUiLocaleSchema).optional(),
     host: BridgeInitHostSchema.optional(),
+    // The status the shell's compatibility gate already read; older shells omit it and the page asks.
+    // Opaque here: the page's status gate validates it with the reader it already loads.
+    hostStatus: salvagedOptional('hostStatus', z.looseObject({})).optional(),
     storage: BridgeInitStorageSchema.optional(),
     refreshTerminalShortcuts: salvagedOptional('refreshTerminalShortcuts', z.boolean()).optional(),
     /**

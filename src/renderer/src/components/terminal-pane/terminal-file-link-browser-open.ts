@@ -1,5 +1,5 @@
 import { getWorkspaceClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
-import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
+import { absolutePathToFileUri } from '@/components/editor/markdown/link-routing/markdown-internal-links'
 import { useAppStore } from '@/store'
 import {
   openPlannedFileBrowserLink,

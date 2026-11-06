@@ -150,6 +150,8 @@ declare global {
     __endLocalLayoutStreamE2E?: LocalLayoutStreamE2EEnd
     /** E2E builds only: whether a paired server's layout frames, not the mirror, draw the workspace. */
     __isFrameDrawnServerWorkspaceE2E?: (environmentId: string, worktreeId: string) => boolean
+    /** Chromium Local Font Access; not yet in TypeScript's DOM lib. */
+    queryLocalFonts?: () => Promise<{ family: string }[]>
   }
 }
 

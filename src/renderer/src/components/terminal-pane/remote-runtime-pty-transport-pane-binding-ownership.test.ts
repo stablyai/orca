@@ -159,11 +159,13 @@ describe('remote runtime pane binding ownership', () => {
         },
         activePanePtyBinding: old,
         bindProcessExitState: vi.fn(),
+        windowsPtyModel: { apply: vi.fn() },
         setPanePtyFitBinding: vi.fn(),
         registerSideEffectFactConsumerForPty: vi.fn(),
         syncHiddenRendererPtyDelivery: vi.fn(),
         syncPanePtyLayoutBinding: vi.fn(),
         writeInputModeGround: vi.fn(),
+        clearPaneMode2031State: vi.fn(),
         agentCompletionCoordinator: { startProcessTracking: vi.fn() }
       } as unknown as ConnectPanePtySession
       installPanePtyVisibilityBind(session)

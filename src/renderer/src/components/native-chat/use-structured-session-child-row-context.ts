@@ -2,11 +2,9 @@ import { useMemo } from 'react'
 import {
   agentChildRowContextForParent,
   type AgentChildRowContext
-} from '../../../../shared/agent-child-row-model'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status-types'
+} from '../../../../shared/agent-status/presentation/agent-child-row-model'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { useNow } from '@/hooks/use-now'
 import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import { useAppStore } from '@/store'

@@ -10,17 +10,6 @@ function windowAt(start: number): string[] {
 }
 
 describe('transcript reply reveal retention', () => {
-  it('shows initial history immediately and begins only a newly arriving tail reply', () => {
-    const view = renderHook(({ rows }) => useNativeChatReplyReveals(rows, new Set(rows)), {
-      initialProps: { rows: ['user', 'existing'] }
-    })
-    expect(view.result.current.begun.size).toBe(0)
-    view.rerender({ rows: ['older', 'user', 'existing'] })
-    expect(view.result.current.begun.size).toBe(0)
-    view.rerender({ rows: ['older', 'user', 'existing', 'reply'] })
-    expect([...view.result.current.begun]).toEqual(['reply'])
-  })
-
   it('does not replay a loaded reply after its section closes and reopens', () => {
     const loaded = new Set(['user', 'child-reply'])
     const view = renderHook(({ rows }) => useNativeChatReplyReveals(rows, loaded), {

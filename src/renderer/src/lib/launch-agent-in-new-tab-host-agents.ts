@@ -1,5 +1,5 @@
 import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
-import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+import type { AgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
 import { useAppStore } from '@/store'
 import {
   awaitStructuredRouteHostAnswer,
@@ -8,9 +8,9 @@ import {
   type AgentSessionLaunchRequest
 } from '@/lib/agent-session-launch-plan'
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
-import type { StructuredPromptDeliveryResult } from '@/lib/structured-agent-session-launch-prompt'
+import type { StructuredPromptDeliveryResult } from '@/lib/agent-session/launch/structured-agent-session-launch-prompt'
 import type { LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab'
-import type { StructuredLaunchTerminal } from '@/lib/structured-agent-session-launch-admission'
+import type { StructuredLaunchTerminal } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 
 /** The user action this launch serves: minted where that action is handled, or carried by the
  *  route the caller already planned for it. */
@@ -32,7 +32,7 @@ export type LaunchAgentInNewTabResult = {
   surface: AgentLaunchSurface
   startupPlan?: AgentStartupPlan
   pasteDraftAfterLaunch: boolean
-  promptDeliveryResult?: Promise<{ delivered: boolean; failureNotified: boolean }>
+  promptDeliveryResult?: Promise<StructuredPromptDeliveryResult>
   /** Structured route only: what the launch did once it settled. The call stays synchronous. */
   terminalCompletion?: StructuredLaunchTerminal['completion']
   structuredSettlement?: Promise<StructuredAgentLaunchSettlement>

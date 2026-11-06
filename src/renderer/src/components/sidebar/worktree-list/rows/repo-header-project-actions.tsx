@@ -25,7 +25,6 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { getRepositoryIconSectionId } from '@/components/settings/repository/repository-settings-targets'
 import { WslMoveProjectMenuItem } from '@/components/wsl-move/WslMoveProjectMenuItem'
@@ -37,11 +36,8 @@ import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
 } from '../../../../../../shared/worktree/ownership'
-import {
-  REPO_HEADER_ACTION_BUTTON_CLASS,
-  REPO_HEADER_ACTION_REVEAL_CLASS
-} from '../../repo-header-action-button-class'
-import { getRepoHeaderCreateState } from '../../repo-header-create-state'
+import { REPO_HEADER_ACTION_BUTTON_CLASS } from './repo-header-action-button-class'
+import { getRepoHeaderCreateState } from './repo-header-create-state'
 import {
   handleRepoHeaderActionPointerDown,
   stopRepoHeaderKeyboardToggle,
@@ -76,7 +72,7 @@ export type RepoHeaderProjectActions = {
   onMoveProjectToGroup: (repo: Repo, groupId: string) => void
   onRemoveProjectFromGroup: (repo: Repo) => void
   onRemoveProject: (repo: Repo) => void
-  /** `pinHost`: the header heads one host section, so its repo is that host's own registration. */
+  /** `pinHost`: the header's rows all sit on its repo's host, so that registration names the host. */
   onCreateForRepo: (repo: Repo, options: { pinHost: boolean }) => void
 }
 
@@ -216,10 +212,7 @@ export const RepoHeaderCreateWorkspaceButton = React.memo(function RepoHeaderCre
       <TooltipTrigger asChild>
         {createState?.disabled ? (
           <span
-            className={cn(
-              'inline-flex cursor-not-allowed transition-[margin,max-width,opacity]',
-              REPO_HEADER_ACTION_REVEAL_CLASS
-            )}
+            className="inline-flex size-5 shrink-0 cursor-not-allowed"
             data-repo-header-action=""
             tabIndex={0}
             aria-label={createState.ariaLabel}

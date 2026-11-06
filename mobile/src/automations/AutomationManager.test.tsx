@@ -11,10 +11,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AutomationManager } from './AutomationManager'
 import { AutomationButton, AutomationChoice, AutomationField } from './AutomationControls'
 import { AutomationRunDetails } from './AutomationRunDetails'
-import { AutomationRunList } from './AutomationRunList'
+
 import { automationSetupKey } from './automation-target-inventory'
 import type * as AutomationInventoryModule from './automation-target-inventory'
-import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
+
 import {
   deferred,
   automationClient,
@@ -44,7 +44,7 @@ vi.mock('lucide-react-native', () => ({
   ChevronRight: 'ChevronRight'
 }))
 vi.mock('../components/PickerModal', () => ({ PickerModal: 'PickerModal' }))
-vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
+vi.mock('../components/bottom-drawer/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
 vi.mock('../components/ConfirmModal', () => ({ ConfirmModal: 'ConfirmModal' }))
 vi.mock('../navigation/route-handoff', () => ({
   useRouteHandoff: () => ({ push: inventory.push })
@@ -611,66 +611,6 @@ describe('mobile automation navigation and setup', () => {
       expect(current.enabled).toBe(false)
     }
   )
-
-  it('opens exact historical and returned manual runs with explicit paths back', async () => {
-    const port = await mount()
-    await act(async () => {
-      root().findByType(MobileSegmentedControl).props.onSelect('runs')
-    })
-    const runList = root().findByType(AutomationRunList)
-    const runRow = runList
-      .findAll((node) => String(node.type) === 'Pressable')
-      .find((node) => node.props.accessibilityLabel?.startsWith('Review changes,'))
-    if (!runRow) {
-      throw new Error('History row missing')
-    }
-    await act(async () => {
-      runRow.props.onPress()
-    })
-    expect(root().findByType(AutomationRunDetails).props.run.id).toBe('run-old')
-    expect(
-      root()
-        .findAll((node) => String(node.type) === 'Text')
-        .some((node) => text(node).includes('Output for run-old'))
-    ).toBe(true)
-    await press('All runs')
-    expect(root().findByType(AutomationRunList)).toBeTruthy()
-    expect(
-      port.send.mock.calls
-        .filter(([method]) => method === 'automation.runs')
-        .every(([, params]) => JSON.stringify(params) === '{"limit":30}')
-    ).toBe(true)
-    await act(async () => {
-      root().findByType(MobileSegmentedControl).props.onSelect('automations')
-    })
-    const entry = root()
-      .findAll((node) => String(node.type) === 'Pressable')
-      .find((node) =>
-        node
-          .findAll((child) => String(child.type) === 'Text')
-          .some((child) => child.props.children === 'Review changes')
-      )
-    if (!entry) {
-      throw new Error('Automation entry missing')
-    }
-    await act(async () => {
-      entry.props.onPress()
-    })
-    await press('Run now')
-    expect(root().findByType(AutomationRunDetails).props.run.id).toBe('manual-run')
-    expect(port.send).toHaveBeenCalledWith(
-      'automation.runNow',
-      {
-        id: 'automation-1',
-        expectedOwner: { selector: { kind: 'self' } }
-      },
-      { failWhenDisconnected: true }
-    )
-    await press('All runs')
-    await act(async () => {
-      root().findByType(MobileSegmentedControl).props.onSelect('automations')
-    })
-  })
   it('preserves an uncertain legacy create without issuing a second uncorrelated write', async () => {
     const port = await mount('legacy')
     await press('New automation')

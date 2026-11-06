@@ -1,4 +1,6 @@
+import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { WORKTREE_ROW_LAYOUT } from '../components/worktree-list-row-layout'
 import { themedStyleSheet } from '../theme/themed-styles'
 
 export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
@@ -9,12 +11,19 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
   list: {
     paddingBottom: spacing.lg
   },
+  // The chevron sits in the rows' status-dot column, so the icon and title start at the row text.
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs
+    paddingLeft: WORKTREE_ROW_LAYOUT.indicatorInset,
+    paddingRight: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: 6
+  },
+  sectionChevron: {
+    width: WORKTREE_ROW_LAYOUT.indicatorWidth,
+    alignItems: 'center',
+    marginRight: spacing.sm
   },
   sectionIcon: {
     marginRight: spacing.xs
@@ -23,25 +32,23 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
     marginRight: spacing.xs
   },
   sectionTitle: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.textSecondary,
+    flexShrink: 1
   },
   sectionCount: {
-    fontSize: 11,
+    fontSize: 13,
     color: colors.textMuted,
-    marginLeft: spacing.xs
+    marginLeft: 6
   },
   sectionPendingSpinner: {
     marginLeft: spacing.sm
   },
   separator: {
-    height: 1,
+    height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
-    marginLeft: spacing.lg + 24,
-    marginRight: spacing.lg
+    marginLeft: WORKTREE_ROW_LAYOUT.textInset
   },
   filterModalSubtitle: {
     fontSize: typography.metaSize,

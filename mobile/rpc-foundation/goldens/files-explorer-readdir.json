@@ -59,7 +59,7 @@
       "rows": ["dir:src", "file:README.md"],
       "text": ["Files", "orca-files"]
     },
-    "dcbcad7e8cfe": {
+    "c721e7f4a5c5": {
       "crash": {
         "$rpc": "null"
       },
@@ -68,12 +68,12 @@
         "ChevronLeft": 1,
         "Pressable": 1,
         "SafeAreaView": 1,
-        "Text": 2,
+        "Text": 3,
         "View": 7
       },
       "labels": ["Back to session"],
       "rows": [],
-      "text": ["Files", "orca-files"]
+      "text": ["Files", "orca-files", "Loading files…"]
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -137,7 +137,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "dcbcad7e8cfe",
+          "state": "c721e7f4a5c5",
           "effects": []
         }
       },

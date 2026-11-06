@@ -2,14 +2,19 @@ import { existsSync, readdirSync, statSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { parsePluginManifest } from '../../shared/plugins/manifest/plugin-manifest'
+import { pluginDisplayNameFromId } from './plugin-display-name'
 import { PLUGIN_TEMPLATE_NAMES, type PluginTemplateName } from './plugin-template-names'
+import { pluginTemplateKey } from './plugin-template-files'
 import { renderPluginTemplate } from './plugin-templates'
+import { writePluginTypeFiles } from './plugin-type-files'
 
 export type PluginCreateResult = {
   path: string
   template: PluginTemplateName
   pluginKey: string
   files: string[]
+  /** Generated, gitignored typings (`.orca/types`), for templates written in TypeScript. */
+  typeFiles: string[]
 }
 
 export class PluginCreateError extends Error {}
@@ -20,14 +25,6 @@ export function pluginIdFromFolder(folder: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-}
-
-function titleFromId(id: string): string {
-  return id
-    .split('-')
-    .filter(Boolean)
-    .map((word) => word[0].toUpperCase() + word.slice(1))
-    .join(' ')
 }
 
 function assertEmptyFolder(dir: string): void {
@@ -54,13 +51,14 @@ export async function createPluginFromTemplate(input: {
 }): Promise<PluginCreateResult> {
   const dir = resolve(input.dir)
   const id = input.id ?? pluginIdFromFolder(dir)
-  const publisher = input.publisher ?? 'your-github-user'
-  const name = input.name ?? (titleFromId(id) || id)
-  const template = renderPluginTemplate(input.template, { publisher, id, name })
+  const name = input.name ?? (pluginDisplayNameFromId(id) || id)
+  const templateInput = { publisher: input.publisher, id, name }
+  const pluginKey = pluginTemplateKey(templateInput)
+  const template = renderPluginTemplate(input.template, templateInput)
   const manifest = parsePluginManifest(JSON.parse(template.files['orca-plugin.json']))
   if (!manifest.ok) {
     throw new PluginCreateError(
-      `cannot create ${publisher}.${id}: ${manifest.error}. Pass --id and --publisher using lowercase letters, numbers and dashes.`
+      `cannot create ${pluginKey}: ${manifest.error}. Pass --id (and --publisher, if set) using lowercase letters, numbers and dashes.`
     )
   }
   assertEmptyFolder(dir)
@@ -70,10 +68,11 @@ export async function createPluginFromTemplate(input: {
     await mkdir(dirname(target), { recursive: true })
     await writeFile(target, template.files[file], { flag: 'wx' })
   }
-  return { path: dir, template: input.template, pluginKey: `${publisher}.${id}`, files }
+  const typeFiles = template.files['tsconfig.json'] ? await writePluginTypeFiles(dir) : []
+  return { path: dir, template: input.template, pluginKey, files, typeFiles }
 }
 
 export const PLUGIN_TEMPLATE_LIST = PLUGIN_TEMPLATE_NAMES.map((name) => ({
   name,
-  description: renderPluginTemplate(name, { publisher: 'p', id: 'x', name: 'X' }).description
+  description: renderPluginTemplate(name, { id: 'x', name: 'X' }).description
 }))

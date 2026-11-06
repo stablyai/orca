@@ -2,9 +2,7 @@ import { View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { HostKindIcon } from './HostKindIcon'
-import { LIST_LEADING_INSET, ListGroup } from './list/ListGroup'
-import { ListRow } from './list/ListRow'
-import { SectionHeader } from './list/SectionHeader'
+import { LIST_LEADING_INSET, ListGroup, SectionHeader, ListRow } from './list/ListGroup'
 import { newWorktreeFormStyles as styles } from './new-worktree-form-styles'
 
 type Selection = { label: string; detail?: string }

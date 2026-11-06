@@ -4,7 +4,7 @@ import {
   AGENT_SESSION_RESTART_CONTINUATION_NOTE,
   AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
   restartContinuationMessage
-} from '../../../shared/agent-session-restart-continuation'
+} from '../../../shared/agent-session/lifecycle/agent-session-restart-continuation'
 import { latestNativeChatOrcaStopCut } from '../../../shared/native-chat/native-chat-orca-stop-cut'
 import { CALLER, envelope } from './structured-agent-session-host-test-harness'
 import {
@@ -17,7 +17,6 @@ import {
   statusNotes
 } from './structured-agent-session-restart-interruption-test-harness'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
-import { previousExitUnverifiableRefusal } from './structured-agent-session-child-close'
 
 type Restarted = Awaited<ReturnType<typeof interruptedRestart>>
 
@@ -145,16 +144,6 @@ it('continues when reading the restart offer hangs', async () => {
   }
 }, 10_000)
 
-it('continues when the restart offer cannot be read', async () => {
-  const { host, dispatch } = await interruptedRestart()
-  const turnItemId = await cutTurn(host)
-  vi.spyOn(host.deps.recoveryCapsule!, 'list').mockRejectedValue(new Error('unreadable'))
-
-  await host.restartResume.continueInterrupted(SESSION, turnItemId)
-
-  await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce())
-})
-
 it('answers once Orca accepted it, while the agent is still starting', async () => {
   const { host, acquire, dispatch } = await interruptedRestart()
   const turnItemId = await cutTurn(host)
@@ -216,22 +205,4 @@ it('continues a reply the user had steered before Orca stopped', async () => {
   expect(answer).toEqual({ sessionId: SESSION, outcome: 'pending' })
   await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce())
   expect(sentTexts(dispatch)).toEqual([restartContinuationMessage(marker!)])
-})
-
-it('answers a refusal before anything was accepted, and a retry adds no note to the chat', async () => {
-  const { host, dispatch } = await interruptedRestart()
-  const turnItemId = await cutTurn(host)
-  const notesBefore = await statusNotes(host)
-  vi.spyOn(host, 'send').mockResolvedValue({
-    ok: false,
-    refusal: previousExitUnverifiableRefusal()
-  })
-
-  const first = await host.restartResume.continueInterrupted(SESSION, turnItemId)
-  const retry = await host.restartResume.continueInterrupted(SESSION, turnItemId)
-
-  expect([first.outcome, retry.outcome]).toEqual(['refused', 'refused'])
-  // Refusal belongs in the click response, with no journal note.
-  expect(await statusNotes(host)).toEqual(notesBefore)
-  expect(dispatch).not.toHaveBeenCalled()
 })

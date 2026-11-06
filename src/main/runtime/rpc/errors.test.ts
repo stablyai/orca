@@ -1,4 +1,4 @@
-import { terminalStartError } from '../../../shared/terminal-start-failure'
+import { terminalStartError } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { describe, expect, it } from 'vitest'
 import { mapRuntimeError } from './errors'
 import {
@@ -20,8 +20,8 @@ import {
   AgentSessionRefusalError,
   agentSessionRefusalError,
   refuseUnclassified
-} from '../../../shared/agent-session-wire-refusals'
-import { readAgentSessionErrorRefusal } from '../../../shared/agent-session-write-failure'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { readAgentSessionErrorRefusal } from '../../../shared/agent-session/failures/agent-session-write-failure'
 import { WslHostWindowsDriveRefusalError } from '../../../shared/wsl-host-windows-drive-refusal'
 
 class LineageError extends Error {

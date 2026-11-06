@@ -1,7 +1,7 @@
 import type {
   AgentSessionHistoryPage,
   AgentSessionHistoryResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { snapshotLatestTurn } from './agent-session-history-latest-turn'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
@@ -41,7 +41,7 @@ export function agentSessionPublishedWorkFields(
   journal: AgentSessionJournal,
   work: AgentSessionPublishedWork
 ): PublishedWorkFields {
-  return publishedWorkFields(snapshotLatestTurn(journal.snapshot()), work)
+  return publishedWorkFields(snapshotLatestTurn(journal.itemsRead()), work)
 }
 
 /** Page-local effective values; off-page sends ride separately budgeted subscriber batches. */

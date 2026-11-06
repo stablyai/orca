@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { notifyServeSupervisorReady } from '../serve-update-handoff'
+import { notifyServeSupervisorReady } from '../updater/serve-update-handoff'
 import { clearServeAbortPark } from '../../shared/serve-abort-park'
 import { findBundledWebClientRoot } from '../../shared/bundled-web-client-root'
 import { buildServePairingReadiness, servePublishMode } from '../server/serve-pairing-readiness'

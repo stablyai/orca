@@ -41,7 +41,8 @@ export function renderMobileTasksChrome(model: ConnectionPresentationModel) {
                 disabled={!taskUiReady}
                 fill
                 testIDPrefix="mobile-tasks-provider-"
-                style={styles.providerSwitch}
+                // Hold the row's space but hide the default sources until the desktop says which exist, so chips never reflow.
+                style={[styles.providerSwitch, !taskUiReady && { opacity: 0 }]}
               />
             ) : null}
 

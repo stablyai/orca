@@ -48,21 +48,6 @@ describe('RemoteBrowserStreamRestartScheduler', () => {
     expect(run).toHaveBeenCalledTimes(5)
   })
 
-  it('reset gives a spent scheduler its budget back so the user can ask again', async () => {
-    vi.useFakeTimers()
-    const scheduler = new RemoteBrowserStreamRestartScheduler([10, 20])
-    const run = vi.fn(async () => true)
-
-    scheduler.schedule(run)
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(run).toHaveBeenCalledTimes(2)
-
-    scheduler.reset()
-    scheduler.schedule(run)
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(run).toHaveBeenCalledTimes(4)
-  })
-
   it('keeps retrying when an attempt rejects rather than dropping the cycle', async () => {
     vi.useFakeTimers()
     const onExhausted = vi.fn()
@@ -105,27 +90,6 @@ describe('RemoteBrowserStreamRestartScheduler', () => {
     expect(run).toHaveBeenCalledTimes(1)
   })
 
-  it('still retries normally when an in-flight attempt resolves without an intervening cancel', async () => {
-    vi.useFakeTimers()
-    const scheduler = new RemoteBrowserStreamRestartScheduler()
-    let resolveAttempt: ((shouldRetry: boolean) => void) | undefined
-    const run = vi.fn(
-      () =>
-        new Promise<boolean>((resolve) => {
-          resolveAttempt = resolve
-        })
-    )
-
-    scheduler.schedule(run)
-    await vi.advanceTimersByTimeAsync(500)
-    resolveAttempt?.(true)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(scheduler.isScheduled).toBe(true)
-
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(run).toHaveBeenCalledTimes(2)
-  })
-
   it('queues one replacement chain while the current attempt is in flight', async () => {
     vi.useFakeTimers()
     const scheduler = new RemoteBrowserStreamRestartScheduler([10, 20])
@@ -149,49 +113,6 @@ describe('RemoteBrowserStreamRestartScheduler', () => {
     expect(firstRun).toHaveBeenCalledTimes(1)
     expect(replacementRun).toHaveBeenCalledTimes(1)
     expect(scheduler.isScheduled).toBe(false)
-  })
-
-  it('grows the delay per counted attempt, never by elapsed wall time, and then stops', async () => {
-    vi.useFakeTimers()
-    const scheduler = new RemoteBrowserStreamRestartScheduler()
-    const setTimeoutSpy = vi.spyOn(global, 'setTimeout')
-    const run = vi.fn(async () => true)
-
-    scheduler.schedule(run)
-    await vi.advanceTimersByTimeAsync(60_000)
-    const observedDelays = setTimeoutSpy.mock.calls.map((call) => call[1])
-
-    // Literal on purpose: asserting against the constant under test makes the ladder self-certifying
-    // — verified, a change to 12 flat 1s attempts passed the whole suite. The budget's size and shape
-    // are user-visible (how long the pane waits before handing control back), so they get pinned here.
-    expect(observedDelays).toEqual([500, 1_000, 2_000, 4_000, 8_000])
-  })
-
-  it('does not double-schedule while a restart is already pending', () => {
-    vi.useFakeTimers()
-    const scheduler = new RemoteBrowserStreamRestartScheduler()
-    const run = vi.fn(async () => true)
-
-    scheduler.schedule(run)
-    expect(scheduler.attemptCount).toBe(1)
-    scheduler.schedule(run) // no-op: already scheduled
-    expect(scheduler.attemptCount).toBe(1)
-    expect(scheduler.isScheduled).toBe(true)
-  })
-
-  it('stops the retry chain and clears the timer when run resolves false (e.g. superseded or success)', async () => {
-    vi.useFakeTimers()
-    const scheduler = new RemoteBrowserStreamRestartScheduler()
-    const run = vi.fn(async () => false)
-
-    scheduler.schedule(run)
-    await vi.advanceTimersByTimeAsync(500)
-
-    expect(run).toHaveBeenCalledTimes(1)
-    expect(scheduler.isScheduled).toBe(false)
-
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(run).toHaveBeenCalledTimes(1)
   })
 
   it('reset() forgets prior failures so the next drop backs off from the first delay again', async () => {

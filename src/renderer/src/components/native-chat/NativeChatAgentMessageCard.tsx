@@ -1,37 +1,42 @@
-import { useId, useLayoutEffect, useRef, useState } from 'react'
+import { useId } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { AgentTypeIcon } from '@/lib/agent-type-icon'
-import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import {
   agentMessageHeading,
   agentMessagePrimarySender,
-  agentMessageOverflows,
-  agentMessageFoldLabel,
-  agentMessageCanCopy,
-  AGENT_MESSAGE_FOLDED_LINES
+  agentMessageCanCopy
 } from '../../../../shared/agent-session/agent-message-presentation'
 import { agentMessageTranscriptText } from '../../../../shared/agent-session/agent-message-display-text'
 import { NativeChatAgentMessageSenders } from './NativeChatAgentMessageSenders'
 import { useAgentMessageSenderView } from './native-chat-agent-message-sender-view'
 import { useNativeChatVisualOwner } from './native-chat-visual-owner'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
+import { NativeChatExpandable } from './NativeChatExpandable'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
+import { NativeChatTextAttachments } from './NativeChatTextAttachments'
 import { NativeChatCodeBlock } from './NativeChatCodeBlock'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { NativeChatImageAttachments } from './NativeChatTranscriptChrome'
 
-function heading(from: AgentMessageSource, agentStart: boolean): string {
-  switch (agentMessageHeading(from, agentStart)) {
+function heading(from: AgentMessageSource, message: NativeChatMessage): string {
+  switch (agentMessageHeading(from, message)) {
     case 'started':
       return translate('components.native-chat.agentMessage.startedWorker', 'Started worker')
+    case 'handed-off':
+      return translate(
+        'components.native-chat.agentMessage.handedOffToAgent',
+        'Handed off to agent'
+      )
+    case 'started-agent':
+      return translate('components.native-chat.agentMessage.startedAgent', 'Started agent')
     case 'task':
       return translate(
         'components.native-chat.agentMessage.taskFromCoordinator',
@@ -49,136 +54,146 @@ function heading(from: AgentMessageSource, agentStart: boolean): string {
   }
 }
 
+type AgentMessageCardProps = {
+  message: NativeChatMessage
+  from: AgentMessageSource
+  runtimeContext?: RuntimeFileOperationArgs | null
+  textAttachmentContent?: string
+  onRefolded: () => void
+}
+
 export function NativeChatAgentMessageCard({
   message,
   from,
   runtimeContext,
-  onLinkClick,
-  allowFileUriLinks,
+  textAttachmentContent,
   onRefolded
-}: {
-  message: NativeChatMessage
-  from: AgentMessageSource
-  runtimeContext?: RuntimeFileOperationArgs | null
-  onLinkClick?: CommentMarkdownLinkClickHandler
-  allowFileUriLinks: boolean
-  onRefolded: () => void
-}): React.JSX.Element {
+}: AgentMessageCardProps): React.JSX.Element {
   const owner = useNativeChatVisualOwner()
   const worktreeId = owner?.worktreeId ?? runtimeContext?.worktreeId ?? null
   const target = owner?.target ?? runtimeContext?.target
-  const text = agentMessageTranscriptText(message.blocks, from)
+  const text = agentMessageTranscriptText(message.blocks, from, message.shortened)
   const disclosure = useNativeChatDisclosure(`agent-message:${message.id}`, false)
-  const clip = useRef<HTMLDivElement>(null)
-  const clipId = useId()
-  const [overflows, setOverflows] = useState(false)
-  useLayoutEffect(() => {
-    const element = clip.current
-    if (!element) {
-      return
+  const labelId = useId()
+  const bodyId = useId()
+  const expandable =
+    agentMessageCanCopy(text) || message.blocks.some((block) => block.type === 'image-ref')
+  const toggle = () => {
+    disclosure.setOpen(!disclosure.open)
+    if (disclosure.open) {
+      requestAnimationFrame(onRefolded)
     }
-    const measure = () => {
-      const lineHeight = Number.parseFloat(getComputedStyle(element).lineHeight)
-      setOverflows(agentMessageOverflows(element.scrollHeight, lineHeight))
-    }
-    measure()
-    const observer = new ResizeObserver(measure)
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [text])
+  }
   return (
-    <div className="group flex w-full gap-3 rounded-xl border border-border bg-card p-3 text-sm text-card-foreground">
-      <AgentMessageAvatar
-        sender={agentMessagePrimarySender(from)}
-        worktreeId={worktreeId}
-        target={target}
-      />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-          <span>{heading(from, message.agentStart === true)}</span>
-          <div className="flex items-center gap-1">
-            {agentMessageCanCopy(text) ? (
-              // Why: -my-1 keeps the 24px button inside the text-xs header line, so copy costs no row of its own.
-              <NativeChatCopyButton
-                text={text}
-                className="-my-1 transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100"
-              />
-            ) : null}
-            <NativeChatMessageTimestamp
-              timestamp={message.timestamp}
-              className="text-muted-foreground"
-            />
-          </div>
-        </div>
-        <NativeChatAgentMessageSenders from={from} chatWorktreeId={worktreeId} target={target} />
-        <NativeChatImageAttachments
-          blocks={message.blocks}
-          runtimeContext={runtimeContext}
-          enablePreview={runtimeContext !== undefined}
-        />
-        <div
-          ref={clip}
-          id={clipId}
-          className={cn(
-            'overflow-hidden leading-6',
-            overflows && !disclosure.open && 'mask-b-from-[calc(100%-1.75rem)]'
-          )}
-          style={disclosure.open ? undefined : { maxHeight: `${AGENT_MESSAGE_FOLDED_LINES}lh` }}
-          onBlur={(event) => {
-            if (document.hasFocus() && !event.currentTarget.contains(event.relatedTarget)) {
-              event.currentTarget.scrollTop = 0
-            }
-          }}
-        >
-          <NativeChatMarkdown
-            rowKey={message.id}
-            content={text}
-            variant="document"
-            className="text-sm"
-            renderCodeBlock={NativeChatCodeBlock}
-            onLinkClick={onLinkClick}
-            allowFileUriLinks={allowFileUriLinks}
+    <div className="group @container w-full rounded-xl border border-border bg-card text-sm text-card-foreground">
+      <div
+        className="relative flex min-w-0 items-center gap-2 px-3 py-1.5"
+        data-state={disclosure.open ? 'open' : 'closed'}
+      >
+        {expandable ? (
+          <button
+            type="button"
+            aria-labelledby={labelId}
+            aria-controls={bodyId}
+            aria-expanded={disclosure.open}
+            onClick={toggle}
+            className="absolute inset-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          />
+        ) : null}
+        <div className="pointer-events-none">
+          <AgentMessageAvatar
+            sender={agentMessagePrimarySender(from)}
+            dispatchId={message.agentStartDispatchId}
+            worktreeId={worktreeId}
+            target={target}
           />
         </div>
-        {overflows ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            aria-expanded={disclosure.open}
-            aria-controls={clipId}
-            onClick={() => {
-              disclosure.setOpen(!disclosure.open)
-              if (disclosure.open) {
-                requestAnimationFrame(onRefolded)
-              }
-            }}
-          >
-            {agentMessageFoldLabel(disclosure.open) === 'expanded'
-              ? translate('components.native-chat.userMessage.showLess', 'Show less')
-              : translate('components.native-chat.agentMessage.showMore', 'Show more')}
-          </Button>
+        <span
+          id={labelId}
+          className="pointer-events-none max-w-1/3 shrink-0 truncate text-xs text-muted-foreground"
+        >
+          {heading(from, message)}
+        </span>
+        <div className="pointer-events-none relative min-w-0 flex-1 [&_button]:pointer-events-auto">
+          <NativeChatAgentMessageSenders
+            compact
+            dispatchId={message.agentStartDispatchId}
+            from={from}
+            chatWorktreeId={worktreeId}
+            target={target}
+          />
+        </div>
+        {agentMessageCanCopy(text) ? (
+          <NativeChatCopyButton
+            text={text}
+            className="relative transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100"
+          />
+        ) : null}
+        <div className={cn('pointer-events-none shrink-0', expandable && 'hidden @sm:block')}>
+          <NativeChatMessageTimestamp
+            timestamp={message.timestamp}
+            className="text-muted-foreground"
+          />
+        </div>
+        {expandable ? (
+          <ChevronDown
+            aria-hidden
+            className={cn(
+              'pointer-events-none size-3.5 shrink-0 text-muted-foreground',
+              disclosure.open && 'rotate-180'
+            )}
+          />
         ) : null}
       </div>
+      <NativeChatExpandable open={expandable && disclosure.open}>
+        <div id={bodyId} className="space-y-2 px-3 pb-3">
+          <NativeChatImageAttachments
+            blocks={message.blocks}
+            runtimeContext={runtimeContext}
+            enablePreview={runtimeContext !== undefined}
+          />
+          <NativeChatTextAttachments
+            content={textAttachmentContent ?? text}
+            structured={textAttachmentContent !== undefined}
+            runtimeContext={runtimeContext}
+            renderText={() => (
+              <NativeChatMarkdown
+                rowKey={message.id}
+                content={text}
+                variant="document"
+                className="text-sm"
+                renderCodeBlock={NativeChatCodeBlock}
+              />
+            )}
+          />
+          <NativeChatMessageTimestamp
+            timestamp={message.timestamp}
+            className="text-muted-foreground @sm:hidden"
+          />
+        </div>
+      </NativeChatExpandable>
     </div>
   )
 }
 
 function AgentMessageAvatar({
+  dispatchId,
   sender,
   worktreeId,
   target
 }: {
+  dispatchId?: string
   sender: AgentMessageSource['senders'][number] | undefined
   worktreeId: string | null
   target?: RuntimeClientTarget
 }): React.JSX.Element {
-  const view = useAgentMessageSenderView(sender, worktreeId, target)
+  const view = useAgentMessageSenderView(sender, worktreeId, target, dispatchId)
   return (
-    <div className="relative mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full border border-border bg-muted">
+    <div className="relative flex size-6 shrink-0 items-center justify-center rounded-full border border-border bg-muted">
       <AgentTypeIcon agentType={view.agentType} size={16} />
       {view.dot ? (
-        <span className="absolute -right-0.5 -bottom-0.5 rounded-full bg-card ring-2 ring-card">
+        // Flex square: the chat line box would stretch a shrink-wrapped badge into a pill.
+        <span className="absolute -right-0.5 -bottom-0.5 flex size-3.5 items-center justify-center rounded-full border border-border bg-card">
           <AgentStateDot state={view.dot} size="md" progress={view.progress} />
         </span>
       ) : null}

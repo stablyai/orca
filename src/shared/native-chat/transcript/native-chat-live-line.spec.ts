@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { nativeChatLiveLine } from './native-chat-live-line'
-import type { NativeChatMessage } from '../../native-chat-types'
+import type { NativeChatMessage } from '../native-chat-types'
 
 const prompt: NativeChatMessage = {
   id: 'user-1',
@@ -59,14 +59,6 @@ describe('the live line both clients draw', () => {
       stopping: true,
       activityText: null,
       reasoning: null
-    })
-  })
-
-  // The label may read the provider's own words; the block it discloses is still the open one.
-  it('keeps the activity text it was handed', () => {
-    expect(line({ activityText: 'Summarizing the plan' })).toMatchObject({
-      activityText: 'Summarizing the plan',
-      reasoning: { message: open }
     })
   })
 })

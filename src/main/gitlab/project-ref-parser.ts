@@ -1,5 +1,5 @@
 import type { GitLabProjectRef } from '../../shared/gitlab-types'
-import { normalizeGitLabRemoteHost } from '../../shared/git-remote-host-alias'
+import { normalizeGitLabRemoteHost } from '../../shared/git/remotes/git-remote-host-alias'
 
 export type ProjectRef = GitLabProjectRef
 

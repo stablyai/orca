@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ExecutionHostId } from '../execution-host'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import { buildPairedServerActivityFacts } from './paired-server-activity-facts'
 import { normalizePairedServerRow, type PairedServerWorkspaceRow } from './paired-server-rows'
 import { composeWorktreeHostIdentity } from '../worktree/host-qualified-identity'

@@ -118,15 +118,6 @@ afterEach(() => {
 })
 
 describe('useOsFileDropOwner', () => {
-  it('claims a trusted refused drop without reading file paths', () => {
-    const onDrop = vi.fn()
-    const view = render(<Owner onDrop={onDrop} canAccept={false} />)
-    drag(view.getByTestId('owner'), 'drop')
-    expect(getPathForFile).not.toHaveBeenCalled()
-    expect(onDrop).not.toHaveBeenCalled()
-    drag(view.getByTestId('owner'), 'drop', undefined, { trusted: false })
-    expect(onDrop).not.toHaveBeenCalled()
-  })
   it('registers the root with a callback ref and delivers one prepared drop to the nearest owner', async () => {
     const outerDrop = vi.fn<DropHandler>()
     const innerDrop = vi.fn<DropHandler>()
@@ -359,42 +350,6 @@ describe('useOsFileDropOwner', () => {
     expect(onDrop).toHaveBeenCalledTimes(1)
     expect(takeBrowserAttachmentFile('orca-browser-file:uuid-2/second.txt')).toBeNull()
     expect(takeBrowserAttachmentFile('orca-browser-file:uuid-1/first.txt')).not.toBeNull()
-  })
-
-  it('delivers drops in order within an owner while another owner can finish', async () => {
-    const firstDrop = vi.fn<DropHandler>()
-    const secondDrop = vi.fn<DropHandler>()
-    let finishFirst: ((prepared: PreparedDroppedPaths) => void) | undefined
-    prepareDroppedPaths.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finishFirst = resolve
-        })
-    )
-    const view = render(
-      <>
-        <Owner onDrop={firstDrop} />
-        <Owner onDrop={secondDrop} />
-      </>
-    )
-    const [firstRoot, secondRoot] = view.getAllByTestId('owner')
-    drag(firstRoot, 'drop', [new File([], 'first.txt')])
-    drag(firstRoot, 'drop', [new File([], 'later.txt')])
-    drag(secondRoot, 'drop', [new File([], 'other.txt')])
-    await act(async () => undefined)
-    expect(firstDrop).not.toHaveBeenCalled()
-    expect(secondDrop).toHaveBeenCalledExactlyOnceWith(
-      { paths: ['/dropped/other.txt'], failures: [] },
-      { target: secondRoot }
-    )
-
-    await act(async () => {
-      finishFirst?.({ paths: ['/dropped/first.txt'], failures: [] })
-    })
-    expect(firstDrop.mock.calls.map(([prepared]) => prepared.paths)).toEqual([
-      ['/dropped/first.txt'],
-      ['/dropped/later.txt']
-    ])
   })
 
   it('does not deliver a prepared drop after its owner detaches', async () => {

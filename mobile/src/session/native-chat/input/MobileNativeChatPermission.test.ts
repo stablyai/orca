@@ -2,7 +2,6 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileNativeChatPermission } from './MobileNativeChatPermission'
-import type { MobileChatPermission } from './mobile-native-chat-permission'
 import {
   findAllByHostType,
   findByHostType
@@ -24,227 +23,74 @@ vi.mock('lucide-react-native', () => ({
 }))
 vi.mock('../../../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 
-describe('MobileNativeChatPermission', () => {
+describe('MobileNativeChatPermission operation details', () => {
   let renderer: ReactTestRenderer | null = null
-
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
   })
 
-  it('accepts only one response when two presses land in the same render batch', async () => {
-    let resolveResponse: (accepted: boolean) => void = () => {}
-    const response = new Promise<boolean>((resolve) => (resolveResponse = resolve))
-    const onRespond = vi.fn(() => response)
+  it('previews an operation and expands in place while access and response tokens stay stable', async () => {
+    const detail = 'update /repo/a.ts\nsecond\nthird\nfourth\n/outside/hidden.ts\n+full diff'
+    const onRespond = vi.fn(async () => false)
     await act(async () => {
       renderer = create(
         createElement(MobileNativeChatPermission, {
-          permission: { title: 'Approve?', options: [{ label: 'Allow', send: '1' }] },
+          permission: {
+            title: 'Apply file changes?',
+            description: 'Write access: /repo',
+            decisionReason: 'Outside the sandbox',
+            blockedPath: '/outside/hidden.ts',
+            detail,
+            options: [{ label: 'Allow', send: 'accept' }]
+          },
           onRespond
         })
       )
     })
-    const button = findByHostType(renderer!.root, 'Pressable')
-
-    act(() => {
-      button.props.onPress()
-      button.props.onPress()
-    })
-
-    expect(onRespond).toHaveBeenCalledOnce()
-    await act(async () => resolveResponse(true))
-  })
-
-  it('passes the rendered prompt identity to cancel', async () => {
-    const onCancel = vi.fn(async () => true)
-    await act(async () => {
-      renderer = create(
-        createElement(MobileNativeChatPermission, {
-          permission: {
-            title: 'Approve?',
-            prompt: { itemId: 'approval-1', expectedRevision: 4 },
-            options: [{ label: 'Allow', send: '1' }]
-          },
-          onRespond: vi.fn(async () => true),
-          onCancel
-        })
+    const toggle = () => renderer!.root.findByProps({ accessibilityRole: 'button' })
+    const shown = () => findAllByHostType(renderer!.root, 'Text').map((node) => node.props.children)
+    const allow = () =>
+      findByHostType(
+        renderer!.root.findByProps({ testID: 'native-chat-approval-actions' }),
+        'Pressable'
       )
-    })
-    const cancel = renderer!.root.findByProps({ accessibilityLabel: 'Cancel' })
-    await act(async () => cancel.props.onPress())
-    expect(onCancel).toHaveBeenCalledWith({ itemId: 'approval-1', expectedRevision: 4 })
+    expect(toggle().props.accessibilityState.expanded).toBe(false)
+    expect(shown()).toContain('update /repo/a.ts\nsecond\nthird\nfourth…')
+    expect(shown()).not.toContain(detail)
+    await act(async () => allow().props.onPress())
+    act(() => toggle().props.onPress())
+    expect(toggle().props.accessibilityState.expanded).toBe(true)
+    expect(shown().filter((text) => text === detail)).toHaveLength(1)
+    expect(shown()).not.toContain('update /repo/a.ts\nsecond\nthird\nfourth…')
+    expect(shown()).toContain('Write access: /repo')
+    expect(
+      findAllByHostType(renderer!.root, 'Text').some((node) =>
+        [node.props.children].flat().includes('Outside the sandbox')
+      )
+    ).toBe(true)
+    const content = renderer!.root.findByProps({ testID: 'native-chat-approval-content' })
+    expect(
+      findAllByHostType(content, 'Text').some((node) =>
+        [node.props.children].flat().includes('/outside/hidden.ts')
+      )
+    ).toBe(true)
+    await act(async () => allow().props.onPress())
+    expect(onRespond.mock.calls).toEqual([['accept'], ['accept']])
+    act(() => toggle().props.onPress())
+    expect(shown()).not.toContain(detail)
   })
 
-  it('keeps oversized provider context in a bounded scroller above the actions', async () => {
-    const description = `Workspace access ${'description '.repeat(400)}`
-    const decisionReason = `Outside the allowed root ${'reason '.repeat(400)}`
+  it('keeps compact command context visible without a redundant disclosure', async () => {
     await act(async () => {
       renderer = create(
         createElement(MobileNativeChatPermission, {
-          permission: {
-            title: 'Claude wants to read secrets.txt '.repeat(400),
-            description,
-            decisionReason,
-            options: [{ label: 'Allow', send: '1' }]
-          },
+          permission: { title: 'Run a command?', detail: 'git status', options: [] },
           onRespond: vi.fn(async () => true)
         })
       )
     })
-
-    const card = renderer!.root.findByProps({ testID: 'native-chat-approval-card' })
-    const title = renderer!.root.findByProps({ testID: 'native-chat-approval-title' })
-    const content = renderer!.root.findByProps({ testID: 'native-chat-approval-content' })
-    const actions = renderer!.root.findByProps({ testID: 'native-chat-approval-actions' })
-    const contentText = findAllByHostType(content, 'Text')
-    const containsText = (value: string): boolean =>
-      contentText.some((node) => {
-        const children = Array.isArray(node.props.children)
-          ? node.props.children
-          : [node.props.children]
-        return children.includes(value)
-      })
-
-    expect(card.props.style).toMatchObject({ flexShrink: 1, minHeight: 0 })
-    expect(title.props).toMatchObject({ numberOfLines: 2, ellipsizeMode: 'tail' })
-    expect(content.props.style).toMatchObject({ maxHeight: 240, minHeight: 0, flexShrink: 1 })
-    expect(containsText(description)).toBe(true)
-    expect(containsText(decisionReason)).toBe(true)
-    expect(content.findAllByProps({ children: 'Allow' })).toHaveLength(0)
-    expect(actions.findAllByProps({ children: 'Allow' })).toHaveLength(1)
-    expect(actions.props.style).toMatchObject({ flexShrink: 0 })
-  })
-
-  it('names a blocked path the request does not show, but never the matched ask rule', async () => {
-    const fromJournal = {
-      title: 'Claude wants to run git push',
-      decisionReason: 'Pushing changes the remote',
-      blockedPath: 'C:\\qa\\demo\\.git\\config',
-      matchedAskRule: {
-        source: 'projectSettings',
-        toolName: 'Bash',
-        ruleContent: 'Bash(git push:*)'
-      },
-      detail: 'git push origin main',
-      options: [{ label: 'Allow', send: '1' }]
-    }
-    const text = await renderContentText(fromJournal)
-    expect(text).toContain('Pushing changes the remote')
-    expect(text).toContain('Needs access to: ')
-    expect(text).toContain('C:\\qa\\demo\\.git\\config')
-    for (const internal of ['Ask rule', 'Bash(git push:*)', 'projectSettings', 'Blocked path']) {
-      expect(text).not.toContain(internal)
-    }
-  })
-
-  it('does not repeat a blocked path the request already shows', async () => {
-    const blockedPath = 'C:\\qa\\demo\\notes.md'
-    const text = await renderContentText({
-      title: 'Claude wants to write notes.md',
-      blockedPath,
-      detail: JSON.stringify({ file_path: blockedPath, content: 'hi' }, null, 2),
-      options: [{ label: 'Allow', send: '1' }]
-    })
-    expect(text).toContain('notes.md')
-    expect(text).not.toContain('Needs access to')
-  })
-
-  async function renderContentText(permission: MobileChatPermission): Promise<string> {
-    await act(async () => {
-      renderer = create(
-        createElement(MobileNativeChatPermission, {
-          permission,
-          onRespond: vi.fn(async () => true)
-        })
-      )
-    })
-    const content = renderer!.root.findByProps({ testID: 'native-chat-approval-content' })
-    return findAllByHostType(content, 'Text')
-      .flatMap((node) => [node.props.children].flat())
-      .filter((child): child is string => typeof child === 'string')
-      .join('')
-  }
-
-  it('renders a plan as markdown inside the same bounded scroller', async () => {
-    const planText = '# Release plan\n\n- Run the tests'
-    await act(async () => {
-      renderer = create(
-        createElement(MobileNativeChatPermission, {
-          permission: {
-            title: 'Claude wants to present its plan',
-            subject: { kind: 'plan', text: planText, filePath: '/repo/PLAN.md' },
-            detail: 'raw json that must not be shown',
-            options: [{ label: 'Approve plan', send: '1' }]
-          },
-          onRespond: vi.fn(async () => true)
-        })
-      )
-    })
-
-    const content = renderer!.root.findByProps({ testID: 'native-chat-approval-content' })
-    const actions = renderer!.root.findByProps({ testID: 'native-chat-approval-actions' })
-
-    expect(content.props.style).toMatchObject({ maxHeight: 240, minHeight: 0, flexShrink: 1 })
-    expect(findByHostType(content, 'MobileMarkdown').props.content).toBe(planText)
-    const planFileShown = findAllByHostType(content, 'Text').some((node) => {
-      const children = Array.isArray(node.props.children)
-        ? node.props.children
-        : [node.props.children]
-      return children.some((child) => typeof child === 'string' && child.includes('/repo/PLAN.md'))
-    })
-    expect(planFileShown).toBe(true)
-    expect(content.findAllByProps({ children: 'raw json that must not be shown' })).toHaveLength(0)
-    expect(actions.findAllByProps({ children: 'Approve plan' })).toHaveLength(1)
-  })
-
-  describe("a subject of a kind this build cannot draw: a newer Orca's", () => {
-    const NEEDS_NEWER_ORCA = 'This request needs a newer version of Orca.'
-
-    async function renderNewer(detail: string | undefined) {
-      const onRespond = vi.fn(async () => true)
-      const onCancel = vi.fn(async () => true)
-      await act(async () => {
-        renderer = create(
-          createElement(MobileNativeChatPermission, {
-            permission: {
-              title: 'Review proposed change',
-              ...(detail ? { detail } : {}),
-              subject: JSON.parse('{"kind":"diff","path":"a.ts"}'),
-              prompt: { itemId: 'approval-1', expectedRevision: 2 },
-              options: [
-                { label: 'Approve', send: 'allow' },
-                { label: 'Deny', send: 'deny' }
-              ]
-            },
-            onRespond,
-            onCancel
-          })
-        )
-      })
-      const actions = renderer!.root.findByProps({ testID: 'native-chat-approval-actions' })
-      return { onRespond, onCancel, options: findAllByHostType(actions, 'Pressable') }
-    }
-
-    it('with no detail: says so, answers nothing, and only its cancel reaches the host', async () => {
-      const { onRespond, onCancel, options } = await renderNewer(undefined)
-      expect(
-        renderer!.root.findByProps({ testID: 'native-chat-approval-needs-newer-orca' }).props
-          .children
-      ).toBe(NEEDS_NEWER_ORCA)
-      expect(options).toHaveLength(2)
-      expect(options.every((option) => option.props.disabled === true)).toBe(true)
-      const cancel = renderer!.root.findByProps({ accessibilityLabel: 'Cancel' })
-      expect(cancel.props.disabled).toBe(false)
-      await act(async () => cancel.props.onPress())
-      expect(onCancel).toHaveBeenCalledWith({ itemId: 'approval-1', expectedRevision: 2 })
-      expect(onRespond).not.toHaveBeenCalled()
-    })
-
-    it('with a detail: shows it, and still approves nothing', async () => {
-      const { options } = await renderNewer('# Release')
-      const content = renderer!.root.findByProps({ testID: 'native-chat-approval-content' })
-      expect(content.findAllByProps({ children: '# Release' })).toHaveLength(1)
-      expect(options.every((option) => option.props.disabled === true)).toBe(true)
-    })
+    expect(renderer!.root.findAllByProps({ accessibilityRole: 'button' })).toHaveLength(0)
+    expect(renderer!.root.findByProps({ children: 'git status' }).props.selectable).toBe(true)
   })
 })

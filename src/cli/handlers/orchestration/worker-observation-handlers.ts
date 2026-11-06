@@ -27,6 +27,9 @@ export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHa
       const lines = [
         `${value.dispatch?.id ?? 'unknown'} task=${value.dispatch?.taskId ?? 'unknown'} [${value.worker.state}] stage=${value.worker.stage}`
       ]
+      if (value.dispatch?.followUpOf) {
+        lines.push(`Follow-up of: dispatch:${value.dispatch.followUpOf}`)
+      }
       // A live PTY can contain a dead agent; show the independent agent verdict and recovery action.
       if (value.projection) {
         lines.push(

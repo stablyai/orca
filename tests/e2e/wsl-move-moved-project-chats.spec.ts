@@ -17,14 +17,14 @@ import {
 } from './helpers/persisted-profile-state'
 import { wslMoveCutoverFixture } from '../../src/main/persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../../src/main/persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
-import { seedTestAgentSessionRecordStore } from '../../src/main/runtime/agent-session-record-store-test-harness'
-import { structuredAgentSessionTabId } from '../../src/shared/structured-agent-session-projection'
+import { seedTestAgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
+import { structuredAgentSessionTabId } from '../../src/shared/agent-session/view/structured-agent-session-projection'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../src/shared/wsl-host-internal-gate'
 import { closeTestJournalHostDatabases } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../src/shared/agent-session-record.test-fixture'
+} from '../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
 
 test.use({ seedTestRepo: false })
 

@@ -1,5 +1,5 @@
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
-import type { CheckRunDetailsTabPatch } from '@/components/editor/check-run-details-tab'
+import type { CheckRunDetailsTabPatch } from '@/components/editor/check-details/actions/check-run-details-tab'
 import type {
   CombinedDiffAlternate,
   ConflictReviewEntry,
@@ -10,8 +10,8 @@ import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
   GitCommitCompareSummary
-} from '../../../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+} from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { WorkspaceVisibleTabType } from '../../../../../../shared/tab-types'
 import type {
   BranchCompareLike,
@@ -96,8 +96,8 @@ export type EditorFilesSlice = {
     newFile: { pluginKey: string; id: string; title: string; extension: string },
     groupId?: string
   ) => Promise<void>
-  /** Creates an untitled file of `extension` holding `content` at the active workspace root. */
-  openSampleFileInActiveWorkspace: (sample: { extension: string; content: string }) => Promise<void>
+  /** Opens an empty `untitled<extension>` at the active workspace root. */
+  openBlankFileInActiveWorkspace: (extension: string) => Promise<void>
   // Why: sequences openFile/setMarkdownViewMode/reveal around an async Monaco remount. See docs/markdown-internal-link-opening-design.md.
   activateMarkdownLink: (
     rawHref: string | undefined,

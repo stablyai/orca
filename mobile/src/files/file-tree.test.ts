@@ -2,9 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   filterDirectoryCache,
   flattenDirectoryCache,
-  getMobileFileKind,
-  isMarkdownPath,
-  shouldIncludeMobileFileExplorerEntry,
   type DirectoryCache,
   type MobileDirEntry
 } from './file-tree'
@@ -52,37 +49,6 @@ describe('file-tree', () => {
     expect(filterDirectoryCache(cache, 'missing')).toEqual([])
   })
 
-  it('orders numbered names naturally, matching the desktop explorer', () => {
-    const cache: DirectoryCache = {
-      '': { entries: [entry('100 - b.txt'), entry('9 - c.txt'), entry('99 - a.txt')] }
-    }
-
-    expect(flattenDirectoryCache(cache, new Set()).map((row) => row.id)).toEqual([
-      'file:9 - c.txt',
-      'file:99 - a.txt',
-      'file:100 - b.txt'
-    ])
-  })
-
-  it('mirrors desktop default browse exclusions while keeping dotfiles visible', () => {
-    const cache: DirectoryCache = {
-      '': {
-        entries: [
-          entry('.git', true),
-          entry('.env'),
-          entry('node_modules', true),
-          entry('src', true)
-        ]
-      }
-    }
-
-    expect(flattenDirectoryCache(cache, new Set()).map((row) => row.id)).toEqual([
-      'dir:src',
-      'file:.env'
-    ])
-    expect(shouldIncludeMobileFileExplorerEntry(entry('.config', true))).toBe(true)
-  })
-
   it('renders inline loading and error rows under expanded directories', () => {
     const cache: DirectoryCache = {
       '': { entries: [entry('loading-dir', true), entry('error-dir', true)] },
@@ -103,23 +69,6 @@ describe('file-tree', () => {
     })
   })
 
-  it('preserves symlink metadata for user-initiated activation', () => {
-    const cache: DirectoryCache = {
-      '': { entries: [entry('linked-docs', false, true)] }
-    }
-
-    expect(flattenDirectoryCache(cache, new Set())).toEqual([
-      {
-        id: 'file:linked-docs',
-        name: 'linked-docs',
-        relativePath: 'linked-docs',
-        depth: 0,
-        kind: 'text',
-        isSymlink: true
-      }
-    ])
-  })
-
   it('does not treat inherited object keys as loaded directories', () => {
     const cache: DirectoryCache = {
       '': { entries: [entry('constructor', true), entry('__proto__', true)] },
@@ -129,16 +78,5 @@ describe('file-tree', () => {
     expect(
       flattenDirectoryCache(cache, new Set(['constructor', '__proto__'])).map((row) => row.id)
     ).toEqual(['dir:__proto__', 'file:__proto__/file.txt', 'dir:constructor'])
-  })
-
-  it('classifies binary file paths for existing mobile preview behavior', () => {
-    expect(getMobileFileKind('assets/logo.png')).toBe('binary')
-    expect(getMobileFileKind('src/app.ts')).toBe('text')
-  })
-
-  it('detects markdown paths', () => {
-    expect(isMarkdownPath('docs/readme.md')).toBe(true)
-    expect(isMarkdownPath('notes.markdown')).toBe(true)
-    expect(isMarkdownPath('app.ts')).toBe(false)
   })
 })

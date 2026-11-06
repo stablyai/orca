@@ -1242,6 +1242,13 @@
   flex: 0 0 auto;
 }
 
+.mobile-page-root .mp-home-status > svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
+  color: var(--m-text-secondary);
+}
+
 .mobile-page-root .mp-home-text {
   flex: 1;
   min-width: 0;
@@ -1311,6 +1318,14 @@
   stroke-width: 2.2;
 }
 
+/* The frame keeps the phone's aspect ratio, so a narrow one is also short: drop
+   the Home mock's extra rows there so Tasks and Automations stay above the bar. */
+@container mp-phone-screen (max-width: 345px) {
+  .mobile-page-root .mp-home-group > .is-tall-only {
+    display: none;
+  }
+}
+
 .mobile-page-root .mp-status-dot {
   width: 7px;
   height: 7px;
@@ -1370,23 +1385,6 @@
 .mobile-page-root .mp-home-bar-button > span {
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-/* The narrow-layout frame can't fit icon and label in half its width. */
-@container mp-phone-screen (max-width: 320px) {
-  .mobile-page-root .mp-home-bar-button {
-    padding: 0 4px;
-    font-size: 12px;
-  }
-
-  .mobile-page-root .mp-home-bar-button svg {
-    display: none;
-  }
-}
-
-.mobile-page-root .mp-home-bar-button.is-secondary {
-  background: var(--m-bg-raised);
-  color: var(--m-text-primary);
 }
 
 .mobile-page-root .mp-home-bar-button.is-primary {

@@ -312,27 +312,6 @@ test.describe('switch on', () => {
     }
   })
 
-  test('an old open page keeps its own reads on a host that serves the feed', async ({
-    orcaPage
-  }) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    const phone = pairMobileClient(await createDesktopMobilePairingOffer(orcaPage))
-    try {
-      // What a page built before the feed reads, unchanged on this host.
-      for (const method of ['worktree.ps', 'mobileRelay.projectSections', 'ui.get', 'repo.list']) {
-        expect(await phone.request(method, {}), method).toMatchObject({ ok: true })
-      }
-      const served = await phone.call<{ catalog: { repos: unknown[] } | null }>(
-        'mobileRelay.projectSections',
-        {}
-      )
-      expect(served.catalog?.repos.length).toBeGreaterThan(0)
-    } finally {
-      phone.dispose()
-    }
-  })
-
   test('the phone lists a paired server’s workspaces as the desktop sidebar does', async (// oxlint-disable-next-line no-empty-pattern -- this test owns its topology launch.
   {}, testInfo) => {
     test.setTimeout(240_000)

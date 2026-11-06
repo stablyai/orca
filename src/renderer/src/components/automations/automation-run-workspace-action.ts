@@ -1,18 +1,20 @@
 import { openExistingStructuredSession } from '@/lib/open-existing-structured-session'
-import { ALL_TUI_AGENTS } from '../../../../shared/tui-agent-display-names'
-import { isStructuredAgentSessionIdFor } from '../../../../shared/structured-agent-session-create'
+import { ALL_TUI_AGENTS } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
+import { isStructuredAgentSessionIdFor } from '../../../../shared/agent-session/structured-agent-session-create'
 import type { AutomationRun } from '../../../../shared/automations-types'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
   activateAndRevealWorktree,
-  activateAndRevealFolderWorkspace
+  activateAndRevealFolderWorkspace,
+  type ActivateAndRevealResult
 } from '@/lib/worktree-activation'
+import { activateWslMovedWorkspace } from '@/lib/wsl-moved-chat-activation'
 import { useAppStore } from '@/store'
 import { activateTerminalTabOnOwner } from '@/lib/terminal-tab-owner-activation'
 import { activateWebRuntimeSessionTab } from '@/runtime/web-runtime-session-tab-lifecycle'
 import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-focus-intent'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { buildAutomationRunOpenLayout } from './automation-run-open-target'
 import type { AutomationsPageActionContext } from './automations-page-action-context'
@@ -113,27 +115,27 @@ export function createAutomationRunWorkspaceAction({
       }
       return
     }
-    const reveal = () => {
+    const reveal = (workspaceId = run.workspaceId!) => {
       const options = {
         executionHostId: runWorktree.hostId,
         runtimeEnvironmentId: ownerEnvironmentId,
         providesInitialSurface:
           runViewState.availability === 'terminal' || runViewState.availability === 'chat'
       }
-      const scope = parseWorkspaceKey(run.workspaceId!)
+      const scope = parseWorkspaceKey(workspaceId)
       return scope?.type === 'folder' && runViewState.availability !== 'terminal'
         ? activateAndRevealFolderWorkspace(scope.folderWorkspaceId, options)
-        : activateAndRevealWorktree(run.workspaceId!, options)
+        : activateAndRevealWorktree(workspaceId, options)
     }
     if (runViewState.availability === 'chat' && run.chatSessionId) {
       const agent = ALL_TUI_AGENTS.find((entry) =>
         isStructuredAgentSessionIdFor(entry, run.chatSessionId!)
       )
-      if (!agent || !reveal()) {
+      if (!agent) {
         toast.error(workspaceUnavailableMessage())
         return
       }
-      void openRunChat(run.workspaceId, run.chatSessionId, ownerEnvironmentId)
+      void openRunChat(run.workspaceId, run.chatSessionId, ownerEnvironmentId, reveal)
       return
     }
     if (runViewState.availability === 'terminal' && !terminalTarget) {
@@ -191,15 +193,33 @@ export function createAutomationRunWorkspaceAction({
 async function openRunChat(
   worktreeId: string,
   sessionId: string,
-  environmentId: string | null
+  environmentId: string | null,
+  revealWorkspace: (workspaceId: string) => ActivateAndRevealResult | false
 ): Promise<void> {
   try {
     await openExistingStructuredSession(
       { workspaceId: worktreeId, sessionId },
       {
         target: environmentId ? { kind: 'environment', environmentId } : { kind: 'local' },
-        present: (outcome) => {
-          if (outcome !== 'activated') {
+        initialize: () => {
+          if (revealWorkspace(worktreeId)) {
+            return true
+          }
+          toast.error(workspaceUnavailableMessage())
+          return false
+        },
+        present: (outcome, result) => {
+          if (result.kind === 'opened') {
+            const workspace = result.target.worktreeId
+            if (
+              useAppStore.getState().activeWorktreeId !== workspace &&
+              !activateWslMovedWorkspace(workspace)
+            ) {
+              revealWorkspace(workspace)
+            }
+          } else if (result.kind === 'failed' && result.failure.reason === 'workspace-missing') {
+            toast.error(workspaceUnavailableMessage())
+          } else if (outcome !== 'activated') {
             runChatUnavailable()
           }
         },

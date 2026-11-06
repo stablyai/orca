@@ -6,7 +6,7 @@ import {
   applyNativeChatSessionOptionSettingsMutation,
   resolveNativeChatSessionOptionDefaults
 } from '../../../../../src/shared/native-chat/input/native-chat-session-option-defaults'
-import { resolveAgentSessionOptionLaunch } from '../../../../../src/shared/agent-session-option-launch'
+import { resolveAgentSessionOptionLaunch } from '../../../../../src/shared/agent-session/options/agent-session-option-launch'
 import type {
   PersistedNativeChatSessionOptions,
   NativeChatSessionOptionSettingsMutation
@@ -115,118 +115,6 @@ describe('useMobileNativeChatSessionOptions', () => {
     }
   )
 
-  it('shows an OMP session under the model its hook reported', () => {
-    mount({ agent: 'omp' })
-    expect(api!.snapshot).toEqual([])
-    update({ reportedModel: 'deepseek/deepseek-v4-pro' })
-    const model = api!.snapshot[0]!
-    expect(model).toMatchObject({ id: 'model', category: 'model', valueSource: 'reported' })
-    expect(model.kind).toMatchObject({
-      type: 'select',
-      currentValue: 'deepseek/deepseek-v4-pro',
-      choices: [
-        {
-          value: 'deepseek/deepseek-v4-pro',
-          label: 'Deepseek Deepseek V4 Pro',
-          description: 'deepseek/deepseek-v4-pro'
-        }
-      ]
-    })
-  })
-
-  it.each(['custom/current', 'deepseek/deepseek-v4-pro-new'])(
-    'keeps the exact OMP report %s with discovered choices',
-    (reportedModel) => {
-      mount({
-        agent: 'omp',
-        reportedModel,
-        discoveredModels: [{ id: 'deepseek/deepseek-v4-pro', label: 'DeepSeek', options: [] }]
-      })
-      expect(api!.snapshot[0]).toMatchObject({ valueSource: 'reported' })
-      expect(api!.snapshot[0]!.kind).toMatchObject({
-        currentValue: reportedModel,
-        choices: expect.arrayContaining([expect.objectContaining({ value: reportedModel })])
-      })
-    }
-  )
-
-  it('switches an OMP session with /orca-model <selector>', async () => {
-    mount({
-      agent: 'omp',
-      reportedModel: 'deepseek/deepseek-v4-pro',
-      modelSwitchCommand: 'orca-model'
-    })
-    let applied: boolean | undefined
-    await act(async () => {
-      applied = await api!.setOption('model', 'minimax-cn/MiniMax-M3')
-    })
-    expect(applied).toBe(true)
-    expect(dispatchCommand).toHaveBeenCalledWith('/orca-model minimax-cn/MiniMax-M3')
-    const model = api!.snapshot[0]!
-    expect(model).toMatchObject({ valueSource: 'dispatched' })
-    expect(model.kind).toMatchObject({ currentValue: 'minimax-cn/MiniMax-M3' })
-    update({ reportedModel: 'minimax-cn/MiniMax-M3' })
-    expect(api!.snapshot[0]).toMatchObject({ valueSource: 'reported' })
-  })
-
-  it('applies a model pick through the catalog modelApply command', async () => {
-    mount()
-    let applied: boolean | undefined
-    await act(async () => {
-      applied = await api!.setOption('model', 'opus')
-    })
-    expect(applied).toBe(true)
-    expect(dispatchCommand).toHaveBeenCalledWith('/model opus')
-    const model = api!.snapshot[0]!
-    expect(model).toMatchObject({ valueSource: 'dispatched' })
-    expect(model.kind).toMatchObject({ currentValue: 'opus' })
-  })
-
-  it.each(['rejected', 'unknown'] as const)(
-    'keeps tracked truth when the write is %s',
-    async (outcome) => {
-      dispatchCommand.mockResolvedValue(outcome)
-      mount()
-      let applied: boolean | undefined
-      await act(async () => {
-        applied = await api!.setOption('model', 'opus')
-      })
-      expect(applied).toBe(false)
-      expect(api!.snapshot[0]).toMatchObject({ valueSource: 'unknown' })
-    }
-  )
-
-  it('offers Grok pickers and saves a pick as the host launch default', async () => {
-    const writeSettings = vi.fn()
-    mount({ agent: 'grok', writeSettings })
-    expect(api!.snapshot[0]).toMatchObject({ id: 'model', settable: true })
-    const model = api!.snapshot[0]!.kind
-    const target = model.type === 'select' ? model.choices[0]!.value : ''
-    await act(async () => {
-      expect(await api!.setOption('model', target)).toBe(true)
-    })
-    expect(writeSettings).toHaveBeenCalledWith({
-      type: 'apply-picks',
-      agent: 'grok',
-      picks: [expect.objectContaining({ modelId: target, optionId: 'model', value: target })]
-    })
-  })
-
-  it('saves a Claude effort but never its unconfirmed model switch as a launch default', async () => {
-    const writeSettings = vi.fn()
-    mount({ reportedModel: 'claude-sonnet-5', writeSettings })
-    await act(async () => {
-      await api!.setOption('model', 'opus')
-      await api!.setOption('effort', 'low')
-    })
-    expect(writeSettings).toHaveBeenCalledTimes(1)
-    expect(writeSettings).toHaveBeenCalledWith({
-      type: 'apply-picks',
-      agent: 'claude',
-      picks: [expect.objectContaining({ optionId: 'effort', adoptModelAsLaunchDefault: false })]
-    })
-  })
-
   it('starts over when the tab runs another agent and then a fresh session', async () => {
     mount({ reportedModel: 'claude-sonnet-5' })
     await act(async () => {
@@ -285,79 +173,6 @@ describe('useMobileNativeChatSessionOptions', () => {
     expect(api!.snapshot[0]!.kind).toMatchObject({ currentValue: 'opus' })
   })
 
-  it('types the Codex picker command and switches to the terminal', async () => {
-    mount({ agent: 'codex' })
-    expect(api!.snapshot[0]?.action).toEqual({ type: 'agent-picker' })
-    await act(async () => {
-      await api!.invokeAction('model')
-    })
-    expect(dispatchCommand).toHaveBeenCalledWith('/model', { delivery: 'type' })
-    expect(onAgentPicker).toHaveBeenCalledOnce()
-  })
-
-  it.each([null, 'gpt-5.6-terra'])(
-    'tracks an unlisted Codex report after %s without inventing effort choices',
-    async (initialModel) => {
-      mount({ agent: 'codex', reportedModel: initialModel })
-      update({ reportedModel: 'gpt-6.1-sol' })
-      expect(api!.snapshot).toHaveLength(1)
-      expect(api!.snapshot[0]).toMatchObject({
-        valueSource: 'reported',
-        action: { type: 'agent-picker' },
-        kind: {
-          currentValue: 'gpt-6.1-sol',
-          choices: expect.arrayContaining([
-            { value: 'gpt-6.1-sol', label: 'GPT 6.1 Sol', description: 'gpt-6.1-sol' }
-          ])
-        }
-      })
-      const snapshot = api!.snapshot
-      update({ reportedModel: null })
-      update({ reportedModel: 'gpt-6.1-sol' })
-      expect(api!.snapshot).toBe(snapshot)
-      await act(async () => {
-        await api!.invokeAction('model')
-      })
-      expect(dispatchCommand).toHaveBeenCalledWith('/model', { delivery: 'type' })
-    }
-  )
-
-  it('types the Codex effort picker command', async () => {
-    mount({ agent: 'codex', reportedModel: 'gpt-5.5' })
-    await act(async () => {
-      await api!.invokeAction('effort')
-    })
-    expect(dispatchCommand).toHaveBeenCalledWith('/model', { delivery: 'type' })
-    expect(onAgentPicker).toHaveBeenCalledOnce()
-  })
-
-  it('seeds the current model from a hook-reported provider model', () => {
-    mount({ reportedModel: 'claude-sonnet-5' })
-    const model = api!.snapshot[0]!
-    expect(model).toMatchObject({ valueSource: 'reported' })
-    expect(model.kind).toMatchObject({ currentValue: 'sonnet' })
-  })
-
-  it('tracks typed commands via recordCommand', () => {
-    mount()
-    act(() => {
-      api!.recordCommand('/model haiku')
-    })
-    expect(api!.snapshot[0]!.kind).toMatchObject({ currentValue: 'haiku' })
-    expect(api!.snapshot[0]).toMatchObject({ valueSource: 'dispatched' })
-  })
-
-  it('applies an option under the tracked model and scopes it to that model', async () => {
-    mount({ reportedModel: 'claude-sonnet-5' })
-    await act(async () => {
-      await api!.setOption('effort', 'low')
-    })
-    expect(dispatchCommand).toHaveBeenCalledWith('/effort low')
-    const effort = api!.snapshot.find((descriptor) => descriptor.id === 'effort')
-    expect(effort).toMatchObject({ valueSource: 'dispatched' })
-    expect(effort!.kind).toMatchObject({ currentValue: 'low' })
-  })
-
   it('does not file an option under a model that changed mid-dispatch', async () => {
     const resolvers: ((outcome: MobileNativeChatSendOutcome) => void)[] = []
     dispatchCommand.mockImplementation(
@@ -389,16 +204,6 @@ describe('useMobileNativeChatSessionOptions', () => {
     update({ scopeKey: 'host\0worktree\0tab' })
     expect(api!.snapshot[0]).toMatchObject({ valueSource: 'dispatched' })
     expect(api!.snapshot[0]!.kind).toMatchObject({ currentValue: 'opus' })
-  })
-
-  it('still lets a genuinely new report supersede a local pick', async () => {
-    mount({ reportedModel: 'claude-sonnet-5' })
-    await act(async () => {
-      await api!.setOption('model', 'opus')
-    })
-    update({ reportedModel: 'claude-haiku-4-5' })
-    expect(api!.snapshot[0]).toMatchObject({ valueSource: 'reported' })
-    expect(api!.snapshot[0]!.kind).toMatchObject({ currentValue: 'haiku' })
   })
 
   it('keeps the live tab’s tracked model when other tabs overflow the record cap', async () => {

@@ -103,6 +103,39 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
             }
   }
 
+/** A send a finished worker took as its next Task: worker-start's receipt plus where it went. */
+export type WorkerFollowUpReceipt = WorkerStartAgentReceipt & {
+  delivery: 'follow_up' | 'reopened' | 'started_fresh'
+  followUpOf: string
+}
+
+type WorkerFollowUpFields = Omit<WorkerStartFields, 'mode' | 'modeDetail'> & {
+  delivery: WorkerFollowUpReceipt['delivery']
+  followUpOf: string
+  /** Behind the worker's own finishing turn: it runs when that turn ends. */
+  queued?: true
+  mode?: string
+  modeDetail?: string
+}
+
+export const WORKER_FOLLOW_UP_VIEW: OrchestrationAgentView<
+  WorkerFollowUpReceipt,
+  WorkerFollowUpFields
+> = {
+  fields: (value) => {
+    const { mode, modeDetail, ...start } = WORKER_START_VIEW.fields(value)
+    return {
+      delivery: value.delivery,
+      followUpOf: value.followUpOf,
+      ...start,
+      queued: value.turnStart === 'queued' ? true : undefined,
+      // The launch mode describes a new worker; only a fresh start is one.
+      ...(value.delivery === 'started_fresh' ? { mode, modeDetail } : {})
+    }
+  },
+  failure: WORKER_START_VIEW.failure
+}
+
 function findEffectId(
   effects: unknown[] | undefined,
   kind: string,

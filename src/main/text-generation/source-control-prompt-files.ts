@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { getUtf8ChunkEndIndex } from '../../shared/utf8-byte-limits'
 import { encodePosixPrintfRecords } from '../../shared/posix-printf-encoding'
 import { toWindowsWslUncPath } from '../../shared/wsl-paths'
-import type { CommitMessagePlan } from '../../shared/commit-message-plan'
+import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
 
 // Reserve the transport signature under the native text attachment cap.
 const PAYLOAD_BYTES = 5 * 1024 * 1024 - 3
