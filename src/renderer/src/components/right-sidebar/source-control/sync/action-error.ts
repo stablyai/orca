@@ -2,7 +2,7 @@ import type { RemoteOpKind } from '../review/source-control-primary-action-types
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 
 export type AbortActionErrorKind = 'abort_merge' | 'abort_rebase'
-export type SourceControlActionErrorKind = RemoteOpKind | AbortActionErrorKind
+export type SourceControlActionErrorKind = RemoteOpKind | AbortActionErrorKind | 'switch_branch'
 export type SourceControlRecoveryStatusEntry = Pick<GitStatusEntry, 'path' | 'status' | 'area'>
 
 export const SOURCE_CONTROL_ACTION_ERROR_ENTRY_SNAPSHOT_LIMIT = 120
