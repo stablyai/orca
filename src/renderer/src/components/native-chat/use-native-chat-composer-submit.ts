@@ -111,18 +111,23 @@ export function useNativeChatComposerSubmit(args: {
         if (!next) {
           return
         }
-        setDraft(next.draft)
-        if (input) {
-          writeNativeChatComposerText(input, next.draft, next.caret)
-        }
-        setCaret(next.caret)
         if (modePick && mode !== null) {
+          if (!structuredTransport.optionsSurface.admits?.('interactionMode', mode)) {
+            input?.focus()
+            return
+          }
           runSessionOptionSurfaceCall(
             mode,
             () => undefined,
             () => structuredTransport.optionsSurface.setOption('interactionMode', mode)
           )
-        } else {
+        }
+        setDraft(next.draft)
+        if (input) {
+          writeNativeChatComposerText(input, next.draft, next.caret)
+        }
+        setCaret(next.caret)
+        if (!modePick) {
           setEntered(true)
         }
       },

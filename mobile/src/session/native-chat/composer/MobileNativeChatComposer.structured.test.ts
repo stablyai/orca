@@ -28,6 +28,14 @@ import { findByHostType } from '../../../test-support/react-test-renderer-host-n
 import type { RpcClient } from '../../../transport/rpc-client'
 import { structuredAgentSessionHostSupport } from '../../mobile-structured-agent-session-host-support'
 import { AGENT_SESSION_RUNTIME_CAPABILITIES } from '../../../../../src/shared/agent-session/agent-session-runtime-capabilities'
+import { useMobileStructuredAgentOptions } from '../../use-mobile-structured-agent-options'
+import {
+  optionsClient,
+  recordingMutate,
+  accepted
+} from '../../use-mobile-structured-agent-options.test-fixture'
+import type { AgentSessionOptionResult } from '../../../../../src/shared/agent-session/agent-session-wire'
+import type { StructuredAgentSessionMutationResult } from '../../mobile-structured-agent-session-rpc'
 import { createElement, useState, type ComponentProps } from 'react'
 import type { SessionOptionDescriptor } from '../../../../../src/shared/native-chat/input/native-chat-session-options'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
@@ -173,6 +181,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
           settable: true
         }
       ]
+      let eligible = false
       const reply = Promise.withResolvers<boolean>()
       const setOption = vi.fn(() => reply.promise)
       const onSend = vi.fn(async () => true)
@@ -190,6 +199,13 @@ describe('MobileNativeChatComposer on a structured chat', () => {
             isWorking: false,
             controller: {
               snapshot,
+              optionSurface: {
+                admits: () => eligible,
+                getSnapshot: () => snapshot,
+                setOption: async () => ({ snapshot }),
+                invokeAction: async () => ({ snapshot }),
+                subscribe: () => () => {}
+              },
               pendingId: null,
               setOption,
               invokeAction: async () => false,
@@ -208,6 +224,11 @@ describe('MobileNativeChatComposer on a structured chat', () => {
         })
       })
       act(() => field().props.onSelectionChange({ nativeEvent: { selection: { end: 8 } } }))
+      await act(async () => labelled('/plan')[0]!.props.onPress())
+      expect(field().props.value).toBe('keep /pl tail')
+      expect(setOption).not.toHaveBeenCalled()
+      expect(labelled('/plan')).not.toHaveLength(0)
+      eligible = true
       await act(async () => labelled('/plan')[0]!.props.onPress())
       expect(setOption).toHaveBeenLastCalledWith('interactionMode', 'plan')
       expect(field().props.value).toBe('keep  tail')
@@ -229,6 +250,99 @@ describe('MobileNativeChatComposer on a structured chat', () => {
       expect(onRemoveAttachment).not.toHaveBeenCalled()
     }
   )
+
+  it('preserves an opposite pick through a real transmitted mode write and retries after settlement', async () => {
+    let mode: 'default' | 'plan' = 'default'
+    const client = optionsClient(async () => ({
+      models: [],
+      current: { interactionMode: mode, acceptedInputSources: { interactionMode: 'saved' } }
+    }))
+    const reply =
+      Promise.withResolvers<StructuredAgentSessionMutationResult<AgentSessionOptionResult>>()
+    const { calls, mutate } = recordingMutate(async (index, fields) =>
+      index === 0
+        ? reply.promise
+        : accepted({ key: String(fields.key), value: String(fields.value) }, true)
+    )
+    let options: ReturnType<typeof useMobileStructuredAgentOptions> | undefined
+    const focus = vi.fn()
+    const onSend = vi.fn(async () => true)
+    function Conversation() {
+      const [value, onChangeText] = useState('keep /pl tail')
+      options = useMobileStructuredAgentOptions({
+        agent: 'codex',
+        client: client.client,
+        sessionId: 'phone-plan-pending',
+        enabled: true,
+        fence: 1,
+        turnId: null,
+        unloadedTurnRevisions: undefined,
+        mutate,
+        hostSupport: CAPABLE
+      })
+      return draw({
+        agent: 'codex',
+        value,
+        onChangeText,
+        onSend,
+        structured: structured(),
+        sessionOptions: {
+          isWorking: false,
+          controller: {
+            snapshot: options.optionSnapshot,
+            optionSurface: options.optionSurface,
+            pendingId: options.pendingOptionId,
+            setOption: options.setStructuredOption,
+            invokeAction: options.invokeStructuredOption,
+            recordCommand: () => {}
+          }
+        },
+        attachments: [{ id: 'retained', path: '/remote/kept.png', previewUri: 'file:///kept.png' }]
+      })
+    }
+    await act(async () => {
+      renderer = create(createElement(Conversation), {
+        createNodeMock: (element) => (element.type === 'TextInput' ? { focus } : null)
+      })
+    })
+    act(() => field().props.onSelectionChange({ nativeEvent: { selection: { end: 8 } } }))
+    await act(async () => labelled('/plan')[0]!.props.onPress())
+    expect(field().props.value).toBe('keep  tail')
+    expect(calls).toHaveLength(1)
+    expect(options!.optionSnapshot.find((entry) => entry.id === 'interactionMode')?.settable).toBe(
+      false
+    )
+    await act(async () => {
+      await options!.setStructuredOption('effort', 'high')
+    })
+    expect(options!.optionSnapshot.find((entry) => entry.id === 'interactionMode')?.settable).toBe(
+      false
+    )
+    act(() => field().props.onChangeText('keep /def tail'))
+    act(() => field().props.onSelectionChange({ nativeEvent: { selection: { end: 9 } } }))
+    await act(async () => labelled('/default')[0]!.props.onPress())
+    expect(field().props.value).toBe('keep /def tail')
+    expect(calls).toHaveLength(2)
+    expect(labelled('/default')).not.toHaveLength(0)
+    mode = 'plan'
+    await act(async () =>
+      reply.resolve(
+        accepted(
+          { key: 'interactionMode', value: 'plan', options: { interactionMode: 'plan' } },
+          true
+        )
+      )
+    )
+    expect(options!.optionSnapshot.find((entry) => entry.id === 'interactionMode')?.settable).toBe(
+      true
+    )
+    await act(async () => labelled('/default')[0]!.props.onPress())
+    expect(field().props.value).toBe('keep  tail')
+    expect(calls).toHaveLength(3)
+    expect(calls[2]!.fields).toEqual({ key: 'interactionMode', value: 'default' })
+    expect(focus).toHaveBeenCalled()
+    expect(onSend).not.toHaveBeenCalled()
+  })
 
   it.each([
     ['', 'accepted'],

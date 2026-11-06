@@ -5,6 +5,10 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useLayoutEffect, type RefObject } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createStructuredAgentSessionOptionsWriteOwner } from '../../../../shared/agent-session/options/structured-agent-session-options-write-owner'
+import { createStructuredSessionSelectionController } from '../../../../shared/agent-session/options/structured-agent-session-selection-operations'
+import { createStructuredAgentSessionOptionState } from '../../../../shared/agent-session/options/structured-agent-session-options'
+import { structuredAgentSessionSeedCatalog } from '../../../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import type { QueuedMessageInlineEditor } from './use-structured-agent-session-queued-edit'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
@@ -120,6 +124,7 @@ function renderStructuredChat(
     send: vi.fn(() => true),
     dispatchCommand: vi.fn(async () => ({ handled: false, accepted: false, error: null })),
     optionsSurface: {
+      admits: vi.fn(() => true),
       getSnapshot: () => [],
       setOption: vi.fn(async () => ({ snapshot: [] })),
       invokeAction: vi.fn(),
@@ -301,6 +306,76 @@ describe('structured composer control picks', () => {
       expect(mocks.sendNativeChatTypedCommand).not.toHaveBeenCalled()
     }
   )
+
+  it('keeps a locked or transmitted mode pick intact even through a retained event callback', async () => {
+    mocks.draft = '/pl'
+    mocks.imageAttachments = [{ id: 'kept-image', path: '/tmp/kept.png' }]
+    const { transport, rerender } = renderStructuredChat(undefined, 'codex')
+    const controller = createStructuredSessionSelectionController(() => {})
+    const view = createStructuredAgentSessionOptionState(
+      'codex',
+      structuredAgentSessionSeedCatalog('codex')
+    )
+    let ready = false
+    const reply = Promise.withResolvers<{ kind: 'accepted'; options: Record<string, string> }>()
+    const transmit = vi.fn(() => reply.promise)
+    const writer = createStructuredAgentSessionOptionsWriteOwner(() => ({
+      controller,
+      record: view.record,
+      view,
+      snapshot: [MODE],
+      ready,
+      providerStarting: false,
+      existingChat: true,
+      isCurrentContext: () => true,
+      flush: () => controller.flush(transmit),
+      revalidate: () => {},
+      revalidateOn: 'settled'
+    }))
+    transport.optionsSurface.admits = writer.admits
+    vi.mocked(transport.optionsSurface.setOption).mockImplementation(async (id, value) => {
+      await writer.setOption(id, value)
+      return { snapshot: [MODE] }
+    })
+    transport.optionSnapshot = [MODE]
+    rerender()
+    const plan = mocks.fieldProps!.autocomplete!.items!.find((item) => item.name === 'plan')!
+    const choose = mocks.fieldProps!.onChoosePickerItem!
+    const input = document.querySelector('textarea')!
+    input.value = 'keep /pl tail'
+    input.setSelectionRange(8, 8)
+    mocks.setDraft.mockClear()
+    act(() => choose(plan))
+    expect(input.value).toBe('keep /pl tail')
+    expect(input.selectionStart).toBe(8)
+    expect(mocks.setDraft).not.toHaveBeenCalled()
+    expect(transmit).not.toHaveBeenCalled()
+    ready = true
+    act(() => choose(plan))
+    expect(input.value).toBe('keep  tail')
+    expect(transmit).toHaveBeenCalledTimes(1)
+    input.value = 'keep /def tail'
+    input.setSelectionRange(9, 9)
+    const leave: CommandItem = {
+      kind: 'command',
+      id: 'command:default',
+      name: 'default',
+      token: '/default',
+      skillCollision: false,
+      orcaOwned: true
+    }
+    // No rerender: this callback still holds the enabled descriptor from before Plan was issued.
+    act(() => choose(leave))
+    expect(input.value).toBe('keep /def tail')
+    expect(input.selectionStart).toBe(9)
+    expect(transmit).toHaveBeenCalledTimes(1)
+    await act(async () => reply.resolve({ kind: 'accepted', options: { interactionMode: 'plan' } }))
+    await act(async () => choose(leave))
+    expect(input.value).toBe('keep  tail')
+    expect(transmit).toHaveBeenCalledTimes(2)
+    expect(transport.send).not.toHaveBeenCalled()
+    expect(mocks.clearImageAttachments).not.toHaveBeenCalled()
+  })
 
   it('keeps namesake skills and a retained mode pick on an unsupported host as text', async () => {
     mocks.draft = '/pl'

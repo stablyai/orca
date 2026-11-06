@@ -130,3 +130,59 @@ it.each([2, 20])('isolates mode refresh reads and renders with %s mounted chats'
     mocks.subscribeStatus.mockImplementation(async () => ({ unsubscribe: vi.fn() }))
   }
 })
+
+it('projects transmitted mode admission to the optimistic exit control and recovers after settlement', async () => {
+  const sessionId = 'mode-admission-projection'
+  forgetStructuredSessionSelection(sessionId)
+  let interactionMode: 'default' | 'plan' = 'default'
+  const reply = Promise.withResolvers<{
+    key: string
+    value: string
+    options: Record<string, string>
+  }>()
+  answer({
+    options: async () => ({
+      models: [],
+      current: { interactionMode, acceptedInputSources: { interactionMode: 'saved' } }
+    })
+  })
+  const { mutate } = mutateWith(async (_method, _fingerprint, fields) => {
+    const pick = fields as { key: string; value: string }
+    return pick.key === 'interactionMode' ? reply.promise : { key: pick.key, value: pick.value }
+  })
+  const hook = renderOptions({ ...REOPENED, sessionId }, mutate)
+  try {
+    await waitFor(() =>
+      expect(hook.result.current.optionSurface.admits?.('interactionMode', 'plan')).toBe(true)
+    )
+    let pending: Promise<boolean> | undefined
+    act(() => {
+      pending = hook.result.current.setStructuredOption('interactionMode', 'plan')
+    })
+    await waitFor(() =>
+      expect(currentValue(hook.result.current.optionSnapshot, 'interactionMode')).toBe('plan')
+    )
+    expect(
+      hook.result.current.optionSnapshot.find((entry) => entry.id === 'interactionMode')?.settable
+    ).toBe(false)
+    await act(async () => {
+      await hook.result.current.setStructuredOption('effort', 'high')
+    })
+    expect(
+      hook.result.current.optionSnapshot.find((entry) => entry.id === 'interactionMode')?.settable
+    ).toBe(false)
+    interactionMode = 'plan'
+    await act(async () => {
+      reply.resolve({ key: 'interactionMode', value: 'plan', options: { interactionMode: 'plan' } })
+      await pending
+    })
+    await waitFor(() =>
+      expect(
+        hook.result.current.optionSnapshot.find((entry) => entry.id === 'interactionMode')?.settable
+      ).toBe(true)
+    )
+  } finally {
+    hook.unmount()
+    forgetStructuredSessionSelection(sessionId)
+  }
+})

@@ -49,6 +49,7 @@ export function useMobileNativeChatComposerMenu(input: {
   onPickSkill?: (skill: { token: string; path?: string }) => void
   editing?: boolean
   interactionModeSupported?: boolean
+  admitsInteractionMode?: (mode: AgentSessionInteractionMode) => boolean
   onPickInteractionMode?: (mode: AgentSessionInteractionMode) => void
   refuseCommand?: (text: string) => boolean
   /** Picking `/goal` enters goal mode instead of inserting the command; an edit has no goal mode. */
@@ -179,6 +180,21 @@ export function useMobileNativeChatComposerMenu(input: {
     if (row.kind === 'command' && input.refuseCommand?.(row.token)) {
       return
     }
+    const enterGoalMode = input.goalMode?.enter
+    const changeMode = input.onPickInteractionMode
+    const mode =
+      !input.editing &&
+      structuredCatalog &&
+      input.interactionModeSupported &&
+      row.kind === 'command' &&
+      row.orcaOwned
+        ? agentSessionInteractionCommand(agent ?? '', row.token)
+        : null
+    const modeDraft = mode !== null ? structuredAgentSessionModePickDraft(value, cursor, row) : null
+    if (mode !== null && (!modeDraft || !changeMode || !input.admitsInteractionMode?.(mode))) {
+      input.focusField()
+      return
+    }
     setMenuKind(null)
     // Restore page field focus after a menu tap so typing continues at the inserted pick.
     input.focusField()
@@ -188,29 +204,21 @@ export function useMobileNativeChatComposerMenu(input: {
       placeCaret(next.caret)
       return
     }
-    const enterGoalMode = input.goalMode?.enter
-    const changeMode =
-      !input.editing && structuredCatalog && input.interactionModeSupported
-        ? input.onPickInteractionMode
-        : undefined
-    const mode =
-      changeMode && row.kind === 'command' && row.orcaOwned
-        ? agentSessionInteractionCommand(agent ?? '', row.token)
-        : null
     if (
       mode !== null ||
       (enterGoalMode &&
         structuredAgentSessionPickEntersGoalMode(row, input.goalMode?.hostSetsGoals === true))
     ) {
-      const next = structuredAgentSessionModePickDraft(value, cursor, row)
+      const next = modeDraft ?? structuredAgentSessionModePickDraft(value, cursor, row)
       if (!next) {
         return
       }
-      setDraft(next.draft)
-      placeCaret(next.caret)
       if (mode !== null) {
         changeMode?.(mode)
-      } else {
+      }
+      setDraft(next.draft)
+      placeCaret(next.caret)
+      if (mode === null) {
         enterGoalMode?.()
       }
       return
