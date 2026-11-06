@@ -119,6 +119,10 @@ describe('ClaudeSessionContinuationTracker', () => {
         userText([{ type: 'text', text: '[Request interrupted by user]' }]) +
         userText([{ type: 'text', text: '<system-reminder>x</system-reminder>' }]) +
         line({ type: 'user', sessionId: OLD, message: { content: [{ type: 'tool_result' }] } }) +
+        userText([
+          { type: 'text', text: 'server context' },
+          { type: 'advisor_tool_result', tool_use_id: 'server', content: 'advice' }
+        ]) +
         line({
           type: 'assistant',
           sessionId: OLD,

@@ -30,7 +30,6 @@ type BuildArgs = {
   settings: AppState['settings']
   projectActions: RepoHeaderProjectActions
   newCardStyle: boolean
-  folderBackedProjectGroupIds: ReadonlySet<string>
   session: WorktreeDragSession
   runtime: WorktreeDragRuntime
   primaryActive: ReturnType<typeof usePrimaryActiveWorktreeRow>
@@ -92,9 +91,11 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       projectHeaderHostContexts: args.projectHeaderHostContexts,
       getCachedFolderWorkspacePathStatus: args.getCachedFolderWorkspacePathStatus,
       toggleGroupWithScrollAnchor: args.toggleGroupWithScrollAnchor,
+      toggleAllProjects: props.onToggleAllProjects,
       projectActions: args.projectActions,
       onRenameProjectGroup: props.handleRenameProjectGroup,
       onDeleteProjectGroup: props.handleDeleteProjectGroup,
+      onRefreshProjectGroup: props.handleRefreshProjectGroup,
       onCreateFolderWorkspace: props.handleCreateFolderWorkspace,
       onWorkspaceStatusDragOver: statusDrag.handleWorkspaceStatusDragOver,
       onWorkspaceStatusDragLeave: statusDrag.handleWorkspaceStatusDragLeave,
@@ -105,12 +106,11 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
     item: {
       settings: args.settings,
       groupBy: props.groupBy,
-      folderBackedProjectGroupIds: args.folderBackedProjectGroupIds,
       groupKeyByRowKey: session.groupKeyByRowKey,
       groupIndexByRowKey: session.groupIndexByRowKey,
       agentSendTargetWorktreeId: props.agentSendTargetWorktreeId,
       worktreeDragState: runtime.worktreeDragState,
-      nativeLineageDropTargetId: runtime.nativeLineageDropTargetId,
+      nativeLineageDropTargetIdentity: runtime.nativeLineageDropTargetIdentity,
       activeWorktreeId: props.activeWorktreeId,
       activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,
       currentWorktreeId: props.currentWorktreeId,

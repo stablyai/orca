@@ -1,9 +1,7 @@
-import { selectWslHostsServing } from '../../use-wsl-hosts-enabled'
 import { useCallback, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { shallow } from 'zustand/shallow'
-import { persistedUIValuesEqual } from '../../../../../../shared/persisted-ui-equality'
 import { useAppStore } from '@/store/index'
+import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
 import {
   getLocalExecutionHostLabel,
   type ExecutionHostId
@@ -29,64 +27,18 @@ import {
   orderHostSectionOptions
 } from '../../../../../../shared/sidebar-list/host-section-order'
 import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host-registry'
-import {
-  buildSidebarHostOptions,
-  sidebarHostSemantics,
-  createSidebarHostLabelsSelector
-} from '../controls/sidebar-host-options'
+import { createSidebarHostLabelsSelector } from '../controls/sidebar-host-options'
+import { createSidebarHostOptionsSelector } from './sidebar-host-options-selector'
 import {
   selectPendingWorktreeCreationKeys,
   decodePendingWorktreeCreationKeys
 } from './pending-worktree-creation-keys'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
-function createSidebarHostOptionsSelector() {
-  let inputs: readonly unknown[] = []
-  let result: ReturnType<typeof buildSidebarHostOptions> = []
-  return (
-    state: ReturnType<typeof useAppStore.getState>,
-    repos: SectionRowsArgs['repos'],
-    settings: SectionRowsArgs['settings'],
-    hostLabelOverrides: Parameters<typeof buildSidebarHostOptions>[0]['hostLabelOverrides']
-  ): ReturnType<typeof buildSidebarHostOptions> => {
-    const nextInputs = [
-      repos,
-      state.sshTargetLabels,
-      state.sshConnectionStates,
-      settings,
-      state.runtimeStatusByEnvironmentId,
-      state.runtimeEnvironments,
-      hostLabelOverrides,
-      state.wslHostStatuses,
-      selectWslHostsServing(state),
-      state.wslHostServerFiles === 'missing'
-    ]
-    if (shallow(inputs, nextInputs)) {
-      return result
-    }
-    inputs = nextInputs
-    const next = buildSidebarHostOptions({
-      repos,
-      sshTargetLabels: state.sshTargetLabels,
-      sshConnectionStates: state.sshConnectionStates,
-      settings,
-      runtimeEnvironments: state.runtimeEnvironments,
-      runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,
-      hostLabelOverrides,
-      wslHostStatuses: state.wslHostStatuses,
-      wslHostsEnabled: selectWslHostsServing(state),
-      wslHostServerFilesMissing: state.wslHostServerFiles === 'missing'
-    })
-    if (!persistedUIValuesEqual(result.map(sidebarHostSemantics), next.map(sidebarHostSemantics))) {
-      result = next
-    }
-    return result
-  }
-}
-
 export function useSidebarSectionRows(args: SectionRowsArgs) {
   const { repos, worktrees, repoMap, defaultHostId } = args
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
+  const lineageParentIdentities = useAppStore(selectSidebarLineageParentIdentities)
   const workspaceHostOrder = useAppStore((s) => s.workspaceHostOrder)
   const setWorkspaceHostOrder = useAppStore((s) => s.setWorkspaceHostOrder)
 
@@ -148,6 +100,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         workspaceStatuses: args.workspaceStatuses,
         projectOrderBy: args.projectOrderBy,
         lineageById: args.worktreeLineageById,
+        lineageParentIdentities,
         worktreeMap: args.worktreeMap,
         nestLineage: true,
         projectGroups: args.visibleProjectGroupsForRows,
@@ -175,6 +128,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       args.workspaceStatuses,
       args.projectOrderBy,
       args.worktreeLineageById,
+      lineageParentIdentities,
       args.worktreeMap,
       args.projectGrouping,
       args.visibleProjectGroupsForRows,

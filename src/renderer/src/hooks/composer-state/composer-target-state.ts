@@ -85,6 +85,7 @@ export function useComposerTargetState(
   })
   const workspaceIdentityState = useWorkspaceIdentityState({
     initialBaseBranch: composerTargetStore.initialBaseBranch,
+    initialParentWorktreeId: composerTargetStore.initialParentWorktreeId,
     initialLinearBranchName: sourceContextState.initialLinearBranchName,
     initialLinkedWorkItem: composerTargetStore.initialLinkedWorkItem,
     linkedWorkItem: sourceContextState.linkedWorkItem,

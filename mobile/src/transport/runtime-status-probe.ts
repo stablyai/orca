@@ -1,7 +1,25 @@
+import type { RpcClient } from './rpc-client'
 import type { UnvalidatedRpcRequestPort } from './unvalidated-rpc-request-port'
 import { hostStatusProbe, readProbedHostStatus } from './host-status-probe-operations'
 import type { HostStatusReply } from './host-status-reply-schema'
 import { isLogicalClientCutoverError } from './stable-logical-rpc-client'
+
+type ProbeClient = UnvalidatedRpcRequestPort &
+  Partial<Pick<RpcClient, 'getGeneration' | 'getLastConnectedAt'>>
+const observed = new WeakMap<object, { epoch: string; status: HostStatusReply | null }>()
+export const runtimeStatusProbeEpoch = (client: ProbeClient) =>
+  `${client.getGeneration?.()}:${client.getLastConnectedAt?.()}`
+export function readRuntimeStatusProbe(client: ProbeClient): HostStatusReply | null | undefined {
+  const entry = observed.get(client)
+  return entry?.epoch === runtimeStatusProbeEpoch(client) ? entry.status : undefined
+}
+
+export function recordRuntimeStatusProbe(
+  client: ProbeClient,
+  status: HostStatusReply | null
+): void {
+  observed.set(client, { epoch: runtimeStatusProbeEpoch(client), status })
+}
 
 // Cutover/timeouts may reject status.get without a connection-state edge; retry until one answer lands.
 const CUTOVER_RETRY_DELAY_MS = 250
@@ -11,7 +29,7 @@ const FAILURE_RETRY_MAX_DELAY_MS = 15_000
 // Deliver unreadable answers as null without retry; refusals/rejections retry and notify onAttemptFailed after scheduling.
 // Accept the raw sender type because capability callers need not hold a full client.
 export function startRuntimeStatusProbe(
-  client: UnvalidatedRpcRequestPort,
+  client: ProbeClient,
   onStatus: (status: HostStatusReply | null) => void,
   onAttemptFailed?: () => void
 ): (() => void) & { wake: () => void } {
@@ -30,6 +48,8 @@ export function startRuntimeStatusProbe(
       return
     }
     inFlight = true
+    // A woken probe can outlive a reconnect; only an answer from the current epoch is recorded.
+    const epoch = runtimeStatusProbeEpoch(client)
     void hostStatusProbe.request(client).then(
       (reply) => {
         inFlight = false
@@ -40,6 +60,9 @@ export function startRuntimeStatusProbe(
         if (!landed) {
           scheduleRetry(false)
           return
+        }
+        if (epoch === runtimeStatusProbeEpoch(client)) {
+          observed.set(client, { epoch, status: landed.status })
         }
         onStatus(landed.status)
         if (dirty) {

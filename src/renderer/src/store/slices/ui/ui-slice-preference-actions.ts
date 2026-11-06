@@ -1,5 +1,4 @@
-import { isWebClientLocation } from '@/lib/web-client-location'
-import { PROJECT_REPO_FILTER_EXACT_CAPABILITY } from '../../../../../shared/project-repo-filter-capability'
+import { getProjectFilterWrite } from './ui-slice-project-filter-write'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { workspaceHostScopeForVisibleHosts } from '../../../../../shared/workspace-view/workspace-host-visibility'
 import { createAgentsViewPreferenceActions } from './ui-slice-agents-view-preference-actions'
@@ -155,37 +154,11 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       }),
 
     filterRepoIds: [],
-    setFilterRepoIds: (ids) => {
-      const state = get()
-      const environment =
-        isWebClientLocation() && state.runtimeEnvironments.length === 1
-          ? state.runtimeEnvironments[0]
-          : null
-      const snapshot = environment
-        ? state.runtimeStatusByEnvironmentId.get(environment.id)?.snapshot
-        : null
-      const readable =
-        snapshot?.verification === 'verified' &&
-        snapshot.transport === 'ready' &&
-        !snapshot.retired &&
-        snapshot.pairingRevision === (environment!.pairingRevision ?? environment!.createdAt)
+    setFilterRepoIds: (ids) =>
       set({
         filterRepoIds: ids,
-        persistedUIProjectFilterWrite: environment
-          ? {
-              ids,
-              intent: {
-                environmentId: environment.id,
-                pairingRevision: environment.pairingRevision ?? environment.createdAt,
-                exact:
-                  !readable ||
-                  snapshot.status?.capabilities?.includes(PROJECT_REPO_FILTER_EXACT_CAPABILITY) ===
-                    true
-              }
-            }
-          : undefined
-      })
-    },
+        persistedUIProjectFilterWrite: getProjectFilterWrite(get(), ids)
+      }),
 
     ...createAgentsViewPreferenceActions(set),
 
@@ -210,6 +183,10 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
         window.api.ui.set({ collapsedGroups: [...next] }).catch(console.error)
         return { collapsedGroups: next }
       }),
+    setCollapsedGroups: (keys) => {
+      set({ collapsedGroups: keys })
+      window.api.ui.set({ collapsedGroups: [...keys] }).catch(console.error)
+    },
 
     worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
     _worktreeCardModeDefaulted: true,

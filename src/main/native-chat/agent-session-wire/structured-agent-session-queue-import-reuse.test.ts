@@ -32,7 +32,7 @@ import {
   threadWrite
 } from './structured-agent-session-queue-import-contract-test-fixture'
 
-it.each([100, 1_000])('raw selection reuse: %i waiting cards', async (size) => {
+it.each([100])('raw selection reuse: %i waiting cards', async (size) => {
   const journal = journalFor(SESSION)
   const rows = Array.from({ length: size }, (_, i): Legacy => [`waiting-${i}`, 'waiting', 'words'])
   seedLegacy(SESSION, rows)

@@ -122,7 +122,6 @@ function prepareProjectSection(ctx: SectionAppendContext, key: string, group: Wo
       importedRows.push(
         buildImportedWorktreesCardRow(
           imported,
-          'repo-group',
           ctx.noticeHostContextLabelByRepoId?.get(getRepoHostIdentity(imported.repo))
         )
       )

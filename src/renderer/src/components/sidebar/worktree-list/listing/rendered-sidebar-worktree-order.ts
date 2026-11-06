@@ -1,3 +1,4 @@
+import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { AppState } from '@/store/types'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
@@ -78,6 +79,7 @@ export function computeRenderedSidebarRows(
     workspaceStatuses: selectWorkspaceBoardStatuses(state),
     projectOrderBy: state.projectOrderBy,
     lineageById: state.worktreeLineageById,
+    lineageParentIdentities: selectSidebarLineageParentIdentities(state),
     worktreeMap: getWorktreeMapFromState(state),
     nestLineage: true,
     projectGroups: filterProjectGroupsForVisibleHosts(

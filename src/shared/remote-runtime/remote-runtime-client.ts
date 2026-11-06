@@ -8,6 +8,7 @@ import type {
   RemoteRuntimeTransportSubscriptionCallbacks
 } from './requests/remote-runtime-subscription-contract'
 import type {
+  RuntimeRequestPreparation,
   RuntimeRequestSelection,
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
@@ -39,7 +40,8 @@ export function sendRemoteRuntimeRequest<TResult>(
   timeoutMs: number,
   envelope?: RuntimeOrchestrationEnvelope,
   signal?: AbortSignal,
-  clientCapabilities: readonly RuntimeCapability[] = []
+  clientCapabilities: readonly RuntimeCapability[] = [],
+  prepareRequest?: RuntimeRequestPreparation
 ): Promise<RuntimeRpcResponse<TResult>> {
   return sendRemoteRuntimeRequestOnSocket(
     connection,
@@ -49,7 +51,9 @@ export function sendRemoteRuntimeRequest<TResult>(
     envelope,
     undefined,
     signal,
-    clientCapabilities
+    clientCapabilities,
+    undefined,
+    prepareRequest
   )
 }
 
@@ -62,7 +66,8 @@ export function sendRemoteRuntimeRequestWithStatusPreflight<TResult>(
   envelope?: RuntimeOrchestrationEnvelope,
   clientCapabilities: readonly RuntimeCapability[] = [],
   signal?: AbortSignal,
-  requestSelection?: RuntimeRequestSelection
+  requestSelection?: RuntimeRequestSelection,
+  prepareRequest?: RuntimeRequestPreparation
 ): Promise<RuntimeRpcResponse<TResult>> {
   return sendRemoteRuntimeRequestOnSocket(
     connection,
@@ -73,7 +78,8 @@ export function sendRemoteRuntimeRequestWithStatusPreflight<TResult>(
     validateStatus,
     signal,
     clientCapabilities,
-    requestSelection
+    requestSelection,
+    prepareRequest
   )
 }
 

@@ -29,6 +29,7 @@ import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import { getSidebarHeaderVisual, renderSidebarHeaderGlyph } from './header-visuals'
 import { resolveProjectGroupHeaderColor } from './project-header-color'
 import { ProjectHeaderActions } from './ProjectHeaderActions'
+import { getSectionHeaderDragState } from './section-header-drag-state'
 import {
   getProjectGroupHeaderPaddingLeft,
   WORKTREE_SECTION_HEADER_PADDING_LEFT
@@ -46,7 +47,8 @@ import {
 } from './repo-header-project-actions'
 import {
   handleRepoHeaderCollapseAffordancePointerDown,
-  shouldIgnoreRepoHeaderToggle
+  shouldIgnoreRepoHeaderToggle,
+  toggleSectionHeaderCollapse
 } from './header-event-guards'
 import type { WorktreeSidebarHeaderDrag } from '../drag/use-header-drag'
 import { getWorktreeOptionId } from './option-dom'
@@ -67,9 +69,11 @@ export type SectionHeaderRowContext = {
     projectGroupId: string
   }) => FolderWorkspacePathStatus | null
   toggleGroupWithScrollAnchor: (groupKey: string) => void
+  toggleAllProjects?: () => void
   projectActions: RepoHeaderProjectActions
   onRenameProjectGroup: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
   onDeleteProjectGroup: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
+  onRefreshProjectGroup?: (projectGroup: ProjectGroup) => void
   onCreateFolderWorkspace: (projectGroup: ProjectGroup) => void
   onWorkspaceStatusDragOver: (event: React.DragEvent, status: WorkspaceStatus) => void
   onWorkspaceStatusDragLeave: (event: React.DragEvent) => void
@@ -116,44 +120,20 @@ export function renderWorktreeSectionHeaderRow(args: {
     row.projectGroup && 'createdFrom' in row.projectGroup
       ? getProjectGroupHostId(row.projectGroup)
       : undefined
-  const repoHeaderIndex =
-    projectIdForHeader !== undefined
-      ? headerDrag.repoHeaderIndexByRepoId.get(projectIdForHeader)
-      : undefined
-  const repoHeaderBucketKey =
-    projectIdForHeader !== undefined
-      ? headerDrag.repoHeaderBucketByRepoId.get(projectIdForHeader)
-      : undefined
-  const projectGroupHeaderIndex =
-    projectGroupDragIdForHeader !== undefined
-      ? headerDrag.projectGroupHeaderIndexByGroupId.get(projectGroupDragIdForHeader)
-      : undefined
-  const projectGroupHeaderBucketKey =
-    projectGroupDragIdForHeader !== undefined
-      ? headerDrag.projectGroupHeaderBucketByGroupId.get(projectGroupDragIdForHeader)
-      : undefined
-  const isDraggableRepoHeader = Boolean(
-    headerDrag.canReorderRepoHeaders &&
-    isRepoHeader &&
-    projectIdForHeader &&
-    repoHeaderBucketKey &&
-    (headerDrag.sidebarRepoHeaderIdsByBucket.get(repoHeaderBucketKey)?.length ?? 0) > 1
-  )
-  const isDraggableProjectGroupHeader = Boolean(
-    headerDrag.canReorderProjectGroupHeaders &&
-    projectGroupDragIdForHeader &&
-    projectGroupHeaderBucketKey &&
-    (headerDrag.sidebarProjectGroupHeaderIdsByBucket.get(projectGroupHeaderBucketKey)?.length ??
-      0) > 1
-  )
-  const isDraggingThis =
-    headerDrag.canReorderRepoHeaders &&
-    headerDrag.repoDrag.state.draggingRepoId !== null &&
-    headerDrag.repoDrag.state.draggingRepoId === projectIdForHeader
-  const isDraggingThisProjectGroup =
-    headerDrag.canReorderProjectGroupHeaders &&
-    headerDrag.projectGroupDrag.state.draggingGroupId !== null &&
-    headerDrag.projectGroupDrag.state.draggingGroupId === projectGroupDragIdForHeader
+  const {
+    repoHeaderIndex,
+    repoHeaderBucketKey,
+    projectGroupHeaderIndex,
+    projectGroupHeaderBucketKey,
+    isDraggableRepoHeader,
+    isDraggableProjectGroupHeader,
+    isDraggingThis,
+    isDraggingThisProjectGroup
+  } = getSectionHeaderDragState(headerDrag, {
+    isRepoHeader,
+    projectIdForHeader,
+    projectGroupDragIdForHeader
+  })
   const headerWorkspaceStatus =
     ctx.groupBy === 'workspace-status'
       ? getWorkspaceStatusFromGroupKey(row.key, ctx.workspaceStatuses, ctx.workspaceStatusById)
@@ -188,6 +168,8 @@ export function renderWorktreeSectionHeaderRow(args: {
     : null
   const collapseKey = row.collapseKey ?? row.key
   const isHeaderCollapsed = ctx.collapsedGroups.has(collapseKey)
+  const toggleHeader = (event: React.MouseEvent | React.KeyboardEvent): void =>
+    toggleSectionHeaderCollapse(event, collapseKey, ctx)
   // Why: repo/project/status/pinned share compact section chrome; flat "All" stays a simple label.
   const showHeaderCollapseAffordance =
     row.count > 0 &&
@@ -301,10 +283,9 @@ export function renderWorktreeSectionHeaderRow(args: {
                 : undefined
           }
           onClick={(event) => {
-            if (shouldIgnoreRepoHeaderToggle(event)) {
-              return
+            if (!shouldIgnoreRepoHeaderToggle(event)) {
+              toggleHeader(event)
             }
-            ctx.toggleGroupWithScrollAnchor(collapseKey)
           }}
           onKeyDown={(e) => {
             if (shouldIgnoreRepoHeaderToggle(e)) {
@@ -312,7 +293,7 @@ export function renderWorktreeSectionHeaderRow(args: {
             }
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault()
-              ctx.toggleGroupWithScrollAnchor(collapseKey)
+              toggleHeader(e)
             }
           }}
         >
@@ -357,7 +338,7 @@ export function renderWorktreeSectionHeaderRow(args: {
                 onClick={(event) => {
                   event.preventDefault()
                   event.stopPropagation()
-                  ctx.toggleGroupWithScrollAnchor(collapseKey)
+                  toggleHeader(event)
                 }}
               >
                 <ChevronDown
@@ -371,6 +352,8 @@ export function renderWorktreeSectionHeaderRow(args: {
                 groupId={projectGroupIdForHeader}
                 hostId={projectGroupHostIdForHeader}
                 label={label}
+                projectGroup={folderBackedProjectGroup}
+                onRefreshProjectGroup={ctx.onRefreshProjectGroup}
                 onRename={ctx.onRenameProjectGroup}
                 onDelete={ctx.onDeleteProjectGroup}
               />

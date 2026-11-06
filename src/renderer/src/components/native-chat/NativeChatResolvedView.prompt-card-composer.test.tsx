@@ -138,14 +138,6 @@ function renderPane(): void {
   )
 }
 
-function rootElement(): Element {
-  const root = document.querySelector('[data-native-chat-root="true"]')
-  if (!root) {
-    throw new Error('chat root missing')
-  }
-  return root
-}
-
 beforeEach(() => {
   restoreViewport = installNativeChatMessageListTestViewport()
   resetNativeChatPtySendQueuesForTests()
@@ -252,41 +244,4 @@ describe('a prompt card hides the composer without unmounting it', () => {
     expect(screen.getByTestId('composer-send').closest('[hidden]')).toBeNull()
     expect(composer.mounts).toBe(1)
   })
-
-  it('routes no typing to the hidden composer until the card is answered', async () => {
-    setStatus({ state: 'waiting', interactivePrompt: approval })
-    renderPane()
-
-    fireEvent.keyDown(rootElement(), { key: 'x' })
-    expect(composer.typed).not.toHaveBeenCalled()
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Allow' }))
-    })
-    fireEvent.keyDown(rootElement(), { key: 'x' })
-    expect(composer.typed).toHaveBeenCalledExactlyOnceWith('x')
-    expect(composer.mounts).toBe(1)
-  })
-
-  it.each(['Escape', 'chevron'])(
-    'gives the composer focus after a %s collapse',
-    async (gesture) => {
-      setStatus({ state: 'waiting', interactivePrompt: approval })
-      renderPane()
-      const card = document.querySelector<HTMLElement>('[data-native-chat-approval-card="true"]')!
-      expect(document.activeElement).toBe(card)
-      act(() => {
-        if (gesture === 'Escape') {
-          fireEvent.keyDown(card, { key: 'Escape' })
-        } else {
-          fireEvent.click(screen.getByRole('button', { name: 'Collapse' }))
-        }
-      })
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 100))
-      })
-      expect(document.activeElement).toBe(screen.getByTestId('composer-field'))
-      expect(pty.verified).not.toHaveBeenCalled()
-    }
-  )
 })

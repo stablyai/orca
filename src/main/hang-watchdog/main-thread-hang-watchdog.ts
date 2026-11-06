@@ -1,4 +1,5 @@
-import { Worker } from 'node:worker_threads'
+import type { Worker } from 'node:worker_threads'
+import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { app } from 'electron'
 import { hangDetectionMarkerPath } from './hang-detection-marker'
 import { resolveHangWatchdogWorkerPath } from './hang-watchdog-worker-path'
@@ -46,7 +47,7 @@ export function installMainThreadHangWatchdog(options: {
   }
   let worker: Worker
   try {
-    worker = new Worker(workerPath, {
+    worker = spawnWorkerThread(workerPath, {
       name: 'orca-main-thread-hang-watchdog',
       workerData
     })

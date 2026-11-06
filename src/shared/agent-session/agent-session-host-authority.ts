@@ -134,6 +134,8 @@ export type RuntimeCreateAgentSessionRequest = {
   promptDelivery?: AgentPromptDelivery
   /** Explicit client override. Omission keeps launch defaults host-owned. */
   agentArgs?: string | null
+  sessionOptions?: Record<string, string>
+  extraAgentArgs?: string
   launchPreferences?: AgentLaunchPreferences
   startupCwd?: string
   presentation?: RuntimeTerminalPresentation

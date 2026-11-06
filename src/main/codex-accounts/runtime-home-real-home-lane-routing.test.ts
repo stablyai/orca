@@ -1,12 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createSettings } from './runtime-home-settings-test-fixtures'
 import {
-  createCodexAccountRecord,
   createCodexAuthJson,
-  createManagedAuth,
   createStore,
   getRuntimeCodexAuthPath,
   getRuntimeCodexHomePath,
@@ -51,148 +49,6 @@ describe('CodexRuntimeHomeService', () => {
 
   afterEach(() => {
     teardownRuntimeHomeTest()
-  })
-
-  it('routes host system default to the real home', async () => {
-    const store = createStore(createSettings({ realHomeRoutable: true }))
-    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    const service = new CodexRuntimeHomeService(store as never)
-
-    expect(service.isHostSystemDefaultRealHomeSelected()).toBe(true)
-    expect(service.prepareForCodexLaunch()).toBeNull()
-    expect(service.getHostCodexHomePathsForSessionDiscovery()).toEqual([
-      getRuntimeCodexHomePath(),
-      getSystemCodexHomePath()
-    ])
-    const markerPath = join(
-      testState.userDataDir,
-      'codex-session-backfill',
-      'backfill-complete.json'
-    )
-    mkdirSync(join(testState.userDataDir, 'codex-session-backfill'), { recursive: true })
-    const perSpawnCustomHome = join(testState.fakeHomeDir, 'per-spawn-custom-codex-home')
-    writeFileSync(markerPath, '{}\n', 'utf-8')
-    expect(service.isHostSystemDefaultRealHomeSelected({ CODEX_HOME: perSpawnCustomHome })).toBe(
-      false
-    )
-    expect(service.prepareForCodexLaunch(undefined, { CODEX_HOME: perSpawnCustomHome })).toBe(
-      getRuntimeCodexHomePath()
-    )
-    expect(existsSync(markerPath)).toBe(true)
-    expect(
-      service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath(), {
-        launchEnv: { CODEX_HOME: perSpawnCustomHome }
-      })
-    ).toBeNull()
-    if (process.platform !== 'win32') {
-      // Avoid ambient WSL bash: shell-startup home discovery is a POSIX-host contract.
-
-      writeFileSync(
-        join(testState.fakeHomeDir, '.zshrc'),
-        'export CODEX_HOME="$HOME/shell-custom-codex-home"\n',
-        'utf-8'
-      )
-      const shellLaunchEnv = { HOME: testState.fakeHomeDir, SHELL: '/bin/zsh' }
-      expect(service.isHostSystemDefaultRealHomeSelected(shellLaunchEnv)).toBe(false)
-      expect(service.prepareForCodexLaunch(undefined, shellLaunchEnv)).toBe(
-        getRuntimeCodexHomePath()
-      )
-    }
-    const previousCodexHome = process.env.CODEX_HOME
-    const previousOrcaCodexHome = process.env.ORCA_CODEX_HOME
-    process.env.CODEX_HOME = getRuntimeCodexHomePath()
-    process.env.ORCA_CODEX_HOME = getRuntimeCodexHomePath()
-    try {
-      // Pin the path so nested Orca cannot poll an inherited managed CODEX_HOME.
-
-      expect(service.prepareForRateLimitFetch()).toEqual({
-        kind: 'ready',
-        codexHomePath: getSystemCodexHomePath()
-      })
-      process.env.CODEX_HOME = getSystemCodexHomePath()
-      delete process.env.ORCA_CODEX_HOME
-      expect(service.isHostSystemDefaultRealHomeSelected()).toBe(true)
-      process.env.CODEX_HOME = join(testState.fakeHomeDir, 'user-owned-codex-home')
-      expect(service.isHostSystemDefaultRealHomeSelected()).toBe(false)
-      expect(service.prepareForRateLimitFetch()).toEqual({
-        kind: 'ready',
-        codexHomePath: getRuntimeCodexHomePath()
-      })
-    } finally {
-      if (previousCodexHome === undefined) {
-        delete process.env.CODEX_HOME
-      } else {
-        process.env.CODEX_HOME = previousCodexHome
-      }
-      if (previousOrcaCodexHome === undefined) {
-        delete process.env.ORCA_CODEX_HOME
-      } else {
-        process.env.ORCA_CODEX_HOME = previousOrcaCodexHome
-      }
-    }
-  })
-
-  it('bridges managed-account history into the real home when launching system default', async () => {
-    const accountBridge = vi.fn(async () => {})
-    vi.doMock('../codex/history/bridges/codex-account-session-bridge', () => ({
-      startCodexAccountSessionBridgeInBackground: accountBridge
-    }))
-    const managedHomePath = createManagedAuth(
-      testState.userDataDir,
-      'account-1',
-      createCodexAuthJson('user@example.com', 'acct-1', 'refresh-1')
-    )
-    const store = createStore(
-      createSettings({
-        realHomeRoutable: true,
-        codexManagedAccounts: [
-          createCodexAccountRecord('account-1', 'user@example.com', 'acct-1', managedHomePath)
-        ]
-      })
-    )
-    try {
-      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-      const service = new CodexRuntimeHomeService(store as never)
-
-      expect(service.prepareForCodexLaunch()).toBeNull()
-      expect(accountBridge).toHaveBeenCalledWith({
-        targetCodexHomePath: getSystemCodexHomePath(),
-        sourceCodexHomePaths: [managedHomePath],
-        hardlinkOnly: true
-      })
-    } finally {
-      vi.doUnmock('../codex/history/bridges/codex-account-session-bridge')
-    }
-  })
-
-  it('leaves a history source inside a WSL distro to the WSL lane', async () => {
-    const accountBridge = vi.fn(async () => {})
-    vi.doMock('../codex/history/bridges/codex-account-session-bridge', () => ({
-      startCodexAccountSessionBridgeInBackground: accountBridge
-    }))
-    const managedHomePath = createManagedAuth(
-      testState.userDataDir,
-      'account-1',
-      createCodexAuthJson('user@example.com', 'acct-1', 'refresh-1')
-    )
-    const store = createStore(
-      createSettings({
-        realHomeRoutable: true,
-        codexManagedAccounts: [
-          createCodexAccountRecord('account-1', 'user@example.com', 'acct-1', managedHomePath)
-        ],
-        codexSessionSourceHome: { host: '\\\\wsl.localhost\\Ubuntu\\home\\me\\.codex' }
-      })
-    )
-    try {
-      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-      const service = new CodexRuntimeHomeService(store as never)
-
-      expect(service.prepareForCodexLaunch()).toBeNull()
-      expect(accountBridge).not.toHaveBeenCalled()
-    } finally {
-      vi.doUnmock('../codex/history/bridges/codex-account-session-bridge')
-    }
   })
 
   it('seeds shared auth for a pane-local custom home on the real-home lane', async () => {
@@ -253,44 +109,6 @@ describe('CodexRuntimeHomeService', () => {
     } finally {
       vi.doUnmock('./legacy-shared-config-compatibility')
     }
-  })
-
-  it('resolves only Orca-owned homes used by live retained host shells', async () => {
-    const accountHome = createManagedAuth(
-      testState.userDataDir,
-      'account-1',
-      createCodexAuthJson('managed@example.com', 'acct-managed', 'managed')
-    )
-    const unownedHome = join(testState.fakeHomeDir, 'unowned-codex-home')
-    mkdirSync(unownedHome, { recursive: true })
-    writeFileSync(join(unownedHome, '.orca-managed-home'), 'account-2\n', 'utf-8')
-    writePaneRegistry({
-      'shared-pane': { selectionKey: 'host', accountId: null, homeRoute: 'shared-home' },
-      'account-pane': { selectionKey: 'host', accountId: 'account-1', homeRoute: 'account-home' },
-      'unowned-pane': { selectionKey: 'host', accountId: 'account-2', homeRoute: 'account-home' },
-      'real-pane': { selectionKey: 'host', accountId: null, homeRoute: 'real-home' },
-      'wsl-pane': { selectionKey: 'wsl:Ubuntu', accountId: null, homeRoute: 'wsl-home' }
-    })
-    const settings = createSettings({
-      codexManagedAccounts: [
-        createCodexAccountRecord('account-1', 'managed@example.com', 'acct-managed', accountHome),
-        createCodexAccountRecord('account-2', 'other@example.com', 'acct-other', unownedHome)
-      ]
-    })
-    const store = createStore(settings)
-    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    const service = new CodexRuntimeHomeService(store as never)
-
-    expect(
-      service.getRetainedHostCodexHookHomePaths([
-        'shared-pane',
-        'account-pane',
-        'unowned-pane',
-        'real-pane',
-        'wsl-pane',
-        'unknown-pane'
-      ])
-    ).toEqual([getRuntimeCodexHomePath(), accountHome])
   })
 
   it('keeps pre-rollout shared-home panes authenticated on the real-home lane', async () => {

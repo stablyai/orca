@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createWorktreeDefaultTabTerminals } from './runtime-worktree-terminal-provisioning'
+import { createWorktreeDefaultTabTerminals } from './workspaces/startup/runtime-worktree-terminal-provisioning'
 import {
   setupLayoutOwnerRuntime as setup,
   WORKTREE_ID
-} from './orca-runtime-layout-owner-start-fixture'
-import { committingSpawn } from './bind-first-pane.test-fixture'
+} from './orca-runtime-tests/orca-runtime-layout-owner-start-fixture'
+import { committingSpawn } from './orca-runtime-tests/bind-first-pane.test-fixture'
 
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 

@@ -13,7 +13,6 @@
   "exclude": [
     "../src/renderer/src/components/terminal-pane/pty-agent-pane-launch.test.ts",
     "../src/renderer/src/app-shell/project-grouping-authored-peer-writes.test.tsx",
-    "../src/renderer/src/components/sidebar/worktree-list/controls/SidebarRepositoryFilterSection.test.tsx",
     "../src/renderer/src/components/sidebar/project-group-actions-test-fixtures.ts",
     "../src/renderer/src/components/sidebar/qualified-group-actions-lifetime.test.tsx",
     "../src/renderer/src/components/sidebar/qualified-group-actions-scaling.test.tsx",
@@ -25,10 +24,8 @@
     "../src/renderer/src/store/repos/repo-removal.test.ts",
     "../src/renderer/src/web/project-grouping-authenticated-peers.test.ts",
     "../src/renderer/src/components/task-page/linear/task-page-linear-detail-query.test.tsx",
-    "../src/renderer/src/components/right-sidebar/source-control/ai/SourceControlAgentActionDialog.picker.test.tsx",
+    "../src/renderer/src/components/native-chat/native-chat-global-keybindings.test.tsx",
     "../src/renderer/src/components/github-item-dialog/load-item-details/work-item-details-target-contract.test.tsx",
-    "../src/renderer/src/runtime/observed-provider-accounts.test.tsx",
-    "../src/renderer/src/components/status-bar/ClaudeSwitcherMenu.observation.test.tsx",
     "../src/renderer/src/components/status-bar/ClaudeSwitcherMenu.owner-lifetime.test.tsx",
     "../src/renderer/src/runtime/provider-account-observation.test-fixture.ts"
   ],

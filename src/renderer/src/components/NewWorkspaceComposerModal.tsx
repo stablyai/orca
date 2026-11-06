@@ -4,11 +4,11 @@ import {
   type AgentPickerEntry
 } from '../../../shared/agent-launch/picker/agent-launch-picker'
 import { DirectWorkItemSetupDialog } from './new-workspace/DirectWorkItemSetupDialog'
-import type { DirectWorkItemSetupRequest } from '@/lib/direct-work-item-setup'
 import { agentChoicePending } from '@/lib/host-chat-program'
 import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
+import type { ComposerModalData } from './new-workspace-composer-modal-data'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import {
   Dialog,
@@ -28,23 +28,14 @@ import {
   pickQuickWorkspaceAgent,
   resolveQuickWorkspaceAgentSelection
 } from '@/lib/quick-workspace-agent-selection'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { useAgentsOfferedForLaunch } from '@/lib/host-chat-program-acquisition'
 import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
-import type { WorkspaceStatus } from '../../../shared/worktree/types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
 import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
-import type {
-  WorkspaceCreationTargetHint,
-  WorkspaceCreationProjectScope
-} from '@/lib/project-host-workspace-target'
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
@@ -55,26 +46,6 @@ const HostedAddRepoDialog = lazyWithRetry(
     reloadKey: 'composer-add-repo'
   }
 )
-
-type ComposerModalData = {
-  directSetup?: DirectWorkItemSetupRequest
-  prefilledName?: string
-  initialRepoId?: string
-  initialEphemeralVmRecipeId?: string
-  initialProjectGroupId?: string
-  linkedWorkItem?: LinkedWorkItemSummary | null
-  initialGitHubWorkItem?: GitHubWorkItem | null
-  taskSourceContext?: TaskSourceContext | null
-  initialProjectScope?: WorkspaceCreationProjectScope | null
-  initialWorkspaceTarget?: WorkspaceCreationTargetHint | null
-  initialBaseBranch?: string
-  initialWorkspaceStatus?: WorkspaceStatus
-  enableIssueAutomation?: boolean
-  /** Creation-surface telemetry; each opener supplies it, otherwise use unknown. */
-  telemetrySource?: WorkspaceCreateTelemetrySource
-  contextualTourSource?: string
-  setupGuideTourRequestId?: string
-}
 
 export default function NewWorkspaceComposerModal(): React.JSX.Element | null {
   const visible = useAppStore((s) => s.activeModal === 'new-workspace-composer')
@@ -171,6 +142,7 @@ function QuickTabBody({
     initialEphemeralVmRecipeId: modalData.initialEphemeralVmRecipeId,
     initialProjectGroupId: modalData.initialProjectGroupId,
     initialWorkspaceStatus: modalData.initialWorkspaceStatus,
+    initialParentWorktreeId: modalData.initialParentWorktreeId,
     ...(modalData.initialBaseBranch ? { initialBaseBranch: modalData.initialBaseBranch } : {}),
     persistDraft: false,
     onCreated: onClose,

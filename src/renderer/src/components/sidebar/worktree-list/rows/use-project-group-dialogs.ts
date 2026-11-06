@@ -3,7 +3,7 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { ProjectGroupOperation } from '../../project-group-operation'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import {
   type ProjectGroupAttempt,
   useProjectGroupOperationOwner
@@ -15,7 +15,7 @@ import { projectRemovalTargets } from '../../workspace-actions/deletion/removal-
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { translate } from '@/i18n/i18n'
 import { selectProjectGroupRemovalTargets } from '@/store/slices/project-group-removal-targets'
-
+import { refreshFolderProjectGroup } from './project-group-folder-refresh'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
@@ -92,6 +92,7 @@ export function useProjectGroupDialogs(args: {
   const deleteProjectGroupWithContainedProjects = useAppStore(
     (s) => s.deleteProjectGroupWithContainedProjects
   )
+  const refreshingGroupIds = useRef(new Set<string>())
   const [nameDialog, setNameDialog] = useState<ProjectGroupNameDialogState | null>(null)
   const [deleteDialog, setDeleteDialog] = useState<ProjectGroupDeleteDialogState | null>(null)
 
@@ -118,6 +119,42 @@ export function useProjectGroupDialogs(args: {
     },
     [operationOwner]
   )
+
+  const handleRefreshProjectGroup = useCallback(async (group: ProjectGroup): Promise<void> => {
+    if (refreshingGroupIds.current.has(group.id)) {
+      return
+    }
+    refreshingGroupIds.current.add(group.id)
+    // Why: scans of large folders can take seconds; show progress so repeat clicks aren't silently ignored.
+    const loadingToastId = toast.loading(
+      translate(
+        'auto.components.sidebar.WorktreeList.projectGroupRefreshing',
+        'Refreshing {{group}}…',
+        { group: group.name }
+      )
+    )
+    try {
+      await refreshFolderProjectGroup(group, {
+        getRepos: () => useAppStore.getState().repos,
+        getProjectGroups: () => useAppStore.getState().projectGroups,
+        scanNestedRepos: useAppStore.getState().scanNestedRepos,
+        importNestedRepos: useAppStore.getState().importNestedRepos,
+        moveProjectToGroup: useAppStore.getState().moveProjectToGroup
+      })
+    } catch (error) {
+      console.error('Failed to refresh project group:', error)
+      toast.error(
+        translate(
+          'auto.components.sidebar.WorktreeList.projectGroupRefreshScanFailed',
+          'Could not scan this project group'
+        ),
+        { description: error instanceof Error ? error.message : String(error) }
+      )
+    } finally {
+      toast.dismiss(loadingToastId)
+      refreshingGroupIds.current.delete(group.id)
+    }
+  }, [])
 
   const handleRenameProjectGroup = useCallback(
     (groupId: string, currentName: string, hostId?: ExecutionHostId) => {
@@ -245,6 +282,7 @@ export function useProjectGroupDialogs(args: {
     handleCreateGroupFromRepo,
     handleMoveProjectToGroup,
     handleRemoveProjectFromGroup,
+    handleRefreshProjectGroup,
     handleRenameProjectGroup,
     handleSubmitProjectGroupName,
     handleDeleteProjectGroup,

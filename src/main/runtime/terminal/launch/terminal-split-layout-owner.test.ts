@@ -1,16 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../orca-runtime-test-mocks.spec'
+import '../../orca-runtime-tests/runtime-test-module-registration.spec'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from '../../orca-runtime-test-fixtures.spec'
-import { createMobileCreateTestNotifier } from '../../orca-runtime-test-scenario-builders.spec'
+} from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
+import { createMobileCreateTestNotifier } from '../../orca-runtime-tests/orca-runtime-test-scenario-builders.spec'
 import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
-import { ProvisioningRuntime } from '../../orca-runtime-layout-owner-start-fixture'
-import { committingSpawn, registerBoundPty } from '../../bind-first-pane.test-fixture'
+import { ProvisioningRuntime } from '../../orca-runtime-tests/orca-runtime-layout-owner-start-fixture'
+import {
+  committingSpawn,
+  registerBoundPty
+} from '../../orca-runtime-tests/bind-first-pane.test-fixture'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 

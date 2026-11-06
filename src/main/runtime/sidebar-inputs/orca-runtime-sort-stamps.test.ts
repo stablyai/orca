@@ -8,7 +8,11 @@ import {
   hostWorktreeTarget,
   type HostWorktreeTarget
 } from '../../../shared/worktree/host-qualified-identity'
-import { partialRuntimeStore, storeRepo, storeWorktreeMeta } from '../runtime-store-partial-fixture'
+import {
+  partialRuntimeStore,
+  storeRepo,
+  storeWorktreeMeta
+} from '../orca-runtime-tests/runtime-store-partial-fixture'
 
 vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 

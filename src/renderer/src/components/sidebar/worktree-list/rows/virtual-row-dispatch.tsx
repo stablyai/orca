@@ -188,7 +188,7 @@ export function renderWorktreeVirtualRow(
       row,
       vItem,
       measureVirtualRowElement: ctx.measureVirtualRowElement,
-      actionState: ctx.importedWorktreeCardActionState.get(getRepoHostIdentity(row.repo)),
+      actionStateByRepoHost: ctx.importedWorktreeCardActionState,
       onShow: ctx.onShowImportedWorktrees,
       onKeepHidden: ctx.onKeepImportedWorktreesHidden
     })

@@ -9,7 +9,7 @@ import {
   runtimeVisibleProjectGroups,
   runtimeVisibleProjectHostSetups,
   runtimeVisibleRepos
-} from '../runtime-visible-catalog'
+} from '../workspaces/catalog/runtime-visible-catalog'
 
 export type SidebarProjectCatalogStore = Pick<
   RuntimeStore,

@@ -49,6 +49,7 @@ export type VirtualizedWorktreeViewportProps = {
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   projectOrderBy: ProjectOrderBy
   toggleGroup: (key: string) => void
+  onToggleAllProjects?: () => void
   collapsedGroups: Set<string>
   handleCreateForRepo: RepoHeaderProjectActions['onCreateForRepo']
   handleOpenRepoSettings: RepoHeaderProjectActions['onOpenRepoSettings']
@@ -64,6 +65,7 @@ export type VirtualizedWorktreeViewportProps = {
   handleRemoveProjectFromGroup: RepoHeaderProjectActions['onRemoveProjectFromGroup']
   handleRenameProjectGroup: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
   handleDeleteProjectGroup: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
+  handleRefreshProjectGroup?: (projectGroup: ProjectGroup) => void
   handleCreateFolderWorkspace: (projectGroup: ProjectGroup) => void
   activeModal: string
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null

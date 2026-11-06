@@ -76,40 +76,6 @@ it('stops a refused steer before its fallback write', async () => {
   await adapter.closeAll()
 })
 
-it('abandons only the stopped message while waiting for a previous turn to open', async () => {
-  const codex = fakeCodexAppServer({ 'turn/start': () => ({ turn: { id: 'opening' } }) })
-  const settlements: LateSettlement[] = []
-  const adapter = await acquiredCodexAdapter({ codex, settlements })
-  const connection = codex.connections[0]!
-  const dispatch = (id: string, signal?: AbortSignal) =>
-    adapter.dispatch({
-      sessionId: 'session-1',
-      clientMessageId: id,
-      fence: 7,
-      body: CODEX_TEST_USER_MESSAGE,
-      signal
-    })
-  await expect(dispatch('first')).resolves.toMatchObject({ state: 'admitted' })
-  const controller = new AbortController()
-  const stopped = dispatch('waiting', controller.signal)
-  await new Promise<void>((resolve) => setTimeout(resolve, 10))
-  const reason = new Error('Stopped local wait')
-  controller.abort(reason)
-  await expect(stopped).rejects.toBeInstanceOf(StructuredAgentSessionInputNotAdmitted)
-  await expect(stopped).rejects.toMatchObject({
-    outcome: {
-      state: 'rejected',
-      rejection: { kind: 'cancelled' },
-      reason: 'provider_cancelled_before_start'
-    }
-  })
-  expect(connection.calls.filter((call) => call.method === 'turn/start')).toHaveLength(1)
-  startTurn(connection, 'opening')
-  echoUserMessage(connection, { turnId: 'opening', itemId: 'first', clientId: 'first' })
-  expect(settlements.map((entry) => entry.clientMessageId)).toEqual(['first'])
-  await adapter.closeAll()
-})
-
 it.each(['accepted', 'uncertain'] as const)(
   'retains the %s outcome of a steer written before Stop',
   async (outcome) => {

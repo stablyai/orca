@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RelayConfig } from './config.js'
 
-vi.mock('./admin-token-verifier.js', () => ({
+vi.mock('./authentication/admin-token-verifier.js', () => ({
   createAdminTokenVerifier: () => async (token: string) => token === 'deploy-token',
   createReadOnlyAdminTokenVerifier: () => async () => false,
   createRegionalRehomeControlApplyTokenVerifier: () => async () => false,
@@ -10,22 +10,22 @@ vi.mock('./admin-token-verifier.js', () => ({
   createRuntimeTokenVerifier: () => async () => false
 }))
 
-vi.mock('./relay-token-verifier.js', () => ({
+vi.mock('./authentication/relay-token-verifier.js', () => ({
   createRelayTokenVerifier: () => async () => null,
   readBearer: (value: string | undefined) => value?.replace(/^Bearer /, '') ?? null
 }))
 
 import { createRelayApp } from './app.js'
 import { RelayAssignmentStore } from './assignment/assignment-store.js'
-import type { CellReserveClient } from './cell-reserve-client.js'
-import { openInMemoryRelayDatabase, type RelayDatabase } from './database.js'
-import { ReserveAssignment, type ReservePlacementMode } from './reserve-assignment.js'
-import { ReservePlacer } from './reserve-placement.js'
+import type { CellReserveClient } from './cell/reservations/cell-reserve-client.js'
+import { openInMemoryRelayDatabase, type RelayDatabase } from './database/database.js'
+import { ReserveAssignment, type ReservePlacementMode } from './assignment/reserve-placement/reserve-assignment.js'
+import { ReservePlacer } from './assignment/reserve-placement/reserve-placement.js'
 import {
   ShadowSeatDirectory,
   type SeatFeedCell,
   type SeatFeedResponse
-} from './shadow-seat-directory.js'
+} from './cell/seats/shadow-seat-directory.js'
 
 const INCARNATION = '11111111-1111-4111-8111-111111111111'
 const CELLS = [

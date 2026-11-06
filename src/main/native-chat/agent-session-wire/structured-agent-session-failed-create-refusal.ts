@@ -153,7 +153,7 @@ export function failedAcquisitionRefusal(
     error instanceof AgentSessionAcquisitionRefusal ||
     isExitProvenAcquisitionFailure(error) ||
     (isAgentSessionPreSpawnError(error) &&
-      (argumentProblemOf(error) || agentCliInstallationProblemOf(error)))
+      (error.reason || argumentProblemOf(error) || agentCliInstallationProblemOf(error)))
   ) {
     return {
       ok: false,

@@ -1,14 +1,20 @@
+import { setTimeout as delay } from 'node:timers/promises'
 import { OrcaRuntimeWithRecordAgentPromptLifecycleState } from '../output/terminal-output-generation'
 import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
-import type { RuntimeTerminalWriteOptions } from '../../runtime-terminal-writer'
+import type { RuntimeTerminalWriteOptions } from '../input/runtime-terminal-writer'
 import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
-import { type DriverState, addListenerToMap } from '../../orca-runtime-core'
-import { notifyRuntimeListeners } from '../../runtime-async-boundaries'
-import type { RuntimeTerminalBufferSnapshot } from '../../runtime-terminal-state-records'
-import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from '../../orca-runtime-postlude'
+import type { RuntimeTerminalDriverState as DriverState } from '../../../../shared/runtime-session-contracts'
+import { addListenerToMap } from './terminal-listener-map'
+import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
+import type { RuntimeTerminalAttention } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalBufferSnapshot } from '../records/runtime-terminal-state-records'
+import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from '../output/provider-snapshot-budget'
 import { assertTerminalInputWithinLimitWithYield } from '../../terminal-send-payload'
+
+// Covers a daemon reconnect plus the attach; past it the write proceeds and is refused as before.
+const ENDPOINT_REATTACH_INPUT_WAIT_MS = 10_000
 
 export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged extends OrcaRuntimeWithRecordAgentPromptLifecycleState {
   protected abstract serializeTerminalBufferFromAvailableState(
@@ -52,7 +58,9 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
   registerRemoteTerminalViewSubscriber(
     ptyId: string,
     isOutputPaused?: () => boolean,
-    mobileClientId?: string
+    mobileClientId?: string,
+    /** Only for views that pause output while their pane is hidden, so "unpaused" means on screen. */
+    reportsHiddenPane = false
   ): () => void {
     const isSilent =
       mobileClientId === undefined
@@ -60,12 +68,80 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
         : () =>
             isOutputPaused?.() === true ||
             !this.isMobileTerminalQueryReplyAuthority(ptyId, mobileClientId)
-    return this.terminalViewSubscribers.registerRemote(ptyId, isSilent)
+    return this.terminalViewSubscribers.registerRemote(
+      ptyId,
+      isSilent,
+      reportsHiddenPane ? isOutputPaused : undefined
+    )
+  }
+
+  /** Whether any viewer other than this host's own window shows the PTY, or the user last typed into it, from any client. */
+  getTerminalAttention(ptyId: string): RuntimeTerminalAttention {
+    return {
+      shownRemotely:
+        this.getDriver(ptyId).kind === 'mobile' ||
+        this.terminalViewSubscribers.isShownRemotely(ptyId),
+      lastInputAt: this.terminalRunFacts.readLastDrivingInputAt(ptyId)
+    }
   }
 
   /** Live local daemon sessions with no ingested bytes need attachment; existing headless state or snapshot reconciliation means attach already began. */
   protected isKnownUnattachedLocalDaemonPty(ptyId: string): boolean {
     return this.mainDaemonAttachments.isKnownUnattachedLocal(ptyId)
+  }
+
+  /** The local provider lost this PTY's endpoint; main re-attaches it so its output and input resume. */
+  notePtyEndpointLoss(ptyId: string): void {
+    this.mainDaemonAttachments.noteEndpointLoss(ptyId)
+  }
+
+  /** Input waits, bounded, for main's in-flight re-attach after an endpoint loss instead of being refused. */
+  protected async waitForPtyEndpointReattach(
+    ptyId: string | undefined,
+    signal?: AbortSignal
+  ): Promise<void> {
+    const reattach =
+      ptyId === undefined ? undefined : this.mainDaemonAttachments.pendingReattach(ptyId)
+    if (ptyId === undefined || !reattach) {
+      return
+    }
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    await this.settleEndpointReattach(ptyId, reattach, signal)
+    if (signal?.aborted) {
+      // A cancelled send must not be written once the terminal is back.
+      throw new Error('request_aborted')
+    }
+    // Input held for one process must not reach a process that replaced it under the same id.
+    if (this.getPtyLifecycleGeneration(ptyId) !== generation) {
+      throw new Error('terminal_handle_stale')
+    }
+  }
+
+  private async settleEndpointReattach(
+    ptyId: string,
+    first: Promise<boolean>,
+    signal?: AbortSignal
+  ): Promise<void> {
+    const deadline = performance.now() + ENDPOINT_REATTACH_INPUT_WAIT_MS
+    // A further loss mid-attach starts another attempt; keep waiting within the same bound.
+    let reattach: Promise<boolean> | undefined = first
+    while (reattach) {
+      const remainingMs = deadline - performance.now()
+      if (remainingMs <= 0) {
+        return
+      }
+      const stopWaiting = new AbortController()
+      const waitSignal = signal ? AbortSignal.any([signal, stopWaiting.signal]) : stopWaiting.signal
+      const settled = await Promise.race([
+        reattach.then(() => true),
+        delay(remainingMs, false, { signal: waitSignal }).catch(() => false)
+      ])
+      stopWaiting.abort()
+      if (!settled) {
+        return
+      }
+      reattach = this.mainDaemonAttachments.pendingReattach(ptyId)
+    }
   }
 
   /** Mark a raw-output viewer without transferring terminal query authority. */

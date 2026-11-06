@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { resolveOrcadBrowserProvider } from './orcad-browser-provider'
-import type { RuntimeBrowserCommands } from '../runtime/browser/browser-commands'
+import type { RuntimeBrowserCommands } from '../runtime/browser/commands/browser-commands'
 
 const executablePath = process.env.ORCA_BROWSER_EXECUTABLE
 
@@ -155,6 +155,9 @@ describe('ExternalChromiumBrowserProcess integration', () => {
           },
           getBrowserHostLeaseRegistry: () => {
             throw new Error('No browser host lease registry')
+          },
+          getBrowserHostRequestRegistry: () => {
+            throw new Error('No browser host request registry')
           },
           getRuntimeBrowserPageRegistry: () => {
             throw new Error('No runtime browser page registry')

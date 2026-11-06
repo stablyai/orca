@@ -1,4 +1,10 @@
-import type { AgentSessionAttachmentClipboardTarget } from '../../../../shared/agent-session/agent-session-attachments'
+import { holdBrowserAttachmentFiles } from '@/lib/browser-attachment-files'
+import { decodeBase64Bytes } from '@/lib/base64-bytes'
+import {
+  agentSessionPastedImageName,
+  type AgentSessionAttachmentClipboardTarget
+} from '../../../../shared/agent-session/agent-session-attachments'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import { saveClipboardImageAsWebAgentSessionAttachment } from './web-agent-session-attachment-upload'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import {
@@ -208,13 +214,24 @@ export async function saveWebClipboardImageAsTempFile(args?: {
   connectionId?: string | null
   runtimeEnvironmentId?: string | null
   agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
-}): Promise<string | null> {
+  forNativeChatDraft?: boolean
+  forStructuredChat?: boolean
+}) {
   if (!requireActiveEnvironmentOrNull()) {
     return null
   }
   const contentBase64 = await readClipboardImagePngBase64()
   if (!contentBase64) {
     return null
+  }
+  if (args?.forNativeChatDraft && args.forStructuredChat && !args.agentSessionAttachment) {
+    return holdBrowserAttachmentFiles([
+      new File(
+        [decodeBase64Bytes(contentBase64)],
+        agentSessionPastedImageName(Date.now(), createBrowserUuid()),
+        { type: 'image/png' }
+      )
+    ])[0]
   }
   if (args?.agentSessionAttachment) {
     if (!args.runtimeEnvironmentId) {

@@ -1,3 +1,4 @@
+import { StructuredAgentSessionCreateUnknownOutcomeError } from './structured-agent-session-launch-errors'
 import {
   structuredLaunchCompatibleOptions,
   structuredLaunchRequestedOptions
@@ -57,8 +58,12 @@ export function prepareStructuredLaunchCreateMessage(
     return
   }
   const hadPrompt = hasStagedStructuredLaunchPrompt(intent.sessionId)
-  const firstMessage = prepareStructuredLaunchPromptForCreate(intent.sessionId, intent.target)
-  if (hadPrompt || firstMessage) {
+  const { firstMessage, deferred } = prepareStructuredLaunchPromptForCreate(
+    intent.sessionId,
+    intent.target,
+    intent.sendSkillsSupport === true
+  )
+  if (!deferred && (hadPrompt || firstMessage)) {
     const beforeCreate = intent.beforeCreate
     intent.beforeCreate = () =>
       beforeCreate?.() !== false && issueStructuredLaunchPromptForCreate(intent.sessionId)
@@ -183,4 +188,31 @@ export function publishStructuredLaunchCreateOptions(
     console.warn('[native-chat] applying a launch option failed', error)
   })
   return receipt
+}
+
+/** Every sender waits on the launch promise, so picks held during launch reach the host first. */
+export function publishWithHeldOptions(
+  state: StructuredLaunchState,
+  created: Promise<StructuredAgentLaunchReceipt>
+): Promise<StructuredAgentLaunchReceipt> {
+  state.intent.prepareCreate = (hostTakesExplicitOptions) =>
+    prepareStructuredLaunchCreateMessage(state, hostTakesExplicitOptions)
+  const publishing: Promise<StructuredAgentLaunchReceipt> = created
+    .then((receipt) =>
+      state.promise === publishing
+        ? publishStructuredLaunchCreateOptions(state, receipt)
+        : state.intent.params.firstMessage
+          ? receipt
+          : state.promise
+    )
+    .catch((error: unknown) => {
+      if (state.promise !== publishing && state.intent.params.firstMessage) {
+        throw new StructuredAgentSessionCreateUnknownOutcomeError(
+          'Opening message outcome belongs to the current attempt.',
+          'agent_session_operation_unknown'
+        )
+      }
+      throw error
+    })
+  return publishing
 }

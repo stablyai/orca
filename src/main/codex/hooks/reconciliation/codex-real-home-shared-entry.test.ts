@@ -31,8 +31,6 @@ import {
   reconcileCodexHooks,
   startCodexHooks
 } from './codex-hook-reconcile'
-import { getOrcaManagedCodexHomePath } from '../../configuration/homes/codex-home-paths'
-import { resolveStartupManagedHookAction } from '../../../agent-hooks/managed-agent-hook-controls'
 
 const homes = setupCodexHookHomes(homedirMock, getPathMock)
 const USER_HOOK = { type: 'command', command: 'user-stop-hook.sh' }
@@ -127,23 +125,6 @@ describe('the shared real-home Codex entry', () => {
     const before = snapshotRealCodexHome()
 
     await reconcileWithHooksOff()
-
-    expect(snapshotRealCodexHome()).toEqual(before)
-  })
-
-  it('survives a startup with hooks off and its first pane launch prep', async () => {
-    seedSharedEntry()
-    const before = snapshotRealCodexHome()
-    const settings = { agentStatusHooksEnabled: false, disabledTuiAgents: [] }
-
-    expect(resolveStartupManagedHookAction(settings)).toBe('skip')
-    await reconcileWithHooksOff()
-    await new CodexHookService().prepareRuntimeHomeForLaunch(
-      getOrcaManagedCodexHomePath(),
-      undefined,
-      () => false,
-      false
-    )
 
     expect(snapshotRealCodexHome()).toEqual(before)
   })

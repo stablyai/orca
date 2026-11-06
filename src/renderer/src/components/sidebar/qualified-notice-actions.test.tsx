@@ -115,7 +115,7 @@ it('routes a rendered concrete Show through mounted action/rollback adapters and
       filterRepoIds: []
     })
     return [...cards.importedWorktreesByRepo.values()].map((candidate, index) => {
-      const row = buildImportedWorktreesCardRow(candidate, 'repo-group')
+      const row = buildImportedWorktreesCardRow(candidate)
       return (
         <div key={row.key} data-owner={getRepoExecutionHostId(candidate.repo)}>
           {renderImportedWorktreesVirtualRow({

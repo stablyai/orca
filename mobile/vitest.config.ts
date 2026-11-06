@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
-import { rendererTestAssets } from '../config/scripts/renderer-test-assets'
+import { rendererTestAssets } from '../config/scripts/test-runtime/environment/renderer-test-assets'
 
 const vitestOxcConfig = { tsconfig: false } as never
 

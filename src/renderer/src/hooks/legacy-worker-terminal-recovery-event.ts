@@ -27,6 +27,7 @@ export function resolveLegacyWorkerTerminalRecoveryAction(
         detail: {
           tabId: pane.tabId,
           leafId: pane.leafId,
+          lastPaneCloseReason: 'cleanup',
           preservePty: true,
           retireSurface: true,
           expectedPtyId: event.ptyId

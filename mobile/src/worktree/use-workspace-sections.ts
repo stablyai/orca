@@ -17,6 +17,7 @@ import {
 } from './workspace-list-sections'
 import { buildFilterRepos, type WorkspaceSectionRepo } from './workspace-filter-repos'
 import type { WorktreeHostContextOf } from './worktree-host-context-labels'
+import type { MobileLineageStores } from './mobile-workspace-lineage'
 
 export function useWorkspaceSections(args: {
   exactProjectRepoFilters?: boolean
@@ -35,6 +36,8 @@ export function useWorkspaceSections(args: {
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   /** Each repo's host, for rows that predate their own hostId. */
   repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId>
+  /** The stores the list spans, so a parent on another machine nests its children. */
+  lineageStores?: MobileLineageStores
 }): {
   sections: Section[]
   rawSections: Section[]
@@ -55,7 +58,8 @@ export function useWorkspaceSections(args: {
     filterCatalogRepos,
     collapsedGroups,
     workspaceStatuses,
-    repoHostIdByRepoId
+    repoHostIdByRepoId,
+    lineageStores
   } = args
 
   const uniqueRepos = useMemo(
@@ -86,10 +90,12 @@ export function useWorkspaceSections(args: {
         workspaceStatuses,
         undefined,
         showPinnedInGroups,
-        repoHostIdByRepoId
+        repoHostIdByRepoId,
+        lineageStores
       ),
     [
       repoHostIdByRepoId,
+      lineageStores,
       displayWorktrees,
       sortMode,
       filters,

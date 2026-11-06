@@ -4,6 +4,7 @@ import {
   AiVaultSearchStatusRequestSchema,
   AiVaultSetSearchEnabledParamsSchema
 } from '../../../../shared/ai-vault/search/ai-vault-search-contract'
+import { sessionSearchTransportForClient } from '../../../../shared/ai-vault/search/ai-vault-search-transport'
 import {
   searchSessionService,
   sessionSearchServiceStatus
@@ -49,7 +50,7 @@ export const AI_VAULT_METHODS = [
     permission: 'workspace',
     params: AiVaultSearchRequestSchema,
     handler: (params, context) => {
-      const transport = context.clientKind ? 'relay' : 'runtime'
+      const transport = sessionSearchTransportForClient(context.clientKind)
       const response = searchSessionService(params, transport)
       // A client that reads no structured sessions keeps the transcript hit, as before.
       return supportsStructuredAgentSessions(context)
@@ -67,7 +68,7 @@ export const AI_VAULT_METHODS = [
     permission: 'workspace',
     params: AiVaultSearchStatusRequestSchema,
     handler: (params, { clientKind }) =>
-      sessionSearchServiceStatus(params, clientKind ? 'relay' : 'runtime')
+      sessionSearchServiceStatus(params, sessionSearchTransportForClient(clientKind))
   }),
   defineMethod({
     name: 'aiVault.setSearchEnabled',
@@ -86,7 +87,7 @@ export const AI_VAULT_METHODS = [
       console.warn(
         `[ai-vault-search] device ${pairedDeviceId} set indexing enabled=${params.enabled}`
       )
-      return sessionSearchServiceStatus({}, clientKind ? 'relay' : 'runtime')
+      return sessionSearchServiceStatus({}, sessionSearchTransportForClient(clientKind))
     }
   }),
   defineMethod({

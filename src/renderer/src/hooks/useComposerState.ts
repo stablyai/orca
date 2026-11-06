@@ -58,6 +58,7 @@ export type UseComposerStateOptions = {
   initialWorkspaceTarget?: WorkspaceCreationTargetHint | null
   initialWorkspaceStatus?: WorkspaceStatus
   initialBaseBranch?: string
+  initialParentWorktreeId?: string
   persistDraft: boolean
   onCreated?: () => void
   isSubmissionCancelled?: () => boolean

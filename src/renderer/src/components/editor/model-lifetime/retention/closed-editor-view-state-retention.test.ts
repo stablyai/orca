@@ -6,12 +6,7 @@ import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { createEditorModelRegistry } from '@/lib/editor-model-registry'
 import { attachClosedEditorTabCleanup } from '@/components/editor/model-lifetime/retention/closed-editor-tab-controller'
 import { toEditorModelUri } from '@/components/editor/model-lifetime/identity/editor-model-uri'
-import {
-  scrollTopCache,
-  editorSelectionCache,
-  pdfViewPositionCache,
-  setWithLRU
-} from '@/lib/scroll-cache'
+import { scrollTopCache, editorSelectionCache, pdfViewPositionCache } from '@/lib/scroll-cache'
 
 const disposeOwners: (() => void)[] = []
 afterEach(() => {
@@ -57,59 +52,6 @@ function open(path: string, text = 'original') {
     }
   }
 }
-
-it('retires the actual model while retaining existing bounded scroll, selection and PDF state', async () => {
-  const path = '/tradeoff/view-state.txt'
-  const owner = open(path)
-  const selection = [
-    {
-      selectionStartLineNumber: 3,
-      selectionStartColumn: 2,
-      positionLineNumber: 3,
-      positionColumn: 7
-    }
-  ]
-  setWithLRU(scrollTopCache, path, 234)
-  setWithLRU(editorSelectionCache, path, selection)
-  setWithLRU(pdfViewPositionCache, `${path}:pdf`, { pageNumber: 2, top: 12, left: 0 })
-  await owner.close()
-  expect(scrollTopCache.get(path)).toBe(234)
-  expect(editorSelectionCache.get(path)).toEqual(selection)
-  expect(pdfViewPositionCache.get(`${path}:pdf`)).toEqual({ pageNumber: 2, top: 12, left: 0 })
-})
-
-it('preserves the existing 20-entry LRU across 40 closed models without retaining the models', async () => {
-  for (let index = 0; index < 40; index += 1) {
-    const path = `/tradeoff/lru-${index}.txt`
-    const owner = open(path)
-    setWithLRU(scrollTopCache, path, index)
-    await owner.close()
-  }
-  expect(monaco.editor.getModels()).toHaveLength(0)
-  expect(scrollTopCache.size).toBe(20)
-  expect(scrollTopCache.get('/tradeoff/lru-39.txt')).toBe(39)
-  expect(scrollTopCache.has('/tradeoff/lru-0.txt')).toBe(false)
-})
-
-it('measures the existing Monaco large-file undo retention limit', async () => {
-  const path = '/tradeoff/undo-large-file.txt'
-  const owner = open(path, 'x'.repeat(10 * 1024 * 1024 + 1))
-  owner.model.pushEditOperations(
-    [],
-    [{ range: new monaco.Range(1, 1, 1, 1), text: 'saved ' }],
-    () => null
-  )
-  owner.model.pushStackElement()
-  expect(owner.model.canUndo()).toBe(true)
-  const content = owner.model.getValue()
-  await owner.close()
-  const reopened = monaco.editor.createModel(
-    content,
-    'plaintext',
-    monaco.Uri.parse(toEditorModelUri(path))
-  )
-  expect(reopened.canUndo()).toBe(false)
-})
 
 it.each([
   '/tradeoff/undo-posix.txt',

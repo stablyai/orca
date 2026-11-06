@@ -9,6 +9,8 @@ type Disposition =
   | 'rewrite'
   /** Names no local project folder, or another host's. */
   | 'keep'
+  /** Only the record keys and `childWorkspaceKey` are re-keyed; the rest names another store. */
+  | 'rewrite-child-key'
 
 /** A new field fails to compile until it has a disposition. */
 export const WSL_DRIVE_UNC_STATE_DISPOSITIONS = {
@@ -29,6 +31,7 @@ export const WSL_DRIVE_UNC_STATE_DISPOSITIONS = {
   worktreeIdentityAliases: 'rewrite',
   worktreeLineageById: 'rewrite',
   workspaceLineageByChildKey: 'rewrite',
+  crossStoreLineageByChildKey: 'rewrite-child-key',
   // Desktop-wide; a path here (the worktree folder) is not a project's.
   settings: 'keep',
   ui: 'rewrite',

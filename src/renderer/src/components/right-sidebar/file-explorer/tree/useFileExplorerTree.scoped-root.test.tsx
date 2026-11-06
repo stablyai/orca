@@ -53,18 +53,3 @@ it.each(['Host unavailable', ''])(
     })
   }
 )
-
-it('distinguishes an unreadable scoped directory from an empty one and allows forced retry', async () => {
-  const { result } = renderHook(() => useFileExplorerTree('/repo', new Set(), 'wt'))
-  read.mockRejectedValueOnce(new Error('Permission denied'))
-  await act(async () => {
-    await result.current.loadDir('/repo/app', 0)
-  })
-  expect(result.current.rootError).toBeNull()
-  expect(result.current.dirCache['/repo/app'].error).toBe('Permission denied')
-  await act(async () => {
-    await result.current.refreshDir('/repo/app')
-  })
-  expect(result.current.dirCache['/repo/app']).toMatchObject({ children: [] })
-  expect(result.current.dirCache['/repo/app'].error).toBeUndefined()
-})

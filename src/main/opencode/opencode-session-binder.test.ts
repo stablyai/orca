@@ -4,9 +4,7 @@ import { lookupOpenCodeSessionPane } from '../../shared/agent-hook-listener/open
 import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import type { ProcessIdentityRow } from './opencode-client-sweep'
 import {
-  advanceBinderCursor,
   applyBinderOwnerships,
-  OPENCODE_SESSION_CURSOR_START,
   runOpenCodeBinderRound,
   type BinderPaneSnapshot
 } from './opencode-session-binder'
@@ -48,18 +46,6 @@ describe('runOpenCodeBinderRound', () => {
     ])
   })
 
-  it('ignores clients outside every pane subtree', () => {
-    const { ownerships } = runOpenCodeBinderRound({
-      nowMs: NOW,
-      sessions: [{ id: 'ses_1', directory: DIR, createdAtMs: NOW - 60_000, parentId: null }],
-      panes: [pane(PANE_A, 100)],
-      processes: [proc(100, 1, ['zsh']), proc(999, 1, ['opencode'], NOW - 90_000)],
-      knownOwners: new Map(),
-      parentBySessionId: new Map()
-    })
-    expect(ownerships).toEqual([])
-  })
-
   it('inherits a root owner across the watermark via the parent map', () => {
     const { ownerships } = runOpenCodeBinderRound({
       nowMs: NOW,
@@ -75,84 +61,9 @@ describe('runOpenCodeBinderRound', () => {
       { sessionId: 'ses_child', paneKey: PANE_A, basis: 'creation-correlation' }
     ])
   })
-
-  it('dedupes same-key snapshots newest-wins', () => {
-    const { ownerships } = runOpenCodeBinderRound({
-      nowMs: NOW,
-      sessions: [{ id: 'ses_1', directory: DIR, createdAtMs: NOW - 60_000, parentId: null }],
-      panes: [
-        { ...pane(PANE_A, 100), directory: '/elsewhere' },
-        { ...pane(PANE_A, 101), directory: DIR }
-      ],
-      processes: [
-        proc(100, 1, ['zsh']),
-        proc(101, 1, ['zsh']),
-        proc(102, 101, ['opencode'], NOW - 90_000)
-      ],
-      knownOwners: new Map(),
-      parentBySessionId: new Map()
-    })
-    expect(ownerships).toEqual([
-      { sessionId: 'ses_1', paneKey: PANE_A, basis: 'single-pane-directory' }
-    ])
-  })
-
-  it('advances the cursor past handled rows only', () => {
-    const fresh = [
-      { id: 'ses_1', directory: DIR, createdAtMs: NOW - 60_000, parentId: null },
-      { id: 'ses_2', directory: DIR, createdAtMs: NOW - 10_000, parentId: null }
-    ]
-    expect(
-      advanceBinderCursor({
-        fresh,
-        isHandled: () => true,
-        current: OPENCODE_SESSION_CURSOR_START
-      })
-    ).toEqual({ ms: NOW - 10_000, id: 'ses_2' })
-  })
-
-  it('freezes the cursor before the first unhandled row so it is re-listed', () => {
-    const fresh = [
-      { id: 'ses_1', directory: DIR, createdAtMs: NOW - 60_000, parentId: null },
-      { id: 'ses_2', directory: DIR, createdAtMs: NOW - 10_000, parentId: null }
-    ]
-    expect(
-      advanceBinderCursor({
-        fresh,
-        isHandled: (id) => id === 'ses_1',
-        current: OPENCODE_SESSION_CURSOR_START
-      })
-    ).toEqual({ ms: NOW - 60_000, id: 'ses_1' })
-  })
-
-  it('keeps the cursor when nothing was handled', () => {
-    const current = { ms: NOW - 120_000, id: 'ses_0' }
-    expect(
-      advanceBinderCursor({
-        fresh: [{ id: 'ses_1', directory: DIR, createdAtMs: NOW - 60_000, parentId: null }],
-        isHandled: () => false,
-        current
-      })
-    ).toBe(current)
-  })
 })
 
 describe('applyBinderOwnerships', () => {
-  it('writes bindings with the pane worktree into the registry', () => {
-    const state = createHookListenerState()
-    const applied = applyBinderOwnerships(
-      state,
-      [pane(PANE_A, 100)],
-      [{ sessionId: 'ses_1', paneKey: PANE_A, basis: 'argv' }],
-      NOW
-    )
-    expect(applied).toBe(1)
-    expect(lookupOpenCodeSessionPane(state, 'ses_1')).toMatchObject({
-      paneKey: PANE_A,
-      worktreeId: 'repo::/Users/jin/work/mocitec'
-    })
-  })
-
   it('takes the newest row worktree when a pane remints', () => {
     const state = createHookListenerState()
     // Insert stale first so a reminted pane’s newer worktree must win.

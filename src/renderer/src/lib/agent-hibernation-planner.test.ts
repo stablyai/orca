@@ -69,7 +69,7 @@ function snapshot(
     tabsByWorktree: { 'wt-bg': [tab()] },
     terminalLayoutsByTabId: { 'tab-1': layout() },
     ptyIdsByTabId: { 'tab-1': ['pty-1'] },
-    mobileLockedPtyIds: [],
+    inUsePtyIds: [],
     agentStatusByPaneKey: { [agentEntry.paneKey]: agentEntry },
     sleepingAgentSessionsByPaneKey: {},
     lastTerminalInputAtByPaneKey: {},
@@ -454,10 +454,37 @@ describe('agent sleep planner', () => {
           ptyIdsByTabId: { 'tab-1': ['remote:env-1@@terminal-1'] },
           runtimeLivePtyIdsByWorktreeId: { 'wt-bg': ['terminal-1'] },
           runtimeLivenessRequiredWorktreeIds: ['wt-bg'],
-          mobileLockedPtyIds: ['remote:env-1@@terminal-1']
+          inUsePtyIds: ['remote:env-1@@terminal-1']
         })
       )
     ).toEqual([])
+  })
+
+  it("judges another client's view and input on the PTY's own host, though two hosts reuse its id", () => {
+    const onB = entry({ paneKey: `tab-b:${LEAF}`, tabId: 'tab-b', worktreeId: 'wt-b' })
+    const twoHosts = (attention: { shownRemotely: boolean; lastInputAt: number | null }) =>
+      snapshot({
+        tabsByWorktree: { 'wt-bg': [tab()], 'wt-b': [tab('tab-b', 'wt-b')] },
+        terminalLayoutsByTabId: {
+          'tab-1': layout(LEAF, 'remote:env-a@@terminal-1'),
+          'tab-b': layout(LEAF, 'remote:env-b@@terminal-1')
+        },
+        ptyIdsByTabId: {
+          'tab-1': ['remote:env-a@@terminal-1'],
+          'tab-b': ['remote:env-b@@terminal-1']
+        },
+        runtimeLivePtyIdsByWorktreeId: { 'wt-bg': ['terminal-1'], 'wt-b': ['terminal-1'] },
+        runtimeLivenessRequiredWorktreeIds: ['wt-bg', 'wt-b'],
+        agentStatusByPaneKey: { [`tab-1:${LEAF}`]: entry(), [onB.paneKey]: onB },
+        attentionByWorktreeId: { 'wt-b': { 'terminal-1': attention } }
+      })
+
+    expect(plannedWorktrees(twoHosts({ shownRemotely: true, lastInputAt: null }))).toEqual([
+      'wt-bg'
+    ])
+    expect(plannedWorktrees(twoHosts({ shownRemotely: false, lastInputAt: NOW - 1 }))).toEqual([
+      'wt-bg'
+    ])
   })
 })
 

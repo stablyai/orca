@@ -1,4 +1,5 @@
 import type { Repo } from '../../../../../../shared/repo-types'
+import { getRepoHostIdentity } from '../../../../../../shared/repo-host-identity'
 import React from 'react'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import type { Row } from '../../../../../../shared/sidebar-list/row-types'
@@ -8,13 +9,6 @@ import ImportedWorktreesVisibilityLine from '../listing/ImportedWorktreesVisibil
 import NewExternalWorktreesInboxLine from '../listing/NewExternalWorktreesInboxLine'
 import type { ImportedWorktreeCardActionState } from '../listing/imported-worktrees-card-actions'
 import type { NewExternalWorktreesInboxActionState } from '../listing/new-external-worktrees-inbox-actions'
-
-export function canKeepImportedWorktreesHidden(
-  row: Extract<Row, { type: 'imported-worktrees-card' }>,
-  actionState: ImportedWorktreeCardActionState | undefined
-): boolean {
-  return row.placement === 'repo-group' && actionState?.forceVisible !== true
-}
 
 type NoticeRowFrameProps = {
   vItem: VirtualItem
@@ -50,33 +44,50 @@ export function renderImportedWorktreesVirtualRow(args: {
   row: Extract<Row, { type: 'imported-worktrees-card' }>
   vItem: VirtualItem
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
-  actionState: ImportedWorktreeCardActionState | undefined
+  /** Keyed by repo-host identity: one project can be checked out on several hosts. */
+  actionStateByRepoHost: ReadonlyMap<string, ImportedWorktreeCardActionState>
   onShow: (repo: Repo) => void
   onKeepHidden: (repo: Repo) => void
 }): React.JSX.Element {
-  const { row, actionState } = args
-  return (
+  const { row, actionStateByRepoHost } = args
+  const frame = (line: React.JSX.Element): React.JSX.Element => (
     <NoticeRowFrame
       key={args.vItem.key}
       vItem={args.vItem}
       measureVirtualRowElement={args.measureVirtualRowElement}
     >
+      {line}
+    </NoticeRowFrame>
+  )
+  if (row.placement === 'all-projects') {
+    const states = row.projects.map((project) =>
+      actionStateByRepoHost.get(getRepoHostIdentity(project.repo))
+    )
+    return frame(
       <ImportedWorktreesVisibilityLine
-        repoDisplayName={row.repo.displayName}
         hostContextLabel={row.hostContextLabel}
         hostContextHostId={row.hostContextHostId}
-        hiddenWorktrees={row.hiddenWorktrees}
-        placement={row.placement}
-        pending={actionState?.pending ?? false}
-        error={actionState?.error ?? null}
-        onShow={() => args.onShow(row.repo)}
-        onKeepHidden={
-          canKeepImportedWorktreesHidden(row, actionState)
-            ? () => args.onKeepHidden(row.repo)
-            : undefined
-        }
+        hiddenWorktrees={row.projects.flatMap((project) => project.hiddenWorktrees)}
+        pending={states.some((state) => state?.pending)}
+        error={states.find((state) => state?.error)?.error ?? null}
+        onShow={() => row.projects.forEach((project) => args.onShow(project.repo))}
       />
-    </NoticeRowFrame>
+    )
+  }
+  const actionState = actionStateByRepoHost.get(getRepoHostIdentity(row.repo))
+  return frame(
+    <ImportedWorktreesVisibilityLine
+      repoDisplayName={row.repo.displayName}
+      hostContextLabel={row.hostContextLabel}
+      hostContextHostId={row.hostContextHostId}
+      hiddenWorktrees={row.hiddenWorktrees}
+      pending={actionState?.pending ?? false}
+      error={actionState?.error ?? null}
+      onShow={() => args.onShow(row.repo)}
+      onKeepHidden={
+        actionState?.forceVisible !== true ? () => args.onKeepHidden(row.repo) : undefined
+      }
+    />
   )
 }
 
