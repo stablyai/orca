@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type * as GitIdentityDisplay from '../../../../shared/worktree/git-identity-display'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -78,11 +79,14 @@ function Watches() {
   return null
 }
 function setup(count: number) {
-  const worktrees = Array.from({ length: count }, (_, i) => ({
+  const worktrees: Worktree[] = Array.from({ length: count }, (_, i) => ({
     id: `repo::/child-${i}`,
     repoId: 'repo',
     path: `/child-${i}`,
     branch: `feature-${i}`,
+    head: 'abc123',
+    isBare: false,
+    isMainWorktree: false,
     displayName: `Child ${i}`,
     comment: '',
     linkedIssue: null,
