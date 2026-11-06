@@ -145,6 +145,25 @@ describe('dispatchTerminalNotification', () => {
     expect(window.api.notifications.dispatch).not.toHaveBeenCalled()
   })
 
+  it('notifies an Antigravity permission wait when only the terminal launch identity is known', () => {
+    mockState.agentLaunchConfigByPaneKey[paneKey] = { identity: { agentType: 'antigravity' } }
+    const waiting = {
+      state: 'waiting' as const,
+      prompt: 'p',
+      agentType: 'antigravity' as const,
+      toolName: 'ask_permission',
+      stateStartedAt: 1_000
+    }
+    mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, waiting)
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'agy',
+      paneKey,
+      agentStatusSnapshot: waiting
+    })
+    expect(window.api.notifications.dispatch).toHaveBeenCalledOnce()
+  })
+
   it.each([
     ['--dangerously-skip-permissions', 'ask_permission', false],
     ['', 'ask_permission', true],

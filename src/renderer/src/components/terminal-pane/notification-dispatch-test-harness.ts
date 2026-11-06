@@ -32,7 +32,7 @@ export type NotificationDispatchMockState = {
   retainedAgentsByPaneKey: Record<string, { worktreeId: string }>
   agentLaunchConfigByPaneKey: Record<
     string,
-    { launchConfig: { agentArgs: string }; identity: { agentType?: string } }
+    { launchConfig?: { agentArgs: string }; identity: { agentType?: string } }
   >
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
   runtimeAgentOrchestrationByPaneKey: Record<string, AgentStatusOrchestrationContext>
