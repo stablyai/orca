@@ -260,7 +260,24 @@ describe('PowerShell create commands', () => {
         GH_CREATE_OUTPUT_CRLF,
         [38750]
       ],
-      [`${pwsh} -Command "Write-Output 'gh pr create'"`, 'gh pr create\r\n', []]
+      [`${pwsh} -Command "Write-Output 'gh pr create'"`, 'gh pr create\r\n', []],
+      // As Codex's argv join writes a script ending in a backslash, and one holding both `$` and
+      // an apostrophe, which it splits into differently quoted pieces of one word.
+      [
+        String.raw`${pwsh} -Command "gh pr create --fill; Set-Location C:\\"`,
+        GH_CREATE_OUTPUT_CRLF,
+        [38750]
+      ],
+      [
+        String.raw`${pwsh} -Command '$t = "Don'"'t stop\"; gh pr create --title "'$t --fill'`,
+        GH_CREATE_OUTPUT_CRLF,
+        [38750]
+      ],
+      [
+        String.raw`${pwsh} -Command '$u = '"'https://github.com/stablyai/orca/pull/38750'; Write-Output \"gh pr create isn't run\"; Write-Output "'$u'`,
+        GH_CREATE_OUTPUT_CRLF,
+        []
+      ]
     ]
     for (const [command, output, expected] of recorded) {
       expect(openedIn(bashTurn({ command }, output))).toEqual(expected)
@@ -268,11 +285,6 @@ describe('PowerShell create commands', () => {
   })
 
   it('keeps a real create through PowerShell quoting', () => {
-    expect(
-      opened(
-        "pwsh -Command 'gh pr edit 3 --body ''Run `pnpm test`''; gh pr create --title ''x'' --fill'"
-      )
-    ).toEqual([38712])
     expect(opened(['pwsh', '-Command', "gh pr create --title 'it''s done' --fill"])).toEqual([
       38712
     ])
@@ -306,6 +318,13 @@ describe('PowerShell create commands', () => {
         ]
       })
     expect(viaPowerShellTool("pwsh -Command 'gh pr create --fill'")).toEqual([38712])
+    // Its launch line is PowerShell too: `''` and a backtick escape are its own quoting.
+    expect(
+      viaPowerShellTool(
+        "pwsh -Command 'gh pr edit 3 --body ''Run `pnpm test`''; gh pr create --title ''x'' --fill'"
+      )
+    ).toEqual([38712])
+    expect(viaPowerShellTool('pwsh -Command "gh pr create --title `"x`" --fill"')).toEqual([38712])
     expect(viaPowerShellTool('gh pr create --title "it`"s" --fill')).toEqual([38712])
     expect(viaPowerShellTool("Write-Output 'gh pr create'")).toEqual([])
   })

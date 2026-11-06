@@ -1,4 +1,5 @@
 import { nativeChatFullCommand } from './native-chat-tool-input-text'
+import { posixShellWords } from './native-chat-tool-preview-prefix'
 
 // Decodes the script a shell tool call ran into POSIX-readable text for command analysis. PowerShell
 // is lexed in its own quoting first, so its strings, escapes and comments can't pass for commands.
@@ -168,48 +169,53 @@ function powershellInvocationScript(argv: readonly string[]): string | null {
   return null
 }
 
-/** A Windows command line's words, undoing its own quoting: `"…"` (with `""` or `\"`), `'…'` (with `''`). */
-function commandLineWords(command: string): string[] | null {
+/** A PowerShell command line's words: `'…'` (with `''`), `"…"` (with `""` or a backtick escape), and
+ *  a bare backtick escape. */
+function powershellWords(command: string): string[] | null {
   const words: string[] = []
+  let word: string | null = null
   let index = 0
   while (index < command.length) {
-    while (/\s/u.test(command[index] ?? '')) {
+    const char = command[index]!
+    if (/\s/u.test(char)) {
+      if (word !== null) {
+        words.push(word)
+      }
+      word = null
       index += 1
+      continue
     }
-    if (index >= command.length) {
-      break
-    }
-    const quote = command[index]
-    if (quote === '"' || quote === "'") {
-      let word = ''
+    word ??= ''
+    if (char === "'" || char === '"') {
       index += 1
       for (;;) {
         if (index >= command.length) {
           return null
         }
-        if (command[index] === quote && command[index + 1] === quote) {
-          word += quote
+        if (command[index] === char && command[index + 1] === char) {
+          word += char
           index += 2
-        } else if (quote === '"' && command[index] === '\\' && command[index + 1] === '"') {
-          // Codex writes a double quote inside one as `\"`, as Windows splits command lines.
-          word += '"'
-          index += 2
-        } else if (command[index] === quote) {
+        } else if (command[index] === char) {
           index += 1
           break
+        } else if (char === '"' && command[index] === '`' && index + 1 < command.length) {
+          word += command[index + 1]
+          index += 2
         } else {
           word += command[index]
           index += 1
         }
       }
-      words.push(word)
+    } else if (char === '`' && index + 1 < command.length) {
+      word += command[index + 1]
+      index += 2
     } else {
-      const start = index
-      while (index < command.length && !/\s/u.test(command[index]!)) {
-        index += 1
-      }
-      words.push(command.slice(start, index))
+      word += char
+      index += 1
     }
+  }
+  if (word !== null) {
+    words.push(word)
   }
   return words
 }
@@ -233,13 +239,15 @@ export function nativeChatToolCallScript(name: string, input: unknown): string |
   if (command === null) {
     return null
   }
+  const powershellTool = name.trim().toLowerCase() === 'powershell'
+  // The launch line is in the language of what ran it: PowerShell for a PowerShell tool, otherwise
+  // POSIX, which Codex joins argv in (`"C:\\…\\pwsh.exe" -Command 'script'` on Windows).
+  const words = powershellTool ? powershellWords(command) : posixShellWords(command)
+  if (words && POWERSHELL_PROGRAM.test(programName(words[0] ?? ''))) {
+    return powershellInvocationScript(words)
+  }
   const first = /^\s*(?:"([^"]+)"|(\S+))/u.exec(command)
   const launched = programName(first?.[1] ?? first?.[2] ?? '')
-  if (POWERSHELL_PROGRAM.test(launched)) {
-    // Codex on Windows records `"C:\…\pwsh.exe" -Command 'script'`.
-    const words = commandLineWords(command)
-    return words ? powershellInvocationScript(words) : null
-  }
   if (CMD_PROGRAM.test(launched) && first) {
     const wrapped = CMD_WRAPPER.exec(command.slice(first.index + first[0].length).trim())
     if (wrapped) {
@@ -250,7 +258,7 @@ export function nativeChatToolCallScript(name: string, input: unknown): string |
     }
   }
   // A tool that is PowerShell itself runs any other command as a PowerShell script.
-  if (name.trim().toLowerCase() === 'powershell') {
+  if (powershellTool) {
     return powershellAnalysisScript(command)
   }
   return command
