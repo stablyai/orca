@@ -112,7 +112,11 @@ export class RuntimeWorktreeLineageController {
   async resolveCallerParentForAnotherStore(
     input: Pick<
       WorktreeLineageInput,
-      'envParentWorkspace' | 'callerTerminalHandle' | 'cwdParentWorktree' | 'cwdParentAmbiguous'
+      | 'envParentWorkspace'
+      | 'callerTerminalHandle'
+      | 'cwdParentWorktree'
+      | 'cwdParentAmbiguous'
+      | 'comment'
     >,
     installationId: string | undefined
   ): Promise<
@@ -247,7 +251,8 @@ export class RuntimeWorktreeLineageController {
       const terminal = await this.deps.showTerminal(handle)
       return {
         source: 'orchestration-context',
-        parent: await this.resolveWorktreeParent(`id:${terminal.worktreeId}`),
+        // As for the caller's own terminal: a task made in a folder workspace names that folder.
+        parent: await this.resolveParent(`id:${terminal.worktreeId}`),
         taskId
       }
     } catch {

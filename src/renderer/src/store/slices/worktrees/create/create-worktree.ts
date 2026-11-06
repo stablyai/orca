@@ -45,6 +45,7 @@ import {
   type WorktreeCreateRequest
 } from './worktree-create-payload'
 import { holdCreatedSidebarWorkspace } from '@/lib/sidebar-pending-layer'
+import { inferNoteCrossStoreParent } from './worktree-create-note-parent'
 import { buildCrossStoreParentRef } from '../metadata/cross-store-parent-ref'
 import {
   lostRequestedParent,
@@ -223,6 +224,11 @@ export function createCreateWorktree(
             }
           )
         : undefined
+      // Nothing else names a parent: a task id in the note may, through this desktop's own Orca.
+      const noteParent =
+        crossStoreParent || parent.parentWorkspace || options?.parentWorktreeId
+          ? undefined
+          : await inferNoteCrossStoreParent(get(), target, options?.note)
       if (
         target.kind === 'environment' &&
         (options?.linkedWorkItem?.provider === 'jira' ||
@@ -255,6 +261,7 @@ export function createCreateWorktree(
                 : undefined,
               parentWorkspace: parent.parentWorkspace,
               crossStoreParent,
+              ...noteParent,
               manualOrder
             },
             target,

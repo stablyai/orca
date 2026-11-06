@@ -459,3 +459,28 @@ describe('caller parent for a create on another machine', () => {
     })
   })
 })
+
+describe('a task id in the note of a create on another machine', () => {
+  it('names the folder workspace the task was made in', async () => {
+    const db = makeRuntimeOrchestrationDb()
+    vi.spyOn(db, 'getDispatchContext').mockReturnValue(undefined)
+    vi.spyOn(db, 'getTask').mockReturnValue(
+      taskLineageRow({ id: 'task_folder', created_by_terminal_handle: 'term_folder' })
+    )
+    const controller = new RuntimeWorktreeLineageController({
+      // Only the folder lookup is read on this path.
+      getStore: () => ({ getFolderWorkspaces: () => [{ id: 'f-1' }] }) as never,
+      getDb: () => db,
+      showTerminal: async () => ({ worktreeId: 'folder:f-1' }),
+      resolveWorktree: async () => {
+        throw new Error('selector_not_found')
+      }
+    })
+    await expect(
+      controller.resolveCallerParentForAnotherStore({ comment: 'for task_folder' }, 'desktop-1')
+    ).resolves.toEqual({
+      parent: { installationId: 'desktop-1', workspaceKey: 'folder:f-1', instanceId: 'f-1' },
+      source: 'orchestration-context'
+    })
+  })
+})
