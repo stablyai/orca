@@ -78,7 +78,14 @@ type ReaderScrollCallbacks = {
 
 export type NativeChatReaderScrollInputHandlers = Pick<
   React.HTMLAttributes<HTMLDivElement>,
-  'onWheel' | 'onTouchMove' | 'onKeyDown' | 'onPointerDown' | 'tabIndex' | 'role'
+  | 'onWheel'
+  | 'onTouchMove'
+  | 'onKeyDown'
+  | 'onKeyUp'
+  | 'onBlur'
+  | 'onPointerDown'
+  | 'tabIndex'
+  | 'role'
 >
 
 /** Invalidate pending navigation on input, and detach only when the transcript can move away. */
@@ -139,6 +146,15 @@ export function nativeChatReaderScrollInputHandlers({
       }
       onReaderAct?.()
       report({ kind: 'content-press' }, event)
+    },
+    // Tab's keyup lands on the element it focused; pointer and scripted focus never mark the ring.
+    onKeyUp: (event) => {
+      if (event.key === 'Tab' && event.target === event.currentTarget) {
+        event.currentTarget.dataset.tabFocus = 'true'
+      }
+    },
+    onBlur: (event) => {
+      delete event.currentTarget.dataset.tabFocus
     }
   }
 }
