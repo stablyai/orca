@@ -133,7 +133,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
         className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
         aria-label={agentStateLabel(state)}
       >
-        <AgentWorkingSpinner className={inner} />
+        <AgentWorkingSpinner className={size === 'md' ? 'size-2.5' : 'size-2'} />
       </span>
     )
   } else if (state === 'monitoring') {
