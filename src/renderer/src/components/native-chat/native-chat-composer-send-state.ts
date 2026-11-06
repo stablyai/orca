@@ -17,6 +17,8 @@ export type NativeChatComposerSendState = {
   sendButtonDisabled: boolean
   /** While the agent works: what Cmd/Ctrl+Enter would do instead of a plain send, when it differs. */
   alternateSend: NativeChatFollowUpBehavior | undefined
+  /** Cmd/Ctrl+Enter on an empty composer sends the head queued card now: into the running turn, or with none running (a paused queue after Stop), as its own. */
+  chordSteersHead: boolean
 }
 
 /** What the composer's Send/Stop button offers now, and whether it can be pressed. */
@@ -26,7 +28,12 @@ export function nativeChatComposerSendState(input: {
   imageAttachments: readonly NativeChatComposerImageAttachment[]
   pastedTextSaving: boolean
   disabled: boolean
-  structuredTransport: NativeChatStructuredComposerTransport | undefined
+  structuredTransport:
+    | Pick<
+        NativeChatStructuredComposerTransport,
+        'sendOut' | 'sendBlockedReason' | 'threadGoal' | 'sendFollowUp'
+      >
+    | undefined
   editSession: { canSave: boolean } | undefined
   isWorking: boolean
   canStop: boolean
@@ -59,6 +66,12 @@ export function nativeChatComposerSendState(input: {
       : draftHeld || !hasDraft
   // The send's own resolver, so the hint withdraws wherever Cmd/Ctrl+Enter would send no differently.
   const followUp = transport?.sendFollowUp
+  const alternateSend: NativeChatFollowUpBehavior | undefined =
+    input.messageDelivery && !input.editSession && followUp?.offersChoice
+      ? followUp.action === 'queue'
+        ? 'steer'
+        : 'queue'
+      : undefined
   return {
     // The host's reason labels Send only while it holds this draft.
     sendBlockedReason:
@@ -68,11 +81,9 @@ export function nativeChatComposerSendState(input: {
     sendHeld,
     hasDraft,
     sendButtonDisabled,
-    alternateSend:
-      input.messageDelivery && !input.editSession && followUp?.offersChoice
-        ? followUp.action === 'queue'
-          ? 'steer'
-          : 'queue'
-        : undefined
+    alternateSend,
+    // Never where the chord queues, or a second press would steer the card the first one just queued.
+    chordSteersHead:
+      input.messageDelivery && !input.editSession && (alternateSend === 'steer' || !input.isWorking)
   }
 }

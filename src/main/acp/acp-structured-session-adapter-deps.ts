@@ -2,10 +2,10 @@ import type {
   AcpLaunchInvocationDeps,
   AcpStructuredLaunch
 } from './acp-structured-launch-resolution'
-import type { StructuredAgentSessionAtRestCommands } from '../native-chat/agent-session-wire/structured-agent-session-at-rest-commands'
-import type { StructuredAgentSessionChildWorkProducer } from '../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
-import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionAtRestCommands } from '../native-chat/agent-session-wire/options/structured-agent-session-at-rest-commands'
+import type { StructuredAgentSessionChildWorkProducer } from '../native-chat/agent-session-wire/observations/structured-agent-session-subagent-rows'
+import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity

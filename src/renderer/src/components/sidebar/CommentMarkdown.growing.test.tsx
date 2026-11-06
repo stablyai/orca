@@ -87,6 +87,19 @@ describe('growing comment markdown', () => {
     expect(renderCodeBlock.mock.calls.length).toBe(afterFence)
   })
 
+  it('does not remount earlier text when a kept tag closes', () => {
+    const props = { variant: 'document', unknownHtmlAsText: true, growing: true } as const
+    const view = render(<CommentMarkdown content={'Intro.\n\nPress <kbd>Ctrl'} {...props} />)
+    const press = view.container.querySelectorAll('p')[1]
+    for (const content of [
+      'Intro.\n\nPress <kbd>Ctrl</kbd> to copy.',
+      'Intro.\n\nPress <kbd>Ctrl</kbd> to copy.\n\nTail.'
+    ]) {
+      view.rerender(<CommentMarkdown content={content} {...props} />)
+      expect(view.container.querySelectorAll('p')[1]).toBe(press)
+    }
+  })
+
   it('links a path in an earlier block once the host confirms it', () => {
     const content = 'Edited src/a.ts.\n\nThen more text'
     const view = render(

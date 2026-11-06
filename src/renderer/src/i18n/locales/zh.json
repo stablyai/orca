@@ -705,7 +705,9 @@
         "cb4d287238": "服务器名称",
         "3affe7de3a": "粘贴来自该浏览器可以访问的 Orca 服务器的配对 URL。",
         "e3bcd082ac": "连接到 Orca",
-        "mobileScopeRejected": "此二维码仅授予受限（移动端）访问权限。若要使用完整 Web 应用，请从设置 → 远程 Orca 服务器 → 分享此 Orca 服务器 → 新链接打开浏览器访问链接。"
+        "mobileScopeRejected": "此二维码仅授予受限（移动端）访问权限。若要使用完整 Web 应用，请从设置 → 远程 Orca 服务器 → 分享此 Orca 服务器 → 新链接打开浏览器访问链接。",
+        "replaceSavedServer": "此链接会连接到与“{{name}}”({{endpoint}}) 不同的服务器。只有在你信任下方端点时才连接。",
+        "keepSavedServer": "保留已保存的服务器"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "此执行主机不支持智能体会话历史。",
@@ -2517,7 +2519,6 @@
         "9cd11ba218": "Jira",
         "11a828abf8": "GitLab",
         "acef77f7ca": "GitHub",
-        "524f095d55": "待评审",
         "7698af5263": "我的",
         "94f0339621": "分配给我",
         "c2268a9982": "全部",
@@ -11283,7 +11284,7 @@
             "terminalRun": "在终端中运行命令（包括 SSH）"
           },
           "decisionFailed": "无法保存权限决定。请重试。",
-          "fullAccessWarning": "完全访问：作为普通程序运行，可以读取你的文件、使用网络并运行其他程序。",
+          "fullAccessWarning": "完全访问：作为普通程序运行，可以读取你的文件、使用网络、运行其他程序，并控制 Orca（包括你的终端和代理）。",
           "uiWarning": "在 Orca 内运行发布者的代码来绘制其视图。Orca 会显示它能访问的内容，并在启用前征求你的同意。"
         },
         "PluginConsentProvenance": {
@@ -18440,6 +18441,8 @@
         "providerExitedRejection": "{{agent}} 在发送此消息前已停止。",
         "providerExitedAnswer": "{{agent}} 已停止，因此您的回答未发送。发送消息以继续。",
         "modelUnavailable": "{{agent}} 无法使用 {{detail}}。请选择其他模型并重新发送。",
+        "modelUnavailableUpdate": "{{agent}} 无法使用 {{detail}}。请将 {{agent}} 更新到 {{minimumVersion}} 或更高版本，以便重启后继续使用；或者选择其他模型并重新发送。",
+        "modelNotSelected": "{{agent}} 没有选择模型。请检查模型选择和 {{agent}} 登录状态，然后重新发送。",
         "providerRejected": "{{agent}} 未接受此消息。",
         "providerRejectedQuoted": "{{agent}} 未接受此消息：{{detail}}。",
         "attachmentEmpty": "此消息中的一张图片为空，因此消息未发送。",
@@ -19325,6 +19328,13 @@
         "hostUnavailable": "附件所在主机不可用。请重新连接后重试。",
         "connectionChanged": "连接已更改。请关闭并重新打开此附件。",
         "readFailed": "无法在主机上读取此附件。请重新连接后重试。文件可能已被删除或更改。"
+      },
+      "composerWorkspace": {
+        "copyFailed": "复制失败",
+        "copyIdentity": "复制 {{value0}}",
+        "folder": "文件夹",
+        "mainCheckout": "主工作副本",
+        "worktree": "工作树"
       }
     },
     "tab": {

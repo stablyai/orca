@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -29,6 +29,70 @@ describe('resolveSessionFilePath', () => {
 
     const resolved = await resolveSessionFilePath('claude', 'sess-123', { claudeProjectsDir })
     expect(resolved).toBe(target)
+  })
+
+  it('never builds a Claude probe path that leaves the projects folder', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-claude-escape-')
+    const claudeProjectsDir = join(root, 'claude-projects')
+    await mkdir(join(claudeProjectsDir, '-Users-ada-repo'), { recursive: true })
+    await writeFile(join(root, 'outside.jsonl'), '{}\n')
+
+    await expect(
+      resolveSessionFilePath('claude', '../../outside', { claudeProjectsDir })
+    ).resolves.toBeNull()
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'skips symlinked Claude buckets and transcripts, which can point at another account',
+    async () => {
+      const root = await makeRoot('orca-native-chat-resolve-claude-symlink-')
+      const claudeProjectsDir = join(root, 'claude-projects')
+      const elsewhere = join(root, 'other-account', '-Users-ada-repo')
+      await mkdir(elsewhere, { recursive: true })
+      await writeFile(join(elsewhere, 'sess-linked.jsonl'), '{}\n')
+      await mkdir(join(claudeProjectsDir, '-Users-ada-file'), { recursive: true })
+      await symlink(elsewhere, join(claudeProjectsDir, '-Users-ada-repo'))
+      await symlink(
+        join(elsewhere, 'sess-linked.jsonl'),
+        join(claudeProjectsDir, '-Users-ada-file', 'sess-linked.jsonl')
+      )
+
+      await expect(
+        resolveSessionFilePath('claude', 'sess-linked', {
+          claudeProjectsDir,
+          cwd: '/Users/ada/repo'
+        })
+      ).resolves.toBeNull()
+    }
+  )
+
+  it('prefers the Claude transcript in the cwd bucket over a copy in another bucket', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-claude-cwd-')
+    const claudeProjectsDir = join(root, 'claude-projects')
+    for (const bucket of ['-Users-ada-old', '-Users-ada-repo']) {
+      await mkdir(join(claudeProjectsDir, bucket), { recursive: true })
+      await writeFile(join(claudeProjectsDir, bucket, 'sess-dup.jsonl'), '{}\n')
+    }
+
+    await expect(
+      resolveSessionFilePath('claude', 'sess-dup', { claudeProjectsDir, cwd: '/Users/ada/repo' })
+    ).resolves.toBe(join(claudeProjectsDir, '-Users-ada-repo', 'sess-dup.jsonl'))
+  })
+
+  it('falls back to every bucket when the cwd hint is too long to name one', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-claude-long-cwd-')
+    const claudeProjectsDir = join(root, 'claude-projects')
+    const target = join(claudeProjectsDir, '-old', 'sess-long-cwd.jsonl')
+    await mkdir(dirname(target), { recursive: true })
+    await writeFile(target, '{}\n')
+
+    await expect(
+      resolveSessionFilePath('claude', 'sess-long-cwd', {
+        claudeProjectsDir,
+        cwd: `/work/${'segment/'.repeat(40)}repo`,
+        strictErrors: true
+      })
+    ).resolves.toBe(target)
   })
 
   it('resolves Grok chat_history.jsonl under encodeURIComponent(cwd)/sessionId', async () => {

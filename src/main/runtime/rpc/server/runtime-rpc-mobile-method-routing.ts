@@ -61,6 +61,7 @@ export const EXECUTION_HOST_METHODS = [
   'files.resolveTerminalPath',
   'files.searchPaths',
   'files.stat',
+  'files.statTerminalArtifact',
   'files.writeTerminalArtifact',
   'folderWorkspace.list',
   'git.abortMerge',

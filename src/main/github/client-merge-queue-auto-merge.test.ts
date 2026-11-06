@@ -259,6 +259,39 @@ describe('GitHub GraphQL rate-limit guard', () => {
     expect(metadataRequests).not.toHaveBeenCalled()
   })
 
+  it('lets a link preview read another repository only on a configured host', async () => {
+    resolvePRRepositoryCandidatesMock.mockResolvedValue({
+      candidates: [{ owner: 'acme', repo: 'widgets', host: 'github.com' }],
+      headRepo: { owner: 'acme', repo: 'widgets', host: 'github.com' }
+    })
+    const other = { owner: 'other', repo: 'tools', host: 'github.com' }
+    const unknownHost = { owner: 'victim', repo: 'secrets', host: 'evil.example.test' }
+
+    await expect(getWorkItemByOwnerRepo('/repo-root', other, 7, 'pr')).resolves.toBeNull()
+    await expect(
+      getWorkItemByOwnerRepo('/repo-root', unknownHost, 7, 'pr', undefined, {}, { preview: true })
+    ).resolves.toBeNull()
+    expect(metadataRequests).not.toHaveBeenCalled()
+
+    metadataRequests.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        number: 7,
+        title: 'Tools PR',
+        state: 'open',
+        html_url: 'https://github.com/other/tools/pull/7',
+        updated_at: '2026-04-01T00:00:00Z',
+        user: { login: 'someone' },
+        labels: [],
+        head: { ref: 'feature', sha: 'head-oid' },
+        base: { ref: 'main' }
+      })
+    })
+    await expect(
+      getWorkItemByOwnerRepo('/repo-root', other, 7, 'pr', undefined, {}, { preview: true })
+    ).resolves.toMatchObject({ title: 'Tools PR' })
+    expect(metadataRequests.mock.calls[0]?.[0]).toEqual(['api', 'repos/other/tools/pulls/7'])
+  })
+
   it('returns conflicting file details instead of running gh merge when PR is dirty', async () => {
     metadataRequests
       .mockResolvedValueOnce({ stdout: JSON.stringify({ stack: null }) })

@@ -373,4 +373,46 @@ describe('terminal clipboard paste', () => {
     expect(observedIgnoreBracketedPasteMode).toEqual([true])
     expect(saveClipboardImageAsTempFile).not.toHaveBeenCalled()
   })
+
+  it('pastes Finder-copied files as paths instead of their name labels', async () => {
+    const pasteText = vi.fn()
+    const pasteFiles = vi.fn().mockResolvedValue(undefined)
+
+    const result = await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue('a b.png\nnotes.txt'),
+      saveClipboardImageAsTempFile: vi.fn(),
+      copiedFiles: {
+        readPaths: vi.fn().mockResolvedValue(['/Users/me/a b.png', '/Users/me/notes.txt']),
+        hasImage: vi.fn().mockResolvedValue(true),
+        paste: pasteFiles
+      },
+      pasteText
+    })
+
+    expect(result).toEqual({ status: 'pasted', kind: 'file-paths' })
+    expect(pasteFiles).toHaveBeenCalledWith(['/Users/me/a b.png', '/Users/me/notes.txt'])
+    expect(pasteText).not.toHaveBeenCalled()
+  })
+
+  it('keeps the image path for an unlabelled file copied beside its picture', async () => {
+    const pasteText = vi.fn()
+    const pasteFiles = vi.fn()
+
+    await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue(''),
+      saveClipboardImageAsTempFile: vi.fn().mockResolvedValue('/tmp/orca-paste-1-id.png'),
+      copiedFiles: {
+        readPaths: vi.fn().mockResolvedValue(['/Users/me/Desktop/Screenshot.png']),
+        hasImage: vi.fn().mockResolvedValue(true),
+        paste: pasteFiles
+      },
+      pasteText
+    })
+
+    expect(pasteFiles).not.toHaveBeenCalled()
+    expect(pasteText).toHaveBeenCalledWith('/tmp/orca-paste-1-id.png', {
+      forceBracketedPaste: true,
+      recoverImagePasteWebglAtlas: true
+    })
+  })
 })

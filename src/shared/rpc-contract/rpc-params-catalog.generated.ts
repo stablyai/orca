@@ -550,6 +550,7 @@ import {
   ProjectHostSetupUpdate,
   ProjectUpdate
 } from './project-runtime-params'
+import { RecipeVmWakeParams } from './recipe-vm-wake-params'
 import { ReferenceFind, ReferenceList } from './reference-params'
 import {
   ProjectGroupCreate,
@@ -1043,6 +1044,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'files.search': FileSearch,
   'files.searchPaths': FilePathSearch,
   'files.stat': FileTreePath,
+  'files.statTerminalArtifact': TerminalArtifactFile,
   'files.unwatch': FileUnwatch,
   'files.watch': FileWatch,
   'files.write': FileWrite,
@@ -1418,6 +1420,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'runtime.clientCapabilities.update': ClientCapabilitiesUpdate,
   'runtime.clientEvents.subscribe': ClientEventsSubscribeParams,
   'runtime.clientEvents.unsubscribe': ClientEventsUnsubscribeParams,
+  'runtimeEnvironment.wakeRecipeVm': RecipeVmWakeParams,
   'session.readTerminalScrollback': SessionReadTerminalScrollbackParams,
   'session.tabs.activate': ActivateTab,
   'session.tabs.close': CloseTab,

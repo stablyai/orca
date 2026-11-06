@@ -11,7 +11,7 @@ import type {
   CodexAppServerLaunch,
   openCodexAppServerConnection
 } from '../../app-server/codex-app-server-connection'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 import type {
   CodexStructuredLaunch,

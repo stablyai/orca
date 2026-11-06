@@ -73,6 +73,17 @@ export function getPublicSshState(targetId: string): SshConnectionState | undefi
   return state ? withSshRemotePlatform(targetId, state) : undefined
 }
 
+/** Settings, CLI and paired-client removals all publish this so the renderer drops the target's live state once. */
+export function broadcastSshTargetRemoved(
+  getMainWindow: () => BrowserWindow | null,
+  targetId: string
+): void {
+  const win = getMainWindow()
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('ssh:target-removed', { targetId })
+  }
+}
+
 export function broadcastPortForwards(
   getMainWindow: () => BrowserWindow | null,
   targetId: string

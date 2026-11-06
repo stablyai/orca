@@ -1,7 +1,7 @@
-import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import type { WorkerTerminalResourceRow } from '../../../../orchestration/worker-terminal-ownership'
-import type { WorkerDispatchRow } from '../../../../orchestration/types'
+import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import type { WorkerTerminalResourceRow } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
+import type { WorkerDispatchRow } from '../../../../orchestration/db/orchestration-records'
 import { resolveStructuredWorkerIdentity } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
 

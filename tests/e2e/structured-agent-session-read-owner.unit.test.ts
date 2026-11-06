@@ -17,10 +17,10 @@ import {
 } from '../../src/shared/agent-session/structured-agent-session-reducer'
 import { hasUnansweredStructuredAgentSessionDispatch } from '../../src/shared/agent-session/requests/structured-agent-session-unanswered-dispatch'
 import { projectStructuredAgentSessionStatus } from '../../src/shared/agent-session/view/structured-agent-session-projection'
-import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import { readAgentSessionHistory } from '../../src/main/native-chat/agent-session-wire/agent-session-history-page'
-import { AgentSessionSubscribers } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-subscribers'
-import { StructuredAgentSessionStatusFeed } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-status-feed'
+import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { readAgentSessionHistory } from '../../src/main/native-chat/agent-session-wire/publication/history/agent-session-history-page'
+import { AgentSessionSubscribers } from '../../src/main/native-chat/agent-session-wire/publication/subscribers/structured-agent-session-subscribers'
+import { StructuredAgentSessionStatusFeed } from '../../src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-feed'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
@@ -32,7 +32,7 @@ import {
   getStructuredAgentSessionReadOwner,
   resetStructuredAgentSessionReadOwnersForTests
 } from '../../src/renderer/src/components/native-chat/structured-agent-session-read-owner'
-import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
+import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { codexProviderHandle } from '../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const SESSION = 'cursor-body-regression'

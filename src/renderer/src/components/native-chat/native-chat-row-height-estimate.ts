@@ -26,6 +26,7 @@ export type NativeChatRowChromeMetrics = {
   hasStatus: boolean
   hasTurnDiff: boolean
   turnDiffFileCount?: number
+  openedPullRequestCount?: number
   /** Folded prose/tools paint only a roster and must not reserve their expanded height. */
   folded?: boolean
   /** Inside a subagent's section, where assistant prose keeps its controls in flow. */
@@ -56,6 +57,8 @@ const SUBAGENT_ROW_PX = 32
 export const NATIVE_CHAT_SUBAGENT_SECTION_HEAD_PX = SUBAGENT_ROW_PX
 const STATUS_ROW_PX = 28
 const TURN_DIFF_PX = 28
+/** The opened-PR card: its heading, then one row per pull request. */
+const OPENED_PULL_REQUEST_ROW_PX = 30
 const RECEIPT_PX = 56
 /** How far assistant prose's controls hang below the row (`-mb-5`) outside a section. */
 const AGENT_CONTROLS_OVERHANG_PX = 20
@@ -187,6 +190,10 @@ export function estimateNativeChatRowHeight(
         chrome.turnDiffFileCount > NATIVE_CHAT_TURN_DIFF_FILE_LIMIT
           ? 1
           : 0))
+    partCount += 1
+  }
+  if (chrome.openedPullRequestCount) {
+    height += OPENED_PULL_REQUEST_ROW_PX * scale * (1 + chrome.openedPullRequestCount)
     partCount += 1
   }
   height += Math.max(0, partCount - 1) * NATIVE_CHAT_ROW_GAP_PX

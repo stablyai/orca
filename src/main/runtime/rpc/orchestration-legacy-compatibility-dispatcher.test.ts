@@ -2,7 +2,7 @@ import './unused-default-rpc-methods.test-fixture'
 import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type Database from '../../sqlite/sync-database'
-import { applyEscalationToDispatch } from '../orchestration/coordinator-escalation-triage'
+import { applyEscalationToDispatch } from '../orchestration/coordinator/escalation/coordinator-escalation-triage'
 import {
   cleanupLegacyCompatibilityDispatcherHarnesses,
   COORDINATOR_HANDLE,
