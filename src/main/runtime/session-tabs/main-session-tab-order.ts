@@ -3,6 +3,11 @@
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
 import type { MainSessionTabRows } from './main-session-tab-rows'
 import { orderIdOf, placeInMainGroups, withStrayIn } from './main-session-tab-group-placement'
+import {
+  normalizeMobileSessionTabSelection,
+  resolveMobileSessionActiveTab,
+  restoreLegacyMobileSessionNavigation
+} from './mobile-session-tab-selection'
 
 /** The written rows, ordered and grouped as main's layout has them. */
 export function withMainTabOrder(
@@ -27,16 +32,11 @@ export function withMainTabOrder(
     writtenOnly,
     writtenOrder
   )
-  const placedGroups = placement.groups.map((group) => {
-    const own = writtenGroups.get(group.id)
-    // The written view's selection in the group stands while the group still lists it.
-    const activeTabId =
-      [own?.activeTabId, group.activeTabId].find((id) => !!id && group.tabOrder.includes(id)) ??
-      group.tabOrder[0] ??
-      null
-    return { ...group, activeTabId }
-  })
-  const activeRow = written.tabs.find((row) => row.id === written.activeTabId)
+  const placedGroups = placement.groups.map((group) => ({
+    ...group,
+    activeTabId: writtenGroups.get(group.id)?.activeTabId ?? null
+  }))
+  const activeRow = resolveMobileSessionActiveTab(written, written.tabs)
   const indexOf = (groupId: string | null): number =>
     placedGroups.findIndex((group) => group.id === groupId)
   const byRow = activeRow
@@ -51,7 +51,9 @@ export function withMainTabOrder(
         : Math.max(indexOf(projected.activeGroupId), 0)
   // A written row in a group main does not hold joins the active group: groups are main's.
   const groups = withStrayIn(placedGroups, placement.stray, activeIndex)
-  const tabGroups = groups.filter((group) => group.tabOrder.length > 0)
+  const tabGroups = groups.filter(
+    (group) => group.tabOrder.length > 0 || group.id === written.activeGroupId
+  )
   const position = new Map(tabGroups.flatMap((group) => group.tabOrder).map((id, at) => [id, at]))
   const tabs = written.tabs
     .map((row, at) => ({ row, at }))
@@ -61,15 +63,19 @@ export function withMainTabOrder(
           (position.get(orderIdOf(b.row)) ?? position.size) || a.at - b.at
     )
     .map(({ row }) => row)
-  const activeGroupId = groups[activeIndex]?.id ?? null
+  const declared =
+    written.tabGroups !== undefined
+      ? (writtenGroups.get(written.activeGroupId ?? '')?.activeTabId ?? null)
+      : written.activeTabId
+  const navigation = normalizeMobileSessionTabSelection(written)
   const { tabGroupLayout: _writtenLayout, ...rest } = written
-  return {
-    ...rest,
-    activeGroupId: tabGroups.some((group) => group.id === activeGroupId)
-      ? activeGroupId
-      : (tabGroups[0]?.id ?? written.activeGroupId),
-    tabGroups,
-    ...(projected.tabGroupLayout ? { tabGroupLayout: projected.tabGroupLayout } : {}),
-    tabs
-  }
+  return restoreLegacyMobileSessionNavigation(
+    {
+      ...rest,
+      tabGroups,
+      ...(projected.tabGroupLayout ? { tabGroupLayout: projected.tabGroupLayout } : {}),
+      tabs
+    },
+    { ...navigation, tabGroups: undefined, activeTabId: activeRow?.id ?? declared }
+  )
 }

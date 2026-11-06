@@ -1,4 +1,7 @@
-import { normalizeMobileSessionTabSelection } from './mobile-session-tab-selection'
+import {
+  normalizeMobileSessionTabSelection,
+  selectMobileSessionTab
+} from './mobile-session-tab-selection'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type {
   RuntimeMobileSessionAgentTab,
@@ -193,10 +196,11 @@ export function projectStructuredSessionTab(
     isActive: input.activate ? false : candidate.isActive
   }))
   tabs.push(tab)
-  const priorGroups = existing?.tabGroups ?? [
+  const navigation = existing ?? input.savedOrder
+  const priorGroups = navigation?.tabGroups ?? [
     {
       id: getHeadlessMobileSessionGroupId(input.workspaceId),
-      activeTabId: existing?.activeTabId ?? null,
+      activeTabId: navigation?.activeTabId ?? null,
       tabOrder: []
     }
   ]
@@ -215,39 +219,39 @@ export function projectStructuredSessionTab(
       )
   const groupId =
     (input.savedOrder ? placement.groupId : (listingGroupId ?? placement.groupId)) ??
-    priorGroups[0]!.id
-  const tabGroups =
-    input.savedOrder?.tabGroups ??
-    priorGroups.map((group) =>
-      group.id === groupId
-        ? {
-            ...group,
-            activeTabId: input.activate ? id : group.activeTabId,
-            tabOrder: listingGroupId
-              ? group.tabOrder
-              : insertTabIdIntoOrder(group.tabOrder, tabs, id, false, placement.afterTabId)
-          }
-        : group
-    )
+    priorGroups[0]?.id ??
+    getHeadlessMobileSessionGroupId(input.workspaceId)
+  const tabGroups = priorGroups.map((group) =>
+    group.id === groupId
+      ? {
+          ...group,
+          activeTabId: input.activate ? id : group.activeTabId,
+          tabOrder: listingGroupId
+            ? group.tabOrder
+            : insertTabIdIntoOrder(group.tabOrder, tabs, id, false, placement.afterTabId)
+        }
+      : group
+  )
   const snapshot: RuntimeMobileSessionTabsSnapshot = {
     worktree: input.workspaceId,
     publicationEpoch: existing?.publicationEpoch ?? `structured:${Date.now().toString(36)}`,
     snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
-    activeGroupId: input.activate ? groupId : (existing?.activeGroupId ?? groupId),
-    activeTabId: input.activate ? id : (existing?.activeTabId ?? null),
-    activeTabType: input.activate ? 'agent-session' : (existing?.activeTabType ?? null),
-    tabGroups,
+    activeGroupId: input.activate ? groupId : navigation ? navigation.activeGroupId : groupId,
+    activeTabId: input.activate ? id : (navigation?.activeTabId ?? null),
+    activeTabType: input.activate ? 'agent-session' : (navigation?.activeTabType ?? null),
+    ...(navigation?.tabGroups !== undefined || !existing ? { tabGroups } : {}),
     ...(existing?.tabGroupLayout ? { tabGroupLayout: existing.tabGroupLayout } : {}),
     tabs
   }
   if (input.eligible?.() === false) {
     throw new Error('Chat tab publication was superseded')
   }
+  const ordered = input.savedOrder ? withMainTabOrder(snapshot, input.savedOrder) : snapshot
   const stored = runtime.storeMobileSessionSnapshot(
     input.workspaceId,
-    normalizeMobileSessionTabSelection(
-      input.savedOrder ? withMainTabOrder(snapshot, input.savedOrder) : snapshot
-    )
+    input.activate
+      ? selectMobileSessionTab(ordered, tab)
+      : normalizeMobileSessionTabSelection(ordered)
   )
   if (input.notify !== false) {
     emit(stored)
