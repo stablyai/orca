@@ -705,7 +705,9 @@
         "cb4d287238": "服务器名称",
         "3affe7de3a": "粘贴来自该浏览器可以访问的 Orca 服务器的配对 URL。",
         "e3bcd082ac": "连接到 Orca",
-        "mobileScopeRejected": "此二维码仅授予受限（移动端）访问权限。若要使用完整 Web 应用，请从设置 → 远程 Orca 服务器 → 分享此 Orca 服务器 → 新链接打开浏览器访问链接。"
+        "mobileScopeRejected": "此二维码仅授予受限（移动端）访问权限。若要使用完整 Web 应用，请从设置 → 远程 Orca 服务器 → 分享此 Orca 服务器 → 新链接打开浏览器访问链接。",
+        "replaceSavedServer": "此链接会连接到与“{{name}}”({{endpoint}}) 不同的服务器。只有在你信任下方端点时才连接。",
+        "keepSavedServer": "保留已保存的服务器"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "此执行主机不支持智能体会话历史。",
