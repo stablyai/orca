@@ -32,7 +32,11 @@ it('dispatches recipe creation through the host recipe service and deduplicates 
     }
   })
   expect(response).toMatchObject({ ok: true, result: { recipeEnvironmentId: 'vm-host' } })
-  expect(dedupeWorktreeCreate).toHaveBeenCalledWith('id:source', 'create-1', expect.any(Function))
+  expect(dedupeWorktreeCreate).toHaveBeenCalledWith(
+    expect.objectContaining({ repo: 'id:source' }),
+    'create-1',
+    expect.any(Function)
+  )
   expect(createManagedRecipeWorkspace).toHaveBeenCalledWith(
     expect.objectContaining({ recipeId: 'sandbox' })
   )

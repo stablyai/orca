@@ -12,6 +12,8 @@ import { getApprovedPluginVmRecipes } from '../plugins/plugin-approved-vm-recipe
 import type { PluginService } from '../plugins/plugin-service'
 import { provisionRecipeEnvironment } from './environment-provision'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
+import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'
+import { retireRemovedRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-removal-cleanup'
 import { attachEphemeralVmRuntimeToWorkspace } from './runtime-attachment'
 import { cleanupEphemeralVmRuntime } from './runtime-service'
 import { releaseEphemeralVmRuntimeEnvironments } from './runtime-environment-release'
@@ -81,7 +83,18 @@ export async function createCliRecipeWorkspace(args: {
           runtimeId
         })
         if (cleaned.ok) {
-          await releaseEphemeralVmRuntimeEnvironments(userDataPath, cleaned.runtime)
+          await releaseEphemeralVmRuntimeEnvironments(
+            userDataPath,
+            cleaned.runtime,
+            (environmentId) => {
+              void retireRemovedRuntimeEnvironment(
+                environmentId,
+                invalidateRuntimeEnvironmentTransport,
+                store,
+                userDataPath
+              )
+            }
+          )
           await removeEphemeralVmRuntimeSshTarget({
             userDataPath,
             runtime: cleaned.runtime,
