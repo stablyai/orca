@@ -160,7 +160,10 @@ it.each(
     // The old Arguments Enter gesture reaches the same refusal without consuming its prompt.
     await act(async () => fireEvent.keyDown(argumentsInput, { key: 'Enter' }))
     expect(dispatch).toHaveBeenCalledTimes(2)
-    expect(dispatch.mock.results[1]).toMatchObject({ type: 'return', value: null })
+    expect(dispatch.mock.results[1]).toMatchObject({
+      type: 'return',
+      value: { refused: { delivered: false, failureNotified: true } }
+    })
     expect(readNativeChatComposerDraft(scope).text).toBe('review this change')
 
     fireEvent.change(argumentsInput, { target: { value: '--add-dir docs' } })
