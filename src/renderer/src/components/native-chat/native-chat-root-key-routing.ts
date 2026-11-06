@@ -1,5 +1,5 @@
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { findNativeChatPasteField } from '@/lib/native-chat-paste-request'
+import { findNativeChatPasteField } from '@/components/native-chat/paste/native-chat-paste-request'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import {
   shouldFocusNativeChatComposerFromEditingKey,

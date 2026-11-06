@@ -116,6 +116,7 @@ export function useMobileTasksGitlabGithubStatusActions<
           client,
           params,
           ownerRepo: target.repository,
+          issueTarget: target,
           send: (selected, exact, options) =>
             githubIssueUpdate.request(selected, { ...params, ...exact }, options)
         })

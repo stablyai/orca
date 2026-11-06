@@ -5,40 +5,36 @@ import { resolveRepoSlug } from '@/lib/repo-slug-index'
 import {
   readRepoSlugCache,
   REPO_SLUG_FAILURE_TTL_MS,
-  repoSlugCacheKey,
-  repoUpstreamIdentityKey
+  repoSlugCacheKey
 } from '@/lib/repo-slug-cache'
-import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
-import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
+import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { FILE_LINK_CONTEXT_INPUT_KEYS } from './native-chat-file-link'
 import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId, isUnresolvedOwnerHostId } from '../../../../shared/execution-host'
 import {
   githubHostFromIdentityKey,
-  githubRepoIdentityKey
+  githubRepoIdentityKey,
+  repoUpstreamIdentityKey
 } from '../../../../shared/github/repository-identity-key'
+import {
+  githubReferenceRepo,
+  type GitHubRepoReference
+} from '../../../../shared/github/github-reference-links'
 
 export type NativeChatGitHubRepo = {
   repo: Repo
-  /** Origin then upstream identity keys; main only answers for these remotes. */
+  /** Origin then upstream identity keys; main answers previews for any repo on their hosts. */
   identityKeys: readonly string[]
   /** Where bare `#123` points: upstream unless the repo prefers origin. github.com only. */
-  referenceRepo: { owner: string; repo: string } | null
+  referenceRepo: GitHubRepoReference | null
 }
 
 function readCachedOriginKey(repo: Repo | null): string | null {
   const cacheKey = repo ? repoSlugCacheKey(repo) : null
   const cached = cacheKey ? readRepoSlugCache(cacheKey) : null
   return cached?.hit ? cached.value : null
-}
-
-function ownerRepoFromKey(key: string): { owner: string; repo: string } | null {
-  if (githubHostFromIdentityKey(key)) {
-    return null
-  }
-  const [owner, repo] = key.split('/')
-  return owner && repo ? { owner, repo } : null
 }
 
 type NativeChatRepoState = Pick<
@@ -130,12 +126,10 @@ export function useNativeChatGitHubRepo(
     const upstreamKey = repoUpstreamIdentityKey(repo, originKey)
     const identityKeys =
       upstreamKey && upstreamKey !== originKey ? [originKey, upstreamKey] : [originKey]
-    const referenceKey =
-      upstreamKey && repo.issueSourcePreference !== 'origin' ? upstreamKey : originKey
     return {
       repo,
       identityKeys,
-      referenceRepo: ownerRepoFromKey(referenceKey)
+      referenceRepo: githubReferenceRepo(repo, originKey)
     }
   }, [repo, originKey])
 }
@@ -145,4 +139,13 @@ export function githubLinkBelongsToRepo(
   slug: { owner: string; repo: string; host?: string }
 ): boolean {
   return repo.identityKeys.includes(githubRepoIdentityKey(slug))
+}
+
+/** A link to any repo on a host the chat repo's remotes use, which main answers previews for. */
+export function githubLinkOnRepoHost(
+  repo: NativeChatGitHubRepo,
+  slug: { owner: string; repo: string; host?: string }
+): boolean {
+  const host = githubHostFromIdentityKey(githubRepoIdentityKey(slug))
+  return repo.identityKeys.some((key) => githubHostFromIdentityKey(key) === host)
 }

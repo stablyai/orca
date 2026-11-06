@@ -1,4 +1,4 @@
-import type { PtyDataMeta } from './pty-dispatcher'
+import type { PtyDataMeta } from './pty-transport/delivery/pty-dispatcher'
 import { flattenRetainedSlice } from '../../lib/flatten-retained-slice'
 import { keptSuffixMeta, markedAfterEviction } from './terminal-stream-position'
 

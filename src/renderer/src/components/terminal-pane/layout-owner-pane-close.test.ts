@@ -18,7 +18,7 @@ vi.mock('../../../../shared/layout-owner-switch', () => ({
 vi.mock('@/runtime/layout-owner-command', () => ({
   sendLayoutCommandToOwner: mocks.sendLayoutCommandToOwner
 }))
-vi.mock('@/lib/agent-launch-pane-closes', () => ({
+vi.mock('@/lib/agent-session/launch/pane/agent-launch-pane-closes', () => ({
   noteAgentLaunchPaneClosedByUser: mocks.noteAgentLaunchPaneClosedByUser
 }))
 vi.mock('@/store/terminals/terminal-surface-close-intent', () => ({

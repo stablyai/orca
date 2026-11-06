@@ -1,6 +1,6 @@
 import { Import, Loader2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
+import { emitBrowserCookieImportToast } from '@/lib/browser/cookies/browser-cookie-import-toast'
 import type {
   BrowserCookieImportSummary,
   BrowserSessionProfile
@@ -22,7 +22,7 @@ import { BrowserCookieImportMachineNotice } from '../../../BrowserCookieImportMa
 import { useAppStore } from '../../../../store/index'
 import { BROWSER_FAMILY_LABELS } from '../../../../../../shared/constants'
 import { translate } from '@/i18n/i18n'
-import { browserCookieImportFailureText } from '@/lib/browser-cookie-import-error-copy'
+import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
 
 type DetectedBrowser = {
   family: string

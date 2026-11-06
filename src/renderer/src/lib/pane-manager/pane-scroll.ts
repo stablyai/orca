@@ -284,7 +284,8 @@ function restoreScrollStateNow(terminal: Terminal, state: ScrollState): ScrollRe
   // Deferred restores need the live marker after reflow; restore/cancel owners dispose it, not these retries.
   if (safeScrollCall(() => terminal.scrollToLine(targetLine))) {
     forceTerminalViewportScrollbarSync(terminal)
-    return 'restored'
+    // xterm can silently clamp against stale scrollbar geometry during reflow.
+    return buf.viewportY === targetLine ? 'restored' : 'retry'
   }
   return 'retry'
 }

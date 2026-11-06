@@ -1,10 +1,13 @@
 import { createElement, type ComponentProps, type ReactNode } from 'react'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import { createFakeRpcClient, rpcSuccess } from '../mobile-web-shell/bridge-host-test-fakes'
 import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-client'
+import { createOrcaQueryClient } from '../query/orca-query-client'
+import { settleQueryNotifications } from '../test-support/rpc-recording/hook-mount'
 import type { MobilePrTab } from '../components/pr-sidebar/use-mobile-pr-tab'
 import type { MessageBox } from '../components/composer-input/MessageBox'
 import type { TextField } from '../components/composer-input/TextField'
@@ -149,10 +152,10 @@ vi.mock('../components/bottom-drawer/BottomDrawer', async () => {
 vi.mock('../components/AutoHeight', () => ({
   AutoHeight: ({ children }: { children: ReactNode }) => children
 }))
-vi.mock('../components/pr-sidebar/CommentMarkdown', async () => {
+vi.mock('../components/MobileMarkdown', async () => {
   const { createElement: element } = await import('react')
   return {
-    CommentMarkdown: ({ content }: { content: string }) => element('CommentMarkdown', { content })
+    MobileMarkdown: ({ content }: { content: string }) => element('MobileMarkdown', { content })
   }
 })
 vi.mock('../components/nav-bar/NavBar', () => ({ NavBar: () => null }))
@@ -273,6 +276,7 @@ vi.mock('./use-mobile-source-control-state', async () => {
     }) => {
       const connState = doubles.client ? 'connected' : 'reconnecting'
       const loaders = useMobileSourceControlLoaders({
+        hostId,
         client: doubles.client,
         connState,
         worktreeId,
@@ -482,13 +486,18 @@ function mountHub() {
   const call = (run: () => unknown) => act(async () => void run())
   // The native close animation finishing, after which the drawer may present another sheet.
   const finishHide = () => act(async () => doubles.hide?.())
+  const queryClient = createOrcaQueryClient()
   const renderPanel = (worktreeId: string, initialTab?: 'pr') =>
     act(async () => {
-      const element = createElement(MobileSourceControlPanel, {
-        hostId: 'host-a',
-        worktreeId,
-        ...(initialTab ? { initialTab } : {})
-      })
+      const element = createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        createElement(MobileSourceControlPanel, {
+          hostId: 'host-a',
+          worktreeId,
+          ...(initialTab ? { initialTab } : {})
+        })
+      )
       if (tree) {
         tree.update(element)
       } else {
@@ -552,6 +561,7 @@ it('reuses Source Control across worktrees without loading the old fallback, con
       rpcSuccess('status-w2', { entries: [], branch: 'new-branch', head: 'new-branch-head' })
     )
   )
+  await settleQueryNotifications()
   const prReads = requests.filter((r) => r.method === 'github.prForBranch')
   expect(prReads).toHaveLength(2)
   expect(prReads[1].params).toMatchObject({
@@ -630,7 +640,7 @@ it('reuses Source Control across worktrees without loading the old fallback, con
   holding.delete('github.workItemDetails')
   await hub.resolveHeld('github.workItemDetails')
   await settle()
-  expect(tree!.root.find((node) => String(node.type) === 'CommentMarkdown').props.content).toBe(
+  expect(tree!.root.find((node) => String(node.type) === 'MobileMarkdown').props.content).toBe(
     'refreshed body'
   )
   expect(refreshLine()).toHaveLength(1)

@@ -35,20 +35,6 @@ const NON_UNIT_TEST_RUNNERS = [
     mirrors: ["'tests/e2e/computer-*.e2e.ts'"]
   },
   {
-    name: 'performance benchmarks (pnpm test:perf:benchmarks)',
-    manual: true,
-    include: [
-      'src/renderer/src/components/editor/monaco-content-sync.bench.ts',
-      'src/renderer/src/components/editor/monaco-content-sync.undo-retention.bench.ts'
-    ],
-    sources: ['config/vitest.performance.config.ts'],
-    mirrors: [
-      "'src/renderer/src/components/editor/monaco-content-sync.bench.ts'",
-      "'src/renderer/src/components/editor/monaco-content-sync.undo-retention.bench.ts'",
-      'benchmark: { include: benchmarks }'
-    ]
-  },
-  {
     name: 'agent-status benchmark',
     manual: true,
     include: ['config/scripts/performance/agent-lineage/agent-status-hot-path-benchmark.ts'],

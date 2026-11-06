@@ -4,7 +4,7 @@ import {
 } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AppState } from '../types'
-import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
+import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import {
   resolveTerminalHostOwnership,
   resolveTerminalPtyOwner

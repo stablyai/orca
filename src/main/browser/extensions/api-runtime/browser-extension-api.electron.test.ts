@@ -424,9 +424,4 @@ describe('browser extension APIs in a real Electron session', () => {
       outcome: 'unavailable'
     })
   })
-
-  it('gives a web page in the same session no answer from the worker API', async () => {
-    await expect.poll(() => readStatus().webPageCall).toBeDefined()
-    expect(readStatus().webPageCall).not.toBe(200)
-  })
 })

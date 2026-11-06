@@ -5,7 +5,7 @@ import { classifyPrJobs } from './pr-code-change-scope.mjs'
 describe('cross-version wire routing for the paired launch route', () => {
   it.each([
     'src/shared/structured-native-chat-launch-route.ts',
-    'src/renderer/src/lib/agent-launch-routing.ts',
+    'src/renderer/src/lib/agent-session/launch/routing/agent-launch-routing.ts',
     'src/renderer/src/runtime/paired-host-client-capabilities.ts',
     'src/shared/electron-remote-runtime-client-capabilities.ts',
     'src/shared/remote-runtime/remote-runtime-client-capabilities.ts'
@@ -14,7 +14,11 @@ describe('cross-version wire routing for the paired launch route', () => {
   })
 
   it('leaves them off for the route input builder, which no cross-version suite executes', () => {
-    expect(classifyPrJobs(['src/renderer/src/lib/agent-launch-route-input.ts'])).toMatchObject({
+    expect(
+      classifyPrJobs([
+        'src/renderer/src/lib/agent-session/launch/routing/agent-launch-route-input.ts'
+      ])
+    ).toMatchObject({
       should_run: true,
       'cross-version-wire': false
     })

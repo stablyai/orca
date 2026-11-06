@@ -16,7 +16,8 @@ import {
   findIndexedReviewRepository,
   hasUniqueIndexedRepositoryHost
 } from '@/lib/repository-owner-index'
-import { worktreeOwnerHostIds } from '@/lib/worktree-runtime-owner-index'
+import '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { worktreeOwnerHostIds } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
 import { prCacheKey } from './cache-identity'
 import { settingsForGitHubRepoOwner } from './work-item-routing'
 import { githubHostedReviewFallbackPRNumber } from './pr-result-routing'

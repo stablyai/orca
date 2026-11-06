@@ -19,6 +19,10 @@ import type {
 import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import type { PaneLaunchRecipe } from '../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import type {
+  TerminalPaneMoveToNewTabReply,
+  TerminalPaneMoveToNewTabRequest
+} from '../../shared/workspace-layout/terminal-leaf-move'
+import type {
   TerminalPaneRevealReply,
   TerminalPaneRevealRequest
 } from '../../shared/workspace-layout/terminal-pane-reveal'
@@ -143,6 +147,7 @@ export type UiCommandEventApi = {
     code?: 'browser_tab_not_found'
   }) => void
   onBrowserPageTabShortcut: (callback: (input: BrowserPageTabShortcut) => void) => () => void
+  onToggleProjectsCollapse: (callback: () => void) => () => void
   onFocusBrowserAddressBar: (callback: (target: BrowserPageCommandTarget) => void) => () => void
   onShowBrowserHistory: (callback: (target: BrowserPageCommandTarget) => void) => () => void
   onFindInBrowserPage: (source: BrowserFindSource, callback: () => void) => () => void
@@ -262,6 +267,10 @@ export type UiCommandEventApi = {
   onMoveSessionTab: (
     callback: (data: { worktreeId: string } & RuntimeMobileSessionTabMove) => void
   ) => () => void
+  onTerminalPaneMoveToNewTabRequest?: (
+    callback: (request: TerminalPaneMoveToNewTabRequest) => void
+  ) => () => void
+  replyTerminalPaneMoveToNewTab?: (reply: TerminalPaneMoveToNewTabReply) => void
   onOpenFileFromMobile: (
     callback: (data: {
       worktreeId: string

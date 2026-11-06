@@ -4,7 +4,7 @@ import {
 } from '../../../../shared/workspace-name'
 import { normalizeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { shouldApplyWorkspaceSourceAutoName } from '../../../../shared/new-workspace/workspace-source'
-import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
+import { resolveGitHubWorkItemIdentity } from '../../../../shared/new-workspace/github-work-item-identity'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-attachments/workspace-linked-item-source-context'
 import {
   getGitHubLinkedWorkItemIdentity,

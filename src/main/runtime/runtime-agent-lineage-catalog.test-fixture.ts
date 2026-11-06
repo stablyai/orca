@@ -1,7 +1,7 @@
 import { vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { RpcDispatcher } from './rpc/dispatcher'
-import { WORKTREE_CATALOG_METHODS } from './rpc/methods/worktree-catalog-methods'
+import { WORKTREE_CATALOG_METHODS } from './rpc/methods/workspaces/worktree-catalog-methods'
 import type { RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import type { RuntimeAgentLineageCatalogTestModule } from '../../shared/runtime-agent-lineage-consumer.test-fixture'
 

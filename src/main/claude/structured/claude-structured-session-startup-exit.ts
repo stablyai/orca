@@ -4,11 +4,11 @@ import {
   providerExitObserved,
   startupAcquisitionRefusal,
   withObservedProviderExit
-} from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
+} from '../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import type { ClaudeStreamJsonConnection } from '../claude-stream-json-connection'
-import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { claudeStartFailure, claudeStartupAnswer } from '../claude-startup-failure'
-import type { AgentSessionStartFailure } from '../../native-chat/agent-session-wire/structured-agent-session-start-failure'
+import type { AgentSessionStartFailure } from '../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 
 /** A physical exit waits briefly for initialize's answer, which the start's verdict weighs
  *  against the exit; a query closed by that exit is no answer. */

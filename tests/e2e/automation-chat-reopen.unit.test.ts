@@ -31,7 +31,7 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
   },
   runtimeEnvironmentSupportsCapability: async () => true
 }))
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: bridge.workspace,
   activateAndRevealFolderWorkspace: bridge.workspace
 }))

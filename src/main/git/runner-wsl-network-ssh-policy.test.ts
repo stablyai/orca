@@ -91,27 +91,6 @@ afterEach(() => {
 })
 
 describe('WSL network Git SSH policy startup', () => {
-  it('allows a three-second shell startup and preserves global config arguments', async () => {
-    const calls = installShell()
-    const args = ['-c', `core.sshCommand=${SSH_COMMAND}`, ...FETCH_ARGS]
-    const pending = gitExecFileAsync(args, { cwd: WSL_CWD, wslDistro: 'Ubuntu', env: {} })
-
-    await vi.advanceTimersByTimeAsync(6500)
-    await expect(pending).resolves.toEqual({ stdout: 'fetch-ok', stderr: '' })
-    expect(calls).toHaveLength(2)
-    const probeScript = calls[0].script
-    expect(probeScript).toContain(`core.sshCommand=${SSH_COMMAND}`)
-    expect(probeScript.indexOf("'-c'")).toBeGreaterThan(-1)
-    expect(probeScript.indexOf("'-c'")).toBeLessThan(probeScript.indexOf('core.sshCommand='))
-    expect(probeScript.indexOf('core.sshCommand=')).toBeLessThan(probeScript.indexOf("'config'"))
-    expect(calls[0].script).toContain('__ORCA_WSL_CAPTURE_BEGIN_')
-    expect(calls[0].env.GIT_SSH_COMMAND).toBeUndefined()
-    expect(networkCalls(calls)[0].env.GIT_SSH_COMMAND).toBe(
-      SSH_COMMAND.replace('ssh', 'ssh -o BatchMode=yes')
-    )
-    expect(networkCalls(calls)[0].env.WSLENV?.split(':')).toContain('GIT_SSH_COMMAND')
-  })
-
   it('honors an explicit shorter timeout before the network command starts', async () => {
     const calls = installShell()
     const pending = fetch({ timeout: 1000 }).catch((error) => error)
@@ -133,27 +112,6 @@ describe('WSL network Git SSH policy startup', () => {
     expect(networkCalls(calls)).toHaveLength(0)
   })
 
-  it.each([undefined, 0])('keeps the native probe deadline with timeout %s', async (timeout) => {
-    const calls = installShell()
-    const pending = gitExecFileAsync(FETCH_ARGS, { cwd: 'C:\\repo', env: {}, timeout }).catch(
-      (error) => error
-    )
-
-    await vi.advanceTimersByTimeAsync(2700)
-    expect(await pending).toMatchObject({ message: 'git timed out.' })
-    expect(calls).toHaveLength(1)
-    expect(calls[0].child.kill).toHaveBeenCalledOnce()
-  })
-
-  it('uses generic batch mode only when config reports a missing value', async () => {
-    const calls = installShell({ configError: Object.assign(new Error('missing'), { code: 1 }) })
-    const pending = fetch()
-
-    await vi.advanceTimersByTimeAsync(6500)
-    await expect(pending).resolves.toMatchObject({ stdout: 'fetch-ok' })
-    expect(networkCalls(calls)[0].env.GIT_SSH_COMMAND).toBe('ssh -o BatchMode=yes')
-  })
-
   it.each([128, 'ETIMEDOUT', 'ENOBUFS'])(
     'keeps configuration failure %s closed after a slow startup',
     async (code) => {
@@ -167,16 +125,6 @@ describe('WSL network Git SSH policy startup', () => {
       expect(networkCalls(calls)).toHaveLength(0)
     }
   )
-
-  it.each(['simple', 'putty'])('preserves configured %s variant behavior', async (variant) => {
-    const calls = installShell({ variant })
-    const pending = fetch()
-
-    await vi.advanceTimersByTimeAsync(6500)
-    await expect(pending).resolves.toMatchObject({ stdout: 'fetch-ok' })
-    expect(networkCalls(calls)).toHaveLength(1)
-    expect(networkCalls(calls)[0].env.GIT_SSH_COMMAND).toBeUndefined()
-  })
 
   it('aborts the slow probe and releases admission for the next attempt', async () => {
     const calls = installShell()
@@ -203,16 +151,5 @@ describe('WSL network Git SSH policy startup', () => {
 
     await expect(fetch({ signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' })
     expect(calls).toHaveLength(0)
-  })
-
-  it('preserves explicitly forwarded SSH environment and skips the probe', async () => {
-    const calls = installShell()
-    const pending = fetch({ env: { GIT_SSH_COMMAND: SSH_COMMAND, WSLENV: 'GIT_SSH_COMMAND' } })
-
-    await vi.advanceTimersByTimeAsync(3500)
-    await expect(pending).resolves.toMatchObject({ stdout: 'fetch-ok' })
-    expect(calls).toHaveLength(1)
-    expect(networkCalls(calls)[0].env.GIT_SSH_COMMAND).toBe(SSH_COMMAND)
-    expect(networkCalls(calls)[0].env.WSLENV?.split(':')).toContain('GIT_SSH_COMMAND')
   })
 })

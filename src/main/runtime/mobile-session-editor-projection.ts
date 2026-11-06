@@ -1,3 +1,7 @@
+import {
+  retireMobileSessionTabSelection,
+  resolveMobileSessionActiveTab
+} from './session-tabs/mobile-session-tab-selection'
 /** Headless hosts project/retire persisted editors themselves; paired desktops mirror them without a publishing renderer. */
 import type {
   RuntimeMobileSessionFileTab,
@@ -183,22 +187,49 @@ export function retireHeadlessMobileSessionEditorTab(
   if (!next) {
     return false
   }
-  host.setWorkspaceSessionForWorktree(worktreeId, next)
-  // Clear first: an empty rebuild otherwise retains the old snapshot.
   const existing = host.mobileSessionTabsByWorktree.get(worktreeId)
+  let saved = next
   if (existing) {
-    host.storeMobileSessionSnapshot(worktreeId, {
-      ...existing,
-      snapshotVersion: existing.snapshotVersion + 1,
-      activeTabId: existing.activeTabId === tab.id ? null : existing.activeTabId,
-      tabGroups: existing.tabGroups?.map((group) => ({
-        ...group,
-        activeTabId: group.activeTabId === tab.id ? null : group.activeTabId,
-        tabOrder: group.tabOrder.filter((id) => id !== tab.id)
-      })),
-      tabs: existing.tabs.filter((candidate) => candidate.id !== tab.id)
-    })
+    const retired = retireMobileSessionTabSelection(
+      { ...existing, snapshotVersion: existing.snapshotVersion + 1 },
+      existing.tabs.filter((candidate) => candidate.id !== tab.id),
+      new Set([tab.id])
+    )
+    const active = resolveMobileSessionActiveTab(retired, retired.tabs)
+    const entries = next.unifiedTabs?.[worktreeId] ?? []
+    const savedId =
+      active?.type === 'terminal'
+        ? active.parentTabId
+        : active?.type === 'agent-session'
+          ? entries.find(
+              (entry) =>
+                entry.contentType === 'agent-session' && entry.entityId === active.sessionId
+            )?.id
+          : active?.type === 'browser'
+            ? entries.find(
+                (entry) =>
+                  entry.contentType === 'browser' && entry.entityId === active.browserWorkspaceId
+              )?.id
+            : active?.id
+    const owner = savedId
+      ? next.tabGroups?.[worktreeId]?.find((group) => group.tabOrder.includes(savedId))
+      : undefined
+    if (owner && savedId && resolveMobileSessionActiveTab(existing, existing.tabs)?.id === tab.id) {
+      saved = {
+        ...next,
+        tabGroups: {
+          ...next.tabGroups,
+          [worktreeId]: next.tabGroups![worktreeId]!.map((group) =>
+            group === owner ? { ...group, activeTabId: savedId } : group
+          )
+        },
+        activeGroupIdByWorktree: { ...next.activeGroupIdByWorktree, [worktreeId]: owner.id },
+        activeTabIdByWorktree: { ...next.activeTabIdByWorktree, [worktreeId]: savedId }
+      }
+    }
+    host.storeMobileSessionSnapshot(worktreeId, retired)
   }
+  host.setWorkspaceSessionForWorktree(worktreeId, saved)
   host.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, { force: true })
   host.notifyMobileSessionTabsChanged(worktreeId)
   return true

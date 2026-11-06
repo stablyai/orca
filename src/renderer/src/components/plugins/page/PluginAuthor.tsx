@@ -6,7 +6,7 @@ import { PluginRowArt } from '../list/PluginRowArt'
 import type { PluginAuthor } from '../presentation/plugin-author'
 import { DetailSection } from './PluginDetailSections'
 import { Button } from '../../ui/button'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function PluginAuthorByline({ author }: { author: PluginAuthor }): React.JSX.Element {
   return (

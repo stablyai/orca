@@ -33,9 +33,12 @@ type MobileNativeChatSendArgs = {
 // Unknown delivery must not be called definite failure; structured queued drafts render as cards, not transcript echoes.
 export type MobileNativeChatSendOutcome = 'accepted' | 'rejected' | 'unknown' | 'queued'
 
-/** How one send goes: `alternate` does the other thing than the host's follow-up setting. */
+/** How one send goes: `alternate` does the other thing than the host's follow-up setting; `goal` sends the draft as the chat's goal objective. */
 export type MobileNativeChatSendIntent = {
   alternate?: true
+  goal?: true
+  /** Continues this usage-limit cut; the host refuses it once the chat has moved on. */
+  usageLimitContinuationOfTurnItemId?: string
   onCreated?: (clientMessageId: string) => void
 }
 

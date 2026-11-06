@@ -141,10 +141,7 @@ export function MobileDiffReviewScreenView({ controller, hostConnection, onBack 
             threadsByLine={controller.threadsByLine}
             threadActions={threadActions}
             selectedRange={selectedRange}
-            onPickLines={(range) => {
-              controller.setComposerBody('')
-              controller.openSheet({ kind: 'range', ...range })
-            }}
+            onPickLines={(range) => controller.openNewNoteSheet({ kind: 'range', ...range })}
             scrollToLine={controller.scrollToLine}
             onScrolledToLine={controller.clearScrollToLine}
             onEditNote={controller.openEditComposer}

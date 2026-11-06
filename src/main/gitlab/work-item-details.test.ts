@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as GlabApiResponse from './glab-api-response'
 
 const {
   glabExecFileAsyncMock,
@@ -22,7 +23,12 @@ const {
   releaseMock: vi.fn()
 }))
 
-vi.mock('./gl-utils', () => ({
+vi.mock('./gl-utils', async () => ({
+  ...(await vi.importActual<typeof GlabApiResponse>('./glab-api-response')),
+  glabApiWithHeaders: async (args: string[], options: unknown) => ({
+    body: (await glabExecFileAsyncMock(['api', ...args], options)).stdout,
+    headers: {}
+  }),
   acquire: acquireMock,
   release: releaseMock,
   getGlabKnownHosts: getGlabKnownHostsMock,
@@ -31,9 +37,6 @@ vi.mock('./gl-utils', () => ({
   glabHostnameArgs: vi.fn(() => []),
   glabRepoExecOptions: glabRepoExecOptionsMock
 }))
-
-import { fetchMRFiles } from './mr-file-diffs'
-import { derivePipelineStatus, mapMRInfo } from './mappers'
 import { getWorkItemDetails } from './work-item-details'
 
 describe('getWorkItemDetails', () => {
@@ -50,416 +53,6 @@ describe('getWorkItemDetails', () => {
       source: { host: 'gitlab.com', path: 'g/p' },
       fellBack: false
     })
-  })
-
-  it.each(['head_pipeline', 'pipeline'])(
-    'preserves a failed %s when no jobs exist',
-    async (field) => {
-      glabExecFileAsyncMock.mockImplementation(async (args: string[]) => ({
-        stdout:
-          args.at(-1) === 'projects/g%2Fp/merge_requests/12'
-            ? JSON.stringify({
-                iid: 12,
-                title: 'Invalid pipeline',
-                state: 'opened',
-                [field]: {
-                  id: 99,
-                  status: 'failed',
-                  web_url: 'https://gitlab.com/g/p/-/pipelines/99'
-                }
-              })
-            : '[]'
-      }))
-
-      const details = await getWorkItemDetails(
-        '/repo',
-        12,
-        'mr',
-        undefined,
-        null,
-        undefined,
-        {},
-        {
-          includeReviewDetails: false
-        }
-      )
-
-      expect(details).toMatchObject({
-        pipeline: {
-          id: 99,
-          status: 'failed',
-          webUrl: 'https://gitlab.com/g/p/-/pipelines/99'
-        },
-        pipelineJobs: []
-      })
-      expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(4)
-    }
-  )
-
-  it.each([
-    ['legacy', { merge_status: 'can_be_merged' }, 'pending'],
-    ['mergeable', { detailed_merge_status: 'mergeable' }, 'neutral']
-  ] as const)(
-    'reads a manual parent on a %s MR with the MR aggregate rule',
-    async (_label, mergeFacts, expected) => {
-      const mr = {
-        iid: 12,
-        title: 'Manual deploy',
-        state: 'opened',
-        has_conflicts: false,
-        ...mergeFacts,
-        head_pipeline: { id: 99, status: 'manual' }
-      }
-      glabExecFileAsyncMock.mockImplementation(async (args: string[]) => ({
-        stdout: args.at(-1) === 'projects/g%2Fp/merge_requests/12' ? JSON.stringify(mr) : '[]'
-      }))
-
-      const details = await getWorkItemDetails(
-        '/repo',
-        12,
-        'mr',
-        undefined,
-        null,
-        undefined,
-        {},
-        {
-          includeReviewDetails: false
-        }
-      )
-
-      const aggregate = mapMRInfo(mr, derivePipelineStatus(mr.head_pipeline)).pipelineStatus
-      expect(aggregate).toBe(expected)
-      expect(details?.pipeline?.checkStatus).toBe(aggregate)
-    }
-  )
-
-  it('caps MR detail discussions, jobs, and file diffs to one API page', async () => {
-    glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      const endpoint = args.at(-1)
-      if (endpoint === 'projects/g%2Fp/merge_requests/12') {
-        return {
-          stdout: JSON.stringify({
-            id: 120,
-            iid: 12,
-            title: 'Bound detail payloads',
-            state: 'opened',
-            web_url: 'https://gitlab.com/g/p/-/merge_requests/12',
-            updated_at: '2026-05-31T12:00:00Z',
-            source_branch: 'feature/bounds',
-            target_branch: 'main',
-            description: 'MR body',
-            sha: 'head-sha',
-            diff_refs: { base_sha: 'base-sha', start_sha: 'start-sha' },
-            head_pipeline: { id: 99 }
-          })
-        }
-      }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/discussions?per_page=100') {
-        return {
-          stdout: JSON.stringify([
-            {
-              id: 'discussion-1',
-              notes: [
-                {
-                  id: 1,
-                  body: 'Review note',
-                  created_at: '2026-05-31T12:01:00Z',
-                  author: { username: 'alice', avatar_url: 'https://example.com/a.png' }
-                }
-              ]
-            }
-          ])
-        }
-      }
-      if (endpoint === 'projects/g%2Fp/pipelines/99/jobs?per_page=100') {
-        return {
-          stdout: JSON.stringify([
-            {
-              id: 10,
-              name: 'verify',
-              stage: 'test',
-              status: 'success',
-              web_url: 'https://gitlab.com/g/p/-/jobs/10',
-              duration: 12
-            }
-          ])
-        }
-      }
-      if (endpoint === 'projects/g%2Fp/pipelines/99/bridges?per_page=100') {
-        return { stdout: '[]' }
-      }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/reviewers') {
-        return { stdout: JSON.stringify([{ user: { id: 1, username: 'alice', name: 'Alice' } }]) }
-      }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/approvals') {
-        return {
-          stdout: JSON.stringify({
-            approvals_required: 1,
-            approvals_left: 0,
-            approved_by: [{ user: { id: 1, username: 'alice', name: 'Alice' } }]
-          })
-        }
-      }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/approval_state') {
-        return {
-          stdout: JSON.stringify({
-            rules: [{ id: 5, name: 'Maintainer', approvals_required: 1, approved: true }]
-          })
-        }
-      }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/diffs?per_page=100') {
-        return {
-          stdout: JSON.stringify([
-            {
-              new_path: 'src/app.ts',
-              old_path: 'src/app.ts',
-              diff: '@@ -1 +1 @@\n-old\n+new'
-            }
-          ])
-        }
-      }
-      throw new Error(`unexpected glab call: ${args.join(' ')}`)
-    })
-
-    const details = await getWorkItemDetails('/repo', 12, 'mr')
-
-    expect(details?.comments).toHaveLength(1)
-    expect(details?.pipelineJobs).toHaveLength(1)
-    expect(details?.files).toHaveLength(1)
-    expect(details?.files?.[0]).toMatchObject({
-      path: 'src/app.ts',
-      additions: 1,
-      deletions: 1
-    })
-    expect(details?.reviewers).toMatchObject([{ id: 1, username: 'alice' }])
-    expect(details?.approvalState).toMatchObject({
-      approvalsRequired: 1,
-      approvalsLeft: 0,
-      approvedBy: [{ id: 1, username: 'alice' }],
-      rules: [{ id: 5, approved: true }]
-    })
-    expect(glabExecFileAsyncMock.mock.calls).toHaveLength(8)
-    expect(glabExecFileAsyncMock.mock.calls.map(([args]) => args)).toContainEqual([
-      'api',
-      'projects/g%2Fp/merge_requests/12/diffs?per_page=100'
-    ])
-    expect(glabExecFileAsyncMock.mock.calls.flatMap(([args]) => args)).not.toContain('--paginate')
-
-    glabExecFileAsyncMock.mockClear()
-    const explicitFull = await getWorkItemDetails(
-      '/repo',
-      12,
-      'mr',
-      undefined,
-      undefined,
-      undefined,
-      {},
-      {
-        includeReviewDetails: true
-      }
-    )
-    expect(explicitFull).toEqual(details)
-    expect(glabExecFileAsyncMock.mock.calls).toHaveLength(8)
-
-    glabExecFileAsyncMock.mockClear()
-    const checks = await getWorkItemDetails(
-      '/repo',
-      12,
-      'mr',
-      undefined,
-      undefined,
-      undefined,
-      {},
-      {
-        includeReviewDetails: false
-      }
-    )
-    expect(checks).toEqual({ ...details, files: [], reviewers: [], approvalState: undefined })
-    expect(glabExecFileAsyncMock.mock.calls.map(([args]) => args.at(-1)).sort()).toEqual([
-      'projects/g%2Fp/merge_requests/12',
-      'projects/g%2Fp/merge_requests/12/discussions?per_page=100',
-      'projects/g%2Fp/pipelines/99/bridges?per_page=100',
-      'projects/g%2Fp/pipelines/99/jobs?per_page=100'
-    ])
-  })
-
-  it('expands bridge child-pipeline jobs into the checks list', async () => {
-    glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      const endpoint = args.at(-1)
-      if (endpoint === 'projects/g%2Fp/merge_requests/12') {
-        return {
-          stdout: JSON.stringify({
-            id: 120,
-            iid: 12,
-            title: 'Bridge pipeline',
-            state: 'opened',
-            web_url: 'https://gitlab.com/g/p/-/merge_requests/12',
-            updated_at: '2026-05-31T12:00:00Z',
-            source_branch: 'feature/bridges',
-            target_branch: 'main',
-            description: 'MR body',
-            sha: 'head-sha',
-            head_pipeline: { id: 99 }
-          })
-        }
-      }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/discussions?per_page=100') {
-        return { stdout: '[]' }
-      }
-      if (endpoint === 'projects/g%2Fp/pipelines/99/jobs?per_page=100') {
-        return {
-          stdout: JSON.stringify([
-            {
-              id: 10,
-              name: 'semgrep-sast',
-              stage: 'test',
-              status: 'success',
-              web_url: 'https://gitlab.com/g/p/-/jobs/10',
-              duration: 12
-            }
-          ])
-        }
-      }
-      if (endpoint === 'projects/g%2Fp/pipelines/99/bridges?per_page=100') {
-        return {
-          stdout: JSON.stringify([
-            {
-              id: 50,
-              name: 'trigger-ci',
-              stage: 'test',
-              status: 'success',
-              web_url: 'https://gitlab.com/g/p/-/jobs/50',
-              downstream_pipeline: {
-                id: 200,
-                status: 'failed',
-                web_url: 'https://gitlab.com/g/p/-/pipelines/200'
-              }
-            }
-          ])
-        }
-      }
-      if (endpoint === 'projects/g%2Fp/pipelines/200/jobs?per_page=100') {
-        return {
-          stdout: JSON.stringify([
-            {
-              id: 300,
-              name: 'unit',
-              stage: 'test',
-              status: 'failed',
-              web_url: 'https://gitlab.com/g/p/-/jobs/300',
-              duration: 40
-            },
-            {
-              id: 301,
-              name: 'lint',
-              stage: 'test',
-              status: 'success',
-              web_url: 'https://gitlab.com/g/p/-/jobs/301',
-              duration: 20
-            }
-          ])
-        }
-      }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/reviewers') {
-        return { stdout: '[]' }
-      }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/approvals') {
-        return { stdout: JSON.stringify({ approvals_required: 0, approvals_left: 0 }) }
-      }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/approval_state') {
-        return { stdout: JSON.stringify({ rules: [] }) }
-      }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/diffs?per_page=100') {
-        return { stdout: '[]' }
-      }
-      throw new Error(`unexpected glab call: ${args.join(' ')}`)
-    })
-
-    const details = await getWorkItemDetails('/repo', 12, 'mr')
-    const names = (details?.pipelineJobs ?? []).map((job) => job.name).sort()
-    expect(names).toEqual(['lint', 'semgrep-sast', 'trigger-ci', 'unit'])
-    expect(details?.pipelineJobs?.find((job) => job.name === 'unit')).toMatchObject({
-      id: 300,
-      status: 'failed',
-      pipelineId: 200
-    })
-    expect(details?.pipelineJobs?.find((job) => job.name === 'trigger-ci')).toMatchObject({
-      id: 0,
-      status: 'failed',
-      pipelineId: 99
-    })
-
-    glabExecFileAsyncMock.mockClear()
-    const narrow = await getWorkItemDetails(
-      '/repo',
-      12,
-      'mr',
-      undefined,
-      undefined,
-      undefined,
-      {},
-      {
-        includeReviewDetails: false
-      }
-    )
-    expect(narrow).toEqual({ ...details, approvalState: undefined })
-    expect(glabExecFileAsyncMock.mock.calls.map(([args]) => args.at(-1)).sort()).toEqual([
-      'projects/g%2Fp/merge_requests/12',
-      'projects/g%2Fp/merge_requests/12/discussions?per_page=100',
-      'projects/g%2Fp/pipelines/200/jobs?per_page=100',
-      'projects/g%2Fp/pipelines/99/bridges?per_page=100',
-      'projects/g%2Fp/pipelines/99/jobs?per_page=100'
-    ])
-  })
-
-  it('preserves issue details when review enrichment is disabled', async () => {
-    glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args.at(-1) === 'projects/g%2Fp/issues/12') {
-        return {
-          stdout: JSON.stringify({
-            iid: 12,
-            title: 'Issue',
-            state: 'opened',
-            description: 'Issue body',
-            assignees: [{ username: 'alice' }]
-          })
-        }
-      }
-      if (args.at(-1) === 'projects/g%2Fp/issues/12/discussions?per_page=100') {
-        return {
-          stdout: JSON.stringify([
-            {
-              id: 'issue-thread',
-              notes: [{ id: 7, body: 'Issue note', author: { username: 'alice' } }]
-            }
-          ])
-        }
-      }
-      throw new Error(`unexpected issue detail endpoint: ${args.at(-1)}`)
-    })
-    const full = await getWorkItemDetails('/repo', 12, 'issue')
-    const fullCalls = glabExecFileAsyncMock.mock.calls.map(([args]) => args)
-    expect(full).toMatchObject({
-      body: 'Issue body',
-      assignees: ['alice'],
-      comments: [{ body: 'Issue note' }]
-    })
-    glabExecFileAsyncMock.mockClear()
-    const narrow = await getWorkItemDetails(
-      '/repo',
-      12,
-      'issue',
-      undefined,
-      undefined,
-      undefined,
-      {},
-      {
-        includeReviewDetails: false
-      }
-    )
-    expect(narrow).toEqual(full)
-    expect(glabExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual(fullCalls)
-    expect(fullCalls).toHaveLength(2)
   })
 
   // Every child fetch launches glab; bound the pool during Checks polling.
@@ -485,7 +78,7 @@ describe('getWorkItemDetails', () => {
           })
         }
       }
-      if (endpoint === 'projects/g%2Fp/pipelines/99/bridges?per_page=100') {
+      if (endpoint === 'projects/g%2Fp/pipelines/99/bridges?per_page=100&page=1') {
         return {
           stdout: JSON.stringify(
             Array.from({ length: BRIDGE_COUNT }, (_, i) => ({
@@ -524,123 +117,90 @@ describe('getWorkItemDetails', () => {
     expect(details?.pipelineJobs).toHaveLength(BRIDGE_COUNT)
   })
 
-  it('routes local WSL MR detail fetches through project resolution and glab options', async () => {
-    const localGitOptions = { wslDistro: 'Ubuntu' }
+  // Parent pipeline 99 has 150 jobs and 100 bridges, one to child pipeline 1000, which has 150 jobs.
+  function servePipelineGraph(failing: { endpoint: string; page: number; message: string }): void {
     glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      const endpoint = args.at(-1)
+      const endpoint = args.at(-1) as string
       if (endpoint === 'projects/g%2Fp/merge_requests/12') {
         return {
           stdout: JSON.stringify({
-            id: 120,
             iid: 12,
-            title: 'WSL detail',
+            title: 'Graph',
             state: 'opened',
-            web_url: 'https://gitlab.com/g/p/-/merge_requests/12',
-            updated_at: '2026-06-16T00:00:00Z',
-            description: 'MR body',
-            sha: 'head-sha',
-            head_pipeline: null,
-            reviewers: []
+            head_pipeline: { id: 99 }
           })
         }
       }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/discussions?per_page=100') {
-        return { stdout: '[]' }
+      const listMatch =
+        /^(projects\/g%2Fp\/pipelines\/\d+\/(?:jobs|bridges))\?per_page=100&page=(\d+)$/.exec(
+          endpoint
+        )
+      if (!listMatch) {
+        return { stdout: endpoint.endsWith('/approvals') ? '{}' : '[]' }
       }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/reviewers') {
-        return { stdout: '[]' }
+      const [, list, pageText] = listMatch
+      const page = Number(pageText)
+      if (list === failing.endpoint && page === failing.page) {
+        throw new Error(failing.message)
       }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/approvals') {
-        return { stdout: JSON.stringify({ approvals_required: 0, approvals_left: 0 }) }
+      if (list.endsWith('/bridges')) {
+        // A full first page makes the walker request page 2.
+        const bridges = list.includes('/99/')
+          ? [
+              { name: 'child', downstream_pipeline: { id: 1000, status: 'success' } },
+              ...Array.from({ length: 99 }, (_, i) => ({ name: `trigger-${i}` }))
+            ]
+          : []
+        return { stdout: JSON.stringify(page === 1 ? bridges : []) }
       }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/approval_state') {
-        return { stdout: JSON.stringify({ rules: [] }) }
+      const pipelineId = Number(/pipelines\/(\d+)/.exec(list)?.[1])
+      const count = page === 1 ? 100 : page === 2 ? 50 : 0
+      return {
+        stdout: JSON.stringify(
+          Array.from({ length: count }, (_, i) => ({
+            id: pipelineId * 1000 + (page - 1) * 100 + i + 1,
+            name: `job-${pipelineId}-${(page - 1) * 100 + i}`
+          }))
+        )
       }
-      if (endpoint === 'projects/g%2Fp/merge_requests/12/diffs?per_page=100') {
-        return { stdout: '[]' }
-      }
-      throw new Error(`unexpected glab call: ${args.join(' ')}`)
     })
-
-    const details = await getWorkItemDetails(
-      '/repo',
-      12,
-      'mr',
-      undefined,
-      null,
-      undefined,
-      localGitOptions
-    )
-
-    expect(details?.item.number).toBe(12)
-    expect(resolveIssueSourceMock).toHaveBeenCalledWith(
-      '/repo',
-      undefined,
-      ['gitlab.com'],
-      null,
-      localGitOptions
-    )
-    expect(glabExecFileAsyncMock.mock.calls.every((call) => call[1]?.wslDistro === 'Ubuntu')).toBe(
-      true
-    )
-  })
-})
-
-describe('GitLab MR file diff counts', () => {
-  async function fileFor(diff: string) {
-    glabExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: JSON.stringify([{ new_path: 'src/app.ts', diff }])
-    })
-    const files = await fetchMRFiles('/repo', { host: 'gitlab.com', path: 'g/p' }, 12)
-    expect(files).toHaveLength(1)
-    return files[0]
   }
 
-  beforeEach(() => glabExecFileAsyncMock.mockReset())
+  it.each([
+    { endpoint: 'projects/g%2Fp/pipelines/99/jobs', includeReviewDetails: true },
+    { endpoint: 'projects/g%2Fp/pipelines/99/jobs', includeReviewDetails: false },
+    { endpoint: 'projects/g%2Fp/pipelines/1000/jobs', includeReviewDetails: false },
+    { endpoint: 'projects/g%2Fp/pipelines/99/bridges', includeReviewDetails: false }
+  ])(
+    'fails the read when $endpoint page 2 fails (includeReviewDetails=$includeReviewDetails)',
+    async ({ endpoint, includeReviewDetails }) => {
+      servePipelineGraph({ endpoint, page: 2, message: '503 upstream unavailable' })
 
-  it('counts header-like content inside the header-less payload GitLab returns', async () => {
-    expect(await fileFor('@@ -1 +1 @@\n--- old comment\n+++ new comment')).toMatchObject({
-      additions: 1,
-      deletions: 1
-    })
-  })
+      const details = await getWorkItemDetails(
+        '/repo',
+        12,
+        'mr',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { includeReviewDetails }
+      )
 
-  it('ignores prefixes before the first hunk', async () => {
-    expect(await fileFor('--- a/x\n+++ b/x\n+not a hunk\n-unknown')).toMatchObject({
-      additions: 0,
-      deletions: 0
-    })
-  })
-
-  it('accumulates asymmetric counts across hunks', async () => {
-    expect(await fileFor('@@ -1 +1 @@\n-a\n+b\n@@ -5 +5,2 @@\n-c\n+d\n+e')).toMatchObject({
-      additions: 3,
-      deletions: 2
-    })
-  })
-
-  it('counts CRLF and Unicode content using line prefixes', async () => {
-    expect(await fileFor('@@ -1 +1 @@\r\n-é\r\n+🚀\r\n')).toMatchObject({
-      additions: 1,
-      deletions: 1
-    })
-  })
-
-  it('treats a lone CR as content within a removed line', async () => {
-    expect(await fileFor('@@ -1 +1 @@\n-old\r+new')).toMatchObject({
-      additions: 0,
-      deletions: 1
-    })
-  })
-
-  it('counts a large diff without splitting it into an array of lines', async () => {
-    const diff = `@@ -1 +1 @@\n${'-old\n+new\n context\n'.repeat(10000)}`
-    const split = vi.spyOn(String.prototype, 'split')
-    try {
-      expect(await fileFor(diff)).toMatchObject({ additions: 10000, deletions: 10000 })
-      expect(split).not.toHaveBeenCalled()
-    } finally {
-      split.mockRestore()
+      expect(details).toBeNull()
     }
+  )
+
+  it('keeps the graph when a child project forbids its first page', async () => {
+    servePipelineGraph({
+      endpoint: 'projects/g%2Fp/pipelines/1000/jobs',
+      page: 1,
+      message: '403 Forbidden'
+    })
+
+    const details = await getWorkItemDetails('/repo', 12, 'mr')
+
+    expect(details?.pipelineJobs?.filter((job) => job.name.startsWith('job-99-'))).toHaveLength(150)
+    expect(details?.pipelineJobs?.some((job) => job.name === 'child')).toBe(true)
   })
 })

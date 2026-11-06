@@ -1,4 +1,4 @@
-import type { PtyDataMeta } from '../pty-dispatcher'
+import type { PtyDataMeta } from '../pty-transport/delivery/pty-dispatcher'
 
 import { HIDDEN_OUTPUT_RESTORE_PENDING_CHARS } from './hidden-output-restore-limits'
 

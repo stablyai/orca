@@ -2,13 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Terminal } from '@xterm/headless'
 import { installTerminalMouseEncodingTracker } from '@/lib/pane-manager/terminal-mouse-encoding-tracker'
-import type { SerializeFn } from '../pty-buffer-serializer'
+import type { SerializeFn } from '../snapshots/pty-buffer-serializer'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { bindRegisterPaneSerializer } from './pane-serializer-register'
 
 const serializers = vi.hoisted(() => new Map<string, SerializeFn>())
 
-vi.mock('../pty-buffer-serializer', () => ({
+vi.mock('../snapshots/pty-buffer-serializer', () => ({
   registerPtySerializer: (ptyId: string, fn: SerializeFn) => {
     serializers.set(ptyId, fn)
     return () => serializers.delete(ptyId)

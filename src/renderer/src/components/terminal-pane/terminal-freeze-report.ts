@@ -1,6 +1,6 @@
 // Production DevTools freeze report combines renderer/main state and breadcrumbs over invoke, which can survive dead push delivery.
 import { getTerminalFreezeBreadcrumbs } from './terminal-freeze-breadcrumbs'
-import { getTerminalDeliveryWatchdogDiagnostics } from './terminal-delivery-watchdog'
+import { getTerminalDeliveryWatchdogDiagnostics } from './pty-transport/delivery/terminal-delivery-watchdog'
 import { isDocumentVisibilityProvenStale } from './stale-document-visibility'
 import { getAllPaneRenderingDiagnostics } from '@/lib/pane-manager/pane-manager-registry'
 
