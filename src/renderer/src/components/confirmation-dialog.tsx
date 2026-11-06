@@ -5,6 +5,13 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -15,11 +22,26 @@ import {
 import {
   ConfirmationDialogContext,
   type ConfirmationDialogContextValue,
+  type ConfirmationDialogField,
   type ConfirmationDialogOptions
 } from '@/components/confirmation-dialog-context'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+
+function resolveFieldValues(
+  inputs: readonly ConfirmationDialogField[] | undefined,
+  edited: Record<string, string>
+): Record<string, string> {
+  // Why: quick-command argument names become field ids, and `{{constructor}}` must not read Object.prototype.
+  const values: Record<string, string> = Object.create(null)
+  for (const field of inputs ?? []) {
+    values[field.id] = Object.hasOwn(edited, field.id)
+      ? edited[field.id]
+      : (field.defaultValue ?? '')
+  }
+  return values
+}
 
 type ConfirmationDialogRequest = {
   id: number
@@ -51,6 +73,11 @@ export function ConfirmationDialogProvider({
   const displayedRequest = activeRequest ?? lastDisplayedRequestRef.current
   const Icon = displayedRequest?.options.icon
   const compact = displayedRequest?.options.compact === true
+  const displayedFields = displayedRequest?.options.fields?.inputs
+  const displayedFieldValues = resolveFieldValues(displayedFields, fieldValues)
+  const missingRequiredField =
+    displayedFields?.some((field) => field.required && !displayedFieldValues[field.id].trim()) ===
+    true
   const buttonSize = compact ? 'sm' : 'default'
   const guarded = displayedRequest?.options.ignoresOpeningGesture === true
   // Why: the gesture that opened the prompt may still be repeating or clicking, and either answer can stick.
@@ -104,16 +131,19 @@ export function ConfirmationDialogProvider({
       if (!request) {
         return
       }
+      const values = resolveFieldValues(request.options.fields?.inputs, fieldValues)
+      if (
+        confirmed &&
+        request.options.fields?.inputs.some((field) => field.required && !values[field.id].trim())
+      ) {
+        return
+      }
       // Why: cancelling must not persist a preference the user backed out of.
       if (confirmed && dontAskAgain) {
         request.options.dontAskAgain?.onConfirmed()
       }
-      const fields = request.options.fields
-      if (confirmed && fields) {
-        const defaults = Object.fromEntries(
-          fields.inputs.map((field) => [field.id, field.defaultValue ?? ''])
-        )
-        fields.onConfirmed({ ...defaults, ...fieldValues })
+      if (confirmed) {
+        request.options.fields?.onConfirmed(values)
       }
       // Why: queued prompts must not inherit this request's preference or typed values.
       setDontAskAgain(false)
@@ -179,29 +209,48 @@ export function ConfirmationDialogProvider({
           </div>
           {displayedRequest?.options.fields ? (
             <div className="space-y-3">
-              {displayedRequest.options.fields.inputs.map((field) => (
-                <div key={field.id} className="space-y-2">
-                  <Label htmlFor={`confirmation-dialog-field-${field.id}`}>{field.label}</Label>
-                  <Input
-                    id={`confirmation-dialog-field-${field.id}`}
-                    type={field.type ?? 'text'}
-                    autoComplete={field.autoComplete}
-                    value={fieldValues[field.id] ?? field.defaultValue ?? ''}
-                    onChange={(event) => {
-                      const { value } = event.target
-                      setFieldValues((current) => ({ ...current, [field.id]: value }))
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault()
-                        if (!(guarded && event.repeat)) {
-                          settleActiveRequest(true)
-                        }
-                      }
-                    }}
-                  />
-                </div>
-              ))}
+              {displayedRequest.options.fields.inputs.map((field) => {
+                const fieldId = `confirmation-dialog-field-${field.id}`
+                const setValue = (value: string): void =>
+                  setFieldValues((current) => ({ ...current, [field.id]: value }))
+                return (
+                  <div key={field.id} className="space-y-2">
+                    <Label htmlFor={fieldId}>{field.label}</Label>
+                    {field.type === 'select' ? (
+                      <Select value={displayedFieldValues[field.id]} onValueChange={setValue}>
+                        <SelectTrigger id={fieldId} className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(field.options ?? []).map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        id={fieldId}
+                        type={field.type ?? 'text'}
+                        autoComplete={field.autoComplete}
+                        placeholder={field.placeholder}
+                        aria-required={field.required}
+                        value={displayedFieldValues[field.id]}
+                        onChange={(event) => setValue(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault()
+                            if (!(guarded && event.repeat)) {
+                              settleActiveRequest(true)
+                            }
+                          }
+                        }}
+                      />
+                    )}
+                  </div>
+                )
+              })}
             </div>
           ) : null}
           {displayedRequest?.options.dontAskAgain ? (
@@ -248,6 +297,7 @@ export function ConfirmationDialogProvider({
               type="button"
               variant={displayedRequest?.options.confirmVariant ?? 'default'}
               size={buttonSize}
+              disabled={missingRequiredField}
               onKeyDown={ignoreRepeatedKey}
               onClick={(event) => {
                 if (isFreshClick(event)) {
