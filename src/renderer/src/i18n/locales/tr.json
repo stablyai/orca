@@ -19348,7 +19348,6 @@
         "truncatedResponse": "Sağlayıcı yanıtı kısaltıldı (özgün boyut: {{bytes}} bayt)."
       },
       "composer": {
-        "buildMode": "Uygula",
         "planMode": "Planla",
         "send": "Gönder",
         "alternateSteerHint": "Yönlendirmek için {{shortcut}}",

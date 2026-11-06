@@ -18585,7 +18585,6 @@
         "pendingWork": "在使用此命令之前，请等待挂起的工作和消息完成。"
       },
       "composer": {
-        "buildMode": "构建",
         "planMode": "规划",
         "send": "发送",
         "alternateSteerHint": "{{shortcut}} 立即发送",

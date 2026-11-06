@@ -18644,7 +18644,6 @@
         "notDoneGoalChangeIncomplete": "目標の変更を完了できませんでした。チャットを確認してください。"
       },
       "composer": {
-        "buildMode": "実装",
         "planMode": "計画",
         "send": "送信",
         "alternateSteerHint": "{{shortcut}} で今すぐ送信",

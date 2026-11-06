@@ -19939,7 +19939,6 @@
         "modelFallback": "Claude переключил модель: {{from}} → {{to}}."
       },
       "composer": {
-        "buildMode": "Реализация",
         "planMode": "Планирование",
         "send": "Отправить",
         "alternateSteerHint": "{{shortcut}}, чтобы направить",

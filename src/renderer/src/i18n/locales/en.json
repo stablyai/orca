@@ -19883,7 +19883,6 @@
       },
       "composer": {
         "send": "Send",
-        "buildMode": "Build",
         "planMode": "Plan",
         "moreControls": "More chat controls",
         "exitPlanMode": "Exit plan mode",
