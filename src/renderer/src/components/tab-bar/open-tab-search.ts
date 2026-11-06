@@ -22,7 +22,7 @@ import {
   type SimulatorPaletteSearchResult
 } from '@/lib/simulator-palette-search'
 import { getUnifiedTabPaletteExecutionHostId } from '@/lib/unified-tab-host-ownership'
-import type { TerminalAgent } from '../../../../shared/terminal-agent'
+import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import {
   searchWorkspaceTabs,
   type SearchableWorkspaceTab,

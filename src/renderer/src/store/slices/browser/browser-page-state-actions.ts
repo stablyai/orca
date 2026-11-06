@@ -9,7 +9,7 @@ import {
   normalizeBrowserTitle,
   normalizeUrl
 } from '../browser-page-records'
-import { normalizeBrowserHistoryUrl } from '../../../../../shared/workspace-session-browser-history'
+import { normalizeBrowserHistoryUrl } from '../../../../../shared/workspace-session/workspace-session-browser-history'
 
 export function createBrowserPageStateActions(
   set: BrowserSliceSet,

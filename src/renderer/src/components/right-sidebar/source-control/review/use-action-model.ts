@@ -1,13 +1,13 @@
 import { useMemo } from 'react'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import type { GitBranchCompareSummary } from '../../../../../../shared/git-diff-compare-types'
-import { isStageableStatusEntry } from '../../../../../../shared/source-control-discard-all-sequence'
-import { resolveDropdownItems } from '../../source-control-dropdown-items'
-import { resolveCommitAreaPrimaryAction } from '../../source-control-primary-action'
+import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
+import { isStageableStatusEntry } from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
+import { resolveDropdownItems } from '../panel/source-control-dropdown-items'
+import { resolveCommitAreaPrimaryAction } from './source-control-primary-action'
 import { resolveCreatePrHeaderAction } from './primary-create-pr-intent-action'
 import { resolveVisibleCreatePrHeaderAction } from './create-pr-intent-state'
-import type { SourceControlEntryGroups } from '../../../../../../shared/source-control-section-order'
+import type { SourceControlEntryGroups } from '../../../../../../shared/source-control/listing/source-control-section-order'
 
 type PrimaryInput = Parameters<typeof resolveCommitAreaPrimaryAction>[0]
 type HeaderInput = Parameters<typeof resolveCreatePrHeaderAction>[0]
@@ -24,6 +24,7 @@ export function useSourceControlActionModel({
   hostedReviewStateForActions,
   isHostedReviewStateLoading,
   inFlightRemoteOpKind,
+  isRemoteOperationInAnotherWorktree,
   hostedReviewCreation,
   branchSummary,
   branchName,
@@ -49,6 +50,7 @@ export function useSourceControlActionModel({
   remoteStatusForActions: PrimaryInput['upstreamStatus']
   hostedReviewStateForActions: PrimaryInput['prState']
   isHostedReviewStateLoading: boolean
+  isRemoteOperationInAnotherWorktree: boolean
   inFlightRemoteOpKind: PrimaryInput['inFlightRemoteOpKind']
   hostedReviewCreation: PrimaryInput['hostedReviewCreation']
   branchSummary: GitBranchCompareSummary | null
@@ -101,6 +103,7 @@ export function useSourceControlActionModel({
         prState: hostedReviewStateForActions,
         isPRStateLoading: isHostedReviewStateLoading,
         inFlightRemoteOpKind,
+        isRemoteOperationInAnotherWorktree,
         hostedReviewCreation: createReviewEligibility,
         branchCommitsAhead:
           branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
@@ -118,6 +121,7 @@ export function useSourceControlActionModel({
       isAbortingOperation,
       isRemoteOperationActive,
       inFlightRemoteOpKind,
+      isRemoteOperationInAnotherWorktree,
       createReviewEligibility,
       isHostedReviewStateLoading,
       hostedReviewStateForActions,

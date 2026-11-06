@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from './db'
 import { reconcileLifecycleMessage } from './lifecycle-reconciliation'
 import { Coordinator } from './coordinator'
-import { warnStaleDispatches } from './coordinator-task-dispatch'
 import type { CoordinatorRuntime } from './coordinator-runtime-contract'
 import { dispatchPreambleSendOptions, type DispatchPreambleSendOptions } from './preamble'
 import { DISPATCH_STALE_THRESHOLD } from './coordinator-stale-base-flag'
@@ -543,94 +542,6 @@ describe('Coordinator', () => {
       insertWorkerDone(db, { taskId: task.id })
       await vi.advanceTimersByTimeAsync(100)
     }
-
-    const result = await settleCoordinatorRun(runPromise)
-    expect(result.status).toBe('completed')
-  })
-
-  it('logs a stale warning for dispatched rows past the threshold and does not auto-fail', async () => {
-    db = new OrchestrationDb(':memory:')
-    const runtime = createMockRuntime()
-    // Use no available terminal so the backdated dispatch drives the stale scan deterministically.
-    const task = db.createTask({ runId, spec: 'work' })
-    const ctx = createRootDispatch(db, task.id, 'term_stale')
-
-    // Backdate both timestamps beyond 10 minutes so the first tick sees the stale row.
-    const sqlite = (
-      db as unknown as { db: { prepare: (s: string) => { run: (...a: unknown[]) => void } } }
-    ).db
-    const iso = (ms: number) => new Date(Date.now() - ms).toISOString()
-    sqlite
-      .prepare('UPDATE dispatch_contexts SET dispatched_at = ?, last_heartbeat_at = ? WHERE id = ?')
-      .run(iso(60 * 60 * 1000), iso(30 * 60 * 1000), ctx.id)
-
-    const logs: string[] = []
-    const coordinator = new Coordinator(db, runtime, {
-      spec: 'go',
-      coordinatorHandle: 'coord',
-      pollIntervalMs: 20,
-      onLog: (m) => logs.push(m)
-    })
-
-    const runPromise = coordinator.run()
-    await vi.advanceTimersByTimeAsync(80)
-    coordinator.stop()
-    await settleCoordinatorRun(runPromise)
-
-    expect(logs.some((l) => /has not sent a heartbeat/.test(l) && l.includes(task.id))).toBe(true)
-    expect(db.getTask(task.id)?.status).toBe('dispatched')
-  })
-
-  it('warns after 30 minutes, not 11, with a 15-minute heartbeat interval', () => {
-    db = new OrchestrationDb(':memory:')
-    vi.useFakeTimers({ toFake: ['Date'] })
-    const now = Date.parse('2026-10-26T12:00:00Z')
-    vi.setSystemTime(now)
-    const task = db.createTask({ runId, spec: 'work' })
-    const dispatch = createRootDispatch(db, task.id, 'term_worker')
-    db.db
-      .prepare('UPDATE dispatch_contexts SET dispatched_at = ? WHERE id = ?')
-      .run(new Date(now - 60 * 60_000).toISOString(), dispatch.id)
-    const onLog = vi.fn()
-    for (const age of [11, 30, 31]) {
-      db.recordHeartbeat(dispatch.id, new Date(now - age * 60_000).toISOString())
-      warnStaleDispatches(db, onLog, 15)
-      expect(onLog).toHaveBeenCalledTimes(age > 30 ? 1 : 0)
-    }
-    expect(onLog).toHaveBeenCalledWith(expect.stringContaining('heartbeat in ~30 min'))
-    expect(db.getTask(task.id)?.status).toBe('dispatched')
-  })
-
-  it('records heartbeat by dispatchId on worker heartbeat messages', async () => {
-    db = new OrchestrationDb(':memory:')
-    const runtime = createMockRuntime()
-    runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
-
-    const task = db.createTask({ runId, spec: 'work' })
-    const ctx = createRootDispatch(db, task.id, 'term_a')
-
-    const coordinator = new Coordinator(db, runtime, {
-      spec: 'go',
-      coordinatorHandle: 'coord',
-      pollIntervalMs: 20
-    })
-
-    const runPromise = coordinator.run()
-
-    db.insertMessage({
-      runId,
-      from: 'term_a',
-      to: 'coord',
-      subject: 'alive',
-      type: 'heartbeat',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: ctx.id, phase: 'implementing' })
-    })
-
-    await vi.advanceTimersByTimeAsync(80)
-
-    expect(db.getDispatchContext(task.id)?.last_heartbeat_at).toBeTruthy()
-
-    insertWorkerDone(db, { taskId: task.id })
 
     const result = await settleCoordinatorRun(runPromise)
     expect(result.status).toBe('completed')

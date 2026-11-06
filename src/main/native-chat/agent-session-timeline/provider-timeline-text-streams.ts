@@ -5,9 +5,9 @@
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody,
-  type AgentJournalProducerLinkage,
-  type AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
+  type AgentJournalProducerLinkage
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import {
   createAgentSessionDeltaCoalescer,
   type AgentSessionDeltaCoalescerDeps
@@ -15,7 +15,6 @@ import {
 import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/structured-agent-session-event-sink-estimate'
 import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/structured-agent-session-transition'
 import {
-  providerTimelineEntryBytes,
   providerTimelinePlacement,
   type ProviderTimelineContext
 } from './provider-timeline-context'
@@ -37,7 +36,7 @@ import type { ProviderTimelineState } from './provider-timeline-state'
 
 export type ProviderTimelineStream = {
   id: string
-  /** Named streams share their item’s budget slot. */
+  /** Named deltas and snapshots share the same row identity. */
   key: string
   row: ProviderTimelineRowId
   /** New rows use this scope; existing rows retain theirs. */
@@ -47,13 +46,9 @@ export type ProviderTimelineStream = {
   producer: AgentJournalProducerLinkage | undefined
   /** Whitespace-only streams cannot complete a message. */
   written: boolean
-  bytes: number
   /** Once a write finds a settled turn, later text cannot land. */
   stoppedIn: string | null
 }
-
-/** Retain stopped keys until the turn boundary, within this bound. */
-const MAX_STOPPED_STREAMS = 128
 
 export class ProviderTimelineTextStreams {
   private readonly streams = new Map<string, ProviderTimelineStream>()
@@ -72,7 +67,7 @@ export class ProviderTimelineTextStreams {
     this.coalescer = createAgentSessionDeltaCoalescer({
       ...(deps.coalesceMs === undefined ? {} : { windowMs: deps.coalesceMs }),
       ...(deps.schedule ? { schedule: deps.schedule } : {}),
-      // The assembler’s shared budget already counts these protected streams.
+      // Live identities must survive until the provider closes them or their turn ends.
       isProtected: () => true,
       emit: (id, text) => this.flushOnWindow(id, text)
     })
@@ -131,11 +126,6 @@ export class ProviderTimelineTextStreams {
       channel: input.channel,
       producer: input.producer,
       written: false,
-      bytes: providerTimelineEntryBytes({
-        key: 'id' in input.item ? input.item.id : input.item.stream,
-        join: input.join,
-        producer: input.producer
-      }),
       stoppedIn: null
     }
   }
@@ -187,16 +177,6 @@ export class ProviderTimelineTextStreams {
         }
       }
     })
-  }
-
-  /** Settled-turn streams hold no budget because none of their text can land. */
-  stopSettled(journal: StructuredAgentSessionTransitionJournal): void {
-    for (const stream of this.open) {
-      const turn = this.rowTurn(stream, journal)
-      if (turn !== null && providerTimelineTurnRowState(journal, turn) === 'settled') {
-        this.stop(stream, turn)
-      }
-    }
   }
 
   planRelease(
@@ -306,12 +286,6 @@ export class ProviderTimelineTextStreams {
     this.forget(stream)
     this.stopped.delete(stream.key)
     this.stopped.set(stream.key, turnItemId)
-    for (const [oldest] of [...this.stopped].slice(
-      0,
-      Math.max(0, this.stopped.size - MAX_STOPPED_STREAMS)
-    )) {
-      this.stopped.delete(oldest)
-    }
   }
 
   private forget(stream: ProviderTimelineStream): void {

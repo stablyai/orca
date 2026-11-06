@@ -18,6 +18,12 @@ export const toolStyles = themedStyleSheet(() => ({
   run: {
     marginTop: spacing.xs
   },
+  viewedImages: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.xs
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -92,7 +98,7 @@ export const toolStyles = themedStyleSheet(() => ({
     gap: 6
   },
   codeBox: {
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel,

@@ -1,7 +1,13 @@
+import type { agentPickerLaunchInputs } from '../../../shared/agent-launch/picker/agent-launch-picker'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
-import type { FolderWorkspaceLinkedTask } from '../../../shared/folder-workspace-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type {
+  WorkspaceLinkedItem as FolderWorkspaceLinkedTask,
+  GitPushTarget,
+  WorkspaceLinkedItem,
+  WorkspaceStatus
+} from '../../../shared/worktree/types'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type {
   CreateSparseCheckoutRequest,
@@ -10,16 +16,14 @@ import type {
   WorktreeCheckoutProgress
 } from '../../../shared/worktree/create-types'
 import type { WorktreeStartupLaunch } from '../../../shared/worktree/launch-types'
-import type {
-  GitPushTarget,
-  WorkspaceLinkedItem,
-  WorkspaceStatus
-} from '../../../shared/worktree/types'
-import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+
+import type { AgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
 import { translate } from '@/i18n/i18n'
+import type { NativeChatComposerDraftImage } from '@/components/native-chat/native-chat-composer-draft-storage'
+import type { AgentJournalSkillRef } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 /** Creation phases include renderer preflight, base fetch and worktree add; remote/runtime can skip git phases, while VM recipes provision before runtime creation. */
 export type WorktreeCreationPhase = 'preparing' | 'provisioning-vm' | 'fetching' | 'creating'
@@ -82,6 +86,7 @@ export type WorktreeCreationRequest = {
   agent: TuiAgent | null
   /** Renderer-owned route decision captured at submit time and reused on retry. */
   agentLaunchRoute?: AgentLaunchRoute
+  launchInputs?: ReturnType<typeof agentPickerLaunchInputs>
   linkedLinearIssue?: string
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
@@ -127,13 +132,69 @@ export type PendingWorktreeCreation = {
   startedAt: number
   // Remote/runtime targets without phase events need one indeterminate spinner, never a checklist stuck at step one.
   indeterminate: boolean
-  // Background creates reveal the loader immediately; older callers opt in, keeping faux tabs stable through terminal handoff.
+  // Instant folder creates retain the initiating surface; explicit opens and retries reveal progress.
   loaderVisible: boolean
   error?: string
   provisioningLog?: string
   // Local git checkout meter; absent when git emits none or creation runs over SSH/runtime.
   checkoutProgress?: WorktreeCheckoutProgress
+  /** Phases entered so far with their start times, so the chat checklist can time each step. */
+  phaseLog?: readonly { phase: WorktreeCreationPhase; at: number }[]
+  /** Chat message sent before the worktree existed; the chat launch delivers it as its first message. */
+  heldChatMessage?: string
+  heldChatAttachments?: readonly NativeChatComposerDraftImage[]
+  heldChatSkills?: readonly AgentJournalSkillRef[]
+  /** The launch owns the captured input until its replacement surface is published. */
+  chatInputHandedOff?: boolean
   request: WorktreeCreationRequest
+}
+
+export function pendingWorktreeCreationIsVisible(
+  entry: PendingWorktreeCreation | undefined
+): boolean {
+  return entry !== undefined && (entry.loaderVisible || entry.status === 'error')
+}
+
+/** Draft scope of the chat composer shown while this creation has no workspace yet. */
+export function pendingCreationChatDraftScopeKey(creationId: string): string {
+  return `pending-worktree-creation:${creationId}`
+}
+
+/** The first message this creation's chat will send: one sent while pending, else the composer's auto-submit prompt. */
+export function pendingCreationHeldChatMessage(
+  entry: Pick<PendingWorktreeCreation, 'heldChatMessage' | 'request'>
+): string | null {
+  if (entry.heldChatMessage !== undefined) {
+    return entry.heldChatMessage
+  }
+  const { quickPrompt, promptDelivery } = entry.request
+  return promptDelivery !== 'draft' && quickPrompt.trim() ? quickPrompt : null
+}
+
+/** The pending chat surface owns the first message and draft; hand both to the chat launch. */
+export function withPendingChatInput(
+  entry: PendingWorktreeCreation | undefined,
+  request: WorktreeCreationRequest
+): WorktreeCreationRequest {
+  if (!entry || !pendingCreationOpensNativeChat({ phase: entry.phase, request })) {
+    return request
+  }
+  const held = pendingCreationHeldChatMessage({ ...entry, request })
+  // The draft prompt was seeded into the pending composer, whose draft the launch moves over.
+  const { launchDraftPrompt: _seeded, ...rest } = request
+  return { ...rest, quickPrompt: held ?? '', promptDelivery: 'auto-submit' }
+}
+
+/** True when this creation ends in a native chat, so its pending surface is the chat itself. */
+export function pendingCreationOpensNativeChat(
+  entry: Pick<PendingWorktreeCreation, 'phase' | 'request'>
+): boolean {
+  return (
+    entry.request.agentLaunchRoute === 'structured-native-chat' &&
+    entry.request.agent !== null &&
+    entry.phase !== 'provisioning-vm' &&
+    !entry.request.ephemeralVmRecipe
+  )
 }
 
 export function findPendingWorktreeCreationId(

@@ -1,5 +1,5 @@
-import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { NativeChatInstallHero } from './NativeChatInstallHero'
 import type { NativeChatInstallSlotState } from './NativeChatInstallSlot'

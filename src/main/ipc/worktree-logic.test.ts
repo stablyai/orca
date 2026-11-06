@@ -27,7 +27,7 @@ import {
   computeValidatedBranchName
 } from './worktree-branch-name'
 import { mergeWorktree } from './worktree-metadata-merge'
-import { areWorktreePathsEqual } from '../git/worktree-path-comparison'
+import { areWorktreePathsEqual } from '../git/worktrees/catalog/worktree-path-comparison'
 
 describe('sanitizeWorktreeName', () => {
   it('replaces spaces with hyphens', () => {
@@ -62,6 +62,10 @@ describe('sanitizeWorktreeName', () => {
     // Slugification can preserve internal .., which Git rejects even without path separators.
     expect(sanitizeWorktreeName('for-..-..-feature')).toBe('for-.-.-feature')
     expect(sanitizeWorktreeName('a..b...c')).toBe('a.b.c')
+  })
+
+  it('keeps a trailing .lock so the folder name matches the request', () => {
+    expect(sanitizeWorktreeName('mise.lock')).toBe('mise.lock')
   })
 
   it('preserves non-ASCII letters and numbers', () => {
@@ -306,6 +310,26 @@ describe('getConfiguredBranchPrefix', () => {
 })
 
 describe('computeValidatedBranchName', () => {
+  it('rewrites a trailing .lock so git check-ref-format accepts the branch', () => {
+    const none = { branchPrefix: 'none' } as const
+    expect(computeValidatedBranchName(sanitizeWorktreeName('adopt mise.lock'), none, null)).toBe(
+      'adopt-mise-lock'
+    )
+    expect(computeValidatedBranchName(sanitizeWorktreeName('mise.lock!'), none, null)).toBe(
+      'mise-lock'
+    )
+    expect(computeValidatedBranchName('mise-.lock', none, null)).toBe('mise-lock')
+    expect(computeValidatedBranchName('mise.lock.json', none, null)).toBe('mise.lock.json')
+    expect(computeValidatedBranchName('mise.LOCK', none, null)).toBe('mise.LOCK')
+    expect(
+      computeValidatedBranchName(
+        'mise.lock',
+        { branchPrefix: 'custom', branchPrefixCustom: 'team' },
+        null
+      )
+    ).toBe('team/mise-lock')
+  })
+
   it('returns the computed branch name when the prefix is valid', () => {
     expect(
       computeValidatedBranchName(

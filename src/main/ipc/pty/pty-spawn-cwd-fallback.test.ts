@@ -1,3 +1,4 @@
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { describe, expect, it, vi } from 'vitest'
 import {
   statSyncMock,
@@ -6,12 +7,11 @@ import {
   existsSyncMock
 } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import { _setWslCachesForTests } from '../../wsl'
-import { acquireWatcherRemovalGate } from '../watcher-removal-gate'
+import { _setWslCachesForTests } from '../../wsl/discovery/distro-catalog'
+import { acquireWatcherRemovalGate } from '../../workspaces/removal/watcher-removal-gate'
 import { registerPtyHandlers } from './register-handlers'
 import { join } from 'node:path'
-import { getShellReadyWrapperRoot } from '../../providers/local-pty-shell-ready-wrapper-root'
+import { getShellReadyWrapperRoot } from '../../providers/local-pty/local-pty-shell-ready-wrapper-root'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -31,8 +31,10 @@ vi.mock('../../agent-hooks/server', () =>
 vi.mock('../../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
-vi.mock('../../wsl', async (importOriginal) =>
+vi.mock('../../pty/shell-startup/pwsh', () =>
+  import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
+)
+vi.mock('../../wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('node:fs/promises', async (importOriginal) =>
@@ -53,10 +55,10 @@ vi.mock('../../memory/pty-registry', () =>
 vi.mock('../../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
-vi.mock('../../codex/codex-pane-account-registry', () =>
+vi.mock('../../codex/configuration/homes/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
-vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
+vi.mock('../../codex/history/index/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 

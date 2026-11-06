@@ -22,7 +22,7 @@ import {
 } from '../terminal/terminal-webview-contract'
 import type { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
 import { clearTerminalLiveInputFocusTimer } from '../terminal/terminal-live-input'
-import { stripTerminalSelectionGutter } from '../../../src/shared/terminal-selection-gutter'
+import { stripTerminalSelectionGutter } from '../../../src/shared/terminal/output/terminal-selection-gutter'
 import { useTerminalCopyTrimsGutter } from '../terminal/terminal-copy-gutter-preference'
 import type { MobileSessionTerminalInputModel } from './use-mobile-session-terminal-input'
 

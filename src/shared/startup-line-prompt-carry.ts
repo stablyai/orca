@@ -3,9 +3,12 @@
  * startup-line-typed-length.live-shell.test.ts measures real shells through the ready barrier, including config beyond its 1.5s cap;
  * only zsh preserved multiline input in both timings, with short individual lines. Long zsh lines still failed. */
 
-import { TUI_AGENT_CONFIG } from './tui-agent-config'
-import { buildAgentStartupPlan, type AgentStartupPlan } from './tui-agent-startup'
-import type { TuiAgent } from './tui-agent'
+import { TUI_AGENT_CONFIG } from './agent-launch/catalog/tui-agent-config'
+import {
+  buildAgentStartupPlan,
+  type AgentStartupPlan
+} from './agent-launch/startup/tui-agent-startup'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 
 /** Half of macOS MAX_CANON: a single typed line this long survived every canonical-mode write
  *  measured, and 1 KiB did not. Also the cap on each line of a multi-line one. */

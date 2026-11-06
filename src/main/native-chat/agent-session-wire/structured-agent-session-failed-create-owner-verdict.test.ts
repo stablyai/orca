@@ -4,8 +4,8 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionAcquisitionRefusal,
@@ -21,10 +21,14 @@ import {
   hostTestAttachParams,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { claudeProfileSetupFailed } from '../../claude-accounts/claude-profile-launch-errors'
 
 const CALLER = { callerKey: 'client-1' }
 const EXIT_REASON = 'claude stream-json exited (code 1): stderr tail'
@@ -76,10 +80,28 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await host.flushAllStreamedEvents()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
 describe('failed create owner verdict', () => {
+  it('returns a typed preparation failure on its first response and replay, then permits recovery', async () => {
+    acquire.mockRejectedValueOnce(claudeProfileSetupFailed())
+    const params = hostTestAttachParams(null)
+    const first = await host.attach(CALLER, params)
+    expect(first).toMatchObject({
+      ok: false,
+      refusal: {
+        code: 'agent_session_operation_invalid',
+        details: { reason: 'claudeAccountSetupFailed', ownerVerdict: 'exited' },
+        ownerVerdict: 'exited'
+      }
+    })
+    await expect(host.attach(CALLER, params)).resolves.toEqual(first)
+    await expect(host.attach(CALLER, hostTestAttachParams(null))).resolves.toMatchObject({
+      ok: true
+    })
+  })
   it.each([
     // Cleanup proves absence, not why startup failed.
     ['a failure the cleanup proved gone', () => new Error(EXIT_REASON), {}, COULD_NOT_RESTART],

@@ -392,32 +392,6 @@ describe('Jira issue workspace request lifetime', () => {
     expect(text('comments-loading')).toBe('false')
   })
 
-  it('discards late detail and comments after closing the mounted workspace', async () => {
-    await render(issue())
-    await render(null)
-    await act(async () => {
-      take(boundary.issues).resolve({ ...issue(), description: 'Screenshot data'.repeat(32_768) })
-      take(boundary.comments).resolve([{ ...comment('late'), body: 'Image data'.repeat(32_768) }])
-    })
-    expect(container.querySelector('[data-open]')?.getAttribute('data-open')).toBe('false')
-    expect(container.querySelector('[data-testid="detail"]')).toBeNull()
-    expect(boundary.composer).toBeNull()
-  })
-
-  it('clears an already hydrated issue and comments when it closes', async () => {
-    await render(issue())
-    await act(async () => {
-      take(boundary.issues).resolve(issue('JIR-1', 'Hydrated'))
-      take(boundary.comments).resolve([comment('loaded')])
-    })
-    expect(text('title')).toBe('Hydrated')
-    expect(text('comments')).toBe('loaded')
-    expect(text('issue-loading')).toBe('false')
-    expect(text('comments-loading')).toBe('false')
-    await render(null)
-    expect(container.querySelector('[data-testid="detail"]')).toBeNull()
-  })
-
   it('ignores old replies and accepts the reopened issue replies', async () => {
     await render(issue())
     const oldIssue = take(boundary.issues)

@@ -62,7 +62,8 @@ export const FileOpenTab = FileOpenTarget.extend({
 })
 
 export const FileOpenDiff = FileOpenTarget.extend({
-  staged: z.boolean().optional()
+  staged: z.boolean().optional(),
+  oldPath: z.string().optional()
 })
 
 export const DocPreviewFileRead = FileOpen.extend({
@@ -92,7 +93,7 @@ export const ServerDirectoryBrowse = z.object({
     .pipe(z.string())
 })
 
-const FileChunkRange = {
+export const FileChunkRange = {
   offset: z.number().int().nonnegative(),
   length: z
     .number()

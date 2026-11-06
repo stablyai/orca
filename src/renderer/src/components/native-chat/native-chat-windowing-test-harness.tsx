@@ -1,7 +1,7 @@
 // happy-dom has no layout or observer delivery; these stubs activate real list windowing.
 import { fireEvent } from '@testing-library/react'
 import { vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { transcriptRowOffset, transcriptWindowHeight } from './native-chat-window-test-layout'

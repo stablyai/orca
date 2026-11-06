@@ -1,6 +1,6 @@
 import type { AgentModelCatalogLiveListing } from '../agent-model-catalog/agent-model-catalog-entry'
-import type { AgentSessionOptionsResult } from '../../../shared/agent-session-wire'
-import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session-provider-handle'
+import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 
 export type StructuredAgentSessionProviderOpenInput = {
   sessionId: string
@@ -10,6 +10,8 @@ export type StructuredAgentSessionProviderOpenInput = {
 }
 
 export type StructuredAgentSessionProviderOpenResult = {
+  /** Actual provider creation, independent of a head already committed by rewind. */
+  newConversation?: boolean
   link?: AgentSessionProviderHandleLink
   reportedOptions: AgentSessionOptionsResult['current']
   catalogListing?: AgentModelCatalogLiveListing

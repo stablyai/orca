@@ -1,12 +1,14 @@
 import {
   findCatalogModel,
   findCatalogOption,
-  getAgentSessionOptionCatalog,
-  type CatalogModel,
-  type CatalogOption
-} from './agent-session-option-catalog'
-import { isTuiAgent } from './tui-agent-config'
-import type { TuiAgent } from './tui-agent'
+  getAgentSessionOptionCatalog
+} from './agent-session/options/agent-session-option-catalog'
+import type {
+  CatalogModel,
+  CatalogOption
+} from './agent-session/options/agent-session-option-catalog-types'
+import { isTuiAgent } from './agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 
 export type OrchestrationWorkerModels = Partial<Record<TuiAgent, string>>
 export type OrchestrationWorkerEfforts = Partial<Record<TuiAgent, string>>

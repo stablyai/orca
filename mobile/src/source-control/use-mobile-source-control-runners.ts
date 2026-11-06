@@ -6,8 +6,8 @@ import { triggerError, triggerSuccess } from '../platform/haptics'
 import { useMobileCommitMessageGeneration } from './use-mobile-commit-message-generation'
 import { useMobileSourceControlCommitRunners } from './use-mobile-source-control-commit-runners'
 import { useMobileSourceControlActionSheetRunners } from './use-mobile-source-control-action-sheet-runners'
-import { useMobileCreatePrRunner } from './use-mobile-create-pr-runner'
 import { useMobileStageAllRunner } from './use-mobile-stage-all-runner'
+import { useMobileConflictRunners } from './use-mobile-conflict-runners'
 import type { RuntimeGitLocalBranches } from '../../../src/shared/runtime-types'
 import type { MobileGitStatusResult } from './mobile-git-status'
 import type { LoadStatusOptions } from './mobile-source-control-screen-state'
@@ -24,7 +24,6 @@ type Params = {
   hostId: string
   worktreeId: string
   status: MobileGitStatusResult | null
-  branchLabel: string
   commitMessage: string
   stagedEntries: MobileCommitFailureRecovery['stagedEntries']
   generatingMessage: boolean
@@ -44,10 +43,10 @@ type Params = {
   setShowActionSheet: (next: boolean) => void
   setLocalBranches: (next: RuntimeGitLocalBranches | null) => void
   setShowBranchPicker: (next: boolean) => void
-  setCreatedPrUrl: (next: string | null) => void
-  setCreatedPrWarning: (next: string | null) => void
   recordCommitFailure: RecordMobileCommitFailure
   onOpenHistory?: () => void
+  /** Every Create PR entry opens the one Create PR sheet. */
+  onCreatePr?: () => void
 }
 
 export function useMobileSourceControlRunners(params: Params) {
@@ -56,7 +55,6 @@ export function useMobileSourceControlRunners(params: Params) {
     hostId,
     worktreeId,
     status,
-    branchLabel,
     commitMessage,
     stagedEntries,
     generatingMessage,
@@ -76,10 +74,9 @@ export function useMobileSourceControlRunners(params: Params) {
     setShowActionSheet,
     setLocalBranches,
     setShowBranchPicker,
-    setCreatedPrUrl,
-    setCreatedPrWarning,
     recordCommitFailure,
-    onOpenHistory
+    onOpenHistory,
+    onCreatePr
   } = params
 
   const runGitWorkflow = useCallback(
@@ -205,24 +202,24 @@ export function useMobileSourceControlRunners(params: Params) {
     recordCommitFailure
   })
 
-  const createPr = useMobileCreatePrRunner({
-    client,
-    worktreeId,
-    status,
-    branchLabel,
-    commitMessage,
-    stagedEntries,
-    mountedRef,
-    runGitWorkflow,
-    loadStatus,
-    cancelGenerateCommitMessage,
-    setActionError,
-    setCommitMessage,
-    setShowActionSheet,
-    setCreatedPrUrl,
-    setCreatedPrWarning,
-    recordCommitFailure
-  })
+  // pushFirst is kept for the action sheet's two rows; the sheet pushes first whenever it has to.
+  const createPr = useCallback(
+    (_pushFirst: boolean) => {
+      setShowActionSheet(false)
+      if (!status?.branch) {
+        triggerError()
+        setActionError(
+          translate(
+            'sourceControl.useMobileCreatePrRunner.branchRequired',
+            'Check out a branch before creating a pull request.'
+          )
+        )
+        return
+      }
+      onCreatePr?.()
+    },
+    [onCreatePr, setActionError, setShowActionSheet, status?.branch]
+  )
 
   const openBranchPicker = useCallback(() => {
     setShowActionSheet(false)
@@ -289,17 +286,7 @@ export function useMobileSourceControlRunners(params: Params) {
     setShowActionSheet
   })
 
-  const abortConflictOperation = useCallback(
-    async (operation: string) => {
-      const method =
-        operation === 'merge' ? 'git.abortMerge' : operation === 'rebase' ? 'git.abortRebase' : null
-      if (!method) {
-        return
-      }
-      await runGitAction(`abort-${operation}`, method, {})
-    },
-    [runGitAction]
-  )
+  const conflictRunners = useMobileConflictRunners({ sendGitRequest, runGitAction, runGitWorkflow })
 
   return {
     runGitAction,
@@ -312,7 +299,7 @@ export function useMobileSourceControlRunners(params: Params) {
     openBranchPicker,
     openHistory,
     checkoutBranch,
-    abortConflictOperation,
+    ...conflictRunners,
     ...actionSheetRunners
   }
 }

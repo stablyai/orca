@@ -8,7 +8,7 @@ import {
   useSyncExternalStore
 } from 'react'
 import { mobileStructuredSessionStatusFeed } from '../session/mobile-structured-session-status-feed'
-import type { AgentSessionConversationNames } from '../../../src/shared/agent-session-conversation-names'
+import type { AgentSessionConversationNames } from '../../../src/shared/agent-session/agent-session-conversation-names'
 import { useForceReconnect } from '../transport/host-client-hooks'
 import { useWorkspaceClient } from '../transport/use-workspace-client'
 import type { RpcClient } from '../transport/rpc-client'
@@ -17,7 +17,7 @@ import type {
   AiVaultScanIssue,
   AiVaultScope,
   AiVaultSession
-} from '../../../src/shared/ai-vault-types'
+} from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
 import {
   deriveMobileAiVaultScopePaths,
@@ -201,7 +201,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
           client,
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reader checks both containers; the rows stay the host's own records because `agent` is a vocabulary this client echoes back on resume. aivault-history-screen-listed `normal` records a full row: every member the cards and the resume path read unguarded.
           sessions: result.sessions as AiVaultSession[],
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same reader, same container check; the issue rows are the host's AiVaultScanIssue and are only counted, never read member-wise (MobileAgentSessionHistoryPanel.tsx:335).
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same reader, same container check; the issue rows are the host's AiVaultScanIssue, classified by `kind` like desktop History (an unknown kind still reads as a notice).
           issues: result.issues as AiVaultScanIssue[]
         })
       } catch (err) {

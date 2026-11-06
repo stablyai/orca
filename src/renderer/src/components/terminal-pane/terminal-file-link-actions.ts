@@ -1,3 +1,4 @@
+import type { FileOpenFailure } from './terminal-file-open-failure'
 import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import { buildHttpLinkActions } from '@/lib/http-link-destinations'
@@ -6,8 +7,7 @@ import {
   mapTerminalFilePath,
   openDetectedFilePath,
   shouldOpenTerminalFileWithSystemDefault,
-  terminalLinkWslDistro,
-  type FileOpenFailure
+  terminalLinkWslDistro
 } from './terminal-file-open-routing'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
 import { isTerminalLinkDirectActivation } from './terminal-link-activation'
@@ -159,8 +159,8 @@ export function buildFileLinkActions(
     canOpenLinkInSourceGroup(useAppStore.getState(), deps.worktreeId, deps.sourceTabId)
       ? {
           label: translate(
-            'auto.components.terminal.pane.TerminalLinkActionPopover.openInThisGroup',
-            'Open in this group'
+            'auto.components.terminal.pane.TerminalLinkActionPopover.openInNewTab',
+            'Open in new tab'
           ),
           run: () =>
             openDetectedFilePath(filePath, line, column, {

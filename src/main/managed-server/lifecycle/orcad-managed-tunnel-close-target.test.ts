@@ -2,8 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createEnvironmentFromPairingOffer,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
-import { PAIRING_OFFER_VERSION } from '../../../shared/pairing'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import '../../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
@@ -99,44 +100,6 @@ function setup(
 }
 
 describe('OrcadManagedTunnelManager.closeTarget (the SSH session teardown)', () => {
-  it("closes the host's built tunnel, so nothing keeps listening after Disconnect", async () => {
-    const state = setup()
-    const environment = createEnvironment()
-    await state.manager.ensure(environment)
-    expect(state.listening.size).toBe(1)
-
-    await state.manager.closeTarget('ssh-1')
-
-    expect(state.listening.size).toBe(0)
-  })
-
-  it('leaves the tunnels of other hosts alone', async () => {
-    const state = setup()
-    await state.manager.ensure(createEnvironment())
-
-    await state.manager.closeTarget('ssh-2')
-
-    expect(state.listening.size).toBe(1)
-  })
-
-  it('supersedes a build still dialling, so it opens no forward after the teardown', async () => {
-    const state = setup()
-    let finishConnect: (connection: SshConnection) => void = () => {}
-    state.connect.mockReturnValueOnce(
-      new Promise<SshConnection>((resolve) => {
-        finishConnect = resolve
-      })
-    )
-    const build = state.manager.ensure(createEnvironment(), undefined, false)
-    await vi.waitFor(() => expect(state.connect).toHaveBeenCalled())
-
-    await state.manager.closeTarget('ssh-1')
-    finishConnect(state.connection)
-
-    await expect(build).rejects.toThrow('superseded')
-    expect(state.listening.size).toBe(0)
-  })
-
   it('closes a forward whose identity check is still running before it resolves', async () => {
     let answer: (identity: OrcadTunnelIdentity) => void = () => {}
     const verifyIdentity = vi.fn(

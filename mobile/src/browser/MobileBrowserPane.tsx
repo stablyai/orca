@@ -1,7 +1,7 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: mobile browser state mirrors a remote desktop screencast session and CDP dialogs, which are external systems that cannot be derived during render. */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AppState, type View } from 'react-native'
-import type { BrowserLoadError } from '../../../src/shared/browser-workspace-types'
+import type { MobileBrowserTab } from '../session/mobile-session-route-types'
 import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { RpcClient } from '../transport/rpc-client'
@@ -33,19 +33,7 @@ import { useMobileBrowserInteractions } from './use-mobile-browser-interactions'
 import { useMobileBrowserStream } from './use-mobile-browser-stream'
 import { useBrowserBinaryScreencastGrant } from './use-browser-binary-screencast-grant'
 
-export type MobileBrowserTab = {
-  type: 'browser'
-  id: string
-  title: string
-  browserWorkspaceId: string
-  browserPageId: string | null
-  url: string
-  loading: boolean
-  loadError?: BrowserLoadError | null
-  canGoBack: boolean
-  canGoForward: boolean
-  isActive: boolean
-}
+export type { MobileBrowserTab } from '../session/mobile-session-route-types'
 
 type MobileBrowserPaneProps = {
   client: RpcClient | null

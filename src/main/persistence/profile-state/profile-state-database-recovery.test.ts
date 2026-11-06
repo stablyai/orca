@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import Database from '../../sqlite/sync-database'
-import * as durableFileWrite from '../../durable-file-write'
+import * as durableFileWrite from '../../filesystem/durable-file-write'
 import {
   openProfileStateDatabase,
   openProfileStateDatabaseReadOnly

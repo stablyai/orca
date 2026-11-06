@@ -1,5 +1,7 @@
 import { z } from 'zod'
-import { isTuiAgent } from '../tui-agent-config'
+import { ChoicePatch, OptionKey } from './agent-launch-settings-params'
+import { AGENT_PERMISSION_CHOICES } from '../agent-launch/permissions/tui-agent-permission-choice'
+import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import {
   OptionalBoolean,
   OptionalPlainString,
@@ -184,6 +186,68 @@ export const AutomationRuns = z.object({
 // Why strict: null or a non-string must fail rather than fall back to "omitted", which preserves.
 const ExtraAgentArgs = z.string({ message: 'Extra agent arguments must be text.' }).optional()
 
+export const AutomationCanonicalLaunchSetup = z.strictObject({
+  surface: z.enum(['chat', 'terminal']).optional(),
+  extraAgentArgs: z.string().optional(),
+  launchPreferences: ChoicePatch.extend({
+    permissionMode: z.enum(AGENT_PERMISSION_CHOICES).optional()
+  }).optional(),
+  agentArgs: z
+    .string()
+    .refine((value) => !value.includes('\0'))
+    .nullable()
+    .optional()
+})
+
+export const AutomationLaunchSetupPatch = z
+  .strictObject({
+    surface: z.enum(['chat', 'terminal']).optional(),
+    choices: ChoicePatch.optional(),
+    arguments: z
+      .discriminatedUnion('kind', [
+        z.strictObject({ kind: z.literal('legacy-extras'), value: z.string() }),
+        z.strictObject({
+          kind: z.literal('value'),
+          value: z.string().refine((value) => !value.includes('\0'))
+        }),
+        z.strictObject({ kind: z.literal('empty') }),
+        z.strictObject({ kind: z.literal('inherit') })
+      ])
+      .optional(),
+    sources: z
+      .strictObject({
+        arguments: z
+          .discriminatedUnion('kind', [
+            z.strictObject({
+              kind: z.literal('value'),
+              value: z.string().refine((value) => !value.includes('\0'))
+            }),
+            z.strictObject({ kind: z.literal('empty') }),
+            z.strictObject({ kind: z.literal('inherit') })
+          ])
+          .optional(),
+        legacyArguments: z.string().optional(),
+        extraAgentArgs: z.string().optional(),
+        retiredChoices: z
+          .array(
+            z
+              .string()
+              .refine(
+                (key) =>
+                  key === 'model' ||
+                  key === 'permissionMode' ||
+                  (key.startsWith('options.') && OptionKey.safeParse(key.slice(8)).success)
+              )
+          )
+          .optional()
+      })
+      .optional(),
+    copy: AutomationCanonicalLaunchSetup.optional()
+  })
+  .refine((patch) => Object.values(patch).some((value) => value !== undefined), {
+    message: 'Choose an automation launch change.'
+  })
+
 export const AutomationCreate = z.object({
   creationKey: OptionalString,
   name: requiredString('Missing automation name'),
@@ -191,6 +255,7 @@ export const AutomationCreate = z.object({
   precheck: AutomationPrecheck,
   agentId: TuiAgent,
   extraAgentArgs: ExtraAgentArgs,
+  launchSetupPatch: AutomationLaunchSetupPatch.optional(),
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,
@@ -213,6 +278,7 @@ export const AutomationUpdateFields = z.object({
   precheck: AutomationPrecheck,
   agentId: TuiAgent.optional(),
   extraAgentArgs: ExtraAgentArgs,
+  launchSetupPatch: AutomationLaunchSetupPatch.optional(),
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,
@@ -233,5 +299,7 @@ export const AutomationUpdate = z.object({
   id: requiredString('Missing automation id'),
   updates: AutomationUpdateFields,
   expectedOwner: ExpectedOwner,
-  destination: Destination
+  destination: Destination,
+  // An edit relying on the current new-per-run mode is refused if the stored mode changed first.
+  expectedWorkspaceMode: z.literal('new_per_run').optional()
 })

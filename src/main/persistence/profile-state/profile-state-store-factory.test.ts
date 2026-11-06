@@ -239,43 +239,35 @@ describe('profile state Store authority factory', () => {
   it.each([
     [
       { experimentalNativeChat: true, openAgentTabsInChatByDefault: true },
-      false,
-      'standard',
+      'eligible',
       'chat-ui-on'
     ],
     [
       { experimentalNativeChat: true, openAgentTabsInChatByDefault: false },
-      true,
-      'keep-terminal',
-      'chat-ui-on-terminal-default'
-    ],
-    [
-      { experimentalNativeChat: false, openAgentTabsInChatByDefault: false },
-      true,
-      'none',
+      'eligible',
       'chat-ui-off'
-    ]
+    ],
+    [{ experimentalNativeChat: false }, 'eligible', 'chat-ui-off']
   ])(
-    'decides the native chat upgrade tip audience once from the startup snapshot (%o)',
-    (settings, laterChatUi, variant, basis) => {
+    'decides the Chat UI launch tip audience once from the startup snapshot (%o)',
+    (settings, membership, basis) => {
       const options = createOptions()
       writeFileSync(options.dataFile, JSON.stringify({ settings }))
       const first = createProfileStateStore({ ...options })
-      expect(first.store.getNativeChatUpgradeTipVariant()).toBe(variant)
 
-      // Later Chat UI changes must not alter the profile's upgrade-tip audience.
-      first.store.updateSettings({ experimentalNativeChat: laterChatUi })
+      // Later choices must not alter the recorded audience.
+      first.store.updateSettings({ nativeChatProviders: { claude: basis === 'chat-ui-off' } })
       first.store.flushOrThrow()
       rmSync(options.dataFile)
       const restarted = createProfileStateStore({ ...options })
 
-      expect(restarted.store.getNativeChatUpgradeTipVariant()).toBe(variant)
-      expect(JSON.parse(restarted.store.prepareProfileStateExport().json)).toMatchObject({
-        nativeChatUpgradeTipAudience: {
-          membership: variant === 'none' ? 'excluded' : 'eligible',
-          basis
-        }
-      })
+      const saved = JSON.parse(restarted.store.prepareProfileStateExport().json)
+      expect(saved).toMatchObject({ chatUiLaunchTipAudience: { version: 1, membership, basis } })
+      expect(saved.settings).toHaveProperty(
+        'experimentalNativeChat',
+        settings.experimentalNativeChat
+      )
+      expect(restarted.store.getSettings()).not.toHaveProperty('experimentalNativeChat')
     }
   )
 

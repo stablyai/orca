@@ -199,7 +199,12 @@ describe('background workspace watch trim', () => {
       tab('wt-wsl')
     ]
     const state = makeState({
-      worktrees: [...worktrees, sshWorktree, wslWorktree],
+      worktrees: [
+        ...worktrees.filter((row) => row.id !== 'wt1'),
+        makeWorktree({ id: 'wt1', repoId: 'r', path: '/r/wt1', hostId: 'runtime:env-1' }),
+        sshWorktree,
+        wslWorktree
+      ],
       repos: [repo('r'), sshRepo],
       openFiles,
       activeWorktreeId: 'wt0'

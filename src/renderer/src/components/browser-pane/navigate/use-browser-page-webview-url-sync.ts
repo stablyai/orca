@@ -5,7 +5,7 @@ import {
   redactKagiSessionToken
 } from '../../../../../shared/browser-url'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
-import { normalizeBrowserGuestSrc } from '../../../../../shared/browser-extension-url'
+import { normalizeBrowserGuestSrc } from '../../../../../shared/browser/extensions/browser-extension-url'
 import {
   applyBrowserPageViewportLayout,
   syncBrowserPageChromeInset

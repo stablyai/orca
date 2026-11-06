@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { View, Text, ScrollView, Pressable } from 'react-native'
+import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native'
 import { File, FileText, Globe, Plus, SquareTerminal } from 'lucide-react-native'
 import { triggerMediumImpact } from '../platform/haptics'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -12,10 +12,9 @@ import {
   getMobileSessionTabTitle,
   resolveMobileTerminalTabAgentId
 } from './mobile-terminal-tab-agent'
-import { colors } from '../theme/mobile-theme'
+import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { MobileSessionHeaderIconButton } from './MobileSessionHeaderIconButton'
-import { QuickCommandsTabButton } from './QuickCommandsTabButton'
+import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import {
   resolveTabStripEdgeHint,
   resolveTabStripHiddenTabs,
@@ -30,15 +29,16 @@ const DOUBLE_TAP_RENAME_MS = 300
 
 export function MobileSessionTabStrip({
   controller,
-  inTopBar
+  inTopBar,
+  actionsCollapsed = false
 }: {
   controller: MobileSessionController
   inTopBar: boolean
+  actionsCollapsed?: boolean
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const {
-    connState,
     activeSessionTabId,
     activeSessionTabIdRef,
     tabStripRef,
@@ -46,14 +46,9 @@ export function MobileSessionTabStrip({
     tabStripViewportWidthRef,
     tabStripContentWidthRef,
     tabLayoutsRef,
-    creating,
-    creatingBrowser,
-    creatingMarkdown,
-    setCreateError,
-    setShowCreateTabDrawer,
-    setShowQuickCommands,
-    quickCommandsSupported,
-    showToast,
+    connState,
+    createTabBusy,
+    handleOpenNewTab,
     scrollActiveTabIntoView,
     holdTabStripReveal,
     cancelHeldTabStripReveal,
@@ -198,10 +193,11 @@ export function MobileSessionTabStrip({
             return (
               <Pressable
                 key={tab.id}
-                style={[
+                style={({ pressed }) => [
                   styles.tab,
                   index === 0 && !inTopBar && styles.tabFirst,
-                  tab.id === activeSessionTabId && styles.tabActive
+                  tab.id === activeSessionTabId && styles.tabActive,
+                  pressed && styles.tabPressed
                 ]}
                 onLayout={(e) => {
                   const { x, width } = e.nativeEvent.layout
@@ -279,38 +275,25 @@ export function MobileSessionTabStrip({
           </View>
         ) : null}
       </View>
-      {/* Why: pinned outside the scroll strip so the new-agent button stays reachable however far the tabs scroll. */}
-      <MobileSessionHeaderIconButton
-        disabled={creating || creatingBrowser || creatingMarkdown || connState !== 'connected'}
-        onPress={() => {
-          setCreateError('')
-          setShowCreateTabDrawer(true)
-        }}
-        accessibilityLabel={t('session.tabStrip.newTab', 'New tab')}
-        icon={Plus}
-      />
-      {/* Why: stable placement matters, while old hosts must stay gated because they strip agentPrompt. */}
-      <QuickCommandsTabButton
-        disabled={creating || creatingBrowser || creatingMarkdown || connState !== 'connected'}
-        onPress={() => {
-          if (quickCommandsSupported === true) {
-            setShowQuickCommands(true)
-            return
-          }
-          showToast(
-            quickCommandsSupported === false
-              ? t(
-                  'session.tabStrip.quickCommandsUpdateRequired',
-                  'Desktop update required for quick commands'
-                )
-              : t(
-                  'session.tabStrip.checkingCapabilities',
-                  'Checking desktop capabilities — try again in a moment'
-                ),
-            1600
-          )
-        }}
-      />
+      {/* Terminal layout and Quick commands live in the header's ⋯ menu. */}
+      {!actionsCollapsed ? (
+        <View style={newTabStyles.slot}>
+          <NavBarButton
+            disabled={createTabBusy || connState !== 'connected'}
+            onPress={handleOpenNewTab}
+            accessibilityLabel={t('session.tabStrip.newTab', 'New tab')}
+            icon={Plus}
+          />
+        </View>
+      ) : null}
     </View>
   )
 }
+
+// The right inset matches the nav bar's, so the + lines up with the ⋯ above it.
+const newTabStyles = StyleSheet.create({
+  slot: {
+    paddingLeft: spacing.sm,
+    paddingRight: spacing.md
+  }
+})

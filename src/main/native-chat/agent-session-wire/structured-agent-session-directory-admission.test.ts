@@ -13,8 +13,8 @@ import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD
 } from './structured-agent-session-host-test-data'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { attachFingerprintFields } from './structured-agent-session-attach'
 import { StructuredAgentSessionTaskQueue } from './structured-agent-session-task-queue'
 import {

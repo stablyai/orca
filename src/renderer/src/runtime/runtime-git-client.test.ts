@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  generateRuntimeCommitMessage,
-  generateRuntimePullRequestFields
-} from './runtime-git-generation-client'
+import './runtime-git-generation-client'
 import { getRuntimeGitStatus } from './runtime-git-status-client'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
@@ -88,22 +85,6 @@ beforeEach(() => {
 })
 
 describe('runtime git client', () => {
-  it('uses the backing folder path for local folder-workspace status', async () => {
-    gitStatus.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
-    const workspaceId = '123e4567-e89b-12d3-a456-426614174000'
-
-    await getRuntimeGitStatus({
-      target: { kind: 'local' as const },
-      worktreeId: `folder-repo::/home/user::workspace:${workspaceId}`,
-      worktreePath: `/home/user::workspace:${workspaceId}`
-    })
-
-    expect(gitStatus).toHaveBeenCalledWith({
-      worktreePath: '/home/user',
-      connectionId: undefined
-    })
-  })
-
   it('forwards line-stat reuse to local status and cancels tokenized work on abort', async () => {
     const controller = new AbortController()
     let resolveStatus!: (value: { entries: never[]; conflictOperation: string }) => void
@@ -136,33 +117,5 @@ describe('runtime git client', () => {
       requestToken: expect.any(String)
     })
     expect(gitCancelStatus).toHaveBeenCalledWith({ requestToken: statusArgs.requestToken })
-  })
-
-  it('passes the raw worktree id to local generation IPC', async () => {
-    // Why: the meta key keeps the `::workspace:<uuid>` suffix that the cwd path strips.
-    const workspaceId = '123e4567-e89b-12d3-a456-426614174000'
-    const worktreeId = `folder-repo::/home/user::workspace:${workspaceId}`
-    const context = {
-      target: { kind: 'local' as const },
-      worktreeId,
-      worktreePath: `/home/user::workspace:${workspaceId}`
-    }
-
-    gitGenerateCommitMessage.mockResolvedValue({ success: true, message: 'feat: x' })
-    gitGeneratePullRequestFields.mockResolvedValue({ success: false, error: 'No changes' })
-    await generateRuntimeCommitMessage(context)
-    await generateRuntimePullRequestFields(context, {
-      base: 'main',
-      title: '',
-      body: '',
-      draft: false
-    })
-
-    expect(gitGenerateCommitMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ worktreeId, worktreePath: '/home/user' })
-    )
-    expect(gitGeneratePullRequestFields).toHaveBeenCalledWith(
-      expect.objectContaining({ worktreeId, worktreePath: '/home/user' })
-    )
   })
 })

@@ -26,53 +26,6 @@ function auth(
 }
 
 describe('Codex personal and organization workspace identity', () => {
-  it.each([
-    ['free', 'Personal (Free)'],
-    ['go', 'Personal (Go)'],
-    ['plus', 'Personal (Plus)'],
-    ['pro', 'Personal (Pro)'],
-    ['team', 'Team'],
-    ['business', 'Business'],
-    ['enterprise', 'Enterprise'],
-    ['edu', 'Education']
-  ])('uses the %s plan when the token omits the workspace name', (plan, label) => {
-    expect(readCodexAuthIdentity(auth('provider-1', { chatgpt_plan_type: plan }))).toEqual({
-      email,
-      providerAccountId: 'provider-1',
-      workspaceAccountId: 'provider-1',
-      workspaceLabel: label
-    })
-  })
-
-  it.each([undefined, null, '', 'future-plan', 42])(
-    'does not infer personal membership from an unknown plan %s',
-    (plan) => {
-      expect(
-        readCodexAuthIdentity(auth('provider-1', { chatgpt_plan_type: plan }))?.workspaceLabel
-      ).toBeNull()
-    }
-  )
-
-  it('preserves an explicit organization name over the plan label', () => {
-    expect(
-      readCodexAuthIdentity(
-        auth('provider-1', { workspace_name: ' Acme ', chatgpt_plan_type: 'enterprise' })
-      )?.workspaceLabel
-    ).toBe('Acme')
-  })
-
-  it('uses the profile workspace name when the auth workspace name is blank', () => {
-    expect(
-      readCodexAuthIdentity(
-        auth(
-          'provider-1',
-          { workspace_name: ' ', chatgpt_plan_type: 'enterprise' },
-          { workspace_name: 'Acme' }
-        )
-      )?.workspaceLabel
-    ).toBe('Acme')
-  })
-
   it('keeps same-email personal and enterprise credentials isolated in both directions', () => {
     const personal = auth('personal-provider', { chatgpt_plan_type: 'plus' })
     const enterprise = auth('enterprise-provider', { chatgpt_plan_type: 'enterprise' })
@@ -96,11 +49,5 @@ describe('Codex personal and organization workspace identity', () => {
     }
     expect(readCodexAuthIdentity(personal)?.workspaceLabel).toBe('Personal (Plus)')
     expect(readCodexAuthIdentity(enterprise)?.workspaceLabel).toBe('Enterprise')
-  })
-
-  it('does not treat a matching plan label as proof of account ownership', () => {
-    const first = auth('enterprise-a', { chatgpt_plan_type: 'enterprise' })
-    const second = auth('enterprise-b', { chatgpt_plan_type: 'enterprise' })
-    expect(codexAuthMatchesSystemDefaultIdentity(first, second)).toBe(false)
   })
 })

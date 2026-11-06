@@ -1,14 +1,14 @@
-import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
-import type { TerminalAgent } from '../../shared/terminal-agent'
-import { withTimeoutResult } from './runtime-async-boundaries'
-import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from './orca-runtime-core'
+import { recognizeAgentProcess } from '../../shared/agent-status/process/agent-process-recognition'
+import type { TerminalAgent } from '../../shared/agent-status/identity/terminal-agent'
+import { withTimeoutResult } from '../../shared/promise-timeout-fallback'
+import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from './terminal/wait/terminal-interactive-probe-budget'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type {
   PtyForegroundAgentRefresh,
   PtyForegroundProcessRead,
   PtyForegroundProcessReadEntry
-} from './runtime-terminal-contracts'
-import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+} from './terminal/lifecycle/pty-foreground-observation-state'
+import type { RuntimePtyWorktreeRecord } from './terminal/records/runtime-terminal-state-records'
 
 type Dependencies = {
   getController(): RuntimePtyController | null
@@ -119,7 +119,7 @@ export class RuntimePtyForegroundAgent {
     }
     let pending = this.identifies.get(ptyId)
     if (!pending) {
-      pending = this.identify(ptyId).finally(() => this.identifies.delete(ptyId))
+      pending = this.identifyForeground(ptyId).finally(() => this.identifies.delete(ptyId))
       this.identifies.set(ptyId, pending)
     }
     return withTimeoutResult(pending, TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS).then((result) =>
@@ -174,10 +174,11 @@ export class RuntimePtyForegroundAgent {
     return true
   }
 
-  private async identify(ptyId: string): Promise<TerminalAgent | null> {
+  /** The agent now in the PTY's foreground, whoever launched it. */
+  async identifyForeground(ptyId: string): Promise<TerminalAgent | null> {
     const controller = this.deps.getController()
     const pty = this.deps.getPty(ptyId)
-    if (!controller || !pty?.connected || pty.launchAgent) {
+    if (!controller || !pty?.connected) {
       return null
     }
     const result = await this.read(ptyId)

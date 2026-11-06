@@ -6,7 +6,7 @@ import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
-import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
+import type { MobileWebBundleManifestRead } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import { createGenerationStore } from './generation-store'
 import { createFakeGenerationFileSystem } from './generation-file-system-fake'
 import { deriveHostCacheKey } from './host-cache-key'

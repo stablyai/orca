@@ -5,7 +5,7 @@ import {
 } from './queued-message-update'
 import type { QueuedMessageRow } from './queued-message-table'
 import type { QueuedEditHostFixtureModule } from '../../../shared/queued-edit-host.test-fixture'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 
 /** Real CAS/lease decisions; delivery of their answers is controlled by the client harness. */
 export const queuedEditHost: QueuedEditHostFixtureModule['queuedEditHost'] = (

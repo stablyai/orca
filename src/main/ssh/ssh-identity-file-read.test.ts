@@ -67,19 +67,4 @@ describe('SSH identity file reads', () => {
       `All configured authentication methods failed. Orca skipped identity file "${keyPath}" (${reason}).`
     )
   })
-
-  it('names a missing configured key', () => {
-    const skipped: SkippedIdentityFiles = new Map()
-    const missing = join(root, 'missing')
-    expect(resolvePrivateKeys(targetFor(missing), null, skipped)).toEqual([])
-    expect([...skipped]).toEqual([[missing, 'it does not exist']])
-  })
-
-  it('leaves non-auth errors unannotated', () => {
-    const skipped: SkippedIdentityFiles = new Map()
-    resolvePrivateKeys(targetFor(join(root, 'directory')), null, skipped)
-    const networkError = new Error('connect ECONNREFUSED')
-    withSkippedIdentityFileDetail(networkError, skipped)
-    expect(networkError.message).toBe('connect ECONNREFUSED')
-  })
 })

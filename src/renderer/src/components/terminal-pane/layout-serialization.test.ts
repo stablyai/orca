@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeAll, vi } from 'vitest'
 import { Terminal } from '@xterm/headless'
-import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 class MockHTMLElement {
   classList: { contains: (cls: string) => boolean }
@@ -37,7 +37,7 @@ import {
   replayPayloadEndsWithCursorHidden,
   RESET_GRAPHIC_RENDITION,
   RESET_TERMINAL_CURSOR_STYLE
-} from '../../../../shared/terminal-mode-reset-profiles'
+} from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import {
   restoreScrollbackBuffers,
   serializePaneTree,

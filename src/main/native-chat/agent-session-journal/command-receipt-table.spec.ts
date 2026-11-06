@@ -17,7 +17,7 @@ import {
   commandReceiptFixture,
   writeCommandReceiptTestRecord
 } from './command-receipt-test-support'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 
 export function registerCommandReceiptTableTests(): void {
   let root: string
@@ -31,7 +31,7 @@ export function registerCommandReceiptTableTests(): void {
   })
 
   afterEach(async () => {
-    closeTestJournalHostDatabases()
+    await closeTestJournalHostDatabases()
     await rm(root, { recursive: true, force: true })
   })
 

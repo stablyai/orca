@@ -7,6 +7,7 @@ import type {
   PluginMarketplaceGitSource
 } from '../../../shared/plugins/catalog/plugin-marketplace'
 import { OFFICIAL_MARKETPLACE_GIT_SOURCE } from '../../../shared/plugins/catalog/plugin-marketplace'
+import { COMMUNITY_MARKETPLACE_GIT_SOURCE } from '../../../shared/plugins/catalog/plugin-install-link'
 import type { PluginMarketplaceFetchResult } from './plugin-marketplace-fetch'
 import { PluginMarketplaceService } from './plugin-marketplace-service'
 import {
@@ -331,6 +332,59 @@ describe('PluginMarketplaceService', () => {
     const sources = await service.listSources()
     expect(sources).toHaveLength(PLUGIN_MARKETPLACE_SOURCE_LIMIT)
     expect(sources).toContainEqual(expect.objectContaining({ official: true }))
+  })
+
+  const communityMarketplace = (): PluginMarketplace => ({
+    ...marketplace('Orca Community Plugins', 'acme.dusk', 'https://github.com/acme/dusk.git'),
+    owner: 'stablyai'
+  })
+
+  it('adds the community catalog once, as a non-official source, and keeps a removal', async () => {
+    const root = await tempRoot()
+    const fetcher = vi.fn(async () => fetched(communityMarketplace()))
+    const service = new PluginMarketplaceService({ pluginsDataDir: root, fetcher })
+
+    await service.seedCommunitySource()
+    const [community] = await service.listSources()
+    expect(community).toMatchObject({ source: COMMUNITY_MARKETPLACE_GIT_SOURCE, official: false })
+    await expect(service.listPlugins()).resolves.toEqual([
+      expect.objectContaining({ pluginKey: 'acme.dusk', official: false })
+    ])
+
+    await service.removeSource(community!.id)
+    const restarted = new PluginMarketplaceService({ pluginsDataDir: root, fetcher })
+    await restarted.seedCommunitySource()
+    await expect(restarted.listSources()).resolves.toEqual([])
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not add the community catalog twice when the user already added it', async () => {
+    const root = await tempRoot()
+    const fetcher = vi.fn(async () => fetched(communityMarketplace()))
+    const service = new PluginMarketplaceService({ pluginsDataDir: root, fetcher })
+    await service.addSource(source('https://github.com/StablyAI/orca-community-plugins'))
+
+    await service.seedCommunitySource()
+
+    await expect(service.listSources()).resolves.toHaveLength(1)
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries an offline community seed only after a pause, and lists without it meanwhile', async () => {
+    const root = await tempRoot()
+    const fetcher = vi.fn(async (): Promise<PluginMarketplaceFetchResult> => {
+      throw new Error('offline')
+    })
+    const service = new PluginMarketplaceService({ pluginsDataDir: root, fetcher })
+
+    await expect(service.seedCommunitySource(1_000)).rejects.toThrow('offline')
+    await expect(service.seedCommunitySource(2_000)).resolves.toBeUndefined()
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    await expect(service.listSources()).resolves.toEqual([])
+
+    fetcher.mockResolvedValueOnce(fetched(communityMarketplace()))
+    await service.seedCommunitySource(1_000 + 10 * 60 * 1000)
+    await expect(service.listSources()).resolves.toHaveLength(1)
   })
 
   it('removes source metadata and browse listings together', async () => {

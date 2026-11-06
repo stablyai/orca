@@ -1,10 +1,10 @@
 import { vi } from 'vitest'
 import * as cut from '../../shared/native-chat/native-chat-orca-stop-cut'
-import * as commands from '../../shared/structured-agent-session-command-entry'
+import * as commands from '../../shared/agent-session/structured-agent-session-command-entry'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 
 /** Count only the original status reader, after production context selection. */
 export function countStatusCutWork() {

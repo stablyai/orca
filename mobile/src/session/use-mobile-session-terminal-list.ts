@@ -4,8 +4,7 @@ import type { Terminal } from './mobile-session-route-types'
 import { mergeTerminalListWithKnownRecords, terminalRecordsEqual } from './mobile-terminal-records'
 import {
   createTerminalPrunePredicate,
-  pruneTerminalHandleMap,
-  resolveRetainedTerminalHandles
+  pruneTerminalHandleMap
 } from './mobile-terminal-prune-decision'
 import type { MobileSessionTerminalStreamDisplayModel } from './use-mobile-session-terminal-stream-display'
 import { MobileTerminalInventoryRequest } from './mobile-terminal-inventory-request'
@@ -19,9 +18,6 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
     setTerminals,
     terminalsRef,
     sessionTabsRef,
-    pruneTerminalHandlesFromLiveInput,
-    defaultTerminalHandlesToLiveInput,
-    clearTerminalLiveInputDefault,
     setTerminalKeyboardMetrics,
     setTerminalModes,
     ptyModesRef,
@@ -35,8 +31,7 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
     activeHandleRef,
     showNativeChatRef,
     unsubscribeTerminal,
-    nativeChatStream,
-    bufferedTerminalDraftState
+    nativeChatStream
   } = scope
   const lastKnownTerminalCountRef = useRef(0)
   const terminalInventoryRequest = useMemo(
@@ -62,7 +57,8 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
             const response = sessionTerminalListRead.interpret(
               await sessionTerminalListRead.request(client, {
                 worktree: `id:${worktreeId}`,
-                includeVisualLayouts: false
+                includeVisualLayouts: false,
+                includePreview: false
               })
             )
             if (!isCurrent() || !response.accepted) {
@@ -85,11 +81,6 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
               showNativeChat: showNativeChatRef.current,
               activeHandle: activeHandleRef.current
             }
-            // Sweep preferences against retained subscriptions, not transient list omissions, so chat leases keep their live-input opt-out.
-            const retainedHandles = resolveRetainedTerminalHandles(pruneContext)
-            pruneTerminalHandlesFromLiveInput(retainedHandles)
-            bufferedTerminalDraftState.pruneDrafts(retainedHandles)
-            defaultTerminalHandlesToLiveInput([...liveHandles])
             const shouldPrune = createTerminalPrunePredicate(pruneContext)
             for (const handle of Array.from(terminalUnsubsRef.current.keys())) {
               if (!shouldPrune(handle)) {
@@ -98,7 +89,6 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
               unsubscribeTerminal(handle)
               terminalRefs.current.delete(handle)
               viewportResubscribeBudgetRef.current.forget(handle)
-              clearTerminalLiveInputDefault(handle)
             }
             for (const cache of [
               ptyModesRef.current,
@@ -155,17 +145,7 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
         opts.onPhysicalRequestStarted
       )
     },
-    [
-      client,
-      worktreeId,
-      clearTerminalLiveInputDefault,
-      defaultTerminalHandlesToLiveInput,
-      nativeChatStream,
-      bufferedTerminalDraftState.pruneDrafts,
-      pruneTerminalHandlesFromLiveInput,
-      terminalInventoryRequest,
-      unsubscribeTerminal
-    ]
+    [client, worktreeId, nativeChatStream, terminalInventoryRequest, unsubscribeTerminal]
   )
   return {
     lastKnownTerminalCountRef,

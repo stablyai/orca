@@ -5,25 +5,26 @@ import { deriveGlobalWindowsRuntimeDefaultFromLegacySettings } from '../../../sh
 import { normalizeTaskProviderSettings } from '../../../shared/task-providers'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../shared/auto-rename-branch-from-work-settings'
 import { normalizePluginSystemEnabledDefaultOn } from '../../../shared/plugins/plugin-system-settings'
+import { migrateNestedWorkerMaxDepthDefault } from '../../../shared/nested-worker-depth'
 import {
   addMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddresses
-} from '../../../shared/mobile-pairing-custom-address'
-import { normalizeSourceControlGroupOrder } from '../../../shared/source-control-group-order'
+} from '../../../shared/remote-runtime/pairing/mobile-pairing-custom-address'
+import { normalizeSourceControlGroupOrder } from '../../../shared/source-control/listing/source-control-group-order'
 import { normalizeProjectGroups } from '../../../shared/project-groups'
-import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
-import { hasUnsupportedTuiAgentArgs } from '../../../shared/tui-agent-launch-defaults'
+import { normalizeDisabledTuiAgents } from '../../../shared/agent-launch/catalog/tui-agent-selection'
+import { hasUnsupportedTuiAgentArgs } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import {
   prepareLoadedOrchestrationWorkerPreferences,
   type LoadedOrchestrationWorkerPreferences
 } from './loaded-orchestration-worker-preferences'
-import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
-import { normalizeTerminalLineHeight } from '../../../shared/terminal-line-height-settings'
+import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal/appearance/terminal-cursor-style-settings'
+import { normalizeTerminalLineHeight } from '../../../shared/terminal/appearance/terminal-line-height-settings'
 import { migratePortugueseUiLanguageOnLoad } from '../../../shared/portuguese-ui-language-migration'
 import { migrateAgentYoloDefaults } from '../applying-settings/terminal-settings-migrations'
-import { hasTypedAgentPermission } from '../../../shared/tui-agent-permission-choice'
-import { migrateAgentPermissionChoice } from '../../../shared/tui-agent-permission-lift'
+import { hasTypedAgentPermission } from '../../../shared/agent-launch/permissions/tui-agent-permission-choice'
+import { migrateAgentPermissionChoice } from '../../../shared/agent-launch/permissions/tui-agent-permission-lift'
 import {
   normalizeLoadedOnboardingState,
   normalizeNotificationSettings,
@@ -41,6 +42,7 @@ export type PreparedLoadedProfileSettings = LoadedOrchestrationWorkerPreferences
     'autoRenameBranchFromWork' | 'autoRenameBranchFromWorkDefaultedOn'
   >
   migratedPluginSystemEnabled: ReturnType<typeof normalizePluginSystemEnabledDefaultOn>
+  migratedNestedWorkerMaxDepth: ReturnType<typeof migrateNestedWorkerMaxDepthDefault>
   migratedTerminalCursorStyle: Pick<
     GlobalSettings,
     'terminalCursorStyle' | 'terminalCursorStyleDefaultedToBlock'
@@ -95,6 +97,10 @@ export function prepareLoadedProfileSettings(
   )
   const migratedPluginSystemEnabled = normalizePluginSystemEnabledDefaultOn(parsed.settings)
   if (parsed.settings?.pluginSystemDefaultedOn !== true) {
+    markNeedsSave()
+  }
+  const migratedNestedWorkerMaxDepth = migrateNestedWorkerMaxDepthDefault(parsed.settings)
+  if (parsed.settings?.nestedWorkerMaxDepthDefaultedToFour !== true) {
     markNeedsSave()
   }
   const migratedTerminalCursorStyle = normalizeTerminalCursorStyleDefault(parsed.settings)
@@ -166,6 +172,7 @@ export function prepareLoadedProfileSettings(
   const migratedAgentPermission = migrateAgentPermissionChoice(
     {
       ...migratedAgentYoloDefaults,
+      agentLaunchChoices: parsed.settings?.agentLaunchChoices,
       agentPermissionDefault: parsed.settings?.agentPermissionDefault,
       agentPermissionOverrides: parsed.settings?.agentPermissionOverrides
     },
@@ -174,6 +181,9 @@ export function prepareLoadedProfileSettings(
   if (
     parsed.settings?.agentYoloDefaultsMigrated !== true ||
     !hasTypedAgentPermission(parsed.settings) ||
+    parsed.settings?.agentLaunchChoices === undefined ||
+    JSON.stringify(parsed.settings.agentLaunchChoices) !==
+      JSON.stringify(migratedAgentPermission.agentLaunchChoices) ||
     parsed.settings?.agentDefaultArgs?.devin !==
       migratedAgentYoloDefaults.agentDefaultArgs?.devin ||
     hasUnsupportedTuiAgentArgs('opencode', parsed.settings?.agentDefaultArgs?.opencode) ||
@@ -273,6 +283,7 @@ export function prepareLoadedProfileSettings(
     migratedExperimentalActivity,
     migratedAutoRenameBranchFromWork,
     migratedPluginSystemEnabled,
+    migratedNestedWorkerMaxDepth,
     migratedTerminalCursorStyle,
     migratedTerminalLineHeight,
     terminalRightClickToPasteDefaultedForPlatform,

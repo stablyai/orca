@@ -18,7 +18,7 @@ import {
 const CODE_FILE = 'plugin-theme-smoke.ts'
 const THEME_KEYWORD = 'rgb(255, 122, 217)'
 
-async function writeThemePlugin(root: string): Promise<void> {
+async function writeThemePlugin(root: string, themeCount = 1): Promise<void> {
   await mkdir(join(root, 'icons'), { recursive: true })
   await writeFile(
     join(root, 'orca-plugin.json'),
@@ -31,7 +31,11 @@ async function writeThemePlugin(root: string): Promise<void> {
       engines: { orca: '>=1.0.0' },
       pluginApi: 1,
       contributes: {
-        themes: [{ id: 'dusk', title: 'Smoke Dusk', path: 'app.json' }],
+        themes: Array.from({ length: themeCount }, (_, index) => ({
+          id: index === 0 ? 'dusk' : `dusk-${index}`,
+          title: index === 0 ? 'Smoke Dusk' : `Smoke Dusk ${index + 1}`,
+          path: 'app.json'
+        })),
         iconThemes: [{ id: 'blocks', title: 'Smoke Blocks', path: 'icons.json' }]
       }
     })

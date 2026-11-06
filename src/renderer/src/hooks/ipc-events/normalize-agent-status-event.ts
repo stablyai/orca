@@ -1,9 +1,9 @@
 import type { AgentStatusMetadata } from '../../store/slices/agent-status/agent-status-contract'
 import {
   normalizeAgentStatusPayload,
-  type AgentStatusIpcPayload,
   type ParsedAgentStatusPayload
-} from '../../../../shared/agent-status-types'
+} from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
 export function normalizeAgentStatusEvent(
   data: AgentStatusIpcPayload

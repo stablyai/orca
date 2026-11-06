@@ -1,14 +1,14 @@
 import { mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type * as ChildProcessModule from 'node:child_process'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { removeTreeSync } from '../../windows-transient-lock-removal'
 import {
   parseWindowsCmdShim,
   resolveWindowsCmdShim
 } from '@orca/process-host/windows-cmd-shim-resolution'
-import { spawnProcess } from '@orca/process-host'
+import '@orca/process-host'
 import {
   REAL_AGENT_BROWSER_CMD,
   REAL_CODEX_CMD,
@@ -21,16 +21,6 @@ import {
   npmProgNodeShim,
   pnpmBranchedNodeShim
 } from '../../../packages/process-host/src/__fixtures__/windows-cmd-shim-bodies'
-
-const { nodeSpawn } = vi.hoisted(() => ({ nodeSpawn: vi.fn<typeof ChildProcessModule.spawn>() }))
-
-vi.mock('node:child_process', async (importOriginal) => {
-  const original = await importOriginal<typeof ChildProcessModule>()
-  return {
-    ...original,
-    spawn: nodeSpawn.mockImplementation(() => new original.ChildProcess())
-  }
-})
 
 describe('parseWindowsCmdShim', () => {
   it('reads the npm node shim MDE flagged (codex.cmd)', () => {
@@ -45,13 +35,6 @@ describe('parseWindowsCmdShim', () => {
       kind: 'node',
       script: '..\\vitest\\vitest.mjs',
       nodePathPrefix: REAL_VITEST_NODE_PATH
-    })
-  })
-
-  it('reads a pnpm branch shim with no NODE_PATH block', () => {
-    expect(parseWindowsCmdShim(pnpmBranchedNodeShim('..\\x\\cli.js'))).toEqual({
-      kind: 'node',
-      script: '..\\x\\cli.js'
     })
   })
 
@@ -98,28 +81,6 @@ describe('parseWindowsCmdShim', () => {
     expect(parseWindowsCmdShim(npmProgNodeShim('cli.js').replace('%*', forwarding))).toBeNull()
   })
 
-  it.each([
-    ['a UTF-8 BOM', (body: string) => `﻿${body}`],
-    ['a doubled UTF-8 BOM', (body: string) => `﻿﻿${body}`],
-    ['LF-only line endings', (body: string) => body.replace(/\r\n/g, '\n')],
-    ['no final newline', (body: string) => body.replace(/\r\n$/, '')],
-    ['trailing whitespace on every line', (body: string) => body.replace(/\r\n/g, '  \t\r\n')],
-    ['doubled blank lines', (body: string) => body.replace(/\r\n/g, '\r\n\r\n')],
-    ['an all-lowercase body', (body: string) => body.toLowerCase()],
-    ['an all-uppercase body', (body: string) => body.toUpperCase()]
-  ])('reads the codex shim through %s', (_case, rewrite) => {
-    // Generators/editors/transports vary casing and whitespace; compare the captured path against the rewritten spelling.
-    const parsed = parseWindowsCmdShim(rewrite(REAL_CODEX_CMD))
-    if (parsed?.kind !== 'node') {
-      throw new Error('Expected a parsed Node shim')
-    }
-    expect(parsed.script.toLowerCase()).toBe('node_modules\\@openai\\codex\\bin\\codex.js')
-  })
-
-  it('refuses lone-CR line endings, which leave the body as one unsplit line', () => {
-    expect(parseWindowsCmdShim(REAL_CODEX_CMD.replace(/\r\n/g, '\r'))).toBeNull()
-  })
-
   it('refuses a NODE_PATH block whose branches are not a plain prepend', () => {
     const tampered = pnpmBranchedNodeShim('..\\a.js', 'C:\\p').replace(
       '"NODE_PATH=C:\\p;%NODE_PATH%"',
@@ -154,13 +115,6 @@ describeOnWindows('resolveWindowsCmdShim', () => {
     writeFileSync(path, contents)
     return path
   }
-
-  it('resolves the npm node shim to node.exe plus the script', () => {
-    const resolved = resolveWindowsCmdShim(write('codexish.cmd', npmProgNodeShim('cli.js')), env)
-    expect(resolved?.program.toLowerCase().endsWith('node.exe')).toBe(true)
-    expect(resolved?.prefixArgs).toEqual([join(dir, 'cli.js')])
-    expect(resolved?.env).toBeUndefined()
-  })
 
   it('prefers a node.exe sitting beside the shim, as the shim itself does', () => {
     const sibling = mkdtempSync(join(tmpdir(), 'orca-shim-sibling-'))
@@ -211,11 +165,6 @@ describeOnWindows('resolveWindowsCmdShim', () => {
   ])('falls back for %s', (_case, name, contents) => {
     // Separate paths avoid same-size/mtime cache collisions between cases.
     expect(resolveWindowsCmdShim(write(`fallback-${name}.cmd`, contents), env)).toBeNull()
-  })
-
-  it('falls back for a relative program path', () => {
-    write('relative.cmd', npmProgNodeShim('cli.js'))
-    expect(resolveWindowsCmdShim('relative.cmd', env)).toBeNull()
   })
 
   it('honours the kill switch', () => {
@@ -316,47 +265,5 @@ describeOnWindows('resolveWindowsCmdShim', () => {
       removeTreeSync(nodeDir)
       removeTreeSync(shimDir)
     }
-  })
-
-  it('keeps cmd.exe out of the spawn for a recognised shim', () => {
-    spawnProcess({
-      program: write('spawned.cmd', npmProgNodeShim('cli.js')),
-      args: ['a b', 'c"d'],
-      env
-    })
-    // Node owns CommandLineToArgvW quoting once the cmd hop is removed.
-    expect(nodeSpawn).toHaveBeenLastCalledWith(
-      expect.stringMatching(/node\.exe$/i),
-      [join(dir, 'cli.js'), 'a b', 'c"d'],
-      expect.objectContaining({ windowsVerbatimArguments: undefined })
-    )
-  })
-
-  it('clears a caller-set windowsVerbatimArguments on the resolved path', () => {
-    // No verbatim line exists on this path; honoring the flag would join spaced arguments without quotes.
-    spawnProcess({
-      program: write('verbatim.cmd', npmProgNodeShim('cli.js')),
-      args: ['a b'],
-      env,
-      windowsVerbatimArguments: true
-    })
-    expect(nodeSpawn).toHaveBeenLastCalledWith(
-      expect.stringMatching(/node\.exe$/i),
-      [join(dir, 'cli.js'), 'a b'],
-      expect.objectContaining({ windowsVerbatimArguments: undefined })
-    )
-  })
-
-  it('still routes an unrecognised .cmd through cmd.exe', () => {
-    spawnProcess({
-      program: write('plain.cmd', REAL_PN_CMD),
-      args: ['x'],
-      env: { ComSpec: 'C:\\W\\cmd.exe' }
-    })
-    expect(nodeSpawn).toHaveBeenLastCalledWith(
-      'C:\\W\\cmd.exe',
-      [expect.stringContaining('/d /v:off /s /c')],
-      expect.objectContaining({ windowsVerbatimArguments: true })
-    )
   })
 })

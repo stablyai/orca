@@ -1,4 +1,4 @@
-import { Check, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../../ui/button'
 import { StatusWord } from '../list/PluginStatusWord'
@@ -49,25 +49,25 @@ export function PluginCardAction({
     const controls = installedPluginControls(installed, entry, {
       busy,
       canCheckUpdate: entry.updatable,
-      handlers: installedHandlers,
-      toggleInMenu: true
+      handlers: installedHandlers
     })
+    const switchable =
+      controls.kind !== 'review' && controls.kind !== 'invalid' && controls.kind !== 'blocked'
     const healthy = controls.kind === 'enabled' || controls.kind === 'running'
+    // Why no word for on/off: the switch beside it already says it.
     const status =
       controls.action ??
-      (!healthy ? (
+      (healthy ? (
+        inUse ? (
+          <PluginInUseAction pluginKey={entry.pluginKey} name={entry.name} inUse={inUse} />
+        ) : null
+      ) : controls.kind === 'disabled' ? null : (
         controls.status
-      ) : inUse ? (
-        <PluginInUseAction pluginKey={entry.pluginKey} name={entry.name} inUse={inUse} />
-      ) : (
-        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-          <Check className="size-3.5 text-status-success" aria-hidden="true" />
-          {translate('auto.components.settings.PluginCardAction.installed', 'Installed')}
-        </span>
       ))
     return (
       <>
         {status}
+        {switchable ? controls.toggle : null}
         {controls.more}
       </>
     )

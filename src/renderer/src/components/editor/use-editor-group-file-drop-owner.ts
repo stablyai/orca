@@ -1,3 +1,4 @@
+import type { EditorFileDropDestination } from './editor-file-drop-destination'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
 import {
@@ -13,11 +14,7 @@ import {
 } from '@/lib/workspace-file-drag'
 import { FILE_OWNER_UNRESOLVED_MESSAGE } from '@/lib/file-owner-runtime-target'
 import { getNativeFileDropRejectionMessage } from '@/lib/native-file-drop-rejection-message'
-import {
-  captureEditorFileDropOpen,
-  editorGroupStillExists,
-  type EditorFileDropDestination
-} from './editor-dropped-file-open'
+import { captureEditorFileDropOpen, editorGroupStillExists } from './editor-dropped-file-open'
 
 type GroupSequenceEntry = { sequence: OsFileDropSequence; owners: number }
 

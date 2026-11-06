@@ -1,4 +1,4 @@
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { resolveCliCommand } from '../../../shared/node-cli-command-resolution'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import { createClaudeModelCatalogProbe } from '../../claude/claude-model-catalog-probe'
-import { createCodexModelCatalogProbe } from '../../codex/codex-model-catalog-probe'
+import { createCodexModelCatalogProbe } from '../../codex/structured/catalog/codex-model-catalog-probe'
 import {
   agentModelCatalogFingerprint,
   agentModelCatalogScopeFingerprint

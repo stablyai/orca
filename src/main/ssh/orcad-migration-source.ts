@@ -5,7 +5,10 @@ import type {
   OrcadMigrationManifest
 } from '../../shared/orcad-migration/orcad-migration-manifest'
 import type { OrcadMigrationSourceCutover } from '../../shared/orcad-migration/orcad-migration-source-cutover'
-import type { OrcadMigrationManifestExportOptions } from './orcad-migration-manifest-export'
+import type {
+  OrcadMigrationExportedBlob,
+  OrcadMigrationManifestExportOptions
+} from './orcad-migration-manifest-export'
 import type {
   OrcadMigrationFenceResult,
   OrcadMigrationFenceState
@@ -13,8 +16,9 @@ import type {
 import type { OrcadMigrationTerminalVerdict } from './orcad-migration-terminal-gate'
 
 export type OrcadMigrationSourceCutoverPort = {
-  /** Before every stage and commit; throws unless the fenced source still matches the journal. */
-  verifyFence: (cutover: OrcadMigrationSourceCutover) => void
+  /** Before every stage and commit; throws unless the fenced source still matches the journal.
+   * Returns the bytes of the blobs its manifest names, which that match proves are the journaled ones. */
+  verifyFence: (cutover: OrcadMigrationSourceCutover) => OrcadMigrationExportedBlob[]
   /** Drops the fence, then the journal; only on proof the destination holds nothing. */
   releaseFence: (cutover: OrcadMigrationSourceCutover) => Promise<void>
 }

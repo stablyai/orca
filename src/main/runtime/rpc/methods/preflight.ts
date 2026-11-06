@@ -1,4 +1,5 @@
 import { defineMethod } from '../core'
+import { resolveQualifiedAgentDetectionHost } from './preflight-workspace-target'
 import {
   detectRemoteWindowsTerminalCapabilities,
   runPreflightCheck
@@ -33,7 +34,7 @@ export const PREFLIGHT_METHODS = [
         // Ungated: it serves a workspace create in that project, which boots the distro anyway.
         return runtime.detectProjectLaunchContext(params.project.repo)
       }
-      const host = await runtime.resolveAgentDetectionHost(params.worktreeId, params.repoId)
+      const host = await resolveQualifiedAgentDetectionHost(runtime, params)
       // A client's inventory read is background work: it must not start a stopped WSL distro (E9).
       await assertAgentDetectionHostRunning(host)
       return detectAgentsOnHost(host)
@@ -57,7 +58,7 @@ export const PREFLIGHT_METHODS = [
     permission: 'workspace',
     params: PreflightAgentDetection,
     handler: async (params, { runtime }) => {
-      const host = await runtime.resolveAgentDetectionHost(params.worktreeId, params.repoId)
+      const host = await resolveQualifiedAgentDetectionHost(runtime, params)
       await assertAgentDetectionHostRunning(host)
       return refreshAgentsOnHost(host)
     }

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import path from 'node:path'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
-import type * as LocalCommandResolver from './command-path-resolver'
+import type * as LocalCommandResolver from './command-path/command-path-resolver'
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
 
 const {
@@ -24,7 +24,7 @@ vi.mock('./preflight-wsl-command', () => ({
   runPreflightCommandInWsl: runPreflightCommandInWslMock
 }))
 
-vi.mock('./command-path-resolver', async (importOriginal) => ({
+vi.mock('./command-path/command-path-resolver', async (importOriginal) => ({
   ...(await importOriginal<typeof LocalCommandResolver>()),
   isCommandOnLocalPath: vi.fn(async () => false),
   listLocalCommandPaths: listLocalCommandPathsMock

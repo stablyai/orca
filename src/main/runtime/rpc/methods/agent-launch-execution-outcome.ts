@@ -1,7 +1,7 @@
 import {
   AGENT_LAUNCH_TAB_CLOSED_CODE,
   AgentLaunchTabClosedError
-} from '../../../../shared/agent-launch-tab-closed'
+} from '../../../../shared/agent-launch/contracts/agent-launch-tab-closed'
 import type { RpcContext } from '../core'
 import { readsAgentLaunchTabClosed, type AgentLaunchRefusal } from './agent-launch-replay'
 import type { EarlyAgentLaunchTab } from './agent-launch-tab-publication'

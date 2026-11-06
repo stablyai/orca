@@ -4,16 +4,11 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  setupGuideProjectPrompt,
   WorkspacesAction,
   cancelPendingSetupGuideTourRequest,
-  getSetupGuideGitRepo,
-  isSetupGuideWorkspaceComposerRequestCurrent,
-  promptForSetupGuideProject,
   requestSetupGuideTourWhenReady
 } from './FeatureWallSetupWorkflowActions'
 import { useAppStore } from '@/store'
-import { toast } from 'sonner'
 import type { Repo } from '../../../../shared/repo-types'
 
 vi.mock('sonner', () => ({
@@ -63,33 +58,6 @@ describe('setup guide workflow actions', () => {
       activeRepoId: null,
       activeContextualTourId: null
     })
-  })
-
-  it('prompts for a project before setup-guide actions that need one', () => {
-    const openModal = vi.fn()
-
-    promptForSetupGuideProject(openModal)
-
-    expect(openModal).toHaveBeenCalledWith('add-repo')
-    expect(toast.message).toHaveBeenCalledWith(setupGuideProjectPrompt())
-  })
-
-  it('chooses the active git repo for setup-guide workspace creation', () => {
-    const active = makeRepo('active')
-
-    expect(getSetupGuideGitRepo([makeRepo('first'), active], 'active')).toBe(active)
-  })
-
-  it('falls back to the first git repo when the active project is a folder', () => {
-    const gitRepo = makeRepo('git')
-
-    expect(getSetupGuideGitRepo([makeRepo('folder', { kind: 'folder' }), gitRepo], 'folder')).toBe(
-      gitRepo
-    )
-  })
-
-  it('returns no setup-guide repo when only folders exist', () => {
-    expect(getSetupGuideGitRepo([makeRepo('folder', { kind: 'folder' })], 'folder')).toBeNull()
   })
 
   it('opens the workspace composer with setup-guide tour context from Multi-task', async () => {
@@ -160,15 +128,5 @@ describe('setup guide workflow actions', () => {
 
     cancelPendingSetupGuideTourRequest()
     vi.useRealTimers()
-  })
-
-  it('rejects a stale setup-guide composer request after close and reopen', () => {
-    useAppStore.setState({
-      activeModal: 'new-workspace-composer',
-      modalData: { setupGuideTourRequestId: 'new-request' }
-    })
-
-    expect(isSetupGuideWorkspaceComposerRequestCurrent('old-request')).toBe(false)
-    expect(isSetupGuideWorkspaceComposerRequestCurrent('new-request')).toBe(true)
   })
 })

@@ -1,4 +1,4 @@
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -9,7 +9,7 @@ import {
   GLOBAL_WORKSPACE_SESSION_FIELDS,
   hostPartitionSliceTemplate,
   WORKSPACE_SESSION_FIELD_OWNERSHIP
-} from '../../../shared/workspace-session-host-field-ownership'
+} from '../../../shared/workspace-session/workspace-session-host-field-ownership'
 import {
   buildWorktreeIdByFileId,
   buildWorktreeIdByTabId,
@@ -18,7 +18,7 @@ import {
   mergeWorkspaceSessionRecordField,
   worktreeIdForPaneKey,
   type WorkspaceSessionRecord
-} from '../../../shared/workspace-session-host-records'
+} from '../../../shared/workspace-session/workspace-session-host-records'
 
 /** Partition unified renderer sessions by execution host for writes and merge on hydration. FIELD_OWNERSHIP exhaustively classifies fields at compile time, matching workspace-session’s relevant-field gate. */
 

@@ -4,7 +4,7 @@ import {
   type NativeChatToolRunSentenceWords
 } from '../../../../shared/native-chat/tools/native-chat-tool-run-sentence'
 import type { NativeChatToolCategory } from '../../../../shared/native-chat/tools/native-chat-tool-icon'
-import type { NativeChatBlock } from '../../../../shared/native-chat-types'
+import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
 
 /** Extraction requires literal keys/fallbacks; parity tests keep these clauses aligned with mobile’s shared record. */
 function clause(category: NativeChatToolCategory, count: number, live: boolean): string {

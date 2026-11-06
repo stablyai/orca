@@ -1,6 +1,9 @@
 import { createConnection, createServer, type Socket, type AddressInfo } from 'node:net'
 import type { Page } from '@stablyai/playwright-test'
-import { decodePairingOffer, encodePairingOffer } from '../../src/shared/pairing'
+import {
+  decodePairingOffer,
+  encodePairingOffer
+} from '../../src/shared/remote-runtime/pairing/pairing'
 import { expect, test } from './helpers/orca-app'
 import {
   createRuntimeDesktopPairingOffer,

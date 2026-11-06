@@ -1,5 +1,6 @@
 import { stopStructuredAgentSessionAgentUnderSerialize } from './structured-agent-session-host-lifetime'
 import { sameProviderChild } from './structured-agent-session-provider-child'
+import { closeStructuredAgentSessionHandovers } from './structured-agent-session-handing-over'
 import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
 import type { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 import type {
@@ -46,5 +47,25 @@ export function createStructuredAgentSessionStopStartingChild(
           error
         })
       )
+  }
+}
+
+/** Cut a closing chat's handovers and start, outside serialization so hung work cannot block the close.
+ *  A close that must be admitted runs this in the session lane instead, and throws if refused. */
+export function cutClosingStructuredAgentSession(
+  host: StructuredAgentSessionConversationLifetimeHost,
+  sessionId: string,
+  admit?: () => boolean
+): void {
+  if (admit && !admit()) {
+    throw new Error('The user kept this chat open.')
+  }
+  const journal = host.sessions.get(sessionId)?.journal
+  if (journal) {
+    closeStructuredAgentSessionHandovers(journal)
+  }
+  const { deps, runtimeState } = host.context()
+  if (deps.store.selectWritableRecord(sessionId).kind !== 'unreadable') {
+    runtimeState.acquireAborts.abort(sessionId, 'closed while starting')
   }
 }

@@ -1,6 +1,6 @@
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { KnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   advanceRuntimeEnvironmentCapabilityIncarnation,
   applyRuntimeEnvironmentCapabilityVerdict,
@@ -27,10 +27,13 @@ vi.mock('./runtime-environment-shared-control-support', () => ({
   supportsSharedControl: supportsMock,
   clearSharedControlSupport: clearSupportMock
 }))
-vi.mock('../../../shared/runtime-environment-store', async (importOriginal) => ({
-  ...(await importOriginal()),
-  resolveEnvironment: resolveEnvironmentMock
-}))
+vi.mock(
+  '../../../shared/remote-runtime/host-store/runtime-environment-store',
+  async (importOriginal) => ({
+    ...(await importOriginal()),
+    resolveEnvironment: resolveEnvironmentMock
+  })
+)
 
 vi.mock('./runtime-environment-request-connections', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -48,6 +51,7 @@ import {
   routeRuntimeEnvironmentCallBySupport,
   routeRuntimeEnvironmentSubscriptionBySupport
 } from './runtime-environment-support-routing'
+import { shouldUseSharedControlEnvelope } from './runtime-environment-shared-control-envelope'
 
 beforeEach(() => {
   resetRuntimeEnvironmentCapabilityEvidence()
@@ -298,3 +302,24 @@ it.each(['capable', 'absent'] as const)(
     expect(setup).toHaveBeenCalledOnce()
   }
 )
+
+describe('shared-control envelope eligibility', () => {
+  const envelope = { orchestrationContractVersion: 1, orchestrationRequestId: 'request-1' }
+
+  it.each([
+    ['orchestration.federationPull', true],
+    ['orchestration.federationAck', true],
+    ['orchestration.federationImport', true],
+    ['orchestration.workerStart', false],
+    ['orchestration.federationRelease', false],
+    ['repo.list', false]
+  ])('%s with an envelope shares control: %s', (method, shared) => {
+    expect(shouldUseSharedControlEnvelope(method, {}, envelope)).toBe(shared ? envelope : undefined)
+  })
+
+  it('never shares control without an envelope', () => {
+    expect(shouldUseSharedControlEnvelope('orchestration.federationAck', {}, undefined)).toBe(
+      undefined
+    )
+  })
+})

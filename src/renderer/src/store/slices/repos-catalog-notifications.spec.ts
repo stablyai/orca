@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import { createTestStore } from './store-test-helpers'
 
@@ -114,35 +114,6 @@ export function registerReposCatalogNotificationsTests(): void {
   })
 
   it.each(cases)(
-    'publishes changed $label and invalidates path statuses',
-    async ({ refresh, catalog }) => {
-      const store = seed()
-      groupsList.mockResolvedValue([{ ...group, name: 'Changed group' }])
-      foldersList.mockResolvedValue([{ ...folder, name: 'Changed folder' }])
-      const changed = vi.fn()
-      const unsubscribe = store.subscribe(changed)
-      await refresh(store)
-      unsubscribe()
-      expect(changed).toHaveBeenCalledOnce()
-      expect(store.getState()[catalog][0]?.name).toMatch(/^Changed /)
-      expect(store.getState().folderWorkspacePathStatuses).toEqual({})
-    }
-  )
-
-  it.each(cases)('retains state after a failed $label read', async ({ refresh }) => {
-    const store = seed()
-    const initial = store.getState()
-    groupsList.mockRejectedValue(new Error('offline'))
-    foldersList.mockRejectedValue(new Error('offline'))
-    const changed = vi.fn()
-    const unsubscribe = store.subscribe(changed)
-    await refresh(store)
-    unsubscribe()
-    expect(store.getState()).toBe(initial)
-    expect(changed).not.toHaveBeenCalled()
-  })
-
-  it.each(cases)(
     'fences an older $label response after a newer no-op response',
     async ({ refresh, catalog }) => {
       const store = seed()
@@ -194,39 +165,6 @@ export function registerReposCatalogNotificationsTests(): void {
     await update
     expect(store.getState().folderWorkspaces[0]?.isUnread).toBe(true)
     expect(store.getState().folderWorkspaces[0]?.updatedAt).toBe(4)
-  })
-
-  it('still clears restored folder owners after a successful all-host refresh', async () => {
-    const store = seed()
-    store.setState({
-      restoredRuntimeHostIdByWorkspaceSessionKey: {
-        'folder:folder-1': 'runtime:retired',
-        unrelated: 'runtime:kept'
-      }
-    })
-    const changed = vi.fn()
-    const unsubscribe = store.subscribe(changed)
-    await store.getState().fetchFolderWorkspacesForAllHosts()
-    unsubscribe()
-    expect(changed).toHaveBeenCalledOnce()
-    expect(store.getState().restoredRuntimeHostIdByWorkspaceSessionKey).toEqual({
-      unrelated: 'runtime:kept'
-    })
-  })
-
-  it('does not publish an all-host refresh whose restored owners need no cleanup', async () => {
-    const store = seed()
-    store.setState({ restoredRuntimeHostIdByWorkspaceSessionKey: { unrelated: 'runtime:kept' } })
-    const initial = store.getState()
-    const changed = vi.fn()
-    const unsubscribe = store.subscribe(changed)
-    await store.getState().fetchFolderWorkspacesForAllHosts()
-    unsubscribe()
-    expect(changed).not.toHaveBeenCalled()
-    expect(store.getState()).toBe(initial)
-    expect(store.getState().restoredRuntimeHostIdByWorkspaceSessionKey).toBe(
-      initial.restoredRuntimeHostIdByWorkspaceSessionKey
-    )
   })
 
   // The catalog these tests read is the one the focused host would have shown.

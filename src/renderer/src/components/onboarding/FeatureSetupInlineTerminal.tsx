@@ -6,7 +6,7 @@ import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRunti
 import {
   buildSkillCommandForRuntime,
   buildSkillSetupTerminalCommand
-} from '../settings/CliSkillRuntimeSetup'
+} from '../../lib/skill-runtime-command'
 import { OnboardingInlineCommandTerminal } from './OnboardingInlineCommandTerminal'
 import {
   getOnboardingFeatureSetupAgentRuntime,

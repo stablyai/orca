@@ -1,9 +1,9 @@
 import type {
   AgentSessionModelOption,
   AgentSessionOptionChoice,
-  AgentSessionOptionsResult,
   AgentSessionSlashCommand
-} from '../../shared/agent-session-wire'
+} from '../../shared/agent-session/agent-session-wire'
+import type { AgentSessionOptionsResult } from '../../shared/agent-session/options/agent-session-options-result'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
 import {
@@ -16,6 +16,7 @@ import {
   SessionConfigSelectGroupSchema,
   SessionConfigSelectOptionSchema,
   type AvailableCommand,
+  type InitializeResponse,
   type SessionConfigOption,
   type SessionConfigSelectOption,
   type SessionModelState
@@ -51,13 +52,19 @@ export class AcpStructuredOptions {
   constructor(
     private readonly dialect: Pick<
       AcpDialect,
-      'modelEfforts' | 'withheldCommands' | 'effortChangesModel'
+      | 'modelEfforts'
+      | 'withheldCommands'
+      | 'effortChangesModel'
+      | 'clampsUnlistedEffort'
+      | 'builtinCommands'
     > = {}
   ) {}
 
   private configOptions: SessionConfigOption[] = []
   private models: SessionModelState | null = null
   private commands: AgentSessionSlashCommand[] | undefined
+  private reportedCommands: readonly AvailableCommand[] | undefined
+  private isBuiltin: (command: AvailableCommand) => boolean = () => false
   // Only new sessions resolve configured defaults; loaded sessions retain their saved choices.
   private resolvesConfig = false
   readonly picked = new Set<string>()
@@ -105,15 +112,25 @@ export class AcpStructuredOptions {
     }
   }
 
+  /** Each process proves its own built-ins; session rows alone cannot. */
+  adoptInitialize(initialized: InitializeResponse): void {
+    this.isBuiltin = this.dialect.builtinCommands?.(initialized) ?? (() => false)
+    if (this.reportedCommands) {
+      this.adoptCommands(this.reportedCommands)
+    }
+  }
+
   adoptCommands(commands: readonly AvailableCommand[]): void {
     const withheld = this.dialect.withheldCommands ?? []
+    this.reportedCommands = commands
     this.commands = commands
       .filter((command) => !withheld.includes(command.name))
       .map((command) => ({
         name: command.name,
         kind: 'command',
         ...(command.description ? { description: command.description } : {}),
-        ...(command.input?.hint ? { argumentHint: command.input.hint } : {})
+        ...(command.input?.hint ? { argumentHint: command.input.hint } : {}),
+        ...(this.isBuiltin(command) ? { builtin: true as const } : {})
       }))
   }
 
@@ -136,7 +153,7 @@ export class AcpStructuredOptions {
     return null
   }
 
-  /** Effort menus describe models; current session values never establish catalog defaults. */
+  /** Native choices never establish an unobserved model's capability or configured default. */
   read(): Pick<AgentSessionOptionsResult, 'models' | 'current'> {
     const modelOption = this.select('model')
     const effortOption = this.select('thought_level')
@@ -167,7 +184,10 @@ export class AcpStructuredOptions {
         model.id === currentModel
           ? { efforts: sessionEfforts }
           : (modelOption || effortOption) && !advertised
-            ? { efforts: [], effortsKnown: false as const }
+            ? {
+                efforts: this.dialect.clampsUnlistedEffort ? sessionEfforts : [],
+                effortsKnown: false as const
+              }
             : { efforts: [] }
       return {
         ...model,
@@ -175,7 +195,10 @@ export class AcpStructuredOptions {
         // Fall back to the running session's menu when the advertised menu is empty.
         ...(advertised && (advertised.efforts.length > 0 || model.id !== currentModel)
           ? advertised
-          : sessionMenu)
+          : sessionMenu),
+        ...(advertised?.declaredDefaultEffort !== undefined
+          ? { declaredDefaultEffort: advertised.declaredDefaultEffort }
+          : {})
       }
     })
     const confirmed = [...(currentModel ? ['model'] : []), ...(effortOption ? ['effort'] : [])]

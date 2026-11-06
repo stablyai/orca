@@ -3,9 +3,9 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { vi } from 'vitest'
 import type {
   AgentSessionModelCatalogResult,
-  AgentSessionOptionResult,
-  AgentSessionOptionsResult
-} from '../../../src/shared/agent-session-wire'
+  AgentSessionOptionResult
+} from '../../../src/shared/agent-session/agent-session-wire'
+import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
 import type { SessionOptionDescriptor } from '../../../src/shared/native-chat/input/native-chat-session-options'
 import type { RpcClient } from '../transport/rpc-client'
 import type {
@@ -109,14 +109,17 @@ type MutateCall = { method: string; fields: Record<string, unknown> }
 
 // Use an untyped mock: a concrete fixture cannot satisfy arbitrary TValue from the generic mutation caller.
 function recordingMutate(
-  next: (call: number) => Promise<StructuredAgentSessionMutationResult<AgentSessionOptionResult>>
+  next: (
+    call: number,
+    fields: Record<string, unknown>
+  ) => Promise<StructuredAgentSessionMutationResult<AgentSessionOptionResult>>
 ) {
   const calls: MutateCall[] = []
   const mock = vi.fn()
   mock.mockImplementation(
     (method: string, _fingerprintMethod: string, fields: Record<string, unknown>) => {
       calls.push({ method, fields })
-      return next(calls.length - 1)
+      return next(calls.length - 1, fields)
     }
   )
   const mutate: StructuredAgentSessionMutate = mock
@@ -142,6 +145,7 @@ type ProbeProps = {
   turnId?: string | null
   sendSelection?: boolean
   coherentCatalog?: boolean
+  modelEffortDiscovery?: boolean
   permissionOwn?: boolean
   onRender: (controller: Controller) => void
 }
@@ -153,6 +157,7 @@ function Probe(props: ProbeProps): null {
     sessionId: props.sessionId,
     enabled: true,
     fence: props.fence,
+    unloadedTurnRevisions: undefined,
     mutate: props.mutate,
     turnId: props.turnId ?? null,
     ...(props.optionStamp ? { optionStamp: props.optionStamp } : {}),
@@ -162,7 +167,8 @@ function Probe(props: ProbeProps): null {
       sendOptions: false,
       statusFeed: false,
       sendSelection: props.sendSelection,
-      coherentModelCatalog: props.coherentCatalog
+      coherentModelCatalog: props.coherentCatalog,
+      modelEffortDiscovery: props.modelEffortDiscovery
     }
   })
   useLayoutEffect(() => props.onRender(controller), [controller, props.onRender])
@@ -178,8 +184,10 @@ async function settle() {
 
 async function mountOptions(props: Omit<ProbeProps, 'onRender'>) {
   let rendered: Controller | null = null
+  const commits: Controller[] = []
   const onRender = (controller: Controller) => {
     rendered = controller
+    commits.push(controller)
   }
   let renderer: ReactTestRenderer | null = null
   await act(async () => {
@@ -194,6 +202,7 @@ async function mountOptions(props: Omit<ProbeProps, 'onRender'>) {
   }
   return {
     current,
+    commits,
     rerender: async (next: Partial<Omit<ProbeProps, 'onRender'>>) => {
       await act(async () => {
         renderer?.update(createElement(Probe, { ...props, ...next, onRender }))

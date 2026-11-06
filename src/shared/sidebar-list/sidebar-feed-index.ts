@@ -5,7 +5,7 @@ import {
   type ExecutionHostId
 } from '../execution-host'
 import { buildExecutionHostRegistry } from '../execution-host-registry'
-import type { FolderWorkspace } from '../folder-workspace-types'
+import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import {
   getRepoHostIdentity,
   getRepoHostIdentityForParts,
@@ -28,6 +28,8 @@ import {
 import { sortWorktreesByStamps, type SortBy } from './smart-sort'
 import type { PairedServerWorkspaceRow } from './paired-server-rows'
 import type { WorkspaceRow } from './workspace-rows'
+import { resolveFeedLineageParentIdentities } from './sidebar-feed-lineage-parents'
+import type { SidebarLineageParentIdentities } from './worktree-lineage-projection'
 
 // By row object: a feed snapshot keeps an unchanged row's object, so only a changed row is read again.
 type FeedRow = WorkspaceRow | PairedServerWorkspaceRow
@@ -61,6 +63,20 @@ function readFeedWorkspaces(domains: SidebarFeedDomains): SidebarFeedWorkspace[]
       (row) => readRemembered(row, () => readFeedPairedServerRow(row)) ?? []
     )
   ]
+}
+
+/** This desktop's own device id on each paired server, by environment id. */
+export function feedPairedDeviceIdsByEnvironment(
+  domains: Pick<SidebarFeedDomains, 'pairedServerHosts'>
+): Map<string, string> {
+  return new Map(
+    [...domains.pairedServerHosts].flatMap(([hostId, { host }]) => {
+      const environmentId = parseExecutionHostId(hostId)
+      return environmentId?.kind === 'runtime' && host?.pairedDeviceId
+        ? [[environmentId.environmentId, host.pairedDeviceId] as const]
+        : []
+    })
+  )
 }
 
 /** The host sections a feed reader lists, labelled from the feed's SSH and paired-server facts. */
@@ -110,6 +126,8 @@ export type SidebarFeedIndex = {
   repoMap: Map<string, Repo>
   /** The registration a workspace belongs to; the same repo id may be registered on several hosts. */
   repoOf: (worktree: Pick<Worktree, 'repoId' | 'hostId'>) => Repo | undefined
+  /** Nesting parents over every store, set only while some row carries a cross-store record. */
+  lineageParentIdentities: SidebarLineageParentIdentities | undefined
 }
 
 /** Prefer the row host’s registration; missing same-ID registrations use repoMap fallback like the window. */
@@ -146,7 +164,8 @@ export function indexSidebarFeed(
     worktrees: workspaces.flatMap((entry) => (entry.folderWorkspace ? [] : [entry.worktree])),
     folderWorkspaces: workspaces.flatMap((entry) => entry.folderWorkspace ?? []),
     repoMap,
-    repoOf: createHostScopedRepoOf(repos, repoMap)
+    repoOf: createHostScopedRepoOf(repos, repoMap),
+    lineageParentIdentities: resolveFeedLineageParentIdentities(domains, workspaces)
   }
 }
 

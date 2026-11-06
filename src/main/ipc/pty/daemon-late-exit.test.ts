@@ -79,7 +79,7 @@ describe('daemon physical exit after synthetic renderer exit', () => {
     const harness = await startLateExitHarness()
     try {
       harness.subprocess._simulateData(FINAL_OUTPUT)
-      harness.subprocess._simulateExit(0)
+      harness.subprocess._simulateExit(0, { kind: 'exited', exitCode: 0 })
       await harness.waitForExit()
       expect(await harness.capture()).toMatchObject({
         connected: false,
@@ -104,7 +104,7 @@ describe('daemon physical exit after synthetic renderer exit', () => {
       expect(replacement.id).toBe(harness.id)
       expect(replacement.incarnationId).not.toBe(harness.result.incarnationId)
       harness.subprocess._simulateData(FINAL_OUTPUT)
-      harness.subprocess._simulateExit(0)
+      harness.subprocess._simulateExit(0, { kind: 'exited', exitCode: 0 })
       harness.resumeStream()
       await harness.waitForExit()
       expect(await harness.capture()).toMatchObject({

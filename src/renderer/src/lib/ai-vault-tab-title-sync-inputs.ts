@@ -1,6 +1,8 @@
-import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
-import { isAiVaultTitleAgent } from '../../../shared/ai-vault-session-title'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import {
+  isAiVaultTitleAgent,
+  sameAiVaultSessionTitle
+} from '../../../shared/ai-vault/contracts/ai-vault-session-title'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
 import { collectAiVaultTitleRequests } from './ai-vault-tab-title-requests'
@@ -101,17 +103,6 @@ function agentRecordsEqual(current: AppState, previous: AppState): boolean {
   )
 }
 
-function titleEqual(
-  left: TerminalTab['aiVaultTitle'],
-  right: TerminalTab['aiVaultTitle']
-): boolean {
-  return (
-    left?.agent === right?.agent &&
-    left?.sessionId === right?.sessionId &&
-    left?.title === right?.title
-  )
-}
-
 function terminalTabsEqual(current: AppState, previous: AppState): boolean {
   const currentKeys = Object.keys(current.tabsByWorktree)
   const previousKeys = Object.keys(previous.tabsByWorktree)
@@ -130,7 +121,8 @@ function terminalTabsEqual(current: AppState, previous: AppState): boolean {
       if (
         left.id !== right.id ||
         left.worktreeId !== right.worktreeId ||
-        !titleEqual(left.aiVaultTitle, right.aiVaultTitle)
+        left.sessionTitleFromHost !== right.sessionTitleFromHost ||
+        !sameAiVaultSessionTitle(left.aiVaultTitle, right.aiVaultTitle)
       ) {
         return false
       }

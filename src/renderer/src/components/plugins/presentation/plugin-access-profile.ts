@@ -49,8 +49,14 @@ export type PluginTrust = {
   worker: boolean
   /** Commands, shortcuts, recipes or agent instructions that act under your authority. */
   declarative: boolean
-  /** A sandboxed panel; bounded by its capabilities. */
+  /** Publisher code drawing a view inside Orca (a panel or an editor); trusted, not sandboxed. */
   panel: boolean
+  /** Known to add a file editor. */
+  editor: boolean
+  /** Known to add a sidebar panel. */
+  sidebarPanel: boolean
+  /** Its only declarative contributions are VM recipes. */
+  recipesOnly: boolean
 }
 
 /** Contribution points a plugin is known to use; null when nothing verified says yet. */
@@ -89,7 +95,7 @@ export function pluginTrust({
   hasWorker?: boolean
 }): PluginTrust {
   if (execution === 'data') {
-    return { worker: false, declarative: false, panel: false }
+    return NOTHING_RUNS
   }
   const worker =
     execution === 'trusted-worker' || hasWorker || usesProfile(points, 'trusted-worker') === true
@@ -98,7 +104,31 @@ export function pluginTrust({
     execution === 'sandboxed-ui' ||
     points?.has('panels') === true ||
     points?.has('customEditors') === true
-  return { worker, declarative, panel }
+  const declarativePoints = points
+    ? [...points].filter(
+        (point) => PLUGIN_CONTRIBUTION_POINT_POLICY[point].execution === 'declarative'
+      )
+    : null
+  return {
+    worker,
+    declarative,
+    panel,
+    editor: points?.has('customEditors') === true,
+    sidebarPanel: points?.has('panels') === true,
+    recipesOnly:
+      declarativePoints !== null &&
+      declarativePoints.length > 0 &&
+      declarativePoints.every((point) => point === 'vmRecipes')
+  }
+}
+
+const NOTHING_RUNS: PluginTrust = {
+  worker: false,
+  declarative: false,
+  panel: false,
+  editor: false,
+  sidebarPanel: false,
+  recipesOnly: false
 }
 
 /** An installed plugin's trust, from its manifest once read, else what its list entry shows. */

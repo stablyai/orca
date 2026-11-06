@@ -1,27 +1,27 @@
 // Windows-only daily usage; gather registry/WSL state only while transmission is enabled. Reuse confirmed running distros, otherwise share one probe when user distros exist.
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
-import { listEnvironments } from '../../shared/runtime-environment-store'
-import { isWslHostRuntimeEnvironment } from '../../shared/runtime-environments'
-import { resolveLocalWorkspaceRuntime } from '../local-project-runtime-resolution'
-import { getCachedWslAvailability } from '../wsl-availability'
-import { getCachedWslDistros } from '../wsl'
-import { listConfirmedRunningWslDistros } from '../wsl-background-distro-gate'
-import { filterUserWslDistros } from '../wsl-distro-list-output'
-import { peekConfirmedRunningWslDistros } from '../wsl-running-distro-cache'
-import { loadWindowsNativeRegistry, WINDOWS_REG_SZ } from '../windows-native-registry'
-import { readWslDistroRegistrations } from '../wsl/wsl-distro-registry-id'
-import { listWslHostDistros } from '../wsl/wsl-host-distro-list'
+import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime-environment-store'
+import { isWslHostRuntimeEnvironment } from '../../shared/remote-runtime/host-catalog/runtime-environments'
+import { resolveLocalWorkspaceRuntime } from '../workspaces/execution-host/local-project-runtime-resolution'
+import { getCachedWslAvailability } from '../wsl/discovery/wsl-availability'
+import { getCachedWslDistros } from '../wsl/discovery/distro-catalog'
+import { listConfirmedRunningWslDistros } from '../wsl/discovery/wsl-background-distro-gate'
+import { filterUserWslDistros } from '../wsl/discovery/wsl-distro-list-output'
+import { peekConfirmedRunningWslDistros } from '../wsl/discovery/wsl-running-distro-cache'
+import { loadWindowsNativeRegistry, WINDOWS_REG_SZ } from '../windows/windows-native-registry'
+import { readWslDistroRegistrations } from '../wsl/discovery/wsl-distro-registry-id'
+import { listWslHostDistros } from '../wsl/host-lifecycle/wsl-host-distro-list'
 import {
   wslHostsAppliedMovedProjects,
   wslHostsAppliedPolicyState,
   wslHostsGateOpen,
   wslHostsGateState
-} from '../wsl/wsl-host-gate'
-import { isForeignLink, readWorktreeLinks } from '../git/worktree-prune-guard'
+} from '../wsl/host-lifecycle/wsl-host-gate'
+import { isForeignLink, readWorktreeLinks } from '../git/worktrees/removal/worktree-prune-guard'
 import { isTelemetryEnabled, track } from './client'
 import {
   buildWslUsageSnapshot,
@@ -152,11 +152,18 @@ export async function gatherWslUsageSnapshotInput(
   const registrations = await readWslDistroRegistrations()
   const userDistros = await listWslHostDistros({
     readRegistrations: async () => registrations,
-    listRunning: () => listRunningDistrosForSnapshot(registrations)
+    readRunning: async () => ({
+      status: 'confirmed',
+      distros: await listRunningDistrosForSnapshot(registrations)
+    })
   })
   return {
     registeredDistroCount: registrations?.length ?? null,
-    userDistros,
+    // A confirmed read never yields 'unverifiable'; the snapshot's schema keeps its two states.
+    userDistros: userDistros.map(({ version, state }) => ({
+      version,
+      state: state === 'running' ? 'running' : 'stopped'
+    })),
     wslPackageVersion: readWslPackageVersion(),
     wslAvailableCached: getCachedWslAvailability(),
     projects: collectWslProjects(

@@ -12,7 +12,7 @@ export type IsolatedSpawner = (
   cwd: string,
   environmentBlock: string,
   onExit: (code: number) => void
-) => { pid: number; exitWatchError: number | null }
+) => { pid: number; exitWatchError: number | null; breakawayDenied?: boolean }
 
 export type DetachedChild = EventEmitter & {
   readonly pid?: number
@@ -112,6 +112,8 @@ export function spawnDetachedWithoutInheritance(spec: DetachedSpec): DetachedChi
   const startedAt = hasSpawnObserver() ? performance.now() : null
   let pid: number | undefined
   let exited = false
+  // No exit watch means no exit event: the pid may be reused, so kill() must not target it.
+  let untracked = false
   let killedWith: NodeJS.Signals | null = null
   // Like libuv: an exit after our own kill() reports (null, signal); any other exit, its code.
   const onExit = (code: number): void => {
@@ -120,7 +122,7 @@ export function spawnDetachedWithoutInheritance(spec: DetachedSpec): DetachedChi
     child.emit('close', killedWith ? null : code, killedWith)
   }
   const kill = (signal: NodeJS.Signals = 'SIGTERM'): boolean => {
-    if (pid === undefined || exited) {
+    if (pid === undefined || exited || untracked) {
       return false
     }
     try {
@@ -143,9 +145,14 @@ export function spawnDetachedWithoutInheritance(spec: DetachedSpec): DetachedChi
     if (startedAt !== null) {
       notifySpawnObserver(resolved.file, resolved.args, performance.now() - startedAt)
     }
+    if (spawned.breakawayDenied) {
+      // The child stays in a job this process is in, and dies if that job is closed with it.
+      console.warn(`[process-host] pid ${pid} could not break away from this process's job`)
+    }
     if (spawned.exitWatchError !== null) {
+      untracked = true
       console.warn(
-        `[process-host] pid ${pid} exit is unobservable; Win32 error ${spawned.exitWatchError}`
+        `[process-host] pid ${pid} is untracked: its exit is unobservable (Win32 error ${spawned.exitWatchError}), so kill() will refuse it`
       )
     }
     process.nextTick(() => child.emit('spawn'))

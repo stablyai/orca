@@ -25,7 +25,7 @@ export const diffStyles = themedStyleSheet(() => ({
     marginTop: spacing.md,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   retryText: {
@@ -58,9 +58,12 @@ export const diffStyles = themedStyleSheet(() => ({
   diffCloseButton: {
     width: 34,
     height: 34,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  diffCloseButtonPressed: {
+    backgroundColor: colors.borderSubtle
   },
   diffState: {
     minHeight: 160,

@@ -1,10 +1,10 @@
 import { build } from 'esbuild'
 import { once } from 'node:events'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
 import {
   setIsolatedSpawner,
@@ -16,6 +16,27 @@ const describeOnWindows = process.platform === 'win32' ? describe : describe.ski
 const ADDON = resolve(__dirname, '..', '..', '..', 'native', 'windows-security', 'index.js')
 const root = mkdtempSync(join(tmpdir(), 'orca-isolated-spawn-'))
 const entry = join(root, 'main.cjs')
+
+// Holders now break away from the runner's job, so nothing reaps one a test leaves behind.
+const started = new Set<number>()
+function track(pid: number | undefined): void {
+  if (pid !== undefined && Number.isInteger(pid) && pid > 0) {
+    started.add(pid)
+  }
+}
+
+afterEach(async () => {
+  const pids = [...started]
+  started.clear()
+  for (const pid of pids.filter(isAlive)) {
+    try {
+      process.kill(pid)
+    } catch {
+      // Exited between the check and the kill.
+    }
+  }
+  await vi.waitFor(() => expect(pids.filter(isAlive)).toEqual([]), { timeout: 10_000 })
+})
 
 function isAlive(pid: number): boolean {
   try {
@@ -47,6 +68,7 @@ async function runElectron(mode: 'isolated' | 'libuv', holderMs: number) {
   const [code] = await once(child, 'close', { signal: AbortSignal.timeout(holderMs + 30_000) })
   const result = readFileSync(resultFile, 'utf8')
   const holderPid = Number(result)
+  track(holderPid)
   const holderAliveAtClose = isAlive(holderPid)
   if (holderAliveAtClose) {
     process.kill(holderPid)
@@ -114,6 +136,8 @@ describeOnWindows('isolated detached spawn against real Windows processes', () =
       }
       const own = start()
       const outside = start()
+      track(own.pid)
+      track(outside.pid)
       await Promise.all([once(own, 'spawn'), once(outside, 'spawn')])
       const ownExit = once(own, 'exit', { signal: AbortSignal.timeout(10_000) })
       const outsideExit = once(outside, 'exit', { signal: AbortSignal.timeout(10_000) })
@@ -153,4 +177,87 @@ describeOnWindows('isolated detached spawn against real Windows processes', () =
     expect(run.code, run.output).toBe(0)
     expect(run.holderAliveAtClose).toBe(false)
   }, 60_000)
+})
+
+// Joins a kill-on-close job (strict: one that forbids breakaway), starts a sleeper through the
+// addon, reports, then exits so the job closes with it, as when Orca is killed in such a job.
+const JOB_HELPER = `
+const [conptyUtils, addonPath, mode, resultFile] = process.argv.slice(2)
+const conpty = require(conptyUtils).loadNativeModule('conpty').module
+const joined = mode === 'strict' ? conpty.assignCurrentProcessToStrictJob() : conpty.assignCurrentProcessToJob()
+const env = Object.entries(process.env).map(([k, v]) => k + '=' + v + '\\0').join('') + '\\0'
+const line = '"' + process.execPath + '" -e "setTimeout(() => {}, 60000)"'
+const spawned = require(addonPath).spawnDetachedIsolated(process.execPath, line, '', env, () => {})
+// Control: libuv's detached spawn never breaks away, so the job's close always takes it.
+const controlPid = require('child_process').spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { detached: true, stdio: 'ignore' }).pid
+require('fs').writeFileSync(resultFile, JSON.stringify({ joined, controlPid, ...spawned }))
+process.exit(0)
+`
+
+describeOnWindows('isolated detached spawn inside a kill-on-close job', () => {
+  let jobRoot = ''
+
+  beforeAll(() => {
+    jobRoot = mkdtempSync(join(tmpdir(), 'orca-isolated-spawn-job-'))
+  })
+
+  afterAll(() => {
+    rmSync(jobRoot, { recursive: true, force: true })
+  })
+
+  async function spawnInJob(mode: 'breakaway-ok' | 'strict') {
+    const helper = join(jobRoot, 'job-helper.cjs')
+    writeFileSync(helper, JOB_HELPER)
+    const conptyUtils = createRequire(import.meta.url).resolve('node-pty/lib/utils')
+    const resultFile = join(jobRoot, `${mode}.json`)
+    const run = spawnProcess({
+      program: process.execPath,
+      args: [helper, conptyUtils, ADDON, mode, resultFile],
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+    let output = ''
+    run.stderr?.on('data', (chunk) => (output += chunk))
+    const [code] = await once(run, 'close', { signal: AbortSignal.timeout(30_000) })
+    expect(code, output).toBe(0)
+    const result: {
+      joined: boolean
+      controlPid: number
+      pid: number
+      breakawayDenied: boolean
+    } = JSON.parse(readFileSync(resultFile, 'utf8'))
+    return result
+  }
+
+  // A cold Node start on a loaded Windows runner can exceed the 5 s default.
+  it('the child breaks away and outlives the job closing with its parent', async (context) => {
+    const result = await spawnInJob('breakaway-ok')
+    track(result.pid)
+    track(result.controlPid)
+    if (!result.joined || result.breakawayDenied) {
+      // The runner's own job refuses nesting or breakaway; SSH sessions and terminals permit it.
+      context.skip()
+    }
+    try {
+      // The control dying proves the job closed; only then does the child's survival mean anything.
+      await vi.waitFor(() => expect(isAlive(result.controlPid)).toBe(false), { timeout: 10_000 })
+      expect(isAlive(result.pid)).toBe(true)
+    } finally {
+      if (isAlive(result.pid)) {
+        process.kill(result.pid)
+      }
+    }
+  }, 40_000)
+
+  // A cold Node start on a loaded Windows runner can exceed the 5 s default.
+  it('a job that forbids breakaway gets the child instead, and says so', async (context) => {
+    const result = await spawnInJob('strict')
+    track(result.pid)
+    track(result.controlPid)
+    if (!result.joined) {
+      context.skip()
+    }
+    expect(result.breakawayDenied).toBe(true)
+    await vi.waitFor(() => expect(isAlive(result.pid)).toBe(false), { timeout: 10_000 })
+  }, 40_000)
 })

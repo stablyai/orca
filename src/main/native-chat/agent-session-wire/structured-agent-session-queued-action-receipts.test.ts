@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { holdLane } from './structured-agent-session-delivery-hold.test-fixture'
-import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../shared/agent-session-host-authority'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
+import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../shared/agent-session/agent-session-host-authority'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import {
   createQueuedMessageTestRig,
@@ -67,7 +67,7 @@ function writeUnreadableReceipt(id: string, method: string): void {
     .run(id, SESSION, CALLER.callerKey, method)
 }
 
-/** Retire the epoch and unsent submissions, as older hosts could. */
+/** Replaces provider presentation while retaining the canonical hand-off. */
 async function rewindConversation(): Promise<void> {
   const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal
   if (!journal) {
@@ -233,7 +233,7 @@ describe('Send now', () => {
     expect(await rig.handoff(draftId)).toBeUndefined()
   })
 
-  it('answers a retry after a rewind dropped its hand-off as lost, and never sends under that id again', async () => {
+  it('keeps an old-context receipt stale without dropping or repeating its canonical hand-off', async () => {
     await rig.workingSend()
     const draftId = await queuedDraft('rewound away')
     const id = opId()
@@ -243,9 +243,10 @@ describe('Send now', () => {
       ok: false,
       refusal: { code: 'agent_session_operation_unknown', details: { reason: 'resultLost' } }
     })
-    // A never-dispatched handoff returns to waiting without redelivery under the retried ID.
+    // A cursor reset keeps the existing receipt contract, but does not release its consumed card.
     const { submissions } = await rig.host.journalSnapshot(SESSION)
-    expect(submissions.some((entry) => entry.clientMessageId === id)).toBe(false)
+    expect(submissions.filter((entry) => entry.clientMessageId === id)).toHaveLength(1)
+    expect(await rig.handoff(draftId)).toMatchObject({ clientMessageId: id })
   })
 })
 
@@ -596,43 +597,51 @@ describe('source-bound ordinary Continue', () => {
     expect(journal.submissions()).toHaveLength(2)
   })
 
-  it('refuses a stale action and actionable backlog before writing a submission or queue card', async () => {
-    const { journal, turnItemId } = await limitedTurn('old')
-    await rig.send('ordinary message wins').result
-    const before = journal.snapshot().items.map((item) => item.itemId)
-    const requests = journal.submissions().map((entry) => entry.clientMessageId)
-    expect(await rig.host.send(CALLER, params(turnItemId))).toMatchObject(superseded)
-    expect(journal.snapshot().items.map((item) => item.itemId)).toEqual(before)
-    expect(journal.submissions().map((entry) => entry.clientMessageId)).toEqual(requests)
-    expect(journal.queuedMessages.list()).toHaveLength(0)
-    await rig.settleRejected(journal.submissions()[0]!.clientMessageId, 'done')
-    const current = await limitedTurn('current')
-    const release = holdLane(rig.host, SESSION)
-    try {
+  it.each(['success', 'failure'] as const)(
+    'refuses a stale action but runs ahead of failure-held backlog, which drains only on success: %s',
+    async (outcome) => {
+      const { journal, turnItemId } = await limitedTurn('old')
+      await rig.send('ordinary message wins').result
+      const before = journal.snapshot().items.map((item) => item.itemId)
+      const requests = journal.submissions().map((entry) => entry.clientMessageId)
+      expect(await rig.host.send(CALLER, params(turnItemId))).toMatchObject(superseded)
+      expect(journal.snapshot().items.map((item) => item.itemId)).toEqual(before)
+      expect(journal.submissions().map((entry) => entry.clientMessageId)).toEqual(requests)
+      expect(journal.queuedMessages.list()).toHaveLength(0)
+      await rig.settleRejected(journal.submissions()[0]!.clientMessageId, 'done')
+      const current = await limitedTurn('current')
       const row = await journal.queuedMessages.insert({
         messageId: opId(),
         body: hostTestMessage('backlog')
       })
-      journal.queuedMessages.editLeases.acquire(
-        { callerKey: CALLER.callerKey, editId: 'edit' },
-        { messageId: row.messageId, fingerprint: row.fingerprint }
-      )
-      const attempt = rig.host.send(CALLER, params(current.turnItemId))
-      release()
-      expect(await attempt).toMatchObject(superseded)
-      expect(journal.queuedMessages.list()).toHaveLength(1)
-      expect(journal.submissions()).toHaveLength(1)
-    } finally {
-      release()
+      expect(journal.queuedMessages.pauses()).toMatchObject([{ reason: 'failed' }])
+      // Continue is the person's recovery, so the held card waits behind it like any other hold.
+      expect(await rig.host.send(CALLER, params(current.turnItemId))).toMatchObject({
+        ok: true,
+        replayed: false
+      })
+      const continuation = journal.submissions().at(-1)!.clientMessageId
+      expect(await rig.handoff(row.messageId)).toBeUndefined()
+      await openRigTurnFor(rig, continuation)
+      await rig.settleAccepted(continuation, 'continued')
+      await openRigTurnFor(rig, continuation, 'completed', outcome)
+      if (outcome === 'success') {
+        await eventually(async () => expect(await rig.handoff(row.messageId)).toBeDefined())
+      } else {
+        expect(journal.queuedMessages.pauses()).toMatchObject([{ reason: 'failed' }])
+        expect(await rig.handoff(row.messageId)).toBeUndefined()
+      }
     }
-  })
+  )
 })
 
 it.each(['send-now', 'automatic'] as const)(
   'clears Sleep on queued submission only: %s',
   async (mode) => {
-    await rig.workingSend()
+    const working = await rig.workingSend()
     const draftId = await queuedDraft('retained through Sleep')
+    await openRigTurnFor(rig, working)
+    await rig.settleAccepted(working, 'received')
     expect(await rig.host.sleepWorkspace('workspace-1', true)).toEqual({
       stoppedSessionIds: [SESSION]
     })

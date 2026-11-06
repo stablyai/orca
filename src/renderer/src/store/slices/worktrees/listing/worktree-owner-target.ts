@@ -36,9 +36,16 @@ export function runtimeTargetForWorktreeOwner(
   return target
 }
 
-/** The owner's transport and place together, refusing an unresolved owner. */
-export function hostRouteForWorktreeOwner(state: AppState, worktreeId: string): HostRoute {
-  const match = resolveOwner(state, { workspaceId: worktreeId })
+/** The owner's transport and place together (on `executionHostId` when given), refusing an unresolved owner. */
+export function hostRouteForWorktreeOwner(
+  state: AppState,
+  worktreeId: string,
+  executionHostId?: ExecutionHostId
+): HostRoute {
+  const match = resolveOwner(state, {
+    workspaceId: worktreeId,
+    ...(executionHostId ? { hostId: executionHostId } : {})
+  })
   if (match.kind !== 'resolved') {
     throw new Error(ambiguousWorkspaceOwnerMessage(state, worktreeId))
   }

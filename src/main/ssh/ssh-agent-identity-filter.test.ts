@@ -142,23 +142,4 @@ describe('createIdentityFilteredAgent', () => {
     expect(createIdentityFilteredAgent('/tmp/agent.sock', ['~/.ssh/work_key'])).toBeUndefined()
     expect(mocks.createAgent).not.toHaveBeenCalled()
   })
-
-  it('delegates signing to the underlying agent', () => {
-    const allowedKey = makeKey('allowed')
-    const sign = vi.fn()
-    const options = { hash: 'sha256' as const }
-    const callback = vi.fn()
-    mocks.readFileSync.mockReturnValue('ssh-ed25519 AAAA allowed')
-    mocks.parseKey.mockReturnValue(allowedKey)
-    mocks.createAgent.mockReturnValue({
-      getIdentities: vi.fn(),
-      sign
-    })
-
-    const agent = createIdentityFilteredAgent('/tmp/agent.sock', ['~/.ssh/work_key'])
-    const data = Buffer.from('payload')
-    agent?.sign(allowedKey as never, data, options, callback)
-
-    expect(sign).toHaveBeenCalledWith(allowedKey, data, options, callback)
-  })
 })

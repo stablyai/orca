@@ -1,7 +1,8 @@
+import { structuredAgentSessionCommandTurn } from '../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
-import { agentJournalTurnBody } from '../../shared/agent-session-turn-record'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalTurnBody } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   type StructuredAgentSessionAdapter,
   AgentSessionAcquisitionRootExitObservedError
@@ -13,11 +14,129 @@ import {
   sessionId,
   setup
 } from './rpc-session-adapter.test-fixture'
-import { agentSessionLaunchFolderMissing } from '../runtime/agent-session-launch-directory'
+import { agentSessionLaunchFolderMissing } from '../runtime/agent-session/agent-session-launch-directory'
 
 afterEach(closePiRpcAdapterFixtures)
 
 describe('Pi RPC session ownership and delivery', () => {
+  it('keeps passive, request-scoped actual separate from future picks and raw successful controls', async () => {
+    const h = await setup({}, undefined, { thinkingLevel: 'medium' })
+    await vi.waitFor(() => expect(h.connection.requests).toContain('get_commands'))
+    const model = { provider: 'anthropic', id: 'model-1', reasoning: true }
+    let effort: string | undefined = 'minimal'
+    h.connection.requestOverride = (command) => {
+      if (command === 'set_thinking_level') {
+        return Promise.resolve({}) // Native success has no echo.
+      }
+      if (command === 'get_state') {
+        return Promise.resolve({
+          sessionFile: file,
+          model,
+          thinkingLevel: effort,
+          isStreaming: false,
+          isCompacting: false
+        })
+      }
+      return undefined
+    }
+    const pick = (key: string, value: string) =>
+      h.adapter.setOption({ sessionId, fence: 7, key, value })
+    const read = () => h.adapter.readOptions({ sessionId, fence: 7 })
+    const saved = { model: 'anthropic/model-1', effort: 'off' }
+    const settle = async () => {
+      const reports = h.lifecycle.mock.calls.length
+      h.connection.receive({ type: 'agent_start' })
+      h.connection.receive({ type: 'agent_settled' })
+      await vi.waitFor(() => expect(h.lifecycle.mock.calls.length).toBeGreaterThan(reports))
+    }
+    await pick('model', saved.model)
+    await pick('effort', saved.effort)
+    expect((await read()).projectCurrent?.(saved)).toMatchObject({ effort: 'off', confirmed: [] })
+    await settle()
+    const applied = await read()
+    expect(applied.projectCurrent?.(saved)).toMatchObject({
+      effort: 'minimal',
+      confirmed: expect.arrayContaining(['effort'])
+    })
+    const requests = h.connection.requests.length
+    await read()
+    await read()
+    expect(h.connection.requests).toHaveLength(requests)
+    expect(applied.projectCurrent?.({ ...saved, effort: 'high' })).toMatchObject({
+      effort: 'high',
+      confirmed: ['model']
+    })
+
+    // An extension changes actual; equal raw input skips setters and leaves that actual intact.
+    effort = 'low'
+    await settle()
+    const changed = await read()
+    expect(changed.projectCurrent?.(saved)).toMatchObject({
+      effort: 'low',
+      confirmed: ['model', 'effort']
+    })
+    const controls = h.connection.requests.filter((command) => command.startsWith('set_'))
+    expect(
+      await h.adapter.dispatch({
+        sessionId,
+        fence: 7,
+        clientMessageId: 'equal-raw',
+        executionOptions: saved,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'same request' }] }
+      })
+    ).toMatchObject({ state: 'admitted', ranOptions: saved })
+    expect(h.connection.requests.filter((command) => command.startsWith('set_'))).toEqual(controls)
+
+    const pending = Promise.withResolvers<unknown>()
+    const requested = Promise.withResolvers<void>()
+    const ordinary = h.connection.requestOverride
+    h.connection.requestOverride = (command) => {
+      if (command === 'get_state') {
+        requested.resolve()
+        return pending.promise
+      }
+      return ordinary(command)
+    }
+    h.connection.receive({ type: 'agent_start' })
+    h.connection.receive({ type: 'agent_settled' })
+    await requested.promise
+    await pick('effort', 'high')
+    pending.resolve({
+      sessionFile: file,
+      model,
+      thinkingLevel: 'minimal',
+      isStreaming: false,
+      isCompacting: false
+    })
+    await vi.waitFor(async () => expect((await read()).current.effort).toBe('high'))
+    expect((await read()).projectCurrent?.({ ...saved, effort: 'high' })).toMatchObject({
+      effort: 'high',
+      confirmed: []
+    })
+    expect(applied.projectCurrent?.(saved)?.confirmed).toEqual([])
+
+    h.connection.requestOverride = ordinary
+    effort = undefined
+    await settle()
+    expect((await read()).projectCurrent?.({ ...saved, effort: 'high' })?.confirmed).not.toContain(
+      'effort'
+    )
+    h.connection.requestOverride = (command) =>
+      command === 'set_thinking_level'
+        ? Promise.reject(new Error('native refused'))
+        : ordinary(command)
+    await expect(pick('effort', 'low')).rejects.toThrow('native refused')
+    expect((await read()).projectCurrent?.({ ...saved, effort: 'high' })?.confirmed).not.toContain(
+      'effort'
+    )
+    await pick('model', 'anthropic/workspace-model')
+    expect(
+      (await read()).projectCurrent?.({ model: 'anthropic/workspace-model', effort: 'off' })
+    ).toMatchObject({ effort: 'off', confirmed: [] })
+    await h.adapter.closeSession(sessionId)
+    expect(changed.projectCurrent?.(saved)?.confirmed).toEqual([])
+  })
+
   it('refuses a floating chat whose folder is gone with the reason the person reads', async () => {
     const h = await setup()
     await h.adapter.closeSession(sessionId)
@@ -63,9 +182,13 @@ describe('Pi RPC session ownership and delivery', () => {
     expect(h.connections).toHaveLength(2)
   })
 
-  it('persists final events after exit while journal writes are blocked', async () => {
+  it('persists a large final message and interrupts its turn after exit while journal writes are blocked', async () => {
     const h = await setup()
     const gate = Promise.withResolvers<void>()
+    const content = Array.from({ length: 1_025 }, (_, index) => ({
+      type: 'text',
+      text: `final block ${index}`
+    }))
     try {
       const blocked = h.rig.journal.readInOrder(() => {
         expect(
@@ -78,6 +201,8 @@ describe('Pi RPC session ownership and delivery', () => {
         return gate.promise
       })
       vi.useFakeTimers()
+      h.connection.receive({ type: 'agent_start' })
+      h.connection.receive({ type: 'message_end', message: { role: 'assistant', content } })
       h.connection.receive({
         type: 'extension_ui_request',
         id: 'last-dialog',
@@ -103,6 +228,16 @@ describe('Pi RPC session ownership and delivery', () => {
           (row) => row.body.kind === 'question' && row.body.question === 'Final tail'
         )
       ).toBe(true)
+      const reopened = await h.rig.reopenJournal()
+      const texts = reopened
+        .snapshot()
+        .items.flatMap(({ body }) =>
+          body.kind === 'message' && body.role === 'assistant'
+            ? body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+            : []
+        )
+      expect(texts).toEqual(content.map((block) => block.text))
+      expect(await h.rig.turns()).toMatchObject([{ state: 'interrupted' }])
     } finally {
       gate.resolve()
       vi.useRealTimers()
@@ -218,7 +353,10 @@ describe('Pi RPC session ownership and delivery', () => {
       state: 'admitted',
       ranOptions: { model: 'anthropic/model-2', effort: 'low' }
     })
-    expect(h.connection.requests.slice(-2)).toEqual(['set_model', 'set_thinking_level'])
+    expect(h.connection.requests.filter((command) => command.startsWith('set_'))).toEqual([
+      'set_model',
+      'set_thinking_level'
+    ])
     expect(h.connection.sent).toMatchObject([{ type: 'prompt', message: 'chosen' }])
   })
 
@@ -387,6 +525,37 @@ describe('Pi RPC session ownership and delivery', () => {
     await vi.waitFor(async () => expect((await h.rig.turns())[0]?.outcome).toBe('cancellation'))
   })
 
+  it('writes a send made while Pi compacts only after compaction ends, unless Stop aborts it', async () => {
+    const h = await setup()
+    const modelSet = Promise.withResolvers<void>()
+    h.connection.requestOverride = (command) =>
+      command === 'set_model' ? modelSet.promise.then(() => ({})) : undefined
+    const send = (clientMessageId: string, extra: { signal?: AbortSignal; model?: string } = {}) =>
+      h.adapter.dispatch({
+        sessionId,
+        fence: 7,
+        clientMessageId,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: clientMessageId }] },
+        ...(extra.signal ? { signal: extra.signal } : {}),
+        ...(extra.model ? { executionOptions: { model: extra.model } } : {})
+      })
+    // Compaction starts while this send is still applying its model.
+    const waiting = send('waiting', { model: 'anthropic/model-2' })
+    await vi.waitFor(() => expect(h.connection.requests).toContain('set_model'))
+    h.connection.receive({ type: 'compaction_start', reason: 'manual' })
+    modelSet.resolve()
+    const stop = new AbortController()
+    const stopped = send('stopped', { signal: stop.signal })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(h.connection.sent).toEqual([])
+    const reason = new Error('Stopped')
+    stop.abort(reason)
+    await expect(stopped).rejects.toBe(reason)
+    h.connection.receive({ type: 'compaction_end', reason: 'manual' })
+    await expect(waiting).resolves.toMatchObject({ state: 'admitted' })
+    expect(h.connection.sent).toMatchObject([{ type: 'prompt', message: 'waiting' }])
+  })
+
   it('keeps a pending manual compaction cancellable and reports root/tree proof honestly', async () => {
     const h = await setup()
     const turnId = 'manual-compact'
@@ -413,6 +582,22 @@ describe('Pi RPC session ownership and delivery', () => {
     await expect(h.adapter.closeSession(sessionId)).rejects.toBeInstanceOf(
       AgentSessionAcquisitionRootExitObservedError
     )
+  })
+
+  it('passes /compact instructions as Pi custom instructions', async () => {
+    const h = await setup()
+    const command = {
+      clientMessageId: 'compact-1',
+      ...structuredAgentSessionCommandTurn('compact-1'),
+      running: { kind: 'turn' as const, turnId: 'compact:compact-1', state: 'running' as const }
+    }
+    await h.adapter.compact({ sessionId, fence: 7, command })
+    await h.adapter.compact({
+      sessionId,
+      fence: 7,
+      command: { ...command, instructions: 'keep the plan' }
+    })
+    expect(h.connection.compactParams).toEqual([{}, { customInstructions: 'keep the plan' }])
   })
 
   it('ends the host command row under its original identity after a no-op compaction', async () => {

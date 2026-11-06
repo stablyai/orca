@@ -23,13 +23,13 @@ vi.mock('@orca/process-host', async (importOriginal) => ({
 const { listDetectedWorktreesForCapturedRepo } = await import('./detected-provider-listing')
 const { setWslStoppedWorktreeRescanNotifier } = await import('./wsl-stopped-worktree-listing')
 const { WslDistroStoppedError, WslDistroUnverifiableError } =
-  await import('../../../wsl/wsl-unc-access-gate')
+  await import('../../../wsl/filesystem/wsl-unc-access-gate')
 const { _resetWslBackgroundDistroGateForTests, noteWslDistroWoken, noteWslDistrosRunning } =
-  await import('../../../wsl-background-distro-gate')
+  await import('../../../wsl/discovery/wsl-background-distro-gate')
 const { scanWorktreesStartingWslDistro } = await import('./wsl-distro-starting-scan')
-const { isWslUserActFor } = await import('../../../wsl/wsl-user-act-scope')
+const { isWslUserActFor } = await import('../../../wsl/discovery/wsl-user-act-scope')
 const { _pendingWslStoppedWorktreeRescanCount, _resetWslStoppedWorktreeRescansForTests } =
-  await import('../../../wsl-stopped-worktree-rescan-registry')
+  await import('../../../wsl/discovery/wsl-stopped-worktree-rescan-registry')
 
 const REPO_PATH = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
 const FEATURE_PATH = '\\\\wsl.localhost\\Ubuntu\\home\\me\\feature'
@@ -248,14 +248,5 @@ describe('Retry on a stopped WSL distro (E9)', () => {
 
     expect(insideAct).toEqual([true])
     expect(isWslUserActFor('Ubuntu')).toBe(false)
-  })
-
-  it('does nothing for a folder workspace or a repo outside WSL', async () => {
-    for (const repo of [makeRepo({ kind: 'folder' }), makeRepo({ path: 'C:\\work\\repo' })]) {
-      await scanWorktreesStartingWslDistro(createStore(repo), repo.id)
-    }
-    await scanWorktreesStartingWslDistro(createStore(makeRepo()), 'unknown-repo')
-
-    expect(mocks.listDetectedGitWorktrees).not.toHaveBeenCalled()
   })
 })

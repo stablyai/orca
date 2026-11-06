@@ -13,13 +13,15 @@ vi.mock('electron', () => ({
     handle: (name: string, handler: (...args: unknown[]) => unknown) => handlers.set(name, handler)
   }
 }))
-vi.mock('./local-file-access-resolution', () => ({ resolveUserNamedRegularFile: authorize }))
+vi.mock('./filesystem/access/local-file-access-resolution', () => ({
+  resolveUserNamedRegularFile: authorize
+}))
 import {
   closeAllLocalLogTailWatchers,
   getActiveLocalLogTailWatcherCount,
   registerLocalLogTailHandlers
 } from './local-log-tail'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: path resolution is mocked, so the store is never read.
 const NO_STORE = {} as Store

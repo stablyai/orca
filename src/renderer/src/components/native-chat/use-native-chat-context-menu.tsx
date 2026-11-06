@@ -1,14 +1,14 @@
 import {
   useCallback,
-  useEffect,
   useRef,
   useState,
   type MouseEventHandler,
   type PointerEventHandler,
   type RefObject
 } from 'react'
-import { chatMathSelectionText } from '../sidebar/chat-markdown-math-selection'
-import { Clipboard, Copy, GitFork, Image as ImageIcon, SquareTerminal } from 'lucide-react'
+import { flushSync } from 'react-dom'
+import { markdownMathSelectionText } from '../../../../shared/markdown-math-selection'
+import { Clipboard, Copy, Image as ImageIcon, SquareTerminal } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,6 +30,10 @@ import { isEditableTarget } from '@/lib/editable-target'
 import { findEditablePrimarySelectionPasteTarget } from '@/lib/primary-selection-paste'
 import { NativeChatCopyOrcaSessionIdMenuItem } from './NativeChatCopyOrcaSessionIdMenuItem'
 import { NativeChatSelectionQuote } from './NativeChatSelectionQuote'
+import {
+  formatNativeChatQuote,
+  readNativeChatTranscriptSelection
+} from './native-chat-quote-selection'
 import { NativeChatPaneMenuItems } from './NativeChatPaneMenuItems'
 import { NativeChatStructuredPaneMenuItems } from './NativeChatStructuredPaneMenuItems'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
@@ -47,6 +51,8 @@ import {
 import type { NativeChatFileLinkContext } from './native-chat-file-link'
 import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
+import { useNativeChatStandaloneMenu } from './use-native-chat-standalone-menu'
+import type { NativeChatSessionMenuSource } from './use-native-chat-session-context-actions'
 
 type NativeChatContextMenuState = {
   open: boolean
@@ -70,7 +76,8 @@ type UseNativeChatContextMenuArgs = {
   actions: NativeChatContextMenuActions
   showTerminalPaneActions?: boolean
   splitShortcutLabels?: { right: string; down: string }
-  chatPane?: { tabId: string; worktreeId: string; groupId: string }
+  chatPane?: { tabId: string; worktreeId: string; groupId: string; sessionId: string }
+  chatSession?: NativeChatSessionMenuSource
   /** A structured chat tab's Orca session ID; a chat in a terminal pane is that terminal's agent. */
   resolveOrcaSessionId?: () => Promise<string | null>
 } & NativeChatContextMenuTargetArgs
@@ -93,7 +100,6 @@ export type NativeChatContextMenuActions = {
   onToggleExpand: () => void
   canContinueAgentSessionInNewSession: boolean
   onContinueAgentSessionInNewSession: () => void
-  onForkAgentSession: () => void
   onCopyAgentSessionContext: () => void
   onSetTitle: () => void
   canClearPaneTitle: boolean
@@ -116,7 +122,6 @@ export const emptyNativeChatContextMenuActions: Omit<NativeChatContextMenuAction
   onToggleExpand: () => {},
   canContinueAgentSessionInNewSession: false,
   onContinueAgentSessionInNewSession: () => {},
-  onForkAgentSession: () => {},
   onCopyAgentSessionContext: () => {},
   onSetTitle: () => {},
   canClearPaneTitle: false,
@@ -140,6 +145,7 @@ export function useNativeChatContextMenu({
   showTerminalPaneActions = true,
   splitShortcutLabels,
   chatPane,
+  chatSession,
   resolveOrcaSessionId,
   messageListRef,
   fileLinkContext = null,
@@ -173,13 +179,9 @@ export function useNativeChatContextMenu({
   const hasItems =
     hasEditItems || hasSessionItems || chatPane !== undefined || resolveOrcaSessionId !== undefined
 
-  useEffect(() => {
-    if (!enabled) {
-      setState((current) =>
-        current.open ? { ...current, open: false, image: undefined } : current
-      )
-    }
-  }, [enabled])
+  if (!enabled && state.open) {
+    setState({ ...state, open: false, image: undefined })
+  }
 
   const onContextMenuCapture = useCallback(
     (event: React.MouseEvent<HTMLElement>) => {
@@ -196,10 +198,18 @@ export function useNativeChatContextMenu({
         return
       }
       menuOpenedAtRef.current = Date.now()
+      const root = rootRef.current
+      const selectedText = getNativeChatSelectedText(root)
+      const missesSelection =
+        selectedText !== '' && menuPointMissesSelection(event.clientX, event.clientY)
+      // Native menus drop a selection the press missed; editors own theirs, so only a reply's goes.
+      if (missesSelection && root && readNativeChatTranscriptSelection(root)) {
+        window.getSelection()?.removeAllRanges()
+      }
       setState({
         open: true,
         point: { x: event.clientX, y: event.clientY },
-        selectedText: getNativeChatSelectedText(rootRef.current),
+        selectedText: missesSelection ? '' : selectedText,
         canPaste: isEditableTarget(event.target),
         returnFocusTo: rootRef.current?.ownerDocument.activeElement ?? null,
         image: readNativeChatCopyImage(event.target),
@@ -221,6 +231,11 @@ export function useNativeChatContextMenu({
     setState((prev) => ({ ...prev, open }))
   }, [])
 
+  const standaloneMenu = useNativeChatStandaloneMenu({
+    pane: showTerminalPaneActions ? undefined : chatPane,
+    source: showTerminalPaneActions ? undefined : chatSession,
+    close: () => setState((prev) => ({ ...prev, open: false }))
+  })
   return {
     onContextMenuCapture,
     onPointerDownCapture: keepSelectionThroughMenuPress,
@@ -277,7 +292,10 @@ export function useNativeChatContextMenu({
           ) : null}
           <NativeChatContextMenuTargetItems
             target={target}
-            composerRef={composerRef}
+            onQuote={(text) => {
+              flushSync(() => setState((prev) => ({ ...prev, open: false })))
+              composerRef.current?.appendText(formatNativeChatQuote(text))
+            }}
             rewind={rewind}
           />
           {state.canPaste ? (
@@ -288,9 +306,11 @@ export function useNativeChatContextMenu({
           ) : null}
           {hasEditItems && hasSessionItems ? <DropdownMenuSeparator /> : null}
           {onFind ? <NativeChatFindMenuItem onSelect={() => onFind(state.returnFocusTo)} /> : null}
+          {standaloneMenu.quickCommands}
           {onHandOff ? (
             <AgentSessionContinuationMenuItem disabled={handOffDisabled} onSelect={onHandOff} />
           ) : null}
+          {standaloneMenu.sessionItems}
           {showTerminalPaneActions ? (
             <>
               {onSwitchToTerminal ? (
@@ -310,13 +330,6 @@ export function useNativeChatContextMenu({
                   onSelect={actions.onContinueAgentSessionInNewSession}
                 />
               ) : null}
-              <DropdownMenuItem onSelect={actions.onForkAgentSession}>
-                <GitFork />
-                {translate(
-                  'auto.components.terminal.pane.TerminalContextMenu.8a7ddb8b8a',
-                  'Fork Agent Session…'
-                )}
-              </DropdownMenuItem>
               <AgentSessionContextCopyMenuItem onSelect={actions.onCopyAgentSessionContext} />
             </>
           ) : null}
@@ -337,6 +350,7 @@ export function useNativeChatContextMenu({
             </>
           ) : null}
         </DropdownMenuContent>
+        {standaloneMenu.dialogs}
       </DropdownMenu>
     )
   }
@@ -350,6 +364,23 @@ function keepSelectionThroughMenuPress(event: React.PointerEvent<HTMLElement>): 
   ) {
     event.preventDefault()
   }
+}
+
+// Native menus act on what was pressed, so a selection the press missed is not offered.
+function menuPointMissesSelection(x: number, y: number): boolean {
+  const selection = window.getSelection()
+  const caret = document.caretPositionFromPoint?.(x, y)
+  const node = caret?.offsetNode
+  // A text control's caret offset counts its value, not DOM children, so it maps to no DOM point.
+  if (
+    !caret ||
+    !selection?.rangeCount ||
+    node instanceof HTMLInputElement ||
+    node instanceof HTMLTextAreaElement
+  ) {
+    return false
+  }
+  return !selection.getRangeAt(0).isPointInRange(caret.offsetNode, caret.offset)
 }
 
 // Why: only Chromium's own menu for a typing target carries the OS spellchecker's suggestions.
@@ -367,7 +398,7 @@ function getNativeChatSelectedText(root: HTMLElement | null): string {
   if (!nodeBelongsToRoot(anchor, root) || !nodeBelongsToRoot(focus, root)) {
     return ''
   }
-  return chatMathSelectionText(selection, root) ?? selection.toString()
+  return markdownMathSelectionText(selection, root) ?? selection.toString()
 }
 
 function nodeBelongsToRoot(node: Node | null, root: HTMLElement): boolean {

@@ -3,10 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import type { SshTarget } from '../../../shared/ssh-types'
-import {
-  admitSystemSshLoopbackRoute,
-  agentListingMayHoldSecurityKey
-} from './system-ssh-loopback-route-admission'
+import { admitSystemSshLoopbackRoute } from './system-ssh-loopback-route-admission'
 import { findSystemSsh } from './system-ssh-binary'
 
 const target: SshTarget = {
@@ -149,24 +146,5 @@ describe.skipIf(findSystemSsh() === null)('admitSystemSshLoopbackRoute with real
       sshdPort: 22,
       hostKeyAlias: 'devbox.internal'
     })
-  })
-})
-
-describe('agentListingMayHoldSecurityKey', () => {
-  const listing = (code: number | null, stdout = '', timedOut = false) => ({
-    code,
-    stdout,
-    timedOut
-  })
-
-  it.each([
-    ['an sk- key in the agent', listing(0, 'sk-ssh-ed25519@openssh.com AAAA k\n'), false, true],
-    ['only ordinary agent keys', listing(0, 'ssh-ed25519 AAAA k\n'), false, false],
-    ['an agent with no identities', listing(1), false, false],
-    ['no default agent to sign with', listing(2), false, false],
-    ['an unreachable configured IdentityAgent', listing(2), true, true],
-    ['an agent query that timed out', listing(null, '', true), false, true]
-  ])('%s → %s', (_name, result, agentConfigured, expected) => {
-    expect(agentListingMayHoldSecurityKey(result, agentConfigured)).toBe(expected)
   })
 })

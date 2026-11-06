@@ -1,4 +1,4 @@
-import { stripAnsiControlSequences } from '../../shared/commit-message-agent-output'
+import { stripAnsiControlSequences } from '../../shared/source-control/ai/generation/commit-message-agent-output'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import {
   textGenerationFailure,
