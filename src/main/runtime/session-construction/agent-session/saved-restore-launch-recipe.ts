@@ -9,26 +9,25 @@ import {
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
-/** A client restoring a pane on this host: replay what this host recorded for the pane, else
- *  the unrecorded rule with the mode this host's hooks saw. Undefined keeps the client's
- *  recorded Arguments, which clients send without the rest of the recipe. */
+/** A client restoring a pane this host ran: the host's note for that source pane, else the
+ *  unrecorded rule with the mode this host's hooks saw there. Never this host's current settings,
+ *  and never the client's partial Arguments: neither is the launch that ran. */
 export function resolveSavedRestoreLaunchRecipe(args: {
   agent: TuiAgent
   providerSession: AgentProviderSessionMetadata
+  /** The source pane's record and latest status on this host. */
   record: SleepingAgentSessionRecord | undefined
   liveRow: AgentStatusIpcPayload | undefined
-  clientAgentArgs: string | null | undefined
-}): SleepingAgentLaunchConfig | undefined {
+}): SleepingAgentLaunchConfig {
   const { agent } = args
   const sameSession = (session: AgentProviderSessionMetadata | null | undefined) =>
     session && agentProviderSessionsEqual(agent, session, args.providerSession) ? session : null
-  const record = args.record?.agent === agent ? args.record : undefined
-  const recorded = sameSession(record?.providerSession) ? record : undefined
+  const recorded =
+    args.record?.agent === agent && sameSession(args.record.providerSession)
+      ? args.record
+      : undefined
   if (recorded?.launchConfig) {
     return resolveResumeLaunchRecipe(recorded.launchConfig, agent, recorded.providerSession)
-  }
-  if (args.clientAgentArgs !== undefined) {
-    return undefined
   }
   const live =
     args.liveRow?.agentType === agent

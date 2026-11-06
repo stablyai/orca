@@ -1,5 +1,6 @@
 import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { AGENT_SESSION_RESUME_EFFORT_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-create-capabilities'
+import { AGENT_SESSION_RESTORE_SOURCE_PANE_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-runtime-capabilities'
 import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 import { isRuntimeCompatBlockError } from './runtime-protocol-compat'
 
@@ -25,5 +26,25 @@ async function hostAcceptsResumeEffort(environmentId: string): Promise<boolean> 
       throw error
     }
     return false
+  }
+}
+
+/** The source pane a saved restore names, for hosts whose strict schema accepts it. */
+export async function restoreSourcePaneOptions(
+  environmentId: string,
+  paneKey: string
+): Promise<{ restoreSourcePaneKey?: string }> {
+  try {
+    return (await runtimeEnvironmentSupportsCapability(
+      environmentId,
+      AGENT_SESSION_RESTORE_SOURCE_PANE_RUNTIME_CAPABILITY
+    ))
+      ? { restoreSourcePaneKey: paneKey }
+      : {}
+  } catch (error) {
+    if (isRuntimeCompatBlockError(error)) {
+      throw error
+    }
+    return {}
   }
 }

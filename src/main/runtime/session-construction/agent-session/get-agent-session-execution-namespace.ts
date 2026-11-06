@@ -21,6 +21,7 @@ import { resolveWslHostAgentResumeInputs } from '../../terminal/launch/wsl-host-
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { resolveSavedRestoreLaunchRecipe } from './saved-restore-launch-recipe'
+import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import {
   resolveTuiAgentLaunchRawArgs,
   resolveTuiAgentLaunchEnv
@@ -89,23 +90,27 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
     return Object.keys(options).length > 0 ? options : undefined
   }
 
-  /** A restore of a pane this host recorded; History and other user resumes keep current settings. */
+  /** A saved restore replays the source pane as this host ran it; History and other user resumes keep current settings. */
   private savedRestoreRecipe(
     worktreeId: string,
     request: Extract<RuntimeEnsureAgentSessionRequest, { kind: 'explicit' }>
-  ): SleepingAgentLaunchConfig | undefined {
+  ): SleepingAgentLaunchConfig {
+    // Why the source pane: a Wake opens a new tab, so `placement` names a pane that never ran it.
     const { tabId, leafId } = request.placement ?? {}
-    const paneKey = tabId && leafId ? makePaneKey(tabId, leafId) : null
+    const sourcePaneKey =
+      request.restoreSourcePaneKey ?? (tabId && leafId ? makePaneKey(tabId, leafId) : null)
+    const record = sourcePaneKey
+      ? this.getWorkspaceSessionForWorktree(worktreeId)?.sleepingAgentSessionsByPaneKey?.[
+          sourcePaneKey
+        ]
+      : undefined
     return resolveSavedRestoreLaunchRecipe({
       agent: request.agent,
       providerSession: request.providerSession,
-      record: paneKey
-        ? this.getWorkspaceSessionForWorktree(worktreeId)?.sleepingAgentSessionsByPaneKey?.[paneKey]
-        : undefined,
-      liveRow: paneKey
-        ? this.getAgentProviderSessionSnapshotFn?.().find((row) => row.paneKey === paneKey)
-        : undefined,
-      clientAgentArgs: request.agentArgs
+      record: record && worktreeIdsEqual(record.worktreeId, worktreeId) ? record : undefined,
+      liveRow: sourcePaneKey
+        ? this.getAgentProviderSessionSnapshotFn?.().find((row) => row.paneKey === sourcePaneKey)
+        : undefined
     })
   }
 
