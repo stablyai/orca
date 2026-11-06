@@ -152,6 +152,10 @@ export class JournalWriterSession {
     this.reducer = null
   }
 
+  get sessionId(): string {
+    return this.target.sessionId
+  }
+
   /** The command's projection scope: the epoch its ready projection covers. */
   scopePrefix(): [string, string] {
     return (this.lastScope ?? this.scope()).prefix

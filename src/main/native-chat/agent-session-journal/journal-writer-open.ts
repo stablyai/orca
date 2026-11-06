@@ -11,8 +11,7 @@ import { readJournalSessionEpoch } from './journal-row-table'
 export async function openJournalWriterSession(
   session: JournalWriterSession
 ): Promise<AgentJournalCursor> {
-  const { collaborators, db } = session
-  const { sessionId } = session.state
+  const { collaborators, db, sessionId } = session
   if (journalLogNeedsFounding(db, sessionId)) {
     collaborators.epochController.start(
       'session_created',
