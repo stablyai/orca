@@ -6450,7 +6450,6 @@
           "savedInProjectSettings": "Сохранено в <settings>настройках этого проекта</settings>"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "Сохранить локальную настройку",
           "3933401d28": "Настроить",
           "31b8b01a45": "Настройки",
           "4a98f907ae": "Повторить попытку",
@@ -6464,9 +6463,16 @@
           "822ff300ad": "Скрыть",
           "5bfd5c8779": "Скрыть скрипты настройки",
           "detectedFromSource": "Обнаружено в <source>{{source}}</source>",
-          "detectedArchiveScript": "Скрипт архивации",
           "ignoresSharedSetup": "Этот репозиторий игнорирует общие скрипты настройки из <yaml>orca.yaml</yaml>. Добавьте локальную команду или измените источник в настройках.",
-          "foundSetupCommandIn": "В <source>{{source}}</source> найдена команда настройки. Сохраните её для запуска в новых рабочих деревьях."
+          "foundSetupCommandIn": "В <source>{{source}}</source> найдена команда настройки. Сохраните её для запуска в новых рабочих деревьях.",
+          "reviewSetupScript": "Проверить скрипт настройки"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "Проверить скрипт настройки",
+          "description": "После сохранения он будет запускаться при каждом создании рабочего дерева для {{repo}} в Orca.",
+          "setupScript": "Скрипт настройки",
+          "archiveScript": "Скрипт архивации",
+          "save": "Сохранить локальную настройку"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "Отмена",

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { buildImportedHookSettings, getDetectedSetupPreviewContent } from './setup-script-prompt'
-import { SETUP_SCRIPT_IMPORT_PROVIDERS } from '../../../shared/setup-script-import-providers'
+import {
+  buildImportedHookSettings,
+  getDetectedSetupPreviewContent,
+  getSetupScriptFirstLine
+} from './setup-script-prompt'
+import { SETUP_SCRIPT_IMPORT_PROVIDERS } from '../../../shared/workspace-setup/setup-script-import-providers'
 import type { Repo } from '../../../shared/repo-types'
 
 const repo: Repo = {
@@ -34,4 +38,17 @@ describe('getDetectedSetupPreviewContent', () => {
       expect(preview.archive).toBe(saved.scripts.archive)
     }
   )
+})
+
+describe('getSetupScriptFirstLine', () => {
+  it('summarizes a multi-line script by its first command', () => {
+    expect(getSetupScriptFirstLine('\n  pnpm install  \n\npnpm build\n')).toEqual({
+      firstLine: 'pnpm install',
+      hasMore: true
+    })
+    expect(getSetupScriptFirstLine('bun install\n')).toEqual({
+      firstLine: 'bun install',
+      hasMore: false
+    })
+  })
 })

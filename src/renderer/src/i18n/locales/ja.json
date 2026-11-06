@@ -5520,7 +5520,6 @@
           "savedInProjectSettings": "この<settings>プロジェクトの設定</settings>に保存済み"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "ローカル設定を保存する",
           "3933401d28": "設定する",
           "31b8b01a45": "設定",
           "4a98f907ae": "再試行",
@@ -5534,9 +5533,16 @@
           "822ff300ad": "閉じる",
           "5bfd5c8779": "セットアップスクリプトを閉じる",
           "detectedFromSource": "<source>{{source}}</source> から検出",
-          "detectedArchiveScript": "アーカイブスクリプト",
           "ignoresSharedSetup": "このリポジトリは共有の <yaml>orca.yaml</yaml> セットアップスクリプトを無視します。ローカルコマンドを追加するか、設定でソースを変更してください。",
-          "foundSetupCommandIn": "<source>{{source}}</source> でセットアップコマンドが見つかりました。新規ワークツリーで実行するには保存してください。"
+          "foundSetupCommandIn": "<source>{{source}}</source> でセットアップコマンドが見つかりました。新規ワークツリーで実行するには保存してください。",
+          "reviewSetupScript": "セットアップスクリプトを確認"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "セットアップスクリプトを確認",
+          "description": "保存すると、Orca が {{repo}} のワークツリーを作成するたびに実行されます。",
+          "setupScript": "セットアップスクリプト",
+          "archiveScript": "アーカイブスクリプト",
+          "save": "ローカル設定を保存する"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "キャンセル",

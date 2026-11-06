@@ -219,6 +219,14 @@ export function getDetectedSetupPreviewContent(
   }
 }
 
+export function getSetupScriptFirstLine(setup: string): { firstLine: string; hasMore: boolean } {
+  const lines = setup
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+  return { firstLine: lines[0] ?? '', hasMore: lines.length > 1 }
+}
+
 // Product names stay as detected; descriptive labels translate by provider.
 function candidateLabel(candidate: SetupScriptImportCandidate): string {
   if (candidate.provider === 'codex') {
