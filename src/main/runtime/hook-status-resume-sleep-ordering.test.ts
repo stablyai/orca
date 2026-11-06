@@ -78,6 +78,7 @@ function sleepCapture(updatedAt: number): WorktreeSleepResumeCapture {
       PTY_ID,
       {
         retiredPaneKeys: [],
+        recipeLostPaneKeys: [],
         records: [
           {
             paneKey: PANE_KEY,

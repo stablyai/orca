@@ -12,10 +12,11 @@ import { isLocalHookConnectionId } from '../../../../shared/wsl-hook-relay-contr
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { isWorkspaceSleepRecord } from '../../../../shared/workspace-sleep'
 
-/** Per slept PTY: the resume records captured, and the panes the hook store proves moved on. */
+/** Per slept PTY: the resume records captured, the panes the hook store proves moved on, and
+ *  the panes whose Orca launch still runs though a daemon reattach cost main its recipe. */
 export type WorktreeSleepResumeCapture = Map<
   string,
-  { retiredPaneKeys: string[]; records: SleepingAgentSessionRecord[] }
+  { retiredPaneKeys: string[]; records: SleepingAgentSessionRecord[]; recipeLostPaneKeys: string[] }
 >
 
 /** Captures before a host-driven sleep stops its PTYs and persists for the ones proven stopped. */
@@ -52,6 +53,7 @@ export async function captureWorktreeSleepResumeRecords(args: {
     })
     const records: SleepingAgentSessionRecord[] = []
     const retiredPaneKeys: string[] = []
+    const recipeLostPaneKeys: string[] = []
     const launch = args.launchByPtyId.get(ptyId)
     for (const { paneKey, tabId } of panes) {
       // Why: the one holder rule — an agent the hook store proved exited left a plain shell.
@@ -87,8 +89,11 @@ export async function captureWorktreeSleepResumeRecords(args: {
         connectionId: isLocalHookConnectionId(row.connectionId) ? null : row.connectionId,
         ...(launch?.config && launch.agent === agent ? { launchConfig: launch.config } : {})
       })
+      if (!launch?.config && launch?.agent === agent) {
+        recipeLostPaneKeys.push(paneKey)
+      }
     }
-    capture.set(ptyId, { retiredPaneKeys, records })
+    capture.set(ptyId, { retiredPaneKeys, records, recipeLostPaneKeys })
   }
   return capture
 }
@@ -112,9 +117,9 @@ export function applyWorktreeSleepResumeRecords(
     }
     for (const record of entry?.records ?? []) {
       const previous = next[record.paneKey]
-      // Reattach can lose launch recipes; retain an earlier capture's config for the same session.
+      // Why only a lost recipe: a typed agent resuming the same conversation never ran the earlier launch.
       const keptLaunchConfig =
-        !record.launchConfig &&
+        entry?.recipeLostPaneKeys.includes(record.paneKey) &&
         previous?.launchConfig &&
         previous.agent === record.agent &&
         agentProviderSessionsEqual(record.agent, previous.providerSession, record.providerSession)
