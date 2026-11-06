@@ -260,7 +260,7 @@ describe('OrcaRuntimeService', () => {
     ).mockRejectedValue(new Error('selector_not_found'))
 
     await expect(runtime.resolveActiveWorktreeContext()).resolves.toMatchObject({
-      worktreeId: `ssh:ssh-missing|${mainId}`,
+      worktreeId: mainId,
       displayName: 'Remote main'
     })
   })
@@ -299,7 +299,7 @@ describe('OrcaRuntimeService', () => {
     ).mockRejectedValue(new Error('selector_not_found'))
 
     await expect(runtime.resolveActiveWorktreeContext()).resolves.toMatchObject({
-      worktreeId: `ssh:ssh-missing|${mainId}`,
+      worktreeId: mainId,
       displayName: 'Remote main'
     })
   })
@@ -341,7 +341,7 @@ describe('OrcaRuntimeService', () => {
     ).mockRejectedValue(new Error('selector_not_found'))
 
     await expect(runtime.resolveActiveWorktreeContext()).resolves.toMatchObject({
-      worktreeId: `ssh:host-a|${id}`,
+      worktreeId: id,
       displayName: 'Host A'
     })
   })
@@ -375,9 +375,36 @@ describe('OrcaRuntimeService', () => {
     ).mockRejectedValue(new Error('selector_not_found'))
 
     await expect(runtime.resolveActiveWorktreeContext()).resolves.toMatchObject({
-      worktreeId: `ssh:ssh-blank|${id}`,
+      worktreeId: id,
       displayName: '/srv/blank'
     })
+  })
+
+  it('keeps a stale focus on a removed local worktree null', async () => {
+    const localRepo = {
+      id: 'local-repo',
+      path: '/src/local',
+      displayName: 'local',
+      badgeColor: 'blue',
+      addedAt: 1
+    }
+    const goneId = `${localRepo.id}::/src/local-gone`
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [localRepo],
+      getRepo: () => localRepo,
+      getAllWorktreeMeta: () => ({}),
+      getWorktreeMeta: () => undefined,
+      getWorktreeMetaForHost: () => undefined,
+      getWorkspaceSession: () => ({ activeWorktreeId: goneId })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    vi.spyOn(
+      runtime as unknown as { resolveWorkspaceSelector: (selector: string) => Promise<unknown> },
+      'resolveWorkspaceSelector'
+    ).mockRejectedValue(new Error('selector_not_found'))
+
+    await expect(runtime.resolveActiveWorktreeContext()).resolves.toBeNull()
   })
 
   it('does not interpret active as a runtime-global worktree selector', async () => {

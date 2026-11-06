@@ -3,7 +3,6 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 
@@ -31,19 +30,20 @@ export type StoredWorkspaceContextStore = {
 }
 
 /**
- * Describe an active workspace from persisted rows. A remote worktree is absent from the local
- * catalog, but its id, path and display name are still what a workspace-scoped plugin needs.
- * Host-qualified ids keep two hosts' copies of the same id apart.
+ * Describe an active remote workspace from persisted rows. A remote worktree is absent from the
+ * local catalog, but its id, path and display name are still what a workspace-scoped plugin needs.
+ * The id stays raw: terminal listing and agent-status rows key on the raw id, and the host filter
+ * below already picks the right copy of a twin id. Local rows never fall back, so a stale focus
+ * on a removed local worktree stays null instead of naming a workspace that no longer exists.
  */
 export function resolveStoredWorkspaceContext(
   store: StoredWorkspaceContextStore | null | undefined,
   worktreeId: string,
   hostId?: ExecutionHostId
 ): { worktreeId: string; path: string; branch: string; displayName: string } | null {
-  const scopedId =
-    hostId && hostId !== LOCAL_EXECUTION_HOST_ID
-      ? composeWorktreeHostIdentity(hostId, worktreeId)
-      : worktreeId
+  if (hostId === LOCAL_EXECUTION_HOST_ID) {
+    return null
+  }
   const scope = parseWorkspaceKey(worktreeId)
   if (scope?.type === 'folder') {
     const folder = store
@@ -53,9 +53,9 @@ export function resolveStoredWorkspaceContext(
           candidate.id === scope.folderWorkspaceId &&
           (!hostId || (candidate.executionHostId ?? LOCAL_EXECUTION_HOST_ID) === hostId)
       )
-    return folder
+    return folder && (folder.executionHostId ?? LOCAL_EXECUTION_HOST_ID) !== LOCAL_EXECUTION_HOST_ID
       ? {
-          worktreeId: scopedId,
+          worktreeId,
           path: folder.folderPath,
           branch: '',
           displayName: nonEmpty(folder.name, folder.folderPath)
@@ -74,11 +74,13 @@ export function resolveStoredWorkspaceContext(
         candidate.id === parsed.repoId && (!hostId || getRepoExecutionHostId(candidate) === hostId)
     )
   const meta = hostId ? store?.getWorktreeMetaForHost?.(id, hostId) : store?.getWorktreeMeta?.(id)
-  if (!meta && !repo) {
+  // Without a known remote host the row may be a removed local worktree; never guess.
+  const rowHostId = hostId ?? (repo ? getRepoExecutionHostId(repo) : undefined)
+  if ((!meta && !repo) || !rowHostId || rowHostId === LOCAL_EXECUTION_HOST_ID) {
     return null
   }
   return {
-    worktreeId: scopedId,
+    worktreeId: id,
     path: parsed.worktreePath,
     branch: '',
     displayName: nonEmpty(meta?.displayName, repo?.displayName, parsed.worktreePath)
