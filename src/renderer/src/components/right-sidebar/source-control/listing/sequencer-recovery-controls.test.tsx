@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { SequencerRecoveryControls } from './sequencer-recovery-controls'
+import { GIT_GRAPH_REFRESH_EVENT } from '@/lib/git-graph-tab'
 import type { GitStatusResult } from '../../../../../../shared/git/status/git-status-types'
 
 const { status, continued } = vi.hoisted(() => ({ status: vi.fn(), continued: vi.fn() }))
@@ -30,7 +31,7 @@ vi.mock('@/lib/worktree-git-copy', () => ({
   })
 }))
 
-it('does not apply a late recovery status to the selected same-ID twin', async () => {
+it('fences late recovery status while invalidating the original graph after navigation', async () => {
   const initial = useAppStore.getState()
   const pending = Promise.withResolvers<GitStatusResult>()
   const fetching = Promise.withResolvers<void>()
@@ -52,6 +53,12 @@ it('does not apply a late recovery status to the selected same-ID twin', async (
   const container = document.createElement('div')
   document.body.append(container)
   const root = createRoot(container)
+  let invalidatedWorktree: unknown
+  const onGraphRefresh = (event: Event) => {
+    if (event instanceof CustomEvent) {
+      invalidatedWorktree = event.detail
+    }
+  }
   try {
     await act(async () =>
       root.render(
@@ -69,7 +76,27 @@ it('does not apply a late recovery status to the selected same-ID twin', async (
       await pending.promise
     })
     expect(accepted).toEqual({ entries: [], head: 'host-B', conflictOperation: 'revert' })
+
+    const recovering = Promise.withResolvers<void>()
+    const started = Promise.withResolvers<void>()
+    continued.mockImplementation(() => {
+      started.resolve()
+      return recovering.promise
+    })
+    window.addEventListener(GIT_GRAPH_REFRESH_EVENT, onGraphRefresh)
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button')!.click()
+      await started.promise
+    })
+    await act(async () => useAppStore.setState({ activeWorktreeId: 'other' }))
+    await act(async () => {
+      recovering.resolve()
+      await recovering.promise
+    })
+    expect(invalidatedWorktree).toBe('wt')
+    expect(accepted).toEqual({ entries: [], head: 'host-B', conflictOperation: 'revert' })
   } finally {
+    window.removeEventListener(GIT_GRAPH_REFRESH_EVENT, onGraphRefresh)
     await act(async () => root.unmount())
     container.remove()
     useAppStore.setState(initial, true)

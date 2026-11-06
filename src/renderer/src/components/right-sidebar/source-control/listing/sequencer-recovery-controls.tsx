@@ -127,8 +127,8 @@ export function SequencerRecoveryControls({
           deps: state,
           request: { shouldApply }
         }).catch(() => {})
-        window.dispatchEvent(new CustomEvent(GIT_GRAPH_REFRESH_EVENT, { detail: worktreeId }))
       }
+      window.dispatchEvent(new CustomEvent(GIT_GRAPH_REFRESH_EVENT, { detail: worktreeId }))
     }
   }
   return (
