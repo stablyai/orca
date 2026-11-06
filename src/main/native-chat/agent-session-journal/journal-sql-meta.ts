@@ -111,9 +111,30 @@ export function beginJournalSqlConversion(db: Database.Database, sessionId: stri
 }
 
 /** Publishes the projection as covering the log as it stands in this transaction. */
-export function markJournalSqlReady(db: Database.Database, sessionId: string): void {
-  db.prepare(`UPDATE journal_proj_meta SET state='ready' WHERE session_id=?`).run(sessionId)
+export function markJournalSqlReady(
+  db: Database.Database,
+  sessionId: string,
+  ownerToken = ''
+): void {
+  db.prepare(`UPDATE journal_proj_meta SET state='ready', owner_token=? WHERE session_id=?`).run(
+    ownerToken,
+    sessionId
+  )
   recordJournalSqlWatermark(db, sessionId)
+}
+
+/** As today's open decides: no epoch, or one with nothing saved, is founded afresh. */
+export function journalLogNeedsFounding(db: Database.Database, sessionId: string): boolean {
+  const log = readJournalLogWatermark(db, sessionId)
+  return !log || (log.through === 0 && log.rowsThrough === 0)
+}
+
+/** The epoch of a projection already published ready, or null before the chat's first one. */
+export function readyJournalSqlEpoch(db: Database.Database, sessionId: string): string | null {
+  const meta = db
+    .prepare('SELECT epoch, state FROM journal_proj_meta WHERE session_id=?')
+    .get(sessionId)
+  return meta?.state === 'ready' && typeof meta.epoch === 'string' ? meta.epoch : null
 }
 
 /** The chat's projection is missing or no longer covers its log; it converts before it opens. */

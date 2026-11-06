@@ -9,6 +9,10 @@ import { JournalSqlScope } from './journal-sql-scope'
 import { advanceJournalOutcomeSource } from './journal-outcome-format'
 import { JournalProjectionStaleError } from './journal-sql-meta'
 import type { JournalWriterCommand, JournalWriterOperation } from './journal-writer-command'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { readJournalSessionEpoch } from './journal-row-table'
+import { currentJournalSqlEpoch } from './journal-sql-meta'
 
 const databases: Database.Database[] = []
 afterEach(() => {
@@ -16,6 +20,14 @@ afterEach(() => {
     db.close()
   }
 })
+
+const identity: AgentSessionJournalIdentity = {
+  sessionId: 'session',
+  workspaceId: 'workspace',
+  hostId: 'host',
+  agent: 'codex',
+  providerHandle: codexProviderHandle('thread')
+}
 
 const roster = {
   provider: 'orca',
@@ -28,10 +40,16 @@ function fixture() {
   seedJournalSqlCommands(db)
   const engine = new JournalSqlCommand(db, '/unused')
   const batch = new JournalSqlBatch(db)
-  const run = async (ownerToken: string, operation: JournalWriterOperation) => {
+  const run = async (
+    ownerToken: string,
+    operation: JournalWriterOperation,
+    epoch = 'epoch',
+    sessionId = 'session'
+  ) => {
     const command: JournalWriterCommand = {
-      target: { sessionId: 'session', epoch: 'epoch', ownerToken },
-      operation
+      target: { sessionId, epoch, ownerToken },
+      operation,
+      facts: { identity: { ...identity, sessionId } }
     }
     const [outcome] = (
       await batch.run([{ command, normal: false }], (entry) => engine.apply(entry, 100))
@@ -106,4 +124,18 @@ it('reconverts after an older build writes the log or removes legacy cards', asy
   await expect(legacy.run('next-handle', { kind: 'open' })).rejects.toBeInstanceOf(
     JournalProjectionStaleError
   )
+})
+
+it('founds a chat with nothing saved on its first open, owned by that open', async () => {
+  const { db, run } = fixture()
+  const opened = await run('first-handle', { kind: 'open' }, '', 'fresh')
+  const epoch = readJournalSessionEpoch(db, 'fresh')!
+
+  expect(opened.value).toEqual({ epoch, sequence: 1 })
+  expect(currentJournalSqlEpoch(db, 'fresh')).toBe(epoch)
+  const resumed = await run('first-handle', { kind: 'queue-resume', fence: 1 }, epoch, 'fresh')
+  expect(resumed.cursor.sequence).toBe(2)
+  await expect(
+    run('other-handle', { kind: 'queue-resume', fence: 1 }, epoch, 'fresh')
+  ).rejects.toMatchObject({ code: 'journal_closed' })
 })

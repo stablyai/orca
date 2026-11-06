@@ -8,7 +8,11 @@ import { runJournalWriterOperation } from './journal-writer-operations'
 import { planJournalWriterRows } from './journal-writer-plan'
 import type { JournalOperationReceipt } from './journal-row-writer'
 import { isJournalStreamedTextRevision } from './journal-streamed-text-revision'
-import { claimJournalSqlProjection, recordJournalSqlWatermark } from './journal-sql-meta'
+import {
+  claimJournalSqlProjection,
+  journalLogNeedsFounding,
+  recordJournalSqlWatermark
+} from './journal-sql-meta'
 
 export class JournalSqlCommand {
   constructor(
@@ -35,7 +39,10 @@ export class JournalSqlCommand {
     if (!this.db.isTransaction) {
       throw new Error('journal SQL command requires its transaction')
     }
-    if (command.operation.kind === 'open') {
+    if (
+      command.operation.kind === 'open' &&
+      !journalLogNeedsFounding(this.db, command.target.sessionId)
+    ) {
       claimJournalSqlProjection(this.db, command.target)
     }
     const session = this.session(command, command.savedAt ?? savedAt)

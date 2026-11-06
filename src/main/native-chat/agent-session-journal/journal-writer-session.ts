@@ -25,6 +25,7 @@ import { JournalWriterChanges, type JournalWriterCommit } from './journal-writer
 import { JournalSqlReducer } from './journal-sql-reducer'
 import { JournalSqlScope } from './journal-sql-scope'
 import { readJournalSqlMeta } from './journal-sql-meta'
+import { publishJournalWriterEpoch } from './journal-writer-epoch'
 import { journalInputOrder } from './journal-input-order'
 import { journalInputAcceptance } from './journal-input-provenance'
 import {
@@ -60,9 +61,9 @@ export class JournalWriterSession {
   private lastScope: JournalSqlScope | null = null
 
   constructor(
-    private readonly db: Database.Database,
+    readonly db: Database.Database,
     private readonly stateDirectory: string,
-    private readonly target: JournalWriterTarget,
+    private target: JournalWriterTarget,
     private readonly facts: JournalWriterHostFacts,
     savedAt: number
   ) {
@@ -89,9 +90,7 @@ export class JournalWriterSession {
       state: () => this.current().state,
       readOnly: () => false,
       cursor: () => journalContextCursor(this.current().state),
-      adopt: () => {
-        throw new Error('journal SQL epoch publication is not built yet')
-      },
+      adopt: (loaded) => this.adoptEpoch(loaded.state),
       prepare: (connection, rows, at, finishFold) => this.persist(connection, rows, at, finishFold),
       commit: (rows, _savedAt, inputChanged) => {
         this.written.push(...rows)
@@ -146,14 +145,16 @@ export class JournalWriterSession {
     }
   }
 
-  /** Items whose saved body still shows live work, in item map order. */
-  liveWorkItemKeys(): string[] {
-    const scope = this.lastScope ?? this.scope()
-    return this.db
-      .prepare(`SELECT entry_key FROM journal_proj_items INDEXED BY journal_proj_items_live_work
-      WHERE session_id=? AND generation=? AND live_work=1 ORDER BY ordinal`)
-      .all(...scope.prefix)
-      .map((row) => JSON.parse(String(row.entry_key)) as string)
+  /** A published epoch's state becomes its projection in the publishing transaction. */
+  private adoptEpoch(state: JournalReducerState): void {
+    publishJournalWriterEpoch(this.db, state, this.target.ownerToken, () => this.current().state)
+    this.target = { ...this.target, epoch: state.epoch }
+    this.reducer = null
+  }
+
+  /** The command's projection scope: the epoch its ready projection covers. */
+  scopePrefix(): [string, string] {
+    return (this.lastScope ?? this.scope()).prefix
   }
 
   private mailUnavailable(from: AgentMessageSource | undefined): boolean {
