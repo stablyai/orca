@@ -1,11 +1,12 @@
 import { isCurrentMobileDictationStart } from './mobile-dictation-session-state'
-import { translate } from '../i18n/mobile-i18n'
+import { dictationSessionLostMessage } from '../dictation/mobile-dictation-setup'
 import {
   dictationSessionCancel,
   dictationSessionStart
 } from '../dictation/mobile-dictation-operations'
 import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../src/shared/rpc-contract/speech-params'
 import { rpcPayloadMember } from '../transport/rpc-reader-payload'
+import { probeLivenessWhileWaiting } from '../transport/rpc-liveness-probe-while-waiting'
 import type { RpcClient } from '../transport/rpc-client'
 
 type StartMobileDictationDesktopSessionOptions = {
@@ -17,7 +18,7 @@ type StartMobileDictationDesktopSessionOptions = {
   getActiveId: () => string | null
   clearActiveId: (dictationId: string) => void
   setIdle: () => void
-  commitRecordingStart: (hostDedupesResends: boolean) => boolean
+  commitRecordingStart: (hostDedupesResends: boolean) => void
   rollbackRecordingStart: () => void
 }
 
@@ -65,12 +66,18 @@ export async function startMobileDictationDesktopSession(
   let hostDedupesResends = false
 
   try {
-    // The mic is already open, so a start stalled by a drop must give up rather than hold it.
-    const reply = await dictationSessionStart.request(
+    // The mic is already recording, so a start stalled by a drop or a sleeping host must give up rather than hold it.
+    const reply = await probeLivenessWhileWaiting(
       client,
-      { dictationId },
-      { timeoutMs: MOBILE_DICTATION_RECONNECT_GRACE_MS }
-    )
+      dictationSessionStart.request(
+        client,
+        { dictationId },
+        { timeoutMs: MOBILE_DICTATION_RECONNECT_GRACE_MS }
+      )
+    ).catch(() => {
+      // Only transport failures reject here; host refusals carry their own message through interpret.
+      throw new Error(dictationSessionLostMessage())
+    })
     const started = dictationSessionStart.interpret(reply)
     hostDedupesResends =
       started != null && rpcPayloadMember(started, 'dedupesResentChunks') === true
@@ -102,33 +109,7 @@ export async function startMobileDictationDesktopSession(
     return false
   }
 
-  try {
-    // Commit before returning so queued cancellation cannot resurrect recording after cleanup.
-    if (!options.commitRecordingStart(hostDedupesResends)) {
-      throw new Error(
-        translate(
-          'hooks.dictationDesktopStart.recordingFailed',
-          'Failed to start microphone recording'
-        )
-      )
-    }
-  } catch (err) {
-    const wasCurrent = isCurrentStart(options)
-    // Native recording can partially start before throwing, so stop audio before
-    // releasing the wake tag and remote session.
-    try {
-      options.rollbackRecordingStart()
-    } catch {
-      // Continue releasing independently owned resources after native audio failure.
-    }
-    options.clearActiveId(dictationId)
-    await cancelDesktopDictation(client, dictationId)
-    const shouldReport = wasCurrent && canReportStartFailure(options)
-    setIdleIfGenerationCurrent(options)
-    if (!shouldReport) {
-      return false
-    }
-    throw err
-  }
+  // Commit before returning so queued cancellation cannot resurrect recording after cleanup.
+  options.commitRecordingStart(hostDedupesResends)
   return true
 }

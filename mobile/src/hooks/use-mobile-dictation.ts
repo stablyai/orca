@@ -7,8 +7,10 @@ import { MobileDictationPendingAudioBudget } from './mobile-dictation-pending-au
 import {
   useMobileDictationTranscriptSoFar,
   sendAcrossConnectionMove,
-  subscribeMobileDictationAudioChunks
+  subscribeMobileDictationAudioChunks,
+  type MobileDictationAudioPhase
 } from './mobile-dictation-audio-chunk'
+import { MobileDictationStartBuffer } from './mobile-dictation-start-buffer'
 import {
   DICTATION_FINISH_TIMEOUT_MS,
   createMobileDictationId,
@@ -45,7 +47,9 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
   const onErrorRef = useRef(onError)
   const pendingChunksRef = useRef<Set<Promise<void>>>(new Set())
   const pendingAudioBudgetRef = useRef(new MobileDictationPendingAudioBudget())
-  const acceptingChunksRef = useRef(false)
+  const audioPhaseRef = useRef<MobileDictationAudioPhase>('closed')
+  const startBufferRef = useRef(new MobileDictationStartBuffer())
+  const sendHeldAudioRef = useRef(() => {})
   const generationRef = useRef(0)
 
   useLayoutEffect(() => {
@@ -75,7 +79,8 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
   )
 
   const closeDictationAudio = useCallback(() => {
-    acceptingChunksRef.current = false
+    audioPhaseRef.current = 'closed'
+    startBufferRef.current.clear()
     pendingChunksRef.current.clear()
     pendingAudioBudgetRef.current.reset()
     try {
@@ -110,14 +115,16 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     const source = {
       getClient: () => clientRef.current,
       getActiveId: () => activeIdRef.current,
-      isAccepting: () => enabledRef.current && acceptingChunksRef.current
+      audioPhase: () => (enabledRef.current ? audioPhaseRef.current : 'closed')
     }
     const sub = subscribeMobileDictationAudioChunks(capture, source, {
       pendingChunks: pendingChunksRef.current,
       pendingAudioBudget: pendingAudioBudgetRef.current,
       failActiveDictation,
-      transcriptSoFar: keptTranscript
+      transcriptSoFar: keptTranscript,
+      startBuffer: startBufferRef.current
     })
+    sendHeldAudioRef.current = sub.sendHeld
     return () => sub.remove()
   }, [capture, failActiveDictation])
 
@@ -155,6 +162,13 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       throw new Error(dictationSessionErrorMessage(opened.reason))
     }
 
+    // Record from the tap: speech during the host's engine build and the round trip is held, not lost.
+    audioPhaseRef.current = 'holding'
+    if (!capture.begin()) {
+      closeDictationAudio()
+      applyStatus('idle')
+      throw new Error(dictationSessionErrorMessage('recording-failed'))
+    }
     const dictationId = createMobileDictationId()
     activeIdRef.current = dictationId
 
@@ -172,23 +186,15 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       },
       setIdle: () => applyStatus('idle'),
       commitRecordingStart: (hostDedupesResends) => {
-        acceptingChunksRef.current = true
+        audioPhaseRef.current = 'sending'
         pendingChunksRef.current.clear()
         pendingAudioBudgetRef.current.reset(hostDedupesResends)
-        if (!capture.begin()) {
-          return false
-        }
         applyStatus('recording')
-        return true
+        sendHeldAudioRef.current()
       },
-      rollbackRecordingStart: () => {
-        acceptingChunksRef.current = false
-        pendingChunksRef.current.clear()
-        pendingAudioBudgetRef.current.reset()
-        void capture.end()
-      }
+      rollbackRecordingStart: closeDictationAudio
     })
-  }, [applyStatus, capture])
+  }, [applyStatus, capture, closeDictationAudio])
 
   const finishDictation = useCallback(
     async (emptyTranscriptMessage: string) => {
@@ -212,7 +218,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       try {
         // Keep shutdown inside try for finally cleanup; accept its tail chunks and snapshot pending sends only after end settles, or finish can overtake the last audio.
         await capture.end()
-        acceptingChunksRef.current = false
+        audioPhaseRef.current = 'closed'
         await Promise.allSettled(Array.from(pendingChunksRef.current))
         if (!isCurrent()) {
           return

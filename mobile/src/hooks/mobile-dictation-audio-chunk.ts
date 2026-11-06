@@ -9,7 +9,7 @@ import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../src/shared/rpc-con
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { rpcPayloadMember } from '../transport/rpc-reader-payload'
 import { waitForRpcClientReconnected } from '../transport/rpc-client-reconnect-wait'
-import { DECISIVE_PROBE_TIMEOUT_MS } from '../transport/rpc-session-liveness-watchdog'
+import { probeLivenessWhileWaiting } from '../transport/rpc-liveness-probe-while-waiting'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { isLogicalClientSuspendedError } from '../transport/logical-client-suspended-error'
 import type {
@@ -17,6 +17,7 @@ import type {
   DictationCaptureChunk
 } from '../platform/dictation-capture-contract'
 import type { MobileDictationPendingAudioBudget } from './mobile-dictation-pending-audio-budget'
+import type { MobileDictationStartBuffer } from './mobile-dictation-start-buffer'
 import type { RpcClient } from '../transport/rpc-client'
 
 type MobileDictationAudioChunkQueue = {
@@ -26,6 +27,9 @@ type MobileDictationAudioChunkQueue = {
   failActiveDictation: (dictationId: string, err: unknown) => void
   transcriptSoFar: MobileDictationTranscriptSoFar
 }
+
+// Holding: the microphone runs from the tap while the host's start reply is pending.
+export type MobileDictationAudioPhase = 'closed' | 'holding' | 'sending'
 
 // Newer hosts report the text so far: shown while speaking, and handed over by a failure instead of dropped.
 export class MobileDictationTranscriptSoFar {
@@ -97,18 +101,15 @@ export function subscribeMobileDictationAudioChunks(
   source: {
     getClient: () => RpcClient | null
     getActiveId: () => string | null
-    isAccepting: () => boolean
+    audioPhase: () => MobileDictationAudioPhase
   },
-  queue: Omit<MobileDictationAudioChunkQueue, 'isActive'>
-): { remove: () => void } {
+  queue: Omit<MobileDictationAudioChunkQueue, 'isActive'> & {
+    startBuffer: MobileDictationStartBuffer
+  }
+): { remove: () => void; sendHeld: () => void } {
   // Reuse wiring on the microphone hot path instead of allocating per chunk.
   const chunkQueue = { ...queue, isActive: (id: string) => source.getActiveId() === id }
-  return capture.onChunk((chunk) => {
-    const client = source.getClient()
-    const dictationId = source.getActiveId()
-    if (!client || !dictationId || !source.isAccepting()) {
-      return
-    }
+  const send = (client: RpcClient, dictationId: string, chunk: DictationCaptureChunk) => {
     if (chunk.droppedBytes > 0) {
       // Page capture loss and budget overflow both mean the page fell behind the microphone; report the same error. Native capture never drops here.
       queue.failActiveDictation(
@@ -118,7 +119,36 @@ export function subscribeMobileDictationAudioChunks(
       return
     }
     enqueueMobileDictationAudioChunk(client, dictationId, chunk, chunkQueue)
+  }
+  const subscription = capture.onChunk((chunk) => {
+    const client = source.getClient()
+    const dictationId = source.getActiveId()
+    const phase = source.audioPhase()
+    if (!client || !dictationId || phase === 'closed') {
+      return
+    }
+    if (phase === 'holding') {
+      queue.startBuffer.hold(chunk)
+      return
+    }
+    send(client, dictationId, chunk)
   })
+  return {
+    remove: () => subscription.remove(),
+    // Call once the phase turns to sending, before any later chunk, so the seq order matches speech order.
+    sendHeld: () => {
+      const held = queue.startBuffer.take()
+      const client = source.getClient()
+      const dictationId = source.getActiveId()
+      for (const chunk of held) {
+        // A failed send ends the dictation and clears the active id, so stop there.
+        if (!client || !dictationId || source.getActiveId() !== dictationId) {
+          return
+        }
+        send(client, dictationId, chunk)
+      }
+    }
+  }
 }
 
 export function enqueueMobileDictationAudioChunk(
@@ -146,14 +176,11 @@ export function enqueueMobileDictationAudioChunk(
   const sendChunk = sendAcrossConnectionMove(
     client,
     () => {
-      // A reply this late, with nothing heard meanwhile, means a silently dead connection; probe now, not after the idle watchdog, and keep asking until it settles.
-      const overdue = hostDedupesResends
-        ? setInterval(() => client.probeLivenessNow?.(), DECISIVE_PROBE_TIMEOUT_MS)
-        : undefined
       // Wait for a reconnect only as long as the host keeps the session; past that, fail and keep the text so far.
-      return dictationAudioChunkSend
-        .request(client, params, { timeoutMs: MOBILE_DICTATION_RECONNECT_GRACE_MS })
-        .finally(() => clearInterval(overdue))
+      const sent = dictationAudioChunkSend.request(client, params, {
+        timeoutMs: MOBILE_DICTATION_RECONNECT_GRACE_MS
+      })
+      return hostDedupesResends ? probeLivenessWhileWaiting(client, sent) : sent
     },
     // A recording cancelled during the outage must not reach the host when it comes back.
     hostDedupesResends ? () => queue.isActive(dictationId) : undefined

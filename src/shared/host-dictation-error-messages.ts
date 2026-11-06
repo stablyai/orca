@@ -1,4 +1,5 @@
-const DICTATION_SESSION_LOST_MESSAGE = 'Dictation lost its connection to the computer. Try again.'
+export const DICTATION_SESSION_LOST_MESSAGE =
+  'Dictation lost its connection to the computer. Try again.'
 const HOST_DICTATION_ERROR_MESSAGES: ReadonlyMap<string, string> = new Map([
   // The host has one speech model, so one dictation runs at a time across the computer and every phone.
   ['dictation_already_active', 'Dictation is already in use on the computer or another phone.'],
