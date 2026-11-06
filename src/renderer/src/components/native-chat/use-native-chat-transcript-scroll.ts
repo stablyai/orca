@@ -20,6 +20,7 @@ import type {
   NativeChatTranscriptScroll,
   NativeChatTranscriptScrollOptions
 } from './native-chat-transcript-scroll-types'
+import type { NativeChatAlignEdge } from './use-native-chat-viewport-align'
 
 export type { NativeChatTranscriptScroll } from './native-chat-transcript-scroll-types'
 
@@ -249,11 +250,11 @@ export function useNativeChatTranscriptScroll({
   )
 
   const scrollMessageToTop = useCallback(
-    (element: HTMLElement) => {
+    (element: HTMLElement, edge?: NativeChatAlignEdge) => {
       clearForwardedScroll()
       followingRef.current = false
       onLeaveEnd?.()
-      alignToViewportTop(element)
+      alignToViewportTop(element, edge)
     },
     [alignToViewportTop, clearForwardedScroll, onLeaveEnd]
   )

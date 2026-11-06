@@ -297,6 +297,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       )
     })
 
+    it('reports no title, since a made-up one would read as the terminal’s own', async () => {
+      await adapter.spawn({ cols: 80, rows: 24 })
+
+      expect((await adapter.listProcesses()).map((row) => row.title)).toEqual([''])
+    })
+
     // Reconcile missed disconnect-time exits so cached hasPty results cannot block absence proofs.
     it('drops cached session ids an authoritative inventory omits', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })

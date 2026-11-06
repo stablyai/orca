@@ -9,6 +9,7 @@ import { WorkspaceSleepCoordinator } from './workspace-sleep-runtime'
 import { dropStrandedSleepRecord } from '../../terminal/stop/worktree-sleep-resume-records'
 import type { RestoredPane } from '../../terminal/recovery/restored-pane-start'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { EphemeralVmRuntimeRecord } from '../../../../shared/ephemeral-vm-runtimes'
 import { WorkspaceLifecycleQueue } from '../lifecycle/workspace-lifecycle-queue'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 export abstract class RuntimeWorkspaceSleepOperations extends OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce {
@@ -60,6 +61,11 @@ export abstract class RuntimeWorkspaceSleepOperations extends OrcaRuntimeWithRes
     return this.workspaceSleep
       .wake(worktreeId)
       .catch((error: unknown) => console.warn('[runtime] sleeping agent wake failed', error))
+  }
+
+  /** Opening a workspace wakes its recipe VM, if this host holds one; resolves with the VM's record. */
+  wakeWorkspaceVm(worktreeId: string): Promise<EphemeralVmRuntimeRecord | null> {
+    return this.workspaceSleep.wakeVm(worktreeId)
   }
 
   /** The window opened a slept pane; main resumes it and the window attaches. */

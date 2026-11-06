@@ -59,6 +59,7 @@ export function useNativeChatMessageRail({
   const [maxTicks, setMaxTicks] = useState(NATIVE_CHAT_RAIL_ROOMY_TICKS)
 
   const previousItemsRef = useRef<readonly NativeChatRailItem[]>([])
+  // Rebuilt only when the slots change: scroll and range renders reuse the last build.
   const loadedItems = useMemo(
     () => buildNativeChatRailItems(slots, previousItemsRef.current),
     [slots]

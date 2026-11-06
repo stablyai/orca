@@ -3212,6 +3212,8 @@
         "loadGitHubWorkFailed": "Не удалось загрузить рабочие элементы GitHub.",
         "gitlabViewIssues": "Задачи",
         "gitlabViewMrs": "MR",
+        "gitlabInvolvementEveryone": "Все",
+        "gitlabInvolvementReviewing": "На ревью",
         "gitlabViewTodos": "Мои дела",
         "startWorkspaceFromMr": "Запустить рабочее пространство из MR {{number}}",
         "startWorkspaceFromIssue": "Запустить рабочее пространство из задачи {{number}}",
@@ -19941,6 +19943,9 @@
       "composer": {
         "send": "Отправить",
         "alternateSteerHint": "{{shortcut}}, чтобы направить",
+        "previewQueue": "В очередь",
+        "previewSteer": "Направить",
+        "previewSteerQueued": "Направить следующее",
         "alternateQueueHint": "{{shortcut}}, чтобы поставить в очередь",
         "noPty": "Терминал отключён. Вернитесь в него, чтобы подключиться снова.",
         "locked": "Вводом управляет другое устройство.",
