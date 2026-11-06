@@ -6,6 +6,8 @@ it('keeps a page on one read snapshot while commits invalidate later page reques
   const { db, store, engine } = harness
   addSyntheticSession(db, { id: 1, text: 'snapshotneedle' })
   addSyntheticSession(db, { id: 2, text: 'snapshotneedle' })
+  const baseline = engine.search({ query: 'snapshotneedle', limit: 1 })
+  const baselineSessions = baseline.hits.map((hit) => hit.sessionId)
   const prepare = db.prepare.bind(db)
   let changed = false
   const boundary = vi.spyOn(db, 'prepare').mockImplementation((sql) => {
@@ -16,7 +18,8 @@ it('keeps a page on one read snapshot while commits invalidate later page reques
         const result = get(...args)
         if (!changed) {
           changed = true
-          store.connection.prepare("UPDATE files SET state='due'").run()
+          // Why: the writer's separate connection removes the page's own hit mid-assembly; the page must not see it.
+          store.removeFile(`/synthetic/${baselineSessions[0]}.jsonl`)
         }
         return result
       }
@@ -25,7 +28,8 @@ it('keeps a page on one read snapshot while commits invalidate later page reques
   })
   try {
     const first = engine.search({ query: 'snapshotneedle', limit: 1 })
-    expect(first.hits).toHaveLength(1)
+    expect(changed).toBe(true)
+    expect(first.hits.map((hit) => hit.sessionId)).toEqual(baselineSessions)
     expect(first.page.cursor).toBeTruthy()
     boundary.mockRestore()
     expect(() =>
