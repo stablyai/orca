@@ -44,7 +44,8 @@ import { findPendingWorktreeCreationId } from '../creation/pending-worktree-crea
 import {
   buildActivationStateTransition,
   markVisited,
-  readPreviousActive
+  readPreviousActive,
+  recordShownTabFocus
 } from './worktree-activation-visit'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
@@ -131,8 +132,7 @@ export function activateAndRevealFolderWorkspace(
         )))
   if (!shouldGateAgentActivation) {
     resumeSleepingAgentSessionsForWorktree(workspaceKey)
-  }
-  if (shouldGateAgentActivation) {
+  } else {
     gateAndReseedEmptyWorkspace(workspaceKey, {
       callerProvidesSurface: opts?.providesInitialSurface === true,
       seedUserDefaultSurface,
@@ -163,6 +163,7 @@ export function activateAndRevealFolderWorkspace(
       agent: opts?.agent
     })
   }
+  recordShownTabFocus(useAppStore.getState(), workspaceKey)
 
   return { primaryTabId }
 }
@@ -241,8 +242,7 @@ export function activateAndRevealWorktree(
   if (!shouldGateAgentActivation) {
     // Resume preserved provider sessions before shell seeding; synchronous tab creation prevents an extra bare shell.
     resumeSleepingAgentSessionsForWorktree(worktreeId)
-  }
-  if (shouldGateAgentActivation) {
+  } else {
     gateAndReseedEmptyWorkspace(worktreeId, {
       callerProvidesSurface: opts?.providesInitialSurface === true,
       seedUserDefaultSurface,
@@ -306,6 +306,7 @@ export function activateAndRevealWorktree(
       agent: opts?.agent
     })
   }
+  recordShownTabFocus(useAppStore.getState(), worktreeId)
 
   return { primaryTabId }
 }

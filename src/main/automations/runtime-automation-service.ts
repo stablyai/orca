@@ -6,6 +6,7 @@ import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import type { Store } from '../persistence/loading-store/store'
+import type { AutomationRun } from '../../shared/automations-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { AutomationService } from './service'
 import { createHeadlessRunTerminalRetention } from './headless-run-terminal-retention'
@@ -28,8 +29,8 @@ export function createRuntimeAutomationService(input: {
   runtime: OrcaRuntimeService
   claudeUsage?: ClaudeUsageStore
   codexUsage?: CodexUsageStore
-  /** Execute remote_host_service schedules through the headless dispatcher. */
-  headless: boolean
+  /** Only server processes execute remote_host_service schedules. */
+  allowRemoteHostScheduling: boolean
 }): AutomationService {
   const { store, runtime, claudeUsage, codexUsage } = input
   // Launch handles remain usable before pane-key lookup resolves.
@@ -66,6 +67,8 @@ export function createRuntimeAutomationService(input: {
               console.warn('[automations] could not read accepted Chat operation:', error)
             })
           }
+          // An unconfirmed terminal prompt is never resumed after restart; the run strands.
+          return null
         }
         return (
           (run.terminalPaneKey ? launchedHandles.get(run.terminalPaneKey) : undefined) ??
@@ -149,7 +152,7 @@ export function createRuntimeAutomationService(input: {
       }
     },
     onAutomationsChanged: (payload) => runtime.notifyAutomationsChanged(payload),
-    allowRemoteHostScheduling: input.headless,
+    allowRemoteHostScheduling: input.allowRemoteHostScheduling,
     chatDispatcher: async (request) => {
       const { terminalHandle, ...launch } = await launchAutomationChatAgent(runtime, {
         ...request,
@@ -163,39 +166,52 @@ export function createRuntimeAutomationService(input: {
       }
       return launch
     },
-    headlessDispatcher: input.headless
-      ? async (request) => {
-          const { terminalHandle, ...launch } = await launchHeadlessAutomationAgent(runtime, {
-            ...request,
-            runs: store.listAutomationRuns(request.automation.id)
-          })
-          if (launch.terminalPaneKey) {
-            launchedHandles.set(launch.terminalPaneKey, terminalHandle)
-            if (launchedHandles.size > MAX_REMEMBERED_LAUNCHES) {
-              launchedHandles.delete(launchedHandles.keys().next().value ?? '')
-            }
+    terminalLauncher: {
+      launch: async (request) => {
+        const { terminalHandle, ...launch } = await launchHeadlessAutomationAgent(runtime, {
+          ...request,
+          runs: store.listAutomationRuns(request.automation.id)
+        })
+        if (launch.terminalPaneKey) {
+          launchedHandles.set(launch.terminalPaneKey, terminalHandle)
+          if (launchedHandles.size > MAX_REMEMBERED_LAUNCHES) {
+            launchedHandles.delete(launchedHandles.keys().next().value ?? '')
           }
-          // Let the watcher retry wait timeouts until completion or its observation deadline.
-          return launch
         }
-      : undefined
+        // Let the watcher retry wait timeouts until completion or its observation deadline.
+        return launch
+      },
+      available: () => runtime.canOpenRunTerminals()
+    }
   })
   runtime.setAutomationService(service)
-  if (input.headless) {
-    bindHeadlessRunTerminalRetention(service, store, runtime)
-  }
+  bindRunTerminalRetention(service, store, runtime)
   return service
 }
 
-function bindHeadlessRunTerminalRetention(
+/** A desktop visit stamps the shown tab's focus; main-created run tabs start unstamped. */
+function runTabWasFocused(runtime: OrcaRuntimeService, run: AutomationRun): boolean {
+  const tabs = run.workspaceId
+    ? runtime.getWorkspaceSessionForWorktree(run.workspaceId)?.unifiedTabs?.[run.workspaceId]
+    : undefined
+  return Boolean(
+    tabs?.some((tab) => tab.id === run.terminalSessionId && tab.lastFocusedAt !== undefined)
+  )
+}
+
+function bindRunTerminalRetention(
   service: AutomationService,
   store: Store,
   runtime: OrcaRuntimeService
 ): void {
   const retention = createHeadlessRunTerminalRetention({
     listRuns: () => store.listAutomationRuns(),
-    terminalClientUse: (run) =>
-      run.terminalPtyId ? runtime.readTerminalClientUse(run.terminalPtyId) : 'unknown',
+    terminalClientUse: (run) => {
+      if (runTabWasFocused(runtime, run)) {
+        return 'used'
+      }
+      return run.terminalPtyId ? runtime.readTerminalClientUse(run.terminalPtyId) : 'unknown'
+    },
     runTerminalAlive: (run) => runOwnHandle(runtime, run) !== null,
     shellAloneAtPrompt: (run) =>
       run.terminalPtyId

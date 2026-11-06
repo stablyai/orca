@@ -8,19 +8,13 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { CrossStoreParentRef } from '../../../../../../shared/worktree/lineage-types'
 import type { TaskSourceContext } from '../../../../../../shared/task-source-context'
-import type {
-  ClientAutomationWorkspaceProvenance,
-  WorkspaceLinkedItem
-} from '../../../../../../shared/worktree/types'
+import type { WorkspaceLinkedItem } from '../../../../../../shared/worktree/types'
 
 /** Trailing bag for `createWorktree` args that outgrew its positional list. */
 export type CreateWorktreeCallOptions = {
   branchIntent?: CreateWorktreeArgs['branchIntent']
   /** Captured before background preparation so navigation cannot retarget creation. */
   executionHostId?: ExecutionHostId
-  automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
-  /** This desktop's own run, offered to a runtime host that records it as a label. */
-  clientAutomationProvenance?: ClientAutomationWorkspaceProvenance
   linkedWorkItem?: WorkspaceLinkedItem | null
   linkedTaskSourceContext?: TaskSourceContext | null
   /** Lets the owning runtime launch and prefill a task agent without first creating an idle shell. */
@@ -134,11 +128,7 @@ export function buildLocalWorktreeCreateArgs(
     repoId: request.repoId,
     ...sharedCreateFields(request, attempt),
     ...(request.startup ? { startup: request.startup } : {}),
-    ...(request.creationId ? { creationId: request.creationId } : {}),
-    // Why local only: this desktop's main minted the dispatch token, so a runtime host must reject it.
-    ...(request.options?.automationProvenanceRequest
-      ? { automationProvenanceRequest: request.options.automationProvenanceRequest }
-      : {})
+    ...(request.creationId ? { creationId: request.creationId } : {})
   }
 }
 

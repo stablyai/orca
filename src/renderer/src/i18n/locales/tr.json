@@ -1882,13 +1882,6 @@
       }
     },
     "hooks": {
-      "useAutomationDispatchEvents": {
-        "59718b120b": "Hedef çalışma alanı artık kullanılamıyor.",
-        "16a21d6413": "SSH'yi yeniden bağlamak etkileşimli kimlik bilgileri gerektirir.",
-        "386db94f3e": "Hedef proje artık kullanılamıyor.",
-        "3ad7d77f57": "Hedef çalışma alanı, bu otomasyon çalıştırma hedefinden farklı bir sunucuda.",
-        "workspaceHostUnresolved": "Hedef çalışma alanı birden fazla sunucuya yayılıyor, bu yüzden bu çalıştırmanın kullanacağı tek bir sunucu yok."
-      },
       "useComposerState": {
         "b2ead86962": "PR tabanı belirlenemedi.",
         "3db83fc58a": "Bu sunucuda ekler için kullanılabilir bir proje yolu yok.",

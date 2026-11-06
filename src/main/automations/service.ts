@@ -1,10 +1,8 @@
 import {
   AutomationDispatchCancelledError,
   requestAutomationDispatch,
-  runAutomationRequestPrecheck,
-  type AutomationRendererChannel
+  runAutomationRequestPrecheck
 } from './automation-dispatch-request'
-export type { AutomationRendererChannel } from './automation-dispatch-request'
 import type { Store } from '../persistence/loading-store/store'
 import {
   isFinalAutomationRunStatus,
@@ -42,24 +40,28 @@ import type {
   PublishAutomationsChanged
 } from '../../shared/runtime-client-events'
 
+/** Main's terminal launcher; `available` is false while no window graph can hold run terminals. */
+export type AutomationTerminalLauncher = {
+  launch: HeadlessAutomationDispatcher
+  available(): boolean
+}
+
 const DEFAULT_TICK_MS = 60 * 1000
 
 export class AutomationService {
   private readonly store: Store
   private readonly tickMs: number
   private timer: ReturnType<typeof setInterval> | null = null
-  private webContents: AutomationRendererChannel | null = null
-  private rendererReady = false
   private evaluating = false
   private stopped = false
   private dispatchGeneration = 0
   private readonly claudeUsage: ClaudeUsageStore | null
   private readonly codexUsage: CodexUsageStore | null
   private readonly allowRemoteHostScheduling: boolean
-  private readonly headlessDispatcher: HeadlessAutomationDispatcher | null
+  private readonly terminalLauncher: AutomationTerminalLauncher | null
   private readonly chatDispatcher: HeadlessAutomationDispatcher | null
   private readonly automationLanes = new Map<string, Promise<void>>()
-  /** Close unused completed terminals on headless hosts; return the count. */
+  /** Close unused completed run terminals; return the count. */
   releaseFinishedRunTerminals: (() => Promise<number>) | null = null
   private readonly publish: PublishAutomationsChanged | null
   private readonly runs: AutomationRunWriter
@@ -74,7 +76,7 @@ export class AutomationService {
       claudeUsage?: ClaudeUsageStore
       codexUsage?: CodexUsageStore
       allowRemoteHostScheduling?: boolean
-      headlessDispatcher?: HeadlessAutomationDispatcher
+      terminalLauncher?: AutomationTerminalLauncher
       chatDispatcher?: HeadlessAutomationDispatcher
       terminalObserver?: AutomationRunTerminalObserver
       onAutomationsChanged?: PublishAutomationsChanged
@@ -85,7 +87,7 @@ export class AutomationService {
     this.claudeUsage = opts.claudeUsage ?? null
     this.codexUsage = opts.codexUsage ?? null
     this.allowRemoteHostScheduling = opts.allowRemoteHostScheduling ?? false
-    this.headlessDispatcher = opts.headlessDispatcher ?? null
+    this.terminalLauncher = opts.terminalLauncher ?? null
     this.chatDispatcher = opts.chatDispatcher ?? null
     this.publish = opts.onAutomationsChanged ?? null
     this.runs = createAutomationRunWriter(store, this.publish)
@@ -103,18 +105,6 @@ export class AutomationService {
     this.publish?.(payload)
   }
 
-  setWebContents(webContents: AutomationRendererChannel | null): void {
-    this.webContents = webContents
-    this.rendererReady = false
-  }
-
-  setRendererReady(): void {
-    this.rendererReady = true
-    // Pane lookup becomes authoritative after the renderer publishes its window graph.
-    this.completionWatcher?.markTerminalSurfaceReady()
-    void this.evaluateDueRuns()
-  }
-
   start(): void {
     if (this.timer) {
       return
@@ -123,12 +113,10 @@ export class AutomationService {
     this.timer = setInterval(() => {
       void this.evaluateDueRuns()
     }, this.tickMs)
+    // Settles unclaimed pending rows before catch-up could claim one again.
     this.completionWatcher?.reconcileRetainedRuns(this.store.listAutomationRuns())
     reportAutomationScheduleDrift(this.store.listAutomations())
-    // Headless hosts need startup catch-up without a renderer-ready notification.
-    if (this.rendererReady || this.headlessDispatcher) {
-      // Serve adopts PTYs and publishes its graph before start().
-      this.completionWatcher?.markTerminalSurfaceReady()
+    if (this.availableLauncher()) {
       void this.evaluateDueRuns()
     }
   }
@@ -154,12 +142,27 @@ export class AutomationService {
     const target = this.resolveTarget(automation)
     const run = await this.runs.createRun(automation, Date.now(), 'manual')
     // The saved pending row is the acknowledgement; the lane owns execution behind earlier launches.
-    void this.requestDispatch(automation, run, target, generation)
+    this.launchInLane(automation, run, target, generation)
+    return run
+  }
+
+  /** Detached so due runs start together; every failure after createRun settles the row. */
+  private launchInLane(
+    automation: Automation,
+    run: AutomationRun,
+    target: AutomationRunTargetResult,
+    generation: number,
+    afterCreate?: () => Promise<unknown>
+  ): void {
+    void (async () => {
+      // A blocked lane must not defer the schedule advance.
+      await afterCreate?.()
+      await this.requestDispatch(automation, run, target, generation)
+    })()
       .catch((error: unknown) => this.recordFailedLaunch(run, generation, error))
       .catch((writeError: unknown) =>
         console.error('[automations] could not record a failed launch', writeError)
       )
-    return run
   }
 
   /** Only an unlaunched run of this generation fails; a flush error after launch is not a launch failure. */
@@ -220,6 +223,9 @@ export class AutomationService {
     }
     this.evaluating = true
     const generation = this.dispatchGeneration
+    if (this.availableLauncher()) {
+      this.completionWatcher?.markTerminalSurfaceReady()
+    }
     try {
       const now = Date.now()
       for (const automation of this.store.listAutomations()) {
@@ -264,7 +270,7 @@ export class AutomationService {
 
     // Fold recurring refusals before creating rows so they do not evict real run history.
     const target = this.resolveTarget(automation)
-    const canDispatch = this.canDispatchToRenderer() || Boolean(this.headlessDispatcher)
+    const canDispatch = Boolean(this.availableLauncher())
     const refusal = await describeScheduledTickRefusal(this.store, { target, canDispatch })
     // Once WSL owns the schedule, avoid churning skips on the retained local copy.
     if (refusal?.errorCode === 'wslMoveOwnedByHost') {
@@ -276,13 +282,10 @@ export class AutomationService {
       return
     }
 
-    await this.requestDispatch(
-      automation,
-      await this.runs.createRun(automation, scheduledFor),
-      target,
-      generation
+    const run = await this.runs.createRun(automation, scheduledFor)
+    this.launchInLane(automation, run, target, generation, () =>
+      this.runs.advanceNextRun(automation.id, now)
     )
-    await this.runs.advanceNextRun(automation.id, now)
   }
 
   private resolveTarget(automation: Automation): AutomationRunTargetResult {
@@ -291,9 +294,9 @@ export class AutomationService {
     })
   }
 
-  private canDispatchToRenderer(): boolean {
-    const webContents = this.webContents
-    return Boolean(webContents && !webContents.isDestroyed() && this.rendererReady)
+  /** The terminal launcher, while a window graph can hold run terminals. */
+  private availableLauncher(): HeadlessAutomationDispatcher | null {
+    return this.terminalLauncher?.available() ? this.terminalLauncher.launch : null
   }
 
   /** Serialize dispatch and retention per automation until launch, without holding the lane during agent work. */
@@ -313,12 +316,9 @@ export class AutomationService {
           store: this.store,
           runs: this.runs,
           isActive: () => !this.stopped && generation === this.dispatchGeneration,
-          getRenderer: () => (this.canDispatchToRenderer() ? this.webContents : null),
-          headlessDispatcher: this.headlessDispatcher,
+          launcher: () => this.availableLauncher(),
           chatDispatcher:
-            this.allowRemoteHostScheduling || this.canDispatchToRenderer()
-              ? this.chatDispatcher
-              : null,
+            this.allowRemoteHostScheduling || this.availableLauncher() ? this.chatDispatcher : null,
           resolveTarget: (current) => this.resolveTarget(current),
           runPrecheck: () => this.runPrecheck(automation.id, run.id),
           markDispatchResult: (result) => this.markDispatchResult(result),

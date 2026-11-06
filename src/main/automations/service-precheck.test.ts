@@ -167,7 +167,7 @@ describe('AutomationService prechecks', () => {
     const service = new AutomationService(store, {
       tickMs: 60_000,
       allowRemoteHostScheduling: true,
-      headlessDispatcher
+      terminalLauncher: { launch: headlessDispatcher, available: () => true }
     })
     const run = store.createAutomationRun(automation, Date.now(), 'scheduled')
 
@@ -231,9 +231,12 @@ describe('AutomationService prechecks', () => {
     const service = new AutomationService(store, {
       tickMs: 60_000,
       allowRemoteHostScheduling: true,
-      headlessDispatcher: async ({ run }) => {
-        dispatched.push(run.trigger)
-        return { workspaceId: 'wt-1', terminalSessionId: null }
+      terminalLauncher: {
+        launch: async ({ run }) => {
+          dispatched.push(run.trigger)
+          return { workspaceId: 'wt-1', terminalSessionId: null }
+        },
+        available: () => true
       }
     })
     vi.setSystemTime(automation.nextRunAt + 30_000)

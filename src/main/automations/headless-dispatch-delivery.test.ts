@@ -34,13 +34,16 @@ async function heldLaunch(hold: 'launch' | 'delivery') {
   const service = new AutomationService(store, {
     tickMs: 60_000,
     allowRemoteHostScheduling: true,
-    headlessDispatcher: async () => {
-      reach()
-      if (hold === 'launch') {
-        await released
-        return OPENED
-      }
-      return { ...OPENED, delivery: released.then((error) => ({ error })) }
+    terminalLauncher: {
+      launch: async () => {
+        reach()
+        if (hold === 'launch') {
+          await released
+          return OPENED
+        }
+        return { ...OPENED, delivery: released.then((error) => ({ error })) }
+      },
+      available: () => true
     }
   })
   const run = await service.runNow(automation.id)

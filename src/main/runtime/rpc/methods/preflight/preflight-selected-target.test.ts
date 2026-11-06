@@ -134,9 +134,9 @@ describe('qualified discovery at the runtime RPC boundary', () => {
     })
     expect(deliver).toHaveBeenCalledTimes(1)
     folders.splice(folders.indexOf(folder), 1)
-    await expect(launchHeadlessAutomationAgent(runtime, request)).rejects.toThrow(
-      'selector_not_found'
-    )
+    await expect(launchHeadlessAutomationAgent(runtime, request)).rejects.toMatchObject({
+      failure: { errorCode: 'targetUnavailable' }
+    })
     expect(deliver).toHaveBeenCalledTimes(1)
   })
 

@@ -6,7 +6,6 @@ import type { TaskSourceContext } from '../task-source-context'
 import type { WorkspaceKey } from '../workspace-scope'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type {
-  AutomationWorkspaceProvenanceRequest,
   GitPushTarget,
   GitWorktreeInfo,
   WorkspaceLinkedItem,
@@ -139,8 +138,6 @@ export type CreateWorktreeArgs = {
   startup?: WorktreeStartupLaunch
   /** Correlate concurrent background creates with renderer progress; synchronous callers may omit it. */
   creationId?: string
-  /** Authorizes the host to mint system-owned automation provenance. */
-  automationProvenanceRequest?: AutomationWorkspaceProvenanceRequest
 }
 
 export type WorktreeCheckoutProgress = {

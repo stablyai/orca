@@ -2145,13 +2145,6 @@
       }
     },
     "hooks": {
-      "useAutomationDispatchEvents": {
-        "59718b120b": "O espaço de trabalho de destino não está mais disponível.",
-        "16a21d6413": "A reconexão SSH requer credenciais interativas.",
-        "386db94f3e": "O projeto de destino não está mais disponível.",
-        "3ad7d77f57": "O espaço de trabalho de destino está em um host diferente do destino de execução desta automação.",
-        "workspaceHostUnresolved": "O espaço de trabalho de destino abrange mais de um host, então esta execução não tem um único host para usar."
-      },
       "useComposerState": {
         "b2ead86962": "Falha ao resolver a base do PR.",
         "3db83fc58a": "Nenhum caminho de projeto está disponível neste host para anexos.",

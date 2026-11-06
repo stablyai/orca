@@ -1,6 +1,7 @@
 import { automationTerminalLaunchInputs } from '../../shared/automation-launch-setup'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
-import { getRepoExecutionHostId } from '../../shared/execution-host'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
+import { automationRunFailure } from '../../shared/automation-run-failure-copy'
 // Automations observe PTYs, so launch terminal agents regardless of the chat default.
 
 import type { AgentLaunchSurfaceExecution } from '../agent-launch/agent-launch-execution'
@@ -15,6 +16,7 @@ import {
   AutomationRunLaunchError,
   type HeadlessAutomationDispatchLaunch
 } from './headless-dispatch'
+import { AutomationDispatchRefusedError } from './headless-dispatch-runner'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './headless-workspace-create'
 import type { AutomationRunTargetResult } from './run-target-resolution'
 
@@ -44,18 +46,9 @@ export async function launchHeadlessAutomationAgent(
   const agent = automation.agentId
   const selectedTarget =
     automation.workspaceMode === 'existing'
-      ? await runtime.resolveManagedTerminalWorkspaceTarget(
-          `id:${requireWorkspaceId(automation)}`,
-          parseWorkspaceKey(automation.workspaceId ?? '')?.type === 'folder'
-            ? undefined
-            : getRepoExecutionHostId(target.repo),
-          false
-        )
+      ? await resolveLocalExistingWorkspace(runtime, automation, target)
       : undefined
   const selectedWorkspace = selectedTarget?.managedWorktree
-  if (automation.workspaceMode === 'existing' && !selectedWorkspace) {
-    throw new Error('The target workspace is no longer available.')
-  }
   // The startup plan trims the prompt for every agent; a blank one launches the agent bare.
   const text = automation.prompt?.trim()
   if (automation.reuseSession && automation.workspaceMode === 'existing' && text) {
@@ -268,6 +261,31 @@ async function sendToReusableSession(
     terminalPaneKey: session.previous.terminalPaneKey,
     terminalPtyId: session.previous.terminalPtyId
   }
+}
+
+/** A missing workspace or one owned by a paired server is a typed skip, never a fresh local launch. */
+async function resolveLocalExistingWorkspace(
+  runtime: OrcaRuntimeService,
+  automation: Automation,
+  target: Extract<AutomationRunTargetResult, { ok: true }>
+) {
+  const unavailable = new AutomationDispatchRefusedError(automationRunFailure('targetUnavailable'))
+  const selected = await runtime
+    .resolveManagedTerminalWorkspaceTarget(
+      `id:${requireWorkspaceId(automation)}`,
+      parseWorkspaceKey(automation.workspaceId ?? '')?.type === 'folder'
+        ? undefined
+        : getRepoExecutionHostId(target.repo),
+      false
+    )
+    .catch((error: unknown) => {
+      throw error instanceof Error && error.message === 'selector_not_found' ? unavailable : error
+    })
+  const hostId = selected.scope.folderWorkspace?.executionHostId ?? selected.managedWorktree?.hostId
+  if (!selected.managedWorktree || parseExecutionHostId(hostId)?.kind === 'runtime') {
+    throw unavailable
+  }
+  return selected
 }
 
 /** Reject reused pane handles whose PTY no longer belongs to this run. */

@@ -184,28 +184,12 @@ describe('dispatch refused for an ambiguous workspace host', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('refuses the desktop dispatch and records why', async () => {
-    const seeded = await ambiguousStore()
-    const send = vi.fn()
-    const service = new AutomationService(seeded.store, { tickMs: 60_000 })
-    service.setWebContents({ isDestroyed: () => false, send } as never)
-
-    await evaluated(seeded, () => service.setRendererReady())
-
-    expect(send).not.toHaveBeenCalled()
-    expect(seeded.store.listAutomationRuns(seeded.automation.id)[0]).toMatchObject({
-      status: 'skipped_unavailable',
-      error: AMBIGUOUS_REFUSAL
-    })
-    service.stop()
-  })
-
-  it('refuses the headless dispatch, which has no ambiguity check of its own', async () => {
+  it('refuses the launch, which has no ambiguity check of its own', async () => {
     const seeded = await ambiguousStore()
     const dispatcher = vi.fn(async () => ({ workspaceId: 'folder:fw-1', terminalSessionId: 't1' }))
     const service = new AutomationService(seeded.store, {
       tickMs: 60_000,
-      headlessDispatcher: dispatcher
+      terminalLauncher: { launch: dispatcher, available: () => true }
     })
 
     await evaluated(seeded, () => service.start())
