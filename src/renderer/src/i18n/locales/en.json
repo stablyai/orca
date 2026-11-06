@@ -1064,6 +1064,7 @@
     },
     "shortcuts": {
       "parseFailed": "Unable to parse shortcut.",
+      "editorNavigationIndentationHint": "The default macOS navigation shortcut replaces an editor indentation shortcut. Click the shortcut to remap it, or disable this command to restore indentation.",
       "validation": {
         "invalidFormat": "Use a shortcut like Ctrl+Shift+P or Cmd+K.",
         "mixedModifiers": "Use either Mod or a platform-specific modifier, not both.",
