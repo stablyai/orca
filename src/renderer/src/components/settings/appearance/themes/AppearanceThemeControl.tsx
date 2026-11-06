@@ -25,6 +25,7 @@ import { findCodeEditorTheme } from '@/lib/code-editor-theme'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { requestPluginBrowse } from '@/store/plugin-preview-request'
 import { useCatalogAppThemes } from './use-catalog-app-themes'
+import { isPluginRuntimeThemeId } from '../../../../../../shared/plugins/appearance/plugin-runtime-theme-id'
 
 type BuiltInTheme = GlobalSettings['theme']
 
@@ -67,18 +68,43 @@ function browseThemesActions(): SettingsSearchableSelectAction[] {
       ]
 }
 
+/** Marks a choice whose colors follow something else live (the terminal, a plugin). */
+function dynamicDetail(): React.JSX.Element {
+  return (
+    <>
+      <Zap className="mr-1 size-3" aria-hidden />
+      {translate('auto.components.settings.AppearanceThemeControl.dynamic', 'dynamic')}
+    </>
+  )
+}
+
+/** A plugin's live-published colors: picking it follows the plugin, picking anything else stops. */
+function dynamicPluginThemeOption(theme: PluginThemeRegistration) {
+  return {
+    value: theme.id,
+    label: theme.pluginName,
+    keywords: [theme.base, theme.label],
+    icon: <PluginThemeSwatch theme={theme} />,
+    detail: dynamicDetail()
+  }
+}
+
 function pluginThemeGroups(
   themes: readonly PluginThemeRegistration[]
 ): SettingsSearchableSelectGroup[] {
   return [...Map.groupBy(themes, (theme) => theme.pluginKey).values()].map((group) => ({
     key: group[0].pluginKey,
     heading: group[0].pluginName,
-    options: group.map((theme) => ({
-      value: theme.id,
-      label: theme.label,
-      keywords: [theme.base],
-      icon: <PluginThemeSwatch theme={theme} />
-    }))
+    options: group.map((theme) =>
+      isPluginRuntimeThemeId(theme.id)
+        ? dynamicPluginThemeOption(theme)
+        : {
+            value: theme.id,
+            label: theme.label,
+            keywords: [theme.base],
+            icon: <PluginThemeSwatch theme={theme} />
+          }
+    )
   }))
 }
 
@@ -144,6 +170,8 @@ export function AppearanceThemeSlotSelect({
 }): React.JSX.Element {
   const allThemes = usePluginThemes()
   const themes = allThemes.filter((theme) => theme.base === base)
+  const dynamicThemes = themes.filter((theme) => isPluginRuntimeThemeId(theme.id))
+  const packagedThemes = themes.filter((theme) => !isPluginRuntimeThemeId(theme.id))
   const catalog = useCatalogAppThemes(base, allThemes, settings.pluginSystemEnabled === true)
   const pluginTerminalThemes = usePluginTerminalThemes()
   const selectedId = base === 'dark' ? settings.pluginAppThemeDark : settings.pluginAppThemeLight
@@ -174,13 +202,28 @@ export function AppearanceThemeSlotSelect({
           if (catalog.pick(next)) {
             return
           }
+          const picked = themes.find((theme) => theme.id === next)
+          const slot = pluginAppThemeSlotUpdate(
+            base,
+            next === MATCH_TERMINAL_APP_THEME ? MATCH_TERMINAL_APP_THEME : (picked?.id ?? null)
+          )
+          const pickedTerminal =
+            picked && isPluginRuntimeThemeId(picked.id)
+              ? pluginTerminalThemes.find((theme) => theme.id === picked.id)
+              : undefined
+          // Why: following a live plugin theme repaints the terminal too, as its publish did.
           updateSettings(
-            pluginAppThemeSlotUpdate(
-              base,
-              next === MATCH_TERMINAL_APP_THEME
-                ? MATCH_TERMINAL_APP_THEME
-                : (themes.find((theme) => theme.id === next)?.id ?? null)
-            )
+            pickedTerminal
+              ? {
+                  ...slot,
+                  ...terminalThemeUpdate(
+                    settings,
+                    pickedTerminal,
+                    base === 'dark',
+                    pluginTerminalThemes
+                  )
+                }
+              : slot
           )
         }}
         groups={[
@@ -194,19 +237,12 @@ export function AppearanceThemeSlotSelect({
                   'auto.components.settings.AppearanceThemeControl.matchTerminal',
                   'Match Terminal'
                 ),
-                detail: (
-                  <>
-                    <Zap className="mr-1 size-3" aria-hidden />
-                    {translate(
-                      'auto.components.settings.AppearanceThemeControl.dynamic',
-                      'dynamic'
-                    )}
-                  </>
-                )
-              }
+                detail: dynamicDetail()
+              },
+              ...dynamicThemes.map(dynamicPluginThemeOption)
             ]
           },
-          ...pluginThemeGroups(themes),
+          ...pluginThemeGroups(packagedThemes),
           {
             key: 'catalog',
             heading: translate(

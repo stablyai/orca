@@ -93,6 +93,13 @@ async function harness(options: { capability?: boolean; desktop?: boolean } = {}
     disable: () => {
       disabled = true
     },
+    enable: () => {
+      disabled = false
+    },
+    userPick: (updates: Partial<GlobalSettings>) => {
+      settings = { ...settings, ...updates }
+      service.options.appearance?.settingsChanged(updates)
+    },
     failSettings: () => {
       failSettings = true
     }
@@ -337,5 +344,80 @@ describe('plugin desktop appearance publication', () => {
     expect(await pending).toMatchObject({ ok: false, code: 'consent_required' })
     expect(h.settings().pluginAppThemeDark).toBeNull()
     expect(h.service.contentPacks.themes.list()).toEqual([])
+  })
+
+  it('stops re-selecting after the user picks another theme, and resumes when they pick it again', async () => {
+    const h = await harness()
+    const apply = async () =>
+      h.service.executeHostCall(
+        'local.appearance',
+        'appearance.apply',
+        colors(await revision(h.service)),
+        'worker'
+      )
+    expect(await apply()).toMatchObject({ ok: true, value: { selected: true } })
+    h.userPick({ pluginAppThemeDark: null, terminalThemeDark: 'Builtin Dark' })
+    expect(await apply()).toMatchObject({ ok: true, value: { selected: false } })
+    expect(h.settings()).toMatchObject({
+      pluginAppThemeDark: null,
+      terminalThemeDark: 'Builtin Dark'
+    })
+    expect(h.service.contentPacks.themes.list()).toMatchObject([
+      { id: 'plugin:local.appearance/runtime-dark' }
+    ])
+    h.userPick({ pluginAppThemeDark: 'plugin:local.appearance/runtime-dark' })
+    expect(await apply()).toMatchObject({ ok: true, value: { selected: true } })
+    expect(h.settings().terminalThemeDark).toBe('plugin:local.appearance/runtime-dark')
+  })
+
+  it("restores the user's prior selection and terminal overrides when the owner is disabled", async () => {
+    const h = await harness()
+    const before = h.settings()
+    await h.service.executeHostCall(
+      'local.appearance',
+      'appearance.apply',
+      colors(await revision(h.service)),
+      'worker'
+    )
+    expect(h.settings().terminalColorOverrides).toBeUndefined()
+    h.disable()
+    await h.service.reconcileActivationState()
+    expect(h.settings()).toMatchObject({
+      theme: before.theme,
+      pluginAppThemeDark: before.pluginAppThemeDark,
+      editorThemeDark: before.editorThemeDark,
+      terminalThemeDark: before.terminalThemeDark,
+      terminalColorOverrides: { red: '#0000ff' },
+      terminalPluginPalettes: []
+    })
+    expect(h.service.contentPacks.themes.list()).toEqual([])
+    h.enable()
+    await h.service.reconcileActivationState()
+    expect(
+      await h.service.executeHostCall(
+        'local.appearance',
+        'appearance.apply',
+        colors(await revision(h.service)),
+        'worker'
+      )
+    ).toMatchObject({ ok: true, value: { selected: true } })
+  })
+
+  it('keeps choices the user changed after the owner wrote them when reverting', async () => {
+    const h = await harness()
+    await h.service.executeHostCall(
+      'local.appearance',
+      'appearance.apply',
+      colors(await revision(h.service)),
+      'worker'
+    )
+    h.userPick({ theme: 'light', terminalColorOverrides: { red: '#00ff00' } })
+    h.disable()
+    await h.service.reconcileActivationState()
+    expect(h.settings()).toMatchObject({
+      theme: 'light',
+      pluginAppThemeDark: null,
+      terminalColorOverrides: { red: '#00ff00' }
+    })
   })
 })

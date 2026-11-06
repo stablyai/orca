@@ -11,6 +11,7 @@ import {
   type PluginTerminalThemeRegistration
 } from '../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
 import { PluginHostCallError } from '../workers/plugin-host-call-scope'
+import { pluginRuntimeThemeId } from '../../../shared/plugins/appearance/plugin-runtime-theme-id'
 
 export type PluginAppearanceColors = { app: string; terminal: string }
 export type PreparedPluginAppearance = {
@@ -47,7 +48,7 @@ export function preparePluginAppearanceColors(
     throw new PluginHostCallError('invalid_params', 'app and terminal appearance modes differ')
   }
   const slot = app.base === 'dark' ? 'Dark' : 'Light'
-  const id = `plugin:${pluginKey}/runtime-${app.base}` as const
+  const id = pluginRuntimeThemeId(pluginKey, app.base)
   const selected = new Set([
     slot === 'Dark' ? id : current.terminalThemeDark,
     slot === 'Light' ? id : current.terminalThemeLight

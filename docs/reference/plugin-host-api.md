@@ -32,7 +32,7 @@ Methods whose capability is `none` need no capability but still need the plugin 
 | [`events.subscribe`](#eventssubscribe) | none | panel, editor | no | 1.2 | Delivers a workspace or agent event to this panel as `orca.on(event)`; needs the event's read capability. The frame APIs call it for you. |
 | [`statusBar.update`](#statusbarupdate) | none | worker | no | 1.2 | Changes one of the plugin's `contributes.statusBarItems` (named by `id`): fields given replace their current value, `visible: false` hides it. Desktop app only; lasts until Orca restarts, and is hidden while the plugin is disabled. A plugin with `main` and status bar items has its worker started when it is enabled and kept running while it stays enabled, so a worker can poll and update its items without an event or a hook. |
 | [`appearance.read`](#appearanceread) | `appearance:write` | worker | no | 1.4 | Reads the current desktop appearance revision for a conditional update. |
-| [`appearance.apply`](#appearanceapply) | `appearance:write` | worker | yes | 1.4 | Publishes owned app/editor and terminal colors and selects them in the desktop. Returns publication, not renderer acknowledgement. |
+| [`appearance.apply`](#appearanceapply) | `appearance:write` | worker | yes | 1.4 | Publishes owned app/editor and terminal colors and selects them unless the user picked another theme. Returns publication, not renderer acknowledgement. |
 | [`workspace.list`](#workspacelist) | `workspace:read` | worker | no | 1.3 | Lists every workspace, Git worktrees and folders, on every host Orca reaches. |
 | [`workspace.open`](#workspaceopen) | `workspace:write` | worker | yes | 1.3 | Shows a workspace in Orca, as clicking it in the sidebar does; a folder workspace needs the desktop app. |
 | [`terminal.create`](#terminalcreate) | `terminal:send` | worker | yes | 1.3 | Opens a terminal in a workspace, optionally running a command, in the background. |
@@ -203,10 +203,10 @@ Reads the current desktop appearance revision for a conditional update.
 
 ### `appearance.apply`
 
-Publishes owned app/editor and terminal colors and selects them in the desktop. Returns publication, not renderer acknowledgement.
+Publishes owned app/editor and terminal colors and selects them unless the user picked another theme. Returns publication, not renderer acknowledgement.
 
 ```ts
-(params: { expectedRevision: string; app: string; terminal: string }) => { revision: string; themeId: string; mode: "dark" | "light"; delivery: "published" }
+(params: { expectedRevision: string; app: string; terminal: string }) => { revision: string; themeId: string; mode: "dark" | "light"; selected: boolean; delivery: "published" }
 ```
 
 ### `workspace.list`

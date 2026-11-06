@@ -30,7 +30,7 @@ export const PLUGIN_APPEARANCE_API = {
   }),
   'appearance.apply': spec({
     summary:
-      'Publishes owned app/editor and terminal colors and selects them in the desktop. Returns publication, not renderer acknowledgement.',
+      'Publishes owned app/editor and terminal colors and selects them unless the user picked another theme. Returns publication, not renderer acknowledgement.',
     since: 4,
     scope: 'desktop',
     capability: 'appearance:write',
@@ -41,6 +41,8 @@ export const PLUGIN_APPEARANCE_API = {
       revision,
       themeId: z.templateLiteral(['plugin:', z.string()]),
       mode: z.enum(['dark', 'light']),
+      /** False when the user picked another theme; the colors stay published but unselected. */
+      selected: z.boolean(),
       delivery: z.literal('published')
     })
   })

@@ -59,7 +59,10 @@ export class PluginContentPackRegistry {
     isApproved: (plugin: ValidDiscoveredPlugin) => boolean,
     keybindings: KeybindingOverrides = {}
   ): Promise<void> {
-    this.appearance?.reconcile(discovered)
+    this.appearance?.reconcile(
+      discovered,
+      (plugin) => isApproved(plugin) && !this.isKilled(plugin.pluginKey)
+    )
     const approvedKeys = new Set(
       discovered
         .filter((plugin): plugin is ValidDiscoveredPlugin => !isInvalidDiscoveredPlugin(plugin))
