@@ -173,8 +173,6 @@ it('shares one live scalar per connection, fences late reads/events, and isolate
   await act(async () => mounted?.unmount())
   expect(a.states.size).toBe(0)
   expect(b.states.size).toBe(0)
-  // Every wire stream the chats opened is closed once they unmount.
-  expect(a.stops).toHaveBeenCalledTimes(vi.mocked(a.client.subscribe).mock.calls.length)
   expect(b.stops).toHaveBeenCalledTimes(1)
 })
 

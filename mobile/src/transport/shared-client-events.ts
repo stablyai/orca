@@ -6,7 +6,7 @@ type WireReady = Extract<RuntimeClientEventStreamMessage, { type: 'ready' }>
 export type SharedClientEvent =
   | Exclude<RuntimeClientEventStreamMessage, { type: 'ready' }>
   | WireReady
-  // A listener joined a stream already live on this connection: nothing was missed, and no snapshot comes.
+  // Joined a stream already live on this connection: no snapshot and no per-subscription replay come.
   | { type: 'ready'; joined: true }
   | { type: 'error'; message?: string }
 
@@ -52,9 +52,16 @@ export function subscribeSharedClientEvents(
     })
   } else {
     streams.set(client, stream)
-    const stop = client.subscribe('runtime.clientEvents.subscribe', null, (payload) =>
-      deliver(client, stream, payload)
-    )
+    let stop: () => void
+    try {
+      stop = client.subscribe('runtime.clientEvents.subscribe', null, (payload) =>
+        deliver(client, stream, payload)
+      )
+    } catch (error) {
+      // A page bridge throws when it can't open a stream; later subscribers must retry the wire.
+      streams.delete(client)
+      throw error
+    }
     if (streams.get(client) === stream) {
       stream.stop = stop
     } else {
