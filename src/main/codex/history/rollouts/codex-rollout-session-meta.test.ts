@@ -44,6 +44,19 @@ describe('readCodexRolloutSessionMetaId', () => {
     await expect(readCodexRolloutSessionMetaId(malformed)).resolves.toBeNull()
   })
 
+  it('reads complete metadata after a short initial read without a newline', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-codex-session-meta-'))
+    tempRoots.push(root)
+    const rollout = join(root, 'rollout.jsonl')
+    await writeFile(
+      rollout,
+      JSON.stringify({ type: 'session_meta', payload: { id: 'short-read' } })
+    )
+    mocks.readTranscriptSlice.mockResolvedValueOnce(Buffer.from('{"type":"session_'))
+
+    await expect(readCodexRolloutSessionMetaId(rollout)).resolves.toBe('short-read')
+  })
+
   it('surfaces an aborted read instead of reporting an unprovable rollout', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-codex-session-meta-'))
     tempRoots.push(root)

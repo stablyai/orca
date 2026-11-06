@@ -28,6 +28,9 @@ import {
 import { SESSION_FILE_ID_LAYOUTS, type SessionIdLookupAgent } from './session-file-id-layouts'
 import { findWslSessionPath } from './wsl-session-path-scan'
 import { parseSshTranscriptPath } from './ssh-transcript-path'
+import { readCodexRolloutSessionMetaId } from '../codex/history/rollouts/codex-rollout-session-meta'
+import { findIndexedNativeCodexRollout } from './native-codex-indexed-rollout'
+import { findIndexedWslCodexRollout } from './wsl-codex-indexed-rollout'
 import { wslTranscriptFsRefusal, type WslTranscriptFsError } from './wsl-transcript-fs-gate'
 
 // Read shared discovery roots per call; preference order prevents cross-account matches.
@@ -234,7 +237,7 @@ async function findFirstInDirs(
   for (const dir of dirs) {
     try {
       const hit = isWslUncPath(dir)
-        ? await findWslSessionPath(agent, dir, sessionId, signal)
+        ? await findWslSessionFile(agent, dir, sessionId, signal)
         : await findHostSessionFile(agent, dir, sessionId, signal, strictErrors)
       if (hit) {
         return hit
@@ -254,6 +257,21 @@ async function findFirstInDirs(
   return null
 }
 
+async function findWslSessionFile(
+  agent: SessionIdLookupAgent,
+  root: string,
+  sessionId: string,
+  signal?: AbortSignal
+): Promise<string | null> {
+  if (agent === 'codex') {
+    const indexed = await findIndexedWslCodexRollout(root, sessionId, signal)
+    if (indexed && (await readCodexRolloutSessionMetaId(indexed, signal)) === sessionId) {
+      return indexed
+    }
+  }
+  return findWslSessionPath(agent, root, sessionId, signal)
+}
+
 async function findHostSessionFile(
   agent: SessionIdLookupAgent,
   root: string,
@@ -267,6 +285,12 @@ async function findHostSessionFile(
     const history = await findGrokChatHistoryBySessionId(root, sessionId)
     signal?.throwIfAborted()
     return history
+  }
+  if (agent === 'codex') {
+    const indexed = await findIndexedNativeCodexRollout(root, sessionId, signal, strictErrors)
+    if (indexed) {
+      return indexed
+    }
   }
   const { fileMatchesId, directoryPredicate } = SESSION_FILE_ID_LAYOUTS[agent]
   const wanted = (id: string): boolean => id === sessionId
