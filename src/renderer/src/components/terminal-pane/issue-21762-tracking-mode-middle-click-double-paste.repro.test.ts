@@ -24,7 +24,7 @@ vi.mock('@/lib/pane-manager/mobile-driver-state', () => ({ getAllDrivers: () => 
 vi.mock('@/lib/pane-manager/pane-manager-registry', () => ({
   refitAndRefreshAllTerminalPanes: vi.fn()
 }))
-vi.mock('./terminal-fit-restore', () => ({
+vi.mock('./viewport/terminal-fit-restore', () => ({
   restoreTerminalFitToDesktop: vi.fn(),
   restoreTerminalFitsToDesktop: vi.fn()
 }))
@@ -32,12 +32,14 @@ vi.mock('./terminal-pane-split-with-inherited-cwd', () => ({
   splitTerminalPaneWithInheritedCwd: vi.fn()
 }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => null }))
-vi.mock('./terminal-paste-coordinator', () => ({ planTerminalPasteWithYield: vi.fn() }))
-vi.mock('./terminal-paste-executor', () => ({ executeTerminalPastePlan: vi.fn() }))
-vi.mock('./terminal-paste-runtime', () => ({ resolveTerminalPasteRuntime: vi.fn() }))
-vi.mock('./terminal-bracketed-paste', () => ({ pasteTerminalText: vi.fn() }))
-vi.mock('./terminal-pty-paste-writer', () => ({ writeTerminalPastePtyInput: vi.fn() }))
-vi.mock('./terminal-paste-errors', () => ({ formatTerminalPasteExecutionError: vi.fn() }))
+vi.mock('./input/paste/terminal-paste-coordinator', () => ({ planTerminalPasteWithYield: vi.fn() }))
+vi.mock('./input/paste/terminal-paste-executor', () => ({ executeTerminalPastePlan: vi.fn() }))
+vi.mock('./input/paste/terminal-paste-runtime', () => ({ resolveTerminalPasteRuntime: vi.fn() }))
+vi.mock('./input/paste/terminal-bracketed-paste', () => ({ pasteTerminalText: vi.fn() }))
+vi.mock('./input/paste/terminal-pty-paste-writer', () => ({ writeTerminalPastePtyInput: vi.fn() }))
+vi.mock('./input/paste/terminal-paste-errors', () => ({
+  formatTerminalPasteExecutionError: vi.fn()
+}))
 vi.mock('./terminal-input-activity', () => ({ recordTerminalUserInputForLeaf: vi.fn() }))
 
 import { useTerminalPaneMobileActions } from './use-terminal-pane-mobile-actions'

@@ -1,5 +1,5 @@
 // Real payload delivery catches conhost losing stdin and code-page corruption missed by shape assertions.
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { createServer, type Server } from 'node:http'
 import { lstatSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
@@ -54,6 +54,10 @@ import {
   buildWindowsNativeHookExecutable,
   WINDOWS_NATIVE_HOOK_BUILD_TIMEOUT_MS
 } from './windows-native-hook-exe.test-fixture'
+import {
+  WINDOWS_POWERSHELL_WARM_UP_TIMEOUT_MS,
+  warmWindowsEncodedPowerShell
+} from './windows-powershell-warm-up.test-fixture'
 
 const PANE_KEY = 'tab-1:leaf-1'
 const HOOK_TOKEN = 'payload-delivery-token'
@@ -426,6 +430,11 @@ describe('Windows managed hook launcher', () => {
 describe.skipIf(process.platform !== 'win32')('Windows managed hook payload delivery', () => {
   let root = ''
   let server: Server | null = null
+
+  beforeAll(
+    () => warmWindowsEncodedPowerShell(hookEnvironment({})),
+    WINDOWS_POWERSHELL_WARM_UP_TIMEOUT_MS
+  )
 
   afterEach(() => {
     vi.unstubAllEnvs()

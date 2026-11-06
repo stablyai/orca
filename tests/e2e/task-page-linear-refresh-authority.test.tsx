@@ -20,7 +20,7 @@ import type { TaskPageComposerActionsModel } from '../../src/renderer/src/compon
 import { useState } from 'react'
 import { workspaceFromLinearData } from '../../src/main/linear/linear-workspace-record'
 import { credentialDecryptionMessage } from '../../src/shared/integration-credential-errors'
-import { writeLinearIssue } from '@/lib/linear-issue-write'
+import { writeLinearIssue } from '@/lib/work-items/linear/linear-issue-write'
 import { defaultScopeSource } from '@/lib/default-creation-host'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import { pendingLinearIssueWrites } from '@/store/slices/linear/linear-issue-publication'

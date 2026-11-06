@@ -41,10 +41,12 @@ let storeSubscribers: ((state: MutableState) => void)[] = []
 let transportFactoryQueue: unknown[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
-vi.mock('./terminal-webgl-atlas-recovery', () => ({
+vi.mock('./render-health/terminal-webgl-atlas-recovery', () => ({
   scheduleTerminalWebglAtlasRecovery: vi.fn()
 }))
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep: vi.fn() }))
+vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
+  notifyCodexPaneBoundForStaleSweep: vi.fn()
+}))
 vi.mock('sonner', () => ({ toast: { info: vi.fn() } }))
 vi.mock('./cache-timer-seeding', () => ({ shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false) }))
 vi.mock('@/store', () => ({
@@ -63,7 +65,7 @@ vi.mock('react', async (importOriginal) => ({
   ...(await importOriginal<typeof React>()),
   useCallback: <T>(fn: T): T => fn
 }))
-vi.mock('./pty-transport', () => ({
+vi.mock('./pty-transport/ipc/pty-transport', () => ({
   createIpcPtyTransport: vi.fn(() => {
     const next = transportFactoryQueue.shift()
     if (!next) {

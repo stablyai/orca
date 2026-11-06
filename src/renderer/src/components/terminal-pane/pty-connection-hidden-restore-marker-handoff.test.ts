@@ -53,7 +53,7 @@ vi.mock('@/lib/pane-manager/pane-manager-registry', async (importOriginal) => ({
   resetAndRefreshAllTerminalWebglAtlases
 }))
 
-vi.mock('./terminal-webgl-atlas-recovery', () => ({
+vi.mock('./render-health/terminal-webgl-atlas-recovery', () => ({
   scheduleTerminalWebglAtlasRecovery
 }))
 
@@ -80,7 +80,7 @@ vi.mock('./cache-timer-seeding', () => ({
 
 vi.mock('sonner', () => ({ toast: { info: toastInfo } }))
 
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({
+vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
   notifyCodexPaneBoundForStaleSweep
 }))
 
@@ -92,7 +92,7 @@ vi.mock('react', async (importOriginal) => {
   }
 })
 
-vi.mock('./pty-transport', () => ({
+vi.mock('./pty-transport/ipc/pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
@@ -103,7 +103,7 @@ vi.mock('./pty-transport', () => ({
   })
 }))
 
-vi.mock('./remote-runtime-pty-transport', () => ({
+vi.mock('./pty-transport/remote-runtime/remote-runtime-pty-transport', () => ({
   createRemoteRuntimePtyTransport: vi.fn(
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
@@ -116,7 +116,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
   )
 }))
 
-vi.mock('./pty-dispatcher', async (importOriginal) => ({
+vi.mock('./pty-transport/delivery/pty-dispatcher', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getEagerPtyBufferHandle: vi.fn(() => undefined)
 }))
@@ -169,7 +169,8 @@ const mainDropLatch = {
 async function wireMainGateToRendererChannel(): Promise<{
   markersDelivered: () => number
 }> {
-  const { _dispatchPtyModelRestoreNeededForTest } = await import('./pty-model-restore-channel')
+  const { _dispatchPtyModelRestoreNeededForTest } =
+    await import('./pty-transport/delivery/pty-model-restore-channel')
   let markersDelivered = 0
   vi.mocked(window.api.pty.setHiddenRendererPty).mockImplementation(
     (id: string, hidden: boolean) => {
@@ -201,7 +202,8 @@ async function wireMainGateToRendererChannel(): Promise<{
 
 /** Main ingests the chunk into its model and drops the renderer copy. */
 async function dropHiddenBytesInMain(): Promise<void> {
-  const { _dispatchPtyModelRestoreNeededForTest } = await import('./pty-model-restore-channel')
+  const { _dispatchPtyModelRestoreNeededForTest } =
+    await import('./pty-transport/delivery/pty-model-restore-channel')
   expect(mainDropLatch.hidden).toBe(true)
   if (mainDropLatch.recordDrop()) {
     _dispatchPtyModelRestoreNeededForTest({
@@ -289,13 +291,13 @@ describe('hidden-output restore marker handoff (STA-4869 R6)', () => {
   afterEach(async () => {
     await restoreTerminalTestGlobals()
     const { _resetPtyRendererDeliveryClaimsForTest } =
-      await import('./pty-renderer-delivery-claims')
+      await import('./pty-transport/delivery/pty-renderer-delivery-claims')
     _resetPtyRendererDeliveryClaimsForTest()
   })
 
   it('[mechanism] the renderer channel drops a marker with no registered handler and never replays it', async () => {
     const { registerPtyModelRestoreNeededHandler, _dispatchPtyModelRestoreNeededForTest } =
-      await import('./pty-model-restore-channel')
+      await import('./pty-transport/delivery/pty-model-restore-channel')
     const retiringHandler = vi.fn()
     const unregister = registerPtyModelRestoreNeededHandler(PTY_ID, retiringHandler)
     unregister()
@@ -379,7 +381,8 @@ describe('hidden-output restore marker handoff (STA-4869 R6)', () => {
     expect(servedCalls).toBe(1)
 
     // A newer episode is reported while the first snapshot is still in flight.
-    const { _dispatchPtyModelRestoreNeededForTest } = await import('./pty-model-restore-channel')
+    const { _dispatchPtyModelRestoreNeededForTest } =
+      await import('./pty-transport/delivery/pty-model-restore-channel')
     _dispatchPtyModelRestoreNeededForTest({
       id: PTY_ID,
       reason: 'hidden-drop',

@@ -13,7 +13,7 @@ import type { CheckDetailsLoadState } from '@/components/github-checks-tab-state
 import { translate } from '@/i18n/i18n'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import { assignUniqueListKeys } from './details-list-keys'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function CheckDetailsPanel({
   check,

@@ -17,7 +17,7 @@ import {
 } from './skill-managed-install-groups'
 import { translate } from '@/i18n/i18n'
 import { SkillInstallManagementDialogContent } from './SkillInstallManagementDialogContent'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 
 export function SkillInstallManagementDialog({
   open,

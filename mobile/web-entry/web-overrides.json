@@ -216,6 +216,10 @@
     {
       "file": "src/components/mobile-markdown-math-typesetter.web.ts",
       "reason": "KaTeX draws a formula as HTML and CSS with its own fonts, which only a document can show. The native file leaves formulas as their source, so the native bundle never carries KaTeX; this one loads KaTeX with the first formula the page draws and adds its stylesheet."
+    },
+    {
+      "file": "src/session/native-chat/MobileNativeChatLowerRegion.web.tsx",
+      "reason": "The shipping web session owns DOM scroll anchoring and reveals focused lower controls inside the keyboard-safe viewport. Native rendering keeps its existing scroll behavior."
     }
   ]
 }

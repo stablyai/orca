@@ -1,34 +1,35 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
-import { httpLinkActionDestinationsFor } from '@/lib/http-link-destinations'
+import { httpLinkActionDestinationsFor } from '@/lib/browser/navigation/http-link-destinations'
+import '@/lib/browser/workspace/workspace-browser-tab-open'
 import {
   canOpenWorkspaceBrowserTabOnRuntime,
   canOpenWorkspaceBrowserTabOnSsh
-} from '@/lib/workspace-browser-tab-open'
+} from '@/lib/browser/workspace/workspace-browser-route-eligibility'
 import { resolvePaneWslDistro } from './terminal-pane-wsl-distro'
 import {
   resolveTerminalHttpLinkSourceOwner,
   resolveTerminalLinkRuntimeEnvironmentId,
   resolveTerminalRuntimeHandle
-} from './terminal-http-link-source-owner'
+} from './links/http/terminal-http-link-source-owner'
 import {
   getTerminalFileOpenHint,
   getTerminalUrlOpenHint,
   terminalUrlOpenHintOptionsFor
-} from './terminal-link-open-hints'
-import type { LinkHandlerDeps } from './terminal-link-handlers'
+} from './links/terminal-link-open-hints'
+import type { LinkHandlerDeps } from './links/files/terminal-link-handlers'
 import type { TerminalPathExistsCache } from './terminal-path-exists-cache'
-import type { TerminalLinkActionContext } from './terminal-link-action-request'
-import type { TerminalHttpLinkActionDestinations } from './terminal-url-link-hit-testing'
+import type { TerminalLinkActionContext } from './links/terminal-link-action-request'
+import type { TerminalHttpLinkActionDestinations } from './links/http/terminal-url-link-hit-testing'
 import type { PtyConnectionDeps } from './pty-connection-types'
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
 import { registerRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
 import { normalizeTerminalLayoutSnapshot } from './layout-serialization'
-import { applyTerminalAppearance } from './terminal-appearance'
-import { terminalLinkClickBehaviorFor } from './terminal-link-click-behavior'
+import { applyTerminalAppearance } from './appearance/terminal-appearance'
+import { terminalLinkClickBehaviorFor } from './links/gestures/terminal-link-click-behavior'
 import { createTerminalPanePtyDeps } from './terminal-pane-pty-deps'
 import type { DeferredSplitPaneHandoffHandle } from './deferred-split-pane-handoff'
 import {

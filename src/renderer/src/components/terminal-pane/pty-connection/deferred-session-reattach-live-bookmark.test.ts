@@ -20,7 +20,7 @@ vi.mock('@/store', () => ({
   useAppStore: { getState: () => mocks.state }
 }))
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
-vi.mock('../pty-dispatcher', () => ({ getEagerPtyBufferHandle: () => null }))
+vi.mock('../pty-transport/delivery/pty-dispatcher', () => ({ getEagerPtyBufferHandle: () => null }))
 vi.mock('./paired-parked-terminal-restore', async (importOriginal) => ({
   ...(await importOriginal<typeof PairedParkedTerminalRestore>()),
   canRestorePairedParkedTerminal: () => mocks.canRestorePairedParked

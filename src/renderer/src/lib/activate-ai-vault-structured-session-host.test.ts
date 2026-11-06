@@ -25,7 +25,9 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
   refreshLocalStructuredSessionWorktreeTabs: async () => undefined
 }))
-vi.mock('./worktree-activation', () => ({ activateAndRevealWorktree: mocks.navigate }))
+vi.mock('./workspace/activation/worktree-activation', () => ({
+  activateAndRevealWorktree: mocks.navigate
+}))
 vi.mock('./wsl-moved-chat-activation', () => ({ activateWslMovedWorkspace: mocks.moved }))
 vi.mock('@/store', () => ({
   useAppStore: {

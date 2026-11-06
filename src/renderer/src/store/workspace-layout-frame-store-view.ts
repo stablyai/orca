@@ -16,9 +16,9 @@ import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-s
 import {
   buildPersistedBrowserPagesByWorkspace,
   buildPersistedBrowserTabsByWorktree
-} from '@/lib/workspace-session-browser-tabs'
-import { buildEditorSessionData } from '@/lib/workspace-session'
-import { buildPersistedUnifiedTabSessionData } from '@/lib/workspace-session-unified-tabs'
+} from '@/lib/workspace/persistence/workspace-session-browser-tabs'
+import { buildEditorSessionData } from '@/lib/workspace/persistence/workspace-session'
+import { buildPersistedUnifiedTabSessionData } from '@/lib/workspace/persistence/workspace-session-unified-tabs'
 import type { AppState } from './types'
 
 export type LayoutFrameStoreViewState = Pick<

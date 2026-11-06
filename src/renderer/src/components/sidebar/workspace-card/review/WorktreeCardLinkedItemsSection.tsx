@@ -32,7 +32,7 @@ import type {
   WorktreeCardJiraIssueDisplay
 } from '../metadata/worktree-card-meta-types'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 function getLinkedTaskState(
   detail: WorkspaceReferenceDetails | undefined,

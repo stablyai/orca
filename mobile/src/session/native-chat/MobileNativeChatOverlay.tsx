@@ -179,6 +179,9 @@ function MobileNativeChatOverlayContent({
     () => ({
       agent,
       structured: structuredComposer ?? null,
+      interactionModeSupported: controller.nativeChatSessionOptions?.controller.snapshot.some(
+        (entry) => entry.id === 'interactionMode'
+      ),
       skillDiscovery: controller.nativeChatSkills,
       onNeedSkills: controller.loadNativeChatSkills,
       filePaths: controller.nativeChatFilePaths,
@@ -195,6 +198,7 @@ function MobileNativeChatOverlayContent({
     [
       agent,
       structuredComposer,
+      controller.nativeChatSessionOptions,
       controller.nativeChatSkills,
       controller.loadNativeChatSkills,
       controller.nativeChatFilePaths,

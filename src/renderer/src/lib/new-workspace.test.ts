@@ -78,15 +78,16 @@ vi.mock('@/lib/agent-paste-draft', () => ({
   pasteDraftToAgentPtyWhenReady: mockPasteDraftToAgentPtyWhenReady
 }))
 
-vi.mock('@/lib/browser-uuid', () => ({
-  createBrowserUuid: () => 'launch-token-1'
+const mockLaunchUuid = vi.hoisted(() => () => 'launch-token-1')
+vi.mock('../../../shared/non-secure-context-uuid', () => ({
+  createNonSecureContextUuid: mockLaunchUuid
 }))
 
 vi.mock('@/lib/telemetry', () => ({
   track: mockTrack
 }))
 
-vi.mock('@/lib/agent-background-session-timeout-toast', () => ({
+vi.mock('@/lib/agent-session/launch/background/agent-background-session-timeout-toast', () => ({
   showAutomationPromptNotSentToast: mockShowAutomationPromptNotSentToast
 }))
 

@@ -1596,7 +1596,8 @@
       "defaultSurfaceSetAllChat": "Definir todos como Chat",
       "defaultSurfaceSetAllTerminal": "Definir todos como Terminal",
       "sameAsChoice": "Igual a {{agent}} · {{choice}}",
-      "modelListFallback": "Lista integrada. O Orca não conseguiu obter uma lista de modelos deste host."
+      "modelListFallback": "Lista integrada. O Orca não conseguiu obter uma lista de modelos deste host.",
+      "chatUnavailableOnWindows": "O {{value0}} Chat ainda não está disponível no Windows, então o {{value0}} abre em um terminal neste host. Chats em um host macOS ou Linux continuam funcionando."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "link simbólico",
@@ -1692,7 +1693,7 @@
         "parakeetV2": "Somente inglês. Mais rápido que v3 com precisão semelhante. Pontuação e maiúsculas e minúsculas.",
         "zipformerBilingual": "Chinês + inglês com alternância de idiomas. Streaming em tempo real com baixa latência.",
         "paraformerBilingual": "Chinês (mandarim + dialetos) + inglês. Bom desempenho com sotaques e variantes regionais do chinês.",
-        "zipformerStreamingEn": "Somente inglês. Modelo leve de 20 milhões de parâmetros, com bom equilíbrio entre velocidade e tamanho.",
+        "zipformerStreamingEnRetired": "Não é mais oferecido: ele perde o início das frases. Exclua-o para liberar espaço.",
         "zipformerStreamingZh": "Somente chinês. Modelo ultraleve de 14 milhões de parâmetros, ideal para dispositivos com poucos recursos.",
         "zipformerStreamingKo": "Somente coreano. Streaming em tempo real com baixa latência.",
         "parakeetJa": "Somente japonês. Treinado com mais de 35 mil horas de fala natural. Inclui pontuação.",
@@ -14183,6 +14184,8 @@
           "noRunUsageYet": "Ainda sem uso de execução",
           "noWorkspace": "Nenhum espaço de trabalho",
           "latestSavedOutput": "Última saída salva",
+          "fullOutputUnavailable": "Não foi possível carregar a saída completa.",
+          "retryFullOutput": "Tentar novamente",
           "backToList": "Todas as automações",
           "tableName": "Nome",
           "tableProject": "Projeto",
@@ -17128,7 +17131,8 @@
             "cliTag": "(CLI)",
             "agentsLoading": "Carregando agentes",
             "terminalListNeedsServerUpdate": "Atualize o Orca neste servidor para listar os agentes de terminal",
-            "terminalListFailed": "Não foi possível listar os agentes de terminal deste espaço de trabalho"
+            "terminalListFailed": "Não foi possível listar os agentes de terminal deste espaço de trabalho",
+            "chatNotOnWindows": "Ainda sem chat no Windows"
           },
           "TabWorkspaceLayoutMenuSection": {
             "right": "Direita",
@@ -17860,6 +17864,7 @@
         "cb55b0390f": "Gerenciar",
         "4f9313984d": "Revisores",
         "02cbe2de44": "Pipeline",
+        "itemLoadFailed": "Não foi possível carregar este item. Atualize para tentar novamente.",
         "be3d291837": "Arquivos",
         "c996e2962c": "Conversa",
         "b3c156dd51": "Atualizar",
@@ -20076,6 +20081,7 @@
         "truncatedResponse": "Resposta do provedor truncada (tamanho original: {{bytes}} bytes)."
       },
       "composer": {
+        "planMode": "Planejar",
         "send": "Enviar",
         "alternateSteerHint": "{{shortcut}} para orientar",
         "previewQueue": "Colocar na fila",
@@ -21044,7 +21050,8 @@
         "folder": "Pasta",
         "mainCheckout": "Checkout principal",
         "worktree": "Worktree"
-      }
+      },
+      "explicitChatWindows": "O chat deste agente ainda não está disponível no Windows. Abra-o em um terminal."
     },
     "tab": {
       "bar": {

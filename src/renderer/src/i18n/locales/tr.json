@@ -837,7 +837,8 @@
       "defaultSurfaceSetAllChat": "Tümünü Sohbet yap",
       "defaultSurfaceSetAllTerminal": "Tümünü Terminal yap",
       "sameAsChoice": "{{agent}} ile aynı · {{choice}}",
-      "modelListFallback": "Yerleşik liste. Orca bu ana makineden model listesi alamadı."
+      "modelListFallback": "Yerleşik liste. Orca bu ana makineden model listesi alamadı.",
+      "chatUnavailableOnWindows": "{{value0}} Chat henüz Windows'ta kullanılamıyor, bu nedenle {{value0}} bu ana makinede bir terminalde açılır. macOS veya Linux ana makinesindeki sohbetler çalışmaya devam eder."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "sembolik bağlantı",
@@ -932,7 +933,7 @@
         "parakeetV2": "Yalnızca İngilizce. Benzer doğrulukla v3'ten daha hızlı. Noktalama ve büyük/küçük harf kullanımı.",
         "zipformerBilingual": "Dil geçişleriyle Çince + İngilizce. Düşük gecikmeli gerçek zamanlı akış.",
         "paraformerBilingual": "Çince (Mandarin + lehçeler) + İngilizce. Aksanlı ve bölgesel Çince konuşmalarda güçlü.",
-        "zipformerStreamingEn": "Yalnızca İngilizce. Hız ve boyut arasında iyi denge sunan, 20 milyon parametreli hafif model.",
+        "zipformerStreamingEnRetired": "Artık sunulmuyor: cümlelerin başını atlıyor. Yer açmak için silin.",
         "zipformerStreamingZh": "Yalnızca Çince. Kaynakları kısıtlı cihazlar için ideal, 14 milyon parametreli çok hafif model.",
         "zipformerStreamingKo": "Yalnızca Korece. Düşük gecikmeli gerçek zamanlı akış.",
         "parakeetJa": "Yalnızca Japonca. 35 bini aşkın saatlik doğal konuşmayla eğitildi. Noktalama dâhil.",
@@ -2299,6 +2300,7 @@
         "cb55b0390f": "Yönet",
         "4f9313984d": "İnceleyenler",
         "02cbe2de44": "Pipeline",
+        "itemLoadFailed": "Bu öğe yüklenemedi. Tekrar denemek için yenileyin.",
         "be3d291837": "Dosyalar",
         "c996e2962c": "Görüşme",
         "b3c156dd51": "Yenile",
@@ -4244,7 +4246,8 @@
             "chatUnavailableAfterSelection": "{{value0}} sohbeti başlatılamadı.",
             "startChat": "{{value0}} ile sohbet başlat",
             "cliTag": "(CLI)",
-            "agentsLoading": "Ajanlar yükleniyor"
+            "agentsLoading": "Ajanlar yükleniyor",
+            "chatNotOnWindows": "Windows'ta henüz sohbet yok"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Sekme Değiştir",
@@ -17615,6 +17618,8 @@
           "noRunUsageYet": "Henüz çalıştırma kullanımı yok",
           "noWorkspace": "Çalışma alanı yok",
           "latestSavedOutput": "En son kaydedilen çıktı",
+          "fullOutputUnavailable": "Çıktının tamamı yüklenemedi.",
+          "retryFullOutput": "Yeniden dene",
           "backToList": "Tüm otomasyonlar",
           "tableName": "Ad",
           "tableProject": "Proje",
@@ -19348,6 +19353,7 @@
         "truncatedResponse": "Sağlayıcı yanıtı kısaltıldı (özgün boyut: {{bytes}} bayt)."
       },
       "composer": {
+        "planMode": "Planla",
         "send": "Gönder",
         "alternateSteerHint": "Yönlendirmek için {{shortcut}}",
         "previewQueue": "Sıraya al",
@@ -20076,7 +20082,8 @@
         "folder": "Klasör",
         "mainCheckout": "Ana çalışma kopyası",
         "worktree": "Worktree"
-      }
+      },
+      "explicitChatWindows": "Bu ajanın sohbeti henüz Windows'ta kullanılamıyor. Bunun yerine bir terminalde açın."
     },
     "tab": {
       "bar": {

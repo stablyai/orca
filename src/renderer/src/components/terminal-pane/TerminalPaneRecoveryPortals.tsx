@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { PtyTransport } from './pty-transport-types'
+import type { PtyTransport } from './pty-transport/pty-transport-types'
 import { useWslHostUnavailableReason } from './use-wsl-host-unavailable-reason'
 import {
   useManagedPairingRefusedEnvironmentId,

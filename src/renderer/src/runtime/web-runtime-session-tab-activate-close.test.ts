@@ -44,7 +44,7 @@ const mocks = vi.hoisted(() => ({
   hasMaterializedWebRuntimeBrowserPage: vi.fn()
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.revealWorktree,
   activateAndRevealFolderWorkspace: mocks.revealWorktree
 }))
@@ -82,7 +82,7 @@ vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
 }))
 
-vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
+vi.mock('@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery', () => ({
   deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
 }))

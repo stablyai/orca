@@ -38,27 +38,27 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
     name: 'accounts.antigravityList',
     permission: 'workspace',
     params: AntigravityAccountTargetParams,
-    handler: async (target) => getAntigravityAccountService(target).listAccounts()
+    handler: async (target) => (await getAntigravityAccountService(target)).listAccounts()
   }),
   defineMethod({
     name: 'accounts.antigravityAddCurrent',
     permission: 'accounts-admin',
     params: AntigravityAccountTargetParams,
-    handler: async (target) => getAntigravityAccountService(target).addCurrentAccount()
+    handler: async (target) => (await getAntigravityAccountService(target)).addCurrentAccount()
   }),
   defineMethod({
     name: 'accounts.antigravitySelect',
     permission: 'accounts-admin',
     params: AntigravityAccountMutationParams,
     handler: async ({ target, accountId }) =>
-      getAntigravityAccountService(target).selectAccount(accountId)
+      (await getAntigravityAccountService(target)).selectAccount(accountId)
   }),
   defineMethod({
     name: 'accounts.antigravityRemove',
     permission: 'accounts-admin',
     params: AntigravityAccountMutationParams,
     handler: async ({ target, accountId }) =>
-      getAntigravityAccountService(target).removeAccount(accountId)
+      (await getAntigravityAccountService(target)).removeAccount(accountId)
   }),
   defineMethod({
     name: 'accounts.antigravityChatSignInStart',
