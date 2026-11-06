@@ -25,6 +25,7 @@ import { preserveRuntimeConflictValues } from './codex-config-settings-preservat
 import { applyCodexDaemonSocketGuard } from '../shared-server/codex-daemon-socket-path-guard'
 import { stripRuntimeOwnedTomlSections } from '../toml/config-toml-runtime-owned-sections'
 import { mergeSystemCodexConfigIntoRuntime } from './codex-config-mirror-merge'
+import { applyManagedHomeCredentialStorePin } from './managed-home-credential-store-pin'
 
 // Mirrored MCP environment tokens require owner-only writes.
 const RUNTIME_CONFIG_WRITE = { mode: 0o600 } as const
@@ -115,6 +116,14 @@ function writeCodexDaemonSocketGuard(runtimeHomePath: string, runtimeConfig: str
       RUNTIME_CONFIG_WRITE
     )
   }
+}
+
+/**
+ * Managed homes pin the credential store to `file` whenever a system config is mirrored into
+ * them; keyring-backed logins would never produce the auth.json Orca manages accounts through.
+ */
+function applyManagedHomeRuntimePins(config: string, runtimeHomePath: string): string {
+  return applyCodexDaemonSocketGuard(applyManagedHomeCredentialStorePin(config), runtimeHomePath)
 }
 
 /** One-way refresh for retained PTYs; promoting stale settings from this retired home could overwrite live config. */
@@ -236,7 +245,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
 
   const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(systemHomePath, systemConfigDir)
   if (!runtimeConfigExists) {
-    const freshRuntimeConfig = applyCodexDaemonSocketGuard(
+    const freshRuntimeConfig = applyManagedHomeRuntimePins(
       prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir, runtimeHomePath),
       runtimeHomePath
     )
@@ -269,7 +278,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
     ),
     promotionPlan.runtimeValuesToPreserve
   )
-  const nextRuntimeConfig = applyCodexDaemonSocketGuard(preserved.content, runtimeHomePath)
+  const nextRuntimeConfig = applyManagedHomeRuntimePins(preserved.content, runtimeHomePath)
   if (nextRuntimeConfig !== runtimeConfig) {
     writeFileAtomically(runtimeConfigPath, nextRuntimeConfig, RUNTIME_CONFIG_WRITE)
   }

@@ -39,7 +39,11 @@ export function registerCodexAccountHandlers(
     }
     forgetStaleCodexPanes(args.ptyIds.filter((ptyId): ptyId is string => typeof ptyId === 'string'))
   })
-  ipcMain.handle('codexAccounts:list', () => codexAccounts.listAccounts())
+  // Probe keyring-backed sign-ins first so one list response reflects the current CLI login.
+  ipcMain.handle('codexAccounts:list', async () => {
+    await codexAccounts.refreshSystemDefaultSignIn().catch(() => {})
+    return codexAccounts.listAccounts()
+  })
   ipcMain.handle('codexAccounts:add', (_event, args?: CodexAccountAddTarget) =>
     codexAccounts.addAccount(args)
   )

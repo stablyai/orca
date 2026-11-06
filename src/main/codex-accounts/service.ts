@@ -256,6 +256,11 @@ export class CodexAccountService {
     return this.identity.resolveSystemDefault(this.configMirror.readHostModelProvider())
   }
 
+  /** Keyring-backed sign-ins are only visible to the Codex CLI; list awaits this probe. */
+  async refreshSystemDefaultSignIn(): Promise<void> {
+    await this.identity.refreshSystemDefaultLoginStatus()
+  }
+
   private readIdentityFromHome(
     managedHomePath: string,
     expectedAccountId: string

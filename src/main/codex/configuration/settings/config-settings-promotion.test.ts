@@ -50,6 +50,7 @@ vi.mock('../../../filesystem/atomic-file-publication', async (importOriginal) =>
 })
 
 import { syncSystemConfigIntoManagedCodexHome } from './codex-config-mirror'
+import { CODEX_CREDENTIAL_STORE_PIN_MARKER } from './managed-home-credential-store-pin'
 
 let tmpHome: string
 let userDataDir: string
@@ -212,7 +213,9 @@ describe('codex settings write-back promotion', () => {
     syncSystemConfigIntoManagedCodexHome()
 
     expect(readSystemConfig()).toBe('model = "gpt-5"\n')
-    expect(readRuntimeConfig()).toBe('model = "o4"\n')
+    expect(readRuntimeConfig()).toBe(
+      `model = "o4"\ncli_auth_credentials_store = "file" ${CODEX_CREDENTIAL_STORE_PIN_MARKER}\n`
+    )
     expect(readFileSync(baselinePath(), 'utf-8')).toBe(baselineBeforeFailure)
 
     promotionTestState.failAtomicWrite = false
