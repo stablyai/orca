@@ -4,7 +4,7 @@ import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-pat
 import {
   resolveGitMetadataPath,
   type GitMetadataPathOptions
-} from '../../../../shared/git-metadata-path'
+} from '../../../../shared/git/metadata/git-metadata-path'
 import { toHostFilesystemPath } from '../../../filesystem/host-tree-removal'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import {

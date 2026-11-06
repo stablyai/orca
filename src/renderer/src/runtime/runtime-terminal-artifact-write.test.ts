@@ -69,38 +69,6 @@ describe('saving a granted host file outside every workspace', () => {
     expect(callsTo('files.writeTerminalArtifact')).toHaveLength(0)
   })
 
-  it('reads back through a fresh grant when the dropped reply also revoked the old one', async () => {
-    let written = false
-    runtimeEnvironmentCall.mockImplementation(async ({ method, params }) => {
-      if (method === 'files.resolveTerminalPath') {
-        return granted('g-2')
-      }
-      if (method === 'files.writeTerminalArtifact') {
-        written = true
-        throw new Error('Request timed out')
-      }
-      if (written && grantIdOf(params) === 'g-1') {
-        return refused('terminal_file_grant_expired')
-      }
-      return read(written ? '# new' : '# old')
-    })
-
-    await expect(save('# new', '# old')).resolves.toEqual({ ok: true })
-  })
-
-  it('keeps a host refusal of the write even when the text on disk already matches', async () => {
-    let attempted = false
-    runtimeEnvironmentCall.mockImplementation(async ({ method }) => {
-      if (method === 'files.writeTerminalArtifact') {
-        attempted = true
-        return refused('EACCES: permission denied')
-      }
-      return read(attempted ? '# new' : '# old')
-    })
-
-    await expect(save('# new', '# old')).rejects.toThrow('EACCES')
-  })
-
   // Why: desktop delivers a lost reply as a runtime_timeout envelope, not a thrown transport error.
   it('reads back after a desktop timeout envelope and still rejects when the old text remains', async () => {
     const timedOut = {

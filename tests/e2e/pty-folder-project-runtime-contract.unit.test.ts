@@ -9,7 +9,7 @@ import { getDefaultSettings, getDefaultWorkspaceSession } from '../../src/shared
 import {
   MIXED_FOLDER,
   MIXED_GROUP
-} from '../../src/shared/folder-workspace-host-routing.test-fixture'
+} from '../../src/shared/folder-workspaces/folder-workspace-host-routing.test-fixture'
 import { setupPtyIpcSuite } from '../../src/main/ipc/pty/pty-ipc-test-harness'
 import { registerPtyHandlers } from '../../src/main/ipc/pty/register-handlers'
 import { createInitialStoreState } from '../../src/renderer/src/components/terminal-pane/pty-connection-test-store-fixtures'
@@ -143,12 +143,12 @@ vi.mock('../../src/main/agent-hooks/migration-unsupported-pty-state', () =>
     m.migrationUnsupportedPtyModuleMock()
   )
 )
-vi.mock('../../src/main/codex/codex-pane-account-registry', () =>
+vi.mock('../../src/main/codex/configuration/homes/codex-pane-account-registry', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) =>
     m.codexPaneAccountRegistryModuleMock()
   )
 )
-vi.mock('../../src/main/codex/codex-state-db-backfill-recovery', () =>
+vi.mock('../../src/main/codex/history/index/codex-state-db-backfill-recovery', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) =>
     m.codexBackfillRecoveryModuleMock()
   )

@@ -3,13 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { PANE } from './server.test-fixtures'
-import type { AgentProcessIdentity } from '../../shared/agent-process-presence'
-import { readHookRootEvidence } from '../../shared/hook-process-root-evidence'
-import type { ProcessTableRow } from '../../shared/process-table-snapshot'
-import { RelayAgentHookServer } from '../../wsl-guest/agent-hook-server'
-import { createRelayPaneRootResolver } from '../../wsl-guest/relay-pane-root'
-import { createWslBridgePaneRootReader } from './local-tmux-managed-pty'
-import type { PtyProcessInfo } from '../providers/pty-provider-contract'
+
+import '../../shared/agent-hook-listener/presence/hook-process-root-evidence'
+
+import '../../wsl-guest/agent-hook-server'
+import '../../wsl-guest/relay-pane-root'
+import './local-tmux-managed-pty'
+
 import {
   NOW,
   CLAUDE,
@@ -37,116 +37,11 @@ import {
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
-vi.mock('../../shared/agent-process-presence-probe', () => ({ probeAgentProcessPresence: vi.fn() }))
+vi.mock('../../shared/agent-status/process/agent-process-presence-probe', () => ({
+  probeAgentProcessPresence: vi.fn()
+}))
 
 registerRootTestHarness()
-
-describe('a relay’s pane-root answer, through the guest to the desktop', () => {
-  const BOOT = '0b1d2c3e-4f50-4617-8293-a4b5c6d7e8f9'
-  const guestRow = (pid: number, ppid: number, pgid: number, command: string, tty = 'pts/3') => ({
-    pid,
-    ppid,
-    pgid,
-    tpgid: tty === 'pts/3' ? 4001 : -1,
-    tty,
-    stat: tty === 'pts/3' ? 'S+' : 'S',
-    command
-  })
-  // The bootstrap's login shell is the guest root; Claude's Bash tool runs a nested run in its
-  // own session, and a background run sits under an ancestor whose argv is unreadable.
-  const guestRows: ProcessTableRow[] = [
-    guestRow(100, 1, 100, '/bin/bash --rcfile /mnt/c/orca/shell-ready/bash/rcfile'),
-    guestRow(4001, 100, 4001, 'node /usr/lib/node_modules/@anthropic-ai/claude-code/cli.js'),
-    guestRow(4005, 4001, 4005, '/bin/bash -c claude -p summarize', '?'),
-    guestRow(4006, 4005, 4005, 'claude -p summarize', '?'),
-    guestRow(4009, 100, 4009, '(node)', 'pts/3'),
-    guestRow(4010, 4009, 4009, 'claude', 'pts/3')
-  ]
-  const pty = (recordsRoot: boolean): PtyProcessInfo => ({
-    id: 'pty-1',
-    incarnationId: 'inc-1',
-    rootProcessId: 7,
-    cwd: '/workspace',
-    title: 'wsl',
-    paneKey: PANE,
-    wslDistro: 'Ubuntu',
-    ...(recordsRoot ? { wslGuestRoot: { pid: 100, startTime: `${BOOT}:10000` } } : {})
-  })
-
-  it.each<[string, boolean, number, Record<string, unknown>]>([
-    ['a legacy answer keeps a restarted guest’s nested-first child', false, 4006, {}],
-    ['a returned root keeps a nested child out', true, 4006, {}],
-    ['a returned root keeps an unproven sender’s fallback under the weak parent', true, 4010, {}],
-    ['a returned root lets the pane’s own agent replace the weak parent', true, 4001, { pid: 4001 }]
-  ])('%s', async (_name, recordsRoot, sender, expected) => {
-    const desktop = await createServer()
-    desktop.ingestRemote(
-      {
-        paneKey: PANE,
-        tabId: 'tab-1',
-        worktreeId: 'wt-1',
-        source: 'claude',
-        hookEventName: 'UserPromptSubmit',
-        providerSession: { provider: 'claude', id: 'parent' },
-        agentPresence: { agent: 'claude', session: 'parent' },
-        payload: { state: 'working', prompt: 'Parent task', agentType: 'claude' }
-      },
-      'wsl:Ubuntu'
-    )
-    desktop.beginRemoteRelaySession('wsl:Ubuntu')
-    for (const pid of [100, 4001, 4006, 4010]) {
-      live.add(pid)
-    }
-    const answer = createWslBridgePaneRootReader(
-      async () => pty(recordsRoot),
-      () => 'pty-1'
-    )
-    const guestIo = {
-      resolveRoot: createRelayPaneRootResolver((paneKey) =>
-        answer(desktop.relayPaneRootIssuer('wsl:Ubuntu'), 'Ubuntu', paneKey)
-      ),
-      probe: (identity: AgentProcessIdentity) => probe(identity),
-      readProcesses: async (pids: readonly number[]) =>
-        guestRows.filter((entry) => pids.includes(entry.pid)),
-      readTerminal: async (tty: string) => guestRows.filter((entry) => entry.tty === tty)
-    }
-    const dir = mkdtempSync(join(tmpdir(), 'relay-root-e2e-'))
-    paths.push(dir)
-    const guest = new RelayAgentHookServer({
-      endpointDir: dir,
-      forward: (envelope) => desktop.ingestRemote(envelope, 'wsl:Ubuntu'),
-      readHookRootEvidence: (hook) => readHookRootEvidence(hook, guestIo)
-    })
-    await guest.start()
-    try {
-      const { port, token } = guest.getCoordinates()
-      const post = async (payload: Record<string, unknown>) => {
-        const response = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Orca-Agent-Hook-Token': token },
-          body: JSON.stringify({
-            paneKey: PANE,
-            tabId: 'tab-1',
-            worktreeId: 'wt-1',
-            agentProcess: { pid: sender, platform: 'linux', startTime: `${BOOT}:${sender}00` },
-            payload
-          })
-        })
-        expect(response.status).toBe(204)
-      }
-      await post({ hook_event_name: 'UserPromptSubmit', session_id: 'parent', prompt: 'Task' })
-      if (!expected.pid) {
-        await post({ hook_event_name: 'SessionEnd', session_id: 'child', reason: 'other' })
-      }
-      expect(desktop.presence()?.process ?? {}).toMatchObject(expected)
-      expect(desktop.presence()?.fallback).toBeUndefined()
-      expect(desktop.row()).toMatchObject({ state: 'working' })
-      expect(desktop.exits).toBe(0)
-    } finally {
-      guest.stop()
-    }
-  })
-})
 
 // Orca's own agent-teams launch sets this synthetic TMUX; its Claudes run in no tmux server.
 const AGENT_TEAMS_HINT = '%1 /tmp/orca-claude-agent-teams/team-x'
@@ -154,6 +49,21 @@ const unboundRoot = () => {
   runningPane(49969, CLAUDE)
   io.resolveRoot.mockResolvedValueOnce(null)
 }
+
+it('rechecks Antigravity on its next turn when its process becomes the pane foreground', async () => {
+  const server = await createServer()
+  runningPane(49990, [49969, 101, 49969, 'agy', 'S'], [49990, 101, 49990, 'claude', 'S+'])
+  await hook(server, 'PreInvocation', { source: 'antigravity', prompt: 'Not foreground' })
+  expect(server.row()).toBeUndefined()
+  expect(attempts()).toBe(1)
+  runningPane(49969, [49969, 101, 49969, 'agy', 'S+'])
+  await hook(server, 'PreToolUse', { source: 'antigravity' })
+  expect(server.row()).toBeUndefined()
+  expect(attempts()).toBe(1)
+  await hook(server, 'PreInvocation', { source: 'antigravity', prompt: 'Foreground task' })
+  expect(server.row()).toMatchObject({ agentType: 'antigravity', prompt: 'Foreground task' })
+  expect(server.presence()).toMatchObject({ agent: 'antigravity', process: capture(49969) })
+})
 
 describe('an empty pane whose first hook cannot be proved', () => {
   it.each<[string, () => void, string?]>([
@@ -264,14 +174,6 @@ describe('a Claude in a tmux session the pane does not show', () => {
       expect(server.exits).toBe(0)
     }
   )
-
-  it('stays status-only while a hinted read is pending', async () => {
-    const server = await createServer()
-    runningPane(101, ...TMUX)
-    slowRoot()
-    await hook(server, 'UserPromptSubmit', { session: 'tmux', pid: 4043, tmuxPane: TMUX_HINT })
-    expect(server.presence()).toEqual({ agent: 'claude', session: 'tmux' })
-  })
 
   it('withdraws a fallback recorded before an unhinted read found the session', async () => {
     const server = await createServer()

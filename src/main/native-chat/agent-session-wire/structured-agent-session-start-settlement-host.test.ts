@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as TimerPromises from 'node:timers/promises'
 import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
+import { codexStartFailure } from '../../codex/app-server/codex-startup-outcome'
 import { withProviderRequestTimeout } from '../../provider-process/provider-request-timeout'
 import { AgentSessionAcquisitionRefusal } from './structured-agent-session-adapter'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
@@ -8,6 +9,8 @@ import { agentSessionFailureFact } from '../../../shared/agent-session/failures/
 import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import * as startFlight from './structured-agent-session-start-flight'
 import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from './structured-agent-session-send-settlement'
+import { agentSessionStartFailure } from './structured-agent-session-start-failure'
+import { withObservedProviderExit } from './structured-agent-session-failure-text'
 import {
   CALLER,
   attach,
@@ -38,6 +41,7 @@ vi.mock('node:timers/promises', async (importOriginal) => {
 let host: ReturnType<typeof hostTestState>['host']
 let acquire: ReturnType<typeof hostTestState>['acquire']
 let dispatch: ReturnType<typeof hostTestState>['dispatch']
+const openFailures = new Map<string, (error: Error) => void>()
 const openGates = new Map<string, () => void>()
 const eventually = (assertion: () => void | Promise<void>) =>
   vi.waitFor(assertion, { timeout: 10_000, interval: 0 })
@@ -52,8 +56,10 @@ beforeEach(async () => {
   await host.close(SESSION, 'evict')
   acquire.mockClear()
   openGates.clear()
+  openFailures.clear()
   host.deps.adapter.open = ({ acquisitionGeneration }) =>
-    new Promise((resolve) => {
+    new Promise((resolve, reject) => {
+      openFailures.set(acquisitionGeneration!, reject)
       openGates.set(acquisitionGeneration!, () => resolve({ reportedOptions: {} }))
     })
 })
@@ -116,6 +122,13 @@ async function endAttempt() {
     reason: 'exited while starting',
     cause: 'unexpected-exit'
   })
+  // As the adapter: its open answers with this acquisition's own unanswered exit.
+  openFailures.get(child.generation)?.(
+    agentSessionStartFailure(
+      withObservedProviderExit(new Error('provider exited before open answered'))
+    )
+  )
+  openFailures.delete(child.generation)
   await eventually(() => expect(session.child).toBeNull())
 }
 
@@ -165,10 +178,15 @@ describe('final logical startup settlement', () => {
         await lifetime.failStartingChild(
           SESSION,
           sessions.get(SESSION)!.child!,
-          withProviderRequestTimeout(new CodexAppServerRequestError('initialize', -1, 'deadline'), {
-            method: 'initialize',
-            timeoutMs: 60_000
-          }),
+          codexStartFailure(
+            withProviderRequestTimeout(
+              new CodexAppServerRequestError('initialize', -1, 'deadline'),
+              {
+                method: 'initialize',
+                timeoutMs: 60_000
+              }
+            )
+          ),
           60_000
         )
         await expect(flight.outcome).resolves.toMatchObject({ ok: false, aborted: true })
@@ -258,10 +276,12 @@ describe('final logical startup settlement', () => {
     await lifetime.failStartingChild(
       SESSION,
       sessions.get(SESSION)!.child!,
-      withProviderRequestTimeout(new CodexAppServerRequestError('initialize', -1, 'deadline'), {
-        method: 'initialize',
-        timeoutMs: 60_000
-      }),
+      codexStartFailure(
+        withProviderRequestTimeout(new CodexAppServerRequestError('initialize', -1, 'deadline'), {
+          method: 'initialize',
+          timeoutMs: 60_000
+        })
+      ),
       60_000
     )
     await eventually(() => expect(conversationDelivery.loop.isRunning(SESSION)).toBe(false))
@@ -369,6 +389,7 @@ describe('final logical startup settlement', () => {
       expect(runtimeState.currentEventSink(SESSION)).toBeUndefined()
       acquire.mockClear()
       openGates.clear()
+      openFailures.clear()
       const other = 'unrelated-chat'
       const unrelated = hostTestAttachParams(null, {
         providerHandle: undefined,

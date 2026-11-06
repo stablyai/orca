@@ -54,11 +54,11 @@ vi.mock('../../../shared/wsl-paths', async (importOriginal) => ({
   }))())
 }))
 
-vi.mock('./filesystem-auth', () => ({
+vi.mock('./access/filesystem-auth', () => ({
   resolveAuthorizedPath: resolveAuthorizedPathMock
 }))
 
-vi.mock('./filesystem-path-containment', () => ({
+vi.mock('./access/filesystem-path-containment', () => ({
   isENOENT: vi.fn(() => false),
   validateGitRelativeFilePath: vi.fn((value: string) => value)
 }))

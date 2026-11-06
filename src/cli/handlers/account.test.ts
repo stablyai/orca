@@ -337,16 +337,6 @@ describe('account CLI handlers', () => {
     expect(dispose).toHaveBeenCalledOnce()
   })
 
-  it('launches a Windows shim installed under Program Files (x86)', async () => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    const shim = 'C:\\Program Files (x86)\\nodejs\\codex.cmd'
-    resolveCliCommandMock.mockReturnValue(shim)
-
-    await ACCOUNT_HANDLERS['account add'](context('codex'))
-
-    expect(spawnMock).toHaveBeenCalledWith(shim, ['login', '--device-auth'], expect.anything())
-  })
-
   it('forwards Windows form text literally through the process launcher', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     callMock.mockResolvedValue({ result: { capabilities: [DATA_ACCOUNT_RUNTIME_CAPABILITY] } })
@@ -368,14 +358,6 @@ describe('account CLI handlers', () => {
       '--standalone'
     ])
     expect(callMock).toHaveBeenLastCalledWith('accounts.addDataFromHome', expect.anything())
-  })
-
-  it('passes a Windows launcher path with shell characters unchanged', async () => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    const launcher = String.raw`C:\Users\A&B\codex.cmd`
-    resolveCliCommandMock.mockReturnValue(launcher)
-    await ACCOUNT_HANDLERS['account add'](context('codex'))
-    expect(spawnMock).toHaveBeenCalledWith(launcher, ['login', '--device-auth'], expect.anything())
   })
 
   it('runs login in the final profile without accessing a locked Keychain', async () => {

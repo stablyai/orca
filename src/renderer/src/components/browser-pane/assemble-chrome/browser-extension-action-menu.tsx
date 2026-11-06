@@ -1,5 +1,5 @@
-import { Check, Pin, PinOff, Settings2, Trash2 } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+import { Check, Pin, PinOff, Settings2, Trash2, type LucideIcon } from 'lucide-react'
+
 import { toast } from 'sonner'
 import {
   ContextMenuItem,
@@ -19,9 +19,9 @@ import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { browserExtensionRemovalDescription } from '@/components/browser-extension-removal-description'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import type { BrowserExtensionContextMenuItem } from '../../../../../shared/browser-extension-context-menu-types'
-import type { BrowserExtensionActionResult } from '../../../../../shared/browser-extension-types'
-import type { BrowserExtensionToolbarAction } from '../../../../../shared/browser-extension-toolbar-types'
+import type { BrowserExtensionContextMenuItem } from '../../../../../shared/browser/extensions/browser-extension-context-menu-types'
+import type { BrowserExtensionActionResult } from '../../../../../shared/browser/extensions/browser-extension-types'
+import type { BrowserExtensionToolbarAction } from '../../../../../shared/browser/extensions/browser-extension-toolbar-types'
 import { useBrowserExtensionActionContextMenu } from './browser-extension-action-context-items'
 
 export type BrowserExtensionMenuEntry =

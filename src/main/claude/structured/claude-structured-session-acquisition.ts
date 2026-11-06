@@ -16,7 +16,7 @@ import { claudeConfigDirEnvPatch } from '../claude-config-dir-pin'
 import { claudeProcessIdentity } from './claude-structured-owner-identity'
 import { ClaudePromptRegistry } from '../claude-prompt-registry'
 import { adoptClaudeStructuredSpawnOptions } from './launch/claude-structured-spawn-options'
-import { observeClaudeExecutionModel } from './claude-structured-execution-observations'
+import { observeClaudeFrameModels } from './claude-structured-execution-observations'
 import { observeClaudeFastModeFacts } from './launch/claude-structured-session-options'
 import {
   createClaudeSessionPublication,
@@ -24,7 +24,7 @@ import {
 } from './claude-structured-session-publication'
 import type * as sessionState from './claude-structured-session-state'
 import { resolveClaudeAcquisitionError } from './claude-structured-session-close'
-import { withObservedProviderExit } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import { claudeStartupError, claudeStartupExit } from './claude-structured-session-startup-exit'
 import { readClaudeTranscriptEntryUuid } from '../claude-transcript-entry-uuid'
 import { claudeTurnResumePointWriter } from './claude-structured-resume-point'
 import { withAgentSessionCreatePhase } from '../../observability/agent-session-instrumentation'
@@ -34,7 +34,7 @@ import {
   createClaudeSessionJournalTranslator
 } from './journal/claude-structured-session-journal-control'
 import { isRootClaudeFrame } from '../claude-turn-opening'
-import { createClaudeStartupOutcome } from './claude-structured-startup-outcome'
+import { createClaudeStartupOutcome, endsClaudeStartup } from './claude-structured-startup-outcome'
 import { claudeStartupResultError } from '../claude-stream-json-exit-error'
 
 export async function acquireClaudeSession({
@@ -62,9 +62,9 @@ export async function acquireClaudeSession({
   const initProof = createClaudeInitProof()
   // Owned by this acquisition alone, so a late frame cannot fail a replacement's open.
   const startup = createClaudeStartupOutcome()
-  const childFailed = (error: Error): void => {
+  const childFailed = (error: Error, ended?: Promise<unknown>): void => {
     childEnded ??= error
-    startup.fail(error)
+    void (ended ? ended.then(startup.fail) : endsClaudeStartup(error) && startup.fail(error))
     initProof.reject(error)
   }
   const translator = createClaudeSessionJournalTranslator(
@@ -98,8 +98,7 @@ export async function acquireClaudeSession({
       }
     }
     const permissionChanged = observeClaudeReportedPermissionMode(observedOptions, message)
-    const modelChanged =
-      liveSession && init?.model ? observeClaudeExecutionModel(liveSession, init.model) : false
+    const modelReport = observeClaudeFrameModels(liveSession, message, init?.model)
     if (init) {
       initProof.resolve(init)
       if (liveSession) {
@@ -140,14 +139,15 @@ export async function acquireClaudeSession({
     }
     try {
       callbacks.deliver(attempt, sessionId, () => {
-        if (liveSession && (modelChanged || permissionChanged)) {
+        if (liveSession && (modelReport || permissionChanged)) {
           callbacks.emit(liveSession, input.events, {
             type: 'options-reported',
             sessionId,
             fence: liveSession.fence,
             acquisitionGeneration: liveSession.acquisitionGeneration,
             reportedOptions: {
-              ...(modelChanged && init?.model ? { model: init.model } : {}),
+              ...modelReport,
+              reportedModel: liveSession.reportedOptions.reportedModel,
               reportedPermissionMode: observedOptions.reportedPermissionMode
             }
           })
@@ -222,8 +222,7 @@ export async function acquireClaudeSession({
               callbacks.finishClose(sessionId, attempt)
               return
             }
-            // Mark in place because the fault report may retain this error object.
-            childFailed(withObservedProviderExit(error))
+            childFailed(...claudeStartupExit(error, attempt.connection, input.events))
             callbacks.handleExit(sessionId, attempt, error)
           })
         }
@@ -284,7 +283,7 @@ export async function acquireClaudeSession({
     })
     acquisitions.deleteIfCurrent(sessionId, attempt)
     await withAgentSessionCreatePhase('publish', input.recordPhase, async () => {
-      sessions.set(sessionId, session)
+      callbacks.publish(session)
       attempt.published = true
       for (const event of attempt.buffered.splice(0)) {
         event()
@@ -300,7 +299,7 @@ export async function acquireClaudeSession({
   } catch (error) {
     unbindReadingControl?.()
     throw await resolveClaudeAcquisitionError({
-      error,
+      error: await claudeStartupError(error, attempt.connection),
       sessionId,
       sessions,
       attempt,

@@ -3,10 +3,13 @@ import type {
   GitConflictOperation,
   GitStagingArea,
   GitStatusResult
-} from '../../../shared/git-status-types'
-import type { GitDiffResult } from '../../../shared/git-diff-compare-types'
-import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-history'
-import type { GitStatusUpstreamRefWatchRequest } from '../git-status-upstream-ref-watch-request'
+} from '../../../shared/git/status/git-status-types'
+import type { GitDiffResult } from '../../../shared/git/diff/git-diff-compare-types'
+import type {
+  GitHistoryOptions,
+  GitHistoryResult
+} from '../../../shared/git/history/git-history-types'
+import type { GitStatusRefBindingRequest as GitStatusUpstreamRefWatchRequest } from '../worktrees/git/worktree-git-status-ref-watch'
 import type { GitAdmissionTier } from '../../git/command-runner/git-exec-options'
 import { getStatus } from '../../git/source-control/status-read'
 import { getSubmoduleStatus } from '../../git/source-control/submodule-status'
@@ -18,21 +21,21 @@ import {
 import { getDiff } from '../../git/source-control/file-diff'
 import { getHistory } from '../../git/history'
 import { isGitWorktreeMutationInFlight } from '../../git/command-runner/git-worktree-mutation-state'
-import type { GitMutationInFlight } from '../../../shared/git-mutation-in-flight'
+import type { GitMutationInFlight } from '../../../shared/git/commands/git-mutation-in-flight'
 import { checkIgnoredPaths } from '../../git/source-control/check-ignored-paths'
 import {
   appendFolderToGitignore,
   findKnownHugeFolderPathsToIgnore
 } from '../../git/huge-folder-ignore'
 import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
-import { validateGitRelativeFilePath } from './filesystem-path-containment'
+import { validateGitRelativeFilePath } from './access/filesystem-path-containment'
 import {
   getLocalGitOptionsForRegisteredWorktree,
   getLocalGitOptionsForRepo,
   getLocalRepoForRegisteredWorktree
 } from '../local-worktree-runtime-options'
 import { getWorktreeSharedLinkPaths } from '../../git/worktrees/content-paths/worktree-shared-directories'
-import { applyGitStatusUpstreamRefWatchRequest } from '../git-status-upstream-ref-watch-request'
+import { applyGitStatusUpstreamRefWatchRequest } from '../worktrees/git/git-status-upstream-ref-watch-request'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { readWorktreeGitUnlessWslStopped } from './wsl-gated-worktree-git-read'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'

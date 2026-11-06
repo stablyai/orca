@@ -275,4 +275,94 @@ describe('applyWebSessionTabsSnapshot', () => {
       })
     ).toBe('host-browser-unified')
   })
+
+  it('leaves a local page alone when a server it serves echoes it back unstamped (#38136)', () => {
+    const workspace: BrowserWorkspace = {
+      id: 'own-browser-workspace',
+      worktreeId: WT,
+      activePageId: 'own-browser-page',
+      pageIds: ['own-browser-page'],
+      url: 'https://intranet.local/',
+      title: 'Intranet',
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: NOW - 10
+    }
+    const page: BrowserPage = {
+      id: 'own-browser-page',
+      workspaceId: workspace.id,
+      worktreeId: WT,
+      url: 'https://intranet.local/',
+      title: 'Intranet',
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: NOW - 10
+    }
+    const unifiedTab: Tab = {
+      id: 'own-browser-unified',
+      entityId: workspace.id,
+      groupId: 'own-group',
+      worktreeId: WT,
+      contentType: 'browser',
+      label: 'Intranet',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW - 10,
+      isPreview: false,
+      isPinned: false
+    }
+    const state = makeState({
+      browserTabsByWorktree: { [WT]: [workspace] },
+      browserPagesByWorkspace: { [workspace.id]: [page] },
+      unifiedTabsByWorktree: { [WT]: [unifiedTab] },
+      groupsByWorktree: {
+        [WT]: [
+          {
+            id: 'own-group',
+            worktreeId: WT,
+            activeTabId: unifiedTab.id,
+            tabOrder: [unifiedTab.id]
+          }
+        ]
+      }
+    })
+
+    const next = {
+      ...state,
+      ...applyWebSessionTabsSnapshot(
+        state,
+        makeSnapshot(
+          [
+            {
+              type: 'browser',
+              id: 'own-browser-unified',
+              title: 'Intranet',
+              browserWorkspaceId: 'own-browser-workspace',
+              browserPageId: 'own-browser-page',
+              url: 'https://intranet.local/',
+              loading: false,
+              canGoBack: false,
+              canGoForward: false,
+              isActive: true
+            }
+          ],
+          { activeTabId: 'own-browser-unified', activeTabType: 'browser' }
+        ),
+        ENV,
+        NOW
+      )
+    }
+
+    expect(next.browserTabsByWorktree[WT]).toEqual([workspace])
+    expect(next.browserPagesByWorkspace[workspace.id]).toEqual([page])
+    expect(next.remoteBrowserPageHandlesByPageId[page.id]).toBeUndefined()
+    expect(next.unifiedTabsByWorktree[WT]?.map((tab) => tab.id)).toEqual(['own-browser-unified'])
+  })
 })

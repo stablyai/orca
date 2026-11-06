@@ -1,6 +1,10 @@
 import { resolve, sep } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { MAX_PENDING_OS_OPENED_DOCUMENTS, OsOpenedDocumentState } from './os-opened-documents'
+import {
+  documentPathsFromArguments,
+  MAX_PENDING_OS_OPENED_DOCUMENTS,
+  OsOpenedDocumentState
+} from './os-opened-documents'
 
 // Normalize fixture paths with host rules, including Windows drive/separators.
 const hostPath = (name: string): string => resolve(sep, 'notes', name)
@@ -26,9 +30,31 @@ describe('OsOpenedDocumentState', () => {
     vi.stubGlobal('process', { ...process, platform: 'darwin', defaultApp: true })
     const state = new OsOpenedDocumentState()
 
-    state.captureFilePaths(['/notes/source.ts', '/notes/Dockerfile'])
+    state.captureFilePaths([
+      '/notes/source.ts',
+      'file:///notes/%E4%BB%A3%E7%A0%81%20notes.custom',
+      '/notes/.env',
+      '/notes/Dockerfile'
+    ])
 
-    expect(state.consume()).toEqual(['/notes/source.ts', '/notes/Dockerfile'])
+    expect(state.consume()).toEqual([
+      '/notes/source.ts',
+      '/notes/代码 notes.custom',
+      '/notes/.env',
+      '/notes/Dockerfile'
+    ])
+  })
+
+  it('keeps code and unknown suffixes out of non-macOS document delivery', () => {
+    expect(
+      documentPathsFromArguments(['/notes/a.csv', '/notes/app.js', '/notes/a.custom'], 'linux')
+    ).toEqual(['/notes/a.csv'])
+    expect(
+      documentPathsFromArguments(
+        ['C:\\notes\\a.csv', 'C:\\notes\\app.js', 'C:\\notes\\a.custom'],
+        'win32'
+      )
+    ).toEqual(['C:\\notes\\a.csv'])
   })
 
   it('does not duplicate a path captured twice', () => {

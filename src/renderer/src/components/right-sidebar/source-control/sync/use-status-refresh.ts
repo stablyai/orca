@@ -17,7 +17,7 @@ import { useAppStore } from '@/store'
 import type { GitPushTarget } from '../../../../../../shared/worktree/types'
 import { isWslDistroNotRunningRefusal } from '../../../../../../shared/wsl-distro-not-running-refusal'
 import type { PullRequestGenerationContext } from '@/store/slices/pull-request-generation'
-import { refreshGitStatusForWorktree } from '../../git-status-refresh'
+import { refreshGitStatusForWorktree } from './git-status-refresh'
 
 export type SourceControlStatusRefresh = {
   refreshActiveGitStatus: (signal?: AbortSignal) => Promise<void>

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { preparePendingSplitClose } from './pending-split-close-test-fixture'
 import { preparePendingRuntimeClose } from './pending-runtime-pane-close-test-fixture'
 import { flushPtySideEffects } from './pty-transport-test-harness'
-import type { PtyRunningWorkProbe } from '../terminal/pty-running-work-probe'
+import type { PtyRunningWorkProbe } from '../../../../shared/terminal/pty/lifecycle/pty-running-work-probe'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 beforeEach(() => vi.clearAllMocks())

@@ -6,7 +6,7 @@ const dependencyExports: [string, string[]][] = [
   ['../ipc/worktree-base-directory-watcher', ['disposeWorktreeBaseDirectoryWatchers']],
   ['../ipc/folder-repo-git-upgrade', ['stopFolderRepoGitUpgradeWatch']],
   ['../ipc/pty/kill-all', ['killAllPty']],
-  ['../daemon/daemon-provider-state', ['disconnectDaemon', 'shutdownDaemon']],
+  ['../daemon/providers/lifecycle/daemon-provider-state', ['disconnectDaemon', 'shutdownDaemon']],
   ['../ipc/ssh-shutdown-drain', ['beginSshShutdown']],
   ['../agent-hooks/server', ['agentHookServer']],
   ['../agent-hooks/wsl-hook-relay-manager', ['wslHookRelayManager']],
@@ -20,15 +20,15 @@ const dependencyExports: [string, string[]][] = [
     ['setStructuredAgentSessionTeardownTrigger']
   ],
   ['../runtime/files/watch/file-watcher-leases', ['awaitRuntimeFileWatcherUnsubscribes']],
-  ['../runtime/runtime-metadata', ['clearRuntimeMetadataIfOwned']],
+  ['../runtime/rpc/server/runtime-metadata', ['clearRuntimeMetadataIfOwned']],
   [
-    '../browser/paired-runtime-browser-client-host-runtime',
+    '../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime',
     ['shutdownPairedRuntimeBrowserClientHosts']
   ],
-  ['../ipc/desktop-browser-bridge-wiring', ['disposeDesktopBrowserBridge']],
+  ['../ipc/browser/desktop-browser-bridge-wiring', ['disposeDesktopBrowserBridge']],
   ['../orca-profiles/profile-cloud-session-owner', ['flushUnsavedCloudSessions']],
   ['../browser/browser-manager', ['browserManager']],
-  ['../browser/browser-session-registry', ['browserSessionRegistry']],
+  ['../browser/sessions/browser-session-registry', ['browserSessionRegistry']],
   ['../codex/codex-state-db-backfill-recovery', ['stopCodexStateDbBackfillRecoveries']],
   ['../codex/codex-account-session-bridge', ['stopCodexAccountSessionBridges']],
   ['../git/refs/maintenance/local-repo-ref-maintenance', ['awaitPackedRefsLockRelease']],

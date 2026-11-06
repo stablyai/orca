@@ -1,3 +1,4 @@
+import { TriangleAlert } from 'lucide-react'
 import React, { useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
@@ -26,9 +27,9 @@ export function CodexRestartStatusPrompt(): React.JSX.Element | null {
   }
 
   return (
-    <div className="mx-1 mb-1 flex items-center gap-2 rounded-md border border-border px-2 py-1.5">
-      <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-muted-foreground" />
-      <div className="min-w-0 flex-1 text-2xs text-foreground">
+    <div className="mx-1 mb-1 flex items-center gap-2 rounded-md border border-status-warning-border bg-status-warning-background px-2 py-1.5">
+      <TriangleAlert aria-hidden className="size-3.5 shrink-0 text-status-warning-text" />
+      <div className="min-w-0 flex-1 text-xs font-medium text-status-warning-text">
         {/* Why: notices are per-PTY-session but restart is per-pane; show both counts so split panes don't look wrong. */}
         {translate(
           'auto.components.status.bar.StatusBar.staleCodexSessions',
@@ -39,7 +40,7 @@ export function CodexRestartStatusPrompt(): React.JSX.Element | null {
           }
         )}
         {staleCodexStatus.staleWorktreeCount > 1 ? (
-          <span className="mt-0.5 block text-muted-foreground">
+          <span className="mt-0.5 block text-2xs font-normal text-muted-foreground">
             {translate(
               'auto.components.status.bar.StatusBar.59c6e7b4e0',
               'Visible sessions restart now. Others restart when their worktree becomes active.'

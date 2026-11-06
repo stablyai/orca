@@ -1,5 +1,5 @@
 import { expect, vi } from 'vitest'
-import { quotePosixShell } from '../../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
 import { randomUUID } from 'node:crypto'
 import { envelope } from './wsl-orcad-chat-envelope'
 import type { ChatInstall, ChatLane } from './wsl-orcad-structured-chat-contract'

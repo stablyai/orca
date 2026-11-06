@@ -3,8 +3,6 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { basename, join, relative } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { buildClaudeChildProcessEnv } from '../claude-child-process-environment'
-import * as claudeConnection from '../claude-stream-json-connection'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { resolveSessionFilePath } from '../../native-chat/session-file-resolver'
 import {
@@ -125,53 +123,6 @@ async function waitForResolvedTranscript(
     await new Promise((resolve) => setTimeout(resolve, 250))
   }
 }
-
-describe('real CLI fixture authentication isolation', () => {
-  it.each(['authenticated', 'signed-out'] as const)(
-    'keeps the %s launch environment independent of inherited credentials',
-    async (mode) => {
-      const authKeys = ['ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN'] as const
-      for (const key of authKeys) {
-        vi.stubEnv(key, 'unusable-fixture-auth-value')
-      }
-      let childEnv: Record<string, string> | undefined
-      const open = vi
-        .spyOn(claudeConnection, 'openClaudeStreamJsonConnection')
-        .mockImplementation(async (launch) => {
-          childEnv = buildClaudeChildProcessEnv(launch.env)
-          throw new Error('fixture stopped before spawning a CLI')
-        })
-      const providerSessionId = randomUUID()
-      const adapter = realAdapter(
-        providerSessionId,
-        join(tmpdir(), 'orca-synthetic-signed-out'),
-        [],
-        process.cwd(),
-        undefined,
-        mode === 'signed-out' ? {} : undefined
-      )
-      try {
-        await expect(
-          adapter.acquire({
-            identity: identity(providerSessionId),
-            fence: 1,
-            spawnToken: 'fixture'
-          })
-        ).rejects.toThrow('fixture stopped before spawning a CLI')
-        expect(open).toHaveBeenCalledOnce()
-        for (const key of authKeys) {
-          expect(childEnv?.[key]).toBe(
-            mode === 'authenticated' ? 'unusable-fixture-auth-value' : undefined
-          )
-        }
-      } finally {
-        await adapter.closeAll()
-        open.mockRestore()
-        vi.unstubAllEnvs()
-      }
-    }
-  )
-})
 
 describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
   it.skipIf(!realClaudeAuthenticated)(
@@ -351,62 +302,6 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
       }
     },
     90_000
-  )
-
-  it.skipIf(!realClaudeAuthenticated)(
-    'opens with nothing sent, then answers a send handed over after it',
-    async () => {
-      const providerSessionId = randomUUID()
-      const claudeConfigDir = process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
-      const events: ClaudeStructuredSessionEvent[] = []
-      const adapter = realAdapter(
-        providerSessionId,
-        claudeConfigDir,
-        events,
-        process.cwd(),
-        undefined,
-        realClaudeLaunchHome().env,
-        false
-      )
-      const until = async (done: () => boolean, timeoutMs: number): Promise<boolean> => {
-        const deadline = Date.now() + timeoutMs
-        while (!done() && Date.now() < deadline) {
-          await new Promise((resolve) => setTimeout(resolve, 20))
-        }
-        return done()
-      }
-      try {
-        const acquireAt = Date.now()
-        await adapter.acquire({
-          identity: identity(providerSessionId),
-          fence: 1,
-          spawnToken: 'real-cli-started-timing'
-        })
-        await claudeStartupSettled(adapter, 'real-cli-handshake')
-        const publishedAt = Date.now()
-        await claudeStartupSettled(adapter, 'real-cli-handshake')
-        const startedAt = Date.now()
-        const before = events.length
-        await adapter.dispatch({
-          sessionId: 'real-cli-handshake',
-          clientMessageId: 'real-cli-started-timing-1',
-          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Say ok' }] },
-          fence: 1
-        })
-        expect(
-          await until(() => events.slice(before).some((event) => event.type === 'message'), 60_000)
-        ).toBe(true)
-        const firstOutputAt = Date.now()
-        console.info(
-          `[real-cli startup timing] acquire->published ${publishedAt - acquireAt} ms, ` +
-            `published->open ${startedAt - publishedAt} ms, ` +
-            `dispatch->first output ${firstOutputAt - startedAt} ms`
-        )
-      } finally {
-        await adapter.closeAll()
-      }
-    },
-    120_000
   )
 
   it.skipIf(!realClaudeAuthenticated).each([

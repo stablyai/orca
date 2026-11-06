@@ -6,9 +6,9 @@ import {
   flushRemovalPendingEdits,
   lastViewUnsavedFiles,
   unsavedTextViewIds
-} from '@/components/editor/removal-unsaved-editor-files'
+} from '@/components/editor/save/flush/removal-unsaved-editor-files'
 import { worktreePurgeClosedFileIds } from './worktree-purge-closed-files'
-import { resolveEditorModelOwner } from '@/components/editor/editor-model-owner'
+import { resolveEditorModelOwner } from '@/components/editor/model-lifetime/identity/editor-model-owner'
 import { isRemovedRuntimeHostId } from '../../stale-runtime-host-rows'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '../../../workspace-record-selectors'

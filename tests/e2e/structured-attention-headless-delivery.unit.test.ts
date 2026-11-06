@@ -15,7 +15,7 @@ it('loads and delivers actual host notifications in plain Node without Electron 
         sourcefile: 'structured-attention-headless-notification.ts',
         contents: `
           import {createStructuredAttentionMobileDelivery} from './src/main/runtime/agent-session/structured-agent-session-mobile-attention'
-          import {RuntimeMobileNotificationController} from './src/main/runtime/runtime-mobile-notification-controller'
+          import {RuntimeMobileNotificationController} from './src/main/runtime/push/notifications/runtime-mobile-notification-controller'
           import {getDefaultNotificationSettings} from './src/shared/notification-settings-defaults'
           const controller = new RuntimeMobileNotificationController()
           controller.configureDismissalStore(${JSON.stringify(join(directory, 'state'))})

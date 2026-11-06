@@ -1,4 +1,4 @@
-import { parseSetupScriptShebang } from '../setup-script-shebang'
+import { parseSetupScriptShebang } from '../workspace-setup/setup-script-shebang'
 import { detectMonacoFilenameLanguage } from './monaco-filename-language'
 import extensionLanguages from './editor-language-extensions.json'
 

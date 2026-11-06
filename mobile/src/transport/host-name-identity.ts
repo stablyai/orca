@@ -1,16 +1,22 @@
 import { GENERATED_HOST_NAME_PATTERN, getNextHostNameFromHosts } from './host-names'
 import type { StoredHostProfile } from './types'
+import { sameHostMachine, type HostMachine } from '../../../src/shared/host-machine-line'
 
 // Resolve name identity inside host-store’s serialized mutation so display name and sources commit together; see withReportedDescriptor’s omission exception.
 
 type HostNameIdentity = Pick<
   StoredHostProfile,
-  'name' | 'personalName' | 'lastKnownMachineName' | 'lastKnownHostPlatform'
+  | 'name'
+  | 'personalName'
+  | 'lastKnownMachineName'
+  | 'lastKnownHostPlatform'
+  | 'lastKnownHostMachine'
 >
 
 export type ReportedHostDescriptor = {
   machineName: string | null
   platform: NodeJS.Platform | null
+  machine?: HostMachine | null
 }
 
 // Classify only legacy names with no identity fields; current records already preserve explicit overrides or generated names.
@@ -19,6 +25,7 @@ export function classifyLegacyHostName<T extends HostNameIdentity>(profile: T): 
     profile.personalName !== undefined ||
     profile.lastKnownMachineName !== undefined ||
     profile.lastKnownHostPlatform !== undefined ||
+    profile.lastKnownHostMachine !== undefined ||
     GENERATED_HOST_NAME_PATTERN.test(profile.name)
   ) {
     return profile
@@ -35,15 +42,18 @@ export function mergeHostNameIdentity(
     personalName: _personalName,
     lastKnownMachineName: _machineName,
     lastKnownHostPlatform: _platform,
+    lastKnownHostMachine: _machine,
     ...rest
   } = incoming
-  const { personalName, lastKnownMachineName, lastKnownHostPlatform } = existing
+  const { personalName, lastKnownMachineName, lastKnownHostPlatform, lastKnownHostMachine } =
+    existing
   return {
     ...rest,
     name: existing.name,
     ...(personalName !== undefined ? { personalName } : {}),
     ...(lastKnownMachineName !== undefined ? { lastKnownMachineName } : {}),
-    ...(lastKnownHostPlatform !== undefined ? { lastKnownHostPlatform } : {})
+    ...(lastKnownHostPlatform !== undefined ? { lastKnownHostPlatform } : {}),
+    ...(lastKnownHostMachine !== undefined ? { lastKnownHostMachine } : {})
   }
 }
 
@@ -70,14 +80,21 @@ export function withReportedDescriptor(
   current: StoredHostProfile,
   descriptor: ReportedHostDescriptor
 ): StoredHostProfile {
-  const { lastKnownMachineName: _machineName, lastKnownHostPlatform: _platform, ...rest } = current
+  const {
+    lastKnownMachineName: _machineName,
+    lastKnownHostPlatform: _platform,
+    lastKnownHostMachine: _machine,
+    ...rest
+  } = current
   const lastKnownMachineName = descriptor.machineName ?? undefined
   const lastKnownHostPlatform = descriptor.platform ?? undefined
+  const lastKnownHostMachine = descriptor.machine ?? undefined
   const name = current.personalName ?? lastKnownMachineName ?? current.name
   if (
     name === current.name &&
     lastKnownMachineName === current.lastKnownMachineName &&
-    lastKnownHostPlatform === current.lastKnownHostPlatform
+    lastKnownHostPlatform === current.lastKnownHostPlatform &&
+    sameHostMachine(descriptor.machine ?? null, current.lastKnownHostMachine ?? null)
   ) {
     return current
   }
@@ -85,6 +102,7 @@ export function withReportedDescriptor(
     ...rest,
     name,
     ...(lastKnownMachineName !== undefined ? { lastKnownMachineName } : {}),
-    ...(lastKnownHostPlatform !== undefined ? { lastKnownHostPlatform } : {})
+    ...(lastKnownHostPlatform !== undefined ? { lastKnownHostPlatform } : {}),
+    ...(lastKnownHostMachine !== undefined ? { lastKnownHostMachine } : {})
   }
 }

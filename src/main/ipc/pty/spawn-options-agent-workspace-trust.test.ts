@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
 import { getDefaultSettings } from '../../../shared/constants'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import * as openCodeCapabilities from '../../opencode/opencode-launch-capabilities'
 
 const applyAgentWorkspaceTrust = vi.hoisted(() =>

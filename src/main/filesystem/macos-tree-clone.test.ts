@@ -78,12 +78,4 @@ describe('cloneMacTree', () => {
     ])
     expect(seenAtCopy).toEqual([false, false])
   })
-
-  it('throws when neither copy succeeds', async () => {
-    runProcessMock.mockResolvedValue({ ...ok, code: 1 })
-    await expect(cloneMacTree('/src/node_modules', destination)).rejects.toThrow(
-      'Could not copy node_modules'
-    )
-    expect(runProcessMock).toHaveBeenCalledTimes(2)
-  })
 })

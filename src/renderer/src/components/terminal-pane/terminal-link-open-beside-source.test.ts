@@ -124,7 +124,7 @@ describe('terminal file links carry their source tab', () => {
     expect(toastErrorMock).toHaveBeenCalledTimes(1)
   })
 
-  it('reports a refused HTML placement for the internal Open in this group action', async () => {
+  it('reports a refused HTML placement for the internal Open in new tab action', async () => {
     seedSourceTab()
     const stat = createDeferred<{ isDirectory: boolean }>()
     statMock.mockImplementationOnce(() => stat.promise)
@@ -186,7 +186,7 @@ describe('terminal file links carry their source tab', () => {
     expect(toastErrorMock).toHaveBeenCalledTimes(1)
   })
 
-  it('refuses an explicit request routed to another workspace before activating it', async () => {
+  it('keeps an explicit request for a local file another workspace holds in its source', async () => {
     setPlatform('Macintosh')
     seedSourceTab()
     storeState.openFiles = [{ filePath: '/other/x.ts', worktreeId: 'wt-2' }]
@@ -199,9 +199,16 @@ describe('terminal file links carry their source tab', () => {
     openDetectedFilePath('/other/x.ts', null, null, { ...sourceDeps, openInSourceGroup: true })
     await flushAsyncWork()
 
-    expect(activateAndRevealWorkspace).not.toHaveBeenCalled()
-    expect(openFileForLinkMock).not.toHaveBeenCalled()
-    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(findWorkspaceFileRouteMock).not.toHaveBeenCalled()
+    expect(activateAndRevealWorkspace).not.toHaveBeenCalledWith('wt-2', expect.anything())
+    expect(openFileForLinkMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/other/x.ts', worktreeId: 'wt-1' }),
+      expect.anything(),
+      expect.anything(),
+      expect.anything()
+    )
+    expect(toastErrorMock).not.toHaveBeenCalled()
+    findWorkspaceFileRouteMock.mockReset()
   })
 })
 

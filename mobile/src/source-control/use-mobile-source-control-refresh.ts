@@ -21,7 +21,7 @@ export function useMobileSourceControlRefresh({
   const [request, setRequest] = useState<{ client: typeof client; worktreeId: string } | null>(null)
   const consumedRequest = useRef(request)
   const refreshCommittedPr = useEffectEvent(() => {
-    void prController.refetchPRSidebar({ includeDetails })
+    void prController.refetchPRSidebar({ includeDetails, refresh: true })
   })
   useEffect(() => {
     if (request !== null && request !== consumedRequest.current) {

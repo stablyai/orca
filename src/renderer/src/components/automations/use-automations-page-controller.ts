@@ -5,7 +5,6 @@ import { createAutomationSaveAction } from './automation-save-action'
 import { useAutomationDraftEffects } from './use-automation-draft-effects'
 import { useAutomationEditorActions } from './use-automation-editor-actions'
 import { useAutomationRunPageState } from './use-automation-run-page-state'
-import { useAutomationSourceAvailability } from './use-automation-source-availability'
 import { useAutomationsPageEscape } from './use-automations-page-escape'
 import { useAutomationsPageListState } from './use-automations-page-list-state'
 import { useAutomationsPageLocalState } from './use-automations-page-local-state'
@@ -44,14 +43,12 @@ export function useAutomationsPageController() {
     draftRepos: destinationForm.dialogRepos
   })
   const runPage = useAutomationRunPageState({ store, local, list, setup })
-  const sourceAvailability = useAutomationSourceAvailability(list.visibleRows)
   const presentation = useAutomationsPagePresentationState({
     store,
     local,
     list,
     destination,
-    destinationForm,
-    sourceAvailability
+    destinationForm
   })
   const pageRefresh = useAutomationsPageRefresh({
     store,
@@ -88,7 +85,6 @@ export function useAutomationsPageController() {
     setup,
     destination,
     destinationForm,
-    sourceAvailability,
     presentation,
     pageRefresh
   }
@@ -107,7 +103,6 @@ export function useAutomationsPageController() {
     destinationForm,
     setup,
     runPage,
-    sourceAvailability,
     presentation,
     pageRefresh,
     draftEffects,

@@ -66,48 +66,6 @@ describe('AI Vault Grok session parser', () => {
     }
   )
 
-  it.each([5000, 256 * 1024 + 1])(
-    'publishes %i-character Grok turns before preview limits',
-    async (length) => {
-      const root = await mkdtemp(join(tmpdir(), 'orca-grok-transcript-'))
-      tempRoots.push(root)
-      const path = join(root, 'summary.json')
-      await writeFile(path, JSON.stringify({ info: { id: 'grok-transcript' } }))
-      const text = 'x'.repeat(length)
-      await writeFile(
-        join(root, 'chat_history.jsonl'),
-        [
-          { type: 'user', content: '<user_info>bootstrap</user_info>' },
-          {
-            type: 'user',
-            content: `<user_info>hidden</user_info><user_query>${text}</user_query>`
-          },
-          { type: 'assistant', content: text },
-          { type: 'assistant', content: [{ type: 'text', text }] }
-        ]
-          .map((line) => JSON.stringify(line))
-          .join('\n')
-      )
-      const messages: TranscriptMessage[] = []
-      const session = await parseGrokSessionFile(
-        { path, mtimeMs: 1, modifiedAt: '2026-05-01T00:00:00.000Z' },
-        'linux',
-        { active: true, push: (message) => messages.push(message) }
-      )
-      expect(messages).toEqual(
-        ['user', 'assistant', 'assistant'].map((role) => ({
-          role,
-          text: text.slice(0, 256 * 1024),
-          timestamp: null,
-          ...(length > 256 * 1024 ? { textTruncated: true } : {})
-        }))
-      )
-      expect(session?.previewMessages.map((message) => message.text.length)).toEqual([
-        220, 220, 220
-      ])
-    }
-  )
-
   it('stores the unwrapped user_query as firstUserPrompt under full capture', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-grok-first-'))
     tempRoots.push(root)

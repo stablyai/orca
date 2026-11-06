@@ -7,9 +7,9 @@ import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import { listWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
 import type * as WorktreeRemovalModule from '../../git/worktrees/removal/worktree-removal'
 import { deleteBranchOfUnregisteredWorktree } from '../../git/worktrees/removal/worktree-removal'
-import { beginTerminalInstall } from '../../ipc/watcher-removal-gate'
+import { beginTerminalInstall } from './watcher-removal-gate'
 import { formatWorktreeRemovalError } from '../../ipc/worktree-logic'
-import { registerWorktreeChangeInvalidator } from '../../ipc/worktree-change-invalidators'
+import { registerWorktreeChangeInvalidator } from '../../ipc/worktrees/listing/worktree-change-invalidators'
 import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests,

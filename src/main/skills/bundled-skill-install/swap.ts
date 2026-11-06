@@ -23,6 +23,35 @@ function siblingPath(target: string, marker: string): string {
   return join(dirname(target), `.${basename(target)}${marker}${randomUUID()}`)
 }
 
+export async function retireBundledSkillPlacement(
+  filesystem: BundledSkillFilesystem,
+  path: string,
+  forwardTo: string | undefined,
+  verify: (path: string) => Promise<boolean>,
+  backupPath: string
+): Promise<string | undefined> {
+  await requireUnchanged(() => verify(path), path)
+  const old = siblingPath(path, BUNDLED_SKILL_OLD_MARKER)
+  await filesystem.rename(path, old)
+  if (!(await verify(old))) {
+    await filesystem.rename(old, path)
+    throw new BundledSkillChangedError(path)
+  }
+  try {
+    if (forwardTo) {
+      await filesystem.createLink(forwardTo, path)
+    }
+  } catch (error) {
+    await filesystem.rename(old, path).catch(() => undefined)
+    throw error
+  }
+  if (!(await verify(old))) {
+    return backUpBundledSkillPath(filesystem, old, backupPath)
+  }
+  await removeBundledSkillSibling(filesystem, old)
+  return undefined
+}
+
 /** Backups stay outside skill roots (agents would load them) and projects (they would pollute repos). */
 export function bundledSkillBackupPath(homeDirectory: string, name: string): string {
   const utc = new Date().toISOString().replace(/[:.]/gu, '-')

@@ -15,7 +15,7 @@ import {
 import * as preflight from './launch-work-item-direct-preflight'
 import * as preparation from './launch-work-item-direct-route-preparation'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
-import { buildAgentDraftLaunchPlan } from './tui-agent-startup'
+import { buildAgentDraftLaunchPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
 import ProjectViewWrapper from '@/components/github-project/ProjectViewWrapper'
 
 const links = vi.hoisted(() => ({ open: vi.fn() }))

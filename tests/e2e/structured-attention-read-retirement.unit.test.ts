@@ -40,7 +40,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { StructuredNotificationRead } from '../../src/shared/notification-settings-types'
-import { RuntimeMobileNotificationController } from '../../src/main/runtime/runtime-mobile-notification-controller'
+import { RuntimeMobileNotificationController } from '../../src/main/runtime/push/notifications/runtime-mobile-notification-controller'
 
 describe('Explicit desktop read acknowledgements', () => {
   const TARGET = { kind: 'local' } as const
@@ -553,7 +553,7 @@ describe('Accepted structured history read retirement', () => {
         throw new Error('prompt not sent')
       }
       relay.configureDismissalStore(relayDirectory)
-      relay.dispatch(sent)
+      relay.dispatch({ ...sent, paneKey: SUBJECT })
       const withdrawals: string[] = []
       relay.onDispatched((event) => {
         if (event.type === 'dismiss') {
@@ -563,7 +563,7 @@ describe('Accepted structured history read retirement', () => {
       transport.dismiss
         .mockImplementation(async (_ids, _panes, reads?: StructuredNotificationRead[]) => {
           for (const read of reads ?? []) {
-            relay.retireStructuredAttention(read)
+            relay.acknowledgeAttention({ reads: [read] }, read.executionHost)
           }
           return { dismissed: 0 }
         })

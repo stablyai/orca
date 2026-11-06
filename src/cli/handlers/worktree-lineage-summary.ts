@@ -19,9 +19,16 @@ function getLineageSourceLabel(source: string): string {
   }
 }
 
+/** The summary line for a parent saved in another Orca store. */
+export function formatCrossStoreParentLine(
+  lineage: NonNullable<RuntimeWorktreeCreateResult['crossStoreLineage']>
+): string {
+  return `parent: ${lineage.parent.workspaceKey} on another machine (${lineage.capture.confidence} from ${getLineageSourceLabel(lineage.capture.source)})`
+}
+
 export function printLineageSummary(
   result: Pick<RuntimeWorktreeCreateResult, 'lineage' | 'workspaceLineage'> &
-    Partial<Pick<RuntimeWorktreeCreateResult, 'warnings'>>,
+    Partial<Pick<RuntimeWorktreeCreateResult, 'warnings' | 'crossStoreLineage'>>,
   json: boolean
 ): void {
   if (json) {
@@ -29,6 +36,10 @@ export function printLineageSummary(
   }
   for (const warning of result.warnings ?? []) {
     console.error(`warning: ${warning.message}`)
+  }
+  if (result.crossStoreLineage) {
+    console.error(formatCrossStoreParentLine(result.crossStoreLineage))
+    return
   }
   if (result.workspaceLineage) {
     const { parentWorkspaceKey, capture } = result.workspaceLineage

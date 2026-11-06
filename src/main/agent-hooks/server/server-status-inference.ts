@@ -1,4 +1,4 @@
-import type { RemoteAgentInterruptDispatch } from '../../../shared/agent-hook-interrupt-reconciliation'
+import type { RemoteAgentInterruptDispatch } from '../../../shared/agent-hook-listener/transport/agent-hook-interrupt-reconciliation'
 import {
   markClaudeLeadTurnDone,
   clearClaudeAnsweredQuestionWait
@@ -9,16 +9,17 @@ import {
   requiresDoubleEscapeInterrupt,
   shouldIgnoreInterruptIntent,
   type AgentInterruptInferenceRequest
-} from '../../../shared/agent-interrupt-intent'
+} from '../../../shared/agent-status/lifecycle/agent-interrupt-intent'
 import {
   isAskUserQuestionTool,
   type AgentQuestionAnsweredInferenceRequest
-} from '../../../shared/agent-question-answered-intent'
-import { AGENT_STATUS_STALE_AFTER_MS, type AgentType } from '../../../shared/agent-status-types'
+} from '../../../shared/agent-status/lifecycle/agent-question-answered-intent'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { equivalentInterruptAgentType, isValidPaneKey } from './server-status-identity'
 import { AgentHookServerRowOwnership } from './server-row-ownership'
-import { foldMainAgentWithRowChildWork } from './server-row-child-work-fold'
+import { foldMainAgentWithRowChildWork } from '../../../shared/agent-hook-listener/state/agent-hook-row-child-work-fold'
 import {
   ClaudeTerminalInterruptTracker,
   type ClaudeTerminalEvidence

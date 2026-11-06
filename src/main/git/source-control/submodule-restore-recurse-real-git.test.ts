@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { canDiscardStatusEntry } from '../../../shared/source-control-entry-actions'
+import { canDiscardStatusEntry } from '../../../shared/source-control/listing/source-control-entry-actions'
 import { discardChanges } from './discard-changes'
 import { getStatus } from './status-read'
 

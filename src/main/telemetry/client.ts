@@ -1,4 +1,4 @@
-// All main/IPC telemetry shares shutdown → burst cap → consent → validation → capture ordering. Cap before settings reads to bound renderer flood cost; disable person profiles per capture because the Node SDK lacks an init-time equivalent.
+// All main/IPC telemetry shares shutdown → sampling → burst cap → consent → validation → capture ordering. Cap before settings reads to bound renderer flood cost; disable person profiles per capture because the Node SDK lacks an init-time equivalent.
 
 import { randomUUID } from 'node:crypto'
 import type { PostHog } from 'posthog-node'
@@ -6,6 +6,7 @@ import type { CommonProps, EventName, EventProps, OptInVia } from '../../shared/
 import type { AgentDashboardSurface } from '../../shared/telemetry-agent-dashboard-event-schemas'
 import type { Store } from '../persistence/loading-store/store'
 import { consumeBurstToken, resetBurstCapsForSession } from './burst-cap'
+import { telemetryEventSampleRate } from './event-sampling'
 import { experimentCohortProps } from './experiment-cohort-props'
 import { getCohortAtEmit } from './cohort-classifier'
 import { isConsentEnvOverridden, resolveConsent } from './consent'
@@ -129,15 +130,15 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
     return false
   }
 
+  const sampleRate = telemetryEventSampleRate(name)
   // Reject late IPC while the client flushes.
-  if (shuttingDown) {
-    return false
-  }
   if (
+    shuttingDown ||
     (!posthog && !postHogStart.isStartDeferred()) ||
     !commonProps ||
     !storeRef ||
-    posthog?.optedOut
+    posthog?.optedOut ||
+    (sampleRate < 1 && Math.random() >= sampleRate)
   ) {
     return false
   }
@@ -191,7 +192,9 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
       ? {
           agent_dashboard_enabled: settings.experimentalAgentDashboardPopout === true
         }
-      : {}
+      : sampleRate < 1
+        ? { sample_rate: sampleRate }
+        : {}
 
   // Node SDK requires per-capture person-profile suppression.
   const message = {

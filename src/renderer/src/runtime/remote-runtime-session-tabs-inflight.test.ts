@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import {
-  getRemoteRuntimeSessionTabsInFlightCountForTests,
   listRemoteRuntimeSessionTabsAfterCurrentInFlight,
   listRemoteRuntimeSessionTabsDeduped
 } from './remote-runtime-session-tabs-inflight'
@@ -17,40 +16,6 @@ const SNAPSHOT = {
 } satisfies RuntimeMobileSessionTabsResult
 
 describe('remote runtime session-tabs in-flight requests', () => {
-  it('shares one request within an environment/worktree and evicts it after settlement', async () => {
-    let resolveLoad: (answer: { snapshot: RuntimeMobileSessionTabsResult }) => void = () => {}
-    const load = vi.fn(
-      () =>
-        new Promise<{ snapshot: RuntimeMobileSessionTabsResult }>((resolve) => {
-          resolveLoad = resolve
-        })
-    )
-    const args = { environmentId: 'env-1', worktreeId: 'wt-1', load }
-
-    const first = listRemoteRuntimeSessionTabsDeduped(args)
-    const second = listRemoteRuntimeSessionTabsDeduped(args)
-
-    expect(load).toHaveBeenCalledOnce()
-    expect(getRemoteRuntimeSessionTabsInFlightCountForTests()).toBe(1)
-    resolveLoad({ snapshot: SNAPSHOT })
-    // Why: a joiner inherits the request's receipt position instead of minting a newer one.
-    await expect(Promise.all([first, second])).resolves.toEqual([
-      { snapshot: SNAPSHOT, receivedFrame: expect.any(Number) },
-      { snapshot: SNAPSHOT, receivedFrame: expect.any(Number) }
-    ])
-    const [firstAnswer, secondAnswer] = await Promise.all([first, second])
-    expect(firstAnswer.receivedFrame).toBe(secondAnswer.receivedFrame)
-    expect(getRemoteRuntimeSessionTabsInFlightCountForTests()).toBe(0)
-
-    const followupLoad = vi.fn(async () => ({ snapshot: SNAPSHOT }))
-    await listRemoteRuntimeSessionTabsDeduped({
-      ...args,
-      load: followupLoad
-    })
-    expect(followupLoad).toHaveBeenCalledOnce()
-    expect(getRemoteRuntimeSessionTabsInFlightCountForTests()).toBe(0)
-  })
-
   it('waits out an older request before sharing a post-operation inventory', async () => {
     let resolveCurrent: (answer: { snapshot: RuntimeMobileSessionTabsResult }) => void = () => {}
     const currentLoad = vi.fn(

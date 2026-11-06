@@ -1,12 +1,12 @@
 // Track evidence for this provider child; the host owns durable subagent records.
 
 import { createHash } from 'node:crypto'
-import type { AgentChildWorkOutcome } from '../../shared/agent-status-child-work'
+import type { AgentChildWorkOutcome } from '../../shared/agent-status/child-work/agent-status-child-work'
 import type {
   AgentChildWorkEvidence,
   AgentChildWorkEvidenceHandle
-} from '../../shared/agent-status-child-work-evidence'
-import { AGENT_CHILD_WORK_ID_MAX_LENGTH } from '../../shared/agent-status-child-work-value-guards'
+} from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import { AGENT_CHILD_WORK_ID_MAX_LENGTH } from '../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import { MAX_SUBAGENT_FIELD_CHARS } from '../../shared/native-chat/transcript/native-chat-subagent-summary'
 import type { NativeChatSubagentState } from '../../shared/native-chat/native-chat-types'
 import { boundSubagentLabel } from '../native-chat/agent-session-journal/journal-subagent-item'
@@ -54,6 +54,15 @@ export class AcpSubagents {
 
   drainEvidence(): AgentChildWorkEvidence[] {
     return this.pending.splice(0)
+  }
+
+  reconcile(
+    id: string,
+    state: NativeChatSubagentState,
+    thread: string,
+    at: number
+  ): AcpTimelineEvent[] {
+    return this.translate([{ id, state, knownOnly: true }], { thread }, at)
   }
 
   translate(

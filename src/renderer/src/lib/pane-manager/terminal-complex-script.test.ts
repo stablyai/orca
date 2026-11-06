@@ -1,141 +1,58 @@
-import { describe, expect, it } from 'vitest'
-import {
-  terminalOutputPrefersRenderRefresh,
-  terminalRewriteOutputRenderRefreshDecision
-} from './terminal-complex-script'
+import { expect, it, vi } from 'vitest'
+import { terminalOutputPrefersRenderRefresh } from './terminal-complex-script'
 
-describe('terminalOutputPrefersRenderRefresh', () => {
-  it('detects ASCII ANSI background SGR output before the non-ASCII fast path', () => {
-    expect(terminalOutputPrefersRenderRefresh('\x1b[48;2;12;34;56m codex input \x1b[0m')).toBe(true)
-    expect(terminalOutputPrefersRenderRefresh('\x1b[48:2::12:34:56m codex input \x1b[0m')).toBe(
-      true
-    )
-    expect(terminalOutputPrefersRenderRefresh('\x1b[44m selected block \x1b[0m')).toBe(true)
-    expect(terminalOutputPrefersRenderRefresh('\x1b[104m bright selected block \x1b[0m')).toBe(true)
-  })
-
-  it('does not disable WebGL for ordinary terminal output or ANSI controls alone', () => {
-    expect(terminalOutputPrefersRenderRefresh('abc 123 ✓')).toBe(false)
-    expect(terminalOutputPrefersRenderRefresh('\x1b[32mplain green\x1b[0m')).toBe(false)
-    expect(terminalOutputPrefersRenderRefresh('\x1b[38;2;48;34;56m foreground only\x1b[0m')).toBe(
-      false
-    )
-    expect(terminalOutputPrefersRenderRefresh('\x1b[38:2::48:34:56m foreground only\x1b[0m')).toBe(
-      false
-    )
-  })
-
-  it('keeps the shared SGR scan stateless across calls', () => {
-    // The global pattern can return mid-loop; reset lastIndex or the next call skips matches.
-    expect(terminalOutputPrefersRenderRefresh('\x1b[41m selected \x1b[0m')).toBe(true)
-    expect(terminalOutputPrefersRenderRefresh('\x1b[44m x\x1b[0m')).toBe(true)
-  })
-})
-
-describe('terminalRewriteOutputRenderRefreshDecision', () => {
-  it('refreshes when a trailing carriage return continues as a split redraw', () => {
-    const trailingCarriageReturn = terminalRewriteOutputRenderRefreshDecision('\r', {
-      previousChunkEndsWithCarriageReturn: false,
-      previousRewriteCsiScanTail: ''
-    })
-    expect(trailingCarriageReturn).toEqual({
-      nextChunkEndsWithCarriageReturn: true,
-      nextRewriteCsiScanTail: '',
-      prefersRenderRefresh: false
-    })
-
-    expect(
-      terminalRewriteOutputRenderRefreshDecision('• Working without erase-line', {
-        previousChunkEndsWithCarriageReturn: true,
-        previousRewriteCsiScanTail: ''
+it.each(['\x1b[32mx\x1b[0m', '\x1b[38m'])(
+  'keeps parameter scanning linear for repeated simple SGR %j',
+  (sequence) => {
+    for (const repetitions of [1_000, 10_000]) {
+      const data = sequence.repeat(repetitions)
+      let examinedCharacters = 0
+      const indexOf = String.prototype.indexOf
+      const charCodeAt = String.prototype.charCodeAt
+      const indexOfSpy = vi.spyOn(String.prototype, 'indexOf').mockImplementation(function (
+        this: string,
+        search,
+        position = 0
+      ) {
+        const result = indexOf.call(this, search, position)
+        if (String(this) === data) {
+          examinedCharacters +=
+            result < 0 ? this.length - position : result - position + search.length
+        }
+        return result
       })
-    ).toEqual({
-      nextChunkEndsWithCarriageReturn: false,
-      nextRewriteCsiScanTail: '',
-      prefersRenderRefresh: true
-    })
-  })
-
-  it('does not refresh split CRLF output', () => {
-    const trailingCarriageReturn = terminalRewriteOutputRenderRefreshDecision('line one\r', {
-      previousChunkEndsWithCarriageReturn: false,
-      previousRewriteCsiScanTail: ''
-    })
-    expect(trailingCarriageReturn).toEqual({
-      nextChunkEndsWithCarriageReturn: true,
-      nextRewriteCsiScanTail: '',
-      prefersRenderRefresh: false
-    })
-
-    expect(
-      terminalRewriteOutputRenderRefreshDecision('\nline two', {
-        previousChunkEndsWithCarriageReturn: true,
-        previousRewriteCsiScanTail: ''
+      const charCodeAtSpy = vi.spyOn(String.prototype, 'charCodeAt').mockImplementation(function (
+        this: string,
+        position
+      ) {
+        if (String(this) === data) {
+          examinedCharacters += 1
+        }
+        return charCodeAt.call(this, position)
       })
-    ).toEqual({
-      nextChunkEndsWithCarriageReturn: false,
-      nextRewriteCsiScanTail: '',
-      prefersRenderRefresh: false
-    })
-  })
+      let prefersRefresh: boolean
+      try {
+        prefersRefresh = terminalOutputPrefersRenderRefresh(data)
+      } finally {
+        indexOfSpy.mockRestore()
+        charCodeAtSpy.mockRestore()
+      }
+      expect(prefersRefresh).toBe(false)
+      expect(examinedCharacters).toBeLessThan(data.length * 12)
+    }
+  }
+)
 
-  it('refreshes when a rewrite erase sequence is split across chunks', () => {
-    const trailingRewriteCsi = terminalRewriteOutputRenderRefreshDecision('\r\x1b[', {
-      previousChunkEndsWithCarriageReturn: false,
-      previousRewriteCsiScanTail: ''
-    })
-    expect(trailingRewriteCsi).toEqual({
-      nextChunkEndsWithCarriageReturn: false,
-      nextRewriteCsiScanTail: '\x1b[',
-      prefersRenderRefresh: true
-    })
-
-    expect(
-      terminalRewriteOutputRenderRefreshDecision('2K• Working', {
-        previousChunkEndsWithCarriageReturn: false,
-        previousRewriteCsiScanTail: '\x1b['
-      })
-    ).toEqual({
-      nextChunkEndsWithCarriageReturn: false,
-      nextRewriteCsiScanTail: '',
-      prefersRenderRefresh: true
-    })
-  })
-
-  it('carries rewrite erase sequence tails split before CSI introducer or params', () => {
-    expect(
-      terminalRewriteOutputRenderRefreshDecision('\x1b', {
-        previousChunkEndsWithCarriageReturn: false,
-        previousRewriteCsiScanTail: ''
-      })
-    ).toEqual({
-      nextChunkEndsWithCarriageReturn: false,
-      nextRewriteCsiScanTail: '\x1b',
-      prefersRenderRefresh: false
-    })
-
-    expect(
-      terminalRewriteOutputRenderRefreshDecision('2J', {
-        previousChunkEndsWithCarriageReturn: false,
-        previousRewriteCsiScanTail: '\x1b['
-      })
-    ).toEqual({
-      nextChunkEndsWithCarriageReturn: false,
-      nextRewriteCsiScanTail: '',
-      prefersRenderRefresh: true
-    })
-  })
-
-  it('drops overlong rewrite CSI tails', () => {
-    expect(
-      terminalRewriteOutputRenderRefreshDecision(`\x1b[${'1'.repeat(80)}`, {
-        previousChunkEndsWithCarriageReturn: false,
-        previousRewriteCsiScanTail: ''
-      })
-    ).toEqual({
-      nextChunkEndsWithCarriageReturn: false,
-      nextRewriteCsiScanTail: '',
-      prefersRenderRefresh: false
-    })
-  })
+it.each([
+  ['\x1b[38;2;1;2;44m', false],
+  ['\x1b[38;2;1;2;3;41m', true],
+  ['\x1b[38:5:1;44m', true],
+  ['\x1b[38;5;41m', false],
+  ['\x1b[38;41m', false],
+  ['\x1b[0041m', true],
+  ['\x1b[4:41m', false],
+  ['\x1b[48m', true],
+  ['\x1b[\x1b[41m', true]
+])('classifies background SGR parameters in %j as %s', (data, expected) => {
+  expect(terminalOutputPrefersRenderRefresh(data)).toBe(expected)
 })

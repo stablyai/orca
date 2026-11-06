@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { RuntimeOrchestrationSenderNames } from '../runtime-orchestration-sender-names'
 import { OrchestrationDb } from './db'
 import { OrchestrationStructuredMailboxPointerDelivery } from './structured-mailbox-pointer-delivery'
 import { StructuredMailboxParking } from './structured-mailbox-parking'
@@ -12,6 +13,7 @@ import type {
 } from './structured-mailbox-pointer-host-contract'
 import type { StructuredMailSendRow } from './db/messages/structured-mail-send-store'
 import { MAX_PROMPT_BYTES } from '../../../shared/rpc-contract/structured-agent-session-message-params'
+import { agentMessageTranscriptText } from '../../../shared/agent-session/agent-message-display-text'
 
 type Mail = {
   id: string
@@ -30,7 +32,7 @@ type Mail = {
 }
 
 /** dispatch:d1 behind one chat session at a time: idle sends start a turn, busy ones wait as cards. */
-function harness(options: { busy?: boolean } = {}) {
+function harness(options: { busy?: boolean; senderNames?: RuntimeOrchestrationSenderNames } = {}) {
   const mailbox = 'dispatch:d1'
   const mail = new Map<string, Mail>()
   const records = new Map<string, StructuredMailSendRow>()
@@ -162,6 +164,9 @@ function harness(options: { busy?: boolean } = {}) {
       unresolvedCustody: () => 'unverifiable',
       getCliCommand: () => 'orca-dev',
       senderSnapshot: () => ({ name: 'Coordinator', agent: null }),
+      senderSnapshotReader: options.senderNames
+        ? () => options.senderNames!.snapshotReader()
+        : undefined,
       host
     })
   let delivery = start()
@@ -253,6 +258,19 @@ describe('structured mailbox delivery: each message whole', () => {
     expect(h.sent[0]!.text).toContain('Subject: subject of m1')
     expect(h.sent[0]!.text).toContain('Tests pass; PR #12 is ready.')
     expect(h.sent[0]!.text).toContain('[Reply: orca-dev orchestration reply --id m1')
+    const delivered = vi.mocked(h.host.send).mock.calls[0][0].body
+    expect(h.sent[0]!.text).toBe(
+      [
+        '──── From: TERM_COORD (term_coord) (status) ────',
+        'Subject: subject of m1',
+        'Tests pass; PR #12 is ready.',
+        '[Reply: orca-dev orchestration reply --id m1 --body "..."]',
+        '─'.repeat(60)
+      ].join('\n')
+    )
+    expect(agentMessageTranscriptText(delivered.blocks, delivered.from)).toBe(
+      'subject of m1\n\nTests pass; PR #12 is ready.'
+    )
     expect(h.mail.get('m1')).toMatchObject({ read: 1 })
     expect(h.records.size).toBe(0)
   })
@@ -484,6 +502,12 @@ describe('structured mailbox delivery: each message whole', () => {
     expect(h.sent.map((send) => send.text)).toEqual([
       'You have 1 orchestration message. Run `orca-dev orchestration check`.'
     ])
+    expect(vi.mocked(h.host.send).mock.calls[0][0].body.from?.orchestration).toMatchObject({
+      messages: [{ messageId: 'm1' }]
+    })
+    expect(JSON.stringify(vi.mocked(h.host.send).mock.calls[0][0].body.from)).not.toContain(
+      '"content"'
+    )
     expect(h.mail.get('m1')).toMatchObject({ read: 0, delivered_at: 'now' })
     const pointer = h.operation('m1')
     h.mail.get('m1')!.read = 1
@@ -685,4 +709,50 @@ describe('parked mailboxes and their journal watches', () => {
       ])
     }
   )
+})
+
+it('captures a newly known actor for later mail admitted after an awaited send', async () => {
+  const db = new OrchestrationDb(':memory:')
+  try {
+    let known = false
+    const names = new RuntimeOrchestrationSenderNames({
+      getDb: () => db,
+      getHandleRecord: () => ({ worktreeId: 'w', tabId: 't', ptyId: 'p' }),
+      getPtyAgents: () => (known ? { foregroundAgent: 'codex' } : undefined),
+      getTerminalPaneKey: () => 't:leaf',
+      getWorkspaceSession: () => null,
+      getGeneratedTitlesEnabled: () => false,
+      getAgentStatusSnapshotForPane: () => [],
+      getTrackedTitle: () => null
+    })
+    const h = harness({ senderNames: names })
+    h.receive('m1')
+    let release: (() => void) | undefined
+    let entered: (() => void) | undefined
+    const paused = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    const resume = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    h.answers.push(async (operationId) => {
+      entered?.()
+      await resume
+      h.chat.set(operationId, { kind: 'accepted' })
+      return { kind: 'sent', state: 'accepted' }
+    })
+    const delivery = h.deliver()
+    await paused
+    known = true
+    h.receive('m2')
+    release?.()
+    await delivery
+    await h.deliver()
+    const sources = vi.mocked(h.host.send).mock.calls.map(([input]) => input.body.from)
+    expect(sources[0]?.kind === 'agent' && sources[0].senders[0].agent).toBeUndefined()
+    expect(sources[1]).toMatchObject({ senders: [{ agent: 'codex' }] })
+    expect(h.host.send).toHaveBeenCalledTimes(2)
+  } finally {
+    db.close()
+  }
 })

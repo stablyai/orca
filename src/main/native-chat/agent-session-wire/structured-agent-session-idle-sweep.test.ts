@@ -2,8 +2,8 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journa
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
-import type { AgentChildWorkKind } from '../../../shared/agent-status-child-work'
-import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
+import type { AgentChildWorkKind } from '../../../shared/agent-status/child-work/agent-status-child-work'
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import {
   collectSubscriber,
   createRestTestRig,
@@ -90,6 +90,23 @@ describe('the idle sweep', () => {
     await vi.waitFor(() => expect(rig.adapter.acquire).toHaveBeenCalledTimes(2))
     await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(2))
     await vi.waitFor(() => expect(readerSaw(reader.events).texts).toContain('carry on'))
+  })
+
+  it('keeps an idle agent while idle stop is Never, and applies a new window on the next tick', async () => {
+    let idleMs: number | null = null
+    await rig.dispose()
+    rig = await createRestTestRig({
+      idleSweep: { intervalMs: 3_600_000, idleMs: () => idleMs }
+    })
+    await foundRestTestChat(rig)
+    rig.clock.now += 24 * 60 * 60_000
+
+    await sweepOnce(rig.host)
+    expect(rig.adapter.closeSession).not.toHaveBeenCalled()
+
+    idleMs = 60 * 60_000
+    await sweepOnce(rig.host)
+    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
   })
 
   it('never stops an agent a message is queued for, and hands the message over (P2-08)', async () => {
@@ -268,6 +285,41 @@ describe('the idle sweep', () => {
     )
   })
 
+  // Pi workers can start between the provider's reports, so only a fresh answer at stop time counts.
+  it('stops a running agent only after its provider confirms nothing is still working', async () => {
+    await foundRestTestChat(rig)
+    rig.adapter.confirmIdle.mockResolvedValueOnce('busy').mockResolvedValueOnce('unknown')
+    rig.clock.now += IDLE_MS + 1
+
+    await sweepOnce(rig.host)
+    expect(rig.adapter.confirmIdle).toHaveBeenCalledWith(SESSION)
+    expect(rig.adapter.closeSession).not.toHaveBeenCalled()
+    rig.clock.now += IDLE_MS + 1
+    await sweepOnce(rig.host)
+    expect(rig.adapter.closeSession).not.toHaveBeenCalled()
+    rig.adapter.confirmIdle.mockResolvedValueOnce('idle')
+    await sweepOnce(rig.host)
+    await vi.waitFor(() =>
+      expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
+    )
+  })
+
+  // The provider is asked outside the session lock, so a send can land while its answer is pending.
+  it('keeps an agent whose chat got a message while its provider was answering', async () => {
+    await foundRestTestChat(rig)
+    rig.host.collaboratorsForTests().lifetime.idleSweep.dispose()
+    const answer = Promise.withResolvers<'idle'>()
+    rig.adapter.confirmIdle.mockReturnValueOnce(answer.promise)
+    rig.clock.now += IDLE_MS + 1
+
+    const swept = sweepOnce(rig.host)
+    await vi.waitFor(() => expect(rig.adapter.confirmIdle).toHaveBeenCalledWith(SESSION))
+    expect((await rig.host.send(CALLER, restTestSend('still here', fence()))).ok).toBe(true)
+    answer.resolve('idle')
+    await swept
+    expect(rig.adapter.closeSession).not.toHaveBeenCalled()
+  })
+
   it('keeps a child an unanswered prompt waits on (P2-22 i)', async () => {
     await foundRestTestChat(rig)
     providerEvents().appendItem(
@@ -307,6 +359,41 @@ describe('an idle stop that fails (P2-11 a)', () => {
 })
 
 describe('the idle sweep with no child running (P2-22 ii)', () => {
+  function sweepWithoutChild(journal: unknown, idleMs?: () => number | null) {
+    const sessions = Object.assign(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a session fixture carrying only the journal and child facts the sweep reads.
+      new Map([[SESSION, { journal, child: null } as never]]),
+      { lastActivityAt: () => 0, touch: () => undefined }
+    )
+    const stopAgent = vi.fn(async () => undefined)
+    const closeConversation = vi.fn(async () => true)
+    const sweep = new StructuredAgentSessionIdleSweep({
+      sessions,
+      serialize: (_id, task) => task(),
+      now: () => IDLE_MS + 1,
+      isDisposed: () => false,
+      deliveryActive: () => false,
+      store: { getConversation: () => null, replacedRuntime: () => undefined },
+      childWorkOpen: () => false,
+      hasOpenDispatch: () => false,
+      providerHoldsDispatch: () => false,
+      confirmIdle: () => undefined,
+      stopAgent,
+      stopStartingAgent: stopAgent,
+      closeConversation,
+      logger: {
+        warn: (_message, fields) => {
+          throw fields.error
+        },
+        error: (_message, fields) => {
+          throw fields.error
+        }
+      },
+      ...(idleMs ? { idleMs } : {})
+    })
+    return { sweep, stopAgent, closeConversation }
+  }
+
   it('closes a handle whose only leftover is a prompt nobody can answer', async () => {
     const journal = {
       submissions: () => [],
@@ -334,37 +421,15 @@ describe('the idle sweep with no child running (P2-22 ii)', () => {
         ]
       })
     }
-    const sessions = Object.assign(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a session fixture carrying only the journal and child facts the sweep reads.
-      new Map([[SESSION, { journal, child: null } as never]]),
-      { lastActivityAt: () => 0, touch: () => undefined }
-    )
-    const stopAgent = vi.fn(async () => undefined)
-    const closeConversation = vi.fn(async () => true)
-    const sweep = new StructuredAgentSessionIdleSweep({
-      sessions,
-      serialize: (_id, task) => task(),
-      now: () => IDLE_MS + 1,
-      isDisposed: () => false,
-      deliveryActive: () => false,
-      store: { getConversation: () => null, replacedRuntime: () => undefined },
-      childWorkOpen: () => false,
-      hasOpenDispatch: () => false,
-      providerHoldsDispatch: () => false,
-      stopAgent,
-      stopStartingAgent: stopAgent,
-      closeConversation,
-      logger: {
-        warn: (_message, fields) => {
-          throw fields.error
-        },
-        error: (_message, fields) => {
-          throw fields.error
-        }
-      }
-    })
+    const { sweep, stopAgent, closeConversation } = sweepWithoutChild(journal)
     await sweep.tick()
     expect(stopAgent).not.toHaveBeenCalled()
+    expect(closeConversation).toHaveBeenCalledWith(SESSION)
+  })
+
+  it('still retires it on the default window while idle stop is Never', async () => {
+    const { sweep, closeConversation } = sweepWithoutChild(null, () => null)
+    await sweep.tick()
     expect(closeConversation).toHaveBeenCalledWith(SESSION)
   })
 })

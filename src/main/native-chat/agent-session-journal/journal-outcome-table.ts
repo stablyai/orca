@@ -1,8 +1,8 @@
+import { OUTCOME_FORMAT_1_COLLECTIONS } from './journal-outcome-format-1'
+import { isNativeOutcomeField } from './journal-outcome-format-2'
 import { journalInputOrder } from './journal-input-order'
 import { detachJournalNativePrefix, restoreJournalNativeState } from './journal-input-conversion'
-import type Database from '../../sqlite/sync-database'
-import type { JournalReducerState } from './journal-reducer'
-import { applyJournalRow } from './journal-reducer'
+import { type JournalReducerState, applyJournalRow } from './journal-reducer'
 import { isolateJournalTransition } from './journal-reducer-transition'
 import type { JournalRow } from './journal-row-schema'
 import { journalRowReadBack } from './journal-row-table'
@@ -13,6 +13,7 @@ import {
   JOURNAL_PREFIX_ORDINAL
 } from './journal-outcome-codec'
 import type { JournalOutcomeSource } from './journal-outcome-format'
+import type Database from '../../sqlite/sync-database'
 
 // The key index orders each key's records newest first, so a range seek past the last key read lands
 // on the next key's newest record: one indexed seek per key, whatever its revisions number.
@@ -30,6 +31,9 @@ export function readJournalOutcomes(
   baseline?: JournalReducerState
 ): JournalReducerState {
   const newest = db.prepare(JOURNAL_NEWEST_OUTCOME_SQL)
+  const recoveries = [...(baseline?.queue.cards.values() ?? [])].flatMap((card) =>
+    card.recovers ? [{ id: card.messageId, recovers: card.recovers }] : []
+  )
   const prefix = detachJournalNativePrefix(baseline)
   const fold = new JournalOutcomeFold()
   let after = { field: '', key: '' }
@@ -37,6 +41,13 @@ export function readJournalOutcomes(
     const row = newest.get(source.generation, after.field, after.key, source.through)
     if (!row) {
       const state = fold.finish(sessionId, epoch, source.through, baseline)
+      // Tail values omit derived recovery links; only the same raw-prefix incarnation inherits one.
+      for (const { id, recovers } of recoveries) {
+        const card = state.queue.cards.get(id)
+        if (card && !fold.replaced('queue.cards', id)) {
+          card.recovers = recovers
+        }
+      }
       restoreJournalNativeState(db, state, source.format, fold, prefix)
       return state
     }
@@ -68,11 +79,17 @@ export function persistJournalOutcomeRows(
     // Folding what a reload reads keeps live state equal to it: an annotation the reader drops as
     // unusable never reaches the model, so it is never refused by the strict record encoder.
     const { stored } = journalRowReadBack(state.sessionId, row)
-    applyJournalRow(transition.state, stored, savedAt ?? row.ts)
+    applyJournalRow(transition.state, transition.input(stored), savedAt ?? row.ts)
     if (row === rows.at(-1)) {
       finish?.(transition.state)
     }
-    const changes = transition.changes(true)
+    const changes = transition
+      .changes(true)
+      .filter(
+        (entry) =>
+          isNativeOutcomeField(entry.path) ||
+          OUTCOME_FORMAT_1_COLLECTIONS.some((path) => path === entry.path)
+      )
     if (upgradeNative) {
       for (const path of ['inputEntries', 'inputCards'] as const) {
         const changed = new Set(

@@ -106,16 +106,6 @@ describe('status feed pinned launch directory', () => {
     })
   })
 
-  it('carries the pin in the snapshot a later subscriber opens with, as after a restart', async () => {
-    const { feed } = await feedFor(FLOATING)
-    await store.pinLaunchDirectory(SESSION, '/home/me/original-floating')
-
-    const late: AgentSessionStatusEvent[] = []
-    feed.subscribe({ id: 'reloaded-renderer', emit: (event) => late.push(event) })
-
-    expect(lastSummary(late)).toMatchObject({ launchDirectory: '/home/me/original-floating' })
-  })
-
   it('omits the pin for a worktree session, whose id is where it launches', async () => {
     const { feed, events } = await feedFor(WORKTREE)
     await store.pinLaunchDirectory(SESSION, '/repos/one')

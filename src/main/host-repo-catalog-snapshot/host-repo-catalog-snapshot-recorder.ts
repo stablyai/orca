@@ -8,7 +8,7 @@ import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import {
   isWslHostRuntimeEnvironment,
   type OrcadDeploymentLink
-} from '../../shared/runtime-environments'
+} from '../../shared/remote-runtime/host-catalog/runtime-environments'
 
 export type HostRepoCatalogSnapshotStore = {
   getHostRepoCatalogSnapshots(): Record<string, HostRepoCatalogSnapshot>

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { normalizeRepoSourceControlAiOverrides } from '../source-control-ai'
+import { normalizeRepoSourceControlAiOverrides } from '../source-control/ai/settings/source-control-ai-repo-settings'
 import { normalizeRepoBadgeColor } from '../repo-badge-color'
 import { sanitizeRepoIcon } from '../repo-icon'
 import { normalizeGhAccountBinding } from '../github/account-binding'

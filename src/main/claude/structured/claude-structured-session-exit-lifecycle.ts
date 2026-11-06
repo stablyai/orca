@@ -1,3 +1,4 @@
+import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import {
   agentSessionFailureFact,
   providerDiagnosticOf
@@ -8,8 +9,13 @@ import {
   startupAcquisitionRefusal
 } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import { providerSpawnAbsent } from '../../provider-process/provider-executable-missing'
-import { settledClaudeTurnEndLeaf } from './claude-structured-resume-point'
+import {
+  claudeSessionHasTurnWork,
+  settledClaudeTurnEndLeaf
+} from './claude-structured-resume-point'
 import { claudeHeldSends } from '../claude-command-lifecycle'
+import type { AgentSessionStartEndings } from '../../native-chat/agent-session-wire/structured-agent-session-start-failure'
+import { claudeExitEnding } from './claude-structured-start-ending'
 import { claudeCloseReport, settleClaudeExitedSession } from './claude-structured-session-close'
 import {
   AgentSessionAcquisitionExitUnprovenError,
@@ -28,6 +34,8 @@ export type ClaudeExitLifecycle = {
   exits: Map<string, ClaudeSessionExit>
   /** Preserve diagnostics for sends admitted before the host learns of the exit. */
   settledExitErrors: Map<string, Error>
+  /** Taken when the exit is first seen, so a start settling meanwhile cannot miss it. */
+  endings: AgentSessionStartEndings
   deps: Pick<ClaudeStructuredSessionAdapterDeps, 'persistHandle' | 'now'>
   emit: (session: ClaudeSession, event: ClaudeStructuredSessionEvent) => void
 }
@@ -44,9 +52,14 @@ export function observeClaudeSessionExit(
   }
   const observedAt = lifecycle.deps.now?.() ?? Date.now()
   session.events?.observeExit?.(claudeHeldSends(session), observedAt)
+  lifecycle.endings.record(sessionId, session.acquisitionGeneration, claudeExitEnding(error))
   lifecycle.sessions.delete(sessionId)
   // Run tree cleanup before recovery; an exit callback proves only root exit.
-  const closePromise = session.connection.close().catch(() => false)
+  const cleanup = session.connection.close().catch(() => false)
+  const closePromise =
+    claudeStartDied(session) && providerExitObserved(error)
+      ? withTimeout(cleanup, 2_000, false)
+      : cleanup
   const exit: ClaudeSessionExit = {
     connection: session.connection,
     session,
@@ -69,6 +82,12 @@ export function observeClaudeSessionExit(
     .catch(() => undefined)
 }
 
+/** Exited before the host-awaited open returned and before any turn; turns can settle without an Orca dispatch. */
+function claudeStartDied(session: ClaudeSession): boolean {
+  // Initialize can answer while a resume open still waits on transcript catch-up.
+  return !session.initialization.startup.opened() && !claudeSessionHasTurnWork(session)
+}
+
 export function settleClaudeUnexpectedExit(
   lifecycle: ClaudeExitLifecycle,
   sessionId: string,
@@ -81,10 +100,12 @@ export function settleClaudeUnexpectedExit(
       settleClaudeExitedSession(exit.session)
       return
     }
-    // Save the completed-turn cursor before recovery permits reacquisition.
-    await persistClaudeSessionHandle(sessionId, exit.session, deps).catch((error: unknown) => {
-      console.warn('[claude-resume-point] exit cursor was not persisted:', { sessionId, error })
-    })
+    // A dead start's host open is still waiting on this exit, and nothing advanced acquisition's cursor.
+    if (!claudeStartDied(exit.session)) {
+      await persistClaudeSessionHandle(sessionId, exit.session, deps).catch((error: unknown) => {
+        console.warn('[claude-resume-point] exit cursor was not persisted:', { sessionId, error })
+      })
+    }
     if (exits.get(sessionId) !== exit) {
       settleClaudeExitedSession(exit.session)
       return
@@ -92,6 +113,9 @@ export function settleClaudeUnexpectedExit(
     exits.delete(sessionId)
     const report = claudeCloseReport(exit.connection, true, exit.error)
     lifecycle.settledExitErrors.set(sessionId, report ?? exit.error)
+    const startupFailure = claudeSessionHasTurnWork(exit.session)
+      ? undefined
+      : exit.connection.startupFailure?.()
     const ended: ClaudeStructuredSessionEvent = {
       type: 'ended',
       sessionId,
@@ -100,11 +124,13 @@ export function settleClaudeUnexpectedExit(
       failure:
         startupAcquisitionRefusal(exit.error) || providerSpawnAbsent(exit.error)
           ? providerStartupFailureFact(exit.error)
-          : providerExitObserved(exit.error)
-            ? agentSessionFailureFact('providerExited', {
-                detail: providerDiagnosticOf(exit.error)
-              })
-            : agentSessionFailureFact('hostFault'),
+          : startupFailure
+            ? providerStartupFailureFact(startupFailure)
+            : providerExitObserved(exit.error)
+              ? agentSessionFailureFact('providerExited', {
+                  detail: providerDiagnosticOf(exit.error)
+                })
+              : agentSessionFailureFact('hostFault'),
       cause: 'unexpected-exit',
       ...(report instanceof AgentSessionAcquisitionRootExitObservedError &&
       report.deathEvidenceKind === 'kill-delivered'

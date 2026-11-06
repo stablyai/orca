@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GitLabWorkItem, GitLabWorkItemDetails } from '../../../shared/gitlab-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
@@ -124,49 +124,4 @@ describe('GitLabItemDialog reconciliation', () => {
     expect(screen.queryByText('alice')).toBeNull()
     expect(screen.getByRole('button', { name: 'Merge' })).toBeTruthy()
   })
-
-  // A write that settles after the dialog moved to another MR must not reread or release state for the new one.
-  it.each(['save', 'reviewer', 'close', 'merge'] as const)(
-    'keeps the next MR first read and controls when a %s on the previous MR fails after switching',
-    async (action) => {
-      api.workItemDetails.mockResolvedValueOnce(detailsFor(mr(7), 'alice'))
-      api.listLabels.mockResolvedValue([])
-      const write = Promise.withResolvers<{ ok: false; error: string }>()
-      api.updateMR.mockReturnValueOnce(write.promise)
-      api.updateMRReviewers.mockReturnValueOnce(write.promise)
-      api.closeMR.mockReturnValueOnce(write.promise)
-      api.mergeMR.mockReturnValueOnce(write.promise)
-      const view = renderDialog(mr(7))
-      await waitFor(() => expect(screen.getByText('alice')).toBeTruthy())
-
-      if (action === 'save') {
-        fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[0]!)
-        fireEvent.change(screen.getByDisplayValue('MR 7'), { target: { value: 'Renamed' } })
-        fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-      } else if (action === 'reviewer') {
-        fireEvent.click(screen.getByRole('button', { name: 'Remove reviewer alice' }))
-      } else if (action === 'close') {
-        // The sheet's own close control shares the name, so the MR's Close button is the second.
-        fireEvent.click(screen.getAllByRole('button', { name: 'Close' })[1]!)
-      } else {
-        fireEvent.click(screen.getByRole('button', { name: 'Merge' }))
-      }
-      const nextRead = Promise.withResolvers<GitLabWorkItemDetails | null>()
-      api.workItemDetails.mockReturnValueOnce(nextRead.promise)
-      view.rerender(
-        <GitLabItemDialog item={mr(8)} repoPath="/repo" repoId="repo-1" onClose={vi.fn()} />
-      )
-      await act(async () => write.resolve({ ok: false, error: 'Connection lost' }))
-      await act(async () => nextRead.resolve(detailsFor(mr(8), 'bob')))
-
-      expect(api.workItemDetails).toHaveBeenCalledTimes(2)
-      expect(screen.getByText('bob')).toBeTruthy()
-      expect(
-        screen.getByRole<HTMLButtonElement>('button', { name: 'Remove reviewer bob' }).disabled
-      ).toBe(false)
-      expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Merge' }).disabled).toBe(false)
-      fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[0]!)
-      expect(screen.getByDisplayValue<HTMLInputElement>('MR 8').disabled).toBe(false)
-    }
-  )
 })

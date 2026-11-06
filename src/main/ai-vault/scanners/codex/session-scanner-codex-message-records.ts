@@ -2,7 +2,7 @@ import {
   publishCodexResponseTool,
   publishCodexCompletedTool
 } from './session-scanner-codex-tool-records'
-import { normalizePromptField } from '../../../../shared/agent-status-field-normalization'
+import { normalizePromptField } from '../../../../shared/agent-status/contracts/agent-status-field-normalization'
 import { addSessionContent } from '../../session-scanner-messages'
 import type { SessionAccumulator } from '../../session-scanner-types'
 import { asRecord } from '../../session-scanner-record-value'

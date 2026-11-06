@@ -1,5 +1,5 @@
 /** The distro list the UI shows against the WSL host records. */
-import type { WslHostDeploymentRecord } from '../../../shared/wsl-host-deployment-store'
+import type { WslHostDeploymentRecord } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
 import type { WslHostDistro } from '../../../shared/wsl-host-types'
 import { sameWslDistro } from './wsl-host-add-admission'
 import type { WslHostDistroCandidate } from './wsl-host-distro-list'

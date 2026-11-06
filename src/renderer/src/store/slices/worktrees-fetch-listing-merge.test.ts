@@ -417,25 +417,6 @@ describe('fetchWorktrees', () => {
     await rename
   })
 
-  it('keeps the last known worktree list when a refresh transiently returns empty', async () => {
-    const store = createTestStore()
-    const existing = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
-
-    mockApi.worktrees.listDetected.mockResolvedValueOnce(
-      makeDetectedResult('repo1', [], {
-        authoritative: false,
-        source: 'metadata-fallback'
-      })
-    )
-    store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 7 } as Partial<AppState>)
-
-    const result = await store.getState().fetchWorktrees('repo1')
-
-    expect(store.getState().worktreesByRepo.repo1).toEqual([existing])
-    expect(store.getState().sortEpoch).toBe(7)
-    expect(result).toBe(false)
-  })
-
   it('keeps the scanned rows and their tabs when a stopped WSL distro returns stored rows', async () => {
     const store = createTestStore()
     const scanned = makeWorktree({

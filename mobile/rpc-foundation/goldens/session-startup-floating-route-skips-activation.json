@@ -4,14 +4,14 @@
   "family": "session.startup",
   "namedDeltas": [],
   "values": {
-    "4f4cd2a4f041": {
-      "name": "clear-pending-live-input-commit",
-      "ordinal": 4,
+    "38b377793c34": {
+      "name": "ensure-session-tabs",
+      "ordinal": 5,
       "value": {}
     },
-    "5bd54a356841": {
+    "4669e4d646e8": {
       "name": "fetch-terminals",
-      "ordinal": 8,
+      "ordinal": 6,
       "value": {
         "allowEmptyLoaded": false
       }
@@ -21,21 +21,21 @@
       "ordinal": 1,
       "value": {}
     },
-    "817acfcc1646": {
-      "name": "clear-delayed-action-timers",
-      "ordinal": 12,
-      "value": {}
-    },
-    "83de0c92427d": {
+    "7953dfb08a13": {
       "name": "fetch-terminals",
-      "ordinal": 9,
+      "ordinal": 8,
       "value": {
         "allowEmptyLoaded": true
       }
     },
-    "99a213805fa0": {
+    "95c8385db422": {
       "name": "clear-delayed-action-timers",
-      "ordinal": 5,
+      "ordinal": 4,
+      "value": {}
+    },
+    "968d084a5a35": {
+      "name": "clear-delayed-action-timers",
+      "ordinal": 10,
       "value": {}
     },
     "a193ad4304cb": {
@@ -65,9 +65,14 @@
       "initializedHandles": [],
       "terminalsLoaded": false
     },
-    "dd4d898535bd": {
-      "name": "clear-pending-restorations",
-      "ordinal": 10,
+    "bc94d6f00eeb": {
+      "name": "clear-pending-live-input-commit",
+      "ordinal": 9,
+      "value": {}
+    },
+    "e927128e41fc": {
+      "name": "clear-pending-live-input-commit",
+      "ordinal": 3,
       "value": {}
     },
     "eb79a9b3682a": {
@@ -77,21 +82,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "ed8838ca9a14": {
-      "name": "ensure-session-tabs",
-      "ordinal": 6,
-      "value": {}
-    },
-    "ef975183a3b7": {
-      "name": "clear-pending-live-input-commit",
-      "ordinal": 11,
-      "value": {}
-    },
-    "f880d7742773": {
-      "name": "reset-drafts",
-      "ordinal": 3,
-      "value": {}
     }
   },
   "recording": {
@@ -109,11 +99,10 @@
           "effects": [
             "6419a011f13b",
             "aab012c297bd",
-            "f880d7742773",
-            "4f4cd2a4f041",
-            "99a213805fa0",
-            "ed8838ca9a14",
-            "a193ad4304cb"
+            "e927128e41fc",
+            "95c8385db422",
+            "38b377793c34",
+            "4669e4d646e8"
           ]
         }
       },
@@ -129,13 +118,12 @@
           "effects": [
             "6419a011f13b",
             "aab012c297bd",
-            "f880d7742773",
-            "4f4cd2a4f041",
-            "99a213805fa0",
-            "ed8838ca9a14",
+            "e927128e41fc",
+            "95c8385db422",
+            "38b377793c34",
+            "4669e4d646e8",
             "a193ad4304cb",
-            "5bd54a356841",
-            "83de0c92427d"
+            "7953dfb08a13"
           ]
         }
       },
@@ -151,16 +139,14 @@
           "effects": [
             "6419a011f13b",
             "aab012c297bd",
-            "f880d7742773",
-            "4f4cd2a4f041",
-            "99a213805fa0",
-            "ed8838ca9a14",
+            "e927128e41fc",
+            "95c8385db422",
+            "38b377793c34",
+            "4669e4d646e8",
             "a193ad4304cb",
-            "5bd54a356841",
-            "83de0c92427d",
-            "dd4d898535bd",
-            "ef975183a3b7",
-            "817acfcc1646"
+            "7953dfb08a13",
+            "bc94d6f00eeb",
+            "968d084a5a35"
           ]
         }
       }

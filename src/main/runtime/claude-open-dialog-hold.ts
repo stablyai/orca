@@ -1,4 +1,4 @@
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 
 // Why a cap: Esc posts no hook, so a dismissed dialog's row can outlive it; a draft can be abandoned.
 export const USER_INPUT_HOLD_CAP_MS = 10 * 60_000

@@ -1,8 +1,8 @@
 // Apply the window's split-pane exit rule in main, including headless exits.
 
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import type { TerminalRunFactsRegister } from '../../terminal-run-facts'
-import { UNVERIFIED_PROCESS_EXIT_CODE } from '../../../../shared/terminal-exit-cause'
+import { UNVERIFIED_PROCESS_EXIT_CODE } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 
 export type ExitedSplitPaneFacts = {
   exitCode: number

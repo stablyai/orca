@@ -1,7 +1,4 @@
-import {
-  combinedDiffViewportAttributes,
-  combinedDiffRowAttributes
-} from '../../combined-diff-viewport'
+import { combinedDiffViewportAttributes, combinedDiffRowAttributes } from './combined-diff-viewport'
 import type React from 'react'
 import { useMemo } from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
@@ -9,11 +6,11 @@ import { joinPath } from '@/lib/path'
 import type { OpenFile } from '@/store/slices/editor'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
 import type { DiffCommentOwner } from '@/store/diff-comment-owner'
-import { DiffSectionItem } from '../../DiffSectionItem'
-import type { DiffSectionItemProps } from '../../diff-section-item-props'
-import { DiffNotesSendMenu } from '../../DiffNotesSendMenu'
-import { canOpenDiffSectionPreviewToSide } from '../../diff-section-preview'
-import type { DiffSection } from '../../diff-section-types'
+import { DiffSectionItem } from '../../diff/sections/DiffSectionItem'
+import type { DiffSectionItemProps } from '../../diff/sections/diff-section-item-props'
+import { DiffNotesSendMenu } from '../../diff/review/DiffNotesSendMenu'
+import { canOpenDiffSectionPreviewToSide } from '../../diff/sections/diff-section-preview'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 import type { CombinedDiffScrollThumb } from './use-combined-diff-scrollbar'
 import { translate } from '@/i18n/i18n'
 

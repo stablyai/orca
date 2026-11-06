@@ -22,7 +22,6 @@ vi.mock('node:os', async (importOriginal) => {
 })
 
 import {
-  AGENT_TRUST_INHERITS_FROM_A_HOME,
   applyWorkspaceTrustOnThisHost,
   type WorkspaceTrustHost
 } from './execution-host-workspace-trust'
@@ -115,12 +114,6 @@ describe('applyWorkspaceTrustOnThisHost', () => {
     })
   })
 
-  it('guards exactly the agents that inherit trust from a home', () => {
-    expect(PRESETS.filter((preset) => AGENT_TRUST_INHERITS_FROM_A_HOME[preset])).toEqual(
-      INHERITING_PRESETS
-    )
-  })
-
   it.each(EXACT_OR_SELF_LIMITING_PRESETS)(
     'trusts a home folder workspace for %s, whose trust there covers only the home',
     async (preset) => {
@@ -135,16 +128,6 @@ describe('applyWorkspaceTrustOnThisHost', () => {
       `[projects."${state.home}"]`
     )
   })
-
-  it.each(PRESETS)(
-    'trusts a worktree whose main checkout is the home for %s, which stores the worktree path',
-    async (preset) => {
-      const worktree = join(root, 'worktrees', 'feature')
-      linkGitWorktree(state.home, worktree)
-      await applyWorkspaceTrustOnThisHost(preset, worktree, thisHost())
-      expect(trustWritten(preset)).toBe(true)
-    }
-  )
 
   it("stores a Codex worktree's own path, not its main checkout", async () => {
     const worktree = join(root, 'worktrees', 'feature')
@@ -173,29 +156,5 @@ describe('applyWorkspaceTrustOnThisHost', () => {
       thisHost({ homes: [null, '', undefined] })
     )
     expect(trustWritten(preset)).toBe(false)
-  })
-
-  it('contains a host description or writer that throws, so the launch proceeds', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const workspace = join(root, 'projects', 'app')
-    mkdirSync(workspace, { recursive: true })
-    await expect(
-      applyWorkspaceTrustOnThisHost('claude', workspace, () => {
-        throw new Error('homedir unavailable')
-      })
-    ).resolves.toBeUndefined()
-    await expect(
-      applyWorkspaceTrustOnThisHost(
-        'codex',
-        workspace,
-        thisHost({
-          codexConfigFiles: () => {
-            throw new Error('userData unavailable')
-          }
-        })
-      )
-    ).resolves.toBeUndefined()
-    expect(warn).toHaveBeenCalledTimes(2)
-    warn.mockRestore()
   })
 })

@@ -8,7 +8,7 @@ import { parseExecutionHostId } from '../../../../shared/execution-host'
 import {
   isWslHostRuntimeEnvironment,
   type OrcadDeploymentLink
-} from '../../../../shared/runtime-environments'
+} from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 /** The distro a WSL host runs in; null for any other host, including an unknown runtime id. */
 export function selectWslHostDistro(

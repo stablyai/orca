@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import type * as EditorAutosave from './editor-autosave'
+import type * as EditorAutosave from './autosave/editor-autosave'
 import type * as RuntimeFileMetadataClient from '@/runtime/runtime-file-metadata-client'
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -22,7 +22,7 @@ vi.mock('@/runtime/runtime-file-metadata-client', async (original) => ({
   ...(await original<typeof RuntimeFileMetadataClient>()),
   runtimePathExists: renameIO.exists
 }))
-vi.mock('./editor-autosave', async (original) => ({
+vi.mock('./autosave/editor-autosave', async (original) => ({
   ...(await original<typeof EditorAutosave>()),
   requestEditorSaveQuiesce: renameIO.quiesce,
   requestEditorFileSave: renameIO.save

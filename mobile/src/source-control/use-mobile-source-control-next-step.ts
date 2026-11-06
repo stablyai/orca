@@ -9,16 +9,16 @@ import {
   buildResolveConflictsPrompt as buildReviewConflictsPrompt
 } from '../session/pr-ai-triage-prompt'
 import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
-import { buildResolveConflictsPrompt } from '../../../src/shared/source-control-conflict-prompts'
+import { buildResolveConflictsPrompt } from '../../../src/shared/source-control/recovery/source-control-conflict-prompts'
 import { resolveGitHubPRMergeMethods } from '../../../src/shared/github/pull-request-merge-methods'
 import type { GitHubPRMergeMethod } from '../../../src/shared/github/pull-request-types'
-import { summarizeProviderChecks } from '../../../src/shared/provider-check-summary'
-import { getBrokenChecks } from '../../../src/shared/pr-checks-fix-prompt'
-import { resolveSourceControlCommitAreaPrimaryActionDecision } from '../../../src/shared/source-control-primary-action-decision'
+import { summarizeProviderChecks } from '../../../src/shared/source-control/checks/provider-check-summary'
+import { getBrokenChecks } from '../../../src/shared/source-control/checks/pr-checks-fix-prompt'
+import { resolveSourceControlCommitAreaPrimaryActionDecision } from '../../../src/shared/source-control/decisions/source-control-primary-action-decision'
 import {
   resolveSourceControlNextStep,
   type SourceControlNextStepReview
-} from '../../../src/shared/source-control-next-step-decision'
+} from '../../../src/shared/source-control/decisions/source-control-next-step-decision'
 import { splitWorktreeIdForFilesystem } from '../../../src/shared/worktree/id'
 import { MOBILE_COMPLETE_MERGE_ACTION_ID } from './mobile-source-control-conflict-actions'
 import {

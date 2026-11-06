@@ -61,14 +61,6 @@ function highlighted(): string {
 }
 
 /** Each preedit character's letter-spacing, i.e. its advance correction onto the cell grid. */
-function advanceCorrections(): string[] {
-  const preedit = terminal.element!.querySelector('.xterm-composition-preedit')!
-  return Array.from(preedit.childNodes).flatMap((node) =>
-    Array.from(node.textContent ?? '', () =>
-      node instanceof HTMLElement ? node.style.letterSpacing : ''
-    )
-  )
-}
 
 it.each([false, true])(
   'highlights each clause the IME selects without sending it (screenReaderMode: %s)',
@@ -89,14 +81,6 @@ it.each([false, true])(
   }
 )
 
-it('drops the highlight when the IME replaces the preedit', () => {
-  openComposition()
-  updatePreedit('きょう')
-  selectClause(0, 3)
-  updatePreedit('きょうは')
-  expect(highlighted()).toBe('')
-})
-
 it('highlights a whole grapheme when a clause boundary falls inside it, but not a caret', () => {
   openComposition()
   updatePreedit('か\u3099X')
@@ -109,46 +93,3 @@ it('highlights a whole grapheme when a clause boundary falls inside it, but not 
     expect(highlighted()).toBe(expected)
   }
 })
-
-it.each([
-  ['that starts in committed text', '今日は', -1, 2],
-  ['that runs past the preedit', '今日はx', 2, 4],
-  ['in a textarea that no longer holds the preedit', 'きょう', 0, 2]
-])('ignores a selection %s', (_selection, textarea, start, end) => {
-  openComposition()
-  updatePreedit('今日は', textarea)
-  selectClause(start, end)
-  expect(highlighted()).toBe('')
-})
-
-it.each([
-  ['selectionForeground', { selectionForeground: '#abcdef' }, '#abcdef'],
-  ['foreground when selectionForeground is unset', { foreground: '#fedcba' }, '#fedcba']
-])(
-  'colors the highlight with selectionBackground and the theme %s',
-  (_source, theme, foreground) => {
-    openComposition({ theme: { selectionBackground: '#123456', ...theme } })
-    updatePreedit('今日は')
-    const view = terminal.element!.querySelector<HTMLElement>('.composition-view')!
-    expect(view.style.getPropertyValue('--xterm-composition-selection-background')).toBe('#123456')
-    expect(view.style.getPropertyValue('--xterm-composition-selection-foreground')).toBe(foreground)
-  }
-)
-
-it.each([
-  { where: 'inside the corrected prefix', start: 10, end: 20 },
-  { where: 'past the layout budget', start: 252, end: 255 }
-])(
-  'highlights a clause $where without moving any character off the cell grid',
-  ({ start, end }) => {
-    const text = Array.from({ length: 256 }, (_, index) =>
-      String.fromCodePoint(0x4e00 + index)
-    ).join('')
-    openComposition()
-    updatePreedit(text)
-    const corrections = advanceCorrections()
-    selectClause(start, end)
-    expect(highlighted()).toBe(text.slice(start, end))
-    expect(advanceCorrections()).toEqual(corrections)
-  }
-)

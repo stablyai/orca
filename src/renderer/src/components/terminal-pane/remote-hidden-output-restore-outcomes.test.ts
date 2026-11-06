@@ -1,3 +1,7 @@
+import {
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -263,7 +267,6 @@ function createManager(paneCount = 1, initialActivePaneId: number | null = null)
   return {
     setPaneGpuRendering: vi.fn(),
     markPaneHasComplexScriptOutput: vi.fn(),
-    rebuildPaneWebgl: vi.fn(),
     hasWebglRenderer: vi.fn(() => false),
     getPanes: vi.fn(() => panes),
     closePane: vi.fn(),
@@ -372,6 +375,7 @@ async function connectHiddenRemoteAgentPane(
   serializeBufferOutcome?: ReturnType<typeof vi.fn>
 ): Promise<RemotePaneDrive> {
   const { connectPanePty } = await import('./pty-connection')
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
   const transport = createMockTransport(REMOTE_PTY_ID)
   transport.serializeBuffer = serializeBuffer
   transport.serializeBufferOutcome = serializeBufferOutcome
@@ -392,7 +396,11 @@ async function connectHiddenRemoteAgentPane(
   const pane = createPane(1)
   const manager = createManager(1)
   const deps = createDeps({ isVisibleRef: { current: false } })
-  const disposable = connectPanePty(pane as never, manager as never, deps as never)
+  const disposable = connectPanePty(
+    pane as never,
+    manager as never,
+    bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+  )
   await flushAsyncTicks(6)
   expect(capturedDataCallback.current).not.toBeNull()
   return {

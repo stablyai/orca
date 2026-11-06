@@ -24,7 +24,8 @@ export const SUCCESS_CHECKS = {
   passed: 1,
   failed: 0,
   pending: 0,
-  neutral: 0
+  neutral: 0,
+  cancelled: 0
 } as const
 
 export function gitlabItem(
@@ -148,6 +149,7 @@ export async function mountDetail(
       detailRequestItem: selection.detailRequestItem,
       client,
       detailRefreshSeq,
+      detailRefreshRequested: { current: false },
       hydrateActionItem: selection.hydrateActionItem,
       setItems,
       setDetailPayload,

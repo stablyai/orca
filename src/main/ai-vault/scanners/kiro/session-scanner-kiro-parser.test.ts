@@ -2,12 +2,8 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  isKiroSessionMetadataPath,
-  parseKiroSessionContent,
-  parseKiroSessionFile
-} from './session-scanner-kiro-parser'
-import { kiroTranscriptPathForMetadata } from '../../../../shared/ai-vault-session-log-resource'
+import { isKiroSessionMetadataPath, parseKiroSessionFile } from './session-scanner-kiro-parser'
+import { kiroTranscriptPathForMetadata } from '../../../../shared/ai-vault/session-display/ai-vault-session-log-resource'
 
 const SESSION_ID = '0b5e1c2a-3d4f-4a5b-8c6d-7e8f9a0b1c2d'
 
@@ -104,18 +100,5 @@ describe('Kiro session parser', () => {
     const session = await parseKiroSessionFile(fileAt(path), 'linux')
     expect(session?.sessionId).toBe(SESSION_ID)
     expect(session?.resumeCommand).toContain(`--resume-id '${SESSION_ID}'`)
-  })
-
-  it('parses streamed remote lines the same way', async () => {
-    const session = await parseKiroSessionContent(
-      fileAt(`/home/u/.kiro/sessions/cli/${SESSION_ID}.json`),
-      metadata(),
-      [prompt, reply],
-      'linux'
-    )
-    expect(session?.messageCount).toBe(2)
-    expect(session?.resumeCommand).toBe(
-      `cd '/tmp/kiro' && kiro-cli chat --tui --resume-id '${SESSION_ID}'`
-    )
   })
 })

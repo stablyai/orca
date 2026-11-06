@@ -17,7 +17,7 @@ import {
   createAliasedWatcherRoot,
   removeAliasedWatcherRoot,
   type AliasedWatcherRoot
-} from '../../watcher-aliased-root-fixture'
+} from '../watcher-process/watcher-aliased-root-fixture'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 

@@ -9,8 +9,8 @@ import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
 import { Textarea } from '../../ui/textarea'
-import { SearchableSetting } from '../SearchableSetting'
-import { SettingsSubsectionHeader } from '../SettingsFormControls'
+import { SearchableSetting } from '../section-layout/SearchableSetting'
+import { SettingsSubsectionHeader } from '../form-controls/SettingsFormControls'
 
 export function getRepositoryFormatterSearchEntry() {
   return {

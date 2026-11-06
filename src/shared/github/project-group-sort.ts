@@ -69,6 +69,17 @@ function getFieldValueForGrouping(
   field: GitHubProjectField,
   orderIndex: ReadonlyMap<string, number>
 ): { key: string; label: string; orderHint: number; iteration: ProjectGroup['iteration'] } {
+  // GitHub returns no field value for Parent issue; the parent lives on the content (#38099).
+  const parent = field.dataType === 'PARENT_ISSUE' ? row.content.parentIssue : null
+  if (parent) {
+    // Key by URL: multi-repo projects can share parent issue numbers.
+    return {
+      key: parent.url,
+      label: `#${parent.number}`,
+      orderHint: parent.number,
+      iteration: null
+    }
+  }
   const value = row.fieldValuesByFieldId[field.id]
   if (!hasNonEmptyFieldValue(value)) {
     return {
@@ -183,7 +194,7 @@ export function groupRowsByField(
     if (groupField.kind === 'iteration' || groupField.kind === 'single-select') {
       return a[1].orderHint - b[1].orderHint
     }
-    if (groupField.dataType === 'NUMBER') {
+    if (groupField.dataType === 'NUMBER' || groupField.dataType === 'PARENT_ISSUE') {
       return a[1].orderHint - b[1].orderHint || a[1].label.localeCompare(b[1].label)
     }
     return a[1].label.localeCompare(b[1].label)

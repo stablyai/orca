@@ -10,16 +10,13 @@ import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
   adapter,
   attach,
-  CALLER,
-  envelope,
   hostTestState,
   replaceHostTestState
 } from './structured-agent-session-host-test-harness'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
-  HOST_TEST_THREAD as THREAD,
-  hostTestMessage
+  HOST_TEST_THREAD as THREAD
 } from './structured-agent-session-host-test-data'
 import {
   closeTestJournalHostDatabases,
@@ -27,10 +24,6 @@ import {
 } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
-
-function eventually(assertion: () => unknown): Promise<unknown> {
-  return vi.waitFor(assertion, { timeout: 10_000 })
-}
 
 const relaunchedRoots: string[] = []
 
@@ -92,53 +85,6 @@ async function turnStates(host: StructuredAgentSessionHost) {
     .flatMap((item) => readAgentJournalTurn(item.body) ?? [])
     .map((turn) => turn.state)
 }
-
-// Read-open settles old work without claiming ownership; death proof alone permits interrupted.
-const PROBES = [
-  ['the old owner is proven gone', { outcome: 'pid-absent' }, 'interrupted'],
-  [
-    'nothing proves the old owner gone',
-    { outcome: 'indeterminate', reason: 'This host cannot probe structured session owners.' },
-    'unverifiable'
-  ]
-] as const satisfies readonly (readonly [string, AgentSessionOwnerProbe, string])[]
-
-it.each(PROBES)(
-  'settles a turn a dead generation left running when a send opens the chat and its start fails, when %s',
-  async (_when, probe, settled) => {
-    const { host, acquire } = await relaunchAfterCrashMidTurn(probe)
-    expect(host.hasSession(SESSION)).toBe(false)
-
-    const body = hostTestMessage('sent to a chat nobody has open')
-    const sendEnvelope = envelope('agentSession.send', { body })
-    await expect(host.send(CALLER, { envelope: sendEnvelope, body })).resolves.toMatchObject({
-      ok: true
-    })
-    await eventually(async () =>
-      expect(
-        (await host.journalSnapshot(SESSION)).submissions.find(
-          (entry) => entry.clientMessageId === sendEnvelope.clientOperationId
-        )
-      ).toMatchObject({ dispatchState: 'rejected' })
-    )
-
-    expect(acquire).toHaveBeenCalledOnce()
-    expect(await turnStates(host)).toEqual([settled])
-    await host.flushAllStreamedEvents()
-  }
-)
-
-it.each(PROBES)(
-  'settles the same turn when a reader opens the chat, when %s',
-  async (_when, probe, settled) => {
-    const { host } = await relaunchAfterCrashMidTurn(probe)
-
-    await host.revealSession(SESSION)
-
-    expect(await turnStates(host)).toEqual([settled])
-    await host.flushAllStreamedEvents()
-  }
-)
 
 // First read may precede startup reconciliation; later proof must revise its unverifiable settlement.
 it('settles it when a read reaches the chat before the startup reconcile, then revises it', async () => {

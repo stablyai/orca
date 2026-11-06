@@ -12,14 +12,15 @@ import { canAddRootComment } from '../../session/pr-comment-actions'
 import { isPrSidebarDetailsPlaceholder } from '../../session/mobile-pr-sidebar-state'
 import type { MobilePrCommentActions } from '../../session/use-mobile-pr-comment-actions'
 import { PRSection } from './PRSection'
-import { CommentMarkdown } from './CommentMarkdown'
+import { MobileMarkdown } from '../MobileMarkdown'
+import { MOBILE_MARKDOWN_DOCUMENT_SCALE } from '../mobile-markdown-styles'
 import { PRCommentCard, type PRCommentCardActions } from './PRCommentCard'
 import { PRCommentComposer } from './PRCommentComposer'
 import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
   type PRCommentAudienceFilter
-} from '../../../../src/shared/pr-comment-audience'
+} from '../../../../src/shared/source-control/review-comments/pr-comment-audience'
 import {
   getPRCommentGroupCount,
   getPRCommentGroupId,
@@ -27,7 +28,7 @@ import {
   groupPRComments,
   isResolvedPRCommentGroup,
   type PRCommentGroup
-} from '../../../../src/shared/pr-comment-groups'
+} from '../../../../src/shared/source-control/review-comments/pr-comment-groups'
 import { prCommentsStyles as styles } from './pr-comments-styles'
 import { mobilePrSidebarStyles as shared } from './mobile-pr-sidebar-styles'
 import { useNow } from '../../hooks/use-now'
@@ -127,7 +128,7 @@ export function PRCommentsSection({
             )}
           </Text>
         ) : body.trim() ? (
-          <CommentMarkdown content={body} variant="document" />
+          <MobileMarkdown content={body} textScale={MOBILE_MARKDOWN_DOCUMENT_SCALE} />
         ) : (
           <Text style={styles.noDescription}>
             {t('pullRequest.commentsSection.noDescription', 'No description provided.')}

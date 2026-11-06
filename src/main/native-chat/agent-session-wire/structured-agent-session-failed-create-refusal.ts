@@ -38,7 +38,7 @@ import {
 } from '../../provider-process/provider-executable-missing'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
 import { agentCliInstallationProblemOf } from '../agent-cli-installation-error'
-import { agentCliInstallationFacts } from '../../../shared/agent-cli-installation-problem'
+import { agentCliInstallationFacts } from '../../../shared/agent-launch/catalog/agent-cli-installation-problem'
 
 export type FailedAcquisitionWording = {
   record: AgentSessionRecord | null
@@ -153,7 +153,7 @@ export function failedAcquisitionRefusal(
     error instanceof AgentSessionAcquisitionRefusal ||
     isExitProvenAcquisitionFailure(error) ||
     (isAgentSessionPreSpawnError(error) &&
-      (argumentProblemOf(error) || agentCliInstallationProblemOf(error)))
+      (error.reason || argumentProblemOf(error) || agentCliInstallationProblemOf(error)))
   ) {
     return {
       ok: false,

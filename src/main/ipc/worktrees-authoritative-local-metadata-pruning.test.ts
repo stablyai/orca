@@ -15,7 +15,7 @@ import { pruneMetadataMissingFromAuthoritativeLocalScan } from './worktrees/list
 import { listDetectedWorktreesForCapturedRepo } from './worktrees/listing/detected-provider-listing'
 import { getLocalWorktreeScanGeneration } from '../workspaces/catalog/local-worktree-scan-generation'
 import { agentHookServer } from '../agent-hooks/server'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import {
   isRegisteredWorktreePath,
   registerWorktreeRootsForRepo
@@ -41,7 +41,7 @@ vi.mock('../wsl/discovery/wsl-background-distro-gate', async (importOriginal) =>
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )
-vi.mock('../../shared/git-worktree-porcelain-parser', async (importOriginal) => ({
+vi.mock('../../shared/git/worktrees/git-worktree-porcelain-parser', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   parseWorktreeList: (await import('./worktrees-test-module-mocks')).parseWorktreeListMock
 }))
@@ -97,6 +97,7 @@ vi.mock('../git/command-runner/git-exec-file-sync', async (importOriginal) => ({
 vi.mock('../git/repo', async () =>
   (await import('./worktrees-test-module-mocks')).gitRepoModuleMock()
 )
+
 vi.mock('../git/repo-default-base-ref', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getBaseRefDefault: (await import('./worktrees-test-module-mocks')).getBaseRefDefaultMock
@@ -107,6 +108,9 @@ vi.mock('../git/git-username', async (importOriginal) => ({
     .resolveLocalGitUsernameMock
 }))
 vi.mock('../github/client', async () =>
+  (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
+)
+vi.mock('../github/client/lookup/get-pr-for-branch', async () =>
   (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
 )
 vi.mock('../source-control/hosted-review', async () =>
@@ -168,7 +172,7 @@ vi.mock('../workspaces/catalog/local-worktree-path-presence', async (importOrigi
   ...(await importOriginal<Record<string, unknown>>()),
   localWorktreePathsExistOrAreUnverifiable: localWorktreePathPresenceMock
 }))
-vi.mock('../runtime/worktree-teardown', async () =>
+vi.mock('../runtime/workspaces/removal/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
 vi.mock('./pty/provider/registry', async () =>

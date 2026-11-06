@@ -6,7 +6,7 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => (
   execCommand: vi.fn()
 }))
 
-vi.mock('../../../shared/shell-argument-quoting', () => ({
+vi.mock('../../../shared/shell/launch/shell-argument-quoting', () => ({
   quotePosixShell: (s: string) => `'${s}'`
 }))
 

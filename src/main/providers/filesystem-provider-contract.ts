@@ -7,7 +7,7 @@ import type {
   DocPreviewFileTarget
 } from '../../shared/doc-preview-file-access'
 import type { DirEntry, FsChangeEvent, MarkdownDocument } from '../../shared/filesystem-entry-types'
-import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
+import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-disk-space/workspace-space-types'
 
 export type FileStat = {
   size: number

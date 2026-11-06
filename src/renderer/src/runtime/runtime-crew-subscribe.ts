@@ -2,7 +2,7 @@ import type {
   CrewSetupFact,
   CrewSubscriptionAttemptArgs,
   CrewSubscriptionAttemptCallbacks
-} from '../../../shared/runtime-environment-subscription-setup'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 import { observePairingRefusal } from './runtime-environment-pairing-refresh'
 import { createBrowserUuid } from '../lib/browser-uuid'
 

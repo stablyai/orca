@@ -13,6 +13,54 @@ import type { AgentSessionJournal } from './journal-store'
 export function registerJournalLifecycleBoundaryTests(
   fixture: ReturnType<typeof createFixture>
 ): void {
+  it('keeps physical open provenance across a context boundary', async () => {
+    const earlier = await fixture.open()
+    await earlier.appendItem(fixture.item(1), fixture.body('one'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    await earlier.appendSubmission({
+      clientMessageId: 'earlier',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'earlier' }] },
+      payloadFingerprint: 'earlier',
+      fence: 1,
+      handoverRecorded: true
+    })
+    for (let i = 0; i < 10; i++) {
+      await earlier.appendItem(fixture.item(1), fixture.body(String(i)), {
+        fence: 1,
+        turnScope: { kind: 'thread' }
+      })
+    }
+    await earlier.close()
+
+    const journal = await fixture.open()
+    const openedCursor = journal.cursor()
+    const leftover = journal.submissions().find((entry) => entry.clientMessageId === 'earlier')
+    expect(journal.wroteBeforeOpen(leftover?.acceptedSequence)).toBe(true)
+
+    await journal.resolveDispatch({
+      clientMessageId: 'earlier',
+      state: 'unknown',
+      reason: 'unconfirmed from an earlier host',
+      fence: 1
+    })
+    // The public context token changes; physical source order and open provenance do not.
+    await journal.replaceEpochItems('handle_forked', 1, [])
+    await journal.appendSubmission({
+      clientMessageId: 'later',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'later' }] },
+      payloadFingerprint: 'later',
+      fence: 1,
+      handoverRecorded: true
+    })
+    const later = journal.submissions().find((entry) => entry.clientMessageId === 'later')
+    expect(journal.cursor().epoch).not.toBe(openedCursor.epoch)
+    expect(journal.wroteBeforeOpen(leftover?.acceptedSequence)).toBe(true)
+    expect(later?.acceptedSequence).toBeGreaterThan(openedCursor.sequence)
+    expect(journal.wroteBeforeOpen(later?.acceptedSequence)).toBe(false)
+  })
+
   describe('bounds', () => {
     it('marks a clipped payload instead of dropping bytes silently', () => {
       const limits = { inlineHeadBytes: 16 }
@@ -186,11 +234,12 @@ export function registerJournalLifecycleBoundaryTests(
         reason: 'unconfirmed from an earlier host',
         fence: 1
       })
-      // Epochs restart sequences, so later rows can fall below the old open cursor.
+      const opened = journal.cursor()
       await journal.replaceEpochItems('handle_forked', 1, [])
       await journal.appendSubmission(submission('later'))
       const later = journal.submissions().find((entry) => entry.clientMessageId === 'later')
-      expect(later?.acceptedSequence).toBeLessThanOrEqual(2)
+      expect(journal.cursor().epoch).not.toBe(opened.epoch)
+      expect(later?.acceptedSequence).toBeGreaterThan(opened.sequence)
       expect(journal.wroteBeforeOpen(later?.acceptedSequence)).toBe(false)
     })
   })

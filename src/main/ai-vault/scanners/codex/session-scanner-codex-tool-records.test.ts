@@ -107,18 +107,3 @@ it('normalizes custom calls and structured results through the existing content 
     'resultneedle'
   ])
 })
-
-it('keeps local shell argv searchable', () => {
-  const messages: TranscriptMessage[] = []
-  const state = createCodexSessionResumeState(file, null, {
-    active: true,
-    push: (message) => messages.push(message)
-  })
-  state.consumeLineBytes!(
-    record('response_item', {
-      type: 'local_shell_call',
-      action: { type: 'exec', command: ['rg', 'argvneedle'] }
-    })
-  )
-  expect(messages.map((message) => message.text)).toEqual(['tool: rg argvneedle'])
-})

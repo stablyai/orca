@@ -6,7 +6,7 @@ import {
   resetWorkspaceCleanupBrowsePersistTimer,
   WORKSPACE_CLEANUP_BROWSE_PERSIST_DEBOUNCE_MS
 } from './workspace-cleanup-browse'
-import { createDefaultWorkspaceCleanupBrowseState } from '../../../../shared/workspace-cleanup-browse-state'
+import { createDefaultWorkspaceCleanupBrowseState } from '../../../../shared/workspace-cleanup/workspace-cleanup-browse-state'
 
 const DISMISSAL = {
   worktreeId: 'wt-1',

@@ -1,4 +1,7 @@
-import { startupAcquisitionRefusal } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import {
+  providerExitObserved,
+  startupAcquisitionRefusal
+} from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
 
 /** One acquisition's startup: its first ending cause is the one its open rejects with. */
 export type ClaudeStartupOutcome = {
@@ -10,6 +13,13 @@ export type ClaudeStartupOutcome = {
   race: <T>(work: Promise<T>, signal: AbortSignal) => Promise<T>
   /** Throws the cause that ended this start; otherwise later failures belong to the journal for good. */
   open: () => void
+  /** Whether the whole host-awaited open has returned for this start. */
+  opened: () => boolean
+}
+
+/** A fault ends the start now unless it is a proven physical exit, which onExit's initialize join settles. */
+export function endsClaudeStartup(error: unknown): boolean {
+  return startupAcquisitionRefusal(error) !== undefined || !providerExitObserved(error)
 }
 
 export function createClaudeStartupOutcome(): ClaudeStartupOutcome {
@@ -60,6 +70,7 @@ export function createClaudeStartupOutcome(): ClaudeStartupOutcome {
         throw ended()
       }
       state = 'opened'
-    }
+    },
+    opened: () => state === 'opened'
   }
 }

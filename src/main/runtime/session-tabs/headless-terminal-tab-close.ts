@@ -1,22 +1,22 @@
 import type { RuntimeHeadlessTabProperties as HeadlessTabPropertiesMethods } from './headless-tab-properties'
 import type { RuntimeHeadlessTabGroups as HeadlessTabGroupsMethods } from './headless-tab-group-moves'
-import type { OrcaRuntimeWithPersistHeadlessTerminalTitle as PersistHeadlessTerminalTitleMethods } from '../workspaces/workspace-file-session-targets'
+import type { RuntimeHeadlessTerminalTabTitles as PersistHeadlessTerminalTitleMethods } from './headless-terminal-tab-titles'
 import { OrcaRuntimeWithMainLayoutTabMoves } from './main-layout-session-tab-move'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type {
   RuntimeMobileSessionTabMove,
   RuntimeMobileSessionTabMoveResult,
   RuntimeMobileSessionTabsSnapshot,
-  RuntimeMobileSessionTerminalTab
-} from '../../../shared/runtime-types'
+  RuntimeSessionTabCloseReason
+} from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTerminalTab } from '../../../shared/runtime-mobile-session-tab-contracts'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
-import { buildHeadlessMobileSessionTabGroups } from '../mobile-session-layout-projection'
+import { buildHeadlessMobileSessionTabGroups } from '../terminal/surface/mobile-session-layout-projection'
 import { paneTitlesForDesktopWindow } from './desktop-pane-title-forwarding'
-import { appendRetiredTerminalSurfaceProofs } from '../../../shared/terminal-retirement-proof-ledger'
-import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
-import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
+import { appendRetiredTerminalSurfaceProofs } from '../../../shared/workspace-layout/terminal-retirement-proof-ledger'
+import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
+import type { TerminalPaneLayoutNode } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { RuntimeTerminalRename } from '../../../shared/runtime-terminal-contracts'
-import type { RuntimeSessionTabCloseReason } from '../../../shared/runtime-session-contracts'
 
 export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWithMainLayoutTabMoves {
   protected abstract applyHeadlessTerminalPaneLayoutToSnapshot(

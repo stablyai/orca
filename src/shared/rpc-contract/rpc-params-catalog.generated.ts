@@ -6,18 +6,19 @@ import {
   AiVaultSearchRequestSchema,
   AiVaultSearchStatusRequestSchema,
   AiVaultSetSearchEnabledParamsSchema
-} from '../ai-vault-search-contract'
+} from '../ai-vault/search/ai-vault-search-contract'
 import {
   BrowserClientFileChannelAbortParams,
   BrowserClientFileChannelReadParams,
   BrowserClientFileChannelWriteParams
-} from '../browser-client-file-channel-protocol'
+} from '../browser/client-hosting/browser-client-file-channel-protocol'
 import {
   BrowserClientHostAttachParams,
   BrowserClientHostCommandResultParams,
   BrowserNetworkTunnelAttachParams
-} from '../browser-client-host-protocol'
-import { BrowserClientPageMetadataParams } from '../browser-client-page-metadata-protocol'
+} from '../browser/client-hosting/browser-client-host-protocol'
+import { BrowserClientHostRequestResultParams } from '../browser/client-hosting/browser-client-host-request-protocol'
+import { BrowserClientPageMetadataParams } from '../browser/client-hosting/browser-client-page-metadata-protocol'
 import {
   BundledSkillAutoUpdateRequestSchema,
   BundledSkillExecuteRequestSchema,
@@ -28,13 +29,7 @@ import {
   DesktopBrowserBridgeAttachParams,
   DesktopBrowserBridgeResultParams
 } from '../desktop-browser-bridge-protocol'
-import { RegisterDeviceKeyParamsSchema } from '../device-key-registration-contract'
 import { HostAccountLaunchEnvParams } from '../host-account-launch-env'
-import {
-  PairingGetEndpointsParamsSchema,
-  PairingProvisionRelayParamsSchema
-} from '../mobile-relay-credential-contract'
-import { MobileRelayHostWorktreesParamsSchema } from '../mobile-relay-hosts-contract'
 import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rpc-contract'
 import { OrcadMigrationBlobChunkRequestSchema } from '../orcad-migration/orcad-migration-blob-transfer'
 import { OrcadMigrationSnapshotChunkRequestSchema } from '../orcad-migration/orcad-migration-scrollback'
@@ -44,6 +39,12 @@ import {
 } from '../orcad-peer-desktops-contract'
 import { OrcadTerminalCensusParamsSchema } from '../orcad-terminal-census'
 import { CrewSubscribeParams } from '../orchestration-crew'
+import { RegisterDeviceKeyParamsSchema } from '../remote-runtime/pairing/device-key-registration-contract'
+import {
+  PairingGetEndpointsParamsSchema,
+  PairingProvisionRelayParamsSchema
+} from '../remote-runtime/relay/mobile-relay-credential-contract'
+import { MobileRelayHostWorktreesParamsSchema } from '../remote-runtime/relay/mobile-relay-hosts-contract'
 import {
   AccountsUnsubscribeParams,
   AddClaudeFromConfigDirParams,
@@ -155,7 +156,7 @@ import {
 } from './browser-params'
 import { ScreencastUnsubscribe } from './browser-screencast-params'
 import { BrowserOpenUrlParams, BrowserTabCreateParams } from './browser-tab-create-params'
-import { ClientEventsUnsubscribeParams } from './client-events-params'
+import { ClientEventsSubscribeParams, ClientEventsUnsubscribeParams } from './client-events-params'
 import {
   NativeChatSessionOptionsMutation,
   PRBotAuthorOverrideUpdate,
@@ -252,7 +253,11 @@ import {
   FileSaveCommit
 } from './files-staged-save-params'
 import { FileOpen, FileWatch, WorktreeSelector } from './files-target-params'
-import { TerminalArtifactFile, TerminalArtifactFileWrite } from './files-terminal-artifact-params'
+import {
+  TerminalArtifactFile,
+  TerminalArtifactFileChunk,
+  TerminalArtifactFileWrite
+} from './files-terminal-artifact-params'
 import {
   FolderWorkspaceCreate,
   FolderWorkspacePathStatus,
@@ -660,6 +665,7 @@ import {
   TerminalHandle,
   TerminalInspectProcess,
   TerminalListParams,
+  TerminalOpenInputSession,
   TerminalRead,
   TerminalReadKittyFile,
   TerminalRecoverPane,
@@ -711,6 +717,7 @@ import {
   WorktreeListParams,
   WorktreePsParams,
   WorktreeRemove,
+  WorktreeResolveCallerParent,
   WorktreeResolveMrBase,
   WorktreeResolvePrBase,
   WorktreeSelector as WorktreeSelectorOfWorktreeParams,
@@ -781,6 +788,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agent.launch': AgentLaunch,
   'agent.launchReplay': AgentLaunchReplay,
   'agentHooks.prepareCodexForWslPane': PrepareCodexForWslPaneParams,
+  'agentSession.accountUsage': OptionsParams,
   'agentSession.acknowledgeAttention': AcknowledgeAttentionParams,
   'agentSession.agents': AgentsParams,
   'agentSession.cancel': CancelParams,
@@ -870,6 +878,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.clientHost.fileChannel.read': BrowserClientFileChannelReadParams,
   'browser.clientHost.fileChannel.write': BrowserClientFileChannelWriteParams,
   'browser.clientHost.pageMetadata': BrowserClientPageMetadataParams,
+  'browser.clientHost.requestResult': BrowserClientHostRequestResultParams,
   'browser.clipboardRead': BrowserTarget,
   'browser.clipboardWrite': ClipboardWrite,
   'browser.console': LimitParam,
@@ -1020,6 +1029,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'files.readDocPreviewChunk': DocPreviewFileReadChunk,
   'files.readPreview': FileOpen,
   'files.readTerminalArtifact': TerminalArtifactFile,
+  'files.readTerminalArtifactChunk': TerminalArtifactFileChunk,
   'files.readTerminalArtifactPreview': TerminalArtifactFile,
   'files.rename': FileRename,
   'files.replaceWithUpload': FileReplaceWithUpload,
@@ -1403,7 +1413,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'runtime.automaticWork.resume': null,
   'runtime.automaticWork.status': null,
   'runtime.clientCapabilities.update': ClientCapabilitiesUpdate,
-  'runtime.clientEvents.subscribe': null,
+  'runtime.clientEvents.subscribe': ClientEventsSubscribeParams,
   'runtime.clientEvents.unsubscribe': ClientEventsUnsubscribeParams,
   'session.readTerminalScrollback': SessionReadTerminalScrollbackParams,
   'session.tabs.activate': ActivateTab,
@@ -1496,6 +1506,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.isRunningAgent': TerminalHandle,
   'terminal.list': TerminalListParams,
   'terminal.multiplex': TerminalMultiplex,
+  'terminal.openInputSession': TerminalOpenInputSession,
   'terminal.read': TerminalRead,
   'terminal.readKittyFile': TerminalReadKittyFile,
   'terminal.recoverPane': TerminalRecoverPane,
@@ -1555,6 +1566,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.persistSortOrder': WorktreeSortOrder,
   'worktree.prefetchCreateBase': WorktreePrefetchCreateBase,
   'worktree.ps': WorktreePsParams,
+  'worktree.resolveCallerParent': WorktreeResolveCallerParent,
   'worktree.resolveMrBase': WorktreeResolveMrBase,
   'worktree.resolvePrBase': WorktreeResolvePrBase,
   'worktree.rm': WorktreeRemove,

@@ -5,10 +5,13 @@ import { eraseRpcMethods, isStreamingMethod, type RpcContext } from '../core'
 import { ALL_RPC_METHODS } from './index'
 
 const paired = vi.hoisted(() => ({ ids: ['one', 'two'] }))
-vi.mock('../../../../shared/runtime-environment-store', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  listEnvironments: () => paired.ids.map((id) => ({ id }))
-}))
+vi.mock(
+  '../../../../shared/remote-runtime/host-store/runtime-environment-store',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    listEnvironments: () => paired.ids.map((id) => ({ id }))
+  })
+)
 
 const methods = eraseRpcMethods(ALL_RPC_METHODS)
 const subscribe = methods.find((method) => method.name === 'layout.subscribe')

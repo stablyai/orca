@@ -6,7 +6,7 @@ import { registerPtyHandlers } from './register-handlers'
 import { existsSyncMock, statSyncMock } from './pty-ipc-mock-registry'
 import type { PtyIpcSuiteFixtures } from './pty-ipc-test-harness'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime/runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from '../../runtime/orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import {
   IDENTITY_ENV_KEYS,
   launchWorkspaceId,
@@ -18,7 +18,7 @@ import {
   partialRuntimeStore,
   storeProject,
   storeProjectGroup
-} from '../../runtime/runtime-store-partial-fixture'
+} from '../../runtime/orca-runtime-tests/runtime-store-partial-fixture'
 
 const WINDOWS_ENV = {
   COMSPEC: 'C:\\Windows\\system32\\cmd.exe',

@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { quotePosixShell } from '../../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
 
 export type WslChatHost = {
   rpc<T>(method: string, params?: unknown): Promise<T>

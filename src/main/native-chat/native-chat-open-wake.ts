@@ -1,4 +1,4 @@
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   isWslHookRelayConnectionId,
   WSL_HOOK_RELAY_CONNECTION_PREFIX

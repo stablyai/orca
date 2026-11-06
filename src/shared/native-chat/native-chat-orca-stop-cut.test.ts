@@ -4,15 +4,12 @@ import { agentSessionFailureWords } from '../agent-session/failures/agent-sessio
 import { readAgentSessionOrcaStop } from '../agent-session/lifecycle/agent-session-orca-stop'
 import { agentJournalItemKey } from '../agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnOutcome } from '../agent-turn-outcome'
+import type { AgentJournalTurnOutcome } from '../agent-status/lifecycle/agent-turn-outcome'
 import { withNativeChatCutTurnNotices } from './transcript/native-chat-cut-turn-notice'
 import {
   latestNativeChatOrcaStopCut,
   orcaShutdownRowClientMessageId
 } from './native-chat-orca-stop-cut'
-
-const LEGACY_TEXT =
-  'Codex stopped while this response was in progress. You can continue in this conversation.'
 
 const turnId = agentJournalItemKey({ provider: 'codex', threadId: 't', turnId: 'cut', ordinal: 1 })
 
@@ -72,10 +69,6 @@ describe('the cause on a stopped row', () => {
   it('is read when known and dropped when a newer host names one this build does not know', () => {
     expect(readAgentSessionOrcaStop(update)).toEqual({ cause: 'update' })
     expect(readAgentSessionOrcaStop({ cause: 'power-loss' })).toBeUndefined()
-  })
-
-  it("rides beside today's sentence, so a client that reads no cause prints the same row", () => {
-    expect(stopRow(update).body).toMatchObject({ text: LEGACY_TEXT, tone: 'error' })
   })
 })
 

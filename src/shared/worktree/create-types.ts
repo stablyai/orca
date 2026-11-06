@@ -3,8 +3,8 @@ import type { ExecutionHostId } from '../execution-host'
 import type { ArchiveHookOverride } from './archive-hook-removal-gate'
 import type { WorkspaceSource } from '../workspace-source'
 import type { TaskSourceContext } from '../task-source-context'
-import type { WorkspaceKey } from '../folder-workspace-types'
-import type { TuiAgent } from '../tui-agent'
+import type { WorkspaceKey } from '../workspace-scope'
+import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type {
   AutomationWorkspaceProvenanceRequest,
   GitPushTarget,
@@ -14,7 +14,13 @@ import type {
   WorkspaceStatus,
   Worktree
 } from './types'
-import type { WorkspaceLineage, WorktreeLineage, WorktreeLineageWarning } from './lineage-types'
+import type {
+  CrossStoreParentRef,
+  CrossStoreWorkspaceLineage,
+  WorkspaceLineage,
+  WorktreeLineage,
+  WorktreeLineageWarning
+} from './lineage-types'
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch,
@@ -121,6 +127,8 @@ export type CreateWorktreeArgs = {
   manualOrder?: number
   /** Parent workspace for in-app creates launched from a folder workspace. */
   parentWorkspace?: WorkspaceKey
+  /** A parent in another Orca store, named by that store's verified installationId (buildCrossStoreParentRef). */
+  crossStoreParent?: CrossStoreParentRef
   /** Agent selected in the create surface. Omitted for blank-shell creates. */
   createdWithAgent?: TuiAgent
   /** Await a first-agent-message branch/title rename for this generated branch. */
@@ -169,6 +177,8 @@ export type CreateWorktreeResult = {
   }
   lineage?: WorktreeLineage | null
   workspaceLineage?: WorkspaceLineage | null
+  /** A parent in another Orca store; older hosts never write one. */
+  crossStoreLineage?: CrossStoreWorkspaceLineage | null
   warnings?: WorktreeLineageWarning[]
   setup?: WorktreeSetupLaunch
   setupReceipt?: {

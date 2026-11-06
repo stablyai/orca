@@ -19,7 +19,7 @@ vi.mock('node:fs', () => ({
   writeFileSync: writeFileSyncMock
 }))
 vi.mock('node:fs/promises', () => ({ stat: statMock }))
-vi.mock('../../shallow-watch-delivery-probe', () => ({
+vi.mock('./shallow-watch-delivery-probe', () => ({
   detectShallowWatchDelivery: detectShallowWatchDeliveryMock,
   hasShallowWatchDelivered: () => false,
   noteShallowWatchDelivered: vi.fn()

@@ -9,7 +9,7 @@ import {
   type AgentSessionAttentionEdge
 } from '../../../shared/agent-session/agent-session-attention'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentStatusOrchestrationContext } from '../../../shared/agent-status-types'
+import type { AgentStatusOrchestrationContext } from '../../../shared/agent-status/contracts/agent-status-types'
 import { isCoordinatorOnlyChatNews } from '../../../shared/dispatched-worker-attention'
 import type {
   NotificationDispatchRequest,
@@ -23,7 +23,7 @@ import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { isNotificationSourceEnabled } from '../../../shared/notification-source-gate'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { buildNotificationOptions } from '../../ipc/notification-options'
-import type { MobileNotificationDispatchEvent } from '../runtime-mobile-notification-controller'
+import type { MobileNotificationDispatchEvent } from '../push/notifications/runtime-mobile-notification-controller'
 import type { RuntimeStore } from '../runtime-store-contract'
 import { getRuntimeDesktopSurface } from '../runtime-desktop-surface'
 

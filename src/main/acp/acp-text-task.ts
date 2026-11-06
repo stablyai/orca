@@ -8,7 +8,7 @@ import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session
 import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisition-starts'
 import { removeAntigravitySignInSessionFiles } from '../antigravity/antigravity-sign-in-session-files'
 import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from '../text-generation/source-control-generation-limits'
-import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
+import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/agent-session/environment/structured-session-child-env'
 import { resolveAcpLaunchInvocation } from './acp-structured-launch-resolution'
 import { prepareAcpLaunch } from './acp-structured-launch-preparation'
 import { acpPrivateTempConnect } from './acp-private-temp'

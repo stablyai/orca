@@ -47,6 +47,7 @@ export function useNativeChatAsyncQuestions({
   }, [owner, scopeKey, prompt])
   return {
     prompt,
+    answerPending: scan?.answerPending === true,
     blocking: scan?.blocking ?? null,
     dismiss,
     ownerKey: JSON.stringify([scopeKey, viewKey])

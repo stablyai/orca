@@ -1,5 +1,5 @@
-import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
-import { isRemoteHeadRef } from '../../shared/hosted-review-refs'
+import { isSafeGitRefName } from '../../shared/git/status/git-status-upstream-ref'
+import { isRemoteHeadRef } from '../../shared/source-control/hosted-review/hosted-review-refs'
 import { isSafeReviewHeadFetchRemote } from '../../shared/review-head-tracking-ref'
 import { probeExactRefsViaForEachRef, type ExactRefProbeExecOptions } from '../git/exact-ref-probe'
 

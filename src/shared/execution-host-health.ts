@@ -1,5 +1,5 @@
 import type { SshConnectionStatus } from './ssh-types'
-import type { RuntimeHostBlockedReason } from './runtime-host-status'
+import type { RuntimeHostBlockedReason } from './remote-runtime/host-status/runtime-host-status'
 
 export type ExecutionHostHealth =
   | 'local'
@@ -42,7 +42,11 @@ export function getExecutionHostHealthLabel(
     case 'connecting':
       return 'Connecting'
     case 'blocked':
-      return blockedReason === 'access-revoked' ? 'Re-pair needed' : 'Update needed'
+      return blockedReason === 'access-revoked'
+        ? 'Re-pair needed'
+        : blockedReason === 'server-replaced'
+          ? 'Different server'
+          : 'Update needed'
     case 'disconnected':
       return 'Disconnected'
     case 'error':

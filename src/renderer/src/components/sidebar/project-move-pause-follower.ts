@@ -7,8 +7,8 @@ import type { WorkspaceSleepNotice } from '../../../../shared/workspace-sleep'
 import { useAppStore } from '@/store'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
-import { workspaceSleepTarget } from './workspace-sleep-target'
-import { followWorkspaceSleep } from './workspace-sleep-follower'
+import { workspaceSleepTarget } from './workspace-actions/sleep/workspace-sleep-target'
+import { followWorkspaceSleep } from './workspace-actions/sleep/workspace-sleep-follower'
 
 type Pause = {
   worktreeIds: Set<string>

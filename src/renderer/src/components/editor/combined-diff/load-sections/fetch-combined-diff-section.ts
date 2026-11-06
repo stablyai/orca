@@ -7,8 +7,8 @@ import type { OpenFile } from '@/store/slices/editor'
 import type {
   GitBranchChangeEntry,
   GitDiffResult
-} from '../../../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+} from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { acquireCombinedDiffSectionOperation } from './combined-diff-section-connection'
 import { withDiffSectionLoadTimeout } from './combined-diff-section-load-timeout'
 
