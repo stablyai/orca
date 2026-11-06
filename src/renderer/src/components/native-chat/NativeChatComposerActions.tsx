@@ -1,6 +1,6 @@
 import { NativeChatComposerDraftNotSavedIcon } from './NativeChatComposerDraftNotSavedIcon'
 import { memo } from 'react'
-import { ArrowUp, Check, CornerDownRight, ListEnd, Mic, Plus, Save, Square } from 'lucide-react'
+import { ArrowUp, CornerDownRight, ListEnd, Mic, Plus, Save, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
@@ -11,10 +11,7 @@ import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
 } from '../../../../shared/native-chat/input/native-chat-session-options'
-import {
-  NativeChatInteractionModeButton,
-  useNativeChatInteractionMode
-} from './NativeChatInteractionModeToggle'
+import { NativeChatComposerPlanChip, useNativeChatPlanMode } from './NativeChatComposerPlanChip'
 import {
   NativeChatComposerToolbar,
   type NativeChatComposerControl
@@ -100,7 +97,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
   launchPrompt = false
 }: NativeChatComposerActionsProps): React.JSX.Element {
   useUiLanguageRevision()
-  const mode = useNativeChatInteractionMode({
+  const mode = useNativeChatPlanMode({
     surface: sessionOptionsSurface,
     snapshot: sessionOptionsSnapshot,
     focusComposer
@@ -266,33 +263,11 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
     ...(mode
       ? [
           {
-            id: 'mode',
+            id: 'plan',
             priority: 7,
-            content: <NativeChatInteractionModeButton control={mode} />,
+            content: <NativeChatComposerPlanChip control={mode} />,
             overflow: (close: () => void) => (
-              <div className="flex gap-1">
-                {(['default', 'plan'] as const).map((value) => (
-                  <Button
-                    key={value}
-                    type="button"
-                    variant="ghost"
-                    size="xs"
-                    aria-pressed={mode.plan === (value === 'plan')}
-                    disabled={mode.disabled}
-                    onClick={() => {
-                      mode.select(value)
-                      close()
-                    }}
-                  >
-                    {mode.plan === (value === 'plan') ? (
-                      <Check aria-hidden="true" className="size-3.5" />
-                    ) : null}
-                    {value === 'plan'
-                      ? translate('components.native-chat.composer.planMode', 'Plan')
-                      : translate('components.native-chat.composer.buildMode', 'Build')}
-                  </Button>
-                ))}
-              </div>
+              <NativeChatComposerPlanChip control={mode} onExit={close} />
             )
           }
         ]

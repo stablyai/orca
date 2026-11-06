@@ -53,7 +53,7 @@ it('keeps current mode, permissions and Goal reachable through overflow, includi
     const compact = this.closest('[data-compact]')?.getAttribute('data-compact') === 'true'
     const sizes: Record<string, [number, number]> = {
       attach: [32, 32],
-      mode: [56, 26],
+      plan: [56, 26],
       permissions: [112, 26],
       goal: [54, 24],
       model: [260, 26],
@@ -176,12 +176,12 @@ it('keeps current mode, permissions and Goal reachable through overflow, includi
   )
   fireEvent.click(screen.getByRole('button', { name: 'More chat controls' }))
   const partial = screen.getByRole('dialog')
-  const inlineMode = screen.getByRole('button', { name: 'Plan' })
+  const inlineMode = screen.getByRole('button', { name: 'Exit plan mode' })
   expect(partial.contains(inlineMode)).toBe(false)
   const menuPermission = within(partial).getByRole('button', { name: 'Permissions Full access' })
   menuPermission.focus()
   resize(1000)
-  expect(screen.getByRole('button', { name: 'Plan' })).toBe(inlineMode)
+  expect(screen.getByRole('button', { name: 'Exit plan mode' })).toBe(inlineMode)
   expect(within(partial).getByRole('button', { name: 'Permissions Full access' })).toBe(
     menuPermission
   )
@@ -202,19 +202,17 @@ it('keeps current mode, permissions and Goal reachable through overflow, includi
   resize(100)
   fireEvent.click(screen.getByRole('button', { name: 'More chat controls' }))
   const popup = screen.getByRole('dialog')
-  expect(within(popup).getByRole('button', { name: 'Plan' }).getAttribute('aria-pressed')).toBe(
-    'true'
+  await act(async () =>
+    fireEvent.click(within(popup).getByRole('button', { name: 'Exit plan mode' }))
   )
-  await act(async () => fireEvent.click(within(popup).getByRole('button', { name: 'Build' })))
   expect(setOption).toHaveBeenLastCalledWith('interactionMode', 'default')
   await waitFor(() =>
     expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Chat message' }))
   )
   fireEvent.click(screen.getByRole('button', { name: 'More chat controls' }))
-  expect(within(screen.getByRole('dialog')).getByRole('button', { name: 'Plan' })).toHaveProperty(
-    'disabled',
-    true
-  )
+  expect(
+    within(screen.getByRole('dialog')).getByRole('button', { name: 'Exit plan mode' })
+  ).toHaveProperty('disabled', true)
   await act(async () => settle())
   const permission = within(screen.getByRole('dialog')).getByRole('button', {
     name: 'Permissions Full access'
@@ -234,7 +232,7 @@ it('keeps current mode, permissions and Goal reachable through overflow, includi
   expect(buttons.slice(0, 4)).toEqual([
     'Attach file',
     'Permissions Full access',
-    'Plan',
+    'Exit plan mode',
     'Exit goal mode'
   ])
   expect(screen.queryByRole('button', { name: 'More chat controls' })).toBeNull()

@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { NativeChatInteractionModeToggle } from './NativeChatInteractionModeToggle'
+import { NativeChatComposerPlanChip, useNativeChatPlanMode } from './NativeChatComposerPlanChip'
 import type { SessionOptionsSurface } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { structuredAgentSessionInteractionDescriptor } from '../../../../shared/agent-session/options/agent-session-interaction-mode'
 import { createStructuredAgentSessionOptionState } from '../../../../shared/agent-session/options/structured-agent-session-options'
@@ -12,7 +12,11 @@ vi.mock('@/i18n/use-ui-language-revision', () => ({ useUiLanguageRevision: () =>
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 afterEach(cleanup)
 
-it('writes an absolute Plan or Build choice, keeps a failed choice unchanged, and returns composer focus', async () => {
+function PlanChip(props: Parameters<typeof useNativeChatPlanMode>[0]) {
+  return <NativeChatComposerPlanChip control={useNativeChatPlanMode(props)} />
+}
+
+it('shows only active Plan, exits with an absolute Build choice, and retains Plan after a failed exit', async () => {
   const descriptor = structuredAgentSessionInteractionDescriptor({
     ...createStructuredAgentSessionOptionState('codex', null),
     interactionModeSupported: true
@@ -28,33 +32,26 @@ it('writes an absolute Plan or Build choice, keeps a failed choice unchanged, an
     subscribe: () => () => {}
   }
   const focus = vi.fn()
-  const view = render(
+  const renderChip = (snapshot: (typeof descriptor)[]) => (
     <TooltipProvider>
-      <NativeChatInteractionModeToggle
-        surface={surface}
-        snapshot={[descriptor]}
-        focusComposer={focus}
-      />
+      <PlanChip surface={surface} snapshot={snapshot} focusComposer={focus} />
     </TooltipProvider>
   )
-  await act(async () => fireEvent.click(screen.getByRole('button', { pressed: false })))
-  expect(setOption).toHaveBeenLastCalledWith('interactionMode', 'plan')
-  expect(screen.getByRole('button', { pressed: false })).toHaveProperty('disabled', false)
-  expect(focus).toHaveBeenCalledOnce()
-  view.rerender(
-    <TooltipProvider>
-      <NativeChatInteractionModeToggle
-        surface={surface}
-        snapshot={[{ ...descriptor, kind: { type: 'select', currentValue: 'plan', choices: [] } }]}
-      />
-    </TooltipProvider>
-  )
-  await act(async () => fireEvent.click(screen.getByRole('button', { pressed: true })))
+  const view = render(renderChip([descriptor]))
+  expect(screen.queryByRole('button')).toBeNull()
+  const plan = {
+    ...descriptor,
+    kind: { type: 'select' as const, currentValue: 'plan', choices: [] }
+  }
+  view.rerender(renderChip([plan]))
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Exit plan mode' })))
   expect(setOption).toHaveBeenLastCalledWith('interactionMode', 'default')
-  view.rerender(
-    <TooltipProvider>
-      <NativeChatInteractionModeToggle surface={surface} snapshot={[]} />
-    </TooltipProvider>
-  )
+  expect(screen.getByRole('button', { name: 'Exit plan mode' })).toHaveProperty('disabled', false)
+  expect(focus).toHaveBeenCalledOnce()
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Exit plan mode' })))
+  expect(setOption).toHaveBeenLastCalledWith('interactionMode', 'default')
+  view.rerender(renderChip([descriptor]))
+  expect(screen.queryByRole('button')).toBeNull()
+  view.rerender(renderChip([]))
   expect(screen.queryByRole('button')).toBeNull()
 })

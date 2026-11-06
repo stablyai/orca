@@ -19886,7 +19886,7 @@
         "buildMode": "Build",
         "planMode": "Plan",
         "moreControls": "More chat controls",
-        "modeNextTurn": "Applies to the next turn",
+        "exitPlanMode": "Exit plan mode",
         "alternateSteerHint": "{{shortcut}} to steer",
         "previewQueue": "Queue",
         "previewSteer": "Steer",
