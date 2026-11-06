@@ -10,7 +10,7 @@ import {
   reopenTopologyStore
 } from '../../../persistence/terminal-topology/terminal-topology-profile-fixture'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 import { TERMINAL_QUERY_METHODS } from '../../rpc/methods/terminal/terminal-query-methods'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))

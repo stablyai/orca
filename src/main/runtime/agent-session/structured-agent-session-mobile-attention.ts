@@ -23,7 +23,7 @@ import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { isNotificationSourceEnabled } from '../../../shared/notification-source-gate'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { buildNotificationOptions } from '../../ipc/notification-options'
-import type { MobileNotificationDispatchEvent } from '../runtime-mobile-notification-controller'
+import type { MobileNotificationDispatchEvent } from '../push/notifications/runtime-mobile-notification-controller'
 import type { RuntimeStore } from '../runtime-store-contract'
 import { getRuntimeDesktopSurface } from '../runtime-desktop-surface'
 

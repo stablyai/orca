@@ -8,14 +8,14 @@ import {
   type PasteTerminalTextDetail
 } from '@/constants/terminal'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport-types'
+import type { PtyTransport } from './pty-transport/pty-transport-types'
 import type { IDisposable } from '@xterm/xterm'
 import { handleFocusTerminalPaneDetail } from './focus-terminal-pane-event'
 import { surfaceStaleAgentRow } from './stale-agent-row'
 import { useAppStore } from '@/store'
 import { useTerminalScrollVisibilityMemory } from './use-terminal-scroll-visibility-memory'
-import { useTerminalContainerFitSync } from './use-terminal-container-fit-sync'
-import { handleTerminalProgrammaticTextPaste } from './terminal-programmatic-text-paste'
+import { useTerminalContainerFitSync } from './viewport/use-terminal-container-fit-sync'
+import { handleTerminalProgrammaticTextPaste } from './input/paste/terminal-programmatic-text-paste'
 import {
   hideTerminalVisibility,
   resumeTerminalVisibility,
@@ -25,7 +25,7 @@ import { useTerminalWindowWakeRecovery } from './use-terminal-window-wake-recove
 import {
   releaseRendererPtyVisibilityClaim,
   setRendererPtyVisibilityClaim
-} from './pty-renderer-delivery-claims'
+} from './pty-transport/delivery/pty-renderer-delivery-claims'
 import { activePaneIsCoveredByNativeChat } from './native-chat-covered-pane'
 
 type UseTerminalPaneGlobalEffectsArgs = {
@@ -259,11 +259,15 @@ export function useTerminalPaneGlobalEffects({
         manager: managerRef.current,
         acknowledgeAgents: (paneKeys) => useAppStore.getState().acknowledgeAgents(paneKeys),
         surfaceStaleAgentRow,
-        scrollToBottomIfOutputSinceLastView: scheduleFollowOutputIfNeeded
+        scrollToBottomIfOutputSinceLastView: scheduleFollowOutputIfNeeded,
+        expandedLeafId: useAppStore.getState().terminalLayoutsByTabId[tabId]?.expandedLeafId,
+        toggleExpandPane
       })
     }
     window.addEventListener(FOCUS_TERMINAL_PANE_EVENT, onFocusPane)
     return () => window.removeEventListener(FOCUS_TERMINAL_PANE_EVENT, onFocusPane)
+    // toggleExpandPane only reads refs, like the expand listener above, so it is not re-subscribed on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabId, managerRef, scheduleFollowOutputIfNeeded])
 
   useEffect(() => {

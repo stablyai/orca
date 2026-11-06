@@ -13,10 +13,8 @@ import {
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { useAppStore } from '@/store'
 import { useAgentPickerRefusedWake } from './use-agent-picker-refused-wake'
-import {
-  buildAgentLaunchRouteInput,
-  workspaceKindForWorktreeId
-} from '@/lib/agent-launch-route-input'
+import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
 import { useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import {
@@ -41,7 +39,7 @@ import { readChatProgram } from '@/lib/host-chat-program'
 import { resolveAgentMenuSelection } from '@/lib/agent-menu-selection'
 import { useHostAgentMenuSettings } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
+import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 
 /** `detectionTarget` is the workspace's agent-inventory host, resolved by the caller. */
 export function useNewTabAgentMenuRows(
@@ -226,10 +224,13 @@ export function useAgentMenuObservation(
     if (!roster || !['yes', 'not-yet-known', 'not-on-host'].includes(preliminary)) {
       return preliminary
     }
-    const verdict =
-      availability?.state === 'received' ? availability.byAgent.get(agent)?.state : undefined
+    const published =
+      availability?.state === 'received' ? availability.byAgent.get(agent) : undefined
+    if (published?.state === 'refused' && published.reason === 'windows') {
+      return 'windows'
+    }
     // Missing/refused published availability overrides a preliminary route that would otherwise allow launch.
-    return !verdict || verdict === 'refused' ? 'not-on-host' : preliminary
+    return !published || published.state === 'refused' ? 'not-on-host' : preliminary
   }
   const executionHostId = unresolvedTarget
     ? undefined

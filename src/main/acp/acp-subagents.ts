@@ -9,7 +9,7 @@ import type {
 import { AGENT_CHILD_WORK_ID_MAX_LENGTH } from '../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import { MAX_SUBAGENT_FIELD_CHARS } from '../../shared/native-chat/transcript/native-chat-subagent-summary'
 import type { NativeChatSubagentState } from '../../shared/native-chat/native-chat-types'
-import { boundSubagentLabel } from '../native-chat/agent-session-journal/journal-subagent-item'
+import { boundSubagentLabel } from '../native-chat/agent-session-journal/item-lifecycle/journal-subagent-item'
 import type { ProviderTimelineJoin } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import type { AcpSubagentUpdate } from './acp-dialects/acp-dialect'
 import type { AcpTimelineEvent } from './acp-timeline-event'
@@ -54,6 +54,15 @@ export class AcpSubagents {
 
   drainEvidence(): AgentChildWorkEvidence[] {
     return this.pending.splice(0)
+  }
+
+  reconcile(
+    id: string,
+    state: NativeChatSubagentState,
+    thread: string,
+    at: number
+  ): AcpTimelineEvent[] {
+    return this.translate([{ id, state, knownOnly: true }], { thread }, at)
   }
 
   translate(

@@ -2,7 +2,7 @@ import { useAppStore } from '@/store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { createFloatingWorkspaceTerminalTab } from '@/lib/floating-workspace-tab-creation'
 import { revealFloatingWorkspacePanel } from '@/lib/floating-workspace-panel-reveal'
-import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 
 /** Opens a new terminal where this tab lives; a new terminal's shell has Orca's agent functions. */
 export function openTerminalBesideTab(terminalTabId: string): boolean {

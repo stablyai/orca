@@ -5,6 +5,7 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileLoadErrorState } from '../components/MobileStateView'
 import { MobileNativeChatImageViewer } from '../session/native-chat/visual/MobileNativeChatImageViewer'
+import { MobileImageViewerActions } from '../session/native-chat/visual/MobileImageViewerActions'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
 import { loadMarkdownPreviewImage } from './mobile-markdown-image-source'
 import { translate } from '../i18n/mobile-i18n'
@@ -99,6 +100,7 @@ export function MobileMarkdownPreviewImage({ client, worktreeId, documentPath, h
         <MobileNativeChatImageViewer
           uri={load.uri}
           label={alt || t('files.markdownPreviewImage.imageLabel', 'Markdown image')}
+          actions={MobileImageViewerActions}
           onClose={() => setExpanded(false)}
         />
       ) : null}

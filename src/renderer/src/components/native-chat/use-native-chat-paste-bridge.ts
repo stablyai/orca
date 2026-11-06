@@ -5,11 +5,10 @@ import { toast } from 'sonner'
 import { isEditableTarget } from '@/lib/editable-target'
 import {
   NativeChatPasteRequest,
-  findNativeChatAnswerField,
   findNativeChatPasteField,
   nativeChatPasteUnavailableNotice,
   NATIVE_CHAT_PASTE_REQUEST_EVENT
-} from '@/lib/native-chat-paste-request'
+} from '@/components/native-chat/paste/native-chat-paste-request'
 import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { pasteTextIntoTextControl, TEXT_CONTROL_PASTE_MAX_BYTES } from '@/lib/text-control-paste'
@@ -44,18 +43,9 @@ export function useNativeChatPasteBridge({
   rootRef,
   composerRef,
   questionAnswerInputRef
-}: NativeChatPasteBridgeRefs): (origin?: HTMLTextAreaElement | HTMLInputElement) => void {
+}: NativeChatPasteBridgeRefs): (origin?: HTMLTextAreaElement) => void {
   const pasteClipboardIntoComposer = useCallback(
-    (
-      origin?: HTMLTextAreaElement | HTMLInputElement,
-      mode: 'paste' | 'paste-and-match-style' = 'paste'
-    ) => {
-      if (origin instanceof HTMLInputElement) {
-        if (findNativeChatAnswerField(origin, rootRef.current) === origin) {
-          pasteClipboardTextInto(origin, () => origin.isConnected)
-        }
-        return
-      }
+    (origin?: HTMLTextAreaElement, mode: 'paste' | 'paste-and-match-style' = 'paste') => {
       if (origin) {
         if (findNativeChatPasteField(origin, rootRef.current) === origin) {
           origin.focus({ preventScroll: true })

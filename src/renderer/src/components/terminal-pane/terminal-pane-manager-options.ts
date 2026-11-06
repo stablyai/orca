@@ -16,11 +16,11 @@ import {
 import { buildFontFamily } from '@/lib/monospace-font-family'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
 import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-keyboard-protocol'
-import { resolvePaneKeyboardProtocolAgent } from './terminal-keyboard-protocol-pane-agent'
+import { resolvePaneKeyboardProtocolAgent } from './input/keyboard/terminal-keyboard-protocol-pane-agent'
 import { UNRESOLVED_OWNER_HOST_ID } from '../../../../shared/execution-host'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { acquireWebviewsDragPassthrough } from '../browser-pane/host-guest/webview-registry'
-import { handleTerminalWebLinkClick } from './terminal-web-link-click'
+import { handleTerminalWebLinkClick } from './links/http/terminal-web-link-click'
 import { createTerminalPaneCreatedHandler } from './terminal-pane-pane-created'
 import { createTerminalPaneClosedHandler } from './terminal-pane-pane-closed'
 import {

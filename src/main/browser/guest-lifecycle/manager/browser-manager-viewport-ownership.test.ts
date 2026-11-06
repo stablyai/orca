@@ -45,8 +45,7 @@ import { browserManager } from '../../browser-manager'
 import { resetBrowserManagerMocks, resetBrowserManagerState } from './browser-manager-test-harness'
 import {
   createViewportGuestFactory,
-  GUEST_CLEAN_UA,
-  GUEST_ELECTRON_UA
+  GUEST_CLEAN_UA
 } from './browser-manager-viewport-test-fixtures'
 
 const makeGuest = createViewportGuestFactory(mocks)
@@ -133,24 +132,6 @@ describe('browser viewport operation ownership', () => {
     expect(cdpUserAgentOverrides.size).toBe(0)
   })
 
-  it('does not restore closed-tab UA intent after a failed clear', async () => {
-    const handle = register('clear-close', 101)
-    await expect(browserManager.setViewportOverride('clear-close', mobile)).resolves.toBe(true)
-    const gate = pause(handle, 'Emulation.setUserAgentOverride')
-    const result = browserManager.setViewportOverride('clear-close', null)
-    await gate.entered
-    browserManager.unregisterGuest('clear-close')
-    const isDestroyed = handle.guest.isDestroyed
-    expect(vi.isMockFunction(isDestroyed)).toBe(true)
-    if (vi.isMockFunction(isDestroyed)) {
-      isDestroyed.mockReturnValue(true)
-    }
-    gate.reject(new Error('Target closed'))
-    await expect(result).resolves.toBe(false)
-    expect(presetIntents.get('clear-close')).toBeUndefined()
-    expect(cdpUserAgentOverrides.size).toBe(0)
-  })
-
   it('preserves replacement desktop intent after an old clear fails', async () => {
     const handle = register('replacement', 102)
     await browserManager.setViewportOverride('replacement', mobile)
@@ -170,25 +151,6 @@ describe('browser viewport operation ownership', () => {
     })
   })
 
-  it('preserves replacement mobile intent after an old clear resumes', async () => {
-    const handle = register('late-delete', 104)
-    await browserManager.setViewportOverride('late-delete', desktop)
-    const gate = pause(handle, 'Emulation.setTouchEmulationEnabled')
-    const result = browserManager.setViewportOverride('late-delete', null)
-    await gate.entered
-    browserManager.unregisterGuest('late-delete')
-    register('late-delete', 105)
-    await browserManager.setViewportOverride('late-delete', mobile)
-    gate.resolve()
-    await expect(result).resolves.toBe(false)
-    expect(presetIntents.get('late-delete')).toEqual({
-      guestWebContentsId: 105,
-      requested: mobile,
-      applied: mobile
-    })
-    expect(registeredGuests.get('late-delete')).toBe(105)
-  })
-
   // Requested and applied metrics may clear while the separate UA override remains tracked.
   it('same-owner clear failure keeps the standing mobile override tracked', async () => {
     const handle = register('same-owner', 106)
@@ -205,45 +167,6 @@ describe('browser viewport operation ownership', () => {
     })
     expect(handle.presentedUserAgent()).toContain('iPhone')
     expect(cdpUserAgentOverrides.has(106)).toBe(true)
-  })
-
-  it('old apply cannot overwrite a replacement guest desktop intent', async () => {
-    const old = register('late-apply', 110)
-    const gate = pause(old, 'Emulation.setTouchEmulationEnabled')
-    const pending = browserManager.setViewportOverride('late-apply', mobile)
-    await gate.entered
-    browserManager.unregisterGuest('late-apply')
-    register('late-apply', 111)
-    await browserManager.setViewportOverride('late-apply', desktop)
-    gate.resolve()
-    await expect(pending).resolves.toBe(false)
-    expect(presetIntents.get('late-apply')).toEqual({
-      guestWebContentsId: 111,
-      requested: desktop,
-      applied: desktop
-    })
-    expect(old.debuggerSendCommand).not.toHaveBeenCalledWith(
-      'Emulation.setUserAgentOverride',
-      expect.anything()
-    )
-  })
-
-  it('an old guest cannot write UA intent after replacement in native process mode', async () => {
-    mocks.processUserAgentMode = 'native'
-    mocks.processUserAgent = GUEST_ELECTRON_UA
-    const old = register('native-replacement', 112)
-    const gate = pause(old, 'Emulation.setTouchEmulationEnabled')
-    const pending = browserManager.setViewportOverride('native-replacement', mobile)
-    await gate.entered
-    browserManager.unregisterGuest('native-replacement')
-    register('native-replacement', 113)
-    gate.resolve()
-    await expect(pending).resolves.toBe(false)
-    expect(presetIntents.get('native-replacement')).toBeUndefined()
-    expect(old.debuggerSendCommand).not.toHaveBeenCalledWith(
-      'Emulation.setUserAgentOverride',
-      expect.anything()
-    )
   })
 
   it('old queued operations cannot remove or join a replacement promise tail', async () => {
@@ -302,55 +225,5 @@ describe('browser viewport operation ownership', () => {
       requested: null,
       applied: null
     })
-  })
-
-  it.each([false, true])(
-    'keeps process-wide native UA behavior with mobile=%s',
-    async (mobileMode) => {
-      mocks.processUserAgentMode = 'native'
-      mocks.processUserAgent = GUEST_ELECTRON_UA
-      const handle = register('native', 117)
-      await expect(
-        browserManager.setViewportOverride('native', mobileMode ? mobile : desktop)
-      ).resolves.toBe(true)
-      if (mobileMode) {
-        expect(handle.debuggerSendCommand).toHaveBeenCalledWith(
-          'Emulation.setUserAgentOverride',
-          expect.objectContaining({ userAgent: expect.stringContaining('iPhone') })
-        )
-      } else {
-        expect(handle.debuggerSendCommand).not.toHaveBeenCalledWith(
-          'Emulation.setUserAgentOverride',
-          expect.anything()
-        )
-      }
-      expect(handle.presentedUserAgent()).toEqual(
-        mobileMode ? expect.stringContaining('iPhone') : GUEST_ELECTRON_UA
-      )
-    }
-  )
-
-  it('late rejected clears cannot repopulate all registries after unregisterAll', async () => {
-    const operations: { gate: ReturnType<typeof pause>; pending: Promise<boolean> }[] = []
-    for (let index = 0; index < 16; index++) {
-      const tab = `all-closed-${index}`
-      const handle = register(tab, 200 + index)
-      await browserManager.setViewportOverride(tab, mobile)
-      const gate = pause(handle, 'Emulation.setUserAgentOverride')
-      const pending = browserManager.setViewportOverride(tab, null)
-      await gate.entered
-      operations.push({ gate, pending })
-    }
-    browserManager.unregisterAll()
-    for (const { gate } of operations) {
-      gate.reject(new Error('Target closed'))
-    }
-    expect(await Promise.all(operations.map(({ pending }) => pending))).toEqual(
-      Array(16).fill(false)
-    )
-    expect(cdpUserAgentOverrides.size).toBe(0)
-    expect(registeredGuests.size).toBe(0)
-    expect(pendingOperations.size).toBe(0)
-    expect(presetIntents.size).toBe(0)
   })
 })

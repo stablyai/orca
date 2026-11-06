@@ -4,26 +4,31 @@ import {
   type OrcadMigrationManifest
 } from '../../shared/orcad-migration/orcad-migration-manifest'
 import type { OrcadMigrationSourceCutover } from '../../shared/orcad-migration/orcad-migration-source-cutover'
-import { createOrcadMigrationManifest } from './orcad-migration-manifest-export'
+import {
+  exportOrcadMigrationManifest,
+  type OrcadMigrationExportedBlob
+} from './orcad-migration-manifest-export'
 import { resolveOrcadMigrationFence } from './orcad-migration-source-fence'
 import { confirmOrcadMigrationTerminalsUnderFence } from './orcad-migration-terminal-gate'
 import { collectUntransferredDependentBlockers } from './targets/ssh-target-orcad-dependents'
 import type { OrcadMigrationPreflightStore } from './targets/ssh-target-orcad-preflight'
 
+/** Returns the re-read bytes of the blobs the journaled manifest names; unchanged source proves them. */
 export function assertOrcadMigrationSourceUnchanged(
   context: { userDataPath: string; store: OrcadMigrationPreflightStore },
   cutover: OrcadMigrationSourceCutover
-): void {
+): OrcadMigrationExportedBlob[] {
   const target = context.store.getSshTarget(cutover.sshTargetId)
   const fence = target ? resolveOrcadMigrationFence(context.userDataPath, target) : null
   if (!target || fence?.state !== 'fenced' || fence.cutover.migrationId !== cutover.migrationId) {
     throw new Error('orcad_migration_source_fence_lost')
   }
   // Re-export with journaled identity/time/destination so only source changes affect comparison.
-  const current = createOrcadMigrationManifest(context.store, target, {
+  const { manifest: current, blobs } = exportOrcadMigrationManifest(context.store, target, {
     migrationId: cutover.migrationId,
     destinationEnvironmentId: cutover.destinationEnvironmentId,
-    now: () => new Date(cutover.manifest.createdAt)
+    now: () => new Date(cutover.manifest.createdAt),
+    inlineAutomationRuns: cutover.manifest.payload.dormantState?.automationRuns !== undefined
   })
   if (frozenSourceDigest(current) !== frozenSourceDigest(cutover.manifest)) {
     throw new Error('orcad_migration_source_changed')
@@ -46,6 +51,7 @@ export function assertOrcadMigrationSourceUnchanged(
   if (terminals.verdict === 'live' || terminals.verdict === 'unverifiable') {
     throw new Error(`orcad_migration_source_terminals_${terminals.verdict}`)
   }
+  return blobs
 }
 
 /** Ignore mutable UI layout/focus/routing: the destination gets the journaled view, and tab churn must not invalidate migration. */

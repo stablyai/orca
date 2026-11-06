@@ -20,19 +20,27 @@ import { codexAiVaultSessionResumePreparation } from '../codex/history/resume/co
 import { prepareCodexPinnedLaunchHome } from './codex-session-resume-launch'
 import { resolveHostCodexSessionSourceHome } from '../codex/history/rollouts/codex-session-source-home'
 import { agentHookRuntimeDeps } from '../agent-hooks/agent-hook-runtime-deps'
-import { getDaemonProvider } from '../daemon/daemon-provider-state'
+import { getDaemonProvider } from '../daemon/providers/lifecycle/daemon-provider-state'
 import type { TerminalSideEffectBatch } from '../../shared/terminal/output/terminal-side-effect-facts'
 import { resolveTuiAgentLaunchEnv } from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 import { createOrchestrationEnvironmentTransport } from '../ipc/runtime-environments/orchestration-environment-transport'
 import { mainProcessState as state } from './main-process-state'
 import { suspendEphemeralVmWorkspace } from '../ephemeral-vm/workspace-suspend'
+import {
+  acceptEphemeralVmWorkspaceWake,
+  resumeEphemeralVmWorkspace
+} from '../ephemeral-vm/workspace-resume'
+import { registerRecipeVmWaker } from '../runtime/recipe-vm-waker-registry'
+import { openRecipeVmEnvironment } from '../ipc/runtime-environments/runtime-environment-recipe-vm-wake'
+import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
+import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
 import { installWslOrcadAccountShim } from './wsl-orcad-account-env-wiring'
 import {
   codexStructuredLaunchHomeResolvers,
   prepareCodexRuntimeHomeForLaunch
 } from './codex-launch-preparation'
-import { resolveHostAgentBaseEnvironment } from '../runtime/structured-agent-shell-environment'
+import { resolveHostAgentBaseEnvironment } from '../runtime/agent-session/environment/structured-agent-shell-environment'
 import type { RuntimeDesktopWindowStatus } from '../../shared/runtime-types'
 import { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
 import { SkillCloudService } from '../skills/skill-cloud-service'
@@ -45,7 +53,7 @@ import { startAgentStateRulesLiveUpdates } from '../runtime/agent-state-rules/ag
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { getRuntimeEnvironmentRegistryRoot } from '../ipc/runtime-environments/runtime-environment-registry-root'
-import { openOffscreenBrowserPageLink } from '../runtime/browser/offscreen-browser-page-link'
+import { openOffscreenBrowserPageLink } from '../runtime/browser/commands/offscreen-browser-page-link'
 
 export function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
   const activation = state.desktopActivationGate
@@ -116,7 +124,11 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
           params,
           timeoutMs
         ),
-      suspendVm: (workspaceId) => suspendEphemeralVmWorkspace(store, workspaceId)
+      ownsVm: (workspaceId) =>
+        findWorkspaceEphemeralVmRuntime(app.getPath('userData'), workspaceId) !== undefined,
+      suspendVm: (workspaceId) => suspendEphemeralVmWorkspace(store, workspaceId),
+      acceptWake: (workspaceId) => acceptEphemeralVmWorkspaceWake(workspaceId),
+      resumeVm: (workspaceId, request) => resumeEphemeralVmWorkspace(store, workspaceId, request)
     },
     // Paired/local settings writes must reconcile the scanner child through the same path.
     applySessionSearchSettings: applySessionSearchSettingsChange,
@@ -135,6 +147,17 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     recordDurableCrashBreadcrumb('agent_state_rules_active', rules)
   )
   state.runtime = runtime
+  // Opening a recipe VM's workspace from a client wakes the VM through the runtime's one owner.
+  registerRecipeVmWaker({
+    state: (workspaceId, suspended) => runtime.workspaceVmState(workspaceId, suspended),
+    noteOpened: (workspaceId) => runtime.noteWorkspaceReopened(workspaceId),
+    holdOpen: (workspaceId, suspended, timeoutMs, signal) =>
+      runtime.holdWorkspaceVmOpen(workspaceId, suspended, timeoutMs, signal),
+    openEnvironment: (selector) => {
+      const root = getRuntimeEnvironmentRegistryRoot()
+      return openRecipeVmEnvironment(root, resolveEnvironment(root, selector))
+    }
+  })
   runtime.attachAgentStatusStore(agentHookServer)
   agentHookServer.subscribeEnrichedStatus((enriched) =>
     recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched, runtime)

@@ -227,8 +227,13 @@ function EditorPanelInner({
   if (!activeFile) {
     return null
   }
+  // Why: a copy its source can't save back, such as a file larger than its grant saves, shows as read-only.
+  const viewedFile =
+    fileContents[activeFile.id]?.readOnly && !activeFile.readOnly
+      ? { ...activeFile, readOnly: true }
+      : activeFile
   const model = getEditorPanelRenderModel({
-    activeFile,
+    activeFile: viewedFile,
     fileContents,
     editorDrafts,
     gitStatusEntries,
@@ -353,7 +358,7 @@ function EditorPanelInner({
       <DiffNavigationProvider>
         <EditorPanelShell
           panelRef={setPanelRef}
-          activeFile={activeFile}
+          activeFile={viewedFile}
           activeViewStateId={activeViewStateId}
           model={model}
           copiedPathVisible={copiedPathToast?.fileId === activeFile.id}

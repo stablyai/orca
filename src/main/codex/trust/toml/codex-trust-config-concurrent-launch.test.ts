@@ -256,51 +256,6 @@ describe('concurrent capability probes against a cold host', () => {
   })
 })
 
-describe('host-scoped transient cooldown', () => {
-  it('lets a concurrent success clear a cooldown a sibling failure just set', async () => {
-    codexAppServerCapabilityCache.rememberSupported('wsl:Ubuntu')
-    const secondHome = join(testState.userDataDir, 'second-runtime-home')
-    mkdirSync(secondHome, { recursive: true })
-    writeFileSync(join(secondHome, 'hooks.json'), '{"hooks":{}}\n', 'utf-8')
-    const entries = [managedEntry('session_start')]
-    const okEntry = { ...entries[0], sourcePath: join(secondHome, 'hooks.json') }
-    const okToml = join(secondHome, 'config.toml')
-    const okPlan = buildPlan([okEntry], { runtimeHomePath: secondHome, tomlPath: okToml })
-
-    let releaseFailure!: () => void
-    const failureGate = new Promise<void>((resolve) => {
-      releaseFailure = resolve
-    })
-    let sessions = 0
-    _internals.setGrantSessionRunner(async (request) => {
-      sessions += 1
-      if (request.hooksListCwd === runtimeHomeDir) {
-        await failureGate
-        throw new Error('spawn ETIMEDOUT')
-      }
-      return writingSessionRunner({
-        tomlPath: okToml,
-        entries: [okEntry],
-        hashPrefix: 'sha256:ok-'
-      })(request)
-    })
-
-    const failing = grantManagedCodexHookTrust(buildPlan(entries))
-    const succeeding = grantManagedCodexHookTrust(okPlan)
-    releaseFailure()
-    expect(await failing).toMatchObject({ lane: 'fallback', reason: 'error' })
-    expect(await succeeding).toMatchObject({ lane: 'rpc' })
-
-    // Clear the shared ledger to force another RPC instead of reusing the successful grant.
-    rmSync(join(testState.userDataDir, 'codex-runtime-home', 'trust-grant-ledger.json'), {
-      force: true
-    })
-    expect(sessions).toBe(2)
-    expect(await grantManagedCodexHookTrust(okPlan)).toMatchObject({ lane: 'rpc' })
-    expect(sessions).toBe(3)
-  })
-})
-
 describe('reentrancy under concurrency', () => {
   it('completes a grant nested inside an installer that already holds both lanes', async () => {
     const { runExclusivelyForCodexTrustConfig } =

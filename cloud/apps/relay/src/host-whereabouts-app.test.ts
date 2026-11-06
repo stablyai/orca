@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
+import type * as AdminTokenVerifier from './authentication/admin-token-verifier.js'
 import type { HostWhereaboutsRow } from './assignment/assignment-store.js'
 import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import type { RelayConfig } from './config.js'
-import { openInMemoryRelayDatabase } from './database.js'
-import { ShadowSeatDirectory } from './shadow-seat-directory.js'
+import { openInMemoryRelayDatabase } from './database/database.js'
+import { ShadowSeatDirectory } from './cell/seats/shadow-seat-directory.js'
 
-vi.mock('./admin-token-verifier.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./admin-token-verifier.js')>()
+vi.mock('./authentication/admin-token-verifier.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof AdminTokenVerifier>()
   const identities = new Map<string, Parameters<typeof actual.relayAdminIdentityMayAccess>[0]>([
     ['deploy-token', 'deploy'],
     ['monitor-token', 'monitor'],
@@ -29,7 +30,7 @@ vi.mock('./admin-token-verifier.js', async (importOriginal) => {
   }
 })
 
-vi.mock('./relay-token-verifier.js', () => ({
+vi.mock('./authentication/relay-token-verifier.js', () => ({
   createRelayTokenVerifier: () => async () => null,
   readBearer: (value: string | undefined) => value?.replace(/^Bearer /, '') ?? null
 }))

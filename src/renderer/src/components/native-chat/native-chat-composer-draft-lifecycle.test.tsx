@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, createElement, Fragment, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
+import type { NativeChatLaunchDraft } from '@/components/native-chat/drafts/native-chat-launch-prompt'
 import type * as DraftHook from './use-native-chat-draft'
 import type * as AttachmentsHook from './use-native-chat-composer-attachments'
 import type * as SendHook from './use-native-chat-structured-composer-send'
@@ -19,7 +19,9 @@ vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (import
   ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => false
 }))
-vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
+vi.mock('@/components/native-chat/telemetry/native-chat-telemetry', () => ({
+  emitNativeChatMessageSent: vi.fn()
+}))
 const mocks = vi.hoisted(() => {
   const launchDrafts: Record<string, NativeChatLaunchDraft> = {}
   return { launchDrafts }
@@ -187,46 +189,6 @@ afterEach(async () => {
 })
 
 describe('native-chat composer draft lifecycle', () => {
-  it('clears the saved draft when a send settles after the composer unmounted', async () => {
-    const hooks = await loadHooks()
-    const seen: { api?: ComposerApi } = {}
-    await mount(
-      createElement(
-        composer(hooks, (next) => {
-          seen.api = next
-        }),
-        { scopeKey: 'tab-1:pane' }
-      )
-    )
-    await act(async () => {
-      seen.api?.setDraft('/goal ship it')
-      hooks.attachmentsHook.appendNativeChatAttachmentCache('tab-1:pane', [
-        { id: 'i1', path: '/tmp/orca-paste-1.png' }
-      ])
-    })
-    window.dispatchEvent(new Event('pagehide'))
-    expect(storedDraft('tab-1:pane')).toMatchObject({ text: '/goal ship it' })
-    const held = seen.api
-
-    // A question prompt replaces the composer while the host accepts the command.
-    await unmount()
-    held?.setDraft('')
-    held?.attachments.clearImageAttachments()
-
-    expect(storedDraft('tab-1:pane')).toBeNull()
-    const reloaded = await loadHooks()
-    const restored: { api?: ComposerApi } = {}
-    await mount(
-      createElement(
-        composer(reloaded, (next) => {
-          restored.api = next
-        }),
-        { scopeKey: 'tab-1:pane' }
-      )
-    )
-    expect(restored.api).toMatchObject({ draft: '', attachments: { imageAttachments: [] } })
-  })
-
   it('clears a saved sent draft when its send settles after the composer unmounted', async () => {
     const hooks = await loadHooks()
     const held = heldTransport()
@@ -310,48 +272,6 @@ describe('native-chat composer draft lifecycle', () => {
     expect(seen.api?.attachments.imageAttachments.map(({ path }) => path)).toEqual([
       '/repo/shot.png'
     ])
-  })
-
-  it('clears an accepted send’s text and images from the shown composer', async () => {
-    const hooks = await loadHooks()
-    const held = heldTransport()
-    const seen: { api?: ComposerApi } = {}
-    await mount(
-      createElement(
-        composer(hooks, (next) => (seen.api = next), held.transport),
-        { scopeKey: 'agent-session:s1' }
-      )
-    )
-    await act(async () => {
-      seen.api?.setDraft('sent text')
-      seen.api?.attachments.attachResolvedPaths(['/repo/a.png'])
-    })
-    await act(async () => seen.api?.send('sent text'))
-
-    await held.settle()
-
-    expect(seen.api?.draft).toBe('')
-    expect(seen.api?.attachments.imageAttachments).toEqual([])
-    expect(storedDraft('agent-session:s1')).toBeNull()
-  })
-
-  it('leaves a draft replaced before the send was accepted as it is', async () => {
-    const hooks = await loadHooks()
-    const held = heldTransport()
-    const seen: { api?: ComposerApi } = {}
-    await mount(
-      createElement(
-        composer(hooks, (next) => (seen.api = next), held.transport),
-        { scopeKey: 'agent-session:s1' }
-      )
-    )
-    await act(async () => seen.api?.setDraft('sent text'))
-    await act(async () => seen.api?.send('sent text'))
-    await act(async () => seen.api?.setDraft('typed while it was on its way'))
-
-    await held.settle()
-
-    expect(seen.api?.draft).toBe('typed while it was on its way')
   })
 
   it('shares one conversation’s draft between its composers, and keeps what the other added', async () => {

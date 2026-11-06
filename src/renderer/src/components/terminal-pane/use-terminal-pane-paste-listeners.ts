@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
-import { createTerminalPanePasteExecution } from './terminal-pane-paste-execution'
-import { registerTerminalPanePasteListeners } from './terminal-pane-paste-listeners'
+import { createTerminalPanePasteExecution } from './input/paste/terminal-pane-paste-execution'
+import { registerTerminalPanePasteListeners } from './input/paste/terminal-pane-paste-listeners'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
 
 export function useTerminalPanePasteListeners(controller: TerminalPaneCloseController): void {

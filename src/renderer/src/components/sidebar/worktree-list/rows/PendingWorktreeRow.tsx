@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import {
   getCreationProgressLabel,
   type PendingWorktreeCreation
-} from '@/lib/pending-worktree-creation'
+} from '@/lib/workspace/creation/pending-worktree-creation'
 import { translate } from '@/i18n/i18n'
 
 function statusLabel(entry: PendingWorktreeCreation): string {

@@ -47,7 +47,7 @@ export function describeSharedDropSkipReason(
 // Ordered: a manual disconnect also reads as a lost connection, and "too large" as a write failure.
 const FAILURE_CATEGORIES: readonly { matches: RegExp; key: string; fallback: string }[] = [
   {
-    matches: /manually disconnected/i,
+    matches: /manually disconnected|reconnect on launch is off/i,
     key: 'auto.lib.dropFailureReason.disconnected',
     fallback: 'The host is disconnected.'
   },

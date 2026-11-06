@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { Keyboard } from 'react-native'
 import { translate } from '../i18n/mobile-i18n'
 import { triggerError } from '../platform/haptics'
+import { currentSoftKeyboardHeight } from '../platform/keyboard-occlusion'
 import type { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
 import { sendTerminalLiveAccessoryRawBytes } from '../terminal/terminal-live-accessory-raw-send'
 import {
@@ -36,7 +37,6 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     setFileActionTarget,
     setBrowserActionTarget,
     setAgentSessionActionTarget,
-    keyboardHeight,
     deviceTokenRef,
     clientRef,
     connStateRef,
@@ -51,6 +51,7 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     getSendCompletionGeneration,
     getLiveInteractionGeneration,
     handleLiveInputAccessoryBytes,
+    handleLiveInputCompositionEnd,
     handleLiveInputSubmit,
     canSend,
     scheduleDelayedAction,
@@ -93,7 +94,8 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       }
       void handleAccessoryKey(input)
       return true
-    }
+    },
+    handleLiveInputCompositionEnd
   )
 
   async function handleAccessoryKey(
@@ -221,7 +223,7 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
 
       clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
 
-      if (keyboardHeight <= 0) {
+      if (currentSoftKeyboardHeight() <= 0) {
         liveInputRef.current?.blur()
         Keyboard.dismiss()
         openAfterDismiss()
@@ -236,12 +238,7 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       Keyboard.dismiss()
       scheduleDelayedAction(openAfterDismiss, TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS)
     },
-    [
-      clearSessionTabActionSheetKeyboardListener,
-      keyboardHeight,
-      openSessionTabActionSheet,
-      scheduleDelayedAction
-    ]
+    [clearSessionTabActionSheetKeyboardListener, openSessionTabActionSheet, scheduleDelayedAction]
   )
 
   return {

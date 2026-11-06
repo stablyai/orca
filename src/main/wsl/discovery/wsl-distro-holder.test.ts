@@ -3,7 +3,7 @@ import { mkdtemp, readdir, readFile, rm, writeFile, mkdir } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { WindowsProcessEvidence } from '../../daemon/daemon-incarnation-evidence-types'
+import type { WindowsProcessEvidence } from '../../daemon/endpoint/identity/daemon-incarnation-evidence-types'
 import {
   buildWslDistroHolderArgs,
   buildWslDistroHolderScript,

@@ -1,4 +1,4 @@
-import { savedSessionId } from './saved-structured-agent-session-restoration'
+import { savedSessionId } from './agent-session/lifecycle/saved-structured-agent-session-restoration'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-layout-command-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
@@ -8,6 +8,8 @@ import {
   type ChatTabChange,
   type ChatTabLayoutCommand
 } from './agent-session/agent-session-tab-layout'
+
+const MAX_STALE_PLACEMENT_RETRIES = 3
 
 export type QueuedChatTabChange = {
   worktreeId: string
@@ -61,17 +63,32 @@ export function createChatTabLayoutQueue(deps: {
       }
       for (const queued of changes) {
         try {
-          for (let step = 0; step < 2; step++) {
+          let placementRetries = 0
+          for (let step = 0; step < 2;) {
             if (queued.eligible && !queued.eligible()) {
               break
             }
             const command = commandNow(queued)
+            let placementChanged = false
             const reply = command
               ? await deps.apply(command, {
-                  admit: (partitions) =>
-                    (!queued.eligible || queued.eligible()) &&
-                    JSON.stringify(commandNow(queued)) === JSON.stringify(command) &&
-                    (command.type !== 'closeTabs' ||
+                  admit: (partitions) => {
+                    if (queued.eligible && !queued.eligible()) {
+                      return false
+                    }
+                    const current = commandNow(queued)
+                    if (JSON.stringify(current) !== JSON.stringify(command)) {
+                      placementChanged =
+                        command.type === 'openAgentSessionTab' &&
+                        current?.type === command.type &&
+                        current.workspace === command.workspace &&
+                        current.tabId === command.tabId &&
+                        current.sessionId === command.sessionId &&
+                        current.agent === command.agent
+                      return false
+                    }
+                    return (
+                      command.type !== 'closeTabs' ||
                       !partitions ||
                       partitions.every((partition) => {
                         const tab = partition.unifiedTabs?.[queued.worktreeId]?.find(
@@ -82,15 +99,28 @@ export function createChatTabLayoutQueue(deps: {
                             ? queued.change.open.sessionId
                             : queued.change.close
                         return !!tab && savedSessionId(tab) === sessionId
-                      }))
+                      })
+                    )
+                  }
                 })
               : null
+            if (
+              placementChanged &&
+              reply &&
+              !reply.ok &&
+              reply.code === 'tab_not_found' &&
+              placementRetries < MAX_STALE_PLACEMENT_RETRIES
+            ) {
+              placementRetries++
+              continue
+            }
             if (command && reply && !reply.ok) {
               console.warn(`[agent-session-tabs] ${command.type} refused:`, reply.code)
             }
             if (!reply?.ok || !('open' in queued.change) || command?.type !== 'closeTabs') {
               break
             }
+            step++
           }
         } catch (error) {
           console.warn('[agent-session-tabs] a chat tab change failed:', error)

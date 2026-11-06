@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { applyWindowLayoutCommand, type WindowLayoutCommand } from './runtime-layout-apply'
+import {
+  applyWindowLayoutCommand,
+  type WindowLayoutCommand
+} from './terminal/layout/runtime-layout-apply'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { LayoutApplyOutcome } from '../../shared/workspace-layout/workspace-layout-command-types'

@@ -1,6 +1,6 @@
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
-import { isWorktreeTerminalsSleepingError } from '../../../runtime/worktree-terminals-sleeping-error'
+import { isWorktreeTerminalsSleepingError } from '../../../../shared/workspace-sleep'
 import type { PtySpawnOutcome } from '../spawn-outcome'
 import type { PaneSpawnOperation } from './pane-spawn-operation'
 

@@ -5,6 +5,10 @@ import {
   type PluginThemeRegistration
 } from '../../../../shared/plugins/artifacts/plugin-theme-artifact'
 import type { PluginTerminalThemeRegistration } from '../../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
+import {
+  disambiguatedContentPluginNames,
+  disambiguatedPluginContentLabels
+} from '../plugins/presentation/plugin-name-disambiguation'
 import { resolveTerminalPalette } from '../../../../shared/terminal-themes/terminal-theme-selection'
 import { TERMINAL_THEME_CATALOG } from '../../../../shared/terminal-themes/terminal-theme-catalog'
 
@@ -154,15 +158,16 @@ function pluginTerminalFor(
 function pluginLook(
   theme: PluginThemeRegistration,
   terminals: readonly PluginTerminalThemeRegistration[],
-  baseline: GlobalSettings
+  baseline: GlobalSettings,
+  shown: { label: string; source: string }
 ): ThemeLook {
   const tokens = completePluginAppThemeTokens(theme.tokens)
   const terminal = pluginTerminalFor(theme, terminals)
   return {
     kind: 'plugin',
     id: theme.id,
-    label: theme.label,
-    source: theme.pluginName,
+    label: shown.label,
+    source: shown.source,
     base: theme.base,
     theme,
     terminal,
@@ -224,9 +229,15 @@ export function buildThemeLooks(options: {
     base,
     palette: { ...BUILT_IN_CHROME[base], terminal: currentTerminal(baseline, base) }
   }
-  const plugins = pluginThemes
-    .filter((theme) => theme.base === base)
-    .map((theme) => pluginLook(theme, pluginTerminalThemes, baseline))
+  const modeThemes = pluginThemes.filter((theme) => theme.base === base)
+  const themeLabels = disambiguatedPluginContentLabels(modeThemes)
+  const pluginNames = disambiguatedContentPluginNames(modeThemes)
+  const plugins = modeThemes.map((theme) =>
+    pluginLook(theme, pluginTerminalThemes, baseline, {
+      label: themeLabels.get(theme.id) ?? theme.label,
+      source: pluginNames.get(theme.pluginKey) ?? theme.pluginName
+    })
+  )
   const terminals = TERMINAL_LOOKS[base].flatMap(
     (name) => terminalLook(name, base, labels.community) ?? []
   )

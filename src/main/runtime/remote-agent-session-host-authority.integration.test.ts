@@ -1,5 +1,5 @@
 import { pairedRuntimeConnectionFromOffer } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
-import '../daemon/mock-descendant-sweep'
+import '../daemon/pty-subprocess/testing/mock-descendant-sweep'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,10 +12,10 @@ import type {
   RuntimeEnsureAgentSessionRequest
 } from '../../shared/agent-session/agent-session-host-authority'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
-import type { SubprocessHandle } from '../daemon/session-subprocess-handle'
-import { TerminalHost } from '../daemon/terminal-host'
+import type { SubprocessHandle } from '../daemon/sessions/session-subprocess-handle'
+import { TerminalHost } from '../daemon/terminal-host/terminal-host'
 import { OrcaRuntimeService } from './orca-runtime'
-import { OrcaRuntimeRpcServer } from './runtime-rpc'
+import { OrcaRuntimeRpcServer } from './rpc/server/runtime-rpc'
 
 const TEST_TIMEOUT_MS = 15_000
 const REQUEST_TIMEOUT_MS = 5_000

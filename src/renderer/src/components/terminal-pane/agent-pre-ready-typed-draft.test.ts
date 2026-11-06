@@ -1,28 +1,28 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { connectPanePty } from './pty-connection'
+import { connectPanePty } from './pty-connection/connect-pane-pty'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { flushAsyncTicks } from './pty-connection-test-async'
+import { flushAsyncTicks } from './pty-connection/test-fixtures/pty-connection-test-async'
 import {
   createManager,
   createMockTransport,
   createPane,
   leafIdForPane,
   type MockTransport
-} from './pty-connection-test-pane-fixtures'
+} from './pty-connection/test-fixtures/pty-connection-test-pane-fixtures'
 import {
   buildPaneConnectionDeps,
   type PtyConnectionAgentTitleMocks,
   bindPaneAgentTitleMocks
-} from './pty-connection-test-deps'
+} from './pty-connection/test-fixtures/pty-connection-test-deps'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
-} from './pty-connection-test-environment'
-import { createInitialStoreState } from './pty-connection-test-store-fixtures'
-import type { StoreState } from './pty-connection-test-store-state'
+} from './pty-connection/test-fixtures/pty-connection-test-environment'
+import { createInitialStoreState } from './pty-connection/test-fixtures/pty-connection-test-store-fixtures'
+import type { StoreState } from './pty-connection/test-fixtures/pty-connection-test-store-state'
 import type * as TerminalWorktreeRouteModule from '@/lib/terminal-worktree-route'
-import { appendTypedDraftText } from './pty-connection/agent-pre-ready-typed-draft'
+import { appendTypedDraftText } from './pty-connection/startup/agent-pre-ready-typed-draft'
 const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
 const {
@@ -32,11 +32,13 @@ const {
   toastInfo,
   waitForAgentDraftInputReady,
   sendAgentDraftPasteContent,
-  onPasteTimeout
+  onPasteTimeout,
+  pasteTimeoutNotice
 } = vi.hoisted(() => ({
   waitForAgentDraftInputReady: vi.fn(),
   sendAgentDraftPasteContent: vi.fn(async () => true),
   onPasteTimeout: vi.fn(),
+  pasteTimeoutNotice: vi.fn(),
   notifyCodexPaneBoundForStaleSweep: vi.fn(),
   scheduleRuntimeGraphSync: vi.fn(),
   shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false),
@@ -87,7 +89,7 @@ vi.mock('@/lib/terminal-worktree-route', async (importOriginal) => {
   }
 })
 
-vi.mock('./remote-runtime-pty-transport', () => ({
+vi.mock('./pty-transport/remote-runtime/remote-runtime-pty-transport', () => ({
   createRemoteRuntimePtyTransport: vi.fn(
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
@@ -102,8 +104,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 
 vi.mock('@/lib/agent-draft-paste-content', () => ({ sendAgentDraftPasteContent }))
 
-vi.mock('@/lib/launch-agent-paste-timeout-notice', () => ({
-  createPasteReadinessTimeoutNotice: () => ({ onTimeout: onPasteTimeout, wasNotified: () => false })
+vi.mock('@/lib/agent-session/launch/prompt/launch-agent-paste-timeout-notice', () => ({
+  createPasteReadinessTimeoutNotice: (args: unknown) => {
+    pasteTimeoutNotice(args)
+    return { onTimeout: onPasteTimeout, wasNotified: () => false }
+  }
 }))
 
 vi.mock('@/store', () => ({
@@ -119,7 +124,8 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
-  const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+  const { buildAgentStatusModuleMock } =
+    await import('./pty-connection/test-fixtures/pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -127,7 +133,9 @@ vi.mock('./cache-timer-seeding', () => ({ shouldSeedCacheTimerOnInitialTitle }))
 
 vi.mock('sonner', () => ({ toast: { info: toastInfo } }))
 
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep }))
+vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
+  notifyCodexPaneBoundForStaleSweep
+}))
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
@@ -137,7 +145,7 @@ vi.mock('react', async (importOriginal) => {
   }
 })
 
-vi.mock('./pty-transport', () => ({
+vi.mock('./pty-transport/ipc/pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
@@ -301,6 +309,10 @@ describe('agent pane keys typed before its PTY binds', () => {
 
     expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
     expect(onPasteTimeout).toHaveBeenCalledOnce()
+    // The typed text exists nowhere else, so the notice must carry it back to the user.
+    expect(pasteTimeoutNotice).toHaveBeenCalledWith(
+      expect.objectContaining({ droppedText: 'hello' })
+    )
     pane.dispose()
   })
 

@@ -4,7 +4,7 @@ import { spacing } from '../theme/mobile-theme'
 const AVERAGE_GLYPH_WIDTH = 7
 const WIDEST_GLYPH_WIDTH = 9
 // Horizontal padding plus the right border of `styles.tableCell`.
-const CELL_CHROME = spacing.md * 2 + 1
+const CELL_CHROME = spacing.sm * 2 + 1
 const MIN_COLUMN_WIDTH = 48
 const MAX_COLUMN_WIDTH = 220
 const WHITESPACE = /\s/

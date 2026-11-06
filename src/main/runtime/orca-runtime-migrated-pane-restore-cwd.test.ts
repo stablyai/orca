@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
-import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from './orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { OrcadTerminalRestoreHintStore } from '../persistence/migrating-orcad-catalog/orcad-terminal-restore-hint-store'
 
 vi.mock('electron', () => ({

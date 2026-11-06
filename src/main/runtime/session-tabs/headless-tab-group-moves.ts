@@ -1,3 +1,4 @@
+import { normalizeMobileSessionTabSelection } from './mobile-session-tab-selection'
 import { RuntimeHeadlessTabProperties } from './headless-tab-properties'
 import type {
   RuntimeMobileSessionTabGroup,
@@ -12,21 +13,17 @@ import {
 import { randomUUID } from 'node:crypto'
 import { withSelectedTabs } from '../headless-tab-group-selection'
 import type { TabGroupLayoutNode } from '../../../shared/tab-types'
-import type { OrcaRuntimeWithPersistHeadlessTerminalTitle } from '../workspaces/workspace-file-session-targets'
+import type { RuntimeMobileSessionTabOrder } from './mobile-session-tab-order'
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 
 export abstract class RuntimeHeadlessTabGroups extends RuntimeHeadlessTabProperties {
   protected abstract resolveMobileSessionHostTabId(
-    ...args: Parameters<
-      OrcaRuntimeWithPersistHeadlessTerminalTitle['resolveMobileSessionHostTabId']
-    >
-  ): ReturnType<OrcaRuntimeWithPersistHeadlessTerminalTitle['resolveMobileSessionHostTabId']>
+    ...args: Parameters<RuntimeMobileSessionTabOrder['resolveMobileSessionHostTabId']>
+  ): ReturnType<RuntimeMobileSessionTabOrder['resolveMobileSessionHostTabId']>
 
   protected abstract normalizeMobileSessionTabOrder(
-    ...args: Parameters<
-      OrcaRuntimeWithPersistHeadlessTerminalTitle['normalizeMobileSessionTabOrder']
-    >
-  ): ReturnType<OrcaRuntimeWithPersistHeadlessTerminalTitle['normalizeMobileSessionTabOrder']>
+    ...args: Parameters<RuntimeMobileSessionTabOrder['normalizeMobileSessionTabOrder']>
+  ): ReturnType<RuntimeMobileSessionTabOrder['normalizeMobileSessionTabOrder']>
 
   protected abstract toMobileSessionTabsResult(
     ...args: Parameters<
@@ -62,27 +59,20 @@ export abstract class RuntimeHeadlessTabGroups extends RuntimeHeadlessTabPropert
       const bIndex = orderIndexByParentTabId.get(bParent) ?? Number.MAX_SAFE_INTEGER
       return aIndex - bIndex
     })
-    const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
-    const reorderedTargetActiveTabId =
-      active?.type === 'terminal' ? active.parentTabId : active ? active.id : (tabOrder[0] ?? null)
     // Reorder only the addressed group or multi-group siblings disappear.
     const existingGroups = snapshot.tabGroups ?? []
     const nextGroups = existingGroups.some((group) => group.id === targetGroup.id)
       ? existingGroups.map((group) =>
-          group.id === targetGroup.id
-            ? { ...group, tabOrder, activeTabId: reorderedTargetActiveTabId }
-            : group
+          group.id === targetGroup.id ? { ...group, tabOrder } : group
         )
-      : [{ ...targetGroup, tabOrder, activeTabId: reorderedTargetActiveTabId }]
-    const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
+      : [{ ...targetGroup, tabOrder }]
+    const nextSnapshot = normalizeMobileSessionTabSelection({
       ...snapshot,
       publicationEpoch: `headless:${Date.now().toString(36)}`,
       snapshotVersion: snapshot.snapshotVersion + 1,
-      activeTabId: active?.id ?? null,
-      activeTabType: active?.type ?? null,
       tabGroups: nextGroups,
       tabs: nextTabs
-    }
+    })
     this.persistHeadlessTabGroups(worktreeId, nextGroups, snapshot.tabGroupLayout)
     this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)

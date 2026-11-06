@@ -319,6 +319,7 @@ export function useOnboardingFlow(
     busyLabel,
     detectedSet,
     isDetectingAgents,
+    refreshDetectedAgents,
     next,
     skipToRepo,
     dismissOnboarding,

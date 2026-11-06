@@ -5,7 +5,6 @@ import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import { nativeChatAppearanceStyle } from './native-chat-appearance-style'
 import { useState } from 'react'
 import { NativeChatFileLinkExistenceContext } from './native-chat-file-link-existence'
-import type { NativeChatQuestionCardProps } from './NativeChatQuestionCard'
 import { NativeChatStructuredAsyncQuestion } from './NativeChatStructuredAsyncQuestion'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 import type {
@@ -13,17 +12,16 @@ import type {
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { NativeChatLinkClickContext } from './native-chat-link-click-context'
 
 function QuestionControls({
   invertedAccent = false,
   question = 'Where should this run?',
-  description = 'Use this computer.',
-  onLinkClick
+  description = 'Use this computer.'
 }: {
   invertedAccent?: boolean
   question?: string
   description?: string
-  onLinkClick?: NativeChatQuestionCardProps['onLinkClick']
 }) {
   return (
     <div
@@ -57,7 +55,6 @@ function QuestionControls({
             }
           ]
         }}
-        onLinkClick={onLinkClick}
         onAnswer={() => {}}
         onCancel={() => {}}
       />
@@ -187,6 +184,8 @@ const linkSnapshot = {
   peek: () => false
 }
 
+const preventLinkDefault = (event: { preventDefault: () => void }): void => event.preventDefault()
+
 const linkExistence = {
   watch: () => ({ subscribe: () => () => {}, getSnapshot: () => linkSnapshot }),
   recheck: () => {}
@@ -196,12 +195,13 @@ export const links = defineFixture({
   width: 720,
   render: () => (
     <NativeChatFileLinkExistenceContext.Provider value={linkExistence}>
-      <QuestionControls
-        onLinkClick={(event) => event.preventDefault()}
-        question={
-          'For the reset time and Continue now action, the proposed surfaces are shown in /tmp/question-mock.html. See [the proposal](https://example.com/proposal).\nWhich surface should carry it?'
-        }
-      />
+      <NativeChatLinkClickContext value={preventLinkDefault}>
+        <QuestionControls
+          question={
+            'For the reset time and Continue now action, the proposed surfaces are shown in /tmp/question-mock.html. See [the proposal](https://example.com/proposal).\nWhich surface should carry it?'
+          }
+        />
+      </NativeChatLinkClickContext>
     </NativeChatFileLinkExistenceContext.Provider>
   )
 })
@@ -210,22 +210,23 @@ export const historyLinks = defineFixture({
   width: 720,
   render: () => (
     <NativeChatFileLinkExistenceContext.Provider value={linkExistence}>
-      <div
-        className="native-chat-appearance bg-chat-canvas p-4"
-        style={nativeChatAppearanceStyle({})}
-      >
-        <NativeChatAwaitingInputRow
-          subject={{
-            kind: 'questions',
-            questions: [
-              'Review /tmp/question-mock.html. Which surface should carry it?',
-              'See [the proposal](https://example.com/proposal). Continue?'
-            ]
-          }}
-          pending={false}
-          onLinkClick={(event) => event.preventDefault()}
-        />
-      </div>
+      <NativeChatLinkClickContext value={preventLinkDefault}>
+        <div
+          className="native-chat-appearance bg-chat-canvas p-4"
+          style={nativeChatAppearanceStyle({})}
+        >
+          <NativeChatAwaitingInputRow
+            subject={{
+              kind: 'questions',
+              questions: [
+                'Review /tmp/question-mock.html. Which surface should carry it?',
+                'See [the proposal](https://example.com/proposal). Continue?'
+              ]
+            }}
+            pending={false}
+          />
+        </div>
+      </NativeChatLinkClickContext>
     </NativeChatFileLinkExistenceContext.Provider>
   ),
   interact: (frame) => frame.querySelector<HTMLButtonElement>('button[aria-expanded]')?.click()
