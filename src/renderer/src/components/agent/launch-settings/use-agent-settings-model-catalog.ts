@@ -5,20 +5,24 @@ import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-t
 import { sourceControlActionAgentPicksModel } from '../../../../../shared/source-control/ai/recipes/source-control-action-options'
 import {
   readHostModelCatalogSnapshot,
-  recordHostModelCatalogSnapshot
+  recordHostModelCatalogSnapshot,
+  withoutUnprovenNewLaunchDefault
 } from '@/runtime/host-model-catalog-snapshots'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { structuredAgentSessionHostKey } from '@/runtime/structured-agent-session-host-capability'
 
 const SETTINGS_LAUNCH = { newLaunch: true, seedsModel: true }
 
-/** The host's listed models for a Settings default. `usesSeedModels` says the release's list stands in. */
+/** The host's account models for a Settings default. `usesSeedModels` says the release's list stands in. */
 export function useAgentSettingsModelCatalog(
   agent: TuiAgent,
   target: RuntimeClientTarget | null
 ): { catalog: AgentSessionModelCatalogResult | undefined; usesSeedModels: boolean } {
   const key = target ? `${structuredAgentSessionHostKey(target)}\u0000${agent}` : null
-  const [settledKey, setSettledKey] = useState<string | null>(null)
+  const [answer, setAnswer] = useState<{
+    key: string
+    catalog: AgentSessionModelCatalogResult | undefined
+  } | null>(null)
   useEffect(() => {
     if (!target || !key || !sourceControlActionAgentPicksModel(agent)) {
       return
@@ -32,13 +36,13 @@ export function useAgentSettingsModelCatalog(
       .then((catalog) => {
         if (!stale) {
           recordHostModelCatalogSnapshot(target, agent, null, catalog)
+          setAnswer({ key, catalog })
         }
       })
-      // A failed read proves nothing about the host's models, so the seed list stays.
-      .catch(() => {})
-      .finally(() => {
+      // Why not the snapshot: an unanswered read can't vouch for an older list.
+      .catch(() => {
         if (!stale) {
-          setSettledKey(key)
+          setAnswer({ key, catalog: undefined })
         }
       })
     return () => {
@@ -46,7 +50,13 @@ export function useAgentSettingsModelCatalog(
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- `key` is the target's identity.
   }, [agent, key])
-  // Why the snapshot: it drops a listed default that a workspace's own config could replace.
-  const catalog = target ? readHostModelCatalogSnapshot(target, agent, SETTINGS_LAUNCH) : undefined
-  return { catalog, usesSeedModels: !catalog && (!target || settledKey === key) }
+  const settled = answer?.key === key ? answer : null
+  // Why not the snapshot once answered: it serves new chats, so it refuses workspace-scoped lists.
+  const catalog = settled
+    ? settled.catalog && withoutUnprovenNewLaunchDefault(settled.catalog)
+    : target
+      ? readHostModelCatalogSnapshot(target, agent, SETTINGS_LAUNCH)
+      : undefined
+  const listed = catalog && catalog.origin !== 'unknown' && catalog.models.length > 0
+  return { catalog, usesSeedModels: !listed && (!target || settled !== null) }
 }

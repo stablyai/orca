@@ -31,6 +31,17 @@ function withoutNamedDefault(catalog: ListedCatalog): ListedCatalog {
   }
 }
 
+/** A default no workspace config could replace stays; any other can't be promised to a new launch. */
+export function withoutUnprovenNewLaunchDefault(
+  catalog: AgentSessionModelCatalogResult
+): AgentSessionModelCatalogResult {
+  return catalog.origin === 'unknown' ||
+    catalog.listingNamesConfiguredModel === false ||
+    catalog.defaultHoldsInEveryWorkspace === true
+    ? catalog
+    : withoutNamedDefault(catalog)
+}
+
 /** Undefined until host answers for this frame. Workspace config can replace defaults, so another workspace’s answer is valid only for named models, no-default lists or host-proven workspace-independent defaults. */
 export function readHostModelCatalogSnapshot(
   target: RuntimeClientTarget,

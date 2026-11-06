@@ -1,7 +1,10 @@
 // @vitest-environment happy-dom
 import { cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
+import {
+  recordHostModelCatalogSnapshot,
+  resetHostModelCatalogSnapshotsForTests
+} from '@/runtime/host-model-catalog-snapshots'
 import { TooltipProvider } from '../../ui/tooltip'
 import { AgentLaunchChoiceEditor } from './AgentLaunchChoiceEditor'
 
@@ -27,8 +30,10 @@ vi.mock('./AgentChoiceMenu', () => ({
   }
 }))
 
+// A Codex account answer: its models are scoped, so no new chat in another workspace may reuse it.
 const LISTED = {
   origin: 'probe',
+  modelsDifferByWorkspace: true,
   models: [
     {
       id: 'gpt-6-astra',
@@ -87,12 +92,26 @@ describe('AgentLaunchChoiceEditor model list', () => {
     )
   })
 
-  it('says the list is built in once the host fails to answer', async () => {
+  it('does not read a listed default as the default model of every workspace', async () => {
+    call.mockResolvedValue(LISTED)
+    renderEditor()
+    await waitFor(() => expect(menus.get('Model')).toEqual(['__agent_default__', 'gpt-6-astra']))
+    expect(menus.get('Reasoning effort')).not.toEqual(['__agent_default__', 'low', 'ultra'])
+  })
+
+  it('says the list is built in once the host fails to answer, even with an older answer', async () => {
+    recordHostModelCatalogSnapshot(HOST, 'codex', null, {
+      origin: 'probe',
+      models: [{ id: 'gpt-older', label: 'GPT Older', isDefault: false, efforts: [] }]
+    } as never)
     call.mockRejectedValue(new Error('offline'))
     renderEditor()
+    expect(menus.get('Model')).toContain('gpt-older')
     expect(document.querySelector('[data-agent-model-list-fallback]')).toBeNull()
     await waitFor(() =>
       expect(document.querySelector('[data-agent-model-list-fallback]')).not.toBeNull()
     )
+    expect(menus.get('Model')).toContain('gpt-5.6-sol')
+    expect(menus.get('Model')).not.toContain('gpt-older')
   })
 })
