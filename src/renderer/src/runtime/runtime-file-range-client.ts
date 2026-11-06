@@ -28,13 +28,24 @@ export function rangeReadTarget(args: RuntimeFileReadArgs): RuntimeRemoteFileAdd
     throw new Error('Remote file has no owning runtime worktree')
   }
   const worktree = toRuntimeWorktreeSelector(args.worktreeId)
+  // Why: a caller that pinned its pairing keeps every later call on that host.
+  const pairing =
+    args.expectedEnvironmentPairingRevision === undefined
+      ? {}
+      : { expectedEnvironmentPairingRevision: args.expectedEnvironmentPairingRevision }
   if (args.terminalArtifactGrantId) {
-    return { target, worktree, grantId: args.terminalArtifactGrantId, absolutePath: args.filePath }
+    return {
+      target,
+      worktree,
+      grantId: args.terminalArtifactGrantId,
+      absolutePath: args.filePath,
+      ...pairing
+    }
   }
   if (!canReadRelativeRuntimeFile(args.relativePath)) {
     throw new Error('Remote file is outside the owning runtime worktree')
   }
-  return { target, worktree, relativePath: args.relativePath }
+  return { target, worktree, relativePath: args.relativePath, ...pairing }
 }
 
 export type RuntimeFileSnapshot = {
