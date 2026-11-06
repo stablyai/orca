@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { ArrowUp, CircleAlert, Mic, Plus, Square } from 'lucide-react'
+import { ArrowUp, Check, CircleAlert, Mic, Plus, Save, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
@@ -130,11 +130,18 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
     <Button
       type="button"
       size="sm"
+      aria-label={translate('components.native-chat.queuedMessages.save', 'Save')}
+      className="group-data-[terminal=true]/toolbar:size-8 group-data-[terminal=true]/toolbar:px-0 pointer-coarse:group-data-[terminal=true]/toolbar:size-10"
       disabled={sendDisabled}
       onMouseDown={(event) => event.preventDefault()}
       onClick={handleCriticalAction}
     >
-      {translate('components.native-chat.queuedMessages.save', 'Save')}
+      <span data-composer-primary-label>
+        {translate('components.native-chat.queuedMessages.save', 'Save')}
+      </span>
+      <span data-composer-primary-icon aria-hidden="true" className="hidden">
+        <Save className="size-4" />
+      </span>
     </Button>
   ) : (
     <Button
@@ -253,6 +260,9 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
                       close()
                     }}
                   >
+                    {mode.plan === (value === 'plan') ? (
+                      <Check aria-hidden="true" className="size-3.5" />
+                    ) : null}
                     {value === 'plan'
                       ? translate('components.native-chat.composer.planMode', 'Plan')
                       : translate('components.native-chat.composer.buildMode', 'Build')}

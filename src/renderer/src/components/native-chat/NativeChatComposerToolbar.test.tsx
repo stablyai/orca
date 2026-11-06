@@ -21,13 +21,6 @@ vi.mock('@/i18n/i18n', () => ({
     )
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
-vi.mock('./NativeChatSessionOptionPickers', () => ({
-  NativeChatSessionOptionPickers: () => (
-    <button aria-label="Model with a long provider label">
-      <span data-composer-label>Model with a long provider label</span>
-    </button>
-  )
-}))
 
 afterEach(() => {
   cleanup()
@@ -100,6 +93,22 @@ it('keeps current mode, permissions and Goal reachable through overflow, includi
   }
   const snapshot: SessionOptionDescriptor[] = [
     {
+      id: 'model',
+      label: 'Model',
+      category: 'model',
+      transport: 'agent-session',
+      valueSource: 'applied',
+      settable: true,
+      kind: {
+        type: 'select',
+        currentValue: 'first',
+        choices: [
+          { value: 'first', label: 'Long provider model' },
+          { value: 'second', label: 'Second model' }
+        ]
+      }
+    },
+    {
       id: 'interactionMode',
       label: 'Mode',
       category: 'mode',
@@ -144,6 +153,7 @@ it('keeps current mode, permissions and Goal reachable through overflow, includi
   const view = render(
     <TooltipProvider>
       <EditorContent editor={editor} />
+      <input aria-label="Outside composer" />
       <NativeChatComposerActions
         attachDisabled={false}
         dictationDisabled={false}
@@ -178,6 +188,17 @@ it('keeps current mode, permissions and Goal reachable through overflow, includi
   expect(document.activeElement).toBe(menuPermission)
   fireEvent.click(screen.getByRole('button', { name: 'More chat controls' }))
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  await waitFor(() =>
+    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Chat message' }))
+  )
+  resize(100)
+  fireEvent.click(screen.getByRole('button', { name: 'More chat controls' }))
+  resize(1000)
+  const outside = screen.getByRole('textbox', { name: 'Outside composer' })
+  fireEvent.pointerDown(outside)
+  outside.focus()
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  expect(document.activeElement).toBe(outside)
   resize(100)
   fireEvent.click(screen.getByRole('button', { name: 'More chat controls' }))
   const popup = screen.getByRole('dialog')
@@ -217,7 +238,18 @@ it('keeps current mode, permissions and Goal reachable through overflow, includi
     'Exit goal mode'
   ])
   expect(screen.queryByRole('button', { name: 'More chat controls' })).toBeNull()
-  expect(screen.getByRole('button', { name: 'Model with a long provider label' })).toBeTruthy()
+  const model = screen.getByRole('button', { name: 'Model Long provider model' })
+  fireEvent.click(model)
+  const modelPopup = screen.getByRole('dialog')
+  resize(50)
+  expect(screen.getByRole('button', { name: 'Model Long provider model' })).toBe(model)
+  expect(screen.getByRole('dialog')).toBe(modelPopup)
+  fireEvent.click(within(modelPopup).getByRole('option', { name: /Second model/ }))
+  expect(setOption).toHaveBeenLastCalledWith('model', 'second')
+  resize(1000)
+  expect(screen.getByRole('dialog')).toBe(modelPopup)
+  expect(screen.getByRole('button', { name: 'Model Second model' })).toBe(model)
+  await act(async () => settle())
   view.unmount()
   editor.destroy()
 })

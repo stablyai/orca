@@ -272,8 +272,11 @@ export function NativeChatComposerField({
   const launch = launchPrompt !== undefined
 
   return (
-    <div className={launch ? undefined : 'shrink-0 bg-chat-pane'}>
-      <div className={launch ? undefined : 'px-3 pt-2 pb-4 sm:px-4'}>
+    <div
+      data-composer-field={launch ? undefined : ''}
+      className={launch ? undefined : '@container/composer-field shrink-0 bg-chat-pane'}
+    >
+      <div className={launch ? undefined : 'native-chat-composer-gutter pt-2 pb-4'}>
         <div
           className={cn('relative w-full', !launch && 'mx-auto max-w-(--chat-content-max-width)')}
         >
@@ -313,6 +316,7 @@ export function NativeChatComposerField({
             className={cn(
               // Use a constant container border so focus changes cannot flash it.
               'group/composer rounded-xl border p-1.5 shadow-xs',
+              !launch && 'native-chat-composer-card',
               launch
                 ? 'border-foreground/10 bg-background dark:bg-foreground/[0.04]'
                 : 'border-chat-composer-border bg-chat-composer-surface',

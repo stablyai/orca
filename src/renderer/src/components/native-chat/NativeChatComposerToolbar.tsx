@@ -13,7 +13,7 @@ export type NativeChatComposerControl = {
   overflow?: (close: () => void) => ReactNode
 }
 
-type Layout = { compact: boolean; hidden: string[] }
+type Layout = { compact: boolean; hidden: string[]; terminal: boolean }
 
 export function NativeChatComposerToolbar({
   left,
@@ -29,10 +29,10 @@ export function NativeChatComposerToolbar({
   const root = useRef<HTMLDivElement>(null)
   const primaryRef = useRef<HTMLDivElement>(null)
   const moreRef = useRef<HTMLDivElement>(null)
-  const [layout, setLayout] = useState<Layout>({ compact: false, hidden: [] })
+  const [layout, setLayout] = useState<Layout>({ compact: false, hidden: [], terminal: false })
   const [open, setOpen] = useState(false)
   const menuControls = useRef<string[]>([])
-  const focusReturn = useNativeChatPickerFocusReturn(focusComposer)
+  const focusReturn = useNativeChatPickerFocusReturn(focusComposer, true)
   const controls = [...left, ...right]
   const measure = useEffectEvent(() => {
     const bar = root.current
@@ -40,6 +40,7 @@ export function NativeChatComposerToolbar({
       return
     }
     const nodes = Array.from(bar.querySelectorAll<HTMLElement>('[data-composer-control]'))
+    bar.dataset.terminal = 'false'
     const widths = new Map<string, number>()
     const gap = (element: Element | null): number =>
       element ? Number.parseFloat(getComputedStyle(element).columnGap) || 0 : 0
@@ -63,14 +64,14 @@ export function NativeChatComposerToolbar({
         (leading.length > 0 || more ? groupGap : 0)
       )
     }
-    let next: Layout = { compact: false, hidden: [] }
+    let next: Layout = { compact: false, hidden: [], terminal: false }
     // Probe the same mounted controls before paint; hidden controls retain their natural measure.
     for (const compact of open ? [true] : [false, true]) {
       bar.dataset.compact = String(compact)
       for (const node of nodes) {
         widths.set(node.dataset.composerControl!, node.getBoundingClientRect().width)
       }
-      next = { compact, hidden: open ? [...menuControls.current] : [] }
+      next = { compact, hidden: open ? [...menuControls.current] : [], terminal: false }
       if (required(next.hidden) <= bar.clientWidth) {
         break
       }
@@ -89,6 +90,20 @@ export function NativeChatComposerToolbar({
           }
           next.hidden.push(item.id)
         }
+        next.terminal = required(next.hidden) > bar.clientWidth
+        bar.dataset.terminal = String(next.terminal)
+        const atomicWidth = Math.max(
+          primaryRef.current?.getBoundingClientRect().width ?? 0,
+          moreWidth,
+          ...controls
+            .filter((item) => !next.hidden.includes(item.id))
+            .map((item) => widths.get(item.id) ?? 0)
+        )
+        const host = bar.closest<HTMLElement>('[data-composer-field]')
+        const atomic = `${atomicWidth}px`
+        if (host && host.style.getPropertyValue('--composer-atomic-width') !== atomic) {
+          host.style.setProperty('--composer-atomic-width', atomic)
+        }
       }
     }
     // An open menu keeps its actions mounted through resize until the user dismisses it.
@@ -97,7 +112,9 @@ export function NativeChatComposerToolbar({
     }
     bar.dataset.compact = String(next.compact)
     setLayout((previous) =>
-      previous.compact === next.compact && previous.hidden.join() === next.hidden.join()
+      previous.compact === next.compact &&
+      previous.hidden.join() === next.hidden.join() &&
+      previous.terminal === next.terminal
         ? previous
         : next
     )
@@ -112,6 +129,10 @@ export function NativeChatComposerToolbar({
     const observe = (): void => {
       resize.disconnect()
       resize.observe(bar)
+      const host = bar.closest('[data-composer-field]')
+      if (host) {
+        resize.observe(host)
+      }
       for (const node of bar.querySelectorAll<HTMLElement>('[data-composer-control]')) {
         resize.observe(node)
       }
@@ -159,9 +180,10 @@ export function NativeChatComposerToolbar({
     <div
       ref={root}
       data-compact={layout.compact}
-      className="flex w-full items-center justify-between gap-2 text-chat-foreground-faint data-[compact=true]:[&_[data-composer-label]]:invisible data-[compact=true]:[&_[data-composer-label]]:absolute data-[compact=true]:[&_[data-composer-label]]:w-max data-[compact=true]:[&_[data-composer-compact-icon]]:block data-[compact=false]:[&_[data-composer-compact-icon]]:hidden"
+      data-terminal={layout.terminal}
+      className="group/toolbar flex w-full items-center justify-between gap-2 text-chat-foreground-faint data-[terminal=true]:flex-wrap data-[terminal=true]:justify-end data-[terminal=true]:[&_[data-composer-primary-label]]:hidden data-[terminal=true]:[&_[data-composer-primary-icon]]:block data-[terminal=false]:[&_[data-composer-primary-icon]]:hidden data-[compact=true]:[&_[data-composer-label]]:invisible data-[compact=true]:[&_[data-composer-label]]:absolute data-[compact=true]:[&_[data-composer-label]]:w-max data-[compact=true]:[&_[data-composer-compact-icon]]:block data-[compact=false]:[&_[data-composer-compact-icon]]:hidden"
     >
-      <div className="flex shrink-0 items-center gap-0.5">
+      <div className="flex shrink-0 items-center gap-0.5 group-data-[terminal=true]/toolbar:contents">
         {left.map(renderControl)}
         <Popover
           open={open}
@@ -214,7 +236,7 @@ export function NativeChatComposerToolbar({
           </PopoverContent>
         </Popover>
       </div>
-      <div className="ml-auto flex shrink-0 items-center gap-1.5">
+      <div className="ml-auto flex shrink-0 items-center gap-1.5 group-data-[terminal=true]/toolbar:contents">
         {right.map(renderControl)}
         <div ref={primaryRef} className="inline-flex shrink-0">
           {primary}
