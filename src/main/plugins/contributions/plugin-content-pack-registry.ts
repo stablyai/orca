@@ -13,6 +13,7 @@ import {
 } from './plugin-theme-registries'
 import { PluginVmRecipeRegistry } from '../plugin-vm-recipe-registry'
 import { PluginCommandRegistry } from '../plugin-command-registry'
+import { PluginLinkRouteRegistry } from './plugin-link-route-registry'
 import { verifyDeclarativePluginContent } from '../plugin-declarative-content-integrity'
 import type { KeybindingOverrides } from '../../../shared/keybindings'
 import type { PluginAppearanceService } from '../appearance/plugin-appearance-service'
@@ -34,6 +35,7 @@ export class PluginContentPackRegistry {
   readonly syntaxes: PluginSyntaxRegistry
   readonly vmRecipes: PluginVmRecipeRegistry
   readonly commands: PluginCommandRegistry
+  readonly linkRoutes: PluginLinkRouteRegistry
   private readonly activationErrors = new Map<string, string>()
 
   constructor(
@@ -52,6 +54,7 @@ export class PluginContentPackRegistry {
     this.syntaxes = new PluginSyntaxRegistry(contentVerifier)
     this.vmRecipes = new PluginVmRecipeRegistry()
     this.commands = new PluginCommandRegistry()
+    this.linkRoutes = new PluginLinkRouteRegistry()
   }
 
   async reconcile(
@@ -99,6 +102,9 @@ export class PluginContentPackRegistry {
       await Promise.all(
         this.families(keybindings).map((family) => family.reconcile(discovered, approveAtomically))
       )
+      // Not a family: a route conflict must not exclude the plugin, or a new install could disable
+      // an approved plugin's unrelated routes.
+      this.linkRoutes.reconcile(discovered, approveAtomically)
 
       let foundNewError = false
       for (const pluginKey of approvedKeys) {

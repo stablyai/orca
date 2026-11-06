@@ -9,6 +9,8 @@ import {
   canHttpLinkOpenInSourceGroup,
   type HttpLinkSourceOwner
 } from '@/lib/http-link-routing'
+import { getPluginLinkRoutes } from '@/store/plugin-link-routes'
+import { matchLinkRoute } from '../../../shared/plugins/contributions/plugin-link-route-matching'
 
 export type OpenHttpLinkOptions = {
   worktreeId?: string | null
@@ -74,10 +76,20 @@ export function canSourceOwnerOpenInOrca(
 export function httpLinkActionDestinationsFor(
   settings: { openLinksInApp?: boolean } | null | undefined,
   sourceOwner: HttpLinkSourceOwner,
-  canOpenOwnedBrowser: boolean
+  canOpenOwnedBrowser: boolean,
+  /** The clicked http(s) URL that plugin link routes match against; null when there is none. */
+  url: string | null
 ): HttpLinkActionDestinations {
+  // Ownership first: a plugin route must never promote a link the source cannot reach.
   if (!canSourceOwnerOpenInOrca(sourceOwner, canOpenOwnedBrowser)) {
     return { primary: 'system' }
+  }
+  const route = url === null ? null : matchLinkRoute(url, getPluginLinkRoutes())
+  if (route) {
+    // Alternate is always the opposite: Shift stays an escape hatch out of the route.
+    return route.destination === 'orca-browser'
+      ? { primary: 'orca', alternate: 'system' }
+      : { primary: 'system', alternate: 'orca' }
   }
   return settings?.openLinksInApp === true
     ? { primary: 'orca', alternate: 'system' }

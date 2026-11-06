@@ -64,3 +64,7 @@ Every change must consider these areas:
 ## Git / GitHub
 
 If changing code around `git`, `gh`, source-control, or review behavior read [`docs/agents-md-refs/git-workflow.md`](./docs/agents-md-refs/git-workflow.md).
+
+## Plugin Link Routes
+
+Before touching `contributes.linkRoutes` hostname matching, the suffix policy, or destination selection, read [`docs/reference/plugin-link-routes.md`](./docs/reference/plugin-link-routes.md) and its [threat model](./docs/reference/plugin-link-route-threat-model.md). `canSourceOwnerOpenInOrca` must run before route matching in `http-link-destinations.ts`, and never build a RegExp from manifest text.

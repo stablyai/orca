@@ -33,6 +33,7 @@ type ContributionValidationManifest = {
     newFiles: IdentifiedContribution[]
     settings: { key: string }[]
     statusBarItems: { id: string; command?: string }[]
+    linkRoutes: { hostname: string }[]
   }
   capabilities: { kind: string }[]
 }
@@ -115,6 +116,14 @@ export function validatePluginManifestContributions(
     (entry) => (entry as { locale: string }).locale.toLowerCase(),
     'languagePacks',
     'language pack locale',
+    ctx
+  )
+  // Hostnames are already canonical ascii here, so a plain compare catches case and IDN duplicates.
+  rejectDuplicateValues(
+    manifest.contributes.linkRoutes.map((route) => route.hostname),
+    String,
+    'linkRoutes',
+    'link route hostname',
     ctx
   )
   rejectDuplicateValues(

@@ -10,10 +10,16 @@ import { PLUGIN_COMMAND_WHEN_SINCE, pluginCommandWhenSchema } from './plugin-com
 import {
   pluginFieldDoc,
   pluginPathFieldDoc,
+  PLUGIN_LINK_ROUTES_SINCE,
   PLUGIN_MANIFEST_V2_SINCE,
   PLUGIN_SCHEMA_SINCE_V1
 } from '../manifest/plugin-schema-field-docs'
 import { pluginFileMatchFields } from './plugin-file-match'
+import {
+  formatRoutePattern,
+  normalizeRoutePattern,
+  LINK_ROUTE_MAX_HOSTNAME_LENGTH
+} from './plugin-link-route-matching'
 
 export const PLUGIN_LANGUAGE_PACK_LIMIT = 16
 export const PLUGIN_KEYBINDING_LIMIT = 256
@@ -22,6 +28,7 @@ export const PLUGIN_THEME_LIMIT = 64
 export const PLUGIN_TERMINAL_THEME_LIMIT = 64
 export const PLUGIN_ICON_THEME_LIMIT = 32
 export const PLUGIN_SYNTAX_LIMIT = 16
+export const PLUGIN_LINK_ROUTE_LIMIT = 64
 
 /** True when Intl can parse the tag's grammar, not just its shape. */
 function isWellFormedLocaleId(value: string): boolean {
@@ -188,6 +195,47 @@ export const pluginSyntaxContributionSchema = z
   .strict()
   .meta({ id: 'SyntaxContribution', description: 'Syntax highlighting for one language.' })
 
+// Stored as the canonical ascii form so consent and click-time matching compare the same string.
+// The public-suffix half of the safety floor runs in main (plugin-link-route-suffix-policy).
+export const pluginLinkRouteContributionSchema = z
+  .object({
+    hostname: z
+      .string()
+      .min(1)
+      .max(LINK_ROUTE_MAX_HOSTNAME_LENGTH + 2)
+      .meta(
+        pluginFieldDoc(
+          'Hostname whose clicked links this route opens: exact (`app.example.com`), one leading label wildcard (`*.example.com`, one label deep, never a public suffix), or a mid-label wildcard under a reserved TLD (`*-dev.test`). Each hostname may be listed once.',
+          PLUGIN_LINK_ROUTES_SINCE,
+          ['*.example.com']
+        )
+      )
+      .transform((value, ctx) => {
+        const pattern = normalizeRoutePattern(value)
+        if (!pattern) {
+          ctx.addIssue({
+            code: 'custom',
+            message:
+              'must be a hostname, optionally with one leading "*"; wildcards may not cover a public suffix'
+          })
+          return z.NEVER
+        }
+        return formatRoutePattern(pattern)
+      }),
+    destination: z
+      .enum(['orca-browser', 'system-browser'])
+      .meta(
+        pluginFieldDoc('Where a matching link opens.', PLUGIN_LINK_ROUTES_SINCE, ['orca-browser'])
+      ),
+    description: safePluginDisplayText(z.string().max(200))
+      .optional()
+      .meta(pluginFieldDoc('Why the route exists, shown at approval.', PLUGIN_LINK_ROUTES_SINCE))
+  })
+  .strict()
+  .meta({
+    id: 'LinkRouteContribution',
+    description: 'Opens clicked links to a hostname in a chosen browser.'
+  })
 export type PluginKeybindingContribution = z.infer<typeof pluginKeybindingContributionSchema>
 export type PluginThemeContribution = z.infer<typeof pluginThemeContributionSchema>
 export type PluginSyntaxContribution = z.infer<typeof pluginSyntaxContributionSchema>

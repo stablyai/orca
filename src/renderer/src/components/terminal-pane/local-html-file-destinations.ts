@@ -10,5 +10,10 @@ export function isHtmlFilePath(filePath: string): boolean {
 
 /** A local HTML file is a page, so it opens where http links do. */
 export function localHtmlFileDestinations(): HttpLinkActionDestinations {
-  return httpLinkActionDestinationsFor(useAppStore.getState().settings, { kind: 'local' }, false)
+  return httpLinkActionDestinationsFor(
+    useAppStore.getState().settings,
+    { kind: 'local' },
+    false,
+    null
+  )
 }

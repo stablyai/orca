@@ -569,7 +569,8 @@
             "customEditors",
             "newFiles",
             "settings",
-            "statusBarItems"
+            "statusBarItems",
+            "linkRoutes"
           ],
           "description": "Contribution point.",
           "x-orca-since": "1.4.245",

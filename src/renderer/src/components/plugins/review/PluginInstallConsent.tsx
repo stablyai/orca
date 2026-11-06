@@ -16,6 +16,7 @@ import { pluginTrustLabel, pluginTrustWarnings } from '../presentation/plugin-co
 import { PluginConsentProvenance, type PluginConsentSource } from './PluginConsentProvenance'
 import { shadowedKeybindingTitles } from '../presentation/plugin-keybinding-conflicts'
 import { PluginVmRecipeConsentPreview } from './PluginVmRecipeConsentPreview'
+import { PluginLinkRouteConsentPreview } from './PluginLinkRouteConsentPreview'
 import type { PluginPageReplacement, PluginPageShortcut } from '../state/use-plugin-page-model'
 import { builtInActionTitle } from '../page/PluginCommandReplacementRow'
 
@@ -207,6 +208,7 @@ export function PluginInstallConsent({
             </p>
           )}
           {installed ? <PluginVmRecipeConsentPreview recipes={installed.vmRecipes ?? []} /> : null}
+          {installed ? <PluginLinkRouteConsentPreview routes={installed.linkRoutes ?? []} /> : null}
         </div>
         {error ? <p className="px-4 pb-2 text-xs text-destructive">{error}</p> : null}
         {/* Why no button here: the page's one decision sits top-right, beside the name. */}

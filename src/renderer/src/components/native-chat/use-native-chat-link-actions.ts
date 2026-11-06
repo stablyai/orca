@@ -60,7 +60,7 @@ export function useNativeChatLinkActions(
       handleNativeChatWebLink(event, route.url, {
         worktreeId: context.worktreeId,
         sourceTabId: context.sourceTabId,
-        ...resolveNativeChatHttpLinkRouting(state, context.worktreeId),
+        ...resolveNativeChatHttpLinkRouting(state, context.worktreeId, route.url),
         actionsEnabled: plainClickBehavior === 'actions',
         plainClickBehavior,
         restoreFocus: () =>

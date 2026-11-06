@@ -53,7 +53,7 @@ export function handleOscLink(
       sourceOwner?: HttpLinkSourceOwner
       requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
       linkActionContext?: TerminalLinkActionContext | null
-      actionDestinations?: TerminalHttpLinkActionDestinations
+      getActionDestinations?: (url: string) => TerminalHttpLinkActionDestinations
     }
 ): boolean {
   if (!isDesktopOscLinkActivation(event)) {
@@ -90,7 +90,9 @@ export function handleOscLink(
             : { kind: 'local' }),
         requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference,
         linkActionContext: deps.linkActionContext,
-        actionDestinations: deps.actionDestinations,
+        // Match on the normalized destination, not rawText: an OSC 8 hyperlink's display text is
+        // attacker-chosen and need not resemble where it goes.
+        actionDestinations: deps.getActionDestinations?.(target.url),
         actionDestination: rawText
       })
     )

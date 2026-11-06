@@ -13754,6 +13754,12 @@
         },
         "SettingsSearchableSelect": {
           "noMatches": "No matches."
+        },
+        "PluginLinkRouteConsentPreview": {
+          "orcaBrowser": "Opens in Orca's built-in browser",
+          "systemBrowser": "Opens in your system browser",
+          "heading": "Link destinations",
+          "conflictWithEnabled": "Another enabled plugin claims this hostname, so neither route works while both are enabled."
         }
       },
       "right": {
