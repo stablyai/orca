@@ -17,6 +17,7 @@ import { CHECK_COLOR, CHECK_ICON } from './check-presentation'
 import { CheckRunDetails } from './check-run-details'
 import { CheckRunTime } from './check-run-time'
 import { getCheckStatusLabel } from '@/components/github/pr-check-presentation'
+import { getCheckConclusion } from '@/components/pr-check-counts'
 import { type ChecksListProps, useChecksListState } from '../refresh/use-checks-list-state'
 import { openAppHttpLink, openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
 import type { PRCheckDetail } from '../../../../../../shared/github/check-types'
@@ -142,7 +143,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
           >
             {rows.map((row) => {
               const check = row.check
-              const conclusion = check.conclusion ?? 'pending'
+              const conclusion = getCheckConclusion(check)
               const expanded = expandedCheckKeys.has(row.key)
               const openUrl = check.url
               return (
@@ -243,7 +244,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
 
 // The icon already shows the state, so its word lives in the icon's tooltip and accessible name, not beside it.
 function CheckStatusIcon({ check }: { check: PRCheckDetail }): React.JSX.Element {
-  const conclusion = check.conclusion ?? 'pending'
+  const conclusion = getCheckConclusion(check)
   const Icon = CHECK_ICON[conclusion] ?? CircleDashed
   const label = getCheckStatusLabel(check)
   return (
@@ -268,7 +269,7 @@ function CheckStatusIcon({ check }: { check: PRCheckDetail }): React.JSX.Element
 
 // The parent pipeline opens on the provider; it has no inline job log to expand.
 function PipelineCheckRow({ check }: { check: PRCheckDetail }): React.JSX.Element {
-  const conclusion = check.conclusion ?? 'pending'
+  const conclusion = getCheckConclusion(check)
   const content = (
     <>
       <CheckStatusIcon check={check} />
