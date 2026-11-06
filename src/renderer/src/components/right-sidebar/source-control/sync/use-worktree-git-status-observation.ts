@@ -1,5 +1,6 @@
 import type { OpenFile } from '@/store/slices/editor'
 import type { SourceControlScope } from '../panel/worktree-scope'
+import { sourceControlFileWatchRuntimeEnvironmentId } from './worktree-git-owner-target'
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import { useRepoById, useWorktreeById } from '@/store/selectors'
@@ -52,6 +53,9 @@ export function useWorktreeGitStatusObservation(
   const activeWorktree = owner?.worktree ?? selectedWorktree
   const activeExecutionHostId = useAppStore(
     (s) => owner?.executionHostId ?? getExecutionHostIdForWorktree(s, activeWorktreeId)
+  )
+  const fileWatchRuntimeEnvironmentId = useAppStore((state) =>
+    owner ? sourceControlFileWatchRuntimeEnvironmentId(state, owner) : undefined
   )
   const updateWorktreeGitIdentity = useAppStore((s) => s.updateWorktreeGitIdentity)
   const setGitStatus = useAppStore((s) => s.setGitStatus)
@@ -299,7 +303,7 @@ export function useWorktreeGitStatusObservation(
     activeRepoSupportsGit,
     activeWorktreeId,
     enabled: canFetchActiveWorktreeGitStatus,
-    runtimeEnvironmentId: owner?.worktree.runtimeOwnerEnvironmentId,
+    runtimeEnvironmentId: fileWatchRuntimeEnvironmentId,
     fetchStatus: fetchStatusOnChangeSignal,
     gitStatusHugeByWorktree: activeWorktreeId ? { [activeWorktreeId]: huge } : {},
     isConnectionReady: () => isActiveConnectionReady,

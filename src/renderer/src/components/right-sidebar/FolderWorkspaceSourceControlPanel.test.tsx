@@ -9,7 +9,10 @@ import type { AppState } from '@/store/types'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import FolderWorkspaceSourceControlPanel from './FolderWorkspaceSourceControlPanel'
 import { useSourceControlWatchConsumers } from '@/hooks/source-control-watch-consumers'
-import { useSourceControlScope } from './source-control/panel/worktree-scope'
+import {
+  useSourceControlScope,
+  type SourceControlScope
+} from './source-control/panel/worktree-scope'
 import { useWorktreeGitStatusObservation } from './source-control/sync/use-worktree-git-status-observation'
 import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
 
@@ -227,6 +230,47 @@ function ActiveStatusObserver() {
   useWorktreeGitStatusObservation(null)
   return null
 }
+
+function ScopedStatusObserver({ owner }: { owner: SourceControlScope }) {
+  useWorktreeGitStatusObservation(owner, { enabled: true })
+  return null
+}
+
+it('filters file events by the section runtime host when a same-id local twin exists', async () => {
+  const [local] = setup(1)
+  const remote = { ...local!, hostId: 'runtime:paired' as const, instanceId: 'remote-instance' }
+  const repo = useAppStore.getState().repos[0]!
+  const owner: SourceControlScope = {
+    worktreeId: remote.id,
+    repoId: remote.repoId,
+    executionHostId: 'runtime:paired',
+    worktree: remote,
+    repo,
+    attachedAt: 0,
+    placementWorkspaceId: 'folder:feature'
+  }
+  useAppStore.setState({ worktreesByRepo: { repo: [local!, remote] } })
+  await act(async () => root.render(<ScopedStatusObserver owner={owner} />))
+  expect(probes.status).toHaveBeenCalledTimes(1)
+  probes.status.mockClear()
+  for (const runtimeEnvironmentId of [null, 'other-runtime', 'paired']) {
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent(ORCA_WORKTREE_FILE_CHANGE_EVENT, {
+          detail: {
+            runtimeEnvironmentId,
+            payload: {
+              worktreePath: remote.path,
+              events: [{ absolutePath: `${remote.path}/a.ts`, kind: 'change' }]
+            }
+          }
+        })
+      )
+      await vi.advanceTimersByTimeAsync(4000)
+    })
+    expect(probes.status).toHaveBeenCalledTimes(runtimeEnvironmentId === 'paired' ? 1 : 0)
+  }
+})
 
 it('refreshes an open diff after a file event with the sidebar closed', async () => {
   vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mac')

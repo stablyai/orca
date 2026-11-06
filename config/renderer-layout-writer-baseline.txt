@@ -69,7 +69,7 @@
 7 src/renderer/src/store/slices/editor/actions/open-file-state.ts
 2 src/renderer/src/store/slices/editor/actions/open-history-diff.ts
 1 src/renderer/src/store/slices/editor/actions/open-unstaged-diff.ts
-11 src/renderer/src/store/slices/editor/actions/recently-closed-editor-tabs.ts
+10 src/renderer/src/store/slices/editor/actions/recently-closed-editor-tabs.ts
 2 src/renderer/src/store/slices/editor/actions/rekey-open-files-action.ts
 5 src/renderer/src/store/slices/editor/actions/restored-editor-owner-in-place.ts
 10 src/renderer/src/store/slices/editor/actions/restored-editor-owner-transition.ts

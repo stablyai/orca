@@ -11,8 +11,7 @@ export function closeMobileSessionTabInStore(
     (tab) => tab.id === tabId || tab.entityId === tabId
   )
   if (unifiedTab && EDITOR_SESSION_CONTENT_TYPES.has(unifiedTab.contentType)) {
-    store.closeFile(unifiedTab.entityId)
-    return true
+    return store.closeUnifiedTab(unifiedTab.id) !== null
   }
 
   const fallbackFile = store.openFiles.find(
@@ -20,7 +19,7 @@ export function closeMobileSessionTabInStore(
   )
   if (fallbackFile) {
     // Fallback openFiles tabs can outlive unified wrappers; mobile must close the source file too.
-    store.closeFile(fallbackFile.id)
+    store.closeFile(fallbackFile.id, { placementWorkspaceId: worktreeId })
     return true
   }
 

@@ -36,12 +36,13 @@ export function createCloseFileAction(
       )
       const placementId =
         opts?.placementWorkspaceId ??
-        preClose?.worktreeId ??
-        (state.activeWorktreeId && owners?.has(state.activeWorktreeId)
-          ? state.activeWorktreeId
-          : owners?.size === 1
-            ? owners.values().next().value
-            : undefined)
+        (preClose && owners?.has(preClose.worktreeId)
+          ? preClose.worktreeId
+          : state.activeWorktreeId && owners?.has(state.activeWorktreeId)
+            ? state.activeWorktreeId
+            : owners?.size === 1
+              ? owners.values().next().value
+              : preClose?.worktreeId)
       if (
         (opts?.placementWorkspaceId && owners?.size) ||
         (owners && [...owners].some((id) => id !== placementId))

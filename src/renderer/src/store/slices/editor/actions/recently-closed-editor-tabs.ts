@@ -282,12 +282,11 @@ export function closedEditorTabOrder(
   state: Pick<AppState, 'tabBarOrderByWorktree'>,
   closedIdsByWorkspace: ReadonlyMap<string, ReadonlySet<string>>
 ): Pick<AppState, 'tabBarOrderByWorktree'> {
-  if (!state.tabBarOrderByWorktree) {
-    return { tabBarOrderByWorktree: state.tabBarOrderByWorktree }
-  }
-  const order = { ...state.tabBarOrderByWorktree }
-  for (const [workspaceId, ids] of closedIdsByWorkspace) {
-    order[workspaceId] = (order[workspaceId] ?? []).filter((id) => !ids.has(id))
+  const order = state.tabBarOrderByWorktree && { ...state.tabBarOrderByWorktree }
+  if (order) {
+    for (const [workspaceId, ids] of closedIdsByWorkspace) {
+      order[workspaceId] = (order[workspaceId] ?? []).filter((id) => !ids.has(id))
+    }
   }
   return { tabBarOrderByWorktree: order }
 }

@@ -23,7 +23,7 @@ import {
 import { useWorktreeGitStatusObservation } from './source-control/sync/useGitStatusPolling'
 import { useSourceControlWatchConsumer } from '@/hooks/source-control-watch-consumers'
 import { useSectionOnScreen } from './source-control/panel/section-viewport-presence'
-import { resolveOwner } from '@/lib/resolve-owner'
+import { sourceControlFileWatchRuntimeEnvironmentId } from './source-control/sync/worktree-git-owner-target'
 const EMPTY_ENTRIES: readonly unknown[] = []
 
 type SectionProps = {
@@ -84,18 +84,9 @@ const WorktreeSection = memo(
     if (bodyActive && !bodyMounted) {
       setBodyMounted(true)
     }
-    const watchRuntimeEnvironmentId = useAppStore((state) => {
-      const ownerMatch = resolveOwner(state, {
-        workspaceId: id,
-        ...(owner.worktree.hostId ? { hostId: owner.executionHostId } : {})
-      })
-      // A runtime proxy to nested SSH cannot watch that filesystem either.
-      if (ownerMatch.kind !== 'resolved' || ownerMatch.owner.at !== 'local') {
-        return undefined
-      }
-      const endpoint = ownerMatch.owner.endpoint
-      return endpoint.kind === 'environment' ? endpoint.environmentId : null
-    })
+    const watchRuntimeEnvironmentId = useAppStore((state) =>
+      sourceControlFileWatchRuntimeEnvironmentId(state, owner)
+    )
     // Only local or served-runtime roots have the existing watch transport; huge repos keep their pause.
     useSourceControlWatchConsumer(
       attachedWorktreeOwnerKey(owner),

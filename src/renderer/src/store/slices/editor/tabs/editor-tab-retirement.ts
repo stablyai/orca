@@ -97,7 +97,8 @@ export function releaseUnreferencedEditorContent(
   entityId: string,
   placementWorkspaceId?: string
 ): void {
-  if (!editorContentIsReferenced(get(), entityId)) {
-    get().closeFile(entityId, { captureRecentlyClosed: false, placementWorkspaceId })
+  const state = get()
+  if (openFileIndex(state.openFiles).has(entityId) && !editorContentIsReferenced(state, entityId)) {
+    state.closeFile(entityId, { captureRecentlyClosed: false, placementWorkspaceId })
   }
 }

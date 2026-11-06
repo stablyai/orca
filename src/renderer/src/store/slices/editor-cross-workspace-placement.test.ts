@@ -12,6 +12,7 @@ import { workspaceEditorFiles } from './editor/tabs/workspace-editor-files'
 import { removeWorktreeLayout } from './tabs/worktree-layout-lifecycle'
 import { buildHydratedTabState } from './tabs-hydration'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
+import { closeMobileSessionTabInStore } from '@/runtime/mobile-session-tab-close'
 
 vi.mock('@/runtime/runtime-rpc-client', async (original) =>
   (
@@ -114,6 +115,42 @@ function patchRemoval(workspaceId: string) {
     })
   )
 }
+
+it.each(['direct', 'mobile'] as const)(
+  '%s close retires a child-owned file whose only placement is in a background folder',
+  async (caller) => {
+    openDiff()
+    await main.settle()
+    const tab = tabs(FOLDER)[0]!
+    useAppStore.setState({
+      activeWorktreeId: CHILD,
+      activeWorkspaceKey: worktreeWorkspaceKey(CHILD)
+    })
+    if (caller === 'direct') {
+      useAppStore.getState().closeFile(tab.entityId)
+    } else {
+      expect(closeMobileSessionTabInStore(useAppStore.getState(), FOLDER, tab.id)).toBe(true)
+    }
+    await main.settle()
+    expect(tabs(FOLDER)).toEqual([])
+    expect(useAppStore.getState().openFiles).toEqual([])
+    expect(useAppStore.getState().activeWorktreeId).toBe(CHILD)
+  }
+)
+
+it('mobile close removes the requested folder placement and retains the child view', async () => {
+  openDiff()
+  openDiff(CHILD)
+  await main.settle()
+  const folderTab = tabs(FOLDER)[0]!
+  const childTab = tabs(CHILD)[0]!
+  useAppStore.setState({ activeWorktreeId: CHILD, activeWorkspaceKey: worktreeWorkspaceKey(CHILD) })
+  expect(closeMobileSessionTabInStore(useAppStore.getState(), FOLDER, folderTab.id)).toBe(true)
+  await main.settle()
+  expect(tabs(FOLDER)).toEqual([])
+  expect(tabs(CHILD).map((tab) => tab.id)).toEqual([childTab.id])
+  expect(useAppStore.getState().openFiles.map((file) => file.id)).toEqual([childTab.entityId])
+})
 
 it('shares child-owned diff content across folder and child views, with independent close and reopen', async () => {
   openDiff()
