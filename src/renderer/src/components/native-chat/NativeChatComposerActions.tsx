@@ -263,7 +263,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
                 onSteerPreview?.()
               }
             }}
-            size="sm"
+            size="pill"
           >
             {steerPreview === 'queue' ? (
               <ListEnd className="size-3.5" />
