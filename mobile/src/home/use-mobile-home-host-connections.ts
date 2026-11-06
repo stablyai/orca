@@ -14,7 +14,7 @@ import {
   fetchHomeHostWorktreeInfo,
   type HostWorktreeInfoSetter
 } from '../worktree/home-host-worktree-fetch'
-import { withoutHomeAgentStates } from '../worktree/home-worktree-info'
+import { withLastSeenHomeAgents } from '../worktree/home-worktree-info'
 import { fetchHomeHostStats, type HomeStatsSetter } from '../stats/home-stats-summary-read'
 import {
   readMobileHomeLastConnected,
@@ -107,7 +107,7 @@ function wireMobileHomeHostSubscriptions(
     // Agents keep moving while we're away; only the reconnect read may show their states again.
     setWorktreeInfo((previous) => {
       const current = previous[entry.hostId]
-      const next = current && withoutHomeAgentStates(current)
+      const next = current && withLastSeenHomeAgents(current)
       return next === current ? previous : { ...previous, [entry.hostId]: next }
     })
   }
