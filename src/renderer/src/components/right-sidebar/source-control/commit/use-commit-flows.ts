@@ -98,13 +98,20 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
   const { handleCancelGenerate } = commitMessageGeneration
   // Cancel box generation when committing its draft so a late reply cannot refill it; Create PR has its own target.
   const handleCommit = useCallback<typeof commitStagedChanges>(
-    (messageOverride, options) => {
+    async (messageOverride, options) => {
       if (!options?.target) {
         handleCancelGenerate()
       }
-      return commitStagedChanges(messageOverride, options)
+      const ok = await commitStagedChanges(messageOverride, options)
+      const id = options?.target?.worktreeId ?? activeWorktreeId
+      if (ok && id) {
+        setRemoteActionErrors((previous) =>
+          previous[id]?.kind === 'switch_branch' ? { ...previous, [id]: null } : previous
+        )
+      }
+      return ok
     },
-    [commitStagedChanges, handleCancelGenerate]
+    [activeWorktreeId, commitStagedChanges, handleCancelGenerate, setRemoteActionErrors]
   )
   const createPrIntentCommitMessage = useSourceControlCreatePrIntentCommitMessage({
     activeRepo,
