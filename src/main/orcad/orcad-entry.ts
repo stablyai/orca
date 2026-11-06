@@ -218,6 +218,13 @@ async function startOrcadRuntime(
   })
   paneGridsForShutdown = runtime
 
+  const { installFirstWorkRenameHookSubscription } =
+    await import('../agent-hooks/first-work-rename-hook-subscription')
+  const { firstWorkRenameDeps } = await import('../agent-hooks/first-work-rename-runtime')
+  registerCleanup(
+    installFirstWorkRenameHookSubscription(firstWorkRenameDeps(profileStore, runtime))
+  )
+
   accountLaunch?.attachToRuntime(runtime)
   const { installOrcadEmulatorBridge } = await import('./orcad-emulator-bridge')
   installOrcadEmulatorBridge(runtime, registerCleanup)

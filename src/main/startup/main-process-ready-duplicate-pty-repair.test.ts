@@ -99,7 +99,9 @@ vi.mock('./main-window-lifecycle-flags', () => ({ recordProcessGoneCrash: vi.fn(
 vi.mock('./gpu-lifecycle', () => ({ handleGpuChildCrash: vi.fn() }))
 vi.mock('./configure-process', () => ({ shouldInstallManagedHooks: () => false }))
 vi.mock('./main-process-observers', () => ({ initializeMainProcessObservers: vi.fn() }))
-vi.mock('./branch-rename-hook', () => ({ installFirstWorkRenameHookSubscription: vi.fn() }))
+vi.mock('../agent-hooks/first-work-rename-hook-subscription', () => ({
+  installFirstWorkRenameHookSubscription: vi.fn()
+}))
 vi.mock('./main-process-account-services', () => ({
   initializeMainProcessAccountServices: vi.fn()
 }))
