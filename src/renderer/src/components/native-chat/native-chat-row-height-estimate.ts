@@ -1,7 +1,9 @@
 // Keep estimates arithmetic over cached metrics; per-measurement block scans would traverse the whole transcript.
 
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
+import { NATIVE_CHAT_TURN_DIFF_FILE_LIMIT } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
+import { agentMessageIsCompact } from '../../../../shared/agent-session/agent-message-presentation'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 import {
   NATIVE_CHAT_USER_MESSAGE_FOLDED_PX,
   nativeChatUserMessageFolds
@@ -9,6 +11,7 @@ import {
 
 export type NativeChatRowContentMetrics = {
   role: NativeChatMessage['role']
+  compactAgentMessage?: boolean
   /** Wrapped display lines of prose, not source lines. */
   textLines: number
   /** A user prompt long enough to mount folded behind "Show full message". */
@@ -22,6 +25,7 @@ export type NativeChatRowChromeMetrics = {
   hasReceipt: boolean
   hasStatus: boolean
   hasTurnDiff: boolean
+  turnDiffFileCount?: number
   /** Folded prose/tools paint only a roster and must not reserve their expanded height. */
   folded?: boolean
   /** Inside a subagent's section, where assistant prose keeps its controls in flow. */
@@ -47,6 +51,7 @@ const IMAGE_STRIP_PX = 88
 const TOOL_RUN_CHROME_PX = 16
 /** A reasoning row draws only its one-line trigger (`min-h-6`) until opened; opening remeasures it. */
 const COLLAPSED_REASONING_PX = 24
+const COMPACT_AGENT_MESSAGE_PX = 38
 const SUBAGENT_ROW_PX = 32
 export const NATIVE_CHAT_SUBAGENT_SECTION_HEAD_PX = SUBAGENT_ROW_PX
 const STATUS_ROW_PX = 28
@@ -96,6 +101,7 @@ export function nativeChatRowContentMetrics(
   const content = deriveNativeChatRowContent(message.blocks)
   const metrics: NativeChatRowContentMetrics = {
     role: message.role,
+    compactAgentMessage: agentMessageIsCompact(message),
     textLines: estimateNativeChatTextLines(content.markdown, typography.charsPerLine),
     userFolds: message.role === 'user' && nativeChatUserMessageFolds(content.markdown),
     imageCount: content.prose.filter((block) => block.type === 'image-ref').length,
@@ -135,6 +141,9 @@ export function estimateNativeChatRowHeight(
   } else if (chrome.folded === true) {
     height = content.subagentGroupCount * SUBAGENT_ROW_PX * scale
     partCount = height > 0 ? 1 : 0
+  } else if (content.compactAgentMessage) {
+    height = COMPACT_AGENT_MESSAGE_PX * scale
+    partCount = 1
   } else {
     height =
       content.role === 'reasoning'
@@ -169,7 +178,15 @@ export function estimateNativeChatRowHeight(
     partCount += 1
   }
   if (chrome.hasTurnDiff) {
-    height += TURN_DIFF_PX * scale
+    height +=
+      TURN_DIFF_PX *
+      scale *
+      (1 +
+        Math.min(chrome.turnDiffFileCount ?? 0, NATIVE_CHAT_TURN_DIFF_FILE_LIMIT) +
+        (chrome.turnDiffFileCount !== undefined &&
+        chrome.turnDiffFileCount > NATIVE_CHAT_TURN_DIFF_FILE_LIMIT
+          ? 1
+          : 0))
     partCount += 1
   }
   height += Math.max(0, partCount - 1) * NATIVE_CHAT_ROW_GAP_PX

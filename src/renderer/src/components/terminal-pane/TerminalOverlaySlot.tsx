@@ -1,10 +1,11 @@
-import { memo, useLayoutEffect, useState } from 'react'
+import { memo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '../../store'
-import { isProvenProcessExit } from '../../../../shared/terminal-exit-cause'
+import { isProvenProcessExit } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
 import type { ActivityTerminalPortalTarget } from '../activity/activity-terminal-portal'
 import TerminalPane from './TerminalPane'
+import type { HiddenTerminalPrewarm } from './terminal-pane-types'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { shouldDeferParkedPtyExitTabClose } from './terminal-parked-tab-watchers'
 
@@ -18,6 +19,8 @@ type TerminalOverlaySlotProps = {
   isWorktreeActive: boolean
   isVisible: boolean
   isActive: boolean
+  /** Hover prewarm of a hidden reveal target. */
+  hiddenPrewarm?: HiddenTerminalPrewarm | null
   /** Visible on the unfocused side of a split. */
   dimmed?: boolean
   activityTerminalPortal: ActivityTerminalPortalTarget | null
@@ -37,6 +40,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   isWorktreeActive,
   isVisible,
   isActive,
+  hiddenPrewarm = null,
   dimmed = false,
   activityTerminalPortal,
   onFocusOwningGroup,
@@ -46,12 +50,12 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   const [shouldMeasureHiddenStartup, setShouldMeasureHiddenStartup] = useState(
     () => useAppStore.getState().pendingStartupByTabId[terminalTabId] !== undefined
   )
-  useLayoutEffect(() => {
-    if (isVisible && shouldMeasureHiddenStartup) {
-      setShouldMeasureHiddenStartup(false)
-    }
-  }, [isVisible, shouldMeasureHiddenStartup])
+  if (isVisible && shouldMeasureHiddenStartup) {
+    setShouldMeasureHiddenStartup(false)
+  }
 
+  // Drop with the reveal in one render, or a later lease release re-runs resume and steals focus.
+  const prewarm = isVisible || activityTerminalPortal !== null ? null : hiddenPrewarm
   const terminalPane = (
     <TerminalPane
       key={`${terminalTabId}-${terminalGeneration ?? 0}`}
@@ -63,6 +67,8 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
       isVisible={isVisible || activityTerminalPortal !== null}
       isWorktreeActive={isWorktreeActive || activityTerminalPortal !== null}
       isolatedPaneKey={activityTerminalPortal?.paneKey ?? null}
+      measureWhileHidden={prewarm !== null}
+      warmRendererWhileHidden={prewarm === 'warm'}
       onPtyExit={(ptyId, exitCode) => {
         if (consumeSuppressedPtyExit(ptyId)) {
           return
@@ -82,9 +88,9 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
           onClosed: captureEmptiedReaction()
         })
       }}
-      onCloseTab={() => {
+      onCloseTab={(reason) => {
         // Use the guarded close path so pinned terminals still require confirmation.
-        closeTerminalTab(terminalTabId, { onClosed: captureEmptiedReaction() })
+        closeTerminalTab(terminalTabId, { reason, onClosed: captureEmptiedReaction() })
       }}
     />
   )
@@ -101,7 +107,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
     <RetainedPaneHost
       groupId={groupId}
       isVisible={isVisible}
-      measureWhileHidden={shouldMeasureHiddenStartup}
+      measureWhileHidden={shouldMeasureHiddenStartup || prewarm !== null}
       fitTerminal
       dimmed={dimmed}
       data-terminal-overlay-tab-id={terminalTabId}

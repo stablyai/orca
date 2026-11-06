@@ -1,39 +1,14 @@
 // @vitest-environment happy-dom
 import { cleanup, renderHook } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, expect, it } from 'vitest'
 import { useNativeChatAvailabilityNotice } from './use-native-chat-availability-notice'
-import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
-import {
-  structuredAgentSessionDeliveryNotices,
-  structuredAgentSessionStartFailureFacts
-} from './structured-agent-session-delivery-notices'
+import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
+import { agentSessionVisibleFailureFacts } from '../../../../shared/agent-session/failures/agent-session-visible-failures'
 
 afterEach(cleanup)
-describe('each agent names its own sign-in method before a send', () => {
-  it.each([
-    ['claude', 'Claude', 'claude auth login'],
-    ['codex', 'Codex', 'codex login'],
-    ['grok', 'Grok', 'grok login'],
-    ['opencode', 'OpenCode', 'opencode auth login'],
-    ['pi', 'Pi', '/login'],
-    ['omp', 'OMP', 'Sign in to OMP.']
-  ] as const)('uses %s copy without a post-send retry tail', (agent, agentLabel, command) => {
-    const { result } = renderHook(() =>
-      useNativeChatAvailabilityNotice({
-        agent,
-        agentLabel,
-        unavailable: { reason: 'notSignedIn' },
-        launchFailure: null,
-        journalItems: []
-      })
-    )
-    expect(result.current?.text).toContain(command)
-    expect(result.current?.text).toContain(agentLabel)
-    expect(result.current?.text).not.toContain('send your message again')
-  })
-})
 
 it('keeps one auth explanation while an unechoed message still reads as unsent', () => {
   const failure = {
@@ -55,7 +30,6 @@ it('keeps one auth explanation while an unechoed message still reads as unsent',
   const { result } = renderHook(() =>
     useNativeChatAvailabilityNotice({
       agent: 'codex',
-      agentLabel: 'Codex',
       unavailable: { reason: 'notSignedIn', account: 'system' },
       launchFailure: null,
       journalItems: [authRow]
@@ -65,7 +39,7 @@ it('keeps one auth explanation while an unechoed message still reads as unsent',
   const notices = structuredAgentSessionDeliveryNotices({
     pending: [],
     agentName: 'Codex',
-    startFailures: structuredAgentSessionStartFailureFacts([authRow]),
+    startFailures: agentSessionVisibleFailureFacts([authRow]),
     submissions: [
       {
         clientMessageId: 'send',
@@ -113,7 +87,6 @@ it("steps aside while the newest send's own line says the notice's reason", () =
     renderHook(() =>
       useNativeChatAvailabilityNotice({
         agent: 'pi',
-        agentLabel: 'Pi',
         unavailable: { reason: 'notSignedIn' },
         launchFailure: null,
         journalItems,

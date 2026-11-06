@@ -9,6 +9,7 @@ import {
   resolveIssueGitHubApiRepositorySource
 } from './github-api-repository'
 import { acquire, extractExecError, ghExecFileAsync, release } from './gh-utils'
+import { codeHostFailure } from '../../shared/code-host-failure-copy'
 
 function githubIssueErrorMessage(error: unknown): string {
   const { stderr, stdout } = extractExecError(error)
@@ -27,7 +28,7 @@ export async function createIssue(
 ): Promise<GitHubCreateIssueResult> {
   const trimmedTitle = title.trim()
   if (!trimmedTitle) {
-    return { ok: false, error: 'Title is required' }
+    return codeHostFailure('titleRequired')
   }
   const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
     repoPath,
@@ -44,7 +45,7 @@ export async function createIssue(
     localGitOptions
   )
   if (!ownerRepo) {
-    return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
+    return codeHostFailure('github.repoUnresolved')
   }
   await acquire()
   try {
@@ -78,7 +79,7 @@ export async function createIssue(
       const { stdout } = await createIssueRequest('')
       data = parseIssue(stdout)
       if (typeof data.number !== 'number') {
-        return { ok: false, error: 'Unexpected response from GitHub' }
+        return codeHostFailure('github.unexpectedResponse')
       }
 
       try {
@@ -99,7 +100,7 @@ export async function createIssue(
     }
 
     if (typeof data.number !== 'number') {
-      return { ok: false, error: 'Unexpected response from GitHub' }
+      return codeHostFailure('github.unexpectedResponse')
     }
     return {
       ok: true,

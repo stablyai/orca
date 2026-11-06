@@ -14,7 +14,7 @@ import {
   readPairedPaneContent,
   waitForPairedPaneMarker
 } from './helpers/paired-host-terminal'
-import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
+import { quotePosixShell } from '../../src/shared/shell/launch/shell-argument-quoting'
 
 const LINE_COUNT = 300
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-initial-scrollback-'))

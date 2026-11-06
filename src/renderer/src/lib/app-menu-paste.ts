@@ -10,7 +10,10 @@ export const APP_MENU_PASTE_EVENT = 'orca-app-menu-paste'
 
 export type AppMenuPasteRequestResult =
   | { status: 'handled'; target: 'terminal' | 'text-control' }
-  | { status: 'native-fallback'; reason: 'no-owned-target' | 'clipboard-read-failed' }
+  | {
+      status: 'native-fallback'
+      reason: 'no-owned-target' | 'clipboard-read-failed' | 'no-clipboard-text'
+    }
   | {
       status: 'rejected'
       target: 'text-control'
@@ -82,6 +85,26 @@ export async function handleAppMenuPasteRequest({
     return { status: 'native-fallback', reason: 'no-owned-target' }
   }
 
+  const nativePasteIntoResolvedTarget = (
+    reason: 'clipboard-read-failed' | 'no-clipboard-text'
+  ): AppMenuPasteRequestResult => {
+    // After the async read, native paste could target newly focused controls instead of the resolved owner.
+    if (target.ownerDocument.activeElement !== target) {
+      const rejectedResult = createTextControlRejectedResult(
+        'target-unavailable',
+        0,
+        'app-menu',
+        getNowMs() - startedAtMs
+      )
+      return createAppMenuTextControlRejectedResult({
+        reason: 'target-unavailable',
+        redactedDiagnostic: rejectedResult.redactedDiagnostic
+      })
+    }
+    performNativePaste({ mode: nativePasteMode })
+    return { status: 'native-fallback', reason }
+  }
+
   let text: string
   try {
     text = await readClipboardText({ maxBytes: TEXT_CONTROL_PASTE_MAX_BYTES })
@@ -98,21 +121,11 @@ export async function handleAppMenuPasteRequest({
         redactedDiagnostic: rejectedResult.redactedDiagnostic
       })
     }
-    // After async failure, native paste could target newly focused controls instead of the resolved owner.
-    if (target.ownerDocument.activeElement !== target) {
-      const rejectedResult = createTextControlRejectedResult(
-        'target-unavailable',
-        0,
-        'app-menu',
-        getNowMs() - startedAtMs
-      )
-      return createAppMenuTextControlRejectedResult({
-        reason: 'target-unavailable',
-        redactedDiagnostic: rejectedResult.redactedDiagnostic
-      })
-    }
-    performNativePaste({ mode: nativePasteMode })
-    return { status: 'native-fallback', reason: 'clipboard-read-failed' }
+    return nativePasteIntoResolvedTarget('clipboard-read-failed')
+  }
+  // Image-only clipboards read as no text; a native paste hands the image to the control's own paste handler.
+  if (!text) {
+    return nativePasteIntoResolvedTarget('no-clipboard-text')
   }
 
   const result = await pasteTextIntoTextControl(target, text, {

@@ -432,11 +432,11 @@ describe('the identity a session presents', () => {
   it('resumes a timed-out ask as the session, without naming a terminal', async () => {
     asSessionWithInheritedPane()
     callMock.mockResolvedValue({ result: { ...RESULT.result, answer: null, timedOut: true } })
-    const errors = vi.mocked(console.error)
+    const logs = vi.mocked(console.log)
 
     await invoke('ask', flagMap({ to: 'term_worker', question: 'q' }), false)
 
-    const advice = errors.mock.calls.map(([line]) => String(line)).join('\n')
+    const advice = logs.mock.calls.map(([line]) => String(line)).join('\n')
     expect(advice).toContain('--resume msg_1')
     expect(advice).not.toContain('--from')
   })

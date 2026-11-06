@@ -5,7 +5,7 @@ import {
   applyManualRepoOrder,
   normalizeManualRepoOrder
 } from '../../../../../shared/manual-repo-order'
-import { normalizeWorkspaceCleanupBrowseState } from '../../../../../shared/workspace-cleanup-browse-state'
+import { normalizeWorkspaceCleanupBrowseState } from '../../../../../shared/workspace-cleanup/workspace-cleanup-browse-state'
 import {
   normalizeExecutionHostScope,
   normalizeExecutionHostOrder,
@@ -48,8 +48,9 @@ import {
   withWslMovedRepoIds,
   withWslMovedSetupScriptDismissals
 } from '../../repos/wsl-moved-repo-ui-retention'
-import type { PersistedUIWriteBaseline } from '../persisted-ui-write-baseline'
+
 import {
+  type PersistedUIWriteBaseline,
   capturePersistedUIWriteBaseline,
   diffPersistedUIWriteFields
 } from '../persisted-ui-write-baseline'
@@ -177,6 +178,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           editorFontZoomLevel: ui.editorFontZoomLevel ?? 0,
           worktreeCardProperties: normalizeWorktreeCardProperties(ui.worktreeCardProperties),
           _worktreeCardModeDefaulted: ui._worktreeCardModeDefaulted === true,
+          showAgentModels: ui.showAgentModels !== false,
           agentActivityDisplayMode: normalizeAgentActivityDisplayMode(ui.agentActivityDisplayMode),
           workspaceStatuses: normalizeWorkspaceStatuses(ui.workspaceStatuses),
           workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
@@ -215,6 +217,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             ? ui.releaseChannelOverride
             : null,
           updateReassuranceSeen: ui.updateReassuranceSeen ?? false,
+          seenMacosUpdateRequirement: ui.seenMacosUpdateRequirement ?? null,
           osc52ClipboardDefaultOnNoticePending: ui.osc52ClipboardDefaultOnNoticePending === true,
           browserDefaultUrl: ui.browserDefaultUrl ?? null,
           browserDefaultSearchEngine: ui.browserDefaultSearchEngine ?? null,
@@ -256,6 +259,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           statusBarCompactChangeNoticeDismissed: ui.statusBarCompactChangeNoticeDismissed !== false,
           // Why: default false so existing users still see the CTA; only explicit dismissal persists true.
           usageEmptyStateDismissed: ui.usageEmptyStateDismissed === true,
+          pluginsAlphaNoticeDismissed: ui.pluginsAlphaNoticeDismissed === true,
           codexTerminalServerIsolationNoticeSeen:
             ui.codexTerminalServerIsolationNoticeSeen === true,
           codexSharedSettingsNoticeSeen: ui.codexSharedSettingsNoticeSeen === true,

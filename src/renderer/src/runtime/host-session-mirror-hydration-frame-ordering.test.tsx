@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act, renderHook } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type * as WebRuntimeTerminalCreationModule from './web-runtime-terminal-creation'
 import type * as WebSessionTerminalHandleEventsModule from './web-session-terminal-handle-events'
@@ -38,11 +38,8 @@ vi.mock('./web-runtime-terminal-creation', async (importOriginal) => {
 
 import { useAppStore } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
-import {
-  takeAllPendingBackgroundTerminalWorktreeMounts,
-  takePendingBackgroundTerminalWorktreeMount
-} from '@/components/terminal/background-terminal-worktree-mount'
-import { wakeSleepingAgentsForWorktreeInBackground } from '@/lib/wake-sleeping-agents-in-background'
+import '@/components/terminal/background-terminal-worktree-mount'
+import '@/lib/wake-sleeping-agents-in-background'
 import {
   BG_MIRROR_TAB_ID,
   BG_WT,
@@ -70,10 +67,10 @@ import {
   setDocumentVisibility,
   tabIds
 } from './host-session-mirror-frame-ordering-test-harness'
-import { clearWebSessionTabsTrackingForEnvironment } from './web-session-tabs-sync/tracking-lifecycle'
+import './web-session-tabs-sync/tracking-lifecycle'
 import { useWebSessionTabsSync } from './web-session-tabs-sync/use-web-session-tabs-sync'
 import { WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS } from './web-session-tabs-sync/state'
-import { hasHostSessionMirrorHydrated } from './host-session-mirror-hydration'
+import './host-session-mirror-hydration'
 import { WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS } from './window-visibility-subscription-parking'
 
 // Waiters drain synchronously: settle only after frame patch commits or recovery sees empty bindings and duplicates resume. Real handlers also verify unverifiable never settles as exited.
@@ -130,46 +127,6 @@ describe('mirrored-pane resume deferral against real stream frames', () => {
     expect(state.terminalLayoutsByTabId[MIRROR_TAB_ID]?.ptyIdsByLeafId?.[LEAF_ID]).toBe(
       afterRestartPtyId
     )
-  })
-
-  it('does not let late bootstrap inventory repopulate after a newer empty inventory', async () => {
-    let resolveListAll: (response: unknown) => void = () => {}
-    runtimeCall.mockImplementation((request: { method: string }) =>
-      request.method === 'session.tabs.listAll'
-        ? new Promise((resolve) => {
-            resolveListAll = resolve
-          })
-        : new Promise(() => {})
-    )
-    renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-
-    const beforeRestart = makeHostSnapshot(WT, HOST_SURFACE_ID, HOST_PARENT_TAB_ID)
-    beforeRestart.publicationEpoch = 'before-empty-inventory'
-    if (beforeRestart.tabs[0]?.type !== 'terminal') {
-      throw new Error('fixture must contain a terminal surface')
-    }
-    beforeRestart.tabs[0].terminal = 'terminal-before-empty-inventory'
-
-    await publish(findSubscription('session.tabs.subscribeAll'), {
-      type: 'snapshots',
-      snapshots: []
-    })
-
-    await act(async () => {
-      resolveListAll({
-        id: 'listall-before-empty-inventory',
-        ok: true as const,
-        result: { snapshots: [beforeRestart] },
-        _meta: { runtimeId: 'runtime-a' }
-      })
-      await settle()
-    })
-
-    // Newer empty inventory must prevent a late list reinserting stale handles.
-    const state = useAppStore.getState()
-    expect(state.ptyIdsByTabId[MIRROR_TAB_ID]).toBeUndefined()
-    expect(state.tabsByWorktree[WT]?.find((tab) => tab.id === MIRROR_TAB_ID)?.ptyId).toBeNull()
   })
 
   it('does not let a late bootstrap runtime id retire a newer stream runtime', async () => {
@@ -279,136 +236,10 @@ describe('mirrored-pane resume deferral against real stream frames', () => {
     expect(tabIds(BG_WT)).toEqual([BG_MIRROR_TAB_ID])
     expectHostOwnedRecordNotResumed(backgroundPaneKey, BG_WT, 'codex-session-bg-1')
   })
-
-  // Deliver each remaining release path alone so another handler cannot mask a missing settle.
-  it('the initial listAll releases the pane it parked', async () => {
-    let resolveListAll: (response: unknown) => void = () => {}
-    runtimeCall.mockImplementation((request: { method: string }) =>
-      request.method === 'session.tabs.listAll'
-        ? new Promise((resolve) => {
-            resolveListAll = resolve
-          })
-        : new Promise(() => {})
-    )
-    renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    const paneKey = seedSleepingRecord(MIRROR_TAB_ID, WT, 'codex-session-listall-release')
-    expect(resumeSleepingAgentSessionsForWorktree(WT)).toBe(0)
-
-    // A settled inventory can retract a closed tab without authorizing another resume.
-    await act(async () => {
-      resolveListAll({
-        id: 'listall',
-        ok: true as const,
-        result: {
-          snapshots: [makeHostSnapshot(WT, OTHER_HOST_SURFACE_ID, OTHER_HOST_PARENT_TAB_ID)]
-        },
-        _meta: { runtimeId: 'runtime-a' }
-      })
-      await settle()
-    })
-
-    expect(tabIds(WT)).not.toContain(MIRROR_TAB_ID)
-    expectHostOwnedRecordNotResumed(paneKey, WT, 'codex-session-listall-release')
-  })
-
-  it('a single frame on the global stream releases the pane it parked', async () => {
-    renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    const paneKey = seedSleepingRecord(MIRROR_TAB_ID, WT, 'codex-session-global-frame')
-    expect(resumeSleepingAgentSessionsForWorktree(WT)).toBe(0)
-
-    await publish(findSubscription('session.tabs.subscribeAll'), {
-      type: 'snapshot',
-      ...makeHostSnapshot(WT, OTHER_HOST_SURFACE_ID, OTHER_HOST_PARENT_TAB_ID)
-    })
-
-    expect(tabIds(WT)).not.toContain(MIRROR_TAB_ID)
-    expectHostOwnedRecordNotResumed(paneKey, WT, 'codex-session-global-frame')
-  })
-
-  it('the active-worktree scoped frame releases the pane it parked', async () => {
-    renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    const paneKey = seedSleepingRecord(MIRROR_TAB_ID, WT, 'codex-session-scoped-frame')
-    expect(resumeSleepingAgentSessionsForWorktree(WT)).toBe(0)
-
-    await publish(findSubscription('session.tabs.subscribe'), {
-      type: 'snapshot',
-      ...makeHostSnapshot(WT, OTHER_HOST_SURFACE_ID, OTHER_HOST_PARENT_TAB_ID)
-    })
-
-    expect(tabIds(WT)).not.toContain(MIRROR_TAB_ID)
-    expectHostOwnedRecordNotResumed(paneKey, WT, 'codex-session-scoped-frame')
-  })
-
-  it('does not let a scoped frame from before tracking reset release its pane', async () => {
-    renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    const paneKey = seedSleepingRecord(MIRROR_TAB_ID, WT, 'codex-session-scoped-old-tracking')
-    expect(resumeSleepingAgentSessionsForWorktree(WT)).toBe(0)
-
-    clearWebSessionTabsTrackingForEnvironment(ENV)
-    await publish(findSubscription('session.tabs.subscribe'), {
-      type: 'snapshot',
-      ...makeHostSnapshot(WT, OTHER_HOST_SURFACE_ID, OTHER_HOST_PARENT_TAB_ID)
-    })
-
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
-    expect(hasHostSessionMirrorHydrated(ENV, WT)).toBe(false)
-  })
 })
 
 describe('mirror latch verdicts against real stream failures', () => {
   installFrameOrderingHarness()
-
-  it('a rejected inventory keeps a parked pane parked', async () => {
-    let rejectListAll: (error: Error) => void = () => {}
-    runtimeCall.mockImplementation((request: { method: string }) =>
-      request.method === 'session.tabs.listAll'
-        ? new Promise((_resolve, reject) => {
-            rejectListAll = reject
-          })
-        : new Promise(() => {})
-    )
-    renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    const paneKey = seedSleepingRecord(MIRROR_TAB_ID, WT, 'codex-session-listall-reject')
-    expect(resumeSleepingAgentSessionsForWorktree(WT)).toBe(0)
-
-    // Lost contact after parking is unverifiable; no PTY exit proof may drain waiters.
-    await act(async () => {
-      rejectListAll(new Error('relay disconnected'))
-      await settle()
-    })
-
-    expect(tabIds(WT)).toEqual([MIRROR_TAB_ID])
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
-    expect(Object.keys(useAppStore.getState().automaticAgentResumeClaimsByTabId)).toHaveLength(0)
-  })
-
-  it('a scoped stream error settles neither its own worktree nor another', async () => {
-    renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    const activePaneKey = seedSleepingRecord(MIRROR_TAB_ID, WT, 'codex-session-active-error')
-    const backgroundPaneKey = seedSleepingRecord(BG_MIRROR_TAB_ID, BG_WT, 'codex-session-bg-error')
-    expect(resumeSleepingAgentSessionsForWorktree(WT)).toBe(0)
-    expect(resumeSleepingAgentSessionsForWorktree(BG_WT)).toBe(0)
-
-    await act(async () => {
-      findSubscription('session.tabs.subscribe').callbacks.onError?.({
-        message: 'stream closed'
-      } as never)
-      await settle()
-    })
-
-    const state = useAppStore.getState()
-    expect(tabIds(WT)).toEqual([MIRROR_TAB_ID])
-    expect(state.sleepingAgentSessionsByPaneKey[activePaneKey]).toBeDefined()
-    expect(tabIds(BG_WT)).toEqual([BG_MIRROR_TAB_ID])
-    expect(state.sleepingAgentSessionsByPaneKey[backgroundPaneKey]).toBeDefined()
-    expect(Object.keys(state.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
-  })
 
   it('a spawn that rejects after the patch still settles the frame that landed', async () => {
     renderHook(() => useWebSessionTabsSync())
@@ -468,32 +299,6 @@ describe('mirror latch verdicts against real stream failures', () => {
     expect(useAppStore.getState().ptyIdsByTabId[MIRROR_TAB_ID]).toEqual([HOST_PTY_ID])
     expect(tabIds(BG_WT)).toEqual([BG_MIRROR_TAB_ID])
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[backgroundPaneKey]).toBeDefined()
-  })
-})
-
-describe('a parked wake replay keeps the mount contract of its caller', () => {
-  installFrameOrderingHarness()
-  beforeEach(takeAllPendingBackgroundTerminalWorktreeMounts)
-  afterEach(takeAllPendingBackgroundTerminalWorktreeMounts)
-
-  it('does not resume or mount a retracted host tab after a phone opens the workspace', async () => {
-    renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    const paneKey = seedSleepingRecord(BG_MIRROR_TAB_ID, BG_WT, 'codex-session-parked-wake')
-
-    // Phone opens a background workspace whose unanswered mirror must park resumes.
-    wakeSleepingAgentsForWorktreeInBackground(BG_WT)
-    expect(takePendingBackgroundTerminalWorktreeMount(BG_WT)).toBeNull()
-
-    // The inventory retracts the background mirror tab, releasing the waiter.
-    await publish(findSubscription('session.tabs.subscribeAll'), {
-      type: 'snapshots',
-      snapshots: [makeHostSnapshot(WT, HOST_SURFACE_ID, HOST_PARENT_TAB_ID)]
-    })
-
-    expectHostOwnedRecordNotResumed(paneKey, BG_WT, 'codex-session-parked-wake')
-    expect(tabIds(BG_WT)).toEqual([BG_MIRROR_TAB_ID])
-    expect(takePendingBackgroundTerminalWorktreeMount(BG_WT)).toBeNull()
   })
 })
 

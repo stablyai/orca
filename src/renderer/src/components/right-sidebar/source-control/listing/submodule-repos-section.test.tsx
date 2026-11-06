@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { GitSubmoduleRepo } from '../../../../../../shared/git-submodule-repo-types'
+import type { GitSubmoduleRepo } from '../../../../../../shared/git/status/git-submodule-repo-types'
 import { SourceControlSubmoduleReposSection } from './submodule-repos-section'
 import type { UseSourceControlSubmoduleChangesResult } from './use-submodule-changes'
 

@@ -4,9 +4,9 @@ import type {
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
-} from '../../shared/agent-status-types'
-import type { AgentInterruptInferenceRequest } from '../../shared/agent-interrupt-intent'
-import type { AgentQuestionAnsweredInferenceRequest } from '../../shared/agent-question-answered-intent'
+} from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { AgentInterruptInferenceRequest } from '../../shared/agent-status/lifecycle/agent-interrupt-intent'
+import type { AgentQuestionAnsweredInferenceRequest } from '../../shared/agent-status/lifecycle/agent-question-answered-intent'
 import type { PreloadApi } from '../api-types'
 
 export const agentStatusApi = {

@@ -51,58 +51,53 @@ const LINEAR_STATUS: LinearConnectionStatus = {
   ]
 }
 
-declare global {
-  // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
-  interface Window {
-    // Set by the fixture below while a Linear lookup is deliberately held open.
-    __orcaTestReleaseLinearLookup?: () => void
-  }
-}
-
 function pasteChord(): string {
   return process.platform === 'darwin' ? 'Meta+V' : 'Control+V'
 }
 
 async function installLinearFixture(
+  electronApp: ElectronApplication,
   page: Page,
   issue: LinearIssue | null = LINEAR_ISSUE,
-  lookupDelayMs: number | null = 150
+  holdLookup = false
 ): Promise<void> {
-  await page.evaluate(
-    ({ resolvedIssue, lookupDelayMs, status }) => {
-      Reflect.deleteProperty(window, '__orcaTestReleaseLinearLookup')
-      const store = window.__store
-      if (!store) {
-        throw new Error('window.__store is not available')
+  await electronApp.evaluate(
+    ({ ipcMain }, { resolvedIssue, holdLookup }) => {
+      // Main-only fixture signal: production preload/runtime and owned reads stay in the path.
+      ipcMain.removeAllListeners('pr34591-release-linear-lookup')
+      for (const method of ['linear:searchIssues', 'linear:listIssues', 'linear:getIssue']) {
+        ipcMain.removeHandler(method)
       }
-      store.setState({
-        linearStatus: status,
-        linearStatusChecked: true,
-        checkLinearConnection: async () => {},
-        searchLinearIssues: async () => [],
-        listLinearIssues: async () => ({ items: [] }),
-        fetchLinearIssue: async (_identifier: string, workspaceId?: string | null) => {
-          await (lookupDelayMs === null
-            ? new Promise<void>((resolve) => {
-                Reflect.set(window, '__orcaTestReleaseLinearLookup', resolve)
-              })
-            : new Promise<void>((resolve) => window.setTimeout(resolve, lookupDelayMs)))
-          return resolvedIssue && workspaceId === resolvedIssue.workspaceId ? resolvedIssue : null
+      ipcMain.handle('linear:searchIssues', () => [])
+      ipcMain.handle('linear:listIssues', () => ({ items: [] }))
+      ipcMain.handle('linear:getIssue', async (_event, { workspaceId }) => {
+        if (holdLookup) {
+          await new Promise<void>((resolve) =>
+            ipcMain.once('pr34591-release-linear-lookup', () => resolve())
+          )
         }
+        return resolvedIssue && workspaceId === resolvedIssue.workspaceId ? resolvedIssue : null
       })
     },
-    { resolvedIssue: issue, lookupDelayMs, status: LINEAR_STATUS }
+    { resolvedIssue: issue, holdLookup }
   )
+  await page.evaluate((status) => {
+    if (!window.__store) {
+      throw new Error('window.__store is not available')
+    }
+    window.__store.setState({
+      linearStatus: status,
+      linearStatusObserved: true,
+      linearStatusChecked: true
+    })
+  }, LINEAR_STATUS)
 }
 
-async function releaseHeldLinearLookup(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const release = window.__orcaTestReleaseLinearLookup
-    if (typeof release !== 'function') {
+async function releaseHeldLinearLookup(electronApp: ElectronApplication): Promise<void> {
+  await electronApp.evaluate(({ ipcMain }) => {
+    if (!ipcMain.emit('pr34591-release-linear-lookup')) {
       throw new Error('Linear lookup is not held')
     }
-    Reflect.deleteProperty(window, '__orcaTestReleaseLinearLookup')
-    release()
   })
 }
 
@@ -132,13 +127,14 @@ test.describe('Linear URL workspace entry', () => {
       ipcMain.removeHandler('linear:status')
       ipcMain.handle('linear:status', () => status)
     }, LINEAR_STATUS)
-    await installLinearFixture(orcaPage)
+    await installLinearFixture(electronApp, orcaPage)
   })
 
   test('pasting into the composer selects the Linear issue without ArrowDown', async ({
+    electronApp,
     orcaPage
   }, testInfo) => {
-    await installLinearFixture(orcaPage, LINEAR_ISSUE, null)
+    await installLinearFixture(electronApp, orcaPage, LINEAR_ISSUE, true)
     await openSidebarWorkspaceComposer(orcaPage)
     const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
     const input = dialog.locator('[data-workspace-name-input="true"]')
@@ -147,13 +143,15 @@ test.describe('Linear URL workspace entry', () => {
     await pasteLinearUrl(orcaPage, input)
     await expect
       .poll(() =>
-        orcaPage.evaluate(() => typeof window.__orcaTestReleaseLinearLookup === 'function')
+        electronApp.evaluate(
+          ({ ipcMain }) => ipcMain.listenerCount('pr34591-release-linear-lookup') > 0
+        )
       )
       .toBe(true)
     await input.press('Enter')
     await expect(input).toHaveValue(LINEAR_URL)
     await expect(dialog.locator('[data-workspace-source-pill="true"]')).toHaveCount(0)
-    await releaseHeldLinearLookup(orcaPage)
+    await releaseHeldLinearLookup(electronApp)
 
     const issueRow = orcaPage.getByRole('option', {
       name: `${LINEAR_ISSUE.identifier} ${LINEAR_ISSUE.title}`,
@@ -184,9 +182,10 @@ test.describe('Linear URL workspace entry', () => {
   })
 
   test('a Linear URL lookup miss falls back to an arbitrary workspace name', async ({
+    electronApp,
     orcaPage
   }) => {
-    await installLinearFixture(orcaPage, null)
+    await installLinearFixture(electronApp, orcaPage, null)
     await openSidebarWorkspaceComposer(orcaPage)
     const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
     const input = dialog.locator('[data-workspace-name-input="true"]')

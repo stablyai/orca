@@ -1,13 +1,14 @@
 import {
   AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
-import { agentSessionSendSubmission } from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { agentSessionSendSubmission } from '../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from '../../../native-chat/agent-session-wire/structured-agent-session-send-settlement'
 import type { RpcContext } from '../core'
 import { requireStructuredSessionHost, structuredCallerFor } from './structured-agent-session-gate'
 import { readsQueuedImageCards } from './structured-agent-session-queued-image-capability'
+import { recordMobileChatSend } from '../../../telemetry/mobile-client-telemetry'
 
 /** Older clients wait past acceptance until handoff/rejection because they cannot show later failure.
  * Command-queued replies avoid request timeout; clients predating pending replies still wait for provider response. */
@@ -22,6 +23,7 @@ export async function sendStructuredAgentSessionForClient(
     userSend: true,
     queuedImageCards: readsQueuedImageCards(context)
   })
+  recordMobileChatSend(context.clientKind, host.sessionAgent(params.envelope.sessionId), result)
   const capabilities = context.clientCapabilities ?? []
   if (
     !result.ok ||

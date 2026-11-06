@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mobileRelayMintFailureFromUnknown } from '../../../shared/mobile-relay-mint-failure'
+import { mobileRelayMintFailureFromUnknown } from '../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
 import { DesktopRelayService } from './desktop-relay-service'
 import { RelayAuthCoordinator } from './relay-auth-coordinator'
 import type { RelayAuthContext } from './relay-auth-identity'

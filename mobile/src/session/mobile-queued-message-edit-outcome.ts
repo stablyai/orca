@@ -1,5 +1,5 @@
-import type { AgentSessionQueuedMessageUpdateResult } from '../../../src/shared/agent-session-wire'
-import { agentSessionSendBodyFingerprint } from '../../../src/shared/structured-agent-session-send-mutation'
+import type { AgentSessionQueuedMessageUpdateResult } from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
+import { agentSessionSendBodyFingerprint } from '../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { MobileQueuedEditDraft } from './mobile-queued-message-edit-draft'
 import type { StructuredAgentSessionMutationResult } from './mobile-structured-agent-session-rpc'
 import { readMobileNativeChatDraftInputs } from './native-chat/composer/mobile-native-chat-draft-inputs'

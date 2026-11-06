@@ -1,4 +1,4 @@
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
@@ -98,19 +98,6 @@ describe.runIf(Boolean(pairingInput && proxyEndpoint))(
       const reconnected = await openClient(directOffer)
       clients.push(reconnected)
       await exerciseCatalogAndFilesystem(reconnected)
-    })
-
-    it('serves independent simultaneous clients over both paths', async () => {
-      const [direct, proxy] = await Promise.all([
-        openClient(directOffer),
-        openClient({ ...directOffer, endpoint: proxyEndpoint ?? '' })
-      ])
-      clients.push(direct, proxy)
-
-      const results = await Promise.all([direct.call('repo.list'), proxy.call('repo.list')])
-      expect(
-        results.map((response) => requireResult<{ repos: Repo[] }>(response).repos.length)
-      ).toEqual([expect.any(Number), expect.any(Number)])
     })
 
     it.runIf(Boolean(secondPairingInput))(

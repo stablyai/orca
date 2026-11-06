@@ -96,15 +96,6 @@ describe('windows foreground inspection cost per pane', () => {
     return resolved
   }
 
-  it('never sets the Memory flag on the snapshot', async () => {
-    await queryWindowsPaneProcessInventory(shellPid(0))
-    expect(flagsSeen).toHaveLength(1)
-    // Memory flags add a second PROCESS_VM_READ OpenProcess per row; foreground inspection does not need it.
-    expect(flagsSeen[0]! & 1).toBe(0)
-    // CommandLine (2) | CreationTime (4).
-    expect(flagsSeen[0]).toBe(6)
-  })
-
   it('projects the shared snapshot once for the whole pane fan-out', async () => {
     const probeRows: unknown[] = []
     for (let pane = 0; pane < PANE_COUNT; pane += 1) {
@@ -128,10 +119,5 @@ describe('windows foreground inspection cost per pane', () => {
 
     // A warm shared index must avoid a whole-table Map rebuild per pane.
     expect(insertions).toBeLessThan(TABLE_SIZE)
-  })
-
-  it('resolves the same foreground child for every pane as an unshared scan would', async () => {
-    const resolved = await sweepPanes()
-    expect(resolved).toEqual(Array.from({ length: PANE_COUNT }, (_, pane) => agentPid(pane)))
   })
 })

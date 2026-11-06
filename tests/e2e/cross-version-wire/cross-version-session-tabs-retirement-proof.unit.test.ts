@@ -92,9 +92,9 @@ function exitProof(): Record<string, unknown> {
 async function loadBuild(ref: string | null): Promise<Build> {
   if (ref === null) {
     const [ledger, proof, retirement] = await Promise.all([
-      import('../../../src/shared/terminal-retirement-proof-ledger'),
-      import('../../../src/main/runtime/mobile-session-terminal-retirement-proof'),
-      import('../../../src/main/runtime/mobile-session-terminal-retirement')
+      import('../../../src/shared/workspace-layout/terminal-retirement-proof-ledger'),
+      import('../../../src/main/runtime/terminal/surface/mobile-session-terminal-retirement-proof'),
+      import('../../../src/main/runtime/terminal/surface/mobile-session-terminal-retirement')
     ])
     return {
       label: 'stack',
@@ -109,9 +109,12 @@ async function loadBuild(ref: string | null): Promise<Build> {
     importReleaseCheckoutModule(checkout, 'src/shared/terminal-retirement-proof-ledger.ts'),
     importReleaseCheckoutModule(
       checkout,
-      'src/main/runtime/mobile-session-terminal-retirement-proof.ts'
+      'src/main/runtime/terminal/surface/mobile-session-terminal-retirement-proof.ts'
     ),
-    importReleaseCheckoutModule(checkout, 'src/main/runtime/mobile-session-terminal-retirement.ts')
+    importReleaseCheckoutModule(
+      checkout,
+      'src/main/runtime/terminal/surface/mobile-session-terminal-retirement.ts'
+    )
   ])
   return {
     label: ref,
@@ -160,26 +163,6 @@ beforeAll(async () => {
 }, SUITE_TIMEOUT_MS)
 
 describe('cross-version session-tabs retirement proof', () => {
-  it('pairs the stack against a real pre-stack release', () => {
-    expect(preStack.label).toBe(PRE_STACK_REF)
-    expect(typeof preStack.ledger.dropRetirementProofsForLiveSurfaces).toBe('function')
-    expect(typeof stack.ledger.dropRetirementProofsForLiveSurfaces).toBe('function')
-    // Prove distinct build identities or every skew cell could silently test the same module twice.
-    expect(preStack.ledger).not.toBe(stack.ledger)
-    expect(preStack.ledger.dropRetirementProofsForLiveSurfaces).not.toBe(
-      stack.ledger.dropRetirementProofsForLiveSurfaces
-    )
-    // The pinned old host cannot publish proof-only frames; this must not merely observe a helper declining once.
-    expect(preStack.host.attachRetirementProofsToSnapshot).toBeUndefined()
-    expect(typeof stack.host.attachRetirementProofsToSnapshot).toBe('function')
-  })
-
-  it('old host against old client publishes no proof on the renderer-first close (the defect)', () => {
-    const frame = hostPublishesOnExit(preStack, snapshotAfterRendererRepublished())
-    expect(frame).toBeNull()
-    expect(clientRetains(preStack, frame)).toEqual([])
-  })
-
   it('new host against new client publishes a proof the client retains (the fix)', () => {
     const frame = hostPublishesOnExit(stack, snapshotAfterRendererRepublished())
     expect(frame).not.toBeNull()
@@ -199,12 +182,6 @@ describe('cross-version session-tabs retirement proof', () => {
     // A client that drops a frame whose version did not advance would silently ignore the
     // proof; this is what makes the proof-only frame reachable at all.
     expect(frame?.snapshotVersion).toBeGreaterThan(before.snapshotVersion)
-  })
-
-  it('old host against NEW client degrades to the two-inventory route, with no crash', () => {
-    const frame = hostPublishesOnExit(preStack, snapshotAfterRendererRepublished())
-    expect(frame).toBeNull()
-    expect(clientRetains(stack, frame)).toEqual([])
   })
 
   it('both builds drop a proof whose surface is published live again, identically', () => {

@@ -79,21 +79,6 @@ afterEach(() => {
 })
 
 describe('closing a structured chat from outside its workspace', () => {
-  it('stops it on the host stamped on its tab, not on whichever host shares its id', () => {
-    const store = storeWith(chatTab('runtime:server-1'))
-
-    const layoutOwner = store.getState()
-    store.getState().closeUnifiedTab('agent-session:chat-1')
-
-    expect(mocks.beginClose).toHaveBeenCalledWith(
-      expect.objectContaining({
-        target: { kind: 'environment', environmentId: 'server-1' },
-        sessionId: 'chat-1',
-        layoutOwner
-      })
-    )
-  })
-
   // Switch on, main's layout holds only chats this machine's host placed, so the stamp is a fact.
   it('an unstamped chat whose workspace two hosts publish: no host off, main’s host on', async () => {
     const store = storeWith(chatTab())

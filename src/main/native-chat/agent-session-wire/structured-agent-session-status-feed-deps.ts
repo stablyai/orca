@@ -1,8 +1,8 @@
-import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
   StructuredChatNamingFailure,
@@ -32,8 +32,11 @@ export type StructuredAgentSessionStatusFeedDeps = {
   starting?: (sessionId: string) => boolean
   getConversation: (sessionId: string) => AgentSessionConversationView | null
   listConversations?: () => AgentSessionConversationView[]
+  /** Reading a closed chat reopens it; true keeps its existing row updating but adds no new one. */
+  rowRetired?: (sessionId: string) => boolean
   /** Absent means no replaced runtime. */
   replacedRuntime?: (sessionId: string) => { fence: number } | undefined
+  readUsageLimitContinue?: (id: string) => AgentSessionStatusSummary['usageLimitContinue']
   now: () => number
   /** Observer/sink failure must not block subscriber events. */
   logger: StructuredAgentSessionLogger
@@ -42,6 +45,7 @@ export type StructuredAgentSessionStatusFeedDeps = {
     summary: AgentSessionStatusSummary,
     options: StructuredAgentSessionStatusObserverOptions
   ) => void
+  onPublished?: (summary: AgentSessionStatusSummary) => void
   /** Resolve after host field initialization; read child records from the sink holding their parent row. */
   statusSink?: () => StructuredAgentSessionStatusSink | undefined
   /** Republish changed child records; producer identifies their write path. */
@@ -104,6 +108,21 @@ export function notifyStructuredStatusObservers(
   } catch (error) {
     deps.logger.warn('status observer failed', {
       scope: 'status-observer',
+      sessionId: summary.sessionId,
+      error
+    })
+  }
+}
+
+export function notifyStructuredStatusPublication(
+  deps: StructuredAgentSessionStatusFeedDeps,
+  summary: AgentSessionStatusSummary
+): void {
+  try {
+    deps.onPublished?.(summary)
+  } catch (error) {
+    deps.logger.warn('saving chat status failed', {
+      scope: 'saved-status',
       sessionId: summary.sessionId,
       error
     })

@@ -1,4 +1,5 @@
-import type { AgentSessionProviderContextBoundary } from '../../../shared/agent-session-provider-context'
+import { journalContextCursor } from './journal-context-cursor'
+import type { AgentSessionProviderContextBoundary } from '../../../shared/agent-session/agent-session-provider-context'
 import type { JournalReducerState } from './journal-reducer'
 import { journalItemRowBuilder } from './journal-row-builders'
 import type { JournalOperationReceipt, JournalRowWriter } from './journal-row-writer'
@@ -64,8 +65,5 @@ export function appendJournalContextClear(input: {
         }
       }
     )
-    .then((rows) => ({
-      epoch: state().epoch,
-      sequence: rows.at(-1)?.seq ?? state().lastSequence
-    }))
+    .then((rows) => journalContextCursor(state(), rows.at(-1)?.seq))
 }

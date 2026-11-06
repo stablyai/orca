@@ -5,8 +5,8 @@ import { useAppStore } from '@/store'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary
-} from '../../../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+} from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { buildActiveOpenFileSignature, buildActiveOpenRowKeys } from './active-open-file-keys'
 import type { FlatEntry } from './use-selection'
 import {
@@ -20,12 +20,14 @@ export function useSourceControlRowOpening({
   activeWorktreeId,
   worktreePath,
   visibleSelectionEntries,
+  visibleBranchRowKeys,
   branchSummary
 }: {
   isMac: boolean
   activeWorktreeId: string | null
   worktreePath: string | null
   visibleSelectionEntries: FlatEntry[]
+  visibleBranchRowKeys: readonly string[]
   branchSummary: GitBranchCompareSummary | null
 }) {
   const activeGroupIdByWorktree = useAppStore((s) => s.activeGroupIdByWorktree)
@@ -66,16 +68,21 @@ export function useSourceControlRowOpening({
       (file) => file.id === activeFileId && file.worktreeId === activeWorktreeId
     )
     return activeFile
-      ? buildActiveOpenFileSignature(activeFile.diffSource, activeFile.relativePath)
+      ? buildActiveOpenFileSignature(
+          activeFile.diffSource,
+          activeFile.relativePath,
+          activeFile.branchCompare,
+          branchSummary
+        )
       : null
   })
   const activeOpenAvailableRowKeys = useMemo(() => {
-    const keys = new Set<string>()
+    const keys = new Set(visibleBranchRowKeys)
     for (const entry of visibleSelectionEntries) {
       keys.add(entry.key)
     }
     return keys
-  }, [visibleSelectionEntries])
+  }, [visibleSelectionEntries, visibleBranchRowKeys])
   const activeOpenRowKeys = useMemo(
     () => buildActiveOpenRowKeys(activeOpenFileSignature, activeOpenAvailableRowKeys),
     [activeOpenAvailableRowKeys, activeOpenFileSignature]

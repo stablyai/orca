@@ -6,6 +6,7 @@ import {
   type GitHubApiRepository,
   type GitHubRepoExecOptions
 } from './github-api-repository'
+import { codeHostFailure } from '../../shared/code-host-failure-copy'
 
 const POLL_INTERVAL_MS = 1_000
 const MAX_POLLS = 180
@@ -103,7 +104,7 @@ export async function mergeGitHubPRStack(args: {
     }
   }
   if (!submitted) {
-    return { ok: false, error: 'GitHub returned an invalid stack merge response.' }
+    return codeHostFailure('github.stackMergeInvalidResponse')
   }
   let result = classifyResult(submitted)
   if (result.kind === 'success') {
@@ -131,7 +132,7 @@ export async function mergeGitHubPRStack(args: {
       }
     }
     if (!response) {
-      return { ok: false, error: 'GitHub returned an invalid stack merge response.' }
+      return codeHostFailure('github.stackMergeInvalidResponse')
     }
     result = classifyResult(response)
     if (result.kind === 'success') {
@@ -141,5 +142,5 @@ export async function mergeGitHubPRStack(args: {
       return { ok: false, error: result.message }
     }
   }
-  return { ok: false, error: 'GitHub is still merging this stack. Refresh to check its status.' }
+  return codeHostFailure('github.stackMergePending')
 }

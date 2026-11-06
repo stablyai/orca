@@ -1,4 +1,4 @@
-import { getVisibleWorkspaceHostIdSet } from '@/components/sidebar/visible-worktree-host-scope'
+import { getVisibleWorkspaceHostIdSet } from '@/components/sidebar/worktree-list/listing/visible-worktree-host-scope'
 import { getPairedDeviceIdsByEnvironment } from '../../../shared/workspace-creator-visibility'
 import { getRepoMapFromState } from '@/store/selectors'
 import type { AppState } from '@/store/types'

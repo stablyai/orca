@@ -8,15 +8,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { installRealWorkerThreadChildProcesses } from '../../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
 import { removeTree } from '../../../shared/windows-transient-lock-removal'
 import { gitFetch, gitPull, gitPush } from '../remote'
-import {
-  bulkStageFiles,
-  bulkUnstageFiles,
-  commitChanges,
-  getStatus,
-  stageFile,
-  unstageFile
-} from '../status'
-import { validateGitRelativeFilePath } from '../../ipc/filesystem/filesystem-path-containment'
+import { bulkStageFiles, bulkUnstageFiles, stageFile, unstageFile } from './staging'
+import { commitChanges } from './commit-changes'
+import { getStatus } from './status-read'
+import { validateGitRelativeFilePath } from '../../ipc/filesystem/access/filesystem-path-containment'
 import { listSubmoduleRepos, resolveInitializedSubmodulePath } from './submodule-repos'
 import { clearSubmodulePathsCache } from './submodule-paths'
 

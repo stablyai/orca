@@ -6,14 +6,14 @@ import {
   JIRA_ISSUE_KEY_PATTERN,
   parseJiraIssueUrl
 } from '../shared/jira/jira-issue-url'
-import { WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY } from '../shared/workspace-attachment-capabilities'
+import { WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY } from '../shared/workspace-attachments/workspace-attachment-capabilities'
 import {
   getWorkspaceReferenceIdentity,
   parseWorkspaceReferenceUrl
-} from '../shared/workspace-reference-identity'
-import type { RuntimeClient } from './runtime-client'
+} from '../shared/workspace-attachments/workspace-reference-identity'
+
 import type { HandlerContext } from './dispatch'
-import { RuntimeClientError } from './runtime-client'
+import { type RuntimeClient, RuntimeClientError } from './runtime-client'
 import { getOptionalStringFlag, getRepeatedStringFlag } from './flags'
 import { resolveJiraTarget } from './jira-target'
 

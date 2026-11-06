@@ -7,6 +7,7 @@ function sectionLabel(domain: string, translate: ProfileStateSectionLabelTransla
     case 'repos':
     case 'projects':
     case 'projectHostSetups':
+    case 'hostRepoCatalogSnapshots':
       return translate('profileState.section.projects', 'Projects')
     case 'projectGroups':
       return translate('profileState.section.projectGroups', 'Project groups')
@@ -19,6 +20,7 @@ function sectionLabel(domain: string, translate: ProfileStateSectionLabelTransla
     case 'worktreeIdentityAliases':
     case 'worktreeLineageById':
     case 'workspaceLineageByChildKey':
+    case 'crossStoreLineageByChildKey':
       return translate('profileState.section.workspaceDetails', 'Workspace details')
     case 'settings':
       return translate('profileState.section.settings', 'Settings')

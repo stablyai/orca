@@ -3,7 +3,7 @@ import {
   buildJiraIssueKeyJql,
   buildJiraTextMatchJql
 } from '../../../shared/jira/jira-search-input-jql'
-import { getJiraBadRequestReason } from './task-page-jira-load-state'
+import { getJiraBadRequestReason } from './task-page/jira/task-page-jira-load-state'
 
 export async function searchJiraIssuesByKeyOrText(
   input: string,

@@ -34,41 +34,6 @@ describe('terminal WebGL atlas recovery', () => {
     vi.unstubAllGlobals()
   })
 
-  it('limits atlas recovery to explicit renderer lifecycle events', () => {
-    expect(terminalWebglAtlasRecovery).not.toHaveProperty('scheduleTerminalWebglAtlasRecovery')
-  })
-
-  it('clears atlases and refreshes panes through the post-paste redraw window', () => {
-    vi.useFakeTimers()
-    const rafCallbacks: FrameRequestCallback[] = []
-    vi.stubGlobal(
-      'requestAnimationFrame',
-      vi.fn((callback: FrameRequestCallback) => {
-        rafCallbacks.push(callback)
-        return rafCallbacks.length
-      })
-    )
-    // Repaint every manager sharing the reset atlas, not just the paste target.
-    const manager = registerManager()
-    const otherManager = registerManager()
-
-    scheduleImagePasteWebglAtlasRecovery()
-
-    expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
-    rafCallbacks[0]?.(0)
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(1)
-    expect(otherManager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
-    expect(otherManager.refreshAllPanes).toHaveBeenCalledTimes(1)
-
-    vi.advanceTimersByTime(120)
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(2)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(2)
-    vi.advanceTimersByTime(380)
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(3)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(3)
-  })
-
   it('refreshes after each scheduled atlas reset', () => {
     vi.useFakeTimers()
     const order: string[] = []

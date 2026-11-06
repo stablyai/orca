@@ -2,11 +2,15 @@ import type { SpawnedProcess } from '@orca/process-host/process-spec'
 import {
   terminateDescendantSnapshotWithVerdict,
   type DescendantTreeVerdict
-} from '../pty-descendant-exit-verification'
-import { captureDescendantSnapshot, type DescendantSnapshot } from '../pty-descendant-termination'
-import { terminateWindowsProcessTree } from '../windows-process-tree-kill'
+} from '../pty/process-retirement/pty-descendant-exit-verification'
+import {
+  captureDescendantSnapshot,
+  type DescendantSnapshot
+} from '../pty/process-retirement/pty-descendant-termination'
+import { terminateWindowsProcessTree } from '../pty/process-retirement/windows-process-tree-kill'
 import { mergeClaudeDescendantSnapshots } from './claude-child-tree-snapshot'
 import { terminateClaudeRoot } from './claude-child-root-termination'
+import { killProviderWriter } from '../provider-process/provider-process-teardown'
 import {
   proveClaudeChildExitWithReaper,
   type ClaudeChildExitProofInput
@@ -34,6 +38,7 @@ function admissibleTree(
 
 export type ClaudeChildTreeReaperDeps = {
   platform?: NodeJS.Platform
+  supervised?: boolean
   /** Whether the root's exit has been observed; only a live root can be walked. */
   exited?: () => boolean
   captureDescendants?: (rootPid: number) => Promise<DescendantSnapshot | null>
@@ -53,6 +58,7 @@ export type ClaudeChildTreeReaper = {
   readonly treeVerdict: DescendantTreeVerdict
   /** Once a reap reaches the live root, its later exit cannot count as voluntary. */
   readonly forcedReapAttempted: boolean
+  readonly killDelivered?: boolean
 }
 
 // Pipe children have no PTY job to sweep; only explicit tree verification can prove their exit.
@@ -73,6 +79,7 @@ export function createClaudeChildTreeReaper(
   let inFlight: Promise<DescendantTreeVerdict> | null = null
   let treeVerdict: DescendantTreeVerdict = 'unverifiable'
   let forcedReapAttempted = false
+  let killDelivered = false
 
   function captureOnce(): Promise<void> {
     if (!snapshots) {
@@ -200,13 +207,26 @@ export function createClaudeChildTreeReaper(
       deps.terminateWindowsTree ??
       ((pid: number) => terminateWindowsProcessTree(pid, { site: 'claude-structured-child-close' }))
     const terminated = await terminateTree(rootPid).catch(() => false)
-    terminateClaudeRoot({ child, exited })
+    killDelivered ||= terminated
+    try {
+      terminateClaudeRoot({ child, exited })
+    } catch {
+      // Exact-root cleanup cannot retract successful tree termination.
+    }
     // Only taskkill's clean exit reports the whole tree terminated.
     return terminated ? 'exited' : 'unverifiable'
   }
 
   async function judgeTree(): Promise<DescendantTreeVerdict> {
-    const killRoot = (): boolean => terminateClaudeRoot({ child, exited })
+    let writerSnapshot: DescendantSnapshot | null = null
+    const killRoot = (): void => {
+      if (!exited()) {
+        killDelivered = killProviderWriter(child, writerSnapshot, deps) || killDelivered
+        if (deps.supervised) {
+          terminateClaudeRoot({ child, exited })
+        }
+      }
+    }
     const rootPid = child.pid
     if (!rootPid) {
       return 'exited'
@@ -218,6 +238,10 @@ export function createClaudeChildTreeReaper(
       return judgeWindowsTree(rootPid)
     }
     await captureOnce()
+    if (deps.supervised && !exited()) {
+      child.kill('SIGSTOP')
+      writerSnapshot = await capture(rootPid).catch(() => null)
+    }
     if (!snapshot) {
       killRoot()
       return 'unverifiable'
@@ -228,6 +252,9 @@ export function createClaudeChildTreeReaper(
       return 'exited'
     }
     // Stopping the root leaves killed children as zombies on macOS; kill it so init can reap them.
+    if (deps.supervised) {
+      killDelivered = killProviderWriter(child, writerSnapshot, deps) || killDelivered
+    }
     const verdictPromise = deps.terminateDescendants
       ? deps.terminateDescendants(snapshot)
       : terminateDescendantSnapshotWithVerdict(snapshot, {
@@ -261,6 +288,9 @@ export function createClaudeChildTreeReaper(
     },
     get treeVerdict() {
       return treeVerdict
+    },
+    get killDelivered() {
+      return killDelivered
     },
     get forcedReapAttempted() {
       return forcedReapAttempted

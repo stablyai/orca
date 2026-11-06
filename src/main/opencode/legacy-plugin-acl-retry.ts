@@ -1,7 +1,8 @@
 import { existsSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { resolveCanonicalPluginWritePath } from '../../shared/opencode-plugin-atomic-write'
-import { grantDirAcl, isPermissionError } from '../win32-utils'
+import { grantDirAcl } from '../windows/windows-directory-acl'
+import { isPermissionError } from '../filesystem/permission-errors'
 
 // Chromium can reset userData's DACL after the startup grant; keep a per-write backstop.
 export function writeLegacyOpenCodePluginWithAclRetry(

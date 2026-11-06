@@ -1,4 +1,4 @@
-import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
+import { journalRowSchemaVersion } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   journalLifecycleMutationRow,
   journalLifecycleMutationItemId,

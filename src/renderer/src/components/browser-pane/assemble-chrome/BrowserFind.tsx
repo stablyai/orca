@@ -4,8 +4,10 @@ import { ChevronUp, ChevronDown, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { getFindRequestQuery } from '@/lib/find-query-bounds'
+import { useGuestEscape } from '../host-guest/use-guest-escape'
 
 type BrowserFindProps = {
+  browserPageId: string
   isOpen: boolean
   onClose: () => void
   webviewRef: React.RefObject<Electron.WebviewTag | null>
@@ -14,6 +16,7 @@ type BrowserFindProps = {
 }
 
 export default function BrowserFind({
+  browserPageId,
   isOpen,
   onClose,
   webviewRef,
@@ -166,6 +169,9 @@ export default function BrowserFind({
   if ((!isOpen || !requestQuery) && result !== null) {
     setResult(null)
   }
+
+  // Like Chrome, Escape typed in the page closes the bar.
+  useGuestEscape(browserPageId, isOpen, onClose)
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

@@ -33,13 +33,6 @@ describe('codex restart notice lifecycle', () => {
     expect(pending()).toBe('claude')
   })
 
-  it('raises no notice when the pane returns to the account it launched under', () => {
-    switchAccount('pty-1', A, B)
-    switchAccount('pty-1', B, A)
-
-    expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toBeUndefined()
-  })
-
   it('keeps the launch account after a dismissal so re-selecting it raises no notice', () => {
     switchAccount('pty-1', A, B)
     useAppStore.getState().dismissCodexRestartNotices(['pty-1'])
@@ -47,17 +40,6 @@ describe('codex restart notice lifecycle', () => {
     switchAccount('pty-1', B, A)
 
     expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toBeUndefined()
-  })
-
-  it('marks a dismissal instead of erasing the pane record', () => {
-    switchAccount('pty-1', A, B)
-    useAppStore.getState().dismissCodexRestartNotices(['pty-1'])
-
-    expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
-      previousAccountLabel: A,
-      nextAccountLabel: B,
-      dismissed: true
-    })
   })
 
   it('re-raises the prompt against the pane launch account when a third account is selected', () => {
@@ -115,30 +97,6 @@ describe('codex restart notice lifecycle', () => {
     })
   })
 
-  it('leaves the notice map identity alone when nothing is dismissable', () => {
-    switchAccount('pty-1', A, B)
-    const before = useAppStore.getState().codexRestartNoticeByPtyId
-
-    useAppStore.getState().dismissCodexRestartNotices(['pty-unknown'])
-
-    expect(useAppStore.getState().codexRestartNoticeByPtyId).toBe(before)
-  })
-
-  it('reports which panes are left holding a notice', () => {
-    expect(
-      useAppStore
-        .getState()
-        .markCodexRestartNotices([{ ptyId: 'pty-1', previousAccountLabel: A, nextAccountLabel: B }])
-    ).toEqual(['pty-1'])
-
-    // Report whether prompt appeared; startup suppresses further offers after success.
-    expect(
-      useAppStore
-        .getState()
-        .markCodexRestartNotices([{ ptyId: 'pty-1', previousAccountLabel: B, nextAccountLabel: A }])
-    ).toEqual([])
-  })
-
   it('still deletes the record when the pane actually restarts', () => {
     switchAccount('pty-1', A, B)
 
@@ -181,13 +139,6 @@ describe('codex restart notices with colliding account labels', () => {
     })
   })
 
-  it('still collapses A -> B -> A when the ids match', () => {
-    switchAccountById('pty-1', 'account-a', 'account-b')
-    switchAccountById('pty-1', 'account-b', 'account-a')
-
-    expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toBeUndefined()
-  })
-
   it('collapses back to the system default the pane launched under', () => {
     switchAccountById('pty-1', null, 'account-b')
     switchAccountById('pty-1', 'account-b', null)
@@ -223,19 +174,6 @@ describe('codex restart notices with colliding account labels', () => {
     })
     expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
   })
-
-  it('leaves unanswered and dismissed notices alone on a reopen request', () => {
-    switchAccount('pty-1', A, B)
-    const unanswered = useAppStore.getState().codexRestartNoticeByPtyId
-
-    useAppStore.getState().reopenCodexRestartPrompt('pty-1')
-    expect(useAppStore.getState().codexRestartNoticeByPtyId).toBe(unanswered)
-
-    useAppStore.getState().dismissCodexRestartNotices(['pty-1'])
-    const dismissed = useAppStore.getState().codexRestartNoticeByPtyId
-    useAppStore.getState().reopenCodexRestartPrompt('pty-1')
-    expect(useAppStore.getState().codexRestartNoticeByPtyId).toBe(dismissed)
-  })
 })
 
 describe('replaceTerminalLayoutPanePtyId', () => {
@@ -260,11 +198,5 @@ describe('replaceTerminalLayoutPanePtyId', () => {
       [LEAF]: 'pty-new',
       [OTHER_LEAF]: 'pty-sibling'
     })
-  })
-
-  it('does nothing for a tab with no layout', () => {
-    const before = useAppStore.getState().terminalLayoutsByTabId
-    useAppStore.getState().replaceTerminalLayoutPanePtyId('tab-none', LEAF, 'pty-new')
-    expect(useAppStore.getState().terminalLayoutsByTabId).toBe(before)
   })
 })

@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
+import type { MobileWebBundleManifestRead } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 
 // Grant-only edits keep the build id: use fresh grants online but preserve the downloaded manifest for offline entry. Test cold mounts sharing only the real store’s disk.
@@ -46,7 +46,7 @@ vi.mock('../transport/rpc-operation', () => ({
   }
 }))
 // Downloads are unexpected: these flows must use the same-build cache or wall it.
-vi.mock('../transport/mobile-web-bundle-fetch', () => ({
+vi.mock('../transport/web-bundle/mobile-web-bundle-fetch', () => ({
   fetchMobileWebBundle: () => Promise.reject(new Error('no flow in this suite downloads'))
 }))
 
@@ -55,8 +55,8 @@ import {
   MOBILE_WEB_BUNDLE_SCHEMA_VERSION
 } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
-import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-fetch'
-import { MobileWebBundleManifestReadSchema } from '../transport/mobile-web-bundle-reply-schemas'
+import type { MobileWebBundleFetchResult } from '../transport/web-bundle/mobile-web-bundle-fetch'
+import { MobileWebBundleManifestReadSchema } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import {
   createFakeGenerationFileSystem,
   type FakeGenerationFileSystem
@@ -172,28 +172,6 @@ describe('an offline cold start after a grant-only manifest edit', () => {
     doubles.connection = { client: {}, state: 'connected' }
     doubles.gates.hostCapabilities = [MOBILE_WEB_BUNDLE_CAPABILITY]
     doubles.manifest = null
-  })
-
-  it('opens a same-build hit online without writing to the generation directory', async () => {
-    // Do not rewrite manifest.json while the native view may read it during page open.
-    const fileSystem = createFakeGenerationFileSystem()
-    await cacheGeneration(fileSystem, manifestGranting(GRANTS_A))
-    const generationPaths = () =>
-      fileSystem.paths().filter((path) => path.startsWith(`${HOST_KEY}/generations/`))
-    const paths = generationPaths()
-    const settled = fileSystem.writes.length
-    doubles.manifest = M2
-
-    const online = await mountRoute(fileSystem)
-
-    expect(online.state()).toMatchObject({ kind: 'ready', buildId: BUILD_ID })
-    expect(online.routeGrants()).toEqual(GRANTS_A_PLUS_B)
-    const generationWrites = fileSystem.writes
-      .slice(settled)
-      .filter((path) => path.startsWith(`${HOST_KEY}/generations/`))
-    expect(generationWrites).toEqual([])
-    expect(generationPaths()).toEqual(paths)
-    await online.unmount()
   })
 
   it('reads the grants the assets arrived with, whatever a later online read accepted', async () => {

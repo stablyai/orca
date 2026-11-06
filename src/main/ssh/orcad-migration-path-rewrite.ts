@@ -1,7 +1,7 @@
 /** Rewrite differing source/destination paths, such as WSL via \wsl.localhost; SSH identity rewriting must preserve payload bytes. */
 import type { OrcadMigrationCatalogPayload } from '../../shared/orcad-migration/orcad-migration-manifest'
 import { isRecord } from '../../shared/orcad-migration/orcad-migration-manifest-fields'
-import { PTY_SESSION_ID_SEPARATOR } from '../../shared/pty-session-id-format'
+import { PTY_SESSION_ID_SEPARATOR } from '../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { rewriteWorktreeIdPath } from '../../shared/worktree/id'
 import {
@@ -30,7 +30,8 @@ export function rewriteOrcadMigrationPayloadPaths(
     return copy
   }
   for (const field of ORCAD_MIGRATION_PATH_FIELDS) {
-    const map = (value: string): string => rewriteValue(value, field.kind, rewriter)
+    const map = (value: string): string =>
+      rewriteOrcadMigrationPathValue(value, field.kind, rewriter)
     visit(copy, parseFieldLocation(field.at), map)
   }
   return copy
@@ -107,7 +108,8 @@ function renameKeys(node: Record<string, unknown>, map: (value: string) => strin
   }
 }
 
-function rewriteValue(
+/** One value of `kind`; anything the rewriter doesn't recognise comes back unchanged. */
+export function rewriteOrcadMigrationPathValue(
   value: string,
   kind: OrcadMigrationPathFieldKind,
   rewriter: OrcadMigrationPathRewriter

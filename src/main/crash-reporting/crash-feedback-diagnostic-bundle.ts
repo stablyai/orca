@@ -28,7 +28,7 @@ function skippedCrashDiagnosticBundle(): CrashDiagnosticBundleAttachment {
   }
 }
 
-function collectCrashDiagnosticBundleAttachment(): CrashDiagnosticBundleAttachment {
+async function collectCrashDiagnosticBundleAttachment(): Promise<CrashDiagnosticBundleAttachment> {
   const status = getDiagnosticsStatus()
   if (!status.bundleEnabled) {
     return {
@@ -39,9 +39,9 @@ function collectCrashDiagnosticBundleAttachment(): CrashDiagnosticBundleAttachme
     }
   }
 
-  let bundle: ReturnType<typeof collectDiagnosticBundle>
+  let bundle: Awaited<ReturnType<typeof collectDiagnosticBundle>>
   try {
-    bundle = collectDiagnosticBundle({
+    bundle = await collectDiagnosticBundle({
       appVersion: app.getVersion(),
       platform: os.platform(),
       arch: os.arch(),
@@ -70,9 +70,9 @@ function collectCrashDiagnosticBundleAttachment(): CrashDiagnosticBundleAttachme
   }
 }
 
-export function prepareCrashDiagnosticBundle(
+export async function prepareCrashDiagnosticBundle(
   includeDiagnosticLogs: boolean
-): CrashDiagnosticBundleAttachment {
+): Promise<CrashDiagnosticBundleAttachment> {
   return includeDiagnosticLogs
     ? collectCrashDiagnosticBundleAttachment()
     : skippedCrashDiagnosticBundle()

@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 

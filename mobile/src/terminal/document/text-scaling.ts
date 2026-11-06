@@ -90,6 +90,8 @@ export function startTextScaling(scope: TerminalDocumentScope) {
   scope.currentTextScale = scope.start().textScale
   scope.scrollIndicator = elementInRoot(scope.root, 'scroll-indicator')
   scope.scrollThumb = elementInRoot(scope.root, 'scroll-thumb')
-  scope.terminalFontFamily =
-    (isIOSWebView() ? 'ui-monospace, ' : '"SF Mono", ') + TERMINAL_FONT_FALLBACKS
+  // iOS already draws ⏴⏵⏶⏷ from system fonts; Android has none.
+  scope.terminalFontFamily = isIOSWebView()
+    ? `ui-monospace, ${TERMINAL_FONT_FALLBACKS}`
+    : `"SF Mono", ${TERMINAL_FONT_FALLBACKS}, "Orca Terminal Symbols"`
 }

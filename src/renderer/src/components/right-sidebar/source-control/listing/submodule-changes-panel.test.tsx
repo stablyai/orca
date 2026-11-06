@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { SubmoduleChangesPanel } from './submodule-changes-panel'
 import type { SubmoduleChangesState } from './use-submodule-changes'
 

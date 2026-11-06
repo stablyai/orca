@@ -1,9 +1,12 @@
-import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
-import { isAiVaultTitleAgent } from '../../../shared/ai-vault-session-title'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import {
+  isAiVaultTitleAgent,
+  sameAiVaultSessionTitle
+} from '../../../shared/ai-vault/contracts/ai-vault-session-title'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
 import { collectAiVaultTitleRequests } from './ai-vault-tab-title-requests'
+import { worktreeOwnerRowsTokenOf } from './worktree-owner-rows-token'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
@@ -100,17 +103,6 @@ function agentRecordsEqual(current: AppState, previous: AppState): boolean {
   )
 }
 
-function titleEqual(
-  left: TerminalTab['aiVaultTitle'],
-  right: TerminalTab['aiVaultTitle']
-): boolean {
-  return (
-    left?.agent === right?.agent &&
-    left?.sessionId === right?.sessionId &&
-    left?.title === right?.title
-  )
-}
-
 function terminalTabsEqual(current: AppState, previous: AppState): boolean {
   const currentKeys = Object.keys(current.tabsByWorktree)
   const previousKeys = Object.keys(previous.tabsByWorktree)
@@ -129,7 +121,8 @@ function terminalTabsEqual(current: AppState, previous: AppState): boolean {
       if (
         left.id !== right.id ||
         left.worktreeId !== right.worktreeId ||
-        !titleEqual(left.aiVaultTitle, right.aiVaultTitle)
+        left.sessionTitleFromHost !== right.sessionTitleFromHost ||
+        !sameAiVaultSessionTitle(left.aiVaultTitle, right.aiVaultTitle)
       ) {
         return false
       }
@@ -151,11 +144,52 @@ function activePanesEqual(current: AppState, previous: AppState): boolean {
   )
 }
 
+type RequestWorktreeIdsInputs = Pick<
+  AppState,
+  | 'agentStatusByPaneKey'
+  | 'retainedAgentsByPaneKey'
+  | 'sleepingAgentSessionsByPaneKey'
+  | 'tabsByWorktree'
+  | 'terminalLayoutsByTabId'
+>
+let cachedRequestWorktreeIds: { inputs: RequestWorktreeIdsInputs; worktreeIds: string[] } | null =
+  null
+
+function requestInputsMatch(inputs: RequestWorktreeIdsInputs, state: AppState): boolean {
+  return (
+    inputs.agentStatusByPaneKey === state.agentStatusByPaneKey &&
+    inputs.retainedAgentsByPaneKey === state.retainedAgentsByPaneKey &&
+    inputs.sleepingAgentSessionsByPaneKey === state.sleepingAgentSessionsByPaneKey &&
+    inputs.tabsByWorktree === state.tabsByWorktree &&
+    inputs.terminalLayoutsByTabId === state.terminalLayoutsByTabId
+  )
+}
+
+// Request membership reads only these maps, so owner-only updates reuse it instead of re-collecting every tab.
+function requestWorktreeIds(state: AppState): string[] {
+  const cached = cachedRequestWorktreeIds
+  if (cached && requestInputsMatch(cached.inputs, state)) {
+    return cached.worktreeIds
+  }
+  const worktreeIds = [
+    ...new Set(collectAiVaultTitleRequests(state).map((request) => request.worktreeId))
+  ]
+  cachedRequestWorktreeIds = {
+    inputs: {
+      agentStatusByPaneKey: state.agentStatusByPaneKey,
+      retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
+      sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
+      tabsByWorktree: state.tabsByWorktree,
+      terminalLayoutsByTabId: state.terminalLayoutsByTabId
+    },
+    worktreeIds
+  }
+  return worktreeIds
+}
+
 function requestOwnersEqual(current: AppState, previous: AppState): boolean {
-  const worktreeIds = new Set([
-    ...collectAiVaultTitleRequests(current).map((request) => request.worktreeId),
-    ...collectAiVaultTitleRequests(previous).map((request) => request.worktreeId)
-  ])
+  // Previous first, so the single cache entry ends on current: the next update's previous.
+  const worktreeIds = new Set([...requestWorktreeIds(previous), ...requestWorktreeIds(current)])
   for (const worktreeId of worktreeIds) {
     const currentHost = getExecutionHostIdForWorktree(current, worktreeId)
     const previousHost = getExecutionHostIdForWorktree(previous, worktreeId)
@@ -167,6 +201,16 @@ function requestOwnersEqual(current: AppState, previous: AppState): boolean {
 }
 
 export function aiVaultTitleSyncInputsChanged(current: AppState, previous: AppState): boolean {
+  const changed = syncInputsChanged(current, previous)
+  // Why: later updates only move forward from current, so a snapshot it replaced can never hit again;
+  // keeping it would pin closed tabs' status text and scrollback until the next owner change.
+  if (cachedRequestWorktreeIds && !requestInputsMatch(cachedRequestWorktreeIds.inputs, current)) {
+    cachedRequestWorktreeIds = null
+  }
+  return changed
+}
+
+function syncInputsChanged(current: AppState, previous: AppState): boolean {
   const agentRecordsChanged =
     current.agentStatusByPaneKey !== previous.agentStatusByPaneKey ||
     current.retainedAgentsByPaneKey !== previous.retainedAgentsByPaneKey ||
@@ -186,7 +230,8 @@ export function aiVaultTitleSyncInputsChanged(current: AppState, previous: AppSt
 
   const ownerInputsChanged =
     current.repos !== previous.repos ||
-    selectWorktreesByRepo(current) !== selectWorktreesByRepo(previous) ||
+    worktreeOwnerRowsTokenOf(selectWorktreesByRepo(current)) !==
+      worktreeOwnerRowsTokenOf(selectWorktreesByRepo(previous)) ||
     selectDetectedWorktreesByRepo(current) !== selectDetectedWorktreesByRepo(previous) ||
     selectFolderWorkspaces(current) !== selectFolderWorkspaces(previous) ||
     current.projectGroups !== previous.projectGroups ||

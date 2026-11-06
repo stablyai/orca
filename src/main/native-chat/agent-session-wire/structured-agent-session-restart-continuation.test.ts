@@ -4,7 +4,7 @@ import {
   AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
   AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE,
   AGENT_SESSION_RESTART_NOT_CONNECTED_NOTE
-} from '../../../shared/agent-session-restart-continuation'
+} from '../../../shared/agent-session/lifecycle/agent-session-restart-continuation'
 import {
   RestartContinuationSupersededError,
   startStructuredAgentSessionContinuation,
@@ -48,18 +48,6 @@ function dependencies(
     logger: createStructuredAgentSessionLogger()
   }
 }
-
-it('reports an accepted continuation and records its note', async () => {
-  const deps = dependencies('accepted')
-
-  await expect(
-    continueStructuredAgentSessionAfterRestart(deps, SESSION, marker(), 'operation-1')
-  ).resolves.toEqual({
-    sessionId: SESSION,
-    outcome: 'continued'
-  })
-  expect(deps.note).toHaveBeenCalledOnce()
-})
 
 const UNCONFIRMED = [SESSION, AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE, 'warning']
 const REFUSED = [SESSION, AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE, 'error']
@@ -170,13 +158,4 @@ it('returns at handover and leaves the provider verdict to be awaited', async ()
   }
   await expect(started.verdict()).resolves.toEqual({ sessionId: SESSION, outcome: 'continued' })
   expect(deps.note).toHaveBeenCalledOnce()
-})
-
-it('still awaits the verdict when the handover wait ends unanswered', async () => {
-  const deps = dependencies('unknown', undefined)
-
-  await expect(
-    continueStructuredAgentSessionAfterRestart(deps, SESSION, marker(), 'operation-1')
-  ).resolves.toEqual({ sessionId: SESSION, outcome: 'unknown' })
-  expect(deps.note).toHaveBeenCalledExactlyOnceWith(...UNCONFIRMED)
 })

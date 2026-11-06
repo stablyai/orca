@@ -1,10 +1,11 @@
 import { z } from 'zod'
+import type { TextGenerationFailureFields } from '../../../src/shared/text-generation-failure-copy'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 
 export type MobileGenerateCommitMessageResult =
   | { success: true; message: string }
-  | { success: false; error: string; canceled?: boolean }
+  | ({ success: false; canceled?: boolean } & TextGenerationFailureFields)
 
 // Preserve delivery-unknown on lost mutation replies; rejection does not prove the host did nothing.
 
@@ -78,21 +79,22 @@ const generatedCommitMessageSchema: z.ZodType<MobileGenerateCommitMessageResult,
     z
       .object({
         success: z.literal(false),
-        error: z.string().min(1),
+        error: z.string().min(1).catch(NO_MESSAGE_GENERATED),
+        errorCode: z.string().optional().catch(undefined),
+        errorParams: z
+          .record(z.string(), z.union([z.string(), z.number()]))
+          .optional()
+          .catch(undefined),
+        errorDetail: z.string().optional().catch(undefined),
         canceled: z.unknown().optional()
       })
 
       .transform((value): MobileGenerateCommitMessageResult => ({
         success: false,
         error: value.error,
-        ...(value.canceled ? { canceled: true } : {})
-      })),
-    z
-      .object({ success: z.literal(false), canceled: z.unknown().optional() })
-
-      .transform((value): MobileGenerateCommitMessageResult => ({
-        success: false,
-        error: NO_MESSAGE_GENERATED,
+        ...(value.errorCode !== undefined ? { errorCode: value.errorCode } : {}),
+        ...(value.errorParams !== undefined ? { errorParams: value.errorParams } : {}),
+        ...(value.errorDetail !== undefined ? { errorDetail: value.errorDetail } : {}),
         ...(value.canceled ? { canceled: true } : {})
       })),
     // Null/non-object means generation failed; unreadable objects use the no-message fallback.
@@ -120,6 +122,70 @@ export const gitCancelGenerateCommitMessageRun = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'git.cancel-generate-commit-message-or-skip',
     method: 'git.cancelGenerateCommitMessage',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('cancel-accepted', unreadPayload)
+  })
+)
+
+export type MobileGeneratedPullRequestFields = {
+  base: string
+  title: string
+  body: string
+  draft: boolean
+}
+
+export type MobileGeneratePullRequestFieldsResult =
+  | { success: true; fields: MobileGeneratedPullRequestFields }
+  | ({ success: false; canceled?: boolean } & TextGenerationFailureFields)
+
+const NO_FIELDS_GENERATED = 'No pull request description generated'
+
+const generatedPullRequestFieldsSchema: z.ZodType<MobileGeneratePullRequestFieldsResult, unknown> =
+  z
+    .union([
+      z
+        .object({
+          success: z.literal(true),
+          fields: z.object({
+            base: z.string(),
+            title: z.string(),
+            body: z.string(),
+            draft: z.boolean()
+          })
+        })
+        .transform((value): MobileGeneratePullRequestFieldsResult => ({
+          success: true,
+          fields: value.fields
+        })),
+      z
+        .object({
+          success: z.literal(false),
+          error: z.string().min(1).catch(NO_FIELDS_GENERATED),
+          canceled: z.unknown().optional()
+        })
+        .transform((value): MobileGeneratePullRequestFieldsResult => ({
+          success: false,
+          error: value.error,
+          ...(value.canceled ? { canceled: true } : {})
+        }))
+    ])
+    .catch({ success: false, error: NO_FIELDS_GENERATED })
+
+export const gitGeneratePullRequestFieldsRun = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'git.generate-pull-request-fields',
+    method: 'git.generatePullRequestFields',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('generated-pull-request-fields', generatedPullRequestFieldsSchema)
+  })
+)
+
+export const gitCancelGeneratePullRequestFieldsRun = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'git.cancel-generate-pull-request-fields-or-skip',
+    method: 'git.cancelGeneratePullRequestFields',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('cancel-accepted', unreadPayload)

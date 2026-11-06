@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import type { IssueInfo } from '../../../../shared/github/pull-request-types'
+import { isWslDistroNotRunningRefusal } from '../../../../shared/wsl-distro-not-running-refusal'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { sourceScopedRepoCacheKey } from './cache-identity'
 import { isFresh, withBoundedCacheEntry } from './cache-policy'
@@ -72,6 +73,10 @@ export const createIssueActions = (
         }))
         return issue
       } catch (err) {
+        // A poll refused for a stopped WSL distro keeps the issue it last showed.
+        if (isWslDistroNotRunningRefusal(err)) {
+          return get().issueCache[cacheKey]?.data ?? null
+        }
         console.error('Failed to fetch issue:', err)
         set((s) => ({
           issueCache: withBoundedCacheEntry(s.issueCache, cacheKey, {

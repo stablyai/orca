@@ -1,8 +1,8 @@
 // Agent modules declare definitions; the runtime registry owns shared lookup instead of agent-name branches.
 
-import type { AgentSessionCapabilities } from '../../../shared/agent-session-capabilities'
+import type { AgentSessionCapabilities } from '../../../shared/agent-session/agent-session-capabilities'
 import type { AgentSessionStoredAgent } from '../../../shared/agent-session/lifecycle/agent-session-stored-agent'
-import type { AgentSessionModelOption } from '../../../shared/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
 
 export type StructuredAgentDefinition = AgentSessionStoredAgent & {
   capabilities: AgentSessionCapabilities

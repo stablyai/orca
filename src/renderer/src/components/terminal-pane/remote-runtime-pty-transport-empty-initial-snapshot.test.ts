@@ -7,7 +7,7 @@ import { REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE } from '../../runtime/remote-runtime
 import {
   TerminalStreamOpcode,
   encodeTerminalStreamJson
-} from '../../../../shared/terminal-stream-protocol'
+} from '../../../../shared/terminal/stream/terminal-stream-protocol'
 
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {

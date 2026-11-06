@@ -32,6 +32,7 @@ import type { TaskSourceContext } from '../../../../../shared/task-source-contex
 import type { PullRequestPageProjectOrigin } from '../page-types'
 import { WorkItemStateBadge } from '../presentation/state-badge'
 import { changePullRequestState, mergePullRequest, setPullRequestAutoMerge } from './merge-actions'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function PRActionsPanel({
   item,
@@ -188,7 +189,7 @@ export function PRActionsPanel({
                 {getPullRequestMergeMethodLabel(method)}
               </DropdownMenuItem>
             ))}
-            <DropdownMenuItem onSelect={() => window.api.shell.openUrl(item.url)}>
+            <DropdownMenuItem onSelect={() => openAppHttpLink(item.url)}>
               <ExternalLink className="size-4" />
               {translate('auto.components.PullRequestPage.7df8d5fc60', 'Open GitHub merge box')}
             </DropdownMenuItem>

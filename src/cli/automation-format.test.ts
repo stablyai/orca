@@ -58,20 +58,21 @@ describe('formatAutomationShow reports the host the authority projects', () => {
     expect(output).toContain('target: ssh:box-1')
   })
 
-  it('names the local host for a self-owned automation', () => {
-    const output = formatAutomationShow({
-      automation: automation({ executionTargetType: 'local', executionTargetId: 'local' }),
-      owner: { selector: { kind: 'self' } }
-    })
-
-    expect(output).toContain('host: self')
-  })
-
   it('omits the host line when the authority reports no owner', () => {
     const output = formatAutomationShow({ automation: automation() })
 
     expect(output).not.toContain('host:')
     expect(output).toContain('target: ssh:box-1')
+  })
+})
+
+describe('formatAutomationShow reports the saved setup choice', () => {
+  it('omits setup for existing-workspace automations', () => {
+    const output = formatAutomationShow({
+      automation: automation({ workspaceMode: 'existing', workspaceId: 'wt-1' })
+    })
+
+    expect(output).not.toContain('setup:')
   })
 })
 

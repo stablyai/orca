@@ -4,12 +4,13 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { translate } from '@/i18n/i18n'
 import { basename, dirname } from '@/lib/path'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import {
   canStageStatusEntry,
   canUnstageStatusEntry
-} from '../../../../../../shared/source-control-entry-actions'
-import { STATUS_COLORS, STATUS_LABELS } from '../../status-display'
+} from '../../../../../../shared/source-control/listing/source-control-entry-actions'
+import { STATUS_COLORS } from '@/lib/git-path-decoration'
+import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
 import { ActionButton } from './action-button'
 import type { SubmoduleChangesState } from './use-submodule-changes'
 

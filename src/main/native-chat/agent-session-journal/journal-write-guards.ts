@@ -47,3 +47,9 @@ export function assertSubmissionIdUnused(
     )
   }
 }
+
+/** Stored outcome content this build rejects; storage errors never become this, so they stay
+ * retryable, as main's replay keeps them. */
+export class JournalOutcomeDecodeError extends Error {
+  override readonly name = 'JournalOutcomeDecodeError'
+}

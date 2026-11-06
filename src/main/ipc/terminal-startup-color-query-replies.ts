@@ -1,9 +1,9 @@
-import { parsePtyStartupIngressIntent } from '../../shared/pty-startup-ingress-intent'
-import { normalizeColorQueryReplyColors } from '../../shared/pty-owner-color-query-colors'
-import { recognizeAgentLaunchCommand } from '../../shared/agent-command-line-intent'
-import { isTuiAgent } from '../../shared/tui-agent-config'
+import { parsePtyStartupIngressIntent } from '../../shared/terminal/pty/ingress/pty-startup-ingress-intent'
+import { normalizeColorQueryReplyColors } from '../../shared/terminal/pty/ingress/pty-owner-color-query-colors'
+import { recognizeAgentLaunchCommand } from '../../shared/agent-launch/startup/agent-command-line-intent'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { agentKindSchema } from '../../shared/telemetry-events'
-import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
+import type { SleepingAgentLaunchConfig } from '../../shared/agent-session/lifecycle/agent-session-resume'
 
 function isAgentLaunch(args: {
   launchAgent?: unknown
@@ -45,15 +45,22 @@ export function getStartupTerminalIngressIntent(args: {
   command?: string
   launchConfig?: SleepingAgentLaunchConfig
   terminalColorQueryReplies?: unknown
+  launcherColorQueryReplies?: unknown
+  launcherViewAttributes?: unknown
   terminalKittyKeyboardProtocol?: boolean
 }) {
+  const skipColors = agentSkipsStartupOscColorQueryReplies(args)
   // Seed every PTY: agents launched later from plain shells can also query before viewer colors arrive.
-  const colors = agentSkipsStartupOscColorQueryReplies(args)
+  const colors = skipColors
     ? {}
     : (normalizeColorQueryReplyColors(args.terminalColorQueryReplies) ?? {})
+  const launcherColors = skipColors
+    ? null
+    : normalizeColorQueryReplyColors(args.launcherColorQueryReplies)
   return parsePtyStartupIngressIntent({
     kittyKeyboardProtocol: args.terminalKittyKeyboardProtocol === true && isAgentLaunch(args),
     colors,
+    ...(launcherColors ? { launcherColors, launcherAttributes: args.launcherViewAttributes } : {}),
     deadlineMs: 5_000
   })
 }

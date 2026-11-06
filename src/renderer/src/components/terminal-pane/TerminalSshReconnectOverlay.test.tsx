@@ -29,7 +29,7 @@ vi.mock('sonner', () => ({
   }
 }))
 
-vi.mock('../sidebar/delete-worktree-flow', () => ({
+vi.mock('../sidebar/workspace-actions/deletion/delete-worktree-flow', () => ({
   runWorktreeDelete: deleteFlowMocks.runWorktreeDelete
 }))
 

@@ -1,22 +1,22 @@
-import type { AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
-import { agentTurnVerdict } from '../../../shared/agent-turn-outcome'
-import { isAgentSessionContextClear } from '../../../shared/agent-session-context-clear'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
+import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentTurnVerdict } from '../../../shared/agent-status/lifecycle/agent-turn-outcome'
+import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
-} from '../../../shared/agent-session-turn-record'
+} from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   isStructuredAgentSessionCommandTurn,
   isStructuredAgentSessionCommandEntry
-} from '../../../shared/structured-agent-session-command-entry'
-import { classifyDispatchRejection } from '../../../shared/structured-agent-session-dispatch-rejection'
+} from '../../../shared/agent-session/structured-agent-session-command-entry'
+import { classifyDispatchRejection } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
-import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
+import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session/failures/agent-session-failure-words'
 
 export type StructuredAgentSessionRequestFailure = {
   sessionId: string
@@ -105,8 +105,11 @@ export class StructuredAgentSessionRequestFailures {
       })
       this.baselines.set(sessionId, baseline)
       journal.visitItems((id) => items.add(id))
-      for (const submission of journal.submissions()) {
-        submissions.add(submission.clientMessageId)
+      for (const itemId of items) {
+        const submission = journal.inputOrder.inputForItem(itemId)
+        if (submission) {
+          submissions.add(submission.clientMessageId)
+        }
       }
     }
     if (!baseline) {
@@ -228,10 +231,7 @@ export class StructuredAgentSessionRequestFailures {
         ? readAgentJournalTurn(journal.itemBody(request.id) ?? undefined)?.userItemId
         : request.id) ?? ''
     )
-    const { clientMessageId } =
-      journal
-        .submissions()
-        .find(({ clientMessageId: id }) => agentJournalSubmissionKey(id) === opener) ?? {}
+    const { clientMessageId } = journal.inputOrder.inputForItem(opener) ?? {}
     const generation = child?.fence === fence ? child?.generation : undefined
     const end = outcome === 'interruption' ? session?.lastEndedChild : undefined
     this.deps.onFailure({

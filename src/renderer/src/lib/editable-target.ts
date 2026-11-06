@@ -1,5 +1,9 @@
 import { getShortcutPlatform } from './shortcut-platform'
 
+export function isNativeChatPromptTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest('[data-native-chat-prompt-editor]') !== null
+}
+
 // Share the capture-listener guard so app/onboarding shortcuts cannot hijack active text edits.
 export function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {

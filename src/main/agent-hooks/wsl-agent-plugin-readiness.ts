@@ -1,16 +1,17 @@
-import { getAgentLaunchExecutableName } from '../../shared/agent-command-line-intent'
+import { getAgentLaunchExecutableName } from '../../shared/agent-launch/startup/agent-command-line-intent'
 import {
   isAgentStatusHooksEnabledForAgent,
   type AgentStatusHooksSettings
-} from '../../shared/agent-status-hooks-setting'
+} from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import type { ClaudeAgentViewSettings } from '../../shared/claude-agent-view'
 import {
   detectExplicitPiAgentKindFromCommand,
   isPiCompatibleAgentType,
   type PiAgentKind
 } from '../../shared/pi-agent-kind'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { wslHookRelayManager, type WslHookRelayManager } from './wsl-hook-relay-manager'
+import { blockedWslDistroForExec } from '../wsl/discovery/wsl-background-exec-gate'
 
 export async function awaitExplicitAgentPluginGuestReadiness(args: {
   isWsl: boolean
@@ -41,6 +42,10 @@ export async function awaitExplicitAgentPluginGuestReadiness(args: {
     return true
   }
   const distro = args.distro ?? null
+  // Ensuring the relay launches wsl.exe; a passive restore must not start a stopped distro (E9).
+  if (await blockedWslDistroForExec(distro)) {
+    return false
+  }
   const manager = args.manager ?? wslHookRelayManager
   let timer: ReturnType<typeof setTimeout> | undefined
   try {

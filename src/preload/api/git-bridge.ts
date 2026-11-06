@@ -1,10 +1,17 @@
 import { ipcRenderer } from 'electron'
-import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
-import type { GitStagingArea, GitUpstreamStatus } from '../../shared/git-status-types'
-import type { GitSubmoduleRepo } from '../../shared/git-submodule-repo-types'
+import type {
+  GitForkSyncExpectedUpstream,
+  GitForkSyncResult
+} from '../../shared/git/remotes/git-fork-sync'
+import type { GitStagingArea, GitUpstreamStatus } from '../../shared/git/status/git-status-types'
+import type { ConflictResolution } from '../../shared/source-control/listing/source-control-entry-actions'
+import type { GitSubmoduleRepo } from '../../shared/git/status/git-submodule-repo-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
-import type { GitStageWorktreeScope } from '../../shared/git-stage-worktree-scope'
-import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type { GitStageWorktreeScope } from '../../shared/git/paths/git-stage-worktree-scope'
+import type {
+  GitHistoryOptions,
+  GitHistoryResult
+} from '../../shared/git/history/git-history-types'
 import type { PreloadApi } from '../api-types'
 
 export const gitApi = {
@@ -45,7 +52,11 @@ export const gitApi = {
   appendGitignore: (args: { worktreePath: string; folderName: string }): Promise<boolean> =>
     ipcRenderer.invoke('git:appendGitignore', args),
   history: (
-    args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
+    args: {
+      worktreePath: string
+      connectionId?: string
+      wakeWslDistro?: boolean
+    } & GitHistoryOptions
   ): Promise<GitHistoryResult> => ipcRenderer.invoke('git:history', args),
   conflictOperation: (args: { worktreePath: string; connectionId?: string }) =>
     ipcRenderer.invoke('git:conflictOperation', args),
@@ -60,7 +71,9 @@ export const gitApi = {
     filePath: string
     staged: boolean
     compareAgainstHead?: boolean
+    oldPath?: string
     connectionId?: string
+    wakeWslDistro?: boolean
   }) => ipcRenderer.invoke('git:diff', args),
   branchCompare: (args: { worktreePath: string; baseRef: string; connectionId?: string }) =>
     ipcRenderer.invoke('git:branchCompare', args),
@@ -120,6 +133,7 @@ export const gitApi = {
     filePath: string
     oldPath?: string
     connectionId?: string
+    wakeWslDistro?: boolean
   }) => ipcRenderer.invoke('git:branchDiff', args),
   commitDiff: (args: {
     worktreePath: string
@@ -128,6 +142,7 @@ export const gitApi = {
     filePath: string
     oldPath?: string
     connectionId?: string
+    wakeWslDistro?: boolean
   }) => ipcRenderer.invoke('git:commitDiff', args),
   commit: (args: {
     worktreePath: string
@@ -135,6 +150,11 @@ export const gitApi = {
     connectionId?: string
     submodulePath?: string
   }): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('git:commit', args),
+  completeMerge: (args: {
+    worktreePath: string
+    connectionId?: string
+  }): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('git:completeMerge', args),
   generateCommitMessage: (args: {
     worktreePath: string
     worktreeId?: string
@@ -178,6 +198,12 @@ export const gitApi = {
     connectionId?: string
     submodulePath?: string
   }): Promise<void> => ipcRenderer.invoke('git:stage', args),
+  resolveConflict: (args: {
+    worktreePath: string
+    filePath: string
+    resolution: ConflictResolution
+    connectionId?: string
+  }): Promise<void> => ipcRenderer.invoke('git:resolveConflict', args),
   bulkStage: (args: {
     worktreePath: string
     filePaths: string[]

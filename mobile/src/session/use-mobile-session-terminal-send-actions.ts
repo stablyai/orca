@@ -1,6 +1,6 @@
-import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
 import { useCallback } from 'react'
 import { Keyboard } from 'react-native'
+import { translate } from '../i18n/mobile-i18n'
 import { triggerError } from '../platform/haptics'
 import type { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
 import { sendTerminalLiveAccessoryRawBytes } from '../terminal/terminal-live-accessory-raw-send'
@@ -21,10 +21,14 @@ import { useAgentSendKeyboardDismissal } from './use-agent-send-keyboard-dismiss
 import type { MobileSessionTab } from './mobile-session-route-types'
 import { useMobileSessionTabActionSheetOpener } from './use-mobile-session-tab-action-targets'
 import type { MobileSessionTerminalWebviewModel } from './use-mobile-session-terminal-webview'
+import type { TerminalLiveInputSender } from '../terminal/terminal-live-input-sender'
 
 export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminalWebviewModel) {
   const {
     client,
+    sendTerminalUserInput: sendUserInput,
+    sendTerminalOrderedInput,
+    terminalRefs,
     activeHandle,
     activeSessionTab,
     setActionTarget,
@@ -37,7 +41,6 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     clientRef,
     connStateRef,
     liveInputRef,
-    commandInputRef,
     ptyModesRef,
     liveInputFocusTimerRef,
     sendLiveTerminalInputRef,
@@ -45,11 +48,10 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     sessionTabActionSheetRequestSeqRef,
     activeHandleRef,
     activeSessionTabTypeRef,
-    sendingRef,
-    bufferedTerminalDraftState,
     getSendCompletionGeneration,
     getLiveInteractionGeneration,
     handleLiveInputAccessoryBytes,
+    handleLiveInputCompositionEnd,
     handleLiveInputSubmit,
     canSend,
     scheduleDelayedAction,
@@ -60,7 +62,6 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
   const dismissSoftwareKeyboard = useCallback(() => {
     dismissTerminalKeyboard({
       clearPendingLiveInputFocus: () => clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef),
-      commandInput: commandInputRef.current,
       dismissKeyboard: () => Keyboard.dismiss(),
       liveInput: liveInputRef.current
     })
@@ -93,80 +94,39 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       }
       void handleAccessoryKey(input)
       return true
-    }
+    },
+    handleLiveInputCompositionEnd
   )
-  const submitBufferedDraft = (): void => {
-    void handleSend()
-  }
-  const bindCommandField = useTerminalTextFieldSubmitBinding(commandInputRef, submitBufferedDraft)
 
-  async function handleSend() {
-    // Offline Return must preserve composed text instead of firing a doomed write.
-    if (!client || !activeHandle || sendingRef.current || !canSend) {
-      return
+  async function handleAccessoryKey(
+    input: ReturnType<typeof createTerminalLiveAccessoryInput>,
+    targetHandle = activeHandle,
+    isDeliveryTargetCurrent: () => boolean = () => true
+  ): Promise<boolean> {
+    if (
+      !client ||
+      !targetHandle ||
+      targetHandle !== activeHandle ||
+      !canSend ||
+      !isDeliveryTargetCurrent()
+    ) {
+      return false
     }
-    sendingRef.current = true
-
-    const draft = bufferedTerminalDraftState.input
-    const text = normalizeTerminalTextInput(draft)
-    const bufferedDraftSend = bufferedTerminalDraftState.beginBufferedTerminalDraftSend(
-      activeHandle,
-      draft
-    )
-    const sendOrigin = {
-      handle: activeHandle,
-      tab: activeSessionTab,
-      generation: getSendCompletionGeneration()
-    }
-    const restoreRejectedDraft = () =>
-      bufferedTerminalDraftState.restoreRejectedDraft(bufferedDraftSend)
-
-    try {
-      // Fail/restore immediately so reconnect cannot execute stale text long after the tap.
-      const response = await terminalInputSend.request(
-        client,
-        buildTerminalSendParams({
-          terminal: activeHandle,
-          text,
-          enter: true,
-          deviceToken: deviceTokenRef.current
-        }),
-        TERMINAL_INPUT_SEND_OPTIONS
-      )
-      const accepted = terminalInputSend.interpret(response) === true
-      if (accepted) {
-        reportWorkerTerminalUserInput(client, activeHandle)
-      }
-      if (!accepted) {
-        restoreRejectedDraft()
-      }
-      const draftUnchanged =
-        accepted && bufferedTerminalDraftState.settleBufferedTerminalDraftSend(bufferedDraftSend)
-      dismissKeyboardAfterAgentSend(sendOrigin, accepted && draftUnchanged)
-    } catch {
-      restoreRejectedDraft()
-    } finally {
-      bufferedTerminalDraftState.settleBufferedTerminalDraftSend(bufferedDraftSend)
-      sendingRef.current = false
-    }
-  }
-
-  async function handleAccessoryKey(input: ReturnType<typeof createTerminalLiveAccessoryInput>) {
-    if (!client || !activeHandle || !canSend) {
-      return
-    }
-    const targetHandle = activeHandle
     // Encode first so the live-input commit sees the bytes the PTY will receive.
     const encoded = {
       ...input,
       bytes: encodeTerminalKeyForModes(input.bytes, ptyModesRef.current.get(targetHandle))
     }
     const accessoryCommit = await handleLiveInputAccessoryBytes(encoded)
-    if (accessoryCommit.kind !== 'allow-raw') {
-      return
+    if (!isDeliveryTargetCurrent() || clientRef.current !== client) {
+      return false
     }
-    await sendTerminalLiveAccessoryRawBytes({
-      client: clientRef.current,
+    if (accessoryCommit.kind !== 'allow-raw') {
+      return accessoryCommit.kind === 'handled'
+    }
+    return sendTerminalLiveAccessoryRawBytes({
+      client,
+      sendTerminalUserInput: sendUserInput,
       targetHandle,
       activeHandle: activeHandleRef.current,
       activeSessionTabType: activeSessionTabTypeRef.current,
@@ -176,8 +136,8 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     })
   }
 
-  const sendLiveTerminalInput = useCallback(
-    async (handle: string, bytes: string): Promise<boolean> => {
+  const sendLiveTerminalInput = useCallback<TerminalLiveInputSender>(
+    async (handle, bytes, origin, enqueue): Promise<boolean> => {
       const text = encodeTerminalKeyForModes(
         normalizeTerminalTextInput(bytes),
         ptyModesRef.current.get(handle)
@@ -187,7 +147,13 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       }
       if (!isTerminalLiveInputWithinByteLimit(text)) {
         triggerError()
-        showToast('Input too large (max 256 KiB)', 1500)
+        showToast(
+          translate(
+            'session.useSessionTerminalSendActions.inputTooLarge',
+            'Input too large (max 256 KiB)'
+          ),
+          1500
+        )
         return false
       }
       const rpc = clientRef.current
@@ -201,29 +167,27 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
         return false
       }
       // Discard live-mirror deltas behind a dying send so reconnect cannot replay stale bytes.
-      return terminalInputSend
-        .request(
-          rpc,
-          buildTerminalSendParams({
-            terminal: handle,
-            text,
-            enter: false,
-            deviceToken: deviceTokenRef.current
-          }),
-          TERMINAL_INPUT_SEND_OPTIONS
-        )
-        .then(
-          (response) => {
-            const accepted = terminalInputSend.interpret(response) === true
-            if (accepted) {
-              reportWorkerTerminalUserInput(rpc, handle)
-            }
-            return accepted
-          },
-          () => false
-        )
+      if (origin !== 'pointer') {
+        terminalRefs.current.get(handle)?.scrollToBottom()
+      }
+      return sendTerminalOrderedInput(
+        rpc,
+        buildTerminalSendParams({
+          terminal: handle,
+          text,
+          enter: false,
+          deviceToken: deviceTokenRef.current
+        }),
+        TERMINAL_INPUT_SEND_OPTIONS,
+        enqueue
+      ).then(
+        (response) => {
+          return terminalInputSend.interpret(response) === true
+        },
+        () => false
+      )
     },
-    [showToast]
+    [sendTerminalOrderedInput, showToast, terminalRefs]
   )
   sendLiveTerminalInputRef.current = sendLiveTerminalInput
 
@@ -283,7 +247,6 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
   )
 
   return {
-    handleSend,
     handleAccessoryKey,
     sendLiveTerminalInput,
     clearSessionTabActionSheetKeyboardListener,
@@ -292,7 +255,6 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     dismissSoftwareKeyboard,
     dismissKeyboardAfterAgentSend,
     bindLiveInputField,
-    bindCommandField,
     submitLiveInput
   }
 }

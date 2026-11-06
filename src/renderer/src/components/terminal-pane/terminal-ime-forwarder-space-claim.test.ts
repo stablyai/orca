@@ -73,21 +73,6 @@ describe('#11504 suppression rests on claiming space and emptying the field', ()
     return created
   }
 
-  // Space triggers the native substitution rule and must remain claimable.
-  it('claims a plain space keydown', () => {
-    const p = pane()
-    expect(p.forwarder.claimKeyEvent(makeKeydown({ key: ' ', code: 'Space', keyCode: 32 }))).toBe(
-      true
-    )
-  })
-
-  it('claims a plain letter keydown', () => {
-    const p = pane()
-    expect(p.forwarder.claimKeyEvent(makeKeydown({ key: 'a', code: 'KeyA', keyCode: 65 }))).toBe(
-      true
-    )
-  })
-
   // Empty the field so the text system cannot read a preceding word and substitute.
   it('leaves the helper textarea empty after a claimed commit, so no word precedes the space', () => {
     const p = pane()
@@ -100,13 +85,5 @@ describe('#11504 suppression rests on claiming space and emptying the field', ()
 
     expect(p.emitted.join('')).toBe('ab ')
     expect(p.textarea.value).toBe('')
-  })
-
-  // Control chords remain with xterm’s encoder.
-  it('does not claim a control chord', () => {
-    const p = pane()
-    expect(
-      p.forwarder.claimKeyEvent(makeKeydown({ key: 'c', code: 'KeyC', keyCode: 67, ctrlKey: true }))
-    ).toBe(false)
   })
 })

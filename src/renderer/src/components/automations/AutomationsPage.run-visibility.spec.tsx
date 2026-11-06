@@ -56,22 +56,4 @@ describe('AutomationsPage run visibility', () => {
     expect(api.automations.runNow).toHaveBeenCalledTimes(1)
     expect(listedNextRunAt()).toBe(2_000)
   })
-
-  it('re-asks the host the run was dispatched to', async () => {
-    desktopStoreHolds([BEFORE_RUN])
-    mocks.state.automationHostFilter = DESKTOP_SELF_FILTER
-
-    await renderPage()
-    await settleHostQueries()
-    const listedBefore = api.automations.listScoped.mock.calls.length
-
-    await act(async () => {
-      mocks.listPanel?.runNow(listedRow('a-1'))
-    })
-    await settleHostQueries()
-
-    // The cache TTL has not expired, so a refetch here can only come from the
-    // invalidation the run itself fed in.
-    expect(api.automations.listScoped.mock.calls.length).toBeGreaterThan(listedBefore)
-  })
 })

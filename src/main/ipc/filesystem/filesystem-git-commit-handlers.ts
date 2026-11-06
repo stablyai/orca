@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
-import { commitChanges } from '../../git/status'
-import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
+import { commitChanges, completeMerge } from '../../git/source-control/commit-changes'
+import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import { resolveGitActionPath } from './git-remote/submodule-action-target'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
@@ -28,6 +28,25 @@ export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerCo
       )
       const worktreePath = await resolveGitActionPath(args, registeredPath, gitOptions)
       return commitChanges(worktreePath, args.message, {
+        ...gitOptions,
+        admissionTier: 'interactive'
+      })
+    }
+  )
+  ipcMain.handle(
+    'git:completeMerge',
+    async (
+      _event,
+      args: { worktreePath: string; connectionId?: string }
+    ): Promise<{ success: boolean; error?: string }> => {
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return completeMerge(worktreePath, {
         ...gitOptions,
         admissionTier: 'interactive'
       })

@@ -13,7 +13,7 @@ import {
   mergeRetiredNameRegistries,
   type RetiredNameRegistry
 } from '../../../shared/worktree/retired-name-registry'
-import { recordRetirementNamespaceRegistry } from '../../worktree-retirement-namespace'
+import { recordRetirementNamespaceRegistry } from '../../workspaces/removal/retirement/worktree-retirement-namespace'
 import {
   applyPreparedOrcadMigrationWorkspaceSession,
   prepareOrcadMigrationWorkspaceSession,

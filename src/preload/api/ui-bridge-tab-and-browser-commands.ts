@@ -61,6 +61,11 @@ export const uiTabAndBrowserCommandsApi = {
     ipcRenderer.on('ui:browserPageTabShortcut', listener)
     return () => ipcRenderer.removeListener('ui:browserPageTabShortcut', listener)
   },
+  onToggleProjectsCollapse: (callback: () => void): (() => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('ui:toggleProjectsCollapse', listener)
+    return () => ipcRenderer.removeListener('ui:toggleProjectsCollapse', listener)
+  },
   onFocusBrowserAddressBar: (
     callback: (target: BrowserPageCommandTarget) => void
   ): (() => void) => {

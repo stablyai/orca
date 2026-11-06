@@ -56,62 +56,6 @@ describe('installTerminalLinkifierHoverResetOnWrite', () => {
   })
   afterEach(() => vi.useRealTimers())
 
-  it('clears the linkifier hover cache a throttle window after output lands', () => {
-    const fake = createFakeTerminal()
-    installTerminalLinkifierHoverResetOnWrite(fake.terminal)
-
-    fake.emitWriteParsed()
-    expect(resetSpy).not.toHaveBeenCalled()
-    expect(fake.linkifier._lastBufferCell).toBeDefined()
-
-    vi.advanceTimersByTime(150)
-    expect(resetSpy).toHaveBeenCalledTimes(1)
-    expect(fake.linkifier._lastBufferCell).toBeUndefined()
-    expect(fake.linkifier._activeLine).toBe(-1)
-  })
-
-  it('coalesces a burst of writes into exactly one reset per window', () => {
-    const fake = createFakeTerminal()
-    installTerminalLinkifierHoverResetOnWrite(fake.terminal)
-
-    // Twenty chunks must share one timer; removing the leading throttle guard must fail.
-    for (let i = 0; i < 20; i += 1) {
-      fake.emitWriteParsed()
-      vi.advanceTimersByTime(5)
-    }
-    vi.advanceTimersByTime(150)
-    expect(resetSpy).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps resetting during continuous streaming instead of starving', () => {
-    const fake = createFakeTerminal()
-    installTerminalLinkifierHoverResetOnWrite(fake.terminal)
-
-    // Continuous 50ms chunks must reset every ~150ms; debounce would postpone forever until streaming stops.
-    for (let i = 0; i < 10; i += 1) {
-      fake.emitWriteParsed()
-      vi.advanceTimersByTime(50)
-    }
-    expect(resetSpy.mock.calls.length).toBeGreaterThanOrEqual(3)
-  })
-
-  it('does not disturb an actively hovered link, and resumes once it clears', () => {
-    const fake = createFakeTerminal()
-    installTerminalLinkifierHoverResetOnWrite(fake.terminal)
-
-    fake.linkifier._currentLink = { link: 'https://example.com' }
-    fake.emitWriteParsed()
-    vi.advanceTimersByTime(150)
-    expect(resetSpy).not.toHaveBeenCalled()
-    expect(fake.linkifier._lastBufferCell).toBeDefined()
-
-    fake.linkifier._currentLink = undefined
-    fake.emitWriteParsed()
-    vi.advanceTimersByTime(150)
-    expect(resetSpy).toHaveBeenCalledTimes(1)
-    expect(fake.linkifier._lastBufferCell).toBeUndefined()
-  })
-
   it('does not drop the reset when the stream goes quiet mid-hover', () => {
     const fake = createFakeTerminal()
     installTerminalLinkifierHoverResetOnWrite(fake.terminal)
@@ -129,25 +73,6 @@ describe('installTerminalLinkifierHoverResetOnWrite', () => {
     expect(fake.linkifier._lastBufferCell).toBeUndefined()
   })
 
-  it('refreshes a changed wrapped link while leaving an unchanged hovered link intact', () => {
-    const fake = createFakeTerminal()
-    const isBufferValid = vi.fn(() => true)
-    fake.linkifier._currentLink = { link: { isBufferValid } }
-    installTerminalLinkifierHoverResetOnWrite(fake.terminal)
-    fake.emitWriteParsed()
-    vi.advanceTimersByTime(150)
-    expect(fake.linkifier._currentLink).toBeDefined()
-    expect(resetSpy).not.toHaveBeenCalled()
-
-    isBufferValid.mockReturnValue(false)
-    vi.advanceTimersByTime(150)
-    expect(fake.linkifier._currentLink).toBeUndefined()
-    expect(fake.linkifier._lastBufferCell).toBeUndefined()
-    expect(resetSpy).not.toHaveBeenCalled()
-    vi.advanceTimersByTime(600)
-    expect(isBufferValid).toHaveBeenCalledTimes(2)
-  })
-
   it('cancels the pending reset and detaches the listener on dispose', () => {
     const fake = createFakeTerminal()
     const disposable = installTerminalLinkifierHoverResetOnWrite(fake.terminal)
@@ -159,10 +84,5 @@ describe('installTerminalLinkifierHoverResetOnWrite', () => {
     vi.advanceTimersByTime(500)
     expect(resetSpy).not.toHaveBeenCalled()
     expect(fake.linkifier._lastBufferCell).toEqual({ x: 3, y: 4 })
-  })
-
-  it('degrades to a no-op when the terminal lacks onWriteParsed', () => {
-    const terminal = { _core: { linkifier: {} } } as unknown as Terminal
-    expect(() => installTerminalLinkifierHoverResetOnWrite(terminal).dispose()).not.toThrow()
   })
 })

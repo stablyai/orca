@@ -3,10 +3,10 @@ import { translate } from '@/i18n/i18n'
 import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { ProjectGroupNameDialog } from '../../ProjectGroupNameDialog'
-import { ProjectGroupDeleteDialog } from '../../ProjectGroupDeleteDialog'
-import SuppressExternalWorktreeInboxDialog from '../../SuppressExternalWorktreeInboxDialog'
-import type { NewExternalWorktreesInboxActionState } from '../../new-external-worktrees-inbox-actions'
+import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
+import { ProjectGroupDeleteDialog } from './ProjectGroupDeleteDialog'
+import SuppressExternalWorktreeInboxDialog from '../listing/SuppressExternalWorktreeInboxDialog'
+import type { NewExternalWorktreesInboxActionState } from '../listing/new-external-worktrees-inbox-actions'
 import type { ProjectGroupDialogs } from './use-project-group-dialogs'
 
 export function SidebarWorktreeListDialogs({
@@ -53,10 +53,18 @@ export function SidebarWorktreeListDialogs({
           nameDialog?.type === 'rename'
             ? nameDialog.currentName
             : nameDialog
-              ? `${nameDialog.repo.displayName} group`
+              ? translate(
+                  'auto.components.sidebar.ProjectGroupNameDialog.defaultGroupName',
+                  '{{name}} group',
+                  { name: nameDialog.repo.displayName }
+                )
               : ''
         }
-        confirmLabel={nameDialog?.type === 'rename' ? 'Rename' : 'Create'}
+        confirmLabel={
+          nameDialog?.type === 'rename'
+            ? translate('auto.components.sidebar.ProjectGroupNameDialog.rename', 'Rename')
+            : translate('auto.components.sidebar.ProjectGroupNameDialog.create', 'Create')
+        }
         onOpenChange={(open) => {
           if (!open) {
             setNameDialog(null)

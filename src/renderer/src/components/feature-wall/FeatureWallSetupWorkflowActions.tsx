@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { ArrowUpRight, Plus, Save, Settings } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -17,11 +17,16 @@ import {
 } from '../contextual-tours/request-contextual-tour-when-ready'
 import { translate } from '@/i18n/i18n'
 
-export const SETUP_GUIDE_PROJECT_PROMPT = "First add a project you'd like to work on."
+export function setupGuideProjectPrompt(): string {
+  return translate(
+    'auto.components.feature.wall.FeatureWallSetupWorkflowActions.addProjectFirst',
+    "First add a project you'd like to work on."
+  )
+}
 
 export function promptForSetupGuideProject(openModal: (modal: 'add-repo') => void): void {
   openModal('add-repo')
-  toast.message(SETUP_GUIDE_PROJECT_PROMPT)
+  toast.message(setupGuideProjectPrompt())
 }
 
 export function getSetupGuideGitRepo(
@@ -103,13 +108,11 @@ export function SetupScriptAction(): React.JSX.Element {
   const canConfigure = repo !== null
   const [setupScript, setSetupScript] = useState('pnpm install')
 
-  useEffect(() => {
-    if (!canConfigure) {
-      setSetupScript('pnpm install')
-      return
-    }
-    setSetupScript(repo.hookSettings?.scripts?.setup?.trim() || 'pnpm install')
-  }, [canConfigure, repo])
+  const [seededFromRepo, setSeededFromRepo] = useState<typeof repo | undefined>(undefined)
+  if (seededFromRepo !== repo) {
+    setSeededFromRepo(repo)
+    setSetupScript(repo?.hookSettings?.scripts?.setup?.trim() || 'pnpm install')
+  }
 
   const openLocalCommandSettings = useCallback(() => {
     if (!repo || !isGitRepoKind(repo)) {

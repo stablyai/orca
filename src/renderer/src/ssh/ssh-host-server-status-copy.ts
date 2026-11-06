@@ -16,6 +16,8 @@ import { blockedNodeDownload, nodeDownloadBlockedText } from './ssh-host-node-do
 import { settingUpLabel, sshHostServerReassurance } from './ssh-host-server-setup-copy'
 import { hostFixableUnavailableText } from './ssh-host-fixable-unavailable-copy'
 import { leaveBehindLine, REFUSAL_INLINE_CHARS, refusedLine } from './ssh-host-refused-move-copy'
+import { sshHostServerSetupRemedy } from '../../../shared/ssh-host-server-setup-remedy'
+import { sshHostSetupRemedyText } from './ssh-host-setup-remedy-copy'
 
 export type SshHostServerStatusLine = {
   text: string
@@ -196,13 +198,12 @@ function tunnelUnavailableLine(): SshHostServerStatusLine {
   }
 }
 
-function retryLine(): SshHostServerStatusLine {
+function setupStoppedLine(code: string | undefined): SshHostServerStatusLine {
+  const remedy = sshHostServerSetupRemedy(code)
   return {
-    tone: 'warning',
-    text: translate(
-      'auto.components.settings.sshHostServer.setupRetry',
-      'Orca couldn’t start its server on this host. Try connecting again.'
-    )
+    // Only a host-side fix the user must make reads as an error.
+    tone: remedy === 'retry' || remedy === 'see-details' ? 'warning' : 'destructive',
+    text: sshHostSetupRemedyText(remedy)
   }
 }
 
@@ -239,7 +240,12 @@ function linkedProjectsLine(
         ? translate(
             'auto.components.settings.sshHostServer.linkedProjects',
             'This host’s Orca server already had {{paths}}, so this desktop now uses the server’s copy. This desktop’s tabs and {{count}} automations there were not moved, and worktrees it created there show as external worktrees.',
-            { paths, count }
+            {
+              paths,
+              count,
+              defaultValue_one:
+                'This host’s Orca server already had {{paths}}, so this desktop now uses the server’s copy. This desktop’s tabs and {{count}} automation there were not moved, and worktrees it created there show as external worktrees.'
+            }
           )
         : translate(
             'auto.components.settings.sshHostServer.linkedProjectsNoAutomations',
@@ -262,7 +268,11 @@ function unservedLine(
           ? translate(
               'auto.components.settings.sshHostServer.olderTerminals',
               '{{count}} terminals started by an older version of Orca are still running on this host, and they don’t stop on their own. Close them in that version of Orca or end them on the host, then reconnect.',
-              { count: status.terminals }
+              {
+                count: status.terminals,
+                defaultValue_one:
+                  '{{count}} terminal started by an older version of Orca is still running on this host, and it doesn’t stop on its own. Close it in that version of Orca or end it on the host, then reconnect.'
+              }
             )
           : translate(
               'auto.components.settings.sshHostServer.olderTerminalsUncounted',
@@ -296,7 +306,7 @@ function unservedLine(
             ? heldMoveLine()
             : status.contactLost
               ? contactLostLine()
-              : retryLine()),
+              : setupStoppedLine(status.code)),
         ...withDetail(status.detail)
       }
     }

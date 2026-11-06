@@ -1,4 +1,4 @@
-import { restoreStructuredLaunchSurfaces } from '@/lib/structured-agent-session-launch-surface'
+import { restoreStructuredLaunchSurfaces } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { useEffect, useRef } from 'react'
 import { restoreLocalStructuredChatsAtStartup } from '@/runtime/local-structured-chats'
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
@@ -32,9 +32,10 @@ import {
 import {
   getRepoExecutionHostId,
   isOwnedSshTargetId,
+  LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId
 } from '../../../shared/execution-host'
-import { listRuntimeSessionHostIdsForStartup } from './startup-runtime-session-hosts'
+import { listRuntimeSessionHostsForStartup } from './startup-runtime-session-hosts'
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
 import { collectWslMovedWorkspaceKeysFromSession } from '../store/repos/wsl-moved-projects'
 import { wslMovedSessionReadApi } from '../store/repos/wsl-moved-local-session-rows'
@@ -101,12 +102,16 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
         // Runtime session hosts need no repo state; overlap their IPC and handle rejection until the later await.
         const runtimeHostsPromise = timeRendererStartupStep(
           'list-runtime-session-hosts',
-          listRuntimeSessionHostIdsForStartup
+          listRuntimeSessionHostsForStartup
         )
         runtimeHostsPromise.catch(() => {})
         // Before the session read: a moved project's local rows must leave before the host's merge in.
         // Started before the repo list too; this startup load does not prune, so it need not wait.
         const wslMovedProjectsPromise = useAppStore.getState().fetchWslMovedProjects()
+        // Desktop-only read; must land before the first live host catalog so that answer can drop deleted projects.
+        const hostCatalogSeedPromise = timeRendererStartupStep('seed-host-repo-catalogs', () =>
+          useAppStore.getState().seedReposFromHostCatalogSnapshots()
+        )
         // Skip remote catalogs for first paint; saved runtimes may wait a full connect timeout.
         await timeRendererStartupStep('fetch-repos-local', () =>
           actions.fetchReposForAllHosts({ remoteHosts: 'skip' })
@@ -123,17 +128,21 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
             actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
           )
         })()
-        const sessionReadPromise = Promise.all([runtimeHostsPromise, wslMovedProjectsPromise]).then(
-          ([startupRuntimeHostIds]) =>
-            // Restore cached runtime-host partitions without network waits; skip unreadable ones.
-            timeRendererStartupStep('session-get', () =>
-              fetchWorkspaceSessionWithRuntimeHostOwners(
-                // A moved workspace's retained rows share tab ids with its host's live ones.
-                wslMovedSessionReadApi(useAppStore.getState().wslMovedProjects),
-                useAppStore.getState().repos,
-                startupRuntimeHostIds
-              )
+        const sessionReadPromise = Promise.all([
+          runtimeHostsPromise,
+          wslMovedProjectsPromise,
+          hostCatalogSeedPromise
+        ]).then(([startupRuntimeHosts]) =>
+          // Restore cached runtime-host partitions without network waits; skip unreadable ones.
+          timeRendererStartupStep('session-get', () =>
+            fetchWorkspaceSessionWithRuntimeHostOwners(
+              // A moved workspace's retained rows share tab ids with its host's live ones.
+              wslMovedSessionReadApi(useAppStore.getState().wslMovedProjects),
+              useAppStore.getState().repos,
+              startupRuntimeHosts.hostIds,
+              startupRuntimeHosts.sshHostIdByRuntimeHostId
             )
+          )
         )
         const hydrationSessionChain = sessionReadPromise.then(async (sessionRead) => {
           const hydrationRepoIds = collectWorktreeHydrationRepoIdsFromSession(
@@ -218,6 +227,8 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           void timeRendererStartupStep('fetch-browser-session-profiles', () =>
             actions.fetchBrowserSessionProfiles()
           ).catch(() => {})
+          // Why: local and SSH tabs use this desktop's profiles even when Settings shows a paired server.
+          void actions.fetchBrowserSessionProfiles(LOCAL_EXECUTION_HOST_ID)
           const onboardingState = await onboardingPromise
           if (!cancelled) {
             onOnboardingLoadedRef.current(onboardingState)

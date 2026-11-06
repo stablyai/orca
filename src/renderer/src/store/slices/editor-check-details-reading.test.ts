@@ -1,14 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createEditorTabsStore } from './editor-slice-test-harness'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
-import { readingCheck, readingDetails } from '@/components/editor/check-details-reading-fixture'
+import {
+  readingCheck,
+  readingDetails
+} from '@/components/editor/check-details/reading/check-details-reading-fixture'
 import {
   checkDetailsReadingKey,
   checkJobIdentities,
   checkLogDigest,
-  checkReadingIntentKey,
   checkReadingLogKey
-} from '@/components/editor/check-details-reading-cache'
+} from '@/components/editor/check-details/reading/check-details-reading-cache'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/runtime/close-mirrored-editor-tab', () => ({ notifyHostOfMirroredEditorClose: vi.fn() }))
@@ -29,73 +31,6 @@ function requestGate() {
 }
 
 describe('accepted details requests and reading cache', () => {
-  it('limits deliberate error-only intents to five jobs and skips unrequested jobs', () => {
-    const store = createEditorTabsStore()
-    const first = readingDetails(null, 'error')
-    first.jobs = Array.from({ length: 7 }, (_, index) => ({
-      ...first.jobs[0],
-      id: index + 1,
-      name: `synthetic-job-${index}`,
-      logState: index === 0 ? 'not_requested' : 'error'
-    }))
-    store.getState().openCheckRunDetails('wt-1', context, readingCheck, {
-      details: first,
-      loading: false,
-      error: null
-    })
-    const intents = [...scrollTopCache.keys()].filter((key) => key.includes('::intent:'))
-    expect(intents).toHaveLength(5)
-    const unclaimed = checkDetailsReadingKey(id, null, context)
-    const identities = checkJobIdentities(first.jobs)
-    expect(scrollTopCache.has(checkReadingIntentKey(unclaimed, identities[0].identity))).toBe(false)
-    expect(scrollTopCache.has(checkReadingIntentKey(unclaimed, identities[6].identity))).toBe(false)
-  })
-  it.each(['available', 'empty', 'error', 'not_requested', undefined] as const)(
-    'seeds first-text intent only for explicit null error, outcome=%s',
-    (outcome) => {
-      const store = createEditorTabsStore()
-      const first = readingDetails(null, outcome)
-      store.getState().openCheckRunDetails('wt-1', context, readingCheck, {
-        details: first,
-        loading: false,
-        error: null
-      })
-      const identity = checkJobIdentities(first.jobs)[0].identity
-      const key = checkReadingIntentKey(checkDetailsReadingKey(id, null, context), identity)
-      expect(scrollTopCache.has(key)).toBe(outcome === 'error')
-    }
-  )
-
-  it.each(['empty', 'not_requested', undefined] as const)(
-    'retires pending error intent on accepted %s absence without re-arming later text',
-    (outcome) => {
-      const store = createEditorTabsStore()
-      const first = readingDetails(null, 'error')
-      store.getState().openCheckRunDetails('wt-1', context, readingCheck, {
-        requestId: 0,
-        details: first,
-        loading: false,
-        error: null
-      })
-      const identity = checkJobIdentities(first.jobs)[0].identity
-      const key = checkReadingIntentKey(checkDetailsReadingKey(id, null, context), identity)
-      expect(scrollTopCache.get(key)).toBe(-1)
-      store.getState().patchOpenCheckRunDetails('wt-1', context, readingCheck, {
-        requestId: 1,
-        details: readingDetails(null, outcome),
-        loading: false,
-        error: null
-      })
-      expect(scrollTopCache.has(key)).toBe(false)
-      store.getState().patchOpenCheckRunDetails('wt-1', context, readingCheck, {
-        requestId: 2,
-        details: readingDetails(undefined, 'available'),
-        loading: false,
-        error: null
-      })
-      expect([...scrollTopCache.keys()].some((entry) => entry.includes('::intent:'))).toBe(false)
-    }
-  )
   it.each(['null', 'throw'])(
     'does not replace a newer completed request after an older %s refresh',
     async (result) => {

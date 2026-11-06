@@ -72,14 +72,6 @@
       "status": "pending",
       "startedAt": 0
     },
-    "b1152db10a02": {
-      "name": "toast",
-      "ordinal": 3,
-      "value": {
-        "durationMs": 1800,
-        "message": "Couldn't run Notes"
-      }
-    },
     "b1d637072fc8": {
       "name": "session.tabs.createTerminal#1",
       "ordinal": 1,
@@ -109,6 +101,14 @@
       "settlement": {
         "status": "pending",
         "startedAt": 0
+      }
+    },
+    "bacf357ed220": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "durationMs": 1800,
+        "message": "No pty slots left on the host"
       }
     },
     "cce8a731064a": {
@@ -151,7 +151,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "7853d5a23971",
-          "effects": ["b1152db10a02"]
+          "effects": ["bacf357ed220"]
         }
       }
     ]

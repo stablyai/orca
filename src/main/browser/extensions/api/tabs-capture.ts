@@ -1,15 +1,22 @@
 import { z } from 'zod'
 import { browserManager } from '../../browser-manager'
-import { parseChromeExtensionUrl } from '../../../../shared/browser-extension-url'
-import { isChromeWebStoreUrl } from '../../../../shared/browser-extension-webstore'
-import { hasBrowserExtensionActiveTab } from '../browser-extension-active-tab'
+import { consumeBrowserExtensionCaptureQuota } from '../api-runtime/browser-extension-capture-quota'
+import { parseChromeExtensionUrl } from '../../../../shared/browser/extensions/browser-extension-url'
+import { isChromeWebStoreUrl } from '../../../../shared/browser/extensions/browser-extension-webstore'
+import { hasBrowserExtensionActiveTab } from '../permissions/browser-extension-active-tab'
 import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
   type BrowserExtensionCaller
-} from '../browser-extension-namespace-registry'
-import { listBrowserExtensionTabs, resolveCallerWindowId } from '../browser-extension-tab-model'
-import { WINDOW_ID_CURRENT, getBrowserExtensionWindow } from '../browser-extension-window-model'
+} from '../api-runtime/browser-extension-namespace-registry'
+import {
+  listBrowserExtensionTabs,
+  resolveCallerWindowId
+} from '../tabs-and-windows/browser-extension-tab-model'
+import {
+  WINDOW_ID_CURRENT,
+  getBrowserExtensionWindow
+} from '../tabs-and-windows/browser-extension-window-model'
 import { browserExtensionHostPatternsInSession } from './permissions'
 
 // Chrome's default JPEG quality for tabs.captureVisibleTab.
@@ -75,6 +82,7 @@ async function captureVisibleTab(
   if (denial) {
     throw new BrowserExtensionApiError(denial)
   }
+  consumeBrowserExtensionCaptureQuota(caller)
   const releasePaint = browserManager.holdPaintForCapture(tab.contents.id)
   let image: Electron.NativeImage
   try {

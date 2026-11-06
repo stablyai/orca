@@ -6,7 +6,7 @@ import {
   drainBeforeWatcherRemoval,
   WATCHER_REMOVAL_FINAL_DRAIN_RESERVE_MS,
   type WatcherRemovalDeadline
-} from '../../watcher-removal-drain'
+} from '../../../workspaces/removal/watcher-removal-drain'
 import { getLocalWatcherRoot } from './filesystem-watcher-paths'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import {

@@ -1,11 +1,11 @@
-import type { AgentSessionConversationView } from '../../../../../shared/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import {
   formatOrcaSessionAddress,
   type OrcaSessionId
 } from '../../../../../shared/orca-session-address'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../shared/orchestration-session-caller-codes'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import type { WorkerStartModeReceipt } from '../orchestration-worker-start-mode'
+import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { observeChatAssignee } from '../../../orchestration/chat-assignee'
 import type { OrchestrationDb } from '../../../orchestration/db'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
@@ -15,12 +15,12 @@ import { refuseUndeliverableSessionRecipient } from './messaging/session-recipie
 
 const NO_EFFECTS = 'No effects were applied.'
 
-/** A chat has no pane or process; its Dispatch names it by its Orca session ID alone. */
+/** A chat with no worker handle has no pane or process; its Dispatch names it by its Orca session ID alone. */
 export const CHAT_WORKER_AUTHORITY = { paneKey: null, processIncarnation: null } as const
 
-/** The chat a Dispatch assignee party names; null for a terminal or a structured worker. */
+/** The chat a party is, whichever name reached it: a structured worker's handle names its chat too. Null for a terminal. */
 export function chatAssigneeOf(party: OrchestrationParty): OrcaSessionId | null {
-  return party.terminalHandle === null ? party.orcaSessionId : null
+  return party.orcaSessionId
 }
 
 /** Use the same reach rules as mail before creating anything; return the assignee's currently running session. */

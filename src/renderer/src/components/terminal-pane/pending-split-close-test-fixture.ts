@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { TerminalTabRetirementState } from '@/store/slices/terminal-tab-retirement'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyConnectResult, PtyTransport } from './pty-transport-types'
 import type { TerminalPaneBindingController } from './use-terminal-pane-layout-bindings'

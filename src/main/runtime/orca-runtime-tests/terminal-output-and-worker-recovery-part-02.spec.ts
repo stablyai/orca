@@ -1,13 +1,12 @@
-import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
+import { makeRuntimeOrchestrationDb } from './runtime-orchestration-db.test-fixture'
+import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import {
-  OrcaRuntimeService,
-  getDefaultWorkspaceSession,
-  makePaneKey
-} from '../orca-runtime-test-mocks.spec'
-import type { OrchestrationDb } from '../orchestration/db'
-import type { WorkspaceSessionState } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
@@ -22,8 +21,8 @@ import {
   makeHeadlessTerminalLayout,
   makeRuntimeStoreWithWorkspaceSession,
   store
-} from '../orca-runtime-test-fixtures.spec'
-import { publishLegacyWorkerReveal } from '../orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { publishLegacyWorkerReveal } from './orca-runtime-test-scenario-builders.spec'
 
 describe('OrcaRuntimeService', () => {
   it('recovers exported ORCA_TERMINAL_HANDLE from discovered live PTY sessions', async () => {
@@ -469,23 +468,24 @@ describe('OrcaRuntimeService', () => {
             : null
       }
     )
-    runtime.setOrchestrationDb({
-      getActiveDispatchForTerminal: () => undefined,
-      listLegacyWorkerTerminalRecoveryRows: () => [
-        {
-          dispatch_id: 'dispatch-legacy',
-          task_id: 'task-legacy',
-          dispatch_status: 'completed',
-          contract_version: 0,
-          assignee_handle: 'term_legacy',
-          assignee_pane_key: workerPaneKey,
-          process_incarnation: `pty-legacy:${incarnationId}`,
-          worker_state: 'ready',
-          worktree_id: TEST_WORKTREE_ID,
-          agent_terminal_handle: 'term_legacy'
-        }
-      ]
-    } as unknown as OrchestrationDb)
+    const orchestrationDb = makeRuntimeOrchestrationDb()
+    vi.spyOn(orchestrationDb, 'listSessionDispatchesForPresentation').mockImplementation(() => [])
+    vi.spyOn(orchestrationDb, 'getActiveDispatchForTerminal').mockImplementation(() => undefined)
+    vi.spyOn(orchestrationDb, 'listLegacyWorkerTerminalRecoveryRows').mockImplementation(() => [
+      {
+        dispatch_id: 'dispatch-legacy',
+        task_id: 'task-legacy',
+        dispatch_status: 'completed',
+        contract_version: 0,
+        assignee_handle: 'term_legacy',
+        assignee_pane_key: workerPaneKey,
+        process_incarnation: `pty-legacy:${incarnationId}`,
+        worker_state: 'ready',
+        worktree_id: TEST_WORKTREE_ID,
+        agent_terminal_handle: 'term_legacy'
+      }
+    ])
+    runtime.setOrchestrationDb(orchestrationDb)
     const write = vi.fn(() => true)
     const kill = vi.fn(() => true)
     const READY_SCREEN =

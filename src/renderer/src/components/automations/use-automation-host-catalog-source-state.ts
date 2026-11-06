@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { getPairedWebClientEnvironmentId } from '@/lib/paired-web-client-host'
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type {
   AutomationCatalogRuntimeSource,
   AutomationCatalogSshSource,
