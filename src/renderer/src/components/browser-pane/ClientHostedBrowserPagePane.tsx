@@ -356,6 +356,7 @@ export function ClientHostedBrowserPagePane({
           {markup.overlay}
           <BrowserPageFeedbackBadge ref={zoom.feedbackBadgeRef} />
           <BrowserFind
+            browserPageId={browserTab.id}
             isOpen={findOpen}
             onClose={() => setFindOpen(false)}
             webviewRef={webviewRef}

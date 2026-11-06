@@ -30,6 +30,7 @@ export type ComposerStateInput = {
   initialWorkspaceTarget?: WorkspaceCreationTargetHint | null
   initialWorkspaceStatus?: WorkspaceStatus
   initialBaseBranch?: string
+  initialParentWorktreeId?: string
   persistDraft: boolean
   onCreated?: () => void
   isSubmissionCancelled?: () => boolean
@@ -54,6 +55,7 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
     initialWorkspaceTarget = null,
     initialWorkspaceStatus,
     initialBaseBranch,
+    initialParentWorktreeId,
     persistDraft,
     onCreated,
     isSubmissionCancelled = NEVER_CANCEL_COMPOSER_SUBMIT,
@@ -173,6 +175,7 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
     initialWorkspaceTarget,
     initialWorkspaceStatus,
     initialBaseBranch,
+    initialParentWorktreeId,
     persistDraft,
     onCreated,
     isSubmissionCancelled,

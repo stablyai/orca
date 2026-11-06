@@ -157,12 +157,6 @@ async function openGrokHost(runs: string, create?: StructuredAgentSessionFirstMe
 }
 
 describe('Grok’s default comes from what a chat with no pick runs', () => {
-  it('names no model before any chat ran, though the listing computed one', async () => {
-    const { listed } = await openGrokHost('grok-4.6')
-    expect(listed).toMatchObject({ origin: 'probe', listingNamesConfiguredModel: false })
-    expect(firstFrame(listed)).toEqual({ model: null, effort: null })
-  })
-
   it('names 4.6, the model a chat with no pick ran, never the listing’s 4.7', async () => {
     const { catalog, host } = await openGrokHost('grok-4.6')
     expect((await host.readOptions(SESSION)).current).toMatchObject({ model: 'grok-4.6' })

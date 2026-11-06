@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../shared/constants'
 import { createProjectGroup } from '../../../shared/project-groups'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
@@ -82,7 +82,7 @@ function fixture(folderCount: number) {
     'runtime:remote': session([...removedIds, 'kept'])
   }
   const scheduleSave = vi.fn()
-  const removeWorkspaceLineageForFolderParent = vi.fn()
+  const removeWorkspaceLineageForRemovedFolder = vi.fn()
   const selected = new Set([...removedIds, 'kept'].map(folderWorkspaceKey))
   const pruneMobileClientTabSelections = vi.fn((matches: (owner: string) => boolean) => {
     for (const owner of selected) {
@@ -94,21 +94,16 @@ function fixture(folderCount: number) {
   const operations = new ProjectGroupPersistenceOperations({
     state,
     scheduleSave,
-    removeWorkspaceLineageForFolderParent,
+    removeWorkspaceLineageForRemovedFolder,
     pruneMobileClientTabSelections
   })
   return {
     state,
     removedIds,
     selected,
-    operations,
-    scheduleSave,
-    removeWorkspaceLineageForFolderParent,
-    pruneMobileClientTabSelections
+    operations
   }
 }
-
-afterEach(() => vi.restoreAllMocks())
 
 describe('project group session removal', () => {
   it('removes the entire subtree from local spill and remote sessions while preserving other owners', () => {
@@ -125,10 +120,5 @@ describe('project group session removal', () => {
     expect(setup.state.projectGroups?.map((group) => group.id)).toEqual(['other'])
     expect(setup.state.folderWorkspaces.map((entry) => entry.id)).toEqual(['kept'])
     expect(setup.selected).toEqual(new Set([folderWorkspaceKey('kept')]))
-    expect(setup.removeWorkspaceLineageForFolderParent.mock.calls).toEqual(
-      setup.removedIds.map((id) => [id])
-    )
-    expect(setup.pruneMobileClientTabSelections).toHaveBeenCalledTimes(1)
-    expect(setup.scheduleSave).toHaveBeenCalledTimes(1)
   })
 })

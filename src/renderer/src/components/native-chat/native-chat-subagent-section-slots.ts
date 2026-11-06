@@ -156,7 +156,8 @@ export function nativeChatSubagentSectionSlots({
       roster: NativeChatSubagentRosterState | undefined,
       turnKey: string | undefined
     ): void {
-      if (!roster?.open) {
+      // No child has rows yet (a reveal before first activity): the roster row draws every entry.
+      if (!roster?.open || roster.sections.size === 0) {
         return
       }
       for (const group of subagentGroupBlocks(message.blocks)) {
@@ -182,14 +183,19 @@ export function nativeChatSubagentSectionSlots({
     },
     rosterAt(messageId: string): NativeChatSubagentRosterState | undefined {
       const anchored = sections.anchoredAt.get(messageId)
-      return anchored === undefined
-        ? undefined
-        : {
-            open:
-              choices.rosters.get(messageId) ??
-              anchored.some((agentId) => choices.sections.has(agentId) || live.has(agentId)),
-            sections: new Map(anchored.map((agentId) => [agentId, isOpen(agentId)]))
-          }
+      if (anchored === undefined) {
+        // A roster whose children have no rows yet still holds an open it was given (a strip reveal).
+        const chosen = choices.rosters.get(messageId)
+        return chosen === undefined ? undefined : { open: chosen, sections: NO_ROSTER_SECTIONS }
+      }
+      return {
+        open:
+          choices.rosters.get(messageId) ??
+          anchored.some((agentId) => choices.sections.has(agentId) || live.has(agentId)),
+        sections: new Map(anchored.map((agentId) => [agentId, isOpen(agentId)]))
+      }
     }
   }
 }
+
+const NO_ROSTER_SECTIONS: ReadonlyMap<string, boolean> = new Map()

@@ -31,6 +31,7 @@ export type ComposerModalData = {
   taskSourceContext?: TaskSourceContext | null
   initialWorkspaceTarget?: WorkspaceCreationTargetHint | null
   initialBaseBranch?: string
+  initialParentWorktreeId?: string
   initialWorkspaceStatus?: WorkspaceStatus
   enableIssueAutomation?: boolean
   /** Creation-surface telemetry; each opener supplies it, otherwise use unknown. */

@@ -12,6 +12,7 @@ import { randomUUID } from 'node:crypto'
 import { copySleepingAgentLaunchConfig } from './runtime-agent-launch-resolution'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../identity/remote-runtime-terminal-create-identity'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { mintServePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { placeCreatedSessionTab } from '../../../../shared/session-tab-placement'
 import { insertTabIdIntoOrder } from '../../../../shared/workspace-layout/tab-order'
 import type { OrcaRuntimeWithBuildPtyTerminalSummary as PtyTerminalSummaryMethods } from '../query/pty-terminal-summary'
@@ -68,7 +69,8 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     const cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, opts.cwd)
     // Why: an SSH sessionId means reattach; only synthesize local serve ids so SSH fresh terminals still call pty.spawn.
     const stableSessionId =
-      opts.identity?.sessionId ?? (workspace.connectionId ? undefined : `serve-${randomUUID()}`)
+      opts.identity?.sessionId ??
+      (workspace.connectionId ? undefined : mintServePtySessionId(workspace.id, randomUUID()))
     const isNewSession = stableSessionId !== undefined && opts.identity?.sessionId === undefined
     const mutationHandle = opts.createMutation
       ? deriveRemoteRuntimeTerminalCreateHandle(

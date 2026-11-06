@@ -33,7 +33,7 @@ vi.mock('@/lib/connection-context', () => ({
 }))
 
 vi.mock('./terminal-remote-file-download-open', () => ({
-  downloadAndOpenRemoteTerminalFile: vi.fn()
+  downloadAndOpenRemoteTerminalFile: vi.fn(async () => true)
 }))
 
 installTerminalLinkTestEnvironment(doubles)
@@ -193,7 +193,8 @@ describe('a paired-server link outside its own workspace', () => {
     expect(openFilePathMock).not.toHaveBeenCalled()
     expect(downloadAndOpenRemoteTerminalFile).toHaveBeenCalledWith(
       expect.objectContaining({ worktreeId: 'wt-main', worktreePath: '/repo' }),
-      '/repo/src/index.ts'
+      '/repo/src/index.ts',
+      expect.objectContaining({ grant: null })
     )
   })
 

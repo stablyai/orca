@@ -23,6 +23,8 @@ export function openSharedControlSocket(
       cause: SharedControlSocketCloseCause,
       close?: { code: number; reason: string }
     ) => void
+    /** The current socket finished its opening handshake. */
+    onOpened: () => void
     onTextFrame: (frame: string) => void
     /** Any inbound frame, ping or pong on the current socket. */
     onActivity?: () => void
@@ -40,6 +42,11 @@ export function openSharedControlSocket(
     callbacks.onActivity?.()
   }
   const opened = openRemoteRuntimeWebSocket(connection, {
+    onOpen: (ws) => {
+      if (callbacks.getCurrentSocket() === ws) {
+        callbacks.onOpened()
+      }
+    },
     onClose: (ws, code, reason) => {
       if (callbacks.getCurrentSocket() === ws) {
         callbacks.onSocketClosed(

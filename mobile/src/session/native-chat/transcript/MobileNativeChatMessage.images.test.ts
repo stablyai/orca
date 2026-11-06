@@ -36,6 +36,7 @@ async function renderWithHost(node: ReactNode): Promise<ReactTestRenderer> {
   const value = {
     openImage: vi.fn(),
     openActions: vi.fn(),
+    openRewind: vi.fn(),
     imageSource: { client: stubRpcClient({ sendRequest }), worktreeId: 'wt-1' }
   }
   await act(async () => {

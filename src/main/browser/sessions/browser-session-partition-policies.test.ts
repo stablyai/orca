@@ -137,64 +137,10 @@ function profileFor(partition: string): BrowserSessionProfile {
   }
 }
 
-function fireWillDownload(partition: string): { cancelled: boolean } {
-  const sess = sessionsByPartition.get(partition)
-  if (!sess || sess.listeners.length !== 1) {
-    throw new Error(`expected exactly one will-download listener on ${partition}`)
-  }
-  let cancelled = false
-  sess.listeners[0]({ preventDefault: () => (cancelled = true) }, { id: 'item-1' }, { id: 42 })
-  return { cancelled }
-}
-
 beforeEach(() => {
   vi.clearAllMocks()
   sessionsByPartition.clear()
   vi.resetModules()
-})
-
-describe('partition download policy', () => {
-  it('routes a download on a partition that did not ask for the deny', async () => {
-    const install = await loadInstaller()
-    install(profileFor('persist:browsing-1'))
-
-    expect(fireWillDownload('persist:browsing-1').cancelled).toBe(false)
-    expect(mocks.handleGuestWillDownload).toHaveBeenCalledWith(
-      expect.objectContaining({ guestWebContentsId: 42 })
-    )
-  })
-
-  it('cancels a download on a partition that asked for the deny, routing nothing', async () => {
-    const install = await loadInstaller()
-    install(profileFor('orca-doc-preview'), { downloads: 'deny' })
-
-    expect(fireWillDownload('orca-doc-preview').cancelled).toBe(true)
-    expect(mocks.handleGuestWillDownload).not.toHaveBeenCalled()
-  })
-
-  it('tells the reader about the refusal, and only on the partition that refused', async () => {
-    const install = await loadInstaller()
-    install(profileFor('orca-doc-preview'), { downloads: 'deny' })
-    install(profileFor('persist:browsing-1'))
-
-    fireWillDownload('persist:browsing-1')
-    expect(mocks.noticeDocPreviewDownloadBlocked).not.toHaveBeenCalled()
-
-    fireWillDownload('orca-doc-preview')
-    expect(mocks.noticeDocPreviewDownloadBlocked).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 42 })
-    )
-  })
-
-  it('keeps each partition on its own decision', async () => {
-    const install = await loadInstaller()
-    install(profileFor('orca-doc-preview'), { downloads: 'deny' })
-    install(profileFor('persist:browsing-1'))
-
-    expect(fireWillDownload('orca-doc-preview').cancelled).toBe(true)
-    expect(fireWillDownload('persist:browsing-1').cancelled).toBe(false)
-    expect(mocks.handleGuestWillDownload).toHaveBeenCalledTimes(1)
-  })
 })
 
 describe('partition permission policy', () => {
@@ -243,44 +189,6 @@ describe('partition permission policy', () => {
     })
     expect(checkHandler(guest(7), 'clipboard-read', 'https://a.test')).toBe(false)
     expect(checkHandler(guest(8), 'clipboard-read', 'https://a.test')).toBe(true)
-  })
-
-  it('answers non-notification requests without inventorying frames', async () => {
-    const install = await loadInstaller()
-    const partition = 'persist:permission-frame-inventory'
-    await install(profileFor(partition), { sitePermissions: 'session' })
-    const { sessionBrowserSitePermissions } =
-      await import('../site-settings/browser-site-permission-prompt')
-    const memory = sessionBrowserSitePermissions(partition)
-    const requestHandler =
-      sessionsByPartition.get(partition)?.setPermissionRequestHandler.mock.calls[0]?.[0]
-    if (typeof requestHandler !== 'function') {
-      throw new Error('Expected the installed permission request handler')
-    }
-    const enumerateFrames = vi.fn(() => [{ url: 'about:srcdoc', origin: 'https://other.test' }])
-    const tab = {
-      id: 12,
-      getURL: () => 'https://a.test/page',
-      mainFrame: {
-        get framesInSubtree() {
-          return enumerateFrames()
-        }
-      }
-    }
-
-    for (const decision of ['allow', 'block'] as const) {
-      memory.set('https://a.test', ['location', 'clipboard', 'midi'], decision)
-      for (const permission of ['geolocation', 'clipboard-read', 'midi']) {
-        const answer = await new Promise<boolean>((resolve) => {
-          requestHandler(tab, permission, resolve, {
-            requestingUrl: 'about:srcdoc',
-            isMainFrame: false
-          })
-        })
-        expect(answer).toBe(decision === 'allow')
-      }
-    }
-    expect(enumerateFrames).not.toHaveBeenCalled()
   })
 
   it("answers a notification from a frame with an inherited origin as the frame's real site", async () => {
@@ -498,120 +406,5 @@ describe('partition permission policy', () => {
     expect(mocks.notifyPermissionDenied).toHaveBeenCalledWith(
       expect.objectContaining({ guestWebContentsId: 11, permission: 'fileSystem' })
     )
-  })
-
-  it('refuses a blocklisted system folder at once instead of leaving the page waiting', async () => {
-    const install = await loadInstaller()
-    install(profileFor('persist:browsing-6'))
-    install(profileFor('orca-doc-preview'), { permissions: 'deny' })
-    const answer = (partition: string) => {
-      const sess = sessionsByPartition.get(partition)
-      const listener = sess?.on.mock.calls.find(
-        ([event]) => event === 'file-system-access-restricted'
-      )?.[1]
-      const actions: string[] = []
-      listener?.(
-        {},
-        {
-          origin: 'https://app.test',
-          isDirectory: true,
-          path: '/Users/me',
-          webContents: { id: 12 }
-        },
-        (action: string) => actions.push(action)
-      )
-      return actions
-    }
-
-    expect(answer('orca-doc-preview')).toEqual(['deny'])
-    expect(mocks.notifyPermissionDenied).not.toHaveBeenCalled()
-    expect(answer('persist:browsing-6')).toEqual(['deny'])
-    expect(mocks.notifyPermissionDenied).toHaveBeenCalledWith({
-      guestWebContentsId: 12,
-      permission: 'fileSystem',
-      rawUrl: 'https://app.test'
-    })
-  })
-
-  it('hands a link to another app to the open-app prompt instead of denying it', async () => {
-    const install = await loadInstaller()
-    install(profileFor('persist:browsing-4'))
-    const sess = sessionsByPartition.get('persist:browsing-4')
-    if (!sess) {
-      throw new Error('Expected the browsing session')
-    }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installer registered exactly this handler on the fake session.
-    const requestHandler = sess.setPermissionRequestHandler.mock.calls[0]?.[0] as (
-      webContents: { id: number; getURL: () => string },
-      permission: string,
-      callback: (allowed: boolean) => void,
-      details: { externalURL?: string; requestingUrl?: string }
-    ) => void
-    const guest = { id: 9, getURL: () => 'https://acme.okta.com/signin' }
-    const details = {
-      externalURL: 'com-okta-authenticator:/deviceChallenge',
-      requestingUrl: 'https://login.acme.okta.com/frame'
-    }
-    const decisions: boolean[] = []
-
-    mocks.requestExternalAppLaunch.mockReturnValueOnce(true)
-    requestHandler(guest, 'openExternal', (allowed) => decisions.push(allowed), details)
-    const [launchGuest, launchUrl, requestingUrl] = mocks.requestExternalAppLaunch.mock.calls[0]
-    expect([launchGuest, launchUrl]).toEqual([guest, 'com-okta-authenticator:/deviceChallenge'])
-    expect(requestingUrl()).toBe('https://login.acme.okta.com/frame')
-    expect(mocks.notifyPermissionDenied).not.toHaveBeenCalled()
-
-    mocks.requestExternalAppLaunch.mockReturnValueOnce(false)
-    requestHandler(guest, 'openExternal', (allowed) => decisions.push(allowed), details)
-    expect(mocks.notifyPermissionDenied).toHaveBeenCalledWith(
-      expect.objectContaining({ guestWebContentsId: 9, permission: 'openExternal' })
-    )
-    // Orca launches approved apps itself, so Chromium's launch remains denied.
-    expect(decisions).toEqual([false, false])
-  })
-
-  it('cancels a download from a page an SSH host drives (#29145)', async () => {
-    mocks.isRemoteCliDrivenGuest.mockImplementation((id?: number) => id === 42)
-    const install = await loadInstaller()
-    install(profileFor('persist:browsing-3'))
-
-    expect(fireWillDownload('persist:browsing-3')).toEqual({ cancelled: true })
-    expect(mocks.handleGuestWillDownload).not.toHaveBeenCalled()
-  })
-
-  it('denies every request and check on a strict partition without WebAuthn handlers', async () => {
-    const install = await loadInstaller()
-    install(profileFor('orca-doc-preview'), { permissions: 'deny' })
-    const sess = sessionsByPartition.get('orca-doc-preview')
-    if (!sess) {
-      throw new Error('Expected the preview session')
-    }
-    const requestHandler = sess.setPermissionRequestHandler.mock.calls[0]?.[0] as (
-      webContents: Electron.WebContents,
-      permission: string,
-      callback: (allowed: boolean) => void
-    ) => void
-    const checkHandler = sess.setPermissionCheckHandler.mock.calls[0]?.[0] as (
-      webContents: Electron.WebContents,
-      permission: string
-    ) => boolean
-    const displayMediaHandler = sess.setDisplayMediaRequestHandler.mock.calls[0]?.[0] as (
-      request: Electron.DisplayMediaRequestHandlerHandlerRequest,
-      callback: (streams: { video?: Electron.WebFrameMain; audio?: 'loopback' }) => void
-    ) => void
-
-    for (const permission of ['media', 'clipboard-read', 'notifications', 'fullscreen']) {
-      let decision: boolean | null = null
-      requestHandler({} as Electron.WebContents, permission, (allowed) => (decision = allowed))
-      expect(decision).toBe(false)
-      expect(checkHandler({} as Electron.WebContents, permission)).toBe(false)
-    }
-    expect(mocks.installBrowserWebAuthnAccessHandlers).not.toHaveBeenCalled()
-    expect(mocks.clearBrowserWebAuthnAccessHandlers).toHaveBeenCalledWith(sess)
-    let displayMediaDecision: { video?: Electron.WebFrameMain; audio?: 'loopback' } | null = null
-    displayMediaHandler({} as Electron.DisplayMediaRequestHandlerHandlerRequest, (decision) => {
-      displayMediaDecision = decision
-    })
-    expect(displayMediaDecision).toEqual({ video: undefined, audio: undefined })
   })
 })

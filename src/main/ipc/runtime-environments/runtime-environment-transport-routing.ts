@@ -33,11 +33,12 @@ import {
 import { runtimeEnvironmentRevisionFailure } from './runtime-environment-revision-guard'
 import {
   executeSupportRoutedCall,
-  shouldUseSharedControlEnvelope,
   shouldRouteCallBySupport,
   shouldRouteSubscriptionBySupport,
   subscribeSupportRoutedRuntimeEnvironment
 } from './runtime-environment-support-routing'
+import { shouldUseSharedControlEnvelope } from './runtime-environment-shared-control-envelope'
+import { sendEnvelopedOneShotCall } from './runtime-environment-runtime-pinned-send'
 
 const DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS = 15_000
 
@@ -107,16 +108,18 @@ export async function callRuntimeEnvironment(
         endpoint = pairedConnection.endpoint
         const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
         const sharedControlEnvelope = shouldUseSharedControlEnvelope(method, params, envelope)
+        const call = {
+          method,
+          params,
+          timeoutMs: effectiveTimeoutMs,
+          signal: options?.signal,
+          prepareRequest: options?.prepareRequest
+        }
         if (envelope && !sharedControlEnvelope) {
-          const response = await sendRemoteRuntimeRequestAbortable(
-            pairedConnection,
-            method,
-            params,
-            effectiveTimeoutMs,
-            envelope,
-            options?.signal,
-            ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-            options?.prepareRequest
+          const response = await sendEnvelopedOneShotCall(
+            { environment: currentEnvironment, connection: pairedConnection },
+            { ...call, envelope },
+            options?.expectedEnvironmentRuntimeId
           )
           markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
           return response
@@ -137,13 +140,10 @@ export async function callRuntimeEnvironment(
           return executeSupportRoutedCall({
             userDataPath,
             environment: currentEnvironment,
-            method,
-            params,
-            timeoutMs: effectiveTimeoutMs,
+            ...call,
             expectedPairingRevision: expectedEnvironmentPairingRevision,
             expectedRuntimeId: options?.expectedEnvironmentRuntimeId,
-            envelope: sharedControlEnvelope,
-            signal: options?.signal
+            envelope: sharedControlEnvelope
           })
         }
         // One-shot startup/control RPCs keep repo hydration independent of stale terminal-control sockets.
@@ -154,7 +154,8 @@ export async function callRuntimeEnvironment(
           effectiveTimeoutMs,
           sharedControlEnvelope,
           options?.signal,
-          ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+          ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+          options?.prepareRequest
         )
         markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
         return response

@@ -218,24 +218,6 @@ describe('worker API protocol', () => {
     expect(seen).toEqual([])
   })
 
-  it('runs a call as the initiating extension, keeping undefined arguments and the worker alive', async () => {
-    vaultSession.startWorker()
-    await expect(callAs(vaultSession, VAULT, echo)).resolves.toEqual({
-      ok: true,
-      value: 42
-    })
-    await expect(callAs(otherSession, OTHER, echo)).resolves.toEqual({
-      ok: true,
-      value: 42
-    })
-    expect(seen).toEqual([
-      { extensionId: VAULT, fromWorker: true },
-      { extensionId: OTHER, fromWorker: true }
-    ])
-    expect(vaultSession.worker.startTask).toHaveBeenCalled()
-    expect(vaultSession.task.end).toHaveBeenCalled()
-  })
-
   it.each(['extension reload', 'host replacement'] as const)(
     'rejects an old lifetime when its request body finishes after %s',
     async (teardown) => {

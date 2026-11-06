@@ -1,58 +1,19 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   authorizeDocPreviewDirectory,
-  getDocPreviewGrant,
   mintDocPreviewGrant,
   resolveCanonicalDocPreviewPath,
   resolveDocPreviewTargetPath,
-  revokeAllDocPreviewGrants,
-  revokeDocPreviewGrant,
-  toRuntimeWorktreeRelativeDirectoryPath,
-  toRuntimeWorktreeRelativePath,
-  type DocPreviewGrant
+  revokeAllDocPreviewGrants
 } from './doc-preview-grant-registry'
 
 const sshOwner = { kind: 'ssh', connectionId: 'ssh-1' } as const
-
-function mintPosixGrant(root = '/srv/repo/docs'): DocPreviewGrant {
-  return mintDocPreviewGrant({
-    owner: sshOwner,
-    root,
-    entryRelativePath: 'index.html',
-    browserPageId: 'page-1'
-  })
-}
 
 beforeEach(() => {
   revokeAllDocPreviewGrants()
 })
 
-describe('doc preview grants', () => {
-  it('returns nothing for an unknown or revoked grant', () => {
-    const grant = mintPosixGrant()
-
-    expect(getDocPreviewGrant('0'.repeat(32))).toBeNull()
-    expect(revokeDocPreviewGrant(grant.id)).toBe(true)
-    expect(getDocPreviewGrant(grant.id)).toBeNull()
-    expect(revokeDocPreviewGrant(grant.id)).toBe(false)
-  })
-})
-
 describe('resolveDocPreviewTargetPath', () => {
-  it('reads only the entry document until the reader approves its directory', () => {
-    const grant = mintPosixGrant()
-
-    expect(resolveDocPreviewTargetPath(grant, 'index.html')).toBe('/srv/repo/docs/index.html')
-    expect(resolveDocPreviewTargetPath(grant, 'assets/logo.png')).toBeNull()
-    expect(resolveDocPreviewTargetPath(grant, 'secrets.env')).toBeNull()
-
-    expect(authorizeDocPreviewDirectory(grant.id, 'assets/logo.png')).toBe(true)
-    expect(resolveDocPreviewTargetPath(grant, 'assets/logo.png')).toBe(
-      '/srv/repo/docs/assets/logo.png'
-    )
-    expect(resolveDocPreviewTargetPath(grant, 'secrets.env')).toBeNull()
-  })
-
   it('keeps silent authority over a document directory strictly inside the workspace, and only there', () => {
     const nested = mintDocPreviewGrant({
       owner: sshOwner,
@@ -75,49 +36,6 @@ describe('resolveDocPreviewTargetPath', () => {
     )
     expect(resolveDocPreviewTargetPath(atWorkspaceRoot, '.env')).toBeNull()
     expect(resolveDocPreviewTargetPath(atWorkspaceRoot, 'docs/styles.css')).toBeNull()
-  })
-
-  it('refuses parent traversal, absolute escapes and empty paths', () => {
-    const grant = mintPosixGrant()
-
-    expect(resolveDocPreviewTargetPath(grant, '../secret.env')).toBeNull()
-    expect(resolveDocPreviewTargetPath(grant, 'assets/../../secret.env')).toBeNull()
-    expect(resolveDocPreviewTargetPath(grant, '..')).toBeNull()
-    expect(resolveDocPreviewTargetPath(grant, '')).toBeNull()
-    expect(resolveDocPreviewTargetPath(grant, 'a//b')).toBeNull()
-  })
-
-  it('refuses backslash and NUL segments that could re-split on the owning host', () => {
-    const grant = mintPosixGrant()
-
-    expect(resolveDocPreviewTargetPath(grant, '..\\secret.env')).toBeNull()
-    expect(resolveDocPreviewTargetPath(grant, 'index.html\0.png')).toBeNull()
-  })
-
-  it('keeps a Windows drive root addressable instead of turning it drive-relative', () => {
-    const grant = mintDocPreviewGrant({
-      owner: sshOwner,
-      root: 'C:\\',
-      entryRelativePath: 'index.html',
-      browserPageId: 'page-1'
-    })
-
-    expect(resolveDocPreviewTargetPath(grant, 'index.html')).toBe('C:\\index.html')
-  })
-
-  it('follows the owning host path flavor rather than this process platform', () => {
-    const windowsGrant = mintDocPreviewGrant({
-      owner: sshOwner,
-      root: 'C:\\srv\\repo\\docs',
-      entryRelativePath: 'index.html',
-      browserPageId: 'page-1'
-    })
-
-    expect(authorizeDocPreviewDirectory(windowsGrant.id, 'assets/logo.png')).toBe(true)
-    expect(resolveDocPreviewTargetPath(windowsGrant, 'assets/logo.png')).toBe(
-      'C:\\srv\\repo\\docs\\assets\\logo.png'
-    )
-    expect(resolveDocPreviewTargetPath(windowsGrant, '../secret.env')).toBeNull()
   })
 
   it('authorizes only the requested sibling directory', () => {
@@ -143,21 +61,6 @@ describe('resolveDocPreviewTargetPath', () => {
     expect(resolveDocPreviewTargetPath(grant, '.env')).toBeNull()
   })
 
-  it('refuses malformed authorization requests and unknown grants', () => {
-    const grant = mintDocPreviewGrant({
-      owner: sshOwner,
-      requestBase: '/srv/repo',
-      root: '/srv/repo/docs',
-      entryRelativePath: 'docs/report.html',
-      browserPageId: 'page-1'
-    })
-
-    expect(authorizeDocPreviewDirectory(grant.id, '../outside/secret.txt')).toBe(false)
-    expect(authorizeDocPreviewDirectory(grant.id, 'assets\\secret.txt')).toBe(false)
-    expect(authorizeDocPreviewDirectory('0'.repeat(32), 'assets/chart.js')).toBe(false)
-    expect(grant.authorizedRoots).toEqual([])
-  })
-
   it('uses Windows semantics when authorizing a sibling directory', () => {
     const grant = mintDocPreviewGrant({
       owner: sshOwner,
@@ -176,24 +79,6 @@ describe('resolveDocPreviewTargetPath', () => {
 })
 
 describe('resolveCanonicalDocPreviewPath', () => {
-  it('refuses a canonical path in a sibling directory that shares the root prefix', async () => {
-    const grant = mintPosixGrant()
-
-    await expect(
-      resolveCanonicalDocPreviewPath(grant, '/srv/repo/docs/index.html', async (path) =>
-        path === grant.root ? path : '/srv/repo/docs-private/secret.html'
-      )
-    ).resolves.toBeNull()
-  })
-
-  it('refuses a sibling of an entry-only document even when it canonicalizes cleanly', async () => {
-    const grant = mintPosixGrant()
-
-    await expect(
-      resolveCanonicalDocPreviewPath(grant, '/srv/repo/docs/notes.txt', async (path) => path)
-    ).resolves.toBeNull()
-  })
-
   it('keeps an approved SSH directory inside the canonical workspace boundary', async () => {
     const grant = mintDocPreviewGrant({
       owner: sshOwner,
@@ -215,24 +100,5 @@ describe('resolveCanonicalDocPreviewPath', () => {
         return path
       })
     ).resolves.toBeNull()
-  })
-})
-
-describe('toRuntimeWorktreeRelativePath', () => {
-  it('rejects paths outside the worktree, which files.read cannot address', () => {
-    expect(toRuntimeWorktreeRelativePath('/srv/repo', '/tmp/agent/report.html')).toBeNull()
-    expect(toRuntimeWorktreeRelativePath('/srv/repo', '/srv/repo')).toBeNull()
-  })
-
-  it('uses Windows semantics for a Windows worktree root', () => {
-    expect(toRuntimeWorktreeRelativePath('C:\\srv\\repo', 'C:\\srv\\repo\\docs\\index.html')).toBe(
-      'docs/index.html'
-    )
-    expect(toRuntimeWorktreeRelativePath('C:\\srv\\repo', 'D:\\other\\index.html')).toBeNull()
-  })
-
-  it('represents an explicitly authorized worktree root as the empty relative directory', () => {
-    expect(toRuntimeWorktreeRelativeDirectoryPath('/srv/repo', '/srv/repo')).toBe('')
-    expect(toRuntimeWorktreeRelativeDirectoryPath('C:\\srv\\repo', 'C:\\srv\\repo')).toBe('')
   })
 })

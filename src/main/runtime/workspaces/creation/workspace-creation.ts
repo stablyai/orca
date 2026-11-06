@@ -180,8 +180,9 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       rearm,
       timing
     })
-    const { worktree, worktreePath, includeCopyWarning, created, addResult } = localCreate
-    const { lineage, workspaceLineage, warnings: lineageWarnings } = localCreate.metadataResult
+    const { worktree, worktreePath, includeCopyWarning, created, addResult, metadataResult } =
+      localCreate
+    const { lineage, workspaceLineage } = metadataResult
 
     let {
       setup,
@@ -263,7 +264,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
         workspaceLineage,
         git: created
       },
-      ...(lineageInput ? { lineage, workspaceLineage, warnings: lineageWarnings } : {}),
+      ...(lineageInput ? metadataResult : {}),
       ...(returnedSetup ? { setup: returnedSetup } : {}),
       ...(args.awaitTerminalProvisioning
         ? {

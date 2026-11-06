@@ -6,8 +6,11 @@ import type {
   WorktreeLineage,
   WorktreeLineageWarning
 } from '../../../../shared/worktree/lineage-types'
+import { crossStoreCreateLineage } from './runtime-worktree-lineage-recording'
+import type { CrossStoreLineageResolution } from './runtime-worktree-lineage-recording'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 import type { RuntimeManagedWorktreeCreateArgs } from '../creation/runtime-managed-worktree-create-types'
+import { WorktreeIdRequiresFullPathError } from './worktree-id-requires-full-path-error'
 
 export type WorktreeLineageInput = NonNullable<RuntimeManagedWorktreeCreateArgs['lineage']>
 
@@ -36,6 +39,7 @@ export type WorktreeLineageResolution =
       coordinatorHandle?: string
       createdByTerminalHandle?: string
     }
+  | CrossStoreLineageResolution
   | { kind: 'none'; warnings: WorktreeLineageWarning[] }
 
 export type WorktreeLineageCandidate = {
@@ -64,16 +68,6 @@ Run \`orca worktree list --limit 10000 --json\` with the same server and host se
 To choose a parent, start a fresh request without --retry-launch; retrying the old ID returns this refusal.`
 }
 
-export class WorktreeIdRequiresFullPathError extends Error {
-  readonly code = 'worktree_id_requires_full_path'
-
-  constructor() {
-    super(
-      'Worktree id selectors must use the full <repo-id>::<path> value. Use the id from `orca worktree list --json`, or target by path:<path>, branch:<branch>, or issue:<number>.'
-    )
-  }
-}
-
 type LineageResolutionDependencies = {
   resolveParent(selector: string): Promise<ResolvedWorkspaceParent>
   resolveWorktreeParent(selector: string): Promise<ResolvedWorkspaceParent>
@@ -100,17 +94,17 @@ export async function resolveRuntimeWorktreeCreateLineage(
   if (!input) {
     return { kind: 'none', warnings: [] }
   }
-  if (
-    (input.noParent === true && (input.parentWorkspace || input.parentWorktree)) ||
-    (input.parentWorkspace && input.parentWorktree)
-  ) {
+  const parents = [input.parentWorkspace, input.parentWorktree, input.crossStoreParent]
+  if (parents.filter(Boolean).length > (input.noParent === true ? 0 : 1)) {
     throw new RuntimeLineageError(
       'LINEAGE_PARENT_CONTEXT_CONFLICT',
       'Choose either one parent selector or --no-parent.'
     )
   }
-  if (input.noParent === true) {
-    return { kind: 'none', warnings: [] }
+  if (input.noParent === true || input.crossStoreParent) {
+    return input.crossStoreParent
+      ? crossStoreCreateLineage({ ...input, crossStoreParent: input.crossStoreParent })
+      : { kind: 'none', warnings: [] }
   }
   if (input.parentWorkspace) {
     try {
