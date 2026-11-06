@@ -608,11 +608,14 @@ describe('StructuredAgentSessionStatusFeed', () => {
       }
       let publications = 0
       let activityPublications = 0
+      let suggestionPublications = 0
       deferred.bind({
         journal,
         fence: 1,
-        publish: (activity) => {
-          if (activity === undefined) {
+        publish: (activity, promptSuggestion) => {
+          if (promptSuggestion !== undefined) {
+            suggestionPublications += 1
+          } else if (activity === undefined) {
             publications += 1
           } else {
             activityPublications += 1
@@ -624,6 +627,8 @@ describe('StructuredAgentSessionStatusFeed', () => {
       expect(seen).toEqual(['idle', 'working', 'idle'])
       expect(publications).toBe(2)
       expect(activityPublications).toBe(agent === 'claude' ? 1 : 0)
+      // Claude's first turn clears any suggestion the host retained from a previous launch.
+      expect(suggestionPublications).toBe(agent === 'claude' ? 1 : 0)
       expect(deferred.state()).toMatchObject({ queuedBytes: 0, queuedOperations: 0 })
       deferred.close()
     }

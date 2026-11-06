@@ -84,6 +84,7 @@ it.each(retainedHistoryCases)('retained history: $adopt / $proof', async ({ adop
       fence: 0,
       hostNow: expect.any(Number),
       activity: null,
+      promptSuggestion: null,
       ...queue,
       batch: { cursor: journal.cursor(), items: [], removedItemIds: [], submissions: [] }
     }

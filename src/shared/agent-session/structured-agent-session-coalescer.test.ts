@@ -33,6 +33,23 @@ function batch(
 }
 
 describe('structured agent session event coalescer', () => {
+  it('keeps the latest prompt suggestion, including a clear, across merged batches', () => {
+    const events: AgentSessionSubscribeEvent[] = []
+    const coalescer = createStructuredAgentSessionEventCoalescer((event) => events.push(event))
+
+    coalescer.push({ ...batch(1), promptSuggestion: 'add a test' })
+    coalescer.push(batch(2))
+    coalescer.flush()
+    coalescer.push({ ...batch(3), promptSuggestion: 'add a test' })
+    coalescer.push({ ...batch(4), promptSuggestion: null })
+    coalescer.flush()
+
+    expect(events.map((event) => event.type === 'batch' && event.promptSuggestion)).toEqual([
+      'add a test',
+      null
+    ])
+  })
+
   it('passes a queue list through at once, with anything it held merged ahead of it', () => {
     const events: AgentSessionSubscribeEvent[] = []
     const coalescer = createStructuredAgentSessionEventCoalescer((event) => events.push(event))

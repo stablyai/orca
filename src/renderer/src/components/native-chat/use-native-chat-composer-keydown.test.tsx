@@ -24,12 +24,14 @@ describe('useNativeChatComposerKeyDown', () => {
       prompts,
       initialDraft = '',
       hasAttachments,
-      isCaretOnVisualEdge = onEveryEdge
+      isCaretOnVisualEdge = onEveryEdge,
+      acceptPromptSuggestion
     }: {
       prompts: string[]
       initialDraft?: string
       hasAttachments?: boolean
       isCaretOnVisualEdge?: (edge: 'start' | 'end') => boolean
+      acceptPromptSuggestion?: () => void
     }): React.JSX.Element {
       const [draft, setDraft] = useState(initialDraft)
       const [recallPosition, setRecallPosition] = useNativeChatRecallPosition(draft)
@@ -37,6 +39,7 @@ describe('useNativeChatComposerKeyDown', () => {
         autocomplete: { mode: 'none' },
         activeSuggestion: 0,
         draft,
+        acceptPromptSuggestion,
         mentionFiles: { files: [], loading: false, failed: false },
         completeMention: vi.fn(),
         recall: {
@@ -86,6 +89,15 @@ describe('useNativeChatComposerKeyDown', () => {
       // Edited back to the recalled text, it is still a typed draft.
       fireEvent.change(field, { target: { value: 'two' } })
       expect(press('ArrowUp')).toEqual({ draft: 'two', claimed: false })
+    })
+
+    it('takes a shown prompt suggestion on Tab or Right Arrow, as Claude Code does', () => {
+      const acceptPromptSuggestion = vi.fn()
+      const { press } = setup({ prompts: [], acceptPromptSuggestion })
+      expect(press('Tab').claimed).toBe(true)
+      expect(press('ArrowRight').claimed).toBe(true)
+      expect(press('Tab', { shiftKey: true }).claimed).toBe(false)
+      expect(acceptPromptSuggestion).toHaveBeenCalledTimes(2)
     })
   })
 

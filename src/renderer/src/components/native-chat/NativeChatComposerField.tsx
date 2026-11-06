@@ -1,5 +1,6 @@
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import { notifyNativeChatComposerState } from './native-chat-composer-mount'
+import type { NativeChatPromptSuggestion } from './native-chat-composer-send-state'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
@@ -44,6 +45,8 @@ export type NativeChatComposerFieldProps = {
   hasPty: boolean
   canSend: boolean
   unavailableHint?: string | undefined
+  /** Replaces the default placeholder while the draft is empty. */
+  promptSuggestion?: NativeChatPromptSuggestion | null
   autocomplete: ComposerAutocomplete
   mentionFiles: NativeChatMentionFiles
   activeSuggestion: number
@@ -140,6 +143,7 @@ export function NativeChatComposerField({
   hasPty,
   canSend,
   unavailableHint,
+  promptSuggestion,
   autocomplete,
   mentionFiles,
   activeSuggestion,
@@ -375,15 +379,16 @@ export function NativeChatComposerField({
                           'Describe your goal, define measurable outcomes for best results'
                         )
                       : (unavailableHint ??
-                        nativeChatComposerPlaceholder(hasPty, canSend, afterStop))
+                        (promptSuggestion?.text ||
+                          nativeChatComposerPlaceholder(hasPty, canSend, afterStop)))
               }
               // Let layout handle wrapping and touch targets; scroll after eight lines (a launch prompt: one line growing to six) without JavaScript measurement.
-              // An empty launch prompt also grows to fit a wrapping placeholder: a paragraph-wide float that keeps its height, with a zero-width margin box so the caret line stays put.
+              // An empty launch prompt also grows to fit a wrapping placeholder: a paragraph-wide float that keeps its height, with a zero-width margin box so the caret line stays put. So does a suggestion.
               className={cn(
                 'w-full bg-transparent px-2 py-1 text-sm outline-none',
                 launch
                   ? 'min-h-7 max-h-[calc(6lh+0.5rem)] text-foreground placeholder:text-muted-foreground [&_p.is-editor-empty:first-child]:before:!h-auto [&_p.is-editor-empty:first-child]:before:w-full [&_p.is-editor-empty:first-child]:before:mr-[-100%]'
-                  : 'min-h-12 max-h-[calc(8lh+0.5rem)] text-chat-foreground-strong placeholder:text-chat-foreground-faint pointer-coarse:min-h-14',
+                  : `min-h-12 max-h-[calc(8lh+0.5rem)] text-chat-foreground-strong placeholder:text-chat-foreground-faint pointer-coarse:min-h-14 ${promptSuggestion ? '[&_p.is-editor-empty:first-child]:before:!h-auto [&_p.is-editor-empty:first-child]:before:w-full [&_p.is-editor-empty:first-child]:before:mr-[-100%]' : ''}`,
                 'overflow-y-auto scrollbar-sleek',
                 // Why: the editor is a contenteditable, which `:disabled` never matches.
                 '[&[contenteditable=false]]:cursor-not-allowed [&[contenteditable=false]]:opacity-50'

@@ -26,6 +26,7 @@ import {
   isRootClaudeFrame
 } from '../../claude-turn-opening'
 import { ClaudeOpenTurn } from '../../claude-open-turn'
+import { ClaudePromptSuggestions } from '../../claude-prompt-suggestions'
 import { absorbClaudeCommandFrame, claudeCommandCurrentTurn } from '../../claude-command-turn'
 import { ClaudeContextFacts } from '../../claude-context-facts'
 import { claudeSessionStateEndsTurn } from '../../claude-session-state-turn-over'
@@ -63,8 +64,12 @@ export function createClaudeJournalTranslator(
     // Keep existing stamps when superseding a turn ends pending attribution corrections.
     turnSuperseded: () => corrections.abandon(),
     endOpenWork: (completedAt) => streamedThinking.finishOpen(completedAt),
-    onOpen: () => context.markActivity()
+    onOpen: () => {
+      context.markActivity()
+      suggestions.turnOpened()
+    }
   })
+  const suggestions = new ClaudePromptSuggestions(deps.sink, turn)
   const context = new ClaudeContextFacts(turn, deps.sink)
   const fallbackId = deps.fallbackIdPrefix ?? 'acquisition'
   const providerFallback = createClaudeProviderFrameFallback(deps.sink, fallbackId, turnScope)
@@ -240,6 +245,7 @@ export function createClaudeJournalTranslator(
         }
         context.observeResponse(event.message, event.observedAt ?? Date.now())
         publishClaudeTurnActivity(turn, deps.sink, event)
+        suggestions.observe(kind, event.message)
         // Idle also closes faults without a result; the live cause decides failed reopening.
         if (claudeSessionStateEndsTurn(event.message)) {
           corrections.abandon()
@@ -249,6 +255,7 @@ export function createClaudeJournalTranslator(
       } else if (event.type === 'provider-frame') {
         providerFallback.append(event.kind, event.payload)
         publishClaudeTurnActivity(turn, deps.sink, event)
+        suggestions.observe(event.kind, event.payload)
       }
     }),
     journalPrompts: prompts,
