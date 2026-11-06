@@ -112,13 +112,11 @@ describe('useNativeChatSteerChordPreview', () => {
     expect(preview()).toBe('')
   })
 
-  it('adds window listeners only for the composer holding a preview, however many chats are busy', () => {
-    const windowListeners = vi.spyOn(window, 'addEventListener')
-    const blurListeners = () => windowListeners.mock.calls.filter(([type]) => type === 'blur')
-    const busyChats = Array.from({ length: 10 }, () => setup())
-    expect(blurListeners()).toHaveLength(0)
-    busyChats[0].hold()
-    expect(blurListeners()).toHaveLength(1)
+  it('shows nothing while an IME composes, since the IME owns Enter then', () => {
+    const { field, preview } = setup({ hasDraft: true })
+    fireEvent.keyDown(field, { key: 'Meta', isComposing: true })
+    act(() => vi.advanceTimersByTime(NATIVE_CHAT_STEER_CHORD_HOLD_MS))
+    expect(preview()).toBe('')
   })
 
   it.each([

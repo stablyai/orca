@@ -37,7 +37,8 @@ export function useNativeChatSteerChordPreview(
     }
     const onKeyDown = (event: KeyboardEvent): void => {
       // Any other key means a chord is under way (Enter included): it runs, the preview goes.
-      if (event.key !== chordKey) {
+      // During IME composition the IME owns Enter, so the chord previews nothing either.
+      if (event.key !== chordKey || event.isComposing) {
         release()
         return
       }
@@ -61,10 +62,12 @@ export function useNativeChatSteerChordPreview(
     element.addEventListener('keydown', onKeyDown)
     element.addEventListener('keyup', onKeyUp)
     element.addEventListener('focusout', release)
+    element.addEventListener('compositionstart', release)
     return () => {
       element.removeEventListener('keydown', onKeyDown)
       element.removeEventListener('keyup', onKeyUp)
       element.removeEventListener('focusout', release)
+      element.removeEventListener('compositionstart', release)
       clearTimeout(timer)
       // A key-up missed while the chord offered nothing must not show a stale preview later.
       setHeld(false)
