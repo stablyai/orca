@@ -97,6 +97,7 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
   } = model
   // Bumped by Retry after a failed hydration, which leaves support unknown.
   const [hydrationAttempt, setHydrationAttempt] = useState(0)
+  // Open items, the create sheet and the workspace form outlive reconnects so typed drafts survive; their drawers hide until Tasks is ready again.
   useEffect(() => {
     if (!client || connState !== 'connected') {
       taskResumeRef.current = {}
@@ -123,12 +124,9 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
       setShowGitHubProjectViewPicker(false)
       setShowGitHubProjectFieldsPicker(false)
       setPendingGitHubProjectViewSelection(null)
-      setActionItem(null)
-      setProjectRowItem(null)
       setProjectRepoNotInOrca(null)
       setDetailPayload(null)
       setProjectRowDetail(null)
-      setShowCreateTask(false)
       setShowCreateTargetPicker(false)
       setLinearStatusPickerItem(null)
       setPendingHostedMerge(null)
@@ -136,7 +134,6 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
       setPendingHostedStateChange(null)
       setMergeMethodTaskItem(null)
       setMergeMethodProjectRow(null)
-      resetWorkspaceCreateState()
       return
     }
 
@@ -160,12 +157,9 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
     setShowGitHubProjectViewPicker(false)
     setShowGitHubProjectFieldsPicker(false)
     setPendingGitHubProjectViewSelection(null)
-    setActionItem(null)
-    setProjectRowItem(null)
     setProjectRepoNotInOrca(null)
     setDetailPayload(null)
     setProjectRowDetail(null)
-    setShowCreateTask(false)
     setShowCreateTargetPicker(false)
     setLinearStatusPickerItem(null)
     setPendingHostedMerge(null)
@@ -173,7 +167,6 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
     setPendingHostedStateChange(null)
     setMergeMethodTaskItem(null)
     setMergeMethodProjectRow(null)
-    resetWorkspaceCreateState()
 
     const hydrateTaskState = async (): Promise<void> => {
       const statusReply = await taskRuntimeStatusRead.request(client)
@@ -327,7 +320,7 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
     return () => {
       stale = true
     }
-  }, [client, connState, hydrationAttempt, requestedTaskSource, resetWorkspaceCreateState])
+  }, [client, connState, hydrationAttempt, requestedTaskSource])
 
   useEffect(() => {
     if (visibleProviders.includes(provider)) {
