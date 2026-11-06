@@ -45,6 +45,7 @@ function derive(blocks: readonly NativeChatBlock[]) {
     hasImages: prose.some((block) => block.type === 'image-ref')
   }
   // One shared accessor preserves the fast row shape without building offscreen text.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: defineProperty installs the readonly markdown property added to the inferred row shape.
   return Object.defineProperty(content, 'markdown', {
     get: readMarkdown,
     enumerable: true,

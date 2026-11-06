@@ -47,6 +47,7 @@ function plainAssistant(message: NativeChatMessage): boolean {
 }
 
 function sameTextPlacement(before: NativeChatMessage, next: NativeChatMessage): boolean {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime keys are used only for equality, including any extra message fields.
   const keys = Object.keys(before) as (keyof NativeChatMessage)[]
   return (
     keys.length === Object.keys(next).length &&

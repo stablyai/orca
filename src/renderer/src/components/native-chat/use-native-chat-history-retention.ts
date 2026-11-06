@@ -21,10 +21,10 @@ export function useNativeChatHistoryRetention({
     sourceKey,
     isVisible
   })
-  const [history, setHistory] = useState({
-    sourceKey,
-    mode: 'initial' as 'initial' | 'browsing' | 'live'
-  })
+  const [history, setHistory] = useState<{
+    sourceKey: string
+    mode: 'initial' | 'browsing' | 'live'
+  }>({ sourceKey, mode: 'initial' })
   const intent = useRef(history)
   const transition = useCallback(
     (mode: typeof history.mode) => {

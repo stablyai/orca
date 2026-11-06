@@ -86,7 +86,7 @@ it.each([100, 1000])(
   }
 )
 
-const rowRenders = vi.hoisted(() => [] as string[])
+const rowRenders = vi.hoisted((): string[] => [])
 vi.mock('./NativeChatInlineVisual', () => ({
   NativeChatInlineVisual: () => {
     throw new Error('Unexpected inline visual')

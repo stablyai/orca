@@ -215,15 +215,19 @@ it('matches full projection through order, retention, optimistic admission and c
     agentId: 'child-a',
     journalPosition: { sequence: 3, index: 0 }
   }
-  const pending = {
+  const pending: NativeChatMessage = {
     ...message('pending', 4, [{ type: 'text', text: 'Next' }], 'user'),
-    pendingSend: true
+    pendingSend: 'active'
   }
-  const inputs = [
+  const inputs: NativeChatMessage[][] = [
     [parent, tail],
     [tail, parent],
     [parent, tail, pending],
-    [parent, tail, { ...pending, pendingSend: false, journalPosition: { sequence: 4, index: 0 } }],
+    [
+      parent,
+      tail,
+      { ...pending, pendingSend: undefined, journalPosition: { sequence: 4, index: 0 } }
+    ],
     [parent, tail, child],
     [tail, child],
     [tail, { ...child, journalPosition: { sequence: 5, index: 0 } }],
@@ -268,6 +272,7 @@ it.each([100, 1000])(
           if (typeof key === 'string' && /^\d+$/.test(key)) {
             reads++
           }
+          // oxlint-disable-next-line anti-slop/no-reflect-get -- Preserve every array read and its receiver while counting numeric reads in this perf contract.
           return Reflect.get(target, key, receiver)
         }
       })
