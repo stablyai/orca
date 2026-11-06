@@ -32,6 +32,8 @@ export type AutomationDispatchWorkspaceContext = {
   workspaceDisplayName: string | null
   precheckResult: AutomationPrecheckResult | null
   sshTargetId?: string | null
+  /** The new workspace's branch had different setup than the automation approved. */
+  setupSkippedReason?: AutomationDispatchResult['setupSkippedReason']
 }
 
 export function resolveAutomationDispatchWorkspace(
@@ -246,6 +248,9 @@ export async function prepareAutomationDispatchWorkspace(args: {
   }
   context.workspaceId = worktree.id
   context.workspaceDisplayName = worktree.displayName
+  if (createResult?.setupTrustMismatch) {
+    context.setupSkippedReason = 'setup-changed'
+  }
   return worktree
 }
 

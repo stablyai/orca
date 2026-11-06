@@ -183,7 +183,11 @@ export type AutomationRun = {
   occurrenceCount?: number
   /** `scheduledFor` of the most recently folded occurrence; absent until one folds. */
   lastOccurrenceAt?: number
+  /** Setup was skipped: the new workspace's branch has different setup than the automation approved. */
+  setupSkippedReason?: AutomationRunSetupSkippedReason
 }
+
+export type AutomationRunSetupSkippedReason = 'setup-changed'
 
 /** A bounded history response; older hosts may continue returning `runs` only. */
 export type AutomationRunsPage = {
@@ -268,6 +272,7 @@ export type AutomationDispatchResult = {
   errorParams?: Record<string, string | number> | null
   /** With `dispatched`: when the agent was handed the run, if not now. */
   dispatchedAt?: number
+  setupSkippedReason?: AutomationRunSetupSkippedReason
 }
 
 export type ExternalAutomationProvider = 'openclaw'
