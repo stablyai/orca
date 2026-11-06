@@ -89,27 +89,20 @@ export class FollowUpActivityRouter {
     operations: readonly string[] = [],
     workspaces: readonly string[] = []
   ): string[] {
-    const collect = (maps: readonly (readonly [Map<string, Set<string>>, readonly string[]])[]) => {
-      const keys = new Set<string>()
-      for (const [map, ids] of maps) {
-        for (const id of ids) {
-          for (const key of map.get(id) ?? []) {
-            keys.add(this.actions.get(key)!.prKey)
-          }
+    const keys = new Set<string>()
+    for (const [map, ids] of [
+      [this.identities, identities],
+      [this.operations, operations],
+      [this.instances, instances],
+      [this.workspaces, workspaces]
+    ] as const) {
+      for (const id of ids) {
+        for (const key of map.get(id) ?? []) {
+          keys.add(this.actions.get(key)!.prKey)
         }
       }
-      return [...keys]
     }
-    const precise = collect([
-      [this.identities, identities],
-      [this.operations, operations]
-    ])
-    return precise.length
-      ? precise
-      : collect([
-          [this.instances, instances],
-          [this.workspaces, workspaces]
-        ])
+    return [...keys]
   }
 
   activeKeys(): string[] {
@@ -118,7 +111,6 @@ export class FollowUpActivityRouter {
 
   admit(worktreeId: string, identity: string, kind: FollowUpActivityKind, at: number): string[] {
     const owners = new Set<string>()
-    const precise = this.keys([identity])
     const recipients = new Set<string>()
     // Identity retains its original instance even after its workspace is removed or replaced.
     const obligations = new Set([
@@ -133,6 +125,6 @@ export class FollowUpActivityRouter {
     for (const owner of owners) {
       this.store.appendActivity(owner, identity, kind, at)
     }
-    return precise.length ? precise : [...recipients]
+    return [...recipients]
   }
 }

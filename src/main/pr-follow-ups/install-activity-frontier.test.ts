@@ -2,6 +2,7 @@ import { expect, it, vi } from 'vitest'
 import type { DatabaseSync } from 'node:sqlite'
 import type Database from '../sqlite/sync-database'
 import { installation } from './install-scheduling.test-fixture'
+import { launchFollowUp, recoverFollowUpLaunch } from './launch'
 import { sessionCrewChanges } from '../runtime/orchestration/crew/crew-changes'
 
 it.each([10, 100])(
@@ -199,5 +200,55 @@ it.each([
     await h.flush()
     expect(reconcile.mock.calls.some(([keys]) => keys && [...keys].includes('pr0'))).toBe(true)
     expect(h.engine.forWorkspace('w0')).not.toBeNull()
+  }
+)
+
+it.each(['separate', 'shared', 'moved'] as const)(
+  'recovers an identity-less obligation on the first mixed committed event with %s workspace authorities',
+  async (layout) => {
+    const h = installation(2, false, 'chat', false, layout === 'shared')
+    await h.flush()
+    if (layout === 'shared') {
+      h.records.saveAction({
+        ...h.records.action('uncertain-pr0')!,
+        recoveryFinalizedAt: undefined
+      })
+      await h.restart()
+    }
+    if (layout === 'moved') {
+      h.inventory(
+        h.targets.filter((target) => target.worktreeId !== 'w0'),
+        h.workspaces.filter((workspace) => workspace.worktreeId !== 'w0')
+      )
+      await h.flush()
+    }
+    const knownWorkspace = layout === 'shared' ? 'w0' : 'w1'
+    const recover = vi
+      .mocked(recoverFollowUpLaunch)
+      .mockImplementation(async (_runtime, action) =>
+        action.operationId === 'uncertain-op-pr0'
+          ? { status: 'accepted', identity: { surface: 'chat', sessionId: 'late-record' } }
+          : { status: 'unconfirmed' }
+      )
+    recover.mockClear()
+    const reconcile = vi.spyOn(h.engine, 'reconcile')
+    sessionCrewChanges.notify(
+      Object.assign(new Set(['records'] as const), {
+        recordIds: ['pane-w1', 'late-record'],
+        recordWorkspaceIds:
+          layout === 'moved' ? [knownWorkspace, 'moved-workspace', 'w0'] : [knownWorkspace, 'w0']
+      })
+    )
+    await h.flush()
+    expect(recover).toHaveBeenCalledOnce()
+    expect(h.records.action('uncertain-pr0')).toMatchObject({
+      status: 'accepted',
+      sessionId: 'late-record'
+    })
+    expect(
+      reconcile.mock.calls.filter(([keys]) => keys && [...keys].length).map(([keys]) => [...keys!])
+    ).toEqual([['pr1', 'pr0']])
+    expect(h.engine.prKeysForAuthorities(['late-record'], [])).toEqual(['pr0'])
+    expect(launchFollowUp).not.toHaveBeenCalled()
   }
 )

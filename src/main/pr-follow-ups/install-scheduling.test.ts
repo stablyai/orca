@@ -171,7 +171,7 @@ it.each([
     await new Promise<void>((resolve) => setImmediate(resolve))
     expect(
       routed.mock.calls.filter(([keys]) => keys && [...keys].length).map(([keys]) => [...keys!])
-    ).toEqual([['pr1']])
+    ).toEqual([['pr1', 'pr0']])
     // Both identities arrive while the operation is claimed, before any receipt identifies it.
     h.stream('pane-w0', false, at + 1)
     h.stream('late', true, at + 5)
