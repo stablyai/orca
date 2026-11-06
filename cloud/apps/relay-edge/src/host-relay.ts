@@ -148,6 +148,7 @@ export class HostRelay extends DurableObject<Env> {
   // Erasure: refused while the host is live, as today's guard; otherwise every byte of the object goes.
   async adminErase(userId: string): Promise<{ outcome: 'erased' | 'busy' | 'mismatch' }> {
     const assignment = this.store.assignment()
+    // Another account now holds this machine's object; its move on wiped the earlier account's data.
     if (assignment && assignment.userId !== userId) return { outcome: 'mismatch' }
     if (this.ctx.getWebSockets('control').length > 0 || this.store.activeBases() > 0) return { outcome: 'busy' }
     await this.ctx.storage.deleteAlarm()

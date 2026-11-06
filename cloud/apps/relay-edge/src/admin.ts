@@ -1,5 +1,5 @@
 // Director → edge admin calls (phase 2). Each request carries an HS256 token signed with the
-// director's assignment signing key, with its own purpose and audience (desktops never receive one)
+// director's edge admin key (not its assignment lease key), with its own purpose and audience (desktops never receive one)
 // and the SHA-256 of the exact request body, so a token cannot authorise a different payload.
 //   POST /__admin/assign  { userId, relayHostId, cellId, assignmentEpoch, devices? }
 //   POST /__admin/export  { relayHostId }  freezes the host for the move away (409 while connected)
@@ -67,7 +67,7 @@ export async function verifyAdminRequest(
   request: Request,
   op: AdminOp
 ): Promise<{ body: unknown } | null> {
-  if (!env.ASSIGNMENT_SIGNING_KEY || !env.ADMIN_ISSUER) return null
+  if (!env.ADMIN_SIGNING_KEY || !env.ADMIN_ISSUER) return null
   const auth = request.headers.get('authorization') ?? ''
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
   if (!token) return null
@@ -75,11 +75,24 @@ export async function verifyAdminRequest(
   if (!(declared >= 0 && declared <= ADMIN_BODY_MAX)) return null
   const raw = await request.arrayBuffer()
   if (raw.byteLength > ADMIN_BODY_MAX) return null
+  // The director signs every op; the erasure job, with its own key and issuer, only `erase`.
+  const signers = [{ key: env.ADMIN_SIGNING_KEY, issuer: env.ADMIN_ISSUER }]
+  if (op === 'erase' && env.ERASE_SIGNING_KEY && env.ERASE_SIGNING_KEY.length >= 32 && env.ERASE_ISSUER) {
+    signers.push({ key: env.ERASE_SIGNING_KEY, issuer: env.ERASE_ISSUER })
+  }
+  for (const signer of signers) {
+    const verified = await verifyWith(token, signer.key, signer.issuer, op, raw)
+    if (verified) return verified
+  }
+  return null
+}
+
+async function verifyWith(token: string, key: string, issuer: string, op: AdminOp, raw: ArrayBuffer): Promise<{ body: unknown } | null> {
   try {
-    const { payload } = await jwtVerify(token, new TextEncoder().encode(env.ASSIGNMENT_SIGNING_KEY), {
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(key), {
       algorithms: ['HS256'],
       audience: ADMIN_AUDIENCE,
-      issuer: env.ADMIN_ISSUER,
+      issuer,
       maxTokenAge: '2m'
     })
     if (payload.purpose !== ADMIN_PURPOSE || payload.op !== op) return null

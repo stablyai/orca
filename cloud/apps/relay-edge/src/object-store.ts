@@ -23,9 +23,11 @@ const MOVE_DDL = `CREATE TABLE IF NOT EXISTS edge_move (
 )`
 export const EXPORT_FREEZE_MS = 30_000
 
-// Everything the credential store keeps for the host, except the audit trail. A host moving onto
-// the edge brings its devices; invites, bases and command results from an earlier stay are void.
+// Everything the credential store keeps for the host. A host moving onto the edge brings its
+// devices; invites, bases, results and audit rows from an earlier stay (possibly another account
+// on the same machine: the object is per relayHostId) are void.
 const HOST_DATA_TABLES = [
+  'relay_audit_events',
   'relay_devices',
   'relay_invites',
   'relay_connection_bases',

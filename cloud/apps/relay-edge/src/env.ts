@@ -37,9 +37,12 @@ export interface Env {
   // Version label baked in per deploy (--var EDGE_VERSION:<tag>), reported by metrics and debug.
   EDGE_VERSION?: string
   METRICS?: AnalyticsEngineDataset
-  // Phase 2 admin calls: the director's assignment signing key (secret) and its public URL (iss).
-  ASSIGNMENT_SIGNING_KEY?: string
+  // Phase 2 admin calls: the director's edge admin key (secret, not its lease key) and its public URL (iss).
+  ADMIN_SIGNING_KEY?: string
   ADMIN_ISSUER?: string
+  // Optional second signer for `erase` only (the account erasure job): it can never push.
+  ERASE_SIGNING_KEY?: string
+  ERASE_ISSUER?: string
 }
 
 export type EdgeClaims = {
@@ -76,7 +79,7 @@ export function edgeConfig(env: Env): EdgeConfig {
   const backend = env.EDGE_BACKEND ?? 'postgres'
   if (backend !== 'object' && backend !== 'postgres' && backend !== 'spike') throw new Error('relay_edge_config_backend')
   // Phase 2: assignments arrive only through signed director pushes.
-  if (backend === 'object' && (!env.ASSIGNMENT_SIGNING_KEY || env.ASSIGNMENT_SIGNING_KEY.length < 32 || !env.ADMIN_ISSUER)) {
+  if (backend === 'object' && (!env.ADMIN_SIGNING_KEY || env.ADMIN_SIGNING_KEY.length < 32 || !env.ADMIN_ISSUER)) {
     throw new Error('relay_edge_config_admin')
   }
   if (backend === 'postgres' && !env.HYPERDRIVE) throw new Error('relay_edge_config_hyperdrive')

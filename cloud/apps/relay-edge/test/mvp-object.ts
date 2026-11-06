@@ -23,6 +23,8 @@ const ORIGIN = REMOTE ?? `http://127.0.0.1:${PORT}`
 const WS_ORIGIN = ORIGIN.replace(/^http/, 'ws')
 const SIGNING_KEY = process.env.MVP_KEY_FILE ? readFileSync(process.env.MVP_KEY_FILE, 'utf8').trim() : randomBytes(36).toString('base64url')
 const DIRECTOR = process.env.MVP_ISSUER ?? 'https://director.test.invalid'
+const ERASE_KEY = randomBytes(36).toString('base64url')
+const ERASER = 'https://api.erasure.test.invalid'
 const ISSUER = 'https://auth.test.invalid'
 const EPOCH = 7
 const USER = 'user-mvp'
@@ -123,11 +125,11 @@ async function phoneOutcome(relayHostId: string, credential: string) {
 
 
 // ---- director side: the signed admin calls (as the director will make them) ----
-async function adminCall(op: string, body: unknown, opts: { key?: string; tokenOp?: string; tokenBody?: string } = {}) {
+async function adminCall(op: string, body: unknown, opts: { key?: string; issuer?: string; tokenOp?: string; tokenBody?: string } = {}) {
   const raw = JSON.stringify(body)
   const token = await new SignJWT({ purpose: 'edge-admin', op: opts.tokenOp ?? op, bodySha256: sha(opts.tokenBody ?? raw) })
     .setProtectedHeader({ alg: 'HS256' })
-    .setIssuer(DIRECTOR)
+    .setIssuer(opts.issuer ?? DIRECTOR)
     .setAudience('orca-relay-edge-admin')
     .setIssuedAt()
     .setExpirationTime('1m')
@@ -166,7 +168,9 @@ async function main(): Promise<void> {
     new URL('../.dev.vars', import.meta.url),
     [
       'EDGE_BACKEND=object',
-      `ASSIGNMENT_SIGNING_KEY=${SIGNING_KEY}`,
+      `ADMIN_SIGNING_KEY=${SIGNING_KEY}`,
+      `ERASE_SIGNING_KEY=${ERASE_KEY}`,
+      `ERASE_ISSUER=${ERASER}`,
       `ADMIN_ISSUER=${DIRECTOR}`,
       `RELAY_JWKS_URL=${jwksUrl}`,
       `RELAY_AUTH_ISSUER=${ISSUER}`,
@@ -324,7 +328,13 @@ async function run(host: Host, key: KeyLike, jwksHits: () => number, remote = fa
   const otherUser = await adminCall('erase', { userId: 'someone-else', relayHostId: id })
   back.client.closeNow()
   await sleep(800)
-  const erased = await adminCall('erase', { userId: USER, relayHostId: id })
+  // Local: the erasure job's own key erases; it cannot push (the deployed env has no erase key).
+  const eraser = remote ? {} : { key: ERASE_KEY, issuer: ERASER }
+  if (!remote) {
+    const pushAsEraser = await adminCall('assign', { userId: USER, relayHostId: id, cellId: 'edge', assignmentEpoch: 99 }, eraser)
+    record('P4 the erasure key cannot push assignments (401)', pushAsEraser.status === 401, `${pushAsEraser.status}`)
+  }
+  const erased = await adminCall('erase', { userId: USER, relayHostId: id }, eraser)
   const afterErase = await adminCall('export', { relayHostId: id })
   const ghost = control(host, jwt, EPOCH + 2)
   const g = await ghost.client.connect().catch((e: Error) => e)
