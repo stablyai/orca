@@ -12,7 +12,7 @@ on:
       - 'native/**/Cargo.lock'
       - 'config/dependency-security-exceptions.json'
       - 'config/cargo-deny.toml'
-      - 'config/scripts/*dependency-security*'
+      - 'config/scripts/dependency-security/**'
       - 'config/scripts/tool-invocation/pnpm-cli-invocation.mjs'
       - 'config/pnpmfile.cjs'
       - '**/patches/**'

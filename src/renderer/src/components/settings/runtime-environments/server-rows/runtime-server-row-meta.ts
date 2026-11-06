@@ -54,7 +54,7 @@ export function getRuntimeServerProblemLine({
   environment: Pick<PublicKnownRuntimeEnvironment, 'lastUsedAt'>
   row: Pick<
     RuntimeServerRowState,
-    'accessRevoked' | 'problem' | 'probeFailed' | 'compatibilityBlocked'
+    'accessRevoked' | 'serverReplaced' | 'problem' | 'probeFailed' | 'compatibilityBlocked'
   >
   remoteUpdate: RemoteServerUpdateEntry | undefined
   managedStatusError: string | null
@@ -64,7 +64,8 @@ export function getRuntimeServerProblemLine({
   duplicateOfNames?: readonly string[]
   now?: number
 }): RuntimeServerProblemLine | null {
-  if (row.accessRevoked) {
+  // A refused pairing needs the user's action, which the generic failed-probe line would hide.
+  if (row.accessRevoked || row.serverReplaced) {
     return { text: row.problem ?? '', destructive: true }
   }
   // Prioritize duplicate pairing because it prevents editing this host’s projects.

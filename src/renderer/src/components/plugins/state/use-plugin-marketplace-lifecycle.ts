@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useState,
-  type Dispatch,
-  type MutableRefObject,
-  type SetStateAction
-} from 'react'
+import { useState, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import type { PluginHostListEntry } from '../../../../../preload/api-types'
 import { translate } from '@/i18n/i18n'
 import { pluginNeedsReview } from '../presentation/plugin-status-presentation'
@@ -41,12 +35,13 @@ export function usePluginMarketplaceLifecycle({
   const [rollbackError, setRollbackError] = useState<string | null>(null)
   const rollbackPlugin = plugins.find((plugin) => plugin.pluginKey === rollbackPluginId) ?? null
 
-  useEffect(() => {
-    if (!mounted || (rollbackPluginId && !rollbackPlugin)) {
-      setRollbackPluginId(null)
-      setRollbackError(null)
-    }
-  }, [mounted, rollbackPlugin, rollbackPluginId])
+  if (
+    (!mounted || (rollbackPluginId && !rollbackPlugin)) &&
+    (rollbackPluginId !== null || rollbackError !== null)
+  ) {
+    setRollbackPluginId(null)
+    setRollbackError(null)
+  }
 
   const reloadAfterMutation = async (pluginKeys: string | readonly string[]): Promise<void> => {
     const changed = new Set(typeof pluginKeys === 'string' ? [pluginKeys] : pluginKeys)

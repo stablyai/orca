@@ -11,12 +11,8 @@ export type CapturePaintHold = () => () => void
 export const SCREENSHOT_TIMEOUT_MS = 8000
 // Probe offsets leave time for the original capture to finish before the deadline.
 const FRAME_PROBE_OFFSETS_MS = [250, 750, 1750, 3750]
-// A cheap 1×1 probe can produce the frame needed by the pending capture.
-const FRAME_PROBE_PARAMS = {
-  format: 'jpeg',
-  quality: 1,
-  clip: { x: 0, y: 0, width: 1, height: 1, scale: 1 }
-}
+// No clip: the probe's frame answers the pending capture too, and a clip shifts it by scrollY.
+const FRAME_PROBE_PARAMS = { format: 'jpeg', quality: 1 }
 const FALLBACK_CAPTURE_TIMEOUT_MS = 1000
 const SCREENSHOT_TIMEOUT_MESSAGE = 'Screenshot timed out — the browser page did not draw a frame.'
 
@@ -187,9 +183,16 @@ function captureUntilDrawn(
       )
     }
     const deadline = setTimeout(() => finish(() => resolve(null)), SCREENSHOT_TIMEOUT_MS)
-    const probes = FRAME_PROBE_OFFSETS_MS.map((offsetMs) =>
-      setTimeout(() => send(FRAME_PROBE_PARAMS)?.catch(() => {}), offsetMs)
-    )
+    let probes: NodeJS.Timeout[] = []
+    if (params.clip || params.captureBeyondViewport) {
+      // A probe sent during a clipped or beyond-viewport capture leaves its emulation applied
+      // afterwards; one sent just before is safe, and the emulation change then draws the frame.
+      send(FRAME_PROBE_PARAMS)?.catch(() => {})
+    } else {
+      probes = FRAME_PROBE_OFFSETS_MS.map((offsetMs) =>
+        setTimeout(() => send(FRAME_PROBE_PARAMS)?.catch(() => {}), offsetMs)
+      )
+    }
     send(params)?.then(
       (result) => finish(() => resolve(result?.data ? { data: result.data } : null)),
       (error: unknown) =>

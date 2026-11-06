@@ -446,7 +446,6 @@ export const DAEMON_INIT_TEST_SUPPORT =
 
 const DAEMON_INIT_TEST_SCOPE = new Set([
   DAEMON_INIT_TEST_SUPPORT,
-  'src/main/native-chat/agent-session-wire/structured-agent-session-claude-queued-stop.test.ts',
   'config/scripts/desktop-distribution/runtime-verification/process-host-build-dist.test.mjs'
 ])
 
