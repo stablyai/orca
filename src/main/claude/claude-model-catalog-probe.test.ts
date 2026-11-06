@@ -108,6 +108,49 @@ describe('claude model catalog probe', () => {
     }
   )
 
+  it.each([
+    [[], [], ['/orca-probe', '/orca-probe'], 'user,project,local'],
+    [['node_modules/claude/cli.js'], [], ['/chat-a', '/chat-b'], 'user'],
+    [['--env-file=work env', '--', 'claude'], [], ['/chat-a', '/chat-b'], 'user'],
+    [[], ['--settings', 'settings.json'], ['/chat-a', '/chat-b'], 'user']
+  ])(
+    'lists prefix %j with arguments %j from %j, reading %s settings',
+    async (prefixArgs, launchArgs, listedIn, sources) => {
+      // A user command line may name files in the chat's folder, so it runs there, but reads only
+      // user settings there so the project's own settings never narrow the account's list.
+      const calls: ListingCall[] = []
+      const probe = createClaudeModelCatalogProbe({
+        ...probeDeps(),
+        resolveCommand: () => ({ command: process.execPath, prefixArgs }),
+        resolveLaunchArgs: async () => launchArgs,
+        runListing: async (...call) => {
+          calls.push(call)
+          return LISTED
+        }
+      })
+      const identities: unknown[] = []
+      for (const folder of ['/chat-a', '/chat-b']) {
+        const resolved = await probe.resolve?.(
+          HOME('/homes/a'),
+          '/orca-probe',
+          'snapshot',
+          undefined,
+          folder
+        )
+        identities.push(resolved?.identity)
+        await resolved?.run()
+      }
+      expect(calls.map(([launch]) => launch.cwd)).toEqual(listedIn)
+      const args = calls[0]?.[0].args ?? []
+      expect(args.slice(0, prefixArgs.length)).toEqual(prefixArgs)
+      expect(args.slice(args.length - launchArgs.length)).toEqual(launchArgs)
+      expect(args[args.indexOf('--setting-sources') + 1]).toBe(sources)
+      expect(JSON.stringify(identities[0]) === JSON.stringify(identities[1])).toBe(
+        listedIn[0] === listedIn[1]
+      )
+    }
+  )
+
   it('keeps the CLI default and account Fast and per-row auto support', async () => {
     const listing = `${JSON.stringify({
       type: 'control_response',

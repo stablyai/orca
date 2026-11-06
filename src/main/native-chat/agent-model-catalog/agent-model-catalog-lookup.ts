@@ -33,6 +33,7 @@ export type AgentModelCatalogClaim = Pick<
   AgentModelCatalogBinding,
   'identity' | 'params' | 'current'
 > & {
+  deadline: number
   controller: AbortController
   promise: Promise<void>
   ready: Promise<void>
@@ -66,11 +67,16 @@ export function createAgentModelCatalogLookup(
       ? (params.selectedModel ??
         (params.sessionId ? deps.getConversation(params.sessionId)?.options?.model : undefined))
       : undefined
-    if (previous?.identity === identity) {
+    // A later reader with more time left starts its own claim, which joins the same listing.
+    if (previous?.identity === identity && previous.deadline >= deadline) {
       previous.demandModel(selectedModel)
       return previous.promise
     }
-    previous?.controller.abort()
+    // The same request with more time left takes over; it joins the listing the earlier one
+    // started, so the earlier one just runs out on its own deadline.
+    if (previous?.identity !== identity) {
+      previous?.controller.abort()
+    }
     const controller = operation.controller
     let target = selectedModel
     let targetFingerprint: string | undefined
@@ -89,7 +95,10 @@ export function createAgentModelCatalogLookup(
       deps.store.retirementRevision(params.agent) === retirement &&
       requestKey(params) === bindingKey &&
       capture(params) === identity
-    const current = (): boolean => valid() && claims.get(key)?.controller === controller
+    // A same-request claim with more time left doesn't retire this one; a different request does.
+    const current = (): boolean =>
+      valid() &&
+      (claims.get(key)?.controller === controller || claims.get(key)?.identity === identity)
     const run = async (): Promise<void> => {
       if (!current()) {
         return
@@ -188,13 +197,16 @@ export function createAgentModelCatalogLookup(
         return
       }
       const probe = deps.probes?.[params.agent]
+      // A listing is shared by every reader of its scope and lives while any of them still wants
+      // it (the store counts each reader's demand); its process runs only under the service.
       const signal = AbortSignal.any([lifetime.signal, controller.signal, operation.signal])
       const list = scopedAgentModelCatalogLister({
         legacy: params.legacy,
         operation: { deadline, current, signal },
-        canList: () => !record || !!deps.getRecord(record.sessionId),
+        // A chat's deletion doesn't stop a listing other chats or folders share.
+        canList: () => resolved !== undefined || !record || !!deps.getRecord(record.sessionId),
         admission,
-        signal,
+        signal: lifetime.signal,
         resolved,
         probe,
         probeHome,
@@ -210,14 +222,13 @@ export function createAgentModelCatalogLookup(
         void deps.store.refresh(
           fingerprint,
           params.agent,
-          (selected) => {
-            const task = list(selected)
+          (selected, owner) => {
+            const task = list(selected, owner)
             tasks.add(task)
             void task.finally(() => tasks.delete(task)).catch(() => {})
             return task
           },
-          current,
-          signal,
+          { current, signal, deadline },
           target
         )
       }
@@ -241,6 +252,7 @@ export function createAgentModelCatalogLookup(
     void promise.finally(() => tasks.delete(promise)).catch(() => {})
     claims.set(key, {
       identity,
+      deadline,
       controller,
       promise,
       ready: ready.promise,

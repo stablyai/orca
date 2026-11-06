@@ -14,6 +14,7 @@ import {
   listedModels,
   record
 } from './structured/launch/claude-structured-model-catalog'
+import { claudeCatalogSignedOut } from './claude-model-catalog-signed-out'
 import {
   claudeFastModeSupport,
   wireClaudeModels
@@ -25,7 +26,7 @@ import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-ca
 import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
 import {
   envWithPathRelativeTo,
-  invocationDependsOnCwd
+  catalogListingDirectory
 } from '../../shared/node-cli-command-resolution'
 import {
   CLAUDE_DEFAULT_SETTING_SOURCES,
@@ -132,12 +133,11 @@ export function createClaudeModelCatalogProbe(
       ),
       ...configuredArgs.additionalDirectories.flatMap((directory) => ['--add-dir', directory])
     ]
-    const argsFor = (strictMcp: boolean) => [
+    const argsFor = (strictMcp: boolean, sources: readonly string[]) => [
       ...buildClaudeModelListArgs(strictMcp, userArgs),
-      ...(cwd ? ['--setting-sources', CLAUDE_DEFAULT_SETTING_SOURCES.join(',')] : []),
+      ...(cwd ? ['--setting-sources', sources.join(',')] : []),
       ...userArgs
     ]
-    const args = argsFor(true)
     const launchDeps = {
       ...deps,
       operation,
@@ -158,11 +158,16 @@ export function createClaudeModelCatalogProbe(
       sources
     )
     assertStructuredAgentResolutionCurrent(operation)
-    // A command line naming files relative to the chat's folder means the same thing only there.
-    const listIn =
-      cwd && launchDirectory && invocationDependsOnCwd(command, [...prefixArgs, ...userArgs])
-        ? launchDirectory
-        : cwd
+    // A command line that may name files relative to the chat's folder runs there, reading only
+    // user settings so the project's settings never narrow the account's list.
+    const listIn = catalogListingDirectory(
+      command,
+      [...prefixArgs, ...userArgs],
+      cwd,
+      launchDirectory
+    )
+    const settingSources = listIn === cwd ? CLAUDE_DEFAULT_SETTING_SOURCES : ['user']
+    const args = argsFor(true, settingSources)
     return {
       identity: {
         command,
@@ -171,18 +176,21 @@ export function createClaudeModelCatalogProbe(
         cwd: listIn,
         overlay: Object.entries(sources.overlay ?? {}).sort()
       },
-      run: async (signal?: AbortSignal): Promise<AgentModelCatalogSuccess> => {
-        assertStructuredAgentResolutionCurrent(operation)
+      run: async (
+        signal?: AbortSignal,
+        runOperation = operation
+      ): Promise<AgentModelCatalogSuccess> => {
+        assertStructuredAgentResolutionCurrent(runOperation)
         signal?.throwIfAborted()
         const outcome = await runClaudeBackgroundAttempts({
           agentId: 'claude',
           run: (strictMcp) => {
-            assertStructuredAgentResolutionCurrent(operation)
+            assertStructuredAgentResolutionCurrent(runOperation)
             signal?.throwIfAborted()
             return (deps.runListing ?? runAgentModelCatalogListing)(
               {
                 command,
-                args: [...prefixArgs, ...argsFor(strictMcp)],
+                args: [...prefixArgs, ...argsFor(strictMcp, settingSources)],
                 ...(listIn ? { cwd: listIn } : {}),
                 stdin: `${CLAUDE_MODEL_LIST_STDIN}${JSON.stringify({ type: 'control_request', request_id: 'orca-model-settings', request: { subtype: 'get_settings' } })}\n${JSON.stringify({ type: 'control_request', request_id: 'orca-signin-discovery', request: { subtype: 'initialize' } })}\n`
               },
@@ -265,35 +273,4 @@ export function createClaudeModelCatalogProbe(
       ).run(options?.signal),
     { resolve, resolveLegacy: (home, operation) => resolve(home, undefined, 'recover', operation) }
   )
-}
-
-function claudeCatalogSignedOut(
-  initialization: unknown,
-  settings: unknown,
-  env: Readonly<Record<string, string>>
-): boolean {
-  const account = record(record(initialization)?.account)
-  const effective = record(record(settings)?.effective)
-  if (
-    !account ||
-    !effective ||
-    account.tokenSource !== 'none' ||
-    (account.apiProvider !== undefined && account.apiProvider !== 'firstParty') ||
-    (account.apiKeySource && account.apiKeySource !== 'none') ||
-    account.email ||
-    account.subscriptionType
-  ) {
-    return false
-  }
-  const configuredEnv = record(effective.env)
-  const endpoint = configuredEnv?.ANTHROPIC_BASE_URL ?? env.ANTHROPIC_BASE_URL
-  if (typeof endpoint === 'string' && endpoint.trim()) {
-    try {
-      const url = new URL(endpoint)
-      return url.protocol === 'https:' && url.hostname === 'api.anthropic.com'
-    } catch {
-      return false
-    }
-  }
-  return true
 }

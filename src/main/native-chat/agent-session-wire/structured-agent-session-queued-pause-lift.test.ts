@@ -273,7 +273,7 @@ describe("a Stop's queue pause", () => {
       origin: 'probe' as const,
       complete: true
     }))
-    await catalogStore.refresh(key, record.provider, refresh, () => true)
+    await catalogStore.refresh(key, record.provider, refresh, { current: () => true })
     expect(refresh).toHaveBeenCalledTimes(1)
     const refreshed = await rig.host.readOptions(HOST_TEST_SESSION)
     expect(

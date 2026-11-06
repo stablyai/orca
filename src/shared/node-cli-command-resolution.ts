@@ -44,16 +44,27 @@ export function pathEnvRelativeTo(pathEnv: string | undefined, cwd: string): str
     .join(delimiter)
 }
 
-const CWD_RELATIVE = /(^|=)["']?\.\.?([\\/]|$)/
+/** Whether a command line may name files relative to where it runs: a relative command, or any
+ *  user-configured argument (no rule can tell `settings.json` or `--env-file=work env` from a
+ *  word), so it may mean something else from another working directory. */
+function invocationDependsOnCwd(command: string, userArgs: readonly string[]): boolean {
+  return userArgs.length > 0 || (!isAbsolute(command) && /[\\/]/.test(command))
+}
 
-/** Whether a command line names files relative to where it runs, so it means something else
- *  from another working directory. */
-export function invocationDependsOnCwd(command: string, args: readonly string[]): boolean {
-  return (
-    CWD_RELATIVE.test(command) ||
-    (!isAbsolute(command) && /[\\/]/.test(command)) ||
-    args.some((arg) => CWD_RELATIVE.test(arg))
-  )
+/** Where a catalog listing runs: `listIn`, unless the command line may mean something else
+ *  outside the chat's `launchDirectory`. */
+export function catalogListingDirectory(
+  command: string,
+  userArgs: readonly string[],
+  listIn: string | undefined,
+  launchDirectory: string | undefined
+): string | undefined {
+  return listIn &&
+    launchDirectory &&
+    launchDirectory !== listIn &&
+    invocationDependsOnCwd(command, userArgs)
+    ? launchDirectory
+    : listIn
 }
 
 /** The environment for a child that runs elsewhere but must find what it would from `cwd`. */

@@ -5,7 +5,7 @@ import {
 import { codexStructuredLaunchArgs } from '../launch/codex-structured-launch-args'
 import {
   envWithPathRelativeTo,
-  invocationDependsOnCwd
+  catalogListingDirectory
 } from '../../../../shared/node-cli-command-resolution'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
 import { AgentModelCatalogUnavailableError } from '../../../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
@@ -71,15 +71,15 @@ export function createCodexModelCatalogProbe(
       ...(launchDirectory ? { resolveWorkingDirectory: () => launchDirectory } : {})
     })
     assertStructuredAgentResolutionCurrent(operation)
-    const args = [
+    const userArgs = [
       ...prefixArgs,
-      ...(cwd ? codexStructuredLaunchArgs((await deps.resolveLaunchArgs?.()) ?? []) : []),
-      ...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS
+      ...(cwd ? codexStructuredLaunchArgs((await deps.resolveLaunchArgs?.()) ?? []) : [])
     ]
+    const args = [...userArgs, ...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS]
     assertStructuredAgentResolutionCurrent(operation)
-    // A command line naming files relative to the chat's folder means the same thing only there.
-    const listIn =
-      cwd && launchDirectory && invocationDependsOnCwd(command, args) ? launchDirectory : cwd
+    // A command line that may name files relative to the chat's folder runs there; the listing
+    // still asks for `cwd`'s config so the project's settings never narrow the account's list.
+    const listIn = catalogListingDirectory(command, userArgs, cwd, launchDirectory)
     // The listing runs from the account folder; relative PATH entries still mean the chat's folder.
     const env = {
       ...(launchDirectory
@@ -89,8 +89,11 @@ export function createCodexModelCatalogProbe(
     }
     return {
       identity: { command, args, cwd: listIn, overlay: Object.entries(overlay).sort() },
-      run: async (signal?: AbortSignal): Promise<AgentModelCatalogSuccess> => {
-        assertStructuredAgentResolutionCurrent(operation)
+      run: async (
+        signal?: AbortSignal,
+        runOperation = operation
+      ): Promise<AgentModelCatalogSuccess> => {
+        assertStructuredAgentResolutionCurrent(runOperation)
         signal?.throwIfAborted()
         deps.prepareHome?.(accountHomePath)
         const run = deps.runSession ?? runCodexAppServerSession
@@ -105,20 +108,20 @@ export function createCodexModelCatalogProbe(
             ...(signal ? { signal } : {})
           },
           async (rpc) => {
-            assertStructuredAgentResolutionCurrent(operation)
+            assertStructuredAgentResolutionCurrent(runOperation)
             // Overlap model and account reads to avoid serial probe latency.
             const listed = fetchCodexModelCatalogListing({
               connection: rpc,
-              cwd: listIn,
-              operation
+              cwd,
+              operation: runOperation
             })
             void listed.catch(() => {})
-            assertStructuredAgentResolutionCurrent(operation)
+            assertStructuredAgentResolutionCurrent(runOperation)
             const response: unknown = await rpc
               .request('account/read', { refreshToken: false }, { timeoutMs: 2_000 })
               // Failed account reads do not establish sign-out.
               .catch(() => undefined)
-            assertStructuredAgentResolutionCurrent(operation)
+            assertStructuredAgentResolutionCurrent(runOperation)
             if (
               typeof response !== 'object' ||
               response === null ||
@@ -134,7 +137,7 @@ export function createCodexModelCatalogProbe(
             const signedOut = { reason: 'notSignedIn' as const, ...(account ? { account } : {}) }
             // Gateways may misreport sign-out; keep models that were successfully listed.
             const inHand = await listed.catch(() => null)
-            assertStructuredAgentResolutionCurrent(operation)
+            assertStructuredAgentResolutionCurrent(runOperation)
             if (!inHand?.models.length) {
               throw new AgentModelCatalogUnavailableError(signedOut)
             }
@@ -146,7 +149,7 @@ export function createCodexModelCatalogProbe(
           }
           throw error
         })
-        assertStructuredAgentResolutionCurrent(operation)
+        assertStructuredAgentResolutionCurrent(runOperation)
         if (listing.models.length === 0) {
           throw new Error('codex app-server listed no models')
         }

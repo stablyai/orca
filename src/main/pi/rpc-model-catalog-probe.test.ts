@@ -281,8 +281,7 @@ describe('Pi model catalog', () => {
         fingerprint,
         'pi',
         () => probe(record.accountHome, { signal: stop.signal }),
-        undefined,
-        stop.signal
+        { signal: stop.signal }
       )
       await started.promise
       if (when === 'during RPC') {

@@ -144,33 +144,59 @@ describe('codex model catalog probe', () => {
   })
 
   it.each([
-    [[], '/orca-probe'],
-    [['./bin/codex.js'], '/chat'],
-    [['-c', 'model_instructions_file="./prompt.md"'], '/chat']
-  ])('lists a command line with arguments %j from %s', async (prefixArgs, listedIn) => {
-    // Files named relative to the chat's folder only mean the same thing there.
+    [[], ['/orca-probe', '/orca-probe']],
+    [['node_modules/@openai/codex/bin/codex.js'], ['/chat-a', '/chat-b']],
+    [
+      ['--env-file=work env', '--', 'codex'],
+      ['/chat-a', '/chat-b']
+    ],
+    [
+      ['-c', 'model_instructions_file="./prompt.md"'],
+      ['/chat-a', '/chat-b']
+    ]
+  ])('lists a command line with arguments %j from %j', async (prefixArgs, listedIn) => {
+    // Only the plain CLI shares one listing; user arguments may name files in the chat's folder.
     const invocations: CodexAppServerInvocation[] = []
+    const configReads: unknown[] = []
     const probe = createCodexModelCatalogProbe({
       resolveEnvironment: async () => ({ PATH: '/bin' }),
       resolveCommand: () => ({ command: '/bin/codex', prefixArgs }),
       runSession: async (invocation, body) => {
         invocations.push(invocation)
         return body({
-          request: async () => ({ data: [MODEL_ROW], nextCursor: null }),
+          request: async (method: string, params: unknown) => {
+            if (method === 'config/read') {
+              configReads.push(params)
+              return { config: {} }
+            }
+            return { data: [MODEL_ROW], nextCursor: null }
+          },
           notify: () => {}
         })
       }
     })
-    const resolved = await probe.resolve?.(
-      { variable: 'CODEX_HOME', path: '/homes/a' },
-      '/orca-probe',
-      'snapshot',
-      undefined,
-      '/chat'
+    const identities: unknown[] = []
+    for (const folder of ['/chat-a', '/chat-b']) {
+      const resolved = await probe.resolve?.(
+        { variable: 'CODEX_HOME', path: '/homes/a' },
+        '/orca-probe',
+        'snapshot',
+        undefined,
+        folder
+      )
+      identities.push(resolved?.identity)
+      await resolved?.run()
+    }
+    expect(invocations.map((invocation) => invocation.cwd)).toEqual(listedIn)
+    expect(invocations[0]?.args.slice(0, prefixArgs.length)).toEqual(prefixArgs)
+    expect(identities[0]).toMatchObject({ cwd: listedIn[0] })
+    expect(JSON.stringify(identities[0]) === JSON.stringify(identities[1])).toBe(
+      listedIn[0] === listedIn[1]
     )
-    expect(resolved?.identity).toMatchObject({ cwd: listedIn })
-    await resolved?.run()
-    expect(invocations[0]?.cwd).toBe(listedIn)
+    // The account's configured default is read for Orca's folder, never the project's.
+    expect(configReads).toEqual(
+      expect.arrayContaining([expect.objectContaining({ cwd: '/orca-probe' })])
+    )
   })
 
   it.each(['launcher $SECRET codex', 'FOO=1 codex', '/missing/codex', './codex'])(

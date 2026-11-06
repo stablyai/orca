@@ -3,159 +3,24 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
-import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
-import { applyCodexConfiguredLaunchDefaults } from '../../codex/structured/launch/codex-configured-launch-defaults'
 import { getAgentSessionOptionCatalog } from '../../../shared/agent-session/options/agent-session-option-catalog'
-import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
 import {
   applyStructuredAgentSessionModelCatalog,
-  commitStructuredAgentSessionOptionValues,
   createStructuredAgentSessionOptionState
 } from '../../../shared/agent-session/options/structured-agent-session-options'
-import { cloneStructuredAgentSessionOptionRecord } from '../../../shared/agent-session/options/structured-agent-session-option-state'
 import type { AgentModelCatalogEntry } from './agent-model-catalog-entry'
 import { structuredAgentSessionShownSnapshot } from '../../../shared/agent-session/options/structured-agent-session-option-view'
-import {
-  agentModelCatalogFingerprint,
-  agentModelCatalogScopeFingerprint
-} from './agent-model-catalog-fingerprint'
+import { agentModelCatalogFingerprint } from './agent-model-catalog-fingerprint'
 import { createAgentModelCatalogFilePersistence } from './agent-model-catalog-persistence'
-import type { AgentModelCatalogServiceDeps } from './agent-model-catalog-service-contract'
 import * as catalogBindings from './agent-model-catalog-snapshot'
 import type { AgentModelCatalogBinding } from './agent-model-catalog-snapshot'
-import { createAgentModelCatalogService } from './agent-model-catalog-service'
 import {
   AgentModelCatalogStore,
   AGENT_MODEL_CATALOG_FRESH_MS,
-  AGENT_MODEL_CATALOG_MAX_ENTRIES,
-  type AgentModelCatalogProbe,
-  type AgentModelCatalogSuccess
+  AGENT_MODEL_CATALOG_MAX_ENTRIES
 } from './agent-model-catalog-store'
-
-const HOME = { variable: 'CODEX_HOME', path: '/account' }
-const FOLDERS: Record<string, string> = {
-  a: '/project-a',
-  b: '/project-b',
-  e: '/project-effort',
-  r: '/restricted'
-}
-
-const listing = (ids: string[], model?: string): AgentModelCatalogSuccess => ({
-  origin: 'probe',
-  complete: true,
-  models: ids.map((id) => ({ id, label: id, isDefault: id === ids[0], efforts: [] })),
-  configured: model ? { model } : {}
-})
-
-function record(sessionId: string, agent: 'claude' | 'codex' = 'codex'): AgentSessionRecord {
-  return agentSessionRecordFixture({
-    sessionId,
-    provider: agent,
-    accountHome: HOME,
-    location: {
-      executionHostId: 'local',
-      wslDistro: null,
-      workspaceId: sessionId,
-      workspaceKind: 'folder'
-    }
-  })
-}
-
-function harness(
-  agent: 'claude' | 'codex' = 'codex',
-  overrides: Partial<AgentModelCatalogServiceDeps> = {}
-) {
-  const full = ['gpt-a', 'gpt-b', 'gpt-c']
-  const byFolder: Record<string, AgentModelCatalogSuccess> = {
-    [resolveHiddenProbeCwd()]: listing(full),
-    '/project-a': listing(full, 'gpt-b'),
-    '/project-b': listing(full, 'gpt-c'),
-    '/restricted': listing(['local-only'], 'local-only')
-  }
-  const gates = new Map<string, PromiseWithResolvers<void>>()
-  const runs: string[] = []
-  const scopeGate = Promise.withResolvers<void>()
-  let holdScope = false
-  const resolveScope: NonNullable<AgentModelCatalogProbe['resolve']> = async (
-    _home,
-    cwd,
-    _lookup,
-    _operation,
-    launchDirectory
-  ) => {
-    if (holdScope) {
-      await scopeGate.promise
-    }
-    // A project-local install resolves another CLI; every other folder shares the account's.
-    const local = launchDirectory === '/restricted'
-    return {
-      identity: { command: local ? `./node_modules/.bin/${agent}` : agent, cwd },
-      run: async () => {
-        const listed = local ? '/restricted' : cwd
-        runs.push(listed)
-        await gates.get(listed)?.promise
-        return byFolder[listed]
-      }
-    }
-  }
-  const resolve = vi.fn(resolveScope)
-  const probe: AgentModelCatalogProbe = Object.assign(
-    async () => byFolder[resolveHiddenProbeCwd()],
-    { resolve }
-  )
-  const store = overrides.store ?? new AgentModelCatalogStore({ now: () => 1000 })
-  const resolveAccountHome = vi.fn<AgentModelCatalogServiceDeps['resolveAccountHome']>(
-    async () => HOME
-  )
-  const probes = { [agent]: probe }
-  const service = createAgentModelCatalogService({
-    store,
-    getConversation: (id) => agentSessionConversationView(record(id, agent)),
-    getRecord: (id) => record(id, agent),
-    drivesRecord: () => true,
-    resolveAccountHome,
-    recordWorkspacePath: async (saved) => FOLDERS[saved.sessionId] ?? null,
-    workspaceMayOverrideDefaultModel: async () => false,
-    probes,
-    ...overrides
-  })
-  const hold = (folder: string): (() => void) => {
-    const gate = Promise.withResolvers<void>()
-    gates.set(folder, gate)
-    return () => gate.resolve()
-  }
-  const read = (sessionId: string, extra = {}) => service.read({ agent, sessionId, ...extra })
-  onTestFinished(() => service.stop())
-  return {
-    service,
-    probes,
-    store,
-    runs,
-    hold,
-    read,
-    full,
-    byFolder,
-    canonicalFingerprint: agentModelCatalogScopeFingerprint(
-      agentModelCatalogFingerprint({ agent, accountHome: HOME, wslDistro: null }),
-      resolveHiddenProbeCwd(),
-      { command: agent, cwd: resolveHiddenProbeCwd() }
-    ),
-    resolve,
-    resolveScope,
-    resolveAccountHome,
-    activity: () => [resolveAccountHome.mock.calls.length, resolve.mock.calls.length, runs.length],
-    holdScope: () => {
-      holdScope = true
-      return () => scopeGate.resolve()
-    }
-  }
-}
-
-const ids = (result: Awaited<ReturnType<ReturnType<typeof harness>['read']>>) =>
-  result.origin === 'unknown' ? null : result.models.map((model) => model.id)
+import { HOME, listing, harness, ids } from './agent-model-catalog-account-list-test-support'
 
 describe('one account listing for every folder', () => {
   it('lists once for the account; a project whose settings may pick the model names no default', async () => {
@@ -623,85 +488,6 @@ for (const agent of ['claude', 'codex'] as const) {
       await prewarm
       expect(h.runs).toEqual([resolveHiddenProbeCwd()])
       await store.flushPersistence()
-    })
-
-    it('withholds the account’s configured model and effort where project settings may pick them, and preserves an unlisted pick', async () => {
-      const h = harness(agent, {
-        // '/project-a' may pick the model; '/project-effort' only the effort.
-        workspaceMayOverrideDefaultModel: async ({ workspacePath }) => ({
-          model: workspacePath === '/project-a',
-          effort: workspacePath === '/project-a' || workspacePath === '/project-effort'
-        })
-      })
-      const efforts = ['low', 'medium', 'high'].map((value) => ({ value, label: value }))
-      const raw = [
-        {
-          id: h.full[0],
-          label: 'Model',
-          isDefault: true,
-          efforts,
-          defaultEffort: 'medium',
-          declaredDefaultEffort: 'medium'
-        }
-      ]
-      h.byFolder[resolveHiddenProbeCwd()] = {
-        origin: 'probe',
-        complete: true,
-        configured: { model: h.full[0], effort: 'high' },
-        // Codex folds configured defaults into rows before the catalog service sees them.
-        models: applyCodexConfiguredLaunchDefaults(raw, { model: h.full[0], effort: 'high' })
-      }
-      await h.service.read({ agent, waitForListing: true })
-      const row = (result: AgentSessionModelCatalogResult) =>
-        result.origin === 'unknown' ? null : result.models[0]
-      const expectDefaults = (result: AgentSessionModelCatalogResult, model: boolean) => {
-        expect(row(result)).toMatchObject({ isDefault: model })
-        expect(Object.keys(row(result) ?? {}).filter((key) => key.endsWith('Effort'))).toEqual([])
-      }
-      const project = await h.read('a', { waitForListing: true })
-      expectDefaults(project, false)
-      const plain = row(await h.read('b', { waitForListing: true }))
-      expect(plain).toMatchObject({ isDefault: true, defaultEffort: 'high' })
-      expectDefaults(await h.read('e', { waitForListing: true }), true)
-      expect(h.service.peek('a')).toMatchObject({
-        configured: null,
-        models: [{ isDefault: false }]
-      })
-      expect(h.service.peek('b')?.configured).not.toBeNull()
-      // A named workspace this host cannot inspect (remote, WSL, ambiguous) may pick its own too.
-      for (const legacy of [false, true]) {
-        const read = { agent, workspacePath: null, legacy, waitForListing: true }
-        expectDefaults(await h.service.read(read), false)
-      }
-      const seed = getAgentSessionOptionCatalog(agent)
-      if (!seed) {
-        throw new Error(`missing option catalog for ${agent}`)
-      }
-      const initial = commitStructuredAgentSessionOptionValues(
-        createStructuredAgentSessionOptionState(agent, seed),
-        { model: h.full[0] },
-        'seeded'
-      )
-      const apply = (state: typeof initial, catalog: AgentSessionModelCatalogResult) =>
-        applyStructuredAgentSessionModelCatalog(state, seed, catalog, {
-          newLaunch: true,
-          coherentCatalog: true
-        })
-      const shown = apply(initial, project)
-      expect(
-        structuredAgentSessionShownSnapshot(shown).find((row) => row.id === 'effort')
-      ).not.toMatchObject({ kind: { currentValue: 'high' }, valueSource: 'default' })
-      const picked = apply(
-        commitStructuredAgentSessionOptionValues(
-          { ...shown, record: cloneStructuredAgentSessionOptionRecord(shown.record) },
-          { model: 'retired-custom', effort: 'high' }
-        ),
-        project
-      )
-      expect(picked.catalog?.models.map((model) => model.id)).toEqual([h.full[0]])
-      expect(picked.record.values.model).toEqual({ value: 'retired-custom', source: 'dispatched' })
-      expect(picked.record.values.effort).toEqual({ value: 'high', source: 'dispatched' })
-      expect(h.runs).toEqual([resolveHiddenProbeCwd()])
     })
   })
 }

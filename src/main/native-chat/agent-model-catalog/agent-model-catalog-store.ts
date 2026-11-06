@@ -49,6 +49,8 @@ export const AGENT_MODEL_CATALOG_MAX_ENTRIES = 256
 import {
   refreshAgentModelCatalogListing,
   retireAgentModelCatalogListing,
+  type AgentModelCatalogListModels,
+  type AgentModelCatalogListingDemand,
   type InFlightListing
 } from './agent-model-catalog-lister'
 export type { AgentModelCatalogSessionAccess } from './agent-model-catalog-lister'
@@ -260,9 +262,8 @@ export class AgentModelCatalogStore {
   refresh(
     fingerprint: string,
     agent: string,
-    listModels: (selectedModels?: readonly string[]) => Promise<AgentModelCatalogSuccess>,
-    current?: () => boolean,
-    signal?: AbortSignal,
+    listModels: AgentModelCatalogListModels,
+    demand?: AgentModelCatalogListingDemand,
     selectedModel?: string
   ): Promise<AgentModelCatalogEntry | null> {
     this.isListing(fingerprint)
@@ -274,8 +275,7 @@ export class AgentModelCatalogStore {
       maxTargets: AGENT_MODEL_CATALOG_MAX_ENTRIES,
       targetDue: (model) => this.efforts.due(fingerprint, model),
       targetAttempted: (model) => this.efforts.attempted(fingerprint, agent, model),
-      current,
-      signal,
+      demand,
       refreshes: this.refreshes,
       failures: this.failures,
       listingWaiters: this.listingWaiters,
@@ -285,7 +285,7 @@ export class AgentModelCatalogStore {
 
   isListing(fingerprint: string): boolean {
     const flight = this.refreshes.get(fingerprint)
-    if (flight?.current?.() === false) {
+    if (flight && !flight.current()) {
       retireAgentModelCatalogListing(this.refreshes, this.listingWaiters, fingerprint, flight)
     }
     return this.refreshes.has(fingerprint)

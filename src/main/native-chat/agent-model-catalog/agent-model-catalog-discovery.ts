@@ -4,7 +4,11 @@ import type { AgentModelCatalogSuccess } from './agent-model-catalog-entry'
 
 export type AgentModelCatalogResolvedProbe = {
   identity: unknown
-  run: (signal?: AbortSignal) => Promise<AgentModelCatalogSuccess>
+  /** `operation` owns the run; it defaults to the one the invocation was resolved under. */
+  run: (
+    signal?: AbortSignal,
+    operation?: StructuredAgentResolutionOperation
+  ) => Promise<AgentModelCatalogSuccess>
 }
 
 /** Recover reruns shell lookup after a miss; snapshot and saved never do. */

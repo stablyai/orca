@@ -138,14 +138,10 @@ describe('agent model catalog store', () => {
       const joiner = new AbortController()
       const old = Promise.withResolvers<AgentModelCatalogSuccess>()
       const next = Promise.withResolvers<AgentModelCatalogSuccess>()
-      const listing = store.refresh('fp', 'grok', () => old.promise, undefined, owner.signal)
-      const joined = store.refresh(
-        'fp',
-        'grok',
-        () => Promise.reject(new Error('must join')),
-        undefined,
-        joiner.signal
-      )
+      const listing = store.refresh('fp', 'grok', () => old.promise, { signal: owner.signal })
+      const joined = store.refresh('fp', 'grok', () => Promise.reject(new Error('must join')), {
+        signal: joiner.signal
+      })
       expect(joined).toBe(listing)
       joiner.abort()
       expect(store.isListing('fp')).toBe(true)
