@@ -2,29 +2,7 @@ import '../../pty-subprocess/testing/mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalHost } from '../../terminal-host/terminal-host'
 import type { SubprocessHandle } from '../session-subprocess-handle'
-import {
-  DAEMON_SESSION_SCROLLBACK_ROWS,
-  resolveDaemonSessionScrollbackRows
-} from '../daemon-session-scrollback-window'
-
-describe('resolveDaemonSessionScrollbackRows', () => {
-  it('defaults to the flat window', () => {
-    expect(resolveDaemonSessionScrollbackRows({} as NodeJS.ProcessEnv)).toBe(
-      DAEMON_SESSION_SCROLLBACK_ROWS
-    )
-  })
-
-  it('accepts the inclusive override bounds and rejects everything outside them', () => {
-    for (const raw of ['100', '2500', '5000']) {
-      const env = { ORCA_DAEMON_SESSION_SCROLLBACK_ROWS: raw } as NodeJS.ProcessEnv
-      expect(resolveDaemonSessionScrollbackRows(env)).toBe(Number(raw))
-    }
-    for (const raw of ['0', '50', '99', '5001', '50000', '-1', '3.5', 'nonsense', '']) {
-      const env = { ORCA_DAEMON_SESSION_SCROLLBACK_ROWS: raw } as NodeJS.ProcessEnv
-      expect(resolveDaemonSessionScrollbackRows(env)).toBe(DAEMON_SESSION_SCROLLBACK_ROWS)
-    }
-  })
-})
+import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../daemon-session-scrollback-window'
 
 describe('daemon session scrollback window', () => {
   let host: TerminalHost

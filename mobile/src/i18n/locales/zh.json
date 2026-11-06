@@ -539,12 +539,19 @@
     "usageLimit": {
       "reached": "{{agent}} 已达到使用上限。",
       "reachedNamed": "{{agent}} 已达到{{window}}上限。",
-      "resetsAt": "将在 {{when}} 重置。",
       "theAgent": "智能体",
       "windowCredits": "额外用量",
       "windowSession": "会话",
       "windowWeekly": "每周",
-      "windowWeeklyModel": "模型每周"
+      "windowWeeklyModel": "模型每周",
+      "switchAccount": "切换账号",
+      "autoContinueCancelFailed": "无法取消自动继续。请重试。",
+      "autoContinueCancel": "不要继续",
+      "statusResetAt": "已于 {{time}} 重置",
+      "statusResetsAt": "将于 {{time}} 重置",
+      "statusContinuesShortly": "Orca 即将继续",
+      "statusContinuesThen": "届时 Orca 将继续",
+      "statusWontContinue": "Orca 不会自动继续"
     },
     "useImageUpload": {
       "attachFailed": "添加失败",
@@ -617,6 +624,8 @@
     }
   },
   "common": {
+    "details": "详情",
+    "hideDetails": "隐藏详情",
     "back": "返回",
     "cancel": "取消",
     "close": "关闭",
@@ -846,6 +855,13 @@
       "openImage": "打开图片",
       "wrapLines": "自动换行",
       "disableLineWrap": "关闭自动换行"
+    },
+    "markdownCallout": {
+      "note": "备注",
+      "tip": "提示",
+      "important": "重要",
+      "warning": "警告",
+      "caution": "注意"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "关闭抽屉"
@@ -2029,6 +2045,8 @@
       "managedAccountEnvOverride": "此次 Claude 启动设置了自己的 Anthropic 登录变量。请移除这些变量以使用受管理的 Claude 账户。",
       "managedAccountUnsupported": "虽然已在 WSL 中添加 Claude 账户，但 Claude 聊天仍需使用 Windows 中的 Claude 账户。",
       "modelUnavailable": "{{agent}} 无法使用 {{detail}}。请选择其他模型并重新发送。",
+      "modelUnavailableUpdate": "{{agent}} 无法使用 {{detail}}。请将 {{agent}} 更新到 {{minimumVersion}} 或更高版本，以便重启后继续使用；或者选择其他模型并重新发送。",
+      "modelNotSelected": "{{agent}} 没有选择模型。请检查模型选择和 {{agent}} 登录状态，然后重新发送。",
       "noTurnToStop": "{{agent}} 没有正在运行的轮次可停止。",
       "notDelivered": "此消息未送达。",
       "notDeliveredSendAgain": "此消息未送达。请重新发送以继续。",
@@ -3271,7 +3289,8 @@
       "moreFields_one": "+{{count}} 个字段",
       "moreFields_other": "+{{count}} 个字段",
       "noItems": "没有项目条目",
-      "pullRequestSubtitle": "PR · {{repository}}{{number}}"
+      "pullRequestSubtitle": "PR · {{repository}}{{number}}",
+      "linkedPullRequestsOverflow": "另有 {{count}} 个"
     },
     "githubProjectPickers": {
       "add": "添加",
@@ -3963,6 +3982,8 @@
       "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "原始代理窗格不可用。已保存的输出仍保留在此处。",
       "openAgent": "打开代理",
       "retryHistory": "重试历史记录",
+      "fullOutputUnavailable": "无法加载完整输出。",
+      "retryFullOutput": "重试",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "已加载的历史记录中没有匹配的运行。请加载更多以继续。",
       "noMatchingRunsYet": "暂无匹配的运行。",
       "runSummary": "{{title}}，{{status}}，{{date}}",

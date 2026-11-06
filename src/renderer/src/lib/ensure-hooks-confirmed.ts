@@ -157,6 +157,11 @@ function getIssueCommandTrustContent(result: IssueCommandReadResult): string {
   return ''
 }
 
+// A committed .orca/issue-command came from the repo, so it needs the same trust as orca.yaml.
+function isUserOwnedIssueCommand(result: IssueCommandReadResult): boolean {
+  return result.source === 'local' && result.localUntracked === true
+}
+
 async function confirmIssueCommandReadResult(
   state: AppState,
   repoId: string,
@@ -167,7 +172,7 @@ async function confirmIssueCommandReadResult(
   if (isCancelled()) {
     return 'skip'
   }
-  if (result.source === 'local') {
+  if (isUserOwnedIssueCommand(result)) {
     return 'run'
   }
   if (result.status === 'error') {
@@ -250,23 +255,23 @@ export async function ensureHooksConfirmed(
     let scriptContent = ''
     try {
       if (scriptKind === 'issueCommand') {
-        // Only shared orca.yaml needs repo trust; user-owned overrides do not. Pass hostId to disambiguate same-ID repos, as checkRuntimeHooks does.
+        // Repo-provided commands need trust; untracked user overrides do not. Pass hostId to disambiguate same-ID repos, as checkRuntimeHooks does.
         // A launch is a user act: it may start the repo's stopped WSL distro.
         const result = await readRuntimeIssueCommand(
           hookRepoOwnerHostId(state, repoId, hostId, runtimeOwnerEnvironmentId),
           repoId,
           { wakeWslDistro: true }
         )
-        if (result.source === 'local') {
+        if (isUserOwnedIssueCommand(result)) {
           return 'run'
         }
         if (result.status === 'error') {
           return 'skip'
         }
-        if (result.source !== 'shared') {
+        if (result.source === 'none') {
           return 'run'
         }
-        scriptContent = (result.sharedContent ?? '').trim()
+        scriptContent = getIssueCommandTrustContent(result)
       } else {
         const repo = findHookRepo(state, repoId, hostId)
         const localScript = repo?.hookSettings?.scripts?.[scriptKind]?.trim()

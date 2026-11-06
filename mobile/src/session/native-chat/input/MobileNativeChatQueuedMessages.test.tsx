@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
 import {
   mobileQueuedMessageCards,
@@ -5,6 +6,12 @@ import {
 } from '../../mobile-structured-queued-message-cards'
 
 import { createElement } from 'react'
+import type * as QueuedCardRowModule from '../../MobileQueuedMessageCardRow'
+import { MobileNativeChatLowerRegion } from '../MobileNativeChatLowerRegion.web'
+import {
+  useMobileNativeChatLowerGeometry,
+  useMobileNativeChatLowerRegion
+} from '../mobile-native-chat-lower-region-context'
 
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -26,6 +33,18 @@ import type { AgentMessageSource } from '../../../../../src/shared/agent-session
 import { formatOrcaSessionAddress } from '../../../../../src/shared/orca-session-address'
 import { testOrcaSessionId } from '../../../../../src/shared/orca-session-address-test-fixture'
 
+const rowRenders = vi.hoisted(() => ({ count: 0 }))
+vi.mock('../../MobileQueuedMessageCardRow', async (importOriginal) => {
+  const original = await importOriginal<typeof QueuedCardRowModule>()
+  return {
+    MobileQueuedMessageCardRow: (
+      props: Parameters<typeof original.MobileQueuedMessageCardRow>[0]
+    ) => {
+      rowRenders.count++
+      return createElement(original.MobileQueuedMessageCardRow, props)
+    }
+  }
+})
 let fontScale = 1
 vi.mock('../../../components/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
 vi.mock('react-native-reanimated', async () => {
@@ -411,3 +430,100 @@ describe('MobileNativeChatQueuedMessages', () => {
     expect(mutate).toHaveBeenCalledTimes(2)
   })
 })
+
+for (const population of [10, 100]) {
+  it(`does no queue population work on geometry-only updates with ${population} cards`, async () => {
+    const root = document.createElement('div')
+    root.dataset.testid = 'native-chat-view'
+    const viewport = document.createElement('div')
+    const content = document.createElement('div')
+    root.append(viewport)
+    viewport.append(content)
+    document.body.append(root)
+    let height = 180
+    Object.defineProperties(viewport, {
+      clientHeight: { get: () => height },
+      clientWidth: { value: 300 },
+      scrollHeight: { value: 300 }
+    })
+    vi.spyOn(root, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 0, 300, 500))
+    let visits = 0
+    let operationRenders = 0
+    let observedHeight = 0
+    function GeometryConsumer() {
+      observedHeight = useMobileNativeChatLowerGeometry().viewportHeight
+      return null
+    }
+    function OperationConsumer() {
+      useMobileNativeChatLowerRegion()
+      operationRenders++
+      return null
+    }
+    const cards = Array.from({ length: population }, (_, index) => {
+      const item = card({ messageId: `queued-${index}` })
+      Object.defineProperty(item, 'messageId', {
+        get: () => {
+          visits++
+          return `queued-${index}`
+        }
+      })
+      return item
+    })
+    let mounted: ReactTestRenderer | undefined
+    const paint = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    const render = (items: MobileQueuedMessageCard[]) => (
+      <MobileNativeChatLowerRegion>
+        <GeometryConsumer />
+        <OperationConsumer />
+        <MobileNativeChatQueuedMessages cards={items} />
+      </MobileNativeChatLowerRegion>
+    )
+    try {
+      await act(async () => {
+        mounted = create(render(cards), {
+          createNodeMock: (element) => {
+            const props = element.props
+            if (
+              typeof props === 'object' &&
+              props !== null &&
+              'testID' in props &&
+              props.testID === 'native-chat-lower-scroll'
+            ) {
+              return { getScrollableNode: () => viewport }
+            }
+            return element.type === 'ScrollView' ? { scrollToEnd: () => {} } : content
+          }
+        })
+      })
+      await act(paint)
+      await act(paint)
+      expect(observedHeight).toBe(180)
+      visits = 0
+      operationRenders = 0
+      rowRenders.count = 0
+      await act(async () => {
+        height = 120
+        window.dispatchEvent(new Event('resize'))
+        await paint()
+      })
+      expect(observedHeight).toBe(120)
+      expect.soft(operationRenders).toBe(0)
+      expect.soft(rowRenders.count).toBe(0)
+      expect.soft(visits).toBe(0)
+      await act(async () =>
+        mounted!.update(
+          render([...cards, card({ messageId: 'appended', text: 'A real new message' })])
+        )
+      )
+      expect(rowRenders.count).toBeGreaterThan(0)
+      expect(visits).toBeGreaterThan(0)
+      expect(
+        mounted!.root.findAllByProps({ children: 'A real new message' }).length
+      ).toBeGreaterThan(0)
+    } finally {
+      await act(async () => mounted?.unmount())
+      root.remove()
+      vi.restoreAllMocks()
+    }
+  })
+}

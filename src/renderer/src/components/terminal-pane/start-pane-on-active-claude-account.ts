@@ -1,5 +1,5 @@
-import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
+import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 import { ACTIVE_CLAUDE_ACCOUNT } from '../../../../shared/claude/project-claude-account-preference'
 import type { PtyPaneStartup } from './pty-connection-types'
 import {

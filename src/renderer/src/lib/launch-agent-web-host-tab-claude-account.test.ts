@@ -47,7 +47,8 @@ const STARTUP_PLAN: AgentStartupPlan = {
 }
 
 async function launch(relaunch?: (claudeAccountId?: string) => void) {
-  const { launchAgentInWebHostTab } = await import('./launch-agent-web-host-tab')
+  const { launchAgentInWebHostTab } =
+    await import('./agent-session/launch/new-tab/launch-agent-web-host-tab')
   return launchAgentInWebHostTab({
     agent: 'claude',
     worktreeId: 'repo-1::/repo/wt',

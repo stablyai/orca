@@ -3,9 +3,12 @@ import type {
   AgentLaunchRouteArgs,
   AgentLaunchRouteStore,
   buildAgentLaunchRouteInput
-} from '@/lib/agent-launch-route-input'
-import { resolveAgentLaunchRoute, type AgentLaunchRoute } from '@/lib/agent-launch-routing'
-import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
+} from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import {
+  resolveAgentLaunchRoute,
+  type AgentLaunchRoute
+} from '@/lib/agent-session/launch/routing/agent-launch-routing'
+import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import { findLaunchRepo, resolveLaunchClaudeAccountId } from '@/lib/claude-launch-account'
 
 export type ClaudeAccountRouteArgs = AgentLaunchRouteArgs & {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { WorktreeCreate } from '../../../../shared/rpc-contract/worktree-create-params'
-import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
+import { buildManagedWorktreeCreateArgs } from './workspaces/worktree-create-args'
 
 describe('worktree.create startupClaudeAccount', () => {
   it('requires a Claude startup agent', () => {

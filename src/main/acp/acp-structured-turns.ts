@@ -2,7 +2,6 @@
 
 import {
   agentSessionFailureFact,
-  providerDiagnostic,
   type SubmissionRejectionFact
 } from '../../shared/agent-session/failures/agent-session-failure'
 import {
@@ -13,11 +12,12 @@ import type { AgentJournalItemIdentity } from '../../shared/agent-session/journa
 import type {
   AgentSessionCommandAdmission,
   StructuredAgentSessionCommandRun
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+} from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { acpCompactPrompt } from './acp-compaction-turn'
 import { AcpAgentError, AcpAuthRequiredError, AcpConnectionClosedError } from './acp-errors'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import type { AcpStructuredLane } from './acp-structured-lane'
+import { acpPromptRejection } from './acp-turn-failures'
 import type { ContentBlock } from './generated/acp-protocol.generated'
 
 export type AcpDispatchSettlement = { clientMessageId: string } & (
@@ -37,6 +37,8 @@ export type AcpStructuredTurnsDeps = {
   settle: (settlement: AcpDispatchSettlement) => void
   /** Replace the child so the next send reopens the session. */
   sessionLost: (error: Error) => void
+  /** The agent had no model for the prompt, which it may word like a sign-in failure. */
+  modelRefusal?: (error: AcpAgentError) => SubmissionRejectionFact | undefined
 }
 
 export class AcpStructuredTurns {
@@ -48,6 +50,10 @@ export class AcpStructuredTurns {
   private readonly idleWaiters = new Set<() => void>()
   private ended = false
   private stopAt: number | null = null
+  // Steers still preparing their controls; they hold their place like queued steers.
+  private preparingSteers = 0
+  // Counts Stops: finish() clears stopAt before a preparing steer can see it.
+  private withdrawals = 0
 
   constructor(private readonly deps: AcpStructuredTurnsDeps) {}
 
@@ -74,7 +80,11 @@ export class AcpStructuredTurns {
   }
 
   get holdsSteers(): boolean {
-    return this.steers.length > 0
+    return this.steers.length > 0 || this.preparingSteers > 0
+  }
+
+  get withdrawalEpoch(): number {
+    return this.withdrawals
   }
 
   get stopped(): boolean {
@@ -127,6 +137,19 @@ export class AcpStructuredTurns {
     })
   }
 
+  /** A steer whose controls must run as a prompt first holds its place until released: Stop
+   *  reaches it, and answers ahead of it are cancelled as they start, as for any newer steer. */
+  holdSteer(): () => void {
+    this.preparingSteers += 1
+    this.cancelForSteer()
+    return () => void this.preparingSteers--
+  }
+
+  /** A Stop or teardown since `epoch` withdraws a preparing steer like any held steer. */
+  withdrawnSince(epoch: number): 'stopped' | 'ended' | null {
+    return this.ended ? 'ended' : this.withdrawals === epoch ? null : 'stopped'
+  }
+
   dispatch(send: Send): void {
     this.unsettled.add(send.clientMessageId)
     if (this.active) {
@@ -175,6 +198,7 @@ export class AcpStructuredTurns {
   }
 
   private withdrawSteers(): boolean {
+    this.withdrawals += 1
     const withdrawn = this.steers.splice(0)
     for (const send of withdrawn) {
       this.reject(
@@ -219,7 +243,7 @@ export class AcpStructuredTurns {
       ? { promptId, requestId: promptId }
       : undefined
     const answered = this.deps.connection.prompt(send.prompt, meta)
-    if (this.steers.length > 0) {
+    if (this.steers.length > 0 || this.preparingSteers > 0) {
       this.cancelForSteer()
     }
     answered.then(
@@ -257,15 +281,11 @@ export class AcpStructuredTurns {
   private agentFailed(send: Send, error: AcpAgentError): void {
     const { lane } = this.deps
     const refusal = lane.translator.promptRefused(send.clientMessageId, error)
+    // Also retires the proof of a model the agent turned out not to have.
+    const noModel = this.deps.modelRefusal?.(error)
     if (refusal !== null) {
-      const detail = providerDiagnostic(refusal, 'person')
-      this.reject(
-        send.clientMessageId,
-        agentSessionFailureFact(
-          lane.translator.authenticationRequired(error) ? 'notSignedIn' : 'providerRejected',
-          detail ? { detail } : {}
-        )
-      )
+      const signedOut = lane.translator.authenticationRequired(error)
+      this.reject(send.clientMessageId, acpPromptRejection(refusal, signedOut, noModel))
     } else {
       lane.apply(lane.translator.promptFailed(send.clientMessageId, error, this.deps.now()))
     }

@@ -7,8 +7,11 @@ import type { TerminalAttachmentLaunchResult } from '../../../../../shared/termi
 import { isPaneOwnerRefusal } from './pane-owner-recovery'
 import type { SpawnDeferralReason } from '../../../../../shared/host-spawn-admission'
 import { createTerminalStartupTiming } from '../terminal-startup-timing'
-import type { PtyReplayDataMeta, PtyTransportRecoveryState } from '../pty-transport-types'
-import type { PtyDataMeta } from '../pty-dispatcher'
+import type {
+  PtyReplayDataMeta,
+  PtyTransportRecoveryState
+} from '../pty-transport/pty-transport-types'
+import type { PtyDataMeta } from '../pty-transport/delivery/pty-dispatcher'
 import type { PtyPaneStartup } from '../pty-connection-types'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'

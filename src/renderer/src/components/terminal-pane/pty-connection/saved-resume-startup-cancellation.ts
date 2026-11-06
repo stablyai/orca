@@ -2,7 +2,7 @@ import { forgetRefusedPaneResume } from '@/lib/forget-refused-pane-resume'
 import { useAppStore } from '@/store'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 import type { PtyPaneStartup } from '../pty-connection-types'
-import type { PtyConnectResult } from '../pty-transport-types'
+import type { PtyConnectResult } from '../pty-transport/pty-transport-types'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { clearStaleAgentTabTitleOnConfirmedShell } from './confirmed-shell-agent-title'
 

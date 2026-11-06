@@ -120,7 +120,7 @@ vi.mock('@/lib/sidebar-worktree-activation', () => ({
   activateWorktreeFromSidebar: mockStore.activateWorktreeFromSidebar
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
 

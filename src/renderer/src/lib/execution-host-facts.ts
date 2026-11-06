@@ -12,11 +12,11 @@ import type { AppState } from '@/store/types'
 import { getConnectionIdFromState } from './connection-owner-resolution'
 import { getLocalProjectExecutionRuntimeContext } from './local-preflight-context'
 import { CLIENT_PLATFORM } from './new-workspace'
-import type { ResolvedAgentBackgroundTarget } from './agent-background-session-contract'
+import type { ResolvedAgentBackgroundTarget } from './agent-session/launch/background/agent-background-session-contract'
 import {
   getExecutionHostIdForWorktree,
   runtimeEnvironmentIdOrLocalUnlessTwin
-} from './worktree-runtime-owner'
+} from './workspace/ownership/worktree-runtime-owner'
 
 /** Withhold unreported execution OS; quoting with client/endpoint guesses would target the wrong shell and must stop launch. */
 export type ExecutionHostPlatformFact =

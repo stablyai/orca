@@ -1,5 +1,5 @@
-import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
-import type { LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab'
+import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+import type { LaunchAgentInNewTabArgs } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-args'
 import type { Repo } from '../../../shared/repo-types'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'

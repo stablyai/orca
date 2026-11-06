@@ -9,7 +9,7 @@ import {
   fallbackRemoteServerName,
   paneRecoveryCause,
   remoteRuntimeRecoveryCopy
-} from './remote-runtime-recovery-copy'
+} from './pty-transport/remote-runtime/recovery/remote-runtime-recovery-copy'
 import { selectRuntimeServerName, selectRuntimeServerTailscaleHost } from './remote-server-outage'
 import { useAppStore } from '@/store'
 

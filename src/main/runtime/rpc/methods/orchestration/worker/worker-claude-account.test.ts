@@ -4,7 +4,7 @@ import type { ClaudeManagedAccountSummary } from '../../../../../../shared/manag
 import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration-worker-start-params'
 import { createWorkerLaunchReceipt, withWorkerLaunchAccount } from './worker-launch-preferences'
 import { assertLocalAccountWorktree, prepareLocalWorkerStart } from './worker-start-validation'
-import { decideWorkerStartMode } from '../../orchestration-worker-start-mode'
+import { decideWorkerStartMode } from '../structured-workers/orchestration-worker-start-mode'
 import { decideAgentLaunchMode } from '../../../../../agent-launch/agent-launch-mode'
 import { parseStartOptions } from './worker-earlier-work'
 import { reopenWorkerTerminal } from './worker-follow-up-placement'

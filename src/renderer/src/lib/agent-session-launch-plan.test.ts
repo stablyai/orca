@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentLaunchRouteStore } from './agent-launch-route-input'
+import type { AgentLaunchRouteStore } from './agent-session/launch/routing/agent-launch-route-input'
 import { ACTIVE_CLAUDE_ACCOUNT } from '../../../shared/claude/project-claude-account-preference'
 
 const mocks = vi.hoisted(() => ({
@@ -9,19 +9,19 @@ const mocks = vi.hoisted(() => ({
   beginStructuredAgentLaunchSettlement: vi.fn()
 }))
 
-vi.mock('@/lib/agent-launch-route-input', () => ({
+vi.mock('@/lib/agent-session/launch/routing/agent-launch-route-input', () => ({
   buildAgentLaunchRouteInput: mocks.buildAgentLaunchRouteInput
 }))
-vi.mock('@/lib/agent-launch-routing', () => ({
+vi.mock('@/lib/agent-session/launch/routing/agent-launch-routing', () => ({
   resolveAgentLaunchRoute: mocks.resolveAgentLaunchRoute,
   structuredAgentLaunchSupported: mocks.structuredAgentLaunchSupported,
   structuredAgentLaunchDowngrade: () => null
 }))
-vi.mock('@/lib/structured-agent-launch-settlement', () => ({
+vi.mock('@/lib/agent-session/launch/continuation/structured-agent-launch-settlement', () => ({
   beginStructuredAgentLaunchSettlement: mocks.beginStructuredAgentLaunchSettlement
 }))
 
-import { planAgentSessionLaunch } from './agent-session-launch-plan'
+import { planAgentSessionLaunch } from './agent-session/launch/routing/agent-session-launch-plan'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the planner reads only settings and repos off the store, and routing inputs are mocked.
 const store = { settings: {} } as unknown as AgentLaunchRouteStore

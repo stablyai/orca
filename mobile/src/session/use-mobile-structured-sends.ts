@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { AgentJournalCursor } from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
@@ -10,7 +10,8 @@ import {
 import { mergeSentImagePreviews } from './native-chat/composer/mobile-native-chat-draft-reconcile'
 import type { AgentSessionQueuedMessage } from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import type { MobileNativeChatSendErrorReporter } from './native-chat/use-mobile-native-chat-send-error'
-// Ordinary in-memory input outlives its request; exact host IDs retire it.
+import { UNCONFIRMED_SEND_DEADLINE_MS } from './native-chat/use-mobile-native-chat-unconfirmed-sends'
+// Ordinary in-memory input outlives its request; exact host IDs retire it, and a lost reply hands it back at the deadline.
 
 type MobileStructuredSend = StructuredAgentSessionOptimisticMessage
 
@@ -23,6 +24,7 @@ export type MobileStructuredSends = {
   accept: (send: StructuredAgentSessionOptimisticMessage, images?: string[]) => void
   acknowledge: (clientMessageId: string, cursor?: AgentJournalCursor) => void
   reject: (clientMessageId: string) => void
+  holdUnconfirmed: (clientMessageId: string, onUnconfirmed: () => void) => void
 }
 
 export function useMobileStructuredSends(args: {
@@ -40,6 +42,11 @@ export function useMobileStructuredSends(args: {
     Record<string, Record<string, string[]>>
   >({})
   const mountedRef = useRef(false)
+  const sendsBySessionRef = useRef(sendsBySession)
+  useLayoutEffect(() => {
+    sendsBySessionRef.current = sendsBySession
+  }, [sendsBySession])
+  const deadlinesRef = useRef(new Map<string, ReturnType<typeof setTimeout>>())
 
   // Capture chat ownership before asynchronous replies can cross a tab switch.
   const keep = useCallback(
@@ -109,6 +116,33 @@ export function useMobileStructuredSends(args: {
     (clientMessageId: string) => forget(new Set([clientMessageId])),
     [forget]
   )
+  const isHeld = useCallback(
+    (clientMessageId: string) =>
+      (sendsBySessionRef.current[sessionKey] ?? []).some(
+        (send) => send.clientMessageId === clientMessageId
+      ),
+    [sessionKey]
+  )
+  const holdUnconfirmed = useCallback(
+    (clientMessageId: string, onUnconfirmed: () => void) => {
+      if (!mountedRef.current) {
+        return
+      }
+      const deadlines = deadlinesRef.current
+      deadlines.set(
+        clientMessageId,
+        setTimeout(() => {
+          deadlines.delete(clientMessageId)
+          // The host's record can arrive before the lost reply settles, so read what is still unrecorded now.
+          if (isHeld(clientMessageId)) {
+            forget(new Set([clientMessageId]))
+            onUnconfirmed()
+          }
+        }, UNCONFIRMED_SEND_DEADLINE_MS)
+      )
+    },
+    [forget, isHeld]
+  )
 
   const sends = sendsBySession[sessionKey] ?? NO_SENDS
   useEffect(() => {
@@ -132,13 +166,22 @@ export function useMobileStructuredSends(args: {
     if (settled.size === 0) {
       return
     }
+    for (const id of settled) {
+      clearTimeout(deadlinesRef.current.get(id))
+      deadlinesRef.current.delete(id)
+    }
     forget(settled)
   }, [cursor, forget, queuedMessages, sends, submissions])
 
   useEffect(() => {
     mountedRef.current = true
+    const deadlines = deadlinesRef.current
     return () => {
       mountedRef.current = false
+      for (const deadline of deadlines.values()) {
+        clearTimeout(deadline)
+      }
+      deadlines.clear()
     }
   }, [])
 
@@ -147,6 +190,7 @@ export function useMobileStructuredSends(args: {
     imagePreviewsByMessageId: imagePreviewsBySession[sessionKey] ?? NO_IMAGE_PREVIEWS,
     accept,
     acknowledge,
-    reject
+    reject,
+    holdUnconfirmed
   }
 }

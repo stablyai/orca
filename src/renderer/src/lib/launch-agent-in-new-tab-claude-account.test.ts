@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ACTIVE_CLAUDE_ACCOUNT } from '../../../shared/claude/project-claude-account-preference'
-import type { launchAgentInWebHostTab } from './launch-agent-web-host-tab'
+import type { launchAgentInWebHostTab } from './agent-session/launch/new-tab/launch-agent-web-host-tab'
 
 type CreateTabOptions = { pendingStartup?: { launchConfig?: Record<string, unknown> } }
 const mockCreateTab = vi.fn(
@@ -59,11 +59,11 @@ vi.mock('@/runtime/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: mockIsWebRuntimeSessionActive
 }))
 
-vi.mock('@/lib/launch-agent-web-host-tab', () => ({
+vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab', () => ({
   launchAgentInWebHostTab: mockLaunchAgentInWebHostTab
 }))
 
-vi.mock('@/lib/worktree-runtime-owner', () => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => 'local',
   getRuntimeEnvironmentIdForWorktree: () => null,
   runtimeEnvironmentIdOrLocalUnlessTwin: () => null
@@ -93,7 +93,8 @@ describe('launchAgentInNewTab Claude account', () => {
   })
 
   it("stamps the project's saved account on a Claude launch", async () => {
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    const { launchAgentInNewTab } =
+      await import('./agent-session/launch/new-tab/launch-agent-in-new-tab')
 
     launchAgentInNewTab({ requestId: 'req-1', agent: 'claude', worktreeId: 'repo-1::/repo/wt' })
 
@@ -101,7 +102,8 @@ describe('launchAgentInNewTab Claude account', () => {
   })
 
   it('prefers a one-time account choice over the saved one', async () => {
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    const { launchAgentInNewTab } =
+      await import('./agent-session/launch/new-tab/launch-agent-in-new-tab')
 
     launchAgentInNewTab({
       requestId: 'req-1',
@@ -114,7 +116,8 @@ describe('launchAgentInNewTab Claude account', () => {
   })
 
   it('leaves other agents unstamped', async () => {
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    const { launchAgentInNewTab } =
+      await import('./agent-session/launch/new-tab/launch-agent-in-new-tab')
 
     launchAgentInNewTab({ requestId: 'req-1', agent: 'codex', worktreeId: 'repo-1::/repo/wt' })
 
@@ -122,7 +125,8 @@ describe('launchAgentInNewTab Claude account', () => {
   })
 
   it('stamps a paired web-host launch and relaunches it on the active account', async () => {
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    const { launchAgentInNewTab } =
+      await import('./agent-session/launch/new-tab/launch-agent-in-new-tab')
     mockIsWebRuntimeSessionActive.mockReturnValue(true)
     const webLaunch = () => mockLaunchAgentInWebHostTab.mock.calls.at(-1)![0]
 

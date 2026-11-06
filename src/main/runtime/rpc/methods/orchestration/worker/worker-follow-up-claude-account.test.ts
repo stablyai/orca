@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/worker-terminal-auto-release-scheduler'
+import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-scheduler'
 import { claudePinnedLaunchError } from '../../../../../../shared/claude/claude-pinned-launch-error'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 

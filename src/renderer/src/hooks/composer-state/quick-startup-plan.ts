@@ -5,8 +5,8 @@ import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/us
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
-import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
-import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import type { AgentStartedTelemetry } from '@/lib/workspace/creation/worktree-startup-payload'
+import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import {
   type AgentStartupPlan,
   buildAgentDraftLaunchPlan,

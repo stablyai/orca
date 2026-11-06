@@ -3,13 +3,17 @@ import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline
 import {
   CALLER,
   envelope
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { acpLaunchSpecFor } from './acp-launch-specs'
-import { GROK_CONFIG_OPTIONS, waitFor } from './acp-structured-adapter.test-support'
+import {
+  GROK_CONFIG_OPTIONS,
+  PROVIDER_SESSION,
+  waitFor
+} from './acp-structured-adapter.test-support'
 import { framesOf, openHostRig, send } from './acp-structured-host.test-support'
 import { z } from 'zod'
 
@@ -31,9 +35,12 @@ const refusals = [
     code: -32603,
     message: 'Internal error',
     data: { details: 'Unknown ACP model: retired' },
-    kind: 'providerRejected',
+    // The option refuses an unlisted value, so OMP's own /model (builtin-modes.ts) gets it next.
+    commandReply:
+      'Unknown model: retired. Use ACP `session/setModel` for picker-driven selection or list available models with /model.',
+    kind: 'modelUnavailable',
     modelRefusal: true,
-    reason: "OMP didn't accept this message: Unknown ACP model: retired."
+    reason: "OMP couldn't use retired. Pick another model and send again."
   },
   {
     agent: 'grok',
@@ -75,7 +82,20 @@ it.each(refusals)(
     const spec = acpLaunchSpecFor(failure.agent)!
     const { host, rig, store, ready } = await openHostRig({
       spec,
-      script: (agent) =>
+      script: (agent) => {
+        agent.on('session/prompt', (frame) => {
+          const text = JSON.stringify(frame.params)
+          if ('commandReply' in failure && text.includes('/model retired')) {
+            agent.notify('session/update', {
+              sessionId: PROVIDER_SESSION,
+              update: {
+                sessionUpdate: 'agent_message_chunk',
+                content: { type: 'text', text: failure.commandReply }
+              }
+            })
+            agent.reply(frame, { stopReason: 'end_turn' })
+          }
+        })
         agent.on('session/set_config_option', (frame) => {
           const { configId, value } = z
             .object({ configId: z.string(), value: z.string() })
@@ -90,6 +110,7 @@ it.each(refusals)(
             })
           }
         })
+      }
     })
     const attached = await host.attach(
       CALLER,
@@ -114,6 +135,11 @@ it.each(refusals)(
         })
       ).toMatchObject({ ok: true })
     }
+    // Only the hidden model command may reach OMP; the refused messages never do.
+    const commands = () =>
+      framesOf(rig.child(), 'session/prompt').filter((frame) =>
+        JSON.stringify(frame.params).includes('/model retired')
+      )
     await pick('retired')
     const attempts = failure.modelRefusal ? ['first attempt', 'second attempt'] : ['first attempt']
     for (const text of attempts) {
@@ -137,7 +163,7 @@ it.each(refusals)(
       expect((await host.readOptions(SESSION, { readsWithoutModel: true })).current.model).toBe(
         'retired'
       )
-      expect(framesOf(rig.child(), 'session/prompt')).toHaveLength(0)
+      expect(commands()).toHaveLength(framesOf(rig.child(), 'session/prompt').length)
     }
     const failed = await host.journalSnapshot(SESSION)
     expect(
@@ -147,14 +173,17 @@ it.each(refusals)(
     expect(
       rows.filter((row) => row.body.kind === 'status' && row.body.failure?.kind === failure.kind)
     ).toHaveLength(0)
+    // The hidden command's reply is OMP's raw text: never a row, a turn or unread.
+    expect(JSON.stringify(rows)).not.toContain('Unknown model:')
     if (!failure.modelRefusal) {
       await host.close(SESSION, 'user-close')
       return
     }
     await pick('grok-4.7')
     await send(host, 'after a new pick')
-    await waitFor(() => expect(framesOf(rig.child(), 'session/prompt')).toHaveLength(1))
-    const prompt = framesOf(rig.child(), 'session/prompt')[0]!
+    const sent = commands().length
+    await waitFor(() => expect(framesOf(rig.child(), 'session/prompt')).toHaveLength(sent + 1))
+    const prompt = framesOf(rig.child(), 'session/prompt').at(-1)!
     rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
     await rig.settle()
     expect(store.getRecord(SESSION)?.options?.model).toBe('grok-4.7')

@@ -1,14 +1,14 @@
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { SessionRestoredBannerReason } from '../session-restored-banner-pane-state'
-import { hasPtySerializer } from '../pty-buffer-serializer'
+import { hasPtySerializer } from '../snapshots/pty-buffer-serializer'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { isExpectedAgentProcess } from '../../../../../shared/agent-status/process/agent-process-recognition'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../../../shared/draft-paste-ready-timeout'
 import { createDraftPasteReadyScanner } from '../../../../../shared/draft-paste-ready-scanner'
 import { sendAgentDraftPasteContent } from '@/lib/agent-draft-paste-content'
-import { writeTerminalPastePtyInput } from '../terminal-pty-paste-writer'
-import { createPasteReadinessTimeoutNotice } from '@/lib/launch-agent-paste-timeout-notice'
+import { writeTerminalPastePtyInput } from '../input/paste/terminal-pty-paste-writer'
+import { createPasteReadinessTimeoutNotice } from '@/lib/agent-session/launch/prompt/launch-agent-paste-timeout-notice'
 
 import { STARTUP_DRAFT_PASTE_QUIET_MS } from './pty-connect-limits'
 

@@ -1,6 +1,6 @@
 import { createTerminalIdentityProjectionInputs } from './terminal-identity-projection-inputs'
 import type { DispatchCreator } from '../../orchestration/db/dispatch-depth'
-import type { AgentSessionRecordReader } from '../../orchestration/structured-session-lineage'
+import type { AgentSessionRecordReader } from '../../orchestration/addressing/session-lineage/structured-session-lineage'
 import {
   captureStructuredWorkerReadInputs,
   createStructuredWorkerReadContext,

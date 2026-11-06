@@ -92,12 +92,12 @@ describe('useNativeChatComposerKeyDown', () => {
   describe('steer chord', () => {
     function Composer({
       initialDraft,
-      alternateSteers,
+      chordSteersHead,
       send,
       steerHead
     }: {
       initialDraft: string
-      alternateSteers: boolean
+      chordSteersHead: boolean
       send: (intent?: { alternate?: boolean }) => void
       steerHead: () => boolean
     }): React.JSX.Element {
@@ -115,7 +115,7 @@ describe('useNativeChatComposerKeyDown', () => {
         interrupt: vi.fn(),
         send,
         steerHead,
-        alternateSteers,
+        chordSteersHead,
         setActiveSuggestion: vi.fn(),
         setDraft,
         setCaret: vi.fn()
@@ -127,14 +127,14 @@ describe('useNativeChatComposerKeyDown', () => {
 
     function pressModEnter(
       initialDraft: string,
-      { alternateSteers = true, ...init }: KeyboardEventInit & { alternateSteers?: boolean } = {}
+      { chordSteersHead = true, ...init }: KeyboardEventInit & { chordSteersHead?: boolean } = {}
     ) {
       const send = vi.fn()
       const steerHead = vi.fn(() => true)
       const field = render(
         <Composer
           initialDraft={initialDraft}
-          alternateSteers={alternateSteers}
+          chordSteersHead={chordSteersHead}
           send={send}
           steerHead={steerHead}
         />
@@ -150,7 +150,7 @@ describe('useNativeChatComposerKeyDown', () => {
       expect(send).not.toHaveBeenCalled()
       expect(pressModEnter('', { repeat: true }).steerHead).not.toHaveBeenCalled()
       // With follow-ups off the chord queues, so a second press never steers the card just queued.
-      expect(pressModEnter('', { alternateSteers: false }).steerHead).not.toHaveBeenCalled()
+      expect(pressModEnter('', { chordSteersHead: false }).steerHead).not.toHaveBeenCalled()
       expect(pressModEnter('steer this').steerHead).not.toHaveBeenCalled()
     })
   })

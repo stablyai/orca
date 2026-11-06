@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { REPO_METHODS } from './repo'
+import { REPO_METHODS } from './projects/repo'
 import { WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {

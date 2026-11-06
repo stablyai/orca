@@ -5,7 +5,7 @@ import {
 import { normalizeExecutionHostId } from '../../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { useAppStore } from '@/store/index'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import { buildAgentResumeStartupPlan } from '../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
 import {
   resolveRuntimeHostReportedPlatform,
@@ -16,7 +16,7 @@ import {
 import {
   agentResumeOriginNamesAnotherExecutionHost,
   sleepingRecordNamesAnotherExecutionHost
-} from '@/lib/sleeping-record-execution-host-scope'
+} from '@/lib/agent-session/resume/sleeping-record-execution-host-scope'
 import { resolveResumeLaunchRecipe } from '../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import {
   agentProviderSessionsEqual,

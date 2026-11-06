@@ -578,7 +578,6 @@
     "usageLimit": {
       "reached": "{{agent}} atingiu seu limite de uso.",
       "reachedNamed": "{{agent}} atingiu seu limite de {{window}}.",
-      "resetsAt": "Renovação do limite: {{when}}",
       "theAgent": "O agente",
       "windowCredits": "uso extra",
       "windowSession": "sessão",
@@ -656,6 +655,8 @@
     }
   },
   "common": {
+    "details": "Detalhes",
+    "hideDetails": "Ocultar detalhes",
     "back": "Voltar",
     "cancel": "Cancelar",
     "close": "Fechar",
@@ -888,6 +889,13 @@
       "openImage": "Abrir imagem",
       "wrapLines": "Quebrar linhas",
       "disableLineWrap": "Desativar quebra de linha"
+    },
+    "markdownCallout": {
+      "note": "Nota",
+      "tip": "Dica",
+      "important": "Importante",
+      "warning": "Aviso",
+      "caution": "Cuidado"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Fechar painel inferior"
@@ -2099,6 +2107,8 @@
       "managedAccountEnvOverride": "Esta inicialização do Claude define suas próprias variáveis de login da Anthropic. Remova-as para usar uma conta gerenciada do Claude.",
       "managedAccountUnsupported": "Embora uma conta do Claude tenha sido adicionada no WSL, os chats do Claude precisam de uma conta do Claude no Windows.",
       "modelUnavailable": "{{agent}} não conseguiu usar {{detail}}. Selecione outro modelo e envie novamente.",
+      "modelUnavailableUpdate": "{{agent}} não conseguiu usar {{detail}}. Atualize o {{agent}} para {{minimumVersion}} ou posterior para mantê-lo após reiniciar, ou selecione outro modelo e envie novamente.",
+      "modelNotSelected": "{{agent}} não tem nenhum modelo selecionado. Verifique a seleção de modelo e o login do {{agent}} e envie novamente.",
       "noTurnToStop": "{{agent}} não tinha nenhuma interação em andamento para interromper.",
       "notDelivered": "Esta mensagem não foi entregue.",
       "notDeliveredSendAgain": "Esta mensagem não foi entregue. Envie-a novamente para continuar.",
@@ -3364,7 +3374,8 @@
       "moreFields_one": "+{{count}} campo",
       "moreFields_other": "+{{count}} campos",
       "noItems": "Nenhum item no projeto",
-      "pullRequestSubtitle": "Pull request · {{repository}}{{number}}"
+      "pullRequestSubtitle": "Pull request · {{repository}}{{number}}",
+      "linkedPullRequestsOverflow": "+{{count}} mais"
     },
     "githubProjectPickers": {
       "add": "Adicionar",
@@ -4064,6 +4075,8 @@
       "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "O painel original do agente está indisponível. A saída salva permanece aqui.",
       "openAgent": "Abrir agente",
       "retryHistory": "Tentar histórico novamente",
+      "fullOutputUnavailable": "Não foi possível carregar a saída completa.",
+      "retryFullOutput": "Tentar novamente",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "Nenhuma execução correspondente no histórico carregado. Carregue mais para continuar.",
       "noMatchingRunsYet": "Ainda não há execuções correspondentes.",
       "runSummary": "{{title}}, {{status}}, {{date}}",

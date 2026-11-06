@@ -5,7 +5,7 @@ import type { AgentLaunchPreferences } from '../../../../../../shared/agent-sess
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { suggestCreatureNameForPaths } from '../../../../../../shared/worktree-name-suggestion'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { WorkerEffect, WorkerSetupReceipt } from './worker-topology'
 

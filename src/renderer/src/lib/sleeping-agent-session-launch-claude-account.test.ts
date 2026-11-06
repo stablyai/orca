@@ -64,7 +64,8 @@ function sleptRecord(claudeAccountId: string): SleepingAgentSessionRecord {
 async function resumedLaunchConfig(
   record: SleepingAgentSessionRecord
 ): Promise<SleepingAgentLaunchConfig | undefined> {
-  const { launchSleepingAgentSession } = await import('./sleeping-agent-session-launch')
+  const { launchSleepingAgentSession } =
+    await import('./agent-session/resume/sleeping-agent-session-launch')
   expect(launchSleepingAgentSession(record)).toBe(true)
   return mockCreateTab.mock.calls.at(-1)?.[3]?.pendingStartup?.launchConfig
 }

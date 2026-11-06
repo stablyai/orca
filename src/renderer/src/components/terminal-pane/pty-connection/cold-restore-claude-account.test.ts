@@ -17,7 +17,7 @@ const store = {
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
 vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'darwin' }))
-vi.mock('@/lib/sleeping-record-execution-host-scope', () => ({
+vi.mock('@/lib/agent-session/resume/sleeping-record-execution-host-scope', () => ({
   agentResumeOriginNamesAnotherExecutionHost: () => false,
   sleepingRecordNamesAnotherExecutionHost: () => false
 }))

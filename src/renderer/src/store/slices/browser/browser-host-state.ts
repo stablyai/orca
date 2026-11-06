@@ -16,7 +16,7 @@ import type {
   BrowserCookieImportExecutionResult,
   RemoteBrowserPageHandle
 } from './browser-slice-contract'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 
 /** Seed restored handles only for client-hosted pages, without dead lease placement generations. Server-hosted pages may vanish during runtime restart; leaving their handle absent recreates the saved URL instead of adopting a missing page and deleting the row. First snapshot supplies live placement. */
 export function buildRestoredRemoteBrowserPageHandles(

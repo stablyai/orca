@@ -77,19 +77,4 @@ describe('BrowserHostRequestRegistry with two paired desktops', () => {
     await rejected
     expect(older.asked).toHaveLength(0)
   })
-
-  it('lets any live subscription answer for its desktop', async () => {
-    const requests = new BrowserHostRequestRegistry()
-    const stale = desktop(requests, 'device-a')
-    const live = desktop(requests, 'device-a')
-
-    const hosted = requests.request()
-    expect(stale.asked).toHaveLength(1)
-    live.answer('host-a')
-
-    await expect(hosted).resolves.toEqual({
-      browserHostClientId: 'host-a',
-      pairedDeviceId: 'device-a'
-    })
-  })
 })

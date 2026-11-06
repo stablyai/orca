@@ -16,9 +16,9 @@ import {
   historyHost,
   matchBrowserHistory,
   prepareBrowserHistoryEntries
-} from '@/lib/browser-history-match'
+} from '@/lib/browser/history/browser-history-match'
 import { displayableFaviconUrl } from '../describe-page/browser-favicon-url'
-import { formatBrowserPaletteUrl } from '@/lib/browser-palette-search'
+import { formatBrowserPaletteUrl } from '@/lib/browser/palette/browser-palette-search'
 import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard-text'
 import { translate } from '@/i18n/i18n'
 

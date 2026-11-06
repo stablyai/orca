@@ -8,6 +8,7 @@
     "./scripts/test-runtime/environment/vitest-caller-identity-env-setup.ts",
     "./scripts/test-runtime/environment/vitest-inherited-git-env-setup.ts",
     "./scripts/test-runtime/environment/vitest-real-agent-home-write-guard.ts",
+    "./scripts/test-runtime/environment/vitest-real-agent-cli-guard.ts",
     "./scripts/test-runtime/environment/vitest-bun-node-builtins.ts",
     "./scripts/test-runtime/dom/vitest-dom-setup.ts",
     "./scripts/test-runtime/dom/happy-dom-offscreen-canvas.ts",

@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { createRuntimeAgentProjections } from './construction/runtime-agent-projections'
-import { OrchestrationDb } from './orchestration/db'
+import { OrchestrationDb } from './orchestration/db/orchestration-db'
+import './orchestration/db/contract-constants'
+import './orchestration/db/messages/mailbox-routing-page'
+import './orchestration/db/dispatch-row-writer'
+import './orchestration/db/attempt-outcome-projection'
 import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixture'
 import { MIRROR_LEAVES_STEP_1 } from './runtime-leaf-record-projection.test-fixture'
 import type {
@@ -17,8 +21,8 @@ import { readAgentSenderGeneration } from './runtime-agent-sender-history-trigge
 import { resolveWorkerLineageFacts } from './orchestration/db/dispatch-context/worker-follow-up-plan'
 import { getFollowUpDispatch } from './orchestration/db/dispatch-context/worker-follow-up-lineage'
 import type { AgentSenderPane } from './runtime-agent-sender-history'
-import type { WorkerTerminalResourceRow } from './orchestration/worker-terminal-ownership'
-import type { DispatchContextRow } from './orchestration/types'
+import type { WorkerTerminalResourceRow } from './orchestration/terminal-authority/release/worker-terminal-ownership'
+import type { DispatchContextRow } from './orchestration/db/orchestration-records'
 
 const unissued = (): never => {
   throw new Error('a sender build issued a terminal handle')

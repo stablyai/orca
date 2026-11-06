@@ -18,7 +18,7 @@ import { MANAGE_SESSIONS_SECTION_ID } from '../session-management/open-terminal-
 import { useAppStore } from '../../../../store/index'
 import { translate } from '@/i18n/i18n'
 import { isWebClientLocation } from '@/lib/web-client-location'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function TerminalWindowsAdministratorSection(): React.JSX.Element {
   const [administrator, setAdministrator] = useState<boolean | null | undefined>()
