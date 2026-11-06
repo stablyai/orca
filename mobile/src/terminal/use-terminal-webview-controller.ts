@@ -14,7 +14,7 @@ import { createTerminalWebViewPendingMessages } from './terminal-webview-pending
 import { dispatchTerminalWebViewNotification } from './terminal-webview-notification-dispatch'
 import { routeTerminalQueryReply } from './terminal-webview-query-reply-routing'
 import { useTerminalWebViewReadyPromises } from './terminal-webview-ready-promises'
-import { createTerminalWriteCoalescer } from './terminal-write-coalescer'
+import { createTerminalDocumentWrites } from './terminal-output-ack'
 import { isTerminalGestureInput } from './terminal-gesture-input'
 
 // Share readiness, queues, coalescing and imperative handles across hosts; only document command/notify transport differs.
@@ -96,8 +96,7 @@ export function useTerminalWebViewController(
 
   // Native coalesces busy PTY output to avoid paying bridge/IPC/paint overhead for every stream frame.
   const writeCoalescer = useMemo(
-    () =>
-      createTerminalWriteCoalescer((data) => postMessage({ type: 'write', data }), { coalesce }),
+    () => createTerminalDocumentWrites(postMessage, { coalesce }),
     [coalesce, postMessage]
   )
 
@@ -252,6 +251,7 @@ export function useTerminalWebViewController(
       write(data: string) {
         writeCoalescer.write(data)
       },
+      ...writeCoalescer.parseAck,
       init({ cols, rows, initialData, preserveScroll, oscLinks, kittyFlags, frame }: TerminalInit) {
         // Arm ready before posting init so a synchronous reply cannot be lost.
         promises.armReady()

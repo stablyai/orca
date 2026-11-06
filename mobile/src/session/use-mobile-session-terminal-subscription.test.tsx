@@ -70,6 +70,7 @@ function subscriptionHarness(opts: {
   const fields = {
     client: {
       onStateChange: () => () => {},
+      sendRequest: vi.fn(async () => ({ ok: true, result: { credited: true } })),
       subscribe: vi.fn(
         (_method: string, params: Record<string, unknown>, onData: StreamHandler) => {
           order.push(`subscribe ${JSON.stringify(params.viewport ?? null)}`)
@@ -520,5 +521,81 @@ describe('two visible terminal subscriptions', () => {
     harness.event(0, { type: 'data', chunk: 'still live' })
     expect(harness.terminal.write).toHaveBeenCalledWith('still live')
     expect(harness.fields.terminalUnsubsRef.current.size).toBe(2)
+  })
+})
+
+describe('terminal output credit', () => {
+  function creditedTerminal(opts: { reportsParsing: boolean }) {
+    const harness = subscriptionHarness({ fit: PHONE, webReady: true, viewport: PHONE })
+    const parsed: Array<() => void> = []
+    if (opts.reportsParsing) {
+      harness.replaceTerminal({
+        ...harness.terminal,
+        writeWithParseAck: vi.fn((_data: string, onParsed: () => void) => {
+          parsed.push(onParsed)
+        })
+      })
+    }
+    harness.subscribe()
+    return { harness, parsed }
+  }
+  const acks = (harness: ReturnType<typeof subscriptionHarness>) =>
+    harness.fields.client.sendRequest.mock.calls
+  const capabilities = (harness: ReturnType<typeof subscriptionHarness>) =>
+    harness.fields.client.subscribe.mock.calls[0][1].capabilities
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('acks received output units only after xterm has parsed them', () => {
+    vi.useFakeTimers()
+    const { harness, parsed } = creditedTerminal({ reportsParsing: true })
+    expect(capabilities(harness)).toEqual({ terminalBinaryStream: 1, outputAck: 1 })
+    harness.event(0, { type: 'subscribed', outputAck: true, streamToken: 'token-1' })
+    harness.scrollback(0, PHONE.cols, PHONE.rows)
+    harness.event(0, { type: 'data', chunk: 'hello' })
+    // Counted as received, before the document rewrites the status dot's selector.
+    harness.event(0, { type: 'data', chunk: '\u23fa\ufe0f ok' })
+    act(() => vi.advanceTimersByTime(200))
+    expect(acks(harness)).toEqual([])
+
+    act(() => parsed.forEach((onParsed) => onParsed()))
+    act(() => vi.advanceTimersByTime(50))
+    expect(acks(harness)).toEqual([['terminal.ackOutput', { streamToken: 'token-1', units: 10 }]])
+  })
+
+  it('acks output dropped unwritten while native chat covers the terminal', () => {
+    vi.useFakeTimers()
+    const { harness, parsed } = creditedTerminal({ reportsParsing: true })
+    harness.event(0, { type: 'subscribed', outputAck: true, streamToken: 'token-1' })
+    harness.fields.showNativeChatRef.current = true
+    harness.event(0, { type: 'data', chunk: 'dropped' })
+    act(() => vi.advanceTimersByTime(50))
+    expect(parsed).toEqual([])
+    expect(acks(harness)).toEqual([['terminal.ackOutput', { streamToken: 'token-1', units: 7 }]])
+  })
+
+  it('never acks a host that did not echo credit', () => {
+    vi.useFakeTimers()
+    const { harness, parsed } = creditedTerminal({ reportsParsing: true })
+    harness.event(0, { type: 'subscribed' })
+    harness.scrollback(0, PHONE.cols, PHONE.rows)
+    harness.event(0, { type: 'data', chunk: 'hello' })
+    act(() => parsed.forEach((onParsed) => onParsed()))
+    act(() => vi.advanceTimersByTime(200))
+    expect(acks(harness)).toEqual([])
+  })
+
+  it('does not ask for credit from a terminal that cannot report parsing', () => {
+    vi.useFakeTimers()
+    const { harness } = creditedTerminal({ reportsParsing: false })
+    expect(capabilities(harness)).toEqual({ terminalBinaryStream: 1 })
+    harness.event(0, { type: 'subscribed', outputAck: true, streamToken: 'token-1' })
+    harness.scrollback(0, PHONE.cols, PHONE.rows)
+    harness.event(0, { type: 'data', chunk: 'hello' })
+    act(() => vi.advanceTimersByTime(200))
+    expect(harness.terminal.write).toHaveBeenCalledWith('hello')
+    expect(acks(harness)).toEqual([])
   })
 })
