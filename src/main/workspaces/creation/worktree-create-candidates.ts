@@ -6,6 +6,28 @@ export function getWorktreeCreateCandidate(value: string, suffix: number): strin
   return suffix === 1 ? value : `${value}-${suffix}`
 }
 
+export function getWorktreeCreateStartingSuffix(
+  baseName: string,
+  existingNames: readonly string[]
+): number {
+  if (!existingNames.includes(baseName)) {
+    return 1
+  }
+  const suffixPrefix = `${baseName}-`
+  let highest = 0
+  for (const existing of existingNames) {
+    if (!existing.startsWith(suffixPrefix)) {
+      continue
+    }
+    const suffix = existing.slice(suffixPrefix.length)
+    if (!/^\d+$/.test(suffix)) {
+      continue
+    }
+    highest = Math.max(highest, Number(suffix))
+  }
+  return highest + 1
+}
+
 export function getGeneratedWorktreeCreateCandidate(
   value: string,
   suffix: number,
