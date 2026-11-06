@@ -169,7 +169,7 @@ export const gitApi = {
     worktreePath: string
     operation: GitCommitAction
     connectionId?: string
-  }): Promise<void> => ipcRenderer.invoke('git:sequencerContinue', args),
+  }): Promise<GitCommitActionResult | void> => ipcRenderer.invoke('git:sequencerContinue', args),
   completeMerge: (args: {
     worktreePath: string
     connectionId?: string

@@ -120,7 +120,7 @@ export class RuntimeGitStatusCommands {
           }),
         checkout: () => provider.checkoutBranch(worktreePath, checkoutTarget, detached),
         getAgentBlocker: async () => this.host.getAgentSwitchBlocker?.(worktreePath) ?? null,
-        onSwitched: () => this.host.recordBranchSwitched?.(target.worktree)
+        onSwitched: () => this.host.recordBranchSwitched?.(target.worktree, detached)
       }
     )
     return { ok: true, branch: result.branch }

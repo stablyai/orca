@@ -162,12 +162,12 @@ export class RuntimeGitSyncCommands {
 
   async sequencerContinueRuntimeGit(worktreeSelector: string, operation: GitCommitAction) {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    await requireRuntimeGitProvider(target).recoverSequencer(
+    const result = await requireRuntimeGitProvider(target).recoverSequencer(
       target.worktree.path,
       operation,
       'continue'
     )
-    return { ok: true }
+    return result ?? { ok: true }
   }
 
   async completeRuntimeGitMerge(

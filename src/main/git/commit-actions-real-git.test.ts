@@ -1,9 +1,9 @@
 import { detectConflictOperation } from './source-control/git-conflict-operation'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installRealWorkerThreadChildProcesses } from '../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
 import { applyCommit, recoverSequencer } from './commit-actions'
 import type { GitCommitAction } from '../../shared/git/commands/git-commit-action'
@@ -37,10 +37,22 @@ beforeEach(async () => {
   await git('checkout', '-q', 'main')
 })
 afterEach(async () => {
+  vi.unstubAllEnvs()
   await rm(directory, { recursive: true, force: true })
 })
 
 describe('commit actions', () => {
+  it('cherry-picks a root commit onto a clean unborn branch', async () => {
+    const root = await git('rev-list', '--max-parents=0', 'HEAD')
+    await git('checkout', '--orphan', 'unborn')
+    await git('rm', '-rf', '.')
+    expect(await applyCommit(directory, 'cherry-pick', root)).toMatchObject({
+      outcome: 'landed',
+      branch: 'unborn'
+    })
+    expect(await git('show', 'HEAD:file.txt')).toBe('base')
+    expect(await git('log', '-1', '--format=%s')).toBe('base')
+  })
   it('cherry-picks onto the current branch without opening an editor', async () => {
     const result = await applyCommit(directory, 'cherry-pick', topic)
     expect(result).toMatchObject({ outcome: 'landed', branch: 'main' })
@@ -63,13 +75,48 @@ describe('commit actions', () => {
     await expect(git('rev-parse', '--verify', 'CHERRY_PICK_HEAD')).rejects.toThrow()
     expect(await git('status', '--porcelain')).toBe('')
   })
+  it('aborts a cherry-pick that becomes empty when continuing a conflict resolution', async () => {
+    await commit('different\n', 'diverged')
+    await applyCommit(directory, 'cherry-pick', topic)
+    await writeFile(join(directory, 'file.txt'), 'different\n')
+    await git('add', 'file.txt')
+    expect(await recoverSequencer(directory, 'cherry-pick', 'continue')).toEqual({
+      outcome: 'empty',
+      message: 'Already applied, nothing to cherry-pick'
+    })
+    expect(await detectConflictOperation(directory)).toBe('unknown')
+    expect(await git('log', '-1', '--format=%s')).toBe('diverged')
+    expect(await git('status', '--porcelain')).toBe('')
+  })
+  for (const inProgress of ['merge', 'rebase', 'cherry-pick', 'revert'] as const) {
+    it(`refuses both commit actions during an existing ${inProgress} conflict`, async () => {
+      await commit('different\n', 'diverged')
+      await expect(git(inProgress, topic)).rejects.toThrow()
+      for (const operation of ['cherry-pick', 'revert'] as const) {
+        expect(await applyCommit(directory, operation, topic)).toEqual({
+          outcome: 'refused',
+          message: `Finish or abort the ${inProgress} in progress before trying again.`
+        })
+      }
+      expect(await detectConflictOperation(directory)).toBe(inProgress)
+      expect(await git('diff', '--name-only', '--diff-filter=U')).toBe('file.txt')
+    })
+  }
   for (const operation of ['cherry-pick', 'revert'] as const satisfies readonly GitCommitAction[]) {
     it(`${operation} leaves a dirty checkout untouched`, async () => {
+      if (operation === 'revert') {
+        await git('cherry-pick', topic)
+      }
       await writeFile(join(directory, 'file.txt'), 'uncommitted\n')
       const result = await applyCommit(directory, operation, topic)
-      expect(result.outcome).toBe('refused')
+      expect(result).toEqual({
+        outcome: 'refused',
+        message: 'Commit or stash your changes, then try again.'
+      })
       expect(await git('diff', '--', 'file.txt')).toContain('+uncommitted')
-      expect(await git('log', '-1', '--format=%s')).toBe('base')
+      expect(await git('log', '-1', '--format=%s')).toBe(
+        operation === 'revert' ? 'topic change' : 'base'
+      )
     })
     it(`${operation} preserves conflicts for recovery`, async () => {
       await commit('different\n', 'diverged')
@@ -88,25 +135,38 @@ describe('commit actions', () => {
       expect(await git('show', 'HEAD:file.txt')).toBe('different')
       expect(await git('status', '--porcelain')).toBe('')
     })
-    it(`${operation} continues a resolution even with a failing configured editor`, async () => {
+    it(`${operation} continues with identity only in HOME and a failing configured editor`, async () => {
       await commit('different\n', 'diverged')
       await applyCommit(directory, operation, topic)
       await writeFile(join(directory, 'file.txt'), 'resolved\n')
       await git('add', 'file.txt')
-      const editor = process.env.GIT_EDITOR
-      process.env.GIT_EDITOR = 'false'
-      try {
-        await recoverSequencer(directory, operation, 'continue')
-      } finally {
-        if (editor === undefined) {
-          delete process.env.GIT_EDITOR
-        } else {
-          process.env.GIT_EDITOR = editor
-        }
+      const home = join(directory, '.git', 'test-home')
+      await mkdir(home)
+      await writeFile(
+        join(home, '.gitconfig'),
+        '[user]\nname = Home Identity\nemail = home@example.test\n'
+      )
+      await git('config', '--unset', 'user.name')
+      await git('config', '--unset', 'user.email')
+      vi.stubEnv('HOME', home)
+      vi.stubEnv('USERPROFILE', home)
+      vi.stubEnv('XDG_CONFIG_HOME', home)
+      vi.stubEnv('GIT_CONFIG_GLOBAL', undefined)
+      vi.stubEnv('GIT_CONFIG_NOSYSTEM', '1')
+      vi.stubEnv('GIT_EDITOR', 'false')
+      for (const key of [
+        'GIT_AUTHOR_NAME',
+        'GIT_AUTHOR_EMAIL',
+        'GIT_COMMITTER_NAME',
+        'GIT_COMMITTER_EMAIL'
+      ]) {
+        vi.stubEnv(key, undefined)
       }
+      await recoverSequencer(directory, operation, 'continue')
       expect(await detectConflictOperation(directory)).toBe('unknown')
       expect(await git('show', 'HEAD:file.txt')).toBe('resolved')
       expect(await git('status', '--porcelain')).toBe('')
+      expect(await git('log', '-1', '--format=%cn <%ce>')).toBe('Home Identity <home@example.test>')
     })
     it(`${operation} refuses a merge commit using its actual parents`, async () => {
       await git('checkout', '-qb', 'other')

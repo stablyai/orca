@@ -4,7 +4,11 @@ import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { installRealWorkerThreadChildProcesses } from '../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
-import { switchBranchGuarded, type BranchSwitchDeps } from './branch-switch'
+import {
+  BranchSwitchLandedWithWarningError,
+  switchBranchGuarded,
+  type BranchSwitchDeps
+} from './branch-switch'
 import { checkoutBranch } from './checkout'
 import { getStatus } from './source-control/status-read'
 
@@ -52,6 +56,18 @@ afterEach(async () => {
 })
 
 describe('switchBranchGuarded', () => {
+  it('does not report detachment as landed when HEAD.lock leaves the named branch at the same OID', async () => {
+    const oid = await git('rev-parse', 'HEAD')
+    await writeFile(join(directory, '.git', 'HEAD.lock'), '')
+    try {
+      await switchBranchGuarded(directory, { commitId: oid }, {}, deps(null, oid))
+      throw new Error('Expected checkout to fail')
+    } catch (error) {
+      expect(error).not.toBeInstanceOf(BranchSwitchLandedWithWarningError)
+      expect(String(error)).toContain('HEAD.lock')
+    }
+    expect(await currentBranch()).toBe('main')
+  })
   it('leaves a reachable detached commit and actually checks out the branch', async () => {
     await git('checkout', '--detach', '-q')
     const result = await switchBranchGuarded(directory, 'feature', {}, deps())

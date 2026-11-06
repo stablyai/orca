@@ -268,7 +268,10 @@ export async function switchBranchGuarded(
             )
           ).stdout.trim()
         : await readCurrentBranch(worktreePath, options)
-      if (landedTarget !== branch) {
+      if (
+        landedTarget !== branch ||
+        (commitTarget && (await readCurrentBranch(worktreePath, options)) !== null)
+      ) {
         throw error
       }
       deps.onSwitched?.()

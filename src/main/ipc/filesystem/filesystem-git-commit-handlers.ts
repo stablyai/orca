@@ -25,7 +25,7 @@ export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerCo
           args.worktreePath,
           worktreePath
         )
-        await recoverSequencer(worktreePath, args.operation, action, {
+        return recoverSequencer(worktreePath, args.operation, action, {
           ...gitOptions,
           admissionTier: 'interactive'
         })

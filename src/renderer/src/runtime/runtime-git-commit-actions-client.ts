@@ -70,7 +70,7 @@ export async function sequencerAbortRuntimeGit(
 export async function sequencerContinueRuntimeGit(
   context: RuntimeGitContext,
   operation: GitCommitAction
-): Promise<void> {
+): Promise<GitCommitActionResult | void> {
   if (context.target.kind === 'local' || !context.worktreeId) {
     return window.api.git.sequencerContinue({
       worktreePath: resolveLocalWorktreePath(context),
@@ -78,10 +78,11 @@ export async function sequencerContinueRuntimeGit(
       operation
     })
   }
-  await callRuntimeRpc(
+  const result = await callRuntimeRpc<GitCommitActionResult | { ok: boolean }>(
     context.target,
     'git.sequencerContinue',
     { worktree: toRuntimeWorktreeSelector(context.worktreeId), operation },
     { timeoutMs: 30_000 }
   )
+  return 'outcome' in result ? result : undefined
 }

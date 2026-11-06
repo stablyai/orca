@@ -75,7 +75,7 @@ export type GitOperationApi = {
     worktreePath: string
     operation: GitCommitAction
     connectionId?: string
-  }) => Promise<void>
+  }) => Promise<GitCommitActionResult | void>
   completeMerge: (args: {
     worktreePath: string
     connectionId?: string

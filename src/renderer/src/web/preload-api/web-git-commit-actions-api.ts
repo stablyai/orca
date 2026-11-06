@@ -10,10 +10,11 @@ export function createGitCommitActionsApi(): Pick<
   return {
     sequencerContinue: async ({ worktreePath, operation }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      await callRuntimeResult('git.sequencerContinue', {
+      const result = await callRuntimeResult('git.sequencerContinue', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         operation
       })
+      return 'outcome' in result ? result : undefined
     },
     sequencerAbort: async ({ worktreePath, operation }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)

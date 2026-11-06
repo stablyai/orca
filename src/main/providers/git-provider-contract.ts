@@ -52,7 +52,7 @@ export type IGitProvider = {
     worktreePath: string,
     operation: GitCommitAction,
     action: 'abort' | 'continue'
-  ): Promise<void>
+  ): Promise<GitCommitActionResult | void>
   completeMerge(worktreePath: string): Promise<{ success: boolean; error?: string }>
   getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null>
   getDiff(
