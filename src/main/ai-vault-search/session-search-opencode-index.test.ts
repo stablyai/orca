@@ -151,14 +151,12 @@ function writeVault(): void {
   ])
 }
 
-it('searches tool output under the all scope and not under conversation', async () => {
+it('excludes tool output from both search scopes', async () => {
   writeVault()
   await startIndexer()
 
   const all = openEngine().search({ query: TOOL_ONLY, scope: 'all' })
-  expect(all.hits).toHaveLength(1)
-  expect(all.hits[0]).toMatchObject({ agent: 'opencode', sessionId: SESSION })
-  expect(all.hits[0]?.evidence?.role).toBe('tool')
+  expect(all.hits).toEqual([])
   expect(openEngine().search({ query: TOOL_ONLY, scope: 'conversation' }).hits).toEqual([])
 })
 

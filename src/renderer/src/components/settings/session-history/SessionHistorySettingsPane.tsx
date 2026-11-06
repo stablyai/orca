@@ -186,7 +186,7 @@ export function SessionHistorySettingsPane({
               )
             : translate(
                 'sessionHistory.settings.computersConsent',
-                'Each computer keeps a searchable copy of its own agent conversations and tool output. Nothing leaves that computer.'
+                'Each computer keeps a searchable copy of its own agent conversations. Nothing leaves that computer.'
               )}
         </p>
       </div>

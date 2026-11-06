@@ -9,7 +9,7 @@ import type {
 } from './ai-vault-search-contract'
 
 /**
- * Tool output beyond 3,072 characters per row is not indexed and not searchable; user and assistant text is indexed in full.
+ * Tool output is not indexed or searchable; user and assistant text is indexed in full.
  * A page cursor outstanding during a retention purge is refused once as `stale-cursor`; the client re-issues page 1.
  * A phrase match across a chunk boundary of a long message is not supported.
  */

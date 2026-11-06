@@ -65,8 +65,7 @@ it.each([1, 1_000_000])(
       ).toEqual([
         { role: 'user', text_truncated: 1 },
         { role: 'user', text_truncated: 1 },
-        { role: 'assistant', text_truncated: 0 },
-        { role: 'tool', text_truncated: 1 }
+        { role: 'assistant', text_truncated: 0 }
       ])
     } finally {
       write.discard()

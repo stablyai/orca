@@ -1,3 +1,4 @@
+import { SessionSearchToolPurge } from './session-search-tool-purge'
 import { readIndexGeneration } from './session-search-index-generation'
 import { parentPort } from 'node:worker_threads'
 import SyncDatabase from '../sqlite/sync-database'
@@ -20,6 +21,7 @@ setActiveSink({
 })
 
 let store: SessionSearchStore | null = null
+let toolPurge: SessionSearchToolPurge | null = null
 let reader: SyncDatabase | null = null
 let engine: SessionSearchEngine | null = null
 let dataVersion: unknown
@@ -121,20 +123,26 @@ async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchW
       engine = new SessionSearchEngine(reader, { retentionCutoffMs: c.cutoff })
       return { id }
     }
-    store = new SessionSearchStore(
-      c.path,
-      (error) => {
-        throw error
-      },
-      (n) => {
-        counts.messages += n
-        parentPort?.postMessage({
-          id: 0,
-          counts,
-          generation: readIndexGeneration(store!.connection)
-        })
-      }
+    const onMessagesChanged = (n: number): void => {
+      counts.messages += n
+      parentPort?.postMessage({
+        id: 0,
+        counts,
+        generation: readIndexGeneration(store!.connection)
+      })
+    }
+    const onError = (error: unknown): never => {
+      throw error
+    }
+    store = new SessionSearchStore(c.path, onError, onMessagesChanged)
+    // Why: worker retirement closes the connection and its maintenance together.
+    toolPurge = new SessionSearchToolPurge(
+      store.connection,
+      () => false,
+      onMessagesChanged,
+      onError
     )
+    void toolPurge.request()
     store.setRetentionCutoffMs(c.cutoff)
     return { id, snapshot: snapshot(), counts, generation: readIndexGeneration(store.connection) }
   }
@@ -168,6 +176,7 @@ async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchW
     writes.clear()
     handlePaths.clear()
     reset = snapshot()
+    void toolPurge?.request()
   }
   let path: string | undefined
   let accepted = true
