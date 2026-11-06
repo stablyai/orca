@@ -79,12 +79,11 @@ beforeEach(() => {
       return style
     }
     const current = activeFade.current
-    return new Proxy(style, {
-      get: (value, key) =>
-        key === 'opacity' || (key === 'transform' && activeFade?.slides)
-          ? current[key]
-          : Reflect.get(value, key)
-    })
+    const sampled = document.createElement('div').style
+    sampled.cssText = style.cssText
+    sampled.opacity = current.opacity
+    sampled.transform = activeFade.slides ? current.transform : style.transform
+    return sampled
   })
   class BrowserKeyframeEffect {
     frames: Keyframe[]
