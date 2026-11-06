@@ -1,10 +1,10 @@
+import { frameAgentStatus } from './frame-agent-status'
 import {
   normalizeCompatibleAgentStatusEntryForOwner,
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
 } from '../../../../shared/agent-status/title/agent-title-owner'
 import { resolvePaneAgentOwnerRecord } from '../../../../shared/agent-status/identity/pane-agent-owner'
-import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { RuntimeMobileSessionClientTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type {
@@ -29,6 +29,7 @@ import {
   terminalTitleBlocksExplicitAgentStatus
 } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { projectRuntimeMobileSessionTitle } from './runtime-mobile-session-title-projection'
 
 export function projectRuntimeMobileSessionTabs(
   snapshot: RuntimeMobileSessionTabsSnapshot,
@@ -267,11 +268,10 @@ export function projectRuntimeMobileSessionTabs(
         retainedAgentStatus,
         getHookRowsForPane
       )
-    const projectedStatusEntry = projectedAgentStatus.agentStatus as
-      | (AgentStatusEntry & { turnCompletedAt?: number })
-      | undefined
-    const { turnCompletedAt: projectedTurnCompletedAt, ...clientStatusFields } =
-      projectedStatusEntry ?? {}
+    const { projectedTurnCompletedAt, ...clientAgentStatus } = frameAgentStatus(
+      projectedAgentStatus.agentStatus,
+      snapshot.worktree
+    )
     const rawTurnCompletedAt =
       hookAgentStatus?.live?.payload.turnCompletedAt ??
       selectRuntimeHookAgentRowForPane(getHookRowsForPane(paneKey)).live?.payload.turnCompletedAt ??
@@ -280,9 +280,6 @@ export function projectRuntimeMobileSessionTabs(
       typeof rawTurnCompletedAt === 'number' && Number.isFinite(rawTurnCompletedAt)
         ? rawTurnCompletedAt
         : undefined
-    const clientAgentStatus: { agentStatus?: AgentStatusEntry } = projectedStatusEntry
-      ? { agentStatus: clientStatusFields as AgentStatusEntry }
-      : {}
     tabs.push({
       type: 'terminal',
       id: tab.id,
@@ -290,6 +287,8 @@ export function projectRuntimeMobileSessionTabs(
       leafId: tab.leafId,
       title,
       ...(tab.customTitle !== undefined ? { customTitle: tab.customTitle } : {}),
+      // A paired desktop re-ranks the title with its own generated name; the session name must reach it.
+      ...projectRuntimeMobileSessionTitle(snapshot, tab, host),
       ...(tab.ptyId ? { ptyId: tab.ptyId } : {}),
       // Bind identity to the handle's live owner, never a stale persisted surface.
       ...(terminalPty?.incarnationId ? { incarnationId: terminalPty.incarnationId } : {}),

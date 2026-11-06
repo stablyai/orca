@@ -4,7 +4,7 @@ import {
   isJiraImageMimeType
 } from '../../../shared/jira/jira-attachment-image'
 import { decodeJiraImageFrame } from '../../../shared/jira/jira-image-stream-frame'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 import { subscribeRuntimeEnvironment } from './runtime-environment-pairing-refresh'

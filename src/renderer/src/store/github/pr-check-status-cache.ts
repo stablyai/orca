@@ -1,3 +1,5 @@
+import { capturePRCheckContract } from '@/lib/pr-check-observation-contract'
+import { isCompletePRCheckOwner } from '../../../../shared/github/complete-pr-check-owner'
 import type { AppState } from '../types'
 import type { GitHubPRRefreshAlias } from '../../../../shared/github/pull-request-refresh-types'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
@@ -15,6 +17,17 @@ export function applyCachedChecksStatus(
   fetchedAt: number,
   aliasExecutionHostId: string
 ): PRInfo {
+  if (
+    isCompletePRCheckOwner(pr) ||
+    capturePRCheckContract(
+      () => state,
+      aliasExecutionHostId.startsWith('runtime:')
+        ? { kind: 'environment', environmentId: aliasExecutionHostId.slice(8) }
+        : { kind: 'local' }
+    ).complete
+  ) {
+    return pr
+  }
   const checksCacheKeys = [
     ...(alias.repoId
       ? [

@@ -23,12 +23,12 @@ import {
   withApprovalTitle
 } from '../../../../shared/dispatched-worker-attention'
 import { canonicalOrchestrationForRow } from '@/runtime/visible-agent-orchestration'
-import { isSupersededAgentCompletionSnapshot } from './agent-completion-snapshot-staleness'
+import { isSupersededAgentCompletionSnapshot } from './agent-completion/agent-completion-snapshot-staleness'
 import { isAutoApprovedAntigravityPermission } from './antigravity-auto-approved-permission'
 import type {
   AgentCompletionDispatchMeta,
   AgentCompletionStatusSnapshot
-} from './agent-completion-coordinator-types'
+} from './agent-completion/agent-completion-coordinator-types'
 import type { NotificationDispatchResult } from '../../../../shared/notification-settings-types'
 import { getNotificationWorkspaceLabels } from './terminal-notification-state'
 import { createTerminalAttentionSurface } from './terminal-attention-surface'

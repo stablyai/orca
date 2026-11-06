@@ -19,13 +19,13 @@ import {
   successResponse,
   type Surface
 } from './check-details-loader-test-fixture'
-import * as normalization from '@/lib/check-run-details-log-normalization'
+import * as normalization from '@/lib/source-control/checks/check-run-details-log-normalization'
 import * as sanitation from '../../../../shared/source-control/checks/logs/check-job-log-excerpt'
 import {
   checkLogJob,
   legacyControls,
   expectedLegacyControls
-} from '@/lib/check-run-details-log-normalization-test-fixture'
+} from '@/lib/source-control/checks/check-run-details-log-normalization-test-fixture'
 
 vi.mock('@/i18n/i18n', async () => {
   const { default: catalog } = await import('../../i18n/locales/zh.json')

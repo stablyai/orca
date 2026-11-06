@@ -74,11 +74,13 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
   const navigationRef = useRef(0)
 
   const {
+    clearSavedNote,
     closeComposer,
     deleteComment,
     markReviewed,
     openComposer,
     openEditComposer,
+    openNewNoteSheet,
     saveCommentsAndReviewState,
     saveComposer,
     toggleItemViewed
@@ -139,6 +141,7 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
   })
 
   return {
+    clearSavedNote,
     clearSentNotes,
     closeComposer,
     copyNotes,
@@ -155,6 +158,7 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     },
     openComposer,
     openEditComposer,
+    openNewNoteSheet,
     openInSession: async () => {
       // Only working-tree files have a desktop diff tab.
       if (
@@ -193,7 +197,7 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     saveComposer,
     sendPromptToTerminal,
     loadTerminals,
-    // The sheet's own lines and the terminals it already listed; the draft clears when the next sheet opens.
+    // The sheet's own lines and the terminals it already listed; the draft clears once the note is saved.
     sendRange: async (
       sheet: Extract<ReviewSheet, { kind: 'range' }>,
       terminals?: readonly MobileReviewTerminalTab[]
@@ -202,6 +206,7 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
       if (!('comment' in saved)) {
         return saved.error
       }
+      clearSavedNote(saved.comment.body)
       sheets.closeSheet('range', sheet)
       await sendNoteNow(saved.comment, terminals)
       return null

@@ -83,7 +83,7 @@ export function useMobileSourceControlRunners(params: Params) {
     async (
       actionId: string,
       runner: () => Promise<void>,
-      options?: { clearCommitMessage?: boolean }
+      options?: { clearCommitMessage?: boolean; refreshOnError?: boolean }
     ) => {
       if (busyActionRef.current) {
         return false
@@ -110,6 +110,14 @@ export function useMobileSourceControlRunners(params: Params) {
         triggerError()
         const text = translate('sourceControl.runners.actionFailed', 'Source control action failed')
         setActionError(err instanceof Error ? err.message : text)
+        if (options?.refreshOnError) {
+          // Keep the reason visible: a successful reload clears the action error by default.
+          await loadStatus({
+            preserveReadyOnFailure: true,
+            force: true,
+            clearActionErrorOnSuccess: false
+          })
+        }
         return false
       } finally {
         if (busyActionRef.current === actionId) {
@@ -269,9 +277,16 @@ export function useMobileSourceControlRunners(params: Params) {
   const checkoutBranch = useCallback(
     async (branch: string) => {
       setShowBranchPicker(false)
-      await runGitAction('checkout', 'git.checkout', { branch })
+      // A host can report a switch that landed with files left behind; show the branch it is on.
+      await runGitWorkflow(
+        'checkout',
+        async () => {
+          await sendGitRequest<unknown>('git.checkout', { branch })
+        },
+        { refreshOnError: true }
+      )
     },
-    [runGitAction, setShowBranchPicker]
+    [runGitWorkflow, sendGitRequest, setShowBranchPicker]
   )
 
   const actionSheetRunners = useMobileSourceControlActionSheetRunners({

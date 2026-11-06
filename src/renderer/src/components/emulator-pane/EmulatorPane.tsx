@@ -1,3 +1,4 @@
+import { emulatorOpeningMessage } from './emulator-opening-message'
 import type { Tab } from '../../../../shared/tab-types'
 import { EmulatorPaneToolbar } from './emulator-pane-toolbar'
 import { EmulatorDeviceFrame } from './emulator-device-frame'
@@ -23,6 +24,7 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
     setSelectedUdid,
     loading,
     error,
+    selectionRequired,
     attach,
     markStreamLost,
     shutdown,
@@ -69,6 +71,11 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
         onRotate={() => void sendRotate()}
       />
 
+      {selectionRequired && (
+        <p role="status" className="border-b border-border px-3 py-2 text-xs text-muted-foreground">
+          {emulatorOpeningMessage(selectionRequired)}
+        </p>
+      )}
       {visibleError ? (
         <div className="border-b border-border bg-destructive/10 px-3 py-2 text-xs text-destructive">
           {visibleError}

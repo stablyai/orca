@@ -1,4 +1,4 @@
-import { callGitHubTargetOperation } from '@/lib/github-work-item-target-request'
+import { callGitHubTargetOperation } from '@/lib/work-items/github/github-work-item-target-request'
 import { requireActiveEnvironment } from './web-runtime-session'
 import { requireGitHubWorkItemTargetDetails } from '../../../../shared/github/work-item-target'
 import type { PreloadApi } from '../../../../preload/api-types'

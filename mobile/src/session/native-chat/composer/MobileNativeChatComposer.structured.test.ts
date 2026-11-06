@@ -36,6 +36,9 @@ import {
   MobileNativeChatDraftComposer
 } from './MobileNativeChatComposer'
 vi.mock('../../../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
+vi.mock('./MobileNativeChatContextUsageRing', () => ({
+  useMobileNativeChatContextRing: () => ({ barProps: {}, ring: null })
+}))
 vi.mock('../../../platform/media-picker', () => ({
   useMediaPicker: () => ({ pickImages: async () => [] })
 }))
@@ -212,6 +215,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
           ...drafts,
           agent: 'codex',
           sendStructured: session.sendWithOutcome,
+          holdUnconfirmed: session.holdUnconfirmed,
           onSendError: vi.fn()
         })
         const image = useMobileNativeChatImageAttachments({
@@ -321,6 +325,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
           ...drafts,
           agent,
           sendStructured: session.sendWithOutcome,
+          holdUnconfirmed: session.holdUnconfirmed,
           onSendError: vi.fn()
         })
         return createElement(MobileNativeChatDraftComposer, {
@@ -438,6 +443,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
         ...drafts,
         agent: 'claude',
         sendStructured: session.sendWithOutcome,
+        holdUnconfirmed: session.holdUnconfirmed,
         onSendError: vi.fn()
       })
       const image = useMobileNativeChatImageAttachments({

@@ -193,6 +193,11 @@
       "sendQueueHint": "Se ejecuta después del turno actual",
       "sendSteerHint": "Entra en lo que el agente está haciendo ahora"
     },
+    "contextUsage": {
+      "label": "Contexto: {{used}} de {{window}} tokens, {{percent}} % usados",
+      "title": "Contexto",
+      "estimated": "Estimado a partir de la última respuesta."
+    },
     "composerAttachments": {
       "attachedImage": "Imagen adjunta",
       "file": "Archivo",
@@ -224,10 +229,22 @@
       "clipboardRejected": "El portapapeles rechazó el texto.",
       "copyFailed": "No se pudo copiar",
       "copyMessage": "Copiar mensaje",
-      "selectText": "Seleccionar texto"
+      "selectText": "Seleccionar texto",
+      "rewind": "Rebobinar hasta aquí"
     },
     "nativeChatImageViewer": {
-      "closeImage": "Cerrar imagen"
+      "closeImage": "Cerrar imagen",
+      "imageActions": "Acciones de imagen",
+      "copyImage": "Copiar imagen",
+      "saveImage": "Guardar imagen",
+      "share": "Compartir…",
+      "imageCopied": "Imagen copiada",
+      "imageSaved": "Imagen guardada",
+      "copyFailed": "No se pudo copiar la imagen",
+      "saveFailed": "No se pudo guardar la imagen",
+      "shareFailed": "No se pudo compartir la imagen",
+      "photosAccessDenied": "Permite que Orca añada fotos en Ajustes",
+      "imageTooLarge": "Esta imagen es demasiado grande"
     },
     "nativeChatProse": {
       "attachedImage": "Imagen adjunta",
@@ -286,7 +303,9 @@
       "permissionDenied": "{{agent}} denegó el permiso. Ver detalles.",
       "safetyReview": "{{agent}} notificó una advertencia de revisión de seguridad. Ver detalles.",
       "truncatedResponse": "Respuesta del proveedor truncada (tamaño original: {{bytes}} bytes).",
-      "modelFallback": "Claude cambió de modelo: {{from}} → {{to}}."
+      "modelFallback": "Claude cambió de modelo: {{from}} → {{to}}.",
+      "signIn": "Iniciar sesión",
+      "signInHint": "Abre una terminal en el ordenador que ejecuta este chat"
     },
     "orcaStop": {
       "canContinue": "Puedes continuar en esta conversación.",
@@ -295,6 +314,13 @@
       "remote": "Orca en {{machine}} se detuvo mientras esta respuesta estaba en curso.",
       "unnamedServer": "el servidor remoto",
       "update": "Orca en {{machine}} se reinició para actualizarse mientras esta respuesta estaba en curso."
+    },
+    "interruptedContinue": {
+      "failed": "No se pudo continuar este chat. Inténtalo de nuevo o envía un mensaje.",
+      "explanation": "Continúa y el agente comprobará primero si su último paso terminó."
+    },
+    "sendError": {
+      "dismiss": "Descartar"
     },
     "permission": {
       "needsAccessTo": "Necesita acceso a: ",
@@ -552,12 +578,19 @@
     "usageLimit": {
       "reached": "{{agent}} alcanzó su límite de uso.",
       "reachedNamed": "{{agent}} alcanzó su límite {{window}}.",
-      "resetsAt": "Próximo restablecimiento: {{when}}.",
       "theAgent": "El agente",
       "windowCredits": "de uso adicional",
       "windowSession": "de sesión",
       "windowWeekly": "semanal",
-      "windowWeeklyModel": "semanal del modelo"
+      "windowWeeklyModel": "semanal del modelo",
+      "switchAccount": "Cambiar de cuenta",
+      "autoContinueCancelFailed": "No se pudo cancelar la continuación automática. Inténtalo de nuevo.",
+      "autoContinueCancel": "No continuar",
+      "statusResetAt": "Se restableció a las {{time}}",
+      "statusResetsAt": "Se restablece a las {{time}}",
+      "statusContinuesShortly": "Orca continuará en breve",
+      "statusContinuesThen": "Orca continuará entonces",
+      "statusWontContinue": "Orca no continuará automáticamente"
     },
     "useImageUpload": {
       "attachFailed": "No se pudo adjuntar",
@@ -586,9 +619,52 @@
       "byteSize": "{{size}} bytes",
       "saveUpdate": "Guardar estará disponible en una actualización del teléfono.",
       "fullCopySaveUpdate": "Copiar todo y Guardar para este adjunto estarán disponibles en una actualización del teléfono."
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}} se está reconectando…",
+      "stopped": "{{hostName}} está detenido. Inícialo en tu ordenador.",
+      "server": "El servidor",
+      "unavailable": "{{hostName}} no está disponible desde tu teléfono. Abre uno de sus proyectos en tu ordenador."
+    },
+    "goal": {
+      "chip": "Objetivo",
+      "exitMode": "Salir del modo objetivo",
+      "placeholder": "Describe tu objetivo y define resultados medibles para obtener mejores resultados",
+      "pursuing": "Objetivo en curso",
+      "set": "Objetivo establecido",
+      "paused": "Objetivo en pausa",
+      "blocked": "Objetivo bloqueado",
+      "limited": "Objetivo limitado",
+      "clear": "Borrar objetivo",
+      "expand": "Mostrar objetivo completo",
+      "collapse": "Ocultar objetivo completo",
+      "attachmentsUnsupported": "Elimina los adjuntos antes de establecer un objetivo.",
+      "pause": "Pausar",
+      "resume": "Reanudar"
+    },
+    "rewind": {
+      "title": "¿Rebobinar hasta aquí?",
+      "confirmation": "¿Descartar este mensaje y todo lo que viene después? El mensaje vuelve al compositor para que puedas editarlo y reenviarlo. Los cambios de archivos en disco se conservan.",
+      "confirm": "Rebobinar",
+      "unsupported": "Este chat no puede volver a un mensaje anterior.",
+      "historyNotPaginated": "Este chat de Codex más antiguo no puede volver a un mensaje anterior. Inicia un chat nuevo para usar Rebobinar hasta aquí.",
+      "busy": "Disponible cuando el agente esté inactivo y nada en este chat esté esperándote.",
+      "staleEpoch": "La conversación cambió. Revisa los últimos mensajes e inténtalo de nuevo.",
+      "invalidTarget": "La conversación no puede volver a este mensaje. No se cambió nada.",
+      "historyLimit": "Esta conversación es demasiado larga para retroceder en ella. No se cambió nada.",
+      "providerRefused": "El agente no pudo volver a este mensaje.",
+      "proofMismatch": "El historial del agente no coincidía con este chat. Revisa la conversación antes de continuar.",
+      "outcomeUnknown": "Orca no pudo confirmar si la conversación volvió a un mensaje anterior. Lo comprobará antes de enviar tu próximo mensaje.",
+      "refused": "Orca no pudo volver a este mensaje. Revisa la conversación antes de continuar.",
+      "unavailable": "Espera a que el chat termine de conectarse.",
+      "outcomeUnknownReturned": "Orca no pudo confirmar si la conversación volvió a este mensaje. Tu mensaje está de nuevo en el compositor y Orca comprobará la conversación antes de enviar tu próximo mensaje.",
+      "timeout": "El chat no se actualizó después de volver a este mensaje. Vuelve a abrirlo para ver lo más reciente.",
+      "pending": "Espera a que la conversación vuelva al mensaje anterior."
     }
   },
   "common": {
+    "details": "Detalles",
+    "hideDetails": "Ocultar detalles",
     "back": "Atrás",
     "cancel": "Cancelar",
     "close": "Cerrar",
@@ -789,8 +865,8 @@
       "pairingInvalid": "Emparejamiento no válido",
       "pairingTemporarilyUnavailable": "Emparejamiento no disponible temporalmente",
       "repairHint": "Toca para volver a emparejar tu escritorio.",
+      "sameNetworkOnlyHint": "Solo se conecta en la misma red Wi-Fi o por Tailscale. Para conectarte desde cualquier lugar, inicia sesión en tu escritorio y vuelve a emparejar",
       "unlockHint": "Desbloquea tu teléfono y toca para reintentar.",
-      "updateDesktopHint": "Actualiza Orca en el escritorio e inicia sesión para conectarte desde cualquier lugar.",
       "worktreeAccessibilitySummary": "{{summary}}, activos: {{activeCount}}"
     },
     "hostDiagnosticsLink": {
@@ -818,7 +894,16 @@
     },
     "markdownBlocks": {
       "copyCode": "Copiar código",
-      "openImage": "Abrir imagen"
+      "openImage": "Abrir imagen",
+      "wrapLines": "Ajustar líneas",
+      "disableLineWrap": "Desactivar ajuste de línea"
+    },
+    "markdownCallout": {
+      "note": "Nota",
+      "tip": "Consejo",
+      "important": "Importante",
+      "warning": "Advertencia",
+      "caution": "Precaución"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Cerrar panel"
@@ -1248,6 +1333,10 @@
       "previewFile": "Previsualizar el archivo {{name}}",
       "retryLoading": "Reintentar cargar {{path}}",
       "unavailable": "No disponible en el móvil"
+    },
+    "fileExplorerRowActions": {
+      "copyName": "Copiar nombre",
+      "copyRelativePath": "Copiar ruta relativa"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Copiar código fuente Markdown cargado",
@@ -1824,13 +1913,8 @@
       "noUpdate": "Sin actualizaciones desde hace {{value0}}"
     },
     "agentMessageAttribution": {
-      "from": "De {{sender}}",
-      "fromMore": "De {{sender}} +{{count}}",
-      "fromUnnamed": "De un agente",
-      "messageFrom": "Mensaje de {{sender}}",
-      "messageFromMore": "Mensaje de {{sender}} +{{count}}",
-      "messageFromUnnamed": "Mensaje de un agente",
-      "unnamedSender": "un agente"
+      "unnamedSender": "un agente",
+      "fromSender": "De"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "No se pudo crear la terminal",
@@ -1860,6 +1944,7 @@
       "countWorkflows_one": "{{count}} flujo de trabajo",
       "countWorkflows_other": "{{count}} flujos de trabajo",
       "detailsUnavailable": "Los detalles de la tarea no están disponibles para esta sesión.",
+      "outputFile": "Salida: {{value0}}",
       "groupAgents": "Agentes",
       "groupMonitors": "Monitores",
       "groupShell": "Shell",
@@ -2030,6 +2115,8 @@
       "managedAccountEnvOverride": "Este inicio de Claude define sus propias variables de inicio de sesión de Anthropic. Quítelas para usar una cuenta de Claude administrada.",
       "managedAccountUnsupported": "Mientras haya una cuenta de Claude agregada en WSL, los chats de Claude necesitan una cuenta de Claude de Windows.",
       "modelUnavailable": "{{agent}} no pudo usar {{detail}}. Elige otro modelo y vuelve a enviar el mensaje.",
+      "modelUnavailableUpdate": "{{agent}} no pudo usar {{detail}}. Actualiza {{agent}} a {{minimumVersion}} o posterior para conservarlo tras un reinicio, o elige otro modelo y vuelve a enviar el mensaje.",
+      "modelNotSelected": "{{agent}} no tiene ningún modelo seleccionado. Revisa la selección de modelo y el inicio de sesión de {{agent}}, y vuelve a enviar el mensaje.",
       "noTurnToStop": "{{agent}} no tenía ningún turno en curso que detener.",
       "notDelivered": "Este mensaje no se entregó.",
       "notDeliveredSendAgain": "Este mensaje no se entregó. Vuelva a enviarlo para continuar.",
@@ -2213,8 +2300,7 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "No se pueden guardar comandos en un mensaje en cola.",
-      "editing": "Editando mensaje",
-      "editingAttributed": "Editando mensaje · {{attribution}}"
+      "editing": "Editando mensaje"
     },
     "quickCommandEditorForm": {
       "action": "Acción",
@@ -3296,7 +3382,8 @@
       "moreFields_one": "+{{count}} campo",
       "moreFields_other": "+{{count}} campos",
       "noItems": "No hay elementos en el proyecto",
-      "pullRequestSubtitle": "Pull request · {{repository}}{{number}}"
+      "pullRequestSubtitle": "Pull request · {{repository}}{{number}}",
+      "linkedPullRequestsOverflow": "+{{count}} más"
     },
     "githubProjectPickers": {
       "add": "Agregar",

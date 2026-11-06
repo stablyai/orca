@@ -1,6 +1,6 @@
 import { expect, vi, type Mock } from 'vitest'
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session/lifecycle/agent-session-record'
-import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import {
   closeProviderTimelineRigs,
   openProviderTimelineRig
@@ -9,7 +9,7 @@ import type { JsonlRpcAgentConnectionOptions } from '../jsonl-rpc/agent-connecti
 import { type JsonlRpcRecord, JsonlRpcResponseError } from '../jsonl-rpc/peer'
 import type { PiRpcConnection } from './rpc-session'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { PiRpcSessionAdapter, type PiRpcSessionAdapterDeps } from './rpc-session-adapter'
 import type { PiRpcResolvedLaunch } from './rpc-launch-resolution'
 

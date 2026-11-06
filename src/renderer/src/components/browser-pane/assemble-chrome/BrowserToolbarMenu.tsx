@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
+import { emitBrowserCookieImportToast } from '@/lib/browser/cookies/browser-cookie-import-toast'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { shouldShowBrowserImportHint } from './browser-import-hint-visibility'
@@ -19,7 +19,7 @@ import { BrowserToolbarMenuDropdown } from './browser-toolbar-menu-dropdown'
 import { BrowserToolbarProfileDialogs } from './browser-toolbar-profile-dialogs'
 import { translate } from '@/i18n/i18n'
 import type { BrowserChromeOverflowMenuProps } from './browser-chrome-folded-tools'
-import { browserCookieImportFailureText } from '@/lib/browser-cookie-import-error-copy'
+import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
 import { setBrowserPageAgentViewportSize } from '../host-guest/browser-page-viewport'
 
 type BrowserToolbarMenuProps = {
@@ -80,7 +80,13 @@ export function BrowserToolbarMenu({
   const [pendingSwitchProfileId, setPendingSwitchProfileId] = useState<string | null | undefined>(
     undefined
   )
-  const [menuOpen, setMenuOpen] = useState(false)
+  // Only expose the hidden Import Cookies row when the tour reaches its fallback step.
+  const [menuOpen, setMenuOpen] = useState(shouldForceMenuOpen)
+  const [prevShouldForceMenuOpen, setPrevShouldForceMenuOpen] = useState(shouldForceMenuOpen)
+  if (prevShouldForceMenuOpen !== shouldForceMenuOpen) {
+    setPrevShouldForceMenuOpen(shouldForceMenuOpen)
+    setMenuOpen(shouldForceMenuOpen)
+  }
   const [siteDisplay, setSiteDisplay] = useState<BrowserPageSiteDisplay | null>(null)
   const mountedRef = useMountedRef()
 
@@ -111,11 +117,6 @@ export function BrowserToolbarMenu({
       }
     })
   }, [browserPageId, menuOpen, mountedRef])
-
-  useLayoutEffect(() => {
-    // Only expose the hidden Import Cookies row when the tour reaches its fallback step.
-    setMenuOpen(shouldForceMenuOpen)
-  }, [shouldForceMenuOpen])
 
   const handleMenuOpenChange = (open: boolean): void => {
     if (shouldForceMenuOpen && !open) {

@@ -2,9 +2,9 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { getWorktreeLineageDropTargetId } from './worktree-lineage-drag-drop'
+import { getWorktreeLineageDropTargetIdentity } from './worktree-lineage-drag-drop'
 
-describe('getWorktreeLineageDropTargetId', () => {
+describe('getWorktreeLineageDropTargetIdentity', () => {
   it.each([true, false])(
     'keeps descendants out of the ancestor hit zone (inline content: %s)',
     (insideParentContent) => {
@@ -23,15 +23,17 @@ describe('getWorktreeLineageDropTargetId', () => {
       childRow.getBoundingClientRect = () => ({ top: 220, bottom: 300 }) as DOMRect
 
       expect(
-        getWorktreeLineageDropTargetId({ container, target: child.target, pointerY: 250 })
-      ).toBe('child')
-      expect(getWorktreeLineageDropTargetId({ container, target: childRow, pointerY: 250 })).toBe(
-        'child'
-      )
+        getWorktreeLineageDropTargetIdentity({ container, target: child.target, pointerY: 250 })
+      ).toBe('ssh:box|child')
       expect(
-        getWorktreeLineageDropTargetId({ container, target: children, pointerY: 250 })
+        getWorktreeLineageDropTargetIdentity({ container, target: childRow, pointerY: 250 })
+      ).toBe('ssh:box|child')
+      expect(
+        getWorktreeLineageDropTargetIdentity({ container, target: children, pointerY: 250 })
       ).toBeNull()
-      expect(getWorktreeLineageDropTargetId({ container, target, pointerY: 120 })).toBe('parent')
+      expect(getWorktreeLineageDropTargetIdentity({ container, target, pointerY: 120 })).toBe(
+        'ssh:box|parent'
+      )
     }
   )
 })
@@ -49,6 +51,7 @@ function makeTarget(args: {
   const container = document.createElement('div')
   const row = document.createElement('div')
   row.setAttribute('data-worktree-drag-id', args.worktreeId)
+  row.setAttribute('data-worktree-host-identity', `ssh:box|${args.worktreeId}`)
   const content = document.createElement('div')
   content.setAttribute('data-worktree-card-parent-content', '')
   content.getBoundingClientRect = () => ({ top: args.top, bottom: args.bottom }) as DOMRect

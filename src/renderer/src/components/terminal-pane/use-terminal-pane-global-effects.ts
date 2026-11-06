@@ -15,7 +15,7 @@ import { surfaceStaleAgentRow } from './stale-agent-row'
 import { useAppStore } from '@/store'
 import { useTerminalScrollVisibilityMemory } from './use-terminal-scroll-visibility-memory'
 import { useTerminalContainerFitSync } from './use-terminal-container-fit-sync'
-import { handleTerminalProgrammaticTextPaste } from './terminal-programmatic-text-paste'
+import { handleTerminalProgrammaticTextPaste } from './input/paste/terminal-programmatic-text-paste'
 import {
   hideTerminalVisibility,
   resumeTerminalVisibility,

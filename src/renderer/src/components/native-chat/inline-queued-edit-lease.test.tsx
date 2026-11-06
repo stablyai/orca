@@ -22,7 +22,7 @@ import { readNativeChatDraftCache, writeNativeChatDraftCache } from './native-ch
 let queuedEditHost: QueuedEditHostFixtureModule['queuedEditHost']
 beforeAll(async () => {
   const fixtures = await vi.importActual<QueuedEditHostFixtureModule>(
-    '../../../../main/native-chat/agent-session-journal/queued-edit-host.test-fixture'
+    '../../../../main/native-chat/agent-session-journal/queued-messages/queued-edit-host.test-fixture'
   )
   queuedEditHost = fixtures.queuedEditHost
 })

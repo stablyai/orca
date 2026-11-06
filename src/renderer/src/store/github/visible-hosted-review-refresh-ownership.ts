@@ -2,7 +2,8 @@ import type { AppState } from '../types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { GitHubPRRefreshCandidate } from '../../../../shared/github/pull-request-refresh-types'
 import { getHostedReviewCacheKey } from '../slices/hosted-review-cache-identity'
-import { findIndexedRepoOwnerForHost } from '@/lib/worktree-runtime-owner-index'
+import '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 
 export function shouldCoordinateVisibleGitHubReview(

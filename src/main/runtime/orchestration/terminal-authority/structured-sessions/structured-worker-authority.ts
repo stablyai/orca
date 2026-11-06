@@ -5,8 +5,8 @@ import type { AgentSessionConversationView } from '../../../../../shared/agent-s
 import { isOrcaSessionId, type OrcaSessionId } from '../../../../../shared/orca-session-address'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../shared/orchestration-session-caller-codes'
 import type { RuntimeTerminalState } from '../../../../../shared/runtime-terminal-contracts'
-import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { canonicalOrcaSessionId } from '../../canonical-orca-session-id'
+import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { canonicalOrcaSessionId } from '../../addressing/session-lineage/canonical-orca-session-id'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { OrchestrationError } from '../../orchestration-error'
 import {
@@ -16,7 +16,7 @@ import {
   type AgentSessionRecordReader,
   type LineageRunningSession,
   type RunningStructuredSession
-} from '../../structured-session-lineage'
+} from '../../addressing/session-lineage/structured-session-lineage'
 import {
   captureStructuredWorkerTabVisibility,
   structuredSessionTabRetired,

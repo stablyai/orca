@@ -1,4 +1,4 @@
-import type { RunRow } from '../../../../orchestration/types'
+import type { RunRow } from '../../../../orchestration/db/orchestration-records'
 
 // Hide routing-only home_database/coordinator_pane_key and the unread coordinator session id; adding it later changes the wire contract.
 const INTERNAL_RUN_COLUMNS = [

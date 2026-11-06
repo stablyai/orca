@@ -16,14 +16,14 @@ import { resolveLocalProjectRuntimeForWorktreeId } from '../../../workspaces/exe
 import type { AgentDetectionHost } from '../../../preflight/workspace-agent-detection'
 import { resolveRuntimeAgentDetectionHost } from '../../runtime-agent-detection-host'
 import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-records'
-import { resolveRuntimeTerminalOrchestrationCliCommand } from '../../orchestration/cli-command'
+import { resolveRuntimeTerminalOrchestrationCliCommand } from '../../orchestration/workers/launch/orchestration-cli-command'
 import {
   readOrchestrationFleetAgentStatusSnapshot,
   readAgentOrchestrationProjectionRecords,
   readCapturedOrchestrationFleetAgentStatusSnapshot
 } from '../../orchestration-fleet-agent-status-snapshot'
 import { resolveStructuredWorkerAuthority } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
-import { matchesProcessIncarnation } from '../../orchestration/worker-terminal-process-liveness'
+import { matchesProcessIncarnation } from '../../orchestration/terminal-authority/release/worker-terminal-process-liveness'
 import { claimIdleShellPrompt } from '../input/idle-shell-prompt-claim'
 
 export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller {
@@ -194,6 +194,7 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
     // Why: collect before the delete below, which drops the restored-authority receipt a
     // receipt-only pane's key comes from.
     const paneKeys = this.collectPaneKeysForPty(ptyId)
+    const changed = Boolean(pty.launchToken || pty.launchIncarnationId)
     this.restoredOrchestrationAuthorityByPtyId.delete(ptyId)
     pty.launchToken = null
     pty.launchIncarnationId = null
@@ -201,6 +202,9 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
     pty.launchCommandAgent = null
     for (const paneKey of paneKeys) {
       this.retireAgentHookCompatibilityAuthorityFn?.(paneKey)
+    }
+    if (changed) {
+      this.refreshAgentSenderAssociations()
     }
   }
 

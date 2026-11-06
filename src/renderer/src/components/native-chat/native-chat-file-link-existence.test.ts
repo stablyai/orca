@@ -1,13 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ParsedTerminalFileLink } from '../../../../shared/terminal/links/terminal-links'
-import type * as FileLinkTargetModule from '@/components/terminal-pane/terminal-file-link-target'
-import type { FileLinkPathExistence } from '@/components/terminal-pane/terminal-file-link-target'
-import type * as FilePathMappingModule from '@/components/terminal-pane/terminal-file-path-mapping'
-import { TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES } from '@/components/terminal-pane/terminal-path-exists-cache'
-import {
-  createNativeChatFileLinkExistence,
-  UNVERIFIABLE_RETRY_DELAYS_MS
-} from './native-chat-file-link-existence'
+import type * as FileLinkTargetModule from '@/components/terminal-pane/links/files/terminal-file-link-target'
+import type { FileLinkPathExistence } from '@/components/terminal-pane/links/files/terminal-file-link-target'
+import type * as FilePathMappingModule from '@/components/terminal-pane/host-files/terminal-file-path-mapping'
+import { RECENT_PATH_ANSWERS_MAX } from '../../../../shared/recent-path-answers'
+import { createNativeChatFileLinkExistence } from './native-chat-file-link-existence'
+import { UNVERIFIABLE_RETRY_DELAYS_MS } from '../../../../shared/native-chat/native-chat-file-link-existence'
 
 const connection = vi.hoisted(() => ({
   resolved: true,
@@ -19,26 +17,32 @@ vi.mock('@/lib/connection-context', () => ({
   isWorktreeConnectionResolved: () => connection.resolved
 }))
 
-vi.mock('@/components/terminal-pane/terminal-file-link-target', async (importOriginal) => ({
-  ...(await importOriginal<typeof FileLinkTargetModule>()),
-  resolveFileLinkTarget: (link: ParsedTerminalFileLink) => ({
-    absolutePath: /^[\\/]{2}/.test(link.pathText) ? link.pathText : `/repo/${link.pathText}`,
-    line: null,
-    column: null,
-    fileContext: { target: { kind: 'local' }, sourceHostResolved: connection.sourceHostResolved },
-    isRemoteRuntimePath: false,
-    cacheKey: link.pathText,
-    isKnownWorktreeRoot: link.pathText === 'ROOT'
+vi.mock(
+  '@/components/terminal-pane/links/files/terminal-file-link-target',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof FileLinkTargetModule>()),
+    resolveFileLinkTarget: (link: ParsedTerminalFileLink) => ({
+      absolutePath: /^[\\/]{2}/.test(link.pathText) ? link.pathText : `/repo/${link.pathText}`,
+      line: null,
+      column: null,
+      fileContext: { target: { kind: 'local' }, sourceHostResolved: connection.sourceHostResolved },
+      isRemoteRuntimePath: false,
+      cacheKey: link.pathText,
+      isKnownWorktreeRoot: link.pathText === 'ROOT'
+    })
   })
-}))
+)
 
-vi.mock('@/components/terminal-pane/terminal-file-path-mapping', async (importOriginal) => ({
-  ...(await importOriginal<typeof FilePathMappingModule>()),
-  getTerminalFileContext: () => ({
-    target: { kind: 'local' },
-    sourceHostResolved: connection.currentOwnerResolved
+vi.mock(
+  '@/components/terminal-pane/host-files/terminal-file-path-mapping',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof FilePathMappingModule>()),
+    getTerminalFileContext: () => ({
+      target: { kind: 'local' },
+      sourceHostResolved: connection.currentOwnerResolved
+    })
   })
-}))
+)
 
 const host = { cwd: '/repo', worktreeId: 'wt-1', worktreePath: '/repo', connectionId: null }
 
@@ -167,7 +171,7 @@ describe('createNativeChatFileLinkExistence', () => {
     const existence = createNativeChatFileLinkExistence(host, pathExists)
     const { watcher } = watching(existence)
     const names = Array.from(
-      { length: TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES + 100 },
+      { length: RECENT_PATH_ANSWERS_MAX + 100 },
       (_, index) => `file-${index}.md`
     )
     const render = (): boolean[] => names.map((name) => watcher.getSnapshot().check(link(name)))

@@ -22,7 +22,12 @@ import {
   extractSessionForTransfer
 } from './profile-project-session-transfer'
 import { collectTransferWorktreeIds } from './profile-project-transfer-worktree-ids'
-import { rekeyWorktreeId, rekeyWorkspaceKey } from './profile-project-worktree-identity'
+import {
+  ownerKeyBelongsToRepo,
+  rekeyWorktreeId,
+  rekeyWorkspaceKey
+} from './profile-project-worktree-identity'
+import { assertNoCrossStoreLinkedWorkspaceInMove } from '../../shared/worktree/cross-store-lineage-move-refusal'
 
 export type TransferPayload = {
   repo: Repo
@@ -125,6 +130,15 @@ function rekeyWorkspaceLineageRecord(
   return next
 }
 
+export function assertRepoHasNoCrossStoreLinkedWorkspace(
+  state: TransferProfileState,
+  repoId: string
+): void {
+  assertNoCrossStoreLinkedWorkspaceInMove(state, (childKey) =>
+    ownerKeyBelongsToRepo(childKey, repoId)
+  )
+}
+
 export function createTransferPayload(args: {
   sourceState: TransferProfileState
   sourceRepo: Repo
@@ -134,6 +148,7 @@ export function createTransferPayload(args: {
   const { sourceState, sourceRepo, targetRepo, includeSessions } = args
   const oldRepoId = sourceRepo.id
   const newRepoId = targetRepo.id
+  assertRepoHasNoCrossStoreLinkedWorkspace(sourceState, oldRepoId)
   const worktreeIds = collectTransferWorktreeIds(sourceState, oldRepoId)
   const targetProjection = projectHostSetupProjectionFromRepos([targetRepo])
   const targetProjectId =

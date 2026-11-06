@@ -35,7 +35,7 @@ vi.mock('@/store', async () => {
   return { useAppStore }
 })
 
-vi.mock('@/lib/worktree-runtime-owner', () => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: (state: MockAppState) =>
     state.runtimeEnvironmentId ? `runtime:${state.runtimeEnvironmentId}` : 'local'
 }))
