@@ -257,7 +257,12 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
             type="button"
             data-native-chat-steer-preview={steerPreview}
             onMouseDown={(event) => event.preventDefault()}
-            onClick={onSteerPreview}
+            onClick={(event) => {
+              // As Send: the label can change between a double-click's presses (Steer, then Steer queued).
+              if (event.detail <= 1) {
+                onSteerPreview?.()
+              }
+            }}
             size="sm"
           >
             {steerPreview === 'queue' ? (
