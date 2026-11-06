@@ -1,9 +1,9 @@
 import type { RuntimeStatus, RuntimeWorktreeRecord } from '../../shared/runtime-types'
-import { isWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import type {
   CrossStoreInferredSource,
   CrossStoreParentRef
 } from '../../shared/worktree/lineage-types'
+import { crossStoreParentRefOfRow } from '../../shared/worktree/cross-store-parent-identity'
 import {
   assertCrossStoreLineageSupported,
   supportsCrossStoreLineage
@@ -47,19 +47,14 @@ async function readCallerParentRef(
   ).result.worktree
   const { installationId } = (await local.call<{ installationId?: string }>('worktree.lineageList'))
     .result
-  if (isWorkspaceKey(parent.id) || !parent.instanceId || !installationId) {
+  const ref = crossStoreParentRefOfRow(installationId, parent)
+  if (!ref) {
     throw new RuntimeClientError(
       'invalid_argument',
-      isWorkspaceKey(parent.id)
-        ? "A folder workspace can't parent a workspace on another machine yet."
-        : "Couldn't confirm the parent's machine or workspace identity. Refresh it and try again."
+      "Couldn't confirm the parent's machine or workspace identity. Refresh it and try again."
     )
   }
-  return {
-    installationId,
-    workspaceKey: worktreeWorkspaceKey(parent.id),
-    instanceId: parent.instanceId
-  }
+  return ref
 }
 
 function serverLabel(client: RuntimeClient): string {

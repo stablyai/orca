@@ -15,6 +15,7 @@ import {
   worktreeWorkspaceKey
 } from '../../../../shared/workspace-scope'
 import { sharesResolvedWorktreeLineageBoundary } from '../../../../shared/resolved-worktree-lineage'
+import { crossStoreParentRefOfRow } from '../../../../shared/worktree/cross-store-parent-identity'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import type { RuntimeStore } from '../../runtime-store-contract'
 import {
@@ -139,19 +140,17 @@ export class RuntimeWorktreeLineageController {
       }
     }
     const { parent, capture } = resolution
-    if (parent.type !== 'worktree') {
-      return { reason: "a folder workspace can't parent a workspace on another machine yet." }
-    }
-    if (!parent.instanceId || !installationId) {
+    const ref = crossStoreParentRefOfRow(
+      installationId,
+      parent.type === 'folder' ? { id: parent.workspaceKey } : parent.worktree
+    )
+    if (!ref) {
       return { reason: "Orca couldn't confirm this workspace's identity." }
     }
     if (!isCrossStoreInferredSource(capture.source)) {
       return { reason: "Orca couldn't tell which workspace this command runs in." }
     }
-    return {
-      parent: { installationId, workspaceKey: parent.workspaceKey, instanceId: parent.instanceId },
-      source: capture.source
-    }
+    return { parent: ref, source: capture.source }
   }
 
   /** This store's identity; the published descriptor reads the same file at the canonical path. */
