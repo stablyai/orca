@@ -24,7 +24,7 @@ import {
   type StructuredAgentSessionLogger
 } from './agent-session-wire/structured-agent-session-logger'
 
-/** null means unavailable/canceled: no failure to display or retry. */
+/** null means unavailable/canceled: no failure to display. */
 export type StructuredChatNameGeneration =
   | { name: string }
   | { error: string; errorCode?: string; failureOutput?: AgentGenerationFailureOutput }
@@ -48,14 +48,10 @@ export type StructuredChatNamingDeps = {
   ) => Promise<StructuredChatNameGeneration>
   onNamed: (workspaceId: string, sessionId: string) => void
   logger: StructuredAgentSessionLogger
-  wait?: (ms: number) => Promise<void>
 }
 
-const GENERATION_RETRY_DELAYS_MS = [2000, 4000]
 const NAMING_ERROR_LIMIT = 1024
 const FAILURE_OUTPUT_ENTRIES = 32
-
-const waitFor = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
 type NamingStore = NonNullable<ReturnType<StructuredChatNamingDeps['getStore']>>
 type NamingRunFailure = Exclude<StructuredChatNameGeneration, null | { name: string }>
@@ -108,7 +104,6 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
         request.record,
         firstPrompt,
         request.record.conversationName ?? '',
-        request.automatic ? GENERATION_RETRY_DELAYS_MS : [],
         () => applicable(request)
       )
       const store = deps.getStore()
@@ -152,39 +147,28 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
     record: AgentSessionRecord,
     firstPrompt: string,
     forName: string,
-    retryDelays: readonly number[],
     stillCurrent: () => boolean
   ): Promise<string | null> {
     attempted.set(record.sessionId, contextId(record))
-    for (let attempt = 0; stillCurrent(); attempt += 1) {
-      let failure: NamingRunFailure
-      try {
-        const result = await deps.generate(record, firstPrompt, stillCurrent)
-        if (!result) {
-          return null
-        }
-        if ('name' in result && result.name) {
-          return result.name
-        }
-        failure = 'error' in result ? result : chatNamingFailure('noName')
-      } catch (error) {
-        warn(record.sessionId, error)
-        failure = chatNamingFailure('agentNotRun')
-      }
-      if (!stillCurrent()) {
+    if (!stillCurrent()) {
+      return null
+    }
+    let failure: NamingRunFailure
+    try {
+      const result = await deps.generate(record, firstPrompt, stillCurrent)
+      if (!result) {
         return null
       }
-      const delay = retryDelays[attempt]
-      if (delay === undefined) {
-        if (stillCurrent()) {
-          fail(record, forName, failure)
-        }
-        return null
+      if ('name' in result && result.name) {
+        return result.name
       }
-      await (deps.wait ?? waitFor)(delay)
-      if (!stillCurrent()) {
-        return null
-      }
+      failure = 'error' in result ? result : chatNamingFailure('noName')
+    } catch (error) {
+      warn(record.sessionId, error)
+      failure = chatNamingFailure('agentNotRun')
+    }
+    if (stillCurrent()) {
+      fail(record, forName, failure)
     }
     return null
   }

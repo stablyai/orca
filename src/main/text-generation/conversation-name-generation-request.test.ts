@@ -123,3 +123,34 @@ describe('generateConversationName', () => {
     })
   })
 })
+
+it.each([
+  [
+    'claude',
+    'haiku',
+    'You cannot use --strict-mcp-config when an enterprise MCP config is present'
+  ],
+  ['opencode', 'provider/model', 'Unrecognized flag: --variant in command opencode run'],
+  ['copilot', 'gpt-5.4', 'Error: Model "gpt-5.4" from --model flag is not available.']
+] as const)(
+  'does not retry or substitute the selected %s naming recipe after failure',
+  async (agentId, model, stderr) => {
+    const calls: string[][] = []
+    const result = await generateConversationNameFromContext(
+      { firstPrompt: 'Fix login' },
+      { agentId, model, thinkingLevel: 'high' },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async (plan) => {
+          calls.push(plan.args)
+          return { stdout: '', stderr, exitCode: 1, timedOut: false }
+        }
+      }
+    )
+    expect(result.success).toBe(false)
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toContain(model)
+  }
+)
