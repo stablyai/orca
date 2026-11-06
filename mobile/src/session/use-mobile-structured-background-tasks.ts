@@ -1,3 +1,5 @@
+import { agentSessionWriteNoticeParts } from '../../../src/shared/agent-session/failures/agent-session-refusal-notice'
+import { mobileAgentSessionWriteNoticeText } from './agent-session-write-notice-copy'
 import { useCallback, useMemo } from 'react'
 import type { AgentChildRowContext } from '../../../src/shared/agent-status/presentation/agent-child-row-model'
 import type { AgentSessionCancelResult } from '../../../src/shared/agent-session/agent-session-wire'
@@ -33,8 +35,9 @@ export function useMobileStructuredBackgroundTasks(args: {
   // Retained roster does not prove current liveness.
   connected: boolean
   mutate: MobileStructuredAgentMutate
+  onSendError: (message: string) => void
 }): MobileStructuredBackgroundTasks {
-  const { connected, mutate, sessionKey, state, turnId } = args
+  const { connected, mutate, onSendError, sessionKey, state, turnId } = args
   const { backgroundTasks, items, latestTurn } = state
   const view = useMemo(
     () =>
@@ -71,9 +74,16 @@ export function useMobileStructuredBackgroundTasks(args: {
         'agentSession.backgroundTask',
         { target }
       )
+      if (result.status === 'unknown') {
+        onSendError(
+          mobileAgentSessionWriteNoticeText(
+            agentSessionWriteNoticeParts({ kind: 'unconfirmed' }, 'background-task')
+          )
+        )
+      }
       return result.status === 'accepted' && result.value.backgrounded && result.sameFence
     },
-    [mutate, streamLive]
+    [mutate, onSendError, streamLive]
   )
   return useMemo(
     () => ({ sessionKey, view, rowContext, stop, background }),

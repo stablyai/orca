@@ -2612,6 +2612,8 @@
         "loadGitHubWorkFailed": "GitHub の作業項目を読み込めませんでした。",
         "gitlabViewIssues": "Issue",
         "gitlabViewMrs": "MR",
+        "gitlabInvolvementEveryone": "全員",
+        "gitlabInvolvementReviewing": "レビュー担当",
         "gitlabViewTodos": "自分の ToDo",
         "startWorkspaceFromMr": "MR {{number}} からワークスペースを開始",
         "startWorkspaceFromIssue": "Issue {{number}} からワークスペースを開始",
@@ -11281,7 +11283,7 @@
             "terminalRun": "ターミナルでコマンドを実行 (SSH を含む)"
           },
           "decisionFailed": "権限の選択を保存できませんでした。再試行してください。",
-          "fullAccessWarning": "フルアクセス：通常のプログラムとして実行され、ファイルの読み取り、ネットワークの使用、他のプログラムの実行ができます。",
+          "fullAccessWarning": "フルアクセス：通常のプログラムとして実行され、ファイルの読み取り、ネットワークの使用、他のプログラムの実行、ターミナルや Agent を含む Orca の操作ができます。",
           "uiWarning": "ビューを描画するため、公開元のコードを Orca 内で実行します。Orca はアクセスできる範囲を表示し、有効にする前に確認します。"
         },
         "PluginConsentProvenance": {
@@ -18646,6 +18648,9 @@
       "composer": {
         "send": "送信",
         "alternateSteerHint": "{{shortcut}} で今すぐ送信",
+        "previewQueue": "キューに入れる",
+        "previewSteer": "今すぐ送信",
+        "previewSteerQueued": "次を今すぐ送信",
         "alternateQueueHint": "{{shortcut}} でキューに入れる",
         "noPty": "ライブターミナルがありません - 再接続するには元に切り替えてください。",
         "locked": "入力は別のデバイスによって保持されます。",
