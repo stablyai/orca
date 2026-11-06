@@ -3,7 +3,7 @@ import {
   claudeModelFallbackLabels
 } from '../../../../../src/shared/native-chat/claude-model-fallback'
 import { useContext, useId, useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react-native'
 import { MobileNativeChatInterruptedContinueButton } from './MobileNativeChatInterruptedContinueButton'
 import {
@@ -45,7 +45,7 @@ import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollVi
 import { toolStyles } from './mobile-native-chat-tool-styles'
 import { MobileNativeChatUsageLimitStatus } from './MobileNativeChatUsageLimitStatus'
 import { MobileNativeChatNoticeDisclosure } from './MobileNativeChatNoticeDisclosure'
-import { SheetPrimaryButton } from '../../../components/SheetPrimaryButton'
+import { sheetPrimaryButtonStyles } from '../../../components/SheetPrimaryButton'
 
 function toneColor(tone: NativeChatNoticeTone): string {
   return { warning: colors.statusAmber, error: colors.statusRed, notice: colors.textMuted }[tone]
@@ -282,16 +282,23 @@ export function MobileNativeChatNoticeRow({
           {continueOffered ? (
             <MobileNativeChatInterruptedContinueButton onPress={continuation.continueNow} />
           ) : signInCommand && runInTerminal ? (
-            <View style={styles.action}>
-              <SheetPrimaryButton
-                label={t('chat.notice.signIn', 'Sign in')}
-                accessibilityHint={t(
-                  'chat.notice.signInHint',
-                  'Opens a terminal on the computer running this chat'
-                )}
-                onPress={() => runInTerminal(signInCommand)}
-              />
-            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityHint={t(
+                'chat.notice.signInHint',
+                'Opens a terminal on the computer running this chat'
+              )}
+              onPress={() => runInTerminal(signInCommand)}
+              style={({ pressed }) => [
+                sheetPrimaryButtonStyles.button,
+                styles.action,
+                pressed && sheetPrimaryButtonStyles.pressed
+              ]}
+            >
+              <Text style={sheetPrimaryButtonStyles.label}>
+                {t('chat.notice.signIn', 'Sign in')}
+              </Text>
+            </Pressable>
           ) : null}
           <MobileNativeChatUsageLimitStatus notice={notice} fontScale={fontScale} />
           {detail || payload ? (

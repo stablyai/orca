@@ -10,7 +10,6 @@ type SheetPrimaryButtonProps = {
   disabled?: boolean
   busy?: boolean
   testID?: string
-  accessibilityHint?: string
   /** Merge keeps desktop's merge green for the one action that lands a pull request. */
   tone?: 'default' | 'merge'
   icon?: LucideIcon
@@ -23,7 +22,6 @@ export function SheetPrimaryButton({
   disabled = false,
   busy = false,
   testID,
-  accessibilityHint,
   tone = 'default',
   icon: Icon
 }: SheetPrimaryButtonProps) {
@@ -32,16 +30,15 @@ export function SheetPrimaryButton({
   return (
     <Pressable
       style={({ pressed }) => [
-        styles.button,
-        tone === 'merge' && styles.merge,
-        pressed && styles.pressed,
-        disabled && !busy && styles.disabled
+        sheetPrimaryButtonStyles.button,
+        tone === 'merge' && sheetPrimaryButtonStyles.merge,
+        pressed && sheetPrimaryButtonStyles.pressed,
+        disabled && !busy && sheetPrimaryButtonStyles.disabled
       ]}
       disabled={disabled || busy}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled, busy }}
       testID={testID}
     >
@@ -50,7 +47,7 @@ export function SheetPrimaryButton({
       ) : (
         <>
           {Icon ? <Icon size={17} color={foreground} strokeWidth={2.2} /> : null}
-          <Text style={[styles.label, { color: foreground }]} numberOfLines={1}>
+          <Text style={[sheetPrimaryButtonStyles.label, { color: foreground }]} numberOfLines={1}>
             {label}
           </Text>
         </>
@@ -59,7 +56,7 @@ export function SheetPrimaryButton({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+export const sheetPrimaryButtonStyles = themedStyleSheet(() => ({
   button: {
     height: 48,
     borderRadius: radii.control,
