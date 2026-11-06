@@ -14,7 +14,7 @@ import { captureStructuredLaunchFirstTurn } from './structured-agent-session-lau
 import type { HostLaunchFirstTurn } from './structured-agent-session-launch-record'
 import {
   getStructuredLaunchStateBySessionId,
-  notifyStructuredLaunchListeners,
+  notifyStructuredLaunchIntentChanged,
   type StructuredLaunchState
 } from './structured-agent-session-launch-registry'
 
@@ -53,8 +53,8 @@ function saveFirstTurn(
   if (intent.hostLaunch) {
     intent.hostLaunch = { ...intent.hostLaunch, firstTurn }
   }
-  // Saved with the launch's row and shown: a failed save never holds the launch back.
-  notifyStructuredLaunchListeners()
+  // Saved with the launch's own row and shown: a failed save never holds the launch back.
+  notifyStructuredLaunchIntentChanged(intent)
 }
 
 /** Saves the choices the chat shows as the launch starts, so a reload can still finish them. */

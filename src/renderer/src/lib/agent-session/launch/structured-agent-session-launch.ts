@@ -30,7 +30,7 @@ import {
 import {
   getStructuredAgentSessionLaunchLifecycle,
   getStructuredLaunchStateBySessionId,
-  notifyStructuredLaunchListeners,
+  notifyStructuredLaunchStateChanged,
   setStructuredLaunchState,
   structuredLaunchIdentity,
   type StructuredLaunchState
@@ -93,7 +93,7 @@ function adoptPairedHostSeed(
     delete state.intent.seedOptions
   }
   state.selection = { ...selection, seed: seedOptions }
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchStateChanged(state)
 }
 
 function resetStructuredLaunchCallers(
@@ -132,7 +132,7 @@ function restartStructuredLaunchState(state: StructuredLaunchState, requested = 
   )
   trackLaunchSettlement(state, state.promise)
   trackStructuredLaunchConfirmationDeadline(state, state.promise)
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchStateChanged(state)
 }
 
 function joinStructuredLaunchState(
@@ -230,7 +230,7 @@ function structuredAgentLaunchState(
     promise: Promise.resolve({ sessionId: '', fence: 0 }),
     visibilityUnknown: false,
     cancelled: false,
-    onVisibilityChanged: notifyStructuredLaunchListeners,
+    onVisibilityChanged: () => notifyStructuredLaunchStateChanged(state),
     callers,
     selection: initialStructuredLaunchSelection(intent)
   }
@@ -250,7 +250,7 @@ function structuredAgentLaunchState(
   })
   trackStructuredLaunchPromptOutcome(state, caller)
   setStructuredLaunchState(state)
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchStateChanged(state)
   trackLaunchSettlement(state, state.promise)
   return { state, caller, joined: false }
 }
@@ -268,7 +268,7 @@ export function cancelStructuredAgentLaunch(worktreeId: string, sessionId: strin
   )
   discardStructuredAgentSessionChatSends(state.intent.sessionId)
   abandonStructuredAgentSessionLaunchIntent(state.intent)
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchStateChanged(state)
   return true
 }
 

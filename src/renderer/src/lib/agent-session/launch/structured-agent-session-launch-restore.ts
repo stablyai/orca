@@ -17,7 +17,10 @@ import { useAppStore } from '@/store/index'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import type { StructuredAgentLaunchPersistedRecord } from './structured-agent-session-launch-record'
-import { readStructuredAgentLaunchRecords } from './structured-agent-session-launch-persistence'
+import {
+  readStructuredAgentLaunchRecords,
+  structuredAgentLaunchRecordsRevision
+} from './structured-agent-session-launch-persistence'
 import {
   getStructuredAgentSessionLaunchOwner,
   getStructuredLaunchStateBySessionId
@@ -26,33 +29,100 @@ import {
   batchStructuredLaunchSurfaces,
   materializeStructuredLaunchSurface,
   openStructuredAgentSessionProvisionalTab,
-  reserveStructuredLaunchSlot
+  reserveStructuredLaunchSlot,
+  structuredLaunchTabShown
 } from './structured-agent-session-launch-surface'
+import type { AppState } from '@/store/types'
+import type { Worktree } from '../../../../../shared/worktree/types'
 
 export function restoreStructuredLaunchSurfaces(): void {
   restoreLaunchSurfaces(readStructuredAgentLaunchRecords())
 }
 
+type OwedHostLaunches = Map<ExecutionHostId, Map<string, StructuredAgentLaunchPersistedRecord[]>>
+// Saved host launches by host and workspace, derived from the saved rows and rebuilt only once
+// they change, so each listing visits just the launches in the workspaces it names.
+let owedIndex: { revision: number; owed: OwedHostLaunches } | undefined
+
+function owedHostLaunches(): OwedHostLaunches {
+  const revision = structuredAgentLaunchRecordsRevision()
+  if (owedIndex?.revision !== revision) {
+    const owed: OwedHostLaunches = new Map()
+    for (const record of readStructuredAgentLaunchRecords()) {
+      const worktreeId = record.surfaceAddress?.worktreeId
+      if (record.hostLaunchOperationId === undefined || !worktreeId) {
+        continue
+      }
+      const byWorkspace = owed.get(record.executionHostId) ?? new Map()
+      owed.set(record.executionHostId, byWorkspace)
+      const inWorkspace = byWorkspace.get(worktreeId)
+      if (inWorkspace) {
+        inWorkspace.push(record)
+      } else {
+        byWorkspace.set(worktreeId, [record])
+      }
+    }
+    owedIndex = { revision, owed }
+  }
+  return owedIndex.owed
+}
+
 /** A host's listing settled: its saved launches this window does not hold come back where the
- *  listing now names their workspace. Another host's listing neither shows nor ends them. */
-export function restoreStructuredLaunchSurfacesListedBy(hostId: ExecutionHostId): void {
-  const owed = readStructuredAgentLaunchRecords().filter(
+ *  listing names their workspace. Another host's listing, or one naming other workspaces, neither
+ *  shows nor ends them. */
+export function restoreStructuredLaunchSurfacesListedBy(
+  hostId: ExecutionHostId,
+  listedWorktreeIds: Iterable<string>
+): void {
+  const byWorkspace = owedHostLaunches().get(hostId)
+  if (!byWorkspace) {
+    return
+  }
+  const owed: StructuredAgentLaunchPersistedRecord[] = []
+  for (const worktreeId of new Set(listedWorktreeIds)) {
+    for (const record of byWorkspace.get(worktreeId) ?? []) {
+      if (!getStructuredLaunchStateBySessionId(record.sessionId)) {
+        owed.push(record)
+      }
+    }
+  }
+  restoreLaunchSurfaces(owed)
+}
+
+/** Only a chat not already showing on its own host is drawn; a shown one costs no catalog read,
+ *  slot, tab or save. Nothing about being shown is saved: the tab list itself says so. */
+function restoreLaunchSurfaces(records: readonly StructuredAgentLaunchPersistedRecord[]): void {
+  const unshown = records.filter(
     (record) =>
-      record.hostLaunchOperationId !== undefined &&
-      record.executionHostId === hostId &&
-      !getStructuredLaunchStateBySessionId(record.sessionId)
+      record.surfaceAddress &&
+      !structuredLaunchTabShown({
+        worktreeId: record.surfaceAddress.worktreeId,
+        sessionId: record.sessionId,
+        executionHostId: record.executionHostId
+      })
   )
-  if (owed.length > 0) {
-    restoreLaunchSurfaces(owed)
+  if (unshown.length > 0) {
+    batchStructuredLaunchSurfaces(() => drawLaunchSurfaces(unshown))
   }
 }
 
-function restoreLaunchSurfaces(records: readonly StructuredAgentLaunchPersistedRecord[]): void {
-  batchStructuredLaunchSurfaces(() => drawLaunchSurfaces(records))
-}
+type LaunchCatalog = { workspaces: Worktree[] }
+// The catalog the launches are placed against, kept while the store's listings it reads are
+// unchanged, so its owner index is built once per listing change rather than once per draw.
+const catalogs = new WeakMap<
+  AppState['worktreesByRepo'],
+  {
+    folders: AppState['folderWorkspaces']
+    groups: AppState['projectGroups']
+    catalog: LaunchCatalog
+  }
+>()
 
-function drawLaunchSurfaces(records: readonly StructuredAgentLaunchPersistedRecord[]): void {
-  const state = useAppStore.getState()
+function launchCatalog(state: AppState): LaunchCatalog {
+  const cached = catalogs.get(state.worktreesByRepo)
+  if (cached?.folders === state.folderWorkspaces && cached.groups === state.projectGroups) {
+    return cached.catalog
+  }
   const catalog = {
     workspaces: [
       ...state.allWorktrees(),
@@ -64,6 +134,17 @@ function drawLaunchSurfaces(records: readonly StructuredAgentLaunchPersistedReco
       })
     ]
   }
+  catalogs.set(state.worktreesByRepo, {
+    folders: state.folderWorkspaces,
+    groups: state.projectGroups,
+    catalog
+  })
+  return catalog
+}
+
+function drawLaunchSurfaces(records: readonly StructuredAgentLaunchPersistedRecord[]): void {
+  const state = useAppStore.getState()
+  const catalog = launchCatalog(state)
   for (const record of records) {
     // A host launch's chat comes back failed or unknown, on its own host; others only as before.
     const hostLaunch = record.hostLaunchOperationId !== undefined

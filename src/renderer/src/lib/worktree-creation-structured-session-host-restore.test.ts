@@ -18,7 +18,8 @@ import {
 } from './agent-session/launch/structured-agent-session-launch-registry'
 import {
   readStructuredAgentLaunchRecords,
-  resetStructuredAgentLaunchPersistenceForTests
+  resetStructuredAgentLaunchPersistenceForTests,
+  writeStructuredAgentLaunchRecord
 } from './agent-session/launch/structured-agent-session-launch-persistence'
 import { retryStructuredAgentSessionLaunch } from './agent-session/launch/structured-agent-session-launch'
 import { restoreStructuredLaunchSurfaces } from './agent-session/launch/structured-agent-session-launch-restore'
@@ -534,4 +535,217 @@ describe('restoring many held launches at once', () => {
       }
     }
   )
+})
+
+describe('a listing settling over launches whose chats already show', () => {
+  type Work = {
+    rowReads: number
+    catalogBuilds: number
+    tabProbes: number
+    orderVisits: number
+    draws: number
+    storageWrites: number
+    storageBytes: number
+    rpc: number
+  }
+  const OTHER_REPO = 'repo-2'
+
+  /** This window's own host listing a repo, applied by the store's own catalog writer. */
+  function listLocal(repoId: string, rows: Worktree[]): void {
+    const outcome = mergeFetchedWorktrees(useAppStore.setState, useAppStore.getState, {
+      repoId,
+      hostId: 'local',
+      ownerWasMissingAtStart: false,
+      requestStartedWorktrees: useAppStore.getState().worktreesByRepo[repoId],
+      refresh: {
+        status: 'admitted',
+        executionHostId: 'local',
+        result: {
+          repoId,
+          authoritative: true,
+          source: 'metadata-fallback',
+          worktrees: rows.map((entry) => ({
+            ...entry,
+            ownership: 'orca-managed' as const,
+            selectedCheckout: false,
+            visible: true
+          }))
+        }
+      }
+    })
+    expect(outcome).toBe('applied')
+  }
+
+  const otherRepoRow = (index: number): Worktree => ({
+    ...worktree,
+    id: `${OTHER_REPO}::/workspace/other-${index}`,
+    repoId: OTHER_REPO,
+    path: `/workspace/other-${index}`
+  })
+  const shownTabs = () =>
+    (useAppStore.getState().unifiedTabsByWorktree[worktree.id] ?? []).filter((tab) =>
+      tab.entityId.startsWith('codex-shown-')
+    )
+
+  /** Restores `count` failed host launches in one workspace, then counts the work the given
+   *  listings do once settled: every saved row, tab and group order read, catalog built, tab
+   *  drawn or slot reserved, journal saved or removed, and host request. */
+  async function settleCost(count: number, settle: () => void): Promise<Work> {
+    main.close()
+    resetStructuredAgentLaunchRegistryForTests()
+    resetStructuredAgentLaunchPersistenceForTests()
+    seedEmptyActivatableWorktree(worktree)
+    const repo = useAppStore.getState().repos[0]!
+    useAppStore.setState({
+      repos: [repo, { ...repo, id: OTHER_REPO }],
+      unifiedTabsByWorktree: {},
+      groupsByWorktree: {},
+      tabsByWorktree: {},
+      layoutByWorktree: {},
+      activeGroupIdByWorktree: {}
+    })
+    main = await drawTabsFromMain(useAppStore)
+    localStorage.setItem(
+      LAUNCHES,
+      JSON.stringify(
+        Array.from({ length: count }, (_, index) =>
+          row(`codex-shown-${count}-${index}`, 'local', {
+            hostLaunchOperationId: `host-op-shown-${count}-${index}`
+          })
+        )
+      )
+    )
+    restoreStructuredLaunchSurfaces()
+    await main.settle()
+    expect(shownTabs()).toHaveLength(count)
+
+    const work: Work = {
+      rowReads: 0,
+      catalogBuilds: 0,
+      tabProbes: 0,
+      orderVisits: 0,
+      draws: 0,
+      storageWrites: 0,
+      storageBytes: 0,
+      rpc: mocks.rpc.length
+    }
+    const counted = <T extends object>(entry: T, key: keyof T, count: () => void): void => {
+      const value = entry[key]
+      Object.defineProperty(entry, key, {
+        configurable: true,
+        enumerable: true,
+        get: () => (count(), value)
+      })
+    }
+    for (const record of readStructuredAgentLaunchRecords()) {
+      counted(record, 'surfaceAddress', () => work.rowReads++)
+    }
+    const state = useAppStore.getState()
+    for (const tab of Object.values(state.unifiedTabsByWorktree).flat()) {
+      counted(tab, 'id', () => work.tabProbes++)
+      counted(tab, 'entityId', () => work.tabProbes++)
+    }
+    for (const group of Object.values(state.groupsByWorktree).flat()) {
+      counted(group, 'tabOrder', () => work.orderVisits++)
+    }
+    const { allWorktrees, createUnifiedTab, ensureWorktreeRootGroup } = state
+    useAppStore.setState({
+      allWorktrees: () => (work.catalogBuilds++, allWorktrees()),
+      createUnifiedTab: (...args) => (work.draws++, createUnifiedTab(...args)),
+      ensureWorktreeRootGroup: (...args) => (work.draws++, ensureWorktreeRootGroup(...args))
+    })
+    const storage = [vi.spyOn(localStorage, 'setItem'), vi.spyOn(localStorage, 'removeItem')]
+    try {
+      settle()
+      await vi.dynamicImportSettled()
+      await main.settle()
+      for (const spy of storage) {
+        for (const [key, value] of spy.mock.calls) {
+          if (key === LAUNCHES || key.startsWith('orca:structuredAgentLaunch')) {
+            work.storageWrites++
+            work.storageBytes += typeof value === 'string' ? value.length : 0
+          }
+        }
+      }
+    } finally {
+      storage.forEach((spy) => spy.mockRestore())
+      useAppStore.setState({ allWorktrees, createUnifiedTab, ensureWorktreeRootGroup })
+    }
+    work.rpc = mocks.rpc.length - work.rpc
+    expect(shownTabs()).toHaveLength(count)
+    return work
+  }
+
+  it('does no work for chats already shown, however many there are', async () => {
+    const small = await settleCost(3, () => listLocal(worktree.repoId, [worktree]))
+    const large = await settleCost(30, () => listLocal(worktree.repoId, [worktree]))
+    for (const work of [small, large]) {
+      // Nothing to draw: no catalog, slot, tab, save or host request.
+      expect(work).toMatchObject({
+        catalogBuilds: 0,
+        orderVisits: 0,
+        draws: 0,
+        storageWrites: 0,
+        storageBytes: 0,
+        rpc: 0
+      })
+    }
+    // Each saved row and shown tab read a bounded number of times: linear, not rows times tabs.
+    expect(large.rowReads).toBeLessThanOrEqual(10 * small.rowReads)
+    expect(large.tabProbes).toBeLessThanOrEqual(10 * small.tabProbes)
+    expect(large.tabProbes).toBeLessThanOrEqual(2 * 30)
+  })
+
+  it('leaves the saved launches unvisited when other repos settle', async () => {
+    // Each settlement adds a workspace to another repo and removes none.
+    const unrelated = (count: number) => () => {
+      const rows: Worktree[] = []
+      for (let index = 0; index < count; index++) {
+        rows.push(otherRepoRow(index))
+        listLocal(OTHER_REPO, rows)
+      }
+    }
+    const small = await settleCost(3, unrelated(3))
+    const large = await settleCost(30, unrelated(30))
+    for (const work of [small, large]) {
+      expect(work).toMatchObject({ draws: 0, storageWrites: 0, rpc: 0 })
+    }
+    // Ten times the settlements over ten times the launches: the saved rows are indexed once
+    // (twice at most), never read again per settlement.
+    expect(large.rowReads).toBeLessThanOrEqual(2 * 30)
+    expect(large.tabProbes).toBeLessThanOrEqual(2 * 30)
+  })
+
+  it('still draws a chat that is not showing: a lost tab, and a launch saved since', async () => {
+    let lost = ''
+    const work = await settleCost(3, () => {
+      // The tab went away without its launch ending. Main draws the tabs it owns, so only a
+      // window-owned list can lose one here.
+      lost = shownTabs()[0]!.entityId
+      if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+        useAppStore.setState((state) => ({
+          unifiedTabsByWorktree: {
+            ...state.unifiedTabsByWorktree,
+            [worktree.id]: state.unifiedTabsByWorktree[worktree.id]!.filter(
+              (tab) => tab.entityId !== lost
+            )
+          }
+        }))
+      }
+      listLocal(worktree.repoId, [worktree])
+    })
+    // Only the lost chat is drawn again: its slot and its tab.
+    expect(work.draws).toBe(ORCA_LAYOUT_OWNER_IS_MAIN ? 0 : 2)
+    expect(chatTabs(lost)).toHaveLength(1)
+    // A launch saved after the reload is drawn by the next listing, beside the shown ones.
+    writeStructuredAgentLaunchRecord(
+      row('codex-shown-later', 'local', { hostLaunchOperationId: 'host-op-later' }) as never
+    )
+    listLocal(worktree.repoId, [worktree])
+    await vi.dynamicImportSettled()
+    await main.settle()
+    expect(chatTabs('codex-shown-later')).toHaveLength(1)
+    expect(chatTabs(lost)).toHaveLength(1)
+    expect(mocks.rpc.filter((method) => /^agent(Session)?\./.test(method))).toEqual([])
+  })
 })

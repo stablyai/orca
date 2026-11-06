@@ -27,6 +27,12 @@ import {
   type OpenedAgentSessionTab
 } from '../../structured-agent-session-tab-open-through-layout-owner'
 import {
+  groupHoldingTab,
+  noteLaunchTabDrawn,
+  workspaceShowsLaunchChat,
+  workspaceTabIdShown
+} from './structured-agent-session-launch-tab-index'
+import {
   clearWebSessionFocusIntentIfMatches,
   peekWebSessionFocusIntent,
   resolveWebSessionVisibleTabId
@@ -39,11 +45,21 @@ type LaunchSurface = {
   surfaceAddress?: StructuredLaunchSurfaceAddress
 }
 
-export function findStructuredLaunchTab(args: {
-  worktreeId: string
-  sessionId: string
-  executionHostId: ExecutionHostId
-}): Tab | null {
+type LaunchTabAddress = { worktreeId: string; sessionId: string; executionHostId: ExecutionHostId }
+
+/** The launch's chat already shows here, on its own host. */
+export function structuredLaunchTabShown(args: LaunchTabAddress): boolean {
+  return workspaceShowsLaunchChat(
+    useAppStore.getState().unifiedTabsByWorktree[args.worktreeId],
+    args,
+    getStructuredAgentSessionLaunchOwner(args.sessionId)
+  )
+}
+
+export function findStructuredLaunchTab(args: LaunchTabAddress): Tab | null {
+  if (!structuredLaunchTabShown(args)) {
+    return null
+  }
   const owner = getStructuredAgentSessionLaunchOwner(args.sessionId)
   const tabs = useAppStore.getState().unifiedTabsByWorktree[args.worktreeId]
   return (
@@ -111,20 +127,18 @@ function reconcileSlotAddresses(
         continue
       }
       const tabId = structuredAgentSessionTabId(record.sessionId)
-      if (state.unifiedTabsByWorktree[address.worktreeId]?.some((tab) => tab.id === tabId)) {
+      if (workspaceTabIdShown(state.unifiedTabsByWorktree[address.worktreeId], tabId)) {
         continue
       }
       hasHiddenSlot = true
       if (state.groupsByWorktree[address.worktreeId] === previousGroups[address.worktreeId]) {
         continue
       }
-      const group = state.groupsByWorktree[address.worktreeId]?.find((entry) =>
-        entry.tabOrder.includes(tabId)
-      )
+      const slot = groupHoldingTab(state.groupsByWorktree[address.worktreeId], tabId)
       const surfaceAddress = {
         worktreeId: address.worktreeId,
-        targetGroupId: group?.id,
-        precedingTabIds: group ? group.tabOrder.slice(0, group.tabOrder.indexOf(tabId)) : []
+        targetGroupId: slot?.group.id,
+        precedingTabIds: slot ? slot.group.tabOrder.slice(0, slot.position) : []
       }
       if (sameSurfaceAddress(address, surfaceAddress)) {
         continue
@@ -208,13 +222,12 @@ export function openStructuredAgentSessionProvisionalTab(args: {
   const record = readStructuredAgentLaunchRecord(args.sessionId)
   const address =
     record?.executionHostId === args.executionHostId ? record.surfaceAddress : undefined
-  const group = state.groupsByWorktree?.[args.worktreeId]?.find((entry) =>
-    entry.tabOrder.includes(tabId)
-  )
+  const group = groupHoldingTab(state.groupsByWorktree?.[args.worktreeId], tabId)?.group
   const targetGroupId =
     group?.id ??
     (address?.worktreeId === args.worktreeId ? address.targetGroupId : args.targetGroupId)
   const drawHere = (): Tab => {
+    const shown = useAppStore.getState().unifiedTabsByWorktree[args.worktreeId]
     const tab = state.createUnifiedTab(args.worktreeId, 'agent-session', {
       id: tabId,
       entityId: args.sessionId,
@@ -225,6 +238,7 @@ export function openStructuredAgentSessionProvisionalTab(args: {
       ...(args.afterTabId ? { afterTabId: args.afterTabId } : {}),
       activate: args.activate !== false
     })
+    noteLaunchTabDrawn(shown, useAppStore.getState().unifiedTabsByWorktree[args.worktreeId], tab)
     const target = structuredAgentSessionTargetForHost(args.executionHostId)
     holdFrameDrawnProvisionalChatTab(target, args.worktreeId, tab.id)
     if (args.activate !== false) {
@@ -259,8 +273,8 @@ function slotAnchor(
   if (address?.worktreeId !== worktreeId) {
     return {}
   }
-  const tabs = useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []
-  const afterTabId = address.precedingTabIds.findLast((id) => tabs.some((tab) => tab.id === id))
+  const tabs = useAppStore.getState().unifiedTabsByWorktree[worktreeId]
+  const afterTabId = address.precedingTabIds.findLast((id) => workspaceTabIdShown(tabs, id))
   return afterTabId ? { afterTabId } : {}
 }
 

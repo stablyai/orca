@@ -28,7 +28,7 @@ import { afterPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   deleteStructuredLaunchStateIfCurrent,
-  notifyStructuredLaunchListeners,
+  notifyStructuredLaunchStateChanged,
   retireStructuredAgentSessionLaunchCancellationTombstone,
   type StructuredLaunchState
 } from './structured-agent-session-launch-registry'
@@ -37,7 +37,7 @@ import { forgetStructuredSessionSelection } from '../../structured-agent-session
 
 function cleanupLaunchState(state: StructuredLaunchState): void {
   if (deleteStructuredLaunchStateIfCurrent(state)) {
-    notifyStructuredLaunchListeners()
+    notifyStructuredLaunchStateChanged(state)
   }
 }
 
@@ -57,7 +57,7 @@ export function maybeCleanupLaunchState(state: StructuredLaunchState): void {
 export function reconsiderShownHostLaunch(state: StructuredLaunchState): void {
   if (state.intent.hostLaunch && !hostLaunchAwaitsItsTab(state)) {
     maybeCleanupLaunchState(state)
-    notifyStructuredLaunchListeners()
+    notifyStructuredLaunchStateChanged(state)
   }
 }
 
@@ -102,7 +102,7 @@ function settleStructuredLaunchRefusal(state: StructuredLaunchState, error: unkn
   ) {
     state.operationEnded = true
     state.callers.outcome = 'unknown'
-    notifyStructuredLaunchListeners()
+    notifyStructuredLaunchStateChanged(state)
     return
   }
   retireStructuredAgentSessionLaunchCancellationTombstone(
@@ -115,7 +115,7 @@ function settleStructuredLaunchRefusal(state: StructuredLaunchState, error: unkn
   if (cleanupUnmaterializedLaunch(state, error)) {
     retireStructuredAgentSessionReadOwner(state.intent.sessionId, state.intent.target)
   }
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchStateChanged(state)
 }
 
 export function trackLaunchSettlement(
@@ -171,7 +171,7 @@ export function trackLaunchSettlement(
           receipt.cursor
         )
       }
-      notifyStructuredLaunchListeners()
+      notifyStructuredLaunchStateChanged(state)
     },
     (error) => {
       if (state.promise !== promise) {
@@ -202,7 +202,7 @@ export function trackLaunchSettlement(
       } else if (!state.visibilityUnknown) {
         settleStructuredLaunchCallers(state.callers, 'failed')
         cleanupUnmaterializedLaunch(state)
-        notifyStructuredLaunchListeners()
+        notifyStructuredLaunchStateChanged(state)
       } else {
         if (state.intent.params.firstMessage) {
           state.operationEnded = true
@@ -210,7 +210,7 @@ export function trackLaunchSettlement(
         }
         state.callers.outcome = 'unknown'
         materializeStructuredLaunchSurface(state.intent)
-        notifyStructuredLaunchListeners()
+        notifyStructuredLaunchStateChanged(state)
       }
     }
   )

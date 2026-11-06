@@ -9,7 +9,7 @@ import { trackStructuredLaunchConfirmationDeadline } from './structured-agent-se
 import { restorePersistedStructuredLaunchState } from './structured-agent-session-launch-reload'
 import {
   getStructuredLaunchStateBySessionId,
-  notifyStructuredLaunchListeners
+  notifyStructuredLaunchStateChanged
 } from './structured-agent-session-launch-registry'
 
 /** A tab proves the chat exists; its journal must also confirm the immutable opening message. */
@@ -52,5 +52,5 @@ export function confirmStructuredLaunchFirstMessagePublication(
     })
   trackLaunchSettlement(state, state.promise)
   trackStructuredLaunchConfirmationDeadline(state, state.promise)
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchStateChanged(state)
 }

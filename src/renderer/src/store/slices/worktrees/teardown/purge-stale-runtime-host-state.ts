@@ -20,6 +20,7 @@ import { buildFullWorktreePurgeState } from './worktree-purge-state'
 import { removeWorktreeVisitEntriesForTargets } from '@/lib/worktree-visit-recency'
 import { settleAttentionRemovedBy } from '../../workspace-attention/attention-removal-follow-up'
 import { settleRetiredHostInput } from './purged-structured-launch-retirement'
+import { batchStructuredAgentLaunchRecordWrites } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 
 export function createPurgeStaleRuntimeHostState(
   set: WorktreeSliceSet,
@@ -317,7 +318,9 @@ export function createPurgeStaleRuntimeHostState(
       beginEnclosingWorktreeRemoval({ hostId: toRuntimeExecutionHostId(id) })
     )
     try {
-      purge(removed)
+      // One logical retirement: every chat launch the host takes with it is cancelled at once and
+      // each launch journal is saved once, at its end.
+      batchStructuredAgentLaunchRecordWrites(() => purge(removed))
     } finally {
       finishRemovals.forEach((finish) => finish())
     }

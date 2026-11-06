@@ -5,7 +5,8 @@ import {
   getPersistedStructuredAgentLaunchRecord,
   getStructuredLaunchStateBySessionId,
   hasStructuredAgentSessionLaunchCancellationTombstone,
-  notifyStructuredLaunchListeners
+  notifyStructuredLaunchStateChanged,
+  publishStructuredLaunchStatus
 } from './structured-agent-session-launch-registry'
 import { forgetUnlistedCreatedChat } from '../../structured-agent-session-unlisted-created-chats'
 
@@ -43,7 +44,7 @@ export function markStructuredAgentSessionLaunchPublished(
       return false
     }
     deleteStructuredAgentLaunchRecord(sessionId)
-    notifyStructuredLaunchListeners()
+    publishStructuredLaunchStatus()
     return true
   }
   if (
@@ -71,7 +72,7 @@ export function markStructuredAgentSessionLaunchPublished(
   state.callers.outcome = 'published'
   deleteStructuredAgentLaunchRecord(sessionId)
   state.callers.onSettled()
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchStateChanged(state)
   return true
 }
 

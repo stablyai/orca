@@ -7,7 +7,7 @@ import type { StructuredLaunchCaller } from './structured-agent-session-launch-c
 import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
 import { STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS } from '@/components/native-chat/structured-agent-session-send-runtime'
 import {
-  notifyStructuredLaunchListeners,
+  notifyStructuredLaunchStateChanged,
   type StructuredLaunchState
 } from './structured-agent-session-launch-registry'
 
@@ -38,7 +38,7 @@ export function trackStructuredLaunchPromptOutcome(
       state.visibilityUnknown = true
       group.outcome = 'unknown'
     }
-    notifyStructuredLaunchListeners()
+    notifyStructuredLaunchStateChanged(state)
   })
 }
 
@@ -62,7 +62,7 @@ export function trackStructuredLaunchConfirmationDeadline(
     }
     state.visibilityUnknown = true
     state.callers.outcome = 'unknown'
-    notifyStructuredLaunchListeners()
+    notifyStructuredLaunchStateChanged(state)
   }, STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS)
   const clear = (): void => clearTimeout(deadline)
   void promise.then(clear, clear)

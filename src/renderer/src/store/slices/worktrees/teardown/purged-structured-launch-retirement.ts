@@ -16,7 +16,10 @@ import {
 } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { discardStructuredAgentSessionChatSends } from '@/lib/agent-session/launch/structured-agent-session-launch-prompt'
 import { forgetUnlistedCreatedChat } from '@/lib/structured-agent-session-unlisted-created-chats'
-import { readStructuredAgentLaunchRecords } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
+import {
+  batchStructuredAgentLaunchRecordWrites,
+  readStructuredAgentLaunchRecords
+} from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
 import { clearWebSessionFocusIntentIfMatches } from '@/runtime/web-session-focus-intent'
 import {
@@ -72,18 +75,34 @@ export function retirePurgedTabLaunches(
   }
 }
 
+/** Which hosts dropped each workspace id; `true` when a target named no host, so any host's did. */
+type DroppedWorkspaces = ReadonlyMap<string, true | ReadonlySet<ExecutionHostId>>
+
+function droppedWorkspaces(
+  droppedBy: readonly WorktreePurgeTarget[] | undefined
+): DroppedWorkspaces | undefined {
+  if (!droppedBy) {
+    return undefined
+  }
+  const dropped = new Map<string, true | Set<ExecutionHostId>>()
+  for (const { id, hostId } of droppedBy) {
+    const hosts = dropped.get(id)
+    if (hosts === true) {
+      continue
+    }
+    dropped.set(id, hostId ? (hosts ?? new Set<ExecutionHostId>()).add(hostId) : true)
+  }
+  return dropped
+}
+
 /** A host launch waits on its own host: another host dropping the same workspace id ends nothing. */
 function hostLaunchDropped(
-  droppedBy: readonly WorktreePurgeTarget[] | undefined,
+  dropped: DroppedWorkspaces | undefined,
   worktreeId: string,
   executionHostId: ExecutionHostId
 ): boolean {
-  return (
-    !droppedBy ||
-    droppedBy.some(
-      (target) => target.id === worktreeId && (!target.hostId || target.hostId === executionHostId)
-    )
-  )
+  const hosts = dropped?.get(worktreeId)
+  return !dropped || hosts === true || !!hosts?.has(executionHostId)
 }
 
 /** Cancels provisional structured-chat launches in these worktrees, on the given host only.
@@ -94,13 +113,25 @@ export function cancelStructuredLaunchesForWorktrees(
   droppedBy?: readonly WorktreePurgeTarget[]
 ): Set<string> {
   const cancelledSessionIds = new Set<string>()
+  batchStructuredAgentLaunchRecordWrites(() =>
+    cancelLaunchesIn(worktreeIdSet, ownedByHost, droppedWorkspaces(droppedBy), cancelledSessionIds)
+  )
+  return cancelledSessionIds
+}
+
+function cancelLaunchesIn(
+  worktreeIdSet: ReadonlySet<string>,
+  ownedByHost: ((worktreeId: string, executionHostId: ExecutionHostId) => boolean) | undefined,
+  dropped: DroppedWorkspaces | undefined,
+  cancelledSessionIds: Set<string>
+): void {
   for (const launch of structuredLaunchStates()) {
     const worktreeId = launch.intent.worktreeId
     if (
       worktreeIdSet.has(worktreeId) &&
       (!ownedByHost || ownedByHost(worktreeId, launch.intent.executionHostId)) &&
       (!launch.intent.hostLaunch ||
-        hostLaunchDropped(droppedBy, worktreeId, launch.intent.executionHostId)) &&
+        hostLaunchDropped(dropped, worktreeId, launch.intent.executionHostId)) &&
       shouldRetainStructuredAgentSessionLaunchTab(worktreeId, launch.intent.sessionId)
     ) {
       markStructuredAgentSessionLaunchCancelledSilently(
@@ -125,10 +156,10 @@ export function cancelStructuredLaunchesForWorktrees(
     const worktreeId = record.surfaceAddress?.worktreeId
     const hostLaunch = record.hostLaunchOperationId !== undefined
     if (
-      (record.executionHostId === 'local' || hostLaunch) &&
       worktreeId &&
-      (!hostLaunch || hostLaunchDropped(droppedBy, worktreeId, record.executionHostId)) &&
       worktreeIdSet.has(worktreeId) &&
+      (record.executionHostId === 'local' || hostLaunch) &&
+      (!hostLaunch || hostLaunchDropped(dropped, worktreeId, record.executionHostId)) &&
       (!ownedByHost || ownedByHost(worktreeId, record.executionHostId)) &&
       !cancelledSessionIds.has(record.sessionId)
     ) {
@@ -141,7 +172,6 @@ export function cancelStructuredLaunchesForWorktrees(
       cancelledSessionIds.add(record.sessionId)
     }
   }
-  return cancelledSessionIds
 }
 
 /** Before a removed paired host's purge: delayed views commit text it may offer back, and its
@@ -150,15 +180,17 @@ export function cancelStructuredLaunchesForWorktrees(
 export function settleRetiredHostInput(state: AppState, removed: ReadonlySet<string>): void {
   flushRetiredHostEdits(state, removed)
   const hostIds = new Set<ExecutionHostId>([...removed].map(toRuntimeExecutionHostId))
-  for (const record of readStructuredAgentLaunchRecords()) {
-    const worktreeId = record.surfaceAddress?.worktreeId
-    if (worktreeId && hostIds.has(record.executionHostId)) {
-      markStructuredAgentSessionLaunchCancelledSilently(
-        worktreeId,
-        record.sessionId,
-        record.executionHostId
-      )
-      discardStructuredAgentSessionChatSends(record.sessionId)
+  batchStructuredAgentLaunchRecordWrites(() => {
+    for (const record of readStructuredAgentLaunchRecords()) {
+      const worktreeId = record.surfaceAddress?.worktreeId
+      if (worktreeId && hostIds.has(record.executionHostId)) {
+        markStructuredAgentSessionLaunchCancelledSilently(
+          worktreeId,
+          record.sessionId,
+          record.executionHostId
+        )
+        discardStructuredAgentSessionChatSends(record.sessionId)
+      }
     }
-  }
+  })
 }

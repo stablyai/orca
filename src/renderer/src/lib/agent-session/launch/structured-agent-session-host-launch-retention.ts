@@ -5,6 +5,7 @@
 
 import type { AppState } from '@/store/types'
 import type { StructuredAgentSessionLaunchIntent } from '../../launch-structured-agent-session'
+import { workspaceShowsLaunchChat } from './structured-agent-session-launch-tab-index'
 
 // Inject store access to break launch registry → store initialization cycles: store slices import
 // the registry, which reads this.
@@ -27,10 +28,9 @@ export function hostLaunchAwaitsItsTab(launch: {
   if (!hostLaunch || !surfaceAddress || launch.cancelled) {
     return false
   }
-  return !(tabsAccessor?.().unifiedTabsByWorktree[worktreeId] ?? []).some(
-    (tab) =>
-      tab.contentType === 'agent-session' &&
-      tab.entityId === sessionId &&
-      (tab.executionHostId ?? executionHostId) === executionHostId
+  return !workspaceShowsLaunchChat(
+    tabsAccessor?.().unifiedTabsByWorktree[worktreeId],
+    { worktreeId, sessionId, executionHostId },
+    executionHostId
   )
 }

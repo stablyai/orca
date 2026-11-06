@@ -9,7 +9,7 @@ import {
   settleHostCarriedStructuredLaunchPrompts,
   takeBackLegacyStructuredLaunchPrompts
 } from './structured-agent-session-launch-prompt'
-import { notifyStructuredLaunchListeners } from './structured-agent-session-launch-registry'
+import { notifyStructuredLaunchIntentChanged } from './structured-agent-session-launch-registry'
 
 /** The host has the text: founded as its chat's first message, delivered to its terminal, or
  *  carried by the terminal's own command. A draft left unsent, a text the plan gave the terminal
@@ -43,7 +43,8 @@ export function releaseHostLaunchMessage(
   if (saved && settled && intent.hostLaunch) {
     const { firstMessage: _settled, ...rest } = intent.hostLaunch
     intent.hostLaunch = rest
-    // Saved again without it: a later reload has nothing left to give back.
-    notifyStructuredLaunchListeners()
+    // Its own row saved again without it, and only that row: a later reload has nothing left to
+    // give back.
+    notifyStructuredLaunchIntentChanged(intent)
   }
 }
