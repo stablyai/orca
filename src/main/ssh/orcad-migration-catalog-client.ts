@@ -156,14 +156,6 @@ export async function stageRemoteOrcadMigrationBlobChunk(
   return parseOrcadMigrationBlobChunkResult(response.result, request)
 }
 
-export async function readRemoteOrcadMigrationCapabilities(
-  pairingCode: string,
-  options: CatalogRequestOptions = {}
-): Promise<readonly string[]> {
-  const status = await listServerRows(pairingCode, 'status.get', 'status', options)
-  return z.object({ capabilities: z.array(z.string()).default([]) }).parse(status).capabilities
-}
-
 export async function listServerRows(
   pairingCode: string,
   method: string,
@@ -242,10 +234,9 @@ async function request(
       hasExtraAgentArgs(automation.extraAgentArgs)
     )
   // An older host would drop the blob a manifest names and import without its rows.
-  const requiredBlobs = [
-    ...expectedBlobs,
-    ...(imports ? orcadMigrationManifestBlobs(manifest) : [])
-  ]
+  const requiredBlobs = imports
+    ? [...expectedBlobs, ...orcadMigrationManifestBlobs(manifest)]
+    : expectedBlobs
   const response = await sendSupportedMigrationRequest(
     pairing,
     METHOD_BY_OPERATION[operation],
@@ -257,7 +248,7 @@ async function request(
     // Hosts without blob capability would strip expectedBlobs and commit unchecked.
     (capabilities) => {
       if (
-        (operation === 'stage' || operation === 'commit') &&
+        imports &&
         (manifest.payload.dormantState?.automations ?? []).some((automation) =>
           hasModernAutomationLaunchSetup(automationCanonicalLaunchSetup(automation))
         ) &&

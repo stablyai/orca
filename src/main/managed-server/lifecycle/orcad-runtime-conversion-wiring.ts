@@ -9,12 +9,12 @@ import {
   abortRemoteOrcadMigrationCatalog,
   commitRemoteOrcadMigrationCatalog,
   listRemoteOrcadRepositories,
-  readRemoteOrcadMigrationCapabilities,
   readRemoteOrcadMigrationCatalogState,
   stageRemoteOrcadMigrationBlobChunk,
   stageRemoteOrcadMigrationCatalog,
   stageRemoteOrcadMigrationSnapshotChunk
 } from '../../ssh/orcad-migration-catalog-client'
+import { readRemoteOrcadMigrationCapabilities } from '../../ssh/orcad-migration-capabilities-client'
 import { abortRemoteOrcadMigrationCatalogByReference } from '../../ssh/orcad-migration-catalog-reference-client'
 import {
   enableRemoteOrcadAutomation,
