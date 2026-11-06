@@ -10,6 +10,7 @@ import {
   AgentLaunchReplay as PreObservationReplay
 } from '../../../../shared/rpc-contract/agent-launch-params.pre-observation.test-fixture'
 import { RuntimeWorktreeLineageController } from './runtime-worktree-lineage-controller'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 import {
   formatAmbiguousCwdParentMessage,
@@ -468,13 +469,33 @@ describe('a task id in the note of a create on another machine', () => {
       taskLineageRow({ id: 'task_folder', created_by_terminal_handle: 'term_folder' })
     )
     const controller = new RuntimeWorktreeLineageController({
-      // Only the folder lookup is read on this path.
-      getStore: () => ({ getFolderWorkspaces: () => [{ id: 'f-1' }] }) as never,
+      getStore: () => null,
       getDb: () => db,
       showTerminal: async () => ({ worktreeId: 'folder:f-1' }),
       resolveWorktree: async () => {
         throw new Error('selector_not_found')
       }
+    })
+    const folderWorkspace: FolderWorkspace = {
+      id: 'f-1',
+      projectGroupId: 'group-1',
+      name: 'Release',
+      folderPath: '/work/multi',
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      createdAt: 0,
+      updatedAt: 0
+    }
+    vi.spyOn(controller, 'resolveParent').mockImplementation(async (selector) => {
+      if (selector !== 'id:folder:f-1') {
+        throw new Error('selector_not_found')
+      }
+      return { type: 'folder', workspaceKey: 'folder:f-1', folderWorkspace, instanceId: null }
     })
     await expect(
       controller.resolveCallerParentForAnotherStore({ comment: 'for task_folder' }, 'desktop-1')
