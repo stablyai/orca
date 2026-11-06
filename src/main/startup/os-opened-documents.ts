@@ -8,9 +8,17 @@ import {
   isMarkdownDocumentName
 } from '../../shared/markdown-document-paths'
 
-export function isOsOpenedDocumentName(name: string): boolean {
+export function isOsOpenedDocumentName(
+  name: string,
+  platform: NodeJS.Platform = process.platform
+): boolean {
   const extension = path.extname(name).toLowerCase()
-  return isMarkdownDocumentName(name) || extension === '.csv' || extension === '.tsv'
+  return (
+    platform === 'darwin' ||
+    isMarkdownDocumentName(name) ||
+    extension === '.csv' ||
+    extension === '.tsv'
+  )
 }
 
 // Bound runaway argv so paths cannot occupy memory for the entire session.
@@ -30,7 +38,7 @@ function localPathFromArgument(argument: string, platform: NodeJS.Platform): str
   return pathApi.isAbsolute(argument) ? argument : null
 }
 
-/** Accept absolute supported documents; entrypoints fail extension checks and relative paths have no meaningful second-instance cwd. */
+/** Relative paths have no meaningful second-instance cwd; the resolver checks regular files. */
 export function documentPathsFromArguments(
   argv: readonly string[],
   platform: NodeJS.Platform = process.platform
@@ -43,7 +51,7 @@ export function documentPathsFromArguments(
       continue
     }
     const argument = localPathFromArgument(rawArgument, platform)
-    if (!argument || !isOsOpenedDocumentName(argument)) {
+    if (!argument || !isOsOpenedDocumentName(argument, platform)) {
       continue
     }
     const normalized = pathApi.normalize(argument)
@@ -64,7 +72,8 @@ export class OsOpenedDocumentState {
 
   /** True means argv contained a supported document. */
   capture(argv: readonly string[], publish?: () => void): boolean {
-    return this.add(documentPathsFromArguments(argv), publish)
+    const fileArguments = argv.slice(process.defaultApp ? 2 : 1)
+    return this.add(documentPathsFromArguments(fileArguments), publish)
   }
 
   /** True means at least one supported document, even if already queued. */
