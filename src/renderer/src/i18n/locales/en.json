@@ -265,7 +265,10 @@
       "needsYou": "Needs you",
       "failed": "Failed",
       "lastSeen": "Last seen {{state}}",
-      "detailsRow": "Details row"
+      "detailsRow": "Details row",
+      "hostRemoved": "host removed",
+      "disconnected": "disconnected",
+      "orcaServer": "Orca server"
     }
   },
   "app": {

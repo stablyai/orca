@@ -70,8 +70,8 @@ type IdleChildAgentGroupRowProps = {
   count: number
   expanded: boolean
   onToggle: () => void
-  // Full-mode child rows use a wider inset; match it so the dots share one column.
-  layout: 'compact' | 'full'
+  // Full-mode child rows use a wider inset; match it so the dots share one column. Slot = the 2.0 card's lines.
+  layout: 'compact' | 'full' | 'slot'
   // Sits among treeitem siblings, so it joins the tree at their level.
   ariaLevel: number
 }
@@ -107,8 +107,11 @@ export function IdleChildAgentGroupRow({
       draggable={false}
       className={cn(
         'worktree-agent-row-hover',
-        'flex h-6 min-w-0 items-center gap-1 rounded-sm text-left text-[11px] leading-none',
-        layout === 'full' ? '-ml-1 w-[calc(100%+0.25rem)] pl-1 pr-2' : 'w-full px-1',
+        layout === 'slot'
+          ? 'flex h-[19px] w-full min-w-0 items-center gap-1.5 rounded-sm pr-2 pl-1 text-left text-2xs leading-none'
+          : 'flex h-6 min-w-0 items-center gap-1 rounded-sm text-left text-[11px] leading-none',
+        layout === 'full' && '-ml-1 w-[calc(100%+0.25rem)] pl-1 pr-2',
+        layout === 'compact' && 'w-full px-1',
         // Group header is meta, not an agent: use the trail tone so it doesn't read as a row name.
         'text-muted-foreground/65 tabular-nums focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring'
       )}
@@ -151,7 +154,7 @@ type ChildAgentsWithIdleGroupProps = {
   flat: boolean
   idleExpanded: boolean
   onToggleIdle: () => void
-  layout: 'compact' | 'full'
+  layout: 'compact' | 'full' | 'slot'
   ariaLevel: number
   renderChild: (childAgent: DashboardAgentRowData, idleGroupExpanded: boolean) => React.ReactNode
 }
@@ -181,7 +184,7 @@ export function ChildAgentsWithIdleGroup({
             layout={layout}
             ariaLevel={ariaLevel}
           />
-          {layout === 'compact' ? (
+          {layout !== 'full' ? (
             <CompactAgentExpansion expanded={idleExpanded}>
               {idleChildren.map((childAgent) => renderChild(childAgent, idleExpanded))}
             </CompactAgentExpansion>
