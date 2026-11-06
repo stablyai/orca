@@ -71,6 +71,7 @@ export function encodeJournalOutcomes(
     // The sequence is the record's own, and the epoch's coverage on read; it is never stored.
     if (
       key !== 'lastSequence' &&
+      value !== before[key] &&
       journalOutcomeScalarJson(value) !== journalOutcomeScalarJson(before[key])
     ) {
       values.push({

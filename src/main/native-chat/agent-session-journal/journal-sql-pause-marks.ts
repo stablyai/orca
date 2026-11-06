@@ -43,18 +43,20 @@ export class JournalSqlPauseMarks {
       resumedSequence: 0,
       reopenedSequence: 0
     })
-    const encoded = scope.db
-      .prepare(`SELECT value_json FROM journal_proj_scalars
-      WHERE session_id=? AND generation=? AND owner='pause-marks' AND name='encoded'`)
-      .get(...scope.prefix)
-    if (encoded) {
-      scope.examined(encoded)
-    }
-    this.encoded = new JournalEncodedScalar(
-      typeof encoded?.value_json === 'string'
-        ? encoded.value_json
-        : JSON.stringify(createJournalQueuePauseMarks())
-    )
+    this.encoded = new JournalEncodedScalar(() => {
+      const encoded = scope.db
+        .prepare(`SELECT value_json FROM journal_proj_scalars
+        WHERE session_id=? AND generation=? AND owner='pause-marks' AND name='encoded'`)
+        .get(...scope.prefix)
+      if (encoded) {
+        scope.examined(encoded)
+      }
+      if (typeof encoded?.value_json === 'string') {
+        scope.work.decodedBytes += Buffer.byteLength(encoded.value_json)
+        return encoded.value_json
+      }
+      return JSON.stringify(createJournalQueuePauseMarks())
+    })
     let members: readonly string[] | undefined
     const readMembers = () => (members ??= this.readMembers())
     const writeMembers = (next: readonly string[]) => {
@@ -97,6 +99,8 @@ export class JournalSqlPauseMarks {
     if (!this.dirty) {
       return
     }
+    // Freeze the previous lazy snapshot before replacing its database row.
+    void this.encoded.json
     const marks = this.marks
     const stop = marks.latestStop
     const clear = marks.cleared

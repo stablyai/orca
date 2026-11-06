@@ -10,7 +10,7 @@ import { JournalSqlReducer } from './journal-sql-reducer'
 import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
 import type { JournalDispatchRow } from './journal-row-schema'
 import { journalInputOrder } from './journal-input-order'
-import { journalOutcomeScalars } from './journal-outcome-codec'
+import { encodeJournalOutcomes, journalOutcomeScalars } from './journal-outcome-codec'
 import { journalOutcomeScalarJson } from './journal-outcome-scalars'
 
 const databases: Database.Database[] = []
@@ -217,14 +217,18 @@ it('does not decode clear members or reindex pauses on an unchanged command, and
   c = command()
   c.scope.work.rows = 0
   c.scope.work.decodedBytes = 0
+  const previous = journalOutcomeScalars(c.command.state)
   const marks = c.command.state.queuePauseMarks
   const unchanged = marks.cleared
   marks.cleared = unchanged
   journalInputOrder(c.command.state).cards.ensure(c.command.state)
-  const after = journalOutcomeScalarJson(journalOutcomeScalars(c.command.state).queuePauseMarks)
-  expect(after).toBe(before)
+  expect(
+    encodeJournalOutcomes(c.command.state, [], previous, c.command.context.untracked).values
+  ).toEqual([])
   expect(c.scope.work.rows).toBeLessThan(30)
   expect(c.scope.work.decodedBytes).toBeLessThan(1024)
+  const after = journalOutcomeScalarJson(journalOutcomeScalars(c.command.state).queuePauseMarks)
+  expect(after).toBe(before)
   c.command.state.queuePauseMarks.cleared!.lifted = true
   c.command.flush()
   c = command()

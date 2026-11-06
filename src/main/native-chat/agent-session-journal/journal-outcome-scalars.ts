@@ -2,7 +2,14 @@ import type { JournalReducerState } from './journal-reducer'
 
 /** A saved scalar can be reused without decoding a growing value unchanged by this command. */
 export class JournalEncodedScalar {
-  constructor(readonly json: string) {}
+  constructor(private encoded: string | (() => string)) {}
+
+  get json(): string {
+    if (typeof this.encoded === 'function') {
+      this.encoded = this.encoded()
+    }
+    return this.encoded
+  }
 }
 
 const readers = new WeakMap<JournalReducerState, () => Record<string, unknown>>()
