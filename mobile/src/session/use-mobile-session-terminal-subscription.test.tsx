@@ -554,11 +554,15 @@ describe('terminal output credit', () => {
     harness.event(0, { type: 'data', chunk: 'hello' })
     // Counted as received, before the document rewrites the status dot's selector.
     harness.event(0, { type: 'data', chunk: '\u23fa\ufe0f ok' })
-    act(() => vi.advanceTimersByTime(200))
+    act(() => {
+      vi.advanceTimersByTime(200)
+    })
     expect(acks(harness)).toEqual([])
 
     act(() => parsed.forEach((onParsed) => onParsed()))
-    act(() => vi.advanceTimersByTime(250))
+    act(() => {
+      vi.advanceTimersByTime(250)
+    })
     expect(acks(harness)).toEqual([['terminal.ackOutput', { streamToken: 'token-1', units: 10 }]])
   })
 
@@ -568,7 +572,9 @@ describe('terminal output credit', () => {
     harness.event(0, { type: 'subscribed', outputAck: true, streamToken: 'token-1' })
     harness.fields.showNativeChatRef.current = true
     harness.event(0, { type: 'data', chunk: 'dropped' })
-    act(() => vi.advanceTimersByTime(250))
+    act(() => {
+      vi.advanceTimersByTime(250)
+    })
     expect(parsed).toEqual([])
     expect(acks(harness)).toEqual([['terminal.ackOutput', { streamToken: 'token-1', units: 7 }]])
   })
@@ -582,7 +588,9 @@ describe('terminal output credit', () => {
     harness.event(0, { type: 'data', chunk: 'x'.repeat(128 * 1024) })
     await act(async () => parsed.forEach((onParsed) => onParsed()))
     expect(acks(harness)).toHaveLength(1)
-    await act(async () => vi.advanceTimersByTime(250))
+    await act(async () => {
+      vi.advanceTimersByTime(250)
+    })
     expect(acks(harness)).toEqual([
       ['terminal.ackOutput', { streamToken: 'token-1', units: 131072 }],
       ['terminal.ackOutput', { streamToken: 'token-1', units: 131072 }]
@@ -597,7 +605,9 @@ describe('terminal output credit', () => {
     harness.scrollback(0, PHONE.cols, PHONE.rows)
     harness.event(0, { type: 'data', chunk: 'hello' })
     act(() => parsed.forEach((onParsed) => onParsed()))
-    act(() => vi.advanceTimersByTime(500))
+    act(() => {
+      vi.advanceTimersByTime(500)
+    })
     expect(acks(harness)).toEqual([])
   })
 })
