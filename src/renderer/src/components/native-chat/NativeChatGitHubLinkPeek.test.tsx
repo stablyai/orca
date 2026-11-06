@@ -7,11 +7,12 @@ import { NativeChatGitHubPeekBody, resolveGitHubPeekLink } from './NativeChatGit
 import type { NativeChatGitHubRepo } from './native-chat-github-repo'
 import { repoFixture } from './native-chat-workspace-test-fixtures'
 
+const lookup = vi.hoisted(() => ({ answer: vi.fn() }))
+
 vi.mock('./native-chat-github-link-preview', () => ({
   githubLinkPreviewKey: () => 'key',
   readCachedGitHubLinkPreview: () => null,
-  // An older host, or a repo the sign-in can't read, leaves the lookup unanswered.
-  loadGitHubLinkPreview: async () => null
+  loadGitHubLinkPreview: () => lookup.answer()
 }))
 
 const repo = repoFixture({ kind: 'git' })
@@ -38,23 +39,34 @@ describe('resolveGitHubPeekLink', () => {
 
 describe('NativeChatGitHubPeekBody', () => {
   const otherLink = parseGitHubIssueOrPRLink('https://github.com/other/tools/pull/7')!
-
-  async function renderAnswered(fallback?: React.ReactNode): Promise<void> {
+  const view = (fallback?: React.ReactNode) =>
     render(<NativeChatGitHubPeekBody repo={repo} link={otherLink} otherRepoFallback={fallback} />)
-    await act(async () => {})
-  }
 
-  it("shows another repo's web preview, or just its name, when the lookup goes unanswered", async () => {
-    await renderAnswered(<p>web</p>)
+  it("keeps another repo's web preview until its details arrive, and through no answer", async () => {
+    let answer: (item: unknown) => void = () => {}
+    lookup.answer.mockReturnValue(new Promise((resolve) => (answer = resolve)))
+    view(<p>web</p>)
     expect(screen.getByText('web')).toBeTruthy()
+    await act(async () => answer({ type: 'pr', title: 'Tools PR', state: 'open', labels: [] }))
+    expect(screen.getByText('Tools PR')).toBeTruthy()
     cleanup()
-    await renderAnswered(null)
-    expect(screen.getByText('other/tools')).toBeTruthy()
-    expect(screen.queryByText('Preview unavailable.')).toBeNull()
+
+    // An older host, or a repo the sign-in can't read, leaves the lookup unanswered.
+    lookup.answer.mockResolvedValue(null)
+    view(<p>web</p>)
+    await act(async () => {})
+    expect(screen.getByText('web')).toBeTruthy()
   })
 
-  it('keeps the failure and its retry for the chat repo itself', async () => {
-    await renderAnswered(undefined)
+  it('shows just the name when there is no web preview, but keeps the failure for the chat repo', async () => {
+    lookup.answer.mockResolvedValue(null)
+    view(null)
+    await act(async () => {})
+    expect(screen.getByText('other/tools')).toBeTruthy()
+    expect(screen.queryByText('Preview unavailable.')).toBeNull()
+    cleanup()
+    view(undefined)
+    await act(async () => {})
     expect(screen.getByText('Preview unavailable.')).toBeTruthy()
   })
 })
