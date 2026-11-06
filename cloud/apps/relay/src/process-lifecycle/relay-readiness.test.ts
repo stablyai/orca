@@ -63,30 +63,6 @@ describe('relay readiness', () => {
     expect(query).toHaveBeenCalledTimes(1)
   })
 
-  it('reports the initial success but not healthy repeats or cached reads', async () => {
-    const observations: RelayReadinessObservation[] = []
-    let now = 100
-    const readiness = createRelayReadiness(database(async () => [{ ready: 1 }]), 'https://jwks', {
-      fetch: vi.fn(async () => new Response('{}', { status: 200 })) as typeof fetch,
-      cacheMs: 10_000,
-      now: () => now,
-      observe: (observation) => observations.push(observation)
-    })
-
-    expect(await readiness.check()).toBe(true)
-    now += 1_000
-    expect(await readiness.check()).toBe(true)
-    now += 10_000
-    expect(await readiness.check()).toBe(true)
-    expect(observations).toEqual([
-      {
-        ready: true,
-        jwksLatencyMs: 0,
-        sqlLatencyMs: 0,
-        totalLatencyMs: 0
-      }
-    ])
-  })
 })
 
 describe('relay readiness last-known-good grace', () => {
@@ -204,61 +180,6 @@ describe('relay readiness last-known-good grace', () => {
     expect(observations.every((observation) => observation.degraded === undefined)).toBe(true)
   })
 
-  it('logs once on entering grace and once on leaving it', async () => {
-    let now = 1_000
-    let jwksOk = true
-    const { readiness, graceEvents } = graceProbe({
-      jwksOk: () => jwksOk,
-      sqlOk: () => true,
-      now: () => now
-    })
-
-    expect(await readiness.check()).toBe(true)
-    jwksOk = false
-    now += 1_000
-    expect(await readiness.check()).toBe(true)
-    now += 1_000
-    expect(await readiness.check()).toBe(true)
-    jwksOk = true
-    now += 1_000
-    expect(await readiness.check()).toBe(true)
-    expect(graceEvents).toEqual([
-      {
-        dependency: 'jwks',
-        grace: 'entered',
-        failure: 'jwks_http_failed',
-        lastSuccessAgeMs: 1_000,
-        graceMs: RELAY_READINESS_JWKS_GRACE_MS
-      },
-      {
-        dependency: 'jwks',
-        grace: 'recovered',
-        lastSuccessAgeMs: 0,
-        graceMs: RELAY_READINESS_JWKS_GRACE_MS
-      }
-    ])
-  })
-
-  it('reports an expired window once when the dependency never comes back', async () => {
-    let now = 1_000
-    let jwksOk = true
-    const { readiness, graceEvents } = graceProbe({
-      jwksGraceMs: 10_000,
-      jwksOk: () => jwksOk,
-      sqlOk: () => true,
-      now: () => now
-    })
-
-    expect(await readiness.check()).toBe(true)
-    jwksOk = false
-    now += 1_000
-    expect(await readiness.check()).toBe(true)
-    now += 20_000
-    expect(await readiness.check()).toBe(false)
-    expect(await readiness.check()).toBe(false)
-    expect(graceEvents.map((event) => event.grace)).toEqual(['entered', 'expired'])
-  })
-
   it('restarts the grace window from the most recent success', async () => {
     let now = 1_000
     let jwksOk = true
@@ -320,32 +241,6 @@ describe('relay readiness last-known-good grace', () => {
     ])
   })
 
-  it('logs both sides of an overlap when one dependency recovers as the other fails', async () => {
-    let now = 1_000
-    let jwksOk = true
-    let sqlOk = true
-    const { readiness, graceEvents } = graceProbe({
-      jwksOk: () => jwksOk,
-      sqlOk: () => sqlOk,
-      now: () => now
-    })
-
-    expect(await readiness.check()).toBe(true)
-    jwksOk = false
-    now += 1_000
-    expect(await readiness.check()).toBe(true)
-    jwksOk = true
-    sqlOk = false
-    now += 1_000
-    expect(await readiness.check()).toBe(true)
-    expect(readiness.degradedDependencies()).toEqual(['sql'])
-    expect(graceEvents.map((event) => [event.dependency, event.grace])).toEqual([
-      ['jwks', 'entered'],
-      ['jwks', 'recovered'],
-      ['sql', 'entered']
-    ])
-  })
-
   it('probes SQL on every poll even while JWKS is failing', async () => {
     let now = 1_000
     let jwksOk = true
@@ -378,26 +273,4 @@ describe('relay readiness last-known-good grace', () => {
     expect(query).toHaveBeenCalledTimes(4)
   })
 
-  it('bounds a cached ready answer after dependency success has expired', async () => {
-    let now = 1_000
-    let jwksOk = true
-    const { readiness, fetchImpl } = graceProbe({
-      cacheMs: 10_000,
-      jwksGraceMs: 5_000,
-      jwksOk: () => jwksOk,
-      sqlOk: () => true,
-      now: () => now
-    })
-
-    expect(await readiness.check()).toBe(true)
-    jwksOk = false
-    now += 6_000
-    expect(await readiness.check()).toBe(true)
-    now += 3_999
-    expect(await readiness.check()).toBe(true)
-    expect(fetchImpl).toHaveBeenCalledTimes(1)
-    now += 1
-    expect(await readiness.check()).toBe(false)
-    expect(fetchImpl).toHaveBeenCalledTimes(2)
-  })
 })

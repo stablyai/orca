@@ -7,38 +7,38 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { BottomDrawer } from './bottom-drawer/BottomDrawer'
 import { TextField } from './composer-input/TextField'
 
-type Props = {
-  visible: boolean
+type SheetProps = {
   title: string
   message?: string
-  defaultValue?: string
+  value: string
+  onChangeText: (value: string) => void
   placeholder?: string
   submitLabel?: string
   selectTextOnFocus?: boolean
   allowEmpty?: boolean
   keyboardType?: KeyboardTypeOptions
+  /** Shown under the field; the text stays so the user can retry. */
+  error?: string | null
+  /** A save in flight: Save is disabled so it can't be sent twice. */
+  busy?: boolean
   onSubmit: (value: string) => void
   onCancel: () => void
+}
+
+type Props = Omit<SheetProps, 'value' | 'onChangeText' | 'error' | 'busy'> & {
+  visible: boolean
+  defaultValue?: string
   /** Called once the drawer has gone, which is when the field stops holding the focus. */
   onAfterClose?: () => void
 }
 
 export function TextInputModal({
   visible,
-  title,
-  message,
   defaultValue = '',
-  placeholder,
-  submitLabel,
-  selectTextOnFocus = false,
-  allowEmpty = false,
-  keyboardType,
-  onSubmit,
   onCancel,
-  onAfterClose
+  onAfterClose,
+  ...sheetProps
 }: Props) {
-  useMobileColorScheme()
-  const t = useMobileTranslation()
   const [value, setValue] = useState(defaultValue)
   const [previousVisible, setPreviousVisible] = useState(visible)
   const [previousDefaultValue, setPreviousDefaultValue] = useState(defaultValue)
@@ -53,17 +53,47 @@ export function TextInputModal({
     }
   }
 
+  return (
+    <BottomDrawer visible={visible} onClose={onCancel} onAfterClose={onAfterClose}>
+      <TextInputSheetContent
+        {...sheetProps}
+        value={value}
+        onChangeText={setValue}
+        onCancel={onCancel}
+      />
+    </BottomDrawer>
+  )
+}
+
+/** The text sheet's body, for a drawer that is already open (e.g. a menu that swaps to it). */
+export function TextInputSheetContent({
+  title,
+  message,
+  value,
+  onChangeText,
+  placeholder,
+  submitLabel,
+  selectTextOnFocus = false,
+  allowEmpty = false,
+  keyboardType,
+  error,
+  busy = false,
+  onSubmit,
+  onCancel
+}: SheetProps) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+
+  const canSubmit = !busy && (allowEmpty || value.trim().length > 0)
+
   function handleSubmit() {
-    const trimmed = value.trim()
-    if (trimmed || allowEmpty) {
-      onSubmit(trimmed)
+    if (canSubmit) {
+      onSubmit(value.trim())
     }
   }
 
-  const canSubmit = allowEmpty || value.trim().length > 0
-
   return (
-    <BottomDrawer visible={visible} onClose={onCancel} onAfterClose={onAfterClose}>
+    <>
       <View style={styles.header}>
         <Text style={styles.title}>{title}</Text>
         {message ? <Text style={styles.message}>{message}</Text> : null}
@@ -71,7 +101,7 @@ export function TextInputModal({
 
       <TextField
         value={value}
-        onChangeText={setValue}
+        onChangeText={onChangeText}
         placeholder={placeholder}
         autoFocus
         autoCapitalize="none"
@@ -81,6 +111,8 @@ export function TextInputModal({
         returnKeyType="done"
         onSubmitEditing={handleSubmit}
       />
+
+      {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <View style={styles.actions}>
         <Pressable
@@ -101,7 +133,7 @@ export function TextInputModal({
           <Text style={styles.submitText}>{submitLabel ?? t('common.save', 'Save')}</Text>
         </Pressable>
       </View>
-    </BottomDrawer>
+    </>
   )
 }
 
@@ -119,6 +151,12 @@ const styles = themedStyleSheet(() => ({
     fontSize: 13,
     color: colors.textMuted,
     marginTop: 2
+  },
+  error: {
+    color: colors.statusRed,
+    fontSize: typography.metaSize,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.xs
   },
   actions: {
     flexDirection: 'row',

@@ -1,7 +1,7 @@
 import { terminalLaunchFacts } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { admitStablePaneAdoption } from '../identity/runtime-terminal-pane-identity'
 import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
-import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
+import type { TerminalCreateOptions } from './terminal-create-options'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {

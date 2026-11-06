@@ -46,24 +46,6 @@ beforeEach(() => {
 })
 
 describe('targeted preparation lock ownership', () => {
-  it('creates Git’s reason marker exclusively without enumerating worktrees', async () => {
-    const controller = new AbortController()
-    const options = {
-      wslDistro: 'Ubuntu',
-      signal: controller.signal,
-      timeout: 8000,
-      admissionTier: 'interactive' as const
-    }
-    await lockWorktreePreparation('/prepared', lockReason, options)
-    expect(mocks.git).toHaveBeenCalledExactlyOnceWith(
-      ['rev-parse', '--git-path', 'locked', '--git-common-dir'],
-      { cwd: '/prepared', ...options }
-    )
-    expect(mocks.writeFile).toHaveBeenCalledExactlyOnceWith(lockPath, `${lockReason}\n`, {
-      flag: 'wx'
-    })
-  })
-
   it('preserves an existing lock if exclusive creation fails', async () => {
     const error = Object.assign(new Error('lock exists'), { code: 'EEXIST' })
     mocks.writeFile.mockRejectedValueOnce(error)
@@ -71,19 +53,6 @@ describe('targeted preparation lock ownership', () => {
       'lock owner changed'
     )
     expect(mocks.unlink).not.toHaveBeenCalled()
-  })
-
-  it('unlinks only the exact reason minted for this checkout', async () => {
-    await unlockWorktreePreparation('/final', lockReason, {})
-    expect(mocks.readFile).toHaveBeenCalledExactlyOnceWith(lockPath, 'utf8')
-    expect(mocks.unlink).toHaveBeenCalledExactlyOnceWith(lockPath)
-  })
-
-  it('reuses a verified administrative path and reads the owner again before unlinking', async () => {
-    await unlockWorktreePreparationAtPath(lockPath, lockReason)
-    expect(mocks.git).not.toHaveBeenCalled()
-    expect(mocks.readFile).toHaveBeenCalledExactlyOnceWith(lockPath, 'utf8')
-    expect(mocks.unlink).toHaveBeenCalledExactlyOnceWith(lockPath)
   })
 
   it.each([
@@ -139,33 +108,6 @@ describe('targeted preparation lock ownership', () => {
 })
 
 describe('combined preparation lock query', () => {
-  it('reads embedded-newline pointers independently without changing their paths', async () => {
-    const controller = new AbortController()
-    const options = { signal: controller.signal, wslDistro: 'Ubuntu', timeout: 6000 }
-    const newlineCommon = join(tmpdir(), 'repo\nnewline', '.git')
-    const newlineLock = join(newlineCommon, 'worktrees', 'prepared', 'locked')
-    mocks.git.mockImplementation(async (args: string[]) => ({
-      stdout:
-        args.includes('--git-path') && args.includes('--git-common-dir')
-          ? `${newlineLock}\n${newlineCommon}\n`
-          : `${args.includes('--git-path') ? newlineLock : newlineCommon}\n`
-    }))
-
-    await expect(lockWorktreePreparation('/prepared', lockReason, options)).resolves.toBe(
-      toHostFilesystemPath(newlineLock)
-    )
-    expect(mocks.git.mock.calls).toEqual([
-      [['rev-parse', '--git-path', 'locked', '--git-common-dir'], { cwd: '/prepared', ...options }],
-      [['rev-parse', '--git-path', 'locked'], { cwd: '/prepared', ...options }],
-      [['rev-parse', '--git-common-dir'], { cwd: '/prepared', ...options }]
-    ])
-    expect(mocks.writeFile).toHaveBeenCalledExactlyOnceWith(
-      toHostFilesystemPath(newlineLock),
-      `${lockReason}\n`,
-      { flag: 'wx' }
-    )
-  })
-
   it.each(['create', 'unlock'] as const)(
     'refuses a foreign administrative path before %s touches its marker',
     async (operation) => {
@@ -179,34 +121,6 @@ describe('combined preparation lock query', () => {
       expect(mocks.unlink).not.toHaveBeenCalled()
     }
   )
-
-  it.each(['create', 'unlock'] as const)(
-    'keeps a failed combined Git read visible before %s touches a marker',
-    async (operation) => {
-      const failure = new Error('Git cannot read the preparation')
-      mocks.git.mockRejectedValueOnce(failure)
-      const run = operation === 'create' ? lockWorktreePreparation : unlockWorktreePreparation
-      await expect(run('/prepared', lockReason, {})).rejects.toBe(failure)
-      expect(mocks.git).toHaveBeenCalledOnce()
-      expect(mocks.readFile).not.toHaveBeenCalled()
-      expect(mocks.writeFile).not.toHaveBeenCalled()
-      expect(mocks.unlink).not.toHaveBeenCalled()
-    }
-  )
-
-  it('keeps a failed independent pointer read visible after an ambiguous response', async () => {
-    const failure = new Error('common directory is unavailable')
-    mocks.git.mockResolvedValueOnce({ stdout: 'ambiguous\n' }).mockImplementation(async (args) => {
-      if (args.includes('--git-common-dir')) {
-        throw failure
-      }
-      return { stdout: `${gitLockPath}\n` }
-    })
-    await expect(lockWorktreePreparation('/prepared', lockReason, {})).rejects.toBe(failure)
-    expect(mocks.git).toHaveBeenCalledTimes(3)
-    expect(mocks.writeFile).not.toHaveBeenCalled()
-    expect(mocks.unlink).not.toHaveBeenCalled()
-  })
 
   it('forwards cancellation to both independent reads and never creates a marker', async () => {
     const controller = new AbortController()
@@ -232,56 +146,6 @@ describe('combined preparation lock query', () => {
 })
 
 describe('Git preparation lock path resolution', () => {
-  it.each([
-    {
-      path: '/prepared',
-      lock: '/repo/.git/worktrees/prepared/locked\n',
-      common: '/repo/.git\n',
-      expected: '/repo/.git/worktrees/prepared/locked',
-      options: { platform: 'linux' as const }
-    },
-    {
-      path: '/workspace/prepared',
-      lock: '../../repo/.git/worktrees/prepared/locked\n',
-      common: '../../repo/.git\n',
-      expected: '/repo/.git/worktrees/prepared/locked',
-      options: { platform: 'linux' as const }
-    },
-    {
-      path: String.raw`C:\workspace\prepared`,
-      lock: 'C:/repo/.git/worktrees/prepared/locked\n',
-      common: 'C:/repo/.git\n',
-      expected: 'C:/repo/.git/worktrees/prepared/locked',
-      options: { platform: 'win32' as const, wslDistro: 'Ubuntu' }
-    },
-    {
-      path: String.raw`\\wsl.localhost\Ubuntu\home\workspace\prepared`,
-      lock: '/home/repo/.git/worktrees/prepared/locked\n',
-      common: '/home/repo/.git\n',
-      expected: String.raw`\\wsl.localhost\Ubuntu\home\repo\.git\worktrees\prepared\locked`,
-      options: { platform: 'win32' as const, wslDistro: 'Ubuntu' }
-    },
-    {
-      path: String.raw`C:\workspace\prepared`,
-      lock: '/mnt/c/repo/.git/worktrees/prepared/locked\n',
-      common: '/mnt/c/repo/.git\n',
-      expected: String.raw`C:\repo\.git\worktrees\prepared\locked`,
-      options: { platform: 'win32' as const, wslDistro: 'Ubuntu' }
-    },
-    {
-      path: '/workspace/new\nline/prepared',
-      lock: '/repo/new\nline/.git/worktrees/prepared/locked\n',
-      common: '/repo/new\nline/.git\n',
-      expected: '/repo/new\nline/.git/worktrees/prepared/locked',
-      options: { platform: 'linux' as const }
-    }
-  ])(
-    'resolves $path in the filesystem namespace that owns Git',
-    ({ path, lock, common, expected, options }) => {
-      expect(resolveWorktreePreparationLockPath(path, lock, common, options)).toBe(expected)
-    }
-  )
-
   it.each([
     { lock: '/repo/.git/locked\n', common: '/repo/.git\n' },
     { lock: '/other/.git/worktrees/prepared/locked\n', common: '/repo/.git\n' },

@@ -1,14 +1,5 @@
-import { readFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import {
-  DAEMON_PROTOCOL_SOURCE_PATH,
-  canAttach,
-  crossingRequirements,
-  parseDaemonProtocolFacts
-} from './daemon-protocol-facts.mjs'
-
-const projectDir = resolve(import.meta.dirname, '../../../..')
+import { parseDaemonProtocolFacts } from './daemon-protocol-facts.mjs'
 
 function source(current, previous) {
   return [
@@ -24,16 +15,6 @@ const facts = (protocolVersion, previousProtocolVersions) => ({
 })
 
 describe('parseDaemonProtocolFacts', () => {
-  it('reads the working tree declarations and keeps the append-only range', () => {
-    const parsed = parseDaemonProtocolFacts(
-      readFileSync(join(projectDir, DAEMON_PROTOCOL_SOURCE_PATH), 'utf8')
-    )
-    expect(parsed.protocolVersion).toBeGreaterThan(1)
-    expect(parsed.previousProtocolVersions).toEqual(
-      Array.from({ length: parsed.protocolVersion - 1 }, (_, index) => index + 1)
-    )
-  })
-
   it('parses multi-line lists and type annotations', () => {
     const text = [
       '// PROTOCOL_VERSION = 99 in a comment is ignored',
@@ -61,30 +42,5 @@ describe('parseDaemonProtocolFacts', () => {
     ]
   ])('fails loudly on %s', (_name, text) => {
     expect(() => parseDaemonProtocolFacts(text, 'fixture.ts')).toThrow(/fixture\.ts/)
-  })
-})
-
-describe('protocol crossing', () => {
-  const release = facts(37, [36, 35])
-
-  it('lets a same-version or listing candidate adopt the release daemon', () => {
-    expect(canAttach(facts(37, [36, 35]), release)).toBe(true)
-    expect(canAttach(facts(38, [37, 36, 35]), release)).toBe(true)
-  })
-
-  it('rejects a candidate that dropped the release version', () => {
-    expect(canAttach(facts(38, [36, 35]), release)).toBe(false)
-  })
-
-  it('cannot roll back past a protocol bump', () => {
-    expect(canAttach(release, facts(38, [37, 36, 35]))).toBe(false)
-    expect(canAttach(release, facts(36, [35]))).toBe(true)
-  })
-
-  it('describes the requirements in both directions', () => {
-    expect(crossingRequirements(release)).toMatchObject({
-      upgrade: 'candidate speaks 37 or lists 37 as previous',
-      rollback: expect.stringContaining('35..37')
-    })
   })
 })

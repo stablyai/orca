@@ -27,12 +27,14 @@ import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-envi
 import { createOrchestrationEnvironmentTransport } from '../ipc/runtime-environments/orchestration-environment-transport'
 import { mainProcessState as state } from './main-process-state'
 import { suspendEphemeralVmWorkspace } from '../ephemeral-vm/workspace-suspend'
+import { resumeEphemeralVmWorkspace } from '../ephemeral-vm/workspace-resume'
+import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
 import { installWslOrcadAccountShim } from './wsl-orcad-account-env-wiring'
 import {
   codexStructuredLaunchHomeResolvers,
   prepareCodexRuntimeHomeForLaunch
 } from './codex-launch-preparation'
-import { resolveHostAgentBaseEnvironment } from '../runtime/structured-agent-shell-environment'
+import { resolveHostAgentBaseEnvironment } from '../runtime/agent-session/environment/structured-agent-shell-environment'
 import type { RuntimeDesktopWindowStatus } from '../../shared/runtime-types'
 import { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
 import { SkillCloudService } from '../skills/skill-cloud-service'
@@ -45,7 +47,7 @@ import { startAgentStateRulesLiveUpdates } from '../runtime/agent-state-rules/ag
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { getRuntimeEnvironmentRegistryRoot } from '../ipc/runtime-environments/runtime-environment-registry-root'
-import { openOffscreenBrowserPageLink } from '../runtime/browser/offscreen-browser-page-link'
+import { openOffscreenBrowserPageLink } from '../runtime/browser/commands/offscreen-browser-page-link'
 
 export function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
   const activation = state.desktopActivationGate
@@ -116,7 +118,10 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
           params,
           timeoutMs
         ),
-      suspendVm: (workspaceId) => suspendEphemeralVmWorkspace(store, workspaceId)
+      ownsVm: (workspaceId) =>
+        findWorkspaceEphemeralVmRuntime(app.getPath('userData'), workspaceId) !== undefined,
+      suspendVm: (workspaceId) => suspendEphemeralVmWorkspace(store, workspaceId),
+      resumeVm: (workspaceId) => resumeEphemeralVmWorkspace(store, workspaceId)
     },
     // Paired/local settings writes must reconcile the scanner child through the same path.
     applySessionSearchSettings: applySessionSearchSettingsChange,

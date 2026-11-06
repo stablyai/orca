@@ -3,7 +3,10 @@ import { normalizeTerminalChunk } from '../terminal-ansi-normalization'
 import { appendNormalizedToTailBuffer } from './terminal-tail-buffer'
 
 import { MAX_TAIL_PARTIAL_CHARS } from './terminal-tail-limits'
-import { readPtyTail, runtimeWithLeaf } from '../../../orca-runtime-pty-leaf.test-fixture'
+import {
+  readPtyTail,
+  runtimeWithLeaf
+} from '../../../orca-runtime-tests/orca-runtime-pty-leaf.test-fixture'
 
 describe('terminal tail CRLF chunk boundaries', () => {
   it('keeps partial retention bounded while a final CR is pending', () => {

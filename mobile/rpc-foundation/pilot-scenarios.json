@@ -12577,6 +12577,23 @@
           }
         },
         {
+          "complete": "status.get#1",
+          "site": "pr-check-discovery",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "runtimeId": "recorded",
+              "hostDescriptor": {
+                "installationId": "recorded"
+              },
+              "capabilities": ["github.exact-work-item-target.v1"]
+            }
+          }
+        },
+        {
           "checkpoint": "checks-settled"
         }
       ]

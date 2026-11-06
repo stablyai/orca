@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createTranscriptPane,
   TRANSCRIPT_PANE_PTY_ID
-} from '../../agent-transcript-pane-test-harness'
+} from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
 import { readRuntimeFixture } from '../../agent-transcript-replay-test-harness'
 import { deliverTerminalAgentLaunchPrompt } from '../../rpc/methods/agent-launch-terminal-prompt'
 import { waitForWorkerAgentReady } from '../wait/launched-agent-composer-readiness'

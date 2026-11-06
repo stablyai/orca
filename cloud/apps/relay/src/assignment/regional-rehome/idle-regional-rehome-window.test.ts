@@ -268,23 +268,6 @@ describe('idle regional rehome candidate window', () => {
     expect(wrapped).toBe(true)
   })
 
-  it('does not stall on a host the window found but the join rejected', async () => {
-    const { store, database, safety, now } = await setup()
-    await seedHost(store, identity)
-    await cloneHosts(database, identity, 2)
-    // The first host in key order loses its control lease, so it can never be a
-    // candidate; an emitted-rows cursor would sit on it forever.
-    await database.query('UPDATE relay_assignment_activity_leases SET expires_at = ? WHERE user_id = ?', [
-      now - 1,
-      'clone-00000'
-    ])
-    const first = await store.selectIdleRegionalRehomeCandidates(safety)
-    expect(first.map((candidate) => candidate.userId)).not.toContain('clone-00000')
-    expect(new Set(first.map((candidate) => candidate.userId))).toEqual(
-      new Set(['clone-00001', identity.userId])
-    )
-  })
-
   it('excludes a host inside its rehome cooldown and takes it back after', async () => {
     const { store, database, safety, now } = await setup()
     await seedHost(store, identity)

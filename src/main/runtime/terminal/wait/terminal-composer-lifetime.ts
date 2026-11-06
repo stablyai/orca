@@ -1,5 +1,5 @@
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
-import type { TerminalWaiter } from '../../runtime-terminal-contracts'
+import type { TerminalWaiter } from './terminal-waiter'
 import { buildPtyTerminalWaitExitError, getPtyTerminalState } from './terminal-wait-results'
 import type { RuntimeTerminalWaiterRegistry } from './terminal-waiter-registry'
 import type { RuntimeTerminalWait } from '../../../../shared/runtime-terminal-contracts'

@@ -1,3 +1,4 @@
+import { openNativeChatAccountUsageModal } from './native-chat-account-usage-modal'
 import { useMemo, type Dispatch, type SetStateAction } from 'react'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import { localizeStructuredComposerOutcome } from './structured-composer-command-error-text'
@@ -69,6 +70,16 @@ export function useNativeChatStructuredComposerTransport(args: {
             : Promise.resolve(false)
       : null
     return {
+      accountUsage:
+        controller.accountUsage === true
+          ? {
+              open: () =>
+                openNativeChatAccountUsageModal({
+                  sessionId: props.sessionId,
+                  target: props.target
+                })
+            }
+          : undefined,
       capturePresentation: controller.capturePresentation,
       send: (text, attachments, ...request) =>
         sendBlockedReason === null &&

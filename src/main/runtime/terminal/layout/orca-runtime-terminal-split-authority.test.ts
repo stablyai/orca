@@ -1,4 +1,4 @@
-import { withRuntimePaneAdmission } from '../../runtime-durable-store-fixture'
+import { withRuntimePaneAdmission } from '../../orca-runtime-tests/runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-session-contracts'
@@ -8,7 +8,10 @@ import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { bindPaneFirst, committingSpawn } from '../../bind-first-pane.test-fixture'
+import {
+  bindPaneFirst,
+  committingSpawn
+} from '../../orca-runtime-tests/bind-first-pane.test-fixture'
 
 const REPO_ID = 'repo-1'
 const WORKTREE_ID = `${REPO_ID}::/workspace`

@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeHostStatusRow } from './RuntimeHostStatusRow'
+import { runtimeHostBlockedCopy } from './remote-host-connection-status'
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuItem: ({
@@ -52,5 +53,25 @@ describe('RuntimeHostStatusRow', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Connect' })[0])
 
     await waitFor(() => expect(onConnect).toHaveBeenCalledOnce())
+  })
+
+  it('sends a replaced server to its settings instead of a futile Connect (#37766)', () => {
+    const onConnect = vi.fn(async () => {})
+    const onRecover = vi.fn()
+    render(
+      <RuntimeHostStatusRow
+        label="Dev Box"
+        state="disconnected"
+        blocked={{ ...runtimeHostBlockedCopy('server-replaced'), recovery: 'open-settings' }}
+        onConnect={onConnect}
+        onRecover={onRecover}
+      />
+    )
+
+    expect(screen.queryByRole('button', { name: 'Connect' })).toBeNull()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Open settings…' })[0])
+
+    expect(onRecover).toHaveBeenCalledOnce()
+    expect(onConnect).not.toHaveBeenCalled()
   })
 })

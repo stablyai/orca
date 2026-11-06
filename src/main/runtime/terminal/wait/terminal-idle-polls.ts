@@ -32,7 +32,7 @@ function isQuietForQuiescence(
   }
   return Date.now() - lastOutputAt >= quiescenceMs
 }
-import type { TerminalWaiter } from '../../runtime-terminal-contracts'
+import type { TerminalWaiter } from './terminal-waiter'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 
 type RuntimeTerminalIdlePollDependencies = TuiIdleEvidenceSource & {

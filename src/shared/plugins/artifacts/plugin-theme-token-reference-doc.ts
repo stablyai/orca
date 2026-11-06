@@ -63,7 +63,7 @@ const TOKEN_ROLES: Record<PluginAppThemeToken, string> = {
   '--split-divider': 'Divider between split tab groups',
   '--split-divider-hover': 'Split divider while hovered or dragged',
   '--chat-user-message': 'Your messages in chat; may be translucent, it paints over the chat',
-  '--text-link': 'Links in Markdown previews and editors',
+  '--text-link': 'Links in Markdown previews, editors and agent chat',
   '--diff-added': 'Added-line hue: Monaco overview ruler and chat diff text',
   '--diff-added-background': 'Added lines in diffs',
   '--diff-added-emphasis': 'Added characters within a changed line',

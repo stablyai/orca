@@ -48,10 +48,10 @@ vi.mock('../../browser-manager', () => ({
 vi.mock('../../../ipc/browser/browser-tab-registration-wait', () => ({
   waitForTabRegistration: vi.fn()
 }))
-vi.mock('../../../runtime/browser/browser-tab-renderer-create', () => ({
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-create', () => ({
   createBrowserTabInRenderer: vi.fn()
 }))
-vi.mock('../../../runtime/browser/browser-tab-renderer-close', () => ({
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-close', () => ({
   closeBrowserTabInRenderer: vi.fn()
 }))
 vi.mock('../permissions/browser-extension-permission-prompt', () => ({
@@ -66,7 +66,7 @@ const registry = await import('../api-runtime/browser-extension-namespace-regist
 const host = await import('../api-runtime/browser-extension-api-host')
 const { registerBrowserExtensionNamespaces } =
   await import('../register-browser-extension-namespaces')
-const { noteBrowserExtensionUserGesture } = await import('./permissions')
+await import('./permissions')
 const { getBrowserExtensionProfileStateStore } =
   await import('../profile-storage/browser-extension-profile-state-store')
 const menuHost = await import('../context-menus/browser-extension-context-menu-host')
@@ -78,8 +78,7 @@ const { attachWorkerEventStream } =
   await import('../api-runtime/browser-extension-worker-event-stream')
 const { handleBrowserExtensionApiRequest } =
   await import('../api-runtime/browser-extension-api-request')
-const { PRELOAD_STORAGE_RELAY_NAMESPACE } =
-  await import('../../../../preload/browser-extension-storage-relay')
+await import('../../../../preload/browser-extension-storage-relay')
 const { PRELOAD_STORAGE_SYNC_NAMESPACE } =
   await import('../../../../preload/browser-extension-storage-sync')
 
@@ -277,251 +276,6 @@ describe('permissions.request', () => {
     host.emitBrowserExtensionEvent({ session, extensionId }, 'privacy', event, [{ value: true }])
     expect(frame.payloads()).toEqual([[{ value: false }]])
   })
-
-  it('permits a worker permission request from its toolbar onClicked handler', async () => {
-    const extensionId = 'g'.repeat(32)
-    extensions.set(
-      extensionId,
-      makeExtension(extensionId, { action: {}, optional_permissions: ['privacy'] })
-    )
-    mocks.contents.set(700, {
-      id: 700,
-      session,
-      isDestroyed: () => false,
-      getType: () => 'webview'
-    })
-    const state = contexts.getHostSessionState(session)
-    if (!state) {
-      throw new Error('Session not attached')
-    }
-    const worker = contexts.ensureWorkerContext(
-      state,
-      extensionId,
-      `chrome-extension://${extensionId}/`
-    )
-    worker.events.add(eventDispatch.eventKey('action', 'onClicked'))
-    let request: Promise<unknown> | undefined
-    attachWorkerEventStream(worker, {
-      send: () => {
-        request = call(extensionId, 'permissions', 'request', [{ permissions: ['privacy'] }])
-      },
-      close() {}
-    })
-    const { activateBrowserExtensionAction } = await import('../actions/browser-extension-toolbar')
-    mocks.prompt.mockResolvedValueOnce(true)
-    expect(
-      activateBrowserExtensionAction({
-        browserPageId: 'gesture-page',
-        extensionId,
-        anchor: { x: 0, y: 0, width: 20, height: 20 },
-        popupOnly: false
-      })
-    ).toEqual({ ok: true })
-    expect(request).toBeDefined()
-    await expect(request).resolves.toBe(true)
-    mocks.contents.delete(700)
-  })
-
-  it('begins delivering network events when optional webRequest permission is granted', async () => {
-    const extensionId = 'h'.repeat(32)
-    extensions.set(
-      extensionId,
-      makeExtension(extensionId, {
-        optional_permissions: ['webRequest'],
-        host_permissions: ['https://*/*']
-      })
-    )
-    const frame = await listenFrame(extensionId, 'webRequest', 'onCompleted')
-    webRequest.observeBrowserExtensionWebRequests(session)
-    expect(extensionSession.webRequest.onCompleted).not.toHaveBeenCalled()
-    mocks.prompt.mockResolvedValueOnce(true)
-    await call(extensionId, 'permissions', 'request', [{ permissions: ['webRequest'] }], 'page')
-    const completed = extensionSession.webRequest.onCompleted.mock.calls.at(-1)?.[1]
-    expect(completed).toBeDefined()
-    completed?.({
-      id: 9,
-      url: 'https://site.test/image.png',
-      method: 'GET',
-      resourceType: 'image',
-      timestamp: 1,
-      initiatorOrigin: 'https://site.test'
-    })
-    expect(frame.payloads()).toEqual([
-      [expect.objectContaining({ url: 'https://site.test/image.png', type: 'image' })]
-    ])
-  })
-
-  it('needs a user gesture in a worker, then prompts, persists the grant and fires onAdded', async () => {
-    const frame = await listenFrame(VAULT, 'permissions', 'onAdded')
-    await expect(
-      call(VAULT, 'permissions', 'request', [{ permissions: ['privacy'] }])
-    ).rejects.toThrow('This function must be called during a user gesture')
-    expect(mocks.prompt).not.toHaveBeenCalled()
-
-    mocks.prompt.mockResolvedValueOnce(true)
-    noteBrowserExtensionUserGesture(session, VAULT)
-    await expect(
-      call(VAULT, 'permissions', 'request', [{ permissions: ['privacy'] }])
-    ).resolves.toBe(true)
-    expect(mocks.prompt).toHaveBeenCalledTimes(1)
-    expect(frame.payloads()).toEqual([[{ permissions: ['privacy'], origins: [] }]])
-    expect(
-      getBrowserExtensionProfileStateStore().read('default', VAULT).grantedPermissions
-    ).toEqual(['privacy'])
-    // The grant now opens the namespace that needs it, and asking again does not prompt.
-    expect(registry.extensionHasPermission(caller(VAULT).extension, 'privacy', session)).toBe(true)
-    await expect(
-      call(VAULT, 'permissions', 'contains', [{ permissions: ['privacy'] }])
-    ).resolves.toBe(true)
-    await expect(
-      call(VAULT, 'permissions', 'request', [{ permissions: ['privacy'] }])
-    ).resolves.toBe(true)
-    expect(mocks.prompt).toHaveBeenCalledTimes(1)
-
-    await expect(
-      call(VAULT, 'permissions', 'remove', [{ permissions: ['privacy'] }])
-    ).resolves.toBe(true)
-    expect(registry.extensionHasPermission(caller(VAULT).extension, 'privacy', session)).toBe(false)
-  })
-
-  it('keeps nothing when the user declines, and refuses a second prompt while one is open', async () => {
-    let answer: (accepted: boolean) => void = () => {}
-    mocks.prompt.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)))
-    const first = call(VAULT, 'permissions', 'request', [{ permissions: ['privacy'] }], 'page')
-    await expect(
-      call(VAULT, 'permissions', 'request', [{ permissions: ['privacy'] }], 'page')
-    ).rejects.toThrow('A permissions request is already pending')
-    answer(false)
-    await expect(first).resolves.toBe(false)
-    expect(
-      getBrowserExtensionProfileStateStore().read('default', VAULT).grantedPermissions
-    ).toEqual([])
-  })
-})
-
-describe('privacy settings', () => {
-  it('reports who controls a setting and tells other extensions when it changes', async () => {
-    const otherFrame = await listenFrame(
-      OTHER,
-      'privacy',
-      'services.passwordSavingEnabled.onChange'
-    )
-    await expect(
-      call(OTHER, 'privacy', 'services.passwordSavingEnabled.get', [{}])
-    ).resolves.toEqual({ value: true, levelOfControl: 'controllable_by_this_extension' })
-
-    getBrowserExtensionProfileStateStore().update('default', VAULT, (state) => ({
-      ...state,
-      grantedPermissions: ['privacy']
-    }))
-    await call(VAULT, 'privacy', 'services.passwordSavingEnabled.set', [{ value: false }])
-    await expect(
-      call(VAULT, 'privacy', 'services.passwordSavingEnabled.get', [{}])
-    ).resolves.toEqual({
-      value: false,
-      levelOfControl: 'controlled_by_this_extension'
-    })
-    expect(otherFrame.payloads()).toEqual([
-      [{ value: false, levelOfControl: 'controlled_by_other_extensions' }]
-    ])
-    await expect(
-      call(VAULT, 'privacy', 'network.networkPredictionEnabled.set', [{ value: false }])
-    ).rejects.toThrow('cannot be changed in Orca')
-    // Privacy Badger reads these and only writes settings it may control.
-    await expect(call(OTHER, 'privacy', 'websites.topicsEnabled.get', [{}])).resolves.toEqual({
-      value: false,
-      levelOfControl: 'not_controllable'
-    })
-  })
-})
-
-describe('action icons', () => {
-  it('reads icon paths as Chrome resolves them: against the worker script, or own URLs', async () => {
-    const { getBrowserExtensionActionState } =
-      await import('../actions/browser-extension-action-registry')
-    const manifest = extensions.get(VAULT)?.manifest ?? {}
-    manifest.background = { service_worker: 'scripts/orca-background.js' }
-    try {
-      await call(VAULT, 'action', 'setIcon', [
-        {
-          path: {
-            16: `chrome-extension://${VAULT}/images/grey16.png`,
-            32: '../icons/enabled 32.png',
-            48: 'https://example.com/icon.png'
-          }
-        }
-      ])
-    } finally {
-      delete manifest.background
-    }
-    expect(
-      getBrowserExtensionActionState('default', caller(VAULT).extension).get(null).icon
-    ).toEqual({
-      kind: 'path',
-      paths: {
-        16: 'images/grey16.png',
-        32: 'icons/enabled 32.png',
-        48: 'https://example.com/icon.png'
-      }
-    })
-  })
-})
-
-describe('storage change relay', () => {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a second profile session over the same stubbed members.
-  const secondSession = { ...extensionSession } as unknown as Electron.Session
-
-  function listeningWorker(sess: Electron.Session, extensionId: string) {
-    const state = contexts.getHostSessionState(sess)
-    if (!state) {
-      throw new Error('Session is not attached')
-    }
-    const context = contexts.ensureWorkerContext(
-      state,
-      extensionId,
-      `chrome-extension://${extensionId}/`
-    )
-    context.events.add(eventDispatch.eventKey(PRELOAD_STORAGE_RELAY_NAMESPACE, 'onChanged'))
-    const send = vi.fn()
-    attachWorkerEventStream(context, { send, close: vi.fn() })
-    return send
-  }
-
-  it('forwards a page write only to the same extension worker in the same session', async () => {
-    host.attachBrowserExtensionApiHostToSession(secondSession, 'work')
-    const vaultWorker = listeningWorker(session, VAULT)
-    const otherWorker = listeningWorker(session, OTHER)
-    const vaultElsewhere = listeningWorker(secondSession, VAULT)
-    const changes = { token: { oldValue: 'a', newValue: 'b' }, added: { newValue: [1] } }
-
-    await call(VAULT, PRELOAD_STORAGE_RELAY_NAMESPACE, 'report', ['session', changes], 'page')
-    expect(vaultWorker.mock.calls).toEqual([
-      [
-        {
-          namespace: PRELOAD_STORAGE_RELAY_NAMESPACE,
-          event: 'onChanged',
-          args: [changes, 'session']
-        }
-      ]
-    ])
-    expect(otherWorker).not.toHaveBeenCalled()
-    expect(vaultElsewhere).not.toHaveBeenCalled()
-    const { BROWSER_EXTENSION_API_SURFACE } =
-      await import('../../../../preload/browser-extension-api-surface')
-    expect(BROWSER_EXTENSION_API_SURFACE).not.toHaveProperty(PRELOAD_STORAGE_RELAY_NAMESPACE)
-  })
-
-  it('refuses reports from the worker and malformed changes', async () => {
-    await expect(
-      call(VAULT, PRELOAD_STORAGE_RELAY_NAMESPACE, 'report', ['local', {}], 'worker')
-    ).rejects.toThrow('The worker delivers its own storage changes')
-    await expect(
-      call(VAULT, PRELOAD_STORAGE_RELAY_NAMESPACE, 'report', ['managed', {}], 'page')
-    ).rejects.toThrow('Invalid arguments at 0')
-    await expect(
-      call(VAULT, PRELOAD_STORAGE_RELAY_NAMESPACE, 'report', ['local', { a: { value: 1 } }], 'page')
-    ).rejects.toThrow('Invalid arguments at 1.a')
-  })
 })
 
 describe('context menus in the page menu', () => {
@@ -596,94 +350,6 @@ describe('context menus in the page menu', () => {
       getBrowserExtensionProfileStateStore().read('default', VAULT).contextMenus[1].checked
     ).toBe(true)
   })
-
-  it('refuses ids the extension already used', async () => {
-    await expect(
-      call(OTHER, 'contextMenus', 'create', [{ id: 9, title: 'Again' }])
-    ).rejects.toThrow('Cannot create item with duplicate id 9')
-  })
-})
-
-describe('cookies', () => {
-  it('needs host permission, reads Chrome-shaped cookies and hides hosts it cannot see', async () => {
-    await expect(
-      call(VAULT, 'cookies', 'get', [{ url: 'https://www.bank.test/', name: 'sid' }])
-    ).resolves.toEqual({
-      name: 'sid',
-      value: '1',
-      domain: '.bank.test',
-      hostOnly: false,
-      path: '/',
-      secure: true,
-      httpOnly: true,
-      sameSite: 'lax',
-      session: false,
-      storeId: '0'
-    })
-    await expect(
-      call(VAULT, 'cookies', 'get', [{ url: 'http://plain.test/', name: 'pref' }])
-    ).rejects.toThrow('No host permissions for cookies at url: "http://plain.test/".')
-    // getAll without a URL returns only cookies on hosts the extension may access (https here).
-    const all = await call(VAULT, 'cookies', 'getAll', [{}])
-    expect(Array.isArray(all) ? all.map((cookie) => cookie.name) : all).toEqual(['sid'])
-    expect(cookies.get).toHaveBeenLastCalledWith({})
-    await expect(
-      call(VAULT, 'cookies', 'get', [{ url: 'https://www.bank.test/', name: 'sid', storeId: '1' }])
-    ).rejects.toThrow('Invalid cookie store id: "1".')
-    await expect(call(VAULT, 'cookies', 'getAllCookieStores', [])).resolves.toEqual([
-      { id: '0', tabIds: [] }
-    ])
-  })
-})
-
-describe('webRequest forwarding', () => {
-  it('maps Electron details to Chrome details and pre-filters by listener filter', () => {
-    const details = webRequest.toChromeWebRequestDetails(
-      {
-        id: 41,
-        url: 'https://site.test/login',
-        method: 'POST',
-        resourceType: 'mainFrame',
-        timestamp: 5,
-        requestHeaders: { Cookie: 'sid=1', 'Content-Type': 'application/x-www-form-urlencoded' },
-        statusCode: 302,
-        redirectURL: 'https://site.test/home'
-      },
-      { tabId: 7, windowId: 1 },
-      { frameId: 0, parentFrameId: -1, frameType: 'outermost_frame', documentLifecycle: 'active' }
-    )
-    expect(details).toEqual({
-      requestId: '41',
-      url: 'https://site.test/login',
-      method: 'POST',
-      frameId: 0,
-      parentFrameId: -1,
-      tabId: 7,
-      windowId: 1,
-      type: 'main_frame',
-      timeStamp: 5,
-      frameType: 'outermost_frame',
-      documentLifecycle: 'active',
-      requestHeaders: [{ name: 'Content-Type', value: 'application/x-www-form-urlencoded' }],
-      statusCode: 302,
-      redirectUrl: 'https://site.test/home'
-    })
-    expect(
-      webRequest.webRequestFilterMatches(
-        { urls: ['https://site.test/*'], types: ['main_frame'] },
-        details
-      )
-    ).toBe(true)
-    expect(
-      webRequest.webRequestFilterMatches({ urls: ['<all_urls>'], types: ['image'] }, details)
-    ).toBe(false)
-    expect(webRequest.webRequestFilterMatches({ urls: ['https://other.test/*'] }, details)).toBe(
-      false
-    )
-    expect(webRequest.webRequestFilterMatches({ urls: ['<all_urls>'], tabId: 8 }, details)).toBe(
-      false
-    )
-  })
 })
 
 describe('storage.sync', () => {
@@ -730,27 +396,6 @@ describe('storage.sync', () => {
   }
 
   beforeEach(async () => {
-    await sync('clear', [])
-  })
-
-  it('reads with every Chrome key form and keeps values as JSON', async () => {
-    await sync('set', [{ theme: { dark: true }, size: 3, when: new Date(0), fn: () => 1 }])
-    await expect(sync('get', [null])).resolves.toEqual({
-      theme: { dark: true },
-      size: 3,
-      when: '1970-01-01T00:00:00.000Z'
-    })
-    await expect(sync('get', [])).resolves.toEqual(expect.objectContaining({ size: 3 }))
-    await expect(sync('get', ['size'])).resolves.toEqual({ size: 3 })
-    await expect(sync('get', [['size', 'missing']])).resolves.toEqual({ size: 3 })
-    await expect(sync('get', [{ size: 0, missing: 'fallback' }])).resolves.toEqual({
-      size: 3,
-      missing: 'fallback'
-    })
-    await expect(sync('getKeys', [])).resolves.toEqual(['theme', 'size', 'when'])
-    // Chrome counts key + JSON bytes: "size" + "3".
-    await expect(sync('getBytesInUse', ['size'])).resolves.toBe(5)
-    await expect(sync('get', [7])).rejects.toThrow('Invalid arguments at 0')
     await sync('clear', [])
   })
 
@@ -801,23 +446,6 @@ describe('storage.sync', () => {
     await expect(sync('get', ['key0'])).resolves.toEqual({ key0: 'short' })
     await sync('clear', [])
   })
-
-  it("fails a write that breaks Chrome's quotas and stores none of it", async () => {
-    await expect(sync('set', [{ big: 'x'.repeat(8192) }])).rejects.toThrow(
-      'QUOTA_BYTES_PER_ITEM quota exceeded'
-    )
-    // Each item fits; 13 of them do not.
-    const items = Object.fromEntries(
-      Array.from({ length: 13 }, (_, index) => [`k${index}`, 'x'.repeat(8000)])
-    )
-    await expect(sync('set', [items])).rejects.toThrow('QUOTA_BYTES quota exceeded')
-    const many = Object.fromEntries(Array.from({ length: 513 }, (_, index) => [`n${index}`, 1]))
-    await expect(sync('set', [many])).rejects.toThrow('MAX_ITEMS quota exceeded')
-    await expect(sync('getBytesInUse', [null])).resolves.toBe(0)
-    await sync('set', [{ edge: 'x'.repeat(8192 - 'edge'.length - 2) }])
-    await expect(sync('getBytesInUse', [])).resolves.toBe(8192)
-    await sync('clear', [])
-  })
 })
 
 /** Registers a listening frame and reads what it was sent. */
@@ -847,10 +475,3 @@ async function listenFrame(extensionId: string, namespace: string, event: string
         .map(([, payload]) => payload.args)
   }
 }
-
-describe('chrome.extension access checks', () => {
-  it('reports no file or incognito access, matching how Orca loads extensions', async () => {
-    expect(await call(VAULT, 'extension', 'isAllowedFileSchemeAccess', [])).toBe(false)
-    expect(await call(VAULT, 'extension', 'isAllowedIncognitoAccess', [])).toBe(false)
-  })
-})

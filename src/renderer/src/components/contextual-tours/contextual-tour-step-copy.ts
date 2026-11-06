@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import type { ContextualTourStepId } from '../../../../shared/contextual-tours'
 
 export type LocalizedContextualTourStepCopy = {
@@ -11,6 +12,9 @@ export type LocalizedContextualTourStepCopy = {
 }
 
 type StepCopyThunk = () => LocalizedContextualTourStepCopy
+
+const getProjectsCollapseModifierLabel = (): string =>
+  getShortcutPlatform() === 'darwin' ? '⌥' : 'Alt'
 
 // Thunks resolve translate() in the language active at render time; `satisfies` makes a step without copy a type error.
 const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
@@ -46,8 +50,8 @@ const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
   }),
   'agent-sessions-split-chat': () => ({
     title: translate(
-      'components.contextualTours.agentSessions.splitChat.title',
-      'Run two chats side by side'
+      'auto.components.contextual.tours.contextual.tour.step.copy.agent.sessions.split.title',
+      'Split a terminal pane'
     ),
     body: translate(
       'components.contextualTours.agentSessions.splitChat.body',
@@ -58,8 +62,8 @@ const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
       'Click the split button at the top of the chat. Each side gets its own tabs.'
     ),
     primaryActionLabel: translate(
-      'components.contextualTours.agentSessions.splitChat.action',
-      'Split chat'
+      'auto.components.contextual.tours.contextual.tour.step.copy.agent.sessions.split.action',
+      'Split terminal'
     )
   }),
   'agent-sessions-split': () => ({
@@ -236,6 +240,27 @@ const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
     body: translate(
       'auto.components.contextual.tours.contextual.tour.step.copy.workspace.creation.agent.body',
       'Pick the agent that should be opened when this worktree is created.'
+    )
+  }),
+  'projects-collapse-all-intro': () => ({
+    title: translate(
+      'components.contextualTours.projectsCollapseAll.intro.title',
+      'Collapse all projects at once'
+    ),
+    // {sidebar.projects.toggleCollapse} resolves to the user's current binding at render time.
+    body: translate(
+      'components.contextualTours.projectsCollapseAll.intro.body',
+      'Press {sidebar.projects.toggleCollapse}, click this button, or {{modifier}}-click any project header.',
+      { modifier: getProjectsCollapseModifierLabel() }
+    ),
+    bodyWithoutShortcut: translate(
+      'components.contextualTours.projectsCollapseAll.intro.bodyWithoutShortcut',
+      'Click this button, or {{modifier}}-click any project header.',
+      { modifier: getProjectsCollapseModifierLabel() }
+    ),
+    primaryActionLabel: translate(
+      'components.contextualTours.projectsCollapseAll.intro.action',
+      'Got it'
     )
   })
 } satisfies Record<ContextualTourStepId, StepCopyThunk>

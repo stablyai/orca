@@ -1,8 +1,4 @@
-import {
-  hasFeatureInteraction,
-  type FeatureInteractionId,
-  type FeatureInteractionState
-} from './feature-interactions'
+import type { FeatureInteractionId } from './feature-interactions'
 
 export type ContextualTourId =
   | 'workspace-board'
@@ -13,6 +9,7 @@ export type ContextualTourId =
   | 'automations'
   | 'floating-workspace'
   | 'workspace-creation'
+  | 'projects-collapse-all'
 
 export type ContextualTourStepControl = {
   kind: 'auto-rename-branch-from-work'
@@ -51,10 +48,13 @@ export type ContextualTourStep = {
   primaryAction?: ContextualTourStepAction
   secondaryAction?: ContextualTourStepAction
   advanceOnFeatureInteraction?: FeatureInteractionId
+  /** Labels a step that announces a newly shipped feature. */
+  badge?: 'new'
 }
 
 export type ContextualTour = {
   id: ContextualTourId
+  preserveFocus?: boolean
   allowedActiveModals?: readonly string[]
   steps: readonly ContextualTourStep[]
 }
@@ -95,13 +95,13 @@ export const CONTEXTUAL_TOURS = [
       // Exactly one split step shows: its target exists only for the active tab's kind.
       {
         id: 'agent-sessions-split-chat',
-        title: 'Run two chats side by side',
+        title: 'Split a terminal pane',
         body: 'Press {terminal.splitRight}, or click the split button at the top of the chat. Each side gets its own tabs.',
         targetSelector:
           '[data-contextual-tour-target="chat-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"][data-active-content-type="agent-session"]',
         requiredForStart: true,
         preferredPlacement: 'bottom',
-        primaryAction: { kind: 'split-chat-pane', label: 'Split chat' },
+        primaryAction: { kind: 'split-chat-pane', label: 'Split terminal' },
         advanceOnFeatureInteraction: 'tab-splits'
       },
       {
@@ -237,6 +237,23 @@ export const CONTEXTUAL_TOURS = [
     ]
   },
   {
+    id: 'projects-collapse-all',
+    preserveFocus: true,
+    steps: [
+      {
+        id: 'projects-collapse-all-intro',
+        badge: 'new',
+        title: 'Collapse all projects at once',
+        body: 'Press {sidebar.projects.toggleCollapse}, click this button, or Alt-click any project header.',
+        targetSelector:
+          '[data-contextual-tour-target="projects-collapse-all"]:has([data-projects-collapse-toggle])',
+        requiredForStart: true,
+        preferredPlacement: 'bottom',
+        primaryAction: { kind: 'complete', label: 'Got it' }
+      }
+    ]
+  },
+  {
     id: 'workspace-creation',
     allowedActiveModals: ['new-workspace-composer'],
     steps: [
@@ -274,35 +291,6 @@ export function isContextualTourId(value: unknown): value is ContextualTourId {
 
 export function getContextualTour(id: ContextualTourId): ContextualTour {
   return CONTEXTUAL_TOURS.find((tour) => tour.id === id)!
-}
-
-// A step that waits for a user action is done only once that action succeeded, never when it is shown.
-export function isContextualTourStepDone(
-  step: ContextualTourStep,
-  featureInteractions: FeatureInteractionState
-): boolean {
-  return (
-    step.advanceOnFeatureInteraction !== undefined &&
-    hasFeatureInteraction(featureInteractions, step.advanceOnFeatureInteraction)
-  )
-}
-
-export function hasContextualTourActionStep(tour: ContextualTour): boolean {
-  return tour.steps.some((step) => step.advanceOnFeatureInteraction !== undefined)
-}
-
-export function hasUndoneContextualTourAction(
-  tour: ContextualTour,
-  featureInteractions: FeatureInteractionState,
-  fromStepIndex = 0
-): boolean {
-  return tour.steps
-    .slice(fromStepIndex)
-    .some(
-      (step) =>
-        step.advanceOnFeatureInteraction !== undefined &&
-        !isContextualTourStepDone(step, featureInteractions)
-    )
 }
 
 export const getContextualTourStepIndex = (id: ContextualTourId, stepId: ContextualTourStepId) =>

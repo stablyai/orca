@@ -8,7 +8,6 @@ import { agentSessionGoalControlWords } from './agent-session-goal-control-words
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useSyncExternalStore } from 'react'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
 import { NativeChatCodeBlock } from './NativeChatCodeBlock'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -69,16 +68,12 @@ const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string
 export function NativeChatNoticeRow({
   block,
   messageId,
-  agentName,
-  onLinkClick,
-  allowFileUriLinks = false
+  agentName
 }: {
   block: NativeChatTextBlock
   /** The transcript row's message, so a plan's code blocks keep their wrap past the row's mount. */
   messageId?: string
   agentName?: string
-  onLinkClick?: CommentMarkdownLinkClickHandler
-  allowFileUriLinks?: boolean
 }): React.JSX.Element {
   useTranslation()
   const orcaStopView = useNativeChatOrcaStopView()
@@ -146,9 +141,7 @@ export function NativeChatNoticeRow({
             variant="document"
             renderCodeBlock={NativeChatCodeBlock}
             className="text-sm text-chat-foreground"
-            onLinkClick={onLinkClick}
-            allowFileUriLinks={allowFileUriLinks}
-            linkifyFilePaths={onLinkClick !== undefined}
+            linkifyFilePaths
           />
         </CardContent>
       </Card>
@@ -201,9 +194,11 @@ export function NativeChatNoticeRow({
   const usageLimitContinue =
     block.usageLimitTurnItemId !== undefined &&
     block.usageLimitTurnItemId === orcaStopView.usageLimitTurnItemId
-  // Only reword auth and missing-conversation text fully described by its fact; host text may also carry command advice.
+  // Reword only text fully described by its fact; other host text may carry command advice.
   const factSurface =
-    failure?.kind === 'notSignedIn' || failure?.kind === 'savedConversationMissing'
+    failure?.kind === 'notSignedIn' ||
+    failure?.kind === 'savedConversationMissing' ||
+    failure?.kind === 'pluginInputRequired'
       ? (['row', 'rejection'] as const).find(
           (surface) => block.text === agentSessionFailureSentence(failure, surface, { agentName })
         )

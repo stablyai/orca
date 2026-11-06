@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createTranscriptPane,
   TRANSCRIPT_PANE_PTY_ID
-} from '../../agent-transcript-pane-test-harness'
+} from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
 
 const POLL_INTERVAL_MS = 2_000
 

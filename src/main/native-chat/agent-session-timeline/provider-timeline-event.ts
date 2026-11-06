@@ -10,6 +10,7 @@ import type {
   AgentJournalProducerLinkage,
   AgentJournalQuestionItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentJournalTurnOutcome } from '../../../shared/agent-status/lifecycle/agent-turn-outcome'
 import type { StructuredAgentSessionTurnVerdict } from '../agent-session-wire/structured-agent-session-stale-turn-verdict'
 
@@ -27,6 +28,8 @@ export type ProviderTimelineJoin = {
   thread?: string
   /** Absent uses the open turn. */
   turn?: string
+  /** Placement recovered from an existing journal row without reversing provider keys. */
+  scope?: AgentJournalTurnScope
 }
 
 /** Named items share full-snapshot rows; anonymous streams create a message each time they start. */
@@ -73,7 +76,13 @@ export type ProviderTimelineEvent =
       Joined)
   /** Final text overrides accumulated deltas; join must match the same item. */
   | ({ type: 'text.close'; item: ProviderTimelineTextItem; text?: string } & Joined)
-  | ({ type: 'request.open'; request: string; body: ProviderTimelineRequestBody } & Produced &
+  /** A request that outlives its turn stays pending until answered or withdrawn. */
+  | ({
+      type: 'request.open'
+      request: string
+      body: ProviderTimelineRequestBody
+      outlivesTurn?: true
+    } & Produced &
       Joined)
   /** Withdraw only unanswered requests. */
   | { type: 'request.withdrawn'; request: string }
