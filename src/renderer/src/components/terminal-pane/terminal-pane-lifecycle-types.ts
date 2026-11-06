@@ -51,7 +51,6 @@ export type UseTerminalPaneLifecycleDeps = {
   expandedStyleSnapshotRef: React.MutableRefObject<
     Map<HTMLElement, { display: string; flex: string }>
   >
-  paneFontSizesRef: React.RefObject<Map<number, number>>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   /** Per-pane live cwd (from the OSC 7 handler). */
   paneCwdRef: React.RefObject<PaneCwdMap>
