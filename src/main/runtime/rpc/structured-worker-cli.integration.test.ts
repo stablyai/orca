@@ -270,7 +270,7 @@ async function start(retryOf?: string) {
     '--agent',
     'codex',
     ...(retryOf
-      ? ['--task', db.getWorkerDispatch(retryOf)!.task_id, '--retry-of', retryOf]
+      ? ['--task', db.getDispatchContextById(retryOf)!.task_id, '--retry-of', retryOf]
       : ['--spec', 'Reply once then wait'])
   ])
   expect(receipt.code, receipt.stdout + receipt.stderr).toBe(0)
@@ -416,7 +416,7 @@ it.each(['worker-release', 'retry-of'] as const)(
     })
     expect(db.getDispatchContextById(dispatchId)).toMatchObject({ status: 'failed' })
     expect(db.getDispatchContextById(dispatchId)?.capability_revoked_at).not.toBeNull()
-    expect(db.getTask(worker.task_id)?.status).toBe('failed')
+    expect(db.getTask(db.getDispatchContextById(dispatchId)!.task_id)?.status).toBe('failed')
     const snapshot = await host.journalSnapshot(identity.sessionId)
     expect(snapshot.submissions).toMatchObject([{ dispatchState: 'rejected' }])
     expect(JSON.stringify(snapshot)).toContain('Refused fixture task')
