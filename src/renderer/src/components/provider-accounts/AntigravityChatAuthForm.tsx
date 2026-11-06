@@ -119,6 +119,7 @@ function AuthForm({
   const active =
     observation.kind === 'known' && antigravityChatSignInRunning(observation.state.flow)
   const unavailable = error?.recovery === 'reload'
+  const displayedMethod = unavailable && !edited.current ? '' : method
   const environmentId = owner.kind === 'environment' ? owner.environmentId : null
   async function load(current: () => boolean = () => mounted.current) {
     const read = ++reads.current
@@ -288,7 +289,7 @@ function AuthForm({
             {translate('accounts.antigravity.authMethod', 'Sign in with')}
           </Label>
           <Select
-            value={unavailable && !edited.current ? '' : method}
+            value={displayedMethod}
             disabled={blocked}
             onValueChange={(value) => {
               edited.current = true
@@ -309,7 +310,7 @@ function AuthForm({
             </SelectContent>
           </Select>
         </div>
-        {method === 'oauth-business' && (
+        {displayedMethod === 'oauth-business' && (
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label htmlFor={`${id}-project`} variant="settings">
