@@ -1,7 +1,8 @@
 import { parentPort, workerData } from 'node:worker_threads'
 import { decodeLegacyTranscriptImport } from './journal-legacy-import-decode'
+import { transferLegacyImportItems } from './journal-legacy-import-transfer'
 import type {
-  LegacyImportValidation,
+  LegacyImportWorkerReply,
   LegacyImportWorkerMessage,
   LegacyTranscriptImportRequest
 } from './journal-legacy-import-worker-protocol'
@@ -11,27 +12,38 @@ if (!parentPort) {
 }
 const port = parentPort
 const send = (message: LegacyImportWorkerMessage) => port.postMessage(message)
+const request = (message: LegacyImportWorkerMessage) =>
+  new Promise<LegacyImportWorkerReply>((resolve) => {
+    port.once('message', resolve)
+    send(message)
+  })
 
-void decodeLegacyTranscriptImport(
-  workerData as LegacyTranscriptImportRequest,
-  (observed) =>
-    new Promise<void>((resolve, reject) => {
-      port.once('message', (reply: LegacyImportValidation) => {
-        if (reply.ok) {
-          resolve()
-        } else {
-          reject(new Error(reply.error))
-        }
-      })
-      send({ type: 'validate-source', observed })
+void decodeLegacyTranscriptImport(workerData as LegacyTranscriptImportRequest, async (observed) => {
+  const reply = await request({ type: 'validate-source', observed })
+  if (reply?.type !== 'validation') {
+    throw new Error('Invalid history validation acknowledgement')
+  }
+  if (!reply.ok) {
+    throw new Error(reply.error)
+  }
+})
+  .then(async (result) => {
+    if (!result.ok) {
+      send({ type: 'result', result })
+      return
+    }
+    const completed = await transferLegacyImportItems(result.items, async (batch) => {
+      const reply = await request(batch)
+      if (reply?.type !== 'credit' || reply.index !== batch.index) {
+        throw new Error('Invalid history transfer acknowledgement')
+      }
     })
-)
-  .then(
-    (result) => send({ type: 'result', result }),
-    (error: unknown) =>
-      send({
-        type: 'result',
-        result: { ok: false, error: error instanceof Error ? error.message : String(error) }
-      })
+    send({ type: 'result', result: { ok: true, sourceEmpty: result.sourceEmpty, ...completed } })
+  })
+  .catch((error: unknown) =>
+    send({
+      type: 'result',
+      result: { ok: false, error: error instanceof Error ? error.message : String(error) }
+    })
   )
   .finally(() => port.close())

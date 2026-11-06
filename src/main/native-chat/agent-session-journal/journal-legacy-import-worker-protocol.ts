@@ -18,8 +18,15 @@ export type PreparedLegacyImport =
   | { ok: true; items: JournalReplacementItem[]; sourceEmpty: boolean }
   | { ok: false; error: string }
 
+export type LegacyImportCompletion =
+  | { ok: true; sourceEmpty: boolean; itemCount: number; batchCount: number }
+  | { ok: false; error: string }
+
 export type LegacyImportWorkerMessage =
   | { type: 'validate-source'; observed: AdoptedTranscriptObservation }
-  | { type: 'result'; result: PreparedLegacyImport }
+  | { type: 'items'; index: number; items: JournalReplacementItem[] }
+  | { type: 'result'; result: LegacyImportCompletion }
 
-export type LegacyImportValidation = { ok: true } | { ok: false; error: string }
+export type LegacyImportWorkerReply =
+  | ({ type: 'validation' } & ({ ok: true } | { ok: false; error: string }))
+  | { type: 'credit'; index: number }

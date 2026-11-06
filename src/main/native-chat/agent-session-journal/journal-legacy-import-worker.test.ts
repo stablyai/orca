@@ -15,6 +15,7 @@ const request: LegacyTranscriptImportRequest = {
 }
 const observed = { sessionId: 'session', cwd: '/workspace' }
 const result = { ok: true, items: [], sourceEmpty: false }
+const completion = { ok: true, itemCount: 0, batchCount: 0, sourceEmpty: false }
 
 class TestWorker extends EventEmitter {
   reply: (value: unknown) => void = () => {}
@@ -39,8 +40,8 @@ it('keeps validation on the host and publishes only after successful exit', asyn
     validated = resolve
   })
   worker.reply = (reply) => {
-    expect(reply).toEqual({ ok: true })
-    worker.emit('message', { type: 'result', result })
+    expect(reply).toEqual({ type: 'validation', ok: true })
+    worker.emit('message', { type: 'result', result: completion })
     acknowledge()
   }
   const pending = runLegacyTranscriptImportWorker(
@@ -87,7 +88,7 @@ it('cancels the host probe and joins the worker when adoption aborts during vali
   expect(validationSignal?.aborted).toBe(true)
 })
 
-it.each(['nonzero', 'missing', 'unvalidated', 'duplicate'] as const)(
+it.each(['nonzero', 'missing', 'unvalidated', 'duplicate', 'incomplete'] as const)(
   'rejects %s worker completion without publishing',
   async (kind) => {
     const worker = new TestWorker()
@@ -99,16 +100,49 @@ it.each(['nonzero', 'missing', 'unvalidated', 'duplicate'] as const)(
     )
     const assertion = expect(pending).rejects.toBeInstanceOf(Error)
     if (kind !== 'missing') {
-      worker.emit('message', { type: 'result', result })
+      worker.emit('message', {
+        type: 'result',
+        result: kind === 'incomplete' ? { ...completion, itemCount: 1 } : completion
+      })
     }
     if (kind === 'duplicate') {
-      worker.emit('message', { type: 'result', result })
+      worker.emit('message', { type: 'result', result: completion })
     } else {
       worker.emit('exit', kind === 'nonzero' ? 1 : 0)
     }
     await assertion
   }
 )
+
+it('discards partial history and cancels deferred credit when adoption aborts', async () => {
+  const worker = new TestWorker()
+  const abort = new AbortController()
+  let credits = 0
+  worker.reply = () => {
+    credits++
+  }
+  const pending = runLegacyTranscriptImportWorker(
+    { ...request, validateSource: false },
+    async () => {},
+    abort.signal,
+    () => worker
+  )
+  const assertion = expect(pending).rejects.toBe(false)
+  worker.emit('message', {
+    type: 'items',
+    index: 0,
+    items: [
+      {
+        identity: { provider: 'legacy', agent: 'claude', sessionId: 'session', uuid: 'partial' },
+        body: { kind: 'message', role: 'assistant', blocks: [] }
+      }
+    ]
+  })
+  abort.abort(false)
+  await assertion
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  expect(credits).toBe(0)
+})
 
 it('does not keep a closing host alive while import work is pending', () => {
   const child = spawnSync(process.execPath, [legacyImportHostExitTestEntry()], {
@@ -129,7 +163,7 @@ it('rejects a completed result when cancellation carries a falsy reason', async 
     () => worker
   )
   const assertion = expect(pending).rejects.toBe(false)
-  worker.emit('message', { type: 'result', result })
+  worker.emit('message', { type: 'result', result: completion })
   abort.abort(false)
   await assertion
 })

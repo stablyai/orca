@@ -6,8 +6,10 @@ import {
   resolveWorkerThreadEntryPath
 } from '../../worker-threads/worker-thread-entry-path'
 import type { AdoptedTranscriptObservation } from './adopted-transcript-observation'
+import type { JournalReplacementItem } from './journal-epoch-replacement'
 import type {
   LegacyImportWorkerMessage,
+  LegacyImportCompletion,
   LegacyTranscriptImportRequest,
   PreparedLegacyImport
 } from './journal-legacy-import-worker-protocol'
@@ -46,12 +48,20 @@ export function runLegacyTranscriptImportWorker(
     }
     const validationAbort = new AbortController()
     let failure: unknown
-    let result: PreparedLegacyImport | undefined
+    let result: LegacyImportCompletion | undefined
+    const items: JournalReplacementItem[] = []
+    let batchCount = 0
+    let credit: NodeJS.Immediate | undefined
+    const cancelCredit = () => {
+      clearImmediate(credit)
+      credit = undefined
+    }
     let validation: Promise<void> | undefined
     let validationRequested = false
     let validationCompleted = false
     const stop = (error: unknown) => {
       failure ??= error ?? new Error('History import cancelled')
+      cancelCredit()
       validationAbort.abort(failure)
       void worker.terminate().catch((error: unknown) => {
         failure ??= error
@@ -71,6 +81,7 @@ export function runLegacyTranscriptImportWorker(
         if (
           !request.validateSource ||
           validationRequested ||
+          batchCount > 0 ||
           result ||
           !message.observed ||
           !(
@@ -88,12 +99,13 @@ export function runLegacyTranscriptImportWorker(
             () => {
               validationCompleted = true
               if (failure === undefined) {
-                worker.postMessage({ ok: true })
+                worker.postMessage({ type: 'validation', ok: true })
               }
             },
             (error: unknown) => {
               if (failure === undefined) {
                 worker.postMessage({
+                  type: 'validation',
                   ok: false,
                   error: error instanceof Error ? error.message : String(error)
                 })
@@ -101,13 +113,42 @@ export function runLegacyTranscriptImportWorker(
             }
           )
           .catch(stop)
+      } else if (message?.type === 'items') {
+        if (
+          result ||
+          credit ||
+          message.index !== batchCount ||
+          !Array.isArray(message.items) ||
+          message.items.length === 0 ||
+          (request.validateSource && !validationCompleted)
+        ) {
+          stop(new Error('Invalid history transfer response'))
+          return
+        }
+        for (const item of message.items) {
+          items.push(item)
+        }
+        batchCount++
+        credit = setImmediate(() => {
+          credit = undefined
+          if (failure === undefined && !result) {
+            try {
+              worker.postMessage({ type: 'credit', index: message.index })
+            } catch (error) {
+              stop(error)
+            }
+          }
+        })
       } else if (
         message?.type === 'result' &&
         !result &&
+        !credit &&
         message.result &&
         ((message.result.ok === false && typeof message.result.error === 'string') ||
           (message.result.ok === true &&
-            Array.isArray(message.result.items) &&
+            message.result.itemCount === items.length &&
+            message.result.batchCount === batchCount &&
+            (!message.result.sourceEmpty || items.length === 0) &&
             typeof message.result.sourceEmpty === 'boolean'))
       ) {
         result = message.result
@@ -118,9 +159,11 @@ export function runLegacyTranscriptImportWorker(
     worker.once('messageerror', stop)
     worker.once('error', (error) => {
       failure ??= error
+      cancelCredit()
       validationAbort.abort(failure)
     })
     worker.once('exit', (code) => {
+      cancelCredit()
       if (
         code !== 0 ||
         !result ||
@@ -136,7 +179,7 @@ export function runLegacyTranscriptImportWorker(
         if (failure !== undefined) {
           reject(failure)
         } else if (result) {
-          resolve(result)
+          resolve(result.ok ? { ok: true, items, sourceEmpty: result.sourceEmpty } : result)
         }
       })
     })

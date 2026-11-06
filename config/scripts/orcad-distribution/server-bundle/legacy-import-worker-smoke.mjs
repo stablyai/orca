@@ -14,24 +14,29 @@ const worker = new Worker(entry, {execArgv:[], workerData:{agent:'claude', sessi
   filePath:source, transcriptAgent:'claude', limits:{inlineHeadBytes:16384}, validateSource:true}})
 let validated = false
 let received = false
+let completed = false
 let failure
 worker.on('error', error => {failure = error})
 worker.on('message', message => {
   if (message.type === 'validate-source' && !validated &&
       message.observed.sessionId === 'smoke-session' && message.observed.cwd === '/smoke') {
     validated = true
-    worker.postMessage({ok:true})
-  } else if (message.type === 'result' && validated && !received && message.result.ok &&
-      message.result.items.length === 1 && message.result.items[0].identity.uuid === 'smoke-message' &&
-      message.result.items[0].body.blocks[0].text === 'hello') {
+    worker.postMessage({type:'validation',ok:true})
+  } else if (message.type === 'items' && validated && !received && message.index === 0 &&
+      message.items.length === 1 && message.items[0].identity.uuid === 'smoke-message' &&
+      message.items[0].body.blocks[0].text === 'hello') {
     received = true
+    setImmediate(() => worker.postMessage({type:'credit',index:0}))
+  } else if (message.type === 'result' && received && !completed && message.result.ok &&
+      message.result.itemCount === 1 && message.result.batchCount === 1 && !message.result.sourceEmpty) {
+    completed = true
   } else {
     failure = Error('invalid import response')
     void worker.terminate()
   }
 })
 worker.on('exit', code => {
-  if (failure || code !== 0 || !received) {
+  if (failure || code !== 0 || !completed) {
     console.error(failure || 'import worker exited before completion')
     process.exitCode = 1
   }
