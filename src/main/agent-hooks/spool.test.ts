@@ -277,6 +277,37 @@ describe('agent hook spool', () => {
     expect(record).toMatchObject({ paneKey: 'tab-scrubbed:0', launchToken: 'generation-token' })
   })
 
+  it('never spools a Claude tool batch while the receiver is down, compact or spaced', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-spool-batch-'))
+    const endpointDir = join(dir, 'agent-hooks')
+    mkdirSync(endpointDir, { recursive: true })
+    const endpoint = join(endpointDir, 'endpoint.env')
+    writeFileSync(endpoint, 'ORCA_AGENT_HOOK_PORT=9\nORCA_AGENT_HOOK_TOKEN=stale\n')
+    const script = join(dir, 'claude-hook.sh')
+    writeFileSync(script, getClaudeManagedScript('posix'))
+    const run = (input: string) =>
+      execFileSync('/bin/sh', [script], {
+        input,
+        env: {
+          ...process.env,
+          ORCA_AGENT_HOOK_ENDPOINT: endpoint,
+          ORCA_PANE_KEY: 'tab-batch:0',
+          ORCA_AGENT_LAUNCH_TOKEN: 'generation-token',
+          CLAUDE_JOB_DIR: ''
+        },
+        timeout: 5000
+      })
+    run('{"hook_event_name":"PostToolBatch","tool_calls":[{"tool_use_id":"toolu-a"}]}\n')
+    run('{"hook_event_name": "PostToolBatch", "tool_calls": [{"tool_use_id": "toolu-b"}]}\n')
+    run('{"hook_event_name":"Stop","session_id":"claude-session"}\n')
+    const spoolDir = join(endpointDir, 'spool')
+    const records = readdirSync(spoolDir).flatMap((file) =>
+      readFileSync(join(spoolDir, file), 'utf8').trim().split('\n')
+    )
+    expect(records).toHaveLength(1)
+    expect(records[0]).toContain('"Stop"')
+  })
+
   it('does not mark a non-terminal downtime replay as runtime-observed', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-spool-observed-'))
     const paneKey = makePaneKey('tab-observed', '00000000-0000-4000-8000-000000000002')
