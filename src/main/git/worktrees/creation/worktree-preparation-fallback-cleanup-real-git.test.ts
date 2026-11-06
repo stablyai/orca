@@ -18,7 +18,7 @@ import {
 } from '../../../workspaces/creation/preparation/worktree-create-preparation-pool'
 import { WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS } from '../worktree-operation-options'
 
-const lockWrite = vi.hoisted(() => ({ after: undefined as (() => void) | undefined }))
+const lockWrite = vi.hoisted((): { after: (() => void) | undefined } => ({ after: undefined }))
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FilePromises>()
   return {
