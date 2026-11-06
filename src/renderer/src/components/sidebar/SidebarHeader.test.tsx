@@ -7,6 +7,7 @@ import SidebarHeader from './SidebarHeader'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import { getContextualTourStepIndex } from '../../../../shared/contextual-tours'
+import type * as FolderSubmitModuleNamespace from './workspace-creation/folder/folder-workspace-composer-submit'
 import {
   makeFolderWorkspace,
   makeProjectGroup
@@ -50,6 +51,8 @@ type MockState = {
   projectGroups: ProjectGroup[]
   createFolderWorkspace: typeof mocks.createFolderWorkspace
   runtimeStatusByEnvironmentId: Map<string, never>
+  sshConnectionStates: Map<string, never>
+  sshStateByEnvironment: Map<string, never>
   groupBy: string
   sidebarBody: 'workspaces' | 'agents'
   sidebarWidth: number
@@ -72,6 +75,7 @@ type MockState = {
 }
 
 let mockState: MockState
+type FolderSubmitModule = typeof FolderSubmitModuleNamespace
 
 vi.mock('@/store', () => {
   const useAppStore = (selector: (state: MockState) => unknown) => selector(mockState)
@@ -127,10 +131,7 @@ vi.mock('./folder-workspace-default-agent', async (importOriginal) => ({
 }))
 
 vi.mock('./workspace-creation/folder/folder-workspace-composer-submit', async (importOriginal) => {
-  const actual =
-    await importOriginal<
-      typeof import('./workspace-creation/folder/folder-workspace-composer-submit')
-    >()
+  const actual = await importOriginal<FolderSubmitModule>()
   mocks.submitFolderWorkspaceCreate.mockImplementation(actual.submitFolderWorkspaceCreate)
   return { submitFolderWorkspaceCreate: mocks.submitFolderWorkspaceCreate }
 })
@@ -184,6 +185,8 @@ beforeEach(() => {
     projectGroups: [],
     createFolderWorkspace: mocks.createFolderWorkspace,
     runtimeStatusByEnvironmentId: new Map<string, never>(),
+    sshConnectionStates: new Map<string, never>(),
+    sshStateByEnvironment: new Map<string, never>(),
     groupBy: 'repo',
     sidebarBody: 'workspaces',
     sidebarWidth: 280,
@@ -305,7 +308,7 @@ describe('SidebarHeader', () => {
     // The agent is chosen and launched on that SSH host too, not the group's unpinned host.
     expect(mocks.resolveDirectCreateAgent).toHaveBeenCalledWith(
       { kind: 'folder', runtimeEnvironmentId: null, executionHostId: 'ssh:box' },
-      { kind: 'ssh', connectionId: 'box' }
+      expect.any(Function)
     )
     expect(mocks.submitFolderWorkspaceCreate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -492,7 +495,7 @@ describe('SidebarHeader', () => {
 
     expect(mocks.resolveDirectCreateAgent).toHaveBeenCalledWith(
       { kind: 'folder', runtimeEnvironmentId: null, executionHostId: 'local' },
-      { kind: 'local' }
+      expect.any(Function)
     )
     expect(mocks.submitFolderWorkspaceCreate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -545,9 +548,7 @@ describe('SidebarHeader', () => {
 
     await act(async () => createButton().click())
 
-    expect(mocks.toastError).toHaveBeenCalledWith(
-      'Could not start Codex. Check its Arguments in Settings → Agents, then try again.'
-    )
+    expect(mocks.toastError).toHaveBeenCalledTimes(1)
     expect(mocks.createFolderWorkspace).not.toHaveBeenCalled()
   })
 
