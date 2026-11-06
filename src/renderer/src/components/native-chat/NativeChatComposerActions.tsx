@@ -239,6 +239,17 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
 
   const left: NativeChatComposerControl[] = [
     { id: 'attach', priority: 6, content: attach },
+    {
+      id: 'permissions',
+      priority: 5,
+      content: (
+        <NativeChatComposerPermissionPicker
+          surface={sessionOptionsSurface}
+          snapshot={sessionOptionsSnapshot}
+          {...(agent ? { agent } : {})}
+        />
+      )
+    },
     ...(mode
       ? [
           {
@@ -273,17 +284,6 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
           }
         ]
       : []),
-    {
-      id: 'permissions',
-      priority: 5,
-      content: (
-        <NativeChatComposerPermissionPicker
-          surface={sessionOptionsSurface}
-          snapshot={sessionOptionsSnapshot}
-          {...(agent ? { agent } : {})}
-        />
-      )
-    },
     ...(onExitGoalMode
       ? [
           {

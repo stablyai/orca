@@ -233,8 +233,8 @@ it('keeps current mode, permissions and Goal reachable through overflow, includi
     .map((button) => button.getAttribute('aria-label') ?? button.textContent)
   expect(buttons.slice(0, 4)).toEqual([
     'Attach file',
-    'Plan',
     'Permissions Full access',
+    'Plan',
     'Exit goal mode'
   ])
   expect(screen.queryByRole('button', { name: 'More chat controls' })).toBeNull()
