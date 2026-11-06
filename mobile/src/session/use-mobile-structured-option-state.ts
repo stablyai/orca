@@ -17,7 +17,7 @@ import {
   createStructuredAgentSessionOptionState
 } from '../../../src/shared/agent-session/options/structured-agent-session-options'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
-import { readHostModelCatalogSeed } from './use-mobile-host-model-catalog-upgrade'
+import { readHostModelCatalogSeed } from './mobile-host-model-catalog-query'
 import { structuredAgentSessionReportsAtFence } from '../../../src/shared/agent-session/options/structured-agent-session-runtime-reports'
 
 // Matches the transcripts this view retains per chat.
@@ -76,15 +76,15 @@ export function useMobileStructuredOptionState(args: {
   // The host's last list for this agent when this world holds one, else the quiet placeholder until the host answers.
   const firstFrame = () => {
     const seeded = createStructuredAgentSessionOptionState(agent ?? 'codex', optionCatalog)
-    const listed =
-      agent && hostId && optionCatalog
-        ? readHostModelCatalogSeed(
-            queryClient,
-            { hostId, exec, agent },
-            { newLaunch, seedsModel: false, ...(worktree ? { worktree } : {}) }
-          )
-        : undefined
-    return listed && optionCatalog
+    if (!agent || !hostId || !optionCatalog) {
+      return seeded
+    }
+    const listed = readHostModelCatalogSeed(
+      queryClient,
+      { hostId, exec, agent },
+      { newLaunch, seedsModel: false, ...(worktree ? { worktree } : {}) }
+    )
+    return listed
       ? applyStructuredAgentSessionModelCatalog(seeded, optionCatalog, listed, {
           newLaunch,
           coherentCatalog

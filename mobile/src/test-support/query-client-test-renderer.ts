@@ -1,7 +1,7 @@
-import { createElement, type ReactElement } from 'react'
-import { QueryClientProvider, notifyManager } from '@tanstack/react-query'
+import type { ReactElement } from 'react'
+import { notifyManager } from '@tanstack/react-query'
 import { create, type ReactTestRenderer, type TestRendererOptions } from 'react-test-renderer'
-import { createOrcaQueryClient } from '../query/orca-query-client'
+import { documentQueryClient } from './rpc-recording/hook-mount'
 
 // TanStack tells observers on a zero-delay timer; a microtask lets act() and fake-timer tests see replies.
 notifyManager.setScheduler(queueMicrotask)
@@ -11,16 +11,15 @@ export function createWithQueryClient(
   element: ReactElement,
   options?: TestRendererOptions
 ): ReactTestRenderer {
-  const client = createOrcaQueryClient()
-  const wrap = (next: ReactElement) => createElement(QueryClientProvider, { client }, next)
-  const renderer = create(wrap(element), options)
+  const document = documentQueryClient()
+  const renderer = create(document.wrap(element), options)
   const update = renderer.update.bind(renderer)
   const unmount = renderer.unmount.bind(renderer)
   return Object.assign(renderer, {
-    update: (next: ReactElement) => update(wrap(next)),
+    update: (next: ReactElement) => update(document.wrap(next)),
     unmount: () => {
       unmount()
-      client.clear()
+      void document.end()
     }
   })
 }
