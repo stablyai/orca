@@ -120,6 +120,17 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
     ]
   ),
   featureRoute(
+    'feature.agent-permission-settings',
+    ['agent-auto-permissions'],
+    [
+      `${COMPONENTS}settings/agents/permissions/`,
+      `${COMPONENTS}agent/launch-settings/AgentPermission`,
+      'src/shared/agent-launch/permissions/tui-agent-permission-choice.ts',
+      'src/shared/agent-launch/permissions/tui-agent-permission-lift.ts',
+      'src/shared/agent-launch/choices/agent-launch-permission-updates.ts'
+    ]
+  ),
+  featureRoute(
     'feature.project-groups',
     ['project-group-creation-visibility', 'project-group-manual-sort'],
     ['src/main/project-groups/', 'src/renderer/src/store/project-groups/']
