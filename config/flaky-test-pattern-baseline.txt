@@ -12,9 +12,7 @@
 5 test-no-in-test-import-actual:src/main/daemon/endpoint/publication/testing/daemon-endpoint-publish.test.ts
 1 test-no-in-test-import-actual:src/main/daemon/history/storage/testing/terminal-history-permissions.test.ts
 1 test-no-in-test-import-actual:src/main/git/command-runner/spawned-command-tree-kill.test.ts
-1 test-no-in-test-import-actual:src/main/ipc/filesystem/access/filesystem-auth.test.ts
 1 test-no-in-test-import-actual:src/main/ipc/filesystem/filesystem-content-search-cancellation.test.ts
-1 test-no-in-test-import-actual:src/main/ipc/notebook.test.ts
 1 test-no-in-test-import-actual:src/main/linear/client.test.ts
 1 test-no-in-test-import-actual:src/main/linear/linear-description-images.test.ts
 1 test-no-in-test-import-actual:src/main/linear/linear-workspace-registry.test.ts
@@ -70,8 +68,6 @@
 1 test-no-polling-loop:src/main/daemon/sessions/testing/repro-12101-mouse-tracking-survives-agent-death.test.ts
 1 test-no-polling-loop:src/main/daemon/transport/client/testing/client.test.ts
 2 test-no-polling-loop:src/main/git/refs/maintenance/repo-ref-maintenance-real-git.test.ts
-1 test-no-polling-loop:src/main/ipc/folder-repo-git-upgrade.test.ts
-1 test-no-polling-loop:src/main/ipc/native-chat.test.ts
 1 test-no-polling-loop:src/main/ipc/runtime-environments/runtime-environment-request-connections.test.ts
 1 test-no-polling-loop:src/main/ipc/worktrees/creation/worktree-base-directory-poller-marker-fanout.test.ts
 2 test-no-polling-loop:src/main/ipc/worktrees/git/worktree-git-status-attribution-real-git.test.ts
@@ -257,17 +253,10 @@
 1 test-no-real-time-wait:src/main/git/worktrees/removal/worktree-prune-guard.test.ts
 1 test-no-real-time-wait:src/main/gitlab/work-item-details.test.ts
 1 test-no-real-time-wait:src/main/grok/grok-hook-stdin-no-eof.test.ts
-1 test-no-real-time-wait:src/main/ipc/created-worktree-reconciliation.test.ts
-1 test-no-real-time-wait:src/main/ipc/filesystem/access/filesystem-auth.test.ts
-5 test-no-real-time-wait:src/main/ipc/filesystem/local-disk-write-precondition.test.ts
 1 test-no-real-time-wait:src/main/ipc/filesystem/watcher-process/parcel-watcher-shallow-file-subscription.test.ts
 1 test-no-real-time-wait:src/main/ipc/filesystem/watcher-process/rebinding-file-watch-noise.test.ts
 1 test-no-real-time-wait:src/main/ipc/filesystem/watcher-process/rebinding-file-watch.test.ts
-2 test-no-real-time-wait:src/main/ipc/folder-repo-git-upgrade.test.ts
-2 test-no-real-time-wait:src/main/ipc/native-chat.test.ts
 1 test-no-real-time-wait:src/main/ipc/pty/host-env/spawn-cwd-hung-folder.test.ts
-1 test-no-real-time-wait:src/main/ipc/pty/pty-agent-launch-pane-attach.test.ts
-1 test-no-real-time-wait:src/main/ipc/pty/pty-daemon-controller-teardown.test.ts
 1 test-no-real-time-wait:src/main/ipc/pty/pty-launch-parity.test.ts
 3 test-no-real-time-wait:src/main/ipc/runtime-environments/runtime-environment-preference.test.ts
 4 test-no-real-time-wait:src/main/ipc/runtime-environments/runtime-environment-request-connections.test.ts
@@ -687,9 +676,6 @@
 6 test-no-wall-clock:src/main/github/pr-refresh-queue-growth-bound.test.ts
 2 test-no-wall-clock:src/main/grok/grok-hook-stdin-no-eof.test.ts
 1 test-no-wall-clock:src/main/ipc/ai-vault/ai-vault.test.ts
-3 test-no-wall-clock:src/main/ipc/folder-repo-git-upgrade.test.ts
-2 test-no-wall-clock:src/main/ipc/native-chat-subscribe-lifecycle.test.ts
-2 test-no-wall-clock:src/main/ipc/native-chat.test.ts
 1 test-no-wall-clock:src/main/ipc/pty/runtime/kill-legacy-relay-bridged.test.ts
 3 test-no-wall-clock:src/main/ipc/runtime-environments/runtime-environment-request-connections.test.ts
 1 test-no-wall-clock:src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts
