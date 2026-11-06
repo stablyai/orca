@@ -331,6 +331,7 @@ export function EditorEditFileSurface({
       key={activeFile.id}
       svgSource={currentContent}
       filePath={activeFile.filePath}
+      imageSource={imageSource}
       mimeType="image/svg+xml"
     />
   ) : isMermaid && mdViewMode === 'rich' ? (

@@ -5,8 +5,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
   clipboardImageCopyErrorDescription,
-  copyImageToClipboard,
-  imageCopyFailedMessage
+  copyImageToClipboard
 } from './clipboard/images/clipboard-image-copy'
 import { blobToBase64 } from './clipboard/images/image-blob-png'
 
@@ -39,7 +38,11 @@ export function readImageFileSource(
   mimeType = 'image/png'
 ): ReadImageSource {
   return async () => {
-    const image = await readRuntimeFileContent({ ...source, pageOversizedBinary: false })
+    const image = await readRuntimeFileContent({
+      ...source,
+      pageOversizedBinary: true,
+      preferMediaUrl: false
+    })
     if (!image.isBinary && mimeType === 'image/svg+xml') {
       return new Blob([image.content], { type: mimeType })
     }
@@ -57,9 +60,12 @@ export async function copyImageSource(image: ReadImageSource): Promise<void> {
     await copyImageToClipboard(await image())
     toast.success(translate('components.native-chat.composer.imageCopied', 'Image copied'))
   } catch (error) {
-    toast.error(imageCopyFailedMessage(), {
-      description: clipboardImageCopyErrorDescription(error)
-    })
+    toast.error(
+      translate('components.native-chat.composer.copyImageFailed', "Couldn't copy image"),
+      {
+        description: clipboardImageCopyErrorDescription(error)
+      }
+    )
   }
 }
 

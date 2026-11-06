@@ -3,14 +3,19 @@ import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as ClipboardImageCopy from '@/lib/clipboard/images/clipboard-image-copy'
 import { ImageActions, ImageActionsButton } from './ImageActions'
 import { PanZoomImageDialog } from './PanZoomImageDialog'
 
 const mocks = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), copy: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { success: mocks.success, error: mocks.error } }))
-vi.mock('@/lib/clipboard/images/clipboard-image-copy', () => ({ copyImageToClipboard: mocks.copy }))
+vi.mock('@/lib/clipboard/images/clipboard-image-copy', async (importOriginal) => ({
+  ...(await importOriginal<typeof ClipboardImageCopy>()),
+  copyImageToClipboard: mocks.copy
+}))
 const writeClipboardText = vi.fn()
 const openPath = vi.fn()
+const openFilePath = vi.fn()
 const openInFileManager = vi.fn()
 const saveDownloadedFile = vi.fn()
 
@@ -19,11 +24,12 @@ beforeEach(() => {
   writeClipboardText.mockResolvedValue(undefined)
   mocks.copy.mockResolvedValue(undefined)
   openPath.mockResolvedValue(undefined)
+  openFilePath.mockResolvedValue(true)
   openInFileManager.mockResolvedValue({ ok: true })
   saveDownloadedFile.mockResolvedValue({ canceled: true })
   vi.stubGlobal('api', {
     ui: { writeClipboardText },
-    shell: { openPath, openInFileManager },
+    shell: { openPath, openFilePath, openInFileManager },
     fs: { saveDownloadedFile }
   })
   vi.stubGlobal(
@@ -119,11 +125,27 @@ describe('image action menus', () => {
     await act(async () =>
       fireEvent.click(screen.getByRole('menuitem', { name: 'Open with default app' }))
     )
-    expect(openPath).toHaveBeenCalledWith('/shots/photo.webp', 'local')
+    expect(openFilePath).toHaveBeenCalledWith('/shots/photo.webp', 'local')
+    expect(openPath).not.toHaveBeenCalled()
     open()
     const reveal = screen.getAllByRole('menuitem')[3]
     await act(async () => fireEvent.click(reveal))
     expect(openInFileManager).toHaveBeenCalledWith('/shots/photo.webp', 'local')
+  })
+
+  it('reports a default-app launch refusal', async () => {
+    openFilePath.mockResolvedValue(false)
+    render(
+      <ImageActionsButton
+        src="blob:original"
+        title="photo.webp"
+        imageSource={{ path: '/shots/photo.webp', localOwner: 'local' }}
+      />
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Image actions' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Open with default app' }))
+    await waitFor(() => expect(mocks.error).toHaveBeenCalledWith('Image action failed'))
+    expect(mocks.success).not.toHaveBeenCalled()
   })
 
   it.each([undefined, 'unresolved', 'runtime:server', 'ssh:host'] as const)(

@@ -5,7 +5,10 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { basename } from '@/lib/path'
 import { useLocalImageSrc } from '@/components/editor/document-images/useLocalImageSrc'
 import { PanZoomImageDialog } from '@/components/editor/document-images/PanZoomImageDialog'
-import { ImageActions, type ImageActionSource } from '@/components/editor/document-images/ImageActions'
+import {
+  ImageActions,
+  type ImageActionSource
+} from '@/components/editor/document-images/ImageActions'
 import {
   copyableNativeChatImageSrc,
   keepPreviewOpenForChatMenu

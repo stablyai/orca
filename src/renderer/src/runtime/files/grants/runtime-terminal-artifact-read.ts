@@ -45,6 +45,7 @@ export async function readHostFileOutsideWorkspaces(args: {
   grantId?: string
   expectedEnvironmentPairingRevision?: number
   pageOversizedBinary: boolean
+  preferMediaUrl?: boolean
 }): Promise<RuntimeReadableFileContent> {
   const pinned = pinTerminalArtifactGrantTarget({
     target: args.target,
@@ -55,14 +56,14 @@ export async function readHostFileOutsideWorkspaces(args: {
   const grantId = args.grantId ?? (await renewRestoredHostFileGrant(pinned))
   return readRuntimeTerminalArtifactContent(
     { ...pinned, grantId },
-    { pageOversizedBinary: args.pageOversizedBinary }
+    { pageOversizedBinary: args.pageOversizedBinary, preferMediaUrl: args.preferMediaUrl }
   )
 }
 
 /** Reads a host file outside every workspace through its grant, renewing a lapsed or stale one. */
 export async function readRuntimeTerminalArtifactContent(
   unpinned: TerminalArtifactGrantTarget & { grantId: string },
-  options: { pageOversizedBinary: boolean }
+  options: { pageOversizedBinary: boolean; preferMediaUrl?: boolean }
 ): Promise<RuntimeReadableFileContent> {
   const args = pinTerminalArtifactGrantTarget(unpinned)
   try {
@@ -83,7 +84,7 @@ export async function readRuntimeTerminalArtifactContent(
 
 async function readThroughGrant(
   args: TerminalArtifactGrantTarget & { grantId: string },
-  options: { pageOversizedBinary: boolean }
+  options: { pageOversizedBinary: boolean; preferMediaUrl?: boolean }
 ): Promise<RuntimeReadableFileContent> {
   const content = await readRemoteFileContent(
     {

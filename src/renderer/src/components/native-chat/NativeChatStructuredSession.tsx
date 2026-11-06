@@ -345,7 +345,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
       </NativeChatCrewFrame>
       {readFailure?.final ? null : (
         <>
-          {/* Keep queued drafts outside the transcript and above the background-task dock. */}
           <NativeChatQueuedMessageList
             controller={submits.queuedMessages}
             chatWorktreeId={ownerWorktreeId ?? null}

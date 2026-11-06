@@ -1,6 +1,9 @@
+import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
+import { readImageFileSource } from '@/lib/image-source-actions'
 import { readRuntimeFileContent } from './runtime-file-read-client'
 import {
+  fsGrantRuntimeFilePreview,
   installRuntimeFileClientEnvironment,
   runtimeEnvironmentCall,
   type RuntimeRpcRequest
@@ -122,6 +125,31 @@ const remote = (relativePath: string) => ({
 })
 
 describe('remote reads larger than one RPC reply', () => {
+  it('exports original image bytes beyond one reply without returning a preview URL', async () => {
+    const bytes = Buffer.alloc(5 * MB, 0x41)
+    bytes.set([137, 80, 78, 71, 13, 10, 26, 10])
+    serveRemoteFile('image.png', { bytes })
+    fsGrantRuntimeFilePreview.mockResolvedValue({
+      mediaUrl: 'orca-media://file/image',
+      content: '',
+      isBinary: true,
+      isImage: true,
+      mimeType: 'image/png'
+    })
+
+    const blob = await readImageFileSource({
+      ...remote('image.png'),
+      pageOversizedBinary: true
+    })()
+
+    expect(blob.type).toBe('image/png')
+    expect(
+      createHash('sha256')
+        .update(Buffer.from(await blob.arrayBuffer()))
+        .digest('hex')
+    ).toBe('112108f550c28bb8687a7202aa74d326c0fc8e4eec9c9f63bb8487e1066225e0')
+  })
+
   it('opens a paged HTML file as complete editable text', async () => {
     const bytes = htmlBytes(2 * MB)
     serveRemoteFile('report.html', { bytes })
