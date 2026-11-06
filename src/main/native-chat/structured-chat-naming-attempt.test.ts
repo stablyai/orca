@@ -38,6 +38,7 @@ it.each(['claude', 'codex'] as const)(
           workspaceId: record.location.workspaceId,
           agent: provider,
           status: 'working',
+          latestPrompt: 'Explain migrations',
           updatedAt: 100
         },
         { replay: false }
