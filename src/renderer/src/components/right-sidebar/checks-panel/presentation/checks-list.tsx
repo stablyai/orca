@@ -153,7 +153,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
                   <div
                     ref={conclusion === 'pending' ? observeOffscreenAnimation : undefined}
                     className={cn(
-                      'group/check-row flex min-w-0 cursor-pointer items-center gap-2 px-3 py-1.5 transition-colors hover:bg-accent/40',
+                      'group/check-row @container flex min-w-0 cursor-pointer items-center gap-2 px-3 py-1.5 transition-colors hover:bg-accent/40',
                       expanded && 'bg-accent/25'
                     )}
                     onClick={() => toggleCheckExpanded(row)}
@@ -171,7 +171,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
                         conclusion === 'pending' && 'animate-spin motion-reduce:animate-none'
                       )}
                     />
-                    <span className="min-w-12 flex-1 truncate text-[12px] text-foreground">
+                    <span className="min-w-9 flex-1 truncate text-[12px] text-foreground">
                       {check.name}
                     </span>
                     <CheckRunTime check={check} />
@@ -266,7 +266,7 @@ function PipelineCheckRow({ check }: { check: PRCheckDetail }): React.JSX.Elemen
           conclusion === 'pending' && 'animate-spin motion-reduce:animate-none'
         )}
       />
-      <span className="min-w-12 flex-1 truncate text-[12px] text-foreground">{check.name}</span>
+      <span className="min-w-9 flex-1 truncate text-[12px] text-foreground">{check.name}</span>
       <CheckRunTime check={check} />
       <span className="text-[11px] text-muted-foreground">
         {getLocalizedCheckStatusLabel(check)}
@@ -274,7 +274,7 @@ function PipelineCheckRow({ check }: { check: PRCheckDetail }): React.JSX.Elemen
       {check.url && <ExternalLink className="size-3 shrink-0 text-muted-foreground" />}
     </>
   )
-  const className = 'flex min-w-0 items-center gap-2 border-b border-border px-3 py-1.5'
+  const className = '@container flex min-w-0 items-center gap-2 border-b border-border px-3 py-1.5'
   const animationRef = conclusion === 'pending' ? observeOffscreenAnimation : undefined
   return check.url ? (
     <a
