@@ -26,6 +26,8 @@ const nestedSshStore = {
   getRepos: () => [nestedSshRepo]
 }
 
+// A cwd alone never files a terminal for a worktree-scoped stop (#36716); the daemon id names the owner.
+const LOCAL_PTY_ID = `${TEST_WORKTREE_ID}@@local`
 const TWIN_PTY_ID = toAppSshPtyId('ssh-twin', 'relay-pty-1')
 const twinPty = {
   id: TWIN_PTY_ID,
@@ -40,7 +42,7 @@ async function sleepLocalCopy(runtimeStore: typeof store = store, twinLive = fal
   runtime.onClientEvent((event) => events.push(event))
   const twin = twinLive ? [twinPty] : []
   const processLists = [
-    [{ id: 'pty-local', cwd: TEST_WORKTREE_PATH, title: 'Shell' }, ...twin],
+    [{ id: LOCAL_PTY_ID, cwd: TEST_WORKTREE_PATH, title: 'Shell' }, ...twin],
     twin
   ]
   const stopAndWait = vi.fn(async (ptyId: string) => {
@@ -119,9 +121,9 @@ describe('worktree terminal sleep across same-id host twins', () => {
   it("sleeping this computer's copy leaves the SSH twin's live terminal running and unfiled", async () => {
     const { runtime, phases, stopAndWait } = await sleepLocalCopy(store, true)
 
-    expect(stopAndWait.mock.calls.map(([ptyId]) => ptyId)).toEqual(['pty-local'])
+    expect(stopAndWait.mock.calls.map(([ptyId]) => ptyId)).toEqual([LOCAL_PTY_ID])
     expect(runtime.getTerminalSleepClientEventSnapshot()).toEqual([
-      expect.objectContaining({ phase: 'committed', ptyIds: ['pty-local'] })
+      expect.objectContaining({ phase: 'committed', ptyIds: [LOCAL_PTY_ID] })
     ])
     const release = await runtime.acquireWorktreeTerminalSpawn(
       spawnWorktreeTarget(TEST_WORKTREE_ID, 'ssh-twin')
