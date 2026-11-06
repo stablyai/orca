@@ -3455,7 +3455,8 @@
       "moreFields_one": "+{{count}} поле",
       "moreFields_other": "+{{count}} поля",
       "noItems": "В проекте нет элементов",
-      "pullRequestSubtitle": "Пул-реквест · {{repository}}{{number}}"
+      "pullRequestSubtitle": "Пул-реквест · {{repository}}{{number}}",
+      "linkedPullRequestsOverflow": "Ещё {{count}}"
     },
     "githubProjectPickers": {
       "add": "Добавить",

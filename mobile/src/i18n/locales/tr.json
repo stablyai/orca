@@ -3277,7 +3277,8 @@
       "moreFields_one": "+{{count}} alan",
       "moreFields_other": "+{{count}} alan",
       "noItems": "Proje öğesi yok",
-      "pullRequestSubtitle": "Pull request · {{repository}}{{number}}"
+      "pullRequestSubtitle": "Pull request · {{repository}}{{number}}",
+      "linkedPullRequestsOverflow": "+{{count}} tane daha"
     },
     "githubProjectPickers": {
       "add": "Ekle",

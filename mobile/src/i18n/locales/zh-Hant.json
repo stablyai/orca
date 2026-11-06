@@ -3273,7 +3273,8 @@
       "moreFields_one": "+{{count}} 個欄位",
       "moreFields_other": "+{{count}} 個欄位",
       "noItems": "沒有專案項目",
-      "pullRequestSubtitle": "PR · {{repository}}{{number}}"
+      "pullRequestSubtitle": "PR · {{repository}}{{number}}",
+      "linkedPullRequestsOverflow": "另有 {{count}} 個"
     },
     "githubProjectPickers": {
       "add": "新增",
