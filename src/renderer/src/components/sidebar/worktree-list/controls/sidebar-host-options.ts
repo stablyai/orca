@@ -19,6 +19,7 @@ import { pickerExecutionHosts } from '../../../../../../shared/managed-orcad-exe
 import { getCheckedHostRows } from '../../../../../../shared/workspace-view/workspace-host-visibility'
 import type { RuntimeCompatVerdict } from '../../../../../../shared/protocol-compat'
 import type { SshConnectionState, SshConnectionStatus } from '../../../../../../shared/ssh-types'
+import { translateExecutionHostLabel } from '../../execution-host-label'
 import {
   isWslHostRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
@@ -177,12 +178,12 @@ export function buildSidebarHostScopeOptions(
     {
       id: ALL_EXECUTION_HOSTS_SCOPE,
       label: translate('auto.components.sidebar.sidebarHostOptions.3e102f111c', 'All hosts'),
-      detail: hosts.map((host) => host.label).join(', '),
+      detail: hosts.map((host) => translateExecutionHostLabel(host.label)).join(', '),
       health: 'mixed'
     },
     ...hosts.map((host) => ({
       id: host.id,
-      label: host.label,
+      label: translateExecutionHostLabel(host.label),
       detail: host.detail,
       health: host.health
     }))
@@ -199,7 +200,7 @@ export function getSidebarHostVisibilityLabel(
     return translate('auto.components.sidebar.sidebarHostOptions.3e102f111c', 'All hosts')
   }
   if (checkedRows.length === 1) {
-    return checkedRows[0].label
+    return translateExecutionHostLabel(checkedRows[0].label)
   }
   if (checkedRows.length === 0) {
     return translate('auto.components.sidebar.sidebarHostOptions.hosts', 'Hosts')
@@ -236,7 +237,7 @@ export function sidebarHostSemantics(host: SidebarHostOption & ExecutionHostRegi
 export function createSidebarHostLabelsSelector() {
   let result = new Map<ExecutionHostId, string>()
   return (hosts: readonly SidebarHostOption[]): ReadonlyMap<ExecutionHostId, string> => {
-    const next = new Map(hosts.map((host) => [host.id, host.label]))
+    const next = new Map(hosts.map((host) => [host.id, translateExecutionHostLabel(host.label)]))
     if (!shallow(result, next)) {
       result = next
     }

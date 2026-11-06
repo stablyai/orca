@@ -23,10 +23,10 @@ describe('localized startup failure surfaces', () => {
     },
     {
       language: 'zh',
-      exit: 'Codex 在启动时退出了。 请在此文件夹的终端中运行它以查看原因，然后重试。',
+      exit: 'Codex 在启动时退出了。请在此文件夹的终端中运行它以查看原因，然后重试',
       workspace:
-        '无法启动 Codex，因为其工作区已不可用。 请恢复工作区文件夹或打开可用的工作区，然后重试。',
-      unknown: '无法确认 Codex 已启动。请先检查其终端，再重试。'
+        '无法启动 Codex，因为其工作区已不可用。请恢复工作区文件夹或打开可用的工作区，然后重试',
+      unknown: '无法确认 Codex 已启动。请先检查其终端，再重试'
     }
   ] as const)('renders both real mappings with the shipped $language catalog', async (copy) => {
     await i18n.changeLanguage(await loadRendererUiLanguage(copy.language))

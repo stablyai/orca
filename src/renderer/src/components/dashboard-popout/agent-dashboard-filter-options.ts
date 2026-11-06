@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { translateWorkspaceBoardStatusLabel } from '@/components/sidebar/workspace-board-status-label'
 import type { DashboardCard, DashboardFilterOption } from '../../../../shared/dashboard-snapshot'
 import type { DashboardReviewFilter } from './agent-board-filtering'
 
@@ -34,12 +35,19 @@ export function workspaceStatusOptions(
     }
     options.set(card.workspaceStatusId, {
       id: card.workspaceStatusId,
-      label: card.workspaceStatusLabel ?? card.workspaceStatusId,
+      label: dashboardWorkspaceStatusLabel(card),
       color: card.workspaceStatusColor,
       count: counts.get(card.workspaceStatusId) ?? 0
     })
   }
   return [...options.values()]
+}
+
+export function dashboardWorkspaceStatusLabel(
+  card: Pick<DashboardCard, 'workspaceStatusId' | 'workspaceStatusLabel'>
+): string {
+  const id = card.workspaceStatusId ?? ''
+  return translateWorkspaceBoardStatusLabel({ id, label: card.workspaceStatusLabel ?? id })
 }
 
 export function projectOptions(

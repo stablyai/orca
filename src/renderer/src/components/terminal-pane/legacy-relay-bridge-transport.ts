@@ -15,11 +15,9 @@ import {
   legacyRelayBridgedPane,
   onLegacyRelayBridgedPanesChanged
 } from './legacy-relay-bridge-panes'
+import { legacyRelayBridgeUnreachableMessage } from './legacy-relay-bridge-copy'
 
 type Callbacks = Parameters<PtyTransport['connect']>[0]['callbacks']
-
-const UNREACHABLE_MESSAGE =
-  'This terminal is still running on the host under an older version of Orca. Reconnecting to it…'
 
 export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransport): PtyTransport {
   const api = window.api.legacyRelayBridge
@@ -79,14 +77,14 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
   const showUnreachable = (): void => {
     if (!showingUnreachable) {
       showingUnreachable = true
-      callbacks?.onError?.(UNREACHABLE_MESSAGE)
+      callbacks?.onError?.(legacyRelayBridgeUnreachableMessage())
     }
   }
 
   const clearUnreachable = (): void => {
     if (showingUnreachable) {
       showingUnreachable = false
-      callbacks?.onErrorCleared?.(UNREACHABLE_MESSAGE)
+      callbacks?.onErrorCleared?.(legacyRelayBridgeUnreachableMessage())
     }
   }
 

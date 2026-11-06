@@ -1,6 +1,7 @@
 import React from 'react'
 import { translate } from '@/i18n/i18n'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
+import { translateExecutionHostLabel } from '../sidebar/execution-host-label'
 import {
   WORKSPACE_CLEANUP_BLOCKER_MODE_VALUES,
   WORKSPACE_CLEANUP_BLOCKER_VALUES,
@@ -138,7 +139,7 @@ export function WorkspaceCleanupGitReviewFacets({
           label={translate('components.workspace.cleanup.browse.host', 'Host')}
           values={options.hostIds}
           selected={filters.location.hostIds}
-          getLabel={getExecutionHostLabel}
+          getLabel={(hostId) => translateExecutionHostLabel(getExecutionHostLabel(hostId))}
           onChange={(hostIds) => onPatch('location', { hostIds })}
         />
         {options.repos.length > 1 ? (

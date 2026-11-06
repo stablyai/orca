@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { RotateCcw } from 'lucide-react'
 import type { Repo } from '../../../../../../shared/repo-types'
@@ -25,6 +26,39 @@ import {
 } from '../../../../runtime/repository-github/repository-icon-github'
 import { translate } from '@/i18n/i18n'
 
+function getRepositoryIconLabel(repoIcon: RepoIcon | null | undefined): string {
+  if (repoIcon?.type === 'image') {
+    if (repoIcon.source === 'github') {
+      return translate(
+        'auto.components.settings.RepositoryIconPicker.githubAvatar',
+        'GitHub avatar'
+      )
+    }
+    return (
+      repoIcon.label ??
+      translate('auto.components.settings.RepositoryIconPicker.customImage', 'Custom image')
+    )
+  }
+  if (repoIcon?.type === 'emoji') {
+    return translate(
+      'auto.components.settings.RepositoryIconPicker.emojiDescription',
+      '{{emoji}} emoji',
+      { emoji: repoIcon.emoji }
+    )
+  }
+  if (repoIcon?.type === 'lucide') {
+    const label =
+      getRepoLucideIconOptions().find((option) => option.name === repoIcon.name)?.label ??
+      translate('auto.components.repo.repo.icon.bed2674f9d', 'Folder')
+    return translate(
+      'auto.components.settings.RepositoryIconPicker.lucideDescription',
+      '{{label}} icon with repo color',
+      { label }
+    )
+  }
+  return translate('auto.components.settings.RepositoryIconPicker.defaultIcon', 'Default')
+}
+
 export function RepositoryIconPicker({
   repo,
   updateRepo
@@ -32,6 +66,7 @@ export function RepositoryIconPicker({
   repo: Repo
   updateRepo: (repoId: string, updates: Partial<Repo>) => void
 }): React.JSX.Element {
+  useTranslation()
   const [loadingGitHub, setLoadingGitHub] = useState(false)
   const [resetting, setResetting] = useState(false)
   const mountedRef = useMountedRef()
@@ -48,24 +83,7 @@ export function RepositoryIconPicker({
     [ownerEnvironmentId]
   )
 
-  const currentIconLabel = useMemo(() => {
-    if (repo.repoIcon?.type === 'image') {
-      if (repo.repoIcon.source === 'github') {
-        return 'GitHub avatar'
-      }
-      return repo.repoIcon.label ?? 'Custom image'
-    }
-    if (repo.repoIcon?.type === 'emoji') {
-      return `${repo.repoIcon.emoji} emoji`
-    }
-    if (repo.repoIcon?.type === 'lucide') {
-      const label =
-        getRepoLucideIconOptions().find((option) => option.name === selectedLucideName)?.label ??
-        'Folder'
-      return `${label} icon with repo color`
-    }
-    return 'Default'
-  }, [repo.repoIcon, selectedLucideName])
+  const currentIconLabel = getRepositoryIconLabel(repo.repoIcon)
 
   const setIcon = (repoIcon: RepoIcon | null) => updateRepo(repo.id, { repoIcon })
   const setBadgeColor = (badgeColor: string) => updateRepo(repo.id, { badgeColor })

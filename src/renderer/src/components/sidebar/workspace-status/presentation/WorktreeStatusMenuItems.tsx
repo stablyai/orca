@@ -9,6 +9,7 @@ import { Kanban } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceStatusVisualMeta } from './workspace-status'
+import { translateWorkspaceBoardStatusLabel } from '../../workspace-board-status-label'
 import type { WorkspaceStatusDefinition } from '../../../../../../shared/worktree/types'
 
 export function WorktreeStatusMenuItems(props: {
@@ -37,7 +38,7 @@ export function WorktreeStatusMenuItems(props: {
                 onSelect={() => props.onAssignWorkspaceStatus(status.id)}
               >
                 <meta.icon className={cn('size-3.5', meta.tone)} />
-                {status.label}
+                {translateWorkspaceBoardStatusLabel(status)}
               </DropdownMenuRadioItem>
             )
           })}

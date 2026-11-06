@@ -13,6 +13,10 @@ import {
   shouldShowHostScopeControls
 } from '../../worktree-list/controls/sidebar-host-options'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  translateExecutionHostDetail,
+  translateExecutionHostLabel
+} from '../../execution-host-label'
 
 import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
 import { translate } from '@/i18n/i18n'
@@ -38,12 +42,12 @@ type AddRepoHostSelectorProps = {
 function getHostStatusDetail(host: SidebarHostOption): string {
   // A disabled WSL feature is not a disconnected-host failure.
   if (host.wslUnavailable) {
-    return host.detail
+    return translateExecutionHostDetail(host.detail)
   }
   if (host.compatibility?.kind === 'blocked') {
     return describeRuntimeCompatBlock(host.compatibility)
   }
-  const detail = host.failureReason ?? host.detail
+  const detail = host.failureReason ?? translateExecutionHostDetail(host.detail)
   return `${getSidebarHostHealthLabel(host.health, host.blockedReason)}${detail ? ` - ${detail}` : ''}`
 }
 
@@ -237,7 +241,7 @@ export function AddRepoHostSelector({
                 return (
                   <CommandItem
                     key={host.id}
-                    value={`${host.label} ${host.detail}`}
+                    value={`${translateExecutionHostLabel(host.label)} ${host.detail}`}
                     disabled={disabled && !canConnect}
                     aria-disabled={disabled}
                     onSelect={() => {
@@ -260,7 +264,9 @@ export function AddRepoHostSelector({
                     />
                     <span className="min-w-0 flex-1">
                       <span className="flex min-w-0 items-center gap-2">
-                        <span className="truncate font-medium">{host.label}</span>
+                        <span className="truncate font-medium">
+                          {translateExecutionHostLabel(host.label)}
+                        </span>
                       </span>
                       <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
                         <span className="min-w-0 flex-1 truncate" title={host.failureReason}>

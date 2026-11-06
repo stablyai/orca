@@ -3,6 +3,7 @@ import type { DashboardFilterOptions } from '../../../../shared/dashboard-snapsh
 import { DEFAULT_WORKSPACE_STATUSES } from '../../../../shared/workspace-statuses'
 import { boundedLabel } from './dashboard-card-labels'
 import type { ActiveDashboardWorkspace } from './dashboard-snapshot-workspaces'
+import { translateWorkspaceBoardStatusLabel } from '@/components/sidebar/workspace-board-status-label'
 
 export function buildDashboardSnapshotFilterOptions(
   state: Partial<Pick<AppState, 'workspaceStatuses'>>,
@@ -20,7 +21,7 @@ export function buildDashboardSnapshotFilterOptions(
       : DEFAULT_WORKSPACE_STATUSES
   ).map((status) => ({
     id: status.id,
-    label: status.label,
+    label: translateWorkspaceBoardStatusLabel(status),
     color: status.color
   }))
   return { projects, workspaceStatuses }

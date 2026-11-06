@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import { formatSshUserFacingError } from './ssh-user-facing-error'
 
 /** Only explicit restoreRemoved lifts tombstones; plain config sync must preserve removals. */
 export function useSshConfigSync(onSynced: () => Promise<void>): {
@@ -46,7 +47,7 @@ export function useSshConfigSync(onSynced: () => Promise<void>): {
       if (mountedRef.current) {
         toast.error(
           err instanceof Error
-            ? err.message
+            ? formatSshUserFacingError(err.message)
             : translate('auto.components.settings.SshPane.f495689b82', 'Import failed')
         )
       }

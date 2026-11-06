@@ -95,25 +95,36 @@ export function DictationController() {
 
     const modelId = settings?.voice?.sttModel
     if (!modelId) {
-      toast('No speech model selected. Download one in Settings > Voice.', {
-        // Held keys and repeated presses replace this toast instead of stacking it.
-        id: 'dictation-no-model',
-        action: {
-          label: translate(
-            'auto.components.dictation.DictationController.bb7f599ee7',
-            'Open Settings'
-          ),
-          onClick: () => {
-            useAppStore.getState().openSettingsTarget({ pane: 'voice', repoId: null })
-            useAppStore.getState().openSettingsPage()
+      toast(
+        translate(
+          'auto.components.dictation.DictationController.noSpeechModel',
+          'No speech model selected. Download one in Settings > Voice.'
+        ),
+        {
+          // Held keys and repeated presses replace this toast instead of stacking it.
+          id: 'dictation-no-model',
+          action: {
+            label: translate(
+              'auto.components.dictation.DictationController.bb7f599ee7',
+              'Open Settings'
+            ),
+            onClick: () => {
+              useAppStore.getState().openSettingsTarget({ pane: 'voice', repoId: null })
+              useAppStore.getState().openSettingsPage()
+            }
           }
         }
-      })
+      )
       return
     }
 
     if (!settings?.voice?.enabled) {
-      toast('Voice dictation is disabled. Enable it in Settings > Voice.')
+      toast(
+        translate(
+          'auto.components.dictation.DictationController.dictationDisabled',
+          'Voice dictation is disabled. Enable it in Settings > Voice.'
+        )
+      )
       return
     }
 

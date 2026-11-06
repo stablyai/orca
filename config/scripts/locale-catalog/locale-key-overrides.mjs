@@ -116,7 +116,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.settings.SettingsSidebar.82db1b7de4': {
     ko: '온보딩 체크리스트, {{value0}}/{{value1}} 완료. 설정 가이드 보기.',
-    zh: '入门清单，已完成 {{value0}}/{{value1}}。显示设置指南。',
+    zh: '入门清单，已完成 {{value0}}/{{value1}}。显示设置指南',
     ja: 'オンボーディングチェックリスト、{{value0}}/{{value1}} 完了。セットアップガイドを表示。'
   },
   'auto.components.settings.ShortcutFilterRail.02dc7d4251': {
@@ -307,12 +307,12 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'settings.appearance.statusBar.kimiToggleDescription': {
     ko: '활성 워크스페이스의 Kimi 구독 사용량을 표시합니다.',
-    zh: '显示当前工作区的 Kimi 订阅使用情况。',
+    zh: '显示当前工作区的 Kimi 订阅使用情况',
     ja: 'アクティブなワークスペースの Kimi サブスクリプション使用状況を表示します。'
   },
   'auto.components.mobile.MobileHero.cd4e5e816f': {
     ko: '주머니 속의 워크스페이스.',
-    zh: '您的工作区就在您的口袋里。',
+    zh: '您的工作区就在您的口袋里',
     ja: 'ワークスペースをポケットに。'
   },
   'auto.components.GitHubItemDialog.dbe5e2448e': {
@@ -332,12 +332,12 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.JiraIssueWorkspace.857bd2f88f': {
     ko: '선택한 이슈를 미리보기하고, 편집하고, 작업을 시작하세요.',
-    zh: '预览、编辑并从选定的议题开始工作。',
+    zh: '预览、编辑并从选定的议题开始工作',
     ja: '選択したイシューをプレビュー・編集し、そこから作業を開始します。'
   },
   'auto.components.LinearIssueWorkspace.ad5dec37b7': {
     ko: '선택한 이슈를 미리보기하고, 편집하고, 작업을 시작하세요.',
-    zh: '预览、编辑并从选定的议题开始工作。',
+    zh: '预览、编辑并从选定的议题开始工作',
     ja: '選択したイシューをプレビュー・編集し、そこから作業を開始します。'
   },
   'auto.components.TaskPage.67662ade50': {
@@ -352,12 +352,12 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.TaskPage.1e1b2ad8f2': {
     ko: '이 이슈를 등록하기 전에 프로젝트 워크스페이스에서 팀을 선택하세요.',
-    zh: '在提交此议题之前，请从项目工作区选择一个团队。',
+    zh: '在提交此议题之前，请从项目工作区选择一个团队',
     ja: 'このイシューを登録する前に、プロジェクトワークスペースからチームを選択してください。'
   },
   'auto.components.TaskPage.94d900518d': {
     ko: '선택한 프리셋과 일치하는 이슈가 없습니다.',
-    zh: '没有与所选预设匹配的议题。',
+    zh: '没有与所选预设匹配的议题',
     ja: '選択したプリセットに一致するイシューはありません。'
   },
   'auto.components.linear.project.view.surfaces.3ad562bdf4': {
@@ -392,7 +392,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.onboarding.OnboardingFlow.04ae28d8ca': {
     ko: '몇 시간 내내 보고 싶은 테마를 선택하세요.',
-    zh: '选择你想盯着看几个小时的主题。',
+    zh: '选择你想盯着看几个小时的主题',
     ja: '何時間も眺めていたくなるテーマを選んでください。'
   },
   'auto.components.GitLabItemDialog.e089f62594': {
@@ -402,12 +402,12 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.right.sidebar.source.control.primary.action.3d5dccef0b': {
     ko: '커밋할 것이 없습니다. PR은 이미 병합되었습니다.',
-    zh: '没有可提交的内容。PR 已合并。',
+    zh: '没有可提交的内容。PR 已合并',
     ja: 'コミットするものはありません。PR はすでにマージされています。'
   },
   'auto.components.settings.integrations.search.16a486a49d': {
     ko: 'Linear에 연결해 이슈를 탐색하고 연결합니다.',
-    zh: '连接 Linear 以浏览和链接议题。',
+    zh: '连接 Linear 以浏览和链接议题',
     ja: 'Linear に接続してイシューを参照し、リンクします。'
   },
   'menu.showTitlebarAppName': {
@@ -422,7 +422,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.lib.fix.checks.agent.launch.9f00d7df0c': {
     ko: '검사 프롬프트가 비어 있습니다. 소스 제어 AI 설정을 업데이트하세요.',
-    zh: '检查提示为空。请更新源代码管理 AI 设置。',
+    zh: '检查提示为空。请更新源代码管理 AI 设置',
     ja: 'チェック プロンプトが空です。ソース管理 AI 設定を更新してください。'
   },
   'auto.components.TaskPage.2af3ab5c58': {
@@ -442,7 +442,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.TaskPage.25ff84769a': {
     ko: '이 Linear 컨텍스트와 일치하는 이슈가 없습니다.',
-    zh: '没有议题与此 Linear 上下文匹配。',
+    zh: '没有议题与此 Linear 上下文匹配',
     ja: 'この Linear コンテキストに一致するイシューはありません。'
   },
   'auto.components.GitHubItemDialog.8c45901789': {
@@ -512,7 +512,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.GitHubItemDialog.a341343303': {
     ko: '리뷰 댓글이 추가되었습니다.',
-    zh: '已添加评审评论。',
+    zh: '已添加评审评论',
     ja: 'レビューコメントを追加しました。'
   },
   // Port forwarding "Forward" is 転送, not the browser-navigation 進む.

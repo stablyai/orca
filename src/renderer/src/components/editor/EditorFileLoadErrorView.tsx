@@ -1,6 +1,7 @@
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { formatFileLoadErrorMessage } from './file-load-error-copy'
 import { displayIpcErrorMessage } from '@/lib/ipc-error'
 import { isFileTooLargeCodeMessage } from '../../../../shared/file-write-disk-precondition'
 import { WORKTREE_HOST_UNRESOLVED_CODE } from './editor-panel-content-types'
@@ -63,7 +64,9 @@ export function EditorFileLoadErrorView({
           <div className="font-medium text-foreground">
             {translate('auto.components.editor.EditorContent.39f018b052', 'Unable to load file')}
           </div>
-          <div className="mt-1 break-words">{localizeFileLoadError(message, code)}</div>
+          <div className="mt-1 break-words">
+            {formatFileLoadErrorMessage(localizeFileLoadError(message, code))}
+          </div>
           <Button type="button" variant="outline" size="sm" className="mt-3" onClick={onRetry}>
             <RefreshCw className="size-3.5" />
             {translate('auto.components.editor.EditorContent.2a512bb46a', 'Retry')}

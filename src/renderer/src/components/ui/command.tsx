@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import { handleOverlayCloseAutoFocus } from '@/lib/overlay-focus-ownership'
 import { getWheelScrollDeltaY } from '@/lib/wheel-scroll-delta'
 import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-scope'
+import { translate } from '@/i18n/i18n'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 import { useImeTextFieldProps } from '@/lib/ime-text-field'
 import { DialogOverlay } from '@/components/ui/dialog'
@@ -55,8 +56,11 @@ function Command({
 
 function CommandDialog({
   children,
-  title = 'Command Palette',
-  description = 'Search for a command to run...',
+  title = translate('auto.components.ui.command.paletteTitle', 'Command Palette'),
+  description = translate(
+    'auto.components.ui.command.paletteDescription',
+    'Search for a command to run...'
+  ),
   shouldFilter,
   onOpenAutoFocus,
   onCloseAutoFocus,

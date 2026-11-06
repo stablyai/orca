@@ -5,6 +5,7 @@ import { useAppStore } from '@/store/index'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { isSshTargetConnecting } from './ssh-target-action-state'
+import { formatSshUserFacingError } from './ssh-user-facing-error'
 
 type TestOutcome = { ok: true } | { ok: false; message: string }
 
@@ -57,7 +58,7 @@ export function useSshTargetTests(): {
         ok: false,
         message:
           err instanceof Error
-            ? err.message
+            ? formatSshUserFacingError(err.message)
             : translate('auto.components.settings.SshPane.68c13b4589', 'Test failed')
       }
     } finally {

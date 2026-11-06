@@ -16,6 +16,10 @@ import type {
 } from './remote-runtime-terminal-multiplexer-types'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 import { refreshRuntimeEnvironmentsAfterPairingChange } from './runtime-environment-pairing-refresh'
+import { translate } from '@/i18n/i18n'
+
+const remoteConnectionClosed = (): string =>
+  translate('auto.runtime.remoteTerminal.connectionClosed', 'Remote runtime connection closed.')
 
 export abstract class RemoteRuntimeTerminalMultiplexerBase {
   protected readonly streams = new Map<number, RemoteRuntimeMultiplexedTerminalState>()
@@ -182,7 +186,7 @@ export abstract class RemoteRuntimeTerminalMultiplexerBase {
     const closingSubscription = this.subscription
     this.ready = false
     this.connectPromise = null
-    this.readyRejecter?.(new Error(message ?? 'Remote runtime connection closed.'))
+    this.readyRejecter?.(new Error(message ?? remoteConnectionClosed()))
     this.readyResolver = null
     this.readyRejecter = null
     this.subscription = null
@@ -193,7 +197,7 @@ export abstract class RemoteRuntimeTerminalMultiplexerBase {
     // Why: close callbacks may resubscribe synchronously; release first so every replacement shares the new environment multiplexer.
     this.releaseIfCurrent(this.environmentId, this)
     for (const stream of streams) {
-      disposeRemoteTerminalStreamState(stream, message ?? 'Remote runtime connection closed.')
+      disposeRemoteTerminalStreamState(stream, message ?? remoteConnectionClosed())
       const canHandleClose = Boolean(stream.callbacks.onTransportClose)
       stream.callbacks.onTransportClose?.({ recoverable })
       if (message && !canHandleClose) {

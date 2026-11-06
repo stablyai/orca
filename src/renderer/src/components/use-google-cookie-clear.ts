@@ -9,6 +9,7 @@ import {
   confirmAndClearGoogleCookies
 } from '@/lib/browser-google-cookie-clear'
 import { translate } from '@/i18n/i18n'
+import { translateBrowserSessionProfileLabel } from '@/lib/browser-session-profile-label'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 
 export function useGoogleCookieClear(hostId: ExecutionHostId, profileId: string, label?: string) {
@@ -110,7 +111,12 @@ export function useGoogleCookieClear(hostId: ExecutionHostId, profileId: string,
         translate(
           'browser.googleCookieClear.unverified',
           "Couldn't check {{profile}}'s Google cookies. Try again.",
-          { profile: label || (profileId === 'default' ? 'Default' : 'Browser profile') }
+          {
+            profile: translateBrowserSessionProfileLabel(
+              label || (profileId === 'default' ? 'Default' : 'Browser profile'),
+              profileId
+            )
+          }
         )
       )
     } finally {

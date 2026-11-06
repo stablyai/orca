@@ -21,17 +21,28 @@ export function showDictationStartErrorToast(message: string): void {
       )
     )
   } else if (message.includes('not ready')) {
-    toast('Speech model not ready. Download it in Settings > Voice.')
+    toast(
+      translate(
+        'auto.components.dictation.DictationController.speechModelNotReady',
+        'Speech model not ready. Download it in Settings > Voice.'
+      )
+    )
   } else if (message.includes('Unknown model')) {
-    toast('Selected model is no longer available. Please choose another in Settings > Voice.', {
-      action: {
-        label: translate(
-          'auto.components.dictation.DictationController.bb7f599ee7',
-          'Open Settings'
-        ),
-        onClick: openVoiceSettings
+    toast(
+      translate(
+        'auto.components.dictation.DictationController.speechModelUnavailable',
+        'Selected model is no longer available. Please choose another in Settings > Voice.'
+      ),
+      {
+        action: {
+          label: translate(
+            'auto.components.dictation.DictationController.bb7f599ee7',
+            'Open Settings'
+          ),
+          onClick: openVoiceSettings
+        }
       }
-    })
+    )
   } else {
     toast.error(
       translate(

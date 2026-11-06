@@ -13,6 +13,7 @@ import {
 } from './remote-runtime-terminal-snapshot-state'
 import type { TerminalMultiplexEvent } from './remote-runtime-terminal-multiplexer-types'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
+import { translate } from '@/i18n/i18n'
 
 type SubscribedCapabilities = {
   ackOutputSourceRanges: boolean
@@ -107,7 +108,10 @@ export abstract class RemoteRuntimeTerminalResponseController extends RemoteRunt
         )
       }
     } else if (event.type === 'end') {
-      disposeRemoteTerminalStreamState(stream, 'Remote terminal stream ended.')
+      disposeRemoteTerminalStreamState(
+        stream,
+        translate('auto.runtime.remoteTerminal.streamEnded', 'Remote terminal stream ended.')
+      )
       this.streams.delete(event.streamId)
       if (stream.capacityRejected) {
         if (stream.callbacks.onTransportClose) {

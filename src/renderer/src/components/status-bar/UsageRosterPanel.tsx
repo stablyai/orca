@@ -7,7 +7,7 @@ import { translate } from '@/i18n/i18n'
 import {
   formatRateLimitWindowChipLabel,
   formatWindowLabel
-} from '../../../../shared/rate-limit-window-label'
+} from './rate-limit-window-localized-label'
 import { CURSOR_MODELS_BUCKET_NAME } from '../../../../shared/cursor-usage-buckets'
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
 import {

@@ -3,6 +3,7 @@ import { CalendarDays, FileText, FolderKanban, RefreshCw, UserRound } from 'luci
 
 import { Progress } from '@/components/ui/progress'
 import { translate } from '@/i18n/i18n'
+import { translateUnassignedLabel } from '@/i18n/unassigned-label'
 import type {
   LinearProjectDetail,
   LinearProjectSummary
@@ -160,7 +161,7 @@ export function LinearProjectOverviewContent({
             />
             <LinearProjectPropertyRow
               label={translate('auto.components.linear.project.view.surfaces.111bef9aa8', 'Lead')}
-              value={linearProjectUnknownText(presentation.lead) ?? 'Unassigned'}
+              value={linearProjectUnknownText(presentation.lead) ?? translateUnassignedLabel()}
               icon={<UserRound className="size-3.5" />}
             />
             <LinearProjectPropertyRow

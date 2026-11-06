@@ -21,6 +21,10 @@ import { useBoundedHostRows } from '../../../host-picker/use-bounded-host-rows'
 import { HostListSearchField } from '../../../host-picker/HostListSearchField'
 import { HostListOverflowNote } from '../../../host-picker/HostListOverflowNote'
 import { translate } from '@/i18n/i18n'
+import {
+  translateExecutionHostDetail,
+  translateExecutionHostLabel
+} from '../../execution-host-label'
 
 type SidebarHostScopeMenuSectionProps = {
   hostVisibilityLabel: string
@@ -34,7 +38,7 @@ type SidebarHostScopeMenuSectionProps = {
 function getHostMetadata(host: SidebarHostOption): string {
   const healthLabel = getSidebarHostHealthLabel(host.health, host.blockedReason)
   if (host.kind === 'local') {
-    return host.detail
+    return translateExecutionHostDetail(host.detail)
   }
   if (host.kind === 'ssh') {
     const presenceLabel =
@@ -147,7 +151,7 @@ export function SidebarHostScopeMenuSection({
               className="min-h-11 items-start py-1.5"
             >
               <span className="flex min-w-0 flex-col gap-0.5">
-                <span className="truncate">{host.label}</span>
+                <span className="truncate">{translateExecutionHostLabel(host.label)}</span>
                 <span className="text-[11px] font-normal text-muted-foreground">
                   {getHostMetadata(host)}
                 </span>

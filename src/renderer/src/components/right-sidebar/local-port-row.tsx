@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react'
 import { Box, Copy, ExternalLink, Info, Server, Trash2 } from 'lucide-react'
-import { getPortOpenBrowserTooltipLabel } from '@/lib/workspace-ports/workspace-port-actions'
+import { getPortOpenBrowserTooltipLabel } from '@/lib/workspace-ports/workspace-port-browser-open'
 import { addressForPort } from '@/lib/workspace-ports/workspace-port-urls'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
