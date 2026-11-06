@@ -38,13 +38,20 @@ export type SessionMemory = UsageValues & {
   pid: number
 }
 
-/** The top-level cpu/memory are the sum of sessions. */
+/** Processes this workspace's terminals started that now run outside every terminal's tree. */
+export type OutsideTerminalsMemory = UsageValues & {
+  pids: number[]
+}
+
+/** The top-level cpu/memory are the sum of sessions and outsideTerminals. */
 export type WorktreeMemory = UsageValues & {
   worktreeId: string
   worktreeName: string
   repoId: string
   repoName: string
   sessions: SessionMemory[]
+  /** Found by the ORCA_WORKTREE_ID tag in their environment; absent when there are none or the host cannot read it. */
+  outsideTerminals?: OutsideTerminalsMemory
   /** Oldest-first memory samples (bytes) for this worktree's tracked subtrees. */
   history: number[]
 }
@@ -71,7 +78,7 @@ export type MemorySnapshot = {
   processMemoryMetric: ProcessMemoryMetric
   /** Committed-byte metric; absent on older hosts or unsupported captures means unknown, never zero. */
   processCommitMetric?: ProcessCommitMetric
-  /** Sum of app + all tracked worktree sessions. Percent of a single core, so may exceed 100 on multi-core machines. */
+  /** Sum of app + all tracked worktrees. Percent of a single core, so may exceed 100 on multi-core machines. */
   totalCpu: number
   /** Sum of per-process samples. With rss/working-set, shared pages may repeat, so this can exceed host.totalMemory. */
   totalMemory: number

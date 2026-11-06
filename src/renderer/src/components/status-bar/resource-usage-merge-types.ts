@@ -44,6 +44,8 @@ export type UnifiedWorktreeRow = {
   hostLabel?: string
   sessions: UnifiedSessionRow[]
   browsers: BrowserWorkspace[]
+  /** Processes its terminals started that run outside them now; included in cpu and memory. */
+  outsideTerminals?: { cpu: number; memory: number; processCount: number }
 }
 
 export type UnifiedProjectGroup = {

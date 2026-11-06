@@ -16,6 +16,7 @@ import { collectHostMemory } from './host-memory'
 import { getProcessMemoryMetric } from './process-memory-metric'
 import { readDarwinProcessFootprints } from './darwin-process-footprint'
 import { getLocalDaemonPid } from './local-daemon-pid'
+import { collectOutsideTerminalUsage } from './outside-terminal-usage'
 import {
   buildProcessIndex,
   collectSubtree,
@@ -176,6 +177,21 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
     'Other'
   )
   const worktreeBuckets = new Map<string, WorktreeMemoryBucket>()
+  const bucketFor = (worktreeId: string): WorktreeMemoryBucket => {
+    const existing = worktreeBuckets.get(worktreeId)
+    if (existing) {
+      return existing
+    }
+    const names = resolveWorktreeMemoryNames(worktreeId, store)
+    const bucket = createEmptyWorktreeMemoryBucket(
+      worktreeId,
+      names.worktreeName,
+      names.repoId,
+      names.repoName
+    )
+    worktreeBuckets.set(worktreeId, bucket)
+    return bucket
+  }
 
   for (const pty of ptys) {
     let sessionCpu = 0
@@ -207,29 +223,23 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
       ...optionalCommitField(processIndex.hasPrivateMemory, sessionPrivateMemory)
     }
 
-    let bucket: WorktreeMemoryBucket
-    if (pty.worktreeId) {
-      const existing = worktreeBuckets.get(pty.worktreeId)
-      if (existing) {
-        bucket = existing
-      } else {
-        const names = resolveWorktreeMemoryNames(pty.worktreeId, store)
-        bucket = createEmptyWorktreeMemoryBucket(
-          pty.worktreeId,
-          names.worktreeName,
-          names.repoId,
-          names.repoName
-        )
-        worktreeBuckets.set(pty.worktreeId, bucket)
-      }
-    } else {
-      bucket = orphan
-    }
-
+    const bucket = pty.worktreeId ? bucketFor(pty.worktreeId) : orphan
     bucket.cpu += session.cpu
     bucket.memory += session.memory
     bucket.privateMemory += clampMemoryMetric(session.privateMemory)
     bucket.sessions.push(session)
+  }
+
+  // Orca's own processes are never a workspace's, whatever their environment says.
+  const daemonPid = getLocalDaemonPid()
+  const orcaRoots = daemonPid === null ? [process.pid] : [process.pid, daemonPid]
+  const outside = await collectOutsideTerminalUsage(processIndex, claimed, orcaRoots)
+  for (const [worktreeId, usage] of outside) {
+    const bucket = bucketFor(worktreeId)
+    bucket.cpu += clampMemoryMetric(usage.cpu)
+    bucket.memory += clampMemoryMetric(usage.memory)
+    bucket.privateMemory += usage.privateMemory
+    bucket.outsideTerminals = usage
   }
 
   const bucketList: WorktreeMemoryBucket[] = [...worktreeBuckets.values()]
@@ -245,11 +255,21 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   }
   sweepStaleMemoryHistory(now)
 
-  const worktrees: WorktreeMemory[] = bucketList.map(({ privateMemory, ...b }) => ({
-    ...b,
-    ...optionalCommitField(processIndex.hasPrivateMemory, privateMemory),
-    history: readMemoryHistory(b.worktreeId)
-  }))
+  const worktrees: WorktreeMemory[] = bucketList.map(
+    ({ privateMemory, outsideTerminals, ...b }) => ({
+      ...b,
+      ...optionalCommitField(processIndex.hasPrivateMemory, privateMemory),
+      ...(outsideTerminals && {
+        outsideTerminals: {
+          cpu: clampMemoryMetric(outsideTerminals.cpu),
+          memory: clampMemoryMetric(outsideTerminals.memory),
+          ...optionalCommitField(processIndex.hasPrivateMemory, outsideTerminals.privateMemory),
+          pids: outsideTerminals.pids
+        }
+      }),
+      history: readMemoryHistory(b.worktreeId)
+    })
+  )
 
   let sessionCpuTotal = 0
   let sessionMemoryTotal = 0

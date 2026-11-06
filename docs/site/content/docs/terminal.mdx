@@ -14,6 +14,8 @@ Agent terminal tabs show the agent identity plus live state: working, waiting fo
 
 The **Resources** view works in both the desktop app and the paired web client while its page is visible. The separate **PTYs** view manages local desktop terminals; a web client cannot end those terminals.
 
+A workspace's usage also counts the processes its terminals started that now run outside every terminal, such as a dev server left behind when its terminal closed, or a daemon. They appear under the workspace as **processes outside terminals**. Orca recognizes them by the `ORCA_WORKTREE_ID` it puts in every terminal's environment, so a process that clears its environment as it leaves is not counted. This works on macOS and Linux.
+
 **Refresh** discovers terminals created since the previous observation. **End** requires a host that can check the selected terminal's identity, agent ownership, and attachments before stopping it. An older host, ambiguous ownership, or lost contact cannot establish a safe End result.
 
 If **End** is unavailable because the terminal host lacks support, end the terminal manually from its terminal tab or on its host.

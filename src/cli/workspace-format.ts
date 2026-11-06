@@ -59,7 +59,12 @@ function formatWorktreeMemoryLine(worktree: WorktreeMemory): string {
       ? []
       : [`${formatByteCount(worktree.privateMemory)} committed`]),
     `${formatCpu(worktree.cpu)}`,
-    `${worktree.sessions.length} session${worktree.sessions.length === 1 ? '' : 's'}`
+    `${worktree.sessions.length} session${worktree.sessions.length === 1 ? '' : 's'}`,
+    ...(worktree.outsideTerminals
+      ? [
+          `outside terminals: ${formatByteCount(worktree.outsideTerminals.memory)} in ${worktree.outsideTerminals.pids.length} process${worktree.outsideTerminals.pids.length === 1 ? '' : 'es'}`
+        ]
+      : [])
   ].join('  ')
 }
 

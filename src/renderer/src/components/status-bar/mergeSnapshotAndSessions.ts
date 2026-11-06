@@ -118,7 +118,14 @@ export function mergeSnapshotAndSessions(
       isRemote: row.isRemote,
       ...(row.hostLabel ? { hostLabel: row.hostLabel } : {}),
       sessions,
-      browsers: []
+      browsers: [],
+      ...(wt.outsideTerminals && {
+        outsideTerminals: {
+          cpu: wt.outsideTerminals.cpu,
+          memory: wt.outsideTerminals.memory,
+          processCount: wt.outsideTerminals.pids.length
+        }
+      })
     })
   }
 
