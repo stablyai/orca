@@ -69,9 +69,9 @@ export const RULES: Rule[] = [
     describe: (c) => `control closes ${c.control_close} in ${WINDOW_MIN} min, over 3x the previous window`
   },
   {
-    // Dead man: the edge (or its metrics) went silent.
+    // Dead man: traffic stopped (the edge or its metrics went silent) after a window that had some.
     id: 'silent',
-    breach: (c) => c.events === 0,
+    breach: (c, min, prior) => prior !== undefined && prior.events >= min && c.events === 0,
     describe: () => `no edge events in ${WINDOW_MIN} min`
   }
 ]

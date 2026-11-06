@@ -46,7 +46,9 @@ check('4429/4503 at 6% fires', r.fired.some((f) => f.includes('busy-refusals')),
 r = await run({ control_close: 4000 }, {})
 check('mass drop fires', r.fired.some((f) => f.includes('mass-drop')), r.fired.join())
 r = await run({ events: 0, phone_open: 0, control_active: 0, control_close: 0, db_ops: 0 }, {})
-check('silence fires', r.fired.some((f) => f.includes('silent')), r.fired.join())
+check('silence after traffic fires', r.fired.some((f) => f.includes('silent')), r.fired.join())
+r = await run({ events: 0, phone_open: 0, control_active: 0, control_close: 0, db_ops: 0 }, { events: 0, phone_open: 0, control_active: 0, control_close: 0, db_ops: 0 })
+check('idle environment stays quiet', r.fired.length === 0, r.fired.join())
 globalThis.fetch = (async (url: string) => (url === env.ALERT_WEBHOOK_URL ? new Response('ok') : new Response('no', { status: 403 }))) as typeof fetch
 const broken = await evaluate(env, Date.UTC(2026, 10, 6, 10, 17))
 check('unreadable metrics alert', broken[0]?.includes('cannot read metrics') === true, broken.join())
