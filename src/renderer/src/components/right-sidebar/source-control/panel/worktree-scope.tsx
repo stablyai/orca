@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import type { StoreApi } from 'zustand'
+import { create, type StoreApi } from 'zustand'
 import { AppStateViewContext, useAppStateValue } from '@/store/app-state-view'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -45,7 +45,7 @@ export function SourceControlScopeProvider({
       return useAppStore
     }
     const snapshot = useAppStore.getState()
-    return { getState: () => snapshot, getInitialState: () => snapshot, subscribe: () => () => {} }
+    return create<AppState>(() => snapshot)
   }, [active])
   const [visibleOwner, setVisibleOwner] = useState(owner)
   if (active && visibleOwner !== owner) {

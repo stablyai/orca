@@ -39,31 +39,23 @@ vi.mock('@monaco-editor/react', () => ({
   loader: { config: vi.fn() }
 }))
 vi.mock('@/lib/monaco-setup', () => ({}))
-vi.mock('@/store', () => {
-  const baseState = {
-    settings: { theme: 'dark', terminalFontSize: 13, terminalFontFamily: 'monospace' },
-    editorFontZoomLevel: 0,
-    setPendingEditorReveal: vi.fn(),
-    setEditorCursorLine: vi.fn(),
-    addDiffComment: vi.fn(),
-    deleteDiffComment: vi.fn(),
-    updateDiffComment: vi.fn(),
-    scrollToDiffCommentId: null,
-    setScrollToDiffCommentId: vi.fn(),
-    worktreeDiffComments: {}
-  }
-  const getState = () => ({
-    ...baseState,
-    openFiles: editorProps.files,
-    ...editorProps.ownerCatalog
-  })
-  return {
-    useAppStore: Object.assign(
-      (selector: (state: ReturnType<typeof getState>) => unknown) => selector(getState()),
-      { getState, getInitialState: getState, subscribe: () => () => {} }
-    )
-  }
-})
+vi.mock('@/store', () => ({
+  useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({
+      settings: { theme: 'dark', terminalFontSize: 13, terminalFontFamily: 'monospace' },
+      editorFontZoomLevel: 0,
+      openFiles: editorProps.files,
+      ...editorProps.ownerCatalog,
+      setPendingEditorReveal: vi.fn(),
+      setEditorCursorLine: vi.fn(),
+      addDiffComment: vi.fn(),
+      deleteDiffComment: vi.fn(),
+      updateDiffComment: vi.fn(),
+      scrollToDiffCommentId: null,
+      setScrollToDiffCommentId: vi.fn(),
+      worktreeDiffComments: {}
+    })
+}))
 vi.mock('../diff-comments/useDiffCommentDecorator', () => ({
   useDiffCommentDecorator: vi.fn()
 }))

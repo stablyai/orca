@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { create } from 'zustand'
 import { AppStateViewContext } from '@/store/app-state-view'
 import { BaseRefPicker } from './BaseRefPicker'
 
@@ -11,11 +12,7 @@ vi.mock('@/runtime/runtime-repo-client', () => ({
 }))
 
 const snapshot = useAppStore.getState()
-const frozen = {
-  getState: () => snapshot,
-  getInitialState: () => snapshot,
-  subscribe: () => () => {}
-}
+const frozen = create(() => snapshot)
 
 afterEach(cleanup)
 

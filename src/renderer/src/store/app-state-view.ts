@@ -1,9 +1,11 @@
 import { createContext, useContext, useMemo, useSyncExternalStore } from 'react'
-import { useStore, type StoreApi } from 'zustand'
+import type { StoreApi, UseBoundStore } from 'zustand'
 import { useAppStore } from './index'
 import type { AppState } from './types'
 
-export type AppStateView = Pick<StoreApi<AppState>, 'getState' | 'getInitialState' | 'subscribe'>
+export type AppStateView = UseBoundStore<
+  Pick<StoreApi<AppState>, 'getState' | 'getInitialState' | 'subscribe'>
+>
 // Null defers the default store read until render, including shared hooks imported by the store.
 export const AppStateViewContext = createContext<AppStateView | null>(null)
 
@@ -13,7 +15,8 @@ export function useAppStateView(): AppStateView {
 }
 
 export function useAppStateValue<T>(selector: (state: AppState) => T): T {
-  return useStore(useAppStateView(), selector)
+  const useViewStore = useAppStateView()
+  return useViewStore(selector)
 }
 
 export function useAppStateViewActive(): boolean {
