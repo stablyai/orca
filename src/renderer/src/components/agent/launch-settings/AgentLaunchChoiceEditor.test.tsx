@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import { getDefaultSettings } from '../../../../../shared/constants'
 import {
   recordHostModelCatalogSnapshot,
   resetHostModelCatalogSnapshotsForTests
@@ -106,7 +106,7 @@ describe('AgentLaunchChoiceEditor model list', () => {
 
     act(() => {
       useAppStore.setState({
-        settings: { agentCmdOverrides: { codex: 'wrapped-codex' } } as unknown as GlobalSettings
+        settings: { ...getDefaultSettings(''), agentCmdOverrides: { codex: 'wrapped-codex' } }
       })
     })
 
