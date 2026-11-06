@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  getReorderUnnestRows,
   getWorktreeLineageDropTargetIdentity,
   isReorderInsideFolderRow
 } from './worktree-lineage-drag-drop'
@@ -78,6 +79,40 @@ describe('isReorderInsideFolderRow', () => {
     )
     expect(isReorderInsideFolderRow('local|folder:f-1', { ...inside, clientY: 340 })).toBe(false)
     folder.remove()
+  })
+})
+
+describe('getReorderUnnestRows', () => {
+  const folderChild = { id: 'r::/w', hostId: 'ssh:box' as const }
+  const groupTwin = { id: 'r::/w', hostId: 'local' as const }
+  const otherGroupTwin = { id: 'r::/w', hostId: 'runtime:env' as const }
+  const base = {
+    legacyIds: ['r::/w'],
+    pickedCopies: [folderChild, groupTwin, otherGroupTwin],
+    sourceGroupIdentities: ['ssh:box|r::/w', 'local|r::/w'],
+    folderParentOf: (identity: string) =>
+      identity === 'ssh:box|r::/w' ? 'local|folder:f-1' : undefined
+  }
+
+  it('names a folder child and its same-group twin by host, and leaves other groups alone', () => {
+    expect(getReorderUnnestRows({ ...base, keepsFolderParent: () => false })).toEqual([
+      groupTwin,
+      folderChild
+    ])
+  })
+
+  it('keeps a folder child dropped inside its folder', () => {
+    expect(getReorderUnnestRows({ ...base, keepsFolderParent: () => true })).toEqual([groupTwin])
+  })
+
+  it('leaves bare ids alone without folder children', () => {
+    expect(
+      getReorderUnnestRows({
+        ...base,
+        folderParentOf: () => undefined,
+        keepsFolderParent: () => false
+      })
+    ).toEqual(['r::/w'])
   })
 })
 

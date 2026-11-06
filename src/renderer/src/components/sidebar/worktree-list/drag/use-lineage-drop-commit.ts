@@ -14,6 +14,7 @@ import type { DraggedWorktreeCopies } from './dragged-worktree-copies'
 import { getCyclicProjectedWorktreeLineageIds } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
 import {
   getReorderedWorktreeIdsToUnnest,
+  getReorderUnnestRows,
   isReorderInsideFolderRow,
   type WorktreeReorderDropPoint
 } from './worktree-lineage-drag-drop'
@@ -171,20 +172,7 @@ export function useWorktreeLineageDropCommit(args: {
       if (!sourceGroup) {
         return
       }
-      // Rows nested under a folder workspace are named by their own host, so a same-id twin elsewhere
-      // is never the one cleared; one dropped back inside its folder's card reorders, not unnests.
-      const folderChildren = (unnestArgs.pickedCopies ?? []).flatMap((copy) => {
-        const identity = getWorktreeHostIdentity(copy)
-        const parent = parentIdentities?.get(identity)
-        return sourceGroup.worktreeIds.includes(identity) &&
-          parent !== undefined &&
-          parseWorkspaceKey(getWorktreeIdFromHostIdentity(parent))?.type === 'folder'
-          ? [{ copy, parent }]
-          : []
-      })
-      const folderChildIds = new Set(folderChildren.map(({ copy }) => copy.id))
-      const folderCopies = new Set(folderChildren.map(({ copy }) => copy))
-      const legacy = getReorderedWorktreeIdsToUnnest({
+      const legacyIds = getReorderedWorktreeIdsToUnnest({
         draggedIds: unnestArgs.draggedIds,
         // Lineage is keyed by worktree id; drag groups key members by host identity.
         sourceGroupIds: sourceGroup.worktreeIds.map(getWorktreeIdFromHostIdentity),
@@ -192,22 +180,24 @@ export function useWorktreeLineageDropCommit(args: {
         worktreeMap,
         cyclicLineageIds
       })
-      // An id a folder child shares names its other picked copies by host; any other id stays bare.
-      const ids = legacy.flatMap((id): (string | DraggedWorktreeCopies[number])[] =>
-        folderChildIds.has(id)
-          ? (unnestArgs.pickedCopies ?? []).filter(
-              (copy) => copy.id === id && !folderCopies.has(copy)
-            )
-          : [id]
-      )
-      const unnestedFolderChildren = folderChildren.flatMap(({ copy, parent }) =>
-        isReorderInsideFolderRow(parent, unnestArgs.dropPoint) ? [] : [copy]
-      )
-      if (ids.length === 0 && unnestedFolderChildren.length === 0) {
+      const rows = getReorderUnnestRows({
+        legacyIds,
+        pickedCopies: unnestArgs.pickedCopies ?? [],
+        sourceGroupIdentities: sourceGroup.worktreeIds,
+        folderParentOf: (identity) => {
+          const parent = parentIdentities?.get(identity)
+          return parent !== undefined &&
+            parseWorkspaceKey(getWorktreeIdFromHostIdentity(parent))?.type === 'folder'
+            ? parent
+            : undefined
+        },
+        keepsFolderParent: (folder) => isReorderInsideFolderRow(folder, unnestArgs.dropPoint)
+      })
+      if (rows.length === 0) {
         return
       }
       // Why: dropping a nested card on a reorder line is the un-nest escape hatch; clear only the dragged children.
-      void unnestWorktrees([...ids, ...unnestedFolderChildren], updateWorktreeLineage)
+      void unnestWorktrees(rows, updateWorktreeLineage)
     },
     [
       cyclicLineageIds,

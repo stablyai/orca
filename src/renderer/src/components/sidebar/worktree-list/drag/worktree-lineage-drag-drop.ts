@@ -1,5 +1,6 @@
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { getLineageRenderInfo } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
 
 const WORKTREE_CARD_CONTENT_TARGET_SELECTOR = '[data-worktree-card-parent-content]'
@@ -131,4 +132,40 @@ export function isReorderInsideFolderRow(
     point.lineClientY > rect.top &&
     point.lineClientY < rect.bottom
   )
+}
+
+type PickedCopy = Pick<Worktree, 'id' | 'hostId'>
+
+/**
+ * The rows a reorder unnests. Legacy ids (worktree parents) stay bare, as before. A row nested
+ * under a folder workspace is named by its own host and kept when it stayed inside its folder; an
+ * id it shares with another picked copy in the source group names that copy by host instead.
+ */
+export function getReorderUnnestRows(args: {
+  legacyIds: readonly string[]
+  pickedCopies: readonly PickedCopy[]
+  sourceGroupIdentities: readonly string[]
+  /** The row's folder workspace parent identity, if its parent is a folder. */
+  folderParentOf: (identity: string) => string | undefined
+  keepsFolderParent: (folderIdentity: string) => boolean
+}): (string | PickedCopy)[] {
+  const inGroup = (copy: PickedCopy): boolean =>
+    args.sourceGroupIdentities.includes(getWorktreeHostIdentity(copy))
+  const folderChildren = args.pickedCopies.flatMap((copy) => {
+    const folder = inGroup(copy) ? args.folderParentOf(getWorktreeHostIdentity(copy)) : undefined
+    return folder === undefined ? [] : [{ copy, folder }]
+  })
+  const folderCopies = new Set(folderChildren.map(({ copy }) => copy))
+  const folderChildIds = new Set(folderChildren.map(({ copy }) => copy.id))
+  const legacy = args.legacyIds.flatMap((id): (string | PickedCopy)[] =>
+    folderChildIds.has(id)
+      ? args.pickedCopies.filter(
+          (copy) => copy.id === id && !folderCopies.has(copy) && inGroup(copy)
+        )
+      : [id]
+  )
+  return [
+    ...legacy,
+    ...folderChildren.flatMap(({ copy, folder }) => (args.keepsFolderParent(folder) ? [] : [copy]))
+  ]
 }
