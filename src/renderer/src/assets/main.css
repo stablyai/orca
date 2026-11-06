@@ -268,7 +268,8 @@
   --chart-5: var(--color-blue-800);
   --worktree-sidebar: #f5f5f5;
   --worktree-sidebar-foreground: #0a0a0a;
-  --host-badge-border: color-mix(in srgb, var(--worktree-sidebar-foreground) 80%, transparent);
+  /* Resolve the omitted border at the consumer so subtree foreground overrides still apply. */
+  --host-badge-border: initial;
   --worktree-sidebar-accent: #eaeaea;
   --worktree-sidebar-accent-foreground: #171717;
   --worktree-sidebar-border: #e5e5e5;
@@ -385,7 +386,7 @@
   /* Mirror light mode’s lifted worktree sidebar above the dark canvas. */
   --worktree-sidebar: #2a2a2a;
   --worktree-sidebar-foreground: #f0f0f0;
-  --host-badge-border: color-mix(in srgb, var(--worktree-sidebar-foreground) 80%, transparent);
+  --host-badge-border: initial;
   --worktree-sidebar-accent: #353535;
   --worktree-sidebar-accent-foreground: #f0f0f0;
   /* Match --border / --sidebar-border (7%) so the left sidebar's divider lines
@@ -1529,7 +1530,10 @@ html.native-shell .app-layout {
 /* #15971: the border carries the pill's shape; the default 80% keeps >=3:1 against the wash. */
 @scope ([data-worktree-card-surface][data-worktree-card-active='primary']) to ([data-worktree-lineage-children]) {
   [data-variant='hostContext'] {
-    border-color: var(--host-badge-border);
+    border-color: var(
+      --host-badge-border,
+      color-mix(in srgb, var(--worktree-sidebar-foreground) 80%, transparent)
+    );
   }
 }
 

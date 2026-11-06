@@ -5,6 +5,7 @@ const colors: Record<string, Rgba> = {
   '#000000': [0, 0, 0, 1],
   '#ffffff': [255, 255, 255, 1],
   '#1a1a1a': [26, 26, 26, 1],
+  '#4a4a4a': [74, 74, 74, 1],
   'rgb(255 255 255 / 0.1)': [255, 255, 255, 0.1]
 }
 const probe: ColorProbe = (value) => colors[value] ?? null
@@ -57,7 +58,7 @@ describe('selected host badge border contrast', () => {
         {
           '--worktree-sidebar': '#000000',
           '--worktree-sidebar-foreground': '#ffffff',
-          '--host-badge-border': '#1a1a1a'
+          '--host-badge-border': '#4a4a4a'
         },
         'dark',
         {},
