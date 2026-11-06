@@ -242,6 +242,7 @@ describe('useMobileDiffReviewController', () => {
           worktreeId: 'wt-1',
           filePath: 'c.ts',
           lineNumber: 1,
+          side: 'modified',
           body: 'older note',
           createdAt: 1
         })
