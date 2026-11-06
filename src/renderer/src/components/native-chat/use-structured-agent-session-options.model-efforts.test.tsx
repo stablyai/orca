@@ -20,9 +20,13 @@ afterEach(() => {
   mocks.effortDiscovery = false
 })
 
-it.each([true, false])(
-  'discovers a draft-held target only on a capable paired host (%s)',
-  async (capable) => {
+it.each([
+  { agent: 'opencode2', capable: true },
+  { agent: 'omp', capable: true },
+  { agent: 'opencode2', capable: false }
+] as const)(
+  'discovers a draft-held $agent target only on a capable paired host ($capable)',
+  async ({ agent, capable }) => {
     mocks.effortDiscovery = capable
     mocks.call.mockReset()
     mocks.hold.mockReset()
@@ -60,7 +64,7 @@ it.each([true, false])(
     const { result } = renderOptions(
       {
         ...PROVISIONAL,
-        agent: 'opencode2',
+        agent,
         paired: true,
         launchSeedOptions: { model: A, effort: 'high' }
       },

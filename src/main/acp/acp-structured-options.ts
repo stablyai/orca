@@ -53,11 +53,7 @@ export class AcpStructuredOptions {
   constructor(
     private readonly dialect: Pick<
       AcpDialect,
-      | 'modelEfforts'
-      | 'withheldCommands'
-      | 'effortChangesModel'
-      | 'clampsUnlistedEffort'
-      | 'builtinCommands'
+      'modelEfforts' | 'withheldCommands' | 'effortChangesModel' | 'builtinCommands'
     > = {}
   ) {}
 
@@ -229,7 +225,7 @@ export class AcpStructuredOptions {
           ? { efforts: sessionEfforts }
           : (modelOption || effortOption) && !advertised
             ? {
-                efforts: this.dialect.clampsUnlistedEffort ? sessionEfforts : [],
+                efforts: [],
                 effortsKnown: false as const
               }
             : { efforts: [] }

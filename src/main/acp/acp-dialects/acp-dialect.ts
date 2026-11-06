@@ -134,8 +134,6 @@ export type AcpDialect = {
     defaultEffort?: string
     declaredDefaultEffort?: string | null
   }
-  /** Native thinking choices remain valid across models; the agent clamps unsupported levels. */
-  clampsUnlistedEffort?: true
   /** Opt-in because advertising forms changes agent behaviour; requests use the generic handlers. */
   clientCapabilities?: Pick<ClientCapabilities, 'elicitation'>
   /** Claimed permission requests are never auto-approved. */

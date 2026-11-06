@@ -74,14 +74,8 @@ describe('a model whose newer chat listing does not know its efforts', () => {
     expect(merged).not.toHaveProperty('defaultEffort')
   })
 
-  it('keeps native suggestions unknown without a known model menu', () => {
+  it('keeps an older menu unknown when a newer Pi listing has no choices', () => {
     const older = unknownChat(1, menu('low', 'high'))
-    const newer = unknownChat(2, menu('off', 'auto'))
-    for (const discovered of [null, { ...older, origin: 'probe' as const }]) {
-      const merged = agentModelCatalogEntry('omp', 'fp', discovered, newer, null)?.models[0]
-      expect(merged).toMatchObject({ efforts: menu('off', 'auto'), effortsKnown: false })
-      expect(merged).not.toHaveProperty('defaultEffort')
-    }
     expect(model({ ...older, origin: 'probe' }, unknownChat(2))).toMatchObject({
       efforts: menu('low', 'high'),
       effortsKnown: false
