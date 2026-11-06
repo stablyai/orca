@@ -12,7 +12,6 @@ type ComposerSessionOptionsArgs = Pick<
   | 'terminalTabId'
   | 'targetPtyId'
   | 'paneKey'
-  | 'onSlashCommand'
   | 'onSubmitted'
   | 'onSwitchToTerminal'
   | 'readTerminalScreen'
@@ -23,7 +22,6 @@ type ComposerSessionOptionsArgs = Pick<
 export function useNativeChatComposerSessionOptions({
   agent,
   disabled,
-  onSlashCommand,
   onSubmitted,
   resolveTarget,
   terminalTabId,
@@ -41,7 +39,6 @@ export function useNativeChatComposerSessionOptions({
   const { dispatch, isDispatching } = useNativeChatSessionOptionCommand({
     agent,
     disabled,
-    onSlashCommand,
     onSubmitted,
     resolveTarget
   })

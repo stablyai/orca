@@ -209,7 +209,6 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     const sessionOptions = useNativeChatComposerSessionOptions({
       agent,
       disabled,
-      onSlashCommand,
       onSubmitted,
       resolveTarget,
       terminalTabId,
