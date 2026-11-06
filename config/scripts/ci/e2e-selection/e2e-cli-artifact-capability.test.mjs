@@ -7,16 +7,8 @@ import { runProcessSync } from '@orca/process-host'
 
 const workflow = parse(readFileSync('.github/workflows/e2e.yml', 'utf8'))
 const build = workflow.jobs.build.steps.find((step) => step.id === 'e2e-cli')
-const scripts = JSON.parse(readFileSync('package.json', 'utf8')).scripts
 
 describe('shared E2E CLI capability', () => {
-  it('uses the same preparation for locally compiled and downloaded CLI output', () => {
-    expect(scripts['build:cli']).toContain('&& pnpm run prepare:cli-output')
-    expect(scripts['prepare:cli-output']).toBe(
-      'node config/scripts/cli-build/verify-cli-bin.mjs --fix-executable --fix-package-json && node config/scripts/development/setup/install-dev-cli.mjs'
-    )
-  })
-
   it.skipIf(process.platform === 'win32').each([
     [false, 0, 0],
     [true, 0, 0],

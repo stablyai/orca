@@ -16,7 +16,7 @@ import {
   appendChatTabOrder,
   mergeMobileSessionSnapshotTabs,
   mergeMobileSessionTabGroups
-} from '../mobile-session-tab-merge'
+} from '../session-lifecycle/projection/mobile-session-tab-merge'
 
 export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding {
   protected abstract markPaneLiveTitlesDirty(): void

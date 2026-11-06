@@ -10,7 +10,7 @@ import {
 import { useCallback } from 'react'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
-import { measureUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
+import { isNativeChatLongPaste } from '../../../../shared/native-chat/input/native-chat-long-paste'
 import { structuredAgentSessionBlocksTooLarge } from '../../../../shared/rpc-contract/structured-agent-session-message-params'
 import { structuredAgentSessionSendBody } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { imageReferencesToPromptMarkers } from '../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
@@ -28,8 +28,6 @@ import {
   resolveNativeChatPastedText,
   settleNativeChatPastedText
 } from './native-chat-composer-pasted-text-references'
-
-export const NATIVE_CHAT_PASTED_TEXT_FILE_THRESHOLD = 32 * 1024
 
 function pastedTextTooLargeNotice(): string {
   return translate(
@@ -71,10 +69,7 @@ export function useNativeChatPastedTextFile(args: {
         scopeKey,
         `${value.slice(0, selectionStart ?? 0)}${text}${value.slice(selectionEnd ?? 0)}`
       )
-      const long =
-        text.length >= NATIVE_CHAT_PASTED_TEXT_FILE_THRESHOLD ||
-        measureUtf8ByteLength(text, { stopAfterBytes: NATIVE_CHAT_PASTED_TEXT_FILE_THRESHOLD - 1 })
-          .exceededLimit
+      const long = isNativeChatLongPaste(text)
       const owner = resolveAttachmentOwner()
       const target =
         owner.kind === 'runtime-session' ? cachedNativeChatPasteUploadTarget(owner) : null

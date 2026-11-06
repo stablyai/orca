@@ -26,7 +26,7 @@ import {
   keepSnapshotChatTabs,
   mergeMobileSessionSnapshotTabs,
   mergeMobileSessionTabGroups
-} from '../mobile-session-tab-merge'
+} from '../session-lifecycle/projection/mobile-session-tab-merge'
 import {
   appendBrowserTabOrder,
   collectBrowserGroupAssignment

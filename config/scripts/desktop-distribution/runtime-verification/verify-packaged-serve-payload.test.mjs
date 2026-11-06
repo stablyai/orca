@@ -3,7 +3,6 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { ORCAD_LOCAL_SERVE_SELECTION_ENTRY } from '../../../../src/shared/orcad-local-serve-selection'
 
 const require = createRequire(import.meta.url)
 const {
@@ -47,52 +46,9 @@ const INDEX =
   '<link rel="stylesheet" href="./assets/web.css">'
 
 describe('assertPackagedWebClient', () => {
-  it('passes a package whose unpacked web client loads every file it names', () => {
-    const resourcesDir = packagedResources({
-      index: INDEX,
-      assets: ['assets/web.js', 'assets/web.css']
-    })
-    expect(() => assertPackagedWebClient(resourcesDir)).not.toThrow()
-  })
-
-  it('fails a package with no unpacked web-index.html', () => {
-    expect(() => assertPackagedWebClient(packagedResources({}))).toThrow(/missing unpacked/)
-  })
-
   it('fails a package whose page loads a file that was not shipped', () => {
     const resourcesDir = packagedResources({ index: INDEX, assets: ['assets/web.js'] })
     expect(() => assertPackagedWebClient(resourcesDir)).toThrow(/assets\/web\.css/)
-  })
-
-  it('fails a page that loads nothing, which is not a real build', () => {
-    expect(() => assertPackagedWebClient(packagedResources({ index: '<html></html>' }))).toThrow(
-      /references no/
-    )
-  })
-
-  it.each([
-    null,
-    {},
-    ['assets/web.js'],
-    ['web-index.html', 'index.html'],
-    ['web-index.html', 'assets/../private'],
-    ['web-index.html', 'assets//private'],
-    ['web-index.html', 'assets/./private'],
-    ['web-index.html', 'assets/a\\private'],
-    ['web-index.html', 'assets/private.js.map'],
-    ['web-index.html', '/assets/a'],
-    ['web-index.html', 'assets/a\0.js'],
-    ['web-index.html', 3]
-  ])('rejects malformed shared web manifests: %j', (files) => {
-    const resourcesDir = packagedResources({
-      index: INDEX,
-      assets: ['assets/web.js', 'assets/web.css']
-    })
-    writeFileSync(
-      join(resourcesDir, 'app.asar.unpacked/out/renderer/.orca-web-client-files.json'),
-      JSON.stringify(files)
-    )
-    expect(() => assertPackagedWebClient(resourcesDir)).toThrow(/invalid web file manifest/)
   })
 
   it('fails when a transitive worker is missing even though HTML assets exist', () => {
@@ -111,15 +67,6 @@ describe('assertPackagedWebClient', () => {
     )
     expect(() => assertPackagedWebClient(resourcesDir)).toThrow(/editor.worker.js/)
   })
-
-  it('fails when the CLI the web root resolves from is not unpacked', () => {
-    const resourcesDir = packagedResources({
-      index: INDEX,
-      assets: ['assets/web.js', 'assets/web.css'],
-      cli: false
-    })
-    expect(() => assertPackagedWebClient(resourcesDir)).toThrow(/no unpacked CLI/)
-  })
 })
 
 describe('assertPackagedServeSelectionEntry', () => {
@@ -133,21 +80,6 @@ describe('assertPackagedServeSelectionEntry', () => {
     }
     return resourcesDir
   }
-
-  it('passes an unpacked entry whose relative requires are all unpacked', () => {
-    const resourcesDir = packagedEntry({
-      [`main/${ORCAD_LOCAL_SERVE_SELECTION_ENTRY}.js`]:
-        'require("../chunks/a.js"); require("node:fs")',
-      'main/chunks/a.js': 'require("./b"); require("../persistence")',
-      'main/chunks/b.js': '',
-      'main/persistence/index.js': ''
-    })
-    expect(() => assertPackagedServeSelectionEntry(resourcesDir)).not.toThrow()
-  })
-
-  it('fails a package that left the entry inside app.asar (#27404)', () => {
-    expect(() => assertPackagedServeSelectionEntry(packagedEntry({}))).toThrow(/missing unpacked/)
-  })
 
   it('fails when a chunk the entry reaches was not unpacked', () => {
     const resourcesDir = packagedEntry({

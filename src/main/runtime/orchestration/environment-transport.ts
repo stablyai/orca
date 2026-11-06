@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
-import { fingerprintAuthenticatedPairingCredential } from '../device-principal'
+import { fingerprintAuthenticatedPairingCredential } from '../rpc/server/pairing/device-principal'
 import type {
+  RuntimeRequestPreparation,
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
 } from '../../../shared/runtime-rpc-envelope'
@@ -15,8 +16,15 @@ export type OrchestrationWorkerServer = {
 
 /** Callers that already proved the contract, or that pin the pairing generation they resolved against. */
 export type OrchestrationEnvironmentCallOptions = {
+  prepareRequest?: RuntimeRequestPreparation
   contractVerified?: boolean
   expectedEnvironmentPairingRevision?: number
+}
+
+export type OrchestrationEnvironmentSendOptions = {
+  prepareRequest?: RuntimeRequestPreparation
+  /** Send only to this host incarnation; any other answers runtime_environment_changed before sending. */
+  expectedRuntimeId?: string
 }
 
 export type OrchestrationEnvironmentTransport = {
@@ -27,7 +35,8 @@ export type OrchestrationEnvironmentTransport = {
     params: unknown,
     timeoutMs?: number,
     envelope?: RuntimeOrchestrationEnvelope,
-    expectedEnvironmentPairingRevision?: number
+    expectedEnvironmentPairingRevision?: number,
+    send?: OrchestrationEnvironmentSendOptions
   ): Promise<RuntimeRpcResponse<unknown>>
 }
 

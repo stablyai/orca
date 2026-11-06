@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { startOrcadBrowserProvider } from './orcad-browser-startup'
 import { resolveOrcadBrowserProvider } from './orcad-browser-provider'
 import {
@@ -11,9 +11,12 @@ import {
 } from '../runtime/browser/installation/runtime-browser-commands-factory'
 import type { RuntimeBrowserCommandHost } from '../runtime/browser/commands/browser-command-contracts'
 import { RuntimeBrowserPageRegistry } from '../runtime/browser/client-pages/runtime-browser-page-registry'
+import { BrowserHostRequestRegistry } from '../runtime/browser-host/leases/browser-host-request-registry'
+import { BrowserHostAmbiguousError } from '../runtime/browser-host/leases/browser-host-capability-selection'
 
 vi.mock('./orcad-browser-provider', () => ({ resolveOrcadBrowserProvider: vi.fn() }))
 afterEach(() => {
+  vi.useRealTimers()
   vi.restoreAllMocks()
   setRuntimeBrowserCommandsFactory(null)
   setRuntimeBrowserUnavailableCause(null)
@@ -49,6 +52,7 @@ function pairedHost(options: { desktopAttached: boolean }) {
     result: Promise.resolve({ status: 'completed' as const })
   }))
   const notifyHeadlessBrowserSessionTabsChanged = vi.fn()
+  const hostRequests = new BrowserHostRequestRegistry()
   const host = {
     getAgentBrowserBridge: () => null,
     resolveBrowserWorkspace: async (selector: string) => ({ id: selector.replace(/^id:/, '') }),
@@ -58,6 +62,9 @@ function pairedHost(options: { desktopAttached: boolean }) {
       revision: 1
     }),
     getRuntimeBrowserPageRegistry: () => pages,
+    getBrowserHostRequestRegistry: () => hostRequests,
+    getPairedDeviceName: (pairedDeviceId: string) =>
+      pairedDeviceId === 'device-a' ? 'Work laptop' : null,
     getBrowserHostLeaseRegistry: () => ({
       authorityRuntimeId: 'orcad-a',
       authorityEpoch: 'epoch-a',
@@ -71,7 +78,14 @@ function pairedHost(options: { desktopAttached: boolean }) {
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every member the client-page path reads; the rest of the host is engine-only.
   const commandHost = host as unknown as RuntimeBrowserCommandHost
-  return { host: commandHost, pages, select, createClientPage, issueClientPageCommand }
+  return {
+    host: commandHost,
+    pages,
+    select,
+    hostRequests,
+    createClientPage,
+    issueClientPageCommand
+  }
 }
 
 it('opens open-url in the paired desktop when orcad has no browser engine', async () => {
@@ -115,8 +129,122 @@ it('refuses open-url with what to do when no paired desktop hosts this server’
     commands.browserOpenUrlOnClient({ url: 'https://example.org/', worktree: 'id:wt-1' })
   ).rejects.toMatchObject({
     code: 'browser_host_unavailable',
-    message: expect.stringContaining("open a browser tab in one of this server's workspaces")
+    message: expect.stringContaining('Keep an Orca desktop paired with this server connected')
   })
+  await startup.stop()
+})
+
+// #35066: before this, open-url failed until the user opened a browser tab on the desktop.
+it('asks a connected desktop to host when open-url arrives before any browser page exists', async () => {
+  const startup = await startWithoutEngine()
+  const options = { desktopAttached: false }
+  const paired = pairedHost(options)
+  paired.hostRequests.register({
+    pairedDeviceId: 'device-a',
+    emit: ({ requestId }) => {
+      options.desktopAttached = true
+      paired.hostRequests.settle(
+        { pairedDeviceId: 'device-a' },
+        { requestId, browserHostClientId: 'desktop-a' }
+      )
+    }
+  })
+
+  const opened = await createRuntimeBrowserCommands(paired.host).browserOpenUrlOnClient({
+    url: 'https://example.org/',
+    worktree: 'id:wt-1'
+  })
+
+  expect(paired.select).toHaveBeenLastCalledWith('desktop-a', ['webview', 'automation-v1'])
+  expect(paired.createClientPage).toHaveBeenCalledWith(
+    expect.objectContaining({
+      browserPageId: opened.browserPageId,
+      browserHostClientId: 'desktop-a',
+      pairedDeviceId: 'device-a'
+    })
+  )
+  await startup.stop()
+})
+
+// Two desktops hold leases, so plain selection is ambiguous; the server picks one instead of failing.
+describe('open-url when two desktops already host', () => {
+  function twoHostingDesktops() {
+    const paired = pairedHost({ desktopAttached: true })
+    const generations: Record<string, number> = { 'desktop-a': 1, 'desktop-b': 2 }
+    paired.select.mockImplementation((browserHostClientId?: string) => {
+      if (!browserHostClientId) {
+        throw new BrowserHostAmbiguousError(['desktop-a', 'desktop-b'])
+      }
+      return {
+        browserHostClientId,
+        pairedDeviceId: browserHostClientId.replace('desktop', 'device'),
+        browserHostGeneration: generations[browserHostClientId] ?? 0
+      }
+    })
+    const volunteer = vi.fn()
+    paired.hostRequests.register({ pairedDeviceId: 'device-c', emit: volunteer })
+    return { paired, volunteer }
+  }
+
+  const openUrl = (paired: ReturnType<typeof pairedHost>) =>
+    createRuntimeBrowserCommands(paired.host).browserOpenUrlOnClient({
+      url: 'https://example.org/',
+      worktree: 'id:wt-1'
+    })
+
+  it('places it on the desktop showing this workspace', async () => {
+    const startup = await startWithoutEngine()
+    const { paired } = twoHostingDesktops()
+    paired.pages.publishClientPage({
+      browserPageId: 'here',
+      workspaceId: 'wt-1',
+      browserProfileId: 'default',
+      executionHostKey: 'native:orcad-a',
+      placement: { ...PLACEMENT, browserHostClientId: 'desktop-a', browserHostGeneration: 1 },
+      url: 'about:blank',
+      loading: false,
+      active: true
+    })
+
+    await openUrl(paired)
+
+    expect(paired.createClientPage).toHaveBeenCalledWith(
+      expect.objectContaining({ browserHostClientId: 'desktop-a', pairedDeviceId: 'device-a' })
+    )
+    await startup.stop()
+  })
+
+  it('uses the newest existing lease, never asking a desktop without one, when none shows it', async () => {
+    const startup = await startWithoutEngine()
+    const { paired, volunteer } = twoHostingDesktops()
+
+    await openUrl(paired)
+
+    expect(paired.createClientPage).toHaveBeenCalledWith(
+      expect.objectContaining({ browserHostClientId: 'desktop-b', pairedDeviceId: 'device-b' })
+    )
+    expect(volunteer).not.toHaveBeenCalled()
+    await startup.stop()
+  })
+})
+
+it('names the desktop that never answered the request to host', async () => {
+  const startup = await startWithoutEngine()
+  vi.useFakeTimers()
+  const paired = pairedHost({ desktopAttached: false })
+  paired.hostRequests.register({ pairedDeviceId: 'device-a', emit: () => {} })
+
+  const opened = createRuntimeBrowserCommands(paired.host).browserOpenUrlOnClient({
+    url: 'https://example.org/',
+    worktree: 'id:wt-1'
+  })
+  const refused = expect(opened).rejects.toMatchObject({
+    code: 'browser_host_unavailable',
+    message: expect.stringContaining('"Work laptop" didn\'t respond')
+  })
+  await vi.advanceTimersByTimeAsync(30_000)
+
+  await refused
   await startup.stop()
 })
 

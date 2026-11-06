@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
@@ -53,9 +53,11 @@ export function useMobileCommitFailureRecovery({
   const summary = useMemo(() => (failure ? summarizeCommitFailure(failure.error) : null), [failure])
   const availability = resolveMobileAgentLaunchAvailability(hostStatus)
 
-  useEffect(() => {
+  const [launchErrorFailure, setLaunchErrorFailure] = useState(failure)
+  if (launchErrorFailure !== failure) {
+    setLaunchErrorFailure(failure)
     setLaunchError(null)
-  }, [failure])
+  }
 
   const hasDetails = useMemo(
     () => (failure && summary ? hasExpandedCommitFailureDetails(failure.error, summary) : false),

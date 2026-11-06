@@ -308,6 +308,7 @@ function setAgentLineageState(options: {
     projectGroups: [],
     ptyIdsByTabId: {},
     recordFeatureInteraction: vi.fn(),
+    suppressContextualTour: vi.fn(),
     remoteBranchConflictByWorktreeId: {},
     reorderRepos: vi.fn(),
     reportVisibleGitHubPRRefreshCandidates: vi.fn(),

@@ -145,7 +145,7 @@ describe.each([
       })
       assembler.apply({ type: 'turn.open', turn: 'acp-turn', at: HOST_TEST_NOW })
       rig.clock.now = LAST_CHUNK_AT
-      const tasks = new AcpBackgroundTaskTimeline(() => undefined)
+      const tasks = new AcpBackgroundTaskTimeline(() => ({}))
       for (const event of tasks.translate(
         [
           {

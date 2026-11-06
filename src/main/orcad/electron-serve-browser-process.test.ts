@@ -10,7 +10,7 @@ import type * as RunProcessModule from '@orca/process-host'
 import type * as FsPromisesModule from 'node:fs/promises'
 import type { RuntimeBrowserCommandHost } from '../runtime/browser/commands/browser-command-contracts'
 import { RuntimeBrowserPageRegistry } from '../runtime/browser/client-pages/runtime-browser-page-registry'
-import { readRuntimeMetadataAsync } from '../runtime/runtime-metadata'
+import { readRuntimeMetadataAsync } from '../runtime/rpc/server/runtime-metadata'
 
 const { spawnProcessMock, lockedRemovalPaths } = vi.hoisted(() => ({
   spawnProcessMock:
@@ -95,6 +95,9 @@ const host: RuntimeBrowserCommandHost = {
   },
   getBrowserHostLeaseRegistry: () => {
     throw new Error('No browser host lease registry')
+  },
+  getBrowserHostRequestRegistry: () => {
+    throw new Error('No browser host request registry')
   },
   getRuntimeBrowserPageRegistry: () => {
     throw new Error('No runtime browser page registry')

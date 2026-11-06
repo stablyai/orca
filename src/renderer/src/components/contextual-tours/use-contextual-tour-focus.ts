@@ -1,10 +1,7 @@
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
+import { hasContextualTourActionStep } from '../../../../shared/contextual-tour-action-steps'
 import { useEffect, useRef, type RefObject } from 'react'
-import {
-  getContextualTour,
-  hasContextualTourActionStep,
-  type ContextualTourId
-} from '../../../../shared/contextual-tours'
+import { getContextualTour, type ContextualTourId } from '../../../../shared/contextual-tours'
 import { getContextualTourFocusableElements } from './ContextualTourOverlaySurface'
 
 // Moves focus into a newly shown tour step and gives it back when the tour ends.
@@ -32,15 +29,14 @@ export function useContextualTourFocus({
     }
     const firstStepOfActivation = focusedStepRef.current === null
     focusedStepRef.current = focusKey
-    // A tour that waits for the user to act (split a pane) shows while they type in the terminal and
-    // keeps coming back until they do; taking focus would send those keystrokes to its dismiss button.
-    // Only navigation inside the callout (Back/Next, whose button the new step replaced) moves focus.
+    // Passive announcements and action tours must not redirect ongoing typing.
     const focusWasInCallout =
       document.activeElement === document.body ||
       !!panelRef.current?.contains(document.activeElement)
+    const tour = getContextualTour(activeTourId)
     if (
-      hasContextualTourActionStep(getContextualTour(activeTourId)) &&
-      (firstStepOfActivation || !focusWasInCallout)
+      tour.preserveFocus ||
+      (hasContextualTourActionStep(tour) && (firstStepOfActivation || !focusWasInCallout))
     ) {
       return
     }

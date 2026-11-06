@@ -18,7 +18,7 @@ import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { resolveWorktreeHostRouting } from '../workspaces/catalog/worktree-launch-host-repo'
 import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
-import type { OrcaRuntimeWithPersistHeadlessTerminalTitle } from '../workspaces/workspace-file-session-targets'
+import type { RuntimeWorkspaceFileTargets } from '../workspaces/workspace-file-session-targets'
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../session-graph/session-graph-authority'
 import type { RuntimeWorkspaceCatalog } from '../workspaces/catalog/workspace-catalog'
 import type { RuntimeWorkspaceSelectors } from '../workspaces/workspace-selectors'
@@ -69,9 +69,7 @@ export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStr
   }
 
   protected structuredAgentSessionLocationForTarget(
-    target: Awaited<
-      ReturnType<OrcaRuntimeWithPersistHeadlessTerminalTitle['resolveRuntimeFileTarget']>
-    >
+    target: Awaited<ReturnType<RuntimeWorkspaceFileTargets['resolveRuntimeFileTarget']>>
   ) {
     const routing = resolveWorktreeHostRouting(this.store?.getRepos() ?? [], target.worktree)
     if (routing.kind === 'ambiguous') {

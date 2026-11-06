@@ -1,4 +1,4 @@
-import type { CodexRenameInvocationDeps } from './codex-provider-session-rename'
+import type { CodexProviderInvocationDeps } from './codex-provider-session-rename'
 import type { CodexAppliedSettings } from '../catalog/codex-structured-applied-settings'
 import type { StructuredAgentSessionChildWorkProducer } from '../../../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
@@ -94,7 +94,7 @@ export type CodexStructuredSessionEvent =
   | { type: 'ended'; sessionId: string; reason: string; observedAt?: number }
 
 export type CodexStructuredSessionAdapterDeps = {
-  renameInvocation?: CodexRenameInvocationDeps
+  providerInvocation?: CodexProviderInvocationDeps
   resolveAccountKind?: (home: string) => AgentSessionAccountKind | undefined
   atRestCommands?: StructuredAgentSessionAtRestCommands
   resolveLaunch: (input: StructuredLaunchRequest) => Promise<CodexStructuredLaunch>

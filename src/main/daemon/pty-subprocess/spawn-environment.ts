@@ -56,7 +56,7 @@ function composeGuardedDaemonGitConfigEnv(
   if (policy !== 'guard' && launchAgent === undefined) {
     return
   }
-  // Preserve the long-lived daemon’s inherited Git config while appending the guard.
+  // Apply the guard after the inherited-env merge so it reflects the pane's final askpass values.
   Object.assign(env, gitCredentialPromptGuardEnv(env, process.platform))
 }
 

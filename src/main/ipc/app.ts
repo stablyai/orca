@@ -40,6 +40,7 @@ import { registerMacKeyboardLayoutChangeNotifications } from './macos-keyboard-l
 import { isProfileStateSaveDelayed } from '../startup/profile-state-save-delay'
 import { readCommandStdout, readKeyboardInputSourceId } from './macos-keyboard-input-source'
 import { getWindowsAdministratorStatus } from '../windows/windows-administrator-status'
+import { getMacosUpgradeSupport } from '../macos-update-requirement/macos-upgrade-support'
 
 import type { ReconnectFactsFor } from '../persistence/window-save-view'
 
@@ -148,6 +149,9 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     return detection
   })
   ipcMain.handle('app:getWindowsAdministratorStatus', getWindowsAdministratorStatus)
+  ipcMain.handle('app:getMacosUpgradeSupport', (_event, minimumMacosVersion: unknown) =>
+    getMacosUpgradeSupport(minimumMacosVersion)
+  )
 
   ipcMain.handle('app:getFeatureWallAssetBaseUrl', (): string => getFeatureWallAssetBaseUrl())
 

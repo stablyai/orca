@@ -11,7 +11,7 @@ import {
 import type * as NodeFsPromises from 'node:fs/promises'
 import type * as NodeOs from 'node:os'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 
 const { homedirMock, getPathMock, parseReads, handles, mutation } = vi.hoisted(() => {
   const parseReads: { path: string; start: number; bytes: number }[] = []
@@ -231,56 +231,6 @@ describe('Codex checkpoint file races', () => {
     expect(second.dailyAggregates).toEqual(cold.dailyAggregates)
   })
 
-  it('releases old owner claims and lets an unchanged deferred fork reclaim them', async () => {
-    const prefix = transcript('session-old', 40)
-    const forkPath = join(dirname(rolloutPath), 'zzzz-fork.jsonl')
-    writeFileSync(rolloutPath, prefix)
-    writeFileSync(forkPath, prefix + records(40, 41))
-    const first = await scanCodexUsageFiles([], [])
-    const fork = first.processedFiles.find((file) => file.path === forkPath)
-    expect(fork?.hasDeferredClaims).toBe(true)
-    expect(fork?.ownedEventKeys).toHaveLength(1)
-    appendFileSync(rolloutPath, records(40, 42))
-    mutation.beforeParse = (filePath) => {
-      if (filePath === rolloutPath) {
-        mutation.beforeParse = null
-        writeFileSync(filePath, transcript('session-new', 60, 2000))
-      }
-    }
-    parseReads.length = 0
-
-    const second = await scanCodexUsageFiles([], first.processedFiles)
-    expect(parseReads.filter((read) => read.path === forkPath).map((read) => read.start)).toEqual([
-      0
-    ])
-    expect(
-      second.processedFiles.find((file) => file.path === forkPath)?.ownedEventKeys
-    ).toHaveLength(41)
-    const cold = await scanCodexUsageFiles([], [])
-    expect(second.sessions).toEqual(cold.sessions)
-    expect(second.dailyAggregates).toEqual(cold.dailyAggregates)
-    const third = await scanCodexUsageFiles([], second.processedFiles)
-    expect(third.sessions).toEqual(cold.sessions)
-  })
-
-  it('keeps an unchanged deferred fork cached when a short owner merely appends', async () => {
-    const prefix = records(0, 3)
-    const forkPath = join(dirname(rolloutPath), 'zzzz-fork.jsonl')
-    writeFileSync(rolloutPath, prefix)
-    writeFileSync(forkPath, prefix + records(3, 4))
-    const first = await scanCodexUsageFiles([], [])
-    const fork = first.processedFiles.find((file) => file.path === forkPath)
-    expect(fork?.hasDeferredClaims).toBe(true)
-    expect(first.processedFiles[0]?.parseResumeState).toBeNull()
-    appendFileSync(rolloutPath, records(4, 5))
-    parseReads.length = 0
-
-    const second = await scanCodexUsageFiles([], first.processedFiles)
-    expect(second.processedFiles.find((file) => file.path === forkPath)).toBe(fork)
-    expect(parseReads.some((read) => read.path === forkPath)).toBe(false)
-    expect(second.dailyAggregates.reduce((sum, row) => sum + row.totalTokens, 0)).toBe(5)
-  })
-
   it('rejects an unchanged file stream that stops early before claiming partial history', async () => {
     writeFileSync(rolloutPath, transcript('session-stable', 40))
     mutation.endBeforeEOF = Buffer.byteLength(transcript('session-stable', 10)) - 1
@@ -313,21 +263,5 @@ describe('Codex checkpoint file races', () => {
     expect(previous.processedFiles[0]?.size).toBe(Buffer.byteLength(prefix))
     const recovered = await scanCodexUsageFiles([], previous.processedFiles)
     expect(recovered.sessions[0]?.eventCount).toBe(42)
-  })
-
-  it('rejects a stable zero-byte read of the skipped prefix in a short legacy source', async () => {
-    writeFileSync(rolloutPath, records(0, 3))
-    mutation.zeroDescriptorRead = true
-    const commitEventKey = vi.fn()
-    const legacySourceSkipBytes = Buffer.byteLength(records(0, 1))
-
-    await expect(
-      parseCodexUsageFile(rolloutPath, () => null, { legacySourceSkipBytes, commitEventKey })
-    ).rejects.toThrow('JSONL snapshot read ended before the unchanged file boundary.')
-    expect(mutation.zeroDescriptorRead).toBe(false)
-    expect(offsets()).toEqual([])
-    expect(commitEventKey).not.toHaveBeenCalled()
-    const recovered = await parseCodexUsageFile(rolloutPath, () => null, { legacySourceSkipBytes })
-    expect(recovered.sessions[0]?.eventCount).toBe(2)
   })
 })

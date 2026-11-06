@@ -2,6 +2,10 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+// Adoption forks the AI Vault service for the chat's title; naming is covered elsewhere.
+vi.mock('../ai-vault/session-titles/session-title-resolver', () => ({
+  resolveLocalAiVaultSessionTitles: async () => ({ titles: [] })
+}))
 import {
   adoptsCliConversations,
   CLI_CONVERSATION_ADOPTING_AGENTS

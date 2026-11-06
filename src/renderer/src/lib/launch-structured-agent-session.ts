@@ -7,6 +7,7 @@ import {
   type StructuredAgentSessionFirstMessage,
   type StructuredAgentSessionResumeSource
 } from '../../../shared/agent-session/structured-agent-session-create'
+import { createStructuredAgentSessionOperationId } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { structuredLaunchSeedOptions } from '../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { useAppStore } from '@/store'
@@ -151,8 +152,22 @@ function buildStructuredAgentSessionLaunchIntent(
 
 /** A definitive refusal consumed its operation id, but the provisional tab still owns its session. */
 export function retryStructuredAgentSessionLaunchIntent(
-  intent: StructuredAgentSessionLaunchIntent
+  intent: StructuredAgentSessionLaunchIntent,
+  retainOpening = false
 ): StructuredAgentSessionLaunchIntent {
+  if (retainOpening) {
+    const { beforeCreate: _beforeCreate, createAfter: _createAfter, ...retained } = intent
+    return {
+      ...retained,
+      params: {
+        ...intent.params,
+        envelope: {
+          ...intent.params.envelope,
+          clientOperationId: createStructuredAgentSessionOperationId(createBrowserUuid)
+        }
+      }
+    }
+  }
   return {
     ...buildStructuredAgentSessionLaunchIntent(
       intent.worktreeId,

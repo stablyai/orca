@@ -126,6 +126,89 @@ function renderStructuredChat(editSession?: QueuedMessageInlineEditor) {
   return { transport, rerender: () => view.rerender(chat()) }
 }
 
+const USAGE: CommandItem = {
+  kind: 'command',
+  id: 'command:usage',
+  name: 'usage',
+  token: '/usage',
+  skillCollision: false,
+  orcaOwned: true
+}
+
+describe('/usage in a structured chat', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.draft = '/resume'
+    mocks.imageAttachments = []
+    mocks.fieldProps = null
+    mocks.keyDownArgs = null
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { git: { discoverCommitMessageModels: vi.fn(async () => ({ success: false })) } }
+    })
+  })
+  afterEach(() => cleanup())
+
+  it('offers usage only with host support and consumes a pick without dropping the remaining draft or attachments', () => {
+    mocks.draft = '/usa'
+    mocks.imageAttachments = [{ id: 'img-1', path: '/tmp/a.png' }]
+    const { transport, rerender } = renderStructuredChat()
+    expect(
+      mocks.fieldProps?.autocomplete?.items?.some(
+        (item) => item.name === 'usage' && item.kind === 'command'
+      ) ?? false
+    ).toBe(false)
+    const open = vi.fn()
+    transport.accountUsage = { open }
+    rerender()
+    expect(
+      mocks.fieldProps?.autocomplete?.items?.some(
+        (item) => item.name === 'usage' && item.kind === 'command'
+      )
+    ).toBe(true)
+    mocks.draft = '/usa keep this draft'
+    rerender()
+    const select = vi.spyOn(HTMLTextAreaElement.prototype, 'setSelectionRange')
+    act(() => mocks.keyDownArgs?.dispatchPickerCommand(USAGE))
+    expect(open).toHaveBeenCalledOnce()
+    expect(mocks.setDraft).toHaveBeenCalledWith('keep this draft')
+    // The next keystroke lands after the kept text, not in front of it.
+    expect(select).toHaveBeenLastCalledWith('keep this draft'.length, 'keep this draft'.length)
+    select.mockRestore()
+    expect(mocks.clearImageAttachments).not.toHaveBeenCalled()
+    expect(transport.send).not.toHaveBeenCalled()
+    mocks.draft = '/usage'
+    rerender()
+    act(() => mocks.fieldProps?.onSend?.())
+    expect(open).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a picked skill named usage as a skill', () => {
+    mocks.draft = '/usa'
+    const { transport, rerender } = renderStructuredChat()
+    const open = vi.fn()
+    transport.accountUsage = { open }
+    rerender()
+    act(() =>
+      mocks.fieldProps?.onChoosePickerItem?.({
+        kind: 'skill',
+        id: 'skill:usage',
+        name: 'usage',
+        token: '/usage',
+        description: null,
+        sources: []
+      })
+    )
+    mocks.draft = '/usage'
+    rerender()
+    act(() => mocks.fieldProps?.onSend?.())
+    expect(open).not.toHaveBeenCalled()
+    expect(transport.dispatchCommand).toHaveBeenCalledWith('/usage')
+    act(() => mocks.keyDownArgs?.dispatchPickerCommand(USAGE))
+    expect(open).toHaveBeenCalledOnce()
+  })
+})
+
 describe('/goal picked in a structured chat without host goals', () => {
   beforeEach(() => {
     vi.clearAllMocks()

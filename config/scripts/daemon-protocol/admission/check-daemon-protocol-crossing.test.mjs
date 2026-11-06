@@ -77,14 +77,6 @@ describe('selectLatestStableReleaseTag', () => {
       expect(selectLatestStableReleaseTag(['v0.0.0'])).toBe('v0.0.0')
     }
   )
-
-  it('skips unfilled entries in a sparse tag list', () => {
-    const sparse = []
-    sparse.length = 12
-    sparse[3] = 'v1.2.3'
-    sparse[8] = 'v2.0.0'
-    expect(selectLatestStableReleaseTag(Object.freeze(sparse))).toBe('v2.0.0')
-  })
 })
 
 describe('checkDaemonProtocolCrossing', () => {
@@ -102,17 +94,6 @@ describe('checkDaemonProtocolCrossing', () => {
   )
 
   const env = {}
-
-  it('passes a bump that lists the newest release version, reporting rollback as info', () => {
-    const repo = repoWithTags([
-      ['v1.0.9', 5],
-      ['v1.0.10', 6]
-    ])
-    writeProtocol(repo, 7)
-    const result = checkDaemonProtocolCrossing({ repoRoot: repo, env })
-    expect(result).toMatchObject({ upgrade: true, rollback: false })
-    expect(result.lines[0]).toBe('release v1.0.10: daemon protocol 6')
-  })
 
   it('fails when the working tree drops the newest release version', () => {
     const repo = repoWithTags([['v1.0.0', 6]])

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { setPlatform } from '../orca-runtime-test-mocks/setup.spec'
-import type { RuntimeTerminalAgentStatusEvent } from '../runtime-terminal-contracts'
+import type { RuntimeTerminalAgentStatusEvent } from '../terminal/output/terminal-agent-status-events'
 import type { HeadlessEmulator } from '../../daemon/emulation/headless-emulator'
 
 import {
