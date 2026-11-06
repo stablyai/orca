@@ -13490,7 +13490,6 @@
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "Henüz commit yok",
-            "781a8bcf7b": "Grafik yükleniyor...",
             "d0fb0f4bf2": "Commit'leri yenile",
             "9f7535d22b": "Ref'ler, tam olarak o commit'i işaret eden branch veya tag adlarıdır. Yalnızca Git'in commit için adlandırılmış bir ref'i olduğu yerlerde görünürler.",
             "9289ba0cb9": "Ref nedir?",
@@ -14707,7 +14706,6 @@
             "f8a2c4d1e0": "Gezgin arama modu"
           },
           "GitHistoryCommitFiles": {
-            "a1b2c3d4e5": "Dosyalar yükleniyor…",
             "b2c3d4e5f6": "Bu commit'te dosya değişikliği yok",
             "c3d4e5f6a7": "Tüm değişiklikleri birlikte aç"
           },

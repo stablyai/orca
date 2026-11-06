@@ -7,7 +7,11 @@ import {
   findIndexedRepoOwnerForHost,
   findIndexedWorktreeOwnerForHost
 } from './worktree-runtime-owner-index'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 import {
   resolveWorktreeOperationRoute,
   resolveWorktreeOperationRouteForHost,
@@ -35,8 +39,8 @@ export function gitGraphScopeInputs(state: ReturnType<typeof useAppStore.getStat
   return {
     repos: state.repos,
     worktreesByRepo: selectWorktreesByRepo(state),
-    detectedWorktreesByRepo: state.detectedWorktreesByRepo,
-    folderWorkspaces: state.folderWorkspaces,
+    detectedWorktreesByRepo: selectDetectedWorktreesByRepo(state),
+    folderWorkspaces: selectFolderWorkspaces(state),
     projectGroups: state.projectGroups,
     settings: state.settings,
     runtimeEnvironments: state.runtimeEnvironments,
@@ -131,26 +135,23 @@ export async function openGitGraph(worktreeId: string): Promise<void> {
   )
   const id = existing?.entityId ?? `${worktreeId}::git-graph`
   const label = translate('gitGraph.title', 'Git Graph')
-  if (!state.openFiles.some((file) => file.id === id)) {
-    useAppStore.setState({
-      openFiles: [
-        ...state.openFiles,
-        {
-          id,
-          filePath: id,
-          relativePath: label,
-          worktreeId,
-          runtimeEnvironmentId: scope.route.runtimeEnvironmentId,
-          language: 'plaintext',
-          isDirty: false,
-          operationProvenance: {
-            generation: captureWorktreeOperationGenerationSnapshot(scope.route),
-            ownershipProjection: 'explicit'
-          },
-          mode: 'git-graph'
-        }
-      ]
-    })
+  if (state.openFiles.some((file) => file.id === id)) {
+    openWorkspaceEditorItem(state, id, worktreeId, label, 'git-graph')
+    return
   }
-  openWorkspaceEditorItem(useAppStore.getState(), id, worktreeId, label, 'git-graph')
+  state.openFile(
+    {
+      filePath: id,
+      relativePath: label,
+      worktreeId,
+      runtimeEnvironmentId: scope.route.runtimeEnvironmentId,
+      language: 'plaintext',
+      operationProvenance: {
+        generation: captureWorktreeOperationGenerationSnapshot(scope.route),
+        ownershipProjection: 'explicit'
+      },
+      mode: 'git-graph'
+    },
+    { reopenId: id, preview: false }
+  )
 }

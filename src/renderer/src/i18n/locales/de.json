@@ -13504,7 +13504,6 @@
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "Noch keine Commits",
-            "781a8bcf7b": "Graph wird geladen…",
             "d0fb0f4bf2": "Commits aktualisieren",
             "9f7535d22b": "Referenzen sind Branch- oder Tag-Namen, die genau auf diesen Commit verweisen. Sie erscheinen nur dort, wo Git eine benannte Referenz für den Commit hat.",
             "9289ba0cb9": "Was sind Referenzen?",
@@ -14721,7 +14720,6 @@
             "f8a2c4d1e0": "Suchmodus des Datei-Explorers"
           },
           "GitHistoryCommitFiles": {
-            "a1b2c3d4e5": "Dateien werden geladen…",
             "b2c3d4e5f6": "Keine Dateiänderungen in diesem Commit",
             "c3d4e5f6a7": "Alle Änderungen gemeinsam öffnen"
           },

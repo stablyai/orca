@@ -13408,7 +13408,6 @@
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "Aucun commit pour le moment",
-            "781a8bcf7b": "Chargement du graphe...",
             "d0fb0f4bf2": "Actualiser les commits",
             "9f7535d22b": "Les refs sont des noms de branche ou de tag pointant vers ce commit exact. Elles n'apparaissent que là où Git possède une ref nommée pour ce commit.",
             "9289ba0cb9": "Que sont les refs ?",
@@ -14663,7 +14662,6 @@
             "f8a2c4d1e0": "Mode de recherche de l'explorateur"
           },
           "GitHistoryCommitFiles": {
-            "a1b2c3d4e5": "Chargement des fichiers…",
             "b2c3d4e5f6": "Aucune modification de fichier dans ce commit",
             "c3d4e5f6a7": "Ouvrir toutes les modifications ensemble"
           },

@@ -13184,7 +13184,6 @@
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "Aún no hay commits",
-            "781a8bcf7b": "Cargando gráfico…",
             "d0fb0f4bf2": "Actualizar commits",
             "9f7535d22b": "Las refs son nombres de ramas o tags que apuntan a ese commit exacto. Solo aparecen cuando Git tiene una ref con nombre para el commit.",
             "9289ba0cb9": "¿Qué son las refs?",
@@ -14439,7 +14438,6 @@
             "f8a2c4d1e0": "Modo de búsqueda del explorador"
           },
           "GitHistoryCommitFiles": {
-            "a1b2c3d4e5": "Cargando archivos…",
             "b2c3d4e5f6": "No hay cambios de archivos en este commit",
             "c3d4e5f6a7": "Abrir todos los cambios juntos"
           },
