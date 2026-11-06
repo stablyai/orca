@@ -69,12 +69,17 @@ function renderEditor(model?: string): void {
 }
 
 describe('AgentLaunchChoiceEditor model list', () => {
+  const initialSettings = useAppStore.getState().settings
+
   beforeEach(() => {
     call.mockReset()
     menus.clear()
     resetHostModelCatalogSnapshotsForTests()
   })
-  afterEach(cleanup)
+  afterEach(() => {
+    cleanup()
+    useAppStore.setState({ settings: initialSettings })
+  })
 
   it('lists the host models and the picked model efforts, keeping a saved unlisted model', async () => {
     call.mockResolvedValue(LISTED)
