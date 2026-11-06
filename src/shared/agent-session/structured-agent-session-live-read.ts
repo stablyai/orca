@@ -146,7 +146,7 @@ export function startStructuredAgentSessionLiveRead(args: {
   const replaceStream = (eventOpenGeneration: number): void => {
     replacedOpenGeneration = eventOpenGeneration
     if (!connected) {
-      // Still opening: the open sees the mark, drops its handle and retries.
+      // Still opening: retry later; the open drops its handle when it lands.
       loseContact()
       return
     }
@@ -227,7 +227,7 @@ export function startStructuredAgentSessionLiveRead(args: {
     unsubscribe = (): void => {}
     try {
       // Desktop passes none, so its subscribe still goes out in the same turn.
-      const textAppend = args.textAppend ? (await args.textAppend) === true : false
+      const textAppend = args.textAppend ? await args.textAppend : false
       if (!isCurrentOpenGeneration(currentOpenGeneration)) {
         return
       }

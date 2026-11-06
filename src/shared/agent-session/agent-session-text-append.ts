@@ -108,11 +108,10 @@ export function sendingTextAppends<R>(
     if (base === undefined || text === null || !text.startsWith(base)) {
       return item
     }
-    const append: AgentSessionTextAppendItem = {
+    return {
       ...withText(item, ''),
       textAppend: { from: base.length, text: text.slice(base.length) }
-    }
-    return append
+    } satisfies AgentSessionTextAppendItem
   })
   return (event) => emit(send(event) ?? event)
 }
