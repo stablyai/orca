@@ -77,8 +77,8 @@ function HostStackView({ animation }: { animation: HostStackAnimation }) {
   const { routes } = state
   const [shown, setShown] = useState<Shown>({ routes, descriptors, transition: null })
   const nodes = useRef(new Map<string, HTMLElement>())
-  // Until a screen paints, only the top is drawn: the host list under a shell-opened target must not compete with it.
-  const [released, setReleased] = useState(false)
+  // A stack that starts with a route beneath the top (the host list under a shell-opened target) draws only the top until a screen paints, so the two don't compete.
+  const [released, setReleased] = useState(routes.length === 1)
   const release = useCallback(() => setReleased(true), [])
 
   // Derive during render so a pop’s first frame still contains its outgoing screen.
