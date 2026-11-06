@@ -286,3 +286,93 @@ it('preserves row content and child attribution through reordering, admission an
     { id: 'answer', blocks: [{ type: 'text', text: 'Eligible revision' }] }
   ])
 })
+
+it('revises the correct duplicate occurrence, including aliases settled to the same row', () => {
+  const project = createNativeChatMessageListProjection()
+  const tail = message('answer', 1, [{ type: 'text', text: 'Found' }])
+  const alias = { ...tail, blocks: [...tail.blocks] }
+  const revised = message('answer', 1, [{ type: 'text', text: 'Revised' }])
+  const final = message('answer', 1, [{ type: 'text', text: 'Final' }])
+  project([tail, tail])
+  expect(project([revised, tail]).conversation.map(({ blocks }) => blocks)).toEqual([
+    [{ type: 'text', text: 'Revised' }],
+    [{ type: 'text', text: 'Found' }]
+  ])
+  expect(project([tail, alias]).conversation.map(({ blocks }) => blocks)).toEqual([
+    [{ type: 'text', text: 'Found' }],
+    [{ type: 'text', text: 'Found' }]
+  ])
+  expect(project([revised, final]).conversation.map(({ blocks }) => blocks)).toEqual([
+    [{ type: 'text', text: 'Revised' }],
+    [{ type: 'text', text: 'Final' }]
+  ])
+})
+
+it('drops an empty lead after a same-output fallback changes its tool dependencies', () => {
+  const project = createNativeChatMessageListProjection()
+  const lead = message('lead', 1, [{ type: 'text', text: 'Reading' }])
+  const result = message(
+    'result',
+    2,
+    [{ type: 'tool-result', callId: 'missing', output: 'Orphan' }],
+    'tool'
+  )
+  project([lead])
+  project([lead, { ...result, unpairedToolResults: true }])
+  project([lead, result])
+  const empty = { ...lead, blocks: [] }
+  expect(
+    project([empty, result]).conversation.map(({ id, role, blocks, unpairedToolResults }) => ({
+      id,
+      role,
+      blocks,
+      unpairedToolResults
+    }))
+  ).toEqual([
+    {
+      id: 'result',
+      role: 'tool',
+      blocks: [{ type: 'tool-result', callId: 'missing', output: 'Orphan' }],
+      unpairedToolResults: true
+    }
+  ])
+  expect(
+    project([message('lead', 1, [{ type: 'text', text: '' }]), result]).conversation.map(
+      ({ id, blocks }) => ({ id, blocks })
+    )
+  ).toEqual([
+    { id: 'lead', blocks: [{ type: 'text', text: '' }] },
+    { id: 'result', blocks: [{ type: 'tool-result', callId: 'missing', output: 'Orphan' }] }
+  ])
+})
+
+it('reallocates a detached result ID when a later raw message reserves it', () => {
+  const project = createNativeChatMessageListProjection()
+  const lead = {
+    ...message('lead', 1, [
+      { type: 'text', text: 'Reading' },
+      { type: 'tool-result', callId: 'missing', output: 'Orphan' }
+    ]),
+    journalPosition: { sequence: 1, index: 0 }
+  }
+  project([lead])
+  const appended = {
+    ...message('unpaired-tool-results:["lead",0]', 2, [{ type: 'text', text: 'After' }]),
+    journalPosition: { sequence: 2, index: 0 }
+  }
+  expect(
+    project([lead, appended]).conversation.map(({ id, role, blocks }) => ({ id, role, blocks }))
+  ).toEqual([
+    { id: 'lead', role: 'assistant', blocks: [{ type: 'text', text: 'Reading' }] },
+    {
+      id: 'unpaired-tool-results:["lead",1]',
+      role: 'tool',
+      blocks: [{ type: 'tool-result', callId: 'missing', output: 'Orphan' }]
+    },
+    {
+      id: 'unpaired-tool-results:["lead",0]',
+      role: 'assistant',
+      blocks: [{ type: 'text', text: 'After' }]
+    }
+  ])
+})

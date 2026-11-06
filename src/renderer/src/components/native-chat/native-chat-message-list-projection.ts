@@ -77,34 +77,34 @@ function reuseConversation(
   before: NativeChatMessage[] | null,
   previous: NativeChatTranscriptProjection,
   byId: ReadonlyMap<string, NativeChatMessage>,
-  indexes: ReadonlyMap<string, number>,
+  indexes: ReadonlyMap<NativeChatMessage, number>,
   rawIds: ReadonlySet<string>
 ): {
   conversation: NativeChatMessage[]
-  changes: { index: number; message: NativeChatMessage }[]
+  changes: { index: number; message: NativeChatMessage; source: NativeChatMessage | null }[]
 } | null {
   if (!before || messages.length < before.length || previous.subagentRows.size > 0) {
     return null
   }
-  const changes: { index: number; message: NativeChatMessage }[] = []
+  const changes: { index: number; message: NativeChatMessage; source: NativeChatMessage | null }[] =
+    []
   for (let index = 0; index < before.length; index += 1) {
     const prior = before[index]!
     const message = messages[index]!
     if (prior === message) {
       continue
     }
-    const projectedIndex = indexes.get(prior.id)
+    const projectedIndex = indexes.get(prior)
     // Folded rows can own later tools: only a directly drawn prose row is independent.
     if (
       projectedIndex === undefined ||
-      byId.get(prior.id) !== prior ||
       !plainAssistant(prior) ||
       !plainAssistant(message) ||
       !sameTextPlacement(prior, message)
     ) {
       return null
     }
-    changes.push({ index: projectedIndex, message })
+    changes.push({ index: projectedIndex, message, source: prior })
   }
   const appended = messages.slice(before.length)
   if (appended.length > 0) {
@@ -125,6 +125,7 @@ function reuseConversation(
         message.pendingSend ||
         message.queued ||
         rawIds.has(message.id) ||
+        byId.has(message.id) ||
         addedIds.has(message.id) ||
         (last && compareMessages(last, message) > 0)
       ) {
@@ -142,7 +143,7 @@ function reuseConversation(
     conversation[index] = message
   }
   for (const message of appended) {
-    changes.push({ index: conversation.length, message })
+    changes.push({ index: conversation.length, message, source: null })
     conversation.push(message)
   }
   return { conversation, changes }
@@ -155,7 +156,7 @@ export function createNativeChatMessageListProjection(): (
   let previous: NativeChatTranscriptProjection = { conversation: [], subagentRows: new Map() }
   let byId = new Map<string, NativeChatMessage>()
   let input: NativeChatMessage[] | null = null
-  let indexes: Map<string, number> | null = null
+  let indexes: Map<NativeChatMessage, number> | null = null
   let rawIds: Set<string> | null = null
   return (messages, journal) => {
     const reused =
@@ -165,9 +166,12 @@ export function createNativeChatMessageListProjection(): (
     if (reused) {
       if (reused.conversation !== previous.conversation) {
         // Reuse the index for content-only revisions; append changes only its new suffix.
-        for (const { index, message } of reused.changes) {
+        for (const { index, message, source } of reused.changes) {
           byId.set(message.id, message)
-          indexes!.set(message.id, index)
+          if (source) {
+            indexes!.delete(source)
+          }
+          indexes!.set(message, index)
         }
         for (let index = appendedStart; index < messages.length; index += 1) {
           rawIds!.add(messages[index]!.id)
@@ -200,7 +204,12 @@ export function createNativeChatMessageListProjection(): (
       )
     const independent = subagentRows.size === 0
     rawIds = independent ? new Set(messages.map((message) => message.id)) : null
-    if (!independent) {
+    // Settlement can restore raw identity after a fold; only canonical output proves provenance.
+    indexes =
+      rawIds?.size === messages.length
+        ? new Map(projected.conversation.map((message, index) => [message, index]))
+        : null
+    if (indexes?.size !== projected.conversation.length) {
       indexes = null
     }
     if (sameConversation && sameSubagents) {
@@ -218,9 +227,6 @@ export function createNativeChatMessageListProjection(): (
           .map((row) => row.message)
       ].map((message) => [message.id, message])
     )
-    indexes = independent
-      ? new Map(conversation.map((message, index) => [message.id, index]))
-      : null
     return previous
   }
 }
