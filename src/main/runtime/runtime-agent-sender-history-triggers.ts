@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { OrchestrationDb } from './orchestration/db'
+import type { OrchestrationDb } from './orchestration/db/orchestration-db'
 import { tolerant } from './runtime-agent-sender-history'
 
 const dirtyRow = z.object({ kind: z.enum(['pane', 'dispatch']), key: z.string() })

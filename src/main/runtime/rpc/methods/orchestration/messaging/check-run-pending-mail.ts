@@ -1,4 +1,5 @@
-import type { MessageType, OrchestrationDb, RunRow } from '../../../../orchestration/db'
+import type { MessageType, RunRow } from '../../../../orchestration/db/orchestration-records'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { interruptedAcknowledgedCheck } from '../routing'
 import { checkWorkerMailbox } from './check-worker'
@@ -6,7 +7,7 @@ import { acknowledgedOnlyReceipt, handsOverBatch } from './mailbox-message-recei
 import { currentDispatchAssigneeRun } from './recipient-routing'
 import { callerHoldsDispatchPane, dispatchFenced } from './dispatch-mailbox-fence'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
-import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
+import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import type { CheckParams } from '../schemas'
 import type { z } from 'zod'
 

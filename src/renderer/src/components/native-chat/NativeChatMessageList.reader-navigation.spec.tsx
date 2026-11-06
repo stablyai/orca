@@ -119,10 +119,15 @@ function offersJumpToLatest(): boolean {
 }
 
 describe('reader navigation', () => {
+  let viewportHeight = 600
   let restore: (() => void)[] = []
   beforeEach(() => {
     vi.useFakeTimers()
-    restore = [stubLayout({ scrollGeometry: true, offsetChain: true }), stubResizeObserver()]
+    viewportHeight = 600
+    restore = [
+      stubLayout({ scrollGeometry: true, offsetChain: true, viewportHeight: () => viewportHeight }),
+      stubResizeObserver()
+    ]
     layout.belowTranscriptPx = BELOW_TRANSCRIPT_PX
     layout.aboveTranscriptPx = 0
   })
@@ -134,29 +139,65 @@ describe('reader navigation', () => {
     vi.useRealTimers()
   })
 
-  it('brings a reader who scrolled up to what they just sent, and follows its reply', () => {
+  it('holds browsed history until the reader chooses Jump to latest, including while hidden', () => {
+    const release = vi.fn()
+    const retainHistory = vi.fn(() => release)
+    const view = (isVisible: boolean) => (
+      <NativeChatMessageList
+        session={{ ...session(transcript), retainHistory }}
+        isVisible={isVisible}
+        isWorking={false}
+        expandSignal={false}
+      />
+    )
+    const { container, rerender, unmount } = render(view(true))
+    paint(container)
+    scrollTranscript(container, 1000)
+    paint(container)
+    expect(retainHistory).toHaveBeenCalledOnce()
+    rerender(view(false))
+    act(() => deliverResizes())
+    expect(release).not.toHaveBeenCalled()
+    rerender(view(true))
+    paint(container)
+    expect(release).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Jump to latest' }))
+    paint(container)
+    expect(release).toHaveBeenCalledOnce()
+    expect(distanceFromBottom(container)).toBe(0)
+    scrollTranscript(container, 1000)
+    paint(container)
+    unmount()
+    expect(release).toHaveBeenCalledTimes(2)
+  })
+
+  it('brings a reader who scrolled up after capturing a send to what they just sent, and follows its reply', () => {
+    const release = vi.fn()
+    const retainHistory = () => release
     const handle = createRef<NativeChatMessageListHandle>()
     const view = (messages: NativeChatMessage[], isWorking: boolean) => (
       <NativeChatMessageList
         ref={handle}
-        session={session(messages)}
+        session={{ ...session(messages), retainHistory }}
         isWorking={isWorking}
         expandSignal={false}
       />
     )
     const { container, rerender } = render(view(transcript, false))
     paint(container)
+    const capturedAtEnd = handle.current?.readerAtEnd()
     scrollTranscript(container, 1000)
     paint(container)
     expect(distanceFromBottom(container)).toBeGreaterThan(1000)
 
-    act(() => handle.current?.revealLatest())
+    act(() => handle.current?.revealLatest(capturedAtEnd))
     const sent = [...transcript, userMessage(TRANSCRIPT_LENGTH, 'follow-up question')]
     rerender(view(sent, true))
     paint(container)
     rerender(view([...sent, marker(TRANSCRIPT_LENGTH + 1)], true))
     paint(container)
 
+    expect(release).toHaveBeenCalledOnce()
     expect(distanceFromBottom(container)).toBe(0)
     expect(screen.getByText('follow-up question')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Jump to latest' })).toBeNull()
@@ -175,13 +216,16 @@ describe('reader navigation', () => {
 
     function sendFrom(
       readerTop: (scroller: HTMLElement) => number,
+      expected: { admitted: boolean; releases: number },
       replyRowsBeforeSend = 0
     ): HTMLElement {
+      const release = vi.fn()
+      const retainHistory = () => release
       const handle = createRef<NativeChatMessageListHandle>()
       const view = (messages: NativeChatMessage[]) => (
         <NativeChatMessageList
           ref={handle}
-          session={session(messages)}
+          session={{ ...session(messages), retainHistory }}
           isWorking
           expandSignal={false}
         />
@@ -197,6 +241,7 @@ describe('reader navigation', () => {
       paint(container)
       // A structured send reads the reader at the press; its echo lands before the host admits it.
       const readerWasAtEnd = handle.current?.readerAtEnd()
+      expect(readerWasAtEnd).toBe(expected.admitted)
       const sentAt = TRANSCRIPT_LENGTH + reply.length
       const sent = [...transcript, ...reply, userMessage(sentAt, 'follow-up question')]
       rerender(view(sent))
@@ -204,17 +249,21 @@ describe('reader navigation', () => {
       act(() => handle.current?.revealLatest(readerWasAtEnd))
       rerender(view([...sent, marker(sentAt + 1)]))
       paint(container)
+      expect(release).toHaveBeenCalledTimes(expected.releases)
       return container
     }
 
     it('leaves a reader who scrolled up where they were', () => {
-      const container = sendFrom(() => 1000)
+      const container = sendFrom(() => 1000, { admitted: false, releases: 0 })
       expect(scrollRoot(container).scrollTop).toBe(1000)
       expect(offersJumpToLatest()).toBe(true)
     })
 
     it('still follows the reply for a reader who stopped just short of the end', () => {
-      const container = sendFrom((scroller) => scroller.scrollHeight - scroller.clientHeight - 20)
+      const container = sendFrom((scroller) => scroller.scrollHeight - scroller.clientHeight - 40, {
+        admitted: true,
+        releases: 1
+      })
       expect(distanceFromBottom(container)).toBe(0)
       expect(offersJumpToLatest()).toBe(false)
     })
@@ -222,11 +271,40 @@ describe('reader navigation', () => {
     it('leaves a reader in place once output has grown past them', () => {
       const container = sendFrom(
         (scroller) => scroller.scrollHeight - scroller.clientHeight - 20,
+        { admitted: false, releases: 0 },
         10
       )
       expect(distanceFromBottom(container)).toBeGreaterThan(ROW_PX * 10)
       expect(offersJumpToLatest()).toBe(true)
     })
+  })
+
+  it('keeps history through a viewport clamp and releases it for a later send', () => {
+    const release = vi.fn()
+    const retainHistory = () => release
+    const handle = createRef<NativeChatMessageListHandle>()
+    const { container } = render(
+      <NativeChatMessageList
+        ref={handle}
+        session={{ ...session(transcript), retainHistory }}
+        isWorking={false}
+        expandSignal={false}
+      />
+    )
+    paint(container)
+    const scroller = scrollRoot(container)
+    scrollTranscript(container, scroller.scrollHeight - scroller.clientHeight - 40)
+    paint(container)
+    expect(release).not.toHaveBeenCalled()
+    viewportHeight += 80
+    fireEvent.scroll(scroller)
+    paint(container)
+    expect(distanceFromBottom(container)).toBe(0)
+    expect(release).not.toHaveBeenCalled()
+    expect(handle.current?.readerAtEnd()).toBe(true)
+    act(() => handle.current?.revealLatest())
+    paint(container)
+    expect(release).toHaveBeenCalledOnce()
   })
 
   it('stops following when the reader pages up from the focused transcript', () => {

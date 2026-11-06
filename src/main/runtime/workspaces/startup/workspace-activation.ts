@@ -71,6 +71,11 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     if (!repo) {
       throw new Error('repo_not_found')
     }
+    // A workspace this host runs on a recipe VM (over its SSH target) wakes with its opening;
+    // the wake can outlast activation, so it runs on its own and records its failure.
+    void this.wakeWorkspaceVm(worktree.id).catch((error: unknown) =>
+      console.warn('[runtime] workspace VM wake failed', error)
+    )
     const navigation = resolveRuntimeNavigationTarget({ ...opts, defaultTarget: 'host' })
     const targetsHost = navigationTargetsHost(navigation)
     const targetsClients = navigationTargetsClients(navigation)

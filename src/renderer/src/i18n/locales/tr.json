@@ -8280,7 +8280,6 @@
         "MobileEmulatorSettingsPane": {
           "19d39113b6": "Kodlama ajanlarının Orca CLI komutlarıyla etkin mobil emülatörü kontrol etmesine izin verin.",
           "f2f8d97bb6": "Ajan Mobil Emülatör Kontrolü",
-          "143961d031": "Varsayılan Cihaz",
           "8aec2f99a0": "Emülatör kullanılabilirliğini yenile",
           "ae1612c58c": "Kullanılabilirlik",
           "f9af91ea26": "Yeni Mobil Emülatör eylemini gösterir ve ajanların etkin emülatöre bağlanmasına izin verir.",
@@ -8293,9 +8292,7 @@
           "d704fb5023": "Kurulum gerekli",
           "06b06429c6": "Android SDK ve iOS Simulator desteği kontrol ediliyor.",
           "6d1483d4a0": "1 emülatör cihazı algılandı.",
-          "0a452d4d3b": "{{value0}} emülatör cihazı algılandı.",
-          "f62a1bb759": "Orca, cihazlar algılandıktan sonra otomatik olarak bir emülatör cihazı seçecektir.",
-          "b2fd62ea75": "Yeni emülatör sekmeleri ve ajan bağlanma komutları için varsayılan cihaz. Otomatik seçim, zaten çalışmakta olan bir cihazı tercih eder."
+          "0a452d4d3b": "{{value0}} emülatör cihazı algılandı."
         },
         "MobileNetworkInterfaceSection": {
           "b2c384cfd6": "Arayüz bulunamadı"
@@ -15902,7 +15899,6 @@
                 "06e10d7356": "Emülatörü kapat",
                 "e7a0d1897e": "Ana Ekran",
                 "6bd8dff42a": "Döndür",
-                "3d836b879c": "Emülatör seç",
                 "81b3571a07": "Bağlan",
                 "868c0f2938": "Çalışıyor…"
               }
@@ -20072,6 +20068,13 @@
         "hostUnavailable": "Ekin ana bilgisayarı kullanılamıyor. Yeniden bağlanıp tekrar deneyin.",
         "connectionChanged": "Bağlantı değişti. Bu eki kapatıp yeniden açın.",
         "readFailed": "Bu ek ana bilgisayarında okunamıyor. Yeniden bağlanıp tekrar deneyin. Dosya silinmiş veya değiştirilmiş olabilir."
+      },
+      "composerWorkspace": {
+        "copyFailed": "Kopyalanamadı",
+        "copyIdentity": "{{value0}} kopyala",
+        "folder": "Klasör",
+        "mainCheckout": "Ana çalışma kopyası",
+        "worktree": "Worktree"
       }
     },
     "tab": {

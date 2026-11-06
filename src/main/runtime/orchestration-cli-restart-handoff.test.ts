@@ -6,7 +6,11 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { OrchestrationDb } from './orchestration/db'
+import { OrchestrationDb } from './orchestration/db/orchestration-db'
+import './orchestration/db/contract-constants'
+import './orchestration/db/messages/mailbox-routing-page'
+import './orchestration/db/dispatch-row-writer'
+import './orchestration/db/attempt-outcome-projection'
 
 const cliPath = join(process.cwd(), 'src/cli/index.ts')
 const tsxLoader = pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href

@@ -169,7 +169,8 @@ describe('useIpcEvents rate-limit hydration', () => {
           onCredentialRequest: () => () => {},
           onCredentialResolved: () => () => {},
           onPortForwardsChanged: () => () => {},
-          onDetectedPortsChanged: () => () => {}
+          onDetectedPortsChanged: () => () => {},
+          onTargetRemoved: () => () => {}
         },
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),

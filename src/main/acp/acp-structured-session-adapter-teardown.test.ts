@@ -3,7 +3,7 @@ import {
   closeProviderTimelineRigs,
   SESSION
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { HOST_TEST_SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import { HOST_TEST_SESSION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { tick, type FakeFrame } from './acp-scripted-agent.test-support'
 import {
   openAcpAdapterRig,

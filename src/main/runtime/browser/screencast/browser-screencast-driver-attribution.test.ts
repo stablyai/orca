@@ -3,7 +3,7 @@ import '../../rpc/unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../../rpc/dispatcher'
-import { BROWSER_SCREENCAST_METHODS } from '../../rpc/methods/browser-screencast'
+import { BROWSER_SCREENCAST_METHODS } from '../../rpc/methods/browser/browser-screencast'
 import {
   createScreencastHarness,
   HARNESS_PAGE_ID as PAGE
