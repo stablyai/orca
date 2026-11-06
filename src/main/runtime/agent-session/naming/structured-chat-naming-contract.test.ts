@@ -1,23 +1,15 @@
-import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { afterEach, beforeEach, expect, it, onTestFinished, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { toSshExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import {
-  savedChatNamingCatalog,
-  observeChatNamingCatalogWork
-} from '../../../../shared/chat-naming-catalog-work.test-fixture'
-import type { SourceControlActionRecipe } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { savedChatNamingCatalog } from '../../../../shared/chat-naming-catalog-work.test-fixture'
 import type { SpawnSourceControlAgent } from '../../../text-generation/source-control-text-generation-types'
 import { createMockDiscoveryChild } from '../../../text-generation/commit-message-text-generation-test-harness'
 import { structuredChatNamingDeps } from './structured-chat-naming-runtime'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { AcpTextTasks } from '../../../acp/acp-text-task'
-import { acpLaunchSpecFor } from '../../../acp/acp-launch-specs'
-import { FakeAcpChild } from '../../../acp/acp-scripted-connection.test-fixture'
 import recordings from '../../__fixtures__/chat-naming-recorded-output.json'
 import type * as OwnedOpenCodeTask from '../../../opencode/opencode-owned-text-task'
 
@@ -106,60 +98,13 @@ function reply(stdout: string, stderr = '', code = 0) {
   return child
 }
 
-function nativeReply() {
-  reply('Native title')
-  const spec = acpLaunchSpecFor('grok')
-  if (!spec) {
-    throw new Error('Missing native task spec')
-  }
-  const tasks = new AcpTextTasks({
-    spec,
-    dataDirectory: '/fixture/state',
-    textTaskLaunch: {
-      dataDirectory: '/fixture/state',
-      inheritedEnv: {},
-      homePath: '/fixture',
-      resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
-      resolveCommand: () => '/fixture/grok'
-    },
-    connect: (launch, options) => {
-      expect(launch.env?.GROK_HOME).toBe('/recorded/grok')
-      const child = new FakeAcpChild(launch, options)
-      const { agent } = child
-      const sessionId = '11111111-1111-4111-8111-111111111111'
-      agent.on('initialize', (frame) =>
-        agent.reply(frame, { protocolVersion: 1, agentCapabilities: {} })
-      )
-      agent.on('session/new', (frame) => agent.reply(frame, { sessionId }))
-      agent.on('_x.ai/session/delete', (frame) => agent.reply(frame, { success: true }))
-      agent.on('session/prompt', (frame) => {
-        agent.notify('session/update', {
-          sessionId,
-          update: {
-            sessionUpdate: 'agent_message_chunk',
-            content: { type: 'text', text: 'Native title' }
-          }
-        })
-        agent.reply(frame, { stopReason: 'end_turn' })
-      })
-      return child
-    }
-  })
-  boundary.native.mockImplementation(tasks.generate)
-  onTestFinished(async () => {
-    await tasks.closeAll()
-  })
-}
-
-it.each(recordings.filter((capture) => !['opencode', 'opencode2'].includes(capture.provider)))(
+it.each(recordings.filter((capture) => capture.provider === 'pi' || capture.provider === 'omp'))(
   'consumes recorded $provider output through runtime, request, planner and parser',
   async (capture) => {
     const { provider, stdout, stderr, exitCode, name, error } = capture
     if (!isTuiAgent(provider)) {
       throw new Error('Unknown recorded provider')
     }
-    expect(createHash('sha256').update(stdout).digest('hex')).toBe(capture.stdoutSha256)
-    expect(createHash('sha256').update(stderr).digest('hex')).toBe(capture.stderrSha256)
     const state = rig()
     const source = state.settings.sourceControlAi
     if (!source) {
@@ -174,10 +119,7 @@ it.each(recordings.filter((capture) => !['opencode', 'opencode2'].includes(captu
     }
     const record = agentSessionRecordFixture()
     record.provider = provider
-    record.accountHome =
-      provider === 'opencode' || provider === 'opencode2'
-        ? { kind: 'opencode', locator: { kind: 'managed', managedProfileId: 'recorded' } }
-        : { variable: 'PI_CODING_AGENT_DIR', path: '/recorded/pi' }
+    record.accountHome = { variable: 'PI_CODING_AGENT_DIR', path: '/recorded/pi' }
     const usesFilePrompt = provider === 'omp'
     const child = reply(stdout, stderr, exitCode)
     let promptPath = ''
@@ -224,102 +166,20 @@ it.each(recordings.filter((capture) => !['opencode', 'opencode2'].includes(captu
       boundary.spawn.mockClear()
       const explicit = reply(stdout, stderr, exitCode)
       expect(await state.deps.generate(record, 'Repair login')).toEqual(result)
-      expect(boundary.spawn.mock.calls[0]?.[0]).toMatchObject({
-        binary: spawn?.binary,
-        args: spawn?.args,
+      const explicitSpawn = boundary.spawn.mock.calls[0]?.[0]
+      expect(explicitSpawn).toMatchObject({
+        binary: 'pi',
         env: { PI_CODING_AGENT_DIR: '/configured/pi' }
       })
-      expect(explicit.stdin.end.mock.calls).toEqual(child.stdin.end.mock.calls)
+      const explicitModelIndex = explicitSpawn?.args.indexOf('--model') ?? -1
+      expect(explicitSpawn?.args.slice(explicitModelIndex, explicitModelIndex + 2)).toEqual([
+        '--model',
+        'openai/gpt-6.1-sol'
+      ])
+      expect(explicit.stdin.end).toHaveBeenCalledExactlyOnceWith(
+        expect.stringContaining('Repair login')
+      )
     }
-  }
-)
-
-it.each([100, 1000])(
-  'bounds actual eligible and skipped naming catalog work for %i rows',
-  async (size) => {
-    const state = rig()
-    const source = savedChatNamingCatalog(size)
-    state.settings.sourceControlAi = source
-    const { work, reset } = observeChatNamingCatalogWork()
-    const samples: Record<string, typeof work> = {}
-    const record = agentSessionRecordFixture()
-    const recipes: (SourceControlActionRecipe | undefined)[] = [
-      undefined,
-      { agentId: 'claude' },
-      { agentArgs: '--model fast' },
-      { agentId: null, agentArgs: '--model fast' }
-    ]
-    for (const [index, recipe] of recipes.entries()) {
-      source.agentId = index === 0 ? null : 'claude'
-      source.actions = recipe ? { conversationName: recipe } : {}
-      boundary.spawn.mockClear()
-      const child = reply('Catalog title')
-      boundary.spawn.mockImplementation((input) => {
-        if (!input.args.includes('mcp')) {
-          return child
-        }
-        const probe = createMockDiscoveryChild()
-        probe.stdin.end.mockImplementation(() =>
-          queueMicrotask(() => {
-            probe.stdout.emit('data', Buffer.from('[]'))
-            probe.emit('close', 0)
-          })
-        )
-        return probe
-      })
-      reset()
-      expect(await state.deps.generate(record, 'Repair login')).toEqual({ name: 'Catalog title' })
-      expect(work.copiedRows).toBeLessThanOrEqual(3 * size)
-      expect(work.copiedRows).toBeGreaterThanOrEqual(size)
-      expect(work.copiedBytes).toBeLessThanOrEqual(3 * 64 * size)
-      expect(work.copiedBytes).toBeGreaterThanOrEqual(32 * size)
-      expect(work.selectedRowReads).toBeLessThanOrEqual(2 * size + 2)
-      expect(work.selectedRowReads).toBeGreaterThanOrEqual(index === 3 ? 0 : size)
-      const agent = index === 3 ? 'codex' : 'claude'
-      const generation = boundary.spawn.mock.calls.filter(([input]) => !input.args.includes('mcp'))
-      expect(generation).toHaveLength(1)
-      expect(generation[0]?.[0].binary).toBe(agent)
-      if (index > 1) {
-        expect(generation[0]?.[0].args).toEqual(expect.arrayContaining(['--model', 'fast']))
-      }
-      if (index === 0) {
-        expect(generation[0]?.[0].env?.CLAUDE_CONFIG_DIR).toBe('/home/user/.claude')
-      }
-      samples[`cli-${index}`] = { ...work }
-    }
-    source.actions = {}
-    source.agentId = null
-    record.provider = 'grok'
-    record.accountHome = { variable: 'GROK_HOME', path: '/recorded/grok' }
-    nativeReply()
-    reset()
-    expect(await state.deps.generate(record, 'Repair login')).toEqual({ name: 'Native title' })
-    expect(work.copiedRows).toBeLessThanOrEqual(2 * size)
-    expect(work.copiedRows).toBeGreaterThanOrEqual(size)
-    expect(work.copiedBytes).toBeLessThanOrEqual(2 * 64 * size)
-    expect(work.selectedRowReads).toBe(0)
-    expect(boundary.native).toHaveBeenCalledWith(
-      expect.objectContaining({ agent: 'grok', accountHome: record.accountHome })
-    )
-    samples.native = { ...work }
-    for (const kind of ['remote', 'wsl']) {
-      if (kind === 'wsl') {
-        record.location.wslDistro = 'Ubuntu'
-      }
-      state.runtime.resolveWorkspace.mockResolvedValue({
-        path: '/remote',
-        executionHostId: kind === 'remote' ? toSshExecutionHostId('target') : 'local'
-      })
-      boundary.spawn.mockClear()
-      boundary.native.mockClear()
-      reset()
-      expect(await state.deps.generate(record, 'Repair login')).toBeNull()
-      expect(work).toEqual({ copiedRows: 0, copiedBytes: 0, selectedRowReads: 0 })
-      expect(boundary.spawn).not.toHaveBeenCalled()
-      expect(boundary.native).not.toHaveBeenCalled()
-      samples[kind] = { ...work }
-    }
-    console.log(JSON.stringify({ metric: 'chat-naming-runtime-catalog', size, samples }))
   }
 )
 

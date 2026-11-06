@@ -89,7 +89,10 @@ async function stagedRig(
     requireAuth?: boolean
   } = {}
 ) {
-  const root = await mkdtemp(join(tmpdir(), 'orca-naming-task-test-'))
+  // Short on POSIX so the private temp root stays in this folder, not /tmp/oacp-*.
+  const root = await mkdtemp(
+    process.platform === 'win32' ? join(tmpdir(), 'orca-naming-task-test-') : '/tmp/o'
+  )
   folders.push(root)
   const base = acpLaunchSpecFor(options.antigravity !== false ? 'antigravity' : 'grok')
   if (!base) {
