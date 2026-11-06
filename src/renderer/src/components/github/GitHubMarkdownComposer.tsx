@@ -106,7 +106,7 @@ export function GitHubMarkdownComposer({
 
   const extensions = useMemo(
     () => [
-      ...createRichMarkdownExtensions({ codec, allowBase64Images: false }),
+      ...createRichMarkdownExtensions({ codec, allowBase64Images: false, imageErrorLink: true }),
       images.extension,
       Placeholder.configure({
         includeChildren: true,

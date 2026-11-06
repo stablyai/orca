@@ -48,6 +48,7 @@ import { RichMarkdownCodeBlockLowlight } from '../code-blocks/rich-markdown-lowl
 import { RichMarkdownTaskList } from '../lists/rich-markdown-task-list'
 import { createCachedLowlight } from '../code-blocks/rich-markdown-lowlight-cache'
 import { documentResourceAccess } from '@/lib/local-file-access'
+import { attachRichMarkdownImageErrorLink } from '../images/rich-markdown-image-error-link'
 import {
   readRichMarkdownImageRuntimeContext,
   resolveRichMarkdownImageUrl
@@ -64,12 +65,14 @@ export function createRichMarkdownExtensions({
   codec,
   includePlaceholder = false,
   allowBase64Images = true,
+  imageErrorLink = false,
   htmlSuperscriptLinks = false,
   htmlSuperscriptLinkContext
 }: {
   codec: RichMarkdownEditorCodec
   includePlaceholder?: boolean
   allowBase64Images?: boolean
+  imageErrorLink?: boolean
   htmlSuperscriptLinks?: boolean
   htmlSuperscriptLinkContext?: RichMarkdownHtmlSuperscriptLinkContext
 }): AnyExtension[] {
@@ -153,10 +156,14 @@ export function createRichMarkdownExtensions({
           dom.appendChild(img)
 
           let currentSrc = node.attrs.src as string | undefined
+          const resetErrorLink = imageErrorLink
+            ? attachRichMarkdownImageErrorLink(dom, img, () => currentSrc)
+            : undefined
           let currentContextVersion = getImageContextVersion(this.storage)
           let releaseImageLease: (() => void) | undefined
 
           const loadImage = (src: string | undefined): void => {
+            resetErrorLink?.()
             releaseImageLease?.()
             releaseImageLease = undefined
             const fp = this.storage.filePath as string

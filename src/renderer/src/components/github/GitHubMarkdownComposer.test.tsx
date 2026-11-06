@@ -390,3 +390,40 @@ it('leaves ordinary HTML paste on the editor parser path', async () => {
     parse.mockRestore()
   }
 })
+
+it('shows a failed hosted image as its filename link without changing the uploaded Markdown', async () => {
+  imageUploads.upload
+    .mockReset()
+    .mockResolvedValue('https://github.com/user-attachments/assets/private')
+  const onChange = vi.fn()
+  const view = render(
+    <GitHubMarkdownComposer value="" onChange={onChange} placeholder="Private image" />
+  )
+  await waitFor(() => expect(view.container.querySelector('.tiptap')).not.toBeNull())
+  const editor = getComposerEditor(view.container)
+  fireEvent.paste(editor, {
+    clipboardData: {
+      files: [new File(['png'], 'screen.png', { type: 'image/png' })],
+      getData: () => ''
+    }
+  })
+  await waitFor(() =>
+    expect(editor.querySelector('img')?.getAttribute('src')).toBe(
+      'https://github.com/user-attachments/assets/private'
+    )
+  )
+  const image = editor.querySelector('img')
+  if (!image) {
+    throw new Error('Uploaded image missing')
+  }
+  fireEvent.error(image)
+  const link = view.getByRole('link', { name: 'screen.png' })
+  expect(link.getAttribute('href')).toBe('https://github.com/user-attachments/assets/private')
+  expect(image.hidden).toBe(true)
+  expect(onChange.mock.lastCall?.[0]).toBe(
+    '![screen.png](https://github.com/user-attachments/assets/private)'
+  )
+  fireEvent.load(image)
+  expect(image.hidden).toBe(false)
+  expect(view.queryByRole('link', { name: 'screen.png' })).toBeNull()
+})
