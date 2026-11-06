@@ -135,6 +135,8 @@ export function TaskPageGitHubFilters({
                   applyPRFilterChange({ state: id })
                 }
               }}
+              // Why: keeps main's right-click on Open, which saved the open-PRs preset.
+              onSetDefault={id === 'open' ? () => handleSetDefaultTaskPreset('prs') : undefined}
             />
           ))}
           <span aria-hidden className="mx-0.5 h-4 w-px bg-border/60" />
