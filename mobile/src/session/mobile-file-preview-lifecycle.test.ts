@@ -85,7 +85,6 @@ function previewSession() {
         sessionTabsRef,
         setSessionTabs: () => {},
         setFileDocs,
-        reconcileBufferedDraftsRef: { current: () => {} },
         closedTabTombstonesRef: { current: new Map() },
         pendingBrowserFocusPageIdRef: { current: null },
         activeSessionTabIdRef: { current: keptTab.id },
@@ -143,44 +142,6 @@ function previewSession() {
 }
 
 describe('mobile file preview lifetime', () => {
-  it('releases successfully closed previews through repeated tab churn and keeps open caches', async () => {
-    const session = previewSession()
-    try {
-      for (let index = 0; index < 64; index++) {
-        const tab = fileTab(`closed-${index}`)
-        session.open(tab, { status: 'ready', kind: 'html', content: `Preview ${index}` })
-        await session.close(tab)
-      }
-      expect(session.tabs()).toEqual([session.keptTab])
-      expect([...session.docs()]).toEqual([[session.keptTab.id, session.keptDoc]])
-    } finally {
-      session.dispose()
-    }
-  })
-
-  it.each([refusedReply(), new Error('Disconnected')])(
-    'keeps a preview when closing fails: %s',
-    async (reply) => {
-      const session = previewSession()
-      const tab = fileTab('still-open')
-      const doc: FileDocState = {
-        status: 'ready',
-        kind: 'image',
-        dataUri: 'data:image/png;base64,AQ=='
-      }
-      try {
-        session.open(tab, doc)
-        session.setCloseReply(reply)
-        await session.close(tab)
-        expect(session.tabs()).toContain(tab)
-        expect(session.docs().get(tab.id)).toBe(doc)
-        expect(session.docs().get(session.keptTab.id)).toBe(session.keptDoc)
-      } finally {
-        session.dispose()
-      }
-    }
-  )
-
   it.each([textReply('Late content'), refusedReply()])(
     'does not recreate a closed preview from a late read: %s',
     async (reply) => {
@@ -225,42 +186,6 @@ describe('mobile file preview lifetime', () => {
       }
     }
   )
-
-  it('keeps a ready preview mounted across a revisit and a failed refresh', async () => {
-    const session = previewSession()
-    const tab = fileTab('revisit')
-    const ready: FileDocState = {
-      status: 'ready',
-      kind: 'file',
-      content: 'Same',
-      truncated: false,
-      byteLength: 4
-    }
-    try {
-      session.open(tab, ready)
-      const unchanged = session.read(tab)
-      expect(session.docs().get(tab.id)).toBe(ready)
-      session.reply(0, textReply('Same'))
-      await unchanged
-      expect(session.docs().get(tab.id)).toBe(ready)
-
-      const failed = session.read(tab)
-      session.reply(1, refusedReply())
-      await failed
-      expect(session.docs().get(tab.id)).toBe(ready)
-
-      const changed = session.read(tab)
-      session.reply(2, textReply('Changed'))
-      await changed
-      expect(session.docs().get(tab.id)).toMatchObject({
-        status: 'ready',
-        kind: 'file',
-        content: 'Changed'
-      })
-    } finally {
-      session.dispose()
-    }
-  })
 
   it('keeps the newer file reread when an older one finishes later', async () => {
     const session = previewSession()

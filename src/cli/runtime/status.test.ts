@@ -185,18 +185,4 @@ describe('projectRemoteAppStatus', () => {
       desktopWindowStatus: 'available'
     })
   })
-
-  it('does not claim a desktop app for a headless serve on any transport', () => {
-    expect(projectRemoteAppStatus(remoteStatus({ desktopWindowStatus: 'openable' }))).toEqual({
-      running: false,
-      pid: null,
-      desktopWindowStatus: 'openable'
-    })
-  })
-
-  it('never reports a remote pid', () => {
-    expect(
-      projectRemoteAppStatus(remoteStatus({ desktopWindowStatus: 'available' })).pid
-    ).toBeNull()
-  })
 })

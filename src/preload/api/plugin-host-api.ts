@@ -1,4 +1,5 @@
 import type { PluginHostImages } from '../../shared/plugins/images/plugin-image-url'
+import type { EditorSaveHookDecision } from '../../shared/plugins/events/plugin-editor-save-hook'
 import type { PluginUpdateAccessGrowth } from '../../shared/plugins/approval/plugin-update-access-growth'
 import type {
   PluginAutoUpdateState,
@@ -265,6 +266,13 @@ export type PluginsApi = {
   onAutoUpdateChanged: (callback: (event: PluginAutoUpdateEvent) => void) => () => void
   /** What workers set with `statusBar.update`. Desktop only; older hosts reject. */
   statusBarState?: () => Promise<PluginStatusBarOverrides>
+  /** Runs plugins' `editor.save.before` on a buffer about to be saved. Older hosts lack it. */
+  editorSaveHook?: (event: {
+    workspaceId: string | null
+    path: string
+    languageId?: string
+    text: string
+  }) => Promise<EditorSaveHookDecision>
   onStatusBarChanged?: (callback: (overrides: PluginStatusBarOverrides) => void) => () => void
 }
 

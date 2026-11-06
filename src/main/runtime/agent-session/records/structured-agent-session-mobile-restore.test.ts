@@ -20,9 +20,9 @@ import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-
 import {
   RuntimeMobileNotificationController,
   type MobileNotificationEvent
-} from '../../runtime-mobile-notification-controller'
+} from '../../push/notifications/runtime-mobile-notification-controller'
 import { createStructuredAttentionMobileDelivery } from '../structured-agent-session-mobile-attention'
-import { MobileNotificationDismissalStore } from '../../mobile-notification-dismissal-store'
+import { MobileNotificationDismissalStore } from '../../push/notifications/mobile-notification-dismissal-store'
 
 function wire(host: StructuredAgentSessionHost, controller: RuntimeMobileNotificationController) {
   const delivery = createStructuredAttentionMobileDelivery({
@@ -117,7 +117,9 @@ describe('prompt delivery after host recovery', () => {
       ])
       await restarted.flushDismissals()
       expect(
-        new MobileNotificationDismissalStore(h.root).liveDeliveries(identity.notificationId)
+        new MobileNotificationDismissalStore(h.root)
+          .liveDeliveries()
+          .filter((delivery) => delivery.notificationId === identity.notificationId)
       ).toEqual([])
       expect(restarted.reconcileDismissedPushes([identity])).toEqual([identity])
       await openTestChats(host)

@@ -118,6 +118,112 @@ function rollback(
 
 describe('repairing damaged profile-state sections', () => {
   it.each([
+    { label: 'newer runs', payload: '[{"id":"r1","n":2},{"id":"recent","n":3}]', noBackup: false },
+    { label: 'newer runs without a backup', payload: '[{"id":"recent","n":3}]', noBackup: true },
+    { label: 'explicit null', payload: 'null', noBackup: false },
+    { label: 'absent history', payload: null, noBackup: false }
+  ])('keeps verified $label when its placeholder is damaged', async ({ payload, noBackup }) => {
+    const profile = await profileWithNewerSaves()
+    if (noBackup) {
+      rmSync(profileStateDatabaseBackupPath(profile.databaseFile, profile.backupId))
+    }
+    withDatabase(profile.databaseFile, (db) => {
+      writeProfileStateDomains(db, {
+        expectedRevision: 2,
+        replacements: [{ domain: 'automationRuns', payload }]
+      })
+      db.exec("DELETE FROM profile_state_documents WHERE domain = 'automationRuns'")
+      db.exec(
+        `INSERT INTO profile_state_documents VALUES ('automationRuns', 'null', 1, 3, 123, 'broken')`
+      )
+    })
+    const damagedBytes = readFileSync(profile.databaseFile)
+    const failure = startupFailure(profile)
+    expect(failure.repairableSections).toEqual([{ domain: 'automationRuns', source: 'current' }])
+    const request = profileStateRecoveryRequestSchema.parse({
+      userDataPath: profile.root,
+      profileId,
+      selector: { kind: 'repair', sections: failure.repairableSections }
+    })
+    const result = rollback(profile, request.selector)
+    expect(profileStateRecoveryResponseSchema.parse({ ok: true, result })).toEqual({
+      ok: true,
+      result
+    })
+    expect(result.repairedSections).toEqual(failure.repairableSections)
+    expect(readFileSync(join(result.quarantineDirectory, 'profile-state.db'))).toEqual(damagedBytes)
+    const reopened = bootstrapProfileStateAuthority(profile)
+    try {
+      expect(JSON.parse(reopened.authority?.readSerializedState() ?? 'null')).toEqual({
+        repos: ['a', 'b'],
+        ui: { width: 2 },
+        ...(payload === null ? {} : { automationRuns: JSON.parse(payload) })
+      })
+    } finally {
+      reopened.authority?.close()
+    }
+  })
+
+  it('refuses to replace newly damaged history under a keep-current approval', async () => {
+    const profile = await profileWithNewerSaves()
+    withDatabase(profile.databaseFile, (db) =>
+      db.exec(
+        "UPDATE profile_state_documents SET content_hash = 'broken' WHERE domain = 'automationRuns'"
+      )
+    )
+    const approved = startupFailure(profile).repairableSections
+    expect(approved).toEqual([{ domain: 'automationRuns', source: 'current' }])
+    withDatabase(profile.databaseFile, (db) =>
+      db.exec("UPDATE profile_state_automation_runs_meta SET content_hash = 'broken'")
+    )
+    const damagedBytes = readFileSync(profile.databaseFile)
+    expect(() =>
+      rollback(profile, { kind: 'repair', sections: approved && [...approved] })
+    ).toThrow('changed since you chose')
+    expect(readFileSync(profile.databaseFile)).toEqual(damagedBytes)
+  })
+
+  it('repairs malformed normalized history metadata from the approved backup', async () => {
+    const profile = await profileWithNewerSaves()
+    withDatabase(profile.databaseFile, (db) =>
+      db.exec("UPDATE profile_state_automation_runs_meta SET content_hash = 'broken'")
+    )
+    const damagedBytes = readFileSync(profile.databaseFile)
+    const failure = startupFailure(profile)
+    expect(failure.repairableSections).toEqual([
+      {
+        domain: 'automationRuns',
+        backupId: profile.backupId,
+        backupCreatedAtMs: expect.any(Number)
+      }
+    ])
+
+    expect(() =>
+      rollback(profile, {
+        kind: 'repair',
+        sections: [{ domain: 'automationRuns', backupId: null }]
+      })
+    ).toThrow('changed since you chose')
+    expect(readFileSync(profile.databaseFile)).toEqual(damagedBytes)
+
+    const result = rollback(profile, {
+      kind: 'repair',
+      sections: failure.repairableSections && [...failure.repairableSections]
+    })
+    expect(readFileSync(join(result.quarantineDirectory, 'profile-state.db'))).toEqual(damagedBytes)
+    const reopened = bootstrapProfileStateAuthority(profile)
+    try {
+      expect(JSON.parse(reopened.authority?.readSerializedState() ?? 'null')).toEqual({
+        repos: ['a', 'b'],
+        ui: { width: 2 },
+        automationRuns: [{ id: 'r1', n: 1 }]
+      })
+    } finally {
+      reopened.authority?.close()
+    }
+  })
+
+  it.each([
     {
       section: 'repos',
       damage:
@@ -288,7 +394,9 @@ describe('repairing damaged profile-state sections', () => {
         expectedRevision: 2,
         replacements: [{ domain: 'automationRuns', payload: '[{"id":"r1","n":2}]' }]
       })
-      db.exec("UPDATE profile_state_documents SET payload = 'bad' WHERE domain IN ('absent', 'ui')")
+      db.exec(
+        "UPDATE profile_state_documents SET payload = 'bad' WHERE domain IN ('absent', 'ui', 'automationRuns')"
+      )
       db.prepare(
         "UPDATE profile_state_documents SET payload = 'bad', content_hash = ? WHERE domain = 'repos'"
       ).run(hashProfileStatePayload('["a"]'))
@@ -310,7 +418,8 @@ describe('repairing damaged profile-state sections', () => {
     expect(sections).toEqual([
       { domain: 'absent', backupId: newest, backupCreatedAtMs: expect.any(Number) },
       { domain: 'repos', backupId: newest, backupCreatedAtMs: expect.any(Number) },
-      { domain: 'ui', backupId: profile.backupId, backupCreatedAtMs: expect.any(Number) }
+      { domain: 'ui', backupId: profile.backupId, backupCreatedAtMs: expect.any(Number) },
+      { domain: 'automationRuns', source: 'current' }
     ])
     expect(observations.map(({ path }) => path)).toEqual(backupPaths)
     const result = rollback(profile, { kind: 'repair', sections: sections && [...sections] })

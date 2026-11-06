@@ -194,3 +194,15 @@ export function removeLegacyLocalStorageNativeChatComposerDrafts(): void {
     // No localStorage: nothing was kept there either.
   }
 }
+
+export type NativeChatComposerDraftChange = {
+  text?: string
+  pastedTextFiles?: Readonly<Record<string, string>>
+  /** Present, even as undefined, to replace the document. */
+  document?: JSONContent
+  images?: readonly NativeChatComposerDraftImage[]
+  /** Text shown but never saved while the draft still holds exactly it. */
+  unsavedText?: string
+  /** A new draft's owner when its chat may no longer be open to name it: the one it was begun in. */
+  owner?: NativeChatComposerDraftOwner
+}

@@ -1,7 +1,20 @@
+import {
+  GITHUB_CONNECTION_CHANGED,
+  githubOperationResponse
+} from '../transport/github-target-invocation'
+import { captureMobilePRCheckContract } from '../transport/pr-check-observation-contract'
+import { acceptPRCheckObservation } from '../../../src/shared/github/complete-pr-check-owner'
+import type { RpcClient } from '../transport/rpc-client'
+import { withGitHubTargetOperation } from '../tasks/github-work-item-operation'
+import { requireGitHubWorkItemTargetDetails } from '../../../src/shared/github/work-item-target'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../src/shared/github/check-types'
-import type { GitHubAssignableUser, PRInfo } from '../../../src/shared/github/pull-request-types'
+import type {
+  GitHubAssignableUser,
+  GitHubOwnerRepo,
+  PRInfo
+} from '../../../src/shared/github/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
-import type { HostedReviewInfo } from '../../../src/shared/hosted-review'
+import type { HostedReviewInfo } from '../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import type { RpcResponse } from '../transport/types'
 import { mobileRepoSelectorFromWorktreeId } from '../source-control/mobile-pr-create'
@@ -88,7 +101,7 @@ export function fetchHostedReviewForBranch(
 }
 
 // Raise decoded upstream-error here so the sidebar retains host text; it is not a protocol decode failure.
-export function fetchPRForBranch(
+export async function fetchPRForBranch(
   client: RpcOperationSender,
   worktreeId: string,
   args: {
@@ -96,24 +109,70 @@ export function fetchPRForBranch(
     linkedPRNumber?: number | null
     fallbackPRNumber?: number | null
     currentHeadOid?: string | null
+    refresh?: boolean
   }
 ): Promise<GitHubPrReadOutcome<PRInfo | null>> {
-  return settleGithubPrRead(
-    {
-      operation: githubPrForBranchRead.operation,
-      interpret: (reply) => resolveGithubPrForBranchOutcome(githubPrForBranchRead.interpret(reply))
-    },
-    () =>
-      githubPrForBranchRead.request(
-        client,
-        githubPrRequestParams(githubPrForBranchRead.operation.method, worktreeId, {
-          branch: args.branch,
-          linkedPRNumber: args.linkedPRNumber ?? null,
-          fallbackPRNumber: args.fallbackPRNumber ?? null,
-          currentHeadOid: args.currentHeadOid ?? null
-        })
+  return observe(true, args.refresh === true)
+  async function observe(
+    adopt: boolean,
+    refresh = false
+  ): Promise<GitHubPrReadOutcome<PRInfo | null>> {
+    const contract = await captureMobilePRCheckContract(
+      client,
+      {
+        repo: mobileRepoSelectorFromWorktreeId(worktreeId)
+      },
+      refresh
+    )
+    try {
+      let sourceMismatch = false
+      const result = await settleGithubPrRead(
+        {
+          operation: githubPrForBranchRead.operation,
+          interpret: (reply) =>
+            resolveGithubPrForBranchOutcome(githubPrForBranchRead.interpret(reply))
+        },
+        async () => {
+          const reply = await githubPrForBranchRead.request(
+            contract.client ?? client,
+            githubPrRequestParams(githubPrForBranchRead.operation.method, worktreeId, {
+              branch: args.branch,
+              linkedPRNumber: args.linkedPRNumber ?? null,
+              fallbackPRNumber: args.fallbackPRNumber ?? null,
+              currentHeadOid: args.currentHeadOid ?? null
+            }),
+            contract.options
+          )
+          sourceMismatch =
+            !reply.ok &&
+            ['runtime_source_mismatch', 'runtime_source_unverifiable'].includes(reply.error.code)
+          return githubOperationResponse(reply)
+        }
       )
-  )
+      if (adopt && sourceMismatch && contract.routeCurrent()) {
+        return observe(false, true)
+      }
+      if (!contract.current()) {
+        if (adopt && !contract.complete && contract.routeCurrent()) {
+          return observe(false)
+        }
+        return { ok: false, error: GITHUB_CONNECTION_CHANGED }
+      }
+      if (result.ok && result.result && contract.complete) {
+        return {
+          ok: true,
+          result: acceptPRCheckObservation(result.result, null, {
+            scope: contract.scope!,
+            complete: true,
+            current: contract.current()
+          })!
+        }
+      }
+      return result
+    } finally {
+      contract.retire()
+    }
+  }
 }
 
 function resolveGithubPrForBranchOutcome(outcome: GitHubPrForBranchOutcome | null): PRInfo | null {
@@ -126,20 +185,46 @@ function resolveGithubPrForBranchOutcome(outcome: GitHubPrForBranchOutcome | nul
   return outcome.kind === 'found' ? outcome.pr : null
 }
 
-export function fetchWorkItemDetails(
-  client: RpcOperationSender,
+export async function fetchWorkItemDetails(
+  client: RpcClient,
   worktreeId: string,
-  args: { prNumber: number }
+  args: { prNumber: number; prRepo?: GitHubPrRepoSlug | null; refresh?: boolean }
 ): Promise<GitHubPrReadOutcome<GitHubWorkItemDetails | null>> {
-  return settleGithubPrRead(githubPrWorkItemDetailsRead, () =>
-    githubPrWorkItemDetailsRead.request(
-      client,
-      githubPrRequestParams(githubPrWorkItemDetailsRead.operation.method, worktreeId, {
-        number: args.prNumber,
-        type: 'pr'
-      })
-    )
+  const params = githubPrRequestParams(githubPrWorkItemDetailsRead.operation.method, worktreeId, {
+    number: args.prNumber,
+    type: 'pr'
+  })
+  const outcome = await settleGithubPrRead(githubPrWorkItemDetailsRead, () =>
+    args.prRepo
+      ? withGitHubTargetOperation({
+          client,
+          params: { repo: mobileRepoSelectorFromWorktreeId(worktreeId) },
+          ownerRepo: args.prRepo,
+          read: true,
+          canonical: args.refresh === true,
+          send: (selected, exact, options) =>
+            githubPrWorkItemDetailsRead.request(selected, { ...params, ...exact }, options)
+        })
+      : githubPrWorkItemDetailsRead.request(client, params)
   )
+  if (outcome.ok && args.prRepo) {
+    try {
+      return {
+        ok: true,
+        result: requireGitHubWorkItemTargetDetails(outcome.result, {
+          repository: args.prRepo,
+          type: 'pr',
+          number: args.prNumber
+        })
+      }
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Unable to load pull request details.'
+      }
+    }
+  }
+  return outcome
 }
 
 export function fetchPRChecks(
@@ -195,13 +280,25 @@ export function fetchPRCheckDetails(
 }
 
 export function fetchAssignableUsers(
-  client: RpcOperationSender,
-  worktreeId: string
+  client: RpcClient,
+  worktreeId: string,
+  prRepo: GitHubOwnerRepo | null
 ): Promise<GitHubPrReadOutcome<GitHubAssignableUser[]>> {
-  return settleGithubPrRead(githubPrAssignableUsersRead, () =>
-    githubPrAssignableUsersRead.request(
-      client,
-      githubPrRequestParams(githubPrAssignableUsersRead.operation.method, worktreeId, {})
+  return settleGithubPrRead(githubPrAssignableUsersRead, () => {
+    if (!prRepo) {
+      throw new Error('Unable to identify this pull request. Open it again.')
+    }
+    const params = githubPrRequestParams(
+      githubPrAssignableUsersRead.operation.method,
+      worktreeId,
+      {}
     )
-  )
+    return withGitHubTargetOperation({
+      client,
+      params,
+      ownerRepo: prRepo,
+      send: (selected, exact, options) =>
+        githubPrAssignableUsersRead.request(selected, { ...params, ...exact }, options)
+    })
+  })
 }

@@ -1,9 +1,7 @@
-import type { TuiAgent } from '../../../src/shared/tui-agent'
-import {
-  MOBILE_TUI_AGENT_AUTO_PICK_ORDER,
-  MOBILE_TUI_AGENT_FAVICON_DOMAINS,
-  MOBILE_TUI_AGENT_LABELS
-} from './mobile-tui-agents'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
+import { TUI_AGENT_AUTO_PICK_ORDER as MOBILE_TUI_AGENT_AUTO_PICK_ORDER } from '../../../src/shared/agent-launch/catalog/tui-agent-selection'
+import { MOBILE_TUI_AGENT_FAVICON_DOMAINS } from './mobile-tui-agents'
+import { TUI_AGENT_DISPLAY_NAMES as MOBILE_TUI_AGENT_LABELS } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 
 export type MobileAgentCatalogEntry = {
   id: TuiAgent

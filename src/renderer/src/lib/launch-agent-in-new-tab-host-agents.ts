@@ -1,5 +1,5 @@
 import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
-import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+import type { AgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
 import { useAppStore } from '@/store'
 import {
   awaitStructuredRouteHostAnswer,
@@ -32,7 +32,7 @@ export type LaunchAgentInNewTabResult = {
   surface: AgentLaunchSurface
   startupPlan?: AgentStartupPlan
   pasteDraftAfterLaunch: boolean
-  promptDeliveryResult?: Promise<{ delivered: boolean; failureNotified: boolean }>
+  promptDeliveryResult?: Promise<StructuredPromptDeliveryResult>
   /** Structured route only: what the launch did once it settled. The call stays synchronous. */
   terminalCompletion?: StructuredLaunchTerminal['completion']
   structuredSettlement?: Promise<StructuredAgentLaunchSettlement>

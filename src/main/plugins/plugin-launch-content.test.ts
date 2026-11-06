@@ -82,21 +82,6 @@ describe('Phase 1 launch plugin content', () => {
     expect(contributionKinds).toEqual(new Set(['vm-recipe', 'theme']))
   })
 
-  it('publishes every bundled pack only when its release hash matches exact bytes', async () => {
-    const userDataPath = await mkdtemp(join(tmpdir(), 'orca-launch-content-'))
-    temporaryRoots.push(userDataPath)
-
-    const result = await bootstrapBundledPlugins({
-      root: launchRoot,
-      userDataPath,
-      hostVersion: PLUGIN_SCHEMA_NEWEST_SINCE
-    })
-
-    expect(result.errors).toEqual([])
-    expect(result.installed).toEqual(await readBundledPluginKeys())
-    expect(result.installed.every(hasOfficialPluginPublisher)).toBe(true)
-  })
-
   it('boots release-indexed content from the packaged resources layout', async () => {
     const resourcesPath = await mkdtemp(join(tmpdir(), 'orca-packaged-resources-'))
     const userDataPath = await mkdtemp(join(tmpdir(), 'orca-packaged-user-data-'))

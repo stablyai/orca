@@ -105,3 +105,18 @@ it('holds nothing back when the launch asks instead of resuming', () => {
   act(() => root.render(<Probe launch={false} />))
   expect(seen.at(-1)).toEqual({ pending: false, resuming: [] })
 })
+
+it('waits for settings when held chats enable the launch first, then resumes by default', async () => {
+  rpc.mockImplementation((_target, method) =>
+    method === 'agentSession.restartResumable'
+      ? Promise.resolve({ sessions: offered })
+      : new Promise(() => {})
+  )
+  await act(async () => root.render(<Probe launch />))
+  expect(rpc).not.toHaveBeenCalledWith(expect.anything(), 'agentSession.restartResumable')
+
+  settings(undefined)
+  await act(async () => root.render(<Probe launch />))
+
+  expect(seen.at(-1)).toEqual({ pending: false, resuming: ['a', 'b'] })
+})

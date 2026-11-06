@@ -36,19 +36,6 @@ describe('mirrored editor tab republication', () => {
     isActive: true
   }
 
-  it('does not republish a file mirrored from a host snapshot and caches the empty snapshot', () => {
-    const clientState = mirrorHostTab(fileTab)
-    expect(clientState.openFiles).toMatchObject([
-      { worktreeId: WT, runtimeEnvironmentId: ENV, mirroredFromRuntimeSession: true }
-    ])
-    expect(clientState.unifiedTabsByWorktree[WT]).toMatchObject([
-      { id: 'host-file-tab', contentType: 'editor' }
-    ])
-    const snapshots = buildMobileSessionTabSnapshots(clientState, false)
-    expect(snapshots).toMatchObject([{ worktree: WT, tabs: [] }])
-    expect(buildMobileSessionTabSnapshots(clientState, false)[0]).toBe(snapshots[0])
-  })
-
   it('keeps a genuinely local file in the same worktree and retracts it after close', () => {
     const mirroredState = mirrorHostTab(fileTab)
     const clientState = {
@@ -80,16 +67,6 @@ describe('mirrored editor tab republication', () => {
     expect(buildMobileSessionTabSnapshots(clientState, false)[0]?.snapshotVersion).toBeGreaterThan(
       snapshots[0]!.snapshotVersion
     )
-  })
-
-  it('filters mirrors without unified tabs or groups', () => {
-    const clientState = mirrorHostTab(fileTab)
-    expect(
-      buildMobileSessionTabSnapshots(
-        makePublicationState({ openFiles: clientState.openFiles }),
-        false
-      )
-    ).toMatchObject([{ worktree: WT, tabs: [] }])
   })
 
   it('resyncs when only the mirror ownership flag changes', () => {

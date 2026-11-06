@@ -220,7 +220,7 @@ export const pluginContributesFields = {
   statusBarItems: contributionList(
     pluginStatusBarItemContributionSchema,
     PLUGIN_STATUS_BAR_ITEM_LIMIT,
-    'Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`.',
+    'Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled.',
     PLUGIN_STATUS_BAR_SINCE
   )
 } satisfies Record<PluginContributionPoint, z.ZodType>

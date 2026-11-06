@@ -3,7 +3,7 @@ import type { WorkspaceEmojiSuggestion } from './workspace-emoji-shortcodes'
 // Lives apart from the shortcode index so only the lazily loaded picker panel ships it.
 // Shown before the user searches: emoji that read well as workspace markers.
 // Only emoji-presentation code points: text-default ones (gear, warning, sun) render as monochrome glyphs.
-// Literal pairs so opening the picker never builds the full shortcode catalog; a test keeps them in sync.
+// Literal pairs so opening the picker never builds the full shortcode catalog.
 const WORKSPACE_EMOJI_PICKER_DEFAULTS: readonly WorkspaceEmojiSuggestion[] = [
   { emoji: '🚀', shortcode: 'rocket' },
   { emoji: '🐛', shortcode: 'bug' },

@@ -1,7 +1,9 @@
-// Require structured.v1 across every agentSession method before exposing journals or mutations.
+// Require structured.v1 across every agentSession method before exposing journals or mutations,
+// except rename, which also admits rename-only clients (requireRenameStructuredHost).
 // Legacy tab restore may still install the host for fallback rows; that never admits agentSession calls.
 
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
@@ -107,6 +109,23 @@ export async function requireInstalledStructuredHost(
 ): Promise<StructuredAgentSessionHost> {
   await ensureStructuredHostInstalled(ctx)
   return sessionId ? requireStructuredSessionHost(ctx, sessionId) : requireStructuredHost(ctx)
+}
+
+/** Naming reads no journal, so a client that asked only to rename chats (the paired CLI) may. */
+export async function requireRenameStructuredHost(
+  ctx: RpcContext,
+  sessionId: string
+): Promise<StructuredAgentSessionHost> {
+  if (
+    supportsStructuredSessions(ctx) ||
+    !ctx.clientCapabilities?.includes(AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY)
+  ) {
+    return requireInstalledStructuredHost(ctx, sessionId)
+  }
+  if (!getStructuredAgentSessionHost()) {
+    await ctx.runtime.ensureStructuredAgentSessionHost()
+  }
+  return requireHostOrRefusal()
 }
 
 /** Persist/share proven paired device id, never clientId bearer credentials (for example, who answered a prompt). */

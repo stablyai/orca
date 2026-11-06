@@ -2,12 +2,12 @@ import {
   buildFixBrokenChecksPrompt,
   collectFixChecksPromptDetails,
   hasGitHubCheckHandle
-} from '../../../src/shared/pr-checks-fix-prompt'
+} from '../../../src/shared/source-control/checks/pr-checks-fix-prompt'
 import type { PRInfo } from '../../../src/shared/github/pull-request-types'
 import type { RpcClient } from '../transport/rpc-client'
 import { fetchPRCheckDetails } from './github-pr-rpc'
 import { splitWorktreeIdForFilesystem } from '../../../src/shared/worktree/id'
-import { buildResolvePullRequestConflictsPrompt } from '../../../src/shared/source-control-conflict-prompts'
+import { buildResolvePullRequestConflictsPrompt } from '../../../src/shared/source-control/recovery/source-control-conflict-prompts'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../src/shared/github/check-types'
 
 // Like desktop, the agent gets the failing steps' log tails, not just check names.

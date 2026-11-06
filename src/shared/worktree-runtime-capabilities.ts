@@ -1,4 +1,4 @@
-import { WORKSPACE_ATTACHMENT_RUNTIME_CAPABILITIES } from './workspace-attachment-capabilities'
+import { WORKSPACE_ATTACHMENT_RUNTIME_CAPABILITIES } from './workspace-attachments/workspace-attachment-capabilities'
 
 export const WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY =
   'worktree.rename-error-dismiss.v1' as const
@@ -47,6 +47,26 @@ export const WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY =
 export const WORKTREE_CLIENT_AUTOMATION_PROVENANCE_RUNTIME_CAPABILITY =
   'worktree.create.client-automation-provenance.v1' as const
 
+// Hosts that save a parent from another Orca store; older hosts strip `crossStoreParent` and write no link.
+export const WORKTREE_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY =
+  'worktree.lineage.crossMachine' as const
+
+export function supportsCrossStoreLineage(capabilities: readonly string[] | undefined): boolean {
+  return capabilities?.includes(WORKTREE_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY) === true
+}
+
+/** Refuses before any request, so an older host never applies the rest of the change without its parent. */
+export function assertCrossStoreLineageSupported(
+  capabilities: readonly string[] | undefined,
+  hostLabel: string
+): void {
+  if (!supportsCrossStoreLineage(capabilities)) {
+    throw new Error(
+      `Update Orca on ${hostLabel} to nest workspaces under a parent on another machine. Nothing was changed.`
+    )
+  }
+}
+
 export const WORKTREE_RUNTIME_CAPABILITIES = [
   WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY,
   WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY,
@@ -66,5 +86,6 @@ export const WORKTREE_RUNTIME_CAPABILITIES = [
   WORKTREE_REMOVE_BRANCH_POLICY_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
-  WORKTREE_CLIENT_AUTOMATION_PROVENANCE_RUNTIME_CAPABILITY
+  WORKTREE_CLIENT_AUTOMATION_PROVENANCE_RUNTIME_CAPABILITY,
+  WORKTREE_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY
 ] as const

@@ -9,16 +9,16 @@ import { z } from 'zod'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { getRuntimeMetadataPath } from '../../../shared/runtime-bootstrap'
 import type { Repo } from '../../../shared/repo-types'
-import { RuntimeRepositoryRegistrationController } from '../runtime-repository-registration-controller'
-import { partialRuntimeStore } from '../runtime-store-partial-fixture'
+import { RuntimeRepositoryRegistrationController } from '../repositories/runtime-repository-registration-controller'
+import { partialRuntimeStore } from '../orca-runtime-tests/runtime-store-partial-fixture'
 import type { RpcRequest } from './core'
 import { repoDispatcher } from './methods/repo-rpc.test-fixture'
 import { UnixSocketTransport } from './unix-socket-transport'
 
-vi.mock('../../repo-icon-autodetect', () => ({
+vi.mock('../../repository-icons/repo-icon-autodetect', () => ({
   detectRepoIconAndUpstream: vi.fn().mockResolvedValue({})
 }))
-vi.mock('../../worktree-root-preparation', () => ({
+vi.mock('../../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: vi.fn().mockResolvedValue(undefined)
 }))
 

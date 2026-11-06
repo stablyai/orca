@@ -1,11 +1,11 @@
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
-import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/request-active-terminal-pane-split'
-import type { NativeChatSplitDirection } from './native-chat-split-shortcut'
+import { openNewTerminalTabInWorkspace } from '@/store/terminals/terminal-active-workspace-creation'
+import type { NativeChatSplitDirection } from './native-chat-pane-shortcut'
 
 export type NativeChatSplitTarget =
   | { kind: 'terminal-pane'; terminalTabId: string }
@@ -72,36 +72,22 @@ export function runNativeChatSplitTarget(
     })
     return true
   }
-  // Captured first so focus follows this action into the new chat's composer.
-  const focusIntent = captureNativeChatComposerFocusIntent()
-  const state = useAppStore.getState()
-  const source = findSplitSource(state, target)
-  const groupId = source
-    ? state.createEmptySplitGroup(source.worktreeId, target.groupId, direction)
-    : null
-  if (!source || !groupId) {
-    focusIntent.cancel()
+  const source = findSplitSource(useAppStore.getState(), target)
+  if (!source) {
     return false
   }
-  const closePane = (): void => {
-    useAppStore.getState().closeEmptyGroup(source.worktreeId, groupId)
-  }
-  // Same launch as New Chat, so the fresh chat opens at once in the new pane.
-  const result = launchAgentInNewTab({
-    requestId: newAgentLaunchRequestId(),
-    focusIntent,
-    requestedSurface: 'chat',
-    selectedExecutionHostId: source.tab.executionHostId,
-    agent: source.agent,
-    worktreeId: source.worktreeId,
-    groupId
+  void openNewTerminalTabInWorkspace(useAppStore.getState, source.worktreeId, target.groupId, {
+    sourceGroupId: target.groupId,
+    splitDirection: direction
+  }).catch(() => {
+    toast.error(
+      translate(
+        'auto.store.slices.worktrees.localBaseRefUnshallowFailed',
+        'Could not open a terminal for this workspace'
+      )
+    )
   })
-  if (!result || 'refused' in result) {
-    closePane()
-    return true
-  }
-  // Settlement cleanup preserves any pane that currently contains a tab.
-  void result.structuredSettlement?.then(closePane, closePane)
+  useAppStore.getState().recordFeatureInteraction('tab-splits')
   return true
 }
 

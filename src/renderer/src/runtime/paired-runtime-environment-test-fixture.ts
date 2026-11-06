@@ -1,5 +1,5 @@
-import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { RuntimeEnvironmentStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 /** A paired environment catalog row; the fields a test names override these defaults. */
 export function publicRuntimeEnvironment(

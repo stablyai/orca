@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { StyleSheet, TextInput, View, useWindowDimensions } from 'react-native'
 import { useKeyboardOcclusion } from '../../../platform/keyboard-occlusion'
+import { hostOs } from '../../../platform/host-os'
 import { useTextInputContentHeight } from '../../../platform/text-input-content-height'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
@@ -38,6 +39,9 @@ export function MobileNativeChatComposerField({
   dictationPreview,
   placeholder,
   ref,
+  onKeyboardSubmit,
+  onKeyPress,
+  onWebPaste,
   ...props
 }: MobileNativeChatComposerFieldProps) {
   useMobileColorScheme()
@@ -45,6 +49,17 @@ export function MobileNativeChatComposerField({
   const [fieldHeight, setFieldHeight] = useState(0)
   const ownRef = useRef<TextInput>(null)
   const input = ref ?? ownRef
+  const paste = useEffectEvent((event: ClipboardEvent) => onWebPaste?.(event))
+  // react-native-web forwards no paste prop; its TextInput ref is the textarea itself.
+  useEffect(() => {
+    const field: unknown = input.current
+    if (!(field instanceof HTMLElement)) {
+      return
+    }
+    const listener = (event: ClipboardEvent) => paste(event)
+    field.addEventListener('paste', listener)
+    return () => field.removeEventListener('paste', listener)
+  }, [input])
   const shown = dictationPreview
     ? `${dictationPreview.before}${dictationPreview.text}${dictationPreview.after}`
     : value || placeholder || ''
@@ -82,6 +97,27 @@ export function MobileNativeChatComposerField({
         onScroll={skillToken ? (event) => setScrollTop(scrollTopOf(event)) : undefined}
         placeholder={dictationPreview ? undefined : placeholder}
         {...props}
+        onKeyPress={(event) => {
+          onKeyPress?.(event)
+          const key = event.nativeEvent
+          if (
+            event.defaultPrevented ||
+            !onKeyboardSubmit ||
+            !(key instanceof KeyboardEvent) ||
+            key.key !== 'Enter' ||
+            key.isComposing ||
+            key.keyCode === 229 ||
+            key.shiftKey ||
+            key.altKey ||
+            !(hostOs() === 'ios' ? key.metaKey && !key.ctrlKey : key.ctrlKey && !key.metaKey)
+          ) {
+            return
+          }
+          event.preventDefault()
+          if (!key.repeat) {
+            onKeyboardSubmit()
+          }
+        }}
       />
     </View>
   )

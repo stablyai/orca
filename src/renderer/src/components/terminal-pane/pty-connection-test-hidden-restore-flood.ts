@@ -9,7 +9,12 @@ import {
   type MockPane,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps, type PaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -17,7 +22,7 @@ import {
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
 import { connectMockPanePty } from './pty-connection-test-connect-mock-pane'
-import type { PtyModelRestoreReason } from '../../../../shared/pty-model-restore-marker'
+import type { PtyModelRestoreReason } from '../../../../shared/terminal/replay/pty-model-restore-marker'
 
 // Shared visible-pane driver for the hidden-restore flood/unhide suites (STA-4869).
 
@@ -92,7 +97,13 @@ export async function connectVisiblePane(): Promise<PaneDrive> {
   const deps = buildPaneConnectionDeps(() => mockStoreState, {
     isVisibleRef: { current: true }
   })
-  const disposable = await connectMockPanePty(pane, createManager(1), deps)
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+
+  const disposable = await connectMockPanePty(
+    pane,
+    createManager(1),
+    bindPaneAgentTitleMocks(deps, agentTitleMocks)
+  )
   await flushAsyncTicks(6)
   expect(captured.current).not.toBeNull()
   return {

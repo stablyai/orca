@@ -3,7 +3,7 @@ import {
   recordCoalescedDurableCrashBreadcrumb,
   recordDurableCrashBreadcrumb
 } from '../../crash-reporting/durable-crash-breadcrumb'
-import { getSystemPowerState } from '../../system-power-lifecycle'
+import { getSystemPowerState } from '../../power/system-power-lifecycle'
 import { profileStateWriterFailureOutcome } from './profile-state-writer-errors'
 
 export type ProfileStateWriterDiagnosticRequest = {

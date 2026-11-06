@@ -15,23 +15,21 @@ import {
   beginSubmissionHandover,
   type StructuredAgentSessionPendingHandover
 } from './structured-agent-session-handover'
-import { structuredAgentSessionCommandRunning } from './structured-agent-session-command-turn'
-import {
-  providerStartupFailureFact,
-  structuredAgentSessionStartFailure
-} from './structured-agent-session-failure-text'
+import { assertStructuredAgentSessionInputReady } from './structured-agent-session-input-readiness'
+import { providerStartupFailureFact } from './structured-agent-session-failure-text'
 import {
   refusedStructuredAgentSessionStart,
-  structuredAgentSessionStartFailureRow,
+  failedStructuredAgentSessionInputContinuation,
   type startThatFailedWhileQueued
 } from './structured-agent-session-start-failure-row'
 import { structuredAgentSessionEndedChildFailure } from './structured-agent-session-ended-child-failure'
 import { sameProviderChild } from './structured-agent-session-provider-child'
+import { previousExitUnverifiableRefusal } from './structured-agent-session-child-close'
 
 type StartFailure = NonNullable<ReturnType<typeof startThatFailedWhileQueued>>
 
 /** The scheduler's selected input keeps one handover while its exact child binding changes. */
-export function beginStructuredAgentSessionInputHandover(
+export async function beginStructuredAgentSessionInputHandover(
   deps: StructuredAgentSessionDeliveryLoopDeps,
   sessionId: string,
   session: StructuredAgentSessionHostSession,
@@ -43,35 +41,31 @@ export function beginStructuredAgentSessionInputHandover(
   let recorder = deps.recordRanOptions?.(sessionId, binding.fence)
   const ownsInput = () =>
     deps.sessions.get(sessionId) === session &&
-    session.journal
-      .submissions()
-      .some((s) => s.clientMessageId === next.clientMessageId && s.dispatchState === 'pending')
+    session.journal.submission(next.clientMessageId)?.dispatchState === 'pending'
   const isBound = () => deps.sessions.get(sessionId) === session && session.child === binding
   const isCurrent = () => isBound() && !binding.close
-  const validate = (signal?: AbortSignal) => {
-    const work = deps.currentWork(sessionId)
-    if (
-      signal?.aborted ||
-      isDisposed() ||
-      !isCurrent() ||
-      binding.phase !== 'ready' ||
-      deps.stopping(sessionId) ||
-      !ownsInput() ||
-      (work && structuredAgentSessionCommandRunning(work))
-    ) {
-      const ended = session.lastEndedChild
-      throw new StructuredAgentSessionInputNotAdmitted({
-        state: 'rejected',
-        ...structuredAgentSessionStartFailure(
-          (ended && sameProviderChild(ended, binding)
-            ? structuredAgentSessionEndedChildFailure(ended)
-            : null) ?? {
-            failure: agentSessionFailureFact('cancelled', { neverReachedAgent: true })
-          },
-          deps.failureTextContext(sessionId)
-        )
-      })
+  const validate = (signal?: AbortSignal) =>
+    assertStructuredAgentSessionInputReady({
+      deps,
+      sessionId,
+      session,
+      binding,
+      next,
+      disposed: isDisposed(),
+      signal
+    })
+  try {
+    validate()
+  } catch (error) {
+    if (!(error instanceof StructuredAgentSessionInputNotAdmitted) || !error.outcome) {
+      throw error
     }
+    await session.journal.resolveDispatch({
+      clientMessageId: next.clientMessageId,
+      fence: binding.fence,
+      ...error.outcome
+    })
+    return null
   }
   return beginSubmissionHandover(
     {
@@ -83,18 +77,22 @@ export function beginStructuredAgentSessionInputHandover(
       failureTextContext: deps.failureTextContext(sessionId),
       record: () => deps.record(sessionId),
 
-      admitFreshInput: async (enqueue, signal, prepare) => {
+      admitFreshInput: async (enqueue, signal, prepare, kind = 'fresh') => {
         let admission: StructuredAgentSessionInputAdmission | undefined
         const invoked = deps.serialize(sessionId, async () => {
           validate(signal)
-          const body = await prepare(binding.fence)
+          const body = kind === 'fresh' ? await prepare(binding.fence) : undefined
           validate(signal)
           const mode = deps.immediatePermission?.(sessionId)
-          if (!mode) {
-            throw new Error('input handover has no permission choice')
+          if (
+            mode &&
+            (deps.adapter.permissionModeRequiresAcquisition?.(sessionId, mode) ??
+              mode !== binding.permissionMode)
+          ) {
+            return { kind: 'acquire' as const, reason: 'permission' as const }
           }
           admission = enqueue(
-            mode,
+            mode ?? 'own',
             deps.retainedWork?.(sessionId, next.clientMessageId) === true,
             body
           )
@@ -111,54 +109,95 @@ export function beginStructuredAgentSessionInputHandover(
           throw error
         }
       },
-      continueInput: async (signal, rebind) => {
-        const failed = async (
+      continueInput: async (signal, rebind, reason = 'auto') => {
+        const failed = (
           cause: StartFailure['cause'],
           fence: number,
           startKey = next.clientMessageId
-        ) => {
-          const words = structuredAgentSessionStartFailure(
+        ) =>
+          failedStructuredAgentSessionInputContinuation(
+            session.journal,
+            deps.failureTextContext(sessionId),
             cause,
-            deps.failureTextContext(sessionId)
-          )
-          if (!('failure' in cause && cause.failure.kind === 'cancelled')) {
-            await session.journal.appendLifecycleBatch({
-              settlementId: `start-failure:${startKey}`,
-              fence,
-              recovered: true,
-              mutations: [structuredAgentSessionStartFailureRow(startKey, words)]
-            })
-          }
-          return {
-            kind: 'failed' as const,
             fence,
-            outcome: { state: 'rejected' as const, ...words }
-          }
-        }
+            startKey
+          )
         try {
+          const mode = await waitForPromiseWithSignal(
+            deps.serialize(sessionId, async () => {
+              validate(signal)
+              return deps.immediatePermission?.(sessionId)
+            }),
+            signal
+          )
+          const transitionNeeded =
+            mode &&
+            (reason === 'auto' ||
+              mode !== binding.permissionMode ||
+              deps.adapter.permissionModeRequiresAcquisition?.(sessionId, mode) !== undefined)
+          if (
+            transitionNeeded &&
+            deps.adapter.settlePermissionTransition &&
+            !(await waitForPromiseWithSignal(
+              deps.adapter.settlePermissionTransition({
+                sessionId,
+                fence: binding.fence,
+                mode,
+                signal
+              }),
+              signal
+            ))
+          ) {
+            return deps.serialize(sessionId, () =>
+              failed(
+                {
+                  failure: agentSessionFailureFact('restartFailed', { neverReachedAgent: true })
+                },
+                binding.fence
+              )
+            )
+          }
           const claim = await waitForPromiseWithSignal(
             deps.serialize(sessionId, async () => {
               validate(signal)
               if (
                 !ownsInput() ||
-                !session.journal
-                  .submissions()
-                  .some(
-                    (s) => s.clientMessageId === next.clientMessageId && s.fence === binding.fence
-                  ) ||
+                session.journal.submission(next.clientMessageId)?.fence !== binding.fence ||
                 !continuingStructuredAgentSessionInput(session.journal, next.clientMessageId)
               ) {
                 throw new Error('input continuation no longer owns its submission')
               }
-              await deps.retireOutgrownChild(sessionId, next.clientMessageId)
+              const latest = deps.immediatePermission?.(sessionId)
+              const acquire =
+                (reason === 'auto' && latest === 'auto') ||
+                (!!latest &&
+                  (deps.adapter.permissionModeRequiresAcquisition?.(sessionId, latest) ??
+                    latest !== binding.permissionMode))
+              if (!acquire) {
+                return null
+              }
+              await (deps.stopPermissionTransitionChild
+                ? deps.stopPermissionTransitionChild(sessionId)
+                : deps.retireOutgrownChild(sessionId, next.clientMessageId))
               signal?.throwIfAborted()
-              if (!ownsInput() || (session.child && session.child !== binding)) {
+              const ended = session.lastEndedChild
+              if (
+                !ownsInput() ||
+                session.child ||
+                !ended ||
+                !sameProviderChild(ended, binding) ||
+                !ended.rootGone ||
+                ended.cause !== 'evict'
+              ) {
                 throw new Error('input continuation lost its provider binding')
               }
               return deps.startProviderChild(sessionId, next.clientMessageId)
             }),
             signal
           )
+          if (!claim) {
+            return { kind: 'ready', isCurrent }
+          }
           const started = await waitForPromiseWithSignal(claim.outcome, signal)
           if (!started.ok) {
             return deps.serialize(sessionId, () =>
@@ -204,6 +243,9 @@ export function beginStructuredAgentSessionInputHandover(
           }
           return { kind: 'ready', isCurrent }
         } catch (error) {
+          if (error instanceof StructuredAgentSessionInputNotAdmitted && error.outcome) {
+            return { kind: 'failed', fence: binding.fence, outcome: error.outcome }
+          }
           if (signal?.aborted) {
             return deps.serialize(sessionId, () => {
               const ended = session.lastEndedChild
@@ -219,11 +261,9 @@ export function beginStructuredAgentSessionInputHandover(
           }
           return deps.serialize(sessionId, () =>
             failed(
-              {
-                failure: signal?.aborted
-                  ? agentSessionFailureFact('cancelled')
-                  : providerStartupFailureFact(error)
-              },
+              binding.close && isBound()
+                ? { refusal: previousExitUnverifiableRefusal() }
+                : { failure: providerStartupFailureFact(error) },
               deps.conversationFence(sessionId)
             )
           )

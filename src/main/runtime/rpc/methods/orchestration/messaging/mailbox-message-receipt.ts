@@ -4,6 +4,7 @@ import { formatMessageBanner } from '../../../../orchestration/formatter'
 
 // Hide read/sequence, pointer_* and sender_pane_key: they are runtime delivery plumbing, not caller mailbox truth.
 const INTERNAL_MESSAGE_COLUMNS = [
+  'answer_sender_snapshot',
   'read',
   'sequence',
   'sender_pane_key',
@@ -72,4 +73,32 @@ export function handsOverBatch(result: unknown): boolean {
     'deliveryAcknowledged' in result &&
     result.deliveryAcknowledged === true
   )
+}
+
+/** The mailboxes a consuming check took mail from: its messages' own, and the one an acknowledgement
+ *  settled. Only their waiting cards can have gone stale. */
+export function checkedMailboxes(result: unknown): string[] {
+  if (typeof result !== 'object' || result === null) {
+    return []
+  }
+  const mailboxes = new Set<string>()
+  if ('messages' in result && Array.isArray(result.messages)) {
+    for (const message of result.messages) {
+      if (
+        typeof message === 'object' &&
+        message !== null &&
+        typeof message.to_handle === 'string'
+      ) {
+        mailboxes.add(message.to_handle)
+      }
+    }
+  }
+  if ('acknowledged' in result && typeof result.acknowledged === 'string') {
+    if ('dispatchId' in result && typeof result.dispatchId === 'string') {
+      mailboxes.add(`dispatch:${result.dispatchId}`)
+    } else if ('runId' in result && typeof result.runId === 'string') {
+      mailboxes.add(`run:${result.runId}`)
+    }
+  }
+  return [...mailboxes]
 }

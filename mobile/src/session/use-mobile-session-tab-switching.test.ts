@@ -170,3 +170,95 @@ describe('useMobileSessionTabSwitching active document retap', () => {
     }
   })
 })
+
+function terminalSwitching(subscribed = true) {
+  const tabs: MobileSessionTab[] = [
+    { type: 'terminal', id: 'a', title: 'A', terminal: 'pty-a', isActive: false },
+    { type: 'terminal', id: 'b', title: 'B', terminal: 'pty-b', isActive: true }
+  ]
+  const subscribe = vi.fn()
+  const unsubscribe = vi.fn()
+  const sendRequest = vi.fn(async () => ({ id: 'reply', ok: true as const, result: {} }))
+  const activeHandleRef: { current: string | null } = { current: 'pty-a' }
+  const hook = hookMount(() => {
+    switching = useMobileSessionTabSwitching(
+      mountFixture<Parameters<typeof useMobileSessionTabSwitching>[0]>({
+        activeSessionTabId: 'a',
+        activeHandleRef,
+        activeSessionTabTypeRef: { current: 'terminal' },
+        pendingSelectionRef: { current: null },
+        terminalUnsubsRef: { current: new Map(subscribed ? [['pty-a', vi.fn()]] : []) },
+        subscribingHandlesRef: { current: new Set<string>() },
+        terminalDiagnosticsRef: { current: new MobileTerminalDiagnostics() },
+        visibleTerminalHandlesRef: { current: [] },
+        switchSessionTabRef: { current: null },
+        setActiveSessionTabId: vi.fn(),
+        setActiveHandle: vi.fn(),
+        subscribeToTerminal: subscribe,
+        unsubscribeTerminal: unsubscribe,
+        markdownDocs: new Map(),
+        fileDocs: new Map(),
+        sessionTabs: tabs,
+        client: { sendRequest },
+        worktreeId: 'workspace'
+      })
+    )
+  })
+  let switching: ReturnType<typeof useMobileSessionTabSwitching>
+  hook.mount()
+  return {
+    tabs,
+    subscribe,
+    unsubscribe,
+    sendRequest,
+    activeHandleRef,
+    hook,
+    select: (tab: MobileSessionTab) => switching.switchSessionTab(tab)
+  }
+}
+
+it('preserves the locally selected terminal stream when its tab is retapped', () => {
+  const h = terminalSwitching()
+  try {
+    performHookAction(() => h.select(h.tabs[0]))
+    expect(h.unsubscribe).not.toHaveBeenCalled()
+    expect(h.subscribe).not.toHaveBeenCalled()
+    expect(h.sendRequest).not.toHaveBeenCalled()
+  } finally {
+    h.hook.unmount()
+  }
+})
+
+it('switches away and back before a render even while the original stream is subscribed', () => {
+  const h = terminalSwitching()
+  try {
+    performHookAction(() => {
+      h.select(h.tabs[1])
+      h.select(h.tabs[0])
+    })
+    expect(h.activeHandleRef.current).toBe('pty-a')
+    expect(h.subscribe).toHaveBeenCalledWith('pty-b')
+    expect(h.subscribe).toHaveBeenCalledWith('pty-a')
+    expect(h.sendRequest).toHaveBeenLastCalledWith('session.tabs.activate', {
+      worktree: 'id:workspace',
+      tabId: 'a',
+      notifyClients: false,
+      navigation: 'caller',
+      intent: 'user'
+    })
+  } finally {
+    h.hook.unmount()
+  }
+})
+
+it('retries a missing stream and still activates a terminal without a handle', () => {
+  const h = terminalSwitching(false)
+  try {
+    performHookAction(() => h.select(h.tabs[0]))
+    expect(h.subscribe).toHaveBeenCalledWith('pty-a')
+    performHookAction(() => h.select({ ...h.tabs[0], type: 'terminal', terminal: null }))
+    expect(h.activeHandleRef.current).toBeNull()
+  } finally {
+    h.hook.unmount()
+  }
+})

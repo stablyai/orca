@@ -1,7 +1,11 @@
+import { supportsSessionAccountUsage } from '../../../shared/agent-session/agent-session-account-usage'
 import { structuredAgentSessionCatalogScopeOwned } from './structured-agent-session-catalog-reads'
 import { withinAgentModelCatalogRead } from '../agent-model-catalog/agent-model-catalog-operation'
 import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../agent-model-catalog/agent-model-catalog-listing-waiters'
-import { independentAgentModelCatalog } from '../agent-model-catalog/agent-model-catalog-discovery'
+import {
+  independentAgentModelCatalog,
+  usesModelSpecificAcpEfforts
+} from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 import {
   readStructuredAgentSessionOptionsAtRest,
   IN_PROCESS_OPTIONS_READER,
@@ -25,7 +29,7 @@ import {
 import { structuredAgentSessionImmediatePermission } from './structured-agent-session-launch-permission'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import { readStructuredSessionRecovery } from './structured-agent-session-recovery-read'
-import { structuredAgentSessionNeverSent } from './structured-agent-session-never-sent'
+import { fillUnknownModelEfforts } from '../../../shared/agent-session/options/agent-session-model-efforts'
 
 export {
   recordStructuredAgentSessionOptionIntent,
@@ -133,6 +137,15 @@ export async function readStructuredAgentSessionOptions(
   const floor = session.journal.context.floor()
   const contextFloor = floor ? { contextFloor: floor } : {}
   const restingOptions = await atRest()
+  if (live && usesModelSpecificAcpEfforts(agent)) {
+    options = {
+      ...options,
+      models: fillUnknownModelEfforts(
+        options.models,
+        restingOptions.inventory.origin === 'unknown' ? [] : restingOptions.inventory.models
+      )
+    }
+  }
   const resting = live ? restingOptions : null
   const record = store.getConversation(sessionId)
   const permissionMode = record
@@ -151,6 +164,12 @@ export async function readStructuredAgentSessionOptions(
   const model = saved.model ?? (options.current.model || selected.current.model || displayDefault)
   const projected = live?.projectCurrent?.({ ...saved, ...(model ? { model } : {}) })
   const reportedEffort = projected?.confirmed?.includes('effort') ? projected.effort : undefined
+  const reportedModel = live
+    ? (options.current.reportedModel ??
+      (agent === 'claude' && options.current.confirmed?.includes('model')
+        ? options.current.model
+        : undefined))
+    : undefined
   const current = {
     ...selected.current,
     ...options.current,
@@ -163,26 +182,18 @@ export async function readStructuredAgentSessionOptions(
         ? selected.current.serviceTier
         : (options.current.serviceTier ?? selected.current.serviceTier)
   }
-  // Defaults cover unsaved choices only; first send pins them.
+  // Unsaved defaults are shown, never sent: the agent's own config decides what an unpicked chat runs.
   const defaultedBy = (key: 'model' | 'effort') =>
     key === 'model' && !options.current.model
       ? displayDefault !== undefined || selected.current.defaulted?.includes(key) === true
       : options.current.defaulted?.includes(key) === true
-  const neverSent = structuredAgentSessionNeverSent(record, session.journal)
-  const defaultKeys = (['model', 'effort'] as const).filter(
+  const defaulted = (['model', 'effort'] as const).filter(
     (key) => saved[key] === undefined && defaultedBy(key)
   )
-  const pinsDefaults = neverSent && (agent !== 'codex' || !live || !!options.current.model)
-  const defaulted = pinsDefaults ? [] : defaultKeys
   const acceptedInputSources: AgentSessionAcceptedInputSources = {}
   for (const key of ['model', 'effort', 'fastMode', 'serviceTier'] as const) {
     if (current[key] !== undefined && saved[key] !== undefined) {
       acceptedInputSources[key] = 'saved'
-    }
-  }
-  for (const key of defaultKeys) {
-    if (pinsDefaults && current[key] !== undefined) {
-      acceptedInputSources[key] = 'policy'
     }
   }
   if (saved.fastMode === undefined && selected.current.fastMode === false) {
@@ -228,6 +239,7 @@ export async function readStructuredAgentSessionOptions(
   return {
     ...options,
     ...recovery,
+    ...(supportsSessionAccountUsage(record) ? { accountUsage: true as const } : {}),
     ...(live?.effortFixed
       ? {
           models: options.models.map(({ effortsKnown: _unknown, ...row }) => ({
@@ -239,6 +251,7 @@ export async function readStructuredAgentSessionOptions(
     current: {
       ...current,
       acceptedInputSources,
+      ...(reportedModel ? { reportedModel } : {}),
       ...(reportedEffort !== undefined ? { reportedEffort } : {}),
       defaulted,
       confirmed,
@@ -257,6 +270,9 @@ export async function readStructuredAgentSessionOptions(
             reason: 'unsupported'
           }),
     conversationCommands: capabilities?.compact ? ['clear', 'compact'] : ['clear'],
+    ...(capabilities?.compact && capabilities.compactInstructions
+      ? { compactInstructions: true }
+      : {}),
     // Live children may narrow declared capabilities, never expand them.
     acceptsImages: capabilities?.imagePrompts === true && options.acceptsImages !== false,
     ...structuredAgentSessionThreadGoalReport(

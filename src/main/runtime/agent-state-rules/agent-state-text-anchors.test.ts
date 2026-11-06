@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { parseAgentStateRuleFiles } from './agent-state-rules-catalog'
 import { compileTextAnchors, findPromptAnchorIndexes } from './agent-state-text-anchors'
 import { terminalWaitBlockedSentinelRe } from './blocked-text-layer'
-import { detectTerminalWaitBlockedReason } from '../terminal-wait-detection'
+import { detectTerminalWaitBlockedReason } from '../terminal/wait/terminal-wait-detection'
 
 function anchorsOf(anchors: unknown[]) {
   return compileTextAnchors(

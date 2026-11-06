@@ -1,5 +1,9 @@
 import { yieldToEventLoop as yieldToEventLoopTask } from '../../../../shared/event-loop-yield'
-import { BRACKETED_PASTE_END, BRACKETED_PASTE_START } from './terminal-bracketed-paste'
+import './terminal-bracketed-paste'
+import {
+  BRACKETED_PASTE_END,
+  BRACKETED_PASTE_START
+} from '../../../../shared/terminal/input/terminal-bracketed-paste-text'
 import { iterateTerminalPastePlanChunks } from './terminal-paste-chunks'
 import { createRedactedPasteExecutionDiagnostic } from './terminal-paste-diagnostics'
 import {

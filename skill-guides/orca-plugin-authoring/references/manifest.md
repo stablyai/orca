@@ -36,7 +36,7 @@
 - `panels` (PanelContribution[], since 1.4.160): Sidebar panels. At most 64.
 - `commands` (CommandContribution[], since 1.4.160): Command palette entries. At most 256.
 - `events` (EventContribution[], since 1.4.160): Events delivered to the plugin worker. At most 4.
-- `hooks` (HookContribution[], since 1.4.248): Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 7.
+- `hooks` (HookContribution[], since 1.4.248): Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 8.
 - `languagePacks` (LanguagePackContribution[], since 1.4.160): Interface translations. At most 16.
 - `keybindings` (KeybindingContribution[], since 1.4.160): Keyboard shortcuts for contributed commands. At most 256.
 - `vmRecipes` (VmRecipeContribution[], since 1.4.160): Virtual machine environment recipes. At most 64.
@@ -47,7 +47,7 @@
 - `customEditors` (CustomEditorContribution[], since 1.4.245): Editors that open files of given types in the editor tab. At most 16.
 - `newFiles` (NewFileContribution[], since 1.4.245): Untitled files the user can create from the + menu and the command palette. At most 16.
 - `settings` (SettingContribution[], since 1.4.246): Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64.
-- `statusBarItems` (StatusBarItemContribution[], since 1.4.248): Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. At most 8.
+- `statusBarItems` (StatusBarItemContribution[], since 1.4.248): Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled. At most 8.
 
 Reserved (must stay empty arrays): `agentHarnesses`, `skills`, `mcpServers`, `taskSources`, `connections`, `sidebarCards`.
 
@@ -81,7 +81,7 @@ An event subscription. Requires `main`, the `trusted-worker` execution profile a
 
 A hook Orca runs through the worker before (or after) it acts. Requires `main` and the `trusted-worker` execution profile.
 
-- `event` ("terminal.send" | "workspace.create.before" | "workspace.create.after" | "agent.launch.before" | "agent.prompt.before" | "agent.tool.before" | "agent.tool.after", required, since 1.4.248): Hook the worker handles with `orca.hooks.on`.
+- `event` ("terminal.send" | "workspace.create.before" | "workspace.create.after" | "agent.launch.before" | "agent.prompt.before" | "agent.tool.before" | "agent.tool.after" | "editor.save.before", required, since 1.4.248): Hook the worker handles with `orca.hooks.on`.
 - `onError` ("pass" | "deny", since 1.4.248): What Orca does when this plugin's hook throws, times out, crashes or does not start: `pass` (the default) carries on as if it passed; `deny` refuses the action, naming the plugin, so a guard fails closed. Ignored for hooks that only observe.
 
 ## LanguagePackContribution
@@ -182,7 +182,7 @@ An item in the status bar. Requires the `declarative` profile; a `trusted-worker
 
 A host API the plugin may call once the user consents.
 
-- `kind` (one of workspace:read, workspace:write, agent:read, agent:launch, terminal:send, terminal:read, notifications:show, storage:own, secrets:own, settings:own, required, since 1.4.160): Capability granted on user consent.
+- `kind` (one of workspace:read, workspace:write, agent:read, agent:launch, terminal:send, terminal:read, notifications:show, storage:own, secrets:own, settings:own, appearance:write, required, since 1.4.160): Capability granted on user consent.
 
 ## Screenshot
 

@@ -6,14 +6,14 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session/agent-session-background-task-wire'
-import type { AgentChildWorkView } from '../../shared/agent-status-child-work-view'
-import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
+import type { AgentChildWorkView } from '../../shared/agent-status/child-work/agent-status-child-work-view'
+import { makeStructuredAgentStatusSubject } from '../../shared/agent-status/contracts/agent-status-subject'
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
 } from '../codex/app-server/codex-app-server-connection-types'
 import type { openCodexAppServerConnection } from '../codex/app-server/codex-app-server-connection'
-import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
+import { collectRuntimeWorktreeAgentSources } from './workspaces/process-listing/runtime-worktree-agent-sources'
 import { AgentHookServer, _internals } from '../agent-hooks/server'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
@@ -27,8 +27,8 @@ import {
   stopStructuredAgentSessionRuntime
 } from './agent-session/structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import { scriptedCodexTransport } from './scripted-codex-transport.test-fixture'
-import { createScriptedClaudeRuntime } from './structured-claude-scripted-runtime-test-support'
+import { scriptedCodexTransport } from './orca-runtime-tests/scripted-codex-transport.test-fixture'
+import { createScriptedClaudeRuntime } from './agent-session/installation/structured-claude-scripted-runtime-test-support'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))

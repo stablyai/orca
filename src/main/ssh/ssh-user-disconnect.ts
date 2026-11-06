@@ -2,7 +2,7 @@ import { formatSshUserDisconnectedMessage } from '../../shared/ssh-user-disconne
 import {
   getRuntimeSshAccess,
   type KnownRuntimeEnvironment
-} from '../../shared/runtime-environments'
+} from '../../shared/remote-runtime/host-catalog/runtime-environments'
 
 /** Session-only disconnect blocks every background dial until explicit connect; restart clears both SSH and managed-server disconnects together. */
 const userDisconnectedTargets = new Set<string>()

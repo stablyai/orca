@@ -3,7 +3,7 @@ import { OpenCodeStartupPromptClaims } from './opencode-startup-prompt-claims'
 import {
   createTranscriptPane,
   TRANSCRIPT_PANE_PTY_ID
-} from '../runtime/agent-transcript-pane-test-harness'
+} from '../runtime/orca-runtime-tests/agent-transcript-pane-test-harness'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },

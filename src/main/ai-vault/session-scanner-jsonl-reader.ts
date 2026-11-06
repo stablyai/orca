@@ -4,7 +4,7 @@ import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import {
   MAX_SESSION_TRANSCRIPT_RECORD_BYTES,
   type SkippedTranscriptRecord
-} from './session-transcript-record-budget'
+} from './transcripts/session-transcript-record-budget'
 
 const NEWLINE_BYTE = 0x0a
 const CARRIAGE_RETURN_BYTE = 0x0d

@@ -1,14 +1,30 @@
+import type { LoadBookkeeping } from './native-chat-composer-draft-load'
+import type { AgentPickerRetainedSetup } from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
+import {
+  currentDraftScope,
+  captureLaunchDraftDestination,
+  clearLaunchDraftSourcesForTests,
+  nativeChatLaunchPromptDraftOwner,
+  retainLaunchDraftSource
+} from './native-chat-launch-draft-source'
+import type { AgentPickerDraft } from '../../../../shared/agent-launch/picker/agent-launch-picker'
+export {
+  nativeChatLaunchPromptDraftOwner,
+  nativeChatLaunchPromptDraftScopeKey,
+  retainLaunchDraftSource
+} from './native-chat-launch-draft-source'
 import { sameNativeChatComposerDraftDocument } from './native-chat-composer-draft-comparison'
 import type { NativeChatComposerDraftAddition } from './native-chat-composer-draft-addition'
+import { reconcileNativeChatStagedDraft } from './native-chat-draft-attachment-staging'
 // Memory owns drafts; storage keeps a copy shared by the API and persistence modules.
 
 import type {
   NativeChatComposerDraft,
   NativeChatComposerDraftImage,
+  NativeChatComposerDraftOwner,
   StoredNativeChatComposerDraft
 } from './native-chat-composer-draft-storage'
 
-// Launch seeds also remain in TUI input; only this run can replace them, so their composer copy must not survive reload.
 export type DraftRecord = StoredNativeChatComposerDraft & { readonly unsavedText?: string }
 
 /** A write or removal handed to storage and not yet confirmed; `draft` is null for a removal. */
@@ -63,6 +79,7 @@ export function installNativeChatDraftRecord(
   } else {
     records.delete(scope)
   }
+  reconcileNativeChatStagedDraft(scope, draft)
 }
 
 // Changed in memory with no write issued yet; a refused write comes back here for the next flush.
@@ -113,28 +130,7 @@ export function reconcileRestoredImageChecks(
 }
 export const scopeListeners = new Map<string, Set<() => void>>()
 
-/** Pre-hydration appends replay over loaded drafts; ordinary edits replace them. */
-export type DraftAppend = (draft: StoredNativeChatComposerDraft) => StoredNativeChatComposerDraft
-
-/** Atomically append in storage, then replay onto hydration if that load could not have read it. */
-export type AppendBeforeLoad = {
-  /** In-run order, compared with the order at which a load attempt read storage. */
-  readonly sequence: number
-  readonly append: DraftAppend
-  committed: boolean
-}
-
-type LoadBookkeeping = {
-  hydrated: boolean
-  /** Sequence of the last append made before the load landed. */
-  appendSequence: number
-  readonly editedBeforeLoad: Set<string>
-  readonly appendsBeforeLoad: Map<string, AppendBeforeLoad[]>
-  readonly deletionsBeforeLoad: ((
-    scopeKey: string,
-    draft: StoredNativeChatComposerDraft
-  ) => boolean)[]
-}
+export type { DraftAppend, AppendBeforeLoad } from './native-chat-composer-draft-load'
 
 export const load: LoadBookkeeping = {
   hydrated: false,
@@ -153,7 +149,31 @@ export function nextSavedAt(): number {
 }
 
 export function notifyScope(scopeKey: string): void {
-  scopeListeners.get(scopeKey)?.forEach((listener) => listener())
+  scopeListeners.get(currentDraftScope(scopeKey))?.forEach((listener) => listener())
+}
+
+/** Setup options are authored input: the first change retains the setup, notifying its draft listeners. */
+export function writeLaunchSetupOptions(
+  scope: string,
+  draft: AgentPickerDraft,
+  slot = '',
+  retained?: AgentPickerRetainedSetup
+): void {
+  const setup = retainLaunchDraftSource(scope)
+  if (setup) {
+    setup.options ??= new Map()
+    const record = retained ??
+      setup.options.get(slot) ?? {
+        target: undefined,
+        agent: draft.agent,
+        source: undefined,
+        draft,
+        active: false
+      }
+    record.draft = draft
+    setup.options.set(slot, record)
+    notifyScope(scope)
+  }
 }
 
 /** A local change not yet in storage, which a write from another window must not replace. */
@@ -161,7 +181,14 @@ export function hasLocalChange(scopeKey: string): boolean {
   return dirtyScopes.has(scopeKey) || unconfirmed.has(scopeKey)
 }
 
+export function hasUnsavedNativeChatComposerDraftChange(scopeKey: string): boolean {
+  return hasLocalChange(currentDraftScope(scopeKey))
+}
+
 export function clearDraftMemoryForTests(): void {
+  retireNativeChatComposerSubmissionsWhere(() => true)
+  clearLaunchDraftSourcesForTests()
+  resolveOwner = null
   for (const draft of records.values()) {
     retireNativeChatDraftPosition(draft)
   }
@@ -182,7 +209,7 @@ export function clearDraftMemoryForTests(): void {
 export type NativeChatDraftAppend =
   | NativeChatComposerDraftAddition
   | ((draft: NativeChatComposerDraft) => NativeChatComposerDraft)
-const appendListeners = new Map<
+export const appendListeners = new Map<
   string,
   Set<(addition: NativeChatDraftAppend, previous: NativeChatComposerDraft) => void>
 >()
@@ -190,13 +217,18 @@ export function subscribeToNativeChatComposerDraftAppend(
   scope: string,
   listener: (addition: NativeChatDraftAppend, previous: NativeChatComposerDraft) => void
 ): () => void {
+  const destination = captureLaunchDraftDestination(scope)
+  scope = currentDraftScope(scope)
+  const member = (addition: NativeChatDraftAppend, previous: NativeChatComposerDraft) =>
+    listener(addition, previous)
   const scoped = appendListeners.get(scope) ?? new Set()
   appendListeners.set(scope, scoped)
-  scoped.add(listener)
+  scoped.add(member)
   return () => {
-    scoped.delete(listener)
-    if (scoped.size === 0) {
-      appendListeners.delete(scope)
+    const current = appendListeners.get(destination?.scopeKey ?? scope)
+    current?.delete(member)
+    if (current?.size === 0) {
+      appendListeners.delete(destination?.scopeKey ?? scope)
     }
   }
 }
@@ -206,7 +238,7 @@ export function notifyDraftAppend(
   addition: NativeChatDraftAppend,
   previous: NativeChatComposerDraft
 ): void {
-  appendListeners.get(scope)?.forEach((listener) => listener(addition, previous))
+  appendListeners.get(currentDraftScope(scope))?.forEach((listener) => listener(addition, previous))
 }
 
 export type NativeChatEditDraftDestination = { scopeKey: string; active: boolean }
@@ -215,7 +247,7 @@ export const ephemeralDrafts = new Map<string, NativeChatEditDraftDestination>()
 export function captureNativeChatEditDraftDestination(
   scopeKey: string
 ): NativeChatEditDraftDestination | undefined {
-  return ephemeralDrafts.get(scopeKey)
+  return captureLaunchDraftDestination(scopeKey) ?? ephemeralDrafts.get(scopeKey)
 }
 
 export function redirectNativeChatEditDraft(scopeKey: string, destination: string): void {
@@ -229,6 +261,15 @@ export function isNativeChatEditDraft(scopeKey: string): boolean {
   return scopeKey.startsWith('queued-edit:')
 }
 
+/** Setup survives view close; only queued edits require an open editor lease. */
+export function isNativeChatSetupDraft(scopeKey: string): boolean {
+  return scopeKey.startsWith('agent-setup:')
+}
+
+export function isNativeChatMemoryOnlyDraft(scopeKey: string): boolean {
+  return isNativeChatEditDraft(scopeKey) || isNativeChatSetupDraft(scopeKey)
+}
+
 export function closeNativeChatEditDraft(scopeKey: string): void {
   const target = ephemeralDrafts.get(scopeKey)
   if (target?.scopeKey === scopeKey) {
@@ -237,4 +278,70 @@ export function closeNativeChatEditDraft(scopeKey: string): void {
   ephemeralDrafts.delete(scopeKey)
   installNativeChatDraftRecord(scopeKey)
   notifyScope(scopeKey)
+}
+
+let resolveOwner: ((scopeKey: string) => NativeChatComposerDraftOwner | undefined) | null = null
+
+/** Names the workspace a scope's chat belongs to, so a new draft can record its owner. */
+export function setNativeChatComposerDraftOwnerResolver(
+  resolver: (scopeKey: string) => NativeChatComposerDraftOwner | undefined
+): void {
+  resolveOwner = resolver
+}
+
+export function resolveNativeChatComposerDraftOwner(
+  scopeKey: string
+): NativeChatComposerDraftOwner | undefined {
+  return nativeChatLaunchPromptDraftOwner(scopeKey) ?? resolveOwner?.(scopeKey)
+}
+
+export type DraftSubmission = {
+  scopeKey: string
+  draft: (NativeChatComposerDraft & { owner?: NativeChatComposerDraftOwner }) | undefined
+  stopObserving: () => void
+}
+export const submissions = new Map<string, Set<DraftSubmission>>()
+
+/** Each send retains its own full source until a recipient owns it; removal revokes its write authority. */
+export function captureNativeChatComposerSubmission(scopeKey: string) {
+  scopeKey = currentDraftScope(scopeKey)
+  const current = records.get(scopeKey)
+  const submission: DraftSubmission = {
+    scopeKey,
+    draft: {
+      ...(current ?? { text: '', images: [] }),
+      owner: current?.owner ?? resolveNativeChatComposerDraftOwner(scopeKey)
+    },
+    stopObserving: () => {}
+  }
+  const scoped = submissions.get(scopeKey) ?? new Set<DraftSubmission>()
+  scoped.add(submission)
+  submissions.set(scopeKey, scoped)
+  return submission
+}
+
+export function releaseNativeChatComposerSubmission(scopeKey: string, submission: DraftSubmission) {
+  scopeKey = submission.scopeKey
+  const draft = submission.draft
+  submission.draft = undefined
+  submission.stopObserving()
+  submission.stopObserving = () => {}
+  const scoped = submissions.get(scopeKey)
+  scoped?.delete(submission)
+  if (scoped?.size === 0) {
+    submissions.delete(scopeKey)
+  }
+  return draft
+}
+
+export function retireNativeChatComposerSubmissionsWhere(
+  matches: (scopeKey: string, draft: StoredNativeChatComposerDraft | undefined) => boolean
+): void {
+  for (const [scopeKey, scoped] of submissions) {
+    for (const submission of scoped) {
+      if (matches(scopeKey, submission.draft ? { ...submission.draft, savedAt: 0 } : undefined)) {
+        releaseNativeChatComposerSubmission(scopeKey, submission)
+      }
+    }
+  }
 }

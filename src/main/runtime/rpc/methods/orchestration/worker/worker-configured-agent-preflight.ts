@@ -1,5 +1,5 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { isTuiAgent } from '../../../../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { prepareFederationAttachmentWorkerStart } from './worker-start-validation'
 

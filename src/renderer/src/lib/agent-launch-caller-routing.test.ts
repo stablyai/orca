@@ -12,16 +12,19 @@ import {
   createLaunchFunnelStore,
   createdTabOptions,
   hostLaunchRequest,
+  queuedStartupPayload,
   resetLaunchFunnelStore
 } from './agent-launch-funnel-test-harness'
 
 import type * as LaunchAdmissionModule from './agent-session/launch/structured-agent-session-launch-admission'
-import { launchedTab } from './agent-tab-launch-outcome.test-fixture'
+import { projectSourceControlActionLaunch } from '../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
+import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 const store = createLaunchFunnelStore()
 const mockIsWebRuntimeSessionActive = vi.fn(() => false)
 const mockLaunchAgentInWebHostTab = vi.fn()
 const mockBeginHostAdmittedStructuredLaunch = vi.fn()
 const mockCreateSupport = vi.fn()
+const mockAwaitCapabilities = vi.fn()
 const mockHostCapabilities = vi.fn<() => readonly string[] | null>(() => [])
 const mockExecutionHostId = vi.fn(() => 'local')
 
@@ -60,13 +63,8 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: (_target: unknown, method: string) =>
     method === 'agentSession.createSupport' ? mockCreateSupport() : new Promise(() => undefined)
 }))
-const { mockToastInfo, mockToastError } = vi.hoisted(() => ({
-  mockToastInfo: vi.fn(),
-  mockToastError: vi.fn()
-}))
-vi.mock('sonner', () => ({
-  toast: { info: mockToastInfo, error: mockToastError, success: vi.fn() }
-}))
+const { mockToastInfo } = vi.hoisted(() => ({ mockToastInfo: vi.fn() }))
+vi.mock('sonner', () => ({ toast: { info: mockToastInfo, error: vi.fn(), success: vi.fn() } }))
 vi.mock(
   '@/lib/agent-session/launch/structured-agent-session-launch-admission',
   async (importOriginal) => ({
@@ -75,7 +73,8 @@ vi.mock(
   })
 )
 vi.mock('@/runtime/local-runtime-capabilities', () => ({
-  readLocalRuntimeCapabilitiesOrUnknown: () => mockHostCapabilities()
+  readLocalRuntimeCapabilitiesOrUnknown: () => mockHostCapabilities(),
+  awaitLocalRuntimeCapabilities: () => mockAwaitCapabilities()
 }))
 function serverReports(capabilities: readonly string[] | null): void {
   Object.assign(store, {
@@ -102,7 +101,7 @@ async function useActualAdmission(): Promise<void> {
 
 async function launch(profile: AgentLaunchCallerProfile) {
   const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-  return launchedTab(launchAgentInNewTab({ requestId: 'request-1', ...profile.args }))
+  return launchAgentInNewTab({ requestId: 'request-1', ...profile.args })
 }
 
 describe('agent launch caller routing', () => {
@@ -126,13 +125,213 @@ describe('agent launch caller routing', () => {
     })
   })
 
-  it.each(cases)('routes %s to a local terminal under default settings', async (_id, profile) => {
-    const result = await launch(profile)
+  it.each([
+    { surface: 'chat', chatDefault: false, supported: true, chat: true },
+    { surface: 'terminal', chatDefault: true, supported: true, chat: false },
+    { surface: undefined, chatDefault: true, supported: true, chat: true },
+    { surface: undefined, chatDefault: false, supported: true, chat: false },
+    { surface: 'chat', chatDefault: false, supported: false, chat: false }
+  ] as const)(
+    'replays saved $surface with Chat default $chatDefault and host support $supported',
+    async ({ surface, chatDefault, supported, chat }) => {
+      store.settings = { ...store.settings, nativeChatProviders: { codex: chatDefault } }
+      mockHostCapabilities.mockReturnValue(
+        supported ? [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY] : []
+      )
+      const projection = projectSourceControlActionLaunch(
+        { agentId: 'codex', surface, agentArgs: '--search' },
+        'codex',
+        { basePrompt: 'Fix checks', settings: store.settings }
+      )
+      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+      const result = launchAgentInNewTab({
+        requestId: 'saved-surface',
+        agent: 'codex',
+        worktreeId: 'wt-1',
+        ...projection
+      })
+      expect(result?.surface.kind).toBe(chat ? 'host-published' : 'local-terminal')
+      if (chat) {
+        expect(store.createTab).not.toHaveBeenCalled()
+        expect(mockBeginHostAdmittedStructuredLaunch).toHaveBeenCalledOnce()
+        expect(mockBeginHostAdmittedStructuredLaunch).toHaveBeenCalledWith(
+          expect.objectContaining({
+            plan: expect.objectContaining({ agent: 'codex', route: 'structured-native-chat' }),
+            worktreeId: 'wt-1'
+          })
+        )
+        expect(mockBeginHostAdmittedStructuredLaunch.mock.calls[0][0].plan).not.toHaveProperty(
+          'requestedSurface'
+        )
+      } else {
+        expect(mockBeginHostAdmittedStructuredLaunch).not.toHaveBeenCalled()
+        expect(store.createTab).toHaveBeenCalledOnce()
+        expect(
+          tokenizeStartupCommand(String(queuedStartupPayload(store)?.command), 'posix')
+        ).toMatchObject({
+          ok: true,
+          tokens: ['codex', '-c', 'disable_paste_burst=true', '--search']
+        })
+      }
+    }
+  )
 
-    expect(result?.surface.kind).toBe('local-terminal')
-    expect(store.createTab).toHaveBeenCalledTimes(1)
-    expect(mockBeginHostAdmittedStructuredLaunch).not.toHaveBeenCalled()
-    expect(mockLaunchAgentInWebHostTab).not.toHaveBeenCalled()
+  it.each(['new-tab', 'default-no-callback'] as const)(
+    'settles delayed saved-source decline through %s with the captured Terminal base and exact Args',
+    async (consumer) => {
+      store.settings = {
+        ...store.settings,
+        nativeChatProviders: { codex: false },
+        agentCmdOverrides: { codex: 'cx' }
+      }
+      await useActualAdmission()
+      let answer!: (value: { supported: boolean }) => void
+      mockCreateSupport.mockReturnValue(
+        new Promise((resolve) => {
+          answer = resolve
+        })
+      )
+      const projection: Omit<
+        ReturnType<typeof projectSourceControlActionLaunch>,
+        'sessionOptions' | 'chatSessionOptions'
+      > & { sessionOptions?: Record<string, string>; chatSessionOptions?: Record<string, string> } =
+        projectSourceControlActionLaunch(
+          {
+            agentId: 'codex',
+            surface: 'chat',
+            agentArgs: `-c 'model="true"'`,
+            launchPreferences: {
+              agentId: 'codex',
+              modelSelection: {
+                base: 'default',
+                options: { effort: { agentId: 'codex', value: 'high' } }
+              }
+            }
+          },
+          'codex',
+          { basePrompt: 'Fix checks' }
+        )
+      expect(projection.sessionOptions).toEqual({ effort: 'high' })
+      expect(projection.chatSessionOptions).toEqual({ model: 'true', effort: 'high' })
+      const { useAppStore } = await import('@/store')
+      const { planAgentSessionLaunch } = await import('./agent-session-launch-plan')
+      const { beginStructuredAgentSessionProvisionalLaunch } =
+        await import('./agent-session/structured-agent-session-provisional-tab')
+      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+      const result =
+        consumer === 'new-tab'
+          ? launchAgentInNewTab({
+              requestId: 'delayed-q',
+              agent: 'codex',
+              worktreeId: 'wt-1',
+              launchPlatform: 'linux',
+              ...projection
+            })
+          : beginStructuredAgentSessionProvisionalLaunch({
+              plan: planAgentSessionLaunch(useAppStore.getState(), {
+                requestId: 'delayed-q',
+                agent: 'codex',
+                workspace: { kind: 'git-worktree', worktreeId: 'wt-1' },
+                launchOptions: projection.sessionOptions,
+                chatLaunchOptions: projection.chatSessionOptions,
+                preferredSurface: projection.preferredSurface
+              }),
+              hooks: {},
+              declinedTerminal: { agentArgs: projection.agentArgs, launchPlatform: 'linux' }
+            })
+      expect(store.createTab).not.toHaveBeenCalled()
+      expect(mockCreateSupport).toHaveBeenCalledOnce()
+      // The form can change while the host owns the outstanding admission.
+      Object.assign(projection.sessionOptions!, { effort: 'low' })
+      Object.assign(projection.chatSessionOptions!, { model: 'later-form', effort: 'low' })
+      projection.agentArgs = '--search'
+      answer({ supported: false })
+      const settlement =
+        result &&
+        ('structuredSettlement' in result
+          ? result.structuredSettlement
+          : 'settlement' in result
+            ? result.settlement
+            : undefined)
+      await expect(settlement).resolves.toEqual({ kind: 'terminal' })
+      expect(store.createTab).toHaveBeenCalledOnce()
+      const startup = queuedStartupPayload(store)
+      expect(tokenizeStartupCommand(String(startup?.command), 'posix')).toEqual(
+        expect.objectContaining({
+          ok: true,
+          tokens: ['cx', '-c', 'model="true"', '-c', 'model_reasoning_effort=high']
+        })
+      )
+      expect(startup?.launchConfig).toEqual({
+        agentCommand: `cx '-c' 'model="true"'`,
+        agentArgs: `-c 'model="true"'`,
+        agentEnv: {}
+      })
+      expect(JSON.stringify(startup)).not.toContain('chatSessionOptions')
+      expect(JSON.stringify(startup)).not.toContain('chatLaunchOptions')
+      expect(JSON.stringify(startup)).not.toContain('later-form')
+      expect(mockCreateSupport).toHaveBeenCalledOnce()
+    }
+  )
+
+  it('settles actual host-answer re-entry and Chat decline from the same captured source', async () => {
+    store.settings = {
+      ...store.settings,
+      nativeChatProviders: { codex: false },
+      agentCmdOverrides: { codex: 'cx' }
+    }
+    mockHostCapabilities.mockReturnValue(null)
+    const known = Promise.withResolvers<readonly string[]>()
+    const stop = vi.fn()
+    mockAwaitCapabilities.mockReturnValue({ known: known.promise, stop })
+    mockCreateSupport.mockResolvedValue({ supported: false })
+    await useActualAdmission()
+    const projection: Omit<
+      ReturnType<typeof projectSourceControlActionLaunch>,
+      'sessionOptions' | 'chatSessionOptions'
+    > & { sessionOptions?: Record<string, string>; chatSessionOptions?: Record<string, string> } =
+      projectSourceControlActionLaunch(
+        {
+          agentId: 'codex',
+          surface: 'chat',
+          agentArgs: `-c 'model="true"'`,
+          launchPreferences: {
+            agentId: 'codex',
+            modelSelection: {
+              base: 'default',
+              options: { effort: { agentId: 'codex', value: 'high' } }
+            }
+          }
+        },
+        'codex',
+        { basePrompt: 'Fix checks' }
+      )
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    const result = launchAgentInNewTab({
+      requestId: 'wait-q',
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      ...projection
+    })
+    expect(result?.surface.kind).toBe('host-published')
+    expect(mockCreateSupport).not.toHaveBeenCalled()
+    projection.agentArgs = '--model later-form'
+    projection.sessionOptions!.effort = 'low'
+    projection.chatSessionOptions!.model = 'later-form'
+    const capabilities = [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+    mockHostCapabilities.mockReturnValue(capabilities)
+    known.resolve(capabilities)
+    await expect(result?.structuredSettlement).resolves.toEqual({ kind: 'terminal' })
+    expect(mockAwaitCapabilities).toHaveBeenCalledOnce()
+    expect(stop).toHaveBeenCalledOnce()
+    expect(mockCreateSupport).toHaveBeenCalledOnce()
+    expect(
+      tokenizeStartupCommand(String(queuedStartupPayload(store)?.command), 'posix')
+    ).toMatchObject({
+      ok: true,
+      tokens: ['cx', '-c', 'model="true"', '-c', 'model_reasoning_effort=high']
+    })
+    expect(queuedStartupPayload(store)?.launchConfig?.agentArgs).toBe(`-c 'model="true"'`)
   })
 
   it.each(cases)(
@@ -154,42 +353,6 @@ describe('agent launch caller routing', () => {
     }
   )
 
-  it.each(cases)(
-    'settles %s on the structured or terminal surface its own arguments allow',
-    async (_id, profile) => {
-      store.settings = { ...store.settings, ...CHAT_DEFAULT_SETTINGS }
-
-      const result = await launch(profile)
-
-      // A caller-named custom cwd requires a PTY, so enabling default chat cannot admit that profile.
-      const structurallyBarred = profile.id === 'session-continuation'
-      expect(result?.surface.kind).toBe(structurallyBarred ? 'local-terminal' : 'host-published')
-    }
-  )
-
-  it.each(cases)(
-    'asks this machine to admit the chat %s routes structured before any of it opens',
-    async (_id, profile) => {
-      store.settings = { ...store.settings, ...CHAT_DEFAULT_SETTINGS }
-
-      const result = await launch(profile)
-
-      if (result?.surface.kind !== 'host-published') {
-        expect(mockBeginHostAdmittedStructuredLaunch).not.toHaveBeenCalled()
-        return
-      }
-      expect(result.pasteDraftAfterLaunch).toBe(false)
-      expect(store.createTab).not.toHaveBeenCalled()
-      expect(mockBeginHostAdmittedStructuredLaunch).toHaveBeenCalledWith(
-        expect.objectContaining({
-          worktreeId: profile.args.worktreeId,
-          executionHostId: 'local',
-          target: { kind: 'local' }
-        })
-      )
-    }
-  )
-
   it('opens a structured chat on the paired server that owns the workspace', async () => {
     store.settings = { ...store.settings, ...CHAT_DEFAULT_SETTINGS }
     mockIsWebRuntimeSessionActive.mockReturnValue(true)
@@ -206,9 +369,6 @@ describe('agent launch caller routing', () => {
       agent: 'claude',
       worktreeId: 'wt-1'
     })
-    if (result && 'refused' in result) {
-      throw new Error('Expected an opened launch')
-    }
 
     expect(result?.surface.kind).toBe('host-published')
     expect(mockBeginHostAdmittedStructuredLaunch).toHaveBeenCalledExactlyOnceWith(
@@ -238,9 +398,6 @@ describe('agent launch caller routing', () => {
       promptDelivery: 'submit-after-ready',
       agentArgs: '--model sonnet'
     })
-    if (result && 'refused' in result) {
-      throw new Error('Expected an opened launch')
-    }
 
     expect(result?.surface).toEqual({ kind: 'host-published' })
     await expect(result?.structuredSettlement).resolves.toEqual({ kind: 'terminal' })
@@ -277,9 +434,6 @@ describe('agent launch caller routing', () => {
       promptDelivery: 'submit-after-ready',
       agentArgs: '--model sonnet'
     })
-    if (result && 'refused' in result) {
-      throw new Error('Expected an opened launch')
-    }
 
     expect(result?.surface).toEqual({ kind: 'host-published' })
     expect(store.createTab).not.toHaveBeenCalled()
@@ -330,33 +484,10 @@ describe('agent launch caller routing', () => {
       worktreeId: 'wt-1',
       onStructuredHostDeclined
     })
-    if (result && 'refused' in result) {
-      throw new Error('Expected an opened launch')
-    }
 
     await expect(result?.structuredSettlement).resolves.toEqual({ kind: 'terminal' })
     expect(onStructuredHostDeclined).toHaveBeenCalledOnce()
     expect(store.createTab).not.toHaveBeenCalled()
-  })
-
-  it('keeps the host-published terminal for a paired server without structured sessions', async () => {
-    store.settings = { ...store.settings, ...CHAT_DEFAULT_SETTINGS }
-    mockIsWebRuntimeSessionActive.mockReturnValue(true)
-    mockExecutionHostId.mockReturnValue('runtime:web-runtime')
-    serverReports([])
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    const result = launchAgentInNewTab({
-      requestId: 'request-4',
-      agent: 'claude',
-      worktreeId: 'wt-1'
-    })
-    if (result && 'refused' in result) {
-      throw new Error('Expected an opened launch')
-    }
-
-    expect(result?.surface).toEqual({ kind: 'host-published' })
-    expect(mockBeginHostAdmittedStructuredLaunch).not.toHaveBeenCalled()
   })
 
   it('aborts a terminal open when beforeSurfaceOpen refuses', async () => {
@@ -369,9 +500,6 @@ describe('agent launch caller routing', () => {
       worktreeId: 'wt-1',
       beforeSurfaceOpen
     })
-    if (result && 'refused' in result) {
-      throw new Error('Expected an opened launch')
-    }
 
     expect(result).toBeNull()
     expect(beforeSurfaceOpen).toHaveBeenCalledExactlyOnceWith({ kind: 'local-terminal' })
@@ -389,9 +517,6 @@ describe('agent launch caller routing', () => {
       worktreeId: 'wt-1',
       beforeSurfaceOpen
     })
-    if (result && 'refused' in result) {
-      throw new Error('Expected an opened launch')
-    }
 
     expect(result).toBeNull()
     expect(beforeSurfaceOpen).toHaveBeenCalledExactlyOnceWith({ kind: 'host-published' })
@@ -409,9 +534,6 @@ describe('agent launch caller routing', () => {
       worktreeId: 'wt-1',
       beforeSurfaceOpen
     })
-    if (result && 'refused' in result) {
-      throw new Error('Expected an opened launch')
-    }
 
     expect(result).toBeNull()
     expect(beforeSurfaceOpen).toHaveBeenCalledExactlyOnceWith({ kind: 'host-published' })
@@ -419,27 +541,10 @@ describe('agent launch caller routing', () => {
     expect(mockCreateSupport).not.toHaveBeenCalled()
   })
 
-  it('opens the terminal when beforeSurfaceOpen returns undefined rather than false', async () => {
-    const beforeSurfaceOpen = vi.fn(() => undefined)
+  it('returns null without opening any surface when no startup plan can be built', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({
-      requestId: 'request-8',
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      beforeSurfaceOpen
-    })
-    if (result && 'refused' in result) {
-      throw new Error('Expected an opened launch')
-    }
-
-    expect(result?.surface.kind).toBe('local-terminal')
-    expect(store.createTab).toHaveBeenCalledTimes(1)
-  })
-
-  it('refuses invalid arguments once, saying what to fix, before any surface opens', async () => {
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
+    // Unbalanced argument quoting must abort before any surface opens.
     const result = launchAgentInNewTab({
       requestId: 'request-9',
       agent: 'codex',
@@ -447,10 +552,7 @@ describe('agent launch caller routing', () => {
       agentArgs: "--model 'gpt-5.5"
     })
 
-    expect(result).toEqual({ refused: { delivered: false, failureNotified: true } })
-    expect(mockToastError).toHaveBeenCalledExactlyOnceWith(
-      'The CLI arguments for Codex have an unclosed quote. Fix them, then try again.'
-    )
+    expect(result).toBeNull()
     expect(store.createTab).not.toHaveBeenCalled()
     expect(mockLaunchAgentInWebHostTab).not.toHaveBeenCalled()
   })

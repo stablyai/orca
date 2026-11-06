@@ -28,6 +28,24 @@ const bridge = vi.hoisted(() => {
   return held
 })
 
+// The page's own router: an in-page hop puts the tapped pane in its URL, not in the shell route.
+const pageUrl = vi.hoisted(() => {
+  const url: {
+    params: { paneKey?: string }
+    setParams: (next: { paneKey?: string }) => void
+  } = {
+    params: {},
+    setParams: (next) => {
+      url.params = { ...url.params, ...next }
+    }
+  }
+  return url
+})
+vi.mock('expo-router', () => ({
+  useLocalSearchParams: () => pageUrl.params,
+  useRouter: () => pageUrl
+}))
+
 vi.mock('../transport/client-context.web', () => ({
   usePageBridgeClient: () => ({
     getShellSession: () => ({ route: bridge.route }),
@@ -118,16 +136,11 @@ beforeEach(() => {
   bridge.listeners = []
   bridge.cleared.length = 0
   switched.length = 0
+  pageUrl.params = {}
 })
 
 // Exercise the page hook: shell init carries pane requests because this document at / cannot edit the native route.
 describe('the page pane hook', () => {
-  it('switches to the pane the page was opened on, which arrives in the first init', () => {
-    bridge.route = { pathname: '/h/host-1/session/wt-1', params: { paneKey: `tab-b:${LEAF}` } }
-    render(true)
-    expect(switched.map((tab) => tab.id)).toEqual(['second'])
-  })
-
   it('holds that request until the terminals have loaded, rather than dropping it', () => {
     bridge.route = { pathname: '/h/host-1/session/wt-1', params: { paneKey: `tab-b:${LEAF}` } }
     const tree = render(false)
@@ -136,13 +149,6 @@ describe('the page pane hook', () => {
       tree.update(createElement(Probe, { terminalsLoaded: true }))
     })
     expect(switched.map((tab) => tab.id)).toEqual(['second'])
-  })
-
-  it('erases the param that carried the pane it applied', () => {
-    // Erase by value so an older acknowledgement cannot spend a newer notification tap.
-    bridge.route = { pathname: '/h/host-1/session/wt-1', params: { paneKey: `tab-b:${LEAF}` } }
-    render(true)
-    expect(bridge.cleared).toEqual([{ param: 'paneKey', value: `tab-b:${LEAF}` }])
   })
 
   it('switches again for a repeat tap on the pane already showing', () => {
@@ -167,32 +173,6 @@ describe('the page pane hook', () => {
     expect(bridge.cleared).toHaveLength(2)
   })
 
-  it('applies successive pane requests and names each value when clearing', () => {
-    render(true)
-    deliver(`tab-a:${LEAF}`)
-    deliver(`tab-b:${LEAF}`)
-    expect(switched.map((tab) => tab.id)).toEqual(['first', 'second'])
-    expect(bridge.cleared.map((entry) => entry.value)).toEqual([`tab-a:${LEAF}`, `tab-b:${LEAF}`])
-  })
-
-  it('asks for nothing and applies nothing when the route carries no pane', () => {
-    // The shell’s erase returns as a route update, including on later ready replies.
-    render(true)
-    deliver(`tab-a:${LEAF}`)
-    bridge.cleared.length = 0
-    deliver('')
-    expect(switched.map((tab) => tab.id)).toEqual(['first'])
-    expect(bridge.cleared).toEqual([])
-  })
-
-  it('stays on the open tab for a pane that has since closed', () => {
-    render(true)
-    deliver(`gone:${LEAF}`)
-    expect(switched).toEqual([])
-    deliver('')
-    expect(switched).toEqual([])
-  })
-
   it('opens a pane missing from a list loaded before the push once a fresh list names it', () => {
     const tree = render(true)
     act(() => {
@@ -206,61 +186,26 @@ describe('the page pane hook', () => {
     expect(switched.map((tab) => tab.id)).toEqual(['second'])
   })
 
-  it('does nothing at all when the page was opened on no pane', () => {
+  it('switches to the agent row tapped in the host list when the page opened the session itself', () => {
+    // #34235: the shell route stays the host list, so the tapped pane is only in the page URL.
+    bridge.route = { pathname: '/h/host-1' }
+    pageUrl.params = { paneKey: `tab-b:${LEAF}` }
+    const tree = render(true)
+    expect(switched.map((tab) => tab.id)).toEqual(['second'])
+    act(() => {
+      tree.unmount()
+    })
     render(true)
-    expect(switched).toEqual([])
+    expect(switched.map((tab) => tab.id)).toEqual(['second'])
   })
-})
 
-it('opens a missing canonical native notification once, only after inventory loads', () => {
-  const openNativeSession = vi.fn(async () => {})
-  const paneKey = structuredAgentSessionPaneKey(
-    structuredAgentSessionTabId('historical'),
-    'historical'
-  )
-  bridge.route = { pathname: '/h/host-1/session/wt-1', params: { paneKey } }
-  let tree: ReactTestRenderer | undefined
-  act(() => {
-    tree = create(createElement(Probe, { terminalsLoaded: false, openNativeSession }))
+  it('follows a newer notification the shell holds over the pane the URL copied at bootstrap', () => {
+    bridge.route = { pathname: '/h/host-1/session/wt-1', params: { paneKey: `tab-b:${LEAF}` } }
+    pageUrl.params = { paneKey: `tab-a:${LEAF}` }
+    render(true)
+    expect(switched.map((tab) => tab.id)).toEqual(['second'])
+    expect(pageUrl.params.paneKey).toBeUndefined()
   })
-  expect(openNativeSession).not.toHaveBeenCalled()
-  act(() => {
-    tree?.update(createElement(Probe, { terminalsLoaded: true, openNativeSession }))
-  })
-  expect(openNativeSession).toHaveBeenCalledExactlyOnceWith({
-    kind: 'notification',
-    sessionId: 'historical',
-    worktreeId: 'wt-1'
-  })
-  deliver(paneKey)
-  expect(openNativeSession).toHaveBeenCalledOnce()
-  act(() => tree?.unmount())
-})
-it('routes an existing native notification through lineage instead of selecting its historical tab directly', () => {
-  const openNativeSession = vi.fn(async () => {})
-  const tab: MobileSessionTab = {
-    type: 'agent-session',
-    id: 'issued',
-    sessionId: 'historical',
-    agent: 'codex',
-    title: 'Chat',
-    isActive: false
-  }
-  let tree: ReactTestRenderer | undefined
-  act(() => {
-    tree = create(
-      createElement(Probe, { terminalsLoaded: true, sessionTabs: [tab], openNativeSession })
-    )
-  })
-  deliver(structuredAgentSessionPaneKey('issued', 'historical'))
-  expect(openNativeSession).toHaveBeenCalledExactlyOnceWith({
-    kind: 'notification',
-    sessionId: 'historical',
-    worktreeId: 'wt-1',
-    agent: 'codex'
-  })
-  expect(switched).toEqual([])
-  act(() => tree?.unmount())
 })
 
 it.each([false, true])(

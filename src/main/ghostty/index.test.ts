@@ -2,9 +2,15 @@ import type { Store } from '../persistence/loading-store/store'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { statMock, readFileMock } = vi.hoisted(() => ({
+const { statMock, readFileMock, showOpenDialogMock } = vi.hoisted(() => ({
   statMock: vi.fn(),
-  readFileMock: vi.fn()
+  readFileMock: vi.fn(),
+  showOpenDialogMock: vi.fn()
+}))
+
+vi.mock('electron', () => ({
+  BrowserWindow: { fromWebContents: vi.fn(() => null) },
+  dialog: { showOpenDialog: showOpenDialogMock }
 }))
 
 vi.mock('fs/promises', () => ({
@@ -37,81 +43,27 @@ function createStore(settings: Record<string, unknown> = {}): Store {
 }
 
 describe('previewGhosttyImport', () => {
-  it('returns found false when no config exists', async () => {
-    statMock.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
-    const result = await previewGhosttyImport(createStore())
-    expect(result.found).toBe(false)
-    expect(result.diff).toEqual({})
-    expect(result.unsupportedKeys).toEqual([])
-  })
+  it('reads only the picked file and never a renderer-supplied path', async () => {
+    const pickedPath = '/Users/alice/dotfiles/ghostty/config'
+    statMock.mockResolvedValue({ isFile: () => true, size: 32 })
+    readFileMock.mockResolvedValue('font-size = 15\n')
+    showOpenDialogMock.mockResolvedValueOnce({ canceled: false, filePaths: [pickedPath] })
 
-  it('returns diff and unsupported keys when config exists', async () => {
-    statMock.mockImplementation(async (p: string) => {
-      if (p === '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config') {
-        return { isFile: () => true }
-      }
-      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+    const picked = await previewGhosttyImport(createStore(), { kind: 'chooseFile' })
+    expect(picked.configPaths).toEqual([pickedPath])
+    expect(picked.diff.terminalFontSize).toBe(15)
+    expect(readFileMock).toHaveBeenCalledTimes(1)
+
+    const withPath = await previewGhosttyImport(createStore(), {
+      kind: 'chooseFile',
+      path: '/etc/passwd'
     })
-    readFileMock.mockResolvedValue(`
-font-family = JetBrains Mono
-font-size = 14
-background = #1a1a1a
-`)
+    expect(withPath.error).toBe('Invalid Ghostty import source.')
 
-    const result = await previewGhosttyImport(
-      createStore({
-        terminalFontFamily: 'Menlo',
-        terminalFontSize: 12
-      })
-    )
-
-    expect(result.found).toBe(true)
-    expect(result.configPath).toBe(
-      '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config'
-    )
-    expect(result.diff).toEqual({
-      terminalFontFamily: 'JetBrains Mono',
-      terminalFontSize: 14,
-      terminalColorOverrides: { background: '#1a1a1a' }
-    })
-    expect(result.unsupportedKeys).toEqual([])
-  })
-
-  it('imports every discovered config file in Ghostty load order', async () => {
-    delete process.env.XDG_CONFIG_HOME
-    statMock.mockImplementation(async (p: string) => {
-      if (
-        p === '/Users/alice/.config/ghostty/config.ghostty' ||
-        p === '/Users/alice/.config/ghostty/config'
-      ) {
-        return { isFile: () => true }
-      }
-      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-    })
-    readFileMock.mockImplementation(async (p: string) => {
-      if (p === '/Users/alice/.config/ghostty/config.ghostty') {
-        return 'font-size = 22\nbackground = #1a1a1a\n'
-      }
-      if (p === '/Users/alice/.config/ghostty/config') {
-        return 'font-family = JetBrains Mono\nfont-size = 18\n'
-      }
-      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-    })
-
-    const result = await previewGhosttyImport(createStore())
-
-    expect(result.found).toBe(true)
-    expect(result.configPath).toBe('/Users/alice/.config/ghostty/config.ghostty')
-    expect(result.configPaths).toEqual([
-      '/Users/alice/.config/ghostty/config.ghostty',
-      '/Users/alice/.config/ghostty/config'
-    ])
-    expect(result.diff).toEqual({
-      terminalFontFamily: 'JetBrains Mono',
-      terminalFontSize: 18,
-      terminalColorOverrides: { background: '#1a1a1a' }
-    })
-    expect(result.unsupportedKeys).toEqual([])
+    showOpenDialogMock.mockResolvedValueOnce({ canceled: true, filePaths: [] })
+    const canceled = await previewGhosttyImport(createStore(), { kind: 'chooseFile' })
+    expect(canceled).toEqual({ found: false, canceled: true, diff: {}, unsupportedKeys: [] })
+    expect(readFileMock).toHaveBeenCalledTimes(1)
   })
 
   it('keeps successfully imported settings when a later config cannot be read', async () => {
@@ -165,128 +117,5 @@ background = #1a1a1a
       diff: { terminalFontSize: 22 }
     })
     expect(readFileMock).not.toHaveBeenCalledWith(oversizedPath, 'utf-8')
-  })
-
-  it('returns the first error when every discovered config fails to load', async () => {
-    delete process.env.XDG_CONFIG_HOME
-    const configPath = '/Users/alice/.config/ghostty/config.ghostty'
-    let configPathStatCalls = 0
-    statMock.mockImplementation(async (p: string) => {
-      if (p === configPath) {
-        configPathStatCalls += 1
-        if (configPathStatCalls === 1) {
-          return { isFile: () => true, size: 128 }
-        }
-        throw new Error('EACCES')
-      }
-      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-    })
-
-    const result = await previewGhosttyImport(createStore())
-
-    expect(result).toEqual({
-      found: false,
-      diff: {},
-      unsupportedKeys: [],
-      error: 'Could not read config: EACCES'
-    })
-  })
-
-  it('omits values that match current settings', async () => {
-    statMock.mockImplementation(async (p: string) => {
-      if (p === '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config') {
-        return { isFile: () => true }
-      }
-      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-    })
-    readFileMock.mockResolvedValue('font-family = Menlo\nfont-size = 12\n')
-
-    const result = await previewGhosttyImport(
-      createStore({
-        terminalFontFamily: 'Menlo',
-        terminalFontSize: 12
-      })
-    )
-
-    expect(result.found).toBe(true)
-    expect(result.diff).toEqual({})
-    expect(result.unsupportedKeys).toEqual([])
-  })
-
-  it('omits object values that are deeply equal to current settings', async () => {
-    statMock.mockImplementation(async (p: string) => {
-      if (p === '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config') {
-        return { isFile: () => true }
-      }
-      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-    })
-    readFileMock.mockResolvedValue('background = #1a1a1a\nforeground = #e0e0e0\n')
-
-    const result = await previewGhosttyImport(
-      createStore({
-        terminalColorOverrides: { background: '#1a1a1a', foreground: '#e0e0e0' }
-      })
-    )
-
-    expect(result.found).toBe(true)
-    expect(result.diff).toEqual({})
-    expect(result.unsupportedKeys).toEqual([])
-  })
-
-  it('omits object values that are equal regardless of key order', async () => {
-    statMock.mockImplementation(async (p: string) => {
-      if (p === '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config') {
-        return { isFile: () => true }
-      }
-      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-    })
-    readFileMock.mockResolvedValue('background = #1a1a1a\nforeground = #e0e0e0\n')
-
-    const result = await previewGhosttyImport(
-      createStore({
-        terminalColorOverrides: { foreground: '#e0e0e0', background: '#1a1a1a' }
-      })
-    )
-
-    expect(result.found).toBe(true)
-    expect(result.diff).toEqual({})
-    expect(result.unsupportedKeys).toEqual([])
-  })
-
-  it('does not set up file watchers or timers (no live sync)', async () => {
-    const watchMock = vi.fn()
-    const watchFileMock = vi.fn()
-    const setIntervalMock = vi.fn()
-    const setTimeoutMock = vi.fn()
-
-    vi.doMock('fs', () => ({
-      watch: watchMock,
-      watchFile: watchFileMock
-    }))
-
-    statMock.mockImplementation(async (p: string) => {
-      if (p === '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config') {
-        return { isFile: () => true }
-      }
-      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-    })
-    readFileMock.mockResolvedValue('font-family = JetBrains Mono\n')
-
-    const originalSetInterval = globalThis.setInterval
-    const originalSetTimeout = globalThis.setTimeout
-    globalThis.setInterval = setIntervalMock as unknown as typeof setInterval
-    globalThis.setTimeout = setTimeoutMock as unknown as typeof setTimeout
-
-    try {
-      await previewGhosttyImport(createStore())
-    } finally {
-      globalThis.setInterval = originalSetInterval
-      globalThis.setTimeout = originalSetTimeout
-    }
-
-    expect(watchMock).not.toHaveBeenCalled()
-    expect(watchFileMock).not.toHaveBeenCalled()
-    expect(setIntervalMock).not.toHaveBeenCalled()
-    expect(setTimeoutMock).not.toHaveBeenCalled()
   })
 })

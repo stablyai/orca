@@ -1,4 +1,4 @@
-const MAX_CONTEXT_CHARS = 36_000
+export const MAX_CONTEXT_CHARS = 36_000
 
 export function trimAgentSessionContext(value: string, source = 'terminal output'): string {
   if (value.length <= MAX_CONTEXT_CHARS) {

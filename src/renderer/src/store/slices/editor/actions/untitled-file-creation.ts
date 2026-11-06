@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import {
   assertEditorFileOperationCurrent,
   captureEditorFileOperationProvenance,
@@ -12,6 +13,7 @@ import {
 } from '@/lib/create-untitled-markdown'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
+import { findGroupForTab } from '../../tab-group-state'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 
@@ -76,13 +78,44 @@ export async function createUntitledFileInActiveWorkspace(
   }
 }
 
-/** Creates `untitled<extension>` at the active workspace root, seeded with `readContent`. */
-function openSeededUntitledFile(
+/** Seeds `untitled<extension>` in the floating workspace for floating targets, else the active one. */
+async function openSeededUntitledFile(
   get: EditorGet,
   extension: string,
   readContent: () => Promise<string>,
   groupId?: string
 ): Promise<boolean> {
+  const failureMessage = translate('auto.store.pluginNewFile.failed', "Couldn't create the file.")
+  // An empty floating panel's + menu passes the workspace ID in place of a group ID.
+  const emptyFloatingPanel = groupId === FLOATING_TERMINAL_WORKTREE_ID
+  if (
+    emptyFloatingPanel ||
+    (groupId && findGroupForTab(get().groupsByWorktree, FLOATING_TERMINAL_WORKTREE_ID, groupId))
+  ) {
+    try {
+      const directory = await window.api.app.getFloatingMarkdownDirectory()
+      if (!directory) {
+        return false
+      }
+      const fileInfo = await createUntitledMarkdownFile(
+        directory,
+        FLOATING_TERMINAL_WORKTREE_ID,
+        undefined,
+        { kind: 'local' },
+        { newFile: { extension, content: await readContent() } }
+      )
+      get().openFile(fileInfo, {
+        preview: false,
+        targetGroupId: emptyFloatingPanel ? undefined : groupId,
+        focusEditor: true,
+        suppressActiveRuntimeFallback: true
+      })
+      return true
+    } catch (err) {
+      toast.error(extractIpcErrorMessage(err, failureMessage))
+      return false
+    }
+  }
   return createUntitledFileInActiveWorkspace(
     get,
     groupId,
@@ -101,7 +134,7 @@ function openSeededUntitledFile(
           assertOperationCurrent: context.assertOperationCurrent
         }
       ),
-    translate('auto.store.pluginNewFile.failed', "Couldn't create the file.")
+    failureMessage
   )
 }
 

@@ -104,6 +104,7 @@ const request: WorktreeCreationRequest = {
 let main: TabsDrawnFromMain
 
 beforeEach(async () => {
+  mocks.call.mockRejectedValue(new Error('Model catalog unavailable'))
   resetStructuredAgentLaunchRegistryForTests()
   seedEmptyActivatableWorktree(worktree)
   useAppStore.setState({

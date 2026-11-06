@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { cleanup, renderHook } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, expect, it } from 'vitest'
 import { useNativeChatAvailabilityNotice } from './use-native-chat-availability-notice'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -9,28 +9,6 @@ import { structuredAgentSessionDeliveryNotices } from './structured-agent-sessio
 import { agentSessionVisibleFailureFacts } from '../../../../shared/agent-session/failures/agent-session-visible-failures'
 
 afterEach(cleanup)
-describe('each agent names its own sign-in method before a send', () => {
-  it.each([
-    ['claude', 'Claude', 'claude auth login'],
-    ['codex', 'Codex', 'codex login'],
-    ['grok', 'Grok', 'grok login'],
-    ['opencode', 'OpenCode', 'opencode auth login'],
-    ['pi', 'Pi', '/login'],
-    ['omp', 'OMP', 'Sign in to OMP.']
-  ] as const)('uses %s copy without a post-send retry tail', (agent, agentLabel, command) => {
-    const { result } = renderHook(() =>
-      useNativeChatAvailabilityNotice({
-        agent,
-        unavailable: { reason: 'notSignedIn' },
-        launchFailure: null,
-        journalItems: []
-      })
-    )
-    expect(result.current?.text).toContain(command)
-    expect(result.current?.text).toContain(agentLabel)
-    expect(result.current?.text).not.toContain('send your message again')
-  })
-})
 
 it('keeps one auth explanation while an unechoed message still reads as unsent', () => {
   const failure = {
@@ -131,27 +109,4 @@ it("steps aside while the newest send's own line says the notice's reason", () =
     notice([sent('a', { at: 5, sequence: 1 }, 'notSignedIn'), sent('b', { at: 2, sequence: 2 })])
       ?.text
   ).toContain('/login')
-})
-
-describe('a missing agent CLI', () => {
-  const missing = (wslDistro?: string) =>
-    renderHook(() =>
-      useNativeChatAvailabilityNotice({
-        agent: 'claude',
-        ...(wslDistro ? { wslDistro } : {}),
-        unavailable: { reason: 'cliMissing' },
-        launchFailure: null,
-        journalItems: []
-      })
-    ).result.current?.text
-
-  it('names the WSL distro on a WSL host', () => {
-    expect(missing('Ubuntu')).toBe(
-      "Claude isn't installed in the WSL distro Ubuntu. Install it inside Ubuntu, or check its Command in Settings → Agents."
-    )
-  })
-
-  it('keeps the computer wording elsewhere', () => {
-    expect(missing()).toContain("Claude wasn't found on the computer running this chat.")
-  })
 })

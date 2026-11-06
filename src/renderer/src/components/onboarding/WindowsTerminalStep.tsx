@@ -5,7 +5,7 @@ import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shel
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { cn } from '@/lib/utils'
 import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
-import { SettingsSegmentedControl } from '../settings/SettingsFormControls'
+import { SettingsSegmentedControl } from '../settings/form-controls/SettingsFormControls'
 import { ShellIcon } from '../tab-bar/shell-icons'
 import {
   Select,

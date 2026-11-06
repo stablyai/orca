@@ -13,7 +13,7 @@ import {
   markSyncPushStageError,
   resolveRemoteOperationErrorMessage
 } from '@/lib/source-control-remote-error'
-import { shouldForcePushWithLeaseForUpstream } from '../../../../../../shared/git-upstream-status'
+import { shouldForcePushWithLeaseForUpstream } from '../../../../../../shared/git/remotes/git-upstream-status'
 
 export function createGitRemoteSync(
   _set: EditorSet,

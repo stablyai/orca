@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
-import { agentChildWorkLiveness } from '../../../shared/agent-status-child-work-liveness'
+import type { AgentChildWorkView } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
+import { agentChildWorkLiveness } from '../../../shared/agent-status/child-work/agent-status-child-work-liveness'
 import {
   conversationCommandBlocked,
   type ConversationCommandAdmissionContext
 } from './structured-conversation-command-admission'
-import type { AgentSessionBackgroundTaskStops } from '../../../shared/agent-child-work-stop-targets'
+import type { AgentSessionBackgroundTaskStops } from '../../../shared/agent-status/child-work/agent-child-work-stop-targets'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { hasUnansweredStructuredAgentSessionDispatch } from '../../../shared/agent-session/requests/structured-agent-session-unanswered-dispatch'
 
@@ -33,10 +33,11 @@ function contextWith(
     sessionId: 'session-1',
     fence: 1,
     journal: {
-      snapshot: () => ({ items: [] }),
+      itemsRead: () => ({ items: [] }),
       cursor: () => ({ epoch: 'e', sequence: 0 }),
       item: () => null,
       submissions: () => [],
+      inputOrder: { recoverableSubmissions: () => [] },
       runningTurn: () => null,
       itemFence: () => undefined,
       visitItems: () => undefined,
@@ -131,7 +132,7 @@ describe('conversationCommandBlocked background work', () => {
 
   it('still refuses on the open turn, not on the work the strip now shows', () => {
     const ctx = contextWith(TARGETED)
-    ctx.journal.snapshot = () =>
+    ctx.journal.itemsRead = () =>
       ({
         items: [
           {
@@ -142,7 +143,7 @@ describe('conversationCommandBlocked background work', () => {
             }
           }
         ]
-      }) as unknown as ReturnType<typeof ctx.journal.snapshot>
+      }) as unknown as ReturnType<typeof ctx.journal.itemsRead>
     ctx.journal.runningTurn = () => RUNNING_TURN
     expect(conversationCommandBlocked(ctx, RECORD, reading([child()]))?.message).toBe(
       'Wait for the current turn to finish before using this command.'
@@ -158,7 +159,7 @@ describe('conversationCommandBlocked for a command sent at rest (C6, B3)', () =>
   it("does not refuse over a dead generation's running turn, which the start sweeps", () => {
     const ctx = contextWith(undefined)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the admission reads only each item's body.
-    ctx.journal.snapshot = () => staleTurn as never
+    ctx.journal.itemsRead = () => staleTurn as never
     ctx.journal.runningTurn = () => RUNNING_TURN
     expect(conversationCommandBlocked(ctx, RECORD, reading([]), 'at-rest')).toBeNull()
     expect(conversationCommandBlocked(ctx, RECORD, reading([]))).toMatchObject({
@@ -212,6 +213,7 @@ describe('conversationCommandBlocked for a command sent at rest (C6, B3)', () =>
       { clientMessageId: 'behind', dispatchState: 'pending', handoverRecorded: true }
     ] as never
     ctx.journal.submissions = () => queued
+    ctx.journal.inputOrder.recoverableSubmissions = () => queued
     expect(conversationCommandBlocked(ctx, RECORD, reading([]), 'handover')).toBeNull()
   })
 })
@@ -249,6 +251,8 @@ describe('conversationCommandBlocked on unsettled messages', () => {
       }
     ]
     ctx.journal.submissions = () => submissions
+    ctx.journal.inputOrder.recoverableSubmissions = () =>
+      submissions.filter((s) => s.dispatchState === 'pending' || s.dispatchState === 'unknown')
     const refusal = conversationCommandBlocked(ctx, RECORD, reading([]), admission)
     return {
       blocked: refusal?.details && 'reason' in refusal.details ? refusal.details.reason : null,

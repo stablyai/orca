@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, expect, it, vi } from 'vitest'
-import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../quit-teardown-deadline'
+import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../../shared/quit-teardown-deadline'
 
 const settled = () => vi.fn(async () => {})
 const idle = () => vi.fn()
@@ -17,7 +17,10 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../ipc/worktree-base-directory-watcher': { disposeWorktreeBaseDirectoryWatchers: settled() },
   '../ipc/folder-repo-git-upgrade': { stopFolderRepoGitUpgradeWatch: idle() },
   '../ipc/pty/kill-all': { killAllPty },
-  '../daemon/daemon-provider-state': { disconnectDaemon: settled(), shutdownDaemon: settled() },
+  '../daemon/providers/lifecycle/daemon-provider-state': {
+    disconnectDaemon: settled(),
+    shutdownDaemon: settled()
+  },
   '../ipc/ssh/ssh-shutdown-drain': { beginSshShutdown },
   './main-process-connector-startup': { desktopConnectorCloud: () => null },
   '../agent-hooks/server': { agentHookServer: { stop: stopAgentHookServer } },
@@ -32,20 +35,22 @@ const dependencies: Record<string, Record<string, unknown>> = {
     setStructuredAgentSessionTeardownTrigger: idle()
   },
   '../runtime/files/watch/file-watcher-leases': { awaitRuntimeFileWatcherUnsubscribes: settled() },
-  '../runtime/runtime-metadata': { clearRuntimeMetadataIfOwned: idle() },
-  '../browser/paired-runtime-browser-client-host-runtime': {
+  '../runtime/rpc/server/runtime-metadata': { clearRuntimeMetadataIfOwned: idle() },
+  '../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime': {
     shutdownPairedRuntimeBrowserClientHosts: settled()
   },
-  '../ipc/desktop-browser-bridge-wiring': { disposeDesktopBrowserBridge: idle() },
+  '../ipc/browser/desktop-browser-bridge-wiring': { disposeDesktopBrowserBridge: idle() },
   '../orca-profiles/profile-cloud-session-owner': { flushUnsavedCloudSessions: idle() },
   '../browser/browser-manager': {
     browserManager: { setBrowserGuestStateChangedListener: idle(), setOffscreenTabOpener: idle() }
   },
-  '../browser/browser-session-registry': { browserSessionRegistry: {} },
-  '../browser/local-ssh-browser-route': { closeAllLocalSshBrowserRoutes: settled() },
+  '../browser/sessions/browser-session-registry': { browserSessionRegistry: {} },
+  '../browser/routing/local-host-partitions/local-ssh-browser-route': {
+    closeAllLocalSshBrowserRoutes: settled()
+  },
   '../codex/codex-state-db-backfill-recovery': { stopCodexStateDbBackfillRecoveries: settled() },
   '../codex/codex-account-session-bridge': { stopCodexAccountSessionBridges: idle() },
-  '../git/local-repo-ref-maintenance': { awaitPackedRefsLockRelease: settled() },
+  '../git/refs/maintenance/local-repo-ref-maintenance': { awaitPackedRefsLockRelease: settled() },
   '../worktree-background-removal': { stopBackgroundWorktreeRemovals: idle() },
   '../dock/unread-badge': { setUnreadDockBadgeCount: idle() },
   '../tray/system-tray': { destroySystemTray: idle() },
@@ -53,8 +58,8 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../observability': { shutdownObservability: settled() },
   '../updater': { isQuittingForUpdate: vi.fn(() => false) },
   '../updater-lifecycle-diagnostics': { recordUpdaterLifecycle: idle() },
-  '../macos-tcc-prompt-notice': { stopTccPromptNotice: idle() },
-  '../terminal-history-gc': { cancelHistoryGc: idle() },
+  '../macos-permissions/macos-tcc-prompt-notice': { stopTccPromptNotice: idle() },
+  '../pty/history/terminal-history-gc': { cancelHistoryGc: idle() },
   './window-all-closed-quit-policy': { shouldQuitWhenAllWindowsClosed: vi.fn(() => false) },
   './configure-process': { isDevParentShutdownRequested: vi.fn(() => false) },
   '../persistence/loading-store/user-data-path': {
@@ -108,7 +113,7 @@ async function startQuit(
   }
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   const { installMainProcessQuitHandlers } = await import('./main-process-quit')
-  const { quitTeardownStartGate } = await import('../quit-teardown-start-gate')
+  const { quitTeardownStartGate } = await import('./quit/quit-teardown-start-gate')
   quitTeardownStartGate.resetForTests()
   installMainProcessQuitHandlers()
   app.emit('before-quit', { defaultPrevented: false })

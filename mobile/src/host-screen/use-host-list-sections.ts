@@ -8,6 +8,8 @@ import { buildProjectSectionCatalog } from '../worktree/project-section-catalog'
 import { useWorkspaceSections } from '../worktree/use-workspace-sections'
 import { buildFilterRepos, type WorkspaceSectionRepo } from '../worktree/workspace-filter-repos'
 import type { Section, SectionRepo, Worktree } from '../worktree/workspace-list-types'
+import type { WorktreeHostContextOf } from '../worktree/worktree-host-context-labels'
+import type { MobileLineageStores } from '../worktree/mobile-workspace-lineage'
 import { useLastVisitedWorktreeOnHost } from '../worktree/use-last-visited-worktree-on-host'
 import { rowFiltersForView } from '../worktree/workspace-view-settings'
 import { buildSidebarFeedCatalog } from '../../../src/shared/sidebar-list/sidebar-feed-catalog'
@@ -23,8 +25,11 @@ export type HostListSectionsInputs = {
   /** Null in a build that lists without the feed. */
   feed: HostSidebarFeed | null
   displayWorktrees: Worktree[]
+  hostContextOf: WorktreeHostContextOf
   /** The desktop's platform, which names its own host; never the phone's. */
   hostPlatform: NodeJS.Platform | null
+  /** The host's own store identity (status.get), for parents on another machine. */
+  hostInstallationId: string | undefined
   state: HostScreenState
 }
 
@@ -53,6 +58,8 @@ function useFilterRepos(
 
 function useLegacyHostListSections({
   displayWorktrees,
+  hostContextOf,
+  hostInstallationId,
   state
 }: HostListSectionsInputs): HostListSections {
   const projectCatalog = useMemo(
@@ -72,8 +79,13 @@ function useLegacyHostListSections({
   )
   const collapsedGroups = useCollapsedGroups(state)
   const rowFilters = useMemo(() => rowFiltersForView(state.view), [state.view])
+  const lineageStores = useMemo<MobileLineageStores>(
+    () => ({ ownInstallationId: hostInstallationId, servers: state.serverWorkspaces.hosts }),
+    [hostInstallationId, state.serverWorkspaces.hosts]
+  )
   const sectionsResult = useWorkspaceSections({
     displayWorktrees,
+    hostContextOf,
     sortMode: state.view.sortBy,
     filters: rowFilters,
     search: state.search,
@@ -84,7 +96,8 @@ function useLegacyHostListSections({
     filterCatalogRepos: state.servedProjectSections?.repos ?? state.desktopRepos,
     collapsedGroups,
     workspaceStatuses: state.view.workspaceStatuses,
-    repoHostIdByRepoId: state.repoHostIdByRepoId
+    repoHostIdByRepoId: state.repoHostIdByRepoId,
+    lineageStores
   })
   return { ...sectionsResult, collapsedGroups, projectOrderBy: projectCatalog.projectOrderBy }
 }
@@ -96,6 +109,7 @@ function useFeedHostListSections({
   hostId,
   feed,
   displayWorktrees,
+  hostContextOf,
   hostPlatform,
   state
 }: HostListSectionsInputs): HostListSections {
@@ -133,12 +147,14 @@ function useFeedHostListSections({
             rows: built.sectionRows,
             lastVisited,
             liveRows: displayWorktrees,
+            hostContextOf,
             repoHostIdByRepoId: state.repoHostIdByRepoId,
             search: state.search
           })
         : preFeed
           ? buildPreFeedSections({
               rows: displayWorktrees,
+              hostContextOf,
               view: state.view,
               search: state.search,
               repoHostIdByRepoId: state.repoHostIdByRepoId,
@@ -149,6 +165,7 @@ function useFeedHostListSections({
       built,
       preFeed,
       displayWorktrees,
+      hostContextOf,
       state.view,
       state.repoHostIdByRepoId,
       state.search,

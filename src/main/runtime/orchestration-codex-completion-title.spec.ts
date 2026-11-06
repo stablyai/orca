@@ -1,9 +1,7 @@
 import { rmSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusIpcPayload
-} from '../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { settledWriteStub } from '../providers/settled-pty-write-stub'
 import { MAILBOX_POINTER_WRITE_ATTEMPTED } from './orchestration/db/messages/mailbox-pointer-enter-state'
 import {

@@ -17,7 +17,7 @@ import {
   matchAutomationListSearchRowKeys
 } from './automation-list-search-rows'
 import { REPO_ID } from './automations-page-fixtures'
-import { makeFolderWorkspace } from '../sidebar/folder-workspace-composer-submit-fixtures'
+import { makeFolderWorkspace } from '../sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import {
   automationFolderWorktreeForRow,
   automationRepoForRow,

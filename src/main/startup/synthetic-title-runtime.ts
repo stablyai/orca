@@ -1,19 +1,19 @@
 import { registerPaneKeyTeardownListener, getPtyIdForPaneKey } from '../ipc/pty/pane/key-state'
 import { agentHookServer } from '../agent-hooks/server'
-import type { AgentStatusState } from '../../shared/agent-status-types'
-import { normalizeTerminalTitle } from '../../shared/agent-title-status'
+import type { AgentStatusState } from '../../shared/agent-status/contracts/agent-status-types'
+import { normalizeTerminalTitle } from '../../shared/agent-status/title/agent-title-status'
 import {
   getSyntheticAgentTitleProfile,
   shouldDriveSyntheticAgentTitleFromHook,
   type SyntheticAgentTitleProfile
-} from '../../shared/synthetic-agent-title'
+} from '../../shared/agent-status/title/synthetic-agent-title'
 import {
   advanceSyntheticTitleSpinnerEntries,
   getSyntheticTitleSpinnerPaneKeyToStop,
   type SyntheticTitleSpinnerEntry
-} from '../synthetic-title-spinner'
-import { shouldSendSyntheticTitleFrame } from '../synthetic-title-visibility'
-import { shouldCopySyntheticTitleFrameToPtyData } from '../synthetic-title-frame-routing'
+} from '../runtime/terminal/title/synthetic-title-spinner'
+import { shouldSendSyntheticTitleFrame } from '../runtime/terminal/title/synthetic-title-visibility'
+import { shouldCopySyntheticTitleFrameToPtyData } from '../runtime/terminal/title/synthetic-title-frame-routing'
 import { mainProcessState as state } from './main-process-state'
 
 // Cursor redraws overwrite one-shot OSC titles; reassert at Pi's 80ms cadence and share the animation with OpenCode.

@@ -1,7 +1,4 @@
-import {
-  PLUGIN_HOOK_NAMES,
-  type PluginHookName
-} from '../../../shared/plugins/contributions/plugin-hook-contribution'
+import type { PluginHookName } from '../../../shared/plugins/contributions/plugin-hook-contribution'
 import { isInvalidDiscoveredPlugin, type ValidDiscoveredPlugin } from '../plugin-discovery'
 import type { PluginEventDeliveryContext } from '../plugin-event-delivery'
 import {
@@ -14,6 +11,7 @@ import type { PluginService } from '../plugin-service'
 import { setAgentToolHookTerminalResolver } from '../../agent-hooks/agent-tool-call-reader'
 import type { PluginWorkerHandle } from '../workers/plugin-host-process'
 import { PLUGIN_WORKER_READY_TIMEOUT_MS } from '../../../shared/plugins/workers/plugin-host-protocol'
+import { pluginApprovedRevision } from '../workers/plugin-resident-worker'
 
 /** The event path's context (enabled, approved, not being removed; worker start; logs). */
 export type PluginHookHostContext = Pick<
@@ -42,16 +40,6 @@ export function pluginHookParticipants(
   return [...installed, ...listed.filter((plugin) => plugin.isDev)]
 }
 
-/** What makes a plugin the one the person approved: a change means a new revision. */
-function pluginHookRevision(plugin: ValidDiscoveredPlugin): string {
-  return [
-    plugin.consentFingerprint,
-    plugin.contentHash ?? '',
-    plugin.devRevision ?? '',
-    plugin.rootDir
-  ].join('\n')
-}
-
 function isSamePluginStillEnabled(
   plugin: ValidDiscoveredPlugin,
   context: Pick<PluginHookHostContext, 'plugins' | 'isRuntimeApproved' | 'isEnabled'>
@@ -61,7 +49,7 @@ function isSamePluginStillEnabled(
     context.isEnabled() &&
     current !== undefined &&
     !isInvalidDiscoveredPlugin(current) &&
-    pluginHookRevision(current) === pluginHookRevision(plugin) &&
+    pluginApprovedRevision(current) === pluginApprovedRevision(plugin) &&
     context.isRuntimeApproved(current)
   )
 }
@@ -116,44 +104,9 @@ export function createPluginHookRunner(context: PluginHookHostContext): PluginHo
   }
 }
 
-/**
- * Starts the workers of enabled plugins that list hooks, so the first hooked action never waits
- * on (or slips past) a cold start. Once per approved revision: crash restarts follow the worker
- * manager's own policy, and a worker it marked errored stays down until the plugin changes.
- */
-export function createPluginHookWarmer(
-  context: Pick<
-    PluginHookHostContext,
-    'plugins' | 'isRuntimeApproved' | 'ensureWorker' | 'isEnabled'
-  >
-): () => void {
-  const warmed = new Map<string, string>()
-  return () => {
-    const hooked = context.isEnabled()
-      ? PLUGIN_HOOK_NAMES.flatMap((event) => pluginHookParticipants(event, context))
-      : []
-    const keys = new Set(hooked.map((plugin) => plugin.pluginKey))
-    for (const pluginKey of warmed.keys()) {
-      if (!keys.has(pluginKey)) {
-        warmed.delete(pluginKey)
-      }
-    }
-    for (const plugin of hooked) {
-      const revision = pluginHookRevision(plugin)
-      if (warmed.get(plugin.pluginKey) === revision) {
-        continue
-      }
-      warmed.set(plugin.pluginKey, revision)
-      // Why swallow: ensure records the activation error the plugin page shows.
-      void context.ensureWorker(plugin).catch(() => undefined)
-    }
-  }
-}
-
-/** Points Orca's hook sites at this service's plugins, through the same path events take, and
- *  keeps hook plugins' workers started as plugins change. */
+/** Points Orca's hook sites at this service's plugins, through the same path events take. */
 export function installPluginHookRunner(
-  service: Pick<PluginService, 'eventDelivery' | 'options' | 'onChanged'>,
+  service: Pick<PluginService, 'eventDelivery' | 'options'>,
   runtime?: { getTerminalHandleForPaneKey(paneKey: string): string | null }
 ): void {
   setAgentToolHookTerminalResolver(
@@ -164,5 +117,4 @@ export function installPluginHookRunner(
     isEnabled: () => service.options.isPluginSystemEnabled()
   }
   setPluginHookRunner(createPluginHookRunner(context))
-  service.onChanged(createPluginHookWarmer(context))
 }

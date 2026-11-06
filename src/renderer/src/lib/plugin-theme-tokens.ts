@@ -20,7 +20,7 @@ type ContrastRule = {
 }
 
 const MIN_TEXT_CONTRAST = 4.5
-// Why 3:1: status hues tint file names, and Orca's own light ignored color is 3.3:1.
+// Why 3:1: status hues only tint file names, so a theme's own git palette keeps working.
 const MIN_STATUS_TEXT_CONTRAST = 3
 const textPair = (surface: string, text: string): ContrastRule => ({
   surface,
@@ -85,6 +85,11 @@ const CONTRAST_RULE_DEFINITIONS: readonly ContrastRule[] = [
     ]
   }),
   { ...textPair('--editor-surface', '--text-link'), drop: ['--text-link'] },
+  {
+    ...textPair('--chat-user-message', '--chat-link'),
+    drop: ['--chat-user-message'],
+    over: '--chat-canvas'
+  },
   ...GIT_DECORATIONS.map((status): ContrastRule => ({
     surface: '--sidebar',
     text: `--git-decoration-${status}`,

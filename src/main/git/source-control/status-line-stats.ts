@@ -1,11 +1,11 @@
-import type { GitStatusEntry } from '../../../shared/git-status-types'
-import { collectGitStatusLineStatInputs } from '../../../shared/git-status-line-stat-inputs'
+import type { GitStatusEntry } from '../../../shared/git/status/git-status-types'
+import { collectGitStatusLineStatInputs } from '../../../shared/git/status/git-status-line-stat-inputs'
 import {
   applyLineStats,
   collectUntrackedAdditions,
   parseNumstat,
   type GitLineStats
-} from '../../../shared/git-uncommitted-line-stats'
+} from '../../../shared/git/status/git-uncommitted-line-stats'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitReadOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'

@@ -4,15 +4,15 @@ import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
   type AgentStartupPlan
-} from '@/lib/tui-agent-startup'
+} from '../../../shared/agent-launch/startup/tui-agent-startup'
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { LaunchSource } from '../../../shared/telemetry-events'
-import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
-import type { AgentLaunchProfileSettings } from '../../../shared/tui-agent-launch-defaults'
-import { resolveAgentStartupPlanInputs } from '../../../shared/agent-startup-plan-inputs'
+import type { StartupCommandDelivery } from '../../../shared/agent-launch/startup/codex-startup-delivery'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import type { AgentLaunchProfileSettings } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { resolveAgentStartupPlanInputs } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { translate } from '@/i18n/i18n'
 
 export function buildDirectWorkItemAgentStartupPlan(args: {

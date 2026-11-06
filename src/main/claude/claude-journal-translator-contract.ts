@@ -24,6 +24,8 @@ export type ClaudeJournalTranslatorDeps = {
   account?: () => AgentSessionAccountKind | undefined
   model?: () => string | undefined
   goalBackgroundWork?: () => ClaudeGoalBackgroundWork
+  /** True when this acquisition's pending startup took a turnless failure result and will fail with it. */
+  acceptStartupFailure?: (message: Record<string, unknown>) => boolean
 }
 
 export type ClaudeJournalTranslator = {

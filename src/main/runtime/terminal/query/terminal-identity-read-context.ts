@@ -5,16 +5,14 @@ import {
   captureStructuredWorkerReadInputs,
   createStructuredWorkerReadContext,
   type StructuredWorkerReadContext
-} from '../../structured-worker-authority'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import type {
-  OrchestrationCompatibilitySshTerminal,
-  TerminalHandleRecord
-} from '../../runtime-terminal-contracts'
+} from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { OrchestrationCompatibilitySshTerminal } from '../../orchestration/terminal-authority/orchestration-compatibility-authority'
+import type { TerminalHandleRecord } from '../identity/terminal-handle-records'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
+} from '../records/runtime-terminal-state-records'
 import type { PtyPane, PtyPaneOf, PtyPaneSource } from '../surface/pty-pane-query'
 
 type IdentitySources = {

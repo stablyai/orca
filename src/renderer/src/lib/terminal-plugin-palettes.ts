@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { TerminalPluginPalette } from '../../../shared/terminal-color-overrides'
+import type { TerminalPluginPalette } from '../../../shared/terminal-themes/terminal-color-overrides'
 import type { PluginTerminalThemeRegistration } from '../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
 
 type PaletteSettings = Pick<

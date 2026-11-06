@@ -6,7 +6,7 @@ vi.mock('./use-bulk-tab-close-confirmation', () => ({ useBulkTabCloseConfirmatio
 
 import { useAppStore } from '../store'
 import { makeOpenFile, makeTab, makeUnifiedTab } from '../store/slices/store-session-test-harness'
-import { registerEditorFrameFlush } from './editor/editor-pending-flush'
+import { registerEditorFrameFlush } from './editor/save/flush/editor-pending-flush'
 import { useTerminalBulkCloseActions } from './use-terminal-bulk-close-actions'
 
 const worktreeId = 'wt'

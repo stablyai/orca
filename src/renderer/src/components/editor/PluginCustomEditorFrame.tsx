@@ -7,17 +7,21 @@ import {
 } from '@/store/plugin-custom-editors'
 import { PLUGIN_PANEL_FRAME_NAME_PREFIX } from '../../../../shared/plugins/frames/plugin-frame-bridge'
 import { CUSTOM_EDITOR_LARGE_DOCUMENT_BYTES } from '../../../../shared/plugins/frames/plugin-custom-editor-bridge'
-import { fillPluginPanelShell } from '../right-sidebar/plugin-panel-design-token-css'
+import { fillPluginPanelShell } from '../plugins/frames/plugin-panel-design-token-css'
 import {
   PluginFrameView,
   pluginFrameWindowOf,
   usablePluginFrameGuest,
   type PluginFrameElement
-} from '../right-sidebar/plugin-frame-element'
-import { usePluginFrameHost } from '../right-sidebar/use-plugin-frame-host'
-import { usePluginFrameEntry } from '../right-sidebar/use-plugin-frame-entry'
+} from '../plugins/frames/plugin-frame-element'
+import { usePluginFrameHost } from '../plugins/frames/use-plugin-frame-host'
+import { usePluginFrameEntry } from '../plugins/frames/use-plugin-frame-entry'
 import { editorShortcutMatches } from './editor-shortcuts'
-import { registerEditorFrameFlush } from './editor-pending-flush'
+import {
+  countCustomEditorMergingView,
+  useCustomEditorOutsideMerge
+} from './use-custom-editor-outside-merge'
+import { registerEditorFrameFlush } from './save/flush/editor-pending-flush'
 import { useCustomEditorReloadFlush } from './use-custom-editor-reload-flush'
 import { PluginEditorNeedsDesktopNotice } from './PluginEditorNeedsDesktopNotice'
 import {
@@ -104,6 +108,8 @@ export default function PluginCustomEditorFrame({
     remountGone
   } = usePluginFrameEntry('editor', editor.pluginKey, editor.id)
   const progressRef = useRef<(step: 'delivered' | 'subscribed') => void>(() => {})
+  const mergingRef = useRef<(merging: boolean) => void>(() => {})
+  const countedRef = useRef(false)
 
   const host = useMemo(() => {
     const created = createCustomEditorHost({
@@ -130,6 +136,7 @@ export default function PluginCustomEditorFrame({
         }
       },
       onFrameProgress: (step) => progressRef.current(step),
+      onMergesOutside: () => mergingRef.current(true),
       onKeyChord: (chord, context) => {
         const event = new KeyboardEvent('keydown', chord)
         // Why: chords are posted by frame code, so only one riding real user input may save.
@@ -167,7 +174,15 @@ export default function PluginCustomEditorFrame({
   )
   useLayoutEffect(() => {
     progressRef.current = reportProgress
+    // Counts this view once while its session merges; text editors only.
+    mergingRef.current = (merging) => {
+      if (fileId !== undefined && !isBinary && merging !== countedRef.current) {
+        countedRef.current = merging
+        countCustomEditorMergingView(fileId, merging ? 1 : -1)
+      }
+    }
   })
+  useCustomEditorOutsideMerge(isBinary ? undefined : fileId, host, content)
 
   const { onFrameLoad } = usePluginFrameHost({
     surface: 'editor',
@@ -187,7 +202,10 @@ export default function PluginCustomEditorFrame({
     if (!frameKey) {
       return
     }
-    return () => host.reset()
+    return () => {
+      host.reset()
+      mergingRef.current(false)
+    }
   }, [frameKey, host])
 
   useEffect(() => {

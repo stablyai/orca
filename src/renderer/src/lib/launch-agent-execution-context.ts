@@ -1,8 +1,8 @@
-import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
-import { launchHostIsRemote } from '../../../shared/agent-launch-remote'
+import { toast } from 'sonner'
+import type { AgentStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { launchHostIsRemote } from '../../../shared/agent-launch/startup/agent-launch-remote'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
-  type ExecutionHostPlatformFact,
   refineLocalLaunchPlatform,
   resolveExecutionHostAgentStartupShell,
   resolveWorktreeExecutionHostPlatform
@@ -18,13 +18,11 @@ export type AgentLaunchExecutionContext = {
   queuedShell: AgentStartupShell | undefined
 }
 
-/** Preparation returns facts; the launch action owns failure presentation. */
+/** `null` means the host's OS is unknown; the user has been told why the launch stopped. */
 export function resolveAgentLaunchExecutionContext(
   store: ReturnType<typeof useAppStore.getState>,
   args: { worktreeId: string; launchPlatform?: NodeJS.Platform }
-):
-  | AgentLaunchExecutionContext
-  | { unavailable: Extract<ExecutionHostPlatformFact, { kind: 'withheld' }> } {
+): AgentLaunchExecutionContext | null {
   // Why: `undefined` (rival host rows disagree) is not evidence of a remote; main rejects it anyway.
   const worktreeSshConnectionId = getConnectionIdFromState(store, args.worktreeId)
   // Why getKnownWorktreeById: folder workspaces are not in allWorktrees, and their path marks WSL.
@@ -35,7 +33,8 @@ export function resolveAgentLaunchExecutionContext(
   // Why: the agent runs on the workspace's execution host, so its OS and shell decide quoting (#22204).
   const fact = resolveWorktreeExecutionHostPlatform(store, args.worktreeId, workspacePath)
   if (fact.kind === 'withheld') {
-    return { unavailable: fact }
+    toast.error(fact.reason)
+    return null
   }
   const launchHost = refineLocalLaunchPlatform(fact, args.launchPlatform)
   return {

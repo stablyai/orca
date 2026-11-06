@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'react'
 import { CheckCircle2, EyeOff, Info } from 'lucide-react'
 import { IntegrationStatusPill } from '@/components/integration-status-pill'
-import { AgentSkillSetupPanel } from '@/components/settings/AgentSkillSetupPanel'
+import { AgentSkillSetupPanel } from '@/components/skills/setup/AgentSkillSetupPanel'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {

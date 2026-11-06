@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { FOLDER_WORKSPACE_PATH_STATUS_TTL_MS } from '../../../shared/folder-workspace-path-status'
+import { FOLDER_WORKSPACE_PATH_STATUS_TTL_MS } from '../../../shared/folder-workspaces/folder-workspace-path-status'
 
 type FolderWorkspacePathStatusCacheClockEntry = {
   checkedAt: number

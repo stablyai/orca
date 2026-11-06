@@ -4,8 +4,8 @@ import { useAppStore } from '@/store/index'
 import {
   isAgentChatPermissionMode,
   newChatPermissionModeForSettings
-} from '../../../../../shared/agent-chat-permission-mode'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
+} from '../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { nativeChatPermissionModeLabel } from '@/components/native-chat/native-chat-permission-mode-labels'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 

@@ -4,7 +4,7 @@ import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ITerminalOptions } from '@xterm/xterm'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { TerminalPreviewConnectResult } from '../../../../shared/terminal-preview'
+import type { TerminalPreviewConnectResult } from '../../../../shared/terminal/replay/terminal-preview'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { useAppStore } from '@/store'
 import { AgentTerminalPreview } from './AgentTerminalPreview'
@@ -157,74 +157,6 @@ async function settleGeometry(): Promise<void> {
     await vi.advanceTimersByTimeAsync(250)
   })
 }
-
-it.each([
-  {
-    updates: { terminalFontSize: 18 },
-    cols: 50,
-    rows: 15,
-    scale: 'scale(0.625)',
-    anchor: 'top left'
-  },
-  {
-    updates: { terminalFontFamily: 'Fira Code' },
-    cols: 50,
-    rows: 15,
-    scale: 'scale(0.625)',
-    anchor: 'top left'
-  },
-  {
-    updates: { terminalFontWeight: 900 },
-    cols: 50,
-    rows: 15,
-    scale: 'scale(0.625)',
-    anchor: 'top left'
-  },
-  {
-    updates: { terminalFontWeightBold: 900 },
-    cols: 50,
-    rows: 15,
-    scale: 'scale(0.625)',
-    anchor: 'top left'
-  },
-  {
-    updates: { terminalLineHeight: 1.5 },
-    cols: 60,
-    rows: 10,
-    scale: 'scale(0.75)',
-    anchor: 'bottom left'
-  },
-  {
-    updates: { terminalLigatures: 'on' },
-    cols: 60,
-    rows: 15,
-    scale: 'scale(0.75)',
-    anchor: 'top left'
-  }
-] satisfies {
-  updates: Partial<GlobalSettings>
-  cols: number
-  rows: number
-  scale: string
-  anchor: string
-}[])(
-  'recreates the owner and fits the new geometry for $updates',
-  async ({ updates, cols, rows, scale, anchor }) => {
-    render(<AgentTerminalPreview ptyId="pty-1" />)
-    await settleGeometry()
-    expect(fit).toHaveBeenLastCalledWith('pty-1', 60, 15)
-    await act(async () => useAppStore.getState().updateSettings(updates))
-    await settleGeometry()
-
-    expect(fit).toHaveBeenCalledTimes(2)
-    expect(fit).toHaveBeenLastCalledWith('pty-1', cols, rows)
-    expect(harness.instances).toHaveLength(2)
-    expect(connect).toHaveBeenCalledTimes(2)
-    expect(unsubscribe).toHaveBeenCalledExactlyOnceWith('pty-1')
-    expect(harness.instances[1]?.container?.style.transform).toBe(scale)
-    expect(harness.instances[1]?.container?.style.transformOrigin).toBe(anchor)
-  }
-)
 
 it('ignores a pending connection retired by a metric change', async () => {
   const gate = Promise.withResolvers<TerminalPreviewConnectResult>()

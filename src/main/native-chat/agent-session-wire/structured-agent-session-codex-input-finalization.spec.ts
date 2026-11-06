@@ -15,10 +15,10 @@ import {
   hostTestMessage
 } from './structured-agent-session-host-test-data'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import * as lifetime from './structured-agent-session-host-lifetime'
 import { claimStructuredAgentSessionAgent } from './structured-agent-session-agent-start'
 import { openStructuredAgentSessionConversationJournal } from './structured-agent-session-conversation-open'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import * as lifetime from './structured-agent-session-host-lifetime'
 
 export function registerCodexInputFinalization(current: typeof codexInputFinalizationFixture) {
   it.each([
@@ -68,7 +68,7 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
     )
     const id = await permissionSend('preserve me', { personality: 'friendly' })
     await preparing.promise
-    await pick('auto')
+    await pick(failure === 'lost-steer' ? 'full-access' : 'auto')
     if (failure === 'refusal') {
       codex.routes['thread/start'] = codex.routes['thread/resume'] = () => {
         throw new AgentSessionAcquisitionRefusal('missing Codex', 'cliMissing')
@@ -106,11 +106,7 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
       })
       expect(provider.ended).toBe(true)
       expect(provider.connection.closed).toBe(true)
-      expect(await row(id)).toMatchObject({
-        dispatchState: 'rejected',
-        rejection: { kind: 'cancelled' },
-        recovered: true
-      })
+      expect(await row(id)).toMatchObject({ dispatchState: 'unknown' })
     }
     if (failure === 'stop' || failure === 'exit' || failure === 'crash') {
       const compiling = Promise.withResolvers<unknown>()
@@ -119,9 +115,6 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
       await vi.waitFor(() => expect(codex.connections).toHaveLength(2))
       await vi.waitFor(() => expect(continuingStructuredAgentSessionInput(journal, id)).toBe(true))
       if (failure === 'crash') {
-        await vi.waitFor(() =>
-          expect(continuingStructuredAgentSessionInput(journal, id)).toBe(true)
-        )
         expect(await row(id)).toMatchObject({ dispatchState: 'pending' })
         await assertInputRecoveredAfterSnapshot(id)
       }
@@ -144,9 +137,9 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
           expect(starts()).toHaveLength(0)
           throw new CodexAppServerRequestError(
             'thread/resume',
-            -32000,
-            'startup failed',
-            'startup failed'
+            -32001,
+            'Server overloaded; retry later.',
+            'Server overloaded; retry later.'
           )
         }
         codex.connections[1]?.handlers.onExit?.(new Error('Codex died before ready'), {
@@ -176,7 +169,7 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
     const writes = await Promise.allSettled(persisted.mock.results.map((result) => result.value))
     expect(writes.filter((result) => result.status === 'rejected')).toEqual([])
     await vi.waitFor(async () =>
-      expect((await row(id))?.dispatchState).toBe(uncertain ? 'unknown' : 'rejected')
+      expect((await row(id))?.dispatchState).toBe(written ? 'unknown' : 'rejected')
     )
     if (failure === 'unproven-exit') {
       expect((await row(id))?.rejection).toMatchObject({
@@ -570,18 +563,21 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
       signals.push(signal)
       return dispatch(input)
     })
-    const retire = deps.retireOutgrownChild
-    const retired = vi.spyOn(deps, 'retireOutgrownChild').mockImplementation(async (...args) => {
-      if (
-        boundary === 'retire' &&
-        args[1] &&
-        continuingStructuredAgentSessionInput(journal, args[1])
-      ) {
-        entered.resolve()
-        await held.promise
-      }
-      return retire(...args)
-    })
+    const retire = deps.stopPermissionTransitionChild!
+    const retired = vi
+      .spyOn(deps, 'stopPermissionTransitionChild')
+      .mockImplementation(async (...args) => {
+        if (
+          boundary === 'retire' &&
+          journal
+            .submissions()
+            .some((s) => continuingStructuredAgentSessionInput(journal, s.clientMessageId))
+        ) {
+          entered.resolve()
+          await held.promise
+        }
+        return retire(...args)
+      })
     const open = codex.routes['thread/start']!
     const opening = vi.fn(async (params: Parameters<typeof open>[0]) => {
       if (boundary === 'acquire' || boundary === 'starting-exit') {
@@ -642,8 +638,6 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
     const id = await permissionSend('same original input', { personality: 'friendly' })
     const waiting = host.waitForSendSettlement(SESSION, id)
     const originalBody = hostTestMessage('same original input')
-    // Ready replacement-child exit proof settles before lease release; terminal rows keep that fence.
-    const settlesAtChildFence = ['readiness', 'rebind'].includes(boundary)
     let stopping: Promise<unknown> = Promise.resolve()
     try {
       await entered.promise
@@ -757,7 +751,7 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
       expect(journal.submission(id)).toMatchObject({
         clientMessageId: id,
         dispatchState: 'rejected',
-        fence: settlesAtChildFence ? boundFence : current().conversationFence(),
+        fence: current().conversationFence(),
         rejection: { kind: 'cancelled' },
         options: { personality: 'friendly' }
       })

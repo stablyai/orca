@@ -1,3 +1,4 @@
+import type { GhAccountBinding } from '../../shared/github/account-binding'
 import type {
   GetProjectViewTableResult,
   GitHubProjectCommentMutationResult,
@@ -75,6 +76,7 @@ export type GithubWorkItemApi = {
   }) => Promise<Omit<GitHubWorkItem, 'repoId'> | null>
   workItemDetails: (
     args: GitHubRepoSelectorArgs & {
+      expectedGhAccount?: GhAccountBinding | null
       number: number
       type?: 'issue' | 'pr'
       ownerRepo?: GitHubOwnerRepo
@@ -129,12 +131,14 @@ export type GithubWorkItemApi = {
     }
   ) => Promise<GitHubCommentResult>
   listLabels: (args: {
+    expectedGhAccount?: GhAccountBinding | null
     repoPath: string
     repoId?: string
     sourceContext?: TaskSourceContext | null
     ownerRepo?: GitHubOwnerRepo
   }) => Promise<string[]>
   listAssignableUsers: (args: {
+    expectedGhAccount?: GhAccountBinding | null
     repoPath: string
     repoId?: string
     sourceContext?: TaskSourceContext | null

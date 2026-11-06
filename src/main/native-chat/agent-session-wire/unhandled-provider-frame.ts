@@ -7,7 +7,10 @@ import {
   PROVIDER_FRAME_PAYLOAD_LIMITS,
   type JournalPayloadLimits
 } from '../agent-session-journal/journal-payload-bounds'
-import { codexGoalRowText, codexThreadGoalState } from '../../codex/codex-goal-journal-rows'
+import {
+  codexGoalRowText,
+  codexThreadGoalState
+} from '../../codex/structured/journal/codex-goal-journal-rows'
 import { isProviderRecord } from '../../provider-process/provider-json-record'
 import { classifyProviderFrame } from './provider-frame-disposition'
 import { hookOutcomeRowBody } from '../../../shared/agent-session/journal/agent-session-hook-outcome'

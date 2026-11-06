@@ -33,7 +33,7 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | `contributes.panels` | [PanelContribution](#panelcontribution)[] | no | 1.4.160 | Sidebar panels. At most 64. |
 | `contributes.commands` | [CommandContribution](#commandcontribution)[] | no | 1.4.160 | Command palette entries. At most 256. |
 | `contributes.events` | [EventContribution](#eventcontribution)[] | no | 1.4.160 | Events delivered to the plugin worker. At most 4. |
-| `contributes.hooks` | [HookContribution](#hookcontribution)[] | no | 1.4.248 | Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 7. |
+| `contributes.hooks` | [HookContribution](#hookcontribution)[] | no | 1.4.248 | Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 8. |
 | `contributes.languagePacks` | [LanguagePackContribution](#languagepackcontribution)[] | no | 1.4.160 | Interface translations. At most 16. |
 | `contributes.keybindings` | [KeybindingContribution](#keybindingcontribution)[] | no | 1.4.160 | Keyboard shortcuts for contributed commands. At most 256. |
 | `contributes.vmRecipes` | [VmRecipeContribution](#vmrecipecontribution)[] | no | 1.4.160 | Virtual machine environment recipes. At most 64. |
@@ -44,7 +44,7 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | `contributes.customEditors` | [CustomEditorContribution](#customeditorcontribution)[] | no | 1.4.245 | Editors that open files of given types in the editor tab. At most 16. |
 | `contributes.newFiles` | [NewFileContribution](#newfilecontribution)[] | no | 1.4.245 | Untitled files the user can create from the + menu and the command palette. At most 16. |
 | `contributes.settings` | [SettingContribution](#settingcontribution)[] | no | 1.4.246 | Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64. |
-| `contributes.statusBarItems` | [StatusBarItemContribution](#statusbaritemcontribution)[] | no | 1.4.248 | Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. At most 8. |
+| `contributes.statusBarItems` | [StatusBarItemContribution](#statusbaritemcontribution)[] | no | 1.4.248 | Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled. At most 8. |
 | `contributes.agentHarnesses` | any[] | no | 1.4.245 | Reserved for coding-agent harness definitions; must be empty until their format is defined. |
 | `contributes.skills` | any[] | no | 1.4.245 | Reserved for agent skills; must be empty until their format is defined. |
 | `contributes.mcpServers` | any[] | no | 1.4.245 | Reserved for MCP server definitions; must be empty until their format is defined. |
@@ -96,7 +96,7 @@ A hook Orca runs through the worker before (or after) it acts. Requires `main` a
 
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |
-| `event` | `"terminal.send"` \| `"workspace.create.before"` \| `"workspace.create.after"` \| `"agent.launch.before"` \| `"agent.prompt.before"` \| `"agent.tool.before"` \| `"agent.tool.after"` | yes | 1.4.248 | Hook the worker handles with `orca.hooks.on`. |
+| `event` | `"terminal.send"` \| `"workspace.create.before"` \| `"workspace.create.after"` \| `"agent.launch.before"` \| `"agent.prompt.before"` \| `"agent.tool.before"` \| `"agent.tool.after"` \| `"editor.save.before"` | yes | 1.4.248 | Hook the worker handles with `orca.hooks.on`. |
 | `onError` | `"pass"` \| `"deny"` | no | 1.4.248 | What Orca does when this plugin's hook throws, times out, crashes or does not start: `pass` (the default) carries on as if it passed; `deny` refuses the action, naming the plugin, so a guard fails closed. Ignored for hooks that only observe. |
 
 ## LanguagePackContribution
@@ -217,7 +217,7 @@ A host API the plugin may call once the user consents.
 
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |
-| `kind` | `"workspace:read"` \| `"workspace:write"` \| `"agent:read"` \| `"agent:launch"` \| `"terminal:send"` \| `"terminal:read"` \| `"notifications:show"` \| `"storage:own"` \| `"secrets:own"` \| `"settings:own"` | yes | 1.4.160 | Capability granted on user consent. |
+| `kind` | `"workspace:read"` \| `"workspace:write"` \| `"agent:read"` \| `"agent:launch"` \| `"terminal:send"` \| `"terminal:read"` \| `"notifications:show"` \| `"storage:own"` \| `"secrets:own"` \| `"settings:own"` \| `"appearance:write"` | yes | 1.4.160 | Capability granted on user consent. |
 
 ## Screenshot
 

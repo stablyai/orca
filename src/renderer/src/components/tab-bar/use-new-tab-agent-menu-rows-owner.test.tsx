@@ -14,7 +14,7 @@ import {
   makeWorktree,
   TEST_REPO
 } from '@/store/slices/worktrees-slice-test-fixtures'
-import { makeProjectGroup } from '@/components/sidebar/folder-workspace-composer-submit-fixtures'
+import { makeProjectGroup } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platform'
 import type { Project } from '../../../../shared/project-types'

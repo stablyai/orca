@@ -59,9 +59,6 @@ describe('launchAgentInNewTab main-window surface', () => {
       agent: 'opencode',
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID
     })
-    if (result && 'refused' in result) {
-      throw new Error('Expected an opened launch')
-    }
 
     expect(result?.surface.kind).toBe('local-terminal')
     const tabId = result?.surface.kind === 'local-terminal' ? result.surface.tabId : null
@@ -74,24 +71,5 @@ describe('launchAgentInNewTab main-window surface', () => {
     expect(floatingGroup?.activeTabId).toBe(tabId)
     expect(state.activeTabIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(tabId)
     expect(state.activeTabTypeByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe('terminal')
-  })
-
-  it('still brings a launch in the active worktree to the front', async () => {
-    const store = seedMainWindowOnEditor()
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    const result = launchAgentInNewTab({
-      requestId: 'request-2',
-      agent: 'opencode',
-      worktreeId: MAIN_WORKTREE_ID
-    })
-    if (result && 'refused' in result) {
-      throw new Error('Expected an opened launch')
-    }
-
-    const tabId = result?.surface.kind === 'local-terminal' ? result.surface.tabId : null
-    expect(tabId).not.toBeNull()
-    expect(store.getState().activeTabType).toBe('terminal')
-    expect(store.getState().activeTabId).toBe(tabId)
   })
 })

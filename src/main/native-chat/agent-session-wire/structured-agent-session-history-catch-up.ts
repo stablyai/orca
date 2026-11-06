@@ -135,7 +135,7 @@ export async function runHistoryCatchUp<View>(input: {
   assertCurrent?: () => void
   timeoutMs: number
   logger?: StructuredAgentSessionLogger
-  readView: (history: StructuredAgentSessionHistoryJournal) => View
+  readView: (history: StructuredAgentSessionHistoryJournal, signal: AbortSignal) => View
   /** Reject commits if saved facts changed since planning. */
   sameView: (planned: View, current: View) => boolean
   prepare: (context: HistoryCatchUpContext<View>) => Promise<HistoryCatchUpPlan | null>
@@ -176,7 +176,7 @@ export async function runHistoryCatchUp<View>(input: {
     }
     const epoch = history.epoch
     let planned: { view: View } | undefined
-    const view = (): View => (planned ??= { view: input.readView(history) }).view
+    const view = (): View => (planned ??= { view: input.readView(history, controller.signal) }).view
     const plan = await waitForPromiseWithSignal(
       input.prepare({
         view,
@@ -212,7 +212,7 @@ export async function runHistoryCatchUp<View>(input: {
             if (
               current.epoch !== epoch ||
               sink.journalHistory?.() !== history ||
-              !input.sameView(view(), input.readView(history))
+              !input.sameView(view(), input.readView(history, controller.signal))
             ) {
               return []
             }

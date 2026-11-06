@@ -5,15 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ZodObject } from 'zod'
 import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shared/orchestration-session-caller-codes'
-import { DeviceRegistry } from '../device-registry'
-import { OrcaRuntimeRpcServer } from '../runtime-rpc'
+import { DeviceRegistry } from './server/pairing/device-registry'
+import { OrcaRuntimeRpcServer } from './server/runtime-rpc'
 import { buildRegistry } from './core'
 import { ORCHESTRATION_METHODS } from './methods/orchestration'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
   structuredWorkerProcessIncarnation
-} from '../structured-worker-identity'
+} from '../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import {
   ADDRESS_X,
   createSessionCallerHarness,
@@ -109,9 +109,9 @@ describe('orchestration session callers at the dispatch entry', () => {
       })
       .sort()
 
-    // The population: 49 registered methods carrying 35 party-naming fields.
-    expect(registry.size).toBe(49)
-    expect(partyNaming).toHaveLength(35)
+    // The population: 50 registered methods carrying 36 party-naming fields.
+    expect(registry.size).toBe(50)
+    expect(partyNaming).toHaveLength(36)
     expect(partyNaming).toEqual(
       [
         ...Object.entries(ORCHESTRATION_CALLER_PARAM).map(

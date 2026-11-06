@@ -218,9 +218,9 @@
         },
         "hooks": {
           "default": [],
-          "description": "Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 7.",
+          "description": "Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 8.",
           "x-orca-since": "1.4.248",
-          "maxItems": 7,
+          "maxItems": 8,
           "type": "array",
           "items": {
             "$ref": "#/$defs/HookContribution"
@@ -327,7 +327,7 @@
         },
         "statusBarItems": {
           "default": [],
-          "description": "Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. At most 8.",
+          "description": "Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled. At most 8.",
           "x-orca-since": "1.4.248",
           "maxItems": 8,
           "type": "array",
@@ -756,7 +756,8 @@
             "agent.launch.before",
             "agent.prompt.before",
             "agent.tool.before",
-            "agent.tool.after"
+            "agent.tool.after",
+            "editor.save.before"
           ],
           "description": "Hook the worker handles with `orca.hooks.on`.",
           "x-orca-since": "1.4.248",
@@ -767,7 +768,8 @@
             "agent.launch.before": "1.4.248",
             "agent.prompt.before": "1.4.248",
             "agent.tool.before": "1.4.248",
-            "agent.tool.after": "1.4.248"
+            "agent.tool.after": "1.4.248",
+            "editor.save.before": "1.4.248"
           }
         },
         "onError": {
@@ -1489,7 +1491,8 @@
             "notifications:show",
             "storage:own",
             "secrets:own",
-            "settings:own"
+            "settings:own",
+            "appearance:write"
           ],
           "description": "Capability granted on user consent.",
           "x-orca-since": "1.4.160",
@@ -1503,7 +1506,8 @@
             "notifications:show": "1.4.160",
             "storage:own": "1.4.245",
             "secrets:own": "1.4.245",
-            "settings:own": "1.4.160"
+            "settings:own": "1.4.160",
+            "appearance:write": "1.4.249"
           }
         }
       },

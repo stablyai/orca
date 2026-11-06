@@ -9,6 +9,7 @@ import { useAppActive } from '../../hooks/use-now'
 import type { PrSidebarState } from '../../session/mobile-pr-sidebar-state'
 import type { PrSidebarLoadOptions } from '../../session/use-mobile-pr-sidebar-controller'
 import type { PrSidebarLoadResult } from '../../session/pr-sidebar-load-result'
+import type { PrTabScope } from './pr-tab-requests'
 
 /** What is on screen: nothing to keep fresh, the PR and its checks, or its comments too. */
 export type PrTabLive = false | 'checks' | 'details'
@@ -18,12 +19,14 @@ type Input = {
   refetch: (options?: PrSidebarLoadOptions) => Promise<PrSidebarLoadResult> | void
   live: PrTabLive
   connected: boolean
+  /** The complete PR incarnation (client, worktree, resource) whose cadence this is. */
+  owner: PrTabScope
 }
 
 // Desktop's checks-panel cadence (shared policy): 1 min while open, backing off to 2 min when nothing
 // changes and up to 15 min on failures, stopping once a merged PR's checks settle. It runs only while
 // the PR is on screen, its route is focused, the host is connected and the app is in the foreground.
-export function useMobilePrPolling({ state, refetch, live, connected }: Input): {
+export function useMobilePrPolling({ state, refetch, live, connected, owner }: Input): {
   /** Polling is running for an open PR, so the screen can say "Live" instead of offering Refresh. */
   polling: boolean
 } {
@@ -42,8 +45,9 @@ export function useMobilePrPolling({ state, refetch, live, connected }: Input): 
   const backoffRef = useRef(60_000)
   const signatureRef = useRef<string | null>(null)
   const lastAttemptRef = useRef<number | null>(null)
-  const inFlightRef = useRef(false)
-  // Each PR is its own generation, so a read started for the last PR cannot steer this one's cadence.
+  // The generation whose poll is in flight; a departed PR's unresolved poll never blocks this one's.
+  const inFlightRef = useRef<number | null>(null)
+  // Each PR incarnation is its own generation, so a read started for the last one cannot steer this one's cadence.
   const generationRef = useRef(0)
   const [tick, setTick] = useState(0)
   const refetchRef = useRef(refetch)
@@ -51,14 +55,13 @@ export function useMobilePrPolling({ state, refetch, live, connected }: Input): 
     refetchRef.current = refetch
   })
 
-  const prNumber = pr?.number ?? null
   useEffect(() => {
     generationRef.current += 1
     policy.reset()
     backoffRef.current = 60_000
     signatureRef.current = null
     lastAttemptRef.current = null
-  }, [policy, prNumber])
+  }, [policy, owner])
 
   // Every read that lands feeds the backoff: unchanged checks slow it, changes reset it, a failed checks read fails it.
   useEffect(() => {
@@ -82,7 +85,7 @@ export function useMobilePrPolling({ state, refetch, live, connected }: Input): 
   const prState = pr?.state
   const checksStatus = pr?.checksStatus
   useEffect(() => {
-    if (!running || !prState || inFlightRef.current) {
+    if (!running || !prState || inFlightRef.current === generationRef.current) {
       return
     }
     const interval = policy.delayMs(prState, checksStatus, backoffRef.current)
@@ -99,7 +102,7 @@ export function useMobilePrPolling({ state, refetch, live, connected }: Input): 
     const generation = generationRef.current
     const timer = setTimeout(() => {
       lastAttemptRef.current = Date.now()
-      inFlightRef.current = true
+      inFlightRef.current = generation
       void Promise.resolve(
         refetchRef.current({ includeDetails: live === 'details', background: true })
       )
@@ -114,13 +117,17 @@ export function useMobilePrPolling({ state, refetch, live, connected }: Input): 
           }
         })
         .finally(() => {
-          inFlightRef.current = false
+          // A departed incarnation's finish neither releases nor re-arms its successor.
+          if (generation !== generationRef.current) {
+            return
+          }
+          inFlightRef.current = null
           setTick((value) => value + 1)
         })
     }, delay)
     return () => clearTimeout(timer)
     // New data from any read (a manual refresh too) re-arms the timer with the backoff it just set.
-  }, [checks, checksError, checksStatus, live, policy, prNumber, prState, running, tick])
+  }, [checks, checksError, checksStatus, live, owner, policy, prState, running, tick])
 
   return { polling: running && (prState === 'open' || prState === 'draft') }
 }

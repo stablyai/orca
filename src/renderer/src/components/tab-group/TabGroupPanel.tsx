@@ -152,7 +152,7 @@ export default function TabGroupPanel({
           return
         }
         // Why: agent quick-launch can briefly desync unified/runtime tab ids before the host snapshot lands, so still route close through the shared helper.
-        closeTerminalTab(terminalId)
+        closeTerminalTab(terminalId, { reason: 'user' })
       }}
       onCloseOthers={(visibleId) => {
         // Why: TabBar emits entityId for terminals/browsers but unifiedTabId for editors; match both so the menu works on every tab kind.
@@ -347,6 +347,8 @@ export default function TabGroupPanel({
           <div
             className="pointer-events-none absolute inset-x-0 top-1/4 h-px"
             data-contextual-tour-target="workspace-agent-terminal-tip"
+            // Picks the chat or terminal split step of the agent-sessions tour.
+            data-active-content-type={activeTab?.contentType}
           />
         ) : null}
         {activeTab &&

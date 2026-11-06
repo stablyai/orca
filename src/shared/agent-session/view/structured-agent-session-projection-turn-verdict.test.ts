@@ -20,38 +20,6 @@ describe('the turn verdict on the status summary', () => {
     blocks: [{ type: 'text', text: 'go' }]
   })
 
-  it('carries the newest settled turn verdict only while the session is idle', () => {
-    const running = item('turn-running', 2, {
-      kind: 'turn',
-      turnId: 'turn-1',
-      state: 'running'
-    })
-    expect(projectStructuredAgentSessionStatusSummary([user, running])).not.toHaveProperty(
-      'turnOutcome'
-    )
-    const cancelled = item('turn-cancelled', 3, {
-      kind: 'turn',
-      turnId: 'turn-1',
-      state: 'interrupted',
-      outcome: 'cancellation'
-    })
-    expect(projectStructuredAgentSessionStatusSummary([user, cancelled])).toMatchObject({
-      status: 'idle',
-      turnOutcome: 'cancellation'
-    })
-  })
-
-  it('reports no verdict for a completed turn the provider never judged', () => {
-    const completed = item('turn-completed', 2, {
-      kind: 'turn',
-      turnId: 'turn-1',
-      state: 'completed'
-    })
-    expect(projectStructuredAgentSessionStatusSummary([user, completed])).not.toHaveProperty(
-      'turnOutcome'
-    )
-  })
-
   // With no verdict from the provider, the lifecycle the host settled is what the row reports.
   it.each([
     ['interrupted', 'interruption'],

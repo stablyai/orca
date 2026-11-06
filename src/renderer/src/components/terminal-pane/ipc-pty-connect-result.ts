@@ -1,5 +1,5 @@
 import { terminalLaunchFacts } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { PtyConnectResult } from './pty-transport-types'
 
 type IpcPtySpawnResult = PtyConnectResult & { isReattach?: boolean }

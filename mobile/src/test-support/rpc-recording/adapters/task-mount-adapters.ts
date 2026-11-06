@@ -80,7 +80,14 @@ export function taskMountAdapters(
         detailPayload: null,
         items: []
       })
-      Object.assign(model, { client: context.client, tasksSupported: true, detailRefreshSeq: 0 })
+      Object.assign(model, {
+        client: context.client,
+        tasksSupported: true,
+        detailRefreshSeq: 0,
+        detailRefreshRequested: { current: false },
+        detailRequestItem: model.actionItem,
+        hydrateActionItem: model.setActionItem
+      })
       if (options.reference) {
         model.taskOperations = {
           detail: modules

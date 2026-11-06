@@ -7,21 +7,18 @@ import {
 import { parseWslUncPath } from '../shared/wsl-paths'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'
+import { isLaunchedByAnotherRuntime } from './runtime/runtime-source-fence'
 import { getOptionalStringFlag, getPresentStringFlag, getRequiredStringFlag } from './flags'
 import {
   getCallerExecutionHostId,
   resolveCallerPaneWorktreeSelector,
   selectWorktreeCreateCwdContext,
   selectEnclosingWorktreeSelectionOnHost,
+  selectCallerTerminalWorkspace,
   selectorPurpose,
   type WorkspaceSelectionPurpose,
   type HostScopedWorktreeSelection
 } from './caller-host-worktree-selection'
-
-export type BrowserCliTarget = {
-  worktree?: string
-  page?: string
-}
 
 export type ComputerCliTarget = {
   session?: string
@@ -79,7 +76,7 @@ export async function normalizeWorktreeSelectorForCaller(
   return resolveCallerDistroPathSelector(normalized, cwd, client)
 }
 
-function assertLocalCwdWorktreeSelector(selector: string, client: RuntimeClient): void {
+export function assertLocalCwdWorktreeSelector(selector: string, client: RuntimeClient): void {
   if (!client.isRemote) {
     return
   }
@@ -201,7 +198,27 @@ export async function getBrowserWorktreeSelector(
   if (client.isRemote) {
     return undefined
   }
-  return optionalCurrentWorktreeSelector(cwd, client, purpose)
+  const catalog = await client
+    .call<RuntimeWorktreeListResult>('worktree.list', { limit: 10_000 })
+    .then((response) => response.result.worktrees)
+    .catch(() => undefined)
+  // Without the catalog neither cwd nor the terminal id can be checked; keep the runtime default.
+  if (!catalog) {
+    return undefined
+  }
+  const hostId = getCallerExecutionHostId()
+  const enclosing = selectEnclosingWorktreeSelectionOnHost(
+    catalog,
+    cwd,
+    hostId,
+    process.env.ORCA_WORKTREE_ID,
+    purpose
+  )
+  if (enclosing || isLaunchedByAnotherRuntime(process.env, client.userDataPath)) {
+    return enclosing?.selector
+  }
+  // An Orca terminal knows its workspace; without this an unmanaged cwd lands in the focused one.
+  return selectCallerTerminalWorkspace(catalog, hostId)
 }
 
 export async function getTerminalHandle(
@@ -220,30 +237,6 @@ export async function getTerminalHandle(
     ...(options.requireUnambiguous ? { requireUnambiguous: true } : {})
   })
   return response.result.handle
-}
-
-export async function getBrowserCommandTarget(
-  flags: Map<string, string | boolean>,
-  cwd: string,
-  client: RuntimeClient
-): Promise<BrowserCliTarget> {
-  const page = getOptionalStringFlag(flags, 'page')
-  if (!page) {
-    return { worktree: await getBrowserWorktreeSelector(flags, cwd, client) }
-  }
-
-  const explicitWorktree = getOptionalStringFlag(flags, 'worktree')
-  if (!explicitWorktree || explicitWorktree === 'all') {
-    return { page }
-  }
-  if (explicitWorktree === 'active' || explicitWorktree === 'current') {
-    assertLocalCwdWorktreeSelector(explicitWorktree, client)
-    return { page, worktree: await resolveCurrentWorktreeSelector(cwd, client) }
-  }
-  return {
-    page,
-    worktree: await normalizeWorktreeSelectorForCaller(explicitWorktree, cwd, client)
-  }
 }
 
 export async function getComputerCommandTarget(

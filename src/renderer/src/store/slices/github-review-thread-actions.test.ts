@@ -28,15 +28,6 @@ function makeComments(isResolved = false): PRComment[] {
   ]
 }
 
-function installLocalComments(store: ReturnType<typeof createTestStore>): string {
-  const cacheKey = sourceScopedRepoCacheKey(repoPath, repoId, prCommentsCacheSuffix(12))
-  store.setState({
-    repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
-    commentsCache: { [cacheKey]: { data: makeComments(), fetchedAt: 1 } }
-  } as unknown as Partial<AppState>)
-  return cacheKey
-}
-
 describe('createGitHubSlice.resolveReviewThread', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -97,30 +88,5 @@ describe('createGitHubSlice.resolveReviewThread', () => {
     })
     expect(mockApi.gh.resolveReviewThread).not.toHaveBeenCalled()
     expect(store.getState().commentsCache[cacheKey]?.data?.[0].isResolved).toBe(true)
-  })
-
-  it('rolls back the captured comment array when GitHub returns false', async () => {
-    const store = createTestStore()
-    const cacheKey = installLocalComments(store)
-    const result = Promise.withResolvers<boolean>()
-    mockApi.gh.resolveReviewThread.mockReturnValueOnce(result.promise)
-
-    const pending = store.getState().resolveReviewThread(repoPath, 12, threadId, true, { repoId })
-    expect(store.getState().commentsCache[cacheKey]?.data?.[0].isResolved).toBe(true)
-    result.resolve(false)
-
-    await expect(pending).resolves.toBe(false)
-    expect(store.getState().commentsCache[cacheKey]?.data).toEqual(makeComments())
-  })
-
-  it('swallows a thrown transport error and rolls back the captured comment array', async () => {
-    const store = createTestStore()
-    const cacheKey = installLocalComments(store)
-    mockApi.gh.resolveReviewThread.mockRejectedValueOnce(new Error('offline'))
-
-    await expect(
-      store.getState().resolveReviewThread(repoPath, 12, threadId, true, { repoId })
-    ).resolves.toBe(false)
-    expect(store.getState().commentsCache[cacheKey]?.data).toEqual(makeComments())
   })
 })

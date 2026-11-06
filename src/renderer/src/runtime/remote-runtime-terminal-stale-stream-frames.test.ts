@@ -3,7 +3,7 @@ import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
   decodeTerminalStreamText
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   getRemoteRuntimeTerminalMultiplexer,
   resetRemoteRuntimeTerminalMultiplexersForTests

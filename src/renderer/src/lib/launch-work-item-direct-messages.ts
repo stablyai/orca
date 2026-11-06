@@ -1,7 +1,11 @@
-import { planAgentCliArgsSuffix } from './tui-agent-startup'
+import { toast } from 'sonner'
+import {
+  planAgentCliArgsSuffix,
+  type AgentStartupShell
+} from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { getAgentLabel } from './agent-catalog'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+
 import { isGitLabIssueUrl } from '@/lib/new-workspace'
 import { translate } from '@/i18n/i18n'
 
@@ -38,17 +42,23 @@ export const agentLaunchCommandErrorMessage = (): string =>
     'Could not build the agent launch command.'
   )
 
-/** What is wrong with a launch's CLI arguments for this shell, or null when they are usable. */
-export function invalidTerminalArgsMessage(
+export function validateActionTerminalArgs(
   agent: TuiAgent,
   args: string | null | undefined,
-  shell: AgentStartupShell
-): string | null {
-  return planAgentCliArgsSuffix(args, shell).ok
-    ? null
-    : translate(
-        'agentLaunch.invalidArgs',
-        'The CLI arguments for {{value0}} have an unclosed quote. Fix them, then try again.',
+  shell: AgentStartupShell,
+  notify = true
+): boolean {
+  if (planAgentCliArgsSuffix(args, shell).ok) {
+    return true
+  }
+  if (notify) {
+    toast.error(
+      translate(
+        'settings.sourceControl.actionModel.invalidArgs',
+        'The CLI arguments for {{value0}} are invalid. Fix them in Settings → Source Control AI.',
         { value0: getAgentLabel(agent) }
       )
+    )
+  }
+  return false
 }

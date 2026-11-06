@@ -3,8 +3,8 @@ import { readProposedPaneFitDimensions } from '@/lib/pane-manager/pane-fit'
 import {
   ABORT_TRUNCATED_CONTROL_STRING,
   buildSnapshotReplayPrologue
-} from '../../../../shared/terminal-mode-reset-profiles'
-import { splitAtAlternateScreenEntry } from '../../../../shared/terminal-alternate-screen-split'
+} from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
+import { splitAtAlternateScreenEntry } from '../../../../shared/terminal/protocol/escape/terminal-alternate-screen-split'
 
 /** Shared snapshot paint ordering keeps reattach/hidden restore dimension and buffer-switch rules aligned. */
 

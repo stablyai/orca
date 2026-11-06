@@ -5,9 +5,9 @@ import type {
   AgentSessionStatusSummary
 } from '../../../shared/agent-session/agent-session-wire'
 import { createSavedStructuredStatusGroup } from './structured-agent-session-saved-status'
-import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
-import type { AgentChildWorkRecord } from '../../../shared/agent-status-child-work'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import type { AgentChildWorkRecord } from '../../../shared/agent-status/child-work/agent-status-child-work'
+import type { AgentChildWorkView } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   structuredAgentSessionNamingSnapshot,
@@ -199,6 +199,7 @@ export class StructuredAgentSessionStatusFeed {
       record,
       state: projection.state,
       stopping: projection.stopping,
+      usageLimitContinue: this.deps.readUsageLimitContinue?.(sessionId),
       childWork: this.childWorkFields(sessionId, session.params.provider),
       namingFailure: this.deps.namingFailure?.(sessionId),
       now: this.deps.now
@@ -211,7 +212,7 @@ export class StructuredAgentSessionStatusFeed {
     const reportOnly = !inputChanged && permissionReportOnly(previous, summary)
     if (!summaryChanged && !inputChanged) {
       if (!this.ownership.matchesLocation(sessionId, session.params.location)) {
-        this.sink(summary, session.params.location)
+        this.sink(summary, this.deps.rowRetired?.(sessionId) ? undefined : session.params.location)
       }
       return
     }
@@ -221,7 +222,7 @@ export class StructuredAgentSessionStatusFeed {
     })
     if (summaryChanged) {
       if (!reportOnly || !this.ownership.matchesLocation(sessionId, session.params.location)) {
-        this.sink(summary, session.params.location)
+        this.sink(summary, this.deps.rowRetired?.(sessionId) ? undefined : session.params.location)
       }
       this.broadcast({ type: 'status', session: summary })
     }

@@ -9,6 +9,8 @@ export const PLUGIN_DERIVED_PUBLISHER_SINCE = '1.4.246'
 export const PLUGIN_PANEL_UI_SINCE = '1.4.246'
 /** First release whose components panels draw catalog 2 (`ui.catalog` 2: Table, Tree, Tabs, ...). */
 export const PLUGIN_COMPONENTS_CATALOG_2_SINCE = '1.4.247'
+/** First release whose components panels draw catalog 4 (`ui.catalog` 4: Box). */
+export const PLUGIN_COMPONENTS_CATALOG_4_SINCE = '1.4.248'
 /** Build-less `.ts/.tsx/.mts/.jsx` panel and editor files ship with components panels. */
 export const PLUGIN_SOURCE_MODULES_SINCE = PLUGIN_PANEL_UI_SINCE
 /** Panels reach their worker, storage, settings and events; `contributes.settings` arrives. */

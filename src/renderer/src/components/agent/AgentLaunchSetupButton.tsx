@@ -3,50 +3,99 @@ import { flushSync } from 'react-dom'
 import { ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { AgentLaunchSetupSubmenu } from './AgentLaunchSetupSubmenu'
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { translate } from '@/i18n/i18n'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
-import type { AgentPickerDraft, AgentPickerEntry } from '../../../../shared/agent-launch-picker'
-import { returnToLaunchItem } from './agent-launch-row'
+import type {
+  AgentPickerDraft,
+  AgentPickerEntry,
+  AgentPickerDraftOwner
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
-// The menu and its popovers unmount on dismissal; authored setups live for this app session.
-const sessionDrafts = new Map<string, AgentPickerDraft>()
+import { useAgentPickerSetup, type AgentPickerSetupIdentity } from './agent-launch-picker-drafts'
+
+export {
+  invalidateAgentPickerDrafts,
+  retireAgentPickerDrafts,
+  useAgentPickerDraftScope
+} from './agent-launch-picker-drafts'
+export type { AgentPickerSetupIdentity } from './agent-launch-picker-drafts'
+
+export type AgentLaunchSetupPanelProps = {
+  entry: AgentPickerEntry
+  draft: AgentPickerDraft
+  getDraft: () => AgentPickerDraft | undefined
+  mode?: 'launch' | 'select'
+  disabled?: boolean
+  onDraftChange: (draft: AgentPickerDraft) => void
+  onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
+}
 
 function setupKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault()
     event.stopPropagation()
     event.currentTarget.click()
-  } else {
-    returnToLaunchItem(event)
+  } else if (['ArrowLeft', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) {
+    const row = event.currentTarget.closest<HTMLElement>('[role="menuitem"]')
+    if (row) {
+      event.preventDefault()
+      event.stopPropagation()
+      row.focus()
+      if (event.key !== 'ArrowLeft') {
+        row.dispatchEvent(new window.KeyboardEvent('keydown', { key: event.key, bubbles: true }))
+      }
+    }
   }
 }
 
 export function AgentLaunchSetupButton({
   entry,
+  draftScope,
+  draftId = 'agent',
+  preset,
   initial,
+  seed,
+  surface,
+  mode = 'launch',
   renderAnchor,
   disabled,
-  terminalBlocked,
+  submenu = false,
   open: controlledOpen,
   replacedByAnotherSetup = false,
   onOpenChange,
   onUse
 }: {
   entry: AgentPickerEntry
+  draftScope?: AgentPickerDraftOwner
+  draftId?: string
+  preset?: AgentPickerSetupIdentity
   initial?: AgentPickerDraft
+  seed?: AgentPickerDraft
+  surface?: AgentPickerDraft['surface']
+  mode?: 'launch' | 'select'
   renderAnchor?: (trigger: ReactElement) => ReactElement
   disabled?: boolean
-  /** The host is still connecting: the terminal launch stays shown but waits. */
-  terminalBlocked?: boolean
+  submenu?: boolean
   open?: boolean
   replacedByAnotherSetup?: boolean
   onOpenChange?: (open: boolean) => void
-  onUse: (draft: AgentPickerDraft) => void
+  onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
 }) {
-  const draftKey = JSON.stringify([entry.ownerKey, entry.agent, initial])
   const [localOpen, setOpen] = useState(false)
   const open = controlledOpen ?? localOpen
+  const setup = useAgentPickerSetup({
+    entry,
+    initial,
+    seed,
+    surface,
+    draftScope,
+    draftId,
+    preset,
+    mode,
+    open
+  })
   const closeFocus = useRef({ open, restore: true })
   useLayoutEffect(() => {
     if (closeFocus.current.open && !open) {
@@ -59,7 +108,7 @@ export function AgentLaunchSetupButton({
   const content = useRef<HTMLDivElement>(null)
   const anchor = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
-    if (!open) {
+    if (!open || submenu) {
       return
     }
     let frame = 0
@@ -76,7 +125,7 @@ export function AgentLaunchSetupButton({
           const available = Number.parseFloat(
             style.getPropertyValue('--radix-popover-content-available-width')
           )
-          if (available < Number.parseFloat(style.minWidth)) {
+          if (available < 416) {
             setPlacement('bottom')
           }
         })
@@ -92,9 +141,10 @@ export function AgentLaunchSetupButton({
       observer.disconnect()
       cancelAnimationFrame(frame)
     }
-  }, [open])
+  }, [open, submenu])
   const changeOpen = (next: boolean) => {
     if (next) {
+      setup.activate()
       setPlacement('right')
     }
     if (controlledOpen === undefined) {
@@ -102,6 +152,47 @@ export function AgentLaunchSetupButton({
     }
     onOpenChange?.(next)
   }
+  const panel = (
+    <div className="min-h-0 overflow-y-auto scrollbar-sleek">
+      {setup.ready ? (
+        <AgentLaunchSetupPanel
+          entry={entry}
+          mode={mode}
+          draft={setup.draft}
+          getDraft={setup.getDraft}
+          disabled={disabled}
+          onDraftChange={setup.change}
+          onUse={(draft) => {
+            const options = { ...draft, surface: setup.draft.surface }
+            delete options.prompt
+            if (!setup.accept(mode === 'select' ? draft : options)) {
+              return false
+            }
+            const accepted = onUse(draft)
+            if (accepted !== false) {
+              changeOpen(false)
+            }
+            return accepted
+          }}
+        />
+      ) : null}
+    </div>
+  )
+  const label = translate('agentPicker.configure', 'Configure {{agent}}', { agent: entry.label })
+  if (submenu && renderAnchor) {
+    return (
+      <AgentLaunchSetupSubmenu
+        open={open}
+        onOpenChange={changeOpen}
+        renderAnchor={renderAnchor}
+        disabled={disabled}
+        label={label}
+      >
+        {panel}
+      </AgentLaunchSetupSubmenu>
+    )
+  }
+
   const trigger = (
     <div className="flex shrink-0 items-center gap-1">
       <Separator orientation="vertical" className="data-[orientation=vertical]:h-4" />
@@ -145,26 +236,19 @@ export function AgentLaunchSetupButton({
         onClick={(event) => event.stopPropagation()}
         // Hovering another menu row moves focus there; only a click outside or Escape closes the panel.
         onFocusOutside={(event) => event.preventDefault()}
+        // The prompt's open / or @ menu takes Escape first.
+        onEscapeKeyDown={(event) => {
+          if (content.current?.querySelector('[contenteditable][aria-expanded="true"]')) {
+            event.preventDefault()
+          }
+        }}
         onCloseAutoFocus={(event) => {
           if (!closeFocus.current.restore) {
             event.preventDefault()
           }
         }}
       >
-        <div className="min-h-0 overflow-y-auto scrollbar-sleek">
-          <AgentLaunchSetupPanel
-            key={draftKey}
-            entry={entry}
-            initial={sessionDrafts.get(draftKey) ?? initial}
-            disabled={disabled}
-            terminalBlocked={terminalBlocked}
-            onDraftChange={(draft) => sessionDrafts.set(draftKey, draft)}
-            onUse={(draft) => {
-              onUse(draft)
-              changeOpen(false)
-            }}
-          />
-        </div>
+        {panel}
       </PopoverContent>
     </Popover>
   )

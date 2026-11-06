@@ -4,7 +4,10 @@ import type {
   AutomaticWorkResumeOutcome,
   AutomaticWorkStatus
 } from '../../shared/host-spawn-admission'
-import type { TerminalLimitStatus, TerminalLimitUpdate } from '../../shared/terminal-limit-policy'
+import type {
+  TerminalLimitStatus,
+  TerminalLimitUpdate
+} from '../../shared/terminal/runtime-policy/terminal-limit-policy'
 
 export abstract class OrcaRuntimeWithPtyController extends OrcaRuntimeWithGetRuntimeId {
   setPtyController(controller: RuntimePtyController | null): void {

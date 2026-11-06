@@ -90,6 +90,7 @@ export type UISlicePreferences = {
   setAgentsGroupBy: (v: ActivityGroupBy) => void
   collapsedGroups: Set<string>
   toggleCollapsedGroup: (key: string) => void
+  setCollapsedGroups: (keys: Set<string>) => void
   worktreeCardProperties: WorktreeCardProperty[]
   _worktreeCardModeDefaulted: boolean
   setWorktreeCardMode: (mode: WorktreeCardMode) => void
@@ -208,6 +209,8 @@ export type UISlicePersistence = {
   setUpdateCardCollapsed: (collapsed: boolean) => void
   updateReassuranceSeen: boolean
   markUpdateReassuranceSeen: () => void
+  seenMacosUpdateRequirement: string | null
+  markMacosUpdateRequirementSeen: (minimumMacosVersion: string) => void
   /** True on the launch where the OSC 52 default-on migration overrode a persisted `false`. */
   osc52ClipboardDefaultOnNoticePending: boolean
   clearOsc52ClipboardDefaultOnNotice: () => void
