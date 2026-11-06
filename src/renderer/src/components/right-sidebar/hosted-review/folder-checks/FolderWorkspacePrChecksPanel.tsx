@@ -1,3 +1,4 @@
+import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { useAppStore } from '@/store/index'
@@ -28,6 +29,7 @@ export default function FolderWorkspacePrChecksPanel({
   const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
   const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
+  const lineageParentIdentities = useAppStore(selectSidebarLineageParentIdentities)
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const repos = useAppStore((s) => s.repos)
   const settings = useAppStore((s) => s.settings)
@@ -48,6 +50,7 @@ export default function FolderWorkspacePrChecksPanel({
         activeWorktreeId,
         folderWorkspaces,
         workspaceLineageByChildKey,
+        lineageParentIdentities,
         worktreeLineageById,
         worktreesByRepo
       }),
@@ -56,6 +59,7 @@ export default function FolderWorkspacePrChecksPanel({
       activeWorktreeId,
       folderWorkspaces,
       workspaceLineageByChildKey,
+      lineageParentIdentities,
       worktreeLineageById,
       worktreesByRepo
     ]

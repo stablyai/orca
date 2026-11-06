@@ -8,6 +8,7 @@ import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualif
 import { getProjectedWorktreeLineage } from '../../../../shared/worktree/workspace-lineage-graph'
 import {
   getSidebarLineageParentsByIdentity,
+  type SidebarLineageParentIdentities,
   getProjectedWorktreeLineageChildrenByParentId
 } from '../../../../shared/sidebar-list/worktree-lineage-projection'
 
@@ -33,6 +34,7 @@ export function attachedWorktreeOwnerKey(owner: AttachedWorktreeOwner): string {
 
 type AttachedWorktreeResolverArgs = {
   executionHostId?: ExecutionHostId | null
+  lineageParentIdentities?: SidebarLineageParentIdentities
   activeWorkspaceKey: string | null
   activeWorktreeId: string | null
   folderWorkspaces: readonly FolderWorkspace[]
@@ -47,6 +49,7 @@ export function getWorktreeActivityTime(worktree: Worktree): number {
 
 export function getAttachedWorktreesForFolderWorkspace({
   executionHostId,
+  lineageParentIdentities,
   activeWorkspaceKey,
   activeWorktreeId,
   folderWorkspaces,
@@ -92,7 +95,11 @@ export function getAttachedWorktreesForFolderWorkspace({
       selectedById.set(row.id, row)
     }
   }
-  const parentByIdentity = getSidebarLineageParentsByIdentity(worktreeLineageById, rows)
+  const parentByIdentity = getSidebarLineageParentsByIdentity(
+    worktreeLineageById,
+    rows,
+    lineageParentIdentities
+  )
   const childrenByParent = new Map<string, Worktree[]>()
   for (const [identity, parent] of parentByIdentity) {
     const child = rows.get(identity)!

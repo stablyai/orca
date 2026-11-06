@@ -1,3 +1,4 @@
+import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
 import { memo, useEffect, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, ArrowUpRight, ChevronRight, GitBranch, RefreshCw } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -196,6 +197,7 @@ export default function FolderWorkspaceSourceControlPanel() {
   const worktreesByRepo = useAppStore(selectWorktreesByRepo)
   const workspaceLineageByChildKey = useAppStore((state) => state.workspaceLineageByChildKey)
   const worktreeLineageById = useAppStore((state) => state.worktreeLineageById)
+  const lineageParentIdentities = useAppStore(selectSidebarLineageParentIdentities)
   const repos = useAppStore((state) => state.repos)
   const resolution = useMemo(
     () =>
@@ -206,7 +208,8 @@ export default function FolderWorkspaceSourceControlPanel() {
         folderWorkspaces,
         worktreesByRepo,
         workspaceLineageByChildKey,
-        worktreeLineageById
+        worktreeLineageById,
+        lineageParentIdentities
       }),
     [
       activeWorkspaceKey,
@@ -215,7 +218,8 @@ export default function FolderWorkspaceSourceControlPanel() {
       folderWorkspaces,
       worktreesByRepo,
       workspaceLineageByChildKey,
-      worktreeLineageById
+      worktreeLineageById,
+      lineageParentIdentities
     ]
   )
   const owners = useMemo(

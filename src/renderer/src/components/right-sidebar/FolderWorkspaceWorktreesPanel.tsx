@@ -1,3 +1,4 @@
+import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
 import WorktreeCard from '@/components/sidebar/workspace-card/surface/WorktreeCard'
 import { stopNestedWorktreeCardBubble } from '@/components/sidebar/worktree-list/rows/header-event-guards'
 import {
@@ -20,6 +21,7 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
   const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
   const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
+  const lineageParentIdentities = useAppStore(selectSidebarLineageParentIdentities)
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const repos = useAppStore((s) => s.repos)
   const [collapsedLineageWorktreeIds, setCollapsedLineageWorktreeIds] = useState<
@@ -33,6 +35,7 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
       activeWorktreeId,
       folderWorkspaces,
       workspaceLineageByChildKey,
+      lineageParentIdentities,
       worktreeLineageById,
       worktreesByRepo
     })

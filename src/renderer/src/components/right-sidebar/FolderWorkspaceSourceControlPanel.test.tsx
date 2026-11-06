@@ -269,3 +269,68 @@ it('refreshes an open diff after a file event with the sidebar closed', async ()
   expect(probes.status).toHaveBeenCalledTimes(1)
   expect(probes.status.mock.calls[0]?.[0]?.worktreeId).toBe(worktree!.id)
 })
+
+it('includes a paired-runtime descendant of a local attached worktree as a section', async () => {
+  const [parent] = setup(1)
+  const remote = {
+    ...parent!,
+    id: 'remote-repo::/remote-child',
+    repoId: 'remote-repo',
+    path: '/remote-child',
+    displayName: 'Remote child',
+    hostId: 'runtime:paired' as const,
+    runtimeOwnerEnvironmentId: 'paired',
+    instanceId: 'remote-instance'
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared lineage selector reads only the status descriptor's installation identity.
+  useAppStore.setState({
+    repos: [
+      ...useAppStore.getState().repos,
+      {
+        id: 'remote-repo',
+        displayName: 'Remote',
+        path: '/remote',
+        kind: 'git',
+        executionHostId: 'runtime:paired'
+      }
+    ],
+    worktreesByRepo: { repo: [parent!], 'remote-repo': [remote] },
+    ownLineageInstallationId: 'local-install',
+    runtimeStatusByEnvironmentId: new Map([
+      [
+        'paired',
+        {
+          status: { hostDescriptor: { installationId: 'remote-install' } },
+          checkedAt: 1
+        }
+      ]
+    ]),
+    crossStoreLineageByStoreKey: {
+      paired: {
+        [`worktree:${remote.id}`]: {
+          childWorkspaceKey: `worktree:${remote.id}`,
+          childInstanceId: 'remote-instance',
+          parent: {
+            installationId: 'local-install',
+            workspaceKey: `worktree:${parent!.id}`,
+            instanceId: 'instance-0'
+          },
+          origin: 'manual',
+          capture: { source: 'explicit-ui', confidence: 'explicit' },
+          createdAt: 2
+        }
+      }
+    },
+    gitStatusByWorktree: { [parent!.id]: [], [remote.id]: [] }
+  } as unknown as Partial<AppState>)
+  await render()
+  expect(
+    [...container.querySelectorAll('section')].map((section) =>
+      section.getAttribute('data-source-control-worktree')
+    )
+  ).toEqual([parent!.id, 'remote-repo::/remote-child'])
+  expect(probes.status.mock.calls.map(([request]) => request.worktreeId)).toEqual([
+    parent!.id,
+    'remote-repo::/remote-child'
+  ])
+})
