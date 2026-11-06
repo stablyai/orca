@@ -35,6 +35,7 @@ function restoreOnHost(args: {
     updatedAt: 1,
     ...(args.recorded ? { launchConfig: args.recorded } : {})
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host's restore reads only the row's pane, agent and provider session.
   const hookRow = {
     paneKey: SOURCE_PANE,
     agentType: 'claude',

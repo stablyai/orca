@@ -19,6 +19,8 @@ const NOTE = { agentArgs: '--dangerously-skip-permissions --verbose', agentEnv: 
 // A hand-typed resume in a paired pane must not replay the retired launch's bypass.
 it('a paired host retiring a launch ends its note for OSC updates and cold restore', () => {
   const store = createTestStore()
+  let clock = 1_700_000_000_000
+  const tick = () => (clock += 1000)
   const osc = () =>
     store
       .getState()
@@ -26,12 +28,12 @@ it('a paired host retiring a launch ends its note for OSC updates and cold resto
         PANE,
         { state: 'working', prompt: 'task', agentType: 'claude' },
         'Claude',
-        { updatedAt: Date.now(), stateStartedAt: 10 },
+        { updatedAt: tick(), stateStartedAt: 10 },
         { tabId: TAB, worktreeId: 'wt' },
         { providerSession: SESSION, launchToken: 'launch-1' }
       )
   const frame = (launchAttested: boolean) => {
-    const agentStatus = { ...store.getState().agentStatusByPaneKey[PANE]!, updatedAt: Date.now() }
+    const agentStatus = { ...store.getState().agentStatusByPaneKey[PANE]!, updatedAt: tick() }
     const surface = {
       type: 'terminal' as const,
       id: `host-tab::${LEAF}`,
@@ -44,9 +46,11 @@ it('a paired host retiring a launch ends its note for OSC updates and cold resto
       launchAttested,
       agentStatus
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: AppState holds every sync-state field the patch reads.
     const state = store.getState() as unknown as WebSessionTabsSyncState
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the patch's fields are AppState fields.
     store.setState({
-      ...buildMirroredAgentStatusPatch(state, [], [surface], [], 'env', 'wt', new Set(), Date.now())
+      ...buildMirroredAgentStatusPatch(state, [], [surface], [], 'env', 'wt', new Set(), tick())
     } as Partial<AppState>)
   }
   const note = () => store.getState().sleepingAgentSessionsByPaneKey[PANE]?.launchConfig

@@ -26,12 +26,15 @@ import type {
   AgentStatusRouting,
   AgentStatusTiming
 } from './agent-status-contract'
-import { registryEntryMatchesStatus } from './agent-status-launch-config'
+import {
+  invocationLaunchConfig,
+  ownerLaunchAttested,
+  registryEntryMatchesStatus
+} from './agent-status-launch-config'
 import { findAgentPaneWorktreeId, getTabIdFromPaneKey } from './agent-status-pane-key-tab-binding'
 import { mergeCurrentOrchestrationContext } from './agent-status-orchestration-context'
 import { deriveAgentStatusLiveFacts } from './agent-status-live-facts'
 import { liveEntryChildFields } from './agent-status-live-entry-children'
-import { invocationLaunchConfig, ownerLaunchAttested } from './agent-status-launch-config'
 import {
   canReuseStatusProviderSession,
   statusRetainsResumableIdentity

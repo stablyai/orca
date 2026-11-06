@@ -13,12 +13,16 @@ export type SetLaunchNoteRequest = {
 }
 
 const isString = (value: unknown): value is string => typeof value === 'string'
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+const isStringRecord = (value: unknown): value is Record<string, string> =>
+  isRecord(value) && Object.values(value).every(isString)
 
 export function parseDaemonLaunchNoteChange(raw: unknown): DaemonLaunchNoteChange | null {
-  if (!raw || typeof raw !== 'object') {
+  if (!isRecord(raw)) {
     return null
   }
-  const { arm, retire } = raw as Record<string, unknown>
+  const { arm, retire } = raw
   if (isString(retire)) {
     return { retire }
   }
@@ -27,22 +31,20 @@ export function parseDaemonLaunchNoteChange(raw: unknown): DaemonLaunchNoteChang
 }
 
 function parseDaemonLaunchNote(raw: unknown): DaemonLaunchNote | null {
-  if (!raw || typeof raw !== 'object') {
+  if (!isRecord(raw)) {
     return null
   }
-  const { launchToken, launchConfig: config } = raw as Record<string, unknown>
+  const { launchToken, launchConfig: config } = raw
   if (!isString(launchToken) || launchToken.length === 0 || launchToken.length > 128) {
     return null
   }
-  if (!config || typeof config !== 'object') {
+  if (!isRecord(config)) {
     return null
   }
-  const { agentArgs, agentEnv, agentCommand, ompResumeFilePath } = config as Record<string, unknown>
+  const { agentArgs, agentEnv, agentCommand, ompResumeFilePath } = config
   if (
     !isString(agentArgs) ||
-    !agentEnv ||
-    typeof agentEnv !== 'object' ||
-    !Object.values(agentEnv).every(isString) ||
+    !isStringRecord(agentEnv) ||
     (agentCommand !== undefined && !isString(agentCommand)) ||
     (ompResumeFilePath !== undefined && !isString(ompResumeFilePath))
   ) {
@@ -52,7 +54,7 @@ function parseDaemonLaunchNote(raw: unknown): DaemonLaunchNote | null {
     launchToken,
     launchConfig: {
       agentArgs,
-      agentEnv: { ...(agentEnv as Record<string, string>) },
+      agentEnv: { ...agentEnv },
       ...(agentCommand ? { agentCommand } : {}),
       ...(ompResumeFilePath ? { ompResumeFilePath } : {})
     }
