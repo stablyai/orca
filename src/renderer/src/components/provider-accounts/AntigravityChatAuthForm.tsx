@@ -3,7 +3,8 @@ import {
   readAntigravityChatSignInSnapshot,
   subscribeAntigravityChatSignIns
 } from '@/runtime/antigravity-chat-sign-in-status'
-import { useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
 import { translate } from '@/i18n/i18n'
 import { callAntigravityChatAuthConfig } from '@/runtime/runtime-antigravity-accounts-client'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/structured-agent-session-host-capability'
@@ -121,47 +122,52 @@ function AuthForm({
   const unavailable = error?.recovery === 'reload'
   const displayedMethod = unavailable && !edited.current ? '' : method
   const environmentId = owner.kind === 'environment' ? owner.environmentId : null
-  async function load(current: () => boolean = () => mounted.current) {
-    const read = ++reads.current
-    try {
-      const config = await callAntigravityChatAuthConfig(owner)
-      if (!current() || !mounted.current || read !== reads.current) {
+  const load = useCallback(
+    async (current: () => boolean = () => mounted.current) => {
+      const read = ++reads.current
+      try {
+        const target: RuntimeClientTarget =
+          environmentId === null ? { kind: 'local' } : { kind: 'environment', environmentId }
+        const config = await callAntigravityChatAuthConfig(target)
+        if (!current() || !mounted.current || read !== reads.current) {
+          return undefined
+        }
+        setLoaded(true)
+        if (!edited.current) {
+          if (observation.kind === 'known' && observation.state.auth === 'signedIn') {
+            setAuthenticatedMethod(config?.method ?? null)
+          }
+          setMethod(config?.method ?? '')
+          setProject(config?.gcpProject ?? '')
+          setLocation(config?.gcpLocation ?? '')
+        }
+        setError(
+          config
+            ? null
+            : {
+                message: translate(
+                  'accounts.antigravity.settingsIncomplete',
+                  'Choose an Antigravity account type and enter its Google Cloud project and location.'
+                ),
+                recovery: null
+              }
+        )
+        return config
+      } catch {
+        if (current() && mounted.current && read === reads.current) {
+          setError({
+            message: translate(
+              'accounts.antigravity.settingsLoadFailed',
+              "Orca couldn't load your Antigravity sign-in settings. Try again."
+            ),
+            recovery: 'reload'
+          })
+        }
         return undefined
       }
-      setLoaded(true)
-      if (!edited.current) {
-        if (observation.kind === 'known' && observation.state.auth === 'signedIn') {
-          setAuthenticatedMethod(config?.method ?? null)
-        }
-        setMethod(config?.method ?? '')
-        setProject(config?.gcpProject ?? '')
-        setLocation(config?.gcpLocation ?? '')
-      }
-      setError(
-        config
-          ? null
-          : {
-              message: translate(
-                'accounts.antigravity.settingsIncomplete',
-                'Choose an Antigravity account type and enter its Google Cloud project and location.'
-              ),
-              recovery: null
-            }
-      )
-      return config
-    } catch {
-      if (current() && mounted.current && read === reads.current) {
-        setError({
-          message: translate(
-            'accounts.antigravity.settingsLoadFailed',
-            "Orca couldn't load your Antigravity sign-in settings. Try again."
-          ),
-          recovery: 'reload'
-        })
-      }
-      return undefined
-    }
-  }
+    },
+    [environmentId, observation]
+  )
   useEffect(() => {
     if (!supported) {
       return
@@ -171,7 +177,7 @@ function AuthForm({
     return () => {
       current = false
     }
-  }, [environmentId, supported, observation])
+  }, [supported, load])
   const draft = (nextMethod = method, nextProject = project, nextLocation = location) => ({
     method: nextMethod,
     ...(nextProject ? { gcpProject: nextProject } : {}),
