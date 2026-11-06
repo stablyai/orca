@@ -8,10 +8,10 @@ import {
   formatCandidateProvenance,
   formatCandidateSource,
   getDetectedSetupPreviewContent,
+  isSetupScriptPromptActionable,
   isSetupScriptPromptDismissed,
   ignoresSharedSetupScripts,
-  inspectSetupScriptPromptState,
-  isSilentSetupScriptPromptState
+  inspectSetupScriptPromptState
 } from '@/lib/setup-script-prompt'
 import { checkRuntimeHooks, inspectRuntimeSetupScriptImports } from '@/runtime/runtime-hooks-client'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
@@ -136,7 +136,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
       promptState?.repoId !== activeRepo.id ||
       promptState.repoHostIdentity !== activeRepoHostIdentity ||
       promptState.status !== 'ok' ||
-      promptState.hasEffectiveSetup
+      !isSetupScriptPromptActionable(promptState, activeRepo)
     ) {
       return
     }
@@ -378,8 +378,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
     promptTargetHidden ||
     !activeRepo ||
     !renderedPromptState ||
-    (renderedPromptState.status === 'ok' && renderedPromptState.hasEffectiveSetup) ||
-    isSilentSetupScriptPromptState(renderedPromptState)
+    !isSetupScriptPromptActionable(renderedPromptState, activeRepo)
   ) {
     return null
   }

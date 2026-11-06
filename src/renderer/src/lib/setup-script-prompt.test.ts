@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   buildImportedHookSettings,
   getDetectedSetupPreviewContent,
-  getSetupScriptFirstLine
+  getSetupScriptFirstLine,
+  isSetupScriptPromptActionable
 } from './setup-script-prompt'
 import { SETUP_SCRIPT_IMPORT_PROVIDERS } from '../../../shared/workspace-setup/setup-script-import-providers'
 import type { Repo } from '../../../shared/repo-types'
@@ -50,5 +51,40 @@ describe('getSetupScriptFirstLine', () => {
       firstLine: 'bun install',
       hasMore: false
     })
+  })
+})
+
+describe('isSetupScriptPromptActionable', () => {
+  const okWithoutSetup = {
+    status: 'ok' as const,
+    repoId: 'repo',
+    hasEffectiveSetup: false,
+    hasSharedHooks: false,
+    candidate: null
+  }
+
+  it('stays hidden when nothing was detected and there is nothing to warn about', () => {
+    expect(isSetupScriptPromptActionable(okWithoutSetup, repo)).toBe(false)
+  })
+
+  it('shows the warning when local-only policy ignores shared setup scripts', () => {
+    const localOnlyRepo = {
+      hookSettings: {
+        mode: 'auto' as const,
+        commandSourcePolicy: 'local-only' as const,
+        scripts: { setup: '', archive: '' }
+      }
+    }
+    expect(isSetupScriptPromptActionable(okWithoutSetup, localOnlyRepo)).toBe(true)
+  })
+
+  it('shows a detected package-manager candidate', () => {
+    const candidate = {
+      provider: 'package-manager' as const,
+      label: 'package manager',
+      files: ['package.json', 'pnpm-lock.yaml'],
+      setup: 'pnpm install'
+    }
+    expect(isSetupScriptPromptActionable({ ...okWithoutSetup, candidate }, repo)).toBe(true)
   })
 })

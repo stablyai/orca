@@ -94,6 +94,20 @@ export function ignoresSharedSetupScripts(repo: Pick<Repo, 'hookSettings'>): boo
   )
 }
 
+// The card only appears when it has something to offer: a retry, a detected command, or a local-only warning.
+export function isSetupScriptPromptActionable(
+  state: SetupScriptPromptInspection,
+  repo: Pick<Repo, 'hookSettings'>
+): boolean {
+  if (state.status === 'error') {
+    return true
+  }
+  if (state.status !== 'ok' || state.hasEffectiveSetup) {
+    return false
+  }
+  return state.candidate !== null || ignoresSharedSetupScripts(repo)
+}
+
 export function getSetupScriptPromptDismissalKey(repoHostIdentity: string): string {
   return `${SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX}${repoHostIdentity}`
 }
