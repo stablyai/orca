@@ -157,9 +157,9 @@ function frame(connection: FakeConnection, message: Record<string, unknown>): vo
 function exit(connection: FakeConnection, stderr: string): void {
   connection.closed = true
   connection.exitVerdict = { root: 'exited', tree: 'exited' }
-  connection.handlers.onExit?.(
-    claudeStreamJsonExitError(stderr, { code: 1, signal: null, processless: false })
-  )
+  const error = claudeStreamJsonExitError(stderr, { code: 1, signal: null, processless: false })
+  connection.exited = Promise.resolve(error)
+  connection.handlers.onExit?.(error)
 }
 
 async function settled(clientMessageId: string) {
@@ -284,16 +284,27 @@ it('leaves a Stop during startup to Stop when Claude then reports a startup fail
   expect(claude.connections).toHaveLength(1)
 })
 
-it('recovers from an unanswered startup exit with no failure row', async () => {
-  await send('continue this chat')
-  exit(await starting(1), GENERIC_TEXT)
-  const recovered = await starting(2)
-  recovered.initialization.resolve({})
-  // The queued send reaches the recovered Claude.
-  await eventually(() => expect(recovered.sent).toHaveLength(1))
-  await host.flushStreamedEvents(SESSION)
-  const { items } = await host.journalSnapshot(SESSION)
-  expect(items.filter((item) => item.body.kind === 'status' && item.body.tone === 'error')).toEqual(
-    []
-  )
-})
+it.each(['no progress', 'SessionStart progress'] as const)(
+  'recovers from an unanswered startup exit with no failure row (%s)',
+  async (progress) => {
+    await send('continue this chat')
+    const connection = await starting(1)
+    if (progress === 'SessionStart progress') {
+      frame(connection, {
+        type: 'system',
+        subtype: 'hook_started',
+        hook_name: 'SessionStart:startup'
+      })
+    }
+    exit(connection, GENERIC_TEXT)
+    const recovered = await starting(2)
+    recovered.initialization.resolve({})
+    // The queued send reaches the recovered Claude.
+    await eventually(() => expect(recovered.sent).toHaveLength(1))
+    await host.flushStreamedEvents(SESSION)
+    const { items } = await host.journalSnapshot(SESSION)
+    expect(
+      items.filter((item) => item.body.kind === 'status' && item.body.tone === 'error')
+    ).toEqual([])
+  }
+)

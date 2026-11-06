@@ -79,6 +79,7 @@ export async function readClaudeStartupFacts(input: {
   })
   const initialization = await Promise.race([
     control.catch(async (error: unknown) => {
+      const exit = await claudeExitForReport(input.connection, error)
       let proof: unknown
       try {
         input.initProof.seen()
@@ -90,8 +91,8 @@ export async function readClaudeStartupFacts(input: {
       throw claudeStartFailure([
         input.connection.startupFailure?.(),
         proof,
-        proof && isClaudeQueryClosed(error) ? undefined : error,
-        await claudeExitForReport(input.connection, error)
+        (proof || providerExitObserved(exit)) && isClaudeQueryClosed(error) ? undefined : error,
+        exit
       ])
     }),
     Promise.race([
