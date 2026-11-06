@@ -10,6 +10,11 @@ import { agentJournalItemKey } from '../../../../shared/agent-session/journal/ag
 import type { JournalReplacementItem } from '../context-epochs/journal-epoch-replacement'
 import { createNewestItemWindow } from './journal-newest-item-window'
 import {
+  createCodexHistoryPlacement,
+  codexHistoryRootStart,
+  type CodexHistoryRoot
+} from './journal-codex-history-placement'
+import {
   boundLegacyImportBody,
   type JournalPayloadLimits
 } from '../item-lifecycle/journal-payload-bounds'
@@ -20,7 +25,7 @@ import {
 
 type Turn = {
   id: string
-  order: number
+  root?: CodexHistoryRoot
   complete: boolean
   source: Record<string, unknown>
   userItemId?: string
@@ -40,16 +45,11 @@ export function createCodexHistoryCollector(
 ) {
   const window = createNewestItemWindow(maxBytes)
   const facts = new Map<string, Fact>()
-  const placement = new WeakMap<
-    JournalReplacementItem,
-    { group: number; at: number; position: number; completedSnapshot: boolean }
-  >()
+  const placement = createCodexHistoryPlacement()
   let factBytes = 0,
-    order = 0,
     position = 0,
     segment = '',
     lastStart = -Infinity,
-    lastTurnOrder = 0,
     lastRecordAt = 0,
     lastTurnId: string | null = null
   let interval: { at: number; position: number; turnKey: string } | null = null
@@ -78,41 +78,44 @@ export function createCodexHistoryCollector(
   const store = (
     key: string,
     row: JournalReplacementItem,
-    group: number,
+    group: CodexHistoryRoot | undefined,
     at: number,
-    completedSnapshot = false
+    completedSnapshot = false,
+    kind: 'root' | 'opener' | 'item' = 'item'
   ) => {
-    const previous = placement.get(window.get(key) ?? row)
-    placement.set(row, { group, at, position: previous?.position ?? position++, completedSnapshot })
+    placement.set(row, window.get(key), group, at, kind, completedSnapshot)
     window.upsert(key, row, 128)
   }
   const turnRow = (turn: Turn) => {
+    if (!turn.root) {
+      return
+    }
     const row: JournalReplacementItem = {
       identity: codexTurnLifecycleIdentity(sessionId, turn.id),
       body: projectCodexHistoryTurn(segment, turn.source, turn.userItemId),
       ownerFence: 0,
       turnScope: { kind: 'thread' }
     }
-    store(`turn:${segment}:${turn.id}`, row, turn.order, -Infinity)
+    store(`turn:${segment}:${turn.id}`, row, turn.root, -Infinity, false, 'root')
   }
   return {
     push(row: JournalReplacementItem) {
-      store(`legacy:${position}`, row, ++order, position)
+      store(`legacy:${position++}`, row, undefined, 0)
     },
     record(descriptor: CodexHistoryRecord) {
-      if (!descriptor.paginated) {
-        return
-      }
       if (segment !== descriptor.segmentId) {
         segment = descriptor.segmentId
         facts.clear()
         factBytes = 0
         interval = null
         lastStart = -Infinity
-        lastTurnOrder = ++order
+        placement.beginSegment()
         lastRecordAt = 0
         lastTurnId = null
         window.reserve(0)
+      }
+      if (!descriptor.paginated) {
+        return
       }
       const record = descriptor.record
       if (record?.type !== 'event_msg') {
@@ -126,6 +129,9 @@ export function createCodexHistoryCollector(
         lastRecordAt = time
       }
       let turn = facts.get(turnKey)?.turn
+      const retainedTurn = window.get(turnKey)
+      const retainedRoot = placement.get(retainedTurn)
+      const root = turn?.root ?? (retainedRoot?.kind === 'root' ? retainedRoot.group : undefined)
       if (['task_started', 'task_complete', 'turn_aborted'].includes(String(payload.type))) {
         if (!turnId) {
           return
@@ -140,25 +146,28 @@ export function createCodexHistoryCollector(
           interval = null
           lastStart = time
           lastTurnId = turnId
-          lastTurnOrder = ++order
           turn = {
             id: turnId,
-            order: lastTurnOrder,
             complete: true,
             source: {
               id: turnId,
-              status: 'inProgress',
-              startedAt: typeof payload.started_at === 'number' ? payload.started_at : time / 1000
+              status: 'inProgress'
             }
           }
         }
         if (!turn) {
-          const retained = window.get(turnKey)
-          // Lost proof cannot promote old metadata past the latest established root.
-          const group =
-            (retained ? placement.get(retained)?.group : undefined) ??
-            (turnId === lastTurnId ? lastTurnOrder : lastTurnOrder - 0.5)
-          turn = { id: turnId, order: group, complete: false, source: { id: turnId } }
+          turn = { id: turnId, complete: false, source: { id: turnId } }
+        }
+        const startedAt =
+          typeof turn.source.startedAt === 'number'
+            ? turn.source.startedAt
+            : retainedTurn?.body.kind === 'turn' && retainedTurn.body.startedAt !== undefined
+              ? retainedTurn.body.startedAt / 1000
+              : codexHistoryRootStart(payload, time)
+        turn.root =
+          root ?? (startedAt !== undefined ? placement.root(turnId, startedAt) : undefined)
+        if (startedAt !== undefined) {
+          turn.source.startedAt = startedAt
         }
         if (payload.type !== 'task_started') {
           const wasTerminal = ['completed', 'failed', 'interrupted'].includes(
@@ -273,7 +282,7 @@ export function createCodexHistoryCollector(
       store(
         rowKey,
         row,
-        turn?.order ?? ++order,
+        root,
         item.type === 'userMessage'
           ? -Infinity
           : typeof start === 'number' && Number.isFinite(start)
@@ -281,22 +290,10 @@ export function createCodexHistoryCollector(
             : typeof end === 'number' && Number.isFinite(end)
               ? end
               : lastRecordAt,
-        payload.type === 'item_completed'
+        payload.type === 'item_completed',
+        item.type === 'userMessage' ? 'opener' : 'item'
       )
     },
-    items: () => {
-      const rows = window.items()
-      const keys = new Set(rows.map((row) => agentJournalItemKey(row.identity)))
-      for (const row of rows) {
-        if (row.body.kind === 'turn' && row.body.userItemId && !keys.has(row.body.userItemId)) {
-          delete row.body.userItemId
-        }
-      }
-      return rows.sort((a, b) => {
-        const x = placement.get(a)!,
-          y = placement.get(b)!
-        return x.group - y.group || x.at - y.at || x.position - y.position
-      })
-    }
+    items: () => placement.items(window.items())
   }
 }

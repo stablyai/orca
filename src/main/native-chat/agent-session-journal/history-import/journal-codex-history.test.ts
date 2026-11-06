@@ -393,19 +393,15 @@ it('does not regain first-terminal proof after eviction, replay or a new task st
   }))
   expect(project([...prior, ...source], 4096)).toMatchObject({ endedAs: 'interrupted' })
   const background = await recordedCodexRollout('b')
+  const backgroundChurn = Array.from({ length: 100 }, (_, n) => ({
+    ...background[12]!,
+    payload: {
+      ...background[12]!.payload,
+      item: { ...readRecord(background[12]!.payload.item), id: `replay-evict-${n}` }
+    }
+  }))
   const oldTurnReplay = collect(
-    [
-      ...background.slice(0, 8),
-      ...Array.from({ length: 100 }, (_, n) => ({
-        ...background[12]!,
-        payload: {
-          ...background[12]!.payload,
-          item: { ...readRecord(background[12]!.payload.item), id: `r2-evict-${n}` }
-        }
-      })),
-      ...background.slice(13),
-      background[7]!
-    ],
+    [...background.slice(0, 8), ...backgroundChurn, ...background.slice(13), background[7]!],
     16384
   )
   expect(oldTurnReplay.findLast((row) => row.body.kind === 'turn')?.body).toMatchObject({
@@ -413,6 +409,85 @@ it('does not regain first-terminal proof after eviction, replay or a new task st
     state: 'interrupted',
     outcome: 'cancellation'
   })
+  const evictedBackground = [...background, ...backgroundChurn]
+  const oldAbort = {
+    ...background[7]!,
+    payload: { ...background[7]!.payload, type: 'turn_aborted', reason: 'interrupted' }
+  }
+  for (const tail of [
+    [background[11]!, background[7]!],
+    [background[8]!, background[1]!, background[11]!, background[7]!],
+    [background[11]!, oldAbort]
+  ]) {
+    const rows = collect([...evictedBackground, ...tail], 16384)
+    const turns = rows.flatMap((row) => (row.body.kind === 'turn' ? [row.body] : []))
+    expect(turns.map((turn) => turn.turnId)).toEqual([
+      '01a1b0e1-897d-73e0-b910-5b854abbfcb7',
+      '01a1b0e1-c125-7c10-ab91-ef9f86b81b3c'
+    ])
+    expect(turns.at(-1)).toMatchObject({
+      startedAt: 1793968947000,
+      state: 'completed',
+      outcome: 'success'
+    })
+  }
+  const sparse = [background[11]!, background[7]!].map((record) => ({
+    ...record,
+    timestamp: undefined,
+    payload: { ...record.payload, started_at: undefined }
+  }))
+  const unknownRoots = collect([...evictedBackground, ...sparse], 16384)
+  expect(unknownRoots.filter((row) => row.body.kind === 'turn')).toEqual([])
+  expect(unknownRoots.at(-1)).toMatchObject({
+    body: { kind: 'tool-call', callId: 'replay-evict-99' },
+    turnScope: {
+      kind: 'turn',
+      turnItemId: 'legacy:codex:bounded:turn-lifecycle%3A01a1b0e1-897d-73e0-b910-5b854abbfcb7'
+    }
+  })
+  for (const rows of [
+    collect([...evictedBackground, ...sparse, background[8]!], 16384),
+    collect([background[8]!, background[11]!, sparse[0]!], 16384)
+  ]) {
+    expect(rows.findLast((row) => row.body.kind === 'turn')?.body).toMatchObject({
+      turnId: '01a1b0e1-c125-7c10-ab91-ef9f86b81b3c',
+      startedAt: 1793968947000,
+      state: 'completed',
+      outcome: 'success'
+    })
+  }
+  // Equal recorded seconds give replay invariance, not evidence of physical chronology.
+  const tied = {
+    ...background[7]!,
+    payload: { ...background[7]!.payload, started_at: 1793968947 }
+  }
+  const observedStart = {
+    ...background[1]!,
+    timestamp: '2026-11-06T12:42:27.999Z',
+    payload: { ...background[1]!.payload, started_at: undefined }
+  }
+  for (const tail of [
+    [tied, background[11]!],
+    [background[11]!, tied],
+    [observedStart, background[8]!, tied, background[11]!]
+  ]) {
+    expect(
+      collect([...evictedBackground, ...tail], 16384).flatMap((row) =>
+        row.body.kind === 'turn' ? [row.body.turnId] : []
+      )
+    ).toEqual(['01a1b0e1-897d-73e0-b910-5b854abbfcb7', '01a1b0e1-c125-7c10-ab91-ef9f86b81b3c'])
+  }
+  const unscoped = {
+    ...background[12]!,
+    payload: {
+      ...background[12]!.payload,
+      turn_id: undefined,
+      item: { ...readRecord(background[12]!.payload.item), id: 'unscoped-after-frontier' }
+    }
+  }
+  expect(
+    collect([...evictedBackground, unscoped, background[11]!, background[7]!], 16384).at(-1)?.body
+  ).toMatchObject({ callId: 'unscoped-after-frontier' })
   const running = {
     ...closure,
     payload: {
