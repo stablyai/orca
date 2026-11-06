@@ -83,9 +83,9 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     confirmForegroundProcess: (ptyId) => confirmForegroundProcessFromRuntimeController(ptyId),
     confirmShellForeground: (ptyId) => confirmShellForegroundFromRuntimeController(ptyId),
     // Why local only: the daemon that outlives main is this host's.
-    setLaunchNote: (ptyId, note) => {
+    setLaunchNote: (ptyId, change) => {
       if (hasPtyProviderForInspection(ptyId)) {
-        getProviderForPty(ptyId).setLaunchNote?.(ptyId, note)
+        getProviderForPty(ptyId).setLaunchNote?.(ptyId, change)
       }
     },
     getCwd: (ptyId) => getCwdFromRuntimeController(ptyId),

@@ -1,4 +1,4 @@
-import type { DaemonLaunchNote } from '../../protocol/daemon-launch-note-protocol'
+import type { DaemonLaunchNoteChange } from '../../protocol/daemon-launch-note-protocol'
 import {
   PTY_FOREGROUND_OBSERVATION_PROTOCOL_VERSION,
   COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
@@ -91,9 +91,9 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
     }
   }
 
-  setLaunchNote(id: string, note: DaemonLaunchNote | null): void {
+  setLaunchNote(id: string, change: DaemonLaunchNoteChange): void {
     // Why fire and forget: an older daemon rejects the request and keeps no note, so restore declines.
-    void this.client.request('setLaunchNote', { sessionId: id, note }).catch(() => undefined)
+    void this.client.request('setLaunchNote', { sessionId: id, change }).catch(() => undefined)
   }
 
   async confirmShellForeground(id: string): Promise<boolean> {

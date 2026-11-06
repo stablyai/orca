@@ -1,4 +1,4 @@
-import type { DaemonLaunchNote } from '../daemon/protocol/daemon-launch-note-protocol'
+import type { DaemonLaunchNoteChange } from '../daemon/protocol/daemon-launch-note-protocol'
 import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
@@ -209,7 +209,7 @@ export type IPtyProvider = {
   /** Fresh execution-host proof that the spawned shell owns the PTY foreground. */
   confirmShellForeground?: (id: string) => Promise<boolean>
   /** Persist main's live launch where the PTY outlives main; only the daemon keeps one. */
-  setLaunchNote?: (id: string, note: DaemonLaunchNote | null) => void
+  setLaunchNote?: (id: string, change: DaemonLaunchNoteChange) => void
   serialize(ids: string[]): Promise<string>
   revive(state: string): Promise<void>
   listProcesses(opts?: {

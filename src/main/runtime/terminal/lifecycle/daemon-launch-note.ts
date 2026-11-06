@@ -16,12 +16,12 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
   protected armDaemonLaunchNote(ptyId: string, pty: RuntimePtyWorktreeRecord): void {
     const note = daemonLaunchNoteOf(pty)
     if (note) {
-      this.ptyController?.setLaunchNote?.(ptyId, note)
+      this.ptyController?.setLaunchNote?.(ptyId, { arm: note })
     }
   }
 
-  /** Nothing reaches a daemon PTY while main is down, so the agent still in the foreground is the
-   *  one the unretired note launched; anything else, including every Windows read, declines. */
+  /** The daemon retires a finished launch even while main is down, and the agent still in the
+   *  foreground covers shells without that marker; anything else, including every Windows read, declines. */
   protected async rearmReattachedLaunch(
     ptyId: string,
     pty: RuntimePtyWorktreeRecord,
@@ -34,16 +34,13 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
     const foreground = await this.readLaunchedAgentForeground(ptyId, launchAgent).catch(
       () => 'unknown' as const
     )
-    if (foreground === 'shell') {
-      this.ptyController?.setLaunchNote?.(ptyId, null)
+    if (this.ptysById.get(ptyId) !== pty || pty.incarnationId !== incarnationId) {
+      return
     }
-    if (
-      foreground === 'agent' &&
-      this.ptysById.get(ptyId) === pty &&
-      pty.incarnationId === incarnationId &&
-      pty.launchAgent === launchAgent &&
-      !pty.launchToken
-    ) {
+    if (foreground === 'shell') {
+      this.ptyController?.setLaunchNote?.(ptyId, { retire: launchNote.launchToken })
+    }
+    if (foreground === 'agent' && pty.launchAgent === launchAgent && !pty.launchToken) {
       pty.launchToken = launchNote.launchToken
       pty.launchIncarnationId = incarnationId
       pty.launchConfig = launchNote.launchConfig

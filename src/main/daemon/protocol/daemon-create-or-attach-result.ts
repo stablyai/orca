@@ -26,7 +26,7 @@ export type DaemonCreateOrAttachResult = {
 
 export function getDaemonSessionResultMetadata(session: {
   launchAgent: TuiAgent | null
-  launchNote: DaemonLaunchNote | null
+  launchNote: { current: DaemonLaunchNote | null }
   historySeeded: boolean | undefined
   wslDistro: string | null
 }): {
@@ -37,7 +37,7 @@ export function getDaemonSessionResultMetadata(session: {
 } {
   return {
     ...(session.launchAgent ? { launchAgent: session.launchAgent } : {}),
-    ...(session.launchNote ? { launchNote: session.launchNote } : {}),
+    ...(session.launchNote.current ? { launchNote: session.launchNote.current } : {}),
     ...(session.historySeeded !== undefined ? { historySeeded: session.historySeeded } : {}),
     // Null identifies native sessions; only older daemons omit the field.
     wslDistro: session.wslDistro

@@ -11,13 +11,9 @@ import { SessionProcessInspection } from './session-process-inspection'
 import type { JobTerminationOutcome } from '../../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import type { DaemonLaunchNote } from '../protocol/daemon-launch-note-protocol'
 import { randomUUID } from 'node:crypto'
 import { PtyStartupIngress } from '../../../shared/terminal/pty/ingress/pty-startup-ingress'
-import {
-  createOsc133CommandFinishedScanner,
-  type Osc133CommandFinishedScanner
-} from '../../../shared/terminal/output/terminal-osc133-command-finished'
+import { SessionLaunchNote } from './session-launch-note'
 
 import type {
   SessionState,
@@ -32,9 +28,7 @@ export class Session extends SessionProcessInspection {
   readonly incarnationId = randomUUID()
   readonly terminalHandle: string | null
   readonly launchAgent: TuiAgent | null
-  /** Main's live launch, so a reattach re-arms only an unretired one. */
-  launchNote: DaemonLaunchNote | null = null
-  private launchNoteRetirement: Osc133CommandFinishedScanner | null = null
+  readonly launchNote = new SessionLaunchNote()
   readonly wslDistro: string | null
   readonly processNameIsSpawnFile: boolean
   readonly shellIsRootChild: boolean
@@ -87,7 +81,7 @@ export class Session extends SessionProcessInspection {
     try {
       this.subprocess.onData((data) => {
         if (!this._disposed) {
-          this.launchNoteRetirement?.scan(data)
+          this.launchNote.scan(data)
           this.shellReady.ingestSubprocessData(data)
         }
       })
@@ -99,14 +93,6 @@ export class Session extends SessionProcessInspection {
       this.output.disposeEmulator()
       throw error
     }
-  }
-
-  /** Retire on command-finished here too: the launch can finish while main is down. */
-  setLaunchNote(note: DaemonLaunchNote | null): void {
-    this.launchNote = note
-    this.launchNoteRetirement = note
-      ? createOsc133CommandFinishedScanner(() => this.setLaunchNote(null))
-      : null
   }
 
   get state(): SessionState {

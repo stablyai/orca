@@ -1,4 +1,4 @@
-import type { DaemonLaunchNote } from '../protocol/daemon-launch-note-protocol'
+import type { DaemonLaunchNoteChange } from '../protocol/daemon-launch-note-protocol'
 import { terminalSessionExitCode } from './terminal-host-returned-process'
 import { runTerminalCreation, type PendingTerminalCreation } from './terminal-creation-work'
 import { beginTerminalHostFencedTermination } from './terminal-host-fenced-termination'
@@ -262,8 +262,8 @@ export class TerminalHost {
     )
   }
 
-  setLaunchNote(sessionId: string, note: DaemonLaunchNote | null): void {
-    this.sessions.get(sessionId)?.setLaunchNote(note)
+  setLaunchNote(sessionId: string, change: DaemonLaunchNoteChange): void {
+    this.sessions.get(sessionId)?.launchNote.change(change)
   }
 
   clearScrollback(sessionId: string): void {

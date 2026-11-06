@@ -3,16 +3,30 @@ import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/li
 /** The Orca launch running in a session, kept by the daemon so it outlives a main restart. */
 export type DaemonLaunchNote = { launchToken: string; launchConfig: SleepingAgentLaunchConfig }
 
-/** Main arms the note when it admits a launch and clears it (null) when that launch retires. */
+/** Main arms the launch it admits and retires it by token, so a stale retire cannot clear a newer launch. */
+export type DaemonLaunchNoteChange = { arm: DaemonLaunchNote } | { retire: string }
+
 export type SetLaunchNoteRequest = {
   id: string
   type: 'setLaunchNote'
-  payload: { sessionId: string; note: DaemonLaunchNote | null }
+  payload: { sessionId: string; change: DaemonLaunchNoteChange }
 }
 
 const isString = (value: unknown): value is string => typeof value === 'string'
 
-export function parseDaemonLaunchNote(raw: unknown): DaemonLaunchNote | null {
+export function parseDaemonLaunchNoteChange(raw: unknown): DaemonLaunchNoteChange | null {
+  if (!raw || typeof raw !== 'object') {
+    return null
+  }
+  const { arm, retire } = raw as Record<string, unknown>
+  if (isString(retire)) {
+    return { retire }
+  }
+  const note = parseDaemonLaunchNote(arm)
+  return note ? { arm: note } : null
+}
+
+function parseDaemonLaunchNote(raw: unknown): DaemonLaunchNote | null {
   if (!raw || typeof raw !== 'object') {
     return null
   }

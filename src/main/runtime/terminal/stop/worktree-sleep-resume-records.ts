@@ -36,7 +36,6 @@ export type WorktreeSleepResumeRecorder = {
 export async function captureWorktreeSleepResumeRecords(args: {
   worktreeId: string
   paneKeysByPtyId: ReadonlyMap<string, Iterable<string>>
-  /** The agent each PTY was launched as, with its recipe; resume must reuse a custom binary/args. */
   /** Each PTY's launch facts; only a launch main still holds supplies its recipe. */
   launchByPtyId: ReadonlyMap<string, PtyLaunchFacts | undefined>
   /** Read after each presence probe, so a conversation started during it is the one captured. */

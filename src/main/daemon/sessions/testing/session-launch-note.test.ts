@@ -1,49 +1,26 @@
-import { afterEach, describe, expect, it } from 'vitest'
-import { Session } from '../session'
+import { describe, expect, it } from 'vitest'
+import { SessionLaunchNote } from '../session-launch-note'
 
 const NOTE = { launchToken: 'launch-1', launchConfig: { agentArgs: '--verbose', agentEnv: {} } }
-
-let session: Session | null = null
-let emit: (data: string) => void = () => {}
-
-afterEach(() => {
-  session?.dispose()
-  session = null
-})
-
-function createSession(): Session {
-  session = new Session({
-    sessionId: 'launch-note-session',
-    cols: 80,
-    rows: 24,
-    shellReadySupported: false,
-    subprocess: {
-      pid: 1,
-      getForegroundProcess: () => null,
-      write() {},
-      resize() {},
-      kill() {},
-      terminateOwnedTree: () => 'unavailable' as const,
-      forceKill() {},
-      signal() {},
-      onData(cb: (data: string) => void) {
-        emit = cb
-      },
-      onExit() {},
-      dispose() {}
-    }
-  })
-  return session
-}
+const NEXT = { launchToken: 'launch-2', launchConfig: { agentArgs: '', agentEnv: {} } }
 
 // The launch can finish while main is down, so the daemon must retire the note without main.
 describe('a daemon session launch note', () => {
-  it('retires when the launched command finishes', () => {
-    const s = createSession()
-    s.setLaunchNote(NOTE)
-    emit('agent output\r\n')
-    expect(s.launchNote).toEqual(NOTE)
-    emit('\x1b]133;D;143\x07')
-    expect(s.launchNote).toBeNull()
+  it('retires when the launched command finishes, even across a same-launch re-arm', () => {
+    const note = new SessionLaunchNote()
+    note.change({ arm: NOTE })
+    note.scan('agent output\x1b]133;')
+    note.change({ arm: NOTE })
+    expect(note.current).toEqual(NOTE)
+    note.scan('D;143\x07')
+    expect(note.current).toBeNull()
+  })
+
+  it('ignores a retire for an earlier launch', () => {
+    const note = new SessionLaunchNote()
+    note.change({ arm: NOTE })
+    note.change({ arm: NEXT })
+    note.change({ retire: 'launch-1' })
+    expect(note.current).toEqual(NEXT)
   })
 })
