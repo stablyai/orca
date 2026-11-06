@@ -45,6 +45,7 @@ export function useNativeChatPtyComposerSend(args: {
   resolveTarget: () => NativeChatResolvedTarget | null
   classifySend: NativeChatPickerState['classifySend']
   onOptimisticSend?: (text: string, imagePaths?: string[], recovery?: boolean) => string | undefined
+  enqueueTerminalMessage?: (text: string) => Promise<boolean>
   optimisticSendOutcome?: NativeChatOptimisticSendOutcome
   onSlashCommand?: (command: string, output?: string) => void
   answerCommandLocally?: NativeChatLocalCommandAnswer
@@ -86,6 +87,37 @@ export function useNativeChatPtyComposerSend(args: {
       text = retry
         ? resolveNativeChatPastedText(args.draftScopeKey, text)
         : serializeNativeChatAgentReferences(text, submitted.document, submitted.pastedTextFiles)
+      if (
+        !retry &&
+        args.enqueueTerminalMessage &&
+        classification === 'chat' &&
+        imagePaths.length === 0
+      ) {
+        args.setDraft('')
+        args.setCaret(0)
+        args.clearSkillOrigin()
+        args.onSubmitted?.()
+        void args
+          .enqueueTerminalMessage(text)
+          .then((accepted) => {
+            if (accepted) {
+              return
+            }
+            if (readNativeChatComposerDraft(args.draftScopeKey).text === '') {
+              args.setDraft(submitted.text)
+            }
+            args.setNotice(translate('components.native-chat.messageNotSent', 'Message not sent'))
+          })
+          .catch(() => {
+            args.setNotice(
+              translate(
+                'components.native-chat.deliveryUnconfirmed',
+                'Delivery unconfirmed — check chat before retrying'
+              )
+            )
+          })
+        return true
+      }
       const { sendOptions: launchSendOptions } = resolveNativeChatLaunchDraftSend({
         launchDraft: args.launchDraft,
         launchDraftResolved: args.launchDraftResolved,

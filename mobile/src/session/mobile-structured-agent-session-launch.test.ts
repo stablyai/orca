@@ -81,6 +81,7 @@ describe('mobile structured agent-session launch', () => {
       }),
       expect.objectContaining({ budgetSpansConnect: true })
     )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: mock call args are untyped; the test asserts each field read below
     const params = client.sendRequest.mock.calls[1]?.[1] as {
       envelope: { sessionId: string; payloadFingerprint: string }
       worktree: string
@@ -88,6 +89,24 @@ describe('mobile structured agent-session launch', () => {
     }
     expect(params.envelope.payloadFingerprint).toMatch(/^[0-9a-f]{64}$/)
     expect(params.envelope.sessionId).toMatch(/^codex_[A-Za-z0-9_]{8,128}$/)
+  })
+
+  it('sends a Hermes resume id in the create fingerprint', async () => {
+    const client = clientReturning({ ok: true, result: { supported: true } }, acceptedCreate)
+    await createMobileStructuredAgentSession(client, 'workspace-1', 'hermes', {
+      resumeFrom: { providerSessionId: '11111111-1111-4111-8111-111111111111' }
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: mock call args are untyped; the test asserts each field read below
+    const params = client.sendRequest.mock.calls[1]?.[1] as {
+      agent: string
+      resumeFrom?: { providerSessionId: string }
+      envelope: { payloadFingerprint: string }
+    }
+    expect(params.agent).toBe('hermes')
+    expect(params.resumeFrom).toEqual({
+      providerSessionId: '11111111-1111-4111-8111-111111111111'
+    })
+    expect(params.envelope.payloadFingerprint).toMatch(/^[0-9a-f]{64}$/)
   })
 
   it('creates a Claude session through the same envelope, keyed to the claude provider', async () => {
@@ -109,6 +128,7 @@ describe('mobile structured agent-session launch', () => {
       worktree: 'id:workspace-1',
       agent: 'claude'
     })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: mock call args are untyped; the test asserts each field read below
     const params = client.sendRequest.mock.calls[1]?.[1] as {
       envelope: { sessionId: string; payloadFingerprint: string }
       agent: string

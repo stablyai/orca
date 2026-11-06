@@ -13,6 +13,7 @@ import type {
   NativeChatTurnLifecycle
 } from './native-chat-types'
 import { LIFECYCLE_CLOCK_SKEW_SLACK_MS } from './transcript/native-chat-clock-skew'
+import type { NativeChatTerminalActivity } from './native-chat-terminal-queue'
 
 export type NativeChatLiveMergeInput = {
   /** Already deduped, ordered, and transcript-normalized by the live assembler. */
@@ -21,6 +22,7 @@ export type NativeChatLiveMergeInput = {
   agent: AgentType
   /** Live hook state for the pane, or null when no hook entry exists. */
   hookState: AgentStatusState | null
+  terminalActivity?: NativeChatTerminalActivity
   /** Epoch ms when the current hook state began, or null when unknown. */
   stateStartedAt?: number | null
   /** Latest provider-authored turn boundary recovered from the transcript. */
@@ -56,19 +58,22 @@ export function mergeNativeChatLiveSession(
     loading,
     error
   } = input
-  const hookAwaitingInput = nativeChatHookAwaitsInput(
-    hookState,
-    stateStartedAt,
-    transcriptLifecycle
-  )
-  const status = liveStatusOverride(
-    agent,
-    hookState,
-    statusTailMessage ?? messages.at(-1),
-    stateStartedAt,
-    transcriptLifecycle,
-    hookHasWorkingSubagents ?? false
-  )
+  const terminalState = agent === 'hermes' ? input.terminalActivity?.state : null
+  const hookAwaitingInput = terminalState
+    ? terminalState === 'waiting'
+    : nativeChatHookAwaitsInput(hookState, stateStartedAt, transcriptLifecycle)
+  const status = terminalState
+    ? terminalState === 'working'
+      ? 'working'
+      : undefined
+    : liveStatusOverride(
+        agent,
+        hookState,
+        statusTailMessage ?? messages.at(-1),
+        stateStartedAt,
+        transcriptLifecycle,
+        hookHasWorkingSubagents ?? false
+      )
   const activity = { hookAwaitingInput, hookWorking: status === 'working' }
   if (error) {
     return { messages, status: 'error', sessionId, agent, error, ...activity }

@@ -73,6 +73,9 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
         ? createTabAgentOptions.map((option) => ({
             id: `agent:${option.agent}`,
             label: option.label,
+            ...(option.opensAsChat
+              ? { hint: t('session.usePanelRouteActions.opensAsChat', 'Opens in Chat') }
+              : {}),
             renderIcon: () => <MobileAgentIcon agentId={option.agent} size={16} />,
             onPress: () => {
               setShowCreateTabDrawer(false)
@@ -127,7 +130,9 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
           ? createTabAgentOptions.map((option) => ({
               id: `agent:${option.agent}`,
               label: option.label,
-              hint: t('session.usePanelRouteActions.newSessionHint', 'New agent session'),
+              hint: option.opensAsChat
+                ? t('session.usePanelRouteActions.opensAsChat', 'Opens in Chat')
+                : t('session.usePanelRouteActions.newSessionHint', 'New agent session'),
               icon: Bot,
               onPress: () => {
                 const delivery = pendingDiffNotesDelivery

@@ -120,6 +120,7 @@ export type NativeChatComposerProps = {
   onStop?: () => void
   /** Render an optimistic echo until the real transcript turn lands. */
   onOptimisticSend?: (text: string, imagePaths?: string[]) => string | undefined
+  enqueueTerminalMessage?: (text: string) => Promise<boolean>
   /** Settle an optimistic echo whose write was refused or never acknowledged. */
   optimisticSendOutcome?: NativeChatOptimisticSendOutcome
   /** Remove an optimistic echo when its delayed submit is canceled. */

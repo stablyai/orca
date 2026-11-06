@@ -20640,7 +20640,8 @@
           "noCredit": "No Codex reset credit is left on this account.",
           "alreadyRedeemed": "That reset credit was already used."
         }
-      }
+      },
+      "deliveryUnconfirmed": "Delivery unconfirmed — check chat before retrying"
     },
     "tab": {
       "bar": {
@@ -22546,7 +22547,8 @@
         "agentNotRun": "Orca could not run the chat-name agent.",
         "noAgentAvailable": "No chat-name agent can run in this workspace.",
         "grokFailed": "Grok could not name this chat. Try generating the name again.",
-        "antigravityFailed": "Antigravity could not name this chat. Try generating the name again."
+        "antigravityFailed": "Antigravity could not name this chat. Try generating the name again.",
+        "hermesFailed": "Hermes could not name this chat. Try generating the name again."
       }
     }
   },

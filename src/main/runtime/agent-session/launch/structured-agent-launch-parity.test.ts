@@ -169,7 +169,8 @@ const AGENTS = [
   'omp',
   'pi',
   'antigravity',
-  'opencode2'
+  'opencode2',
+  'hermes'
 ] as const
 type Agent = (typeof AGENTS)[number]
 
@@ -182,7 +183,8 @@ const VERSIONS: Record<Agent, string> = {
   omp: '17.1.0',
   pi: '1.1.0',
   antigravity: '1.3.0',
-  opencode2: '2.0.20'
+  opencode2: '2.0.20',
+  hermes: '0.21.7'
 }
 /** An agent whose binary is not named after it. */
 const BINARIES: Partial<Record<Agent, string>> = { antigravity: 'agy_acp_server.par' }
@@ -298,7 +300,8 @@ function configuredSettings(): Partial<GlobalSettings> {
       omp: '',
       pi: '',
       antigravity: '',
-      opencode2: ''
+      opencode2: '',
+      hermes: ''
     },
     agentDefaultEnv: Object.fromEntries(
       AGENTS.map((agent) => [
@@ -372,6 +375,8 @@ function accountHomeFor(agent: Agent): AgentSessionAccountHome {
       return { variable: 'PI_CODING_AGENT_DIR', path: directory('pi') }
     case 'antigravity':
       return { variable: 'GEMINI_HOME', path: directory('antigravity') }
+    case 'hermes':
+      return { variable: 'HERMES_HOME', path: directory('hermes') }
   }
 }
 
@@ -396,6 +401,7 @@ async function resumedHandleFor(
     case 'opencode2':
     case 'omp':
     case 'antigravity':
+    case 'hermes':
       return { transport: 'acp', agent, nativeId: `acp-session-${sessionId}` }
   }
 }
@@ -678,7 +684,8 @@ describe.skipIf(process.platform === 'win32')('native-chat launch parity', () =>
         ['grok', false],
         ['opencode', true],
         ['opencode2', true],
-        ['antigravity', false]
+        ['antigravity', false],
+        ['hermes', false]
       ] as const) {
         expect(
           STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.find(

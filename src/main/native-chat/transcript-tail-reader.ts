@@ -6,6 +6,7 @@ import type {
   NativeChatTurnLifecycle
 } from '../../shared/native-chat/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
+import { canReadHermesTranscriptHere, hermesTranscriptDeps } from './transcript-hermes'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import {
   decodeClaudeTranscriptLine,
@@ -254,10 +255,13 @@ export async function readNativeChatTranscriptTail(
     }
   | { error: string; notFound?: true }
 > {
-  if (resolveNativeChatTranscriptAgent(args.agent) === 'opencode') {
+  if (args.agent === 'hermes' && !canReadHermesTranscriptHere(args)) {
+    return { error: 'Transcript unavailable', notFound: true }
+  }
+  if (args.agent === 'hermes' || resolveNativeChatTranscriptAgent(args.agent) === 'opencode') {
     return readOpenCodeNativeChatTranscriptTail(
       { ...args, agent: args.agent === 'zcode' ? 'zcode' : undefined },
-      {},
+      args.agent === 'hermes' ? hermesTranscriptDeps : {},
       signal
     )
   }
