@@ -28,7 +28,12 @@ export function nativeChatComposerSendState(input: {
   imageAttachments: readonly NativeChatComposerImageAttachment[]
   pastedTextSaving: boolean
   disabled: boolean
-  structuredTransport: NativeChatStructuredComposerTransport | undefined
+  structuredTransport:
+    | Pick<
+        NativeChatStructuredComposerTransport,
+        'sendOut' | 'sendBlockedReason' | 'threadGoal' | 'sendFollowUp'
+      >
+    | undefined
   editSession: { canSave: boolean } | undefined
   isWorking: boolean
   canStop: boolean

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 
-import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import { nativeChatComposerSendState } from './native-chat-composer-send-state'
 
 function chordSteersHead(
@@ -10,9 +9,7 @@ function chordSteersHead(
 ): boolean {
   const { followUp = 'queue', ...input } = overrides
   const working = input.isWorking ?? false
-  const structuredTransport = {
-    sendFollowUp: { action: followUp, offersChoice: working }
-  } as unknown as NativeChatStructuredComposerTransport
+  const structuredTransport = { sendFollowUp: { action: followUp, offersChoice: working } }
   return nativeChatComposerSendState({
     draft: '',
     messageDelivery: true,
