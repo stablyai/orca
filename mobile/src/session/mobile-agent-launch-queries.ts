@@ -90,7 +90,7 @@ export function reloadNewTabSettings(
   )
 }
 
-export type MobileAgentLaunchQueries = {
+type MobileAgentLaunchQueries = {
   detection: UseQueryResult<MobileDetectedAgents>
   settings: UseQueryResult<{ settings: unknown }>
   target: HostQueryTarget

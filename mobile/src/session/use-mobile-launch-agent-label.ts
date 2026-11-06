@@ -11,7 +11,7 @@ export function useMobileLaunchAgentLabel(args: {
   client: RpcClient | null
   worktreeId: string
   hostCapabilities: readonly string[]
-  actionId: SourceControlLaunchActionId
+  actionId: SourceControlLaunchActionId | null
   enabled: boolean
 }): string | null {
   const { client, worktreeId, hostCapabilities, actionId, enabled } = args
@@ -24,7 +24,7 @@ export function useMobileLaunchAgentLabel(args: {
       enabled
     })
   )
-  if (!enabled || !context) {
+  if (!actionId || !context) {
     return null
   }
   // An unknown agent keeps the generic label; the launch itself reports the real failure.
@@ -33,6 +33,6 @@ export function useMobileLaunchAgentLabel(args: {
 }
 
 // Labels sit in workspace routes, whose path names the paired host.
-export function useRouteHostId(): string {
+function useRouteHostId(): string {
   return firstParam(useLocalSearchParams<{ hostId?: string | string[] }>().hostId)
 }
