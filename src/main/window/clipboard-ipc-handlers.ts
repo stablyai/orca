@@ -46,6 +46,7 @@ import { readClipboardImageSource } from './clipboard-image-source'
 import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
 import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
 import { readClipboardNativeImage } from './clipboard-native-image'
+import { readClipboardText } from './clipboard-read-text'
 import {
   ClipboardPublisherBusyError,
   publishClipboardOperation,
@@ -131,7 +132,7 @@ export function registerClipboardHandlers(
 
   ipcMain.handle('clipboard:readText', async (event, options?: ReadClipboardTextOptions) => {
     assertTrustedClipboardTextSender(event)
-    return assertClipboardTextWithinLimitWithYield(clipboard.readText(), options)
+    return assertClipboardTextWithinLimitWithYield(readClipboardText(), options)
   })
   ipcMain.handle(
     'clipboard:readSelectionText',
@@ -297,15 +298,13 @@ function normalizeClipboardWriteFileRequest(args: unknown): ClipboardWriteFileRe
   if (!args || typeof args !== 'object' || Array.isArray(args)) {
     return null
   }
-  const filePath = (args as { filePath?: unknown }).filePath
+  const { filePath, connectionId } = args as { filePath?: unknown; connectionId?: unknown }
   if (typeof filePath !== 'string') {
     return null
   }
-  const connectionId = (args as { connectionId?: unknown }).connectionId
-  if (typeof connectionId === 'string' && connectionId.trim() !== '') {
-    return { filePath, connectionId }
-  }
-  return { filePath }
+  return typeof connectionId === 'string' && connectionId.trim() !== ''
+    ? { filePath, connectionId }
+    : { filePath }
 }
 
 function assertTrustedClipboardSender(event: IpcMainInvokeEvent): void {
