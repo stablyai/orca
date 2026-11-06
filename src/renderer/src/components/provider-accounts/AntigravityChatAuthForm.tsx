@@ -120,7 +120,6 @@ function AuthForm({
   const active =
     observation.kind === 'known' && antigravityChatSignInRunning(observation.state.flow)
   const unavailable = error?.recovery === 'reload'
-  const displayedMethod = unavailable && !edited.current ? '' : method
   const environmentId = owner.kind === 'environment' ? owner.environmentId : null
   const load = useCallback(
     async (current: () => boolean = () => mounted.current) => {
@@ -290,33 +289,35 @@ function AuthForm({
     <>
       {heading}
       <div className="space-y-2">
-        <div className="space-y-1">
-          <Label htmlFor={`${id}-method`} variant="settings">
-            {translate('accounts.antigravity.authMethod', 'Sign in with')}
-          </Label>
-          <Select
-            value={displayedMethod}
-            disabled={blocked}
-            onValueChange={(value) => {
-              edited.current = true
-              setMethod(value)
-              void save(draft(value))
-            }}
-          >
-            <SelectTrigger id={`${id}-method`} size="sm" density="compact">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="oauth-personal">
-                {translate('accounts.antigravity.personal', 'Google account')}
-              </SelectItem>
-              <SelectItem value="oauth-business">
-                {translate('accounts.antigravity.enterprise', 'Gemini Enterprise')}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        {displayedMethod === 'oauth-business' && (
+        {!unavailable && (
+          <div className="space-y-1">
+            <Label htmlFor={`${id}-method`} variant="settings">
+              {translate('accounts.antigravity.authMethod', 'Sign in with')}
+            </Label>
+            <Select
+              value={method}
+              disabled={blocked}
+              onValueChange={(value) => {
+                edited.current = true
+                setMethod(value)
+                void save(draft(value))
+              }}
+            >
+              <SelectTrigger id={`${id}-method`} size="sm" density="compact">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="oauth-personal">
+                  {translate('accounts.antigravity.personal', 'Google account')}
+                </SelectItem>
+                <SelectItem value="oauth-business">
+                  {translate('accounts.antigravity.enterprise', 'Gemini Enterprise')}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        {!unavailable && method === 'oauth-business' && (
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label htmlFor={`${id}-project`} variant="settings">

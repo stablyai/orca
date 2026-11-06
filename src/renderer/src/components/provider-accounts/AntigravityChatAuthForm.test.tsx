@@ -368,8 +368,7 @@ it.each(['accounts', 'provider'] as const)(
     const action = screen.getByRole('button', { name: /Sign in|Retry sign-in/ })
     expect(screen.getAllByRole('button')).toEqual([action])
     expect(action).toBeEnabled()
-    expect(screen.getByRole('combobox')).toBeDisabled()
-    expect(screen.getByRole('combobox')).not.toHaveTextContent('Google account')
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
     await user.click(action)
     expect(action).toBeEnabled()
     expect(callAntigravityChatSignIn).not.toHaveBeenCalled()
@@ -388,7 +387,7 @@ it.each(['accounts', 'provider'] as const)(
       streams.handlers.get(key(target))?.onEvent({ revision: 2, auth: 'unknown', flow: null })
     )
     await screen.findByRole('alert')
-    expect(screen.getByRole('combobox')).not.toHaveTextContent('Gemini Enterprise')
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Google Cloud project')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Google Cloud location')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled()
@@ -444,7 +443,7 @@ it('keeps an edited draft ahead of another client’s choice when recovering a f
     streams.handlers.get(key(target))?.onEvent({ revision: 1, auth: 'unknown', flow: null })
   )
   await screen.findByRole('alert')
-  expect(screen.getByRole('combobox')).toHaveTextContent('Gemini Enterprise')
+  expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
   vi.mocked(callAntigravityChatAuthConfig).mockImplementation(
     async (_owner, config) => config ?? personal
   )
