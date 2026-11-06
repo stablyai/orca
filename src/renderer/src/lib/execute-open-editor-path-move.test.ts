@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RuntimeFileMutationClient from '@/runtime/runtime-file-mutation-client'
-import type * as EditorAutosave from '@/components/editor/editor-autosave'
+import type * as EditorAutosave from '@/components/editor/autosave/editor-autosave'
 
 const mocks = vi.hoisted(() => ({ renameRuntimePath: vi.fn() }))
 vi.mock('@/runtime/runtime-file-mutation-client', async (importOriginal) => {
@@ -19,7 +19,7 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
-vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
+vi.mock('@/components/editor/autosave/editor-autosave', async (importOriginal) => {
   const actual = await importOriginal<typeof EditorAutosave>()
   return { ...actual, requestEditorSaveQuiesce: vi.fn().mockResolvedValue(undefined) }
 })

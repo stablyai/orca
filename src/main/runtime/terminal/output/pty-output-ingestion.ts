@@ -1,24 +1,24 @@
-import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status-osc'
+import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status/transport/agent-status-osc'
 import type {
   RuntimePtyWorktreeRecord,
   RuntimeLeafRecord,
   RuntimePtyTitleTrackerEntry
-} from '../../runtime-terminal-state-records'
+} from '../records/runtime-terminal-state-records'
 import type { RuntimeSyncedLeaf } from '../../../../shared/runtime-types'
 import { OrcaRuntimeWithPreparePtyExecutionContext } from '../launch/terminal-execution-context'
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
-import { appendNormalizedToTailBuffer } from '../../terminal-tail-buffer'
-import { normalizeTerminalChunk } from '../../terminal-ansi-normalization'
-import { observeTerminalCommandPaint } from '../../terminal-command-paint'
+import { appendNormalizedToTailBuffer } from './tail/terminal-tail-buffer'
+import { normalizeTerminalChunk } from './terminal-ansi-normalization'
+import { observeTerminalCommandPaint } from '../input/terminal-command-paint'
 import {
   appendCompletedTerminalTranscript,
   buildPreview,
   tailStateMatches
-} from '../../terminal-tail-state'
+} from './tail/terminal-tail-state'
 import {
   computeTerminalTailWaitState,
   tailGainedNewerBlockedReason
-} from '../../terminal-wait-tail-state'
+} from '../wait/terminal-wait-tail-state'
 import { extractOscTitleScanTail } from '../../../../shared/osc-title-scan-tail'
 
 export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecutionContext {

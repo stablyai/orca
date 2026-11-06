@@ -1,4 +1,5 @@
-import { createElement } from 'react'
+import { createElement, useCallback, useLayoutEffect, useState } from 'react'
+import { useMobileSourceControlRefresh } from '../source-control/use-mobile-source-control-refresh'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PRCheckDetail } from '../../../src/shared/github/check-types'
@@ -47,15 +48,19 @@ function Harness(props: Parameters<typeof useMobilePrSidebarController>[0]) {
   return null
 }
 
-async function flush(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve()
-    await Promise.resolve()
-  })
+function probeClient(): RpcClient {
+  // Connection for these tests is the connState prop. The client still has to accept the sidebar's subscription.
+  const client = {
+    sendRequest: vi.fn(),
+    getState: () => 'disconnected',
+    onStateChange: () => () => {}
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these tests call only sendRequest, getState, and onStateChange; connection changes come from the connState prop.
+  return client as unknown as RpcClient
 }
 
 describe('useMobilePrSidebarController repo probe', () => {
-  const client = { sendRequest: vi.fn() } as unknown as RpcClient
+  const client = probeClient()
   let renderer: ReactTestRenderer | null = null
 
   beforeEach(() => {
@@ -70,50 +75,179 @@ describe('useMobilePrSidebarController repo probe', () => {
     renderer = null
   })
 
-  // Probe repo eligibility even without a branch so detached/rebasing worktrees reach unavailable state instead of spinning forever.
-  it('resolves the probe when connected without a branch (detached HEAD)', async () => {
-    fetchGithubRepoSlugMock.mockResolvedValue({ ok: true, result: { owner: 'o', repo: 'r' } })
+  it('does not let an older probe overwrite the refreshed provider', async () => {
+    const original = Promise.withResolvers<{ ok: true; result: null }>()
+    fetchGithubRepoSlugMock.mockReturnValueOnce(original.promise)
     await act(async () => {
       renderer = create(
         createElement(Harness, {
           client,
           connState: 'connected',
           worktreeId: 'w',
-          branch: null,
+          branch: 'main',
           headSha: 'sha'
         })
       )
     })
-    await flush()
-
-    expect(fetchGithubRepoSlugMock).toHaveBeenCalledWith(client, 'w')
-    expect(captured?.prSidebarRepoProbeLoaded).toBe(true)
-    expect(captured?.prSidebarIsGithubRepo).toBe(true)
-    expect(captured?.prSidebarState.kind).toBe('hidden')
-  })
-
-  it('does not probe until the client is connected', async () => {
     fetchGithubRepoSlugMock.mockResolvedValue({ ok: true, result: { owner: 'o', repo: 'r' } })
     await act(async () => {
-      renderer = create(
-        createElement(Harness, {
-          client,
-          connState: 'connecting',
-          worktreeId: 'w',
-          branch: null,
-          headSha: 'sha'
-        })
-      )
+      await captured!.refreshPRSidebarRepoProbe()
+      original.resolve({ ok: true, result: null })
     })
-    await flush()
+    expect(captured?.prSidebarIsGithubRepo).toBe(true)
+  })
 
-    expect(fetchGithubRepoSlugMock).not.toHaveBeenCalled()
+  it('refreshes the PR for the branch committed by the fresh status read', async () => {
+    const statusRead = Promise.withResolvers<void>()
+    let refresh = () => {}
+    rpc.fetchHostedReviewForBranch.mockResolvedValue({ ok: true, result: null })
+    rpc.fetchPRForBranch.mockReset().mockResolvedValue({ ok: true, result: null })
+    fetchGithubRepoSlugMock.mockResolvedValue({ ok: true, result: null })
+    function RefreshHarness() {
+      const [branch, setBranch] = useState('main')
+      const controller = useMobilePrSidebarController({
+        client,
+        connState: 'connected',
+        worktreeId: 'w',
+        branch,
+        headSha: 'sha'
+      })
+      captured = controller
+      const loadStatus = useCallback(async () => {
+        await statusRead.promise
+        setBranch('desktop-topic')
+        return true
+      }, [])
+      refresh = useMobileSourceControlRefresh({
+        client,
+        worktreeId: 'w',
+        loadStatus,
+        prController: controller,
+        includeDetails: true
+      })
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(RefreshHarness))
+    })
+    fetchGithubRepoSlugMock.mockResolvedValue({ ok: true, result: { owner: 'o', repo: 'r' } })
+    await act(async () => refresh())
+    expect(rpc.fetchPRForBranch).not.toHaveBeenCalled()
+    await act(async () => statusRead.resolve())
+    expect(rpc.fetchPRForBranch.mock.calls.map((call) => call[2].branch)).toEqual(['desktop-topic'])
+    expect(captured?.prSidebarIsGithubRepo).toBe(true)
+    expect(captured?.prSidebarState.kind).toBe('none')
+  })
+
+  it.each(['refusal', 'rejection'])(
+    'retains the shown review when re-probing fails: %s',
+    async (failure) => {
+      fetchGithubRepoSlugMock.mockResolvedValue({ ok: true, result: { owner: 'o', repo: 'r' } })
+      rpc.fetchHostedReviewForBranch.mockResolvedValue({ ok: true, result: null })
+      rpc.fetchPRForBranch.mockResolvedValue({ ok: true, result: null })
+      await act(async () => {
+        renderer = create(
+          createElement(Harness, {
+            client,
+            connState: 'connected',
+            worktreeId: 'w',
+            branch: 'main',
+            headSha: 'sha'
+          })
+        )
+      })
+      await act(async () => {
+        await captured!.refetchPRSidebar({ includeDetails: false })
+      })
+      expect(captured?.prSidebarState.kind).toBe('none')
+      if (failure === 'refusal') {
+        fetchGithubRepoSlugMock.mockResolvedValue({ ok: false, error: 'Timed out' })
+      } else {
+        fetchGithubRepoSlugMock.mockRejectedValue(new Error('Disconnected'))
+      }
+      await act(async () => {
+        expect(await captured!.refreshPRSidebarRepoProbe()).toBe(false)
+      })
+      expect(captured?.prSidebarIsGithubRepo).toBe(true)
+      expect(captured?.prSidebarState.kind).toBe('none')
+    }
+  )
+
+  it('selects unknown for each worktree incarnation before layout, ignores late probes and retains same-worktree eligibility', async () => {
+    const replies: ((value: {
+      ok: true
+      result: { owner: string; repo: string } | null
+    }) => void)[] = []
+    fetchGithubRepoSlugMock.mockImplementation(
+      () => new Promise((resolve) => replies.push(resolve))
+    )
+    const layouts: { worktreeId: string; known: boolean; eligible: boolean }[] = []
+    function ObservedHarness(props: Parameters<typeof useMobilePrSidebarController>[0]) {
+      const current = useMobilePrSidebarController(props)
+      captured = current
+      useLayoutEffect(() => {
+        layouts.push({
+          worktreeId: props.worktreeId,
+          known: current.prSidebarRepoProbeLoaded,
+          eligible: current.prSidebarIsGithubRepo
+        })
+      }, [props.worktreeId])
+      return null
+    }
+    const update = async (
+      worktreeId: string,
+      connState: 'connected' | 'disconnected' = 'connected',
+      branch: string | null = null
+    ) => {
+      await act(async () => {
+        const view = createElement(ObservedHarness, {
+          client,
+          connState,
+          worktreeId,
+          branch,
+          headSha: 'head'
+        })
+        if (renderer) {
+          renderer.update(view)
+        } else {
+          renderer = create(view)
+        }
+      })
+    }
+    await update('a')
+    const firstA = replies.shift()!
+    await update('b')
+    const firstB = replies.shift()!
     expect(captured?.prSidebarRepoProbeLoaded).toBe(false)
+    await update('a')
+    const secondA = replies.shift()!
+    await act(async () => firstA({ ok: true, result: { owner: 'old', repo: 'r' } }))
+    expect(captured?.prSidebarRepoProbeLoaded).toBe(false)
+    await act(async () => firstB({ ok: true, result: { owner: 'old-b', repo: 'r' } }))
+    expect(captured?.prSidebarRepoProbeLoaded).toBe(false)
+    await act(async () => secondA({ ok: true, result: { owner: 'current', repo: 'r' } }))
+    expect(captured?.prSidebarIsGithubRepo).toBe(true)
+    expect(captured?.prSidebarRepoProbeLoaded).toBe(true)
+    await update('a', 'disconnected', 'changed-branch')
+    expect(captured?.prSidebarIsGithubRepo).toBe(true)
+    expect(captured?.prSidebarRepoProbeLoaded).toBe(true)
+    expect(fetchGithubRepoSlugMock).toHaveBeenCalledTimes(3)
+    await update('a', 'connected', null)
+    expect(captured?.prSidebarIsGithubRepo).toBe(true)
+    expect(fetchGithubRepoSlugMock).toHaveBeenCalledTimes(4)
+    await act(async () => replies.shift()!({ ok: true, result: null }))
+    expect(captured?.prSidebarIsGithubRepo).toBe(false)
+    expect(captured?.prSidebarRepoProbeLoaded).toBe(true)
+    expect(layouts).toEqual([
+      { worktreeId: 'a', known: false, eligible: false },
+      { worktreeId: 'b', known: false, eligible: false },
+      { worktreeId: 'a', known: false, eligible: false }
+    ])
   })
 })
 
 describe('useMobilePrSidebarController write reconciliation', () => {
-  const client = { sendRequest: vi.fn() } as unknown as RpcClient
+  const client = probeClient()
   const pr = (number: number, extra: Partial<PRInfo> = {}): PRInfo => ({
     number,
     title: 'Feat',
@@ -337,6 +471,12 @@ describe('useMobilePrSidebarController write reconciliation', () => {
   })
 
   it('does not carry details to the same PR number in another repo', async () => {
+    // Details count only when they name this repository, so the later switch can prove they were not reused.
+    const loaded = details('Old')
+    rpc.fetchWorkItemDetails.mockResolvedValue({
+      ok: true,
+      result: { ...loaded, item: { ...loaded.item, url: 'https://github.com/acme/a/pull/7' } }
+    })
     rpc.fetchPRForBranch.mockResolvedValue({
       ok: true,
       result: pr(7, { prRepo: { owner: 'acme', repo: 'a' } })

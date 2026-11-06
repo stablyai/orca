@@ -12,7 +12,7 @@ import type { ActiveViewPreference } from '../preferences/active-view-preference
 import {
   getProfileTerminalScrollbackSnapshotRoot,
   type TerminalScrollbackSnapshotStorage
-} from '../../terminal-scrollback-snapshots'
+} from '../../pty/scrollback/terminal-scrollback-snapshots'
 import { ProtectedSecretPersistence } from '../../credentials/protected-secret-persistence'
 import { getDataFile, getGithubCacheFile } from './user-data-path'
 import { dirname, join } from 'node:path'

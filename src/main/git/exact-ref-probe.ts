@@ -1,7 +1,5 @@
-import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
-import { isShowRefNoMatchError } from '../../shared/git-show-ref-no-match'
-
-export { isShowRefNoMatchError }
+import { isSafeGitRefName } from '../../shared/git/status/git-status-upstream-ref'
+import { isShowRefNoMatchError } from '../../shared/git/refs/git-show-ref-no-match'
 
 export type ExactRefProbeExecOptions = {
   maxBuffer?: number

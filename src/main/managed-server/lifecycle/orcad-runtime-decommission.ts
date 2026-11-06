@@ -5,11 +5,11 @@ import type {
   OrcadManagedStopResult
 } from '../../../shared/orcad-managed-runtime'
 import type { OrcadDaemonRetirementVerdict } from '../../../shared/orcad-stop-request'
-import { removeManagedOrcadEnvironment } from '../../../shared/runtime-environment-managed-orcad-store'
+import { removeManagedOrcadEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import type {
   KnownRuntimeEnvironment,
   OrcadSshDeploymentLink
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { recoverInterruptedOrcadActivation } from '../activation/orcad-activation-recovery'
 import { withStaleOrcadActivationRecoveryLock } from '../activation/orcad-activation-lock'
 import { readOrcadActivationTransaction } from '../activation/orcad-activation-transaction-store'
@@ -31,6 +31,8 @@ import { RemoteInstallLockBusyError } from '../install/remote-install-lock'
 type ManagedOrcadStopPolicy = {
   isActiveEnvironment: (environmentId: string) => boolean
   retireLocalState: (environmentId: string) => Promise<void> | void
+  /** Runs inside the host's lifecycle, so a Connect queued behind the unlink still wins. */
+  releaseHostTransport: (sshTargetId: string) => Promise<void>
 }
 
 type Refusal = Extract<OrcadManagedStopResult, { outcome: 'refused' }>
@@ -168,6 +170,8 @@ async function unlinkEnvironmentLocally(
   await claims.flush()
   // Clear journals after the fence; stale leftovers are recoverable on later conversion.
   removeOrcadMigrationJournalsForDestination(userDataPath, deployment.sshTargetId, environment.id)
+  // No server serves the host now, and an unserved host never stays connected.
+  await policy.releaseHostTransport(deployment.sshTargetId)
 }
 
 export function cancelManagedOrcadStop(

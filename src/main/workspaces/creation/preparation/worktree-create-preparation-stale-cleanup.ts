@@ -6,12 +6,12 @@ import {
 } from '../../../../shared/worktree/create-preparation'
 import { orcadDataRootIsOnLocalDisk } from '../../../orcad/orcad-data-root-locality'
 import { profileStateAccessMachineIdentity } from '../../../persistence/profile-state/profile-state-access-identity'
-import type { AddWorktreeOptions } from '../../../git/worktree-operation-options'
-import { listWorktreeGraph } from '../../../git/worktree-scan-cache'
+import type { AddWorktreeOptions } from '../../../git/worktrees/worktree-operation-options'
+import { listWorktreeGraph } from '../../../git/worktrees/catalog/worktree-scan-cache'
 import {
   discardPreparedWorktree,
   unlockPreparedWorktree
-} from '../../../git/worktree-create-preparation'
+} from '../../../git/worktrees/creation/worktree-create-preparation'
 import { retryPendingPreparationDiscards } from './worktree-preparation-discard-retry'
 
 const STALE_PREPARATION_CLEANUP_CONCURRENCY = 4

@@ -8,13 +8,14 @@ import { describe, expect, it } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import { hasPendingStalePreparationCleanup } from './worktree-create-preparation-stale-cleanup'
 import { WORKTREE_CREATE_PREPARATION_DIRECTORY } from '../../../../shared/worktree/create-preparation'
-import { WorktreePreparationLockOwnershipError } from '../../../git/worktree-preparation-lock'
+import { WorktreePreparationLockOwnershipError } from '../../../git/worktrees/creation/worktree-preparation-lock'
 import {
   _resetWorktreeCreatePreparationsForTests,
   consumePreparedWorktreeCreate,
   hasPendingWorktreeCreatePreparations,
   prepareWorktreeCreateForRepo
 } from './worktree-create-preparation'
+import { releaseWorktreeCreatePreparationsForRepo } from './worktree-create-preparation-project-removal'
 
 describe('worktree create preparation registry', () => {
   it.each([undefined, 'Ubuntu'])(
@@ -306,6 +307,63 @@ describe('worktree create preparation registry', () => {
         baseBranch: 'origin/main'
       })
     ).resolves.toMatchObject({ status: 'hit' })
+  })
+
+  it("discards a removed project's armed checkout and reclaims its crash leftovers", async () => {
+    const otherRepo = { id: 'repo-2', path: '/other-repo' } as Repo
+    await prepareWorktreeCreateForRepo(store, otherRepo, 'origin/main')
+    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
+    await flushBackgroundWork()
+    const armedPath = mocks.prepareCheckout.mock.calls[1]?.[1]
+    const stalePath = '/workspace/.orca-preparing/999999999-11111111-1111-4111-8111-111111111111'
+    mocks.listWorktreeGraph.mockResolvedValueOnce([
+      {
+        path: stalePath,
+        branch: undefined,
+        lockReason: 'orca-create-preparation:v1:999999999:stale',
+        head: 'deadbeef',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    releaseWorktreeCreatePreparationsForRepo(store, repo)
+    await flushBackgroundWork()
+
+    expect(mocks.discard).toHaveBeenCalledWith(repo.path, armedPath, {}, expect.any(String))
+    expect(mocks.discard).toHaveBeenCalledWith(
+      repo.path,
+      stalePath,
+      { admissionTier: 'background' },
+      'orca-create-preparation:v1:999999999:stale'
+    )
+    await expect(
+      consumePreparedWorktreeCreate({
+        repoPath: otherRepo.path,
+        workspaceRoot: '/workspace',
+        worktreePath: '/workspace/other',
+        branch: 'feature/other',
+        baseBranch: 'origin/main'
+      })
+    ).resolves.toMatchObject({ status: 'hit' })
+  })
+
+  it('still discards armed checkouts when the project runtime needs repair', async () => {
+    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
+    await flushBackgroundWork()
+    mocks.getWorktreeOptions.mockImplementation(() => {
+      throw new Error('Project runtime requires repair before git execution: wsl-distro-missing')
+    })
+
+    expect(() => releaseWorktreeCreatePreparationsForRepo(store, repo)).not.toThrow()
+    await flushBackgroundWork()
+
+    expect(mocks.discard).toHaveBeenCalledWith(
+      repo.path,
+      mocks.prepareCheckout.mock.calls[0]?.[1],
+      {},
+      expect.any(String)
+    )
   })
 
   it('routes preparation and finalization through the selected WSL runtime', async () => {

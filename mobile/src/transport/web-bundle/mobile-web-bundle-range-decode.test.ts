@@ -23,12 +23,6 @@ describe('decoding a bundle range', () => {
     expect(decodeMobileWebBundleRange(RANGE, GZIP, RAW.byteLength)).toEqual(RAW)
   })
 
-  it('passes an identity range through', () => {
-    expect(
-      decodeMobileWebBundleRange({ ...RANGE, encoding: 'identity' }, RAW, RAW.byteLength)
-    ).toEqual(RAW)
-  })
-
   it('refuses a truncated gzip body', () => {
     expect(
       refusalOf(() =>

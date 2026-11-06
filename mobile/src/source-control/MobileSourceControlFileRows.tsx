@@ -12,8 +12,11 @@ import { SHEET_CURVE } from '../components/sheet-motion-values'
 import { useDrawerReducedMotion } from '../components/bottom-drawer/bottom-drawer-constants'
 import { Minus, Plus, Undo2 } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
-import { STATUS_LABELS } from '../../../src/shared/git-status-labels'
-import type { GitConflictKind, GitFileStatus } from '../../../src/shared/git-status-types'
+import { STATUS_LABELS } from '../../../src/shared/git/status/git-status-labels'
+import type {
+  GitConflictKind,
+  GitFileStatus
+} from '../../../src/shared/git/status/git-status-types'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'

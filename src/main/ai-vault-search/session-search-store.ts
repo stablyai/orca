@@ -1,7 +1,7 @@
 import type SyncDatabase from '../sqlite/sync-database'
 import { asRecord } from '../ai-vault/session-scanner-record-value'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
-import type { TranscriptSessionIdentity } from '../ai-vault/session-transcript-consumers'
+import type { TranscriptSessionIdentity } from '../ai-vault/transcripts/session-transcript-consumers'
 import {
   fileIdentity,
   type SessionSearchFileIdentity,

@@ -11,14 +11,14 @@ import {
 } from '../../../../shared/cross-platform-path'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
-import { getWorktreeMirrorDistro } from '../../../project-runtime-git-options'
+import { getWorktreeMirrorDistro } from '../../../workspaces/execution-host/project-runtime-git-options'
 import {
   computeWorkspaceRoot,
   getWorktreePathSettings,
   workspaceRootMirrorsIntoWsl
 } from '../../worktree-logic'
 import { shouldEmitBoundedWarning } from '../../bounded-warning-dedupe'
-import { resolveWorktreeCommonGitDirectory } from '../../worktree-common-git-directory'
+import { resolveWorktreeCommonGitDirectory } from './worktree-common-git-directory'
 import type {
   WorktreeBaseRepoWatchConfig,
   WorktreeBaseWatchKind,

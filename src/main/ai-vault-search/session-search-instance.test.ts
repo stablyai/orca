@@ -2,8 +2,8 @@ import { existsSync } from 'node:fs'
 import { utimes } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-parse-cache'
-import { resetTranscriptConsumersForTests } from '../ai-vault/session-transcript-consumers'
+import { resetSessionParseCacheForTests } from '../ai-vault/parse-cache/session-parse-cache-store'
+import { resetTranscriptConsumersForTests } from '../ai-vault/transcripts/session-transcript-consumers'
 import { SessionSearchInstance } from './session-search-instance'
 import {
   openSessionSearchIndexerHarness,

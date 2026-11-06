@@ -18,7 +18,7 @@ vi.mock('node:child_process', () => ({
 }))
 
 // Mock recovery so its process-table import does not require real execFile.
-vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
+vi.mock('../codex/history/index/codex-state-db-backfill-recovery', () => ({
   startCodexStateDbBackfillRecoveryInBackground: vi.fn()
 }))
 

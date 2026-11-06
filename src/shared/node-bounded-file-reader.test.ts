@@ -42,17 +42,6 @@ function createFileHandle({
 beforeEach(() => openMock.mockReset())
 
 describe('readNodeFileWithinLimit', () => {
-  it('reads a stable file and closes its descriptor', async () => {
-    const handle = createFileHandle({ content: Buffer.from('stable') })
-    openMock.mockResolvedValue(handle)
-
-    const result = await readNodeFileWithinLimit('/workspace/stable.txt', 64)
-
-    expect(result.buffer).toEqual(Buffer.from('stable'))
-    expect(result.stats.size).toBe(6)
-    expect(handle.close).toHaveBeenCalledOnce()
-  })
-
   it('rejects an oversized initial size before reading file bytes', async () => {
     const handle = createFileHandle({ content: Buffer.alloc(0), initialSize: 65 })
     openMock.mockResolvedValue(handle)

@@ -2,7 +2,7 @@ import { appendFileSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { AgentStatusIpcPayload } from '../../src/shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../src/shared/agent-status/contracts/agent-status-ipc-payload'
 import type { NativeChatMessage } from '../../src/shared/native-chat/native-chat-types'
 import { eraseRpcMethods, type RpcContext } from '../../src/main/runtime/rpc/core'
 import { NATIVE_CHAT_METHODS } from '../../src/main/runtime/rpc/methods/native-chat'

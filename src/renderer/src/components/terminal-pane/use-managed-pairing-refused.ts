@@ -1,5 +1,5 @@
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { getOrcadSshDeployment } from '../../../../shared/runtime-environments'
+import { getOrcadSshDeployment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { workspaceOwnerHostId } from '@/lib/workspace-row-owner-host'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'

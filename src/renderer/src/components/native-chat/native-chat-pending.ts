@@ -105,6 +105,4 @@ export function nextNativeChatPendingSendId(now = Date.now()): string {
   return `${now}-${pendingSendCounter}`
 }
 
-export function isLaunchPromptMessageId(id: string): boolean {
-  return id.startsWith('launch-pending:')
-}
+export { isLaunchPromptMessageId } from '../../../../shared/native-chat/transcript/native-chat-pending-sends'

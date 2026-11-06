@@ -4,7 +4,7 @@ import { terminalQuickCommandMatchesWorkspaceProject } from '@/lib/terminal-quic
 import {
   getTerminalQuickCommandScope,
   isTerminalQuickCommandComplete
-} from '../../../shared/terminal-quick-commands'
+} from '../../../shared/terminal/quick-commands/terminal-quick-commands'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type {
   TerminalQuickCommandHost,

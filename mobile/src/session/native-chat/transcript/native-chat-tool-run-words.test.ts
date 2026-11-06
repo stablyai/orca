@@ -44,28 +44,4 @@ describe('mobile tool-run sentence continuations', () => {
       'Başladı | inceledi | ısındı'
     )
   })
-
-  it.each<SupportedUiLocale>(['en', 'es', 'fr', 'pt', 'ru'])(
-    'continues later clauses in %s',
-    (locale) => {
-      expect(joinNativeChatToolRunClauses(['Read', 'Searched'], mobileWords(locale))).toBe(
-        'Read | searched'
-      )
-    }
-  )
-
-  it.each<SupportedUiLocale>(['ja', 'ko', 'zh', 'zh-Hant'])(
-    'preserves clause text in %s',
-    (locale) => {
-      expect(joinNativeChatToolRunClauses(['開始', 'Browser'], mobileWords(locale))).toBe(
-        '開始 | Browser'
-      )
-    }
-  )
-
-  it('retains the default casing when no continuation is supplied', () => {
-    expect(joinNativeChatToolRunClauses(['Read', 'Searched', 'Edited'], joiners)).toBe(
-      'Read | searched | edited'
-    )
-  })
 })

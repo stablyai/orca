@@ -14,7 +14,7 @@ import {
   createAliasedWatcherRoot as createNativeAliasedWatcherRoot,
   removeAliasedWatcherRoot,
   type AliasedWatcherRoot
-} from '../ipc/watcher-aliased-root-fixture'
+} from '../ipc/filesystem/watcher-process/watcher-aliased-root-fixture'
 import { PluginDevWatcher } from './plugin-dev-watcher'
 import { PluginServiceHousekeeping } from './plugin-service-housekeeping'
 

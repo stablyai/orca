@@ -1,5 +1,5 @@
-import { isGeminiTerminalTitle } from '@/lib/agent-status'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import { isGeminiTerminalTitle as isGeminiTerminalTitleDefault } from '../../../../shared/agent-status/title/agent-title-core'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 export type TerminalGpuAccelerationMode = GlobalSettings['terminalGpuAcceleration']
@@ -12,6 +12,7 @@ export type RendererPolicyDecision = {
 }
 
 export type ResolvePaneRendererPolicyInput = {
+  isGeminiTerminalTitle?: typeof isGeminiTerminalTitleDefault
   rawTitle: string | null
   ownerAgentType: AgentType | null | undefined
   userGpuMode: TerminalGpuAccelerationMode
@@ -39,7 +40,8 @@ type GeminiCompatFallback = {
 // Preserve Gemini title fallback unless current ownership proves another agent/shell.
 function resolveGeminiCompatFallback(
   rawTitle: string | null,
-  ownerAgentType: AgentType | null | undefined
+  ownerAgentType: AgentType | null | undefined,
+  isGeminiTerminalTitle = isGeminiTerminalTitleDefault
 ): GeminiCompatFallback {
   if (!isGeminiTerminalTitle(rawTitle ?? '')) {
     return { disable: false, confidence: 'authoritative' }
@@ -58,7 +60,11 @@ export function resolvePaneRendererPolicy(
 
   if (userGpuMode === 'off') {
     // Off already forces DOM downstream; keep the content gate accurate for a later mode change.
-    const fallback = resolveGeminiCompatFallback(rawTitle, ownerAgentType)
+    const fallback = resolveGeminiCompatFallback(
+      rawTitle,
+      ownerAgentType,
+      input.isGeminiTerminalTitle
+    )
     // Retain fallback confidence consistently in off and auto modes.
     return {
       gpuEnabled: !fallback.disable,
@@ -78,7 +84,11 @@ export function resolvePaneRendererPolicy(
     return { gpuEnabled: true, reason: 'user-setting', confidence: 'authoritative' }
   }
 
-  const fallback = resolveGeminiCompatFallback(rawTitle, ownerAgentType)
+  const fallback = resolveGeminiCompatFallback(
+    rawTitle,
+    ownerAgentType,
+    input.isGeminiTerminalTitle
+  )
   if (fallback.disable) {
     return { gpuEnabled: false, reason: 'agent-compatibility', confidence: fallback.confidence }
   }

@@ -1,3 +1,4 @@
+import type * as RepoDetectionModule from '../git/repo-detection'
 /** Linked worktrees report their own toplevel; deduplicate by common repo to avoid duplicate run-target rows. */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest'
@@ -29,6 +30,15 @@ const {
   prepareLocalWorktreeRootForRepoMock: vi.fn(),
   detectRepoIconAndUpstreamMock: vi.fn()
 }))
+
+vi.mock('../git/repo-detection', async (importOriginal) => {
+  const facade = await vi.importMock<typeof RepoDetectionModule>('../git/repo')
+  return {
+    ...(await importOriginal<typeof RepoDetectionModule>()),
+    isGitRepoAsync: facade.isGitRepoAsync,
+    getGitRepoRootAsync: facade.getGitRepoRootAsync
+  }
+})
 
 vi.mock('electron', () => ({
   dialog: { showOpenDialog: vi.fn() },

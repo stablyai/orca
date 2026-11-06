@@ -1,7 +1,7 @@
 import { z } from 'zod'
-import { isTuiAgent } from '../tui-agent-config'
-import { AGENT_PERMISSION_CHOICES } from '../tui-agent-permission-choice'
-import type { TuiAgent } from '../tui-agent'
+import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
+import { AGENT_PERMISSION_CHOICES } from '../agent-launch/permissions/tui-agent-permission-choice'
+import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 
 const Agent = z.custom<TuiAgent>((value) => typeof value === 'string' && isTuiAgent(value))
 const Value = z
@@ -13,11 +13,11 @@ const ChoiceValue = z
   .min(1)
   .max(512)
   .refine((value) => !value.includes('\0'))
-const OptionKey = ChoiceValue.refine(
+export const OptionKey = ChoiceValue.refine(
   (key) =>
     !['__proto__', 'constructor', 'prototype', 'agentId', 'model', 'permissionMode'].includes(key)
 )
-const ChoicePatch = z
+export const ChoicePatch = z
   .object({
     model: ChoiceValue.nullable().optional(),
     options: z

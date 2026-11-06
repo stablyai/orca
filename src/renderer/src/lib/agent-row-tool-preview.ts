@@ -1,10 +1,10 @@
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
-import type { AgentRowState } from '../../../shared/agent-row-decay-state'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentRowState } from '../../../shared/agent-status/presentation/agent-row-decay-state'
 import { isProgramStatusRow } from './program-status/row'
 import {
   agentToolPreviewInput,
   formatAgentToolPreviewLine
-} from '../../../shared/agent-tool-preview'
+} from '../../../shared/agent-status/presentation/agent-tool-preview'
 
 type ToolPreviewEntry = Pick<AgentStatusEntry, 'toolName' | 'toolInput'> &
   Partial<Pick<AgentStatusEntry, 'agentType' | 'programStatus' | 'observation'>>

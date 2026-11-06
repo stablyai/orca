@@ -1,4 +1,8 @@
-import { agentPhaseTransition, type AgentPhase, type AgentTransition } from '../agent-transitions'
+import {
+  agentPhaseTransition,
+  type AgentPhase,
+  type AgentTransition
+} from '../agent-status/lifecycle/agent-transitions'
 
 /** Owning hosts stamp events; every client sorts without a clock. recentAt persists in lastActivityAt. */
 

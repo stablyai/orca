@@ -36,7 +36,8 @@ import {
 import {
   downloadRemoteFileViaPreview,
   readRemoteDownloadChunk,
-  remoteChunkedDownloadAvailable
+  remoteChunkedDownloadAvailable,
+  streamDownloadedFile
 } from './runtime-remote-file-download'
 
 export { localAccess } from './runtime-file-routing'
@@ -239,36 +240,7 @@ export async function downloadRuntimeFile(
     return downloadRemoteFileViaPreview(remoteArgs, suggestedName)
   }
 
-  const download = await window.api.fs.startDownloadedFile({ suggestedName })
-  if (download.canceled) {
-    return download
-  }
-
-  let finished = false
-  try {
-    let offset = 0
-    for (;;) {
-      const chunk = await readRemoteDownloadChunk(remoteArgs, offset)
-      if (chunk.bytesRead > 0) {
-        await window.api.fs.appendDownloadedFileChunk({
-          transferId: download.transferId,
-          contentBase64: chunk.contentBase64
-        })
-      }
-      offset += chunk.bytesRead
-      if (chunk.eof) {
-        break
-      }
-      if (chunk.bytesRead <= 0) {
-        throw new Error('Remote download stalled before reaching EOF')
-      }
-    }
-    const result = await window.api.fs.finishDownloadedFile({ transferId: download.transferId })
-    finished = true
-    return result
-  } finally {
-    if (!finished) {
-      await window.api.fs.cancelDownloadedFile({ transferId: download.transferId }).catch(() => {})
-    }
-  }
+  return streamDownloadedFile(suggestedName, (offset) =>
+    readRemoteDownloadChunk(remoteArgs, offset)
+  )
 }

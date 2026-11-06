@@ -5,7 +5,7 @@ import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
   TerminalTab
-} from '../../src/shared/terminal-tab-types'
+} from '../../src/shared/workspace-layout/terminal-tab-types'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../src/shared/tab-types'
 import type { WorktreeLineage } from '../../src/shared/worktree/lineage-types'
 import type { Worktree } from '../../src/shared/worktree/types'

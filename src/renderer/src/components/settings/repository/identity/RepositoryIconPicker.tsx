@@ -22,7 +22,7 @@ import {
   buildRepositoryGitHubAvatarUpdate,
   resolveRepositoryGitHubAvatar,
   resolveRepositoryUpstreamLive
-} from './repository-icon-github'
+} from '../../../../runtime/repository-github/repository-icon-github'
 import { translate } from '@/i18n/i18n'
 
 export function RepositoryIconPicker({

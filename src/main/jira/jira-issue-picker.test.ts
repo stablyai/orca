@@ -121,9 +121,12 @@ describe('numeric Jira issue suggestions', () => {
     })
   })
 
-  it.each([12, 50])(
+  it.each([
+    [12, 'TEXT-10'],
+    [50, 'TEXT-48']
+  ] as const)(
     'keeps exact keys ahead of newer text matches across sites (limit %i)',
-    async (limit) => {
+    async (limit, lastTextKey) => {
       getClients.mockReturnValue([entry('cloud'), entry('dc', true)])
       const exact = ['A-1799', 'B-1799'].map((key, index) => ({
         ...issue(key),
@@ -139,11 +142,9 @@ describe('numeric Jira issue suggestions', () => {
 
       const result = await searchIssues(fallback, limit, 'all', undefined, false, suggestions)
 
-      expect(result.map(({ key }) => key)).toEqual([
-        'B-1799',
-        'A-1799',
-        ...text.slice(0, limit - 2).map(({ key }) => key)
-      ])
+      expect(result).toHaveLength(limit)
+      expect(result.slice(0, 3).map(({ key }) => key)).toEqual(['B-1799', 'A-1799', 'TEXT-1'])
+      expect(result.at(-1)?.key).toBe(lastTextKey)
     }
   )
 

@@ -1,6 +1,7 @@
 import type { ChildProcessHandle, ProcessSpec } from '@orca/process-host/process-spec'
 import { spawnProcess } from '@orca/process-host'
-import { normalizeHookTrustKeyForLookup } from '../config-toml-trust'
+import '../trust/toml/config-toml-trust'
+import { normalizeCodexHookTrustLookupKey as normalizeHookTrustKeyForLookup } from '../trust/identity/codex-trust-identity'
 import { runCodexAppServerSession, type CodexAppServerInvocation } from './codex-app-server-session'
 
 // Codex owns hook hash computation; its trust RPCs also preserve user config comments.

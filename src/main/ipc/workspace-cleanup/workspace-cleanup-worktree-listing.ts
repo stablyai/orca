@@ -1,11 +1,11 @@
 import type { Store } from '../../persistence/loading-store/store'
-import { listRepoWorktrees, createFolderWorktree } from '../../repo-worktrees'
+import { listRepoWorktrees, createFolderWorktree } from '../../workspaces/catalog/repo-worktrees'
 import type { Repo } from '../../../shared/repo-types'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import type {
   WorkspaceCleanupScanError,
   WorkspaceCleanupScanResult
-} from '../../../shared/workspace-cleanup'
+} from '../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
   createWorkspaceCleanupScanError,
@@ -18,7 +18,7 @@ import {
   resolveWorkspaceCleanupRepoGitRoute,
   type WorkspaceCleanupGitRoute
 } from './workspace-cleanup-git-route'
-import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
+import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 
 export async function listCleanupGitWorktrees(
   store: Store,

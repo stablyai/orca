@@ -1,7 +1,12 @@
 // Keep E2EE framing outside transport-independent plaintext RPC handlers.
 import type { WebSocket } from 'ws'
-import { PAIRED_E2EE_HANDSHAKE_DEADLINE_MS } from '../../../shared/paired-e2ee-handshake-deadline'
-import { deriveSharedKey, encrypt, decrypt, decryptBytes } from '../../../shared/e2ee-crypto'
+import { PAIRED_E2EE_HANDSHAKE_DEADLINE_MS } from '../../../shared/remote-runtime/e2ee/paired-e2ee-handshake-deadline'
+import {
+  deriveSharedKey,
+  encrypt,
+  decrypt,
+  decryptBytes
+} from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import {
   DesktopMobileE2EEV2Session,
   type DesktopMobileE2EEV2Context
@@ -24,12 +29,8 @@ import type { MobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memo
 import { MobileE2EEDesktopOutboundOwner } from './mobile-e2ee-desktop-outbound-owner'
 import { createLegacyReplySenders } from './mobile-e2ee-legacy-reply-senders'
 import { RuntimeClientCapabilities } from './runtime-client-capabilities'
-import type {
-  RpcBinarySendOptions,
-  RpcBinarySendResult,
-  RpcBinarySender
-} from './rpc-binary-sender'
-import type { DevicePrincipal } from '../device-principal'
+import type * as RpcBinary from './rpc-binary-sender'
+import type { E2EEAuthenticatedDevice } from './server/mobile-e2ee-authenticated-device'
 
 const MAX_CONSECUTIVE_DECRYPT_FAILURES = 5
 
@@ -43,11 +44,6 @@ export type E2EEChannelOptions = {
   transportContext?: DesktopMobileE2EEV2Context
   requireV2?: boolean
   outboundMemoryBudget?: MobileE2EEOutboundMemoryBudget
-}
-
-export type E2EEAuthenticatedDevice = DevicePrincipal & {
-  // Absent for a keyed row, which never presented a bearer.
-  deviceToken?: string
 }
 
 export class E2EEChannel {
@@ -72,7 +68,7 @@ export class E2EEChannel {
     | ((
         plaintext: string,
         encryptedReply: (response: string) => void,
-        encryptedBinaryReply: RpcBinarySender
+        encryptedBinaryReply: RpcBinary.RpcBinarySender
       ) => void)
     | null = null
   private binaryMessageHandler: ((plaintext: Uint8Array<ArrayBufferLike>) => void) | null = null
@@ -111,7 +107,7 @@ export class E2EEChannel {
     handler: (
       plaintext: string,
       encryptedReply: (response: string) => void,
-      encryptedBinaryReply: RpcBinarySender
+      encryptedBinaryReply: RpcBinary.RpcBinarySender
     ) => void
   ): void {
     this.messageHandler = handler
@@ -299,7 +295,10 @@ export class E2EEChannel {
     })
   }
 
-  private enqueueV2(item: V2OutboundItem, options?: RpcBinarySendOptions): RpcBinarySendResult {
+  private enqueueV2(
+    item: V2OutboundItem,
+    options?: RpcBinary.RpcBinarySendOptions
+  ): RpcBinary.RpcBinarySendResult {
     if (!this.v2Session || this.ws.readyState !== this.ws.OPEN) {
       return false
     }

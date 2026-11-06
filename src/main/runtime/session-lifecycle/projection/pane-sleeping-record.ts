@@ -1,11 +1,14 @@
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { findLegacyNumericSleepingRecord } from '../../../../shared/sleeping-record-legacy-pane-key'
-import { makePaneKey, parseLegacyNumericPaneKey } from '../../../../shared/stable-pane-id'
+import {
+  makePaneKey,
+  parseLegacyNumericPaneKey
+} from '../../../../shared/workspace-layout/stable-pane-id'
 import { resolveRuntimePaneTitleLeafIdFromRoot } from '../../../../shared/runtime-pane-title-leaf-id'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
-import { collectPersistedTerminalLeafIds } from '../../mobile-session-layout-projection'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import { collectPersistedTerminalLeafIds } from '../../terminal/surface/mobile-session-layout-projection'
 
 /** The pane's record and, for a numbered one, its tab's numbered keys: aliases, not other panes. */
 export function findPaneSleepingRecord(

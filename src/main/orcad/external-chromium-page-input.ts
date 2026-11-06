@@ -6,8 +6,8 @@ import {
   FILL_ELEMENT_FUNCTION,
   SELECT_ALL_ELEMENT_FUNCTION,
   SELECT_OPTION_TARGET_FUNCTION
-} from '../browser/browser-element-functions'
-import { typedInputSteps } from '../browser/cdp-keyboard-us-layout'
+} from '../browser/cdp/input/browser-element-functions'
+import { typedInputSteps } from '../browser/cdp/input/cdp-keyboard-us-layout'
 import {
   agentBrowserError,
   agentBrowserEvalCommand,

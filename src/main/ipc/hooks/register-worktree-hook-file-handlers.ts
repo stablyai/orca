@@ -1,8 +1,8 @@
-import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
+import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import { ipcMain } from 'electron'
 import { getRepoDialableSshTargetId, type ExecutionHostId } from '../../../shared/execution-host'
 import { isFolderRepo } from '../../../shared/repo-kind'
-import { joinWorktreeRelativePath } from '../../runtime/runtime-relative-paths'
+import { joinWorktreeRelativePath } from '../../runtime/files/paths/runtime-relative-paths'
 import {
   readIssueCommandUnlessWslStopped,
   writeIssueCommandUnlessWslStopped

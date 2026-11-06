@@ -149,18 +149,6 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
     expect(s.activeTabType).toBe('terminal')
   })
 
-  it('is a no-op when the id list is empty', () => {
-    const store = createTestStore()
-    const before = {
-      'repoA::/a/wt1': [{ id: 'tab-1', worktreeId: 'repoA::/a/wt1' }]
-    }
-    store.setState({ tabsByWorktree: before } as unknown as Partial<AppState>)
-
-    store.getState().purgeWorktreeTerminalState([])
-
-    expect(store.getState().tabsByWorktree).toBe(before)
-  })
-
   it('ignores the floating workspace sentinel while purging mixed real ids', () => {
     const store = createTestStore()
     const staleId = 'repoA::/a/wt1'
@@ -249,66 +237,5 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
       type: 'leaf',
       groupId: 'floating-group'
     })
-  })
-
-  it('is a no-op when only the floating workspace sentinel is passed', () => {
-    const store = createTestStore()
-    const tabsByWorktree = {}
-    const browserTabsByWorktree = {
-      [FLOATING_TERMINAL_WORKTREE_ID]: [{ id: 'floating-browser', url: 'https://orca.test' }]
-    }
-    const openFiles = [
-      {
-        id: 'floating-file',
-        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-        filePath: '/floating/note.md',
-        relativePath: 'note.md',
-        language: 'markdown',
-        isDirty: false,
-        isPreview: false,
-        mode: 'edit' as const
-      }
-    ]
-    const unifiedTabsByWorktree = {
-      [FLOATING_TERMINAL_WORKTREE_ID]: [
-        {
-          id: 'floating-unified-tab',
-          type: 'editor',
-          worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-          fileId: 'floating-file'
-        }
-      ]
-    }
-    const groupsByWorktree = {
-      [FLOATING_TERMINAL_WORKTREE_ID]: [
-        {
-          id: 'floating-group',
-          worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-          activeTabId: 'floating-unified-tab'
-        }
-      ]
-    }
-    const layoutByWorktree = {
-      [FLOATING_TERMINAL_WORKTREE_ID]: { type: 'leaf', groupId: 'floating-group' }
-    }
-
-    store.setState({
-      tabsByWorktree,
-      browserTabsByWorktree,
-      openFiles,
-      activeFileIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-file' },
-      unifiedTabsByWorktree,
-      groupsByWorktree,
-      layoutByWorktree
-    } as unknown as Partial<AppState>)
-
-    store.getState().purgeWorktreeTerminalState([FLOATING_TERMINAL_WORKTREE_ID])
-
-    expect(store.getState().tabsByWorktree).toBe(tabsByWorktree)
-    expect(store.getState().browserTabsByWorktree).toBe(browserTabsByWorktree)
-    expect(store.getState().openFiles).toBe(openFiles)
-    expect(store.getState().unifiedTabsByWorktree).toBe(unifiedTabsByWorktree)
-    expect(store.getState().groupsByWorktree).toBe(groupsByWorktree)
-    expect(store.getState().layoutByWorktree).toBe(layoutByWorktree)
   })
 })

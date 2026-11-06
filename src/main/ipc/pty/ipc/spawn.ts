@@ -1,4 +1,4 @@
-import { formatTerminalStartFailure } from '../../../../shared/terminal-start-failure'
+import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { getPtyIpc } from '../pty-host-bindings'
 import { runPtyIpcSpawn } from './spawn-run'
 import type { PtySpawnIpcArgs, PtySpawnIpcDeps } from './spawn-types'

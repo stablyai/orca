@@ -11,10 +11,10 @@ import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab
 } from '../../../shared/runtime-types'
-import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
-import type { BrowserSessionTabSelectionOptions } from '../browser-tab-create-publication'
-import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
-import { applyBrowserSessionTabSelection } from '../browser-session-tab-selection-snapshot'
+import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
+import type { BrowserSessionTabSelectionOptions } from '../browser/tabs/browser-tab-create-publication'
+import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
+import { applyBrowserSessionTabSelection } from '../browser/tabs/browser-session-tab-selection-snapshot'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionCloseCause } from '../../native-chat/agent-session-wire/structured-agent-session-host-lifetime'
 import {
@@ -23,7 +23,7 @@ import {
   type ChatTabChange
 } from '../agent-session/agent-session-tab-layout'
 import { createChatTabLayoutQueue } from '../agent-session-tab-layout-queue'
-import type { WindowLayoutCommand, LayoutCommandRunOptions } from '../runtime-layout-apply'
+import type * as LayoutCommands from '../terminal/layout/runtime-layout-apply'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import {
@@ -56,8 +56,8 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
   ): ReturnType<PruneMobileSessionTabGroupLayoutMethods['getMobileTerminalPaneKey']>
 
   abstract applyLayoutCommand(
-    command: WindowLayoutCommand,
-    run?: Pick<LayoutCommandRunOptions, 'admit'>
+    command: LayoutCommands.WindowLayoutCommand,
+    run?: Pick<LayoutCommands.LayoutCommandRunOptions, 'admit'>
   ): Promise<LayoutApplyReply>
 
   protected abstract persistHeadlessTabGroups(
@@ -231,7 +231,7 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
     if (options.caller) {
       // Keep shared selection; only the originating client selects its newly created tab. Local creates lack a caller.
       this.applyMobileSessionTabNavigation(
-        this.getMobileSessionTabsForWorktree(worktreeId),
+        this.getMobileSessionTabsForWorktree(worktreeId, undefined, { includeAgentSenders: false }),
         tab.id,
         options.caller.navigation,
         options.caller.clientNavigationId,

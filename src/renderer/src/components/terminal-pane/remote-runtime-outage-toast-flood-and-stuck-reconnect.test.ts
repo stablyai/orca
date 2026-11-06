@@ -19,7 +19,7 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
-} from '../../../../shared/terminal-stream-protocol'
+} from '../../../../shared/terminal/stream/terminal-stream-protocol'
 import { RuntimeRpcCallQueueOverloadError } from '../../../../shared/runtime-rpc-call-queue'
 import { withRemoteRuntimeTailscaleHint } from '../../../../shared/remote-runtime/remote-runtime-tailscale-hint'
 import type { PtyTransportRecoveryState } from './pty-transport-types'

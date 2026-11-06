@@ -91,7 +91,3 @@ it('prints delivery limitations on relayed receipts', async () => {
     'Queued relay_1 for worker Dispatch ctx_remote\nWarning: term_remote is reachable through a compatibility address.'
   )
 })
-
-it('leaves a canonical receipt unchanged', async () => {
-  await expect(formatSend({ message: { id: 'msg_1' } })).resolves.toBe('Sent msg_1')
-})

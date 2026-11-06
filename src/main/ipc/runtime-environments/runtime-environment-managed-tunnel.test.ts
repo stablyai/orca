@@ -1,5 +1,5 @@
 import type { RemoteRuntimeSubscriptionCallbacks } from '../../../shared/remote-runtime/remote-runtime-client'
-import type * as RuntimeEnvironmentStore from '../../../shared/runtime-environment-store'
+import type * as RuntimeEnvironmentStore from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { subscribeRuntimeEnvironment } from './runtime-environment-transport-routing'
 import { EventEmitter } from 'node:events'
 import {
@@ -15,8 +15,9 @@ import {
   resetRuntimeEnvironmentStatusOwners
 } from './runtime-environment-request-connections'
 import { advanceRuntimeEnvironmentTransportGeneration } from './runtime-environment-transport-generation'
-import { createEnvironmentFromPairingOffer } from '../../../shared/runtime-environments'
-import { PAIRING_OFFER_VERSION } from '../../../shared/pairing'
+import { createEnvironmentFromPairingOffer } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import '../../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type * as ServingModule from '../../managed-server/lifecycle/orcad-managed-serving'
 import type { ManagedOrcadStartListener } from '../../managed-server/lifecycle/orcad-managed-serving'
 import type { SshTarget } from '../../../shared/ssh-types'
@@ -65,19 +66,22 @@ vi.mock('./runtime-environment-request-connections', async () => {
     closeRemoteRuntimeRequestConnection: vi.fn()
   })
 })
-vi.mock('../../../shared/runtime-environment-store', async (importOriginal) => ({
-  ...(await importOriginal<typeof RuntimeEnvironmentStore>()),
-  resolveEnvironment: (_userData: string, id: string) => {
-    const environment = mocks.environments[id]
-    if (!environment) {
-      return { id, orcadDeployment: { sshTargetId: 'ssh-1' } }
+vi.mock(
+  '../../../shared/remote-runtime/host-store/runtime-environment-store',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof RuntimeEnvironmentStore>()),
+    resolveEnvironment: (_userData: string, id: string) => {
+      const environment = mocks.environments[id]
+      if (!environment) {
+        return { id, orcadDeployment: { sshTargetId: 'ssh-1' } }
+      }
+      mocks.reads[id] = (mocks.reads[id] ?? 0) + 1
+      // Fresh records distinguish the post-bring-up read from the initial lookup.
+      return { ...environment, read: mocks.reads[id] }
     }
-    mocks.reads[id] = (mocks.reads[id] ?? 0) + 1
-    // Fresh records distinguish the post-bring-up read from the initial lookup.
-    return { ...environment, read: mocks.reads[id] }
-  }
-}))
-vi.mock('../../wsl/wsl-host-service-instance', () => ({
+  })
+)
+vi.mock('../../wsl/host-lifecycle/wsl-host-service-instance', () => ({
   getWslHostService: () =>
     mocks.hasWslService ? { ensureForRuntimeCall: mocks.ensureForRuntimeCall } : null,
   getWslHostPhoneGate: () =>
@@ -121,7 +125,7 @@ import {
   requireWslHostWithoutStart,
   resolveManagedRuntimeEnvironment
 } from './runtime-environment-managed-tunnel'
-import { WSL_HOSTS_GATED_OFF_MESSAGE } from '../../wsl/wsl-host-gate'
+import { WSL_HOSTS_GATED_OFF_MESSAGE } from '../../wsl/host-lifecycle/wsl-host-gate'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/wsl-host-internal-gate'
 
 describe('resolving a managed runtime for a call', () => {

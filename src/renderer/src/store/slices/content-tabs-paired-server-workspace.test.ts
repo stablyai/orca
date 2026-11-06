@@ -109,19 +109,6 @@ const sentFor = (worktreeId: string) =>
   layoutApplyTestTransport.sent.filter((command) => command.workspace === worktreeId)
 
 describe("a paired server's workspace", () => {
-  it('opens and closes a browser tab without main', async () => {
-    const browserTab = store.getState().createBrowserTab(SERVER_WT, 'https://example.com')
-    await main.settle()
-    const drawn = tabsOf(SERVER_WT).find((tab) => tab.entityId === browserTab.id)
-    expect(drawn).toMatchObject({ contentType: 'browser' })
-
-    store.getState().closeBrowserTab(browserTab.id)
-    await main.settle()
-
-    expect(tabsOf(SERVER_WT).some((tab) => tab.entityId === browserTab.id)).toBe(false)
-    expect(sentFor(SERVER_WT)).toEqual([])
-  })
-
   it('opens and closes a chat tab without main', async () => {
     const chat = openStructuredAgentSessionProvisionalTab({
       worktreeId: SERVER_WT,

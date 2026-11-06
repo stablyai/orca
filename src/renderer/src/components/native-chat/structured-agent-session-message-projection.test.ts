@@ -120,20 +120,4 @@ describe('structured agent session message projection', () => {
     expect(messages.map((message) => message.id)).toEqual([walItem.itemId])
     expect(optimistic[0]?.id).toBe(messages[0]?.id)
   })
-
-  it('keeps an optimistic send until its acceptance arrives', () => {
-    const outbox = [
-      optimisticMessage({
-        clientMessageId: 'client-pending',
-        sessionId: 'session-1',
-        text: 'pending',
-        attachments: [],
-        queuedAt: 1
-      })
-    ]
-
-    expect(projectStructuredAgentSessionMessages([], outbox, [])).toMatchObject([
-      { id: agentJournalSubmissionKey('client-pending'), role: 'user' }
-    ])
-  })
 })

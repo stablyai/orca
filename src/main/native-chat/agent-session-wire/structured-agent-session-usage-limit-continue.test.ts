@@ -81,6 +81,21 @@ async function limitTurn(journal: AgentSessionJournal, resetsAt: number, now: nu
   return turnItemId
 }
 
+function resumeQueue(current: RestTestRig) {
+  return current.host.queuedMessagesResume(REST_TEST_CALLER, {
+    envelope: {
+      sessionId: SESSION,
+      clientOperationId: hostTestOperationId(),
+      expectedRuntimeFence: null,
+      payloadFingerprint: computeAgentSessionPayloadFingerprint({
+        method: 'agentSession.queuedMessagesResume',
+        sessionId: SESSION,
+        fields: {}
+      })
+    }
+  })
+}
+
 it('waits for the buffered reset, accepts one ordinary continuation and never sends twice', async () => {
   const { current, sweep, resetsAt } = await setup()
   expect(sweep.readState(SESSION)?.state).toBe('scheduled')
@@ -218,11 +233,14 @@ it('lets later due chats run while an earlier chat has an edited queued message,
     blocks: [{ type: 'text' as const, text: 'backlog' }]
   }
   const row = await journal.queuedMessages.insert({ messageId: hostTestOperationId(), body })
+  // The limit failure holds the card; Resume makes it actionable, the edit lease keeps it waiting.
+  const resumed = resumeQueue(current)
   journal.queuedMessages.editLeases.acquire(
     { callerKey: REST_TEST_CALLER.callerKey, editId: 'held-edit' },
     { messageId: row.messageId, fingerprint: row.fingerprint }
   )
   release()
+  expect(await resumed).toMatchObject({ ok: true, value: { resumed: true } })
   const send = vi.spyOn(current.host, 'send')
   current.clock.now = resetsAt + 15_001
   await sweep.tick()
@@ -238,16 +256,66 @@ it('lets later due chats run while an earlier chat has an edited queued message,
   expect(sweep.readState(SESSION)?.state).toBe('scheduled')
 })
 
+it('continues ahead of a failure-held card, which drains only after the continuation succeeds', async () => {
+  const { current, sweep, journal, resetsAt } = await setup()
+  await journal.queuedMessages.insert({
+    messageId: hostTestOperationId(),
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'held backlog' }] }
+  })
+  const pause = async () => {
+    const page = await current.host.history({ sessionId: SESSION, direction: 'tail' })
+    return page.ok ? page.page.queuePause : undefined
+  }
+  const dispatched = () =>
+    current.adapter.dispatch.mock.calls.map(([{ body }]) =>
+      body.kind === 'message' && body.blocks[0]?.type === 'text' ? body.blocks[0].text : null
+    )
+  expect(await pause()).toEqual({ reason: 'failed' })
+  const send = vi.spyOn(current.host, 'send')
+  current.clock.now = resetsAt + 15_000
+  await sweep.tick()
+  expect(await send.mock.results[0]!.value).toMatchObject({ ok: true })
+  await vi.waitFor(() =>
+    expect(dispatched()).toEqual(['hello', NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE])
+  )
+  // The continuation's turn is still open: the card stays held.
+  expect(await pause()).toEqual({ reason: 'failed' })
+  await journal.appendItem(
+    { provider: 'orca', clientMessageId: 'continued-turn' },
+    {
+      kind: 'turn',
+      turnId: 'turn-2',
+      state: 'completed',
+      outcome: 'success',
+      startedAt: current.clock.now,
+      completedAt: current.clock.now
+    },
+    { fence: 1, turnScope: { kind: 'thread' } }
+  )
+  current.host.publishWorkChanged(SESSION)
+  await vi.waitFor(() =>
+    expect(dispatched()).toEqual([
+      'hello',
+      NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE,
+      'held backlog'
+    ])
+  )
+  expect(await pause()).toBeNull()
+})
+
 it('reuses the status projection and does not cold replay disabled sweeps', async () => {
   const { current, sweep, journal } = await setup()
   const snapshot = vi.spyOn(journal, 'snapshot')
+  const status = vi.spyOn(journal, 'statusRead')
   sweep.readState(SESSION)
   sweep.readState(SESSION)
   expect(snapshot).not.toHaveBeenCalled()
+  expect(status).not.toHaveBeenCalled()
   current.host.publishWorkChanged(SESSION)
-  expect(snapshot).toHaveBeenCalledOnce()
+  expect(status).toHaveBeenCalledOnce()
   sweep.readState(SESSION)
-  expect(snapshot).toHaveBeenCalledOnce()
+  expect(status).toHaveBeenCalledOnce()
+  expect(snapshot).not.toHaveBeenCalled()
   const sessions = current.host.collaboratorsForTests().sessions
   const held = sessions.get(SESSION)!
   sessions.delete(SESSION)

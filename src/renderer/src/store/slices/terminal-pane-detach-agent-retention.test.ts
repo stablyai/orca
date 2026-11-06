@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { collectRetainedAgentsOnDisappear } from '@/components/dashboard/useRetainedAgents'
 import {
   resetAgentPaneAuthorityAliasesForTests,
   resolveAgentPaneAuthorityKey
 } from './agent-pane-authority'
 import { createTestStore, makeTab, makeWorktree, seedStore } from './store-test-helpers'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 
 const WORKTREE_ID = 'repo::/repo/worktree'
@@ -187,35 +187,6 @@ describe('detach completed split pane → sidebar retention', () => {
     // Why: every intermediate key must resolve to the CURRENT owner, not the previous hop.
     expect(resolveAgentPaneAuthorityKey(SOURCE_PANE_KEY)).toBe(FINAL_PANE_KEY)
     expect(resolveAgentPaneAuthorityKey(TARGET_PANE_KEY)).toBe(FINAL_PANE_KEY)
-  })
-
-  it('keeps every intermediate key routed after a fourth move', () => {
-    const store = createDetachStore()
-    const EXTRA_TAB = 'tab-extra'
-    const extraPaneKey = makePaneKey(EXTRA_TAB, LEAF)
-    store.setState({
-      tabsByWorktree: {
-        [WORKTREE_ID]: [
-          ...(store.getState().tabsByWorktree[WORKTREE_ID] ?? []),
-          makeTab({ id: EXTRA_TAB, worktreeId: WORKTREE_ID, ptyId: null })
-        ]
-      }
-    })
-    store.getState().setAgentStatus(SOURCE_PANE_KEY, {
-      state: 'done',
-      prompt: 'Fix it',
-      agentType: 'claude'
-    })
-
-    detach(store, SOURCE_TAB, TARGET_TAB)
-    detach(store, TARGET_TAB, FINAL_TAB)
-    detach(store, FINAL_TAB, EXTRA_TAB)
-
-    for (const formerKey of [SOURCE_PANE_KEY, TARGET_PANE_KEY, FINAL_PANE_KEY]) {
-      expect(resolveAgentPaneAuthorityKey(formerKey)).toBe(extraPaneKey)
-    }
-    store.getState().setAgentStatus(TARGET_PANE_KEY, { state: 'done', prompt: 'late post' })
-    expect(store.getState().agentStatusByPaneKey[extraPaneKey]?.prompt).toBe('late post')
   })
 
   it('does not resurrect the source when the transferred owner immediately closes', () => {

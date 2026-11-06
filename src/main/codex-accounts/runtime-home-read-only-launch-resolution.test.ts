@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { realpathSync, writeFileSync } from 'node:fs'
 import type * as NodeFs from 'node:fs'
-import type * as CodexConfigMirror from '../codex/codex-config-mirror'
-import type * as CodexHomePaths from '../codex/codex-home-paths'
-import type * as CodexSessionBackfillMarker from '../codex/codex-session-backfill-marker'
+import type * as CodexConfigMirror from '../codex/configuration/settings/codex-config-mirror'
+import type * as CodexHomePaths from '../codex/configuration/homes/codex-home-paths'
+import type * as CodexSessionBackfillMarker from '../codex/history/backfill/codex-session-backfill-marker'
 import { join } from 'node:path'
 import { createSettings } from './runtime-home-settings-test-fixtures'
 import {
@@ -88,23 +88,27 @@ async function importServiceWithSideEffectSpies() {
   const systemBridge = vi.fn(async () => {})
   const accountBridge = vi.fn(async () => {})
   const backfillMarker = vi.fn(() => false)
-  vi.doMock('../codex/codex-home-paths', async () => ({
-    ...(await vi.importActual<typeof CodexHomePaths>('../codex/codex-home-paths')),
+  vi.doMock('../codex/configuration/homes/codex-home-paths', async () => ({
+    ...(await vi.importActual<typeof CodexHomePaths>(
+      '../codex/configuration/homes/codex-home-paths'
+    )),
     syncSystemCodexResourcesIntoManagedHome: syncResources
   }))
-  vi.doMock('../codex/codex-config-mirror', async () => ({
-    ...(await vi.importActual<typeof CodexConfigMirror>('../codex/codex-config-mirror')),
+  vi.doMock('../codex/configuration/settings/codex-config-mirror', async () => ({
+    ...(await vi.importActual<typeof CodexConfigMirror>(
+      '../codex/configuration/settings/codex-config-mirror'
+    )),
     syncSystemConfigIntoManagedCodexHome: syncConfig
   }))
-  vi.doMock('../codex/codex-session-bridge', () => ({
+  vi.doMock('../codex/history/bridges/codex-session-bridge', () => ({
     startSystemCodexSessionBridgeInBackground: systemBridge
   }))
-  vi.doMock('../codex/codex-account-session-bridge', () => ({
+  vi.doMock('../codex/history/bridges/codex-account-session-bridge', () => ({
     startCodexAccountSessionBridgeInBackground: accountBridge
   }))
-  vi.doMock('../codex/codex-session-backfill-marker', async () => ({
+  vi.doMock('../codex/history/backfill/codex-session-backfill-marker', async () => ({
     ...(await vi.importActual<typeof CodexSessionBackfillMarker>(
-      '../codex/codex-session-backfill-marker'
+      '../codex/history/backfill/codex-session-backfill-marker'
     )),
     markCodexSessionBackfillMarkerPending: backfillMarker
   }))

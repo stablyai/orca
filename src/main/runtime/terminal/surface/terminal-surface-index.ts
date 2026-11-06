@@ -19,13 +19,13 @@ import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout
 import { bindingOf } from '../../pane-live-facts'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { getPtyExecutionHost } from '../../../../shared/terminal-execution-host'
+import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import {
   projectSessionTabs,
   type ProjectedSessionTabs
 } from '../../../../shared/workspace-layout/old-client/old-client-session-tabs-projection'
 import { projectRuntimeSurfaces } from '../../runtime-leaf-record-projection'
-import type { WorkspaceLayoutReads } from '../../workspace-layout-stream'
+import type { WorkspaceLayoutReads } from './workspace-layout-stream'
 
 type LoadedPartition = Pick<LoadedWorkspaceLayout, 'layout' | 'desktopView' | 'facts'>
 

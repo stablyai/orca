@@ -28,13 +28,15 @@ declare module 'micromark-util-types' {
 
 const lineEnding = (code: Code): boolean => code !== null && code < -2
 const whitespace = (code: Code): boolean => code === null || code < 0 || code === 32
-const digit = (code: Code): boolean => code !== null && code >= 48 && code <= 57
+const digit = (code: Code): code is number => code !== null && code >= 48 && code <= 57
+const currencyTerminators = new Set([33, 41, 58, 59, 63])
 
 type ExhaustedSearch = { from: number; to: number; last: Map<number, number> }
 
 function construct(flow: boolean): Construct {
   const searches = new WeakMap<TokenizeContext, Map<string, ExhaustedSearch>>()
   const tokenize: Tokenizer = function (effects, ok, nok) {
+    const afterWhitespace = () => whitespace(this.previous)
     const knowledge = flow ? undefined : (searches.get(this) ?? new Map<string, ExhaustedSearch>())
     if (knowledge) {
       searches.set(this, knowledge)
@@ -48,6 +50,7 @@ function construct(flow: boolean): Construct {
     let escaped = false
     let candidate: Token
     let closeSize = 0
+    let closeAfterWhitespace = false
     const continuation: Construct = {
       partial: true,
       tokenize(e, yes, no) {
@@ -126,7 +129,22 @@ function construct(flow: boolean): Construct {
       if (opener === '$' && whitespace(code)) {
         return nok(code)
       }
+      if (opener === '$' && digit(code)) {
+        effects.enter('chatMathData')
+        return leadingNumber(code)
+      }
       return between(code)
+    }
+    function leadingNumber(code: Code): State | undefined {
+      if (digit(code) || code === 44 || code === 46) {
+        effects.consume(code)
+        body += String.fromCharCode(code)
+        return leadingNumber
+      }
+      if (whitespace(code) || (code !== null && currencyTerminators.has(code))) {
+        return nok(code)
+      }
+      return data(code)
     }
     function between(code: Code): State | undefined {
       if (code === null) {
@@ -136,7 +154,7 @@ function construct(flow: boolean): Construct {
         if (flow) {
           return effects.attempt(continuation, continued, finish)(code)
         }
-        if (opener === '$' || opener === '\\(') {
+        if (opener === '\\(') {
           return exhausted(code)
         }
         effects.enter('lineEnding')
@@ -146,6 +164,7 @@ function construct(flow: boolean): Construct {
         return between
       }
       if (code === 36 && opener.startsWith('$')) {
+        closeAfterWhitespace = afterWhitespace()
         candidate = effects.enter('chatMathMarker')
         closeSize = 0
         return dollarClose(code)
@@ -160,7 +179,7 @@ function construct(flow: boolean): Construct {
       return between(code)
     }
     function dollarClose(code: Code): State | undefined {
-      if (code === 36) {
+      if (code === 36 && (opener !== '$' || closeSize === 0)) {
         effects.consume(code)
         closeSize++
         return dollarClose
@@ -174,13 +193,7 @@ function construct(flow: boolean): Construct {
         body += '$'.repeat(closeSize)
         return between(code)
       }
-      if (
-        opener === '$' &&
-        (/\s/.test(body.at(-1) ?? '') ||
-          digit(code) ||
-          (/^[+-]?\d[\d,]*(?:\.\d+)?(?:[^\p{ASCII}]|\s)/u.test(body) &&
-            !/[\\_^=<>+*/{}-]/.test(body)))
-      ) {
+      if (opener === '$' && (closeAfterWhitespace || digit(code))) {
         return nok(code)
       }
       effects.exit('chatMathMarker')

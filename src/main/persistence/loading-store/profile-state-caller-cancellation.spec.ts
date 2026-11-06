@@ -5,7 +5,7 @@ import {
   setMigrationUnsupportedPty
 } from '../../agent-hooks/migration-unsupported-pty-state'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { openProfileStateDatabase } from '../profile-state/profile-state-database'
 import { readProfileStateRevision } from '../profile-state/profile-state-revision'
 import { ProfileStateWriterError } from '../profile-state/profile-state-writer-errors'

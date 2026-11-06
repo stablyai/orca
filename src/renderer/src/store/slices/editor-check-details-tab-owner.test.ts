@@ -2,7 +2,7 @@ import type { StoreApi } from 'zustand/vanilla'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createEditorTabsStore } from './editor-slice-test-harness'
 import { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
-import '@/components/editor/check-run-details-tab'
+import '@/components/editor/check-details/actions/check-run-details-tab'
 import type { AppState } from '../types'
 import type { PRCheckRunDetails } from '../../../../shared/github/check-types'
 

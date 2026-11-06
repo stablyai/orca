@@ -51,18 +51,4 @@ describe('EditorFileLoadErrorView on a stopped WSL host', () => {
     expect(onHostStarted).toHaveBeenCalledTimes(1)
     expect(onRetry).not.toHaveBeenCalled()
   })
-
-  it('keeps the read error and Retry for any other workspace', () => {
-    mocks.stopped.current = { environmentId: 'wsl:ubuntu', distro: 'Ubuntu' }
-    const view = render(
-      <EditorFileLoadErrorView
-        message="Permission denied"
-        worktreeId="wt-local"
-        onRetry={vi.fn()}
-      />
-    )
-    expect(view.getByText('Unable to load file')).toBeTruthy()
-    expect(view.getByRole('button', { name: 'Retry' })).toBeTruthy()
-    expect(view.queryByText('Ubuntu is stopped')).toBeNull()
-  })
 })

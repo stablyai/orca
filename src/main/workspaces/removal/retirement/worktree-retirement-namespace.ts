@@ -4,7 +4,7 @@ import {
   type RetiredNameRegistry
 } from '../../../../shared/worktree/retired-name-registry'
 import type { Repo } from '../../../../shared/repo-types'
-import { worktreePathComparisonKey } from '../../../worktree-path-comparison-key'
+import { worktreePathComparisonKey } from '../../catalog/worktree-path-comparison-key'
 import { sshEndpointKey, type SshIdentityFields } from '../../../ssh/targets/ssh-target-identity'
 
 /** Repo-id storage survives settings changes; this path-derived copy survives project remove/re-add. */

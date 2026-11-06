@@ -9,14 +9,14 @@ import { assertClipboardTextWriteWithinLimitWithYield } from '../../../shared/cl
 import { normalizeBrowserNavigationUrl } from '../../../shared/browser-url'
 import { BrowserError } from '../browser-error'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
-import { FILL_ELEMENT_FUNCTION } from '../browser-element-functions'
+import { FILL_ELEMENT_FUNCTION } from '../cdp/input/browser-element-functions'
 import { EMBEDDED_NAVIGATION_TIMEOUT_MS } from './agent-browser-bridge-types'
 import {
   isAbortedNavigationError,
   waitForAbortedNavigationReplacement
 } from './agent-browser-bridge-process'
 import { AgentBrowserBridgeQueue } from './agent-browser-bridge-queue'
-import { assertRemoteCliPageAccess } from '../remote-cli-page-admission'
+import { assertRemoteCliPageAccess } from '../routing/input-ownership/remote-cli-page-admission'
 import { agentBrowserSnapshotArgs } from './agent-browser-snapshot-arguments'
 
 export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQueue {

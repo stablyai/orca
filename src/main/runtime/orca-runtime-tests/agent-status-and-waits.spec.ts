@@ -1,14 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
-import { committingSpawn } from '../bind-first-pane.test-fixture'
-import { OrcaRuntimeService, makePaneKey } from '../orca-runtime-test-mocks.spec'
-import type { RuntimeTerminalAgentStatusEvent } from '../orca-runtime-test-mocks.spec'
+import { committingSpawn } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import type { RuntimeTerminalAgentStatusEvent } from '../terminal/output/terminal-agent-status-events'
 import {
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   expectStablePaneKeyEnv,
-  spawnedPtyEnv,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { spawnedPtyEnv } from '../spawned-pty-env-fixtures'
 
 describe('OrcaRuntimeService', () => {
   it('preserves OSC 9999 parser state for rendererless background PTYs', async () => {

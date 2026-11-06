@@ -2,16 +2,16 @@
  * What the move dialog shows about its projects, read from the renderer catalog. Main decides what
  * moves; this only names rows, counts what they hold, and maps blockers back to their project.
  */
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import {
   isWslHostRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
-} from '../../../../shared/runtime-environments'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+} from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { Tab } from '../../../../shared/tab-types'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { collectLeafIdsInOrder } from '../terminal-pane/terminal-layout-leaf-ids'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'

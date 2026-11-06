@@ -9,8 +9,8 @@ import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime
 import type { AgentWorkspaceTrustSpawnRequest } from '../../../shared/agent-workspace-trust-spawn-request'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 import { applyWorkspaceTrustOnThisHost, launchedAgentHome } from './execution-host-workspace-trust'
-import { getLocalCodexTrustConfigFiles } from '../../codex/codex-home-paths'
-import { getCachedWslHome } from '../../wsl-home-cache'
+import { getLocalCodexTrustConfigFiles } from '../../codex/configuration/homes/codex-home-paths'
+import { getCachedWslHome } from '../../wsl/discovery/wsl-home-cache'
 
 export type AgentTrustLaunchContext = {
   /** The final spawn env, before the host's own process env. */

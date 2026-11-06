@@ -4,12 +4,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
-import { listWorktreesStrict } from '../../git/worktree-listing'
-import type * as WorktreeRemovalModule from '../../git/worktree-removal'
-import { deleteBranchOfUnregisteredWorktree } from '../../git/worktree-removal'
-import { beginTerminalInstall } from '../../ipc/watcher-removal-gate'
+import { listWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
+import type * as WorktreeRemovalModule from '../../git/worktrees/removal/worktree-removal'
+import { deleteBranchOfUnregisteredWorktree } from '../../git/worktrees/removal/worktree-removal'
+import { beginTerminalInstall } from './watcher-removal-gate'
 import { formatWorktreeRemovalError } from '../../ipc/worktree-logic'
-import { registerWorktreeChangeInvalidator } from '../../ipc/worktree-change-invalidators'
+import { registerWorktreeChangeInvalidator } from '../../ipc/worktrees/listing/worktree-change-invalidators'
 import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests,
@@ -29,12 +29,12 @@ import { readWorktreeRemovalRecords } from './worktree-removal-records'
 import { loadWorktreeRemovalRecordsForStore } from '../../startup/worktree-removal-records-load'
 
 const listWorktreesStrictMock = vi.hoisted(() => vi.fn(async () => []))
-vi.mock('../../git/worktree', () => ({ listWorktreesStrict: listWorktreesStrictMock }))
-vi.mock('../../git/worktree-listing', async (importOriginal) => ({
+
+vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   listWorktreesStrict: listWorktreesStrictMock
 }))
-vi.mock('../../git/worktree-removal', async (importOriginal) => ({
+vi.mock('../../git/worktrees/removal/worktree-removal', async (importOriginal) => ({
   ...(await importOriginal<typeof WorktreeRemovalModule>()),
   deleteBranchOfUnregisteredWorktree: vi.fn(async () => ({}))
 }))

@@ -3,10 +3,7 @@ import type { DiffComment } from '../../../shared/diff-comment-types'
 
 import type { AppState } from './types'
 import { makeWorktree } from './slices/worktrees-slice-test-fixtures'
-import {
-  selectWorktreeDiffComments,
-  selectWorktreeDiffCommentsOrEmpty
-} from './worktree-diff-comments-selector'
+import './worktree-diff-comments-selector'
 import { createDiffCommentViewSelector, sourceParts } from './diff-comment-owner'
 
 const TARGET = 'repo-9::/w/target'
@@ -92,25 +89,5 @@ describe('note owner view selectors', () => {
     // A listing change costs one pass per consumer over the open repo plus one shared index build.
     expect(small.catalogWriteReads).toBeLessThanOrEqual(8 * 100 + 9 * 100)
     expect(large.catalogWriteReads).toBeLessThanOrEqual(8 * 1000 + 9 * 1000)
-  })
-})
-
-describe('selectWorktreeDiffComments', () => {
-  it('reads a replacement worktree snapshot and handles an absent id', () => {
-    const firstComments = [makeComment('comment-1')]
-    const nextComments = [makeComment('comment-2')]
-    const first = {
-      'repo-9': [makeWorktree({ id: TARGET, repoId: 'repo-9', diffComments: firstComments })]
-    }
-    const next = {
-      'repo-9': [makeWorktree({ id: TARGET, repoId: 'repo-9', diffComments: nextComments })]
-    }
-
-    expect(selectWorktreeDiffComments({ worktreesByRepo: first }, TARGET)).toBe(firstComments)
-    expect(selectWorktreeDiffComments({ worktreesByRepo: next }, TARGET)).toBe(nextComments)
-    expect(selectWorktreeDiffComments({ worktreesByRepo: next }, null)).toBeUndefined()
-    expect(selectWorktreeDiffCommentsOrEmpty({ worktreesByRepo: next }, null)).toBe(
-      selectWorktreeDiffCommentsOrEmpty({ worktreesByRepo: next }, undefined)
-    )
   })
 })

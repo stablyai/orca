@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { prepareOpenCodePtyLaunch } from './opencode-pty-launch'
-import { seedWslGuestEnvironmentForTests } from '../wsl/wsl-guest-environment'
+import { seedWslGuestEnvironmentForTests } from '../wsl/execution/wsl-guest-environment'
 
 const run = vi.hoisted(() => vi.fn())
 vi.mock('@orca/process-host', () => ({ runProcess: run }))
-vi.mock('../wsl/wsl-executable-path', () => ({ resolveWslExecutablePath: () => 'wsl.exe' }))
+vi.mock('../wsl/execution/wsl-executable-path', () => ({
+  resolveWslExecutablePath: () => 'wsl.exe'
+}))
 vi.mock('../agent-hooks/server', () => ({ agentHookServer: { endpointFilePath: null } }))
 
 beforeEach(() => {

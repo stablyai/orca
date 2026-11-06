@@ -7,6 +7,10 @@ import {
   resetTerminalWebglSuggestion
 } from './pane-webgl-renderer'
 import { openTerminal, setLigaturesEnabled } from './pane-lifecycle'
+import {
+  buildDefaultTerminalOptions,
+  resolveTerminalScrollOnUserInput
+} from './pane-terminal-options'
 
 const webglMock = vi.hoisted(() => ({
   contextLossHandler: null as (() => void) | null,
@@ -256,5 +260,14 @@ describe('openTerminal — addon and provider wiring', () => {
     expect(WebglAddon).toHaveBeenCalledTimes(2)
     expect(webglMock.dispose).toHaveBeenCalledTimes(1)
     expect(pane.ligaturesAddon).toBeNull()
+  })
+})
+
+describe('terminal scroll on user input', () => {
+  it('scrolls to the bottom on input by default', () => {
+    expect(buildDefaultTerminalOptions().scrollOnUserInput).toBe(true)
+    expect(resolveTerminalScrollOnUserInput(undefined)).toBe(true)
+    expect(resolveTerminalScrollOnUserInput(true)).toBe(true)
+    expect(resolveTerminalScrollOnUserInput(false)).toBe(false)
   })
 })

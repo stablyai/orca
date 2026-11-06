@@ -7,7 +7,7 @@ import {
   applyWorkspaceCleanupPolicy,
   createWorkspaceCleanupFingerprint,
   type WorkspaceCleanupCandidate
-} from '../../../shared/workspace-cleanup'
+} from '../../../shared/workspace-cleanup/workspace-cleanup'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import {
   getNewestWorkspaceCleanupDiffCommentAt,
@@ -17,7 +17,7 @@ import {
 import {
   getRepoOwnedWorktreeMeta,
   isWorktreeMetaOwnedByRepo
-} from '../../worktree-metadata-ownership'
+} from '../../workspaces/catalog/worktree-metadata-ownership'
 import {
   readAllWorktreeMetaForHost,
   readWorktreeMetaForHost

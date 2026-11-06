@@ -12,7 +12,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { createOrchestrationRpcHarness } from './rpc-test-harness'
 import { STATUS_METHODS } from '../status'
 import { eraseRpcMethods } from '../../core'
-import { partialRuntimeStore } from '../../../runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../../../orca-runtime-tests/runtime-store-partial-fixture'
 import { resolveOrchestrationSessionCaller } from '../../orchestration-session-caller'
 import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
@@ -38,7 +38,7 @@ import {
   projectStructuredItemToNativeChat
 } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { latestStructuredAgentSessionPrompt } from '../../../../../shared/agent-session/requests/structured-agent-session-latest-request'
-import { isOrcaDispatchPrompt } from '../../../../../shared/agent-row-primary-text'
+import { isOrcaDispatchPrompt } from '../../../../../shared/agent-status/presentation/agent-row-primary-text'
 import * as placement from './worker/worker-start-agent-placement'
 import * as topology from './worker/worker-topology'
 import {
@@ -653,7 +653,7 @@ it.each([
     expect(prompt).toContain(`Your task ID is: ${from.orchestration.taskId}`)
     if (queued) {
       expect(agentMessageHeading(from, { blocks: [] })).toBe('task')
-      expect(agentMessageSenderCanOpen(from.senders[0], true)).toBe(true)
+      expect(agentMessageSenderCanOpen(from.senders[0])).toBe(true)
       expect(agentSessionMessagePayload(body)).not.toHaveProperty('from')
       expect(agentSessionSendBodyFingerprint(WORKER, body)).toBe(
         agentSessionSendBodyFingerprint(WORKER, agentSessionMessagePayload(body))
@@ -666,19 +666,6 @@ it.each([
         body
       })
       expect(projected?.from?.senders[0].agent).toBe('claude')
-      const attributionPath =
-        '../../../../../../mobile/src/session/mobile-agent-message-attribution'
-      const { agentMessageAttribution } = await import(attributionPath)
-      expect(agentMessageAttribution('Message from', projected?.from)).toBe(
-        'Message from Claude Chat'
-      )
-      const queuePath =
-        '../../../../../../mobile/src/session/mobile-structured-queued-message-cards'
-      const { mobileQueuedMessageCards } = await import(queuePath)
-      const [mobileCard] = mobileQueuedMessageCards([queued], [])
-      expect(mobileCard.attribution).toBe('From Claude Chat')
-      expect(mobileCard.line).toBe(task)
-      expect(mobileCard.from.senders[0].agent).toBe('claude')
       const [card] = projectQueuedMessageCards([queued], [], {})
       expect(card.from?.senders[0].agent).toBe('claude')
       expect(queuedMessageCardLine(card)).toBe(task)

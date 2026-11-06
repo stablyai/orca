@@ -103,13 +103,12 @@ vi.mock('@/lib/telemetry', () => ({
 
 vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: vi.fn(),
-  createWebRuntimeAgentSessionTerminal: vi.fn(),
-  createWebRuntimeAgentSessionTerminalWithLaunchDraft: vi.fn()
+  deliverCreatedWebRuntimeAgentSessionPrompt: vi.fn(async () => true)
 }))
 vi.mock('@/runtime/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: mockIsWebRuntimeSessionActive
 }))
-vi.mock('../../../shared/terminal-surface-id', () => ({
+vi.mock('../../../shared/workspace-layout/terminal-surface-id', () => ({
   isWebTerminalSurfaceTabId: vi.fn(() => false)
 }))
 

@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => {
 vi.mock('../../../shared/app-environment', () => ({
   getAppEnvironment: () => ({ getPath: () => '/u' })
 }))
-vi.mock('../../../shared/runtime-environment-store', () => ({
+vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   listEnvironments: () => mocks.environments.current.map((id) => ({ id }))
 }))
 vi.mock('../../managed-server/lifecycle/orcad-managed-launch-session', () => ({

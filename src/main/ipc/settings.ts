@@ -1,3 +1,5 @@
+import { sanitizeRendererSettingsUpdate } from './renderer-settings-update'
+import { confirmBrowserPasswordOwner } from '../browser-passwords/browser-password-reauth'
 import { getClaudeAgentViewService } from '../claude/agent-view/agent-view-service'
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
@@ -13,54 +15,39 @@ import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../share
 import type { AgentAwakeService } from '../power/agent-awake-service'
 import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-directory'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
-import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
+import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyElectronProxySettings } from '../network/proxy-settings'
-import { applyBrowserSessionProxies } from '../browser/browser-session-proxy'
-import { applyProxyToElectronUpdaterSession } from '../updater/electron-updater-proxy-session'
-import { browserSessionRegistry } from '../browser/browser-session-registry'
+import { applyBrowserSessionProxies } from '../browser/sessions/browser-session-proxy'
+import { applyProxyToElectronUpdaterSession } from '../updater/lifecycle/electron-updater-proxy-session'
+import { browserSessionRegistry } from '../browser/sessions/browser-session-registry'
 import { sanitizeNetworkSettings } from './network-settings-sanitization'
 import { normalizeAppIconId } from '../../shared/app-icon'
 import { normalizeUiLanguage } from '../../shared/ui-language'
 import { applyAppIcon } from '../window/desktop-integration/app-icon'
-import { normalizeTerminalCustomThemes } from '../../shared/terminal-custom-themes'
-import { normalizeDesktopTerminalScrollbackRows } from '../../shared/terminal-scrollback-policy'
-import { normalizeTerminalLineHeight } from '../../shared/terminal-line-height-settings'
+import { normalizeTerminalCustomThemes } from '../../shared/terminal-themes/terminal-custom-themes'
+import { normalizeDesktopTerminalScrollbackRows } from '../../shared/terminal/replay/terminal-scrollback-policy'
+import { normalizeTerminalLineHeight } from '../../shared/terminal/appearance/terminal-line-height-settings'
 import { prepareLocalWorktreeRootsForRepos } from '../workspaces/creation/worktree-root-preparation'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktrees/creation/worktree-base-directory-watcher'
-import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
-import { resolveEnvironment } from '../../shared/runtime-environment-store'
+import { applyPRBotAuthorOverride } from '../../shared/source-control/review-comments/pr-bot-author-overrides'
+import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environments/runtime-environment-preference'
-import { haveSameDisabledTuiAgents } from '../../shared/tui-agent-selection'
+import { haveSameDisabledTuiAgents } from '../../shared/agent-launch/catalog/tui-agent-selection'
 import {
   normalizeMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddresses
-} from '../../shared/mobile-pairing-custom-address'
+} from '../../shared/remote-runtime/pairing/mobile-pairing-custom-address'
 import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode
 } from '../../shared/computer-awake-mode'
-import { resolveAiVaultSearchSettings } from '../../shared/ai-vault-search-settings'
+import { resolveAiVaultSearchSettings } from '../../shared/ai-vault/search/ai-vault-search-settings'
 import { applySessionSearchSettingsChange } from '../ai-vault-search/session-search-enablement'
 import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/runtime-environment-registry-root'
 
 const SETTINGS_CHANGED_WHITELIST_SET = new Set<string>(SETTINGS_CHANGED_WHITELIST)
 const registryRoot = getRuntimeEnvironmentRegistryRoot
-
-type LegacyTerminalScrollbackSettingsUpdate = Partial<GlobalSettings> & {
-  terminalScrollbackBytes?: unknown
-}
-
-function sanitizeRendererSettingsUpdate(args: Partial<GlobalSettings>): Partial<GlobalSettings> {
-  const { terminalScrollbackBytes: _legacyScrollbackBytes, ...sanitizedArgs } =
-    args as LegacyTerminalScrollbackSettingsUpdate
-  void _legacyScrollbackBytes
-  // Plugin consent and enablement require main's reviewed-fingerprint handlers.
-  delete sanitizedArgs.pluginConsents
-  delete sanitizedArgs.disabledPlugins
-  delete sanitizedArgs.pluginExternalHostGrants
-  return sanitizedArgs
-}
 
 // Electron menus do not react to settings; rebuild appearance checkboxes after writes.
 const APPEARANCE_MENU_KEYS: readonly (keyof GlobalSettings)[] = [
@@ -179,6 +166,15 @@ export function registerSettingsHandlers(
     }
     if (args.theme) {
       nativeTheme.themeSource = args.theme
+    }
+    if (
+      sanitizedArgs.browserPasswordsFillRequiresReauth === false &&
+      (store.getSettings().browserPasswordsFillRequiresReauth !== true ||
+        !(await confirmBrowserPasswordOwner('turn off saved password fill authentication', {
+          always: true
+        })))
+    ) {
+      delete sanitizedArgs.browserPasswordsFillRequiresReauth
     }
     // No-op UI saves must not inflate settings_changed adoption telemetry.
     const before = store.getSettings()

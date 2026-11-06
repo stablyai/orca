@@ -11,7 +11,7 @@ import {
   recordTerminalParseProgress
 } from '@/lib/pane-manager/terminal-write-pipeline-health'
 import { writeXtermParseBarrier } from '@/lib/pane-manager/xterm-parse-barrier'
-import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
+import { redactPtyIdForDiagnostics } from '../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 
 // Guard replay auto-replies from shell stdin while xterm’s provenance keeps real typing flowing.
 

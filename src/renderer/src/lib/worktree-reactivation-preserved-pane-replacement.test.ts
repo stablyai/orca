@@ -5,7 +5,7 @@ import { useAppStore, type AppState } from '@/store'
 import { activateAndRevealWorktree } from './worktree-activation'
 import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
 import { makeCreatedAgentWorktree as makeWorktree } from '@/lib/worktree-activation-created-agent.test-fixture'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from './worktree-runtime-owner'
 import {

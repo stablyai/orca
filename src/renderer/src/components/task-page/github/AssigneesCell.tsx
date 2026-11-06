@@ -10,6 +10,7 @@ import { parseGitHubIssueOrPRLink } from '@/lib/github-links'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { gitHubSlugApiForTarget } from '@/runtime/github-slug-owner-api'
 import { githubProjectHost } from '../../../../../shared/github/project-identity'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
@@ -102,14 +103,10 @@ export function GHAssigneesCell({
                 number: item.number,
                 updates
               }
-              const res =
-                target.kind === 'environment'
-                  ? await callRuntimeRpc<
-                      Awaited<ReturnType<typeof window.api.gh.updateIssueBySlug>>
-                    >(target, 'github.project.updateIssueBySlug', args, {
-                      timeoutMs: 30_000
-                    })
-                  : await window.api.gh.updateIssueBySlug({ ...args, wakeWslDistro: true })
+              const res = await gitHubSlugApiForTarget(target).updateIssueBySlug({
+                ...args,
+                wakeWslDistro: true
+              })
               if (!res.ok) {
                 throw new Error(res.error.message)
               }

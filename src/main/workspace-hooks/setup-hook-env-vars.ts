@@ -1,5 +1,5 @@
 import { getRuntimePathBasename } from '../../shared/cross-platform-path'
-import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../shared/terminal-git-credential-guard'
+import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../shared/shell/launch/terminal-git-credential-guard'
 import type { Repo } from '../../shared/repo-types'
 
 // Keep WSL path translation in pty/wsl-orca-env.ts in sync; names and policies are not paths.

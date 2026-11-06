@@ -1,4 +1,4 @@
-import { parseTerminalAttachmentLaunchResult } from '../../../../shared/terminal-attachment-launch-result'
+import { parseTerminalAttachmentLaunchResult } from '../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import { REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE } from './remote-runtime-pty-shell'
 import { terminalLaunchFacts } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
@@ -17,7 +17,7 @@ import {
   type RemoteRuntimeInputSegment
 } from './remote-runtime-input-journal'
 import type { AcceptedInputOptions } from './pty-preconnect-input-buffer'
-import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
 import { isSshSignInPendingTerminalError } from './terminal-ssh-sign-in-error'
 import { terminalCreateThemeParams } from './terminal-view-attributes-publisher'
 /* eslint-disable max-lines -- Why: remote PTY transport keeps lifecycle, JSON fallback, and binary stream wiring together so reconnect/destroy ordering stays testable as one behavior surface. */
@@ -42,15 +42,13 @@ import type {
   RuntimeTerminalSend,
   RuntimeTerminalShow
 } from '../../../../shared/runtime-types'
-import {
-  SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY,
-  TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
+import { SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY } from '../../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { agentResumeHostAuthorityCapability } from '../../runtime/agent-resume-host-authority-capability'
 import {
   isTerminalInputTooLargeWithDeferredMeasurement,
   iterateTerminalInputChunks
-} from '../../../../shared/terminal-input'
+} from '../../../../shared/terminal/input/terminal-input'
 import type {
   IpcPtyTransportOptions,
   PtyConnectResult,
@@ -104,7 +102,7 @@ import { replaceDriverPtyId, setDriverForPty } from '@/lib/pane-manager/mobile-d
 import {
   isWebTerminalSurfaceTabId,
   toHostSessionTabId
-} from '../../../../shared/terminal-surface-id'
+} from '../../../../shared/workspace-layout/terminal-surface-id'
 import { listRemoteRuntimeSessionTabsAfterCurrentInFlight } from '@/runtime/remote-runtime-session-tabs-inflight'
 import { subscribeAcceptedWebSessionTerminalHandle } from '@/runtime/web-session-terminal-handle-events'
 import { hostSnapshotAffirmsWorktreeContents } from '@/runtime/host-session-snapshot-authority'
@@ -258,6 +256,7 @@ export function createRemoteRuntimePtyTransport(
   let handle: string | null = null
   let remotePtyId: string | null = null
   let authoritativeExecutionHostId: ExecutionHostId | null = executionHostId ?? null
+  const executionHostListeners = new Set<() => void>()
   let authoritativeHostPlatform: NodeJS.Platform | null = null
   let authoritativePtyIncarnationId: string | null = null
   // Why: never adopts a persisted existingPtyId's environment; the worktree owner chose this transport.
@@ -529,9 +528,15 @@ export function createRemoteRuntimePtyTransport(
     hostPlatform?: NodeJS.Platform
     incarnationId?: string | null
   }): void => {
+    const previousExecutionHostId = authoritativeExecutionHostId
     authoritativeExecutionHostId = terminal.executionHostId ?? authoritativeExecutionHostId
     authoritativeHostPlatform = terminal.hostPlatform ?? authoritativeHostPlatform
     authoritativePtyIncarnationId = terminal.incarnationId ?? null
+    if (authoritativeExecutionHostId !== previousExecutionHostId) {
+      for (const listener of executionHostListeners) {
+        listener()
+      }
+    }
   }
   const viewportClaimReadyWaiters = new Set<(ready: boolean) => void>()
   const clearPendingViewportClaim = (): void => {
@@ -4004,6 +4009,11 @@ export function createRemoteRuntimePtyTransport(
 
     getExecutionHostId() {
       return authoritativeExecutionHostId
+    },
+
+    onExecutionHostChange(listener) {
+      executionHostListeners.add(listener)
+      return () => executionHostListeners.delete(listener)
     },
 
     getRemotePlatform() {

@@ -3,7 +3,7 @@ import { browserCookieImportFailure } from '../../../../shared/browser-cookie-im
 import type { BrowserCookieImportResult } from '../../../../shared/browser-workspace-types'
 import { decodeSafariBinaryCookies } from './browser-cookie-safari-parser'
 import { importValidatedCookies, cookieImportTarget } from '../browser-cookie-import-pipeline'
-import type { DetectedBrowser } from './browser-cookie-detection-types'
+import type { DetectedBrowser } from './browser-cookie-source-profiles'
 import { diag } from '../browser-cookie-import-diagnostics'
 
 export async function importCookiesFromSafari(

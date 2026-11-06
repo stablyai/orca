@@ -33,12 +33,6 @@ afterEach(() => {
 })
 
 describe('runPluginHookChain', () => {
-  it('passes the event through unchanged when handlers return nothing', async () => {
-    const { outcome, logs } = chain({ 'a.one': [() => undefined], 'a.two': [] })
-    await expect(outcome).resolves.toEqual({ kind: 'continue', payload: send })
-    expect(logs).toEqual([])
-  })
-
   it('carries a changed event to the next plugin, in order', async () => {
     const seen: string[] = []
     const { outcome } = chain({

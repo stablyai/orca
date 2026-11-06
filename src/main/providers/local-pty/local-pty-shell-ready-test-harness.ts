@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process'
 import {
   OVERLAY_ONLY_FEATURES,
   STARTUP_COMMAND_FEATURES
-} from '../../shell-startup-launch-intent-fixtures'
+} from '../../pty/shell-startup/shell-startup-launch-intent-fixtures'
 
 // Wrapper code also runs in plain-node daemon forks; select user data through env without importing Electron.
 export function setTestUserDataPath(path: string): void {

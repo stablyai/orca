@@ -1,5 +1,5 @@
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
-import { terminalLayoutEqual } from '../../../../shared/terminal-layout-equality'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
+import { terminalLayoutEqual } from '../../../../shared/workspace-layout/terminal-layout-equality'
 import { updateWebRuntimePaneLayout } from '@/runtime/web-runtime-terminal-actions'
 import {
   requeuePendingPaneTitleRenames,

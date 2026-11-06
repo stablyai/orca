@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { ORCA_BROWSER_BLANK_URL } from '../../../shared/constants'

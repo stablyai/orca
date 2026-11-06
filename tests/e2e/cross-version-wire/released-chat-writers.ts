@@ -15,7 +15,7 @@ import {
 import type { agentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
 import type { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
 import type { createClaudeJournalTranslator } from '../../../src/main/claude/structured/journal/claude-structured-journal-translation'
-import type { createCodexJournalTranslator } from '../../../src/main/codex/codex-structured-journal-translation'
+import type { createCodexJournalTranslator } from '../../../src/main/codex/structured/journal/codex-structured-journal-translation'
 import type { createDeferredStructuredAgentSessionEventSink } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { createTrackedJournalOpener } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import {
@@ -69,7 +69,7 @@ async function released(ref: string) {
       'createClaudeJournalTranslator'
     ),
     codex: await load<typeof createCodexJournalTranslator>(
-      'src/main/codex/codex-structured-journal-translation.ts',
+      'src/main/codex/structured/journal/codex-structured-journal-translation.ts',
       'createCodexJournalTranslator'
     ),
     sink: await load<typeof createDeferredStructuredAgentSessionEventSink>(

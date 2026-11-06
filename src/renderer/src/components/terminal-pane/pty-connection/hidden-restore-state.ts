@@ -1,4 +1,4 @@
-import { INITIAL_MODE_2031_REPLY_SCAN_STATE } from '../../../../../shared/terminal-color-scheme-protocol'
+import { INITIAL_MODE_2031_REPLY_SCAN_STATE } from '../../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
 import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { cancelTerminalScrollIntentBufferRebuildCompletions } from '@/lib/pane-manager/terminal-scroll-intent-rebuild'
 import { DeferredReattachLiveDataQueue } from '../deferred-reattach-live-data-queue'

@@ -5,7 +5,7 @@ import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { isStreamingMethod, eraseRpcMethods } from '../../../core'
-import { registerBoundPty } from '../../../../bind-first-pane.test-fixture'
+import { registerBoundPty } from '../../../../orca-runtime-tests/bind-first-pane.test-fixture'
 
 // Host contact loss never proves worker exit; relay only confirmed stops as settled.
 

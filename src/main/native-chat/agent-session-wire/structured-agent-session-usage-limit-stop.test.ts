@@ -10,8 +10,9 @@ import { agentSessionFailureWords } from '../../../shared/agent-session/failures
 import * as liveTurn from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import * as commands from '../../../shared/agent-session/structured-agent-session-command-entry'
 import * as usageLimitCut from '../../../shared/native-chat/native-chat-usage-limit-cut'
-import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
+import { createCodexJournalTranslator } from '../../codex/structured/journal/codex-structured-journal-translation'
 import * as reducer from '../agent-session-journal/journal-reducer'
+import * as publicRead from '../agent-session-journal/journal-public-read'
 import * as stoppedCut from '../agent-session-journal/journal-stopped-usage-limit-cut'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
@@ -306,7 +307,7 @@ describe('a Stop accepted before a usage limit ends the turn', () => {
 
 /** Work counted only inside the Stop's commit hook and the status projection's cut reader. */
 function countCommitWork() {
-  const counts = { hooks: 0, scans: 0, renders: 0, cutReads: 0, indexes: 0 }
+  const counts = { hooks: 0, scans: 0, renders: 0, fullRenders: 0, cutReads: 0, indexes: 0 }
   let inside: 'hook' | 'cut' | null = null
   const hook = stoppedCut.journalStoppedUsageLimitCut
   vi.spyOn(stoppedCut, 'journalStoppedUsageLimitCut').mockImplementation((state, rows) => {
@@ -325,8 +326,13 @@ function countCommitWork() {
   })
   const render = reducer.renderJournalState
   vi.spyOn(reducer, 'renderJournalState').mockImplementation((state) => {
-    counts.renders += inside === 'hook' ? 1 : 0
+    counts.fullRenders += inside === 'hook' ? 1 : 0
     return render(state)
+  })
+  const status = publicRead.renderJournalStatus
+  vi.spyOn(publicRead, 'renderJournalStatus').mockImplementation((state, owner) => {
+    counts.renders += inside === 'hook' ? 1 : 0
+    return status(state, owner)
   })
   const read = usageLimitCut.latestNativeChatUsageLimitCut
   vi.spyOn(usageLimitCut, 'latestNativeChatUsageLimitCut').mockImplementation(
@@ -346,7 +352,14 @@ function countCommitWork() {
     return index(items)
   })
   const reset = () =>
-    Object.assign(counts, { hooks: 0, scans: 0, renders: 0, cutReads: 0, indexes: 0 })
+    Object.assign(counts, {
+      hooks: 0,
+      scans: 0,
+      renders: 0,
+      fullRenders: 0,
+      cutReads: 0,
+      indexes: 0
+    })
   return { counts, reset }
 }
 
@@ -360,6 +373,7 @@ describe('journal commit work after a Stop', () => {
       await codexLimitedEnd('turn-1', 60)
       // The Stop owns this end, so it rendered once to find the cut it withdraws.
       expect(counts.renders).toBeGreaterThan(0)
+      expect(counts.fullRenders).toBe(0)
       expect(rig.store.getRecord(SESSION)?.usageLimitContinueCancel).toEqual(await currentCut())
       const fence = rig.store.getRecord(SESSION)!.lease.runtimeFence
       for (let i = 0; i < history; i++) {
@@ -382,13 +396,13 @@ describe('journal commit work after a Stop', () => {
       // Every streamed commit ran the hook and the projection, at the same cost for any history.
       expect(counts.hooks).toBeGreaterThanOrEqual(streamed)
       expect(counts.cutReads).toBeGreaterThanOrEqual(streamed)
-      expect(counts).toMatchObject({ scans: 0, renders: 0, indexes: 0 })
+      expect(counts).toMatchObject({ scans: 0, renders: 0, fullRenders: 0, indexes: 0 })
 
       reset()
       codex()('turn/completed', { threadId: THREAD, turn: { id: 'turn-2', status: 'completed' } })
       await rig.host.flushStreamedEvents(SESSION)
       // The end scans for the newest turn once; the Stop does not own it, so nothing renders.
-      expect(counts).toMatchObject({ scans: 1, renders: 0, indexes: 0 })
+      expect(counts).toMatchObject({ scans: 1, renders: 0, fullRenders: 0, indexes: 0 })
     }
   )
 })

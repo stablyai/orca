@@ -1,5 +1,8 @@
 import type { AppState } from '../../types'
-import type { AgentStatusEntry, AgentType } from '../../../../../shared/agent-status-types'
+import type {
+  AgentStatusEntry,
+  AgentType
+} from '../../../../../shared/agent-status/contracts/agent-status-types'
 import {
   agentProviderSessionsEqual,
   type AgentProviderSessionMetadata,
@@ -10,7 +13,7 @@ import type {
   AgentLaunchConfigRegistrationMetadata
 } from './agent-status-contract'
 import { getLeafIdFromPaneKey, getTabIdFromPaneKey } from './agent-status-pane-key-tab-binding'
-import { launchConfigsEqual } from '../../../../../shared/agent-resume-record-equivalence'
+import { launchConfigsEqual } from '../../../../../shared/agent-session/lifecycle/agent-resume-record-equivalence'
 
 export function normalizeLaunchConfigRegistrationMetadata(
   paneKey: string,

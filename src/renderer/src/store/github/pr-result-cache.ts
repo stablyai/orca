@@ -1,3 +1,9 @@
+import type { PRCheckContract } from '@/lib/pr-check-observation-contract'
+import {
+  acceptPRCheckObservation,
+  completePRCheckOwnerScope
+} from '../../../../shared/github/complete-pr-check-owner'
+import { applyCachedChecksStatus } from './pr-check-status-cache'
 import type { LinkedReviewClearScope } from './linked-review-clear'
 import type { AppState } from '../types'
 import type { RuntimeFocusSettings } from '../../../../shared/github/github-cache-key'
@@ -29,6 +35,9 @@ type GitHubPRResultCacheArgs = {
   executionHostId?: string | null
   hasRepoOwner?: boolean
   pr: PRInfo | null
+  checkContract?: PRCheckContract
+  checksProof?: boolean
+  overlayChecks?: boolean
   fetchedAt: number
   rejectedPRUrls?: readonly string[]
   worktreeId?: string
@@ -81,6 +90,12 @@ export function deletePRRefreshStartedEntry(sequence: number | undefined, cacheK
 }
 
 export function pruneExpiredPRRefreshStartedEntries(now = performance.now()): void {
+  for (const [key, request] of prRefreshStartedHostedReviewEntries) {
+    if (now <= request.expiresAt) {
+      break
+    }
+    prRefreshStartedHostedReviewEntries.delete(key)
+  }
   for (const [cacheKey, request] of prRefreshStartedLinkedReviewScopes) {
     // Monotonic expiry order avoids scanning live aliases on every refresh event.
     if (now <= request.expiresAt) {
@@ -94,7 +109,8 @@ export function setPRRefreshStartedEntry(
   sequence: number,
   cacheKey: string,
   entry: AppState['hostedReviewCache'][string] | undefined,
-  clearScope?: LinkedReviewClearScope
+  clearScope?: LinkedReviewClearScope,
+  checkContract?: PRCheckContract
 ): void {
   // Ownership evidence must survive advisory cache eviction for every accepted alias.
   prRefreshStartedLinkedReviewScopes.delete(cacheKey)
@@ -106,12 +122,16 @@ export function setPRRefreshStartedEntry(
     })
   }
   const key = prRefreshStartedEntryKey(sequence, cacheKey)
-  if (entry === undefined) {
+  if (entry === undefined && !checkContract) {
     prRefreshStartedHostedReviewEntries.delete(key)
     return
   }
   prRefreshStartedHostedReviewEntries.delete(key)
-  prRefreshStartedHostedReviewEntries.set(key, entry)
+  prRefreshStartedHostedReviewEntries.set(key, {
+    entry,
+    checkContract,
+    expiresAt: performance.now() + PR_REFRESH_ACTIVE_STALE_MS
+  })
   while (prRefreshStartedHostedReviewEntries.size > PR_REFRESH_STARTED_HOSTED_REVIEW_ENTRY_MAX) {
     const oldest = prRefreshStartedHostedReviewEntries.keys().next()
     if (oldest.done) {
@@ -160,12 +180,51 @@ export function applyGitHubPRResultToCaches(
   )
   const hostedReviewEntry = args.hostedReviewCache[hostedReviewCacheKey]
   const current = args.prCache[args.prCacheKey]
+  let suppliedChecksTrusted = true
+  if (args.checkContract) {
+    if (!args.checkContract.sourceCurrent()) {
+      return { prCache: args.prCache, hostedReviewCache: args.hostedReviewCache }
+    }
+    if (args.pr) {
+      const publication = args.checkContract.publicationContext()
+      const scope = `${publication.scope}:${args.prCacheKey}`
+      const complete =
+        publication.complete || completePRCheckOwnerScope(current?.data ?? {}) === scope
+      const trusted = publication.trusted && args.checksProof !== false
+      suppliedChecksTrusted =
+        !complete || (trusted && Boolean(args.pr.headSha) && Boolean(args.pr.checksSummary))
+      const accepted = acceptPRCheckObservation(args.pr, current?.data, {
+        ...publication,
+        scope,
+        complete,
+        trusted
+      })!
+      args = {
+        ...args,
+        pr:
+          complete || !args.overlayChecks
+            ? accepted
+            : applyCachedChecksStatus(
+                args.state,
+                { cacheKey: args.prCacheKey, ...args },
+                accepted,
+                args.fetchedAt,
+                getRepoExecutionHostId(args)
+              )
+      }
+    }
+  }
   const prNumber = args.pr?.number ?? null
   // The coordinator delivers each outcome twice; skip duplicates only while both caches name the same PR.
   if (
+    completePRCheckOwnerScope(current?.data ?? {}) === completePRCheckOwnerScope(args.pr ?? {}) &&
     current?.fetchedAt === args.fetchedAt &&
     (current.data?.number ?? null) === prNumber &&
     current.data?.url === args.pr?.url &&
+    current.data?.checksStatus === args.pr?.checksStatus &&
+    JSON.stringify(current.data?.checksSummary) === JSON.stringify(args.pr?.checksSummary) &&
+    JSON.stringify(hostedReviewEntry?.data?.checksSummary) ===
+      JSON.stringify(args.pr?.checksSummary) &&
     hostedReviewEntry?.data?.url === args.pr?.url &&
     (hostedReviewEntry?.data?.provider === 'github' ? hostedReviewEntry.data.number : null) ===
       prNumber
@@ -200,21 +259,24 @@ export function applyGitHubPRResultToCaches(
     requestStartedEntry: args.requestStartedEntry
   })
   return {
-    prCache: applyPRCacheResult(
-      args.prCache,
-      args.prCacheKey,
-      args.pr,
-      args.fetchedAt,
-      shouldWritePRCacheForHostedReviewSync({
-        hostedReviewSyncAccepted: hostedReviewSync.accepted,
-        hostedReviewEntry,
-        pr: args.pr,
-        linkedPRNumber: args.linkedPRNumber,
-        fallbackPRNumber: args.fallbackPRNumber
-      }),
-      preserveExistingPRForFallbackMiss,
-      args.fetchedHeadOid
-    ),
+    prCache:
+      !suppliedChecksTrusted && !hostedReviewSync.accepted
+        ? args.prCache
+        : applyPRCacheResult(
+            args.prCache,
+            args.prCacheKey,
+            args.pr,
+            args.fetchedAt,
+            shouldWritePRCacheForHostedReviewSync({
+              hostedReviewSyncAccepted: hostedReviewSync.accepted,
+              hostedReviewEntry,
+              pr: args.pr,
+              linkedPRNumber: args.linkedPRNumber,
+              fallbackPRNumber: args.fallbackPRNumber
+            }),
+            preserveExistingPRForFallbackMiss,
+            args.fetchedHeadOid
+          ),
     hostedReviewCache: hostedReviewSync.cache
   }
 }

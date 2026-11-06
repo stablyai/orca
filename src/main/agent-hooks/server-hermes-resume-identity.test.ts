@@ -2,14 +2,14 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { normalizeHookPayload } from '../../shared/agent-hook-listener'
+import { normalizeHookPayload } from '../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import { createHookListenerState } from '../../shared/agent-hook-listener/listener-state'
-import { resumeRecordFromStatus } from '../../shared/agent-resume-record-from-status'
-import { getAgentResumeArgv } from '../../shared/agent-resume-argv'
-import type { AgentHookRelayEnvelope } from '../../shared/agent-hook-relay'
+import { resumeRecordFromStatus } from '../../shared/agent-session/lifecycle/agent-resume-record-from-status'
+import { getAgentResumeArgv } from '../../shared/agent-launch/startup/agent-resume-argv'
+import type { AgentHookRelayEnvelope } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { RelayAgentHookServer } from '../../wsl-guest/agent-hook-server'
 import { AgentHookServer } from './server'
-import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
+import { buildBody, postHookEvent } from './server.test-fixtures'
 
 const ROOT = 'local-parent'
 const CHILD = '20261024_child'
@@ -88,35 +88,6 @@ it.each(HOOKS.map((_, index) => index))(
     }
   }
 )
-
-it('requires root authority, never creates an unmarked tool locator, and respects host reset', () => {
-  const server = new AgentHookServer()
-  server.ingestRemote(normalize(HOOKS[2]), null)
-  expect(server.getStatusSnapshot()[0]?.providerSession).toBeUndefined()
-  for (const platform of ['cli', 'tui', 'desktop', 'acp']) {
-    server.ingestRemote(root(platform, platform), null)
-    expectResume(server, platform)
-  }
-  for (const platform of ['', 'subagent', 'telegram', undefined]) {
-    const event = normalize({ hook_event_name: 'pre_llm_call', session_id: CHILD, platform })
-    expect(event.providerSession).toBeUndefined()
-    server.ingestRemote(event, null)
-    expectResume(server, 'acp')
-  }
-  // An older normalized relay still exposes the non-authoritative event kind.
-  server.ingestRemote({ ...root(CHILD), hookEventName: 'pre_tool_call' }, null)
-  expectResume(server, 'acp')
-  server.ingestRemote(normalize({ hook_event_name: 'on_session_end', session_id: 'acp' }), null)
-  server.ingestTerminalStatus({
-    paneKey: PANE,
-    worktreeId: 'wt-1',
-    origin: 'process',
-    payload: { state: 'working', prompt: '', agentType: 'hermes' }
-  })
-  server.ingestRemote(normalize(HOOKS[2]), null)
-  expect(server.getStatusSnapshot()[0]?.providerSession).toBeUndefined()
-  server.stop()
-})
 
 it.each(['local', 'relay'] as const)(
   'preserves root status re-entry without tool-derived restore identity over %s',

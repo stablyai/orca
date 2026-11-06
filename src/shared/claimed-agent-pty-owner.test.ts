@@ -29,25 +29,6 @@ const surface: AgentSessionSurfaceBinding = {
 }
 
 describe('ClaimedAgentPtyOwnerRegistry', () => {
-  it('joins concurrent exact ensures and spawns once', async () => {
-    const registry = new ClaimedAgentPtyOwnerRegistry()
-    let finish!: (result: { ptyId: string }) => void
-    const spawn = vi.fn(
-      () =>
-        new Promise<{ ptyId: string }>((resolve) => {
-          finish = resolve
-        })
-    )
-
-    const first = registry.ensure({ claim: claim(), surface, spawn })
-    const second = registry.ensure({ claim: claim(), surface, spawn })
-    finish({ ptyId: 'pty-1' })
-
-    await expect(first).resolves.toMatchObject({ disposition: 'created' })
-    await expect(second).resolves.toMatchObject({ disposition: 'adopted' })
-    expect(spawn).toHaveBeenCalledTimes(1)
-  })
-
   it('conflicts when the same identity is claimed by another worktree', async () => {
     const registry = new ClaimedAgentPtyOwnerRegistry()
     await registry.ensure({

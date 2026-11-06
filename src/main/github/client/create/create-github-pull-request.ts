@@ -3,11 +3,11 @@ import { hostedReviewSshConnectionId } from '../../../source-control/hosted-revi
 import type {
   CreateHostedReviewInput,
   CreateHostedReviewResult
-} from '../../../../shared/hosted-review'
+} from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   normalizeHostedReviewBaseRef,
   normalizeHostedReviewHeadRef
-} from '../../../../shared/hosted-review-refs'
+} from '../../../../shared/source-control/hosted-review/hosted-review-refs'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'

@@ -1,9 +1,10 @@
 import type { AppState } from '../types'
-import { FOLDER_WORKSPACE_PATH_STATUS_TTL_MS } from '../../../../shared/folder-workspace-path-status'
-import type {
-  FolderWorkspacePathStatus,
-  FolderWorkspacePathStatusRequest
-} from '../../../../shared/folder-workspace-path-status'
+import {
+  FOLDER_WORKSPACE_PATH_STATUS_TTL_MS,
+  type FolderWorkspacePathStatus,
+  type FolderWorkspacePathStatusRequest
+} from '../../../../shared/folder-workspaces/folder-workspace-path-status'
+
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
@@ -16,7 +17,8 @@ import {
   runtimeTargetForOwnerEnvironment
 } from '../../runtime/runtime-client-target'
 import { catalogOwnsHost, getProjectGroupHostId } from '../slices/project-group-owner-routing'
-import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspace-execution-host'
+import '../../../../shared/folder-workspaces/folder-workspace-execution-host'
+import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'
 import { selectFolderWorkspaces } from '../workspace-record-selectors'
 
 type FolderPathStatusSnapshotState = Pick<

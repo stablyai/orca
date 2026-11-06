@@ -1,6 +1,6 @@
 import { PLUGIN_HOOK_SPECS } from '../../../shared/plugins/events/plugin-hook-payloads'
 import { isRestoreSpawnIntent } from '../../../shared/host-spawn-admission'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { workspaceKindForWorktreeId } from '../../../shared/workspace-launch-kind'
 import { pluginHookWanted, runPluginHook } from '../../plugins/hooks/plugin-hook-dispatch'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../ai-vault/structured-session-ownership'

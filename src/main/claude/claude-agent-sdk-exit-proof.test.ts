@@ -1,12 +1,12 @@
-import { collectDescendantRows } from '../pty-descendant-termination'
+import { collectDescendantRows } from '../pty/process-retirement/pty-descendant-termination'
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import type { PipedChildProcess } from '@orca/process-host/process-spec'
 import { execFileSync } from 'node:child_process'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
-import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
-import type { DescendantSnapshot } from '../pty-descendant-termination'
+import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
+import type { DescendantSnapshot } from '../pty/process-retirement/pty-descendant-termination'
 import {
   createClaudeChildTreeReaper,
   proveClaudeChildExit,

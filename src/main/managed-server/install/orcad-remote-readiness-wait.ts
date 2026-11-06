@@ -1,5 +1,5 @@
 // Wait on-host in one bounded exec; repeated SSH polling spawned process bursts and triggered Windows EDR.
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {
   isWindowsRemoteHost,
   joinRemotePath,

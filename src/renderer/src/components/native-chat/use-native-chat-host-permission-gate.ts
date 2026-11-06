@@ -1,4 +1,4 @@
-import { newChatPermissionModeForSettings } from '../../../../shared/agent-chat-permission-mode'
+import { newChatPermissionModeForSettings } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { translate } from '@/i18n/i18n'
 import { hostPermissionRefusedText } from '@/lib/agent-session/launch/structured-agent-session-launch-permission-notice'
 import { useStructuredChatHostPermissionVerdict } from '@/runtime/structured-chat-host-permission'

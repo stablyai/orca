@@ -1,7 +1,7 @@
 import type { ExecutionHostKind } from '../../../../shared/execution-host'
 import type { ExecutionHostHealth } from '../../../../shared/execution-host-registry'
 import type { RuntimeCompatVerdict } from '../../../../shared/protocol-compat'
-import type { RuntimeHostBlockedReason } from '../../../../shared/runtime-host-status'
+import type { RuntimeHostBlockedReason } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 
 // Host scoping belongs to the scope strip; this menu manages lifecycle and section collapse.
 export type HostHeaderMenuAction =

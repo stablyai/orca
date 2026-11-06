@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import '../../../../shared/terminal-surface-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import '../../../../shared/workspace-layout/terminal-surface-id'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import {
   ENV,

@@ -10,7 +10,7 @@ import {
 import type { PRRefreshOutcome } from '../../../../shared/github/pull-request-refresh-types'
 import type { PRInfo, CheckStatus } from '../../../../shared/github/pull-request-types'
 import type { PRCheckDetail } from '../../../../shared/github/check-types'
-import '../../../../shared/hosted-review-github'
+import '../../../../shared/source-control/hosted-review/hosted-review-github'
 
 function createRefreshContext(pr: PRInfo | null = null) {
   const store = createTestStore()

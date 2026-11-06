@@ -1,5 +1,5 @@
 import { terminalLaunchOpened } from '@/lib/launch-agent-in-new-tab-host-agents'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { parseExecutionHostId } from '../../../../../shared/execution-host'
 import { useAppStore } from '@/store/index'
@@ -163,7 +163,7 @@ export function beginHostAdmittedStructuredLaunch(args: {
   let admitted: AdmittedLaunch | null = null
   const isCancelled = (): boolean => cancelled || args.hooks.signal?.aborted === true
   let resolveDelivery: (result: StructuredPromptDeliveryResult) => void = () => undefined
-  const deliversPrompt = Boolean(plan.prompt?.trim())
+  const deliversPrompt = Boolean(plan.prompt?.trim() || plan.promptAttachments?.length)
   const promptDeliveryResult = deliversPrompt
     ? new Promise<StructuredPromptDeliveryResult>((resolve) => {
         resolveDelivery = resolve

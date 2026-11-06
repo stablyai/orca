@@ -5,8 +5,8 @@ import { assertRemovalHostMatchesRepoRow } from '../repo-host-ownership'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
-import { getLocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
-import { listWorktreesStrict as listGitWorktreesStrict } from '../../../git/worktree'
+import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
+import { listWorktreesStrict as listGitWorktreesStrict } from '../../../git/worktrees/catalog/worktree-listing'
 import {
   SshHostNotServedError,
   SSH_WORKTREE_REMOVAL_NOT_SERVED_MESSAGE
@@ -16,7 +16,7 @@ import {
   authorizeUnregisteredWindowsRemoval,
   nativeWindowsMarkerMissing,
   usesNativeWindowsRemoval
-} from '../../../git/windows-worktree-removal'
+} from '../../../git/worktrees/removal/windows-worktree-removal'
 import { isPrunableGitFileWorktree } from '../../../workspaces/removal/worktree-prunable-git-file'
 import { findRegisteredDeletableWorktree } from '../../../workspaces/removal/worktree-removal-safety'
 import { assertNestedWorktreeRemovalApproval } from '../../../workspaces/removal/nested-worktree-removal-plan'

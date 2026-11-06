@@ -1,0 +1,55 @@
+// @vitest-environment happy-dom
+import { act, cleanup, renderHook } from '@testing-library/react'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { useFileExplorerTree } from './useFileExplorerTree'
+import { getExplorerEffectiveExpanded } from '../navigation/file-explorer-display-root'
+
+const read = vi.hoisted(() => vi.fn())
+vi.mock('./file-explorer-directory-listing', async (original) => ({
+  ...(await original<Record<string, unknown>>()),
+  readFileExplorerDirectory: read
+}))
+vi.mock('../navigation/file-explorer-operation-owner', async (original) => ({
+  ...(await original<Record<string, unknown>>()),
+  getFileExplorerOperationOwner: () => ({ kind: 'local' })
+}))
+const listing = (name?: string) => ({
+  entries: name ? [{ name, isDirectory: false }] : [],
+  operationOwner: { kind: 'local' }
+})
+beforeEach(() => read.mockReset().mockResolvedValue(listing()))
+afterEach(cleanup)
+
+it.each(['Host unavailable', ''])(
+  'preserves cached children on refresh failure (%j) and recovers',
+  async (message) => {
+    const expanded = getExplorerEffectiveExpanded(new Set(), '/repo/packages/app')
+    const { result } = renderHook(() => useFileExplorerTree('/repo', expanded, 'wt'))
+    read.mockResolvedValueOnce(listing('before.ts'))
+    await act(async () => {
+      await result.current.loadDir('/repo/packages/app', 1)
+    })
+    read.mockImplementation(async (_id, _root, path) => {
+      if (path === '/repo/packages/app') {
+        throw new Error(message)
+      }
+      return listing()
+    })
+    await act(async () => {
+      await result.current.refreshTree()
+    })
+    expect(result.current.dirCache['/repo/packages/app']).toMatchObject({
+      error: message,
+      children: [{ relativePath: 'packages/app/before.ts', depth: 2 }]
+    })
+    read.mockResolvedValue(listing('after.ts'))
+    await act(async () => {
+      await result.current.refreshTree()
+    })
+    expect(result.current.dirCache['/repo/packages/app'].error).toBeUndefined()
+    expect(result.current.dirCache['/repo/packages/app'].children[0]).toMatchObject({
+      relativePath: 'packages/app/after.ts',
+      depth: 2
+    })
+  }
+)

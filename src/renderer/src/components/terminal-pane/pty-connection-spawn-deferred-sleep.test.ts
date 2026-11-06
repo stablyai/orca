@@ -3,18 +3,27 @@ import { registerMainOwnedResumeDrainTests } from './pty-connection-main-owned-r
 import type { ConnectPanePtySession } from './pty-connection/connect-pane-pty-session'
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
   expectWindowStartAskedMain,
   mainLayoutApplyTransport
 } from './pty-connection-test-main-pane-start-fixtures'
 import { flushAsyncTicks } from './pty-connection-test-async'
-import { createMockTransport, createPane, createManager } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  createMockTransport,
+  createPane,
+  createManager,
+  type MockTransport
+} from './pty-connection-test-pane-fixtures'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
-import type { MockTransport } from './pty-connection-test-pane-fixtures'
+
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
@@ -246,6 +255,7 @@ describe('connectPanePty: a restore the host kept asleep', () => {
 
   async function mainOwnedResumeFixture() {
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const pane = createPane(1)
     const paneKey = makePaneKey('tab-1', pane.leafId)
     const record = {
@@ -284,7 +294,9 @@ describe('connectPanePty: a restore the host kept asleep', () => {
     transportFactoryQueue.push(transport)
     const onDeferredCwdSpawnFailed = vi.fn()
     const deps = createDeps({ onDeferredCwdSpawnFailed })
-    const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
+    const binding = connectPanePty(
+      ...mockPanePtyArgs(pane, createManager(1), bindPaneAgentTitleMocks(deps, agentTitleMocks))
+    )
     if (vi.isFakeTimers()) {
       await vi.advanceTimersByTimeAsync(0)
     }
@@ -456,6 +468,7 @@ describe('connectPanePty: a restore the host kept asleep', () => {
 
   it('keeps the pane sleeping with its resume handle and resumes it when opened', async () => {
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const { getPaneSpawnDeferral } = await import('@/lib/pane-spawn-deferral-registry')
     const transport = deferringTransport()
     transportFactoryQueue.push(transport)
@@ -471,7 +484,9 @@ describe('connectPanePty: a restore the host kept asleep', () => {
       }
     })
 
-    const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
+    const binding = connectPanePty(
+      ...mockPanePtyArgs(pane, createManager(1), bindPaneAgentTitleMocks(deps, agentTitleMocks2))
+    )
     await flushAsyncTicks(20)
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       await expectRestoreAskedMainNotDeferred(transport, makePaneKey('tab-1', pane.leafId))
@@ -505,6 +520,7 @@ describe('connectPanePty: a restore the host kept asleep', () => {
 
   it('resumes a hidden pane in the background once the host has room, as an automatic restore', async () => {
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const { getPaneSpawnDeferral } = await import('@/lib/pane-spawn-deferral-registry')
     const transport = deferringTransport()
     transportFactoryQueue.push(transport)
@@ -519,7 +535,9 @@ describe('connectPanePty: a restore the host kept asleep', () => {
       }
     })
 
-    const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
+    const binding = connectPanePty(
+      ...mockPanePtyArgs(pane, createManager(1), bindPaneAgentTitleMocks(deps, agentTitleMocks3))
+    )
     await flushAsyncTicks(20)
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       await expectRestoreAskedMainNotDeferred(transport, makePaneKey('tab-1', pane.leafId))
@@ -546,6 +564,7 @@ describe('connectPanePty: a restore the host kept asleep', () => {
 
   it('does not resume a session that meanwhile started in another tab', async () => {
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const { getPaneSpawnDeferral } = await import('@/lib/pane-spawn-deferral-registry')
     const transport = deferringTransport()
     transportFactoryQueue.push(transport)
@@ -560,7 +579,9 @@ describe('connectPanePty: a restore the host kept asleep', () => {
       }
     })
 
-    const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
+    const binding = connectPanePty(
+      ...mockPanePtyArgs(pane, createManager(1), bindPaneAgentTitleMocks(deps, agentTitleMocks4))
+    )
     await flushAsyncTicks(20)
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       await expectRestoreAskedMainNotDeferred(transport, makePaneKey('tab-1', pane.leafId))
@@ -599,6 +620,7 @@ describe('connectPanePty: a restore the host kept asleep', () => {
 
   it('stays the owner while its retry is in flight, then hands over to the PTY', async () => {
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const { getPaneSpawnDeferral, isPaneSpawnDeferred } =
       await import('@/lib/pane-spawn-deferral-registry')
     const transport = deferringTransport()
@@ -614,7 +636,9 @@ describe('connectPanePty: a restore the host kept asleep', () => {
       }
     })
 
-    const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
+    const binding = connectPanePty(
+      ...mockPanePtyArgs(pane, createManager(1), bindPaneAgentTitleMocks(deps, agentTitleMocks5))
+    )
     await flushAsyncTicks(20)
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       await expectRestoreAskedMainNotDeferred(transport, makePaneKey('tab-1', pane.leafId))
@@ -643,6 +667,7 @@ describe('connectPanePty: a restore the host kept asleep', () => {
 
   it('does not resume a session another tab has already queued', async () => {
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const transport = deferringTransport()
     transportFactoryQueue.push(transport)
     const pane = createPane(1)
@@ -655,7 +680,9 @@ describe('connectPanePty: a restore the host kept asleep', () => {
       }
     })
 
-    const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
+    const binding = connectPanePty(
+      ...mockPanePtyArgs(pane, createManager(1), bindPaneAgentTitleMocks(deps, agentTitleMocks6))
+    )
     await flushAsyncTicks(20)
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       await expectRestoreAskedMainNotDeferred(transport, makePaneKey('tab-1', pane.leafId))
@@ -675,6 +702,7 @@ describe('connectPanePty: a restore the host kept asleep', () => {
 
   it('offers to clear a crash pause on the host, then resumes the pane', async () => {
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const { getPaneSpawnDeferral } = await import('@/lib/pane-spawn-deferral-registry')
     const transport = deferringTransport('paused')
     transportFactoryQueue.push(transport)
@@ -689,7 +717,9 @@ describe('connectPanePty: a restore the host kept asleep', () => {
       }
     })
 
-    const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), deps))
+    const binding = connectPanePty(
+      ...mockPanePtyArgs(pane, createManager(1), bindPaneAgentTitleMocks(deps, agentTitleMocks7))
+    )
     await flushAsyncTicks(20)
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       await expectRestoreAskedMainNotDeferred(transport, makePaneKey('tab-1', pane.leafId))

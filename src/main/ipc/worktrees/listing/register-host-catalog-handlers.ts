@@ -8,7 +8,7 @@ import type {
 } from '../../../../shared/detected-worktree-provider-contract'
 import type { DetectedWorktree } from '../../../../shared/worktree/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { projectWorktreeLineageWithHostPeers } from '../../../worktree-lineage-host-peers'
+import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { agentHookServer } from '../../../agent-hooks/server'
 import { pruneWorkspaceCleanupScanSnapshots } from '../../../workspaces/cleanup/workspace-cleanup-scan-snapshot'

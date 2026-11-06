@@ -5,7 +5,7 @@ import { realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as FsPromises from 'node:fs/promises'
-import type * as GitRepo from '../git/repo'
+import type * as GitRepo from '../git/repo-detection'
 import type { Repo } from '../../shared/repo-types'
 
 // Count real stats to prevent directory-listing fan-out in polling.
@@ -29,7 +29,7 @@ async function drainGitChecks(): Promise<void> {
   }
 }
 
-vi.mock('../git/repo', async (importOriginal) => {
+vi.mock('../git/repo-detection', async (importOriginal) => {
   const actual = await importOriginal<typeof GitRepo>()
   return {
     ...actual,

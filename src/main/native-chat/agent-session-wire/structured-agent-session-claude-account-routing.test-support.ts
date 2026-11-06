@@ -11,8 +11,8 @@ import { claudeProfileMarkerPath } from '../../claude-accounts/claude-profile-pa
 import { CLAUDE_STRUCTURED_AGENT } from '../../claude/structured/claude-structured-agent-definition'
 import { claudeInitializationAuthError } from '../../claude/structured/claude-structured-init-proof'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
-import { resolveStructuredClaudeAccountHomePath } from '../../runtime/structured-agent-account-home'
-import { createClaudeStructuredLaunchResolver } from '../../runtime/structured-agent-launch-composition.test-support'
+import { resolveStructuredClaudeAccountHomePath } from '../../runtime/agent-session/environment/structured-agent-account-home'
+import { createClaudeStructuredLaunchResolver } from '../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 
 const savedAccount = (id: string) => ({

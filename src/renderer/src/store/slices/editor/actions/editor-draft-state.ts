@@ -5,6 +5,8 @@ import {
   type EditorBufferViewIndex
 } from '../buffers/editor-buffer-views'
 import type { EditorViewMode, MarkdownViewMode } from '../types/open-file'
+import type { MarkdownDefaultViewMode } from '../../../../../../shared/markdown-default-view-mode'
+import { markdownViewModesForNewDefault } from './markdown-default-view-mode-action'
 import { clampMarkdownTocPanelWidth } from '../../../../../../shared/markdown-toc-panel-width'
 import {
   clampCombinedDiffFileTreeWidth,
@@ -20,6 +22,8 @@ export type EditorDraftState = {
   clearEditorDrafts: (fileIds: string[]) => void
   markdownViewMode: Record<string, MarkdownViewMode>
   setMarkdownViewMode: (fileId: string, mode: MarkdownViewMode) => void
+  /** Persists the default view for newly opened Markdown files without flipping open tabs. */
+  setMarkdownDefaultViewMode: (mode: MarkdownDefaultViewMode) => void
   // Why: per-file opt-in to open an oversized markdown file in the rich editor despite the size limit.
   markdownRichModeSizeOverride: Record<string, boolean>
   setMarkdownRichModeSizeOverride: (fileId: string, enabled: boolean) => void
@@ -52,7 +56,7 @@ function clearEditorDraftsOf<TState extends Pick<AppState, 'editorDrafts'> & Edi
   return next === s.editorDrafts ? s : { editorDrafts: next }
 }
 
-export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorDraftState {
+export function createEditorDraftState(set: EditorSet, get: EditorGet): EditorDraftState {
   return {
     editorDrafts: {},
     setCsvPreviewOnly: (fileId, enabled) =>
@@ -94,6 +98,10 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
       set((s) => ({
         markdownViewMode: { ...s.markdownViewMode, [fileId]: mode }
       })),
+    setMarkdownDefaultViewMode: (mode) => {
+      set((s) => ({ markdownViewMode: markdownViewModesForNewDefault(s, mode) }))
+      void get().updateSettings({ markdownDefaultViewMode: mode })
+    },
 
     markdownRichModeSizeOverride: {},
     setMarkdownRichModeSizeOverride: (fileId, enabled) =>
