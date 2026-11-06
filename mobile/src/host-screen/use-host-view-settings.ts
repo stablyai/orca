@@ -1,4 +1,6 @@
-import { useCallback, useRef } from 'react'
+import { useHostProjectOrder } from './use-host-project-order'
+import type { ServedProjectSections } from '../worktree/project-sections-operations'
+import { useCallback, useEffect, useRef } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { getMobileWorkspaceLineageGroupKey } from '../worktree/mobile-workspace-lineage'
@@ -21,7 +23,6 @@ import {
 import { hostListSettingsRead } from '../transport/settings-read-operations'
 import type {
   AgentActivityDisplayMode,
-  ProjectOrderBy,
   WorktreeCardProperty
 } from '../../../src/shared/ui-chrome-types'
 import { getWorktreeCardModeUpdates } from '../../../src/shared/worktree/card-properties'
@@ -40,6 +41,8 @@ export function useHostViewSettings(args: {
   client: RpcClient | null
   connState: ConnectionState
   state: HostScreenState
+  hostCapabilities?: readonly string[]
+  projectCatalog?: ServedProjectSections | null
 }) {
   const { client, connState, state } = args
   const { clientRef, setActionError, setShowPinnedInGroups, setView, viewRef } = state
@@ -52,6 +55,14 @@ export function useHostViewSettings(args: {
     viewRef.current = next
     setView(next)
   }, [])
+
+  useEffect(() => {
+    if (viewRef.current.personalProjectOrder === undefined) {
+      return
+    }
+    const next = { ...viewRef.current, personalProjectOrder: undefined }
+    applyViewState(next)
+  }, [client, applyViewState])
 
   const syncViewSettingsFromDesktop = useCallback(
     async (options: { resend?: boolean } = {}) => {
@@ -183,9 +194,13 @@ export function useHostViewSettings(args: {
     [persistViewSettings]
   )
 
-  const setProjectOrderBy = useCallback(
-    (value: ProjectOrderBy) => persistViewSettings({ projectOrderBy: value }),
-    [persistViewSettings]
+  const { supportsPersonalProjectOrder, setProjectOrderBy, toggleProjectPin } = useHostProjectOrder(
+    {
+      ...args,
+      applyViewState,
+      refused,
+      syncViewSettingsFromDesktop
+    }
   )
 
   const setAgentActivityDisplayMode = useCallback(
@@ -265,6 +280,8 @@ export function useHostViewSettings(args: {
 
   return {
     clearFilters,
+    supportsPersonalProjectOrder,
+    toggleProjectPin,
     pendingViewChanges: pendingViewChanges?.status ?? NOTHING_PENDING,
     setAgentActivityDisplayMode,
     setCardLayout,
