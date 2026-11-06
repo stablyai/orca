@@ -58,27 +58,31 @@ describe('orca cli worktree awareness', () => {
     spawnMock
   })
 
-  it('identifies unsupported folder parents and avoids blaming the child for missing parents', async () => {
+  it('moves a worktree under a folder parent and avoids blaming the child for missing parents', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const priorExitCode = process.exitCode
     const child = 'id:repo::/tmp/repo/child'
     try {
       for (const parent of ['folder:folder-1', 'id:folder:folder-1']) {
-        logSpy.mockClear()
+        callMock.mockReset()
+        callMock.mockResolvedValueOnce({
+          id: 'req_set',
+          ok: true,
+          result: { worktree: { id: 'repo::/tmp/repo/child' } },
+          _meta: { runtimeId: 'runtime_1' }
+        })
         await main(
           ['worktree', 'set', '--worktree', child, '--parent-worktree', parent, '--json'],
           '/tmp/repo'
         )
-        expect(callMock).not.toHaveBeenCalled()
-        const output = JSON.parse(logSpy.mock.calls.at(-1)?.[0] ?? '{}').error
-        expect(output.message).toContain(`Parent selector "${parent}" is a folder.`)
-        expect(output.message).toContain(
-          'Folder parents are accepted only by orca worktree create.'
+        expect(callMock).toHaveBeenCalledWith(
+          'worktree.set',
+          expect.objectContaining({ worktree: child, parentWorktree: 'id:folder:folder-1' })
         )
-        expect(process.exitCode).toBe(1)
       }
 
+      callMock.mockReset()
       callMock.mockRejectedValueOnce(
         new RuntimeRpcFailureError({
           id: 'req_missing_parent',

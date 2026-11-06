@@ -9,6 +9,7 @@ import {
   supportsCrossStoreLineage
 } from '../../shared/worktree-runtime-capabilities'
 import { getOptionalStringFlag } from '../flags'
+import { folderWorkspaceKey, parseWorkspaceKey } from '../../shared/workspace-scope'
 import { RuntimeClient, RuntimeClientError } from '../runtime-client'
 import { getOptionalWorktreeSelector, resolveWorktreeCreateCwdContext } from '../selectors'
 import { parentCwdNextSteps, withWorktreeSelectorRecovery } from '../worktree-selector-recovery'
@@ -181,6 +182,13 @@ export async function resolveSetParentFields(
   client: RuntimeClient
 ): Promise<{ crossStoreParent?: CrossStoreParentRef; parentWorktree?: string }> {
   const raw = getOptionalStringFlag(flags, 'parent-worktree')
+  const scope = raw
+    ? parseWorkspaceKey(raw.startsWith('id:') ? raw.slice('id:'.length) : raw)
+    : null
+  if (scope?.type === 'folder') {
+    // A folder workspace on the host itself, as for create; the host resolves it.
+    return { parentWorktree: `id:${folderWorkspaceKey(scope.folderWorkspaceId)}` }
+  }
   if (client.isRemote && (raw === 'active' || raw === 'current')) {
     const selector = await getOptionalWorktreeSelector(
       flags,
