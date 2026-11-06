@@ -123,7 +123,17 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
 
   protected providerVisibleRetryAtByPtyId = new Map<string, number>()
 
+  /** PTYs whose screen has shown no agent dialog since this runtime attached; their restored permission waits are spent. */
+  protected restoredAgentDialogRuledOutPtys = new Set<string>()
+
   protected providerSnapshotsWithLiveModeTransition = new WeakSet<PtyProviderBufferSnapshot>()
+
+  /** Forgets the provider frame facts of a PTY whose screen restarts or ends. */
+  protected forgetProviderVisibleState(ptyId: string): void {
+    this.providerVisibleStateByPtyId.delete(ptyId)
+    this.providerVisibleRetryAtByPtyId.delete(ptyId)
+    this.restoredAgentDialogRuledOutPtys.delete(ptyId)
+  }
 
   protected ptyLifecycleGenerationById = new Map<string, number>()
 
