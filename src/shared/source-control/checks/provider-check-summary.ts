@@ -5,7 +5,8 @@ export type CheckOutcome = 'passed' | 'failed' | 'pending' | 'neutral'
 export type CheckOutcomeInput = { status?: string | null; conclusion?: string | null }
 
 // Skipped means not applicable; count it passing everywhere so desktop/mobile agree on the same PR.
-const PASSED_CONCLUSIONS = new Set(['success', 'skipped'])
+// GitLab allowed failures pass too: GitLab itself marks the pipeline passed.
+const PASSED_CONCLUSIONS = new Set(['success', 'skipped', 'allowed_failure'])
 
 // Why: these block the merge. GitLab `manual` is deliberately absent — it waits on a human.
 const FAILED_CONCLUSIONS = new Set([

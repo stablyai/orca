@@ -26,6 +26,7 @@ const CHECK_RUN_CONCLUSION = [
   'cancelled',
   'timed_out',
   'action_required',
+  'allowed_failure',
   'neutral',
   'skipped',
   'pending'

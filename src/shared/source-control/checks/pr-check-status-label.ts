@@ -21,6 +21,9 @@ export function getCheckStatusLabel(check: PRCheckDetail): string {
   if (conclusion === 'action_required') {
     return 'Action required'
   }
+  if (conclusion === 'allowed_failure') {
+    return 'Allowed to fail'
+  }
   if (conclusion === 'neutral') {
     return 'Neutral'
   }

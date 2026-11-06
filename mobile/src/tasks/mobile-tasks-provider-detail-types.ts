@@ -253,6 +253,7 @@ export type DetailPayload =
         status: string
         webUrl?: string | null
         duration?: number | null
+        allowFailure?: boolean
       }>
     }
   | {

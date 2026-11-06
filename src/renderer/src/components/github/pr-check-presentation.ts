@@ -26,6 +26,12 @@ export function getCheckStatusLabel(check: PRCheckDetail): string {
       'Action required'
     )
   }
+  if (conclusion === 'allowed_failure') {
+    return translate(
+      'auto.components.editor.CheckRunDetailsPanel.allowedFailure',
+      'Allowed to fail'
+    )
+  }
   if (conclusion === 'neutral') {
     return translate('auto.components.editor.CheckRunDetailsPanel.5a1c8e3d67', 'Neutral')
   }

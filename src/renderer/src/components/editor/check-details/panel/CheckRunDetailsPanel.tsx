@@ -52,6 +52,11 @@ function getCheckStatusLabel(check: CheckStatusLike): string {
         'auto.components.editor.CheckRunDetailsPanel.actionRequired',
         'Action required'
       )
+    case 'allowed_failure':
+      return translate(
+        'auto.components.editor.CheckRunDetailsPanel.allowedFailure',
+        'Allowed to fail'
+      )
     case 'skipped':
       return translate('auto.components.editor.CheckRunDetailsPanel.7b3e9d4f12', 'Skipped')
     case 'neutral':
