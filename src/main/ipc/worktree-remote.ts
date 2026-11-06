@@ -301,7 +301,7 @@ export function recordWorkspaceLineageForCreatedWorktree(
     return NO_CREATED_WORKTREE_LINEAGE
   }
 
-  // Folder parents have no WorktreeLineage row and do not create sidebar nesting.
+  // Folder parents have no WorktreeLineage row; their link is the workspace lineage record.
   let lineage: CreateWorktreeResult['lineage'] = null
   let parentOutsideLineageBoundary = false
   let lineageOwnedByTwin = false

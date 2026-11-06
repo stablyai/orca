@@ -6,7 +6,8 @@ import type {
 import { crossStoreParentRefOfRow } from '../../shared/worktree/lineage-row-identity'
 import {
   assertCrossStoreLineageSupported,
-  supportsCrossStoreLineage
+  supportsCrossStoreLineage,
+  supportsFolderParent
 } from '../../shared/worktree-runtime-capabilities'
 import { getOptionalStringFlag } from '../flags'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../shared/workspace-scope'
@@ -187,6 +188,14 @@ export async function resolveSetParentFields(
     : null
   if (scope?.type === 'folder') {
     // A folder workspace on the host itself, as for create; the host resolves it.
+    const status = (await client.call<RuntimeStatus>('status.get')).result
+    // An older host reads a folder parent as an unknown worktree; refuse before the request.
+    if (!supportsFolderParent(status.capabilities)) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `Update Orca on ${client.isRemote ? serverLabel(client) : 'this computer'} to move a workspace under a folder workspace. Nothing was changed.`
+      )
+    }
     return { parentWorktree: `id:${folderWorkspaceKey(scope.folderWorkspaceId)}` }
   }
   if (client.isRemote && (raw === 'active' || raw === 'current')) {

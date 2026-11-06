@@ -64,14 +64,19 @@ describe('orca cli worktree awareness', () => {
     const priorExitCode = process.exitCode
     const child = 'id:repo::/tmp/repo/child'
     try {
-      for (const parent of ['folder:folder-1', 'id:folder:folder-1']) {
-        callMock.mockReset()
-        callMock.mockResolvedValueOnce({
-          id: 'req_set',
+      const answer = (capabilities: string[]) => (method: string) =>
+        Promise.resolve({
+          id: 'req',
           ok: true,
-          result: { worktree: { id: 'repo::/tmp/repo/child' } },
+          result:
+            method === 'status.get'
+              ? { capabilities }
+              : { worktree: { id: 'repo::/tmp/repo/child' } },
           _meta: { runtimeId: 'runtime_1' }
         })
+      for (const parent of ['folder:folder-1', 'id:folder:folder-1']) {
+        callMock.mockReset()
+        callMock.mockImplementation(answer(['worktree.lineage.folderParent']))
         await main(
           ['worktree', 'set', '--worktree', child, '--parent-worktree', parent, '--json'],
           '/tmp/repo'
@@ -81,6 +86,19 @@ describe('orca cli worktree awareness', () => {
           expect.objectContaining({ worktree: child, parentWorktree: 'id:folder:folder-1' })
         )
       }
+      // An older host would read the folder as an unknown worktree: refuse before writing.
+      callMock.mockReset()
+      callMock.mockImplementation(answer([]))
+      logSpy.mockClear()
+      await main(
+        ['worktree', 'set', '--worktree', child, '--parent-worktree', 'folder:folder-1', '--json'],
+        '/tmp/repo'
+      )
+      expect(callMock.mock.calls.map(([method]) => method)).toEqual(['status.get'])
+      expect(JSON.parse(logSpy.mock.calls.at(-1)?.[0] ?? '{}').error.message).toContain(
+        'Update Orca on this computer to move a workspace under a folder workspace.'
+      )
+      process.exitCode = priorExitCode
 
       callMock.mockReset()
       callMock.mockRejectedValueOnce(
