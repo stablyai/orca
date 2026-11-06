@@ -64,7 +64,7 @@ export function useAgentMenuObservation(
   detectionTarget: AgentDetectionTarget | undefined,
   options?: AgentMenuObservationOptions
 ) {
-  const store = useAppStateView()
+  const state = useAppStateView().getState()
   const viewActive = useAppStateViewActive()
   const worktreeId = typeof target === 'string' ? target : target?.workspace.worktreeId
   const launchCwd = typeof target === 'string' ? undefined : target?.launchCwd
@@ -93,7 +93,7 @@ export function useAgentMenuObservation(
     readLocalRuntimeCapabilityObservation
   )
   // The observation owns these settings; picker consumers reuse its snapshot.
-  const desktopSettings = store.getState().settings
+  const desktopSettings = state.settings
   const workspace =
     typeof target === 'string'
       ? { kind: workspaceKindForWorktreeId(target), worktreeId: target }
@@ -120,7 +120,6 @@ export function useAgentMenuObservation(
       }
     })
   )
-  const state = store.getState()
   const input = buildAgentLaunchRouteInput(state, { agent: 'claude', workspace })
   const { settings, pending: preferencesPending } = useHostAgentMenuSettings(
     unresolvedTarget ? null : facts,
