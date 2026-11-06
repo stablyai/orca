@@ -377,6 +377,17 @@ describe('killStaleDaemon ownership decisions', () => {
     expect(existsSync(getDaemonPidPath(dir))).toBe(false)
   })
 
+  it('keeps an empty pid record while its endpoint answers', async () => {
+    writeFileSync(getDaemonPidPath(dir), '', { mode: 0o600 })
+
+    await expect(
+      killStaleDaemon(dir, socketPath, tokenPath, undefined, {
+        probeEndpoint: async () => 'connected'
+      })
+    ).resolves.toEqual({ killed: false, liveOwnerSurvived: true })
+    expect(existsSync(getDaemonPidPath(dir))).toBe(true)
+  })
+
   it.skipIf(process.platform === 'win32')(
     "leaves a replacement's pid record after killing the recorded owner",
     async () => {

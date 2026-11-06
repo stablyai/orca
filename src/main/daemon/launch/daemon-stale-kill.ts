@@ -153,14 +153,16 @@ export async function killStaleDaemon(
   // Fence removal to the inspected record so a concurrent replacement keeps its ownership.
   if (recordedOwner) {
     unlinkOwnedDaemonPidFile(pidPath, recordedOwner.pid, recordedOwner.launchNonce)
-  } else {
-    // Reclaim malformed records under a content-checked claim so valid replacements survive.
-    unlinkDaemonPidFileWhen(pidPath, (content) => parseDaemonPidFile(content) === null)
   }
 
   // Only publishers replace dead endpoints; this probe is advisory and never removes another daemon's name.
-  if ((await probeEndpoint(socketPath)) === 'connected') {
+  const endpointOutcome = await probeEndpoint(socketPath)
+  if (endpointOutcome === 'connected') {
     return { killed: killedDaemon, liveOwnerSurvived: true }
+  }
+  if (!recordedOwner && endpointIsProvenDead(endpointOutcome)) {
+    // A publishing daemon's record is empty until written, so reclaim malformed records only once its endpoint is dead.
+    unlinkDaemonPidFileWhen(pidPath, (content) => parseDaemonPidFile(content) === null)
   }
   return { killed: killedDaemon, liveOwnerSurvived }
 }
