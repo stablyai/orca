@@ -64,7 +64,7 @@ async function resolveAutomationWriteTarget(
     return {}
   }
   const { repo, worktreeId } = await resolveTargetRepo(client, target)
-  const connectionId = repo.connectionId?.trim()
+  const connectionId = getRepoRoutingConnectionId(repo)
   if (!connectionId) {
     return { destination: { selector: { kind: 'self' } }, repo, worktreeId }
   }
