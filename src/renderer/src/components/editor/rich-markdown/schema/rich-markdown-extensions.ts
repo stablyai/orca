@@ -63,11 +63,13 @@ const RichMarkdownCode = Code.extend({
 export function createRichMarkdownExtensions({
   codec,
   includePlaceholder = false,
+  allowBase64Images = true,
   htmlSuperscriptLinks = false,
   htmlSuperscriptLinkContext
 }: {
   codec: RichMarkdownEditorCodec
   includePlaceholder?: boolean
+  allowBase64Images?: boolean
   htmlSuperscriptLinks?: boolean
   htmlSuperscriptLinkContext?: RichMarkdownHtmlSuperscriptLinkContext
 }): AnyExtension[] {
@@ -241,7 +243,7 @@ export function createRichMarkdownExtensions({
         }
       }
     }).configure({
-      allowBase64: true,
+      allowBase64: allowBase64Images,
       // Markdown nests images in paragraphs; block image nodes would become schema-invalid and crash on the first edit.
       inline: true
     }),

@@ -292,6 +292,7 @@ import {
   WorktreeSelector as WorktreeSelectorOfGitParams
 } from './git-params'
 import { BindableAccounts, ValidateAccountBinding } from './github-account-binding-params'
+import { UploadGitHubAttachment } from './github-attachment-params'
 import { CreateIssue, Issue, IssueComment, UpdateIssue } from './github-issue-params'
 import {
   ClearProjectItemField,
@@ -1144,6 +1145,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'github.updatePR': UpdatePr,
   'github.updatePRState': UpdatePrState,
   'github.updatePRTitle': UpdatePrTitle,
+  'github.uploadAttachment': UploadGitHubAttachment,
   'github.validateAccountBinding': ValidateAccountBinding,
   'github.workItem': WorkItem,
   'github.workItemByOwnerRepo': WorkItemByOwnerRepo,

@@ -1,3 +1,4 @@
+import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
 import {
   combinedDiffViewportAttributes,
   combinedDiffRowAttributes
@@ -369,6 +370,15 @@ export function PRFilesCombinedDiffViewer({
                       'Open files on GitHub'
                     )}
                     renderHeaderTrailingContent={renderViewedCheckbox}
+                    imageUploadAddress={() =>
+                      githubCommentImageUploadAddress({
+                        repoPath,
+                        repoId,
+                        sourceContext,
+                        type: 'pr',
+                        prRepo
+                      })
+                    }
                     onAddLineComment={handleAddLineComment}
                     addLineCommentLabel={translate(
                       'auto.components.GitHubItemDialog.bf43425540',

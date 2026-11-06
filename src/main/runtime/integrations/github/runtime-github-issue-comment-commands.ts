@@ -15,16 +15,76 @@ import {
 import { createIssue } from '../../../github/issue-create'
 import { updateIssue } from '../../../github/issue-update'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import type { GitHubAttachmentTarget } from '../../../../shared/rpc-contract/github-attachment-params'
+import { uploadGitHubImage } from '../../../github/image-attachment-upload'
+import {
+  resolveGitHubRepoExecution,
+  resolveIssueGitHubApiRepositorySource
+} from '../../../github/github-api-repository'
+import { projectGhExecOptions } from '../../../github/project-view/internals'
+import { runAsDefaultWslCliUserAct } from '../../../git/command-runner/default-wsl-cli-fallback'
 
 type LocalGitArgs = [] | [LocalProjectGhExecOptions]
 
 type RuntimeGitHubIssueCommentCommandsDeps = {
   resolveRepo: (selector: string) => Promise<Repo>
+  resolveTarget: (args: {
+    repoSelector: string
+    worktreeSelector?: string
+  }) => Promise<{ repo: Repo; repoPath: string }>
   getLocalGitArgs: (repo: Repo) => LocalGitArgs
 }
 
 export class RuntimeGitHubIssueCommentCommands {
   constructor(private readonly deps: RuntimeGitHubIssueCommentCommandsDeps) {}
+
+  async uploadGitHubAttachment(
+    args: { target: GitHubAttachmentTarget; fileName: string; contentType: string },
+    bytes: Buffer,
+    signal?: AbortSignal
+  ): Promise<{ url: string }> {
+    const target = args.target
+    const upload = () =>
+      uploadGitHubImage({
+        ...args,
+        bytes,
+        signal,
+        resolve: async (uploadSignal) => {
+          if (target.kind === 'slug') {
+            return {
+              ownerRepo: target,
+              ghOptions: { ...projectGhExecOptions(target.host), signal: uploadSignal }
+            }
+          }
+          const { repo, repoPath } = await this.deps.resolveTarget({
+            repoSelector: target.repo,
+            worktreeSelector: target.worktree
+          })
+          const connectionId = getRepoRoutingConnectionId(repo)
+          const options = { ...this.deps.getLocalGitArgs(repo)[0], signal: uploadSignal }
+          return resolveGitHubRepoExecution(
+            repoPath,
+            target.ownerRepo ??
+              (target.source === 'issue'
+                ? async () =>
+                    (
+                      await resolveIssueGitHubApiRepositorySource(
+                        repoPath,
+                        repo.issueSourcePreference,
+                        connectionId,
+                        options
+                      )
+                    ).source
+                : undefined),
+            connectionId,
+            options
+          )
+        }
+      })
+    return target.kind === 'slug' && target.wakeWslDistro
+      ? runAsDefaultWslCliUserAct(upload)
+      : upload()
+  }
 
   async createRepoIssue(
     repoSelector: string,

@@ -60,6 +60,7 @@ it.each(['github', 'gitlab'] as const)(
       title: 'Fix login',
       body: 'Details'
     }
+    const imagePending = { current: true }
     const create = vi
       .fn()
       .mockResolvedValue({ ok: true, number: 100, url: 'https://example.com/reviews/100' })
@@ -91,6 +92,7 @@ it.each(['github', 'gitlab'] as const)(
           handlePullRequestCreated: vi.fn(),
           hostedReviewCreateCopy: localizedHostedReviewCopy(provider),
           prBase: 'main',
+          prImageUploadPendingRef: imagePending,
           prBody: '',
           resolvedPrCreationDefaults: DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
           setCreatePrInFlightByWorktree: vi.fn(),
@@ -99,6 +101,11 @@ it.each(['github', 'gitlab'] as const)(
         }),
       { initialProps: { settings: null } }
     )
+    await expect(
+      result.current.createHostedReviewForCreatePrIntent(token, eligibility)
+    ).resolves.toBe(false)
+    expect(create).not.toHaveBeenCalled()
+    imagePending.current = false
     await expect(
       result.current.createHostedReviewForCreatePrIntent(token, eligibility)
     ).resolves.toBe(true)

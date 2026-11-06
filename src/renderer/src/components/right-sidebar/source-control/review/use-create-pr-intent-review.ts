@@ -9,7 +9,10 @@ import { operationGitContext } from '../listing/operation-target'
 import { translate } from '@/i18n/i18n'
 import { generateRuntimePullRequestFields } from '@/runtime/runtime-git-generation-client'
 import type { HostedReviewCreationEligibility } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import { localizedCreateFailure } from '../../hosted-review/provider-actions/hosted-review-create-failure-copy'
+import {
+  localizedCreateFailure,
+  localizedCreateException
+} from '../../hosted-review/provider-actions/hosted-review-create-failure-copy'
 import {
   normalizeHostedReviewHeadRef,
   normalizeHostedReviewBaseRef as stripBaseRef
@@ -46,12 +49,13 @@ export function useSourceControlCreatePrIntentReview({
   handlePullRequestCreated,
   hostedReviewCreateCopy,
   prBase,
+  prImageUploadPendingRef,
   prBody,
   resolvedPrCreationDefaults,
   setCreatePrInFlightByWorktree,
   setCreatePrIntentNoticeForWorktree,
   settings
-}: {
+}: Pick<SourceControlCreateReviewComposer, 'prBase' | 'prBody'> & {
   activeRepo: SourceControlWorktreeContext['activeRepo']
   createHostedReview: SourceControlStoreActions['createHostedReview']
   createPrInFlightRef: SourceControlWorktreeOperationState['createPrInFlightRef']
@@ -61,8 +65,7 @@ export function useSourceControlCreatePrIntentReview({
   getCreatePrIntentOperationTarget: SourceControlCreatePrIntentTarget['getCreatePrIntentOperationTarget']
   handlePullRequestCreated: SourceControlHostedReviewCreated['handlePullRequestCreated']
   hostedReviewCreateCopy: SourceControlHostedReviewState['hostedReviewCreateCopy']
-  prBase: SourceControlCreateReviewComposer['prBase']
-  prBody: SourceControlCreateReviewComposer['prBody']
+  prImageUploadPendingRef?: React.RefObject<boolean>
   resolvedPrCreationDefaults: SourceControlAi['resolvedPrCreationDefaults']
   setCreatePrInFlightByWorktree: SourceControlWorktreeOperationState['setCreatePrInFlightByWorktree']
   setCreatePrIntentNoticeForWorktree: SourceControlWorktreeOperationState['setCreatePrIntentNoticeForWorktree']
@@ -73,7 +76,12 @@ export function useSourceControlCreatePrIntentReview({
       token: CreatePrIntentRunToken,
       eligibility: HostedReviewCreationEligibility
     ): Promise<boolean> => {
-      if (!activeRepo || !token.branch || !shouldAttemptCreateHostedReviewForIntent(eligibility)) {
+      if (
+        prImageUploadPendingRef?.current ||
+        !activeRepo ||
+        !token.branch ||
+        !shouldAttemptCreateHostedReviewForIntent(eligibility)
+      ) {
         return false
       }
 
@@ -171,6 +179,7 @@ export function useSourceControlCreatePrIntentReview({
       }
 
       if (
+        prImageUploadPendingRef?.current ||
         !createPrIntentRunStillOwnsWorktree(token) ||
         createPrIntentActiveTargetConflicts(token)
       ) {
@@ -263,14 +272,7 @@ export function useSourceControlCreatePrIntentReview({
         })
         return false
       } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : translate(
-                'auto.components.right.sidebar.SourceControl.e2b7a1c0d9f4',
-                'Failed to create {{value0}}',
-                { value0: hostedReviewCreateCopy.reviewLabel }
-              )
+        const message = localizedCreateException(error, hostedReviewCreateCopy.reviewLabel)
         setCreatePrIntentNoticeForWorktree(token.worktreeId, {
           tone: 'destructive',
           message
@@ -292,6 +294,7 @@ export function useSourceControlCreatePrIntentReview({
       handlePullRequestCreated,
       hostedReviewCreateCopy.reviewLabel,
       prBase,
+      prImageUploadPendingRef,
       prBody,
       resolvedPrCreationDefaults.draft,
       resolvedPrCreationDefaults.openAfterCreate,

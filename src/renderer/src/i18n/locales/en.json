@@ -23613,7 +23613,10 @@
     "viewed": {
       "markFile": "Mark {{path}} as viewed",
       "unmarkFile": "Unmark {{path}} as viewed"
-    }
+    },
+    "pasteImageFile": "Paste the image as a file to attach it to GitHub.",
+    "imageUploadFailed": "Could not attach image: {{message}}",
+    "imageUploadError": "GitHub could not upload this image."
   },
   "agentPicker": {
     "catalogUnsupported": "{{agent}} models are unavailable on this host. You can keep your current choices or use Arguments.",

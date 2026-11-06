@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import React from 'react'
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -173,4 +174,152 @@ describe('GitHubMarkdownComposer submission', () => {
     expect(getComposerEditor(view.container).getAttribute('contenteditable')).toBe('true')
     expect(onChange).not.toHaveBeenCalled()
   })
+})
+
+const imageUploads = vi.hoisted(() => ({ upload: vi.fn() }))
+vi.mock('./github-image-upload', () => ({ captureGitHubImageUpload: () => imageUploads.upload }))
+
+function ImageDraft() {
+  const [value, setValue] = React.useState('')
+  return (
+    <GitHubMarkdownComposer
+      value={value}
+      onChange={setValue}
+      placeholder="Image draft"
+      imageUploadAddress={{
+        runtime: { kind: 'local' },
+        target: { kind: 'repo', repo: 'repo', source: 'issue' }
+      }}
+    />
+  )
+}
+
+it('uploads pasted files sequentially, keeps placeholders out of Markdown, and replaces duplicate names independently', async () => {
+  const first = Promise.withResolvers<string>()
+  const second = Promise.withResolvers<string>()
+  imageUploads.upload
+    .mockReset()
+    .mockReturnValueOnce(first.promise)
+    .mockReturnValueOnce(second.promise)
+  const onChange = vi.fn()
+  const view = render(
+    <GitHubMarkdownComposer
+      value="Before"
+      onChange={onChange}
+      placeholder="Images"
+      imageUploadAddress={{
+        runtime: { kind: 'local' },
+        target: { kind: 'repo', repo: 'repo', source: 'issue' }
+      }}
+    />
+  )
+  await waitFor(() => expect(view.container.querySelector('.tiptap')).not.toBeNull())
+  const editor = getComposerEditor(view.container)
+  const files = [
+    new File(['one'], 'same.png', { type: 'image/png' }),
+    new File(['two'], 'same.png', { type: 'image/png' })
+  ]
+  fireEvent.paste(editor, { clipboardData: { files, getData: () => '' } })
+  await waitFor(() => expect(imageUploads.upload).toHaveBeenCalledTimes(1))
+  expect(editor.textContent).toContain('Uploading same.png')
+  expect(onChange.mock.lastCall?.[0]).not.toContain('Uploading')
+  expect(onChange.mock.lastCall?.[0]).not.toContain('data:')
+  await act(async () => first.resolve('https://github.com/user-attachments/assets/one'))
+  await waitFor(() => expect(imageUploads.upload).toHaveBeenCalledTimes(2))
+  await act(async () => second.resolve('https://github.com/user-attachments/assets/two'))
+  await waitFor(() => expect(editor.querySelectorAll('img')).toHaveLength(2))
+  expect(onChange.mock.lastCall?.[0]).toContain(
+    '![same.png](https://github.com/user-attachments/assets/one)'
+  )
+  expect(onChange.mock.lastCall?.[0]).toContain(
+    '![same.png](https://github.com/user-attachments/assets/two)'
+  )
+})
+
+it('keeps an image-only controlled draft pending and removes failed placeholders before continuing', async () => {
+  const first = Promise.withResolvers<string>()
+  imageUploads.upload
+    .mockReset()
+    .mockReturnValueOnce(first.promise)
+    .mockResolvedValueOnce('https://github.com/user-attachments/assets/two')
+  const view = render(<ImageDraft />)
+  await waitFor(() => expect(view.container.querySelector('.tiptap')).not.toBeNull())
+  const editor = getComposerEditor(view.container)
+  fireEvent.paste(editor, {
+    clipboardData: {
+      files: [
+        new File(['a'], 'a.png', { type: 'image/png' }),
+        new File(['b'], 'b.png', { type: 'image/png' })
+      ],
+      getData: () => ''
+    }
+  })
+  await waitFor(() => expect(editor.textContent).toContain('Uploading a.png'))
+  await act(async () => first.reject(new Error('Try again')))
+  await waitFor(() =>
+    expect(editor.querySelector('img')?.getAttribute('src')).toBe(
+      'https://github.com/user-attachments/assets/two'
+    )
+  )
+  expect(editor.textContent).not.toContain('Uploading')
+})
+
+it('finishes against the same editor while Preview temporarily hides its DOM', async () => {
+  const held = Promise.withResolvers<string>()
+  imageUploads.upload.mockReset().mockReturnValue(held.promise)
+  const view = render(<ImageDraft />)
+  await waitFor(() => expect(view.container.querySelector('.tiptap')).not.toBeNull())
+  fireEvent.paste(getComposerEditor(view.container), {
+    clipboardData: {
+      files: [new File(['a'], 'preview.png', { type: 'image/png' })],
+      getData: () => ''
+    }
+  })
+  fireEvent.click(view.getByRole('button', { name: 'Preview' }))
+  await act(async () => held.resolve('https://github.com/user-attachments/assets/preview'))
+  fireEvent.click(view.getByRole('button', { name: 'Write' }))
+  await waitFor(() =>
+    expect(getComposerEditor(view.container).querySelector('img')?.getAttribute('src')).toBe(
+      'https://github.com/user-attachments/assets/preview'
+    )
+  )
+})
+
+it('retains only clean surrounding text when a pending draft is closed and reopened', async () => {
+  const held = Promise.withResolvers<string>()
+  imageUploads.upload.mockReset().mockReturnValue(held.promise)
+  function RetainedDraft() {
+    const [value, setValue] = React.useState('Keep this text')
+    const [open, setOpen] = React.useState(true)
+    return (
+      <>
+        <button onClick={() => setOpen(!open)}>Toggle</button>
+        {open && (
+          <GitHubMarkdownComposer
+            value={value}
+            onChange={setValue}
+            placeholder="Retained"
+            imageUploadAddress={{
+              runtime: { kind: 'local' },
+              target: { kind: 'repo', repo: 'repo', source: 'issue' }
+            }}
+          />
+        )}
+      </>
+    )
+  }
+  const view = render(<RetainedDraft />)
+  await waitFor(() => expect(view.container.querySelector('.tiptap')).not.toBeNull())
+  fireEvent.paste(getComposerEditor(view.container), {
+    clipboardData: {
+      files: [new File(['a'], 'orphan.png', { type: 'image/png' })],
+      getData: () => ''
+    }
+  })
+  await waitFor(() => expect(imageUploads.upload).toHaveBeenCalledOnce())
+  fireEvent.click(view.getByRole('button', { name: 'Toggle' }))
+  fireEvent.click(view.getByRole('button', { name: 'Toggle' }))
+  await act(async () => held.resolve('https://github.com/user-attachments/assets/orphan'))
+  await waitFor(() => expect(getComposerEditor(view.container).textContent).toBe('Keep this text'))
+  expect(getComposerEditor(view.container).querySelector('img')).toBeNull()
 })
