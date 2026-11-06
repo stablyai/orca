@@ -102,7 +102,7 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
       ptyId,
       observed ? screen.lines.join('\n') : undefined
     )
-    const explicitStatus = this.getFreshExplicitAgentStatusForHandle(handle)
+    const explicitStatus = this.getFreshExplicitAgentStatusForHandle(handle, ptyId)
     return {
       terminal,
       explicitStatus,
