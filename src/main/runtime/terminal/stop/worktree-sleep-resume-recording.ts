@@ -1,6 +1,7 @@
 import { sleepingRecordsEquivalentIgnoringCaptureTime } from '../../../../shared/agent-session/lifecycle/agent-resume-record-equivalence'
 import { OrcaRuntimeWithStopTerminalsForWorktree } from './worktree-terminal-stop'
 import { launchStatement } from '../launch/attested-launch-config'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import {
   applyWorktreeSleepResumeRecords,
   captureWorktreeSleepResumeRecords,
@@ -125,20 +126,11 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
   >()
   private hookStatusResumeWrites: Promise<void> = Promise.resolve()
 
+  protected abstract getPtyRecordForPaneKey(paneKey: string): RuntimePtyWorktreeRecord | null
+
   /** Main's word on the Orca launch running in this pane now; the one check every saved note passes. */
-  getLaunchStatementForPaneKey: PaneLaunchConfigOf = (paneKey, agent) => {
-    let paneStatement: ReturnType<PaneLaunchConfigOf> = null
-    for (const pty of this.ptysById.values()) {
-      const statement = launchStatement(pty, agent)
-      if (statement !== null && this.paneOfPty(pty).paneKey === paneKey) {
-        if (statement) {
-          return statement
-        }
-        paneStatement = undefined
-      }
-    }
-    return paneStatement
-  }
+  getLaunchStatementForPaneKey: PaneLaunchConfigOf = (paneKey, agent) =>
+    launchStatement(this.getPtyRecordForPaneKey(paneKey), agent)
 
   // Main records accepted status for its panes even without windows, preserving window resume rules; serialize writes so statuses read prior records.
   recordHookStatusResume(row: AgentStatusIpcPayload): void {

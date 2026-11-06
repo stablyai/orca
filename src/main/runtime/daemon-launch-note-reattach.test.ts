@@ -16,7 +16,8 @@ const NOTE = { launchToken: 'launch-1', launchConfig: LAUNCH_CONFIG }
 async function reattach(
   foreground: 'agent' | 'shell' | 'unknown',
   mainHoldsLaunch = false,
-  launchNote: typeof NOTE | null | 'omitted' = NOTE
+  launchNote: typeof NOTE | null | 'omitted' = NOTE,
+  finishedOnReattach = false
 ) {
   const runtime = new OrcaRuntimeService(null)
   const setLaunchNote = vi.fn()
@@ -47,6 +48,16 @@ async function reattach(
     }
   })
   await new Promise((resolve) => setTimeout(resolve, 0))
+  if (finishedOnReattach) {
+    runtime.registerPty(PTY_ID, 'worktree-1', null, {
+      ...binding,
+      providerReattachLaunchIdentity: {
+        incarnationId: INCARNATION,
+        launchAgent: 'claude',
+        launchNote: null
+      }
+    })
+  }
   return {
     config: runtime.getLaunchStatementForPaneKey(makePaneKey(TAB_ID, LEAF_ID), 'claude'),
     retired: setLaunchNote.mock.calls.some(([, change]) => 'retire' in change)
@@ -70,6 +81,10 @@ describe('a daemon reattach after a main restart', () => {
   // Undecided: readers keep their earlier same-session rule rather than drop the settings.
   it('makes no statement when the foreground is unreadable', async () => {
     expect((await reattach('unknown')).config).toBeUndefined()
+  })
+
+  it('settles an undecided pane when a later attach reports its launch finished', async () => {
+    expect((await reattach('unknown', false, NOTE, true)).config).toBeNull()
   })
 
   it('makes no statement for a daemon that keeps no launch notes', async () => {

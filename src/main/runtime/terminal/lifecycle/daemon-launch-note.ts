@@ -28,7 +28,12 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
     reattach: { incarnationId: string; launchAgent: TuiAgent; launchNote?: DaemonLaunchNote | null }
   ): Promise<void> {
     const { launchNote, launchAgent, incarnationId } = reattach
-    if (launchNote === null || pty.launchToken) {
+    if (pty.launchToken) {
+      return
+    }
+    if (launchNote === null) {
+      // The daemon saw this launch finish, which settles a pane an earlier attach left undecided.
+      pty.launchUndecided = false
       return
     }
     pty.launchUndecided = true
