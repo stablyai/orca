@@ -2,7 +2,7 @@ import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../src/shared/clipboard-
 
 // Keep contracts/errors free of Expo imports so a page-side instanceof cannot pull native picker code into the bundle.
 
-export type MobileImageSource = 'library' | 'files'
+export type MobileImageSource = 'camera' | 'library' | 'files'
 
 export type PickedMobileImage = {
   // Raw base64 (no data: prefix); fed straight into the existing upload pipeline.
@@ -30,6 +30,13 @@ export class MobileFileTooLargeError extends Error {
       `${fileName ?? 'That file'} is over ${Math.floor(MOBILE_PICKED_FILE_MAX_BYTES / (1024 * 1024))} MB`
     )
     this.name = 'MobileFileTooLargeError'
+  }
+}
+
+export class CameraPermissionError extends Error {
+  constructor() {
+    super('Camera permission denied')
+    this.name = 'CameraPermissionError'
   }
 }
 
