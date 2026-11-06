@@ -49,11 +49,14 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
 
   private readonly terminalViewerDevices = new TerminalViewerDevices()
 
-  /** A departed device's xterm never blurred; tell PTYs that no remote viewer or local pane still shows. */
+  /**
+   * A departed device's xterm never blurred; tell PTYs that no remote viewer or local pane still
+   * shows. A remaining view whose pane is hidden already blurred, so it does not hold focus.
+   */
   protected reportFocusLostForDepartedDevice(deviceClientId: string): void {
     for (const ptyId of this.terminalViewerDevices.takeDeparted(deviceClientId)) {
       if (
-        !this.terminalViewSubscribers.hasRemote(ptyId) &&
+        !this.terminalViewSubscribers.mayBeShownRemotely(ptyId) &&
         this.ptyController?.hasRendererSerializer?.(ptyId) !== true
       ) {
         void this.ptyController?.reportFocusLost?.(ptyId)

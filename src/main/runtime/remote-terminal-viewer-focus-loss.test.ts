@@ -12,8 +12,14 @@ function createRuntime(hasLocalPane = false) {
     hasRendererSerializer: () => hasLocalPane,
     reportFocusLost
   } as never)
-  const view = (deviceId: string) =>
-    runtime.registerRemoteTerminalViewSubscriber('pty-1', undefined, undefined, false, deviceId)
+  const view = (deviceId: string, paneHidden?: () => boolean) =>
+    runtime.registerRemoteTerminalViewSubscriber(
+      'pty-1',
+      paneHidden,
+      undefined,
+      paneHidden !== undefined,
+      deviceId
+    )
   return { runtime, reportFocusLost, view }
 }
 
@@ -31,6 +37,21 @@ describe('remote terminal viewer focus loss', () => {
     runtime.onClientDisconnected('other-laptop')
     expect(reportFocusLost).toHaveBeenCalledTimes(1)
     expect(reportFocusLost).toHaveBeenCalledWith('pty-1')
+  })
+
+  it('reports focus lost while the only remaining view has its pane hidden', () => {
+    const { runtime, reportFocusLost, view } = createRuntime()
+    let otherPaneHidden = true
+    view('other-laptop', () => otherPaneHidden)
+    view('laptop')()
+    runtime.onClientDisconnected('laptop')
+    expect(reportFocusLost).toHaveBeenCalledWith('pty-1')
+
+    reportFocusLost.mockClear()
+    otherPaneHidden = false
+    view('laptop')()
+    runtime.onClientDisconnected('laptop')
+    expect(reportFocusLost).not.toHaveBeenCalled()
   })
 
   it('treats a resubscribe from a still-connected device as no departure', () => {
