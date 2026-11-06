@@ -95,6 +95,7 @@ describe('OrchestrationWorkerModelSetting', () => {
     expect(agents.map((agent) => agent.id)).toEqual([
       'claude',
       'codex',
+      'grok',
       'muse',
       'omp',
       'antigravity',
