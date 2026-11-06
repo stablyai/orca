@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useQueryClient, type QueryClient, type UseQueryResult } from '@tanstack/react-query'
+import { useOptionalHostProtocolGates } from '../components/host-protocol-gates-context'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { defineHostQuery, useHostQuery } from '../query/host-query'
 import { hostQueryKey, type HostQueryParams, type HostQueryTarget } from '../query/host-query-key'
@@ -113,7 +114,9 @@ export function useMobileAgentLaunchQueries(args: {
   const target = useMemo(() => ({ exec, worktree: worktreeId }), [exec, worktreeId])
   const input = useMemo(() => ({ refusesOtherRuntime }), [refusesOtherRuntime])
   const settingsTarget = useMemo(() => ({ exec }), [exec])
-  const enabled = args.enabled && worktreeId !== ''
+  // Capabilities pick the detection path and key, so wait for the host's status rather than read twice.
+  const statusPending = useOptionalHostProtocolGates()?.statusPending === true
+  const enabled = args.enabled && worktreeId !== '' && !statusPending
   const observed = (family: string, queryTarget: HostQueryTarget, params: HostQueryParams) =>
     observeLoaded ||
     queryClient.getQueryData(hostQueryKey(hostId, family, queryTarget, params)) === undefined
