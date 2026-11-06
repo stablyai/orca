@@ -109,3 +109,21 @@ it('orders the current branch before recent local commits', () => {
     )
   ).toEqual(['old', 'new', 'middle'])
 })
+
+it('shows an exact remote at the end of a full local and remote window instead of hiding both actions', () => {
+  const branches = Array.from({ length: 50 }, (_, n) => `feat-${n}`)
+  const local = indexLocalBranchRows({ current: null, branches }, '/repo', null)
+  const refDetails = Array.from({ length: 50 }, (_, n) => ({
+    refName: `origin/${n === 49 ? 'feat' : `feat-${n}`}`,
+    localBranchName: n === 49 ? 'feat' : `remote-feat-${n}`
+  }))
+  const page = branchPickerRows(
+    local,
+    new Set(branches),
+    { refs: [], refDetails, truncated: false },
+    'feat'
+  )
+  expect(page.rows).toHaveLength(100)
+  expect(page.rows.at(-1)?.target).toEqual({ kind: 'remote', name: 'origin/feat' })
+  expect(page.rows.some((row) => row.target.kind === 'new')).toBe(false)
+})

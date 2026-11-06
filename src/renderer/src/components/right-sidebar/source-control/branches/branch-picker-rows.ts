@@ -82,11 +82,15 @@ export function branchPickerRows(
   )
   const rows = matches.slice(0, LOCAL_BRANCH_WINDOW)
   const remoteRows = remote?.refDetails ?? []
+  const canCreate =
+    isBranchNameValid(name) &&
+    !localNames.has(name) &&
+    !remoteRows.some((ref) => ref.localBranchName === name || ref.refName === name)
   for (const ref of remoteRows) {
     if (ref.refName.startsWith('refs/heads/') || localNames.has(ref.localBranchName)) {
       continue
     }
-    if (rows.length >= BRANCH_PICKER_ROW_LIMIT - 1) {
+    if (rows.length >= BRANCH_PICKER_ROW_LIMIT - Number(canCreate)) {
       break
     }
     rows.push({
@@ -94,11 +98,7 @@ export function branchPickerRows(
       label: ref.refName.replace(/^refs\/remotes\//, '')
     })
   }
-  if (
-    isBranchNameValid(name) &&
-    !localNames.has(name) &&
-    !remoteRows.some((ref) => ref.localBranchName === name || ref.refName === name)
-  ) {
+  if (canCreate) {
     rows.push({ target: { kind: 'new', name }, label: name })
   }
   return { rows, moreLocal: matches.length > LOCAL_BRANCH_WINDOW }
