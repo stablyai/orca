@@ -318,15 +318,15 @@ describeRender('the Route A page in a real browser', () => {
     try {
       const opened = await openPage({ shellRoute: { pathname: HOST_ROUTE } })
       await opened.page.goto(`${origin}/`, { waitUntil: 'load' })
-      // The page waits for the held chunk before it mounts, so nothing may report a paint meanwhile.
       await opened.page.waitForFunction(
         () => document.documentElement.dataset.orcaWebEntry === 'shell-ready',
         { timeout: 30_000, polling: 250 }
       )
-      expect(await opened.page.evaluate(() => document.body.innerText)).not.toContain(
-        SHELL_HOST.name
-      )
       await waitForPageFrames(opened.page)
+      // The page waits for its route's held chunk before it mounts, so nothing may mount or report a paint meanwhile.
+      expect(await opened.page.evaluate(() => document.documentElement.dataset.orcaWebEntry)).toBe(
+        'shell-ready'
+      )
       expect(await paintReports(opened.page, paintName)).toBe(0)
 
       arrive()
