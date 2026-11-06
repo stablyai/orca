@@ -82,8 +82,13 @@ export function harness(
     }
   }
   const resolve = vi.fn(resolveScope)
+  // Folders a listing ran in without a resolved CLI (undefined: wherever Orca itself runs).
+  const unresolvedRuns: (string | undefined)[] = []
   const probe: AgentModelCatalogProbe = Object.assign(
-    async () => byFolder[resolveHiddenProbeCwd()],
+    async (_home: unknown, options?: { workspacePath?: string }) => {
+      unresolvedRuns.push(options?.workspacePath)
+      return byFolder[resolveHiddenProbeCwd()]
+    },
     { resolve }
   )
   const store = overrides.store ?? new AgentModelCatalogStore({ now: () => 1000 })
@@ -114,6 +119,7 @@ export function harness(
     probes,
     store,
     runs,
+    unresolvedRuns,
     hold,
     read,
     full,

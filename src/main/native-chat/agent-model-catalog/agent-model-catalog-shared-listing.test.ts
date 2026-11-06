@@ -215,3 +215,67 @@ it('keeps a later reader of the same folder waiting for its own deadline, not th
   expect(await later).toMatchObject({ models: [{ id: 'shared' }] })
   expect(h.run).toHaveBeenCalledOnce()
 })
+
+function readOperation(h: ReturnType<typeof sharedListingHarness>, deadline: number) {
+  const controller = new AbortController()
+  let current = true
+  return {
+    operation: {
+      deadline,
+      retirement: h.store.retirementRevision('codex'),
+      signal: controller.signal,
+      controller,
+      current: () => current && !controller.signal.aborted && Date.now() < deadline
+    },
+    // As when its chat closes: its own request no longer matches, though nothing aborts it.
+    leave: () => {
+      current = false
+    }
+  }
+}
+
+it("keeps a shared listing for a second chat when the first chat's own request stops matching", async () => {
+  vi.useFakeTimers()
+  onTestFinished(() => {
+    vi.useRealTimers()
+  })
+  const h = sharedListingHarness()
+  const first = readOperation(h, Date.now() + 60_000)
+  void h.service.demand({ agent: 'codex', workspacePath: '/a', operation: first.operation })
+  await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
+  const second = h.service.read({
+    agent: 'codex',
+    workspacePath: '/a',
+    waitForListing: true,
+    deadline: Date.now() + 30_000
+  })
+  await vi.advanceTimersByTimeAsync(0)
+  first.leave()
+  await vi.advanceTimersByTimeAsync(1_000)
+  h.discovery.resolve({ ...listing('shared'), complete: true, configured: {} })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(await second).toMatchObject({ models: [{ id: 'shared' }] })
+  expect(h.run).toHaveBeenCalledOnce()
+})
+
+it('ends a shared claim at its last live reader’s deadline once a longer one cancels', async () => {
+  vi.useFakeTimers()
+  onTestFinished(() => {
+    vi.useRealTimers()
+  })
+  const h = sharedListingHarness()
+  let settled = false
+  void h.service
+    .demand({ agent: 'codex', workspacePath: '/a', deadline: Date.now() + 1_000 })
+    .then(() => {
+      settled = true
+    })
+  await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
+  const longer = readOperation(h, Date.now() + 30_000)
+  void h.service.demand({ agent: 'codex', workspacePath: '/a', operation: longer.operation })
+  longer.operation.controller.abort()
+  await vi.advanceTimersByTimeAsync(1_500)
+  expect(settled).toBe(true)
+  // Nobody wants the listing any more, so its process is stopped too.
+  expect(h.runs[0]?.signal?.aborted).toBe(true)
+})

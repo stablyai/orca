@@ -125,9 +125,13 @@ export function runAgentModelCatalogOperation(
   // A budget a later reader extends is rechecked when the earlier one runs out.
   const end = Date.now() + (typeof remaining === 'number' ? remaining : 0)
   const left = typeof remaining === 'number' ? () => end - Date.now() : remaining
+  // Aborting the operation ends its wait at once rather than at a budget it no longer has.
+  const stopped = new Promise<void>((resolve) =>
+    controller.signal.addEventListener('abort', () => resolve(), { once: true })
+  )
   const bounded = async (): Promise<void> => {
-    for (let wait = left(); !settled && wait > 0; wait = left()) {
-      await withTimeout(operation, wait, undefined)
+    for (let wait = left(); !settled && !controller.signal.aborted && wait > 0; wait = left()) {
+      await withTimeout(Promise.race([operation, stopped]), wait, undefined)
     }
   }
   return bounded().finally(() => {

@@ -68,15 +68,17 @@ export async function resolveAgentModelCatalogScope(
   } catch {
     return { base, fingerprint: base, exact: false }
   }
+  // A workspace this host can't inspect lists as the account does (its default stays unknown),
+  // never from wherever Orca itself runs.
   const cwd =
     params.workspacePath === null
-      ? null
+      ? listIn
       : (params.workspacePath ?? (record ? await sessionWorkspacePath(deps, record) : listIn))
   if (!current()) {
     return null
   }
   if (!cwd) {
-    return { base, fingerprint: base, exact: false }
+    return { base, fingerprint: base, exact: false, cwd: listIn }
   }
   const resolve = (lookup: AgentModelCatalogLookup) =>
     probe?.resolve?.(home, listIn, lookup, operation, cwd).catch(() => null)

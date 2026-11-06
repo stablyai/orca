@@ -83,7 +83,7 @@ export function createAgentModelCatalogLookup(
     previous?.controller.abort()
     // The claim's own: retirement, a different request or its last reader leaving ends it.
     const controller = new AbortController()
-    const readers = agentModelCatalogClaimReaders(deadline, controller)
+    const readers = agentModelCatalogClaimReaders(controller)
     let listing: string | undefined
     const join = (entry: AgentModelCatalogListingDemand): void => {
       readers.add(entry)
@@ -104,9 +104,7 @@ export function createAgentModelCatalogLookup(
       !controller.signal.aborted &&
       !lifetime.signal.aborted &&
       readers.any() &&
-      deps.store.retirementRevision(params.agent) === retirement &&
-      requestKey(params) === bindingKey &&
-      capture(params) === identity
+      deps.store.retirementRevision(params.agent) === retirement
     const current = (): boolean => valid() && claims.get(key)?.controller === controller
     // Bounded work below runs until the last reader's deadline, however late it joined.
     const bounded = {
@@ -270,6 +268,7 @@ export function createAgentModelCatalogLookup(
       controller,
       () => {
         ready.resolve()
+        readers.clear()
         if (claims.get(key)?.controller === controller) {
           claims.delete(key)
         }

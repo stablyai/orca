@@ -107,5 +107,15 @@ for (const agent of ['claude', 'codex'] as const) {
       expect(picked.record.values.effort).toEqual({ value: 'high', source: 'dispatched' })
       expect(h.runs).toEqual([resolveHiddenProbeCwd()])
     })
+
+    it('lists a workspace this host cannot inspect as the account does, never where Orca runs', async () => {
+      const h = harness(agent)
+      const result = await h.service.read({ agent, workspacePath: null, waitForListing: true })
+      expect(result.origin === 'unknown' ? null : result.models).toEqual(
+        h.full.map((id) => expect.objectContaining({ id, isDefault: false }))
+      )
+      expect(h.runs).toEqual([resolveHiddenProbeCwd()])
+      expect(h.unresolvedRuns).toEqual([])
+    })
   })
 }
