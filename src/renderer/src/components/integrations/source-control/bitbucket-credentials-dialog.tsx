@@ -1,3 +1,4 @@
+import { BitbucketApiTokenScopes } from './bitbucket-api-token-scopes'
 import { useEffectEvent, useId, useLayoutEffect, useRef, useState } from 'react'
 import { ExternalLink, LoaderCircle, Lock } from 'lucide-react'
 import type { BitbucketAuthMode } from '../../../../../shared/bitbucket-credentials'
@@ -162,6 +163,7 @@ export function BitbucketCredentialsDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
+        scrollable
         overlayClassName={overlayClassName}
         className={cn('sm:max-w-lg', contentClassName)}
         onPointerDownOutside={guardOutsideDismiss}
@@ -336,6 +338,7 @@ export function BitbucketCredentialsDialog({
                 {connectError}
               </p>
             ) : null}
+            {!isTokenMode ? <BitbucketApiTokenScopes /> : null}
             <div className="space-y-2 text-xs leading-relaxed text-muted-foreground">
               <p>
                 {isTokenMode

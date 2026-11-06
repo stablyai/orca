@@ -24045,5 +24045,15 @@
     "discussionAction": "Join the discussion",
     "checkAction": "Check compatibility",
     "settingsStatus": "Orca {{version}} requires macOS {{macos}} or later. This is the latest version for this Mac."
+  },
+  "bitbucket": {
+    "apiTokenScopes": {
+      "user": "Verify your account",
+      "repository": "Read build statuses",
+      "readPullRequest": "Read pull requests",
+      "writePullRequest": "Create pull requests",
+      "title": "Select these Bitbucket API token scopes:",
+      "writeNote": "For read-only use, omit the write scope. Write does not include read; select each scope separately."
+    }
   }
 }
