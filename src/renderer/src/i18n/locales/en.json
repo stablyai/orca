@@ -695,6 +695,10 @@
         "widthDescription": "How wide messages and the message box can grow in a wide pane.",
         "resetAppearance": "Reset chat appearance",
         "resetDescription": "Restore the defaults above.",
+        "changedFilesSummary": "Changed files summary",
+        "changedFilesSummaryDescription": "Shows the files each turn changed, with line counts, below the reply.",
+        "changedFilesSummaryKeywordDiff": "diff",
+        "changedFilesSummaryKeywordEdits": "edits",
         "comfortable": "Comfortable",
         "wide": "Wide",
         "full": "Full",
@@ -19854,7 +19858,11 @@
         "partial": "Partial diff",
         "changedFiles_one": "{{count}} changed file",
         "changedFiles_other": "{{count}} changed files",
-        "showMoreFiles": "Show {{count}} more"
+        "showMoreFiles": "Show {{count}} more",
+        "hide": "Hide",
+        "hidden": "Hidden",
+        "hideFailed": "Couldn't hide changed files. Try again, or turn off Changed files summary in Settings › Chat UI.",
+        "hiddenDescription": "You can change this anytime in <settings>Settings › Chat UI</settings>"
       },
       "receipt": {
         "unavailable": "Selected answer unavailable",
