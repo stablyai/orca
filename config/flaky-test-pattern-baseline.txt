@@ -9,8 +9,6 @@
 2 test-no-in-test-import-actual:src/main/browser/cookies/browser-cookie-import.comet.test.ts
 3 test-no-in-test-import-actual:src/main/claude-usage/scanner-scan.test.ts
 1 test-no-in-test-import-actual:src/main/claude/claude-agent-sdk-process-spawn.test.ts
-3 test-no-in-test-import-actual:src/main/codex-accounts/runtime-home-read-only-launch-resolution.test.ts
-1 test-no-in-test-import-actual:src/main/codex-accounts/runtime-home-wsl-system-default.test.ts
 8 test-no-in-test-import-actual:src/main/daemon/endpoint/publication/testing/daemon-endpoint-publish.test.ts
 2 test-no-in-test-import-actual:src/main/daemon/history/storage/testing/terminal-history-permissions.test.ts
 1 test-no-in-test-import-actual:src/main/git/command-runner/spawned-command-tree-kill.test.ts
@@ -661,9 +659,7 @@
 3 test-no-wall-clock:src/main/claude/structured/launch/claude-structured-real-cli-options.test.ts
 1 test-no-wall-clock:src/main/cli/appimage-generation-lease.test.ts
 6 test-no-wall-clock:src/main/cli/packaged-cli-assets.test.ts
-1 test-no-wall-clock:src/main/cli/wsl-cli-registration-registry.test.ts
 1 test-no-wall-clock:src/main/codex-accounts/legacy-wsl-runtime-auth-drain-rollback-script.test.ts
-1 test-no-wall-clock:src/main/codex-accounts/service.test.ts
 6 test-no-wall-clock:src/main/codex/app-server/codex-app-server-client.test.ts
 2 test-no-wall-clock:src/main/codex/configuration/settings/config-settings-promotion.test.ts
 1 test-no-wall-clock:src/main/codex/history/backfill/codex-session-backfill-marker.test.ts
