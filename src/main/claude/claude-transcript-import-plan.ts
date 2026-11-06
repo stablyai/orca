@@ -1,3 +1,4 @@
+import { isClaudeToolResultContent } from '../../shared/claude-tool-content'
 import { isDeepStrictEqual } from 'node:util'
 import {
   agentJournalItemKey,
@@ -200,7 +201,7 @@ export function createClaudeTranscriptImportPlan(input: {
         queued ||
         (envelope?.role === 'user' &&
           !claudeEnvelopeStopHookFeedbackRow(envelope) &&
-          envelope.content.some((part) => claudeRecord(part)?.type !== 'tool_result'))
+          envelope.content.some((part) => !isClaudeToolResultContent(part)))
       const decoded = prompt
         ? decodeClaudeTranscriptLine(JSON.stringify(row), `${input.providerSessionId}:${uuid}`)
         : null
