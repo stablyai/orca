@@ -55,7 +55,7 @@ export function AgentOpensAsControl({
   )
 }
 
-/** This desktop's chat host lacks the agent's chat; null on web clients, whose host OS is unknown. */
+/** This desktop's chat host lacks the agent's chat; false on web clients, whose host OS is unknown. */
 export function chatUnavailableOnThisDesktop(agent: string): boolean {
   return structuredChatUnavailableOnPlatform(agent, isWindowsDesktopClient() ? 'win32' : null)
 }
