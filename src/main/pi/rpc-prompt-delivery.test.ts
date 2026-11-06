@@ -202,7 +202,7 @@ it.each([100, 1000])('classifies a refresh diagnostic with %i token mentions', (
   const diagnostic = prefix + mentions
   const exec = RegExp.prototype.exec
   let scanSteps = 0
-  const scan = vi.spyOn(RegExp.prototype, 'exec').mockImplementation(function (text) {
+  const scan = vi.spyOn(RegExp.prototype, 'exec').mockImplementation(function (this: RegExp, text) {
     if (text === diagnostic && this.global) {
       scanSteps += 1
     }
