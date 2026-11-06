@@ -292,8 +292,8 @@ export function MobileNativeChatComposer({
   useLayoutEffect(() => {
     lowerRegion?.layoutChanged()
     const shown = menu.rows.length > 0
-    if (shown && !menuWasShown.current && focused) {
-      lowerRegion?.reveal(groupRef.current)
+    if (shown !== menuWasShown.current && focused) {
+      lowerRegion?.reveal(groupRef.current, shown ? 'menu' : 'edit')
     }
     menuWasShown.current = shown
   })

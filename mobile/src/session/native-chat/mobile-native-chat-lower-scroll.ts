@@ -1,17 +1,18 @@
 import { createMobileNativeChatReadingHold } from './mobile-native-chat-reading-hold'
 import { connectMobileNativeChatScrollGesture } from './mobile-native-chat-scroll-gesture'
-import { externalAllowance, visible } from './mobile-native-chat-lower-geometry'
+import {
+  externalAllowance,
+  visible,
+  composerGroupOf as groupOf,
+  fittingComposerSurface,
+  revealOffset,
+  surfaceVisibility,
+  focusedLowerElement
+} from './mobile-native-chat-lower-geometry'
 
 const BOTTOM_TOLERANCE = 4
 const SCROLL_SETTLE_MS = 150
-
-function groupOf(target: HTMLElement): HTMLElement {
-  return (
-    target.closest<HTMLElement>('[data-testid="queued-card-editor"]') ??
-    target.closest<HTMLElement>('[data-testid="native-chat-composer-group"]') ??
-    target
-  )
-}
+type RevealReason = 'focus' | 'edit' | 'menu'
 
 export function connectMobileNativeChatLowerScroll(
   viewport: HTMLElement,
@@ -23,7 +24,9 @@ export function connectMobileNativeChatLowerScroll(
   let lastScroll = viewport.scrollTop
   let lastMaximum = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
   let active: { element: HTMLElement; visible: boolean; clipped: number } | null = null
-  let pending: HTMLElement | null | undefined
+  let pending: { group: HTMLElement | null; target: HTMLElement; reason: RevealReason } | null =
+    null
+  let layoutPending = false
   let frame: number | null = null
   let settle: ReturnType<typeof setTimeout> | null = null
   let settling = false
@@ -38,27 +41,13 @@ export function connectMobileNativeChatLowerScroll(
 
   const maximum = () => Math.max(0, viewport.scrollHeight - viewport.clientHeight)
   const atBottom = () => maximum() - viewport.scrollTop <= BOTTOM_TOLERANCE
-  const focused = () => {
-    const target = document.activeElement
-    return target instanceof HTMLElement && content.contains(target) && visible(target)
-      ? target
-      : null
-  }
-  const intersectsViewport = (target: HTMLElement) => {
-    const rect = target.getBoundingClientRect()
-    const bounds = viewport.getBoundingClientRect()
-    return rect.bottom > bounds.top && rect.top < bounds.bottom
-  }
-  const clipping = (target: HTMLElement) => {
-    const rect = target.getBoundingClientRect()
-    const bounds = viewport.getBoundingClientRect()
-    return Math.max(0, bounds.top - rect.top) + Math.max(0, rect.bottom - bounds.bottom)
-  }
+  const focused = () => focusedLowerElement(content)
+  const surfaceOf = (target: HTMLElement, bounds = viewport) =>
+    fittingComposerSurface(target, bounds)
   const recordActive = () => {
     const element = focused()
-    active = element
-      ? { element, visible: intersectsViewport(element), clipped: clipping(element) }
-      : null
+    const surface = element && surfaceOf(element)
+    active = element && surface ? { element, ...surfaceVisibility(viewport, surface) } : null
   }
   const write = (node: HTMLElement, offset: number) => {
     const next = Math.max(0, Math.min(offset, node.scrollHeight - node.clientHeight))
@@ -72,31 +61,24 @@ export function connectMobileNativeChatLowerScroll(
       lastMaximum = maximum()
     }
   }
-  const expose = (node: HTMLElement, target: HTMLElement) => {
-    const bounds = node.getBoundingClientRect()
-    const rect = target.getBoundingClientRect()
-    const delta =
-      rect.top < bounds.top
-        ? rect.top - bounds.top
-        : rect.bottom > bounds.bottom
-          ? rect.bottom - bounds.bottom
-          : 0
-    write(node, node.scrollTop + delta)
+  const expose = (node: HTMLElement, target: HTMLElement, bottom = false) => {
+    write(node, node.scrollTop + revealOffset(node, target, bottom))
   }
+
   const reconcile = () => {
     frame = null
     if (disposed) {
       return
     }
     observeOuterMovement()
+    onGeometry(viewport.clientHeight, externalAllowance(root))
     if (gesture.active() || settling || viewport.scrollTop < 0 || viewport.scrollTop > maximum()) {
       return
     }
-    onGeometry(viewport.clientHeight, externalAllowance(root))
     const target = focused()
-    if (pending !== undefined && target) {
+    if (pending && target === pending.target) {
       const requested = pending
-      pending = undefined
+      pending = null
       for (
         let parent = target.parentElement;
         parent && parent !== viewport;
@@ -104,25 +86,24 @@ export function connectMobileNativeChatLowerScroll(
       ) {
         const style = getComputedStyle(parent)
         if (/(auto|scroll)/.test(style.overflowY) && parent.scrollHeight > parent.clientHeight) {
-          expose(parent, target)
+          expose(parent, surfaceOf(target, parent))
         }
       }
       const group =
         target.closest<HTMLElement>('[data-testid="queued-card-editor"]') ??
-        (requested && requested.contains(target) && visible(requested)
-          ? requested
+        (requested.group && requested.group.contains(target) && visible(requested.group)
+          ? requested.group
           : groupOf(target))
-      expose(
-        viewport,
-        group.getBoundingClientRect().height <= viewport.clientHeight ? group : target
-      )
+      const surface =
+        group.getBoundingClientRect().height <= viewport.clientHeight ? group : surfaceOf(target)
+      expose(viewport, surface, requested.reason === 'menu' && surface !== group)
       attached = atBottom()
       reading.clear()
       if (!attached) {
         reading.refresh(false)
       }
     } else {
-      pending = undefined
+      pending = null
       if (attached) {
         write(viewport, maximum())
       } else {
@@ -134,6 +115,7 @@ export function connectMobileNativeChatLowerScroll(
         reading.refresh(false)
       }
     }
+    layoutPending = false
     recordActive()
   }
   const schedule = () => {
@@ -141,22 +123,30 @@ export function connectMobileNativeChatLowerScroll(
       frame = requestAnimationFrame(reconcile)
     }
   }
-  const reveal = (group?: unknown) => {
-    pending = group instanceof HTMLElement ? group : null
+  const reveal = (group?: unknown, reason: RevealReason = 'focus') => {
+    const target = focused()
+    pending = target ? { group: group instanceof HTMLElement ? group : null, target, reason } : null
     schedule()
   }
   const layoutChanged = () => {
+    layoutPending = true
     const target = focused()
+    const surface = target && surfaceOf(target)
     const resized =
       viewportHeight !== viewport.clientHeight || viewportWidth !== viewport.clientWidth
     viewportHeight = viewport.clientHeight
     viewportWidth = viewport.clientWidth
     if (
       target &&
-      (resized ||
-        (active?.element === target && active.visible && clipping(target) > active.clipped + 0.5))
+      surface &&
+      !gesture.active() &&
+      !settling &&
+      !pending &&
+      active?.element === target &&
+      active.visible &&
+      (resized || surfaceVisibility(viewport, surface).clipped > active.clipped + 0.5)
     ) {
-      pending = groupOf(target)
+      reveal(groupOf(target), 'edit')
     }
     schedule()
   }
@@ -168,12 +158,14 @@ export function connectMobileNativeChatLowerScroll(
     settle = setTimeout(() => {
       settle = null
       settling = false
+      gesture.settled()
       schedule()
     }, SCROLL_SETTLE_MS)
   }
   const observeOuterMovement = () => {
     const position = viewport.scrollTop
     const limit = maximum()
+    const extentChanged = limit !== lastMaximum
     const previous = limit < lastMaximum ? Math.min(lastScroll, limit) : lastScroll
     const delta = position - previous
     lastScroll = position
@@ -181,7 +173,19 @@ export function connectMobileNativeChatLowerScroll(
     if (Math.abs(delta) < 0.5) {
       return false
     }
-    pending = undefined
+    if (pending) {
+      return false
+    }
+    if (!gesture.navigating()) {
+      if (!attached && !layoutPending && !extentChanged) {
+        reading.move(delta)
+        reading.refresh(false)
+        attached = atBottom()
+        recordActive()
+      }
+      schedule()
+      return false
+    }
     reading.move(delta)
     attached = atBottom()
     if (attached) {
@@ -210,7 +214,10 @@ export function connectMobileNativeChatLowerScroll(
       }
       return
     }
-    pending = undefined
+    if (pending || !gesture.navigating()) {
+      schedule()
+      return
+    }
     if (!attached) {
       reading.refresh()
     }
@@ -220,7 +227,7 @@ export function connectMobileNativeChatLowerScroll(
   const gesture = connectMobileNativeChatScrollGesture(
     viewport,
     () => {
-      pending = undefined
+      pending = null
     },
     settleLater
   )
@@ -233,9 +240,11 @@ export function connectMobileNativeChatLowerScroll(
       settle = null
     }
     settling = false
+    gesture.settled()
     schedule()
   }
   const onFocus = () => reveal()
+  const onInput = () => reveal(undefined, 'edit')
   const observer = new ResizeObserver(layoutChanged)
   observer.observe(viewport)
   observer.observe(content)
@@ -255,8 +264,10 @@ export function connectMobileNativeChatLowerScroll(
   window.visualViewport?.addEventListener('resize', layoutChanged)
   window.visualViewport?.addEventListener('scroll', layoutChanged)
   viewport.addEventListener('focusin', onFocus)
+  viewport.addEventListener('input', onInput)
   viewport.addEventListener('scroll', onScroll, true)
   viewport.addEventListener('scrollend', onScrollEnd)
+  onGeometry(viewport.clientHeight, externalAllowance(root))
   if (focused()) {
     reveal()
   } else {
@@ -275,6 +286,7 @@ export function connectMobileNativeChatLowerScroll(
       window.visualViewport?.removeEventListener('scroll', layoutChanged)
       viewport.style.overflowAnchor = priorAnchoring
       viewport.removeEventListener('focusin', onFocus)
+      viewport.removeEventListener('input', onInput)
       viewport.removeEventListener('scroll', onScroll, true)
       viewport.removeEventListener('scrollend', onScrollEnd)
       if (frame !== null) {
@@ -284,7 +296,7 @@ export function connectMobileNativeChatLowerScroll(
         clearTimeout(settle)
       }
       reading.clear()
-      pending = undefined
+      pending = null
     }
   }
 }

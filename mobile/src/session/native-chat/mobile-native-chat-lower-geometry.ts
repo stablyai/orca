@@ -33,3 +33,59 @@ export function visible(element: HTMLElement): boolean {
   const rect = element.getBoundingClientRect()
   return element.isConnected && rect.width > 0 && rect.height > 0
 }
+
+export function composerGroupOf(target: HTMLElement): HTMLElement {
+  return (
+    target.closest<HTMLElement>('[data-testid="queued-card-editor"]') ??
+    target.closest<HTMLElement>('[data-testid="native-chat-composer-group"]') ??
+    target
+  )
+}
+
+export function fittingComposerSurface(target: HTMLElement, viewport: HTMLElement): HTMLElement {
+  for (const surface of [
+    composerGroupOf(target),
+    target.closest<HTMLElement>('[data-testid="native-chat-composer-inset"]'),
+    target.closest<HTMLElement>('[data-testid="native-chat-composer"]')
+  ]) {
+    if (
+      surface &&
+      visible(surface) &&
+      surface.getBoundingClientRect().height <= viewport.clientHeight
+    ) {
+      return surface
+    }
+  }
+  return target
+}
+
+export function revealOffset(viewport: HTMLElement, target: HTMLElement, bottom: boolean): number {
+  const bounds = viewport.getBoundingClientRect()
+  const rect = target.getBoundingClientRect()
+  if (
+    rect.height > viewport.clientHeight ||
+    (rect.top >= bounds.top && rect.bottom <= bounds.bottom)
+  ) {
+    return 0
+  }
+  if (bottom || rect.bottom > bounds.bottom) {
+    return rect.bottom - bounds.bottom
+  }
+  return rect.top - bounds.top
+}
+
+export function surfaceVisibility(viewport: HTMLElement, target: HTMLElement) {
+  const rect = target.getBoundingClientRect()
+  const bounds = viewport.getBoundingClientRect()
+  return {
+    visible: rect.bottom > bounds.top && rect.top < bounds.bottom,
+    clipped: Math.max(0, bounds.top - rect.top) + Math.max(0, rect.bottom - bounds.bottom)
+  }
+}
+
+export function focusedLowerElement(content: HTMLElement): HTMLElement | null {
+  const target = content.ownerDocument.activeElement
+  return target instanceof HTMLElement && content.contains(target) && visible(target)
+    ? target
+    : null
+}

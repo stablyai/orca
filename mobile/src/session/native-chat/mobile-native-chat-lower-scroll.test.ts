@@ -8,6 +8,7 @@ let content: HTMLDivElement
 let anchor: HTMLParagraphElement
 let field: HTMLTextAreaElement
 let group: HTMLDivElement
+let viewportHeight: number
 let extent: number
 let addedAbove: number
 let addedBeforeField: number
@@ -16,6 +17,7 @@ let connection: ReturnType<typeof connectMobileNativeChatLowerScroll> | undefine
 const painted = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
 
 beforeEach(() => {
+  viewportHeight = 100
   extent = 350
   addedAbove = 0
   addedBeforeField = 0
@@ -34,9 +36,11 @@ beforeEach(() => {
   root.append(viewport)
   document.body.append(root)
   vi.spyOn(root, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 0, 300, 600))
-  vi.spyOn(viewport, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 0, 300, 100))
+  vi.spyOn(viewport, 'getBoundingClientRect').mockImplementation(
+    () => new DOMRect(0, 0, 300, viewportHeight)
+  )
   Object.defineProperties(viewport, {
-    clientHeight: { value: 100 },
+    clientHeight: { get: () => viewportHeight },
     clientWidth: { value: 300 },
     scrollHeight: { get: () => extent + addedAbove + addedBeforeField }
   })
@@ -72,6 +76,7 @@ function connect() {
 }
 
 function userScroll(offset: number) {
+  viewport.dispatchEvent(new WheelEvent('wheel'))
   viewport.scrollTop = offset
   viewport.dispatchEvent(new Event('scroll'))
   viewport.dispatchEvent(new Event('scrollend'))
@@ -271,6 +276,7 @@ it('preserves user navigation through a rubber-band excursion without writing ag
   await painted()
   userScroll(0)
   await painted()
+  viewport.dispatchEvent(new WheelEvent('wheel'))
   viewport.scrollTop = -20
   viewport.dispatchEvent(new Event('scroll'))
   lower.layoutChanged()
@@ -286,6 +292,7 @@ it('preserves user navigation through a rubber-band excursion without writing ag
   expect(viewport.scrollTop).toBe(15)
   userScroll(250)
   await painted()
+  viewport.dispatchEvent(new WheelEvent('wheel'))
   viewport.scrollTop = 270
   viewport.dispatchEvent(new Event('scroll'))
   viewport.scrollTop = 230
@@ -293,4 +300,85 @@ it('preserves user navigation through a rubber-band excursion without writing ag
   viewport.dispatchEvent(new Event('scrollend'))
   await painted()
   expect(viewport.scrollTop).toBe(230)
+})
+
+it('reveals a fitting composer surface through menu entry and removal despite incidental movement', async () => {
+  viewportHeight = 219
+  extent = 900
+  const inset = document.createElement('div')
+  inset.dataset.testid = 'native-chat-composer-inset'
+  group.append(inset)
+  inset.append(field)
+  vi.mocked(group.getBoundingClientRect).mockImplementation(
+    () => new DOMRect(0, -viewport.scrollTop, 300, 900)
+  )
+  vi.spyOn(inset, 'getBoundingClientRect').mockImplementation(
+    () => new DOMRect(0, 634 + addedBeforeField - viewport.scrollTop, 300, 214)
+  )
+  vi.mocked(field.getBoundingClientRect).mockImplementation(
+    () => new DOMRect(0, 653 + addedBeforeField - viewport.scrollTop, 300, 128)
+  )
+  const lower = connect()
+  field.focus()
+  await painted()
+  userScroll(637)
+  await painted()
+  expect(inset.getBoundingClientRect().top).toBe(-3)
+  addedBeforeField = 301
+  lower.reveal(group, 'menu')
+  viewport.scrollTop = 938
+  viewport.dispatchEvent(new Event('scroll'))
+  lower.layoutChanged()
+  await painted()
+  expect(inset.getBoundingClientRect().top).toBe(5)
+  expect(inset.getBoundingClientRect().bottom).toBe(219)
+  addedBeforeField = 0
+  lower.reveal(group, 'edit')
+  viewport.scrollTop = 594
+  field.scrollTop = 30
+  field.dispatchEvent(new Event('scroll', { bubbles: true }))
+  viewport.dispatchEvent(new Event('scroll'))
+  await painted()
+  expect(inset.getBoundingClientRect().top).toBe(5)
+  expect(inset.getBoundingClientRect().bottom).toBe(219)
+  expect(field.scrollTop).toBe(30)
+  expect(document.activeElement).toBe(field)
+  expect(field.value).toBe('A separate retained draft')
+})
+
+it('keeps new Tab and tap focus reveals while later navigation cancels and editing keys do not', async () => {
+  const lower = connect()
+  vi.useFakeTimers()
+  field.focus()
+  await vi.advanceTimersByTimeAsync(20)
+  field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
+  field.blur()
+  field.focus()
+  viewport.scrollTop = 0
+  viewport.dispatchEvent(new Event('scroll'))
+  await vi.advanceTimersByTimeAsync(200)
+  expect(viewport.scrollTop).toBe(190)
+  field.blur()
+  field.dispatchEvent(
+    new PointerEvent('pointerdown', { pointerType: 'mouse', pointerId: 3, bubbles: true })
+  )
+  field.focus()
+  viewport.scrollTop = 0
+  viewport.dispatchEvent(new Event('scroll'))
+  document.dispatchEvent(new PointerEvent('pointerup', { pointerType: 'mouse', pointerId: 3 }))
+  await vi.advanceTimersByTimeAsync(200)
+  expect(viewport.scrollTop).toBe(190)
+  lower.reveal(group, 'edit')
+  field.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+  viewport.scrollTop = 0
+  viewport.dispatchEvent(new Event('scroll'))
+  await vi.advanceTimersByTimeAsync(200)
+  expect(viewport.scrollTop).toBe(190)
+  lower.reveal(group)
+  group.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageUp', bubbles: true }))
+  viewport.scrollTop = 130
+  viewport.dispatchEvent(new Event('scroll'))
+  viewport.dispatchEvent(new Event('scrollend'))
+  await vi.advanceTimersByTimeAsync(200)
+  expect(viewport.scrollTop).toBe(130)
 })

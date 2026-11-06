@@ -19,7 +19,10 @@ export function MobileNativeChatLowerRegion({
   const scrollRef = useRef<ScrollView>(null)
   const contentRef = useRef<View>(null)
   const coordinator = useRef<ReturnType<typeof connectMobileNativeChatLowerScroll> | null>(null)
-  const [geometry, setGeometry] = useState({ viewportHeight: 0, allocationHeight: 0 })
+  const [geometry, setGeometry] = useState<{
+    viewportHeight: number
+    allocationHeight: number | null
+  }>({ viewportHeight: 0, allocationHeight: null })
   const getViewport = useCallback((): unknown => scrollRef.current?.getScrollableNode(), [])
   const getContent = useCallback((): unknown => contentRef.current, [])
   const getRoot = useCallback((): unknown => {
@@ -28,7 +31,11 @@ export function MobileNativeChatLowerRegion({
       ? viewport.closest('[data-testid="native-chat-view"]')
       : null
   }, [getViewport])
-  const reveal = useCallback((group?: unknown) => coordinator.current?.reveal(group), [])
+  const reveal = useCallback(
+    (group?: unknown, reason?: 'focus' | 'edit' | 'menu') =>
+      coordinator.current?.reveal(group, reason),
+    []
+  )
   const layoutChanged = useCallback(() => coordinator.current?.layoutChanged(), [])
   const value = useMemo(
     () => ({ getViewport, getContent, getRoot, reveal, layoutChanged }),

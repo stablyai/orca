@@ -4,7 +4,7 @@ export type MobileNativeChatLowerRegion = {
   getViewport: () => unknown
   getContent: () => unknown
   getRoot: () => unknown
-  reveal: (group?: unknown) => void
+  reveal: (group?: unknown, reason?: 'focus' | 'edit' | 'menu') => void
   layoutChanged: () => void
 }
 
@@ -16,9 +16,12 @@ export function useMobileNativeChatLowerRegion(): MobileNativeChatLowerRegion | 
   return useContext(MobileNativeChatLowerRegionContext)
 }
 
-export const MobileNativeChatLowerGeometryContext = createContext({
+export const MobileNativeChatLowerGeometryContext = createContext<{
+  viewportHeight: number
+  allocationHeight: number | null
+}>({
   viewportHeight: 0,
-  allocationHeight: 0
+  allocationHeight: null
 })
 
 export const MobileNativeChatComposerPresenceContext = createContext(true)

@@ -8,7 +8,35 @@ export function connectMobileNativeChatScrollGesture(
   const touchPointers = new Set<number>()
   const touchTargets = new Set<EventTarget>()
   let contacts = 0
+  let inputSession = false
   const active = () => contacts > 0 || pointers.size > 0 || touchPointers.size > 0
+  const start = () => {
+    inputSession = true
+    onStart()
+  }
+  const onMove = () => {
+    if (active()) {
+      start()
+    }
+  }
+  const onWheel = () => {
+    start()
+    onEnd()
+  }
+  const onKey = (event: KeyboardEvent) => {
+    const target = event.target
+    const editable =
+      target instanceof HTMLElement &&
+      (target.isContentEditable || target.closest('input, textarea, [contenteditable="true"]'))
+    if (
+      event.key === 'Tab' ||
+      (!editable &&
+        ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key))
+    ) {
+      start()
+      onEnd()
+    }
+  }
   const releaseTargets = () => {
     for (const target of touchTargets) {
       target.removeEventListener('touchend', onTouchEnd, true)
@@ -34,7 +62,7 @@ export function connectMobileNativeChatScrollGesture(
   }
   const onTouchStart = (event: TouchEvent) => {
     contacts = event.touches.length
-    onStart()
+    start()
     const target = event.target
     if (target && !touchTargets.has(target)) {
       target.addEventListener('touchend', onTouchEnd, { capture: true, passive: true })
@@ -45,7 +73,7 @@ export function connectMobileNativeChatScrollGesture(
   const onPointerStart = (event: PointerEvent) => {
     const activePointers = event.pointerType === 'touch' ? touchPointers : pointers
     activePointers.add(event.pointerId)
-    onStart()
+    start()
   }
   const onPointerEnd = (event: PointerEvent) => {
     if (event.pointerType === 'touch') {
@@ -62,12 +90,22 @@ export function connectMobileNativeChatScrollGesture(
   }
   viewport.addEventListener('pointerdown', onPointerStart, { passive: true })
   viewport.addEventListener('touchstart', onTouchStart, { passive: true })
+  viewport.addEventListener('pointermove', onMove, { passive: true })
+  viewport.addEventListener('touchmove', onMove, { passive: true })
+  viewport.addEventListener('wheel', onWheel, { passive: true })
+  viewport.addEventListener('keydown', onKey)
   document.addEventListener('pointerup', onPointerEnd, { passive: true })
   document.addEventListener('pointercancel', onPointerEnd, { passive: true })
   document.addEventListener('touchend', onTouchEnd, { passive: true })
   document.addEventListener('touchcancel', onTouchEnd, { passive: true })
   return {
     active,
+    navigating: () => inputSession,
+    settled: () => {
+      if (!active()) {
+        inputSession = false
+      }
+    },
     dispose: () => {
       releaseTargets()
       pointers.clear()
@@ -75,6 +113,10 @@ export function connectMobileNativeChatScrollGesture(
       contacts = 0
       viewport.removeEventListener('pointerdown', onPointerStart)
       viewport.removeEventListener('touchstart', onTouchStart)
+      viewport.removeEventListener('pointermove', onMove)
+      viewport.removeEventListener('touchmove', onMove)
+      viewport.removeEventListener('wheel', onWheel)
+      viewport.removeEventListener('keydown', onKey)
       document.removeEventListener('pointerup', onPointerEnd)
       document.removeEventListener('pointercancel', onPointerEnd)
       document.removeEventListener('touchend', onTouchEnd)
