@@ -4,6 +4,12 @@ import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { decodeJournalOutcomeItem } from './journal-outcome-codec'
 import { lostLiveWorkJournalBody } from './journal-subagent-liveness'
+import { isSubagentRow } from '../agent-session-wire/agent-session-history-page-bounds'
+import {
+  namedSubagents,
+  subagentFoldKey,
+  subagentItemBlock
+} from '../../../shared/native-chat/transcript/native-chat-subagent-items'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type {
@@ -26,6 +32,20 @@ export function journalSqlItemMetadata(item: AgentJournalRenderItem, bytes: numb
     item.agentId ?? null,
     Number(isAgentSessionContextClear(item.body)),
     bytes
+  ]
+}
+
+/** Lets history paging choose subagent candidates and groups without loading bodies. */
+function journalSqlItemSubagentColumns(item: AgentJournalRenderItem) {
+  if (item.body.kind !== 'message') {
+    return [0, null, null]
+  }
+  const block = subagentItemBlock(item.body)
+  const names = isRootAgentJournalItem(item) ? item.body.blocks.flatMap(namedSubagents) : []
+  return [
+    Number(isSubagentRow(item)),
+    block ? subagentFoldKey(block) : null,
+    names.length > 0 ? JSON.stringify(names) : null
   ]
 }
 
@@ -177,22 +197,24 @@ export class JournalSqlItemValues {
       .prepare(`INSERT INTO journal_proj_items
       (session_id, generation, entry_key, incarnation, ordinal, sequence, sequence_index,
        revision, kind, turn_id, turn_item_id, opener_item_id, root, subagent_id, context_clear, byte_size,
-       live_work)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       live_work, subagent_row, subagent_group_key, subagent_names)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(session_id, generation, entry_key) DO UPDATE SET
       incarnation=excluded.incarnation, ordinal=excluded.ordinal, sequence=excluded.sequence,
       sequence_index=excluded.sequence_index, revision=excluded.revision, kind=excluded.kind,
       turn_id=excluded.turn_id, turn_item_id=excluded.turn_item_id,
       opener_item_id=excluded.opener_item_id, root=excluded.root,
       subagent_id=excluded.subagent_id, context_clear=excluded.context_clear, byte_size=excluded.byte_size,
-      live_work=excluded.live_work`)
+      live_work=excluded.live_work, subagent_row=excluded.subagent_row,
+      subagent_group_key=excluded.subagent_group_key, subagent_names=excluded.subagent_names`)
       .run(
         ...this.scope.prefix,
         location.key,
         location.incarnation,
         ordinal,
         ...journalSqlItemMetadata(item, bytes),
-        Number(lostLiveWorkJournalBody(item.body) !== null)
+        Number(lostLiveWorkJournalBody(item.body) !== null),
+        ...journalSqlItemSubagentColumns(item)
       )
   }
 }

@@ -31,6 +31,9 @@ CREATE TABLE IF NOT EXISTS journal_proj_items (
   hidden INTEGER NOT NULL DEFAULT 0,
   byte_size INTEGER NOT NULL,
   live_work INTEGER NOT NULL DEFAULT 0,
+  subagent_row INTEGER NOT NULL DEFAULT 0,
+  subagent_group_key TEXT,
+  subagent_names TEXT,
   PRIMARY KEY (session_id, generation, entry_key)
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS journal_proj_items_position
@@ -46,6 +49,9 @@ CREATE INDEX IF NOT EXISTS journal_proj_items_clear
   ON journal_proj_items(session_id, generation, sequence DESC) WHERE context_clear=1;
 CREATE INDEX IF NOT EXISTS journal_proj_items_live_work
   ON journal_proj_items(session_id, generation, ordinal) WHERE live_work=1;
+CREATE INDEX IF NOT EXISTS journal_proj_items_subagent_group
+  ON journal_proj_items(session_id, generation, subagent_group_key, sequence, sequence_index)
+  WHERE subagent_group_key IS NOT NULL;
 CREATE INDEX IF NOT EXISTS journal_proj_items_opener
   ON journal_proj_items(session_id, generation, opener_item_id) WHERE opener_item_id IS NOT NULL;
 `
