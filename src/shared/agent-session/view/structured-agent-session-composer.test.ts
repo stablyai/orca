@@ -144,11 +144,13 @@ describe('agent-implemented commands pass through to the agent', () => {
       [],
       [{ name: 'permissions', kind: 'command' as const }]
     ]) {
-      expect(queuedMessageEditAcceptsText('/fast status', 'omp', sessionCommands)).toBe(true)
-      expect(queuedMessageEditAcceptsText('/clear', 'omp', sessionCommands)).toBe(false)
       expect(
-        isStructuredAgentSessionComposerCommand('/permissions', 'codex', sessionCommands)
-      ).toBe(false)
+        queuedMessageEditAcceptsText('/fast status', 'omp', sessionCommands, false, false)
+      ).toBe(true)
+      expect(queuedMessageEditAcceptsText('/clear', 'omp', sessionCommands, false, false)).toBe(
+        false
+      )
+      expect(isStructuredAgentSessionComposerCommand('/permissions', 'codex', [])).toBe(false)
       expect(
         await dispatchStructuredAgentSessionComposerCommand('/permissions', {
           ...controller,

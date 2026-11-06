@@ -64,7 +64,7 @@ export function MobileQueuedMessageComposer({
         agent,
         reported,
         hostSetsGoals,
-        context?.interactionModeSupported
+        context?.interactionModeSupported === true
       ),
     [agent, reported, hostSetsGoals, context?.interactionModeSupported]
   )

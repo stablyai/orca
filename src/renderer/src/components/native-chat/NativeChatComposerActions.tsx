@@ -264,7 +264,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
       ? [
           {
             id: 'plan',
-            priority: 7,
+            priority: 4,
             content: <NativeChatComposerPlanChip control={mode} />,
             overflow: (close: () => void) => (
               <NativeChatComposerPlanChip control={mode} onExit={close} />

@@ -271,6 +271,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     })
     const submission = useNativeChatComposerSubmit({
       agent,
+      textareaRef,
       structuredTransport,
       draftScopeKey,
       draft,
@@ -288,6 +289,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
 
     const { goalMode } = submission
     const { sendHeld, ...sendButton } = nativeChatComposerSendState({
+      agent,
       draft,
       messageDelivery: submission.messageDelivery,
       imageAttachments,

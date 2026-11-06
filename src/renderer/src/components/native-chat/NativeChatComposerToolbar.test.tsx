@@ -176,12 +176,11 @@ it('keeps current mode, permissions and Goal reachable through overflow, includi
   )
   fireEvent.click(screen.getByRole('button', { name: 'More chat controls' }))
   const partial = screen.getByRole('dialog')
-  const inlineMode = screen.getByRole('button', { name: 'Exit plan mode' })
-  expect(partial.contains(inlineMode)).toBe(false)
+  const menuMode = within(partial).getByRole('button', { name: 'Exit plan mode' })
   const menuPermission = within(partial).getByRole('button', { name: 'Permissions Full access' })
   menuPermission.focus()
   resize(1000)
-  expect(screen.getByRole('button', { name: 'Exit plan mode' })).toBe(inlineMode)
+  expect(within(partial).getByRole('button', { name: 'Exit plan mode' })).toBe(menuMode)
   expect(within(partial).getByRole('button', { name: 'Permissions Full access' })).toBe(
     menuPermission
   )

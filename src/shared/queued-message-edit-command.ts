@@ -10,18 +10,18 @@ import {
 export function queuedMessageEditAcceptsText(
   text: string,
   agent: AgentType,
-  reported?: readonly AgentSessionSlashCommand[],
-  hostSetsGoals = false,
-  hostSetsInteractionMode = false
+  reported: readonly AgentSessionSlashCommand[] | undefined,
+  hostSetsGoals: boolean,
+  hostSetsInteractionMode: boolean
 ): boolean {
   return prepareQueuedMessageEditText(agent, reported, hostSetsGoals, hostSetsInteractionMode)(text)
 }
 
 export function prepareQueuedMessageEditText(
   agent: AgentType,
-  reported?: readonly AgentSessionSlashCommand[],
-  hostSetsGoals = false,
-  hostSetsInteractionMode = false
+  reported: readonly AgentSessionSlashCommand[] | undefined,
+  hostSetsGoals: boolean,
+  hostSetsInteractionMode: boolean
 ): (text: string) => boolean {
   const hostCommand = prepareStructuredAgentSessionComposerCommand(agent, reported)
   return (text) =>

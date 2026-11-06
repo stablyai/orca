@@ -2,12 +2,15 @@
 
 // @vitest-environment happy-dom
 
-import { act, cleanup, render } from '@testing-library/react'
-import type { RefObject } from 'react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { useLayoutEffect, type RefObject } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import type { QueuedMessageInlineEditor } from './use-structured-agent-session-queued-edit'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
+import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 
 type CommandItem = Extract<NativeChatPickerItem, { kind: 'command' }>
 
@@ -16,10 +19,12 @@ type FieldProps = {
   autocomplete?: { mode: string; items?: NativeChatPickerItem[] }
   onChooseMentionFile?: (path: string) => void
   onSend?: () => void
+  sendButtonDisabled?: boolean
   onChoosePickerItem?: (item: NativeChatPickerItem) => void
   goalMode?: { active: boolean }
 }
 type KeyDownArgs = {
+  send: () => void
   completePickerItem: (item: NativeChatPickerItem) => void
   dispatchPickerCommand: (item: CommandItem) => void
 }
@@ -69,8 +74,21 @@ vi.mock('./use-native-chat-draft', () => ({
 vi.mock('./NativeChatComposerField', () => ({
   NativeChatComposerField: (props: FieldProps) => {
     mocks.fieldProps = props
+    const draft = mocks.draft
+    useLayoutEffect(() => {
+      if (props.textareaRef.current) {
+        props.textareaRef.current.value = draft
+      }
+    }, [draft, props.textareaRef])
     // Holds the draft as the real editor does; a picker completes the text the editor holds.
-    return <textarea ref={props.textareaRef} value={mocks.draft} readOnly />
+    return (
+      <>
+        <textarea ref={props.textareaRef} defaultValue={mocks.draft} />
+        <button disabled={props.sendButtonDisabled} onClick={props.onSend}>
+          Send command
+        </button>
+      </>
+    )
   }
 }))
 vi.mock('./use-native-chat-skills', () => ({
@@ -92,7 +110,10 @@ vi.mock('./use-native-chat-composer-keydown', () => ({
 
 import { NativeChatComposer } from './NativeChatComposer'
 
-function renderStructuredChat(editSession?: QueuedMessageInlineEditor) {
+function renderStructuredChat(
+  editSession?: QueuedMessageInlineEditor,
+  agent: AgentType = 'claude'
+) {
   const transport: NativeChatStructuredComposerTransport = {
     capturePresentation: () => () => true,
     ...(editSession ? { threadGoal: { setObjective: vi.fn(async () => true) } } : {}),
@@ -100,7 +121,7 @@ function renderStructuredChat(editSession?: QueuedMessageInlineEditor) {
     dispatchCommand: vi.fn(async () => ({ handled: false, accepted: false, error: null })),
     optionsSurface: {
       getSnapshot: () => [],
-      setOption: vi.fn(),
+      setOption: vi.fn(async () => ({ snapshot: [] })),
       invokeAction: vi.fn(),
       subscribe: () => () => {}
     },
@@ -118,7 +139,7 @@ function renderStructuredChat(editSession?: QueuedMessageInlineEditor) {
       draftScopeKey={editSession?.draftScopeKey}
       paneKey="tab-1:structured"
       targetPtyId={null}
-      agent="claude"
+      agent={agent}
       structuredTransport={transport}
     />
   )
@@ -135,7 +156,24 @@ const USAGE: CommandItem = {
   orcaOwned: true
 }
 
-describe('/usage in a structured chat', () => {
+const MODE: SessionOptionDescriptor = {
+  id: 'interactionMode',
+  label: 'Mode',
+  category: 'mode',
+  kind: {
+    type: 'select',
+    currentValue: 'default',
+    choices: [
+      { value: 'default', label: 'Build' },
+      { value: 'plan', label: 'Plan' }
+    ]
+  },
+  valueSource: 'default',
+  transport: 'agent-session',
+  settable: true
+}
+
+describe('structured composer control picks', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.draft = '/resume'
@@ -148,6 +186,150 @@ describe('/usage in a structured chat', () => {
     })
   })
   afterEach(() => cleanup())
+
+  it.each([
+    ['claude', '/plan', 'plan'],
+    ['codex', '/default', 'default']
+  ] as const)(
+    'lets %s %s configure a held host through Send and Enter',
+    async (agent, draft, mode) => {
+      mocks.draft = draft
+      const { transport, rerender } = renderStructuredChat(undefined, agent)
+      transport.sendBlockedReason = 'The host is waiting'
+      vi.mocked(transport.dispatchCommand).mockImplementation((text) =>
+        dispatchStructuredAgentSessionComposerCommand(text, {
+          agent,
+          snapshot: transport.optionSnapshot,
+          setOption: async (id, value) => {
+            await transport.optionsSurface.setOption(id, value)
+            return true
+          },
+          invokeAction: async () => false
+        })
+      )
+      rerender()
+      expect(screen.getByRole('button', { name: 'Send command' }).hasAttribute('disabled')).toBe(
+        true
+      )
+      transport.optionSnapshot = [MODE]
+      rerender()
+      const button = screen.getByRole('button', { name: 'Send command' })
+      expect(button.hasAttribute('disabled')).toBe(false)
+      await act(async () => fireEvent.click(button))
+      expect(transport.optionsSurface.setOption).toHaveBeenLastCalledWith('interactionMode', mode)
+      await act(async () => mocks.keyDownArgs?.send())
+      expect(transport.optionsSurface.setOption).toHaveBeenCalledTimes(2)
+      expect(transport.dispatchCommand).toHaveBeenNthCalledWith(1, draft)
+      expect(transport.dispatchCommand).toHaveBeenNthCalledWith(2, draft)
+      transport.sendOut = true
+      rerender()
+      expect(button.hasAttribute('disabled')).toBe(true)
+      await act(async () => fireEvent.click(button))
+      expect(transport.optionsSurface.setOption).toHaveBeenCalledTimes(2)
+      expect(transport.send).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each(['claude', 'codex'] as const)(
+    'applies %s mode picks through every picker route without sending or losing draft text',
+    async (agent) => {
+      mocks.draft = '/pl'
+      mocks.imageAttachments = [{ id: 'kept-image', path: '/tmp/kept.png' }]
+      const { transport, rerender } = renderStructuredChat(undefined, agent)
+      transport.optionSnapshot = [MODE]
+      transport.sessionCommands = [
+        { name: 'plan', kind: 'command', description: 'Toggle plan mode' },
+        { name: 'plan', kind: 'command', description: 'Switch to Plan mode' }
+      ]
+      rerender()
+      const plans = mocks.fieldProps?.autocomplete?.items?.filter(
+        (item): item is CommandItem => item.kind === 'command' && item.name === 'plan'
+      )
+      expect(plans).toHaveLength(1)
+      const plan = plans![0]!
+      const input = document.querySelector('textarea')!
+      const reply = Promise.withResolvers<{ snapshot: SessionOptionDescriptor[] }>()
+      vi.mocked(transport.optionsSurface.setOption).mockReturnValue(reply.promise)
+      const choose = [
+        () => mocks.fieldProps?.onChoosePickerItem?.(plan),
+        () => mocks.keyDownArgs?.completePickerItem(plan),
+        () => mocks.keyDownArgs?.dispatchPickerCommand(plan)
+      ]
+      for (const pick of choose) {
+        // The live editor can move ahead of the React draft before a pick lands.
+        input.value = 'keep /pl tail'
+        input.setSelectionRange(8, 8)
+        await act(async () => pick())
+        expect(transport.optionsSurface.setOption).toHaveBeenLastCalledWith(
+          'interactionMode',
+          'plan'
+        )
+        expect(mocks.setDraft).toHaveBeenLastCalledWith('keep  tail')
+        expect(input.value).toBe('keep  tail')
+        expect(input.selectionStart).toBe(5)
+        expect(document.activeElement).toBe(input)
+      }
+      input.value = 'later typing'
+      mocks.setDraft.mockClear()
+      await act(async () => choose[0]!())
+      expect(mocks.setDraft).not.toHaveBeenCalled()
+      expect(transport.optionsSurface.setOption).toHaveBeenCalledTimes(3)
+      input.blur()
+      await act(async () => reply.resolve({ snapshot: [] }))
+      expect(input.value).toBe('later typing')
+      expect(document.activeElement).not.toBe(input)
+
+      if (agent === 'codex') {
+        mocks.draft = '/def'
+        rerender()
+        const leave = mocks.fieldProps?.autocomplete?.items?.find(
+          (item) => item.kind === 'command' && item.name === 'default'
+        )
+        expect(leave).toBeDefined()
+        input.value = '/def'
+        input.setSelectionRange(4, 4)
+        await act(async () => mocks.fieldProps?.onChoosePickerItem?.(leave!))
+        expect(transport.optionsSurface.setOption).toHaveBeenLastCalledWith(
+          'interactionMode',
+          'default'
+        )
+        expect(input.value).toBe('')
+      }
+      expect(mocks.clearImageAttachments).not.toHaveBeenCalled()
+      expect(transport.send).not.toHaveBeenCalled()
+      expect(transport.dispatchCommand).not.toHaveBeenCalled()
+      expect(mocks.sendNativeChatTypedCommand).not.toHaveBeenCalled()
+    }
+  )
+
+  it('keeps namesake skills and a retained mode pick on an unsupported host as text', async () => {
+    mocks.draft = '/pl'
+    const { transport, rerender } = renderStructuredChat()
+    transport.optionSnapshot = [MODE]
+    rerender()
+    const plan = mocks.fieldProps?.autocomplete?.items?.find((item) => item.name === 'plan')
+    expect(plan).toBeDefined()
+    await act(async () =>
+      mocks.fieldProps?.onChoosePickerItem?.({
+        kind: 'skill',
+        id: 'skill:plan',
+        name: 'plan',
+        token: '/plan',
+        description: null,
+        sources: []
+      })
+    )
+    expect(mocks.setDraft).toHaveBeenLastCalledWith('/plan ')
+    transport.optionSnapshot = []
+    rerender()
+    const input = document.querySelector('textarea')!
+    input.value = '/pl'
+    input.setSelectionRange(3, 3)
+    await act(async () => mocks.fieldProps?.onChoosePickerItem?.(plan!))
+    expect(input.value).toBe('/plan ')
+    expect(transport.optionsSurface.setOption).not.toHaveBeenCalled()
+    expect(transport.send).not.toHaveBeenCalled()
+  })
 
   it('rechecks a retained Plan command pick when the host starts owning mode changes', () => {
     mocks.draft = '/pl'
@@ -171,24 +353,7 @@ describe('/usage in a structured chat', () => {
     act(() => mocks.fieldProps?.onChoosePickerItem?.(plan!))
     expect(mocks.setDraft).toHaveBeenCalledWith('/plan ')
     mocks.setDraft.mockClear()
-    transport.optionSnapshot = [
-      {
-        id: 'interactionMode',
-        label: 'Mode',
-        category: 'mode',
-        kind: {
-          type: 'select',
-          currentValue: 'default',
-          choices: [
-            { value: 'default', label: 'Build' },
-            { value: 'plan', label: 'Plan' }
-          ]
-        },
-        valueSource: 'default',
-        transport: 'agent-session',
-        settable: true
-      }
-    ]
+    transport.optionSnapshot = [MODE]
     rerender()
     act(() => mocks.fieldProps?.onChoosePickerItem?.(plan!))
     expect(mocks.setDraft).not.toHaveBeenCalled()

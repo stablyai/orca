@@ -151,14 +151,13 @@ function structuredRecognizedCommands(): readonly SlashCommandSuggestion[] {
  *  would be silently dropped, whereas a pass-through command is a real send. */
 export function isStructuredAgentSessionComposerCommand(
   text: string,
-  agent: AgentType = 'codex',
-  _reported?: readonly AgentSessionSlashCommand[],
-  snapshot: readonly SessionOptionDescriptor[] = []
+  agent: AgentType | undefined,
+  snapshot: readonly SessionOptionDescriptor[]
 ): boolean {
   const command = commandParts(text)
   return Boolean(
     (command && structuredRecognizedCommands().some((entry) => entry.name === command.name)) ||
-    (agentSessionInteractionCommand(agent, text) !== null &&
+    (agentSessionInteractionCommand(agent ?? '', text) !== null &&
       snapshot.some((entry) => entry.id === 'interactionMode'))
   )
 }
@@ -167,11 +166,11 @@ export function isStructuredAgentSessionComposerCommand(
 export function isStructuredAgentSessionHostCommand(
   text: string,
   hostSetsGoals: boolean,
-  agent?: AgentType,
-  snapshot?: readonly SessionOptionDescriptor[]
+  agent: AgentType | undefined,
+  snapshot: readonly SessionOptionDescriptor[]
 ): boolean {
   return (
-    isStructuredAgentSessionComposerCommand(text, agent, undefined, snapshot) ||
+    isStructuredAgentSessionComposerCommand(text, agent, snapshot) ||
     (hostSetsGoals && isStructuredAgentSessionGoalCommand(text))
   )
 }
@@ -275,7 +274,7 @@ export async function dispatchStructuredAgentSessionComposerCommand(
   }
   if (
     !command ||
-    !isStructuredAgentSessionComposerCommand(text, controller.agent, controller.sessionCommands)
+    !isStructuredAgentSessionComposerCommand(text, controller.agent, controller.snapshot)
   ) {
     return { handled: false, accepted: false, error: null }
   }

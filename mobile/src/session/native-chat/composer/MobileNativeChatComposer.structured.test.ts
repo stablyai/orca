@@ -28,7 +28,8 @@ import { findByHostType } from '../../../test-support/react-test-renderer-host-n
 import type { RpcClient } from '../../../transport/rpc-client'
 import { structuredAgentSessionHostSupport } from '../../mobile-structured-agent-session-host-support'
 import { AGENT_SESSION_RUNTIME_CAPABILITIES } from '../../../../../src/shared/agent-session/agent-session-runtime-capabilities'
-import { createElement, type ComponentProps } from 'react'
+import { createElement, useState, type ComponentProps } from 'react'
+import type { SessionOptionDescriptor } from '../../../../../src/shared/native-chat/input/native-chat-session-options'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -149,6 +150,84 @@ describe('MobileNativeChatComposer on a structured chat', () => {
       (node) => node.props.accessibilityLabel === label && node.props.onPress !== undefined
     )
   const drawers = () => renderer!.root.findAll((node) => node.props.onHidden !== undefined)
+
+  it.each(['claude', 'codex'] as const)(
+    '%s picks native mode without sending its draft or attachments',
+    async (agent) => {
+      const snapshot: SessionOptionDescriptor[] = [
+        {
+          id: 'interactionMode',
+          label: 'Mode',
+          category: 'mode',
+          kind: {
+            type: 'select',
+            currentValue: 'default',
+            choices: [
+              { value: 'default', label: 'Build' },
+              { value: 'plan', label: 'Plan' }
+            ]
+          },
+          valueSource: 'default',
+          transport: 'agent-session',
+          settable: true
+        }
+      ]
+      const reply = Promise.withResolvers<boolean>()
+      const setOption = vi.fn(() => reply.promise)
+      const onSend = vi.fn(async () => true)
+      const focus = vi.fn()
+      const onRemoveAttachment = vi.fn()
+      function Conversation() {
+        const [value, onChangeText] = useState('keep /pl tail')
+        return draw({
+          agent,
+          value,
+          onChangeText,
+          onSend,
+          structured: structured(),
+          sessionOptions: {
+            isWorking: false,
+            controller: {
+              snapshot,
+              pendingId: null,
+              setOption,
+              invokeAction: async () => false,
+              recordCommand: () => {}
+            }
+          },
+          attachments: [
+            { id: 'kept-image', path: '/remote/kept.png', previewUri: 'file:///kept.png' }
+          ],
+          onRemoveAttachment
+        })
+      }
+      await act(async () => {
+        renderer = create(createElement(Conversation), {
+          createNodeMock: (element) => (element.type === 'TextInput' ? { focus } : null)
+        })
+      })
+      act(() => field().props.onSelectionChange({ nativeEvent: { selection: { end: 8 } } }))
+      await act(async () => labelled('/plan')[0]!.props.onPress())
+      expect(setOption).toHaveBeenLastCalledWith('interactionMode', 'plan')
+      expect(field().props.value).toBe('keep  tail')
+      expect(field().props.selection).toEqual({ start: 5, end: 5 })
+      expect(focus).toHaveBeenCalled()
+      act(() => field().props.onChangeText('later typing'))
+      focus.mockClear()
+      await act(async () => reply.resolve(false))
+      expect(field().props.value).toBe('later typing')
+      expect(focus).not.toHaveBeenCalled()
+      if (agent === 'codex') {
+        act(() => field().props.onChangeText('/def'))
+        act(() => field().props.onSelectionChange({ nativeEvent: { selection: { end: 4 } } }))
+        await act(async () => labelled('/default')[0]!.props.onPress())
+        expect(setOption).toHaveBeenLastCalledWith('interactionMode', 'default')
+        expect(field().props.value).toBe('')
+      }
+      expect(onSend).not.toHaveBeenCalled()
+      expect(onRemoveAttachment).not.toHaveBeenCalled()
+    }
+  )
 
   it.each([
     ['', 'accepted'],

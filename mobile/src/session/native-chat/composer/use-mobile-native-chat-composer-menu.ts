@@ -7,9 +7,13 @@ import {
 } from '../../../../../src/shared/native-chat/input/native-chat-composer-autocomplete'
 import { applyPickerSuggestion } from '../../../../../src/shared/native-chat/input/native-chat-picker-triggers'
 import {
-  structuredAgentSessionGoalModeDraft,
+  structuredAgentSessionModePickDraft,
   structuredAgentSessionPickEntersGoalMode
 } from '../../../../../src/shared/agent-session/view/structured-agent-session-goal-mode'
+import {
+  agentSessionInteractionCommand,
+  type AgentSessionInteractionMode
+} from '../../../../../src/shared/agent-session/options/agent-session-interaction-mode'
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
 import {
   boundedMenuItems,
@@ -45,6 +49,7 @@ export function useMobileNativeChatComposerMenu(input: {
   onPickSkill?: (skill: { token: string; path?: string }) => void
   editing?: boolean
   interactionModeSupported?: boolean
+  onPickInteractionMode?: (mode: AgentSessionInteractionMode) => void
   refuseCommand?: (text: string) => boolean
   /** Picking `/goal` enters goal mode instead of inserting the command; an edit has no goal mode. */
   goalMode?: { hostSetsGoals: boolean; enter?: () => void }
@@ -63,8 +68,8 @@ export function useMobileNativeChatComposerMenu(input: {
       prepareQueuedMessageEditText(
         agent ?? 'codex',
         reported,
-        input.goalMode?.hostSetsGoals,
-        input.interactionModeSupported
+        input.goalMode?.hostSetsGoals === true,
+        input.interactionModeSupported === true
       ),
     [agent, reported, input.goalMode?.hostSetsGoals, input.interactionModeSupported]
   )
@@ -184,14 +189,30 @@ export function useMobileNativeChatComposerMenu(input: {
       return
     }
     const enterGoalMode = input.goalMode?.enter
+    const changeMode =
+      !input.editing && structuredCatalog && input.interactionModeSupported
+        ? input.onPickInteractionMode
+        : undefined
+    const mode =
+      changeMode && row.kind === 'command' && row.orcaOwned
+        ? agentSessionInteractionCommand(agent ?? '', row.token)
+        : null
     if (
-      enterGoalMode &&
-      structuredAgentSessionPickEntersGoalMode(row, input.goalMode?.hostSetsGoals === true)
+      mode !== null ||
+      (enterGoalMode &&
+        structuredAgentSessionPickEntersGoalMode(row, input.goalMode?.hostSetsGoals === true))
     ) {
-      const next = structuredAgentSessionGoalModeDraft(value, cursor, row)
+      const next = structuredAgentSessionModePickDraft(value, cursor, row)
+      if (!next) {
+        return
+      }
       setDraft(next.draft)
       placeCaret(next.caret)
-      enterGoalMode()
+      if (mode !== null) {
+        changeMode?.(mode)
+      } else {
+        enterGoalMode?.()
+      }
       return
     }
     const next = applyPickerSuggestion(value, cursor, row)

@@ -202,6 +202,11 @@ export function MobileNativeChatComposer({
     interactionModeSupported:
       editSession?.interactionModeSupported ??
       sessionOptions?.controller.snapshot.some((entry) => entry.id === 'interactionMode'),
+    onPickInteractionMode: sessionOptions
+      ? (mode) => {
+          void sessionOptions.controller.setOption('interactionMode', mode)
+        }
+      : undefined,
     filePaths,
     onNeedFiles,
     skillDiscovery,
