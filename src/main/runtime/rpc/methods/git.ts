@@ -7,6 +7,7 @@ import {
   GitBulkStage,
   GitCheckIgnored,
   GitCheckout,
+  GitSwitchBranch,
   GitCommit,
   GitCommitCompare,
   GitFilePath,
@@ -115,6 +116,13 @@ export const GIT_METHODS = [
     permission: 'workspace',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.abortRuntimeGitRebase(params.worktree)
+  }),
+  defineMethod({
+    name: 'git.switchBranch',
+    permission: 'workspace',
+    params: GitSwitchBranch,
+    handler: async (params, { runtime }) =>
+      runtime.switchRuntimeGitBranch(params.worktree, params.target)
   }),
   defineMethod({
     name: 'git.checkout',

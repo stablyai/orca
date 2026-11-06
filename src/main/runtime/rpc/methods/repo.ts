@@ -242,7 +242,8 @@ export const REPO_METHODS = [
           params.repo,
           params.query,
           params.limit,
-          includesQualifiedSearchRefs(clientCapabilities)
+          includesQualifiedSearchRefs(clientCapabilities),
+          params.namespace
         ),
         clientCapabilities
       )

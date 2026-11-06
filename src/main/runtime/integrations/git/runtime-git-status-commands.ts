@@ -4,7 +4,9 @@ import type {
 } from '../../../../shared/git/history/git-history-types'
 import type { GitMutationInFlight } from '../../../../shared/git/commands/git-mutation-in-flight'
 import { isGitWorktreeMutationInFlight } from '../../../git/command-runner/git-worktree-mutation-state'
-import { switchBranchGuarded } from '../../../git/branch-switch'
+import type { BranchSwitchTarget } from '../../../../shared/git/branch-switch-target'
+import type { RuntimeGitSwitchResult } from '../../../../shared/runtime-worktree-contracts'
+import { BranchSwitchLandedWithWarningError, switchBranchGuarded } from '../../../git/branch-switch'
 import type {
   GitConflictOperation,
   GitStagingArea,
@@ -117,6 +119,35 @@ export class RuntimeGitStatusCommands {
       }
     )
     return { ok: true, branch: result.branch }
+  }
+
+  async switchRuntimeGitBranch(
+    worktreeSelector: string,
+    branchTarget: BranchSwitchTarget
+  ): Promise<RuntimeGitSwitchResult> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const provider = requireRuntimeGitProvider(target)
+    const path = target.worktree.path
+    try {
+      const result = await switchBranchGuarded(
+        path,
+        branchTarget,
+        localGitOptionsForTarget(target),
+        {
+          getStatus: () =>
+            provider.getStatus(path, { admissionTier: 'interactive', includeLineStats: false }),
+          checkout: (branch, creation) => provider.checkoutBranch(path, branch, creation),
+          getAgentBlocker: async () => this.host.getAgentSwitchBlocker?.(path) ?? null,
+          onSwitched: () => this.host.recordBranchSwitched?.(target.worktree)
+        }
+      )
+      return { ok: true, branch: result.branch }
+    } catch (error) {
+      if (error instanceof BranchSwitchLandedWithWarningError) {
+        return { ok: true, branch: error.branch, warning: error.message }
+      }
+      throw error
+    }
   }
 
   async listRuntimeGitLocalBranches(worktreeSelector: string): Promise<RuntimeGitLocalBranches> {

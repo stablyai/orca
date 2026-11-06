@@ -1,3 +1,4 @@
+import { BranchSwitchCollisionError } from '../../git/branch-switch-target'
 import { formatTerminalStartFailure } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 // Centralize the runtimeId envelope and error-code contracts that clients use for decisions and display.
 import { AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE } from '../../../shared/agent-launch/contracts/agent-launch-surface'
@@ -193,6 +194,7 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     return agentSessionRefusalErrorResponse(id, meta, error)
   }
   if (
+    error instanceof BranchSwitchCollisionError ||
     error instanceof TerminalSplitOutcomeError ||
     error instanceof WslHostWindowsDriveRefusalError
   ) {

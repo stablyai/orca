@@ -145,6 +145,8 @@ export type RuntimeWorktreePsSummary = {
 export type RuntimeGitLocalBranches = {
   current: string | null
   branches: string[]
+  committedAt?: Record<string, number>
+  worktreePaths?: Record<string, string>
 }
 
 export type RuntimeSpeechModelSummary = {
@@ -163,6 +165,8 @@ export type RuntimeSpeechSetupState = {
   dictationMode: 'toggle' | 'hold'
   models: RuntimeSpeechModelSummary[]
 }
+
+export type RuntimeGitSwitchResult = { ok: true; branch: string; warning?: string }
 
 export type RuntimeGitCheckoutResult = {
   ok: true
@@ -211,6 +215,7 @@ export type RuntimeWorktreePsResult = {
 export type RuntimeRepoList = { repos: Repo[] }
 
 export type RuntimeRepoSearchRefs = {
+  namespace?: 'remote'
   refs: string[]
   refDetails?: BaseRefSearchResult[]
   truncated: boolean

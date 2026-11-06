@@ -288,6 +288,7 @@ import {
   GitResolveConflict,
   GitStatusParams,
   GitSubmoduleStatus,
+  GitSwitchBranch,
   GitTargetedRemote,
   WorktreeSelector as WorktreeSelectorOfGitParams
 } from './git-params'
@@ -1088,6 +1089,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.resolveConflict': GitResolveConflict,
   'git.stage': GitFilePath,
   'git.status': GitStatusParams,
+  'git.switchBranch': GitSwitchBranch,
   'git.submoduleStatus': GitSubmoduleStatus,
   'git.unstage': GitFilePath,
   'git.upstreamStatus': GitTargetedRemote,
