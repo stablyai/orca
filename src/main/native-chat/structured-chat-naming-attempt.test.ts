@@ -2,6 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { closeTestJournalHostDatabase } from './agent-session-journal/journal-host-database-test-support'
 import {
@@ -16,7 +17,12 @@ it.each(['claude', 'codex'] as const)(
     const directory = await mkdtemp(join(tmpdir(), 'orca-naming-attempt-'))
     vi.useFakeTimers()
     try {
-      const record = { ...agentSessionRecordFixture(), provider }
+      const record = agentSessionRecordFixture()
+      if (provider === 'codex') {
+        record.provider = 'codex'
+        record.accountHome = { variable: 'CODEX_HOME', path: '/home/user/.codex' }
+        record.providerHandleChain[0]!.handle = codexProviderHandle('thread-naming')
+      }
       await seedTestAgentSessionRecordStore(directory, { records: [record] })
       const store = await openTestAgentSessionRecordStore(directory)
       const naming = createStructuredChatNamingHandler({
