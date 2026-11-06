@@ -266,6 +266,8 @@ async function mount(
   setForegroundTimer?: MobileWebShellRuntime['setForegroundTimer']
 ): Promise<Mounted> {
   const timers = createTimerSeam()
+  // Mint distinct ids so a remount's replacement view can be told from the one it retires.
+  let minted = 0
   const handle: {
     retry: () => void
     documentStarted: () => void
@@ -293,7 +295,7 @@ async function mount(
       routePathname: '/h/host-1',
       runtime: {
         createStore: () => store,
-        mintSessionId: () => 'session-id',
+        mintSessionId: () => `session-${++minted}`,
         now: () => 0,
         setForegroundTimer: setForegroundTimer ?? timers.setTimer
       }
@@ -506,6 +508,28 @@ describe('the wait for the page to speak', () => {
     expect(mounted.states().at(-1)?.kind).toBe('ready')
     return mounted
   }
+
+  // A remount mints the replacement's session before React commits it; reports the retired view already queued must not land on it.
+  it('does not charge a second fault from the retired view to its replacement', async () => {
+    const mounted = await ready()
+    await act(async () => {
+      mounted.shellFailed('document-load-failed')
+      mounted.shellFailed('document-load-failed')
+    })
+    expect(mounted.states().at(-1)?.kind).toBe('ready')
+  })
+
+  it('does not let the retired view say ready for its replacement', async () => {
+    const mounted = await ready()
+    await act(async () => {
+      mounted.shellFailed('document-load-failed')
+      mounted.pageReady()
+    })
+    expect(mounted.handshakes().at(-1)).toBe(false)
+    expect(live(mounted.timers.armed).map((timer) => timer.delayMs)).toContain(
+      DOCUMENT_LOAD_DEADLINE_MS
+    )
+  })
 
   it('remounts the generation a finished document never spoke for, without deleting it', async () => {
     const fake = createFakeStore()

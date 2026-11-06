@@ -263,34 +263,52 @@ export function useMobileWebShellSession(args: {
     dispatch(epochRef.current, { type: 'retry-pressed' })
   }, [dispatch, invalidate, runtime])
 
-  const reportShellFailure = useCallback(
-    (reason: MobileWebShellReportedFailure) => {
-      dispatch(epochRef.current, { type: 'shell-failed', reason })
+  // A remount mints the replacement's session before React commits it; drop reports queued by the view it retired.
+  const viewSessionId = state.kind === 'ready' ? state.sessionId : null
+  const reportFromView = useCallback(
+    (event: MobileWebShellSessionEvent): void => {
+      const live = sessionRef.current.state
+      if (viewSessionId === null || (live.kind === 'ready' && live.sessionId === viewSessionId)) {
+        dispatch(epochRef.current, event)
+      }
     },
-    [dispatch]
+    [dispatch, viewSessionId]
   )
 
-  const reportDocumentStarted = useCallback(() => {
-    dispatch(epochRef.current, { type: 'document-started' })
-  }, [dispatch])
+  const reportShellFailure = useCallback(
+    (reason: MobileWebShellReportedFailure) => {
+      const event = { type: 'shell-failed', reason } as const
+      // Profile reads come from the screen, not the view, so no retired document can send one.
+      return reason === 'host-profile-unreadable'
+        ? dispatch(epochRef.current, event)
+        : reportFromView(event)
+    },
+    [dispatch, reportFromView]
+  )
 
-  const reportDocumentLoaded = useCallback(() => {
-    dispatch(epochRef.current, { type: 'document-loaded' })
-  }, [dispatch])
+  const reportDocumentStarted = useCallback(
+    () => reportFromView({ type: 'document-started' }),
+    [reportFromView]
+  )
 
-  const reportPageReady = useCallback(() => {
-    dispatch(epochRef.current, { type: 'page-ready' })
-  }, [dispatch])
+  const reportDocumentLoaded = useCallback(
+    () => reportFromView({ type: 'document-loaded' }),
+    [reportFromView]
+  )
 
-  const reportPagePainted = useCallback(() => {
-    dispatch(epochRef.current, { type: 'page-painted' })
-  }, [dispatch])
+  const reportPageReady = useCallback(
+    () => reportFromView({ type: 'page-ready' }),
+    [reportFromView]
+  )
+
+  const reportPagePainted = useCallback(
+    () => reportFromView({ type: 'page-painted' }),
+    [reportFromView]
+  )
 
   const reportPageBackClaim = useCallback(
-    (claimed: boolean) => {
-      dispatch(epochRef.current, { type: 'page-back-claim', claimed })
-    },
-    [dispatch]
+    (claimed: boolean) => reportFromView({ type: 'page-back-claim', claimed }),
+    [reportFromView]
   )
 
   return {
