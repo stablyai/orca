@@ -23,10 +23,12 @@ import { TERMINAL_FOCUS_IN_SEQUENCE, TERMINAL_FOCUS_OUT_SEQUENCE } from './foreg
 import { isCodexPaneStale } from './codex-pane-stale'
 import { installTerminalSelectionFitGuard } from '../terminal-selection-fit-guard'
 import { initializePaneGeometry, readPaneSize } from './read-pane-size'
+import { createSessionStaleMouseTrackingGuard } from './session-stale-mouse-tracking-guard'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 export function installPtyInputForward(session: ConnectPanePtySession): void {
+  const staleMouseTrackingGuard = createSessionStaleMouseTrackingGuard(session)
   session.forwardPtyInput = (data: string, wasUserInput = false): void => {
     // During replay, drop query replies and pointer-generated mouse/arrows but preserve typing; stale TUI modes could send reports or recall history in the fresh shell (replay-guard.ts).
     if (
@@ -36,6 +38,9 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
         (isXtermWheelCursorKey(data) && session.pane.terminal.buffer.active.type === 'alternate'))
     ) {
       return
+    }
+    if (wasUserInput) {
+      staleMouseTrackingGuard.observeUserInput(isXtermMouseReport(data))
     }
     const currentPtyId = session.transport.getPtyId()
     // Protocol replies keep the TUI responsive while an account notice blocks typing.

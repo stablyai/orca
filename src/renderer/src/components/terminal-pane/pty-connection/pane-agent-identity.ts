@@ -10,7 +10,6 @@ import {
 import { createTerminalCommandLifecycle } from '../terminal-command-lifecycle'
 import { createPaneForegroundAgentTracker } from '../pane-foreground-agent-tracker'
 import { isRemoteExecutionHostPtyId } from '../../../../../shared/remote-execution-host-pty-id'
-import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import {
@@ -25,6 +24,7 @@ import {
 } from './pane-launch-agent-candidate'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { clearStaleAgentTabTitleOnConfirmedShell } from './confirmed-shell-agent-title'
+import { createPaneForegroundReaderDeps } from './pane-foreground-reader-deps'
 
 export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   // Share expected-agent derivation between 133;D confirmation and visible resampling so their identity guards cannot drift.
@@ -140,16 +140,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   session.paneForegroundAgentTracker = createPaneForegroundAgentTracker({
     getPtyId: () => session.transport.getPtyId(),
     isTrackablePtyId: session.isForegroundTrackingAllowed,
-    readForegroundProcess: (id, options) =>
-      isRemoteExecutionHostPtyId(id)
-        ? inspectRuntimeTerminalProcess(id, options)
-        : window.api.pty.getForegroundProcess(id),
-    confirmForegroundProcess: (id, options) =>
-      isRemoteExecutionHostPtyId(id)
-        ? inspectRuntimeTerminalProcess(id, options)
-        : window.api.pty.confirmForegroundProcess(id),
-    isRemotePtyId: isRemoteExecutionHostPtyId,
-    getExpectedIncarnationId: () => session.remotePtyIncarnationId ?? null,
+    ...createPaneForegroundReaderDeps(session),
     publish: (entry) => useAppStore.getState().setPaneForegroundAgent(session.cacheKey, entry),
     getPublishedEntry: () => useAppStore.getState().paneForegroundAgentByPaneKey[session.cacheKey],
     // Why lazy: the completion coordinator is installed after this tracker.
