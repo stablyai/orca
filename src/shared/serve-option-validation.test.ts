@@ -1,5 +1,27 @@
 import { describe, expect, it } from 'vitest'
-import { getServeFlagTypoError } from './serve-option-validation'
+import { getServeFlagTypoError, getServeOptionValidationError } from './serve-option-validation'
+
+describe('getServeOptionValidationError', () => {
+  const base = { noPairing: false, recipeJson: false, projectRoot: null }
+
+  it('rejects --mobile-pairing with a bind the mobile offer cannot widen', () => {
+    for (const bind of ['127.0.0.1', '100.64.1.20', '::']) {
+      expect(getServeOptionValidationError({ ...base, mobilePairing: true, bind })).toMatch(
+        /--mobile-pairing needs --bind 0\.0\.0\.0/
+      )
+    }
+  })
+
+  it('allows --mobile-pairing without a narrower bind, and any bind without it', () => {
+    expect(getServeOptionValidationError({ ...base, mobilePairing: true })).toBeNull()
+    expect(
+      getServeOptionValidationError({ ...base, mobilePairing: true, bind: '0.0.0.0' })
+    ).toBeNull()
+    expect(
+      getServeOptionValidationError({ ...base, mobilePairing: false, bind: '127.0.0.1' })
+    ).toBeNull()
+  })
+})
 
 describe('getServeFlagTypoError', () => {
   it('accepts exact serve flags and arbitrary Chromium switches', () => {

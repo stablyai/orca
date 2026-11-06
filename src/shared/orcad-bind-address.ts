@@ -21,6 +21,11 @@ export function resolveOrcadBindHost(raw?: string): string {
   if (value === 'localhost') {
     return ORCAD_LOOPBACK_BIND_HOST
   }
+  if (value.includes('%')) {
+    throw new OrcadBindAddressError(
+      `--bind does not support scoped IPv6 addresses (got '${value}'). Use an unscoped literal IPv6 address.`
+    )
+  }
   if (isIP(value) === 0) {
     throw new OrcadBindAddressError(
       `--bind expects a literal IP address (got '${value}'). Hostnames are refused because ` +
