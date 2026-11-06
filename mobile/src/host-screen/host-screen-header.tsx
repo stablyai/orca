@@ -3,6 +3,7 @@ import { Pressable, Text, View } from 'react-native'
 import {
   CalendarClock,
   ChevronLeft,
+  Gauge,
   List,
   MoreHorizontal,
   PanelLeftClose,
@@ -123,6 +124,14 @@ export function HostScreenHeader({
       disabled: disconnected,
       closeBeforePress: true,
       onPress: () => actions.navigateFromHostList(`${hostPath}/accounts`)
+    },
+    {
+      id: 'resources',
+      label: t('hostScreen.hostScreenHeader.resources', 'Resources'),
+      icon: Gauge,
+      disabled: disconnected,
+      closeBeforePress: true,
+      onPress: () => actions.navigateFromHostList(`${hostPath}/resources`)
     },
     ...(floatingWorkspaceEnabled
       ? [
