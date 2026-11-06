@@ -31,7 +31,7 @@ export function pluginTrustWarnings(trust: PluginTrust): string[] {
     warnings.push(
       translate(
         'auto.components.settings.PluginConsentDialog.fullAccessWarning',
-        'Full access: runs as a normal program and can read your files, use the network and run other programs.'
+        'Full access: runs as a normal program and can read your files, use the network, run other programs and control Orca, including your terminals and agents.'
       )
     )
   }

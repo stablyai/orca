@@ -371,7 +371,7 @@ describe('OrcaRuntimeService', () => {
         worktreeId: TEST_WORKTREE_ID,
         tabId: 'host-tab',
         leafId: HEADLESS_LEAF_ID,
-        sessionId: expect.stringMatching(/^serve-/),
+        sessionId: expect.stringMatching(/@@serve-/),
         isNewSession: true,
         persistHostSessionBinding: true
       })

@@ -13,6 +13,11 @@ export type PRCheckDetail = {
     | 'action_required'
     | null
   url: string | null
+  // Provider ISO times for when this check ran; absent when the host or read path has none.
+  startedAt?: string
+  completedAt?: string
+  // Set only when the host proves this run was for a commit other than the review's current head.
+  notLatestCommitSha?: string
   observedHeadSha?: string
   checkRunId?: number
   workflowRunId?: number
