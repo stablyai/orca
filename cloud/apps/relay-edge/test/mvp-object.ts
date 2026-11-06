@@ -7,7 +7,8 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import { createServer } from 'node:http'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { DatabaseSync } from 'node:sqlite'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SignJWT, exportJWK, generateKeyPair, importJWK, type KeyLike } from 'jose'
@@ -146,6 +147,9 @@ async function mainRemote(): Promise<void> {
   const keys = JSON.parse(readFileSync(new URL('../spike/.keys.json', import.meta.url), 'utf8'))
   const privateKey = (await importJWK(keys.privateJwk, 'ES256')) as KeyLike
   await run(newHost(), privateKey, () => 1, true)
+  const stray = await phoneOutcome(newHost().relayHostId, b64url(randomBytes(32)))
+  await waitFor(() => stray.state.closed !== null, 3000)
+  record('E11 phone for an unpushed host: relay-hello{ok:false,4409}, close 4409', stray.state.hello?.code === 4409 && stray.state.closed === 4409, `close=${stray.state.closed}`)
   const failed = results.filter((r) => !r.ok)
   console.log(`\n${results.length - failed.length}/${results.length} passed (${ORIGIN})`)
   if (failed.length) process.exitCode = 1
@@ -201,6 +205,7 @@ async function main(): Promise<void> {
     }
     await run(host, privateKey, () => jwksHits)
     await sweepCheck()
+    await preAuthCheck(stateDir)
   } catch (error) {
     console.error(error)
     console.error(devLog.split('\n').filter((l) => /error|exception/i.test(l)).slice(-20).join('\n'))
@@ -353,6 +358,45 @@ async function sweepCheck(): Promise<void> {
   await sleep(11_000)
   const after = await assign(id, 'edge', 1)
   record('E10 sweep wipes an object whose host left past the retention (older epoch now applies)', away.json?.outcome === 'applied' && after.json?.outcome === 'applied', `${away.json?.outcome}/${after.json?.outcome}`)
+}
+
+// E11 (local only): a phone for a host nobody pushed is sent to the director without any object
+// storage; unauthenticated upgrades are limited per source (local limit 60/min).
+async function preAuthCheck(stateDir: string): Promise<void> {
+  const list = () => readdirSync(stateDir, { recursive: true }).map(String).filter((f) => f.endsWith('.sqlite'))
+  const files = () => list().length
+  const beforeList = new Set(list())
+  const before = files()
+  const stray = await phoneOutcome(newHost().relayHostId, b64url(randomBytes(32)))
+  await waitFor(() => stray.state.closed !== null, 3000)
+  await sleep(500)
+  // Local dev opens a file (with its own __miniflare table) for any object it starts; what counts
+  // is that the edge wrote nothing to it.
+  const created = list().filter((f) => !beforeList.has(f))
+  const tables = created.flatMap((f) => {
+    const db = new DatabaseSync(join(stateDir, f), { readOnly: true })
+    try {
+      // Any table at all (KV puts land in _cf_KV), or any row in one, is a write.
+      return db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE '__miniflare%'").all().map((r) => String(r.name))
+        .map((name) => `${name}:${Number((db.prepare(`SELECT count(*) AS n FROM "${name}"`).get() as { n: number }).n)}`)
+    } finally {
+      db.close()
+    }
+  })
+  record(
+    'E11 phone for an unpushed host: relay-hello{ok:false,4409}, close 4409, nothing written to object storage',
+    stray.state.hello?.code === 4409 && stray.state.closed === 4409 && tables.length === 0,
+    `hello=${JSON.stringify(stray.state.hello)} close=${stray.state.closed} newFiles=${created.length} tables=${tables.join(',') || 'none'}`
+  )
+  const id = newHost().relayHostId
+  const statuses: number[] = []
+  for (let i = 0; i < 70; i++) statuses.push((await fetch(`${ORIGIN}/v1/connect/${id}`)).status)
+  const data = (await fetch(`${ORIGIN}/v1/host/data/x`)).status
+  record(
+    'E11 unauthenticated phone upgrades past the per-source limit get 429; data sockets count apart',
+    statuses.includes(426) && statuses.at(-1) === 429 && data === 426,
+    `first=${statuses[0]} last=${statuses.at(-1)} limitedFrom=${statuses.indexOf(429)} data=${data}`
+  )
 }
 
 main().catch((error) => {

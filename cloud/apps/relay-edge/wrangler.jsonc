@@ -23,6 +23,9 @@
   ],
   // Local dev/tests only: Postgres on 127.0.0.1:55432 (see test/mvp.ts). Deployed environments
   // bind a real Hyperdrive config instead.
+  // Unauthenticated phone/data upgrades per source per colo. Local: low, so test/mvp-object.ts
+  // can reach it.
+  "ratelimits": [{ "name": "PREAUTH_LIMITER", "namespace_id": "1000", "simple": { "limit": 60, "period": 60 } }],
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
@@ -52,6 +55,9 @@
         "code_update_strategy": { "mode": "deferred", "max_delay": 300 }
       },
       "analytics_engine_datasets": [{ "binding": "METRICS", "dataset": "orca_relay_edge_phase2" }],
+      // Per source per colo, phone and data counted apart. Sized for carrier NAT: one address can
+      // front many phones, and a whole region reconnects after an edge deploy.
+      "ratelimits": [{ "name": "PREAUTH_LIMITER", "namespace_id": "1001", "simple": { "limit": 600, "period": 60 } }],
       "vars": {
         "EDGE_BACKEND": "object",
         "EDGE_CELL_ID": "edge",

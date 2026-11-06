@@ -6,6 +6,7 @@ import { edgeConfig, type Env } from './env'
 import { HOST_ID, readBearer, verifyRelayJwt } from './jwt'
 import { SPLICE_SLOTS, makeConnId, parseConnId } from './splice-slot'
 import { metric } from './metrics'
+import { admitPreAuth, notOnEdge } from './preauth'
 import { AssignBodySchema, EraseBodySchema, ExportBodySchema, verifyAdminRequest, type AdminOp } from './admin'
 
 export { HostRelay, SpliceRelay }
@@ -145,6 +146,7 @@ export default {
 
     const phone = url.pathname.match(/^\/v1\/connect\/([^/]+)$/)
     if (phone) {
+      if (!(await admitPreAuth(env, request, 'phone'))) return reject(429)
       if (!isUpgrade) return reject(426)
       // 429 for malformed ids matches the GCE cells.
       if (!HOST_ID.test(phone[1])) return reject(429)
@@ -154,12 +156,17 @@ export default {
       const connId = await host
         .allocateConnId(phone[1])
         .catch(() => makeConnId(phone[1], Math.floor(Math.random() * SPLICE_SLOTS)))
+      if (connId === null) {
+        metric(env, 'not_on_edge')
+        return notOnEdge()
+      }
       const parsed = parseConnId(connId)!
       return forward(env, request, phone[1], { 'x-edge-kind': 'phone', 'x-edge-conn-id': connId }, 'splice', parsed.object)
     }
 
     const data = url.pathname.match(/^\/v1\/host\/data\/([^/]+)$/)
     if (data) {
+      if (!(await admitPreAuth(env, request, 'data'))) return reject(429)
       if (!isUpgrade) return reject(426)
       const connId = decodeURIComponent(data[1])
       const parsed = parseConnId(connId)

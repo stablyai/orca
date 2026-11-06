@@ -17,6 +17,9 @@ export type MetricEvent =
   | 'sweep'
   // Director admin calls: label '<op>:<outcome or status>'.
   | 'admin'
+  // Pre-auth socket refused by the per-source limiter: label 'phone' | 'data'. Unpushed-host phones: 'not_on_edge'.
+  | 'preauth_limited'
+  | 'not_on_edge'
 
 // blobs: [event, label, version]; doubles: [value, ...extra]. One index per event for sampling.
 // Heartbeat events fire per host every ping interval; keep 1 in 10 (multiply counts by 10).

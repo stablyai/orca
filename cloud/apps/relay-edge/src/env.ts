@@ -37,6 +37,8 @@ export interface Env {
   // Version label baked in per deploy (--var EDGE_VERSION:<tag>), reported by metrics and debug.
   EDGE_VERSION?: string
   METRICS?: AnalyticsEngineDataset
+  // Per-source limit on unauthenticated phone and host data upgrades (Rate Limiting binding).
+  PREAUTH_LIMITER?: RateLimit
   // Phase 2 admin calls: the director's edge admin key (secret, not its lease key) and its public URL (iss).
   ADMIN_SIGNING_KEY?: string
   ADMIN_ISSUER?: string

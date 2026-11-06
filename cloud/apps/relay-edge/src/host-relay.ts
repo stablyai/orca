@@ -522,7 +522,10 @@ export class HostRelay extends DurableObject<Env> {
   // Picks the least-busy slot of this host's splice pool for a new phone connection, so concurrent
   // phones land in different objects. Ties go to a random slot. Not a reservation: a slot can still
   // hold several splices, and the 8-connection budget is enforced in authorizePhone.
-  async allocateConnId(relayHostId: string): Promise<string> {
+  // Object backend: null for a host the director has not pushed (never, or wiped since), so the
+  // Worker answers the phone without this object or a splice object writing any storage.
+  async allocateConnId(relayHostId: string): Promise<string | null> {
+    if (this.config.backend === 'object' && !this.pushed()) return null
     const now = Date.now()
     this.recentPicks = this.recentPicks.filter((p) => now - p.at < 15_000)
     const load = new Array<number>(SPLICE_SLOTS).fill(0)
@@ -536,6 +539,13 @@ export class HostRelay extends DurableObject<Env> {
     const slot = candidates[Math.floor(Math.random() * candidates.length)]
     this.recentPicks.push({ slot, at: now })
     return makeConnId(relayHostId, slot)
+  }
+
+  // Read-only: an object nobody pushed has no tables, and this must not create them.
+  private pushed(): boolean {
+    const sql = this.ctx.storage.sql
+    if (sql.exec("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'edge_assignment'").toArray().length === 0) return false
+    return sql.exec('SELECT 1 FROM edge_assignment WHERE id = 1').toArray().length > 0
   }
 
   // ---------------- RPC from SpliceRelay ----------------
