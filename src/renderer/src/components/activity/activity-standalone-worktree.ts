@@ -1,4 +1,5 @@
 import { i18n, translate } from '@/i18n/i18n'
+import { getTranslationResourceVersion } from '@/i18n/translation-resource-version'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -7,7 +8,7 @@ const STANDALONE_ACTIVITY_WORKTREE_REPO_ID = '__activity_standalone__'
 const STANDALONE_ACTIVITY_WORKTREES_CAP = 200
 const standaloneActivityWorktrees = new Map<string, Worktree>()
 // The cached rows carry a localized displayName, so they cannot outlive a language switch.
-let cachedDisplayNameLocale: string | undefined
+let cachedDisplayNameScope: string | undefined
 
 function buildStandaloneActivityWorktree(
   worktreeId: string,
@@ -50,8 +51,9 @@ export function standaloneActivityWorktree(
   worktreeId: string,
   executionHostId?: ExecutionHostId
 ): Worktree {
-  if (cachedDisplayNameLocale !== i18n.language) {
-    cachedDisplayNameLocale = i18n.language
+  const displayNameScope = `${i18n.language}\0${getTranslationResourceVersion()}`
+  if (cachedDisplayNameScope !== displayNameScope) {
+    cachedDisplayNameScope = displayNameScope
     standaloneActivityWorktrees.clear()
   }
   const cacheKey = `${worktreeId}\0${executionHostId ?? ''}`

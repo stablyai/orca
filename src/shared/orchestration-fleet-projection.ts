@@ -44,6 +44,8 @@ export type FleetDurableWorker = {
     hostScope: string | null
     ownershipState: string
     releaseState: string
+    /** A scheduled automatic release; the coordinator owes no release of its own. */
+    autoReleaseAt?: string | null
     updatedAt: string
   } | null
 }
@@ -112,6 +114,8 @@ export type OrchestrationFleetWorker = {
     lastObservedAt: number | null
   }
   resource: FleetResourceProjection
+  /** When Orca releases this settled worker's terminal on its own, from the host that owns it. */
+  autoReleaseAt?: string
   nextAction: FleetNextAction
   attention: OrchestrationFleetAttention
 }

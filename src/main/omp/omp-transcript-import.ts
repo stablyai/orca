@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { resolveOmpSessionsDir } from '../ai-vault/omp-session-root'
+import { resolveOmpSessionsDir } from '../ai-vault/scanners/omp/omp-session-root'
 import { directoryTranscriptImport } from '../native-chat/structured-agent-cli-conversations'
 import { findOmpSessionByCwd } from './omp-session-cwd-lookup'
 

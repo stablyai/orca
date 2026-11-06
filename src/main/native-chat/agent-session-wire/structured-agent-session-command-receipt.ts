@@ -1,6 +1,6 @@
-import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
-import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session/agent-session-wire'
+import { isAgentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   commandReceiptScope,
   type CommandReceipt,
@@ -27,7 +27,7 @@ type CommandReceiptIdentity = {
   operationCallerKey: string
   fingerprint: string
   envelope: AgentSessionMutationEnvelope
-  plan: { method: string; operationIdScope?: 'global' }
+  plan: Pick<MutationPlan<unknown>, 'method' | 'operationIdScope' | 'acceptanceRecord'>
   context: AgentSessionTurnContext
 }
 
@@ -153,6 +153,9 @@ function acceptanceReceipt(
       callerKey: operationCallerKey,
       operationId: envelope.clientOperationId,
       fingerprint,
+      ...(plan.acceptanceRecord
+        ? { record: { sessionId: envelope.sessionId, update: plan.acceptanceRecord } }
+        : {}),
       now: context.now(),
       ...(plan.operationIdScope ? { operationIdScope: plan.operationIdScope } : {}),
       outcome: { status: 'succeeded', sessionId: envelope.sessionId }

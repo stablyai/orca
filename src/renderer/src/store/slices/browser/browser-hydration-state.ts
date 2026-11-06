@@ -2,9 +2,9 @@ import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browse
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
-import type { WorkspaceSessionState } from '../../../../../shared/workspace-session-state-types'
-import { normalizeBrowserHistoryEntries } from '../../../../../shared/workspace-session-browser-history'
-import { normalizeWorkspaceDocHistoryEntries } from '../../../../../shared/workspace-doc-history'
+import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
+import { normalizeBrowserHistoryEntries } from '../../../../../shared/workspace-session/workspace-session-browser-history'
+import { normalizeWorkspaceDocHistoryEntries } from '../../../../../shared/workspace-session/workspace-doc-history'
 import type { AppState } from '../../types'
 import { mirrorWorkspaceFromActivePage, normalizeUrl } from '../browser-page-records'
 import {

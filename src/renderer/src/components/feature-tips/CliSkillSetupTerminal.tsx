@@ -7,7 +7,7 @@ import { OnboardingInlineCommandTerminal } from '@/components/onboarding/Onboard
 import {
   buildSkillCommandForRuntime,
   buildSkillSetupTerminalCommand
-} from '@/components/settings/CliSkillRuntimeSetup'
+} from '@/lib/skill-runtime-command'
 import { ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { translate } from '@/i18n/i18n'

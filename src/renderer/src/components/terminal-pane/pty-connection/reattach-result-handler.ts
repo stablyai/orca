@@ -49,6 +49,7 @@ type ReattachResultSession = ReattachPayloadSession &
     | 'disposed'
     | 'handleReattachResult'
     | 'mountFollowsTerminalPark'
+    | 'noteBoundProcessIncarnation'
     | 'registerEffectiveLaunchConfig'
     | 'cancelSavedResumeStartup'
     | 'registerPaneSerializerFor'
@@ -101,6 +102,7 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       result && typeof result === 'object' && 'id' in result ? (result as PtyConnectResult) : null
     if (connectResult?.incarnationId) {
       session.remotePtyIncarnationId = connectResult.incarnationId
+      session.noteBoundProcessIncarnation(connectResult.incarnationId)
     } else if (connectResult?.isReattach || typeof result === 'string') {
       // Missing legacy incarnation remains client-only unverifiable evidence until a stamped attach.
       session.remotePtyIncarnationId = null

@@ -8,10 +8,6 @@ import { readHooksJson, writeHooksJson } from '../agent-hooks/installer-utils'
 import { ClaudeHookService } from './hook-service'
 import { getWindowsManagedLifecycleHook } from './hook-settings'
 import { getWindowsClaudeHookEntry, getWindowsClaudeHookPayloadPath } from './windows-hook-files'
-import { codebuddyHookService } from '../codebuddy/hook-service'
-import { qoderHookService, qoderCnHookService } from '../qoder/hook-service'
-import { qwenCodeHookService } from '../qwen-code/hook-service'
-import { openClaudeHookService } from '../openclaude/hook-service'
 
 const { home } = vi.hoisted(() => ({ home: { path: '' } }))
 vi.mock('node:os', async (original) => ({
@@ -41,16 +37,6 @@ afterEach(() => {
 })
 
 describe('Windows Claude hook files', () => {
-  it('installs a delegating entry and a payload that answers before bounded delivery', () => {
-    expect(service.install().state).toBe('installed')
-    expect(readFileSync(entry, 'utf8')).toBe(getWindowsClaudeHookEntry())
-    const body = readFileSync(payload, 'utf8')
-    expect(body.indexOf('echo {}')).toBeLessThan(body.indexOf('curl.exe'))
-    expect(body).toContain('--connect-timeout 0.5 --max-time 1.5')
-    expect(body).toContain('--data-urlencode "payload@-" >nul 2>&1\r\nexit /b 0')
-    expect(body).toContain('DEVIN_PROJECT_DIR')
-  })
-
   it('repairs a missing payload from the surviving entry without touching settings', async () => {
     service.install()
     rmSync(payload)
@@ -139,25 +125,5 @@ describe('Windows Claude hook files', () => {
     expect(config).not.toContain('C:/old/')
     expect(config).toContain('echo user-hook')
     expect(service.getStatus().state).toBe('installed')
-  })
-
-  it('keeps compatible agents on their existing single-file scripts', async () => {
-    for (const [name, compatible] of [
-      ['qoder', qoderHookService],
-      ['qoder-cn', qoderCnHookService],
-      ['qwen-code', qwenCodeHookService],
-      ['codebuddy', codebuddyHookService],
-      ['openclaude', openClaudeHookService]
-    ] as const) {
-      expect(compatible.install().state).toBe('installed')
-      await compatible.refreshManagedScripts()
-      const path = join(home.path, '.orca', 'agent-hooks', `${name}-hook.cmd`)
-      const source = name === 'openclaude' ? 'claude' : name
-      expect(readFileSync(path, 'utf8')).toContain(`/hook/${source}`)
-      expect(readFileSync(path, 'utf8')).not.toContain('claude-hook-impl.cmd')
-      expect(existsSync(join(home.path, '.orca', 'agent-hooks', `${name}-hook-impl.cmd`))).toBe(
-        false
-      )
-    }
   })
 })

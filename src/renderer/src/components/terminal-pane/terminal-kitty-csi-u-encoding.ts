@@ -3,7 +3,7 @@ import {
   KITTY_REPORT_ALTERNATE_KEYS,
   KITTY_REPORT_ASSOCIATED_TEXT,
   KITTY_REPORT_EVENT_TYPES
-} from '../../../../shared/terminal-kitty-keyboard-flags'
+} from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
 
 export type TerminalKittyCsiUEventType = 'press' | 'repeat' | 'release'
 

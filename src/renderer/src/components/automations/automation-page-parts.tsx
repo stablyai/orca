@@ -2,20 +2,23 @@ import React from 'react'
 import type { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { AutomationRun } from '../../../../shared/automations-types'
+import { translate } from '@/i18n/i18n'
+import { formatUiNarrowRelativeTime } from '@/i18n/relative-time-format'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 
 // Reuse one formatter across run cells; per-cell construction dominates large-history rendering.
-const automationDateTimeFormatter = new Intl.DateTimeFormat(undefined, {
+const AUTOMATION_DATE_TIME_OPTIONS: Intl.DateTimeFormatOptions = {
   month: 'short',
   day: 'numeric',
   hour: 'numeric',
   minute: '2-digit'
-})
+}
 
 export function formatAutomationDateTime(value: number | null | undefined): string {
   if (!value) {
-    return 'Never'
+    return translate('auto.components.automations.automationPageParts.never', 'Never')
   }
-  return automationDateTimeFormatter.format(value)
+  return uiDateTimeFormat(AUTOMATION_DATE_TIME_OPTIONS).format(value)
 }
 
 export function formatAutomationRelativeTime(
@@ -30,21 +33,17 @@ export function formatAutomationRelativeTime(
   const minuteMs = 60 * 1000
   const hourMs = 60 * minuteMs
   const dayMs = 24 * hourMs
-  const format = (amount: number, unit: string): string => `${amount}${unit}`
-  let text: string
+  const sign = diffMs >= 0 ? 1 : -1
   if (absMs < minuteMs) {
-    text = 'now'
-  } else if (absMs < hourMs) {
-    text = format(Math.round(absMs / minuteMs), 'm')
-  } else if (absMs < dayMs) {
-    text = format(Math.round(absMs / hourMs), 'h')
-  } else {
-    text = format(Math.round(absMs / dayMs), 'd')
+    return translate('auto.components.automations.automationPageParts.now', 'now')
   }
-  if (text === 'now') {
-    return text
+  if (absMs < hourMs) {
+    return formatUiNarrowRelativeTime(sign * Math.round(absMs / minuteMs), 'minute')
   }
-  return diffMs >= 0 ? `in ${text}` : `${text} ago`
+  if (absMs < dayMs) {
+    return formatUiNarrowRelativeTime(sign * Math.round(absMs / hourMs), 'hour')
+  }
+  return formatUiNarrowRelativeTime(sign * Math.round(absMs / dayMs), 'day')
 }
 
 export function formatAutomationDateTimeWithRelative(
@@ -74,23 +73,44 @@ export function getAutomationRunStatusVariant(
 export function getAutomationRunStatusLabel(status: AutomationRun['status']): string {
   switch (status) {
     case 'pending':
-      return 'Queued'
+      return translate('auto.components.automations.automationPageParts.runStatusPending', 'Queued')
     case 'dispatching':
-      return 'Starting'
+      return translate(
+        'auto.components.automations.automationPageParts.runStatusDispatching',
+        'Starting'
+      )
     case 'dispatched':
-      return 'Launched'
+      return translate(
+        'auto.components.automations.automationPageParts.runStatusDispatched',
+        'Launched'
+      )
     case 'completed':
-      return 'Done'
+      return translate('auto.components.automations.automationPageParts.runStatusCompleted', 'Done')
     case 'skipped_precheck':
-      return 'Precheck skipped'
+      return translate(
+        'auto.components.automations.automationPageParts.runStatusSkippedPrecheck',
+        'Precheck skipped'
+      )
     case 'skipped_missed':
-      return 'Skipped'
+      return translate(
+        'auto.components.automations.automationPageParts.runStatusSkippedMissed',
+        'Skipped'
+      )
     case 'skipped_unavailable':
-      return 'Unavailable'
+      return translate(
+        'auto.components.automations.automationPageParts.runStatusSkippedUnavailable',
+        'Unavailable'
+      )
     case 'skipped_needs_interactive_auth':
-      return 'Needs credentials'
+      return translate(
+        'auto.components.automations.automationPageParts.runStatusSkippedNeedsInteractiveAuth',
+        'Needs credentials'
+      )
     case 'dispatch_failed':
-      return 'Failed'
+      return translate(
+        'auto.components.automations.automationPageParts.runStatusDispatchFailed',
+        'Failed'
+      )
   }
 }
 

@@ -1,10 +1,10 @@
 import { useAppStore } from '@/store'
 import { getPaletteWorktreeExecutionHostId } from '@/lib/palette-repo-resolution'
-import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import {
   getProvenWorkspaceReferenceIdentity,
   parseWorkspaceReferenceUrl
-} from '../../../../shared/workspace-reference-identity'
+} from '../../../../shared/workspace-attachments/workspace-reference-identity'
 import { getLinearIssueWorkspaceName } from '../../../../shared/workspace-name'
 import {
   getLinkedWorkItemWorkspaceName,

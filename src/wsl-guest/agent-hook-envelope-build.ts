@@ -1,7 +1,11 @@
 // Build SSH hook envelopes from parsed events/raw bodies; publication owns shedding and redelivery.
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
-import type { AgentHookRelayEnvelope, AgentHookSource } from '../shared/agent-hook-relay'
-import { pickHostTurnEnd } from '../shared/agent-status-types'
+import type {
+  AgentHookRelayEnvelope,
+  AgentHookSource
+} from '../shared/agent-hook-listener/transport/agent-hook-relay'
+import { hasSeparateHookSessionAdmission } from '../shared/agent-hook-listener/pane-provider-session'
+import { pickHostTurnEnd } from '../shared/agent-status/contracts/agent-status-types'
 
 // Why: cap metadata to prevent a misbehaving CLI growing the cache unboundedly.
 const MAX_HOOK_META_LEN = 64
@@ -18,7 +22,13 @@ export function buildRelayHookEnvelope(
     ...(event.hostEvidenceObservedAt !== undefined
       ? { evidenceAgeMs: Math.max(0, Date.now() - event.hostEvidenceObservedAt) }
       : {}),
-    agentPresence: event.agentPresence,
+    agentPresence: hasSeparateHookSessionAdmission(source)
+      ? {
+          ...event.agentPresence,
+          agent: source,
+          session: event.statusAdmissionSession
+        }
+      : event.agentPresence,
     paneKey: event.paneKey,
     ...(event.hostTurnRevision ? { hostTurnRevision: event.hostTurnRevision } : {}),
     ...(event.launchToken ? { launchToken: event.launchToken } : {}),
@@ -32,6 +42,10 @@ export function buildRelayHookEnvelope(
     grokPromptBoundary: event.grokPromptBoundary,
     compactTrigger: event.compactTrigger,
     toolUseId: event.toolUseId,
+    // A live batch end carries the requests it resolved; replays attach retained history separately.
+    ...(event.hookEventName === 'PostToolBatch' && event.claudeSettledRequests
+      ? { claudeSettledRequests: event.claudeSettledRequests }
+      : {}),
     toolAgentId: event.toolAgentId,
     teammateName: event.teammateName,
     toolAgentType: event.toolAgentType,

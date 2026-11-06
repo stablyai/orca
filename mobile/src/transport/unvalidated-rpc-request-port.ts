@@ -5,6 +5,10 @@ import type { RpcResponse } from './types'
 // The request-port boundary inventory fences every remaining raw user and may only shrink.
 
 export type SendRequestOptions = {
+  /** Local ownership only; never part of a wire envelope. */
+  signal?: AbortSignal
+  /** Local assertion, after the connect wait and immediately before frame admission. */
+  beforeSend?: () => void
   timeoutMs?: number
   /** Include the connect wait in the caller's timeout budget. */
   budgetSpansConnect?: boolean

@@ -69,6 +69,8 @@ export function BrowserGuestAnnotateOverlays({
     handleAnnotationTraySendOpenChange,
     activeGroupId,
     browserAnnotationsPrompt,
+    includePageDetails,
+    handleIncludePageDetailsChange,
     handleBrowserAnnotationsSentToAgent,
     handleBrowserAnnotationsHandedOff,
     handleCopyBrowserAnnotations,
@@ -95,6 +97,7 @@ export function BrowserGuestAnnotateOverlays({
       {pendingAnnotationPayload ? (
         <PendingBrowserAnnotationCard
           payload={pendingAnnotationPayload}
+          worktreeId={worktreeId}
           resolveAnchor={(cardHeight) =>
             getBrowserOverlayAnchor(
               pendingAnnotationPayload,
@@ -118,6 +121,8 @@ export function BrowserGuestAnnotateOverlays({
           worktreeId={worktreeId}
           activeGroupId={activeGroupId}
           browserAnnotationsPrompt={browserAnnotationsPrompt}
+          includePageDetails={includePageDetails}
+          handleIncludePageDetailsChange={handleIncludePageDetailsChange}
           handleBrowserAnnotationsSentToAgent={handleBrowserAnnotationsSentToAgent}
           handleBrowserAnnotationsHandedOff={handleBrowserAnnotationsHandedOff}
           handleCopyBrowserAnnotations={handleCopyBrowserAnnotations}

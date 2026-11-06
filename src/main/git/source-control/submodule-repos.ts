@@ -1,11 +1,11 @@
 import { realpath, stat } from 'node:fs/promises'
 import * as path from 'node:path'
-import type { GitSubmoduleRepo } from '../../../shared/git-submodule-repo-types'
+import type { GitSubmoduleRepo } from '../../../shared/git/status/git-submodule-repo-types'
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
-import { getUpstreamStatus } from '../upstream'
+import { getUpstreamStatus } from './upstream'
 import { listSubmodulePaths, resolveSubmoduleWorktreePath } from './submodule-paths'
 
 const SUBMODULE_REPO_READ_CONCURRENCY = 4

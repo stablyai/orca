@@ -61,7 +61,7 @@ export async function bringWslMovedProjectBack(
       title: translate('sidebar.wslMoved.useHereRefusedTitle', "Can't use {{name}} here yet", {
         name: project.displayName
       }),
-      description: wslMoveUseHereRefusalMessage(result, project.distro),
+      description: wslMoveUseHereRefusalDescription(result, project.distro, project.displayName),
       confirmLabel: translate('sidebar.wslMoved.useHereRefusedOk', 'OK'),
       acknowledgeOnly: true,
       initialFocus: 'confirm'
@@ -84,9 +84,28 @@ function newerMoveNames(
     .map((moved) => moved.displayName)
 }
 
+/** The refusal, and where the host's terminals are when the refusal came after their stop. */
+function wslMoveUseHereRefusalDescription(
+  result: Extract<WslMoveUseLocallyResult, { released: false }>,
+  distro: string,
+  projectName: string
+): string {
+  const message = wslMoveUseHereRefusalMessage(result, distro, projectName)
+  if (!result.hostTerminalsAsleep) {
+    return message
+  }
+  const asleep = translate(
+    'sidebar.wslMoved.useHereHostTerminalsAsleep',
+    'Its terminals on the {{distro}} host were put to sleep. Open the project to resume them.',
+    { distro }
+  )
+  return `${message} ${asleep}`
+}
+
 function wslMoveUseHereRefusalMessage(
   result: Extract<WslMoveUseLocallyResult, { released: false }>,
-  distro: string
+  distro: string,
+  projectName: string
 ): string {
   const { reason } = result
   const names = reason === 'superseded' ? newerMoveNames(result.newerMove) : []
@@ -109,6 +128,13 @@ function wslMoveUseHereRefusalMessage(
       'sidebar.wslMoved.useHereMoveRunning',
       'A move to the {{distro}} host is still running. Try again once it ends.',
       { distro }
+    )
+  }
+  if (result.detail === 'host-kept-for-peers') {
+    return translate(
+      'sidebar.wslMoved.useHereHostKeptForPeers',
+      '{{project}} moved to the {{distro}} host, which is still running for another Orca. Re-add the host to use it here again.',
+      { project: projectName, distro }
     )
   }
   if (result.detail === 'host-removal-pending') {

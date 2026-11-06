@@ -13,7 +13,7 @@ import type {
   RuntimeTerminalSplit
 } from '../../src/shared/runtime-terminal-contracts'
 import { expect, test } from './helpers/orca-app'
-import { pickNextActiveTabAfterClose } from '../../src/shared/workspace-session-terminal-tab-close'
+import { pickNextActiveTabAfterClose } from '../../src/shared/workspace-session/workspace-session-terminal-tab-close'
 import {
   addRepoWorktree,
   cliClient,

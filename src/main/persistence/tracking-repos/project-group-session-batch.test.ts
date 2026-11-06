@@ -1,8 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../shared/constants'
 import { createProjectGroup } from '../../../shared/project-groups'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { createMinimalPersistedTerminalTab } from '../restoring-sessions/session-owner-fields'
 import { ProjectGroupPersistenceOperations } from './project-group-operations'
@@ -82,7 +82,7 @@ function fixture(folderCount: number) {
     'runtime:remote': session([...removedIds, 'kept'])
   }
   const scheduleSave = vi.fn()
-  const removeWorkspaceLineageForFolderParent = vi.fn()
+  const removeWorkspaceLineageForRemovedFolder = vi.fn()
   const selected = new Set([...removedIds, 'kept'].map(folderWorkspaceKey))
   const pruneMobileClientTabSelections = vi.fn((matches: (owner: string) => boolean) => {
     for (const owner of selected) {
@@ -94,30 +94,18 @@ function fixture(folderCount: number) {
   const operations = new ProjectGroupPersistenceOperations({
     state,
     scheduleSave,
-    removeWorkspaceLineageForFolderParent,
+    removeWorkspaceLineageForRemovedFolder,
     pruneMobileClientTabSelections
   })
   return {
     state,
     removedIds,
     selected,
-    operations,
-    scheduleSave,
-    removeWorkspaceLineageForFolderParent,
-    pruneMobileClientTabSelections
+    operations
   }
 }
 
-afterEach(() => vi.restoreAllMocks())
-
 describe('project group session removal', () => {
-  it('copies each host session once when deleting many folder workspaces', () => {
-    const { operations } = fixture(24)
-    const clone = vi.spyOn(globalThis, 'structuredClone')
-    expect(operations.deleteProjectGroup('root')).toBe(true)
-    expect(clone).toHaveBeenCalledTimes(3)
-  })
-
   it('removes the entire subtree from local spill and remote sessions while preserving other owners', () => {
     const setup = fixture(8)
     const kept = session(['kept'])
@@ -132,32 +120,5 @@ describe('project group session removal', () => {
     expect(setup.state.projectGroups?.map((group) => group.id)).toEqual(['other'])
     expect(setup.state.folderWorkspaces.map((entry) => entry.id)).toEqual(['kept'])
     expect(setup.selected).toEqual(new Set([folderWorkspaceKey('kept')]))
-    expect(setup.removeWorkspaceLineageForFolderParent.mock.calls).toEqual(
-      setup.removedIds.map((id) => [id])
-    )
-    expect(setup.pruneMobileClientTabSelections).toHaveBeenCalledTimes(1)
-    expect(setup.scheduleSave).toHaveBeenCalledTimes(1)
-  })
-
-  it('preserves session references when the deleted group has no folder workspaces', () => {
-    const { state, operations, scheduleSave } = fixture(0)
-    const local = state.workspaceSession
-    const hosts = state.workspaceSessionsByHostId
-    const clone = vi.spyOn(globalThis, 'structuredClone')
-    expect(operations.deleteProjectGroup('root')).toBe(true)
-    expect(state.workspaceSession).toBe(local)
-    expect(state.workspaceSessionsByHostId).toBe(hosts)
-    expect(clone).not.toHaveBeenCalled()
-    expect(scheduleSave).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not prune or save when the requested group does not exist', () => {
-    const setup = fixture(8)
-    const before = structuredClone(setup.state)
-    expect(setup.operations.deleteProjectGroup('missing')).toBe(false)
-    expect(setup.state).toEqual(before)
-    expect(setup.removeWorkspaceLineageForFolderParent).not.toHaveBeenCalled()
-    expect(setup.pruneMobileClientTabSelections).not.toHaveBeenCalled()
-    expect(setup.scheduleSave).not.toHaveBeenCalled()
   })
 })

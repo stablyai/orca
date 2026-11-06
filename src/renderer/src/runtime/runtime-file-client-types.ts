@@ -3,6 +3,8 @@ import type { LocalFileAccess } from '../../../shared/local-file-access'
 
 export type RuntimeReadableFileContent = {
   mediaUrl?: string
+  /** Bytes behind `mediaUrl`, for viewers that no longer see the content. */
+  size?: number
   content: string
   isBinary: boolean
   isImage?: boolean
@@ -34,6 +36,7 @@ export type RuntimeFileReadArgs = {
 export type RuntimeFileOperationArgs = {
   /** The worktree owner's transport; never the focused server. */
   target: RuntimeClientTarget
+  expectedEnvironmentPairingRevision?: number
   worktreeId: string | null | undefined
   worktreePath: string | null | undefined
   connectionId?: string

@@ -1,0 +1,322 @@
+import {
+  isCrossStoreInferredSource,
+  type CrossStoreInferredSource,
+  type CrossStoreParentRef,
+  type WorktreeLineage,
+  type WorkspaceLineage
+} from '../../../../shared/worktree/lineage-types'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
+
+import {
+  type WorkspaceKey,
+  folderWorkspaceKey,
+  parseWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../../shared/workspace-scope'
+import { sharesResolvedWorktreeLineageBoundary } from '../../../../shared/resolved-worktree-lineage'
+import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
+import type { RuntimeStore } from '../../runtime-store-contract'
+import {
+  readAllWorktreeMetaForHost,
+  worktreeRowTarget
+} from '../../../persistence/host-qualified-worktree-meta'
+import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
+import { getRepoOwnedWorktreeMeta } from '../../../workspaces/catalog/worktree-metadata-ownership'
+import { readStoreInstallationId } from '../../hosts/platform-probe/host-descriptor'
+import { assertParentInAnotherStore } from './cross-store-parent-store-check'
+import { getCanonicalUserDataPath } from '../../../persistence/loading-store/user-data-path'
+import { isWslMoveWorktreeBlocked } from '../../../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import {
+  RuntimeLineageError,
+  LINEAGE_PARENT_AMBIGUOUS,
+  formatAmbiguousCwdParentMessage,
+  enforceCreateLineageHostBoundary,
+  resolveRuntimeWorktreeCreateLineage,
+  type ResolvedWorkspaceParent,
+  type WorktreeLineageCandidate,
+  type WorktreeLineageInput,
+  type WorktreeLineageResolution
+} from './runtime-worktree-lineage-resolution'
+
+type RuntimeWorktreeLineageDependencies = {
+  getStore(): RuntimeStore | null
+  getDb(): OrchestrationDb | null
+  resolveWorktree(selector: string): Promise<ResolvedWorktree>
+  listResolvedWorktrees(): Promise<ResolvedWorktree[]>
+  showTerminal(handle: string): Promise<{ worktreeId: string }>
+}
+
+/** Read ownership-scoped metadata without migration; validation must not adopt another host's legacy row. */
+function savedInstanceIdReader(
+  store: RuntimeStore,
+  hostId: ExecutionHostId | undefined
+): (id: string) => string | undefined {
+  if (!hostId) {
+    return (id) => store.getWorktreeMeta(id)?.instanceId
+  }
+  const repos = store.getRepos()
+  const ownerCounts = new Map<string, number>()
+  for (const repo of repos) {
+    ownerCounts.set(repo.id, (ownerCounts.get(repo.id) ?? 0) + 1)
+  }
+  const reposOnHost = new Map(
+    repos.filter((repo) => getRepoExecutionHostId(repo) === hostId).map((repo) => [repo.id, repo])
+  )
+  const metaById = readAllWorktreeMetaForHost(store, hostId)
+  return (id) => {
+    const repo = reposOnHost.get(getRepoIdFromWorktreeId(id))
+    return repo
+      ? getRepoOwnedWorktreeMeta(repo, id, metaById, ownerCounts.get(repo.id) ?? 0)?.instanceId
+      : undefined
+  }
+}
+
+export class RuntimeWorktreeLineageController {
+  constructor(private readonly deps: RuntimeWorktreeLineageDependencies) {}
+
+  async resolveCreate(
+    input?: WorktreeLineageInput,
+    childHostId?: ExecutionHostId
+  ): Promise<WorktreeLineageResolution> {
+    const resolution = await resolveRuntimeWorktreeCreateLineage(input, {
+      resolveParent: (selector) => this.resolveParent(selector),
+      resolveWorktreeParent: (selector) => this.resolveWorktreeParent(selector),
+      resolveTaskCandidate: (taskId) => this.resolveTaskCandidate(taskId),
+      resolveCaller: async (handle) => {
+        const terminal = await this.deps.showTerminal(handle)
+        const parent = await this.resolveParent(`id:${terminal.worktreeId}`)
+        const db = this.deps.getDb()
+        const dispatch = db?.getActiveDispatchForTerminal(handle)
+        const run = db?.getActiveCoordinatorRun()
+        return {
+          parent,
+          ...(dispatch ? { activeDispatch: { taskId: dispatch.task_id } } : {}),
+          ...(run ? { activeRun: { id: run.id, coordinatorHandle: run.coordinator_handle } } : {})
+        }
+      }
+    })
+    if (resolution.kind === 'crossStore') {
+      await assertParentInAnotherStore(resolution.parent, () => this.readStoreInstallationId())
+    }
+    const retained = enforceCreateLineageHostBoundary(resolution, childHostId)
+    if (
+      retained.kind === 'lineage' &&
+      retained.capture.source === 'cwd-context' &&
+      input?.cwdParentAmbiguous === true
+    ) {
+      throw new RuntimeLineageError(LINEAGE_PARENT_AMBIGUOUS, formatAmbiguousCwdParentMessage())
+    }
+    return retained
+  }
+
+  /** The parent a same-store create would infer from this caller context, as a ref for a child in
+   * another store. `installationId` is the runtime's published identity, never created here. A
+   * reason replaces the ref when none is valid or contexts conflict. */
+  async resolveCallerParentForAnotherStore(
+    input: Pick<
+      WorktreeLineageInput,
+      'envParentWorkspace' | 'callerTerminalHandle' | 'cwdParentWorktree' | 'cwdParentAmbiguous'
+    >,
+    installationId: string | undefined
+  ): Promise<
+    { parent: CrossStoreParentRef; source: CrossStoreInferredSource } | { reason: string }
+  > {
+    let resolution: WorktreeLineageResolution
+    try {
+      resolution = await this.resolveCreate(input)
+    } catch (error) {
+      return { reason: error instanceof Error ? error.message : String(error) }
+    }
+    if (resolution.kind !== 'lineage') {
+      const conflict =
+        resolution.kind === 'none' &&
+        resolution.warnings.some((warning) => warning.code === 'LINEAGE_PARENT_CONTEXT_CONFLICT')
+      return {
+        reason: conflict
+          ? "this terminal's contexts name different workspaces."
+          : "Orca couldn't find this terminal's workspace."
+      }
+    }
+    const { parent, capture } = resolution
+    if (parent.type !== 'worktree') {
+      return { reason: "a folder workspace can't parent a workspace on another machine yet." }
+    }
+    if (!parent.instanceId || !installationId) {
+      return { reason: "Orca couldn't confirm this workspace's identity." }
+    }
+    if (!isCrossStoreInferredSource(capture.source)) {
+      return { reason: "Orca couldn't tell which workspace this command runs in." }
+    }
+    return {
+      parent: { installationId, workspaceKey: parent.workspaceKey, instanceId: parent.instanceId },
+      source: capture.source
+    }
+  }
+
+  /** This store's identity; the published descriptor reads the same file at the canonical path. */
+  async readStoreInstallationId(): Promise<string | undefined> {
+    return await readStoreInstallationId(null, getCanonicalUserDataPath())
+  }
+
+  async resolveParent(selector: string): Promise<ResolvedWorkspaceParent> {
+    const rawSelector = selector.startsWith('id:') ? selector.slice(3) : selector
+    const parsed = parseWorkspaceKey(rawSelector)
+    if (parsed?.type === 'folder') {
+      const folderWorkspace = this.deps
+        .getStore()
+        ?.getFolderWorkspaces?.()
+        .find((workspace) => workspace.id === parsed.folderWorkspaceId)
+      if (!folderWorkspace) {
+        throw new Error('selector_not_found')
+      }
+      return {
+        type: 'folder',
+        workspaceKey: folderWorkspaceKey(folderWorkspace.id),
+        folderWorkspace,
+        instanceId: null
+      }
+    }
+    return this.resolveWorktreeParent(
+      parsed?.type === 'worktree' ? `id:${parsed.worktreeId}` : selector
+    )
+  }
+
+  async resolveWorktreeParent(selector: string): Promise<ResolvedWorkspaceParent> {
+    const worktree = await this.deps.resolveWorktree(selector)
+    return {
+      type: 'worktree',
+      workspaceKey: worktreeWorkspaceKey(worktree.id),
+      worktree,
+      instanceId: worktree.instanceId ?? null
+    }
+  }
+
+  validateParent(child: ResolvedWorktree, parent: ResolvedWorktree): void {
+    if (child.id === parent.id) {
+      throw new RuntimeLineageError('LINEAGE_PARENT_CYCLE', 'A worktree cannot parent itself.')
+    }
+    if (!sharesResolvedWorktreeLineageBoundary(child, parent)) {
+      throw new RuntimeLineageError(
+        'LINEAGE_PARENT_CONTEXT_CONFLICT',
+        'Parent worktree must be on the same execution host.'
+      )
+    }
+    const store = this.deps.getStore()
+    let readSavedInstanceId: ((id: string) => string | undefined) | undefined
+    // Reparent invalidates the resolved cache; saved metadata must cover intermediate nodes or longer loops escape detection.
+    const instanceIdOf = (id: string): string | undefined => {
+      if (id === child.id || id === parent.id) {
+        return id === child.id ? child.instanceId : parent.instanceId
+      }
+      readSavedInstanceId ??= store
+        ? savedInstanceIdReader(store, child.hostId ?? parent.hostId)
+        : () => undefined
+      return readSavedInstanceId(id)
+    }
+    let cursor: string | undefined = parent.id
+    const visited = new Set<string>()
+    while (cursor) {
+      if (cursor === child.id) {
+        throw new RuntimeLineageError(
+          'LINEAGE_PARENT_CYCLE',
+          'Parent selector would create a lineage cycle.'
+        )
+      }
+      // An unrelated saved loop must not block this parent.
+      if (visited.has(cursor)) {
+        break
+      }
+      visited.add(cursor)
+      const lineage = store?.getWorktreeLineage?.(cursor)
+      if (!lineage) {
+        break
+      }
+      if (
+        instanceIdOf(cursor) !== lineage.worktreeInstanceId ||
+        instanceIdOf(lineage.parentWorktreeId) !== lineage.parentWorktreeInstanceId
+      ) {
+        break
+      }
+      cursor = lineage.parentWorktreeId
+    }
+  }
+
+  async resolveTaskCandidate(taskId: string): Promise<WorktreeLineageCandidate | null> {
+    const db = this.deps.getDb()
+    const dispatch = db?.getDispatchContext(taskId)
+    const handle = dispatch?.assignee_handle ?? db?.getTask(taskId)?.created_by_terminal_handle
+    if (!handle) {
+      return null
+    }
+    try {
+      const terminal = await this.deps.showTerminal(handle)
+      return {
+        source: 'orchestration-context',
+        parent: await this.resolveWorktreeParent(`id:${terminal.worktreeId}`),
+        taskId
+      }
+    } catch {
+      return null
+    }
+  }
+
+  async hydrate(): Promise<void> {
+    const store = this.deps.getStore()
+    if (!store?.getWorktreeLineage || !store.setWorktreeLineage) {
+      return
+    }
+    for (const worktree of await this.deps.listResolvedWorktrees()) {
+      if (
+        store.getWorktreeLineage(worktree.id) ||
+        // An inferred parent must not replace an explicit one on another machine.
+        store.getCrossStoreWorkspaceLineage?.(worktreeWorkspaceKey(worktree.id)) ||
+        !worktree.instanceId ||
+        isWslMoveWorktreeBlocked(worktree.id, worktree.hostId, worktree.path)
+      ) {
+        continue
+      }
+      const taskId = worktree.comment?.match(/\btask_[A-Za-z0-9]+\b/)?.[0]
+      if (!taskId) {
+        continue
+      }
+      const candidate = await this.resolveTaskCandidate(taskId)
+      if (
+        !candidate?.parent.instanceId ||
+        candidate.parent.type !== 'worktree' ||
+        candidate.parent.worktree.id === worktree.id
+      ) {
+        continue
+      }
+      try {
+        this.validateParent(worktree, candidate.parent.worktree)
+      } catch {
+        continue
+      }
+      const target = worktreeRowTarget(store, worktree)
+      if (!target) {
+        continue
+      }
+      store.setWorktreeLineage(target, {
+        worktreeId: worktree.id,
+        worktreeInstanceId: worktree.instanceId,
+        parentWorktreeId: candidate.parent.worktree.id,
+        parentWorktreeInstanceId: candidate.parent.instanceId,
+        origin: 'orchestration',
+        capture: { source: 'orchestration-context', confidence: 'inferred' },
+        taskId,
+        createdAt: Date.now()
+      })
+    }
+  }
+
+  async listWorktreeLineage(): Promise<Record<string, WorktreeLineage>> {
+    await this.hydrate()
+    return this.deps.getStore()?.getAllWorktreeLineage?.() ?? {}
+  }
+
+  async listWorkspaceLineage(): Promise<Record<WorkspaceKey, WorkspaceLineage>> {
+    await this.hydrate()
+    return this.deps.getStore()?.getAllWorkspaceLineage?.() ?? {}
+  }
+}

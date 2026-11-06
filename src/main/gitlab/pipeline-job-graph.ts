@@ -1,5 +1,6 @@
 import type { GitLabPipelineJob } from '../../shared/gitlab-types'
 import { encodedProject } from './project-path-encoding'
+import { gitLabRunTimes } from './gitlab-run-times'
 import {
   glabHostnameArgs,
   glabRepoExecOptions,
@@ -23,6 +24,8 @@ type GitLabRawJob = {
   status?: string
   web_url?: string
   duration?: number | null
+  started_at?: string | null
+  finished_at?: string | null
 }
 
 type GitLabRawBridge = {
@@ -32,6 +35,8 @@ type GitLabRawBridge = {
   status?: string
   web_url?: string
   duration?: number | null
+  started_at?: string | null
+  finished_at?: string | null
   downstream_pipeline?: {
     id?: number
     project_id?: number
@@ -48,7 +53,8 @@ function mapPipelineJob(raw: GitLabRawJob, pipelineId: number): GitLabPipelineJo
     stage: raw.stage ?? '',
     status: raw.status ?? '',
     webUrl: raw.web_url ?? '',
-    duration: typeof raw.duration === 'number' ? raw.duration : null
+    duration: typeof raw.duration === 'number' ? raw.duration : null,
+    ...gitLabRunTimes(raw)
   }
 }
 
@@ -63,7 +69,9 @@ function mapBridgeAsJob(raw: GitLabRawBridge, pipelineId: number): GitLabPipelin
     // Bridge status may remain successful while its downstream pipeline is running or failed.
     status: childStatus || raw.status || '',
     webUrl: raw.downstream_pipeline?.web_url ?? raw.web_url ?? '',
-    duration: typeof raw.duration === 'number' ? raw.duration : null
+    duration: typeof raw.duration === 'number' ? raw.duration : null,
+    // The trigger job's own times can end long before the child pipeline it now stands for.
+    ...(childStatus ? {} : gitLabRunTimes(raw))
   }
 }
 

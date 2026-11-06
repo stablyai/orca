@@ -5,10 +5,10 @@ import {
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
-} from '../../shared/agent-session-account-home'
-import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import { structuredAgentRuntimeMetadata } from '../runtime/structured-agent-runtime-metadata'
+} from '../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import { structuredAgentRuntimeMetadata } from '../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import { sessionIdFromFileName } from '../ai-vault/session-scanner-accumulator'
 
 /** One conversation wherever it is named: the agents sharing its ids, its id (null: a targetless

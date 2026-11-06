@@ -1,13 +1,20 @@
 import { useEffect, useRef } from 'react'
 import { BackHandler, Platform } from 'react-native'
 
-// Android intercepts/posts hardware Back; iOS disables swipe-back while claimed so an open sheet cannot lose its screen. No live claim leaves navigation unchanged.
+type GestureOptions = { setOptions: (options: { gestureEnabled: boolean }) => void }
+
+const parentClaims = new WeakMap<GestureOptions, number>()
+
+// Android intercepts/posts hardware Back; iOS disables the stack swipe while claimed so it cannot pop the page (the shell's edge swipe sends Back instead). No live claim leaves navigation unchanged.
 export function useShellPageBack(args: {
   claimed: boolean
   isFocused: () => boolean
   // Return false for an undeliverable press so navigation can handle it.
   sendBack: () => boolean
-  setOptions: (options: { gestureEnabled: boolean }) => void
+  setOptions: GestureOptions['setOptions']
+  // The parent screen's swipe pops a nested stack's only screen and takes the edge whenever the nested swipe is off,
+  // so it stays off until the last claim among the shells under it ends.
+  parent: GestureOptions | undefined
 }): void {
   const { claimed } = args
   // Hold fresh caller callbacks without tearing down key registration on every render.
@@ -33,5 +40,23 @@ export function useShellPageBack(args: {
       return
     }
     latest.current.setOptions({ gestureEnabled: !claimed })
+    const parent = latest.current.parent
+    if (!claimed || !parent) {
+      return
+    }
+    const held = (parentClaims.get(parent) ?? 0) + 1
+    parentClaims.set(parent, held)
+    if (held === 1) {
+      parent.setOptions({ gestureEnabled: false })
+    }
+    return () => {
+      const left = (parentClaims.get(parent) ?? 1) - 1
+      if (left > 0) {
+        parentClaims.set(parent, left)
+        return
+      }
+      parentClaims.delete(parent)
+      parent.setOptions({ gestureEnabled: true })
+    }
   }, [claimed])
 }

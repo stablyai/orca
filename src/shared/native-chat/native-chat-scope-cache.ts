@@ -5,11 +5,12 @@ export const NATIVE_CHAT_COMPOSER_SCOPE_CACHE_MAX = 128
 export function setBoundedScopeCacheEntry<T>(
   cache: Map<string, T>,
   scopeKey: string,
-  value: T
+  value: T,
+  max = NATIVE_CHAT_COMPOSER_SCOPE_CACHE_MAX
 ): void {
   cache.delete(scopeKey)
   cache.set(scopeKey, value)
-  while (cache.size > NATIVE_CHAT_COMPOSER_SCOPE_CACHE_MAX) {
+  while (cache.size > max) {
     const oldest = cache.keys().next().value
     if (oldest === undefined) {
       break

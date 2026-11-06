@@ -1,12 +1,5 @@
 import type { MobileGitStatusEntry } from './mobile-git-status'
 
-export {
-  COMMIT_FAILURE_SUMMARY_SCAN_CODE_UNITS,
-  buildFixCommitFailurePrompt,
-  hasExpandedCommitFailureDetails,
-  summarizeCommitFailure
-} from '../../../src/shared/source-control-commit-failure'
-
 export type MobileCommitFailureStagedEntry = Pick<MobileGitStatusEntry, 'path' | 'status'> & {
   area: 'staged'
 }

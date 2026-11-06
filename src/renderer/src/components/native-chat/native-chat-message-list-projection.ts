@@ -1,10 +1,10 @@
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import {
   projectNativeChatTranscript,
   type NativeChatSubagentRow,
   type NativeChatTranscriptProjection
-} from '../../../../shared/native-chat-transcript-projection'
-import type { NativeChatTurnJournal } from '../../../../shared/native-chat-turn-membership'
+} from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
+import type { NativeChatTurnJournal } from '../../../../shared/native-chat/transcript/native-chat-turn-membership'
 import { compareMessages, orderMessages } from './native-chat-session-assembler'
 
 function sameMessage(left: NativeChatMessage, right: NativeChatMessage): boolean {

@@ -1,6 +1,6 @@
 // Combine calls/thoughts after slot selection so every intervening visible row or section boundary ends the run.
 
-import { agentJournalItemSubagentId } from '../../../../shared/agent-session-journal-producer'
+import { agentJournalItemSubagentId } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
 import {
   nativeChatWorkRunMember,
   nativeChatWorkRunSpans,
@@ -58,6 +58,7 @@ function workRunSlot(
         hasReceipt: false,
         hasStatus: head.status !== undefined,
         hasTurnDiff: turnDiff !== undefined,
+        turnDiffFileCount: turnDiff?.files.length,
         inSubagentSection: head.depth > 0
       },
       typography

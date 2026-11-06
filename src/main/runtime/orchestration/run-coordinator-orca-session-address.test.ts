@@ -12,7 +12,7 @@ import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
   structuredWorkerProcessIncarnation
-} from '../structured-worker-identity'
+} from './terminal-authority/structured-sessions/structured-worker-identity'
 import { OrchestrationDb } from './db'
 import { backfillStructuredWorkerOrcaSessionIds } from './db/schema/structured-worker-orca-session-backfill'
 
@@ -266,6 +266,7 @@ describe('Run coordinator Orca session address', () => {
       coordinatorHandle: handle,
       coordinatorPaneKey: pane
     })
+    db.bindRun({ runId: second.id, coordinatorHandle: handle, coordinatorPaneKey: pane })
     expect(db.getRunRaw(first.id)).toMatchObject({
       coordinator_handle: null,
       coordinator_orca_session_id: null

@@ -1,6 +1,6 @@
 import type { TabGroup } from '../../../../shared/tab-types'
 import type { prepareWebSessionTabsSnapshotUnified } from './apply-preparation-unified'
-import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import {
   isWebSessionBrowserPlacementGroupReserved,
   peekWebSessionBrowserPlacementGroup
@@ -93,12 +93,31 @@ export function prepareWebSessionTabsSnapshotGroups(
         })
       }
     }
+    // The nearest mirrored tab before each one in its host group, so a new tab keeps the host's place.
+    const hostPredecessor = new Map<string, string>()
+    for (const group of snapshot.tabGroups ?? []) {
+      let previous: string | undefined
+      for (const hostTabId of group.tabOrder) {
+        const localTabId = hostToLocalTabId.get(hostTabId)
+        if (localTabId === undefined) {
+          continue
+        }
+        if (previous !== undefined) {
+          hostPredecessor.set(localTabId, previous)
+        }
+        previous = localTabId
+      }
+    }
     const adoptedTabs = mirroredUnifiedTabs
       .filter((tab) => !knownGroupTabIds.has(tab.id))
-      .map((tab) => ({
-        tabId: tab.id,
-        groupId: clientGroupIdByLocalTabId.get(tab.id) ?? tab.groupId
-      }))
+      .map((tab) => {
+        const afterTabId = hostPredecessor.get(tab.id)
+        return {
+          tabId: tab.id,
+          groupId: clientGroupIdByLocalTabId.get(tab.id) ?? tab.groupId,
+          ...(afterTabId ? { afterTabId } : {})
+        }
+      })
     return reconcileClientOwnedTabPlacement({
       currentGroups,
       worktreeId,

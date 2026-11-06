@@ -1,8 +1,8 @@
 // Persist unheard paired closes across reload or the next host snapshot restores closed tabs forever (STA-6224).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import { parseWorkspaceSession } from '../../../shared/workspace-session-schema'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { parseWorkspaceSession } from '../../../shared/workspace-session/workspace-session-schema'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { useAppStore, type AppState } from '@/store'
 import {
   createSessionWriteSubscriber,

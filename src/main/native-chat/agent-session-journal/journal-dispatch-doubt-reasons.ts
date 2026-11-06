@@ -1,7 +1,7 @@
 // Unknown delivery never authorizes redelivery under the same ID; only a new user send rotates it.
 // Process facts end acknowledgement waits; elapsed time alone proves neither delivery nor rejection.
 
-import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../../../shared/structured-agent-session-send-evidence'
+import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../../../shared/agent-session/requests/structured-agent-session-send-evidence'
 
 export const DISPATCH_DOUBT_HOST_RESTARTED = 'host_restarted_before_acknowledgement'
 

@@ -102,6 +102,8 @@ export function SkillShareDialog({
       }
       const nextPreview = await window.api.skills.prepareShare({
         skillIds: selectedSkills.map((skill) => skill.id),
+        // Only these folders' roots may start a stopped WSL distro.
+        skillDirectories: selectedSkills.map((skill) => skill.directoryPath),
         bundleName,
         ...(managedInstall ? { packageId: managedInstall.packageId } : {})
       })

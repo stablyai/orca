@@ -114,7 +114,7 @@ export function renderFloatingTerminalPanelSurface({
             className="relative flex h-full w-full min-h-0 flex-col overflow-hidden rounded-lg border border-black/14 bg-card dark:border-white/14"
           >
             <div
-              className="flex h-9 shrink-0 cursor-grab items-center border-b border-border bg-[var(--bg-titlebar,var(--card))] active:cursor-grabbing"
+              className="flex h-9 shrink-0 cursor-grab items-center border-b border-border bg-[var(--bg-titlebar,var(--tab-bar,var(--card)))] active:cursor-grabbing"
               data-floating-terminal-shortcut-surface
               onPointerDown={handleDragStart}
               onPointerMove={handleDragMove}
@@ -181,6 +181,12 @@ export function renderFloatingTerminalPanelSurface({
                   tabStripChrome="floating-panel"
                 />
               </div>
+              {/* Keep a grab area even when the tab strip overflows. */}
+              <div
+                className="h-full w-16 shrink-0 select-none"
+                data-floating-terminal-drag-handle
+                aria-hidden
+              />
               <FloatingTerminalWindowControls
                 maximized={maximized}
                 onToggleMaximized={toggleMaximized}

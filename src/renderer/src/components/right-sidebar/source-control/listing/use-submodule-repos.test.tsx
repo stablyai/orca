@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 
-import type { GitSubmoduleRepo } from '../../../../../../shared/git-submodule-repo-types'
+import type { GitSubmoduleRepo } from '../../../../../../shared/git/status/git-submodule-repo-types'
 
 const { toastErrorMock } = vi.hoisted(() => ({ toastErrorMock: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: toastErrorMock } }))

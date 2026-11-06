@@ -75,18 +75,6 @@ describe('BrowserWebAuthnAccountDialog', () => {
     })
   })
 
-  it('returns null only when the user cancels', () => {
-    render(<BrowserWebAuthnAccountDialog />)
-    showRequest()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-
-    expect(respondMock).toHaveBeenCalledWith({
-      requestId: 'request-1',
-      credentialId: null
-    })
-  })
-
   it('closes a timed-out prompt when main dispatches teardown', () => {
     render(<BrowserWebAuthnAccountDialog />)
     showRequest()

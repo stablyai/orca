@@ -1,14 +1,11 @@
 // Admission allocates/writes nothing; deferred resolvers read current journal state because recovery
 // may land after admission but before sink binding.
 
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import type { StructuredAgentSessionItemAppendOptions } from '../agent-session-wire/structured-agent-session-event-sink'
 import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/structured-agent-session-transition'
-import type { ProviderTimelineHold } from './provider-timeline-budget'
 import type { ProviderTimelineContext } from './provider-timeline-context'
 import type { ProviderTimelineEvent } from './provider-timeline-event'
 import {
@@ -63,7 +60,6 @@ export type ProviderTimelineItemWrite = {
 
 export type ProviderTimelineDecision = {
   dropped?: ProviderTimelineDropRule
-  hold?: ProviderTimelineHold
   /** Apply state changes only after sink admission. */
   commit?: (state: ProviderTimelineState) => void
   /** Resolve settlement from the journal at execution. */
@@ -103,7 +99,7 @@ export function decideProviderTimelineEvent(
     case 'turn.end':
       return decideTurnEnd(input, event)
     case 'turn.settled':
-      return decideTurnSettled(event)
+      return decideTurnSettled(input, event)
     case 'item.open':
     case 'item.update':
     case 'item.close':

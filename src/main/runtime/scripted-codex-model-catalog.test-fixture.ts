@@ -1,4 +1,4 @@
-import type { CodexModelCatalogProbeDeps } from '../codex/codex-model-catalog-probe'
+import type { CodexModelCatalogProbeDeps } from '../codex/structured/catalog/codex-model-catalog-probe'
 
 /** Independent RPC transport for the scripted chat's installed-CLI discovery. */
 export const scriptedCodexCatalogSession: NonNullable<

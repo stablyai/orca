@@ -3,7 +3,7 @@ import {
   TERMINAL_MULTIPLEX_ACK_STREAM_MAX_WINDOW_BYTES,
   TERMINAL_MULTIPLEX_ACK_TOTAL_MAX_WINDOW_BYTES,
   TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS
-} from '../../../../../shared/terminal-multiplex-flow-control'
+} from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { drainTerminalMultiplexRoundRobin } from '../../terminal-multiplex-round-robin'
 import {
   sendSnapshotFrames,
@@ -67,6 +67,7 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
           kittyKeyboardFlags: serialized.kittyKeyboardFlags,
           alternateScreen: serialized.alternateScreen,
           terminalOwner: serialized.terminalOwner,
+          lastTitle: serialized.lastTitle,
           truncatedByByteBudget: serialized.truncatedByByteBudget,
           scrollbackRows: serialized.scrollbackRows,
           data: serialized.data

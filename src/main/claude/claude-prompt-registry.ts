@@ -2,7 +2,7 @@ import type { PermissionResult, PermissionUpdate } from '@anthropic-ai/claude-ag
 import type {
   AgentJournalApprovalMatchedAskRule,
   AgentJournalApprovalSubject
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 
 /** Settles the SDK's `canUseTool` promise; `null` writes no provider response. */
 export type ClaudePromptSettle = (response: PermissionResult | null) => void

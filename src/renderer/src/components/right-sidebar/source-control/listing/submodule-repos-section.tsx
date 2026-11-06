@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { ArrowDownToLine, ArrowUp, CloudDownload, GitBranch } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import type { GitSubmoduleRepo } from '../../../../../../shared/git-submodule-repo-types'
+import type { GitSubmoduleRepo } from '../../../../../../shared/git/status/git-submodule-repo-types'
 import { ActionButton } from './action-button'
 import { SectionHeader } from './section-header'
 import type {

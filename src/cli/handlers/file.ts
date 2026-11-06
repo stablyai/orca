@@ -1,5 +1,5 @@
 import { getFileOpenPosition } from './file-open-position'
-import type { GitStatusEntry, GitStatusResult } from '../../shared/git-status-types'
+import type { GitStatusEntry, GitStatusResult } from '../../shared/git/status/git-status-types'
 import type { RuntimeFileOpenResult, RuntimeWorktreeRecord } from '../../shared/runtime-types'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import { isRuntimePathAbsolute, relativePathInsideRoot } from '../../shared/cross-platform-path'

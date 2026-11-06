@@ -3,7 +3,7 @@ import {
   clearClientHostedBrowserCloseIntents,
   recordClientHostedBrowserCloseIntents
 } from '@/runtime/client-hosted-browser-close-intents'
-import { getBrowserSettingsHostId } from './browser-host-state'
+import { getBrowserSettingsHostId, updateDefaultBrowserProfileForHost } from './browser-host-state'
 import { parseExecutionHostId } from '../../../../../shared/execution-host'
 
 export function createBrowserHostActions(
@@ -47,8 +47,6 @@ export function createBrowserHostActions(
       set((s) => ({
         browserSessionHostIdOverride: nextHostId,
         browserSessionProfiles: s.browserSessionProfilesByHostId[nextHostId] ?? [],
-        defaultBrowserSessionProfileId:
-          s.defaultBrowserSessionProfileIdByHostId[nextHostId] ?? null,
         browserSessionImportState: null,
         detectedBrowsers: [],
         detectedBrowsersLoaded: false,
@@ -57,14 +55,7 @@ export function createBrowserHostActions(
       await Promise.all([get().fetchBrowserSessionProfiles(), get().fetchDetectedBrowsers()])
     },
 
-    setDefaultBrowserSessionProfileId: (profileId) => {
-      set((s) => ({
-        defaultBrowserSessionProfileId: profileId,
-        defaultBrowserSessionProfileIdByHostId: {
-          ...s.defaultBrowserSessionProfileIdByHostId,
-          [getBrowserSettingsHostId(s)]: profileId
-        }
-      }))
-    }
+    setDefaultBrowserSessionProfileId: (profileId) =>
+      updateDefaultBrowserProfileForHost(get, getBrowserSettingsHostId(get()), () => profileId)
   }
 }

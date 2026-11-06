@@ -5,8 +5,10 @@ import {
   type ContextOnlyDispatchReleaseResult
 } from '../../context-only-dispatch-release'
 import { isEquivalentPaneKey } from '../pane-key-match'
+import { refuseStopWhileKeptOpen } from '../worker-terminal/worker-terminal-user-keep'
 import type { OrchestrationDb } from '../orchestration-db'
 import { reconcileTaskAfterDispatchInterruption } from '../dispatch-context/task-dispatch-reconciliation'
+import { markUnreadFollowUpMail } from '../dispatch-context/worker-follow-up-lineage'
 import {
   beginLifecycleWriteTransaction,
   commitLifecycleWriteTransaction,
@@ -40,6 +42,21 @@ export function isStopStrandedByAnotherRuntime(
   return worker.state === 'stopping' && worker.runtime_epoch !== runtimeEpoch
 }
 
+/** worker-stop fenced this Dispatch: it starts no helper, and a helper it was starting stops when that start ends. */
+export function isWorkerStopRequested(this: OrchestrationDb, dispatchId: string): boolean {
+  const state =
+    this.getWorkerDispatch(dispatchId)?.state ?? this.getRemoteDispatchAttachment(dispatchId)?.state
+  return state === 'stopping' || state === 'stop_unknown' || state === 'stopped'
+}
+
+/** Every Dispatch this one started as its helper, oldest first. */
+export function listHelperDispatchIds(this: OrchestrationDb, creatorDispatchId: string): string[] {
+  return this.db
+    .prepare('SELECT id FROM dispatch_contexts WHERE creator_dispatch_id = ? ORDER BY rowid')
+    .all(creatorDispatchId)
+    .map((row) => String(row.id))
+}
+
 export function beginWorkerStop(
   this: OrchestrationDb,
   dispatchId: string,
@@ -67,6 +84,7 @@ export function beginWorkerStop(
       this.db.exec('COMMIT')
       return { disposition: 'already_settled', worker, dispatch }
     }
+    refuseStopWhileKeptOpen(this, dispatchId)
     // A different runtime epoch may retry a stranded stop; this epoch must preserve its in-flight stopping verdict for the exit event.
     if (
       !['ready', 'start_unknown'].includes(worker.state) &&
@@ -138,6 +156,8 @@ export function settleWorkerStop(this: OrchestrationDb, dispatchId: string): Wor
     reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
     // Move helper mail received while the creator was stopping.
     this.closeQuestionsForDispatch(dispatchId)
+    // Mail it never read stays for the next send, as a report would keep it.
+    markUnreadFollowUpMail(this, dispatchId)
     this.db.exec('COMMIT')
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {
@@ -271,6 +291,8 @@ export function markWorkerStopUnknown(
 
 export type WorkerDispatchStopMethods = {
   isDispatchProcessCurrent: typeof isDispatchProcessCurrent
+  isWorkerStopRequested: typeof isWorkerStopRequested
+  listHelperDispatchIds: typeof listHelperDispatchIds
   beginWorkerStop: typeof beginWorkerStop
   settleWorkerStop: typeof settleWorkerStop
   reconcileFederatedWorkerStop: typeof reconcileFederatedWorkerStop
@@ -281,6 +303,8 @@ export type WorkerDispatchStopMethods = {
 export function attachWorkerDispatchStop(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     isDispatchProcessCurrent,
+    isWorkerStopRequested,
+    listHelperDispatchIds,
     beginWorkerStop,
     settleWorkerStop,
     reconcileFederatedWorkerStop,

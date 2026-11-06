@@ -13,7 +13,7 @@ import type {
   PublishedWorkspaceLayout
 } from '../../../shared/workspace-layout/workspace-layout-published'
 import { saveWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-save'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { projectHydratedBrowserSession } from './slices/browser/browser-hydration-state'
 import { buildHydratedEditorSessionState } from './slices/editor/actions/hydrated-editor-session-state'
 import { openFileOfLayoutEditorView } from './slices/editor/tabs/open-file-layout-view'

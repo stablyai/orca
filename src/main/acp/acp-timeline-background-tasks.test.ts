@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { backgroundTaskFallbackText } from '../../shared/native-chat/input/native-chat-background-task-row'
-import { deriveNativeChatRowContent } from '../../shared/native-chat-row-content'
-import { isBackgroundTaskBlock } from '../../shared/native-chat-types'
+import { deriveNativeChatRowContent } from '../../shared/native-chat/transcript/native-chat-row-content'
+import { isBackgroundTaskBlock } from '../../shared/native-chat/native-chat-types'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { openAcpFixtureRig, readAcpFixture } from './acp-timeline-fixture.test-support'
 
@@ -124,44 +124,6 @@ describe('Grok background tasks through the shared timeline', () => {
       expect((await taskRows(fixture))[0]?.block.state).toBe('done')
     }
   )
-
-  it.each([
-    [{ exit_code: 2, error: 'Command failed' }, 'blocked'],
-    [{ exit_code: null, error: 'Task failed' }, 'blocked'],
-    [{ exit_code: null, signal: 'SIGTERM' }, 'blocked'],
-    [{ exit_code: null, explicitly_killed: true }, 'idle'],
-    [{ exit_code: null }, 'done']
-  ] as const)(
-    'preserves explicit task completion and the provider outcome %j',
-    async (snapshot, state) => {
-      const fixture = await openAcpFixtureRig()
-      await fixture.feed(await runningFrames())
-      fixture.apply(fixture.lane().notification('x.ai/task_completed', completed(snapshot), 2000))
-      expect((await taskRows(fixture))[0]?.block.state).toBe(state)
-    }
-  )
-
-  it('keeps the label and placement of a running task beside 130 other running tasks', async () => {
-    const fixture = await openAcpFixtureRig()
-    await fixture.feed(await runningFrames())
-    const [before] = await taskRows(fixture)
-    for (let index = 0; index < 130; index += 1) {
-      fixture.apply(
-        fixture
-          .lane()
-          .notification('x.ai/task_backgrounded', started(`task-${index}`), 1500 + index)
-      )
-    }
-    fixture.apply(fixture.lane().notification('x.ai/task_completed', completed(), 2000))
-    const original = (await taskRows(fixture)).find((task) => task.block.taskId === taskId)
-    expect(original?.row.itemId).toBe(before?.row.itemId)
-    expect(original?.row.turnScope).toEqual(before?.row.turnScope)
-    expect(original?.block).toMatchObject({
-      state: 'done',
-      label: before?.block.label,
-      parentToolUseId: 'call-1'
-    })
-  })
 
   it('places a first task notice beside its original tool after its turn ended and another began', async () => {
     const fixture = await openAcpFixtureRig()

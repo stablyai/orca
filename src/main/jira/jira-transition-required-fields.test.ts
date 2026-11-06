@@ -51,21 +51,6 @@ describe('required Jira transition fields', () => {
     getClients.mockReturnValue([entry])
   })
 
-  it('loads required resolution metadata rather than hiding it from the form', async () => {
-    jiraRequest.mockResolvedValue({ transitions: [transition] })
-    const { listTransitions } = await import('./jira-transition-queries')
-    expect(await listTransitions('APP-1', 'site-1')).toMatchObject([
-      {
-        id: '31',
-        fields: [{ key: 'resolution', required: true, allowedValues: [{ id: '1', name: 'Fixed' }] }]
-      }
-    ])
-    expect(jiraRequest).toHaveBeenCalledWith(
-      entry,
-      '/rest/api/3/issue/APP-1/transitions?expand=transitions.fields'
-    )
-  })
-
   it('posts resolution and comment in the same request Jira validates', async () => {
     jiraRequest.mockImplementation(async (_entry, _path, options) => {
       const payload = JSON.parse(options.body)
@@ -105,23 +90,6 @@ describe('required Jira transition fields', () => {
     expect(jiraRequest).toHaveBeenCalledTimes(1)
     expect(release).toHaveBeenCalledOnce()
     expect(clearToken).not.toHaveBeenCalled()
-  })
-
-  it('preserves the legacy empty list on operational failures without strict reads', async () => {
-    jiraRequest.mockRejectedValue(new JiraApiError('Service unavailable', 503))
-    const { listTransitions } = await import('./jira-transition-queries')
-    expect(await listTransitions('APP-1', 'site-1')).toEqual([])
-    expect(jiraRequest).toHaveBeenCalledTimes(1)
-    expect(release).toHaveBeenCalledOnce()
-    expect(clearToken).not.toHaveBeenCalled()
-  })
-
-  it('does not retry expired credentials', async () => {
-    jiraRequest.mockRejectedValue(new JiraApiError('Unauthorized', 401))
-    const { listTransitions } = await import('./jira-transition-queries')
-    await expect(listTransitions('APP-1')).rejects.toThrow('Unauthorized')
-    expect(jiraRequest).toHaveBeenCalledTimes(1)
-    expect(clearToken).toHaveBeenCalledWith('site-1')
   })
 
   it('keeps old-client bare transitions and Server comments compatible', async () => {

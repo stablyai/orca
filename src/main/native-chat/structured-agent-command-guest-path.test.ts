@@ -47,7 +47,7 @@ describe.skipIf(process.platform === 'win32')('launch-time CLI resolution in a W
     guest.mounts = [windowsDrive]
     expect(
       resolveStructuredAgentCommand('codex', {}, { pathEnv: `${windowsDrive}:${linuxBin}` })
-    ).toBe(join(linuxBin, 'codex'))
+    ).toEqual({ command: join(linuxBin, 'codex'), prefixArgs: [] })
   })
 
   it("filters this process's PATH when the caller gives none", () => {
@@ -55,7 +55,10 @@ describe.skipIf(process.platform === 'win32')('launch-time CLI resolution in a W
     const linuxBin = binDir('linux')
     guest.mounts = [windowsDrive]
     vi.stubEnv('PATH', `${windowsDrive}:${linuxBin}`)
-    expect(resolveStructuredAgentCommand('codex', {})).toBe(join(linuxBin, 'codex'))
+    expect(resolveStructuredAgentCommand('codex', {})).toEqual({
+      command: join(linuxBin, 'codex'),
+      prefixArgs: []
+    })
   })
 
   it('filters the PATH a Command setting resolves through', () => {
@@ -66,15 +69,19 @@ describe.skipIf(process.platform === 'win32')('launch-time CLI resolution in a W
       agentCmdOverrides: { codex: 'codex-custom' },
       agentDefaultEnv: { codex: { PATH: `${windowsDrive}:${linuxBin}` } }
     }
-    expect(resolveStructuredAgentCommand('codex', settings)).toBe(join(linuxBin, 'codex-custom'))
+    expect(resolveStructuredAgentCommand('codex', settings)).toEqual({
+      command: join(linuxBin, 'codex-custom'),
+      prefixArgs: []
+    })
   })
 
   it('keeps the first PATH match off a guest', () => {
     const first = binDir('first')
     const second = binDir('second')
-    expect(resolveStructuredAgentCommand('codex', {}, { pathEnv: `${first}:${second}` })).toBe(
-      join(first, 'codex')
-    )
+    expect(resolveStructuredAgentCommand('codex', {}, { pathEnv: `${first}:${second}` })).toEqual({
+      command: join(first, 'codex'),
+      prefixArgs: []
+    })
   })
 })
 

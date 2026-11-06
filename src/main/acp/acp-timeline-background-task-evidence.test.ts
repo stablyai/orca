@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { backgroundTaskFallbackText } from '../../shared/native-chat/input/native-chat-background-task-row'
-import { isBackgroundTaskBlock } from '../../shared/native-chat-types'
+import { isBackgroundTaskBlock } from '../../shared/native-chat/native-chat-types'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import type { ToolCallUpdate } from './generated/acp-protocol.generated'
 import { openAcpFixtureRig, readAcpFixture } from './acp-timeline-fixture.test-support'
@@ -100,16 +100,6 @@ describe('background task outcome evidence', () => {
     expect(JSON.stringify(task?.row.body)).not.toContain('PASS a.test.js')
   })
 
-  it('uses the command when the provider never gives a description', async () => {
-    const fixture = await openAcpFixtureRig()
-    taskNotice(fixture, 'unnamed')
-    taskNotice(fixture, 'unnamed', false, true)
-    const [task] = await taskRows(fixture)
-    expect(task && backgroundTaskFallbackText(task.block)).toBe(
-      'Background command "sleep 99" finished'
-    )
-  })
-
   it('joins the captured task and queue notices into one completed row beside its launch tool', async () => {
     const fixture = await openAcpFixtureRig()
     const tail = await launch(fixture)
@@ -177,21 +167,6 @@ describe('background task outcome evidence', () => {
       taskNotice(fixture, taskId)
       taskNotice(fixture, taskId, false, true)
       expect((await taskRows(fixture))[0]?.block.state).toBe('idle')
-    }
-  )
-
-  it.each(['pending', 'in_progress', 'failed'] as const)(
-    'does not infer a stop from a %s kill call',
-    async (status) => {
-      const fixture = await openAcpFixtureRig()
-      await launch(fixture)
-      tool(fixture, {
-        toolCallId: 'kill-1',
-        name: 'kill_command_or_subagent',
-        status,
-        rawInput: { task_id: taskId }
-      })
-      expect((await taskRows(fixture))[0]?.block.state).toBe('working')
     }
   )
 

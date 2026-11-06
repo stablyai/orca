@@ -21,9 +21,6 @@ export function acquireDesktopProfileLockOrExplain(userDataPath: string): boolea
 
 /** Ends a failed preflight without showing a Linux dialog before Electron is ready. */
 export function handleMainProcessPreflightFailure(error: unknown, exitCode = 1): void {
-  const message =
-    formatProfileStateStartupFailure(error) ??
-    (error instanceof Error ? error.message : String(error))
   const shouldShowDialog = !state.isServeMode && !isBackgroundLaunch()
   state.desktopActivationGate = null
   const admission = state.profileStateAdmission
@@ -36,6 +33,10 @@ export function handleMainProcessPreflightFailure(error: unknown, exitCode = 1):
 
   const showDialogAndExit = (): void => {
     try {
+      // Built here so Linux reads the system-language catalog loaded after ready.
+      const message =
+        formatProfileStateStartupFailure(error, translateMain) ??
+        (error instanceof Error ? error.message : String(error))
       dialog.showErrorBox(translateMain('startupFailure.title', 'Orca could not start'), message)
     } catch (dialogError) {
       console.warn('[startup] Could not show startup failure:', dialogError)

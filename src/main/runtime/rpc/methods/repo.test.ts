@@ -1,9 +1,11 @@
 import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
+import type { Repo } from '../../../../shared/repo-types'
 import { RpcDispatcher } from '../dispatcher'
-import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { REPO_METHODS } from './repo'
+import { makeRequest, repoDispatcher } from './repo-rpc.test-fixture'
 import {
   NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
@@ -14,21 +16,38 @@ import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runti
 import { REPO_SEARCH_REFS_MAX_LIMIT } from '../../../../shared/repo-search-limits'
 import { SSH_TARGET_MANAGEMENT_RUNTIME_CAPABILITY } from '../../../../shared/ssh-target-management'
 
-function makeRequest(method: string, params?: unknown): RpcRequest {
-  return { id: 'req-1', authToken: 'tok', method, params }
-}
-
-function repoDispatcher(
-  runtime: Pick<OrcaRuntimeService, 'getRuntimeId'> & Partial<OrcaRuntimeService>
-) {
-  return new RpcDispatcher({
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: These RPC cases supply every runtime method their handlers and envelope access.
-    runtime: runtime as OrcaRuntimeService,
-    methods: REPO_METHODS
-  })
-}
-
 describe('repo RPC methods', () => {
+  it('answers repo.list snapshot reads unchanged while the repos stay the same', async () => {
+    let repos: Repo[] = [
+      { id: 'repo-1', path: '/r', displayName: 'api', badgeColor: '#fff', addedAt: 1 }
+    ]
+    const dispatcher = repoDispatcher({
+      getRuntimeId: () => 'test-runtime',
+      listVisibleRepos: () => repos
+    })
+    const snapshotIdOf = (reply: unknown) =>
+      z.object({ snapshotId: z.string() }).parse(reply).snapshotId
+    const result = async (params?: unknown) => {
+      const response = await dispatcher.dispatch(makeRequest('repo.list', params))
+      return response.ok ? response.result : null
+    }
+
+    const legacy = await result()
+    const first = await result({ afterSnapshotId: null })
+    const repeat = await result({ afterSnapshotId: snapshotIdOf(first) })
+    repos = [{ id: 'repo-1', path: '/r', displayName: 'api-2', badgeColor: '#fff', addedAt: 1 }]
+    const changed = await result({ afterSnapshotId: snapshotIdOf(first) })
+
+    expect(legacy).toEqual({ repos: [expect.objectContaining({ displayName: 'api' })] })
+    expect(first).toEqual({
+      repos: [expect.objectContaining({ displayName: 'api' })],
+      snapshotId: snapshotIdOf(first)
+    })
+    expect(repeat).toEqual({ unchanged: true, snapshotId: snapshotIdOf(first) })
+    expect(changed).toMatchObject({ repos: [expect.objectContaining({ displayName: 'api-2' })] })
+    expect(snapshotIdOf(changed)).not.toBe(snapshotIdOf(first))
+  })
+
   it('advertises qualified-ref support from hosts and native remote clients', () => {
     expect(RUNTIME_CAPABILITIES).toContain(REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY)
     expect(NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES).toContain(
@@ -409,8 +428,19 @@ describe('repo RPC methods', () => {
 
     const hooksResponse = await dispatcher.dispatch(makeRequest('repo.hooks', { repo: 'repo-1' }))
     await dispatcher.dispatch(makeRequest('repo.hooksCheck', { repo: 'repo-1' }))
+    await dispatcher.dispatch(makeRequest('repo.hooksCheck', { repo: 'repo-1', background: true }))
+    await dispatcher.dispatch(
+      makeRequest('repo.hooksCheck', { repo: 'repo-1', wakeWslDistro: true })
+    )
     await dispatcher.dispatch(makeRequest('repo.setupScriptImports', { repo: 'repo-1' }))
     await dispatcher.dispatch(makeRequest('repo.issueCommandRead', { repo: 'repo-1' }))
+    // A launch's wake reaches the read; a non-boolean value is dropped, as older clients send none.
+    await dispatcher.dispatch(
+      makeRequest('repo.issueCommandRead', { repo: 'repo-1', wakeWslDistro: true })
+    )
+    await dispatcher.dispatch(
+      makeRequest('repo.issueCommandRead', { repo: 'repo-1', wakeWslDistro: 'yes' })
+    )
     await dispatcher.dispatch(
       makeRequest('repo.issueCommandWrite', {
         repo: 'repo-1',
@@ -423,10 +453,19 @@ describe('repo RPC methods', () => {
       ok: true,
       result: { setupTrust: { contentHash: 'hash-1', scriptContent: 'pnpm install' } }
     })
-    expect(runtime.checkRepoHooks).toHaveBeenCalledWith('repo-1')
+    // A check without a launch's wake (a web or older client) never opens a stopped distro (E9).
+    expect(runtime.checkRepoHooks).toHaveBeenNthCalledWith(1, 'repo-1', { background: true })
+    expect(runtime.checkRepoHooks).toHaveBeenNthCalledWith(2, 'repo-1', { background: true })
+    expect(runtime.checkRepoHooks).toHaveBeenNthCalledWith(3, 'repo-1', { background: false })
     expect(runtime.inspectRepoSetupScriptImports).toHaveBeenCalledWith('repo-1')
-    expect(runtime.readRepoIssueCommand).toHaveBeenCalledWith('repo-1')
-    expect(runtime.writeRepoIssueCommand).toHaveBeenCalledWith('repo-1', 'Fix it')
+    expect(vi.mocked(runtime.readRepoIssueCommand).mock.calls).toEqual([
+      ['repo-1', { wakeWslDistro: undefined }],
+      ['repo-1', { wakeWslDistro: true }],
+      ['repo-1', { wakeWslDistro: undefined }]
+    ])
+    expect(runtime.writeRepoIssueCommand).toHaveBeenCalledWith('repo-1', 'Fix it', {
+      wakeWslDistro: undefined
+    })
   })
 
   it('persists GitHub issue source preference updates', async () => {

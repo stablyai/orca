@@ -17,12 +17,13 @@ export type PreflightSlice = {
   preflightStatusLoading: boolean
   preflightStatusError: string | null
 
-  refreshPreflightStatus: (options?: { force?: boolean }) => Promise<void>
+  /** `wakeWslDistro`: a user act (window focus, a click) that may start the focused workspace's stopped WSL distro. */
+  refreshPreflightStatus: (options?: { force?: boolean; wakeWslDistro?: boolean }) => Promise<void>
   invalidatePreflightStatus: () => void
 }
 
 let nonForcedPreflightRequest: { key: string; promise: Promise<void> } | null = null
-let forcedPreflightRequest: { key: string; promise: Promise<void> } | null = null
+let forcedPreflightRequest: { key: string; promise: Promise<void>; wake: boolean } | null = null
 let latestPreflightRequestId = 0
 
 function getErrorMessage(error: unknown): string {
@@ -31,16 +32,22 @@ function getErrorMessage(error: unknown): string {
 
 function buildPreflightArgs(
   force: boolean,
+  wake: boolean,
   context: LocalPreflightContext
-): (PreflightRuntimeContext & { force?: boolean }) | undefined {
+): (PreflightRuntimeContext & { force?: boolean; wakeWslDistro?: boolean }) | undefined {
   const wslDistro = context?.wslDistro
   const wslDefault = context?.wslDefault === true
   const projectRuntime = context?.projectRuntime
   if (!force && !wslDistro && !wslDefault && !projectRuntime) {
     return undefined
   }
+  // Only a focused WSL workspace's own distro may wake; a native workspace wakes nothing.
+  const wslWorkspace =
+    Boolean(wslDistro) ||
+    (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl')
   return {
     ...(force ? { force: true } : {}),
+    ...(wake && wslWorkspace ? { wakeWslDistro: true } : {}),
     ...(projectRuntime ? { projectRuntime } : {}),
     ...(wslDistro ? { wslDistro } : {}),
     ...(wslDefault ? { wslDefault: true } : {})
@@ -69,6 +76,7 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
 
   refreshPreflightStatus: async (options) => {
     const force = options?.force === true
+    const wake = options?.wakeWslDistro === true
     const context = getLocalPreflightContext(get())
     const contextKey = localPreflightContextKey(context)
     if (!force && forcedPreflightRequest?.key === contextKey) {
@@ -77,7 +85,12 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
     if (!force && nonForcedPreflightRequest?.key === contextKey) {
       return nonForcedPreflightRequest.promise
     }
-    if (force && forcedPreflightRequest?.key === contextKey) {
+    // A background probe in flight may be refused for a stopped distro; a wake must not join it.
+    if (
+      force &&
+      forcedPreflightRequest?.key === contextKey &&
+      (forcedPreflightRequest.wake || !wake)
+    ) {
       return forcedPreflightRequest.promise
     }
 
@@ -85,7 +98,7 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
     const contextChanged = get().preflightStatusContextKey !== contextKey
     // Why: the host the context key names: the focused workspace's owner, else the default scope host.
     const runtimeTarget = getActiveWorkspaceOwnerTarget(get()) ?? defaultScopeHost(get().settings)
-    const preflightArgs = buildPreflightArgs(force, context)
+    const preflightArgs = buildPreflightArgs(force, wake, context)
     set({
       preflightStatus: contextChanged ? null : get().preflightStatus,
       preflightStatusChecked: contextChanged ? false : get().preflightStatusChecked,
@@ -136,7 +149,7 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
     if (!force) {
       nonForcedPreflightRequest = { key: contextKey, promise: request }
     } else {
-      forcedPreflightRequest = { key: contextKey, promise: request }
+      forcedPreflightRequest = { key: contextKey, promise: request, wake }
     }
 
     return request

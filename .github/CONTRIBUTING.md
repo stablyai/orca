@@ -53,6 +53,15 @@ pnpm install
 pnpm dev
 ```
 
+`mobile/` is a separate pnpm project with its own lockfile, so the root `pnpm install` leaves its
+dependencies uninstalled. `pnpm build` (`build:mobile-web` fails without them) and the lint
+passes that cover `mobile/` need them. Install them before building or linting, and again
+when `mobile/pnpm-lock.yaml` changes:
+
+```bash
+pnpm -C mobile install --frozen-lockfile
+```
+
 ### Dev Profiles and Parallel Instances
 
 `pnpm dev` in a linked Git worktree uses its own userData profile, renderer port, and remote
@@ -99,7 +108,7 @@ feedback, Vitest can select tests affected by your edits:
 ```bash
 pnpm test:changed src/main/runtime --maxWorkers=2
 pnpm test --changed=origin/main --maxWorkers=2
-pnpm test src/shared/app-version.test.ts --maxWorkers=2
+pnpm test src/shared/automation-cron-dialect.test.ts --maxWorkers=2
 ```
 
 `test:changed` considers staged, unstaged, and untracked files. `--changed=origin/main`
@@ -139,7 +148,7 @@ needed. Things to know:
   dependencies the package never declared and hides missing-dependency bugs; `pnpm install` warns
   when it finds one.
 - Native addons are never rebuilt in place in a shared slot: each CPU gets its own build
-  beside it (see [`native-build-entry.cjs`](../config/scripts/native-build-entry.cjs)), so
+  beside it (see [`native-build-entry.cjs`](../config/scripts/native-build/node-addons/native-build-entry.cjs)), so
   cross-arch packaging is safe for other worktrees.
 - `ORCA_PNPM_GLOBAL_VIRTUAL_STORE=0` opts out. Keep it set
   in your shell: `pnpm run` re-checks the install and relinks a worktree whose layout no longer
@@ -170,7 +179,7 @@ Avoid vague names like `test`, `misc`, or `changes`.
 
 ## Before Opening a PR
 
-Run the same checks that CI runs:
+Run the same checks that CI runs, after the `mobile/` install from [Local Setup](#local-setup):
 
 ```bash
 pnpm lint

@@ -1,14 +1,11 @@
 import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
-import type {
-  PRState,
-  ProviderCheckSummary
-} from '../../../../src/shared/github/pull-request-types'
+import type { PRState } from '../../../../src/shared/github/pull-request-types'
 import {
-  classifyCheckOutcome,
-  summarizeProviderChecks,
-  type CheckOutcome as SharedCheckOutcome
-} from '../../../../src/shared/provider-check-summary'
+  getProviderChecksOutcome,
+  summarizeProviderChecks
+} from '../../../../src/shared/source-control/checks/provider-check-summary'
 import { prStateToken } from '../pr-state-token'
+import { translate } from '../../i18n/mobile-i18n'
 
 // Pure RN-free checks/badge logic follows desktop merge-state and reviewer presenters.
 
@@ -21,17 +18,10 @@ export type MobileStatusToken =
   | 'textSecondary'
 
 export type CheckOutcome = 'success' | 'pending' | 'failure' | 'neutral'
+type CheckPresentationOutcome = CheckOutcome | 'cancelled'
 
-const OUTCOME_BY_SHARED: Record<SharedCheckOutcome, CheckOutcome> = {
-  passed: 'success',
-  failed: 'failure',
-  pending: 'pending',
-  neutral: 'neutral'
-}
-
-// Share desktop classifier: duplicate logic misclassified skipped as unresolved and action_required as pending.
-export function checkOutcome(check: PRCheckDetail): CheckOutcome {
-  return OUTCOME_BY_SHARED[classifyCheckOutcome(check)]
+export function checkOutcome(check: PRCheckDetail): CheckPresentationOutcome | 'none' {
+  return getProviderChecksOutcome(summarizeProviderChecks([check]))
 }
 
 export type PRChecksSummary = {
@@ -39,43 +29,77 @@ export type PRChecksSummary = {
   passed: number
   pending: number
   failed: number
-  outcome: CheckOutcome | 'none'
+  cancelled: number
+  outcome: CheckPresentationOutcome | 'none'
   label: string
-}
-
-const OUTCOME_BY_STATE: Record<ProviderCheckSummary['state'], CheckOutcome | 'none'> = {
-  success: 'success',
-  failure: 'failure',
-  pending: 'pending',
-  neutral: 'neutral',
-  none: 'none'
 }
 
 export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSummary {
   if (checks.length === 0) {
-    return { total: 0, passed: 0, pending: 0, failed: 0, outcome: 'none', label: 'No checks' }
+    return {
+      total: 0,
+      passed: 0,
+      pending: 0,
+      failed: 0,
+      cancelled: 0,
+      outcome: 'none',
+      label: translate('pullRequest.prChecksPresentation.noChecks', 'No checks')
+    }
   }
   // Counts and the worst-case rollup come from the shared summarizer; only the label wording is mobile's.
-  const { total, passed, pending, failed, neutral, state } = summarizeProviderChecks(checks)
-  const outcome = OUTCOME_BY_STATE[state]
+  const summary = summarizeProviderChecks(checks)
+  const { total, passed, pending, neutral } = summary
+  const cancelled = summary.cancelled ?? 0
+  const failed = summary.failed - cancelled
+  const outcome = getProviderChecksOutcome(summary)
   const parts: string[] = []
   if (failed > 0) {
-    parts.push(`${failed} failing`)
+    const count = failed
+    parts.push(
+      count === 1
+        ? translate('pullRequest.prChecksPresentation.failing_one', '{{count}} failing', { count })
+        : translate('pullRequest.prChecksPresentation.failing_other', '{{count}} failing', {
+            count
+          })
+    )
+  }
+  if (cancelled > 0) {
+    parts.push(`${cancelled} ${translate('pullRequest.checkStatus.cancelled', 'Cancelled')}`)
   }
   if (pending > 0) {
-    parts.push(`${pending} pending`)
+    const count = pending
+    parts.push(
+      count === 1
+        ? translate('pullRequest.prChecksPresentation.pending_one', '{{count}} pending', { count })
+        : translate('pullRequest.prChecksPresentation.pending_other', '{{count}} pending', {
+            count
+          })
+    )
   }
   if (passed > 0) {
-    parts.push(`${passed} passed`)
+    const count = passed
+    parts.push(
+      count === 1
+        ? translate('pullRequest.prChecksPresentation.passed_one', '{{count}} passed', { count })
+        : translate('pullRequest.prChecksPresentation.passed_other', '{{count}} passed', { count })
+    )
   }
   if (neutral > 0) {
-    parts.push(`${neutral} neutral`)
+    const count = neutral
+    parts.push(
+      count === 1
+        ? translate('pullRequest.prChecksPresentation.neutral_one', '{{count}} neutral', { count })
+        : translate('pullRequest.prChecksPresentation.neutral_other', '{{count}} neutral', {
+            count
+          })
+    )
   }
   return {
     total,
     passed,
     pending,
     failed,
+    cancelled,
     outcome,
     label: parts.join(' · ')
   }
@@ -83,10 +107,12 @@ export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSum
 
 /** An unreadable checks reply is not an absent one, so the header must not read "No checks". */
 export function prChecksSummaryLabel(summary: PRChecksSummary, checksError: string | null): string {
-  return checksError === null ? summary.label : 'Checks unavailable'
+  return checksError === null
+    ? summary.label
+    : translate('pullRequest.prChecksPresentation.unavailable', 'Checks unavailable')
 }
 
-export function checkOutcomeToken(outcome: CheckOutcome | 'none'): MobileStatusToken {
+export function checkOutcomeToken(outcome: CheckPresentationOutcome | 'none'): MobileStatusToken {
   switch (outcome) {
     case 'success':
       return 'statusGreen'
@@ -110,29 +136,21 @@ export function prCheckKey(check: PRCheckDetail): string {
   return `name:${check.name}`
 }
 
-// Use sorted list for first-failure auto-expand so chosen row matches rendered actionable order.
-export function firstFailingCheckKey(checks: readonly PRCheckDetail[]): string | null {
-  for (const check of checks) {
-    if (checkOutcome(check) === 'failure') {
-      return prCheckKey(check)
-    }
-  }
-  return null
-}
-
 export type PRStateBadge = {
   label: string
   token: MobileStatusToken
 }
 
-const PR_STATE_LABELS: Record<PRState, string> = {
-  open: 'Open',
-  merged: 'Merged',
-  draft: 'Draft',
-  closed: 'Closed'
+function prStateLabels(): Record<PRState, string> {
+  return {
+    open: translate('pullRequest.prChecksPresentation.stateOpen', 'Open'),
+    merged: translate('pullRequest.prChecksPresentation.stateMerged', 'Merged'),
+    draft: translate('pullRequest.prChecksPresentation.stateDraft', 'Draft'),
+    closed: translate('pullRequest.prChecksPresentation.stateClosed', 'Closed')
+  }
 }
 
 // Use shared prStateToken so sidebar and workspace badge agree on merged/open/closed/draft colors.
 export function prStateBadge(state: PRState): PRStateBadge {
-  return { label: PR_STATE_LABELS[state] ?? state, token: prStateToken(state) }
+  return { label: prStateLabels()[state] ?? state, token: prStateToken(state) }
 }

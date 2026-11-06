@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-import { openTerminalManageSessions } from '../settings/open-terminal-manage-sessions'
+import { openTerminalManageSessions } from '../settings/terminal/session-management/open-terminal-manage-sessions'
 
 const POLL_INTERVAL_MS = 30_000
 

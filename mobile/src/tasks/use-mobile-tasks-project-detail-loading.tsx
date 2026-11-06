@@ -1,5 +1,5 @@
 import type { ItemDetailLoadingModel } from './use-mobile-tasks-item-detail-loading'
-import { useEffect } from './mobile-tasks-dependencies'
+import { useEffect, useLayoutEffect } from './mobile-tasks-dependencies'
 import {
   editableProjectFields,
   projectFieldDraftValue,
@@ -8,7 +8,30 @@ import {
 } from './mobile-tasks-legacy-foundation'
 import { githubProjectRowDetailRead } from './mobile-task-project-board-operations'
 
-export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel) {
+export function useMobileTasksProjectDetailLoading<
+  Model extends Pick<
+    ItemDetailLoadingModel,
+    | 'activeGitHubProjectHost'
+    | 'client'
+    | 'githubProjectTable'
+    | 'projectRowDetailRefreshSeq'
+    | 'projectRowItem'
+    | 'setExpandedPrFilePath'
+    | 'setPrFileCommentDrafts'
+    | 'resetPrFiles'
+    | 'setProjectBodyDraft'
+    | 'setProjectCommentDraft'
+    | 'setProjectEditingCommentDraft'
+    | 'setProjectEditingCommentId'
+    | 'setProjectFieldDrafts'
+    | 'setProjectReviewersDraft'
+    | 'setProjectRowDetail'
+    | 'setProjectRowDetailError'
+    | 'setProjectRowDetailLoading'
+    | 'setProjectTitleDraft'
+    | 'tasksSupported'
+  >
+>(model: Model) {
   const {
     activeGitHubProjectHost,
     client,
@@ -17,8 +40,7 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
     projectRowItem,
     setExpandedPrFilePath,
     setPrFileCommentDrafts,
-    setPrFileContents,
-    setPrFileLoadingPath,
+    resetPrFiles,
     setProjectBodyDraft,
     setProjectCommentDraft,
     setProjectEditingCommentDraft,
@@ -31,6 +53,9 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
     setProjectTitleDraft,
     tasksSupported
   } = model
+  useLayoutEffect(() => {
+    resetPrFiles()
+  }, [projectRowItem, client, projectRowDetailRefreshSeq, resetPrFiles])
   useEffect(() => {
     if (!projectRowItem) {
       setProjectRowDetail(null)
@@ -43,8 +68,6 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
       setProjectEditingCommentDraft('')
       setProjectReviewersDraft('')
       setExpandedPrFilePath(null)
-      setPrFileContents({})
-      setPrFileLoadingPath(null)
       setPrFileCommentDrafts({})
       setProjectFieldDrafts({})
       return
@@ -59,8 +82,6 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
     setProjectEditingCommentDraft('')
     setProjectReviewersDraft('')
     setExpandedPrFilePath(null)
-    setPrFileContents({})
-    setPrFileLoadingPath(null)
     setPrFileCommentDrafts({})
     setProjectFieldDrafts(
       Object.fromEntries(
@@ -143,4 +164,5 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
   return model
 }
 
-export type ProjectDetailLoadingModel = ReturnType<typeof useMobileTasksProjectDetailLoading>
+export type ProjectDetailLoadingModel = ItemDetailLoadingModel &
+  ReturnType<typeof useMobileTasksProjectDetailLoading>

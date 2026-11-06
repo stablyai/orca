@@ -1,6 +1,6 @@
 // Read current repo count at emit time, after repo additions land; zero identifies pre-repo sessions. Uninitialized/failed reads omit the optional cohort field so telemetry never blocks the app (onboarding-funnel-cohort-addendum.md).
 
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 
 let storeRef: Store | null = null
 

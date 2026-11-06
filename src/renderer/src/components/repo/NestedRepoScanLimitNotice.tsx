@@ -6,17 +6,48 @@ import { translate } from '@/i18n/i18n'
 
 function formatTimeout(timeoutMs: number): string {
   if (timeoutMs >= 1000 && timeoutMs % 1000 === 0) {
-    return `${timeoutMs / 1000} seconds`
+    const count = timeoutMs / 1000
+    return translate(
+      'auto.components.repo.NestedRepoScanLimitNotice.seconds',
+      '{{count}} seconds',
+      { count, defaultValue_one: '{{count}} second' }
+    )
   }
-  return `${timeoutMs} ms`
+  return translate('auto.components.repo.NestedRepoScanLimitNotice.milliseconds', '{{count}} ms', {
+    count: timeoutMs
+  })
+}
+
+function folderLevelsLabel(count: number): string {
+  return translate(
+    'auto.components.repo.NestedRepoScanLimitNotice.folderLevels',
+    '{{count}} folder levels',
+    { count, defaultValue_one: '{{count}} folder level' }
+  )
+}
+
+function repositoriesLabel(count: number): string {
+  return translate(
+    'auto.components.repo.NestedRepoScanLimitNotice.repositories',
+    '{{count}} repositories',
+    { count, defaultValue_one: '{{count}} repository' }
+  )
 }
 
 export function nestedRepoScanLimitText(scan: NestedRepoScanResult): string {
-  const automaticStops = [`${scan.maxDepth} folder levels`, `${scan.maxRepos} repositories`]
-  if (scan.timeoutMs !== null) {
-    automaticStops.push(formatTimeout(scan.timeoutMs))
-  }
-  return `Scan stops after ${automaticStops.join(' or ')}. You can stop scanning early and import repositories found so far.`
+  const depth = folderLevelsLabel(scan.maxDepth)
+  const repos = repositoriesLabel(scan.maxRepos)
+  return scan.timeoutMs === null
+    ? translate(
+        'auto.components.repo.NestedRepoScanLimitNotice.limitText',
+        'Scan stops after {{depth}} or {{repos}}. You can stop scanning early and import repositories found so far.',
+        { depth, repos }
+      )
+    : translate(
+        'auto.components.repo.NestedRepoScanLimitNotice.limitTextWithTimeout',
+        'Scan stops after {{depth}}, {{repos}}, or {{timeout}}. You can stop scanning early and import repositories found so far.',
+        { depth, repos, timeout: formatTimeout(scan.timeoutMs) }
+      )
 }
 
 export function NestedRepoScanLimitNotice({ scan }: { scan: NestedRepoScanResult }) {

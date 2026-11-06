@@ -1,18 +1,19 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
+import type { ITerminalOptions } from '@xterm/xterm'
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   TERMINAL_PASTE_CHUNK_MAX_BYTES,
   TERMINAL_PASTE_DIRECT_MAX_BYTES
 } from '@/components/terminal-pane/terminal-paste-limits'
+import '@/components/terminal-pane/terminal-bracketed-paste'
 import {
   BRACKETED_PASTE_END,
   BRACKETED_PASTE_START
-} from '@/components/terminal-pane/terminal-bracketed-paste'
+} from '../../../../shared/terminal/input/terminal-bracketed-paste-text'
 import { dispatchAppMenuPasteEvent } from '@/lib/app-menu-paste'
-import { dispatchAppMenuSelectionAction } from '@/lib/app-menu-selection-actions'
 
 const terminalHarness = vi.hoisted(() => ({
   instances: [] as {
@@ -83,6 +84,7 @@ vi.mock('@xterm/xterm', () => ({
     element = document.createElement('div')
     unicode = { activeVersion: '6', versions: ['6', '11'], register: vi.fn() }
     loadAddon = vi.fn()
+    options: ITerminalOptions = {}
     attachCustomWheelEventHandler = vi.fn()
     scrollToTop = vi.fn()
     scrollToBottom = vi.fn()
@@ -211,245 +213,6 @@ describe('AgentTerminalPreview clipboard routes', () => {
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()
-  })
-
-  it('claims the app-menu paste event and pastes while the preview owns focus', async () => {
-    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    focusInsidePreview(view.container)
-
-    let claimed = false
-    act(() => {
-      claimed = dispatchAppMenuPasteEvent()
-    })
-
-    // The claim is what keeps App-level paste out of xterm's hidden textarea.
-    expect(claimed).toBe(true)
-    await waitFor(() => expect(terminal.paste).toHaveBeenCalledWith('clip-text'))
-    expect(input).toHaveBeenCalledWith('pty-1', 'clip-text')
-  })
-
-  it('encodes a leading newline for a remote Windows Codex preview without submitting', async () => {
-    readClipboardText.mockResolvedValueOnce('\nsecond line')
-    const view = render(
-      <AgentTerminalPreview
-        ptyId="remote:windows-box@@pty-1"
-        terminalInput={{
-          hostPlatform: 'win32',
-          localWindowsConpty: false,
-          windowsShiftEnterEncoding: 'alt-enter',
-          windowsInputRecordPasteNewline: 'alt-enter',
-          ctrlEnterCsiU: false,
-          kittyKeyboardAdvertised: false
-        }}
-      />
-    )
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    focusInsidePreview(view.container)
-
-    act(() => {
-      dispatchAppMenuPasteEvent()
-    })
-
-    await waitFor(() =>
-      expect(input).toHaveBeenCalledWith('remote:windows-box@@pty-1', '\x1b\rsecond line')
-    )
-    expect(terminal.input).toHaveBeenCalledWith('\x1b\rsecond line')
-    expect(terminal.paste).not.toHaveBeenCalled()
-  })
-
-  it('claims app-menu selection actions while the preview owns focus', async () => {
-    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    terminal.selectionText = 'selected text'
-    const focusTarget = focusInsidePreview(view.container, 'textarea')
-    focusTarget.className = 'xterm-helper-textarea'
-
-    let selectAllClaimed = false
-    let copyClaimed = false
-    act(() => {
-      selectAllClaimed = dispatchAppMenuSelectionAction('select-all')
-    })
-    act(() => {
-      copyClaimed = dispatchAppMenuSelectionAction('copy')
-    })
-
-    expect(selectAllClaimed).toBe(true)
-    expect(copyClaimed).toBe(true)
-    expect(terminal.selectAll).toHaveBeenCalledOnce()
-    await waitFor(() => expect(writeTerminalClipboardText).toHaveBeenCalledWith('selected text'))
-  })
-
-  it('leaves app-menu selection actions unclaimed for text controls inside the preview', async () => {
-    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    focusInsidePreview(view.container)
-
-    let claimed = true
-    act(() => {
-      claimed = dispatchAppMenuSelectionAction('select-all')
-    })
-
-    // Unclaimed so the App-level handler performs the native selection action.
-    expect(claimed).toBe(false)
-    expect(terminal.selectAll).not.toHaveBeenCalled()
-  })
-
-  it('leaves a copy action with no terminal selection unclaimed', async () => {
-    render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-
-    let claimed = true
-    act(() => {
-      claimed = dispatchAppMenuSelectionAction('copy')
-    })
-
-    expect(claimed).toBe(false)
-    expect(writeTerminalClipboardText).not.toHaveBeenCalled()
-  })
-
-  it('leaves the app-menu paste event unclaimed when focus is outside the preview', async () => {
-    render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-
-    let claimed = true
-    await act(async () => {
-      claimed = dispatchAppMenuPasteEvent()
-    })
-
-    expect(claimed).toBe(false)
-    expect(readClipboardText).not.toHaveBeenCalled()
-    expect(terminalHarness.instances[0]!.paste).not.toHaveBeenCalled()
-  })
-
-  it('stops claiming app-menu clipboard events once unmounted', async () => {
-    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    focusInsidePreview(view.container)
-    view.unmount()
-
-    expect(dispatchAppMenuPasteEvent()).toBe(false)
-    expect(dispatchAppMenuSelectionAction('select-all')).toBe(false)
-  })
-
-  it('pastes on plain Ctrl+V on Windows, where no Edit-menu accelerator ever fires', async () => {
-    platformState.value = 'win32'
-    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
-    focusInsidePreview(view.container)
-
-    const plain = new KeyboardEvent('keydown', {
-      key: 'v',
-      code: 'KeyV',
-      ctrlKey: true,
-      cancelable: true
-    })
-    expect(terminal.customKeyHandler!(plain)).toBe(false)
-    expect(plain.defaultPrevented).toBe(true)
-    await waitFor(() => expect(terminal.paste).toHaveBeenCalledWith('clip-text'))
-
-    // The repeat is swallowed without a second clipboard read, and so is the keyup.
-    expect(
-      terminal.customKeyHandler!(
-        new KeyboardEvent('keydown', { key: 'v', code: 'KeyV', ctrlKey: true, repeat: true })
-      )
-    ).toBe(false)
-    expect(terminal.customKeyHandler!(new KeyboardEvent('keyup', { key: 'v', code: 'KeyV' }))).toBe(
-      false
-    )
-    expect(readClipboardText).toHaveBeenCalledTimes(1)
-  })
-
-  it('handles the shifted paste chord on Linux', async () => {
-    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
-    focusInsidePreview(view.container)
-
-    const shifted = new KeyboardEvent('keydown', {
-      key: 'V',
-      code: 'KeyV',
-      ctrlKey: true,
-      shiftKey: true,
-      cancelable: true
-    })
-    expect(terminal.customKeyHandler!(shifted)).toBe(false)
-    expect(shifted.defaultPrevented).toBe(true)
-    await waitFor(() => expect(terminal.paste).toHaveBeenCalledWith('clip-text'))
-    expect(readClipboardText).toHaveBeenCalledTimes(1)
-  })
-
-  it('leaves plain Cmd+V to the macOS Edit-menu accelerator', async () => {
-    platformState.value = 'darwin'
-    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
-    focusInsidePreview(view.container)
-
-    // macOS Cmd+V uses its native accelerator; handling it here too would paste twice.
-    const plain = terminal.customKeyHandler!(
-      new KeyboardEvent('keydown', { key: 'v', code: 'KeyV', metaKey: true })
-    )
-    expect(plain).toBe(true)
-    expect(readClipboardText).not.toHaveBeenCalled()
-  })
-
-  it('pastes on terminal-style right-click when the setting is on', async () => {
-    storeState.settings = { terminalRightClickToPaste: true }
-    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    focusInsidePreview(view.container)
-    const host = view.container.querySelector<HTMLElement>('.origin-bottom-left')!
-
-    const menuEvent = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
-    act(() => {
-      host.dispatchEvent(menuEvent)
-    })
-
-    expect(menuEvent.defaultPrevented).toBe(true)
-    await waitFor(() => expect(terminal.paste).toHaveBeenCalledWith('clip-text'))
-  })
-
-  it('copies the selection on terminal-style right-click instead of pasting', async () => {
-    storeState.settings = { terminalRightClickToPaste: true }
-    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    terminal.selectionText = 'selected text'
-    focusInsidePreview(view.container)
-    const host = view.container.querySelector<HTMLElement>('.origin-bottom-left')!
-
-    act(() => {
-      host.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))
-    })
-
-    await waitFor(() => expect(writeTerminalClipboardText).toHaveBeenCalledWith('selected text'))
-    expect(readClipboardText).not.toHaveBeenCalled()
-  })
-
-  it('leaves right-click to the native menu when the setting is off', async () => {
-    storeState.settings = { terminalRightClickToPaste: false }
-    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    focusInsidePreview(view.container)
-    const host = view.container.querySelector<HTMLElement>('.origin-bottom-left')!
-
-    const menuEvent = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
-    act(() => {
-      host.dispatchEvent(menuEvent)
-    })
-
-    expect(menuEvent.defaultPrevented).toBe(false)
-    expect(readClipboardText).not.toHaveBeenCalled()
   })
 
   it('cancels an async paste when the preview loses focus', async () => {

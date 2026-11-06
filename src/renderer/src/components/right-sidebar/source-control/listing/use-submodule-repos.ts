@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import type { GitSubmoduleRepo } from '../../../../../../shared/git-submodule-repo-types'
+import type { GitSubmoduleRepo } from '../../../../../../shared/git/status/git-submodule-repo-types'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 

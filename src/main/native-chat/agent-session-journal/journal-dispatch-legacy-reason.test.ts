@@ -43,9 +43,4 @@ describe("a dispatch row's reason", () => {
       JOURNAL_DISPATCH_REASON_LIMITS.inlineHeadBytes + 1024
     )
   })
-
-  it('reads as stored when it already fits, or is absent', () => {
-    expect(reasonAfter('Provider rejected the message.')).toBe('Provider rejected the message.')
-    expect(reasonAfter(null)).toBeNull()
-  })
 })

@@ -78,6 +78,7 @@ export async function getPRCheckDetails(
       return call.result
     }
     let checkRun: Record<string, unknown> | null = null
+    let output: Record<string, unknown> | null = null
     let annotations: PRCheckRunDetails['annotations'] = []
     if (args.checkRunId) {
       const { stdout } = await fetchMetadata([
@@ -89,15 +90,21 @@ export async function getPRCheckDetails(
         parsed && typeof parsed === 'object' && !Array.isArray(parsed)
           ? Object.fromEntries(Object.entries(parsed))
           : null
-      try {
-        const annotationsResult = await fetchMetadata([
-          'api',
-          `repos/${ownerRepo.owner}/${ownerRepo.repo}/check-runs/${args.checkRunId}/annotations?per_page=20`
-        ])
-        annotations = mapCheckAnnotations(JSON.parse(annotationsResult.stdout))
-      } catch (err) {
-        rethrowCheckDetailsAbort(controller.signal, err)
-        console.warn('getPRCheckDetails', 'annotations_failed')
+      output =
+        checkRun?.output && typeof checkRun.output === 'object'
+          ? Object.fromEntries(Object.entries(checkRun.output))
+          : null
+      if (checkRun?.status !== 'completed' || output?.annotations_count !== 0) {
+        try {
+          const annotationsResult = await fetchMetadata([
+            'api',
+            `repos/${ownerRepo.owner}/${ownerRepo.repo}/check-runs/${args.checkRunId}/annotations?per_page=20`
+          ])
+          annotations = mapCheckAnnotations(JSON.parse(annotationsResult.stdout))
+        } catch (err) {
+          rethrowCheckDetailsAbort(controller.signal, err)
+          console.warn('getPRCheckDetails', 'annotations_failed')
+        }
       }
       await waitPrevious()
     }
@@ -124,10 +131,6 @@ export async function getPRCheckDetails(
       await waitPrevious()
     }
 
-    const output =
-      checkRun?.output && typeof checkRun.output === 'object'
-        ? Object.fromEntries(Object.entries(checkRun.output))
-        : null
     return {
       name: nullableString(checkRun?.name) ?? args.checkName ?? 'Check',
       status: nullableString(checkRun?.status),

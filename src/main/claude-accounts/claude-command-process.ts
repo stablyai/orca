@@ -5,14 +5,14 @@ import {
   type WindowsHostInteractiveLoginSpawn
 } from '../../shared/windows-interactive-login-spawn'
 import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import { resolveClaudeCommand } from '../codex-cli/command'
 import {
   isSpawnEnoent,
   isWindowsOnlyAgentCommand,
   windowsOnlyCliMessage
 } from '../codex-cli/windows-only-agent-cli'
-import { resolveWslExecutablePath } from '../wsl/wsl-executable-path'
+import { resolveWslExecutablePath } from '../wsl/execution/wsl-executable-path'
 import { buildWindowsCommandInvocation } from './windows-command-invocation'
 import { terminateClaudeProcess } from './claude-login-process-termination'
 

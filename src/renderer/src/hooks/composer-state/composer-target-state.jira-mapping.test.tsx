@@ -158,7 +158,7 @@ function renderUnavailableMappedComposer(
     includeSetupHint?: boolean
     emptyRepoOverride?: boolean
     missingSshSetup?: boolean
-    canonicalSameHostSetup?: boolean
+    sameHostSiblingCheckout?: boolean
   } = {}
 ) {
   const mappedRepo: Repo = {
@@ -166,11 +166,11 @@ function renderUnavailableMappedComposer(
     id: options.repeatedId ? currentRepo.id : 'mapped',
     path: '/mapped',
     connectionId: 'builder',
-    ...(options.canonicalSameHostSetup ? { upstream: { owner: 'fixture', repo: 'app' } } : {})
+    ...(options.sameHostSiblingCheckout ? { upstream: { owner: 'fixture', repo: 'app' } } : {})
   }
-  const canonicalRepo: Repo = { ...mappedRepo, id: 'canonical', path: '/canonical' }
-  const repos = options.canonicalSameHostSetup
-    ? [currentRepo, canonicalRepo, mappedRepo]
+  const siblingRepo: Repo = { ...mappedRepo, id: 'sibling', path: '/sibling' }
+  const repos = options.sameHostSiblingCheckout
+    ? [currentRepo, siblingRepo, mappedRepo]
     : [currentRepo, mappedRepo]
   const projection = projectHostSetupProjectionFromRepos(repos)
   const initialWorkspaceTarget: WorkspaceCreationTargetHint = {
@@ -216,7 +216,7 @@ function renderUnavailableMappedComposer(
     const source = useComposerSourceState(target, external)
     return { ...target, source }
   })
-  return { ...hook, mappedRepo, canonicalRepo }
+  return { ...hook, mappedRepo }
 }
 
 describe('unavailable mapped Jira destinations', () => {
@@ -299,20 +299,20 @@ describe('unavailable mapped Jira destinations', () => {
     expect(result.current.initialTargetState.repoId).toBe(currentRepo.id)
   })
 
-  it('aligns the repo identity with the canonical same-host setup after recovery', () => {
-    const { result, canonicalRepo } = renderUnavailableMappedComposer({
-      canonicalSameHostSetup: true
+  it('keeps the mapped checkout, not an older same-host sibling, after recovery', () => {
+    const { result, mappedRepo } = renderUnavailableMappedComposer({
+      sameHostSiblingCheckout: true
     })
     expect(result.current.runtimeTargetSelection.selectedWorkspaceTarget.status).toBe('unavailable')
     act(() => useAppStore.setState({ sshTargetLabels: new Map([['builder', 'Builder']]) }))
 
     expect(result.current.runtimeTargetSelection.selectedWorkspaceTarget).toMatchObject({
       status: 'ready',
-      target: { repo: canonicalRepo, hostId: 'ssh:builder' }
+      target: { repo: mappedRepo, hostId: 'ssh:builder' }
     })
-    expect(result.current.runtimeTargetSelection.selectedRepo).toBe(canonicalRepo)
-    expect(result.current.initialTargetState.repoId).toBe(canonicalRepo.id)
-    expect(result.current.runtimeTargetSelection.repoIdRef.current).toBe(canonicalRepo.id)
+    expect(result.current.runtimeTargetSelection.selectedRepo).toBe(mappedRepo)
+    expect(result.current.initialTargetState.repoId).toBe(mappedRepo.id)
+    expect(result.current.runtimeTargetSelection.repoIdRef.current).toBe(mappedRepo.id)
     expect(result.current.sourceContextState.taskSourceContext).toEqual(jiraSource)
     expect(result.current.sourceContextState.linkedWorkItem?.jiraIdentifier).toBe('APP-1')
   })

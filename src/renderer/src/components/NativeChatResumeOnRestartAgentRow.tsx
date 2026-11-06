@@ -1,6 +1,7 @@
 import { useContext } from 'react'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
+import { agentTypeToIconAgent } from '../../../shared/agent-status/presentation/agent-type-icon-agent'
+import { formatAgentTypeLabel } from '../../../shared/agent-status/presentation/agent-type-label'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
 import { translate } from '@/i18n/i18n'
 import type { ResumeCandidate, ResumeFailure } from './native-chat-resume-on-restart-grouping'

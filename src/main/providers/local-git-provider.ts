@@ -1,6 +1,6 @@
 import { gitSyncForkDefaultBranch } from '../git/fork-sync'
 import type { GitRuntimeOptions } from '../git/git-runtime-options'
-import { checkIgnoredPaths } from '../git/check-ignored-paths'
+import { checkIgnoredPaths } from '../git/source-control/check-ignored-paths'
 import { checkoutBranch, listLocalBranches } from '../git/checkout'
 import { getHistory } from '../git/history'
 import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from '../git/remote'
@@ -9,25 +9,27 @@ import { awaitWindowsHostGitEnvironmentReady, gitExecFileAsync } from '../git/ru
 import {
   abortMerge,
   abortRebase,
-  bulkDiscardChanges,
+  detectConflictOperation
+} from '../git/source-control/git-conflict-operation'
+import { bulkDiscardChanges, discardChanges } from '../git/source-control/discard-changes'
+import {
   bulkStageFiles,
   bulkUnstageFiles,
-  commitChanges,
-  detectConflictOperation,
-  discardChanges,
-  getBranchCompare,
-  getCommitCompare,
-  getCommitDiff,
-  getDiff,
-  getStagedCommitContext,
-  getStatus,
-  getSubmoduleStatus,
+  resolveConflict,
   stageFile,
   stageWorktreeChanges,
   unstageFile
-} from '../git/status'
-import { getUpstreamStatus } from '../git/upstream'
-import { listWorktrees } from '../git/worktree'
+} from '../git/source-control/staging'
+import { commitChanges, completeMerge } from '../git/source-control/commit-changes'
+import { getBranchCompare } from '../git/source-control/branch-compare'
+import { getCommitCompare } from '../git/source-control/commit-compare'
+import { getCommitDiff } from '../git/source-control/commit-diff'
+import { getDiff } from '../git/source-control/file-diff'
+import { getStagedCommitContext } from '../git/source-control/staged-commit-context'
+import { getStatus } from '../git/source-control/status-read'
+import { getSubmoduleStatus } from '../git/source-control/submodule-status'
+import { getUpstreamStatus } from '../git/source-control/upstream'
+import { listWorktrees } from '../git/worktrees/catalog/worktree-scan-cache'
 import type { IGitProvider } from './git-provider-contract'
 
 /** Per-worktree execution options; build one provider per call and never cache it (WSL routing). */
@@ -72,10 +74,16 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
     getHistory: (worktreePath, historyOptions = {}) =>
       getHistory(worktreePath, { ...historyOptions, ...interactive }),
     commit: (worktreePath, message) => commitChanges(worktreePath, message, interactive),
+    completeMerge: (worktreePath) => completeMerge(worktreePath, interactive),
     getStagedCommitContext: (worktreePath) => getStagedCommitContext(worktreePath, interactive),
-    getDiff: (worktreePath, filePath, staged, compareAgainstHead) =>
-      getDiff(worktreePath, filePath, staged, compareAgainstHead, interactive),
+    getDiff: (worktreePath, filePath, staged, compareAgainstHead, oldPath) =>
+      getDiff(worktreePath, filePath, staged, compareAgainstHead, {
+        ...interactive,
+        ...(oldPath ? { oldPath } : {})
+      }),
     stageFile: (worktreePath, filePath) => stageFile(worktreePath, filePath, interactive),
+    resolveConflict: (worktreePath, filePath, resolution) =>
+      resolveConflict(worktreePath, filePath, resolution, interactive),
     unstageFile: (worktreePath, filePath) => unstageFile(worktreePath, filePath, interactive),
     bulkStageFiles: async (worktreePath, filePaths, scope) => {
       if (scope) {
