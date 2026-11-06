@@ -118,6 +118,19 @@ describe('DeviceRegistry pairing offer TTL', () => {
     expect(new DeviceRegistry(dir).validateToken(offer.token)?.deviceId).toBe(offer.deviceId)
   })
 
+  it('keeps a paired row paired when a stale writer saves its older copy', () => {
+    const owner = new DeviceRegistry(dir)
+    const offer = owner.getOrCreatePendingDevice('Phone', 'mobile', 'network', [], TTL)
+    // Loaded while the offer was still unscanned.
+    const stale = new DeviceRegistry(dir)
+    vi.setSystemTime(1_000_000 + 1_000)
+    owner.updateLastSeen(offer.deviceId)
+
+    stale.addDevice('CLI', 'runtime')
+    vi.setSystemTime(9e12)
+    expect(new DeviceRegistry(dir).validateToken(offer.token)?.deviceId).toBe(offer.deviceId)
+  })
+
   it('treats an unreadable expiry as never expiring', () => {
     writeFileSync(
       join(dir, DEVICE_REGISTRY_FILENAME),

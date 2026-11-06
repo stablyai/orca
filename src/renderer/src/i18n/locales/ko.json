@@ -7666,7 +7666,7 @@
           "diagnosticsCopied": "진단이 복사되었습니다.",
           "diagnosticsCopyFailed": "진단을 복사하지 못했습니다.",
           "5e2c7a1f84": "휴대폰에서 터미널을 사용하는 동안 Orca는 휴대폰 화면에 맞게 터미널을 축소합니다. 앱을 닫거나 다른 앱으로 전환할 때, 휴대폰 화면 크기를 유지할지(대화형 CLI 도구의 레이아웃 재배치 방지) 아니면 데스크톱 크기로 다시 조정할지 제어합니다. 배너에서 언제든지 '복원' 또는 '모두 복원'을 사용해 수동으로 크기를 조정할 수 있습니다.",
-          "codeRefreshesAutomatically": "코드는 자동으로 새로 고쳐집니다."
+          "codeRefreshesAutomatically": "코드는 자동으로 새로 고쳐집니다. 복사한 코드는 최대 10분 동안 사용할 수 있습니다."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "앱스토어",

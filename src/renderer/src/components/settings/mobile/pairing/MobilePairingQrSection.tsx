@@ -140,7 +140,7 @@ export function MobilePairingQrSection({
                 {' '}
                 {translate(
                   'auto.components.settings.MobilePane.codeRefreshesAutomatically',
-                  'Code refreshes automatically.'
+                  'Code refreshes automatically. A copied code works for up to 10 minutes.'
                 )}
               </>
             ) : null}

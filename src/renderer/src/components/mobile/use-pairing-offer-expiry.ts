@@ -2,6 +2,8 @@ import { useEffect, useEffectEvent } from 'react'
 
 // Main reuses an offer only with more than a minute left, so a refresh here mints a fresh one.
 export const PAIRING_OFFER_REFRESH_LEAD_MS = 60_000
+// Timers stall while the computer sleeps; recheck the wall clock so a woken screen never keeps an expired code.
+export const PAIRING_OFFER_WALL_CLOCK_RECHECK_MS = 15_000
 
 /** Calls `onDue` at `expiresAt - leadMs` while this surface is mounted and visible. */
 export function usePairingOfferExpiry(
@@ -30,20 +32,22 @@ export function usePairingOfferExpiry(
       timer = window.setTimeout(
         () => {
           timer = null
-          // Timers may fire a little early; firing before dueAt would just get the same offer back.
+          // Not due yet (an interim recheck, or a timer firing a little early): keep waiting.
           if (Date.now() < dueAt) {
             arm()
             return
           }
           fire()
         },
-        Math.max(0, dueAt - Date.now())
+        Math.min(Math.max(0, dueAt - Date.now()), PAIRING_OFFER_WALL_CLOCK_RECHECK_MS)
       )
     }
     arm()
     document.addEventListener('visibilitychange', arm)
+    window.addEventListener('focus', arm)
     return () => {
       document.removeEventListener('visibilitychange', arm)
+      window.removeEventListener('focus', arm)
       if (timer !== null) {
         window.clearTimeout(timer)
       }

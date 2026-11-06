@@ -43,6 +43,24 @@ describe('usePairingOfferExpiry', () => {
     expect(onDue).toHaveBeenCalledOnce()
   })
 
+  it('fires soon after the computer wakes from sleep past the refresh time', () => {
+    const onDue = vi.fn()
+    renderHook(() => usePairingOfferExpiry(EXPIRES_AT, onDue))
+    // Sleep moves the wall clock without running timers.
+    vi.setSystemTime(EXPIRES_AT + 60 * 60_000)
+    act(() => vi.advanceTimersByTime(15_000))
+    expect(onDue).toHaveBeenCalledOnce()
+  })
+
+  it('rechecks when the window regains focus', () => {
+    const onDue = vi.fn()
+    renderHook(() => usePairingOfferExpiry(EXPIRES_AT, onDue))
+    vi.setSystemTime(EXPIRES_AT)
+    act(() => window.dispatchEvent(new Event('focus')))
+    act(() => vi.advanceTimersByTime(0))
+    expect(onDue).toHaveBeenCalledOnce()
+  })
+
   it('stops after unmount and never runs without an expiry', () => {
     const onDue = vi.fn()
     const { unmount } = renderHook(() => usePairingOfferExpiry(EXPIRES_AT, onDue))

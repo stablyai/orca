@@ -8172,7 +8172,7 @@
           "diagnosticsCopied": "已複製診斷訊息",
           "diagnosticsCopyFailed": "無法複製診斷訊息",
           "5e2c7a1f84": "當您在手機上使用終端機時，Orca 會將其縮小以適合您的手機螢幕。當您關閉應用程式或切換離開時，此設定可控制終端機要保持手機尺寸（讓互動式 CLI 工具不會重新排版），還是調整回桌面尺寸。您隨時可以使用橫幅上的「還原」或「全部還原」來手動調整大小。",
-          "codeRefreshesAutomatically": "配對碼會自動重新整理。"
+          "codeRefreshesAutomatically": "配對碼會自動重新整理。複製的配對碼最多可使用 10 分鐘。"
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",

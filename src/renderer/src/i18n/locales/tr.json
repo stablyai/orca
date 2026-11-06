@@ -8335,7 +8335,7 @@
           "diagnosticsCopied": "Tanılama bilgileri kopyalandı",
           "diagnosticsCopyFailed": "Tanılama bilgileri kopyalanamadı",
           "5e2c7a1f84": "Telefonunuzda terminal kullanırken Orca, terminali telefon ekranına sığacak şekilde küçültür. Uygulamayı kapattığınızda veya başka bir uygulamaya geçtiğinizde bu ayar, terminalin telefon boyutunda kalmasını (etkileşimli CLI araçlarının düzeninin değişmemesi için) ya da masaüstü boyutuna geri dönmesini belirler. Boyutu elle değiştirmek için bildirim çubuğundaki Geri yükle veya Tümünü geri yükle seçeneklerini her zaman kullanabilirsiniz.",
-          "codeRefreshesAutomatically": "Kod otomatik olarak yenilenir."
+          "codeRefreshesAutomatically": "Kod otomatik olarak yenilenir. Kopyalanan kod en fazla 10 dakika çalışır."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
