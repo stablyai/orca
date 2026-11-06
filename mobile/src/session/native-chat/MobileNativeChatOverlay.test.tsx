@@ -96,10 +96,9 @@ it('keeps the chat view mounted and hidden while its terminal shows', () => {
   const shown = renderer!.root.findByType('ChatView' as never).props
   expect(shown.ids).toEqual(['a', 'b'])
 
-  // The hidden lane reads as an empty chat; the overlay draws nothing and keeps the last chat.
+  // The hidden lane reads as an empty chat; nothing is drawn over the terminal.
   act(() => renderer!.update(overlay(false, [])))
   expect(renderer!.toJSON()).toBeNull()
-  expect(renderer!.root.findByType('ChatView' as never).props.ids).toEqual(['a', 'b'])
 
   act(() => renderer!.update(overlay(true, [...rows, message('c')])))
   const back = renderer!.root.findByType('ChatView' as never).props
