@@ -11,6 +11,7 @@ import {
   selectLivePtyIdsForWorktree
 } from '@/components/sidebar/workspace-card/activity/worktree-card-status-inputs'
 import { useAppStore } from '@/store/index'
+import { selectKnownWorktreeById } from '@/store/selectors'
 import {
   useWorktreeStructuredChatTabNames,
   getStructuredChatTabNames
@@ -84,7 +85,7 @@ export function ReviewNotesSendMenuContent({
   const now = useNow(30_000, viewActive)
   const worktree = useAppStateValue(
     useShallow((state) => {
-      const row = state.getKnownWorktreeById(worktreeId)
+      const row = selectKnownWorktreeById(state, worktreeId)
       return row
         ? {
             id: row.id,
