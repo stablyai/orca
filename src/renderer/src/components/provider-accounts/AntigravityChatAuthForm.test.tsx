@@ -109,11 +109,14 @@ it.each(['accounts', 'provider'] as const)(
     expect(screen.queryByLabelText('Google Cloud project')).not.toBeInTheDocument()
     await user.click(screen.getByRole('combobox'))
     await user.click(screen.getByRole('option', { name: 'Gemini Enterprise' }))
-    expect(screen.getByRole('button', { name: 'Sign in', exact: true })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeDisabled()
     expect(callAntigravityChatSignIn).not.toHaveBeenCalled()
     await user.type(screen.getByLabelText('Google Cloud project'), enterprise.gcpProject)
+    await act(async () => {
+      streams.handlers.get(key(target))?.onEvent({ revision: 1, auth: 'unknown', flow: null })
+    })
     await user.type(screen.getByLabelText('Google Cloud location'), enterprise.gcpLocation)
-    await user.click(screen.getByRole('button', { name: 'Sign in', exact: true }))
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
     expect(callAntigravityChatAuthConfig).toHaveBeenLastCalledWith(target, enterprise)
     expect(callAntigravityChatSignIn).not.toHaveBeenCalled()
     await act(async () => {
@@ -137,7 +140,7 @@ it('keeps the visible draft and does not start sign-in after a failed automatic 
   )
   await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
   await user.type(screen.getByLabelText('Google Cloud project'), '-changed')
-  await user.click(screen.getByRole('button', { name: 'Sign in', exact: true }))
+  await user.click(screen.getByRole('button', { name: 'Sign in' }))
   await screen.findByRole('alert')
   expect(screen.getByLabelText('Google Cloud project')).toHaveValue('enterprise-project-changed')
   expect(callAntigravityChatSignIn).not.toHaveBeenCalled()
@@ -159,7 +162,7 @@ it('does not start a departed host after its prepared save settles', async () =>
   )
   await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
   await user.type(screen.getByLabelText('Google Cloud project'), '-changed')
-  await user.click(screen.getByRole('button', { name: 'Sign in', exact: true }))
+  await user.click(screen.getByRole('button', { name: 'Sign in' }))
   view.unmount()
   await act(async () => {
     finish(enterprise)
@@ -174,7 +177,7 @@ it('retains sign-in for an older host without configuration capability', async (
   render(
     <AntigravityChatSignInRow owner={target} label="Test host" description="" disabled={false} />
   )
-  await user.click(await screen.findByRole('button', { name: 'Sign in', exact: true }))
+  await user.click(await screen.findByRole('button', { name: 'Sign in' }))
   await waitFor(() => expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start'))
   expect(callAntigravityChatAuthConfig).not.toHaveBeenCalled()
 })
@@ -191,7 +194,7 @@ it('follows another client’s account change while mounted and allows Personal 
     <AntigravityChatSignInRow owner={target} label="Test host" description="" disabled={false} />
   )
   await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
-  expect(screen.getByRole('button', { name: 'Sign in', exact: true })).toBeEnabled()
+  expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled()
   await act(async () => {
     current = enterprise
     streams.handlers.get(key(target))?.onEvent({ revision: 1, auth: 'unknown', flow: null })
@@ -223,7 +226,7 @@ it('refreshes the saved method after reconnecting to a restarted host with the s
     <AntigravityChatSignInRow owner={target} label="Test host" description="" disabled={false} />
   )
   await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
-  expect(screen.getByRole('button', { name: 'Sign in', exact: true })).toBeEnabled()
+  expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled()
   vi.useFakeTimers()
   await act(async () => {
     current = {

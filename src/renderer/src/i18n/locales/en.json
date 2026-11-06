@@ -22186,7 +22186,6 @@
       "enterprise": "Gemini Enterprise",
       "gcpProject": "Google Cloud project",
       "gcpLocation": "Google Cloud location",
-      "applyAuth": "Apply account settings",
       "projectPlaceholder": "my-project-id",
       "locationPlaceholder": "us-central1",
       "authHelp": "Changes stop running Antigravity chats. Sign in again to use a different account."
