@@ -40,7 +40,7 @@ export function readIndexGeneration(db: SyncDatabase): number {
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0
 }
 
-/** Tool cleanup changes raw generation for legacy clients without invalidating frozen conversation hits. */
+/** Invisible-row cleanup changes raw generation for legacy clients without invalidating frozen hits. */
 export function readIndexContentRevision(
   db: SyncDatabase,
   generation = readIndexGeneration(db)

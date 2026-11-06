@@ -2,6 +2,7 @@ import { traceSessionSearch } from './session-search-trace'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import type SyncDatabase from '../sqlite/sync-database'
 import { deleteSearchMessages } from './session-search-message-rows'
+import { readIndexGeneration, recordIndexMaintenance } from './session-search-index-generation'
 
 export const RETENTION_DELETE_ROWS_PER_STEP = 256
 // Reclaim freed pages incrementally to avoid a long vacuum after the purge.
@@ -64,9 +65,11 @@ export async function drainOrphanedMessages(
     db.exec('BEGIN IMMEDIATE')
     let deleted = 0
     try {
+      const before = readIndexGeneration(db)
       deleted = traceSessionSearch('drain', () =>
         deleteSearchMessages(db, orphan!, RETENTION_DELETE_ROWS_PER_STEP)
       )
+      recordIndexMaintenance(db, before)
       db.exec('COMMIT')
       onMessagesChanged(-deleted)
     } catch (error) {
