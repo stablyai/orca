@@ -48,6 +48,7 @@ import {
 } from './MobileNativeChatComposerMic'
 import type { MobileStructuredThreadGoal } from '../../use-mobile-structured-thread-goal'
 import { useMobileNativeChatComposerGoalMode } from './use-mobile-native-chat-composer-goal-mode'
+import { MobileNativeChatComposerPlanChip } from './MobileNativeChatComposerPlanChip'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
@@ -357,31 +358,33 @@ export function MobileNativeChatComposer({
             textAlignVertical="top"
           />
           <View style={inputStyles.actionRow} testID="native-chat-composer-actions">
-            <MobileNativeChatComposerAttachButton
-              onAttachImage={onAttachImage}
-              onAttachFiles={structured?.onAttachFiles}
-              structured={structured !== null}
-              isAttaching={isAttaching}
-              disabled={disabled}
-              menu={menu}
-            />
-            {goal.chip}
-            {sessionOptions ? (
-              <MobileNativeChatSessionOptionPickers
-                {...sessionOptions}
-                sendInFlight={sending || isAttaching}
-                presentation={picker}
-                onNavigate={(page) => setPicker((current) => current && { ...current, page })}
-                onDrawerOpen={(page) => setPicker({ page, refocus: focused })}
-                onDrawerAfterClose={() => {
-                  if (picker?.refocus) {
-                    fieldRef.current?.focus()
-                  }
-                  setPicker(null)
-                }}
+            <View style={styles.leadingControls}>
+              <MobileNativeChatComposerAttachButton
+                onAttachImage={onAttachImage}
+                onAttachFiles={structured?.onAttachFiles}
+                structured={structured !== null}
+                isAttaching={isAttaching}
+                disabled={disabled}
+                menu={menu}
               />
-            ) : null}
-            <View style={inputStyles.actionSpacer} />
+              {sessionOptions ? (
+                <MobileNativeChatSessionOptionPickers
+                  {...sessionOptions}
+                  sendInFlight={sending || isAttaching}
+                  presentation={picker}
+                  onNavigate={(page) => setPicker((current) => current && { ...current, page })}
+                  onDrawerOpen={(page) => setPicker({ page, refocus: focused })}
+                  onDrawerAfterClose={() => {
+                    if (picker?.refocus) {
+                      fieldRef.current?.focus()
+                    }
+                    setPicker(null)
+                  }}
+                />
+              ) : null}
+              <MobileNativeChatComposerPlanChip options={sessionOptions} inputRef={fieldRef} />
+              {goal.chip}
+            </View>
             {contextRing.ring}
             {onMicPress ? (
               <MobileNativeChatComposerMic

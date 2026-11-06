@@ -125,7 +125,8 @@ export function MobileNativeChatSessionOptionPickers({
     }
     wasOpen.current = open
   }, [open, controller.optionSurface])
-  const { snapshot, pendingId } = controller
+  const { pendingId } = controller
+  const snapshot = controller.snapshot.filter((descriptor) => descriptor.id !== 'interactionMode')
   const hasControls = snapshot.some((descriptor) => descriptor.settable)
   const canOpen = !sendInFlight && pendingId === null && hasControls
   useEffect(() => {
@@ -188,7 +189,6 @@ export function MobileNativeChatSessionOptionPickers({
     // A permission report can match a new explicit pick while the saved intent is Own.
     if (
       descriptor !== permission &&
-      descriptor.id !== 'interactionMode' &&
       descriptor.valueSource !== 'unknown' &&
       descriptor.valueSource !== 'default' &&
       descriptor.kind.type === 'select' &&

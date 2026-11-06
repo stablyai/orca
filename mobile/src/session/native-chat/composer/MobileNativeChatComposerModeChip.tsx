@@ -1,6 +1,5 @@
 import { Pressable, Text } from 'react-native'
-import { Goal, X } from 'lucide-react-native'
-import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
+import { X, type LucideIcon } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
@@ -10,25 +9,40 @@ import {
   composerInputStyles
 } from '../../../components/composer-input/composer-input-styles'
 
-/** Goal mode's chip: a tap leaves the mode, it never clears the chat's goal. Touch has no hover, so the × always shows. */
-export function MobileNativeChatComposerGoalChip({
+/** Touch has no hover, so the exit affordance always shows. */
+export function MobileNativeChatComposerModeChip({
+  icon: Icon,
+  label,
+  exitLabel,
+  testID,
+  disabled = false,
   onExit
 }: {
+  icon: LucideIcon
+  label: string
+  exitLabel: string
+  testID: string
+  disabled?: boolean
   onExit: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
-  const t = useMobileTranslation()
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={t('chat.goal.exitMode', 'Exit goal mode')}
+      accessibilityLabel={exitLabel}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       hitSlop={COMPOSER_CONTROL_HIT_SLOP}
-      style={({ pressed }) => [styles.chip, pressed && composerInputStyles.pressed]}
+      style={({ pressed }) => [
+        styles.chip,
+        disabled && composerInputStyles.disabled,
+        pressed && composerInputStyles.pressed
+      ]}
       onPress={onExit}
-      testID="native-chat-goal-chip"
+      testID={testID}
     >
-      <Goal size={15} color={colors.textPrimary} strokeWidth={2} />
-      <Text style={styles.label}>{t('chat.goal.chip', 'Goal')}</Text>
+      <Icon size={15} color={colors.textPrimary} strokeWidth={2} />
+      <Text style={styles.label}>{label}</Text>
       <X size={14} color={colors.textMuted} strokeWidth={2} />
     </Pressable>
   )

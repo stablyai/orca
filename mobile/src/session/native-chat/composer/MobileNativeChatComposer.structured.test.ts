@@ -102,6 +102,8 @@ vi.mock('lucide-react-native', () => ({
   ChevronRight: 'ChevronRight',
   CornerDownRight: 'CornerDownRight',
   FileText: 'FileText',
+  Goal: 'Goal',
+  PencilRuler: 'PencilRuler',
   ListEnd: 'ListEnd',
   Mic: 'Mic',
   Package: 'Package',
@@ -251,7 +253,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
     }
   )
 
-  it('preserves an opposite pick through a real transmitted mode write and retries after settlement', async () => {
+  it('holds opposite picks during a transmitted mode write and exits Plan without consuming the draft', async () => {
     let mode: 'default' | 'plan' = 'default'
     const client = optionsClient(async () => ({
       models: [],
@@ -259,10 +261,14 @@ describe('MobileNativeChatComposer on a structured chat', () => {
     }))
     const reply =
       Promise.withResolvers<StructuredAgentSessionMutationResult<AgentSessionOptionResult>>()
+    const exitReply =
+      Promise.withResolvers<StructuredAgentSessionMutationResult<AgentSessionOptionResult>>()
     const { calls, mutate } = recordingMutate(async (index, fields) =>
       index === 0
         ? reply.promise
-        : accepted({ key: String(fields.key), value: String(fields.value) }, true)
+        : index === 2
+          ? exitReply.promise
+          : accepted({ key: String(fields.key), value: String(fields.value) }, true)
     )
     let options: ReturnType<typeof useMobileStructuredAgentOptions> | undefined
     const focus = vi.fn()
@@ -305,6 +311,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
         createNodeMock: (element) => (element.type === 'TextInput' ? { focus } : null)
       })
     })
+    expect(labelled('Exit plan mode')).toHaveLength(0)
     act(() => field().props.onSelectionChange({ nativeEvent: { selection: { end: 8 } } }))
     await act(async () => labelled('/plan')[0]!.props.onPress())
     expect(field().props.value).toBe('keep  tail')
@@ -336,10 +343,29 @@ describe('MobileNativeChatComposer on a structured chat', () => {
     expect(options!.optionSnapshot.find((entry) => entry.id === 'interactionMode')?.settable).toBe(
       true
     )
-    await act(async () => labelled('/default')[0]!.props.onPress())
-    expect(field().props.value).toBe('keep  tail')
+    expect(labelled('Exit plan mode')[0]!.props.disabled).toBe(false)
+    focus.mockClear()
+    act(() => labelled('Exit plan mode')[0]!.props.onPress())
+    expect(labelled('Exit plan mode')[0]!.props.disabled).toBe(true)
+    expect(labelled('Exit plan mode')[0]!.props.accessibilityState).toEqual({ disabled: true })
+    expect(field().props.value).toBe('keep /def tail')
+    expect(focus).toHaveBeenCalled()
     expect(calls).toHaveLength(3)
     expect(calls[2]!.fields).toEqual({ key: 'interactionMode', value: 'default' })
+    mode = 'default'
+    await act(async () =>
+      exitReply.resolve(
+        accepted(
+          { key: 'interactionMode', value: 'default', options: { interactionMode: 'default' } },
+          true
+        )
+      )
+    )
+    expect(labelled('Exit plan mode')).toHaveLength(0)
+    expect(field().props.value).toBe('keep /def tail')
+    expect(
+      renderer!.root.findAll((node) => node.props.source?.uri === 'file:///kept.png')
+    ).not.toHaveLength(0)
     expect(focus).toHaveBeenCalled()
     expect(onSend).not.toHaveBeenCalled()
   })

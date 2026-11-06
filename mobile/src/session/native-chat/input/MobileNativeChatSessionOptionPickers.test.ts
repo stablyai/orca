@@ -159,9 +159,10 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     renderer = null
   })
 
-  it('applies an explicit Build pick during a reply even when saved Build is already shown', async () => {
+  it('omits interaction mode from the drawer and model summary', async () => {
     mount(
       [
+        MODEL_DESCRIPTOR,
         {
           id: 'interactionMode',
           label: 'Mode',
@@ -182,8 +183,12 @@ describe('MobileNativeChatSessionOptionPickers', () => {
       true,
       'interactionMode'
     )
-    await act(async () => rowByText('Build').props.onPress())
-    expect(setOption).toHaveBeenCalledWith('interactionMode', 'default')
+    expect(findAllByHostType(renderer!.root, 'BottomDrawer')).toHaveLength(0)
+    expect(pill('Model').props.accessibilityLabel).not.toMatch(/Build|Plan/)
+    act(() => pill('Model').props.onPress())
+    expect(() => rowByText('Build')).toThrow('No row labeled Build')
+    expect(() => rowByText('Plan')).toThrow('No row labeled Plan')
+    expect(setOption).not.toHaveBeenCalled()
   })
 
   it('consumes a refused page without replay, then permits a fresh open and permission pick', async () => {
