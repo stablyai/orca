@@ -2,12 +2,12 @@ import {
   getCommandTokenPathBasename,
   getFirstCommandToken
 } from '../../../shared/command-token-scanner'
-import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-process-recognition'
+import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-status/process/agent-process-recognition'
 import { selectForegroundProcessCandidate } from '../../../shared/foreground-process-selection'
 import { resolveOuterWrapperForegroundProcess } from '../../../shared/foreground-wrapper-agent'
 import { unreadableArgvName, type ProcessTableRow } from '../../../shared/process-table-snapshot'
-import { isShellProcess } from '../../../shared/shell-process-detection'
-import type { TerminalForegroundSample } from '../../../shared/terminal-foreground-observation'
+import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
+import type { TerminalForegroundSample } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import { isRetiredPtyMaster } from './node-pty-master-fd-retirement'
 import { readPtsName } from './node-pty-pts-name'
 import {

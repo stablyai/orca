@@ -1,3 +1,4 @@
+import { NativeChatQuestionText } from './NativeChatQuestionText'
 import { translate } from '@/i18n/i18n'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
@@ -65,7 +66,7 @@ export function NativeChatResolutionReceipt({
           <div
             key={body.kind === 'question' ? (body.questions?.[index]?.id ?? 'answer') : 'answer'}
           >
-            {heading ? <p>{heading}</p> : null}
+            {heading ? <NativeChatQuestionText content={heading} /> : null}
             <p className="line-clamp-3 whitespace-pre-wrap break-words">
               {answer.answer === ''
                 ? translate(

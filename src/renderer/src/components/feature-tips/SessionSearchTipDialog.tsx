@@ -1,5 +1,5 @@
 import { useRef, type JSX } from 'react'
-import type { AiVaultSearchStatus } from '../../../../shared/ai-vault-search-types'
+import type { AiVaultSearchStatus } from '../../../../shared/ai-vault/search/ai-vault-search-types'
 import type { FeatureTip } from '../../../../shared/feature-tips'
 import {
   sessionSearchStatusDetails,

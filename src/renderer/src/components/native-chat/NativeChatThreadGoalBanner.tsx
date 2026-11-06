@@ -12,10 +12,8 @@ import {
   agentSessionThreadGoalStatusChange
 } from '../../../../shared/agent-session/agent-session-thread-goal'
 import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/agent-session-thread-goal-wire'
-import {
-  formatNativeChatThreadGoalElapsed,
-  nativeChatThreadGoalStatusLabel
-} from './native-chat-thread-goal-presentation'
+import { formatAgentSessionThreadGoalElapsed } from '../../../../shared/agent-session/view/agent-session-thread-goal-presentation'
+import { nativeChatThreadGoalStatusLabel } from './native-chat-thread-goal-presentation'
 
 function GoalAction(props: {
   label: string
@@ -68,7 +66,7 @@ export function NativeChatThreadGoalBanner(props: {
   if (label === null) {
     return null
   }
-  const elapsed = formatNativeChatThreadGoalElapsed(
+  const elapsed = formatAgentSessionThreadGoalElapsed(
     agentSessionThreadGoalElapsedSeconds(goal, now, runningTurn)
   )
   const expandLabel = expanded

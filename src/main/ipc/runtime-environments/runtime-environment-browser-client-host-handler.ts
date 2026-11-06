@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import {
   BrowserClientHostPlacementPreparationRequest,
   type BrowserPageCreationPlacement
-} from '../../../shared/browser-client-host-placement'
+} from '../../../shared/browser/client-hosting/browser-client-host-placement'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { prepareRuntimeEnvironmentBrowserPlacement } from './runtime-environment-browser-placement'
 

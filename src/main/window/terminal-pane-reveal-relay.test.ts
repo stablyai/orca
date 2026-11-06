@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   TerminalPaneRevealRequest,
   TerminalPaneRevealTarget
-} from '../../shared/terminal-pane-reveal'
+} from '../../shared/workspace-layout/terminal-pane-reveal'
 import type { FocusExistingMainWindowOptions } from './focus-existing-window'
 
 const ipcEmitter = new EventEmitter()

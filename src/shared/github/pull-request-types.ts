@@ -53,6 +53,7 @@ export type PRInfo = {
   state: PRState
   url: string
   checksStatus: CheckStatus
+  checksSummary?: ProviderCheckSummary
   updatedAt: string
   mergeable: PRMergeableState
   reviewDecision?: PRReviewDecision | null
@@ -105,6 +106,8 @@ export type ProviderCheckSummary = {
   total: number
   passed: number
   failed: number
+  /** Subset of failed; absent when cancellation detail is unavailable. */
+  cancelled?: number
   pending: number
   neutral: number
   /** 'pipeline' when the state is a GitLab pipeline's own verdict, so its counts are not check counts. */

@@ -1,15 +1,15 @@
 import { installSavedResumeStartupCancellation } from './saved-resume-startup-cancellation'
-import { launchConfigsEqual } from '../../../../../shared/agent-resume-record-equivalence'
-import { useAppStore } from '@/store'
+import { launchConfigsEqual } from '../../../../../shared/agent-session/lifecycle/agent-resume-record-equivalence'
+import { useAppStore } from '@/store/index'
 import type { PtyConnectResult } from '../pty-transport-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { findLegacyNumericSleepingRecord } from '../../../../../shared/sleeping-record-legacy-pane-key'
-import { neutralTerminalTitle } from '../../../../../shared/terminal-pane-title-reset'
+import { neutralTerminalTitle } from '../../../../../shared/workspace-layout/terminal-pane-title-reset'
 import {
   agentProviderSessionsEqual,
   type SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { recognizeAgentProcessFromCommandLine } from '../../../../../shared/agent-process-recognition'
+import { recognizeAgentProcessFromCommandLine } from '../../../../../shared/agent-status/process/agent-process-recognition'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { TUI_AGENT_CONFIG } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import {

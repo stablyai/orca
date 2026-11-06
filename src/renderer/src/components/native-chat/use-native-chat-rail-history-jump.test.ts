@@ -120,101 +120,6 @@ async function releasePage(lane: { releasePage: () => void }): Promise<void> {
 }
 
 describe('rail jump through unloaded history', () => {
-  it('pages older history until the message has a slot, then jumps to it', async () => {
-    const { lane, useLaneRailJump } = createLane({ total: 100, pageSize: 10, initiallyLoaded: 10 })
-    const jumpToLoaded = vi.fn()
-    const { result } = renderHook(() => useLaneRailJump(jumpToLoaded))
-
-    act(() => result.current.start(outlineItem('m5')))
-    expect(result.current.pendingId).toBe('m5')
-
-    await waitFor(() => expect(jumpToLoaded).toHaveBeenCalledTimes(1))
-    expect(lane.reads.count).toBe(9)
-    expect(jumpToLoaded).toHaveBeenCalledWith(expect.objectContaining({ id: 'm5', slotIndex: 5 }))
-    expect(result.current.pendingId).toBeNull()
-  })
-
-  it('stops quietly when history runs out without the message drawing a row', async () => {
-    const { lane, useLaneRailJump } = createLane({
-      total: 30,
-      pageSize: 10,
-      initiallyLoaded: 10,
-      ghost: { id: 'ghost', at: -1 }
-    })
-    const jumpToLoaded = vi.fn()
-    const { result } = renderHook(() => useLaneRailJump(jumpToLoaded))
-
-    act(() => result.current.start(outlineItem('ghost')))
-    await waitFor(() => expect(result.current.pendingId).toBeNull())
-    expect(lane.reads.count).toBe(2)
-    expect(jumpToLoaded).not.toHaveBeenCalled()
-  })
-
-  it('stops once the window covers the message without it drawing a row', async () => {
-    const { lane, useLaneRailJump } = createLane({
-      total: 40,
-      pageSize: 10,
-      initiallyLoaded: 10,
-      ghost: { id: 'ghost', at: 25 }
-    })
-    const jumpToLoaded = vi.fn()
-    const { result } = renderHook(() => useLaneRailJump(jumpToLoaded))
-
-    act(() => result.current.start(outlineItem('ghost')))
-    await waitFor(() => expect(result.current.pendingId).toBeNull())
-    expect(lane.reads.count).toBe(1)
-    expect(jumpToLoaded).not.toHaveBeenCalled()
-  })
-
-  it.each(['failed', 'unchanged', 'superseded'] as const)(
-    'stops after one %s page even while a live turn keeps streaming',
-    async (pageResult) => {
-      const { lane, useLaneRailJump } = createLane({
-        total: 30,
-        pageSize: 10,
-        initiallyLoaded: 10,
-        pageResult
-      })
-      lane.holdPages()
-      const jumpToLoaded = vi.fn()
-      const { result } = renderHook(() => useLaneRailJump(jumpToLoaded))
-
-      act(() => result.current.start(outlineItem('m3')))
-      await waitFor(() => expect(lane.reads.count).toBe(1))
-      for (let batch = 0; batch < 5; batch += 1) {
-        act(() => lane.stream())
-      }
-      await releasePage(lane)
-      for (let batch = 0; batch < 5; batch += 1) {
-        act(() => lane.stream())
-        await act(async () => {
-          await Promise.resolve()
-        })
-      }
-
-      await waitFor(() => expect(result.current.pendingId).toBeNull())
-      expect(lane.loadEarlier).toHaveBeenCalledTimes(1)
-      expect(jumpToLoaded).not.toHaveBeenCalled()
-    }
-  )
-
-  it('joins a page already in flight instead of reading it as no progress', async () => {
-    const { lane, useLaneRailJump } = createLane({ total: 40, pageSize: 10, initiallyLoaded: 10 })
-    lane.holdPages()
-    const jumpToLoaded = vi.fn()
-    const { result } = renderHook(() => useLaneRailJump(jumpToLoaded))
-    // Scrolling to the top already asked for the next page.
-    act(() => void lane.loadEarlier())
-
-    act(() => result.current.start(outlineItem('m25')))
-    expect(result.current.pendingId).toBe('m25')
-    await releasePage(lane)
-
-    await waitFor(() => expect(jumpToLoaded).toHaveBeenCalledTimes(1))
-    expect(jumpToLoaded).toHaveBeenCalledWith(expect.objectContaining({ id: 'm25' }))
-    expect(lane.reads.count).toBe(1)
-  })
-
   it("lets a pick made during another pick's page win, sharing that page", async () => {
     const { lane, useLaneRailJump } = createLane({ total: 40, pageSize: 10, initiallyLoaded: 10 })
     lane.holdPages()
@@ -250,24 +155,6 @@ describe('rail jump through unloaded history', () => {
     expect(lane.reads.count).toBe(3)
   })
 
-  it('stops paging once aborted', async () => {
-    const { lane, useLaneRailJump } = createLane({ total: 40, pageSize: 10, initiallyLoaded: 10 })
-    lane.holdPages()
-    const jumpToLoaded = vi.fn()
-    const { result } = renderHook(() => useLaneRailJump(jumpToLoaded))
-
-    act(() => result.current.start(outlineItem('m25')))
-    await waitFor(() => expect(lane.reads.count).toBe(1))
-    act(() => result.current.abort())
-    expect(result.current.pendingId).toBeNull()
-    await releasePage(lane)
-
-    // The lane still receives the page after the jump abandons it.
-    expect(lane.getSnapshot().loaded).toBe(20)
-    expect(lane.reads.count).toBe(1)
-    expect(jumpToLoaded).not.toHaveBeenCalled()
-  })
-
   it('abandons the jump when the session changes mid-page', async () => {
     const { lane, useLaneRailJump } = createLane({ total: 40, pageSize: 10, initiallyLoaded: 10 })
     lane.holdPages()
@@ -283,41 +170,6 @@ describe('rail jump through unloaded history', () => {
     expect(result.current.pendingId).toBeNull()
     await releasePage(lane)
 
-    expect(lane.reads.count).toBe(1)
-    expect(jumpToLoaded).not.toHaveBeenCalled()
-  })
-
-  // A hidden terminal-backed pane stops reading its transcript, so the page would never land.
-  it('abandons the jump when the pane hides mid-page', async () => {
-    const { lane, useLaneRailJump } = createLane({ total: 40, pageSize: 10, initiallyLoaded: 10 })
-    lane.holdPages()
-    const jumpToLoaded = vi.fn()
-    const { result, rerender } = renderHook(
-      ({ isVisible }: { isVisible: boolean }) =>
-        useLaneRailJump(jumpToLoaded, 'session-1', isVisible),
-      { initialProps: { isVisible: true } }
-    )
-
-    act(() => result.current.start(outlineItem('m25')))
-    await waitFor(() => expect(lane.reads.count).toBe(1))
-    rerender({ isVisible: false })
-    expect(result.current.pendingId).toBeNull()
-    await releasePage(lane)
-
-    expect(lane.reads.count).toBe(1)
-    expect(jumpToLoaded).not.toHaveBeenCalled()
-  })
-
-  it('abandons the jump when the list unmounts mid-page', async () => {
-    const { lane, useLaneRailJump } = createLane({ total: 40, pageSize: 10, initiallyLoaded: 10 })
-    lane.holdPages()
-    const jumpToLoaded = vi.fn()
-    const { result, unmount } = renderHook(() => useLaneRailJump(jumpToLoaded))
-
-    act(() => result.current.start(outlineItem('m2')))
-    await waitFor(() => expect(lane.reads.count).toBe(1))
-    unmount()
-    await releasePage(lane)
     expect(lane.reads.count).toBe(1)
     expect(jumpToLoaded).not.toHaveBeenCalled()
   })

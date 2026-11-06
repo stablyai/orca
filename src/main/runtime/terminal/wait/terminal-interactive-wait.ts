@@ -6,16 +6,16 @@ import type {
   RuntimeTerminalInteractiveWait,
   RuntimeTerminalWaitBlockedReason
 } from '../../../../shared/runtime-terminal-contracts'
-import type { RuntimeTerminalAgentStatusSnapshot } from '../../runtime-terminal-agent-status-query'
+import type { RuntimeTerminalAgentStatusSnapshot } from '../query/runtime-terminal-agent-status-query'
 import type {
   TerminalInteractiveWaitEvidence,
   TerminalWaitPermissionInputs,
   TerminalWaitStatusEvidence
 } from './terminal-wait-permission'
 import type { AgentLaunchScope } from '../../session-tabs/structured-session-tab-restoration'
-import { withTimeout } from '../../runtime-async-boundaries'
-import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from '../../orca-runtime-core'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from './terminal-interactive-probe-budget'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { ExactWorkerProviderSession } from '../../../../shared/orchestration-worker-output'
 import { selectExactWorkerProviderSession } from '../../orchestration/worker-provider-session'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -28,11 +28,11 @@ import {
 } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { resolveConfiguredWorkerAgent } from '../../orchestration/configured-worker-agent-selector'
-import { resolveAgentLaunchRuntime } from '../../agent-launch-scope-runtime'
+import { resolveAgentLaunchRuntime } from '../launch/agent-launch-scope-runtime'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { resolveOpenCodeModelLaunchRoute } from '../../../opencode/opencode-model-startup-plan'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 
 export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAdoptTerminalOrphansFromInventory {

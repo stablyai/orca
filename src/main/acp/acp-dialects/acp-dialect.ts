@@ -11,10 +11,18 @@ import type { AcpAgentError } from '../acp-errors'
 import type { AgentSessionOptionChoice } from '../../../shared/agent-session/agent-session-wire'
 import type {
   AvailableCommand,
+  ClientCapabilities,
   InitializeResponse,
   ModelInfo,
   ToolCallUpdate
 } from '../generated/acp-protocol.generated'
+
+export const pendingAcpResolution = {
+  state: 'pending',
+  selectedOptionId: null,
+  resolvedBy: null,
+  resolvedAt: null
+} as const
 
 export type AcpRequestPresentation = {
   body: ProviderTimelineRequestBody
@@ -121,6 +129,8 @@ export type AcpDialect = {
   }
   /** Native thinking choices remain valid across models; the agent clamps unsupported levels. */
   clampsUnlistedEffort?: true
+  /** Opt-in because advertising forms changes agent behaviour; requests use the generic handlers. */
+  clientCapabilities?: Pick<ClientCapabilities, 'elicitation'>
   /** Claimed permission requests are never auto-approved. */
   request?(method: string, params: unknown): AcpRequestPresentation | undefined
   settleRequest?(method: string, params: unknown): AcpRequestSettlement | undefined

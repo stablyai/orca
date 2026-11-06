@@ -1,6 +1,6 @@
 import { lstat } from 'node:fs/promises'
-import { isUnsupportedWorktreeAddLockReasonError } from '../../../../shared/git-worktree-command-capabilities'
-import { resolveWorktreeHostPath } from '../../../../shared/git-metadata-path'
+import { isUnsupportedWorktreeAddLockReasonError } from '../../../../shared/git/worktrees/git-worktree-command-capabilities'
+import { resolveWorktreeHostPath } from '../../../../shared/git/metadata/git-metadata-path'
 import { windowsLongPathGitArgs } from '../../../../shared/windows-long-path-git-args'
 import { toHostFilesystemPath } from '../../../filesystem/host-tree-removal'
 import { withLocalGitCapabilityCacheForExecution } from '../../command-runner/git-capability-state'

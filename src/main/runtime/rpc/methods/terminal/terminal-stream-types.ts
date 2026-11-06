@@ -1,11 +1,11 @@
-import type { TerminalOscLinkRange } from '../../../../../shared/terminal-osc-link-ranges'
-import type { TerminalSnapshotUnavailableReason } from '../../../../../shared/terminal-snapshot-unavailability'
+import type { TerminalOscLinkRange } from '../../../../../shared/terminal/links/terminal-osc-link-ranges'
+import type { TerminalSnapshotUnavailableReason } from '../../../../../shared/terminal/replay/terminal-snapshot-unavailability'
 import type {
   TerminalOutputFrameChunk,
   TerminalOutputMeta
 } from '../../terminal-output-frame-chunks'
 import type { TerminalOutputBatcher } from './terminal-output-batcher'
-import type { TerminalReplyQueryScanState } from '../../../../../shared/terminal-reply-query-scan'
+import type { TerminalReplyQueryScanState } from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-scan'
 import type { YieldedTerminalQuery } from './terminal-multiplex-yielded-queries'
 
 export type SnapshotFrameOptions = {

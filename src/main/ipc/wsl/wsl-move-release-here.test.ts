@@ -19,7 +19,7 @@ const window = vi.hoisted(() => ({
 }))
 const releaseFails = vi.hoisted(() => ({ value: false }))
 const host = vi.hoisted(() => ({ listed: true, keptForPeers: false }))
-vi.mock('../../../shared/runtime-environment-store', () => ({
+vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   listEnvironments: () => (host.listed ? [{ id: 'wsl:Ubuntu' }] : [])
 }))
 vi.mock('../../wsl/host-lifecycle/wsl-host-kept-for-peers', () => ({

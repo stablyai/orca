@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
 import type { RuntimeClientEventStreamMessage } from '../../../src/shared/runtime-client-events'
 import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
@@ -54,19 +54,19 @@ export function useLiveWorktreeName({
   // Repo-scan failures can misreport live workspaces as missing; require a confirming fallback read.
   const missingStreakRef = useRef({ worktreeId, count: 0 })
 
-  useEffect(() => {
+  // Reset during render on route change; an effect would commit and re-render the session screen.
+  const [routeSource, setRouteSource] = useState({ worktreeId, routeNameHint })
+  if (routeSource.worktreeId !== worktreeId || routeSource.routeNameHint !== routeNameHint) {
+    setRouteSource({ worktreeId, routeNameHint })
     setWorktreeName((current) =>
       current.worktreeId === worktreeId && current.name === routeNameHint
         ? current
         : { worktreeId, name: routeNameHint }
     )
-  }, [routeNameHint, worktreeId])
-
-  useEffect(() => {
     setResolved((current) =>
       current.worktreeId === worktreeId ? current : { worktreeId, resolution: 'unknown' }
     )
-  }, [worktreeId])
+  }
 
   useFocusEffect(
     useCallback(() => {

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcess, spawnProcess } from '@orca/process-host'
 import { NODE_RUNTIME_ASSETS } from '../../shared/node-runtime-pin'
 import { orcadNodeRuntimeRelativePath } from '../../shared/orcad-artifacts'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 
 const TARGET = 'darwin-arm64'
 const SHA = NODE_RUNTIME_ASSETS[TARGET].executableSha256

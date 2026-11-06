@@ -2,22 +2,22 @@ import {
   transportActionArgumentChoices,
   demoteActionArgumentChoices,
   type ActionArgumentChoices
-} from '../../../../../shared/source-control-action-argument-document'
-import { liftActionPermissionArgs } from '../../../../../shared/source-control-action-permission-lift'
-import { useEffect, useMemo, useRef, useState, type SetStateAction } from 'react'
+} from '../../../../../shared/source-control/ai/recipes/source-control-action-argument-document'
+import { liftActionPermissionArgs } from '../../../../../shared/source-control/ai/recipes/source-control-action-permission-lift'
+import { useEffect, useMemo, useState, type SetStateAction } from 'react'
 import type {
   SourceControlAiSettings,
   SourceControlAiModelChoice,
   SourceControlAiSettingsPatch
-} from '../../../../../shared/source-control-ai-types'
+} from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import {
   setSourceControlActionDefault,
   SOURCE_CONTROL_TEXT_ACTION_IDS,
   type SourceControlActionLaunchPreferences,
   type SourceControlActionId
-} from '../../../../../shared/source-control-ai-actions'
-import type { SourceControlAiModelEdits } from '../../../../../shared/source-control-ai-action-model-edits'
-import { replayGlobalTextModelEdits } from '../source-control-text-action-model-replay'
+} from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import type { SourceControlAiModelEdits } from '../../../../../shared/source-control/ai/settings/source-control-ai-action-model-edits'
+import { replayGlobalTextModelEdits } from './text-actions/source-control-text-action-model-replay'
 import {
   type ActionRecipeDraftState,
   readActionRecipeInputValues,
@@ -74,8 +74,6 @@ export function useSourceControlActionRecipeDraftState({
   writeConfig
 }: UseSourceControlActionRecipeDraftStateArgs) {
   const persistedActionRecipeValues = useMemo(() => readActionRecipeInputValues(config), [config])
-  const persistedActionRecipeValuesRef = useRef(persistedActionRecipeValues)
-  persistedActionRecipeValuesRef.current = persistedActionRecipeValues
   const [storedDraftState, setActionRecipeDraftState] = useState<ActionRecipeDraftState>(() => ({
     values: persistedActionRecipeValues,
     baseValues: persistedActionRecipeValues
@@ -93,6 +91,15 @@ export function useSourceControlActionRecipeDraftState({
       followPersistedRecipeValues(current, persistedActionRecipeValues)
     )
   }
+  const [seenDiscardSignal, setSeenDiscardSignal] = useState(customPromptDiscardSignal)
+  if (seenDiscardSignal !== customPromptDiscardSignal) {
+    actionRecipeDraftState = {
+      values: persistedActionRecipeValues,
+      baseValues: persistedActionRecipeValues
+    }
+    setSeenDiscardSignal(customPromptDiscardSignal)
+    setActionRecipeDraftState(actionRecipeDraftState)
+  }
   const [savingActionTemplateIds, setSavingActionTemplateIds] = useState<
     Partial<Record<SourceControlActionId, boolean>>
   >({})
@@ -105,13 +112,6 @@ export function useSourceControlActionRecipeDraftState({
     [actionRecipeDraftState.baseValues]
   )
   const actionTemplateDirty = actionRecipeDraftSerialized !== actionRecipeBaseSerialized
-
-  useEffect(() => {
-    setActionRecipeDraftState({
-      values: persistedActionRecipeValuesRef.current,
-      baseValues: persistedActionRecipeValuesRef.current
-    })
-  }, [customPromptDiscardSignal])
 
   useEffect(() => {
     onCustomPromptDirtyChange?.(actionTemplateDirty)

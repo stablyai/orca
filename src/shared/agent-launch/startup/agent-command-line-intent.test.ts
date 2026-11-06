@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { extractAgentLaunchCommand, recognizeAgentLaunchCommand } from './agent-command-line-intent'
-import { recognizeAgentProcessFromCommandLine } from '../../agent-process-recognition'
+import { recognizeAgentProcessFromCommandLine } from '../../agent-status/process/agent-process-recognition'
 import { COMMAND_TOKEN_SCAN_MAX_CHARS } from '../../command-token-scanner'
 
 it.each([

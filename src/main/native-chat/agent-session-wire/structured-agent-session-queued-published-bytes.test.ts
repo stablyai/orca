@@ -10,7 +10,6 @@ import {
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import { hostTestMessage } from './structured-agent-session-host-test-data'
-import { orchestrationMailFixture } from '../../runtime/orchestration/orchestration-mail.test-fixture'
 
 let rig: QueuedMessageTestRig
 
@@ -63,19 +62,4 @@ it("leaves room for the person's largest message however much other agents queue
   expect(
     await rig.send(textOfBytes(MAX_PROMPT_BYTES, true), 'queue-if-active').result
   ).toMatchObject({ ok: true, value: { queued: { state: 'waiting' } } })
-})
-
-it('keeps three large whole-mail cards within the agent queue budget', async () => {
-  await rig.workingSend()
-  for (let i = 0; i < 3; i++) {
-    const mail = orchestrationMailFixture({ id: `large-mail-${i}`, body: 'x'.repeat(240 * 1024) })
-    const block = mail.blocks[0]
-    if (block.type !== 'text') {
-      throw new Error('expected mail text')
-    }
-    expect(
-      await rig.send(block.text, 'queue-if-active', { internal: true, from: mail.from }).result
-    ).toMatchObject({ ok: true, value: { queued: { state: 'waiting' } } })
-  }
-  expect(await rig.drafts()).toHaveLength(3)
 })

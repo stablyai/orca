@@ -1,7 +1,7 @@
 /** ORCA_E2E_FAKE_WSL_HOSTS maps fake distros directly to a headless server pairing so any CI OS can test WSL host UI without wsl.exe. */
 import { appendFileSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { z } from 'zod'
-import { parsePairingCode } from '../../../shared/pairing'
+import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
 import type { WslHostConnector } from './wsl-host-connector-contract'
 import type {
   WslOrcadConnection,

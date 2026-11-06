@@ -33,6 +33,9 @@ export function useMobileStructuredAgentOptions(args: {
   enabled: boolean
   fence: number | null
   turnId: string | null
+  /** The chat has a turn or a send: its value picks keep the remembered new-chat model. */
+  hasTurn?: boolean
+  unloadedTurnRevisions: number | undefined
   mutate: StructuredAgentSessionMutate
   optionStamp?: string
   hostSupport: Pick<
@@ -40,13 +43,24 @@ export function useMobileStructuredAgentOptions(args: {
     | 'permissionModes'
     | 'permissionOwn'
     | 'coherentModelCatalog'
+    | 'modelEffortDiscovery'
     | 'statusFeed'
     | 'sendSelection'
     | 'sendOptions'
   > | null
 }) {
-  const { agent, client, enabled, fence, mutate, optionStamp, sessionId, turnId, hostSupport } =
-    args
+  const {
+    agent,
+    client,
+    enabled,
+    fence,
+    mutate,
+    optionStamp,
+    sessionId,
+    turnId,
+    unloadedTurnRevisions,
+    hostSupport
+  } = args
   const optionCatalog = useMemo(
     () => (agent ? structuredAgentSessionSeedCatalog(agent) : null),
     [agent]
@@ -65,6 +79,9 @@ export function useMobileStructuredAgentOptions(args: {
     updateOptionState,
     conversationSupport,
     imageSupport,
+    threadGoalSupport,
+    rewindSupport,
+    rewindBlockedReason,
     receiveCatalog,
     isCurrentContext,
     controller,
@@ -77,25 +94,13 @@ export function useMobileStructuredAgentOptions(args: {
     optionCatalog,
     sessionId,
     turnId,
+    unloadedTurnRevisions,
     client,
     optionStamp,
     sendSelection: hostSupport?.sendSelection === true,
     newLaunch: createdHere !== undefined,
     worktree: createdHere?.worktree,
     coherentCatalog: hostSupport?.coherentModelCatalog === true
-  })
-  const demandModelCatalog = useMobileHostModelCatalogUpgrade({
-    agent,
-    client,
-    sessionId,
-    enabled,
-    fence,
-    newLaunch: createdHere !== undefined,
-    ...(createdHere ? { worktree: createdHere.worktree } : {}),
-    optionCatalog,
-    activeOptionRecordRef,
-    updateOptionState,
-    receiveCatalog
   })
 
   // Pre-1.4.225 hosts lack per-chat modes; show their actual global agent mode.
@@ -126,6 +131,25 @@ export function useMobileStructuredAgentOptions(args: {
   }, [acceptsPicks, legacyHostPermissions, readOptionState])
   const optionSnapshot = readOptionSnapshot()
 
+  const modelOption = optionSnapshot.find((row) => row.id === 'model')
+  const demandModelCatalog = useMobileHostModelCatalogUpgrade({
+    agent,
+    selectedModel:
+      hostSupport?.modelEffortDiscovery && modelOption?.kind.type === 'select'
+        ? modelOption.kind.currentValue
+        : undefined,
+    client,
+    sessionId,
+    enabled,
+    fence,
+    newLaunch: createdHere !== undefined,
+    ...(createdHere ? { worktree: createdHere.worktree } : {}),
+    optionCatalog,
+    activeOptionRecordRef,
+    updateOptionState,
+    receiveCatalog
+  })
+
   const readWriteContext = () => {
     const currentState = projectRuntimeReports({
       ...optionStateRef.current,
@@ -139,6 +163,7 @@ export function useMobileStructuredAgentOptions(args: {
       snapshot: readOptionSnapshot(),
       ready: acceptsPicks,
       providerStarting,
+      existingChat: createdHere === undefined || args.hasTurn === true,
       isCurrentContext,
       flush: (isCurrent: () => boolean) => {
         controller.flush(async (pick) => {
@@ -201,9 +226,18 @@ export function useMobileStructuredAgentOptions(args: {
       conversationSupport?.sessionId === sessionId ? conversationSupport.commands : NO_COMMANDS,
     compactInstructions:
       conversationSupport?.sessionId === sessionId && conversationSupport.compactInstructions,
+    contextUsageSupport:
+      conversationSupport?.sessionId === sessionId ? conversationSupport.contextUsage : undefined,
+    threadGoalSupport: threadGoalSupport?.sessionId === sessionId ? threadGoalSupport : null,
     acceptsImages:
       (imageSupport?.sessionId === sessionId ? imageSupport.acceptsImages : undefined) ??
       (agent !== null && isAgentSessionHandleProvider(agent)),
+    /** Undefined until this fence's options read answers. */
+    rewindSupport:
+      rewindSupport?.sessionId === sessionId && rewindSupport.fence === fence
+        ? rewindSupport
+        : undefined,
+    rewindBlockedReason,
     optionSnapshot,
     optionSurface,
     pendingOptionId: writer.pendingOptionId(controller, optionState.record),

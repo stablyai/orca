@@ -1,60 +1,65 @@
 import { runCheckoutProcess } from './release-checkout-process.ts'
 
-export async function prefetchReleaseBlobs(
+const PREPARATION_TIMEOUT_MS = 60_000
+
+export async function prepareReleaseSnapshotSource(
   repoRoot: string,
   commit: string,
-  paths: string[],
-  deadline: number
+  { timeoutMs = PREPARATION_TIMEOUT_MS } = {}
 ): Promise<void> {
-  const objects = await runCheckoutProcess(
-    repoRoot,
-    'git',
-    [
-      'rev-list',
-      '--objects',
-      '--missing=print',
-      '--no-object-names',
-      '--no-walk',
-      commit,
-      '--',
-      ...paths
-    ],
-    deadline,
-    { maxOutputBytes: 8 * 1024 * 1024 }
-  )
-  const missing = objects
-    .split('\n')
-    .filter((line) => line.startsWith('?'))
-    .map((line) => line.slice(1))
-  if (missing.length === 0) {
-    return
+  const deadline = Date.now() + timeoutMs
+  const git = (args: string[], input?: string): Promise<string> =>
+    runCheckoutProcess(repoRoot, 'git', args, deadline, {
+      input,
+      maxOutputBytes: 16 * 1024 * 1024,
+      timeoutMs
+    })
+  // Starting at the tree visits this snapshot, not the commit's ancestry.
+  const missingObjects = async (): Promise<string[]> =>
+    (
+      await git([
+        'rev-list',
+        '--objects',
+        '--no-object-names',
+        '--missing=print',
+        `${commit}^{tree}`
+      ])
+    )
+      .split('\n')
+      .filter((line) => line.startsWith('?'))
+      .map((line) => line.slice(1))
+  try {
+    const missing = await missingObjects()
+    if (missing.length !== 0) {
+      const remotes = await git(['config', '--get-regexp', '^remote[.].*[.]promisor$'])
+      const remote = /^remote\.(.+)\.promisor (?:true|1)$/m.exec(remotes)?.[1]
+      if (!remote) {
+        throw new Error('Missing snapshot objects without a promisor remote')
+      }
+      await git(
+        [
+          '-c',
+          'fetch.negotiationAlgorithm=noop',
+          '-c',
+          'maintenance.auto=false',
+          '-c',
+          'gc.auto=0',
+          'fetch',
+          '--quiet',
+          '--no-tags',
+          '--no-write-fetch-head',
+          '--recurse-submodules=no',
+          '--filter=blob:none',
+          remote,
+          '--stdin'
+        ],
+        `${missing.join('\n')}\n`
+      )
+      if ((await missingObjects()).length !== 0) {
+        throw new Error('Requested snapshot objects remain unavailable')
+      }
+    }
+  } catch (error) {
+    throw new Error(`Historical source preparation: ${String(error)}`)
   }
-  const remotes = await runCheckoutProcess(
-    repoRoot,
-    'git',
-    ['config', '--get-regexp', '^remote\\..*\\.promisor$'],
-    deadline
-  )
-  const remote = /^remote\.(.+)\.promisor (?:true|1)$/m.exec(remotes)?.[1]
-  if (!remote) {
-    throw new Error('Historical release blobs are missing without a promisor remote')
-  }
-  // Archive otherwise fetches cold historical blobs individually in filtered CI clones.
-  await runCheckoutProcess(
-    repoRoot,
-    'git',
-    [
-      '-c',
-      'fetch.negotiationAlgorithm=noop',
-      'fetch',
-      '--quiet',
-      '--no-tags',
-      '--recurse-submodules=no',
-      '--filter=blob:none',
-      '--stdin',
-      remote
-    ],
-    deadline,
-    { input: `${missing.join('\n')}\n` }
-  )
 }

@@ -1,4 +1,4 @@
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 
 /** Fence host mirroring only after renderer byte-derived status proves its claim; otherwise two writers flap the same pane row between working/generated titles and host defaults. */
 type RendererOwnedAgentStatusPane = {

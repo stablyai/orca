@@ -3,7 +3,7 @@ import type {
   OrcadMigrationManifestSource
 } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { OrcadMigrationTerminalScrollbackSnapshot } from '../../../shared/orcad-migration/orcad-migration-scrollback'
 import {
   extractSessionOwnersForTransfer,
@@ -36,7 +36,7 @@ import {
   type SessionFragment
 } from './orcad-source-session-copy-resolution'
 import { withoutOrcadMigrationDrafts } from './orcad-source-draft-rename'
-import { hasClosedTerminalTabRecord } from '../../../shared/closed-terminal-tab-tombstones'
+import { hasClosedTerminalTabRecord } from '../../../shared/workspace-layout/closed-terminal-tab-tombstones'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../shared/workspace-scope'
 import { orcadMigrationSessionPartitions } from './orcad-source-session-partitions'

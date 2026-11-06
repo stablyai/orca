@@ -6,7 +6,7 @@ import { agentSessionConversationView } from '../../../shared/agent-session/life
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
-import { applyCodexConfiguredLaunchDefaults } from '../../codex/codex-configured-launch-defaults'
+import { applyCodexConfiguredLaunchDefaults } from '../../codex/structured/launch/codex-configured-launch-defaults'
 import { getAgentSessionOptionCatalog } from '../../../shared/agent-session/options/agent-session-option-catalog'
 import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
 import {

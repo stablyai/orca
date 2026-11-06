@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { SourceControlLaunchActionId } from '../../../src/shared/source-control-ai-actions'
+import type { SourceControlLaunchActionId } from '../../../src/shared/source-control/ai/recipes/source-control-ai-actions'
 import { tuiAgentDisplayName } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'

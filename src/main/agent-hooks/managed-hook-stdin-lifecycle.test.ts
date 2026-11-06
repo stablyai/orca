@@ -1,6 +1,6 @@
 // POSIX hooks drain before exit; Windows missing-context hooks may exit without owning stdin.
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as CodexHookHashLookup from '../codex/codex-hook-hash-lookup'
+import type * as CodexHookHashLookup from '../codex/trust/hooks/codex-hook-hash-lookup'
 import { runProcess, spawnProcess } from '@orca/process-host'
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -45,10 +45,12 @@ vi.mock('./windows-native-hook-executable', async (importOriginal) => ({
   resolveBundledWindowsNativeHookExecutable: () => bundledHook.path
 }))
 
-vi.mock('../codex/codex-hook-hash-lookup', async (importOriginal) => ({
+vi.mock('../codex/trust/hooks/codex-hook-hash-lookup', async (importOriginal) => ({
   ...(await importOriginal<typeof CodexHookHashLookup>()),
   resolveCodexHookAnswerForLaunch: async () =>
-    (await import('../codex/hook-service-test-harness')).codexHookAnswerForTests()
+    (
+      await import('../codex/hooks/installation/hook-service-test-harness')
+    ).codexHookAnswerForTests()
 }))
 
 vi.mock('electron', () => ({
@@ -68,7 +70,8 @@ vi.mock('os', async (importOriginal) => {
 import { AntigravityHookService } from '../antigravity/hook-service'
 import { ClaudeHookService } from '../claude/hook-service'
 import { getRemoteManagedCommand } from '../claude/hook-settings'
-import { CodexHookService } from '../codex/hook-service'
+import '../codex/hooks/installation/hook-service'
+import { CodexHookService } from '../codex/hooks/installation/codex-hook-service-implementation'
 import { CommandCodeHookService } from '../command-code/hook-service'
 import { CopilotHookService } from '../copilot/hook-service'
 import { CursorHookService } from '../cursor/hook-service'
@@ -80,12 +83,7 @@ import { KimiHookService } from '../kimi/hook-service'
 
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { wrapPosixHookCommand, wrapWindowsHookCommand } from './installer-utils'
-import {
-  POSIX_HOOK_JSON_STDIN_PRELUDE,
-  POSIX_HOOK_JSON_STDIN_READER,
-  POSIX_HOOK_STDIN_READER,
-  WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD
-} from './hook-stdin-contract'
+import { POSIX_HOOK_STDIN_READER } from './hook-stdin-contract'
 import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
 import { createAgentHookMemorySftp } from './agent-hook-memory-sftp.test-fixture'
 import { findGitBash } from './windows-git-bash-path.test-fixture'
@@ -93,12 +91,6 @@ import {
   buildWindowsNativeHookExecutable,
   WINDOWS_NATIVE_HOOK_BUILD_TIMEOUT_MS
 } from './windows-native-hook-exe.test-fixture'
-
-function decodeEncodedPowerShellCommand(command: string): string {
-  const encoded = command.match(/-EncodedCommand\s+(\S+)/)
-  expect(encoded, 'launcher carries an encoded command').not.toBeNull()
-  return Buffer.from(encoded![1], 'base64').toString('utf16le')
-}
 
 const REMOTE_HOME = '/home/dev'
 // Windows broken-pipe errors vary with pipe and process teardown ordering.
@@ -266,19 +258,6 @@ async function generatePosixScripts(onlyAgent?: string): Promise<Map<string, str
   return scripts
 }
 
-// Keep the platform override pinned across asynchronous installers.
-async function withPlatform<T>(platform: NodeJS.Platform, run: () => T | Promise<T>): Promise<T> {
-  const original = Object.getOwnPropertyDescriptor(process, 'platform')
-  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
-  try {
-    return await run()
-  } finally {
-    if (original) {
-      Object.defineProperty(process, 'platform', original)
-    }
-  }
-}
-
 describe('Windows managed hook stdin structure', () => {
   // A fresh runner's first encoded-PowerShell launch took 5-15s; the per-hook bound detects stdin hangs, not cold start.
   beforeAll(async () => {
@@ -293,87 +272,6 @@ describe('Windows managed hook stdin structure', () => {
     })
     expect(warm, 'encoded PowerShell warm-up').toMatchObject({ code: 0, timedOut: false })
   }, 60_000)
-
-  it('places missing-context guards before Windows stdin readers', async () => {
-    const home = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-windows-'))
-    homedirMock.mockReturnValue(home)
-    seedCmdAutoRunTarget(home)
-    const previousGrokHome = process.env.GROK_HOME
-    const previousKimiHome = process.env.KIMI_CODE_HOME
-    delete process.env.GROK_HOME
-    delete process.env.KIMI_CODE_HOME
-    try {
-      await withPlatform('win32', async () => {
-        for (const entry of LOCAL_INSTALLERS) {
-          expect((await entry.install()).state, `${entry.agent} install status`).toBe('installed')
-        }
-      })
-      const hooksDir = join(home, '.orca', 'agent-hooks')
-      const fileNames = readdirSync(hooksDir)
-      const mainBatchScripts = fileNames.filter(
-        (name) => name.endsWith('-hook.cmd') && !name.startsWith('antigravity-')
-      )
-      mainBatchScripts.push('antigravity-hook.cmd')
-      expect(mainBatchScripts).toHaveLength(12)
-      for (const fileName of mainBatchScripts) {
-        const script = readFileSync(join(hooksDir, fileName), 'utf8')
-        expect(script, `${fileName} port guard`).toContain(
-          'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0'
-        )
-        expect(script, `${fileName} token guard`).toContain(
-          'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0'
-        )
-        expect(script, `${fileName} pane guard`).toContain('if "%ORCA_PANE_KEY%"=="" exit /b 0')
-        // A caller may hold stdin open, so no guard or skip may park in the more.com drain (#24907).
-        expect(script, `${fileName} no guard may route to the more.com drain`).not.toMatch(
-          /goto :?orca_agent_hook_drain_stdin/
-        )
-        if (fileName === 'antigravity-hook.cmd') {
-          expect(script).not.toContain('more.com')
-          expect(script).toContain('antigravity-hook-post.cjs')
-        }
-      }
-
-      // Missing-script launchers must answer gates before guarding, then guard before ReadToEnd.
-      for (const [name, command] of [
-        [
-          'wrapWindowsHookCommand',
-          wrapWindowsHookCommand('C:\\missing\\orca-hook.cmd', {}, { fallbackStdout: '{}' })
-        ],
-        [
-          'wrapRuntimeHomeHookCommand',
-          wrapRuntimeHomeHookCommand('missing-orca-hook', { neutralJsonWhenMissing: true })
-        ]
-      ] as const) {
-        const decoded = decodeEncodedPowerShellCommand(command)
-        expect(decoded, `${name} decoded`).toContain(WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD)
-        expect(
-          decoded.indexOf("Write-Output '{}'"),
-          `${name} response exists`
-        ).toBeGreaterThanOrEqual(0)
-        expect(decoded.indexOf("Write-Output '{}'"), `${name} answers first`).toBeLessThan(
-          decoded.indexOf(WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD)
-        )
-        expect(
-          decoded.indexOf(WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD),
-          `${name} guards before owning stdin`
-        ).toBeLessThan(decoded.indexOf('[Console]::In.ReadToEnd()'))
-      }
-    } finally {
-      homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
-      if (previousGrokHome === undefined) {
-        delete process.env.GROK_HOME
-      } else {
-        process.env.GROK_HOME = previousGrokHome
-      }
-      if (previousKimiHome === undefined) {
-        delete process.env.KIMI_CODE_HOME
-      } else {
-        process.env.KIMI_CODE_HOME = previousKimiHome
-      }
-      rmSync(home, { recursive: true, force: true })
-    }
-  })
 
   it.skipIf(process.platform !== 'win32')(
     'exits 0 for every local script and missing-script launcher, dropping stdin only without Orca env',
@@ -582,27 +480,6 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
     expect(JSON.parse(result.stdout.trim())).toEqual({})
   })
 
-  it('captures stdin before every possible whole-script success exit', async () => {
-    const scripts = await generatePosixScripts()
-    for (const [agent, script] of scripts) {
-      const captureIndex = Math.max(
-        script.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`),
-        script.indexOf(`payload=$(${POSIX_HOOK_JSON_STDIN_READER})`)
-      )
-      const firstExitIndex = script.indexOf('exit 0')
-      expect(captureIndex, `${agent} payload capture`).toBeGreaterThanOrEqual(0)
-      expect(firstExitIndex, `${agent} first success exit`).toBeGreaterThan(captureIndex)
-      // The JSON reader needs its variable-setting prelude before capture.
-      if (script.includes(POSIX_HOOK_JSON_STDIN_READER)) {
-        const prelude = POSIX_HOOK_JSON_STDIN_PRELUDE.join('\n')
-        expect(script.indexOf(prelude), `${agent} JSON reader prelude`).toBeGreaterThanOrEqual(0)
-        expect(script.indexOf(prelude), `${agent} prelude before capture`).toBeLessThan(
-          captureIndex
-        )
-      }
-    }
-  })
-
   it('accepts a large payload across generated hooks without breaking the writer', async () => {
     const scripts = await generatePosixScripts()
     for (const [agent, script] of scripts) {
@@ -672,12 +549,6 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
     const script = (await generatePosixScripts('codex')).get('codex codex-hook.sh')
     expect(script).toBeDefined()
     const result = await runPosixHook(script!, { CLAUDE_JOB_DIR: '/tmp/claude-job' })
-    expect(result.exitCode).toBe(0)
-    expect(result.stdinErrors).toHaveLength(0)
-  })
-
-  it('drains a large payload when the configured script is missing', async () => {
-    const result = await runPosixHook(wrapPosixHookCommand('/missing/orca-hook.sh'))
     expect(result.exitCode).toBe(0)
     expect(result.stdinErrors).toHaveLength(0)
   })

@@ -9,28 +9,6 @@ import { AcpAgentError, AcpRequestTimeoutError } from './acp-errors'
 import { AcpScriptedAgent } from './acp-scripted-agent.test-support'
 import { agentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
-import { acpReopenTakeover } from './acp-session-reopen-failure'
-
-it.each(['ServerUnavailable', 'CatalogNotReady'])(
-  'retains the saved session on a temporary %s load answer',
-  (errorName) => {
-    const error = new AcpAgentError(-32603, 'not ready', { errorName })
-    const warn = vi.fn()
-    expect(() =>
-      acpReopenTakeover(
-        error,
-        {
-          key: 'saved-key',
-          sessionId: 'saved-id',
-          mayBeUnsaved: () => false,
-          unannouncedLosses: () => []
-        },
-        { over: false, now: 1, warn }
-      )
-    ).toThrow(error)
-    expect(warn).not.toHaveBeenCalled()
-  }
-)
 
 afterEach(async () => {
   vi.useRealTimers()

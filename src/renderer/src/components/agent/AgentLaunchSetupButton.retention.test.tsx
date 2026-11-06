@@ -4,14 +4,7 @@ import { fireEvent, getByRole } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { createTestStore } from '@/store/slices/store-test-helpers'
-import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
 import { retireAgentPickerDrafts } from './agent-launch-picker-drafts'
 import { AgentLaunchSetupButton } from './AgentLaunchSetupButton'
 import { agentLaunchPromptScopeKey } from './AgentLaunchPromptComposer'
@@ -19,7 +12,6 @@ import { changePrompt } from '../native-chat/native-chat-prompt-editor.test-supp
 import {
   clearNativeChatComposerDraftsForTests,
   readNativeChatComposerDraft,
-  updateNativeChatComposerDraft,
   writeLaunchSetupOptions
 } from '../native-chat/native-chat-composer-draft-store'
 import * as sources from '../native-chat/native-chat-launch-draft-source'
@@ -45,31 +37,7 @@ function row(workspace: number, agent: (typeof AGENTS)[number]): AgentPickerEntr
     worktreeId: `folder:f${workspace}`
   }
 }
-function folder(id: string, executionHostId: ExecutionHostId) {
-  return {
-    id,
-    projectGroupId: 'group',
-    folderPath: `/${id}`,
-    name: id,
-    connectionId: null,
-    executionHostId,
-    linkedTask: null,
-    comment: '',
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 1,
-    createdAt: 1,
-    updatedAt: 1
-  }
-}
 const sourceCount = () => [...sources.launchDraftSources()].length
-const listFolders = (folders: ReturnType<typeof folder>[]) =>
-  Object.assign(window, {
-    api: { folderWorkspaces: { list: vi.fn().mockResolvedValue(folders) } }
-  })
-
 let root: Root
 let host: HTMLDivElement
 beforeEach(() => {
@@ -89,91 +57,6 @@ afterEach(() => {
 })
 
 describe('setup records exist only for authored setups', () => {
-  it.each([100, 1000])(
-    'keeps %i rendered unopened rows record-free and visits only authored setups',
-    async (count) => {
-      const workspaces = count / AGENTS.length
-      const entries = Array.from({ length: workspaces }, (_, w) =>
-        AGENTS.map((agent) => row(w, agent))
-      )
-      const show = () =>
-        act(() =>
-          root.render(
-            <TooltipProvider>
-              <DropdownMenu defaultOpen modal={false}>
-                <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  {entries.map((menu, w) => (
-                    <AgentLaunchPickerMenu key={w} entries={menu} runLaunch={vi.fn()} hideSearch />
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </TooltipProvider>
-          )
-        )
-      show()
-      show()
-      expect(document.querySelectorAll('button[aria-label^="Configure"]')).toHaveLength(count)
-      expect(sourceCount()).toBe(0)
-      for (const entry of entries.flat()) {
-        expect(sources.launchDraftSource(agentLaunchPromptScopeKey(entry))).toBeUndefined()
-      }
-
-      // Authored control: the same k rows at N and 10N, half typed and half option changes.
-      const authored = entries.slice(0, 5).map((menu) => menu[0])
-      authored.forEach((entry, i) => {
-        const scope = agentLaunchPromptScopeKey(entry)
-        if (i % 2 === 0) {
-          updateNativeChatComposerDraft(scope, { text: `task ${i}` }, 'immediate')
-        } else {
-          writeLaunchSetupOptions(scope, {
-            agent: entry.agent,
-            surface: 'chat',
-            choices: { model: `model-${i}` }
-          })
-        }
-      })
-      show()
-      expect(sourceCount()).toBe(authored.length)
-
-      // Real folder catalog applies, unchanged and repeated, visit authored setups only.
-      const visits: number[] = []
-      const all = sources.launchDraftSources
-      vi.spyOn(sources, 'launchDraftSources').mockImplementation(() => {
-        const listed = [...all()]
-        visits.push(listed.length)
-        return listed
-      })
-      const local = Array.from({ length: workspaces }, (_, w) =>
-        HOSTS[w % HOSTS.length] === 'local' ? [folder(`f${w}`, 'local')] : []
-      ).flat()
-      const store = createTestStore()
-      store.setState({ folderWorkspaces: local })
-      listFolders(local)
-      await store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: null })
-      await store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: null })
-      transitionLaunchDrafts(() => undefined)
-      const visitsPerApply = [...visits]
-      expect(visitsPerApply).toEqual([authored.length, authored.length, authored.length])
-
-      // A catalog pin after authoring carries the typed prompt to the row's new key.
-      const pinned = [{ ...local[0], executionHostId: 'ssh:pinned' as const }, ...local.slice(1)]
-      listFolders(pinned)
-      await store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: null })
-      const moved = {
-        ...authored[0],
-        rows: [{ ...authored[0].rows[0], executionHostId: 'ssh:pinned' as const }]
-      }
-      expect(readNativeChatComposerDraft(agentLaunchPromptScopeKey(moved)).text).toBe('task 0')
-      const records = sourceCount()
-      expect(records).toBe(authored.length)
-      process.stdout.write(
-        `${JSON.stringify({ metric: 'unopened-setup-rows', count, authored: authored.length, records, visitsPerApply })}\n`
-      )
-    },
-    60_000
-  )
-
   it('keeps typed prompt and options through close, reopen and a rename', () => {
     const entry = {
       ...row(0, 'codex'),

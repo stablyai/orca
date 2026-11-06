@@ -2,7 +2,6 @@
 const EMOJI_PRESENTATION_PATTERN = /\p{Emoji_Presentation}/u
 const ESCAPE_CHARACTER = String.fromCharCode(0x1b)
 const REWRITE_CSI_SCAN_TAIL_MAX_CHARS = 64
-const SGR_SEQUENCE_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\[([0-9:;]*)m`, 'g')
 
 function containsStandaloneCarriageReturn(data: string): boolean {
   let index = data.indexOf('\r')
@@ -63,55 +62,92 @@ function isEastAsianRendererRiskCodePoint(value: number): boolean {
   )
 }
 
-function sgrParamCode(param: string | undefined): number | null {
-  if (!param) {
-    return null
+const SEMICOLON = 0x3b
+const COLON = 0x3a
+const DIGIT_ZERO = 0x30
+const DIGIT_NINE = 0x39
+const SGR_FINAL = 0x6d
+
+/** Leading decimal of one SGR parameter (digits before any ':'); null when that head is empty. */
+function sgrParamCodeAt(data: string, start: number, end: number): number | null {
+  let value = 0
+  let index = start
+  for (; index < end; index++) {
+    const code = data.charCodeAt(index)
+    if (code === COLON) {
+      break
+    }
+    // Saturate: only codes up to 107 matter, and a huge code must not wrap into that range.
+    value = value > 1000 ? value : value * 10 + (code - DIGIT_ZERO)
   }
-  const [head] = param.split(':')
-  const value = Number.parseInt(head ?? '', 10)
-  return Number.isFinite(value) ? value : null
+  return index === start ? null : value
 }
 
-function sgrSequenceSetsBackground(params: string): boolean {
-  const parts = params.split(';')
-  for (let i = 0; i < parts.length; i += 1) {
-    const value = sgrParamCode(parts[i])
-    if (value === null) {
-      continue
+function sgrParamEnd(data: string, start: number, paramsEnd: number): number {
+  for (let index = start; index < paramsEnd; index++) {
+    if (data.charCodeAt(index) === SEMICOLON) {
+      return index
     }
-    if (isInRange(value, 40, 47) || isInRange(value, 100, 107)) {
+  }
+  return paramsEnd
+}
+
+function sgrParamHasColon(data: string, start: number, end: number): boolean {
+  for (let index = start; index < end; index++) {
+    if (data.charCodeAt(index) === COLON) {
       return true
-    }
-    if (value === 48) {
-      return true
-    }
-    if (value === 38 && !parts[i]?.includes(':')) {
-      const mode = sgrParamCode(parts[i + 1])
-      if (mode === 5) {
-        i += 2
-      } else if (mode === 2) {
-        i += 4
-      } else {
-        i += 1
-      }
     }
   }
   return false
 }
 
-function containsBackgroundSgr(data: string): boolean {
-  if (!data.includes('\x1b[')) {
-    return false
+// Walks `params` in place; allocating per SGR made this scan cost as much as xterm's own parse on coloured floods.
+function sgrSequenceSetsBackground(data: string, paramsStart: number, paramsEnd: number): boolean {
+  let skipParams = 0
+  for (let start = paramsStart; start <= paramsEnd;) {
+    const end = sgrParamEnd(data, start, paramsEnd)
+    const next = end + 1
+    if (skipParams > 0) {
+      skipParams -= 1
+      start = next
+      continue
+    }
+    const value = sgrParamCodeAt(data, start, end)
+    if (value !== null) {
+      if (isInRange(value, 40, 47) || isInRange(value, 100, 107) || value === 48) {
+        return true
+      }
+      if (value === 38 && !sgrParamHasColon(data, start, end)) {
+        const mode =
+          next <= paramsEnd ? sgrParamCodeAt(data, next, sgrParamEnd(data, next, paramsEnd)) : null
+        skipParams = mode === 5 ? 2 : mode === 2 ? 4 : 1
+      }
+    }
+    start = next
   }
-  SGR_SEQUENCE_PATTERN.lastIndex = 0
-  for (
-    let match = SGR_SEQUENCE_PATTERN.exec(data);
-    match;
-    match = SGR_SEQUENCE_PATTERN.exec(data)
-  ) {
-    if (sgrSequenceSetsBackground(match[1] ?? '')) {
+  return false
+}
+
+function isSgrParamCode(code: number): boolean {
+  return (code >= DIGIT_ZERO && code <= DIGIT_NINE) || code === SEMICOLON || code === COLON
+}
+
+function containsBackgroundSgr(data: string): boolean {
+  let escapeIndex = data.indexOf('\x1b[')
+  while (escapeIndex !== -1) {
+    const paramsStart = escapeIndex + 2
+    let paramsEnd = paramsStart
+    while (paramsEnd < data.length && isSgrParamCode(data.charCodeAt(paramsEnd))) {
+      paramsEnd += 1
+    }
+    if (
+      paramsEnd < data.length &&
+      data.charCodeAt(paramsEnd) === SGR_FINAL &&
+      sgrSequenceSetsBackground(data, paramsStart, paramsEnd)
+    ) {
       return true
     }
+    escapeIndex = data.indexOf('\x1b[', paramsEnd)
   }
   return false
 }

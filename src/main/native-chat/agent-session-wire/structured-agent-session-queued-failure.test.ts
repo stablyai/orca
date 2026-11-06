@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
 import { createClaudeJournalTranslator } from '../../claude/structured/journal/claude-structured-journal-translation'
-import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
-import { readCodexThreadId } from '../../codex/codex-structured-thread-facts'
+import { createCodexJournalTranslator } from '../../codex/structured/journal/codex-structured-journal-translation'
+import { readCodexThreadId } from '../../codex/app-server/codex-structured-thread-facts'
 import {
   createQueuedMessageTestRig,
   eventually,
@@ -44,7 +44,19 @@ function mail(text: string) {
     sessionId: SESSION,
     callerKey: structuredSessionPointerCallerKey(SESSION),
     turn: {
-      body: { ...hostTestMessage(text), from: { kind: 'agent', senders: [], orchestration: null } },
+      body: {
+        ...hostTestMessage(text),
+        from: {
+          kind: 'agent',
+          senders: [],
+          orchestration: {
+            message: 'mail-notice',
+            mailbox: 'run:coordinator',
+            dispatchId: null,
+            messages: [{ messageId: id, runId: 'coordinator', from: 'term_worker' }]
+          }
+        }
+      },
       delivery: 'queue',
       operationId: id,
       expectedRuntimeFence: 1,

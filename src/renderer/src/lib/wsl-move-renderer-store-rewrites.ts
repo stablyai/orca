@@ -55,7 +55,8 @@ const STORE_REWRITES: Record<
     )
   },
   'notebook-environments': async (scope) => {
-    const { copyEnvironments } = await import('../components/editor/ipynb-kernel-store')
+    const { copyEnvironments } =
+      await import('../components/editor/notebook/kernel/ipynb-kernel-store')
     copyEnvironments((filePath, environment) =>
       hostNotebookEnvironment(filePath, environment, scope)
     )

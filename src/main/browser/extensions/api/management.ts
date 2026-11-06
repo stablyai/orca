@@ -1,7 +1,7 @@
 /// <reference types="chrome" />
 import { z } from 'zod'
-import { getChromeExtensionOrigin } from '../../../../shared/browser-extension-url'
-import type { InstalledBrowserExtension } from '../../../../shared/browser-extension-types'
+import { getChromeExtensionOrigin } from '../../../../shared/browser/extensions/browser-extension-url'
+import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 import { browserSessionRegistry } from '../../sessions/browser-session-registry'
 import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'
 import { notifyBrowserExtensionListChanged } from '../installation/browser-extension-list-changes'

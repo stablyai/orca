@@ -8,7 +8,7 @@ import {
   normalizeTuiAgentEnvRecord
 } from '../agent-launch/choices/tui-agent-launch-defaults'
 import { MACHINE_NAME_MAX_LENGTH } from '../machine-name'
-import { normalizePRBotAuthorOverrides } from '../pr-bot-author-overrides'
+import { normalizePRBotAuthorOverrides } from '../source-control/review-comments/pr-bot-author-overrides'
 import { WorktreeVisibilityDefaultsUpdate } from './worktree-visibility-defaults-params'
 import { AGENT_CHAT_PERMISSION_MODES } from '../agent-launch/permissions/agent-chat-permission-mode'
 

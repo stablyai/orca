@@ -201,13 +201,15 @@ describe('advertised migration blob kinds', () => {
     expect(advertisedOrcadMigrationBlobCapabilities({ wslHost: false })).toEqual([
       ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY,
       'orcad.migration-blob.terminal-restore-hints.v1',
-      'orcad.migration-blob.shell-history.v1'
+      'orcad.migration-blob.shell-history.v1',
+      'orcad.migration-blob.automation-run-history.v1'
     ])
     expect(advertisedOrcadMigrationBlobCapabilities({ wslHost: true })).toEqual([
       ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY,
       'orcad.migration-blob.terminal-restore-hints.v1',
       'orcad.migration-blob.shell-history.v1',
-      'orcad.migration-blob.terminal-history.v1'
+      'orcad.migration-blob.terminal-history.v1',
+      'orcad.migration-blob.automation-run-history.v1'
     ])
   })
 })

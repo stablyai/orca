@@ -15,7 +15,7 @@ import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut
 import {
   folderRelativePathToIncludeGlob,
   selectedExplorerFolderRelativePath
-} from '../components/right-sidebar/file-search-include-pattern'
+} from '../components/right-sidebar/file-explorer/content-search/file-search-include-pattern'
 import { usePluginCommands } from '@/store/plugin-panels'
 import { useAppStore } from '../store'
 import { keybindingMatchesAction, type KeybindingActionId } from '../../../shared/keybindings'

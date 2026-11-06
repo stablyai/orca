@@ -10,8 +10,8 @@ import { MobileRelayBetaNotice } from '../settings/mobile/pairing/MobileRelayBet
 import { MachineNameField } from '../machine-identity/MachineNameField'
 import { MobileRelayMintFailureNotice } from './mobile-relay-mint-failure-notice'
 import { WindowsFirewallNotice } from './WindowsFirewallNotice'
-import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
-import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
+import type { MobilePairingConnectionMode } from '../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
 import { i18n, translate } from '@/i18n/i18n'
 
 /** Why: one full sentence per device kind so translators own word order and punctuation. */

@@ -1,6 +1,6 @@
 import { buildClaudeModelListArgs } from '../../shared/claude-model-list-probe'
-import type { CommandTemplateBackslash } from '../../shared/commit-message-prompt'
-import type { CommitMessagePlan } from '../../shared/commit-message-plan'
+import type { CommandTemplateBackslash } from '../../shared/source-control/ai/generation/commit-message-prompt'
+import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
 import { planAgentBinary } from '../../shared/agent-launch/startup/agent-command-plan'
 import type { AgentModelProbeSpec } from '../../shared/agent-model-probe-spec'
 import { formatAgentCliFailureMessage } from './source-control-agent-failure'

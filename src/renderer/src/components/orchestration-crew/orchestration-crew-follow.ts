@@ -8,10 +8,10 @@ import { SharedControlReconnectScheduler } from '../../../../shared/remote-runti
 import {
   runtimeHostContactForEntry,
   lastRuntimeHostAnswer
-} from '../../../../shared/runtime-host-contact'
+} from '../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/protocol-version'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { CrewSubscriptionAttemptArgs } from '../../../../shared/runtime-environment-subscription-setup'
+import type { CrewSubscriptionAttemptArgs } from '../../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 import { CrewSubscription, UNKNOWN_CREW } from './orchestration-crew-subscription'
 
 type SourceSelection = {

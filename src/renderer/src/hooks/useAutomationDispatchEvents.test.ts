@@ -1,5 +1,5 @@
 import type * as ReactModule from 'react'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { countUnchangedObserverHistoryReads } from './automation-dispatch-observer-test-probe'
 

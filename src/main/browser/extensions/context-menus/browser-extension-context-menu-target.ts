@@ -2,7 +2,7 @@
 import type {
   BrowserExtensionContextMenuGroup,
   BrowserExtensionContextMenuItem
-} from '../../../../shared/browser-extension-context-menu-types'
+} from '../../../../shared/browser/extensions/browser-extension-context-menu-types'
 import { sameId } from './browser-extension-context-menu-model'
 import { matchesExtensionMatchPattern } from '../permissions/browser-extension-match-pattern'
 import type { StoredContextMenuItem } from '../profile-storage/browser-extension-profile-state-store'

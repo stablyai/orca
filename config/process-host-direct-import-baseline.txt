@@ -27,10 +27,10 @@ src/main/computer/macos-computer-use-permission-status.ts
 src/main/computer/macos-computer-use-permissions.ts
 src/main/computer/macos-native-provider-transport.ts
 src/main/computer/sidecar-client.ts
-src/main/daemon/daemon-launched-child.ts
-src/main/daemon/daemon-process-identity-query.ts
-src/main/daemon/daemon-process-inspection.ts
-src/main/daemon/daemon-process-start-time.ts
+src/main/daemon/launch/daemon-launched-child.ts
+src/main/daemon/endpoint/identity/daemon-process-identity-query.ts
+src/main/daemon/endpoint/identity/daemon-process-inspection.ts
+src/main/daemon/endpoint/identity/daemon-process-start-time.ts
 src/main/emulator/android/android-avd-boot.ts
 src/main/emulator/android/scrcpy-stream-session.ts
 src/main/emulator/serve-sim-helper-processes.ts
@@ -102,6 +102,6 @@ src/shared/ephemeral-vm-recipe-process.ts
 src/shared/ephemeral-vm-recipe-runner.ts
 src/shared/fish-binary-requirement.ts
 src/shared/process-table-ps-capture.ts
-src/shared/pty-slave-line-discipline-echo.ts
-src/shared/shell-process-readiness.ts
+src/shared/terminal/pty/native-process/pty-slave-line-discipline-echo.ts
+src/shared/terminal/pty/native-process/shell-process-readiness.ts
 src/wsl-guest/preflight-handler.ts

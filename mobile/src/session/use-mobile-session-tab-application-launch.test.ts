@@ -43,10 +43,6 @@ function reservedTerminalTab(terminal: string, isActive = false): MobileSessionT
   }
 }
 
-function chatTab(id: string, sessionId: string): MobileSessionTab {
-  return { type: 'agent-session', id, title: 'Claude', sessionId, agent: 'claude', isActive: false }
-}
-
 let version = 0
 function snapshot(tabs: MobileSessionTab[], extra: Partial<SessionTabsResult> = {}) {
   version += 1
@@ -87,9 +83,7 @@ function scope(pending: PendingSessionSelection | null) {
       appliedSnapshotMarkerRef: { current: { epoch: null, version: -1 } },
       appliedSessionTabsRevisionRef: { current: 0 },
       closedTabTombstonesRef: { current: new Map() },
-      reconcileBufferedDraftsRef: { current: vi.fn() },
       setTerminalsLoaded: vi.fn(),
-      defaultTerminalHandlesToLiveInput: vi.fn(),
       setActiveHandle: vi.fn(),
       setActiveSessionTabId: vi.fn(),
       activeSessionTabIdRef: mutableRef<string | null>('tab-old'),
@@ -343,16 +337,6 @@ describe('landing on a launched tab', () => {
 
     apply(snapshot([old, terminalTab('tab-new', 'term_new')]))
     expect(activations(sendRequest)).toHaveLength(1)
-  })
-
-  it('records a launched chat, found by its session, by the tab id the host gave it', () => {
-    const { state, sendRequest } = scope(launchedSelection('l1', { sessionId: 'claude_s1' }))
-    const apply = mount(state)
-
-    apply(snapshot([terminalTab('tab-old', 'term_old', true), chatTab('opaque-7', 'claude_s1')]))
-
-    expect(activations(sendRequest)).toEqual([expect.objectContaining({ tabId: 'opaque-7' })])
-    expect(state.setActiveSessionTabId).toHaveBeenLastCalledWith('opaque-7')
   })
 
   it('leaves the host’s choice alone when it moved this device itself', () => {

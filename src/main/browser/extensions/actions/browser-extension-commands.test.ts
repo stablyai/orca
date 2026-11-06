@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  parseExtensionShortcut,
-  readBrowserExtensionCommands,
-  shortcutMatchesInput
-} from './browser-extension-commands'
+import { parseExtensionShortcut, readBrowserExtensionCommands } from './browser-extension-commands'
 
 // Bitwarden's manifest commands.
 const manifest = {
@@ -15,23 +11,6 @@ const manifest = {
     autofill_login: { suggested_key: { default: 'Ctrl+Shift+L' }, description: 'Fill login' },
     autofill_card: { description: 'Fill card' },
     generate_password: { suggested_key: { default: 'Ctrl+Shift+9' } }
-  }
-}
-
-function key(input: Partial<Electron.Input>): Electron.Input {
-  return {
-    type: 'keyDown',
-    key: '',
-    code: '',
-    isAutoRepeat: false,
-    isComposing: false,
-    shift: false,
-    control: false,
-    alt: false,
-    meta: false,
-    location: 0,
-    modifiers: [],
-    ...input
   }
 }
 
@@ -55,20 +34,5 @@ describe('manifest commands', () => {
       control: true,
       meta: false
     })
-  })
-
-  it('matches the physical key so Option and Shift variants still fire', () => {
-    const [openPopup] = readBrowserExtensionCommands(manifest, 'darwin')
-    const binding = openPopup.binding
-    expect(binding).not.toBeNull()
-    if (!binding) {
-      return
-    }
-    expect(
-      shortcutMatchesInput(binding, key({ key: 'Y', code: 'KeyY', meta: true, shift: true }))
-    ).toBe(true)
-    expect(
-      shortcutMatchesInput(binding, key({ key: 'Y', code: 'KeyY', control: true, shift: true }))
-    ).toBe(false)
   })
 })

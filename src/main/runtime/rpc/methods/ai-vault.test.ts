@@ -4,12 +4,13 @@ import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { RuntimeAiVaultCommands } from '../../runtime-ai-vault-commands'
-import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-vault-types'
+import type {
+  AiVaultListResult,
+  AiVaultSession
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AiVaultServiceScanOptions } from '../../../ai-vault/scan-service/session-scanner-service-protocol'
-import {
-  AI_VAULT_SESSION_TITLES_RUNTIME_CAPABILITY,
-  RUNTIME_CAPABILITIES
-} from '../../../../shared/protocol-version'
+import { RUNTIME_CAPABILITIES } from '../../../../shared/protocol-version'
+import { AI_VAULT_SESSION_TITLES_RUNTIME_CAPABILITY } from '../../../../shared/ai-vault/contracts/ai-vault-runtime-capabilities'
 
 const { scanAiVaultSessionsInService, resolveAiVaultSessionTitlesInService } = vi.hoisted(() => ({
   scanAiVaultSessionsInService:

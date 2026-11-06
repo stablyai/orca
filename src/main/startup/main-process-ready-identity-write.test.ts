@@ -223,7 +223,7 @@ vi.mock('../cli/wsl-cli-registration-reconciliation', () => ({
 vi.mock('./wsl-cli-reconciliation-startup-barrier', () => ({
   createWslCliReconciliationStartupBarrier: () => Promise.resolve()
 }))
-vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../../shared/agent-hook-listener/configuration/agent-status-hooks-setting', () => ({
   isAgentStatusHooksEnabled: vi.fn()
 }))
 vi.mock('./main-process-ready-runtime', () => ({

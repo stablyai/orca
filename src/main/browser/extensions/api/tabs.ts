@@ -1,6 +1,6 @@
 /// <reference types="chrome" />
 import { z } from 'zod'
-import { resolveBrowserExtensionRequestedUrl } from '../../../../shared/browser-extension-url'
+import { resolveBrowserExtensionRequestedUrl } from '../../../../shared/browser/extensions/browser-extension-url'
 import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,

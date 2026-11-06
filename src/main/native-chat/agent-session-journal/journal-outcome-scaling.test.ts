@@ -22,14 +22,7 @@ import { journalOutcomeSource } from './journal-outcome-format'
 import { JournalOutcomeSweeper, sweepJournalOutcomePage } from './journal-outcome-cleanup'
 import { JOURNAL_NEWEST_OUTCOME_SQL } from './journal-outcome-table'
 import { readJournalOutcomeGroups } from './journal-read-row'
-import { applyJournalRow, type JournalReducerState } from './journal-reducer'
-import { isolateJournalTransition } from './journal-reducer-transition'
 import { encodeJournalState } from './journal-state-codec'
-import type * as RowStorage from './journal-storage-row-schema'
-import type * as Strict from './journal-storage-strict'
-import type * as OutcomeFormat1 from './journal-outcome-format-1'
-import type * as OutcomeFormat2 from './journal-outcome-format-2'
-import type * as Transition from './journal-reducer-transition'
 import {
   projectionBase as base,
   projectionEpoch as epoch,
@@ -37,8 +30,14 @@ import {
   projectionSessionId as sessionId,
   projectionWriter,
   seedOutcomeRows,
-  seedProjectionRows
+  seedProjectionRows,
+  trackedJournalDraftNodes
 } from './journal-projection-test-support'
+import type * as RowStorage from './journal-storage-row-schema'
+import type * as Strict from './journal-storage-strict'
+import type * as OutcomeFormat1 from './journal-outcome-format-1'
+import type * as OutcomeFormat2 from './journal-outcome-format-2'
+import type * as Transition from './journal-reducer-transition'
 
 // N/10N contracts: each counts statements (prepare and exec), rows read and rows and bytes
 // written, never time, and requires the same work for a chat ten times larger.
@@ -108,18 +107,25 @@ vi.mock('./journal-outcome-format-2', async (original) => {
   }
 })
 // Every draft transition a write or a replacement folds through, to count the nodes it reaches.
-const transitions = vi.hoisted(() => {
-  const opened: { tracked: () => number; trackedDerived: () => number }[] = []
-  return opened
-})
+type DraftCounts = { tracked: number; trackedDerived: number }
+const transitions = vi.hoisted((): DraftCounts[] => [])
 vi.mock('./journal-reducer-transition', async (original) => {
   const actual = await original<typeof Transition>()
   return {
     ...actual,
     isolateJournalTransition: (...input: Parameters<typeof actual.isolateJournalTransition>) => {
       const transition = actual.isolateJournalTransition(...input)
-      transitions.push(transition)
-      return transition
+      return {
+        ...transition,
+        adopt: () => {
+          const state = transition.adopt()
+          transitions.push({
+            tracked: transition.tracked(),
+            trackedDerived: transition.trackedDerived()
+          })
+          return state
+        }
+      }
     }
   }
 })
@@ -497,12 +503,12 @@ it.each(['rewind', 'replacement', 'rollover'] as const)(
         [
           'canonical draft nodes',
           transitions.reduce(
-            (sum, transition) => sum + transition.tracked() - transition.trackedDerived(),
+            (sum, transition) => sum + transition.tracked - transition.trackedDerived,
             0
           )
         ]
       ])
-      const derived = transitions.reduce((sum, transition) => sum + transition.trackedDerived(), 0)
+      const derived = transitions.reduce((sum, transition) => sum + transition.trackedDerived, 0)
       // Two coordinate indexes each have an all-card and a domain AVL; a point path
       // visits at most twice log2(K+2), reaching at most eight objects at each level.
       expect(derived).toBeLessThanOrEqual(64 * (size + 1) * Math.ceil(Math.log2(size + 2)))
@@ -529,7 +535,9 @@ it.each(['rewind', 'replacement', 'rollover'] as const)(
     expect(large.counts.get('canonical draft nodes')).toBeGreaterThan(
       small.counts.get('canonical draft nodes') ?? 0
     )
-    expect(large.derived).toBeGreaterThan(small.derived)
+    // Logical replacement reuses the derived input indexes instead of rebuilding a physical epoch.
+    expect(base.derived).toBeGreaterThan(0)
+    expect(large.derived).toBe(small.derived)
   }
 )
 
@@ -542,7 +550,7 @@ function outcomeKeys(database: JournalHostDatabase): number {
   )
 }
 
-it("opens a new chat reading each key's newest record once, the same with N and 10N superseded revisions", async () => {
+it('opens a new chat with one newest record per key plus indexed admission and first-card evidence, independent of superseded revisions', async () => {
   const measure = async (revisions: number) => {
     const { database, rig } = outcomeChat(N, `open-${revisions}`)
     for (let index = 1; index <= revisions; index++) {
@@ -562,10 +570,10 @@ it("opens a new chat reading each key's newest record once, the same with N and 
   expect(large.records - small.records).toBe(9 * N)
   expect(large.keys).toBe(small.keys)
   expectSameWork(small.work, large.work)
-  // One record per key; of the chat's rows only the marker, which its outcome summary must agree with.
+  // Newest keys plus four indexed admission reads/send and two first-card reads/card.
   expect(small.work.read).toStrictEqual({
     journal_outcome_epochs: 1,
-    journal_outcomes: small.keys,
+    journal_outcomes: small.keys + 4 * (N + 1) + 2 * N,
     journal_rows: 1,
     journal_sessions: 2,
     other: 0
@@ -625,7 +633,7 @@ it('writes to an existing chat without reading its prefix, the same at N and 10N
   expect(large.rig.state().submissions.get('send')?.dispatchState).toBe('accepted')
 })
 
-it("opens an existing chat reading main's prefix rows and each tail key's newest record, at N and 10N", async () => {
+it('opens an existing chat reading its prefix, newest tail and only relevant admission keys at N and 10N', async () => {
   const measure = async (size: number) => {
     const { database, rig } = await prefixChat(size, `prefix-open-${size}`)
     // The tail's one streamed item takes `size` more revisions: superseded, never read.
@@ -645,7 +653,7 @@ it("opens an existing chat reading main's prefix rows and each tail key's newest
     // The prefix rows main folds, plus the marker: checked against the outcome summary, and met
     // again on the prefix's last page.
     expect(work.read.journal_rows).toBe(prefix + 2)
-    expect(work.read.journal_outcomes).toBe(keys)
+    expect(work.read.journal_outcomes).toBe(keys + 1)
   }
   // The first mandatory conversion persisted one native identity per original card.
   expect(large.keys - small.keys).toBe(9 * N)
@@ -826,38 +834,47 @@ it('catches a wire client up from outcomes reading only the groups it asks for a
   expectSameWork(await measure(N), await measure(10 * N))
 })
 
-/** Reducer nodes the draft reaches to fold `row` onto `state`, without adopting it. */
-const trackedNodes = (state: JournalReducerState, row: JournalRow) =>
-  isolateJournalTransition(state, (draft) => applyJournalRow(draft, row, row.ts)).tracked()
-
-it("folds a streamed revision and an acceptance through the draft with only main's scans growing at N and 10N", () => {
+it('folds a streamed revision with constant draft work and bounds the actual acceptance scans at N and 10N', () => {
   const measure = (size: number) => {
     const database = databaseFor(`draft-${size}`)
-    const state = seedOutcomeRows(database, historyOf(size, true))
+    // Historical rows replay as a prefix; founding never restates accepted history in one draft.
+    const state = seedProjectionRows(database, historyOf(size, true))
     const next = state.lastSequence + 1
     const live = {
       items: state.items.size,
       submissions: state.submissions.size,
       cards: state.queue.cards.size,
       returned: [...state.queue.cards.values()].filter((card) => card.state === 'returned').length,
-      streamed: trackedNodes(
+      streamed: trackedJournalDraftNodes(
         state,
         revision('answer', message('y'.repeat(4_096), 'assistant'), 2)(next, 10_000)
       ),
-      accepted: trackedNodes(state, revision(providerItemId, message('send'), 1)(next, 10_000))
+      accepted: trackedJournalDraftNodes(
+        state,
+        revision(providerItemId, message('send'), 1)(next, 10_000)
+      )
     }
     return live
   }
   const small = measure(N)
   const large = measure(10 * N)
-  const grown = (key: keyof typeof small) => large[key] - small[key]
+  const grown = (key: 'items' | 'submissions' | 'cards' | 'returned') => large[key] - small[key]
   // Main's reducer scans these on the same rows; the draft adds one node per value it reaches.
-  // A streamed revision's only growing term is the queue card scan: each card, and each returned
-  // card's body.
+  // Returned-command membership is derived once; a streamed revision no longer scans cards.
   const cardScan = grown('cards') + grown('returned')
   expect(cardScan).toBeGreaterThan(0)
-  expect(grown('streamed')).toBe(cardScan)
-  // An echo also reads every item with its body (context-clear and echo lookups) and every
-  // submission to find its send.
-  expect(grown('accepted')).toBe(2 * grown('items') + grown('submissions') + cardScan)
+  expect(large.streamed).toEqual(small.streamed)
+  // Canonical context/echo lookups retain their item/body and candidate-input scans.
+  expect(large.accepted.canonical - small.accepted.canonical).toBe(
+    2 * grown('items') + grown('submissions')
+  )
+  for (const [size, measured] of [
+    [N, small],
+    [10 * N, large]
+  ] as const) {
+    // One accepted input updates the time and nonrefused AVL indexes, with two coordinate trees.
+    expect(measured.accepted.derived).toBeLessThanOrEqual(128 * Math.ceil(Math.log2(size + 2)))
+    expect(measured.accepted.derived).toBeGreaterThan(0)
+    console.info('acceptance-draft', JSON.stringify({ size, ...measured }))
+  }
 })

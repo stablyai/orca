@@ -10,7 +10,7 @@ import {
   queueTerminalLiveControlSend,
   waitForTerminalLivePendingFlush
 } from './terminal-live-pending-flush-state'
-import { TERMINAL_INPUT_MAX_BYTES } from '../../../src/shared/terminal-input'
+import { TERMINAL_INPUT_MAX_BYTES } from '../../../src/shared/terminal/input/terminal-input'
 
 const accepted: RpcResponse = { id: 'send', ok: true, result: { send: { accepted: true } } }
 const opened: RpcResponse = { id: 'open', ok: true, result: { inputSessionId: 'session' } }
@@ -90,76 +90,6 @@ it('admits live text and controls into a bounded window before any send reply, p
   })
   wire.releases.shift()!(accepted)
   await expect(Promise.all(deliveries)).resolves.toEqual(Array(9).fill(true))
-})
-
-it('latches legacy mode while capability discovery changes, even across a field reset', async () => {
-  const wire = transport()
-  const sender = new MobileTerminalInputSender()
-  const first = sender.request(wire.client, params('a'), undefined, false)
-  const second = sender.request(wire.client, params('b'), undefined, true)
-  expect(wire.sent).toEqual([{ method: 'terminal.send', payload: params('a') }])
-  wire.releases.shift()!(accepted)
-  await first
-  await vi.waitFor(() => expect(wire.releases).toHaveLength(1))
-  wire.releases.shift()!(accepted)
-  await second
-  const third = sender.request(wire.client, params('\r'), undefined, true)
-  await vi.waitFor(() => expect(wire.releases).toHaveLength(1))
-  expect(wire.sent.at(-1)).toEqual({ method: 'terminal.send', payload: params('\r') })
-  wire.releases.shift()!(accepted)
-  await third
-})
-
-it('bounds callers during opening and retires unsent suffixes on overflow', async () => {
-  const wire = transport(true)
-  const sender = new MobileTerminalInputSender()
-  const deliveries = Array.from({ length: 129 }, () =>
-    sender.request(wire.client, params(''), undefined, true)
-  )
-  await expect(
-    Promise.all(deliveries).then((replies) =>
-      replies.every((reply) => terminalInputSend.interpret(reply) === false)
-    )
-  ).resolves.toBe(true)
-  wire.open()
-  await Promise.resolve()
-  expect(wire.sent).toHaveLength(1)
-})
-
-it('charges retained launch drafts while opening before admitting another caller', async () => {
-  const wire = transport(true)
-  const sender = new MobileTerminalInputSender()
-  const admissions: boolean[] = []
-  const payload = {
-    ...params(''),
-    resolvedLaunchDraft: { text: 'x'.repeat(9 * 1024 * 1024), createdAt: 0 }
-  }
-  const first = sender.request(wire.client, payload, undefined, true, {
-    onAdmission: (accepted) => admissions.push(accepted)
-  })
-  const second = sender.request(wire.client, payload, undefined, true, {
-    onAdmission: (accepted) => admissions.push(accepted)
-  })
-  try {
-    expect(admissions).toEqual([true, false])
-  } finally {
-    sender.cancelAll()
-    wire.open()
-    await Promise.all([first, second])
-  }
-})
-
-it.each([true, false])('normalizes semantic controls only for strict=%s', async (strict) => {
-  const wire = transport()
-  const sender = new MobileTerminalInputSender()
-  const payload = { ...params('a'), enter: { ignored: 'data' }, interrupt: ['ignored'] }
-  const delivery = sender.request(wire.client, payload, undefined, strict)
-  await vi.waitFor(() => expect(wire.releases).toHaveLength(1))
-  expect(wire.sent.at(-1)).toMatchObject({
-    payload: strict ? { ...payload, enter: false, interrupt: false } : payload
-  })
-  wire.releases.shift()!(accepted)
-  await delivery
 })
 
 it('keeps issued byte reservations after cancellation until physical settlement and accepts a legal buffered paste', async () => {

@@ -1,5 +1,5 @@
 /** Whether any process runs from an orcad slot: its server, or a terminal daemon a candidate spawned there, which outlives the candidate's stop. */
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { posixProcessArgsShellFunction } from '../../managed-server/install/orcad-remote-host-support'
 import { isOrcadInstallDirLive } from '../../managed-server/install/orcad-remote-gc'
 import {

@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
-import { resolveFolderWorkspaceHost } from '../../../shared/folder-workspace-execution-host'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
+import { resolveFolderWorkspaceHost } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
 import {
   getAllowedRoots,
   getLocalRepos,

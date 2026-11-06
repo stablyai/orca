@@ -27,7 +27,7 @@ const { listWorktreesStrict } = vi.hoisted(() => ({ listWorktreesStrict: vi.fn()
 // The git binary is the external boundary for worktree.ps; everything above it stays real.
 
 import type Database from '../../../../../sqlite/sync-database'
-import type { AgentStatusIpcPayload } from '../../../../../../shared/agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from '../../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { toAgentStatusIpcPayload } from '../../../../../agent-hooks/server/server-status-identity'
 import type { EnrichedAgentHookEventPayload } from '../../../../../agent-hooks/server/server-types'
 import { registerAgentHookHandlers } from '../../../../../ipc/agent-hooks'

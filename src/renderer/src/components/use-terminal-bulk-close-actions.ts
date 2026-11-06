@@ -1,7 +1,10 @@
 import { useCallback } from 'react'
 import { useAppStore } from '../store'
 import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
-import { hasEditorFrameFlush, runAfterEditorFramesFlush } from './editor/editor-pending-flush'
+import {
+  hasEditorFrameFlush,
+  runAfterEditorFramesFlush
+} from './editor/save/flush/editor-pending-flush'
 import { closeTerminalTab } from './terminal/terminal-tab-actions'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { closeBrowserWorkspaceTabOnHosts } from '@/runtime/browser-workspace-tab-close'
@@ -59,7 +62,7 @@ export function useTerminalBulkCloseActions(
           unifiedTab?.contentType === 'terminal' &&
           isWebRuntimeSessionActive(getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId))
         ) {
-          closeTerminalTab(unifiedTab.entityId, { skipRunningProcessConfirm: true })
+          closeTerminalTab(unifiedTab.entityId, { reason: 'user', skipRunningProcessConfirm: true })
           continue
         }
         if (unifiedTab?.contentType === 'agent-session') {

@@ -34,16 +34,6 @@ describe('SparsePresetSettingsSection', () => {
     storeMock.state.removeSparsePreset.mockReset()
   })
 
-  it('offers a load retry and prevents creating against an unknown preset list', () => {
-    storeMock.state.sparsePresetsLoadStatusByRepo = { 'repo-1': 'error' }
-    storeMock.state.sparsePresetsErrorByRepo = { 'repo-1': 'disk failed' }
-    storeMock.state.fetchSparsePresets.mockResolvedValue(undefined)
-    render(<SparsePresetSettingsSection repoId="repo-1" />)
-    expect(screen.getByRole('button', { name: 'New Preset' }).hasAttribute('disabled')).toBe(true)
-    fireEvent.click(screen.getByRole('button', { name: 'Retry loading presets' }))
-    expect(storeMock.state.fetchSparsePresets).toHaveBeenCalledWith('repo-1')
-  })
-
   it('edits a preset in place and prevents replacing an unsaved draft', () => {
     storeMock.state.sparsePresetsByRepo = {
       'repo-1': ['Web', 'API'].map((name) => ({

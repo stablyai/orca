@@ -267,6 +267,10 @@ describe('orcad migration catalog persistence', () => {
     const restored = createStore()
     expect(restored.getOrcadMigrationCatalogState(input)).toMatchObject({ state: 'committed' })
     expect(restored.commitStagedOrcadMigrationCatalog(input)).toMatchObject({ state: 'committed' })
+    expect(restored.listAutomations()[0].launchSetup).toMatchObject({
+      launchPreferences: DORMANT_AUTOMATION.launchPreferences,
+      agentArgs: DORMANT_AUTOMATION.agentArgs
+    })
     expect(restored.getWorktreeMeta(DORMANT_WORKTREE_ID)?.comment).toBe('Preserve me')
     expect(restored.getSparsePresets(REPOSITORY.id)).toHaveLength(1)
     expect(restored.getWorkspaceSession().tabsByWorktree[DORMANT_WORKTREE_ID]).toHaveLength(1)

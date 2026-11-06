@@ -1,5 +1,3 @@
-// Publish list/pause/next-card together with stable identity so token frames cannot resend unchanged queues.
-
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
   type AgentSessionQueuedMessage,
@@ -16,7 +14,7 @@ import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 import {
   nextStructuredQueuedMessage,
   type StructuredQueueGateInput
-} from './structured-agent-session-queued-messages'
+} from './structured-agent-session-queued-gate'
 import {
   heldStructuredAgentSessionCurrentWork,
   type StructuredAgentSessionCurrentWorkHost
@@ -49,7 +47,8 @@ export function structuredQueueSendGate(
   })
 }
 
-/** Per-card holds are separate from the queue-level Stop pause published beside the list. */
+/** Waiting and returned rows only. `paused` is a per-card hold (a failed conversion); a person's
+ *  Stop pauses the queue, published once beside it. */
 function computePublishedQueuedMessages(journal: AgentSessionJournal): AgentSessionQueuedMessage[] {
   const published: AgentSessionQueuedMessage[] = []
   for (const row of journal.queuedMessages.list()) {
@@ -81,19 +80,20 @@ function isPublishedPausedReason(
 }
 
 type ListMemo = { key: string; serialized: string; list: AgentSessionQueuedMessage[] }
-
 /** Stable identity avoids repeated serialization on token frames. */
 const listMemos = new WeakMap<AgentSessionJournal, ListMemo>()
 const publications = new WeakMap<AgentSessionJournal, QueuePublication>()
 
-function readPublishedQueuedMessages(journal: AgentSessionJournal): AgentSessionQueuedMessage[] {
-  const key = String(journal.queuedMessages.revision())
+export function readPublishedQueuedMessages(
+  journal: AgentSessionJournal
+): AgentSessionQueuedMessage[] {
+  const key = journal.queuedMessages.revision()
   const memo = listMemos.get(journal)
   if (memo && memo.key === key) {
     return memo.list
   }
   const list = computePublishedQueuedMessages(journal)
-  // Equal recomputed content must retain identity for subscriber deduplication.
+  // Belt for the identity dedup: equal recomputed content keeps the previous reference.
   const serialized = JSON.stringify(list)
   if (memo && memo.serialized === serialized) {
     listMemos.set(journal, { key, serialized, list: memo.list })
@@ -132,11 +132,14 @@ export function readQueuePublication(
   )
   const resumable = silent ? null : resumableQueuePause(pauses, journal.queuedMessages.list())
   // The input order indexes pending sends, so a held queue never rescans history.
+  const input = gate(journal)
   const pause =
-    resumable && !queuePauseLiftOnItsWay(resumable, journal.inputOrder.sendingSubmissions())
+    resumable &&
+    !queuePauseLiftOnItsWay(resumable, journal.inputOrder.sendingSubmissions(), (submission) =>
+      input.work.owesSend(submission)
+    )
       ? resumable
       : null
-  const input = gate(journal)
   const working = structuredInputExecutionWorking(journal, input.work)
   const queuePause =
     pause?.reason === 'stopped' || (pause?.reason === 'failed' && !working)

@@ -17,8 +17,11 @@ import type {
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import { structuredSummaryConversationNaming } from './structured-agent-session-status-summary'
 import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session/records/agent-session-record-launch-directory'
-import { normalizeOptionalField } from '../../../shared/agent-status-field-normalization'
-import { AGENT_MODEL_MAX_LENGTH } from '../../../shared/agent-status-types'
+import {
+  normalizeOptionalField,
+  AGENT_MODEL_MAX_LENGTH
+} from '../../../shared/agent-status/contracts/agent-status-field-normalization'
+
 import { isAgentChatPermissionMode } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 
 export function savedStructuredAgentSessionStatus(

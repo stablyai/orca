@@ -1,9 +1,9 @@
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { basename } from '@/lib/path'
-import { canAutoSaveOpenFile } from '@/components/editor/editor-autosave'
-import { indexEditorExternalWatchBatchPaths } from '@/components/editor/editor-external-watch-path-index'
-import { getRecentSelfWrite } from '@/components/editor/editor-self-write-registry'
+import { canAutoSaveOpenFile } from '@/components/editor/autosave/editor-autosave'
+import { indexEditorExternalWatchBatchPaths } from '@/components/editor/external-changes/editor-external-watch-path-index'
+import { getRecentSelfWrite } from '@/components/editor/external-changes/editor-self-write-registry'
 import {
   hasActiveEditorPathMoves,
   isActiveMoveSourcePath

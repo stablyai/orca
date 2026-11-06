@@ -8,7 +8,7 @@ import {
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { TerminalContrastSetting } from './TerminalContrastSetting'
 import { translate } from '@/i18n/i18n'
-import { resolveTerminalInlineImagesEnabled } from '../../../../../../shared/terminal-inline-images-settings'
+import { resolveTerminalInlineImagesEnabled } from '../../../../../../shared/terminal/images/terminal-inline-images-settings'
 
 type TerminalRenderingSectionProps = {
   settings: GlobalSettings

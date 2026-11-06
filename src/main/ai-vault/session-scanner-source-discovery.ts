@@ -1,5 +1,5 @@
 import { delimiter } from 'node:path'
-import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
+import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { discoverFiles } from './session-scanner-discovery'
 import { opencodeDiscoveries } from './scanners/opencode/session-scanner-opencode-sources'
 import { zcodeDiscoveries } from './scanners/zcode/session-scanner-zcode-sources'

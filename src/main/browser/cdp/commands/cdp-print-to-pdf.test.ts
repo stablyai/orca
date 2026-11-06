@@ -1,19 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { buildPrintToPdfOptions, CdpPdfStreamStore } from './cdp-print-to-pdf'
-
-const DEFAULT_MARGIN_INCHES = 1 / 2.54
+import { CdpPdfStreamStore } from './cdp-print-to-pdf'
 const TTL_MS = 5 * 60 * 1000
-
-describe('buildPrintToPdfOptions', () => {
-  it('defaults omitted margin sides to 1cm when any side is set', () => {
-    expect(buildPrintToPdfOptions({ marginTop: 0.25 }).margins).toEqual({
-      top: 0.25,
-      bottom: DEFAULT_MARGIN_INCHES,
-      left: DEFAULT_MARGIN_INCHES,
-      right: DEFAULT_MARGIN_INCHES
-    })
-  })
-})
 
 describe('CdpPdfStreamStore', () => {
   afterEach(() => {

@@ -1,5 +1,5 @@
 import type { IDisposable } from '@xterm/xterm'
-import { TERMINAL_KITTY_SHIFT_ENTER_INPUT } from '../../../../shared/terminal-modified-enter-encoding'
+import { TERMINAL_KITTY_SHIFT_ENTER_INPUT } from '../../../../shared/terminal/protocol/input-modes/terminal-modified-enter-encoding'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport-types'
 import type { PaneCwdMap } from './resolve-split-cwd'
@@ -9,7 +9,7 @@ import type {
   KeybindingPlatform,
   TerminalShortcutPolicy
 } from '../../../../shared/keybindings'
-import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import { getLayoutCharacterForCode } from '@/lib/keyboard-layout/layout-base-character'
 import { createOptionKeyLocationTracker } from '@/lib/keyboard-layout/option-key-location-state'
 import { createTerminalOptionKittyReleaseTracker } from './terminal-option-kitty-release'
@@ -26,7 +26,7 @@ import {
 } from './terminal-captured-input-dispatch'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { useAppStore } from '@/store'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
 import { hasCtrlEnterCsiUAuthorityForPane } from './terminal-ctrl-enter'
 import { titleHasExplicitAgentIdentity } from './title-agent-identity'

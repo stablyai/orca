@@ -9,9 +9,9 @@ import type {
 } from '../../../../shared/runtime-types'
 import type { OwnedMobileTerminalCreateOptions } from './mobile-terminal-create'
 import { randomUUID } from 'node:crypto'
-import { copySleepingAgentLaunchConfig } from '../../runtime-agent-launch-resolution'
-import { deriveRemoteRuntimeTerminalCreateHandle } from '../../remote-runtime-terminal-create-identity'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { copySleepingAgentLaunchConfig } from './runtime-agent-launch-resolution'
+import { deriveRemoteRuntimeTerminalCreateHandle } from '../identity/remote-runtime-terminal-create-identity'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { placeCreatedSessionTab } from '../../../../shared/session-tab-placement'
 import { insertTabIdIntoOrder } from '../../../../shared/workspace-layout/tab-order'
 import type { OrcaRuntimeWithBuildPtyTerminalSummary as PtyTerminalSummaryMethods } from '../query/pty-terminal-summary'
@@ -19,7 +19,7 @@ import {
   buildHeadlessMobileSessionTabGroups,
   buildMaterializedHeadlessParentLayout,
   getHeadlessMobileSessionGroupId
-} from '../../mobile-session-layout-projection'
+} from '../surface/mobile-session-layout-projection'
 
 const OWNED_MOBILE_DISPATCH_RECIPE_TTL_MS = 15 * 60_000
 

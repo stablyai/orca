@@ -1,4 +1,4 @@
-import type { WorkspaceCleanupScanResult } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupScanResult } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 
 type BroadScanEntry = {
   scanId: string

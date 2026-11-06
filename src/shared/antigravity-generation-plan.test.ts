@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { planCommitMessageGeneration } from './commit-message-plan'
+import { planCommitMessageGeneration } from './source-control/ai/generation/commit-message-plan'
 
 describe('Antigravity generation planning', () => {
   it.each(['-fix: something', '--sandbox', 'line one\n"quoted"\r\n日本語 🐳'])(

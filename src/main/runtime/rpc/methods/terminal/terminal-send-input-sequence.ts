@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { z } from 'zod'
-import { TERMINAL_INPUT_MAX_BYTES } from '../../../../../shared/terminal-input'
+import { TERMINAL_INPUT_MAX_BYTES } from '../../../../../shared/terminal/input/terminal-input'
 import {
   TerminalOpenInputSession,
   type TerminalSend
@@ -11,7 +11,7 @@ import {
   terminalOrderedInputByteLength,
   TERMINAL_ORDERED_INPUT_MAX_BYTES,
   type TerminalInputSessionBinding
-} from '../../../../../shared/terminal-ordered-input'
+} from '../../../../../shared/terminal/input/terminal-ordered-input'
 import { defineMethod, type RpcContext } from '../../core'
 import { getTerminalInputSequenceLedger } from './terminal-input-sequence-ledger'
 

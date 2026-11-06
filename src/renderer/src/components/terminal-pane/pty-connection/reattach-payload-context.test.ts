@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { createPane } from '../pty-connection-test-pane-fixtures'
 import {
   installTerminalTestGlobals,

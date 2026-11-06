@@ -9,12 +9,12 @@ import {
   listEnvironments,
   removeEnvironment,
   resolveEnvironment
-} from '../../../shared/runtime-environment-store'
+} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   redactRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment,
   type RuntimeEnvironmentRemoval
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   connectThroughOwningService,
   removeThroughOwningService

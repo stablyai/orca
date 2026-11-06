@@ -7,7 +7,7 @@ import {
   type BrowserClientPageRendererIdentity as RendererPageIdentity,
   type BrowserClientPageRendererReply as RendererReply,
   type BrowserClientPageRendererRequest as RendererRequest
-} from '../../../../shared/browser-client-page-renderer-protocol'
+} from '../../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
 import type { BrowserClientPageRenderer } from '../lifecycle/browser-client-page-cleanup'
 import {
   readCurrentRendererFrame,

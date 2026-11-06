@@ -3,7 +3,7 @@ import {
   NATIVE_CHAT_SOURCE_PRIORITY,
   type NativeChatMessage
 } from '../../../../shared/native-chat/native-chat-types'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   applyAppend,
   createNativeChatMerger,

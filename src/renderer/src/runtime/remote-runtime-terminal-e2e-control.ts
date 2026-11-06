@@ -1,4 +1,4 @@
-import { TerminalStreamOpcode } from '../../../shared/terminal-stream-protocol'
+import { TerminalStreamOpcode } from '../../../shared/terminal/stream/terminal-stream-protocol'
 import { e2eConfig } from '@/lib/e2e-config'
 import type {
   RemoteRuntimeMultiplexedTerminalState,

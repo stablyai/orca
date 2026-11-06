@@ -116,3 +116,10 @@ export type RuntimeRequestSelection = {
   paramsForStatus: (status: unknown) => unknown
   onDispatch?: () => void
 }
+
+/** Internal preparation on the exact sending socket; never serialized or given credentials. */
+export type RuntimeRequestPreparation = (request: {
+  params: unknown
+  envelope: RuntimeOrchestrationEnvelope | undefined
+  measure: (params: unknown, envelope: RuntimeOrchestrationEnvelope | undefined) => number
+}) => { params: unknown; envelope: RuntimeOrchestrationEnvelope | undefined }

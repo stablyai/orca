@@ -7,14 +7,14 @@ import {
   RelayAssignmentStore,
   STRANDED_MIGRATION_ABANDON_MS
 } from './assignment-store.js'
-import { encodeMembership, type CellAdmissionMembership } from '../cell-admission-selector.js'
+import { encodeMembership, type CellAdmissionMembership } from '../cell/admission/cell-admission-selector.js'
 import {
   openInMemoryRelayDatabase,
   type RelayDatabase,
   type RelayLockOptions,
   type RelayTransactionOptions,
   type SqlRow
-} from '../database.js'
+} from '../database/database.js'
 
 const CELLS: RelayCellConfig[] = [
   { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 2 },
@@ -45,12 +45,10 @@ const FENCE_PLAN_BINDING = {
   terraformStateSerial: 7,
   terraformStateObjectGeneration: '987654321',
   terraformStateObjectSha256: 'd'.repeat(64),
-  requestReason:
-    'orca-relay-fence/22222222-2222-4222-8222-222222222222'
+  requestReason: 'orca-relay-fence/22222222-2222-4222-8222-222222222222'
 }
 const FENCE_INVOCATION_ID = '55555555-5555-4555-8555-555555555555'
-const FENCE_INVOCATION_REASON =
-  `${FENCE_PLAN_BINDING.requestReason}/${FENCE_INVOCATION_ID}`
+const FENCE_INVOCATION_REASON = `${FENCE_PLAN_BINDING.requestReason}/${FENCE_INVOCATION_ID}`
 
 async function applyGenerationZeroSelector(
   store: RelayAssignmentStore,
@@ -63,9 +61,7 @@ async function applyGenerationZeroSelector(
   return await store.applyCellAdmissionSelector({
     ...input,
     expectedGeneration: 0,
-    expectedMembershipSha256: createHash('sha256')
-      .update(encodeMembership(current))
-      .digest('hex')
+    expectedMembershipSha256: createHash('sha256').update(encodeMembership(current)).digest('hex')
   })
 }
 
@@ -81,68 +77,6 @@ function cellFenceEvidence(attemptId = '22222222-2222-4222-8222-222222222222') {
     fenceCommit: 'a'.repeat(40),
     planSha256: 'b'.repeat(64),
     ...FENCE_PLAN_BINDING
-  }
-}
-
-class OneShotInventoryFailureDatabase implements RelayDatabase {
-  readonly retryLocks: string[] = []
-  private armed = false
-  private failed = false
-
-  constructor(private readonly delegate: RelayDatabase) {}
-
-  arm(): void {
-    this.armed = true
-  }
-
-  async query(sql: string, params: unknown[] = []): Promise<SqlRow[]> {
-    return await this.delegate.query(sql, params)
-  }
-
-  async queryLocked(
-    sql: string,
-    params: unknown[] = [],
-    options: RelayLockOptions = {}
-  ): Promise<SqlRow[]> {
-    return await this.lockedQuery(this.delegate, sql, params, options)
-  }
-
-  async transaction<T>(operation: (transaction: RelayDatabase) => Promise<T>): Promise<T> {
-    return await this.delegate.transaction(
-      async (transaction) =>
-        await operation({
-          dialect: transaction.dialect,
-          query: async (sql, params = []) => await transaction.query(sql, params),
-          queryLocked: async (sql, params = [], options = {}) =>
-            await this.lockedQuery(transaction, sql, params, options),
-          transaction: async (nested) => await transaction.transaction(nested),
-          close: async () => {}
-        })
-    )
-  }
-
-  async close(): Promise<void> {
-    await this.delegate.close()
-  }
-
-  private async lockedQuery(
-    database: RelayDatabase,
-    sql: string,
-    params: unknown[],
-    options: RelayLockOptions
-  ): Promise<SqlRow[]> {
-    const inventory = sql.trim() === 'SELECT * FROM relay_cells ORDER BY cell_id ASC'
-    if (this.armed && inventory && options.failIfUnavailable) {
-      this.armed = false
-      this.failed = true
-      this.retryLocks.push('inventory-nowait-failed')
-      throw new Error('database_lock_unavailable')
-    }
-    if (this.failed && inventory) this.retryLocks.push('inventory-first')
-    if (this.failed && sql.includes('FROM relay_assignments')) {
-      this.retryLocks.push(options.failIfUnavailable ? 'assignment-nowait' : 'assignment')
-    }
-    return await database.queryLocked(sql, params, options)
   }
 }
 
@@ -370,9 +304,7 @@ describe('RelayAssignmentStore', () => {
         plannedGraceMs: 120_000
       })
     ).resolves.toMatchObject({ state: 'prepared', shouldSend: false })
-    expect(
-      await database!.query(`SELECT * FROM relay_post_drain_migration_pins`)
-    ).toEqual([])
+    expect(await database!.query(`SELECT * FROM relay_post_drain_migration_pins`)).toEqual([])
     await expect(
       store.prepareCellDrainRecovery({
         attemptId,
@@ -813,10 +745,10 @@ describe('RelayAssignmentStore', () => {
        WHERE user_id = ? AND relay_host_id = ?`,
       [identity.userId, identity.relayHostId]
     )
-    await database!.query(
-      `UPDATE relay_cells SET reserved_requests = 0 WHERE cell_id IN (?, ?)`,
-      ['cell-a', 'cell-b']
-    )
+    await database!.query(`UPDATE relay_cells SET reserved_requests = 0 WHERE cell_id IN (?, ?)`, [
+      'cell-a',
+      'cell-b'
+    ])
     now = ASSIGNMENT_LIMITS.dormantTtlMs + 1
     await heartbeat(store, cells[2]!, {
       incarnation: '33333333-3333-4333-8333-333333333333'
@@ -846,9 +778,7 @@ describe('RelayAssignmentStore', () => {
          WHERE user_id = ? AND relay_host_id = ?`,
         [identity.userId, identity.relayHostId]
       )
-    ).resolves.toEqual([
-      { cell_id: 'cell-c', assignment_epoch: current.assignmentEpoch }
-    ])
+    ).resolves.toEqual([{ cell_id: 'cell-c', assignment_epoch: current.assignmentEpoch }])
     await expect(
       database!.query(
         `SELECT activity_id, cell_id FROM relay_assignment_activity_leases
@@ -946,11 +876,7 @@ describe('RelayAssignmentStore', () => {
     }
     await store.prepareCellFenceAttempt(evidence)
     await store.bindCellFencePlanGeneration(evidence, evidence.planObjectGeneration)
-    await store.startCellFenceApply(
-      evidence,
-      FENCE_INVOCATION_ID,
-      FENCE_INVOCATION_REASON
-    )
+    await store.startCellFenceApply(evidence, FENCE_INVOCATION_ID, FENCE_INVOCATION_REASON)
     await store.recordCellFenceOperation(
       evidence,
       FENCE_INVOCATION_ID,
@@ -1010,27 +936,18 @@ describe('RelayAssignmentStore', () => {
     expect(prepared).toMatchObject({ createdAt: 100, expiresAt: 3_600_100 })
     expect(prepared.planObjectGeneration).toBeUndefined()
     await expect(
-      store.bindCellFencePlanGeneration(
-        evidence,
-        evidence.planObjectGeneration
-      )
+      store.bindCellFencePlanGeneration(evidence, evidence.planObjectGeneration)
     ).resolves.toMatchObject({
       planObjectGeneration: evidence.planObjectGeneration
     })
     await expect(
-      store.bindCellFencePlanGeneration(
-        evidence,
-        evidence.planObjectGeneration
-      )
+      store.bindCellFencePlanGeneration(evidence, evidence.planObjectGeneration)
     ).resolves.toMatchObject({
       planObjectGeneration: evidence.planObjectGeneration
     })
-    await expect(
-      store.bindCellFencePlanGeneration(
-        evidence,
-        '987654321'
-      )
-    ).rejects.toThrow('cell_fence_plan_generation_mismatch')
+    await expect(store.bindCellFencePlanGeneration(evidence, '987654321')).rejects.toThrow(
+      'cell_fence_plan_generation_mismatch'
+    )
     for (const changed of [
       { attemptId: '33333333-3333-4333-8333-333333333333' },
       { environment: 'staging' as const },
@@ -1050,11 +967,7 @@ describe('RelayAssignmentStore', () => {
         )
       ).rejects.toThrow()
     }
-    await store.startCellFenceApply(
-      evidence,
-      FENCE_INVOCATION_ID,
-      FENCE_INVOCATION_REASON
-    )
+    await store.startCellFenceApply(evidence, FENCE_INVOCATION_ID, FENCE_INVOCATION_REASON)
     await store.recordCellFenceOperation(
       evidence,
       FENCE_INVOCATION_ID,
@@ -1062,21 +975,17 @@ describe('RelayAssignmentStore', () => {
       'operation-1'
     )
     now += 45_001
-    await expect(
-      store.attestCellFenceAttempt(evidence, 'operation-other')
-    ).rejects.toThrow('cell_fence_operation_not_attested')
+    await expect(store.attestCellFenceAttempt(evidence, 'operation-other')).rejects.toThrow(
+      'cell_fence_operation_not_attested'
+    )
     const attested = await store.attestCellFenceAttempt(evidence, 'operation-1')
     expect(attested).toMatchObject({
       expiresAt: now + 300_000,
       attempt: { ...evidence, gceOperation: 'operation-1', completedAt: now }
     })
-    await expect(store.attestCellFenceAttempt(evidence, 'operation-1')).resolves.toEqual(
-      attested
-    )
+    await expect(store.attestCellFenceAttempt(evidence, 'operation-1')).resolves.toEqual(attested)
     now += 300_001
-    await expect(
-      store.attestCellFenceAttempt(evidence, 'operation-1')
-    ).resolves.toMatchObject({
+    await expect(store.attestCellFenceAttempt(evidence, 'operation-1')).resolves.toMatchObject({
       expiresAt: now + 300_000,
       attempt: { completedAt: attested.attempt.completedAt }
     })
@@ -1099,22 +1008,13 @@ describe('RelayAssignmentStore', () => {
       ...FENCE_PLAN_BINDING
     }
     await store.prepareCellFenceAttempt(evidence)
-    await store.bindCellFencePlanGeneration(
-      evidence,
-      evidence.planObjectGeneration
-    )
+    await store.bindCellFencePlanGeneration(evidence, evidence.planObjectGeneration)
     await expect(store.abortCellFenceAttempt(evidence)).resolves.toMatchObject({
       abortedAt: 100
     })
     await expect(
-      store.startCellFenceApply(
-        evidence,
-        FENCE_INVOCATION_ID,
-        FENCE_INVOCATION_REASON
-      )
-    ).rejects.toThrow(
-      'cell_fence_attempt_aborted'
-    )
+      store.startCellFenceApply(evidence, FENCE_INVOCATION_ID, FENCE_INVOCATION_REASON)
+    ).rejects.toThrow('cell_fence_attempt_aborted')
   })
 
   it('adopts a stale disabled legacy fence only when no durable attempt exists', async () => {
@@ -1128,10 +1028,9 @@ describe('RelayAssignmentStore', () => {
       store.adoptLegacyCellFence('cell-a', '11111111-1111-4111-8111-111111111111')
     ).resolves.toBe(now + 300_000)
     await expect(
-      database!.query(
-        `SELECT cell_id, cell_incarnation FROM relay_cell_fences WHERE cell_id = ?`,
-        ['cell-a']
-      )
+      database!.query(`SELECT cell_id, cell_incarnation FROM relay_cell_fences WHERE cell_id = ?`, [
+        'cell-a'
+      ])
     ).resolves.toEqual([
       {
         cell_id: 'cell-a',
@@ -1145,10 +1044,7 @@ describe('RelayAssignmentStore', () => {
         ['cell-a']
       )
     ).resolves.toEqual([])
-    await store.commitLegacyCellFenceAdoption(
-      'cell-a',
-      '11111111-1111-4111-8111-111111111111'
-    )
+    await store.commitLegacyCellFenceAdoption('cell-a', '11111111-1111-4111-8111-111111111111')
     await expect(
       database!.query(
         `SELECT cell_id, cell_incarnation
@@ -1166,10 +1062,7 @@ describe('RelayAssignmentStore', () => {
     await expect(
       store.adoptLegacyCellFence('cell-a', '11111111-1111-4111-8111-111111111111')
     ).resolves.toBe(now + 300_000)
-    await store.commitLegacyCellFenceAdoption(
-      'cell-a',
-      '11111111-1111-4111-8111-111111111111'
-    )
+    await store.commitLegacyCellFenceAdoption('cell-a', '11111111-1111-4111-8111-111111111111')
     await expect(
       database!.query(
         `SELECT attested_at, expires_at
@@ -1180,10 +1073,9 @@ describe('RelayAssignmentStore', () => {
 
     await heartbeat(store)
     await expect(
-      database!.query(
-        `SELECT cell_id FROM relay_cell_legacy_fence_adoptions WHERE cell_id = ?`,
-        ['cell-a']
-      )
+      database!.query(`SELECT cell_id FROM relay_cell_legacy_fence_adoptions WHERE cell_id = ?`, [
+        'cell-a'
+      ])
     ).resolves.toEqual([])
   })
 
@@ -1199,11 +1091,7 @@ describe('RelayAssignmentStore', () => {
       if (status === 'aborted') await store.abortCellFenceAttempt(evidence)
       if (status === 'completed') {
         await store.bindCellFencePlanGeneration(evidence, evidence.planObjectGeneration)
-        await store.startCellFenceApply(
-          evidence,
-          FENCE_INVOCATION_ID,
-          FENCE_INVOCATION_REASON
-        )
+        await store.startCellFenceApply(evidence, FENCE_INVOCATION_ID, FENCE_INVOCATION_REASON)
         await store.recordCellFenceOperation(
           evidence,
           FENCE_INVOCATION_ID,
@@ -1269,20 +1157,11 @@ describe('RelayAssignmentStore', () => {
       ...FENCE_PLAN_BINDING
     }
     await store.prepareCellFenceAttempt(evidence)
-    await store.bindCellFencePlanGeneration(
-      evidence,
-      evidence.planObjectGeneration
-    )
+    await store.bindCellFencePlanGeneration(evidence, evidence.planObjectGeneration)
     now += 3_600_001
     await expect(
-      store.startCellFenceApply(
-        evidence,
-        FENCE_INVOCATION_ID,
-        FENCE_INVOCATION_REASON
-      )
-    ).rejects.toThrow(
-      'cell_fence_attempt_expired'
-    )
+      store.startCellFenceApply(evidence, FENCE_INVOCATION_ID, FENCE_INVOCATION_REASON)
+    ).rejects.toThrow('cell_fence_attempt_expired')
   })
 
   it('keeps a started Terraform fence attempt recoverable after its preparation TTL', async () => {
@@ -1303,15 +1182,8 @@ describe('RelayAssignmentStore', () => {
       ...FENCE_PLAN_BINDING
     }
     await store.prepareCellFenceAttempt(evidence)
-    await store.bindCellFencePlanGeneration(
-      evidence,
-      evidence.planObjectGeneration
-    )
-    await store.startCellFenceApply(
-      evidence,
-      FENCE_INVOCATION_ID,
-      FENCE_INVOCATION_REASON
-    )
+    await store.bindCellFencePlanGeneration(evidence, evidence.planObjectGeneration)
+    await store.startCellFenceApply(evidence, FENCE_INVOCATION_ID, FENCE_INVOCATION_REASON)
     now += 3_600_001
     await expect(
       store.recordCellFenceOperation(
@@ -1330,8 +1202,7 @@ describe('RelayAssignmentStore', () => {
         attemptId: '44444444-4444-4444-8444-444444444444',
         planObjectName:
           'terraform/state/relay-fence-plans/production/44444444-4444-4444-8444-444444444444.tfplan',
-        requestReason:
-          'orca-relay-fence/44444444-4444-4444-8444-444444444444'
+        requestReason: 'orca-relay-fence/44444444-4444-4444-8444-444444444444'
       })
     ).rejects.toThrow('cell_fence_attempt_evidence_mismatch')
   })
@@ -1389,9 +1260,10 @@ describe('RelayAssignmentStore', () => {
   })
 
   it('keeps concurrent sticky assignment grants restart-safe', async () => {
-    const store = await setup(() => 100, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 }
-    ])
+    const store = await setup(
+      () => 100,
+      [{ id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 }]
+    )
     const identity = { userId: 'private-user', relayHostId: 'host000000000001' }
 
     await Promise.all(Array.from({ length: 20 }, async () => await store.assign(identity)))
@@ -1407,9 +1279,10 @@ describe('RelayAssignmentStore', () => {
   })
 
   it('classifies activated and non-control activity as restart-blocking', async () => {
-    const store = await setup(() => 100, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 }
-    ])
+    const store = await setup(
+      () => 100,
+      [{ id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 }]
+    )
     const identity = { userId: 'private-user', relayHostId: 'host000000000001' }
     const assignment = await store.assign(identity)
     await store.activateControl(identity, {
@@ -1436,9 +1309,10 @@ describe('RelayAssignmentStore', () => {
   })
 
   it('fails closed for malformed pending controls and unexplained reservations', async () => {
-    const store = await setup(() => 100, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 }
-    ])
+    const store = await setup(
+      () => 100,
+      [{ id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 }]
+    )
     await store.assign({ userId: 'private-user', relayHostId: 'host000000000001' })
     await database!.query(
       `UPDATE relay_assignment_activity_leases SET request_units = 2
@@ -1455,20 +1329,18 @@ describe('RelayAssignmentStore', () => {
       `UPDATE relay_assignment_activity_leases SET request_units = 1 WHERE cell_id = ?`,
       ['cell-a']
     )
-    await database!.query(
-      `UPDATE relay_cells SET reserved_requests = 0 WHERE cell_id = ?`,
-      ['cell-a']
-    )
+    await database!.query(`UPDATE relay_cells SET reserved_requests = 0 WHERE cell_id = ?`, [
+      'cell-a'
+    ])
     expect(await store.cellDeploymentStatus('cell-a')).toMatchObject({
       restartBlockingActivityLeases: 0,
       restartBlockingActivityRequestUnits: 0,
       restartBlockingReservedRequests: -1
     })
 
-    await database!.query(
-      `UPDATE relay_cells SET reserved_requests = 2 WHERE cell_id = ?`,
-      ['cell-a']
-    )
+    await database!.query(`UPDATE relay_cells SET reserved_requests = 2 WHERE cell_id = ?`, [
+      'cell-a'
+    ])
     expect(await store.cellDeploymentStatus('cell-a')).toMatchObject({
       restartBlockingActivityLeases: 0,
       restartBlockingActivityRequestUnits: 0,
@@ -1477,10 +1349,13 @@ describe('RelayAssignmentStore', () => {
   })
 
   it('keeps a migration blocking when its target also has a pending control', async () => {
-    const store = await setup(() => 100, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 },
-      { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 20 }
-    ])
+    const store = await setup(
+      () => 100,
+      [
+        { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 },
+        { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 20 }
+      ]
+    )
     const identity = { userId: 'private-user', relayHostId: 'host000000000001' }
     await store.assign(identity)
     await store.startEvacuation(identity, 'cell-b')
@@ -1595,19 +1470,7 @@ describe('RelayAssignmentStore', () => {
         target_reserved_units, expires_at, target_registered_at,
         completed_at, aborted_at, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?)`,
-      [
-        identity.userId,
-        identity.relayHostId,
-        'cell-b',
-        'cell-a',
-        -1,
-        0,
-        0,
-        1,
-        90_100,
-        now,
-        now
-      ]
+      [identity.userId, identity.relayHostId, 'cell-b', 'cell-a', -1, 0, 0, 1, 90_100, now, now]
     )
     await database!.query(
       `INSERT INTO relay_post_drain_migration_pins
@@ -1714,10 +1577,9 @@ describe('RelayAssignmentStore', () => {
     expect(await store.evacuateDeadCells(1)).toBe(1)
     expect(await store.resolve(legacyIdentity)).toMatchObject({ cellId: 'cell-c' })
     expect(
-      await database!.query(
-        `SELECT cell_id FROM relay_assignments WHERE user_id = ?`,
-        [cappedIdentity.userId]
-      )
+      await database!.query(`SELECT cell_id FROM relay_assignments WHERE user_id = ?`, [
+        cappedIdentity.userId
+      ])
     ).toEqual([{ cell_id: 'cell-a' }])
   })
 
@@ -1752,9 +1614,10 @@ describe('RelayAssignmentStore', () => {
   })
 
   it('admits exactly through the configured capacity boundary', async () => {
-    const store = await setup(() => 100, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 2 }
-    ])
+    const store = await setup(
+      () => 100,
+      [{ id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 2 }]
+    )
     await store.assign({ userId: 'user-a', relayHostId: 'host000000000001' })
     await store.assign({ userId: 'user-b', relayHostId: 'host000000000002' })
 
@@ -1765,12 +1628,16 @@ describe('RelayAssignmentStore', () => {
   })
 
   it('does not oversubscribe when assignments race', async () => {
-    const store = await setup(() => 100, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 2 }
-    ])
+    const store = await setup(
+      () => 100,
+      [{ id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 2 }]
+    )
     const results = await Promise.allSettled(
       Array.from({ length: 8 }, (_, index) =>
-        store.assign({ userId: `user-${index}`, relayHostId: `host${String(index).padStart(12, '0')}` })
+        store.assign({
+          userId: `user-${index}`,
+          relayHostId: `host${String(index).padStart(12, '0')}`
+        })
       )
     )
 
@@ -1819,9 +1686,10 @@ describe('RelayAssignmentStore', () => {
 
   it('releases every expired activity reservation without going negative', async () => {
     let now = 100
-    const store = await setup(() => now, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 }
-    ])
+    const store = await setup(
+      () => now,
+      [{ id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 }]
+    )
     const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
     await store.assign(identity)
     for (const kind of ['splice', 'invite', 'install', 'confirmation', 'migration'] as const) {
@@ -1889,9 +1757,7 @@ describe('RelayAssignmentStore', () => {
 
     expect(activityId).toBe(`control:${assignment.cellId}:1`)
     expect(await cellReservations(database!)).toEqual({ 'cell-a': 1, 'cell-b': 0 })
-    const leases = await database!.query(
-      `SELECT activity_id FROM relay_assignment_activity_leases`
-    )
+    const leases = await database!.query(`SELECT activity_id FROM relay_assignment_activity_leases`)
     expect(leases).toEqual([{ activity_id: activityId }])
   })
 
@@ -1983,9 +1849,7 @@ describe('RelayAssignmentStore', () => {
     })
     expect(await cellReservations(database!)).toEqual({ 'cell-a': 1, 'cell-b': 0 })
     expect(
-      await database!.query(
-        `SELECT activity_id FROM relay_assignment_activity_leases`
-      )
+      await database!.query(`SELECT activity_id FROM relay_assignment_activity_leases`)
     ).toEqual([{ activity_id: 'control-pending:1' }])
     expect(
       await database!.query(
@@ -2023,9 +1887,7 @@ describe('RelayAssignmentStore', () => {
          WHERE user_id = ? AND relay_host_id = ?`,
         [identity.userId, identity.relayHostId]
       )
-      await delegate.query(
-        `UPDATE relay_cells SET reserved_requests = 2 WHERE cell_id = 'cell-a'`
-      )
+      await delegate.query(`UPDATE relay_cells SET reserved_requests = 2 WHERE cell_id = 'cell-a'`)
     })
     database = seeded
     const store = new RelayAssignmentStore(seeded, () => now)
@@ -2073,28 +1935,16 @@ describe('RelayAssignmentStore', () => {
         last_activity_at, reserved_controls, reserved_splices, reserved_invites,
         pending_installs, pending_confirmations, migration_leases)
        VALUES (?, ?, 'cell-b', 2, ?, ?, 1, 0, 0, 0, 0, 0)`,
-      [
-        identity.userId,
-        identity.relayHostId,
-        now + ASSIGNMENT_LIMITS.activityLeaseMs,
-        now
-      ]
+      [identity.userId, identity.relayHostId, now + ASSIGNMENT_LIMITS.activityLeaseMs, now]
     )
     await database!.query(
       `INSERT INTO relay_assignment_activity_leases
        (user_id, relay_host_id, activity_id, activity_kind, cell_id,
         request_units, expires_at, updated_at)
        VALUES (?, ?, 'control:cell-a:1', 'control', 'cell-a', 1, ?, ?)`,
-      [
-        identity.userId,
-        identity.relayHostId,
-        now + ASSIGNMENT_LIMITS.activityLeaseMs,
-        now
-      ]
+      [identity.userId, identity.relayHostId, now + ASSIGNMENT_LIMITS.activityLeaseMs, now]
     )
-    await database!.query(
-      `UPDATE relay_cells SET reserved_requests = 1 WHERE cell_id = 'cell-a'`
-    )
+    await database!.query(`UPDATE relay_cells SET reserved_requests = 1 WHERE cell_id = 'cell-a'`)
 
     await expect(store.assign(identity)).resolves.toMatchObject({
       cellId: 'cell-b',
@@ -2129,28 +1979,16 @@ describe('RelayAssignmentStore', () => {
         last_activity_at, reserved_controls, reserved_splices, reserved_invites,
         pending_installs, pending_confirmations, migration_leases)
        VALUES (?, ?, 'cell-a', 3, ?, ?, 1, 0, 0, 0, 0, 0)`,
-      [
-        identity.userId,
-        identity.relayHostId,
-        now + ASSIGNMENT_LIMITS.activityLeaseMs,
-        now
-      ]
+      [identity.userId, identity.relayHostId, now + ASSIGNMENT_LIMITS.activityLeaseMs, now]
     )
     await database!.query(
       `INSERT INTO relay_assignment_activity_leases
        (user_id, relay_host_id, activity_id, activity_kind, cell_id,
         request_units, expires_at, updated_at)
        VALUES (?, ?, 'control-pending:1', 'control', 'cell-a', 1, ?, ?)`,
-      [
-        identity.userId,
-        identity.relayHostId,
-        now + ASSIGNMENT_LIMITS.activityLeaseMs,
-        now
-      ]
+      [identity.userId, identity.relayHostId, now + ASSIGNMENT_LIMITS.activityLeaseMs, now]
     )
-    await database!.query(
-      `UPDATE relay_cells SET reserved_requests = 1 WHERE cell_id = 'cell-a'`
-    )
+    await database!.query(`UPDATE relay_cells SET reserved_requests = 1 WHERE cell_id = 'cell-a'`)
 
     await expect(store.assign(identity)).resolves.toMatchObject({
       cellId: 'cell-a',
@@ -2182,21 +2020,14 @@ describe('RelayAssignmentStore', () => {
          (user_id, relay_host_id, activity_id, activity_kind, cell_id,
           request_units, expires_at, updated_at)
          VALUES (?, ?, 'splice:connection-1', 'splice', 'cell-a', 1, ?, ?)`,
-        [
-          identity.userId,
-          identity.relayHostId,
-          now + ASSIGNMENT_LIMITS.activityLeaseMs,
-          now
-        ]
+        [identity.userId, identity.relayHostId, now + ASSIGNMENT_LIMITS.activityLeaseMs, now]
       )
       await delegate.query(
         `UPDATE relay_assignments SET reserved_splices = 1
          WHERE user_id = ? AND relay_host_id = ?`,
         [identity.userId, identity.relayHostId]
       )
-      await delegate.query(
-        `UPDATE relay_cells SET reserved_requests = 1 WHERE cell_id = 'cell-a'`
-      )
+      await delegate.query(`UPDATE relay_cells SET reserved_requests = 1 WHERE cell_id = 'cell-a'`)
     })
     database = seeded
     const store = new RelayAssignmentStore(seeded, () => now)
@@ -2296,10 +2127,13 @@ describe('RelayAssignmentStore', () => {
   })
 
   it('moves an origin-scoped activity reservation without double counting', async () => {
-    const store = await setup(() => 100, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
-      { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 }
-    ])
+    const store = await setup(
+      () => 100,
+      [
+        { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
+        { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 }
+      ]
+    )
     const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
     await store.assign(identity)
     await store.acquireActivity(identity, {
@@ -2321,9 +2155,10 @@ describe('RelayAssignmentStore', () => {
   })
 
   it('rejects a durable activity before it can exceed cell capacity', async () => {
-    const store = await setup(() => 100, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 2 }
-    ])
+    const store = await setup(
+      () => 100,
+      [{ id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 2 }]
+    )
     const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
     await store.assign(identity)
 
@@ -2338,10 +2173,13 @@ describe('RelayAssignmentStore', () => {
   })
 
   it('moves active assignments target-first and completes only after source drain', async () => {
-    const store = await setup(() => 100, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
-      { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 }
-    ])
+    const store = await setup(
+      () => 100,
+      [
+        { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
+        { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 }
+      ]
+    )
     const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
     const first = await store.assign(identity)
     const sourceControl = await store.activateControl(identity, {
@@ -2471,47 +2309,11 @@ describe('RelayAssignmentStore', () => {
     })
     now += 45_001
     await heartbeat(store, cells[1]!)
-    await store.attestCellFence(
-      'cell-a',
-      '11111111-1111-4111-8111-111111111111'
-    )
+    await store.attestCellFence('cell-a', '11111111-1111-4111-8111-111111111111')
     expect(await store.cellEvacuationStatus('cell-a', 'cell-b', true)).toMatchObject({
       inProgress: 0,
       completed: 1
     })
-  })
-
-  it('logs the drift reconciliation corrects, once, after it commits', async () => {
-    const store = await setup(() => 100, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
-      { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 }
-    ])
-    const grant = await store.assign({ userId: 'user-a', relayHostId: 'host000000000001' })
-    await database!.query(`UPDATE relay_cells SET reserved_requests = 5 WHERE cell_id = ?`, [
-      grant.cellId
-    ])
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    let lines: string[]
-    try {
-      await store.cellEvacuationStatus('cell-a', 'cell-b', true)
-      await store.cellEvacuationStatus('cell-a', 'cell-b', true)
-    } finally {
-      lines = warn.mock.calls.map((call) => String(call[0]))
-      warn.mockRestore()
-    }
-
-    const drift = lines
-      .filter((line) => line.includes('orca_relay_reservation_drift'))
-      .map((line) => JSON.parse(line) as unknown)
-    expect(drift).toEqual([
-      {
-        event: 'orca_relay_reservation_drift',
-        cellId: grant.cellId,
-        reservedRequests: 5,
-        leaseUnits: 1
-      }
-    ])
   })
 
   it('blocks aggregate fenced completion on assignment accounting mismatch', async () => {
@@ -2551,10 +2353,7 @@ describe('RelayAssignmentStore', () => {
     )
     now += 45_001
     await heartbeat(store, cells[1]!)
-    await store.attestCellFence(
-      'cell-a',
-      '11111111-1111-4111-8111-111111111111'
-    )
+    await store.attestCellFence('cell-a', '11111111-1111-4111-8111-111111111111')
 
     expect(await store.cellEvacuationStatus('cell-a', 'cell-b', true)).toMatchObject({
       inProgress: 1,
@@ -2620,10 +2419,7 @@ describe('RelayAssignmentStore', () => {
     )
     now += 45_001
     await heartbeat(store, cells[1]!)
-    await store.attestCellFence(
-      'cell-a',
-      '11111111-1111-4111-8111-111111111111'
-    )
+    await store.attestCellFence('cell-a', '11111111-1111-4111-8111-111111111111')
 
     expect(await store.cellEvacuationStatus('cell-a', 'cell-b', true)).toMatchObject({
       inProgress: 1,
@@ -2633,10 +2429,13 @@ describe('RelayAssignmentStore', () => {
 
   it('rolls back an unregistered expired evacuation with a strictly newer epoch', async () => {
     let now = 100
-    const store = await setup(() => now, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
-      { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 }
-    ])
+    const store = await setup(
+      () => now,
+      [
+        { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
+        { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 }
+      ]
+    )
     const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
     const first = await store.assign(identity)
     await store.activateControl(identity, {
@@ -2746,13 +2545,7 @@ describe('RelayAssignmentStore', () => {
       { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
       { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 }
     ]
-    const { store, identity } = await wedgeRegisteredMigration(
-      () => now,
-      cells,
-      true,
-      false,
-      false
-    )
+    const { store, identity } = await wedgeRegisteredMigration(() => now, cells, true, false, false)
 
     now += ASSIGNMENT_LIMITS.migrationLeaseMs + STRANDED_MIGRATION_ABANDON_MS + 1
     expect(await store.abortExpiredEvacuations()).toBe(1)
@@ -2951,14 +2744,8 @@ describe('RelayAssignmentStore', () => {
 
     now += 45_001
     await heartbeat(store, cells[1]!)
-    await store.adoptLegacyCellFence(
-      'cell-a',
-      '11111111-1111-4111-8111-111111111111'
-    )
-    await store.commitLegacyCellFenceAdoption(
-      'cell-a',
-      '11111111-1111-4111-8111-111111111111'
-    )
+    await store.adoptLegacyCellFence('cell-a', '11111111-1111-4111-8111-111111111111')
+    await store.commitLegacyCellFenceAdoption('cell-a', '11111111-1111-4111-8111-111111111111')
     now += ASSIGNMENT_LIMITS.migrationLeaseMs + 1
     await heartbeat(store, cells[1]!)
     const query = database!.query.bind(database)
@@ -3014,13 +2801,7 @@ describe('RelayAssignmentStore', () => {
       { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
       { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 }
     ]
-    const { store, identity } = await wedgeRegisteredMigration(
-      () => now,
-      cells,
-      false,
-      true,
-      false
-    )
+    const { store, identity } = await wedgeRegisteredMigration(() => now, cells, false, true, false)
     await applyGenerationZeroSelector(store, {
       attemptId: 'retired_source_active',
       membership: {
@@ -3073,10 +2854,7 @@ describe('RelayAssignmentStore', () => {
       }
     })
     now += STRANDED_MIGRATION_ABANDON_MS + ASSIGNMENT_LIMITS.migrationLeaseMs + 1
-    await database!.query(
-      `UPDATE relay_assignment_migrations SET expires_at = ?`,
-      [now - 1]
-    )
+    await database!.query(`UPDATE relay_assignment_migrations SET expires_at = ?`, [now - 1])
 
     expect(await store.abortExpiredEvacuations()).toBe(1)
   })
@@ -3205,10 +2983,13 @@ describe('RelayAssignmentStore', () => {
 
   it('repairs an expired migration marker from its exact active target control', async () => {
     let now = 100
-    const store = await setup(() => now, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
-      { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 }
-    ])
+    const store = await setup(
+      () => now,
+      [
+        { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
+        { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 }
+      ]
+    )
     const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
     const first = await store.assign(identity)
     const sourceControl = await store.activateControl(identity, {
@@ -3257,10 +3038,13 @@ describe('RelayAssignmentStore', () => {
 
   it('keeps a registered migration pending while its proven target control is offline', async () => {
     let now = 100
-    const store = await setup(() => now, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
-      { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 }
-    ])
+    const store = await setup(
+      () => now,
+      [
+        { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
+        { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 }
+      ]
+    )
     const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
     const first = await store.assign(identity)
     const sourceControl = await store.activateControl(identity, {
@@ -3284,17 +3068,16 @@ describe('RelayAssignmentStore', () => {
     await store.releaseActivity(identity, sourceControl)
     now += ASSIGNMENT_LIMITS.activityLeaseMs + 1
     expect(await store.completeReadyEvacuations()).toBe(0)
-    await expect(
-      store.completeEvacuation(identity, migration.assignmentEpoch)
-    ).rejects.toThrow('migration_target_not_active')
+    await expect(store.completeEvacuation(identity, migration.assignmentEpoch)).rejects.toThrow(
+      'migration_target_not_active'
+    )
     await store.releaseActivity(identity, targetControl)
     expect(await store.completeReadyEvacuations()).toBe(0)
 
     expect(await store.cellEvacuationStatus('cell-a', 'cell-b', true)).toEqual({
       inProgress: 1,
       oldestExpiresAt: 100 + ASSIGNMENT_LIMITS.migrationLeaseMs,
-      oldestRemainingMs:
-        ASSIGNMENT_LIMITS.migrationLeaseMs - ASSIGNMENT_LIMITS.activityLeaseMs - 1,
+      oldestRemainingMs: ASSIGNMENT_LIMITS.migrationLeaseMs - ASSIGNMENT_LIMITS.activityLeaseMs - 1,
       targetRegistered: 1,
       registeredSourceActive: 0,
       registeredCompletable: 0,
@@ -3324,12 +3107,23 @@ describe('RelayAssignmentStore', () => {
 
   it('completes a registered migration after its disabled source is proven dead', async () => {
     let now = 100
-    const store = await setupWithHeartbeats(() => now, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
-      { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 }
-    ])
-    await heartbeat(store, { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 })
-    await heartbeat(store, { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 })
+    const store = await setupWithHeartbeats(
+      () => now,
+      [
+        { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
+        { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 }
+      ]
+    )
+    await heartbeat(store, {
+      id: 'cell-a',
+      url: 'https://relay-a.example.com',
+      capacityRequests: 10
+    })
+    await heartbeat(store, {
+      id: 'cell-b',
+      url: 'https://relay-b.example.com',
+      capacityRequests: 10
+    })
     const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
     const first = await store.assign(identity)
     const sourceControl = await store.activateControl(identity, {
@@ -3355,10 +3149,7 @@ describe('RelayAssignmentStore', () => {
       { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 },
       { startedAt: 50 }
     )
-    await store.attestCellFence(
-      'cell-a',
-      '11111111-1111-4111-8111-111111111111'
-    )
+    await store.attestCellFence('cell-a', '11111111-1111-4111-8111-111111111111')
 
     const input = {
       assignmentEpoch: migration.assignmentEpoch,
@@ -3422,9 +3213,11 @@ describe('RelayAssignmentStore', () => {
     await heartbeat(store, cells[1]!, { startedAt: 50 })
     await store.attestCellFence('cell-a', '11111111-1111-4111-8111-111111111111')
 
-    await expect(
-      store.cellEvacuationStatus('cell-a', 'cell-b', true)
-    ).resolves.toMatchObject({ inProgress: 0, completed: 1, blocked: 0 })
+    await expect(store.cellEvacuationStatus('cell-a', 'cell-b', true)).resolves.toMatchObject({
+      inProgress: 0,
+      completed: 1,
+      blocked: 0
+    })
     expect(await cellReservations(database!)).toEqual({ 'cell-a': 0, 'cell-b': 0 })
     expect(
       await database!.query(
@@ -3499,10 +3292,7 @@ describe('RelayAssignmentStore', () => {
         assignmentEpoch: migration.assignmentEpoch
       })
       await store.releaseActivity(identity, sourceControl)
-      now +=
-        targetControlState === 'expired'
-          ? ASSIGNMENT_LIMITS.activityLeaseMs + 1
-          : 45_001
+      now += targetControlState === 'expired' ? ASSIGNMENT_LIMITS.activityLeaseMs + 1 : 45_001
       await heartbeat(store, cells[1]!, {
         startedAt: targetControlState === 'previous-incarnation' ? now - 1 : 50,
         incarnation:
@@ -3510,21 +3300,18 @@ describe('RelayAssignmentStore', () => {
             ? '22222222-2222-4222-8222-222222222222'
             : '11111111-1111-4111-8111-111111111111'
       })
-      await store.attestCellFence(
-        'cell-a',
-        '11111111-1111-4111-8111-111111111111'
-      )
+      await store.attestCellFence('cell-a', '11111111-1111-4111-8111-111111111111')
 
-      await expect(
-        store.cellEvacuationStatus('cell-a', 'cell-b', false)
-      ).resolves.toMatchObject({
+      await expect(store.cellEvacuationStatus('cell-a', 'cell-b', false)).resolves.toMatchObject({
         inProgress: 1,
         registeredCompletable: 0,
         registeredTargetInactive: 1
       })
-      await expect(
-        store.cellEvacuationStatus('cell-a', 'cell-b', true)
-      ).resolves.toMatchObject({ inProgress: 0, completed: 1, blocked: 0 })
+      await expect(store.cellEvacuationStatus('cell-a', 'cell-b', true)).resolves.toMatchObject({
+        inProgress: 0,
+        completed: 1,
+        blocked: 0
+      })
       expect(await cellReservations(database!)).toEqual({ 'cell-a': 0, 'cell-b': 0 })
       expect(
         await database!.query(
@@ -3551,12 +3338,23 @@ describe('RelayAssignmentStore', () => {
   )
 
   it('refuses dead-source completion while the source heartbeat is fresh', async () => {
-    const store = await setupWithHeartbeats(() => 100, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
-      { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 }
-    ])
-    await heartbeat(store, { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 })
-    await heartbeat(store, { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 })
+    const store = await setupWithHeartbeats(
+      () => 100,
+      [
+        { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
+        { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 }
+      ]
+    )
+    await heartbeat(store, {
+      id: 'cell-a',
+      url: 'https://relay-a.example.com',
+      capacityRequests: 10
+    })
+    await heartbeat(store, {
+      id: 'cell-b',
+      url: 'https://relay-b.example.com',
+      capacityRequests: 10
+    })
     const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
     const first = await store.assign(identity)
     const sourceControl = await store.activateControl(identity, {
@@ -3640,10 +3438,7 @@ describe('RelayAssignmentStore', () => {
     now += 45_001
     await heartbeat(store, cells[0]!, { startedAt: 50 })
     await heartbeat(store, cells[2]!, { startedAt: 50 })
-    await store.attestCellFence(
-      'cell-b',
-      '11111111-1111-4111-8111-111111111111'
-    )
+    await store.attestCellFence('cell-b', '11111111-1111-4111-8111-111111111111')
     const input = {
       assignmentEpoch: migration.assignmentEpoch,
       sourceCellId: 'cell-a',
@@ -3691,65 +3486,6 @@ describe('RelayAssignmentStore', () => {
     })
   })
 
-  it('retries registered migration supersession with inventory locked first', async () => {
-    let now = 100
-    const cells = [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
-      { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 },
-      { id: 'cell-c', url: 'https://relay-c.example.com', capacityRequests: 10 }
-    ]
-    const delegate = await openInMemoryRelayDatabase()
-    const retryDatabase = new OneShotInventoryFailureDatabase(delegate)
-    database = retryDatabase
-    const store = new RelayAssignmentStore(retryDatabase, () => now, {
-      requireLiveCells: true,
-      heartbeatTtlMs: 45_000
-    })
-    await store.reconcileCells(cells)
-    for (const cell of cells) await heartbeat(store, cell)
-    const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
-    const first = await store.assign(identity)
-    await store.activateControl(identity, {
-      cellId: first.cellId,
-      assignmentEpoch: first.assignmentEpoch,
-      generation: 1
-    })
-    await store.setCellEnabled('cell-a', false)
-    const migration = await store.startEvacuation(identity, 'cell-b')
-    await store.activateControl(identity, {
-      cellId: 'cell-b',
-      assignmentEpoch: migration.assignmentEpoch,
-      generation: 1
-    })
-    await store.markMigrationTargetRegistered(identity, {
-      cellId: 'cell-b',
-      assignmentEpoch: migration.assignmentEpoch
-    })
-    await store.setCellEnabled('cell-b', false)
-    now += 45_001
-    await heartbeat(store, cells[0]!, { startedAt: 50 })
-    await heartbeat(store, cells[2]!, { startedAt: 50 })
-    await store.attestCellFence(
-      'cell-b',
-      '11111111-1111-4111-8111-111111111111'
-    )
-    retryDatabase.arm()
-
-    await expect(
-      store.supersedeRegisteredEvacuation(identity, {
-        assignmentEpoch: migration.assignmentEpoch,
-        sourceCellId: 'cell-a',
-        currentTargetCellId: 'cell-b',
-        replacementTargetCellId: 'cell-c'
-      })
-    ).resolves.toMatchObject({ targetCellId: 'cell-c', assignmentEpoch: 3 })
-    expect(retryDatabase.retryLocks).toEqual([
-      'inventory-nowait-failed',
-      'inventory-first',
-      'assignment-nowait'
-    ])
-  })
-
   it('reconciles durable cell accounting once before aggregate supersession', async () => {
     let now = 100
     const cells = [
@@ -3781,10 +3517,7 @@ describe('RelayAssignmentStore', () => {
     now += 45_001
     await heartbeat(store, cells[0]!, { startedAt: 50 })
     await heartbeat(store, cells[2]!, { startedAt: 50 })
-    await store.attestCellFence(
-      'cell-b',
-      '11111111-1111-4111-8111-111111111111'
-    )
+    await store.attestCellFence('cell-b', '11111111-1111-4111-8111-111111111111')
     await database!.query(
       `UPDATE relay_cells
        SET reserved_requests = CASE WHEN cell_id = ? THEN 1 ELSE 0 END
@@ -3846,19 +3579,16 @@ describe('RelayAssignmentStore', () => {
        WHERE user_id = ? AND relay_host_id = ? AND activity_id = ?`,
       ['cell-d', identity.userId, identity.relayHostId, sourceControl]
     )
-    await database!.query(
-      `UPDATE relay_cells SET reserved_requests = ? WHERE cell_id = ?`,
-      [5, 'cell-c']
-    )
+    await database!.query(`UPDATE relay_cells SET reserved_requests = ? WHERE cell_id = ?`, [
+      5,
+      'cell-c'
+    ])
     await store.setCellEnabled('cell-b', false)
     now += 45_001
     await heartbeat(store, cells[0]!, { startedAt: 50 })
     await heartbeat(store, cells[2]!, { startedAt: 50 })
     await heartbeat(store, cells[3]!, { startedAt: 50 })
-    await store.attestCellFence(
-      'cell-b',
-      '11111111-1111-4111-8111-111111111111'
-    )
+    await store.attestCellFence('cell-b', '11111111-1111-4111-8111-111111111111')
 
     await expect(
       store.supersedeRegisteredCellEvacuations('cell-a', 'cell-b', 'cell-c', 100)
@@ -3961,10 +3691,7 @@ describe('RelayAssignmentStore', () => {
     now += 45_001
     await heartbeat(store, cells[0]!, { startedAt: 50 })
     await heartbeat(store, cells[2]!, { startedAt: 50 })
-    await store.attestCellFence(
-      'cell-b',
-      '11111111-1111-4111-8111-111111111111'
-    )
+    await store.attestCellFence('cell-b', '11111111-1111-4111-8111-111111111111')
     const input = {
       assignmentEpoch: migration.assignmentEpoch,
       sourceCellId: 'cell-a',
@@ -3991,53 +3718,14 @@ describe('RelayAssignmentStore', () => {
     })
   })
 
-  it('classifies an expired migration blocked by a newer target assignment', async () => {
-    let now = 100
-    const store = await setup(() => now, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 },
-      { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 20 }
-    ])
-    const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
-    const first = await store.assign(identity)
-    await store.activateControl(identity, {
-      cellId: first.cellId,
-      assignmentEpoch: first.assignmentEpoch,
-      generation: 1
-    })
-    await store.startEvacuation(identity, 'cell-b')
-    await store.activateControl(identity, {
-      cellId: 'cell-b',
-      assignmentEpoch: 2,
-      generation: 1
-    })
-    await database!.query(
-      `UPDATE relay_assignments SET assignment_epoch = ?
-       WHERE user_id = ? AND relay_host_id = ?`,
-      [3, identity.userId, identity.relayHostId]
-    )
-
-    now += ASSIGNMENT_LIMITS.migrationLeaseMs + 1
-    expect(await store.cellEvacuationStatus('cell-a', 'cell-b', false)).toEqual({
-      inProgress: 1,
-      oldestExpiresAt: 100 + ASSIGNMENT_LIMITS.migrationLeaseMs,
-      oldestRemainingMs: -1,
-      targetRegistered: 0,
-      ...NO_REGISTERED_EVACUATION_DIAGNOSTICS,
-      completed: 0,
-      blocked: 0,
-      expiredUnregistered: 1,
-      repairableExpiredUnregistered: 0,
-      abortableExpiredUnregistered: 0,
-      blockedExpiredUnregistered: 1,
-      blockedExpiredOnNewerTargetAssignment: 1
-    })
-  })
-
   it('does not complete a registered migration after the assignment epoch advances', async () => {
-    const store = await setup(() => 100, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 },
-      { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 20 }
-    ])
+    const store = await setup(
+      () => 100,
+      [
+        { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 },
+        { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 20 }
+      ]
+    )
     const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
     const first = await store.assign(identity)
     const sourceControl = await store.activateControl(identity, {
@@ -4063,9 +3751,9 @@ describe('RelayAssignmentStore', () => {
     )
 
     expect(await store.completeReadyEvacuations()).toBe(0)
-    await expect(
-      store.completeEvacuation(identity, migration.assignmentEpoch)
-    ).rejects.toThrow('migration_assignment_mismatch')
+    await expect(store.completeEvacuation(identity, migration.assignmentEpoch)).rejects.toThrow(
+      'migration_assignment_mismatch'
+    )
     expect(await store.cellEvacuationStatus('cell-a', 'cell-b', false)).toMatchObject({
       inProgress: 1,
       targetRegistered: 1
@@ -4074,10 +3762,13 @@ describe('RelayAssignmentStore', () => {
 
   it('retires an expired migration without rewriting its newer target assignment', async () => {
     let now = 100
-    const store = await setup(() => now, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 },
-      { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 20 }
-    ])
+    const store = await setup(
+      () => now,
+      [
+        { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 },
+        { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 20 }
+      ]
+    )
     const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
     const first = await store.assign(identity)
     await store.activateControl(identity, {
@@ -4109,10 +3800,7 @@ describe('RelayAssignmentStore', () => {
          WHERE user_id = ? AND relay_host_id = ? ORDER BY activity_id`,
         [identity.userId, identity.relayHostId]
       )
-    ).toEqual([
-      { activity_id: 'control:cell-a:1' },
-      { activity_id: 'control:cell-b:1' }
-    ])
+    ).toEqual([{ activity_id: 'control:cell-a:1' }, { activity_id: 'control:cell-b:1' }])
     expect(await store.cellEvacuationStatus('cell-a', 'cell-b', false)).toMatchObject({
       inProgress: 0
     })
@@ -4125,10 +3813,13 @@ describe('RelayAssignmentStore', () => {
     'fails closed when expired migration assignment state is not superseding: $expected',
     async ({ assignmentEpoch, removeAssignment, expected }) => {
       let now = 100
-      const store = await setup(() => now, [
-        { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 },
-        { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 20 }
-      ])
+      const store = await setup(
+        () => now,
+        [
+          { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 },
+          { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 20 }
+        ]
+      )
       const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
       await store.assign(identity)
       await store.startEvacuation(identity, 'cell-b')
@@ -4155,10 +3846,13 @@ describe('RelayAssignmentStore', () => {
   )
 
   it('reconciles duplicated assignment counters and cell reservations after evacuation', async () => {
-    const store = await setup(() => 100, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 },
-      { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 20 }
-    ])
+    const store = await setup(
+      () => 100,
+      [
+        { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 },
+        { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 20 }
+      ]
+    )
     const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
     const first = await store.assign(identity)
     const sourceControl = await store.activateControl(identity, {
@@ -4219,10 +3913,13 @@ describe('RelayAssignmentStore', () => {
   })
 
   it('refuses reservation reconciliation when an activity lease has no assignment', async () => {
-    const store = await setup(() => 100, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 },
-      { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 20 }
-    ])
+    const store = await setup(
+      () => 100,
+      [
+        { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 },
+        { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 20 }
+      ]
+    )
     await database!.query(
       `INSERT INTO relay_assignment_activity_leases
        (user_id, relay_host_id, activity_id, activity_kind, cell_id,
@@ -4238,10 +3935,13 @@ describe('RelayAssignmentStore', () => {
   })
 
   it('refuses reservation reconciliation when an activity lease names no cell', async () => {
-    const store = await setup(() => 100, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 },
-      { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 20 }
-    ])
+    const store = await setup(
+      () => 100,
+      [
+        { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 },
+        { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 20 }
+      ]
+    )
     const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
     await store.assign(identity)
     await database!.query(
@@ -4268,11 +3968,14 @@ describe('RelayAssignmentStore', () => {
   })
 
   it('leaves accounting for cells outside the selected evacuation pair unchanged', async () => {
-    const store = await setup(() => 100, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 },
-      { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 20 },
-      { id: 'cell-c', url: 'https://relay-c.example.com', capacityRequests: 20 }
-    ])
+    const store = await setup(
+      () => 100,
+      [
+        { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 },
+        { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 20 },
+        { id: 'cell-c', url: 'https://relay-c.example.com', capacityRequests: 20 }
+      ]
+    )
     await database!.query(
       `INSERT INTO relay_assignments
        (user_id, relay_host_id, cell_id, assignment_epoch, lease_expires_at,
@@ -4286,21 +3989,11 @@ describe('RelayAssignmentStore', () => {
        (user_id, relay_host_id, activity_id, activity_kind, cell_id,
         request_units, expires_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        'unrelated-user',
-        'unrelatedhost001',
-        'control:unrelated',
-        'control',
-        'cell-c',
-        1,
-        200,
-        100
-      ]
+      ['unrelated-user', 'unrelatedhost001', 'control:unrelated', 'control', 'cell-c', 1, 200, 100]
     )
-    await database!.query(
-      `UPDATE relay_cells SET reserved_requests = 9 WHERE cell_id = ?`,
-      ['cell-c']
-    )
+    await database!.query(`UPDATE relay_cells SET reserved_requests = 9 WHERE cell_id = ?`, [
+      'cell-c'
+    ])
 
     expect(await store.cellEvacuationStatus('cell-a', 'cell-b', true)).toMatchObject({
       inProgress: 0
@@ -4321,10 +4014,13 @@ describe('RelayAssignmentStore', () => {
 
   it('rebalances only a fully inactive assignment after the dormant TTL', async () => {
     let now = 100
-    const store = await setup(() => now, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
-      { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 }
-    ])
+    const store = await setup(
+      () => now,
+      [
+        { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
+        { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 }
+      ]
+    )
     const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
     const first = await store.assign(identity)
     const control = await store.activateControl(identity, {
@@ -4344,10 +4040,13 @@ describe('RelayAssignmentStore', () => {
   })
 
   it('durably removes an unhealthy cell from new assignment without moving existing hosts', async () => {
-    const store = await setup(() => 100, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
-      { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 }
-    ])
+    const store = await setup(
+      () => 100,
+      [
+        { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
+        { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 10 }
+      ]
+    )
     const existing = { userId: 'user-a', relayHostId: 'host000000000001' }
     expect(await store.assign(existing)).toMatchObject({ cellId: 'cell-a' })
     await store.setCellEnabled('cell-a', false)
@@ -4364,10 +4063,13 @@ describe('RelayAssignmentStore', () => {
   })
 
   it('bulk-migrates active controls without exposing assignment identities', async () => {
-    const store = await setup(() => 100, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 },
-      { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 20 }
-    ])
+    const store = await setup(
+      () => 100,
+      [
+        { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 },
+        { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 20 }
+      ]
+    )
     await store.setCellEnabled('cell-b', false)
     const identities = [1, 2, 3].map((index) => ({
       userId: `user-${index}`,
@@ -4444,11 +4146,14 @@ describe('RelayAssignmentStore', () => {
   it.each(['cell-b', 'cell-c'])(
     'skips a batch row that concurrently moved from the selected source to %s',
     async (movedCellId) => {
-      const store = await setup(() => 100, [
-        { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 },
-        { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 20 },
-        { id: 'cell-c', url: 'https://relay-c.example.com', capacityRequests: 20 }
-      ])
+      const store = await setup(
+        () => 100,
+        [
+          { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 },
+          { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 20 },
+          { id: 'cell-c', url: 'https://relay-c.example.com', capacityRequests: 20 }
+        ]
+      )
       const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
       const assignment = await store.assign(identity)
       await store.activateControl(identity, {
@@ -4472,10 +4177,13 @@ describe('RelayAssignmentStore', () => {
   )
 
   it('does not count an existing migration after a stale batch row moves to its target', async () => {
-    const store = await setup(() => 100, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 },
-      { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 20 }
-    ])
+    const store = await setup(
+      () => 100,
+      [
+        { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 },
+        { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 20 }
+      ]
+    )
     const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
     const assignment = await store.assign(identity)
     await store.activateControl(identity, {
@@ -4497,9 +4205,10 @@ describe('RelayAssignmentStore', () => {
   })
 
   it('preserves operator-owned tagged URLs and admission state across reconciliation', async () => {
-    const store = await setup(() => 100, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 }
-    ])
+    const store = await setup(
+      () => 100,
+      [{ id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 }]
+    )
     await store.configureCell(
       { id: 'cell-a', url: 'https://old---relay-a.example.com', capacityRequests: 20 },
       false
@@ -4521,10 +4230,13 @@ describe('RelayAssignmentStore', () => {
   })
 
   it('bulk-migrates activity even when its source control is temporarily absent', async () => {
-    const store = await setup(() => 100, [
-      { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 },
-      { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 20 }
-    ])
+    const store = await setup(
+      () => 100,
+      [
+        { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 20 },
+        { id: 'cell-b', url: 'https://relay-b.example.com', capacityRequests: 20 }
+      ]
+    )
     const identity = { userId: 'user-1', relayHostId: 'host000000000001' }
     const assignment = await store.assign(identity)
     const control = await store.activateControl(identity, {

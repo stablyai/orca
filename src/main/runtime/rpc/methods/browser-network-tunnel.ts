@@ -5,13 +5,13 @@ import {
   type BrowserNetworkExecutionRouteResolver
 } from '../../../browser/network/execution-routes/browser-network-execution-route'
 import { resolveBrowserNetworkExecutionRoute } from '../../../browser/network/execution-routes/browser-network-execution-route-dispatch'
-import { BrowserNetworkTunnelAttachParams } from '../../../../shared/browser-client-host-protocol'
+import { BrowserNetworkTunnelAttachParams } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
-import { getBrowserHostLeaseRegistry } from '../../browser-host/browser-host-lease-registry-instance'
+import { getBrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry-instance'
 import { defineStreamingMethod } from '../core'
 
 const outboundMemoryBudgets = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry()

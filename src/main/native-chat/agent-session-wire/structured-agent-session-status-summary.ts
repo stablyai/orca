@@ -1,8 +1,14 @@
-import { structuredAgentSessionRuntimePermission } from './structured-agent-session-ran-options'
+import {
+  structuredAgentSessionRuntimeModel,
+  structuredAgentSessionRuntimePermission
+} from './structured-agent-session-ran-options'
 import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
-import { normalizeOptionalField } from '../../../shared/agent-status-field-normalization'
-import { AGENT_MODEL_MAX_LENGTH } from '../../../shared/agent-status-types'
+import {
+  normalizeOptionalField,
+  AGENT_MODEL_MAX_LENGTH
+} from '../../../shared/agent-status/contracts/agent-status-field-normalization'
+
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionStatusState } from './structured-agent-session-status-journal-projection'
 import type {
@@ -80,6 +86,9 @@ export function structuredAgentSessionStatusSummary({
       ? { rewindBlockedReason: 'outcome-unknown' as const }
       : {}),
     ...(model ? { model } : {}),
+    ...(session.params.provider === 'claude' && session.child
+      ? { reportedModel: structuredAgentSessionRuntimeModel(session.child) }
+      : {}),
     ...(isAgentChatPermissionMode(permissionMode) ? { permissionMode } : {}),
     ...(effort ? { effort } : {}),
     ...(fastMode ? { fastMode } : {}),
@@ -146,6 +155,7 @@ export function releasedStructuredStatusSummary(
     hostExecutionPhase: _hostExecutionPhase,
     stopping: _stopping,
     restartResume: _restartResume,
+    reportedModel: _reportedModel,
     ...retained
   } = previous
   return { ...retained, runtimePermission: null }

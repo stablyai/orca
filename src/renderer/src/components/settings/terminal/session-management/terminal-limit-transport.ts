@@ -3,7 +3,7 @@ import {
   TERMINAL_LIMIT_RUNTIME_CAPABILITY,
   type TerminalLimitStatus,
   type TerminalLimitUpdate
-} from '../../../../../../shared/terminal-limit-policy'
+} from '../../../../../../shared/terminal/runtime-policy/terminal-limit-policy'
 import { callHostRoute } from '@/runtime/host-route-call'
 import type { HostRoute } from '@/runtime/runtime-client-target'
 

@@ -78,6 +78,12 @@ export function localSshBrowserTargetIdForSession(webSession: Session): string |
   return partition ? (preparedByPartition.get(partition)?.targetId ?? null) : null
 }
 
+export function localSshBrowserProfileIdForSession(webSession: Session): string | null {
+  const partition = partitionBySession.get(webSession)
+  const profileId = partition ? preparedByPartition.get(partition)?.browserProfileId : null
+  return profileId && browserSessionRegistry.getProfile(profileId) ? profileId : null
+}
+
 // Verify the proxy before exposing the partition to the renderer.
 export async function prepareLocalSshBrowserPartition(input: {
   targetId: string

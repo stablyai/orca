@@ -1,23 +1,21 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control-ai-types'
-import {
-  normalizeSourceControlAiSettings,
-  resolveSourceControlAiForOperation
-} from '../../../../../shared/source-control-ai'
+import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
+import { normalizeSourceControlAiSettings } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings'
+import { resolveSourceControlAiForOperation } from '../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
   setSourceControlActionDefault
-} from '../../../../../shared/source-control-ai-actions'
-import { CUSTOM_AGENT_ID } from '../../../../../shared/commit-message-agent-spec'
+} from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import { CUSTOM_AGENT_ID } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import { Switch } from '../../ui/switch'
 import { Card, CardContent } from '../../ui/card'
 import { SourceControlActionRecipeRow } from '../source-control/SourceControlActionRecipeRow'
-import { replayGlobalTextModelEdits } from '../source-control-text-action-model-replay'
+import { replayGlobalTextModelEdits } from '../source-control/text-actions/source-control-text-action-model-replay'
 import { CustomAgentCommandField } from '../source-control/CustomAgentCommandField'
 import { SettingsSubsectionHeader } from '../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../section-layout/SearchableSetting'

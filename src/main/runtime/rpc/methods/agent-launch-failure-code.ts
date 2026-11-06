@@ -1,8 +1,8 @@
-import { formatTerminalStartFailure } from '../../../../shared/terminal-start-failure'
+import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import {
   RuntimeLineageError,
   LINEAGE_PARENT_AMBIGUOUS
-} from '../../runtime-worktree-lineage-resolution'
+} from '../../workspaces/lineage/runtime-worktree-lineage-resolution'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { AgentLaunchTarget } from '../../../../shared/agent-launch/contracts/agent-launch-intent'
 import {
@@ -19,7 +19,7 @@ import {
 } from '../../../../shared/agent-launch/contracts/agent-launch-session-already-exists'
 import type { TerminalSpawnDispatch } from '../../../agent-launch/agent-launch-not-started'
 import { FolderWorkspaceCreateRefusedError } from '../../../project-groups/folder-workspace-create-refusal'
-import { WorktreeCreateSetupChoiceRefusedError } from '../../worktree-create-setup-choice-refusal'
+import { WorktreeCreateSetupChoiceRefusedError } from '../../workspaces/creation/worktree-create-setup-choice-refusal'
 import { AgentLaunchSurfaceUnavailableError } from '../../../agent-launch/agent-launch-surface-refusal'
 
 /** Long enough for every code this path raises, with room for one a later guard adds. */

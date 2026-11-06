@@ -9,7 +9,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -63,6 +67,8 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
 
     it('keeps hidden synchronized output off the global atlas recovery path', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -80,9 +86,12 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
         ...mockPanePtyArgs(
           pane,
           createManager(1),
-          createDeps({
-            isVisibleRef: { current: false }
-          })
+          bindPaneAgentTitleMocks(
+            createDeps({
+              isVisibleRef: { current: false }
+            }),
+            agentTitleMocks
+          )
         )
       )
       await flushAsyncTicks(6)
@@ -111,6 +120,8 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
 
     it('keeps split hidden synchronized output off the global atlas recovery path', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -128,9 +139,12 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
         ...mockPanePtyArgs(
           pane,
           createManager(1),
-          createDeps({
-            isVisibleRef: { current: false }
-          })
+          bindPaneAgentTitleMocks(
+            createDeps({
+              isVisibleRef: { current: false }
+            }),
+            agentTitleMocks2
+          )
         )
       )
       await flushAsyncTicks(6)
@@ -155,6 +169,8 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
 
     it('does not schedule hidden atlas recovery for ordinary rich text or metadata output', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -172,9 +188,12 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
         ...mockPanePtyArgs(
           pane,
           createManager(1),
-          createDeps({
-            isVisibleRef: { current: false }
-          })
+          bindPaneAgentTitleMocks(
+            createDeps({
+              isVisibleRef: { current: false }
+            }),
+            agentTitleMocks3
+          )
         )
       )
       await flushAsyncTicks(6)
@@ -197,6 +216,8 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
 
     it('keeps hidden TUI redraw output off the global atlas recovery path', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -214,9 +235,12 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
         ...mockPanePtyArgs(
           pane,
           createManager(1),
-          createDeps({
-            isVisibleRef: { current: false }
-          })
+          bindPaneAgentTitleMocks(
+            createDeps({
+              isVisibleRef: { current: false }
+            }),
+            agentTitleMocks4
+          )
         )
       )
       await flushAsyncTicks(6)
@@ -236,6 +260,8 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
 
     it('keeps hidden rewrite frames on the pane-local output path', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks5 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -253,9 +279,12 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
         ...mockPanePtyArgs(
           pane,
           createManager(1),
-          createDeps({
-            isVisibleRef: { current: false }
-          })
+          bindPaneAgentTitleMocks(
+            createDeps({
+              isVisibleRef: { current: false }
+            }),
+            agentTitleMocks5
+          )
         )
       )
       await flushAsyncTicks(6)
@@ -283,6 +312,8 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
 
     it('keeps a background-origin alternate-screen chunk in the stream, pane-local', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks6 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { background?: boolean }) => void) | null
@@ -303,9 +334,12 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
         ...mockPanePtyArgs(
           pane,
           createManager(1),
-          createDeps({
-            isVisibleRef
-          })
+          bindPaneAgentTitleMocks(
+            createDeps({
+              isVisibleRef
+            }),
+            agentTitleMocks6
+          )
         )
       )
       await flushAsyncTicks(6)
@@ -338,6 +372,8 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
 
     it('queues visible split-pane PTY bytes when the pane is not active', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks7 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -355,7 +391,9 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
         isVisibleRef: { current: true }
       })
 
-      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+      connectPanePty(
+        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks7))
+      )
       await flushAsyncTicks(6)
 
       expect(capturedDataCallback.current).not.toBeNull()
@@ -370,6 +408,8 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
 
     it('queues visible ANSI redraws when only another split pane is active', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks8 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -390,7 +430,9 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
         isVisibleRef: { current: true }
       })
 
-      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+      connectPanePty(
+        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks8))
+      )
       await flushAsyncTicks(6)
 
       expect(capturedDataCallback.current).not.toBeNull()
@@ -408,6 +450,8 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
         visibilityState: 'hidden'
       }
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks9 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -425,7 +469,9 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
         isVisibleRef: { current: true }
       })
 
-      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+      connectPanePty(
+        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks9))
+      )
       await flushAsyncTicks(6)
 
       expect(capturedDataCallback.current).not.toBeNull()
@@ -443,6 +489,8 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
 
     it('keeps hidden Codex telemetry startup output parsing briefly', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks10 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -459,17 +507,20 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
         ...mockPanePtyArgs(
           pane,
           manager,
-          createDeps({
-            isVisibleRef: { current: false },
-            startup: {
-              command: 'wrapped-agent',
-              telemetry: {
-                agent_kind: 'codex',
-                launch_source: 'tab_bar_quick_launch',
-                request_kind: 'new'
+          bindPaneAgentTitleMocks(
+            createDeps({
+              isVisibleRef: { current: false },
+              startup: {
+                command: 'wrapped-agent',
+                telemetry: {
+                  agent_kind: 'codex',
+                  launch_source: 'tab_bar_quick_launch',
+                  request_kind: 'new'
+                }
               }
-            }
-          })
+            }),
+            agentTitleMocks10
+          )
         )
       )
       await flushAsyncTicks(6)
@@ -490,6 +541,8 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
 
     it('does not answer hidden Jcode startup color queries (composer-text leak guard)', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks11 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -504,18 +557,21 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
         ...mockPanePtyArgs(
           createPane(1),
           createManager(1),
-          createDeps({
-            isVisibleRef: { current: false },
-            startup: {
-              command: 'jcode',
-              launchAgent: 'jcode',
-              telemetry: {
-                agent_kind: 'jcode',
-                launch_source: 'tab_bar_quick_launch',
-                request_kind: 'new'
+          bindPaneAgentTitleMocks(
+            createDeps({
+              isVisibleRef: { current: false },
+              startup: {
+                command: 'jcode',
+                launchAgent: 'jcode',
+                telemetry: {
+                  agent_kind: 'jcode',
+                  launch_source: 'tab_bar_quick_launch',
+                  request_kind: 'new'
+                }
               }
-            }
-          })
+            }),
+            agentTitleMocks11
+          )
         )
       )
       await flushAsyncTicks(6)
@@ -533,6 +589,8 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
 
     it('keeps hidden Grok telemetry startup output parsing briefly', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks12 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -549,17 +607,20 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
         ...mockPanePtyArgs(
           pane,
           manager,
-          createDeps({
-            isVisibleRef: { current: false },
-            startup: {
-              command: 'wrapped-agent',
-              telemetry: {
-                agent_kind: 'grok',
-                launch_source: 'tab_bar_quick_launch',
-                request_kind: 'new'
+          bindPaneAgentTitleMocks(
+            createDeps({
+              isVisibleRef: { current: false },
+              startup: {
+                command: 'wrapped-agent',
+                telemetry: {
+                  agent_kind: 'grok',
+                  launch_source: 'tab_bar_quick_launch',
+                  request_kind: 'new'
+                }
               }
-            }
-          })
+            }),
+            agentTitleMocks12
+          )
         )
       )
       await flushAsyncTicks(6)
@@ -580,6 +641,8 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
 
     it('keeps hidden bare Codex startup commands parsing briefly', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks13 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -596,10 +659,13 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
         ...mockPanePtyArgs(
           pane,
           manager,
-          createDeps({
-            isVisibleRef: { current: false },
-            startup: { command: 'codex' }
-          })
+          bindPaneAgentTitleMocks(
+            createDeps({
+              isVisibleRef: { current: false },
+              startup: { command: 'codex' }
+            }),
+            agentTitleMocks13
+          )
         )
       )
       await flushAsyncTicks(6)
@@ -620,6 +686,8 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
 
     it('keeps hidden bare Grok startup commands parsing briefly', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks14 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -636,10 +704,13 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
         ...mockPanePtyArgs(
           pane,
           manager,
-          createDeps({
-            isVisibleRef: { current: false },
-            startup: { command: '/Users/me/.grok/bin/grok --permission-mode bypassPermissions' }
-          })
+          bindPaneAgentTitleMocks(
+            createDeps({
+              isVisibleRef: { current: false },
+              startup: { command: '/Users/me/.grok/bin/grok --permission-mode bypassPermissions' }
+            }),
+            agentTitleMocks14
+          )
         )
       )
       await flushAsyncTicks(6)
@@ -660,6 +731,8 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
 
     it('skips arbitrary hidden startup output parsing', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks15 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -676,10 +749,13 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
         ...mockPanePtyArgs(
           pane,
           manager,
-          createDeps({
-            isVisibleRef: { current: false },
-            startup: { command: 'printf noisy startup' }
-          })
+          bindPaneAgentTitleMocks(
+            createDeps({
+              isVisibleRef: { current: false },
+              startup: { command: 'printf noisy startup' }
+            }),
+            agentTitleMocks15
+          )
         )
       )
       await flushAsyncTicks(6)
@@ -698,6 +774,8 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
 
     it('records a mode 2031 subscribe from the raw chunk boundary without answering', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks16 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -715,7 +793,14 @@ export function registerPtyConnectionHiddenAtlasRecoveryTests(): void {
       const pane = createPane(1)
       const manager = createManager(1)
       const binding = connectPanePty(
-        ...mockPanePtyArgs(pane, manager, createDeps({ isVisibleRef: { current: false } }))
+        ...mockPanePtyArgs(
+          pane,
+          manager,
+          bindPaneAgentTitleMocks(
+            createDeps({ isVisibleRef: { current: false } }),
+            agentTitleMocks16
+          )
+        )
       )
       await flushAsyncTicks(6)
 

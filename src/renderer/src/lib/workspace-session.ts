@@ -3,10 +3,10 @@ import type { WorkspaceVisibleTabType } from '../../../shared/tab-types'
 import type {
   PersistedOpenFile,
   WorkspaceSessionState
-} from '../../../shared/workspace-session-state-types'
-import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
-import { normalizeBrowserHistoryEntries } from '../../../shared/workspace-session-browser-history'
-import { normalizeWorkspaceDocHistoryEntries } from '../../../shared/workspace-doc-history'
+} from '../../../shared/workspace-session/workspace-session-state-types'
+import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session/workspace-session-terminal-buffers'
+import { normalizeBrowserHistoryEntries } from '../../../shared/workspace-session/workspace-session-browser-history'
+import { normalizeWorkspaceDocHistoryEntries } from '../../../shared/workspace-session/workspace-doc-history'
 import type { AppState } from '../store'
 import type { OpenFile } from '../store/slices/editor'
 import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'

@@ -17,12 +17,12 @@ import {
   applyAgentPickerEdit,
   type AgentPickerEdit
 } from '../../../shared/agent-launch/picker/agent-launch-picker-edits'
-import { captureSourceControlActionSelection } from '../../../shared/source-control-ai-operation-policy'
+import { captureSourceControlActionSelection } from '../../../shared/source-control/ai/source-control-ai-operation-policy'
 import {
   canonicalSourceControlActionSelection,
   selectSourceControlActionRecipe
-} from '../../../shared/source-control-action-selection'
-import { projectSourceControlActionLaunch } from '../../../shared/source-control-action-launch-preferences'
+} from '../../../shared/source-control/ai/recipes/source-control-action-selection'
+import { projectSourceControlActionLaunch } from '../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { agentPickerPanelArguments } from '../../../shared/agent-launch/picker/agent-launch-picker-arguments'
 

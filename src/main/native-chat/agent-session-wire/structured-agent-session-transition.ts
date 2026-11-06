@@ -1,6 +1,3 @@
-// Admit each event’s writes whole so producer state cannot advance after partial admission.
-// Execute against the latest fold in one queue turn; failure retains the written prefix and skips later steps.
-
 import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
@@ -13,10 +10,18 @@ import type {
 } from './structured-agent-session-event-sink'
 import type { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
 import { structuredAgentSessionJournalAppendOptions } from './structured-agent-session-journal-append-options'
+// Admit each event’s writes whole so producer state cannot advance after partial admission.
+// Execute against the latest fold in one queue turn; failure retains the written prefix and skips later steps.
 
 export type StructuredAgentSessionTransitionJournal = Pick<
   AgentSessionJournal,
-  'epoch' | 'visitItems' | 'itemBody' | 'item' | 'visitItemsWithLinkage' | 'canonicalItemId'
+  | 'epoch'
+  | 'visitItems'
+  | 'itemBody'
+  | 'item'
+  | 'visitItemsWithLinkage'
+  | 'canonicalItemId'
+  | 'presentationRemoved'
 >
 
 export type StructuredAgentSessionTransitionStep =

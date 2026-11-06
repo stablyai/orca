@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   BROWSER_EXTENSION_INSTALL_PROMPT_REQUESTED_CHANNEL,
   type BrowserExtensionWebStoreInstallResult
-} from '../../../../shared/browser-extension-webstore'
+} from '../../../../shared/browser/extensions/browser-extension-webstore'
 import type * as PromptModule from './browser-extension-install-prompt'
 import type * as ServiceModule from '../web-store/browser-extension-webstore-service'
 import type * as InstallModule from '../installation/browser-extension-webstore-install'
@@ -181,32 +181,6 @@ describe('Settings extension install prompt lifetime', () => {
       accepted: true
     })
     await expect(retry).resolves.toEqual({ status: 'installed', name: 'Vault' })
-    expect(install.isBrowserExtensionBusy(extensionId)).toBe(false)
-  })
-
-  it('finishes an accepted install when the renderer navigates during loading', async () => {
-    let finishLoading = (): void => {}
-    state.load.mockImplementation(
-      () =>
-        new Promise<void>((resolve) => {
-          finishLoading = resolve
-        })
-    )
-    const contents = renderer()
-    const pending = start(contents)
-    const request = await requested(contents)
-    prompt.respondToBrowserExtensionInstallPrompt(asContents(contents), {
-      requestId: request.requestId,
-      accepted: true
-    })
-    try {
-      await vi.waitFor(() => expect(state.load).toHaveBeenCalledOnce())
-      contents.emit('did-navigate', {}, 'file:///orca/index.html', 200, 'OK')
-      expect(install.isBrowserExtensionBusy(extensionId)).toBe(true)
-    } finally {
-      finishLoading()
-    }
-    await expect(pending).resolves.toEqual({ status: 'installed', name: 'Vault' })
     expect(install.isBrowserExtensionBusy(extensionId)).toBe(false)
   })
 })

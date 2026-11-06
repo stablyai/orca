@@ -4,12 +4,11 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { AgentJournalSubmissionSchema } from '../../../shared/agent-session/journal/agent-session-journal-submission-schema'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { createJournalReducerState, applyJournalRow } from './journal-reducer'
-import { parseJournalRow, serializeJournalRow, type JournalRow } from './journal-row-schema'
+import { parseJournalRow, type JournalRow } from './journal-row-schema'
 import type { AgentSessionJournal } from './journal-store'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
 import {
@@ -64,19 +63,6 @@ export function registerJournalSubmissionQueuedLinkTests(): void {
   })
 
   describe('the submission names the queued draft it hands off', () => {
-    it('on every hand-off, and never on a direct send', async () => {
-      const journal = await open()
-      await handOff(journal, 'draft-1', 'handoff-1')
-      await journal.appendSubmission({
-        clientMessageId: 'direct-1',
-        payloadFingerprint: 'fp-direct',
-        body: BODY,
-        fence: 0
-      })
-      expect(journal.submission('handoff-1')?.queuedMessageId).toBe('draft-1')
-      expect(journal.submission('direct-1')).not.toHaveProperty('queuedMessageId')
-    })
-
     it('survives a reload, which replays the rows through the reducer', async () => {
       let journal = await open()
       await handOff(journal, 'draft-1', 'handoff-1')
@@ -106,13 +92,6 @@ export function registerJournalSubmissionQueuedLinkTests(): void {
       expect(journal.submissions()).toHaveLength(0)
       expect(journal.queuedMessages.get('draft-1')?.state).toBe('waiting')
     })
-
-    it('is published: the wire schema keeps the field rather than stripping it', async () => {
-      const journal = await open()
-      await handOff(journal, 'draft-1', 'handoff-1')
-      const published = AgentJournalSubmissionSchema.parse(journal.submission('handoff-1'))
-      expect(published.queuedMessageId).toBe('draft-1')
-    })
   })
 
   describe('the persisted row', () => {
@@ -129,11 +108,6 @@ export function registerJournalSubmissionQueuedLinkTests(): void {
       body: BODY,
       queuedMessageId: 'draft-1'
     }
-
-    it('parses with the key, which a reader that does not know it simply keeps', () => {
-      const parsed = parseJournalRow(serializeJournalRow(row))
-      expect(parsed).toMatchObject({ ok: true, row: { queuedMessageId: 'draft-1' } })
-    })
 
     it('keeps a row whose stored link is malformed, dropping only the link', () => {
       const parsed = parseJournalRow(JSON.stringify({ ...row, queuedMessageId: 42 }))

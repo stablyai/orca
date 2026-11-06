@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { Tab } from '../../../shared/tab-types'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { buildSearchableBrowserPages } from './browser-palette-page-entries'
 import { searchBrowserPages } from './browser-palette-search'
@@ -270,7 +270,8 @@ describe('Cmd-J host-qualified candidate ownership', () => {
       activeFileId: null,
       activeFileIdByWorktree: {},
       activeTabTypeByWorktree: {},
-      generatedTitlesEnabled: true
+      generatedTitlesEnabled: true,
+      chatNames: new Map()
     })
 
     expect(
@@ -343,7 +344,8 @@ describe('Cmd-J host-qualified candidate ownership', () => {
         retainedAgentsByPaneKey: {},
         sleepingAgentSessionsByPaneKey: {},
         terminalLayoutsByTabId: {}
-      }
+      },
+      new Map()
     )
 
     expect(entries).toEqual({

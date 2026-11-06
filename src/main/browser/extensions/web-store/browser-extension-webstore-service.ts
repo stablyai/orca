@@ -1,19 +1,17 @@
 import { webContents } from 'electron'
-import type { InstalledBrowserExtension } from '../../../../shared/browser-extension-types'
+import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 import {
   parseChromeWebStoreExtensionInput,
   type BrowserExtensionWebStoreInstallResult
-} from '../../../../shared/browser-extension-webstore'
+} from '../../../../shared/browser/extensions/browser-extension-webstore'
 import { browserManager } from '../../browser-manager'
 import { browserSessionRegistry } from '../../sessions/browser-session-registry'
 import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'
 import { requestBrowserExtensionInstallPrompt } from '../permissions/browser-extension-install-prompt'
 import { removeBrowserExtension } from '../browser-extension-management'
 import { readBrowserExtensionIconDataUrl } from '../installation/browser-extension-manifest'
-import {
-  samePermissionSummary,
-  type BrowserExtensionPermissionSummary
-} from '../permissions/browser-extension-permission-summary'
+import { samePermissionSummary } from '../permissions/browser-extension-permission-summary'
+import type { BrowserExtensionAccessLists as BrowserExtensionPermissionSummary } from '../../../../shared/browser/extensions/browser-extension-permission-warnings'
 import { getBrowserExtensionSessionForProfile } from '../profile-sessions/browser-extension-session-loader'
 import { isBrowserExtensionSupportEnabled } from '../browser-extension-support'
 import {

@@ -1,4 +1,4 @@
-import type { SelectedSourceControlActionRecipe } from '../../../../../../shared/source-control-action-selection'
+import type { SelectedSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import {
   AgentLaunchChoiceCancelled,
@@ -20,14 +20,14 @@ import {
 import {
   pickSourceControlLaunchAgent,
   readSourceControlLaunchRecipeAgentId
-} from '../../../../../../shared/source-control-launch-agent-selection'
+} from '../../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import { isTuiAgentEnabled } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import {
   projectSelectedSourceControlActionLaunch,
   resolveSourceControlActionPreferredSurface
-} from '../../../../../../shared/source-control-action-launch-preferences'
-import type { SourceControlLaunchActionId } from '../../../../../../shared/source-control-ai-actions'
-import { buildSourceControlRecoveryAgentCommandInput } from '../../../../../../shared/source-control-recovery-agent-command'
+} from '../../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
+import type { SourceControlLaunchActionId } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import { buildSourceControlRecoveryAgentCommandInput } from '../../../../../../shared/source-control/recovery/source-control-recovery-agent-command'
 import { translate } from '@/i18n/i18n'
 import { agentChoiceMayOpenAsChat } from '@/lib/host-chat-program'
 import { worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'

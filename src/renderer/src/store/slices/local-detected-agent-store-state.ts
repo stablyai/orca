@@ -2,7 +2,7 @@ import type { AppState } from '../types'
 import type {
   PathSource,
   ShellHydrationFailureReason
-} from '../../../../shared/shell-path-hydration-types'
+} from '../../../../shared/shell/launch/shell-path-hydration-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 
 /** `wakeWslDistro`: a user act (a click, a runtime choice) that may start a stopped WSL distro. */
@@ -27,6 +27,8 @@ export type LocalDetectedAgentState = {
     options?: LocalAgentRefreshOptions
   ) => Promise<TuiAgent[]>
   ensureNativeDetectedAgents: () => Promise<TuiAgent[]>
+  /** Re-reads this computer's own agents; under WSL the workspace refresh does not reach them. */
+  refreshNativeDetectedAgents: () => Promise<TuiAgent[]>
   ensureDetectedAgents: (worktreeId?: string | null) => Promise<TuiAgent[]>
   /** The focused (or given) workspace's last agent probe was refused because its WSL distro was not running. */
   isLocalAgentInventoryRefused: (worktreeId?: string | null) => boolean

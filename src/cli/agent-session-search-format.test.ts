@@ -3,7 +3,10 @@ import {
   formatSessionSearchResponse,
   formatSessionSearchStatus
 } from './agent-session-search-format'
-import type { AiVaultSearchHit, AiVaultSearchResponse } from '../shared/ai-vault-search-types'
+import type {
+  AiVaultSearchHit,
+  AiVaultSearchResponse
+} from '../shared/ai-vault/search/ai-vault-search-types'
 
 const localHit: AiVaultSearchHit = {
   agent: 'claude',

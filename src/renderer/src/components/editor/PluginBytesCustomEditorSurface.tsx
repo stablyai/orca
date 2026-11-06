@@ -11,7 +11,7 @@ import { Button } from '../ui/button'
 import type { OpenFile } from '@/store/slices/editor'
 import type { FileContent } from './editor-panel-content-types'
 import PluginCustomEditorFrame from './PluginCustomEditorFrame'
-import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
+import { ExternalFileChangeBanner } from './external-changes/ExternalFileChangeBanner'
 import {
   editorBytesDocument,
   editorBytesEdits,
@@ -22,7 +22,7 @@ import {
   setEditorBytesDraft,
   sha256Hex,
   subscribeEditorBytes
-} from './editor-bytes-documents'
+} from './save/bytes/editor-bytes-documents'
 
 type BytesState =
   | { status: 'ok' }

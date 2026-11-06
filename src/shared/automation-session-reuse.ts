@@ -1,5 +1,5 @@
 /** Share previous-agent reuse policy across desktop/headless hosts; callers supply pane status/liveness. */
-import type { AgentType } from './agent-status-types'
+import type { AgentType } from './agent-status/contracts/agent-status-types'
 import type { AutomationRun } from './automations-types'
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type { WorkspaceRunContext } from './task-source-context'

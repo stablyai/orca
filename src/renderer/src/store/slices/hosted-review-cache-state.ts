@@ -7,8 +7,8 @@ import type {
   HostedReviewForBranchOutcome,
   HostedReviewForBranchReply,
   HostedReviewInfo
-} from '../../../../shared/hosted-review'
-import { hostedReviewForBranchOutcome } from '../../../../shared/hosted-review'
+} from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import { hostedReviewForBranchOutcome } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { Repo } from '../../../../shared/repo-types'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'

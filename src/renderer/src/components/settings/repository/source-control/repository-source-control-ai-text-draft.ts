@@ -1,25 +1,25 @@
-import type { SourceControlAiModelEdits } from '../../../../../../shared/source-control-ai-action-model-edits'
+import type { SourceControlAiModelEdits } from '../../../../../../shared/source-control/ai/settings/source-control-ai-action-model-edits'
 import {
   transportActionArgumentChoices,
   demoteActionArgumentChoices,
   type ActionArgumentChoices
-} from '../../../../../../shared/source-control-action-argument-document'
+} from '../../../../../../shared/source-control/ai/recipes/source-control-action-argument-document'
 import type { Dispatch, SetStateAction } from 'react'
 import type {
   SourceControlActionId,
   SourceControlActionLaunchPreferences,
   SourceControlActionRecipe
-} from '../../../../../../shared/source-control-ai-actions'
+} from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type {
   RepoSourceControlAiOverrides,
   SourceControlAiModelChoice,
   SourceControlAiSettings
-} from '../../../../../../shared/source-control-ai-types'
-import { liftActionPermissionArgs } from '../../../../../../shared/source-control-action-permission-lift'
+} from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
+import { liftActionPermissionArgs } from '../../../../../../shared/source-control/ai/recipes/source-control-action-permission-lift'
 import {
   readActionRecipeTextDraft,
   type ActionRecipeTextDraft
-} from './repository-source-control-ai-draft'
+} from './repository-source-control-ai-recipe-text'
 import { retireActionLaunchPreferences } from '../../source-control/source-control-ai-action-recipe-draft'
 import { readInheritedCommandTemplate } from './repository-source-control-ai-labels'
 

@@ -1,4 +1,4 @@
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type { AgentSessionSlashCommand } from '../../agent-session/agent-session-wire'
 import type { DiscoveredSkill, SkillDiscoveryResult } from '../../skills'
 import { getNativeChatAgentProfile, readsSkillSource } from '../native-chat-agent-profiles'

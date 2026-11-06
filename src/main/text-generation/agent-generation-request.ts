@@ -2,15 +2,15 @@ import { textGenerationFailureCodeFields } from '../../shared/text-generation-fa
 import { runClaudeGenerationAttempts } from '../../shared/claude-background-run-isolation'
 import {
   cleanGeneratedCommitMessage,
-  stripPrefilledReasoningPreamble,
-  type CommandTemplateBackslash
-} from '../../shared/commit-message-prompt'
-import { isCustomAgentId } from '../../shared/commit-message-agent-spec'
+  stripPrefilledReasoningPreamble
+} from '../../shared/source-control/ai/generation/commit-message-agent-output'
+import type { CommandTemplateBackslash } from '../../shared/source-control/ai/generation/commit-message-prompt'
+import { isCustomAgentId } from '../../shared/source-control/ai/generation/commit-message-agent-spec'
 import {
   planCommitMessageGeneration,
   type CommitMessagePlan
-} from '../../shared/commit-message-plan'
-import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
+} from '../../shared/source-control/ai/generation/commit-message-plan'
+import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control/ai/source-control-ai-operation-resolution'
 import { openCodeVariantRetryPlan } from '../../shared/opencode-generation-command'
 import { copilotUnavailableModelRetryPlan } from './copilot-unavailable-model-retry'
 import { runLocalPlanForAgent } from './source-control-local-generation'

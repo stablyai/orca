@@ -1,5 +1,5 @@
 import type { Terminal, IDisposable } from '@xterm/xterm'
-import { createOsc133CommandFinishedScanner } from '../../../../shared/terminal-osc133-command-finished'
+import { createOsc133CommandFinishedScanner } from '../../../../shared/terminal/output/terminal-osc133-command-finished'
 
 type TerminalCommandLifecycleOptions = {
   onCommandFinished: (bestEffortExitCode: number | null) => void

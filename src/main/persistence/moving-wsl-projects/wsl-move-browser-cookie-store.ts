@@ -1,6 +1,6 @@
 /** Registers the `browser-cookies` rewrite store against the app's real browser sessions. */
 import { BrowserWindow } from 'electron'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { WSL_MOVE_BROWSER_COOKIES_STORE_ID } from '../../../shared/wsl-move/wsl-move-browser-cookie-copy'
 import {
   copyBrowserPartitionCookies,

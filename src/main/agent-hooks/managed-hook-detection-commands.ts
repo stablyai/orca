@@ -1,4 +1,4 @@
-import type { AgentHookTarget } from '../../shared/agent-hook-types'
+import type { AgentHookTarget } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import {
   extractExecutableToken,
   isSafeOverrideExecutableToken

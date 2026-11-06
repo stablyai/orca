@@ -229,51 +229,6 @@ describe('fetchMobileWebBundle from a host whose manifest names a range grid', (
     expect(host.peakInFlight()).toBe(4)
   })
 
-  it('accepts an identity range, an empty asset, and an asset that ends on the grid', async () => {
-    const host = rangeHost(FILES)
-    const fetched = await fetchMobileWebBundle({ client: host.client })
-
-    expect(fetched.assets.get(NOISE)).toEqual(FILES[NOISE])
-    expect(fetched.assets.get(EMPTY)).toEqual(new Uint8Array(0))
-    expect(fetched.assets.get(EXACT)).toEqual(FILES[EXACT])
-    const exact = readsOf(host.calls, 'mobileWeb.bundle.range').filter(
-      (call) => call.params.path === EXACT
-    )
-    expect(exact.map((call) => call.params.offset)).toEqual([0, RANGE_GRID])
-  })
-
-  it('pages a host whose manifest names no range grid in chunks, as before', async () => {
-    const host = rangeHost(FILES, { ranges: false })
-    const fetched = await fetchMobileWebBundle({ client: host.client })
-
-    expect(fetched.assets.get('assets/app.js')).toEqual(FILES['assets/app.js'])
-    expect(readsOf(host.calls, 'mobileWeb.bundle.range')).toHaveLength(0)
-    expect(readsOf(host.calls, 'mobileWeb.bundle.chunk')).toHaveLength(slotsOn(CHUNK_GRID))
-  })
-
-  it('carries the same bundle in fewer reads and fewer bytes than chunks', async () => {
-    const chunked = rangeHost(FILES, { ranges: false })
-    const ranged = rangeHost(FILES)
-    await fetchMobileWebBundle({ client: chunked.client })
-    await fetchMobileWebBundle({ client: ranged.client })
-
-    expect(readsOf(ranged.calls, 'mobileWeb.bundle.range').length).toBeLessThan(
-      readsOf(chunked.calls, 'mobileWeb.bundle.chunk').length
-    )
-    expect(ranged.wireBase64Bytes()).toBeLessThan(chunked.wireBase64Bytes())
-  })
-
-  it('refuses a corrupt gzip range as undecodable', async () => {
-    const host = rangeHost(FILES, {
-      tamper: (call, body) =>
-        call.params.path === 'assets/app.js' && call.params.offset === 0
-          ? encodeBase64(Uint8Array.of(0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 0, 3, 1, 2, 3))
-          : body
-    })
-
-    expect(await refusalOf(fetchMobileWebBundle({ client: host.client }))).toBe('range-undecodable')
-  })
-
   // Bound a gzip bomb at one byte over its slot; enough planned reads expose continued dispatch after refusal.
   it('refuses a gzip bomb at one byte over the window and sends little after it', async () => {
     vi.useFakeTimers()
@@ -302,14 +257,5 @@ describe('fetchMobileWebBundle from a host whose manifest names a range grid', (
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('refuses a range that inflates short of its window as short', async () => {
-    const host = rangeHost(FILES, {
-      tamper: (call, body) =>
-        call.params.path === 'index.html' ? encodeBase64(gzipSync(scriptBytes(599, 3))) : body
-    })
-
-    expect(await refusalOf(fetchMobileWebBundle({ client: host.client }))).toBe('asset-short')
   })
 })

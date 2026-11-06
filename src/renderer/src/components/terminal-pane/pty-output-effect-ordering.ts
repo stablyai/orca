@@ -1,9 +1,9 @@
 import {
   isCursorNativeAgentTitle,
-  normalizeTerminalTitle,
   shouldSuppressCursorNativeTitle
-} from '../../../../shared/agent-detection'
-import type { AgentStatus } from '../../../../shared/agent-title-core'
+} from '../../../../shared/agent-status/title/agent-title-core'
+import { normalizeTerminalTitle } from '../../../../shared/agent-status/title/agent-title-status'
+import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import type { PlacedProgramActivity } from '../../../../shared/program-status/title-activity-order'
 import type { PendingPtySideEffect } from './pty-output-side-effect-queue'
 

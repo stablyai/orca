@@ -6,7 +6,7 @@ import type { GlobalSettings } from '../../../../../shared/global-settings-types
 import { useAppStore } from '../../../store'
 import type { SettingsStoreModel } from '../page/use-settings-store-model'
 import type { SettingsInteractionModel } from '../page/use-settings-interaction-controller'
-import { normalizeSourceControlAiSettings } from '../../../../../shared/source-control-ai'
+import { normalizeSourceControlAiSettings } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import {
   agentLaunchSettingsMutationUpdates,
   projectAgentLaunchSettings,

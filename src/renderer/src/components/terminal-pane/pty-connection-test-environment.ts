@@ -1,3 +1,4 @@
+import { isGeminiTerminalTitle as actualIsGeminiTerminalTitle } from '../../../../shared/agent-status/title/agent-title-core'
 import { vi } from 'vitest'
 import { resetAgentStartupDelayedDeliveryForTests } from '@/lib/agent-startup-delayed-delivery'
 import * as agentStatusStartupSnapshot from '@/hooks/ipc-events/agent-status-startup-snapshot'
@@ -17,7 +18,7 @@ let resetStatusSnapshot: StatusSnapshot | undefined
 export function buildAgentStatusModuleMock(
   actual: Record<string, unknown>
 ): Record<string, unknown> {
-  const isGeminiTerminalTitle = actual.isGeminiTerminalTitle as (title: string) => boolean
+  const isGeminiTerminalTitle = actualIsGeminiTerminalTitle
   return {
     ...actual,
     isGeminiTerminalTitle: vi.fn((title: string) => isGeminiTerminalTitle(title)),

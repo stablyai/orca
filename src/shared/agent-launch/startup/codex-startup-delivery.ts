@@ -1,5 +1,5 @@
-import { recognizeAgentProcessFromCommandLine } from '../../agent-process-recognition'
-import { shellReadyMarkerComesFromLineEditor } from '../../shell-ready-marker-timing'
+import { recognizeAgentProcessFromCommandLine } from '../../agent-status/process/agent-process-recognition'
+import { shellReadyMarkerComesFromLineEditor } from '../../terminal/output/shell-ready-marker-timing'
 
 export type StartupCommandDelivery = 'fast' | 'shell-ready'
 

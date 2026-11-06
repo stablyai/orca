@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import { useSidebarWorktreeSelection } from './use-selection'
-import { getVisibleWorktreeShortcutTargets } from '../../visible-worktrees'
+import { getVisibleWorktreeShortcutTargets } from '../listing/visible-worktrees'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

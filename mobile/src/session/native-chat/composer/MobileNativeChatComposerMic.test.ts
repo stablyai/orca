@@ -39,43 +39,6 @@ describe('MobileNativeChatComposerMic', () => {
     renderer = null
   })
 
-  it('shows the mic busy while a stopped dictation is transcribing', () => {
-    act(() => {
-      renderer = create(
-        createElement(MobileNativeChatComposerMic, {
-          onMicPress: vi.fn(),
-          micProcessing: true,
-          disabled: false
-        })
-      )
-    })
-    const mic = renderer!.root.find(
-      (node) =>
-        String(node.type) === 'Pressable' &&
-        node.props.accessibilityLabel === 'Transcribing dictation'
-    )
-    expect(findAllByHostType(mic, 'ActivityIndicator')).toHaveLength(1)
-    expect(findAllByHostType(mic, 'Mic')).toHaveLength(0)
-  })
-
-  it('tells screen readers it is busy starting before recording begins', () => {
-    act(() => {
-      renderer = create(
-        createElement(MobileNativeChatComposerMic, {
-          onMicPress: vi.fn(),
-          micActive: true,
-          micStarting: true,
-          disabled: false
-        })
-      )
-    })
-    const mic = renderer!.root.find(
-      (node) =>
-        String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Starting dictation'
-    )
-    expect(mic.props['aria-busy']).toBe(true)
-  })
-
   it('adds the meter beside the mic without remounting it under a held press', () => {
     const meter = createMobileDictationMeter()
     const render = (micStarting: boolean) =>

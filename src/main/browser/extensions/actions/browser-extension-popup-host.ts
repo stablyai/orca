@@ -1,9 +1,9 @@
 import { BrowserWindow, screen } from 'electron'
-import type { BrowserExtensionAnchorRect } from '../../../../shared/browser-extension-toolbar-types'
+import type { BrowserExtensionAnchorRect } from '../../../../shared/browser/extensions/browser-extension-toolbar-types'
 import {
   getChromeExtensionOrigin,
   isSameExtensionNavigation
-} from '../../../../shared/browser-extension-url'
+} from '../../../../shared/browser/extensions/browser-extension-url'
 import { allowPageUnload } from '../../guest-lifecycle/browser-guest-unload-policy'
 import { BrowserExtensionApiError } from '../api-runtime/browser-extension-namespace-registry'
 import {

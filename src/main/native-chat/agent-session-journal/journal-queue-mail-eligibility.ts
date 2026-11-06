@@ -1,3 +1,5 @@
+import type { JournalSubmissionConsume } from './journal-store-contracts'
+import { QueuedMessageNotConsumableError } from './queued-message-consume-error'
 import { orchestrationMailNotice } from '../../../shared/agent-session/agent-session-message-source'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { journalInputOrder } from './journal-input-order'
@@ -19,6 +21,7 @@ export function nextEligibleQueuedCard(input: {
    *  and its edit holds' version. */
   revisions: readonly unknown[]
   unavailable: ((card: QueuedMessageRow) => boolean) | undefined
+  steer?: boolean
 }): QueuedMessageRow | null {
   const { state, floor, get } = input
   const order = journalInputOrder(state)
@@ -30,6 +33,42 @@ export function nextEligibleQueuedCard(input: {
     !input.editHeld(card.messageId)
   if (!head || !ready(head)) {
     return null
+  }
+  if (input.steer) {
+    if (!order.cards.candidates.hasMail()) {
+      return null
+    }
+    const candidate = (card: QueuedMessageRow): 'mail' | 'pass' | 'stop' => {
+      if (!ready(card)) {
+        return 'stop'
+      }
+      return orchestrationMailNotice(card.body.from)
+        ? 'mail'
+        : card.body.command || card.body.from
+          ? 'stop'
+          : 'pass'
+    }
+    const first = candidate(head)
+    const next =
+      first === 'mail'
+        ? head
+        : first === 'stop'
+          ? null
+          : order.cards.candidates.pastHead(
+              head,
+              [...input.revisions, order.cards.failureHolds(), 'steer'],
+              () => {
+                for (const row of order.cards.candidates.after(head)) {
+                  const card = get(row.messageId) ?? row
+                  const kind = candidate(card)
+                  if (kind !== 'pass') {
+                    return kind === 'mail' ? card : null
+                  }
+                }
+                return null
+              }
+            )
+    return next && !input.unavailable?.(next) ? next : null
   }
   if (!orchestrationMailNotice(head.body.from) || !input.unavailable?.(head)) {
     return head
@@ -47,4 +86,22 @@ export function nextEligibleQueuedCard(input: {
     }
     return null
   })
+}
+
+/** Automatic consumption validates the same current selection on the journal write lane. */
+export function assertQueuedCardConsumable(
+  input: JournalSubmissionConsume & { consumedAs: string; fingerprint: string },
+  card: QueuedMessageRow | null,
+  next: () => QueuedMessageRow | null
+): void {
+  if (
+    card !== null &&
+    card.state === input.expect &&
+    card.fingerprint === input.fingerprint &&
+    input.consumedAs !== input.messageId &&
+    (!input.yieldsToPause || next()?.messageId === input.messageId)
+  ) {
+    return
+  }
+  throw new QueuedMessageNotConsumableError(input.messageId, input.expect)
 }

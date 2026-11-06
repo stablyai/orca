@@ -15,8 +15,8 @@ import type { RetiredNameRegistry } from '../../shared/worktree/retired-name-reg
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
-} from '../../shared/folder-workspace-path-status'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+} from '../../shared/folder-workspaces/folder-workspace-path-status'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
@@ -132,6 +132,10 @@ export type WorktreeApi = {
   listLineage: () => Promise<{
     lineage: Record<string, WorktreeLineage>
     workspaceLineage?: Record<string, WorkspaceLineage>
+    /** Read through validCrossStoreLineage; older hosts omit it. */
+    crossStoreLineage?: Record<string, unknown>
+    /** This store's identity, which other stores' records name; absent when unknown. */
+    installationId?: string
   }>
   updateLineage: (args: {
     worktreeId: string

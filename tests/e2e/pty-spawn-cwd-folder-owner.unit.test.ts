@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   MIXED_FOLDER,
   MIXED_GROUP
-} from '../../src/shared/folder-workspace-host-routing.test-fixture'
+} from '../../src/shared/folder-workspaces/folder-workspace-host-routing.test-fixture'
 import { getDefaultWorkspaceSession } from '../../src/shared/constants'
 import type { RuntimePtyController } from '../../src/main/runtime/runtime-pty-controller-contract'
 import { spawnMock } from '../../src/main/ipc/pty/pty-ipc-mock-registry'
@@ -70,12 +70,12 @@ vi.mock('../../src/main/agent-hooks/migration-unsupported-pty-state', () =>
     m.migrationUnsupportedPtyModuleMock()
   )
 )
-vi.mock('../../src/main/codex/codex-pane-account-registry', () =>
+vi.mock('../../src/main/codex/configuration/homes/codex-pane-account-registry', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) =>
     m.codexPaneAccountRegistryModuleMock()
   )
 )
-vi.mock('../../src/main/codex/codex-state-db-backfill-recovery', () =>
+vi.mock('../../src/main/codex/history/index/codex-state-db-backfill-recovery', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) =>
     m.codexBackfillRecoveryModuleMock()
   )

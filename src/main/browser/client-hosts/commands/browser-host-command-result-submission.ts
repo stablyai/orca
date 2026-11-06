@@ -1,9 +1,11 @@
 import {
-  BrowserClientHostCommandResult,
   BrowserClientHostCommandResultAck,
-  type BrowserClientHostCommandEvent,
-  type BrowserClientHostCommandResult as BrowserClientHostCommandResultType
-} from '../../../../shared/browser-client-host-protocol'
+  type BrowserClientHostCommandEvent
+} from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
+import {
+  BrowserClientAutomationResult as BrowserClientHostCommandResult,
+  type BrowserClientAutomationResult as BrowserClientHostCommandResultType
+} from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import type { RemoteRuntimeSubscription } from '../../../../shared/remote-runtime/remote-runtime-client'
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
 

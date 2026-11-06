@@ -3,10 +3,13 @@
  * Orca manufactured OMP/Pi flicker via synthetic profile labels and normalization that discarded session/cwd (#16093).
  * OMP disables terminal-title synthesis so its session titles survive every state. Normalize rotating braille while preserving labels. */
 import { describe, expect, it } from 'vitest'
-import { detectAgentStatusFromTitle, normalizeTerminalTitle } from './agent-title-status'
-import { isDecorativeAgentTitleFrameChange } from './agent-decorative-title-signature'
-import { normalizeCompatibleAgentTitleForOwner } from './agent-title-owner'
-import { getPiCompatibleTitleSeparatorStatus } from './pi-compatible-synthetic-title'
+import {
+  detectAgentStatusFromTitle,
+  normalizeTerminalTitle
+} from './agent-status/title/agent-title-status'
+import { isDecorativeAgentTitleFrameChange } from './agent-status/title/agent-decorative-title-signature'
+import { normalizeCompatibleAgentTitleForOwner } from './agent-status/title/agent-title-owner'
+import { getPiCompatibleTitleSeparatorStatus } from './agent-status/title/providers/pi-compatible-synthetic-title'
 
 // Verbatim from src/main/pi/titlebar-extension-source.ts:44 and oh-my-pi:530-544.
 const ORCA_EXTENSION_WORKING = (frame: string): string => `${frame} π - fixing the sidebar - orca`

@@ -5,7 +5,7 @@ import type {
   AiVaultPrepareSessionResumeRequest,
   AiVaultPrepareSessionResumeResult,
   AiVaultSessionResumePreparation
-} from '../../../shared/ai-vault-resume-preparation'
+} from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { isUnresolvedOwnerHostId, parseExecutionHostId } from '../../../shared/execution-host'
 import { isWslUncPath } from '../../../shared/wsl-paths'
 import { assertLegacyAiVaultResumeAllowed } from '../../ai-vault/structured-session-ownership'

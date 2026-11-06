@@ -1,4 +1,4 @@
-import { GitCommandTimeoutError } from '../../../../shared/git-command-timeout'
+import { GitCommandTimeoutError } from '../../../../shared/git/commands/git-command-timeout'
 import { resolveWorktreeAddBaseRef } from '../../../../shared/worktree/base-ref'
 import type {
   LocalBaseRefRefreshResult,

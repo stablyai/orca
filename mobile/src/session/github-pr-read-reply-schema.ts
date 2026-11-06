@@ -5,7 +5,7 @@ import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
 } from '../../../src/shared/github/work-item-types'
-import type { HostedReviewInfo } from '../../../src/shared/hosted-review'
+import type { HostedReviewInfo } from '../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 import {
   CHECK_STATUS,
   MERGEABLE_STATE,
@@ -58,6 +58,7 @@ export const hostedReviewForBranchSchema = z
     state: salvagedOptional('state', z.enum(HOSTED_REVIEW_STATE)),
     url: prText('url'),
     status: salvagedOptional('status', z.enum(CHECK_STATUS)),
+    checksSummary: prCheckSummary('checksSummary'),
     updatedAt: prText('updatedAt'),
     mergeable: salvagedOptional('mergeable', z.enum(MERGEABLE_STATE)),
     reviewDecision: salvagedOptional('reviewDecision', z.enum(REVIEW_DECISION).nullable()),
@@ -76,6 +77,7 @@ export const hostedReviewForBranchSchema = z
           state: review.state ?? 'open',
           url: review.url ?? '',
           status: review.status ?? 'pending',
+          checksSummary: review.checksSummary,
           updatedAt: review.updatedAt ?? '',
           mergeable: review.mergeable ?? 'UNKNOWN',
           reviewDecision: review.reviewDecision,
@@ -119,6 +121,7 @@ const pullRequestSchema = z
     title: prText('title'),
     url: prText('url'),
     checksStatus: salvagedOptional('checksStatus', z.enum(CHECK_STATUS)),
+    checksSummary: prCheckSummary('checksSummary'),
     updatedAt: prText('updatedAt'),
     mergeable: salvagedOptional('mergeable', z.enum(MERGEABLE_STATE)),
     reviewDecision: salvagedOptional('reviewDecision', z.enum(REVIEW_DECISION).nullable()),
@@ -143,6 +146,7 @@ const pullRequestSchema = z
           state: pr.state,
           url: pr.url ?? '',
           checksStatus: pr.checksStatus ?? 'pending',
+          checksSummary: pr.checksSummary,
           updatedAt: pr.updatedAt ?? '',
           mergeable: pr.mergeable ?? 'UNKNOWN',
           reviewDecision: pr.reviewDecision,

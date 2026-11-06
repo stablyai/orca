@@ -2,13 +2,13 @@ import { rmSync } from 'node:fs'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
 import { AgentHookServer } from './server'
 import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
-import type { AgentProcessIdentity } from '../../shared/agent-process-presence'
-import { probeAgentProcessPresence } from '../../shared/agent-process-presence-probe'
+import type { AgentProcessIdentity } from '../../shared/agent-status/process/agent-process-presence'
+import { probeAgentProcessPresence } from '../../shared/agent-status/process/agent-process-presence-probe'
 import {
   readHookRootEvidence,
   type HookPaneProcessIo,
   type HookPaneRoot
-} from '../../shared/hook-process-root-evidence'
+} from '../../shared/agent-hook-listener/presence/hook-process-root-evidence'
 import type { ProcessTableRow } from '../../shared/process-table-snapshot'
 
 // Shared harness for the hook server's pane-root acquisition tests. Each test file mocks

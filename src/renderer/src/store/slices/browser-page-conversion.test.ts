@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
 import '../../../../shared/constants'
-import { browserPageSchema } from '../../../../shared/workspace-session-browser-schema'
+import { browserPageSchema } from '../../../../shared/workspace-session/workspace-session-browser-schema'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 

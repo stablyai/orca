@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { isAbsoluteBrowserUrl } from '../browser-expected-url'
+import { isAbsoluteBrowserUrl } from '../browser/client-hosting/browser-expected-url'
 import { memoizeStringResult } from '../string-result-cache'
 
 // ~300 declarations repeat ~170 messages; zod schemas are immutable, so equal messages can share one instance.

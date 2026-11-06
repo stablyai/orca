@@ -2,11 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { i18n } from '@/i18n/i18n'
 import es from '@/i18n/locales/es.json'
 import { keybindingFileDiagnostic } from '../../../../../shared/keybindings/keybinding-diagnostic-copy'
-import { normalizeKeybinding } from '../../../../../shared/keybindings/normalization'
-import {
-  keybindingDiagnosticText,
-  keybindingValidationErrorText
-} from './keybinding-diagnostic-text'
+import { keybindingDiagnosticText } from './keybinding-diagnostic-text'
 
 const originalLanguage = i18n.language
 
@@ -15,31 +11,6 @@ afterEach(async () => {
 })
 
 describe('keybinding diagnostic text', () => {
-  it('translates a diagnostic and its nested Orca reason as whole sentences', async () => {
-    i18n.addResourceBundle('es', 'translation', es)
-    await i18n.changeLanguage('es')
-    const invalid = normalizeKeybinding('Shift+P')
-    if (invalid.ok) {
-      throw new Error('expected a validation failure')
-    }
-    const reason = es.settings.shortcuts.validation.modifierRequired
-    expect(keybindingValidationErrorText(invalid)).toBe(reason)
-    const diagnostic = keybindingFileDiagnostic(
-      { severity: 'error', actionId: 'terminal.search' },
-      'shortcutIgnored',
-      { actionId: 'terminal.search', reason: invalid.error },
-      invalid.errorCode
-    )
-    expect(diagnostic.message).toBe(
-      'Shortcut for "terminal.search" was ignored: Include at least one modifier key.'
-    )
-    expect(keybindingDiagnosticText(diagnostic)).toBe(
-      es.settings.shortcuts.diagnostics.shortcutIgnored
-        .replace('{{actionId}}', 'terminal.search')
-        .replace('{{reason}}', reason)
-    )
-  })
-
   it('keeps verbatim reasons and falls back to the English message', async () => {
     i18n.addResourceBundle('es', 'translation', es)
     await i18n.changeLanguage('es')

@@ -1,7 +1,7 @@
 import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/ai-vault-resume-shell'
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { toast } from 'sonner'
-import { canResumeAiVaultSessionOnTarget } from '../../../../shared/ai-vault-resume-target'
+import { canResumeAiVaultSessionOnTarget } from '../../../../shared/ai-vault/resume/ai-vault-resume-target'
 import {
   getAiVaultResumeWorkspaceExecutionHostId,
   getAiVaultResumeWorkspaceTargetStatus
@@ -13,10 +13,8 @@ import {
   hasAiVaultSessionDragData,
   readAiVaultSessionDragData
 } from '@/lib/ai-vault-session-drag'
-import {
-  buildAiVaultDropRepinStartup,
-  getAiVaultAgentProviderSession
-} from '@/lib/ai-vault-resume-command'
+import { buildAiVaultDropRepinStartup } from '@/lib/ai-vault-resume-command'
+import { getAiVaultAgentProviderSession } from '../../../../shared/ai-vault/resume/ai-vault-resume-startup'
 import { launchAiVaultSessionInNewTab } from '@/lib/launch-ai-vault-session'
 import { prepareAiVaultTerminalResumeRequest } from '@/lib/ai-vault-session-resume-preparation'
 import { describeAiVaultResumeFailure } from '@/lib/ai-vault-resume-refusal'

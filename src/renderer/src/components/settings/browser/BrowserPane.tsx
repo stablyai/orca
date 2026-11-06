@@ -24,11 +24,13 @@ import { SettingsSubsectionHeader } from '../form-controls/SettingsFormControls'
 import { BrowserSessionCookiesSection } from './profiles/BrowserSessionCookiesSection'
 import { BrowserNewProfileDialog } from './profiles/BrowserNewProfileDialog'
 import { BrowserExtensionsSection } from './extensions/BrowserExtensionsSection'
+import { BrowserPasswordsSection } from './passwords/BrowserPasswordsSection'
+import { getBrowserPasswordsSearchEntry } from './passwords/browser-passwords-copy'
 import {
   createBrowserHomePageDraftState,
   resolveBrowserHomePageDraftState
 } from './browser-home-page-draft-state'
-import { buildSidebarHostOptions } from '../../sidebar/sidebar-host-options'
+import { buildSidebarHostOptions } from '../../sidebar/worktree-list/controls/sidebar-host-options'
 import { getHostDisplayLabelOverrides } from '../../../../../shared/host-setting-overrides'
 import {
   getSettingsFocusedExecutionHostId,
@@ -36,6 +38,7 @@ import {
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
 import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { resolveAvailableBrowserSessionHostId } from './profiles/browser-session-host-selection'
@@ -124,6 +127,7 @@ export function BrowserPane({
   const showSitePermissions = matchesSettingsSearch(searchQuery, [browserSearchEntries[11]])
   const showProfileScope = matchesSettingsSearch(searchQuery, [browserSearchEntries[12]])
   const showLinkRoutingBackground = matchesSettingsSearch(searchQuery, [browserSearchEntries[13]])
+  const showPasswords = matchesSettingsSearch(searchQuery, [getBrowserPasswordsSearchEntry()])
   const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
   const isMac = isMacUserAgent()
   const linkRoutingDescription = getBrowserLinkRoutingDescription(
@@ -175,6 +179,9 @@ export function BrowserPane({
   const activeBrowserSessionProfileId =
     useAppStore((s) => getDefaultBrowserProfileForHost(s, selectedBrowserSessionHostId)) ??
     'default'
+  const activeBrowserSessionProfileLabel =
+    browserSessionProfiles.find((profile) => profile.id === activeBrowserSessionProfileId)?.label ??
+    activeBrowserSessionProfileId
   useEffect(() => {
     const requestedHostId = browserSessionHostIdOverride ?? settingsFocusedHostId
     if (selectedBrowserSessionHostId !== requestedHostId) {
@@ -339,15 +346,24 @@ export function BrowserPane({
         />
       ) : null}
 
+      {/* The vault lives on this computer only, so it follows the local host's profiles. */}
+      {showPasswords &&
+      !isWebClientLocation() &&
+      selectedBrowserSessionHostId === LOCAL_EXECUTION_HOST_ID ? (
+        <BrowserPasswordsSection
+          browserProfileId={activeBrowserSessionProfileId}
+          profileLabel={activeBrowserSessionProfileLabel}
+          settings={settings}
+          updateSettings={updateSettings}
+        />
+      ) : null}
+
       {/* Why local only: release 1 runs extensions in this computer's browser profiles. */}
       {settings.experimentalBrowserExtensions === true &&
       selectedBrowserSessionHostId === LOCAL_EXECUTION_HOST_ID ? (
         <BrowserExtensionsSection
           profileId={activeBrowserSessionProfileId}
-          profileLabel={
-            browserSessionProfiles.find((profile) => profile.id === activeBrowserSessionProfileId)
-              ?.label ?? activeBrowserSessionProfileId
-          }
+          profileLabel={activeBrowserSessionProfileLabel}
         />
       ) : null}
 

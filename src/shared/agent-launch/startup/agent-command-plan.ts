@@ -2,7 +2,7 @@ import { extractLeadingEnvAssignments } from '../../command-environment'
 import {
   tokenizeCustomCommandTemplate,
   type CommandTemplateBackslash
-} from '../../commit-message-prompt'
+} from '../../source-control/ai/generation/commit-message-prompt'
 
 export function parseAgentCommand(
   defaultBinary: string,

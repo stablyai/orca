@@ -3,7 +3,7 @@ import { isRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../../transport/stable-logical-rpc-client'
 import { nativeChatTerminalWrite } from '../mobile-session-write-operations'
 import { typeAgentTuiCommand } from '../../../../src/shared/agent-launch/startup/agent-tui-command-typing'
-import { readTerminalSendAcknowledgment } from '../../../../src/shared/terminal-send-acknowledgment'
+import { readTerminalSendAcknowledgment } from '../../../../src/shared/terminal/pty/lifecycle/terminal-send-acknowledgment'
 import {
   AGENT_TUI_CLEAR_MAX_LINES,
   countAgentTuiInputLines,
@@ -33,8 +33,12 @@ type MobileNativeChatSendArgs = {
 // Unknown delivery must not be called definite failure; structured queued drafts render as cards, not transcript echoes.
 export type MobileNativeChatSendOutcome = 'accepted' | 'rejected' | 'unknown' | 'queued'
 
-/** How one send goes: `alternate` does the other thing than the host's follow-up setting. */
-export type MobileNativeChatSendIntent = { alternate?: true }
+/** How one send goes: `alternate` does the other thing than the host's follow-up setting; `goal` sends the draft as the chat's goal objective. */
+export type MobileNativeChatSendIntent = {
+  alternate?: true
+  goal?: true
+  onCreated?: (clientMessageId: string) => void
+}
 
 export type MobileNativeChatWriteOutcome = Exclude<MobileNativeChatSendOutcome, 'queued'>
 

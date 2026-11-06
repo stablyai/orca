@@ -5,8 +5,8 @@ import {
   BROWSER_CLIENT_FILE_CHANNEL_TRANSFER_MAX_BYTES,
   BrowserClientFileChannelReadResult,
   decodeBrowserClientFileChannelChunk
-} from '../../../../shared/browser-client-file-channel-protocol'
-import type { BrowserClientHostCommandEvent } from '../../../../shared/browser-client-host-protocol'
+} from '../../../../shared/browser/client-hosting/browser-client-file-channel-protocol'
+import type { BrowserClientHostCommandEvent } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 
 export const BROWSER_CLIENT_FILE_CHANNEL_READ_METHOD = 'browser.clientHost.fileChannel.read'
 

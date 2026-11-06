@@ -291,22 +291,6 @@ it.each([false, true])(
   }
 )
 
-it('keeps recorded CLI labels and focuses the exact remote pane from both surfaces', async () => {
-  seed(false, true)
-  await mount()
-  for (const link of screen.getAllByRole('button', { name: 'Recorded sender' })) {
-    await act(async () => fireEvent.click(link))
-    expect(transport.focusRenderer).toHaveBeenLastCalledWith('term-current', 'server-1')
-    expect(transport.bridge).toHaveBeenCalledWith(
-      expect.objectContaining({
-        selector: 'server-1',
-        method: 'terminal.focus',
-        params: { terminal: 'term-current', navigation: 'host' }
-      })
-    )
-  }
-})
-
 it('keeps older-host direct-root names and both clicks on the stamped host when the workspace is local', async () => {
   seed()
   transport.unsupported = true

@@ -13,9 +13,12 @@ export function useNativeChatQuestionKeys(
     const target = event.target instanceof Element ? event.target : null
     const card = cardRef.current
     const isNumberKey = /^[1-9]$/.test(event.key)
+    const isArrow = event.key === 'ArrowDown' || event.key === 'ArrowUp'
+    const field = card?.querySelector<HTMLTextAreaElement>('[data-native-chat-answer-field]')
+    const inField = field != null && target === field
     if (
       event.defaultPrevented ||
-      isEditableTarget(target) ||
+      (isEditableTarget(target) && !(inField && isArrow)) ||
       target?.closest('[data-native-chat-find-bar], [data-queued-message-editor]') ||
       !isInNativeChatPaneOf(card, target) ||
       (!isNumberKey && !card?.contains(target))
@@ -45,18 +48,30 @@ export function useNativeChatQuestionKeys(
       }
       event.preventDefault()
       onPick(optionIndex)
-    } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      if (rows.length === 0) {
+    } else if (isArrow) {
+      const up = event.key === 'ArrowUp'
+      if (
+        rows.length === 0 ||
+        (inField &&
+          (field.selectionStart !== field.selectionEnd ||
+            field.selectionStart !== (up ? 0 : field.value.length)))
+      ) {
         return
       }
+      const stops: HTMLElement[] = field ? [...rows, field] : rows
+      const current = inField ? stops.length - 1 : focusedIndex
       const nextIndex =
-        focusedIndex === -1
-          ? event.key === 'ArrowDown'
-            ? 0
-            : rows.length - 1
-          : (focusedIndex + (event.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length
+        current === -1
+          ? up
+            ? stops.length - 1
+            : 0
+          : (current + (up ? -1 : 1) + stops.length) % stops.length
       event.preventDefault()
-      rows[nextIndex]?.focus()
+      const next = stops[nextIndex]
+      next?.focus()
+      if (field && next === field) {
+        field.setSelectionRange(field.value.length, field.value.length)
+      }
     } else if (event.key === 'Enter' && focusedIndex !== -1) {
       event.preventDefault()
       onPick(focusedIndex)

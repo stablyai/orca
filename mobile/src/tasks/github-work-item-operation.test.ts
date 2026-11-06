@@ -5,7 +5,7 @@ import { RpcClientRequestTracker } from '../transport/rpc-client-request-tracker
 import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-client'
 import { GITHUB_DESKTOP_UPDATE_REQUIRED } from '../transport/github-target-invocation'
-import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY as capability } from '../../../src/shared/source-control-runtime-capabilities'
+import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY as capability } from '../../../src/shared/source-control/runtime/source-control-runtime-capabilities'
 
 function deferred() {
   let resolve = () => {}

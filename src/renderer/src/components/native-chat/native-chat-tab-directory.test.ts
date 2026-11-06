@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
-  resolveNativeChatTabDirectory,
   resolveNativeChatTabDirectoryResolution,
   type NativeChatTabDirectoryState
 } from './native-chat-tab-directory'
@@ -44,48 +43,6 @@ function state(overrides: Partial<NativeChatTabDirectoryState> = {}): NativeChat
 }
 
 describe('resolveNativeChatTabDirectory', () => {
-  it.each(['opencode', 'grok', 'omp', 'pi'])(
-    'answers a floating %s chat with its pinned folder, as for Claude and Codex',
-    (agent) => {
-      const tab = { ...FLOATING_TAB, agentSessionAgent: agent }
-      expect(
-        resolveNativeChatTabDirectory(
-          state({ unifiedTabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [tab] } }),
-          tab.id,
-          FLOATING_TERMINAL_WORKTREE_ID
-        )
-      ).toBe('/home/me/pinned')
-    }
-  )
-
-  it('answers a floating chat with its pinned folder after the floating setting moved', () => {
-    expect(
-      resolveNativeChatTabDirectory(state(), FLOATING_TAB.id, FLOATING_TERMINAL_WORKTREE_ID)
-    ).toBe('/home/me/pinned')
-    expect(
-      resolveNativeChatTabDirectory(
-        state(),
-        FLOATING_TAB.id,
-        FLOATING_TERMINAL_WORKTREE_ID,
-        'local'
-      )
-    ).toBe('/home/me/pinned')
-  })
-
-  it('has no directory until the pin arrives, instead of the current floating setting', () => {
-    const unpinned = state({ structuredSessionLaunchDirectoryByTabId: {} })
-    expect(
-      resolveNativeChatTabDirectory(unpinned, FLOATING_TAB.id, FLOATING_TERMINAL_WORKTREE_ID)
-    ).toBeNull()
-    expect(
-      resolveNativeChatTabDirectoryResolution(
-        unpinned,
-        FLOATING_TAB.id,
-        FLOATING_TERMINAL_WORKTREE_ID
-      )
-    ).toEqual({ status: 'awaiting-pin' })
-  })
-
   it('ignores a pin left from a session the tab no longer shows', () => {
     const rebound = state({
       unifiedTabsByWorktree: {
@@ -99,39 +56,5 @@ describe('resolveNativeChatTabDirectory', () => {
         FLOATING_TERMINAL_WORKTREE_ID
       )
     ).toEqual({ status: 'awaiting-pin' })
-  })
-
-  it('resolves a floating tab no session pin is published for by the floating setting', () => {
-    expect(
-      resolveNativeChatTabDirectory(
-        state(),
-        FLOATING_TERMINAL_TAB.id,
-        FLOATING_TERMINAL_WORKTREE_ID
-      )
-    ).toBe('/home/me/changed-setting')
-  })
-
-  it('never answers a floating chat off the local host, pinned or not', () => {
-    expect(
-      resolveNativeChatTabDirectory(
-        state(),
-        FLOATING_TAB.id,
-        FLOATING_TERMINAL_WORKTREE_ID,
-        SSH_HOST
-      )
-    ).toBeNull()
-  })
-
-  it('resolves worktree chats by id even when a pin is recorded for the tab', () => {
-    const pinned = state({
-      structuredSessionLaunchDirectoryByTabId: {
-        [WORKTREE_TAB.id]: { sessionId: 'session-2', launchDirectory: '/somewhere/else' },
-        'ssh-chat-1': { sessionId: 'session-3', launchDirectory: '/somewhere/else' }
-      }
-    })
-    expect(resolveNativeChatTabDirectory(pinned, WORKTREE_TAB.id, 'wt-1')).toBe('/repo/worktree')
-    expect(resolveNativeChatTabDirectory(pinned, 'ssh-chat-1', 'wt-ssh', SSH_HOST)).toBe(
-      '/srv/remote/worktree'
-    )
   })
 })

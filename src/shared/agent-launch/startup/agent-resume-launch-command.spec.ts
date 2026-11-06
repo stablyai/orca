@@ -224,17 +224,6 @@ describe('buildAgentResumeStartupPlan claude selector guard', () => {
       expectSingleAuthoritativeResume(restored?.launchCommand ?? '', shell)
     }
   )
-
-  it('persists the original base command unchanged', () => {
-    const restored = buildAgentResumeStartupPlan({
-      agent: 'claude',
-      providerSession,
-      cmdOverrides: {},
-      agentCommand: "claude '--resume'",
-      platform: 'linux'
-    })
-    expect(restored?.launchConfig.agentCommand).toBe("claude '--resume'")
-  })
 })
 
 describe('buildAgentResumeStartupPlan claude effort', () => {

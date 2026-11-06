@@ -6,7 +6,7 @@
 import { assertWslHostRunAllowed } from './wsl-host-gate'
 import { focusReachability } from './wsl-host-focus-reachability'
 import { ensureWslHostForRuntimeCall } from './wsl-host-runtime-call'
-import type { WslHostDeploymentRecord } from '../../../shared/wsl-host-deployment-store'
+import type { WslHostDeploymentRecord } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
 import type {
   WslHostAddResult,
   WslHostConnectIntent,

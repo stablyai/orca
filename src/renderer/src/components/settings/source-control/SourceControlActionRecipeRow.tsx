@@ -1,27 +1,27 @@
-import { SourceControlTextActionAgentPicker } from '../SourceControlTextActionAgentPicker'
-import type { SourceControlAiModelEdits } from '../../../../../shared/source-control-ai-action-model-edits'
+import { SourceControlTextActionAgentPicker } from './text-actions/SourceControlTextActionAgentPicker'
+import type { SourceControlAiModelEdits } from '../../../../../shared/source-control/ai/settings/source-control-ai-action-model-edits'
 import type {
   SourceControlAiSettings,
   SourceControlAiModelChoice,
   SourceControlAiSettingsPatch
-} from '../../../../../shared/source-control-ai-types'
+} from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import {
   useAgentPickerDraftScope,
   invalidateAgentPickerDrafts
 } from '../../agent/agent-launch-picker-drafts'
-import { canonicalSourceControlActionSelection } from '../../../../../shared/source-control-action-selection'
-import type { ActionArgumentChoices } from '../../../../../shared/source-control-action-argument-document'
+import { canonicalSourceControlActionSelection } from '../../../../../shared/source-control/ai/recipes/source-control-action-selection'
+import type { ActionArgumentChoices } from '../../../../../shared/source-control/ai/recipes/source-control-action-argument-document'
 import { SourceControlActionAgentPicker } from './SourceControlActionAgentPicker'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { CustomAgentId } from '../../../../../shared/commit-message-agent-spec'
-import { isCustomAgentId } from '../../../../../shared/commit-message-agent-spec'
+import type { CustomAgentId } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
+import { isCustomAgentId } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import {
   SOURCE_CONTROL_ACTION_LABELS,
   type SourceControlActionRecipe,
   type AiActionId,
   type SourceControlActionLaunchPreferences
-} from '../../../../../shared/source-control-ai-actions'
+} from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { SourceControlActionVariableChips } from '../../source-control/SourceControlActionVariableChips'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
