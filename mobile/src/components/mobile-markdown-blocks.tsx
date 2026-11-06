@@ -303,7 +303,7 @@ function renderBlock(
     case 'blockquote':
       // A GitHub alert's body is ordinary text, not a muted quote.
       return node.data?.callout ? (
-        <MobileMarkdownCallout key={key} kind={node.data.callout}>
+        <MobileMarkdownCallout key={key} kind={node.data.callout} textScale={ctx.textScale}>
           {renderBlocks(node.children, ctx, { style: text.style, selectable: true }, depth + 1)}
         </MobileMarkdownCallout>
       ) : (

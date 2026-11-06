@@ -81,4 +81,16 @@ describe('GitHub syntax in mobile Markdown', () => {
       }
     ])
   })
+
+  it('keeps an image inside a heading in its heading and reads a link href as HTML does', () => {
+    const [heading, link] = blocks(
+      '<h1 align="center"><img src="https://example.com/logo.png" width="120"><br>Project</h1>\n\n' +
+        '<a title="see href=javascript:x" href="https://x.com/?a=1&amp;b=2">compare</a>'
+    )
+    expect(heading).toMatchObject({ type: 'heading', depth: 1 })
+    expect(link).toMatchObject({
+      type: 'paragraph',
+      children: [{ type: 'link', url: 'https://x.com/?a=1&b=2' }]
+    })
+  })
 })

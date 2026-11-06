@@ -37,8 +37,16 @@ const CALLOUTS: Record<GitHubCalloutKind, { color: () => string; label: () => st
   }
 }
 
-function CalloutIcon({ kind, color }: { kind: GitHubCalloutKind; color: string }) {
-  const icon = { size: 14, color, strokeWidth: 2.2 }
+function CalloutIcon({
+  kind,
+  color,
+  size
+}: {
+  kind: GitHubCalloutKind
+  color: string
+  size: number
+}) {
+  const icon = { size, color, strokeWidth: 2.2 }
   switch (kind) {
     case 'note':
       return <Info {...icon} />
@@ -56,9 +64,11 @@ function CalloutIcon({ kind, color }: { kind: GitHubCalloutKind; color: string }
 /** A GitHub alert (`> [!NOTE]`): its kind's colour, icon and title over ordinary body text. */
 export function MobileMarkdownCallout({
   kind,
+  textScale,
   children
 }: {
   kind: GitHubCalloutKind
+  textScale: number
   children: ReactNode
 }) {
   useMobileColorScheme()
@@ -66,8 +76,15 @@ export function MobileMarkdownCallout({
   return (
     <View style={[styles.callout, { borderLeftColor: color() }]}>
       <View style={styles.calloutTitle}>
-        <CalloutIcon kind={kind} color={color()} />
-        <Text style={[styles.calloutTitleText, { color: color() }]}>{label()}</Text>
+        <CalloutIcon kind={kind} color={color()} size={14 * textScale} />
+        <Text
+          style={[
+            styles.calloutTitleText,
+            { color: color(), fontSize: styles.calloutTitleText.fontSize * textScale }
+          ]}
+        >
+          {label()}
+        </Text>
       </View>
       {children}
     </View>

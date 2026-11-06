@@ -56,7 +56,8 @@ function stripTags(value: string): string {
   return restoreMarkdownCode(stripped, codeSpans, placeholderPrefix)
 }
 
-function attrValue(tag: string, name: string): string {
+/** An attribute's decoded value in an HTML tag, quotes respected; '' when absent. */
+export function attrValue(tag: string, name: string): string {
   let cursor = 1
   while (cursor < tag.length && !/[\s/>]/.test(tag[cursor] ?? '')) {
     cursor += 1

@@ -1,6 +1,7 @@
 import type { PhrasingContent } from 'mdast'
 import type { Token } from './mobile-markdown-code-nodes'
 import { plainText } from './mobile-markdown-plain-text'
+import { attrValue } from './mobile-markdown-preview-html'
 
 // Inline HTML tags desktop's sanitized renderer draws (GitHub's allowlist), as spans. Tags outside it
 // keep only their text, as before.
@@ -24,8 +25,6 @@ const OPEN_TAG = /^<([a-z]+)(?:\s[^<>]*)?>$/i
 const CLOSE_TAG = /^<\/([a-z]+)\s*>$/i
 /** How far back a closing tag looks for its opener; unclosed tags beyond that stay text. */
 const MAX_OPEN_TAGS = 32
-const HREF = /\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i
-
 type TagPair = { tag: string; close: number; href: string }
 const pairsByTokens = new WeakMap<readonly Token[], Map<number, TagPair>>()
 
@@ -43,8 +42,7 @@ export function inlineTagPairs(tokens: readonly Token[]): Map<number, TagPair> {
     const opened = OPEN_TAG.exec(content)?.[1]?.toLowerCase()
     const closed = CLOSE_TAG.exec(content)?.[1]?.toLowerCase()
     if (opened && SPAN_TAGS.has(opened)) {
-      const href = HREF.exec(content)
-      open.push({ tag: opened, index, href: href?.[1] ?? href?.[2] ?? href?.[3] ?? '' })
+      open.push({ tag: opened, index, href: opened === 'a' ? attrValue(content, 'href') : '' })
       open.splice(0, open.length - MAX_OPEN_TAGS)
     } else if (closed) {
       const at = open.findLastIndex((entry) => entry.tag === closed)
@@ -80,7 +78,14 @@ export function inlineTagNode(
     case 'strike':
       return { type: 'delete', children }
     case 'code':
-      return { type: 'inlineCode', value: children.map(plainText).join('') }
+      // Tags inside the code keep only their text, as the HTML would show.
+      return {
+        type: 'inlineCode',
+        value: children
+          .filter((child) => child.type !== 'html')
+          .map(plainText)
+          .join('')
+      }
     default:
       return { type: 'htmlSpan', tag, children }
   }
