@@ -5,7 +5,7 @@ import { tailscaleHostOfEndpoint } from '../../../../shared/remote-runtime/remot
 import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
 import { workspaceOwnerHostId } from '@/lib/workspace-row-owner-host'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
-import type { RemoteRuntimeRecoveryCause } from './remote-runtime-recovery-copy'
+import type { RemoteRuntimeRecoveryCause } from './pty-transport/remote-runtime/recovery/remote-runtime-recovery-copy'
 
 /** Read shared server reconnection once so individual panes do not announce the same outage. */
 export function selectRetryingOutageEnvironmentId(

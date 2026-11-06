@@ -23,7 +23,7 @@ import {
 import { recoverFromDegradedStartup } from '../startup/startup-degraded-recovery'
 import { restoreSshConnectionsForStartup } from '../startup/startup-ssh-connection-restore'
 import { collectActiveWorkspaceSshTargetIds } from '../startup/active-workspace-ssh-targets'
-import { publishTerminalViewAttributesAtAppStart } from '../components/terminal-pane/terminal-appearance'
+import { publishTerminalViewAttributesAtAppStart } from '../components/terminal-pane/appearance/terminal-appearance'
 import { getSystemPrefersDark } from '../lib/terminal-theme'
 import {
   collectTerminalProviderSnapshotPtyIds,

@@ -8,9 +8,12 @@ import {
 } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import type { AppState } from '@/store/types'
-import type { PtyTransport } from '../pty-transport-types'
+import type { PtyTransport } from '../pty-transport/pty-transport-types'
 import { isWslShellOverride } from './paste/terminal-paste-runtime'
-import { runtimeHostPlatform, sshTargetRemotePlatform } from '../pty-owner-machine-platform'
+import {
+  runtimeHostPlatform,
+  sshTargetRemotePlatform
+} from '../pty-transport/host-ownership/pty-owner-machine-platform'
 
 type TerminalInputHostPlatformState = Pick<
   AppState,

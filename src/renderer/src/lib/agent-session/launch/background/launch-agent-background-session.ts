@@ -12,8 +12,8 @@ import {
   registerEagerPtyBuffer,
   subscribeToPtyExit,
   type EagerPtyHandle
-} from '@/components/terminal-pane/pty-dispatcher'
-import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-subscriptions'
+} from '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher'
+import { subscribeToPtyData } from '@/components/terminal-pane/pty-transport/delivery/pty-data-sidecar-subscriptions'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { retireProvider } from '@/lib/agent-session/launch/background/retire-unowned-background-terminal'
 import {

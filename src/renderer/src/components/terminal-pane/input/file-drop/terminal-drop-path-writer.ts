@@ -2,7 +2,7 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { separateImagePasteFromFollowingText } from '../../../../../../shared/image-paste-following-text'
 import '../../pane-helpers'
 import { shellEscapePath } from '../../../../../../shared/shell/launch/shell-path-quoting'
-import type { PtyTransport } from '../../pty-transport-types'
+import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 import '../paste/terminal-bracketed-paste'
 import { wrapTerminalBracketedPasteText } from '../../../../../../shared/terminal/input/terminal-bracketed-paste-text'
 import {

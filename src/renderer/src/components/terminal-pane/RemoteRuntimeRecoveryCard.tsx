@@ -6,7 +6,7 @@ import { tailscalePingCommand } from '../../../../shared/remote-runtime/remote-r
 import {
   remoteRuntimeDownForLabel,
   remoteRuntimeTailscaleHintLabel
-} from './remote-runtime-recovery-copy'
+} from './pty-transport/remote-runtime/recovery/remote-runtime-recovery-copy'
 
 function useNow(active: boolean): number {
   const [now, setNow] = useState(() => Date.now())

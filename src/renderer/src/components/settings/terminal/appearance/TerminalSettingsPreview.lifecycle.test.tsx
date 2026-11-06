@@ -123,7 +123,7 @@ vi.mock('@/lib/monospace-font-family', () => ({
   buildFontFamily: (font: string) => `built:${font}`
 }))
 
-vi.mock('@/components/terminal-pane/terminal-appearance', () => ({
+vi.mock('@/components/terminal-pane/appearance/terminal-appearance', () => ({
   composeActiveTerminalTheme: () => ({ background: '#111111', foreground: '#eeeeee' })
 }))
 

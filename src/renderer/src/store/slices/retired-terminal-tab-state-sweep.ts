@@ -4,7 +4,7 @@ import { forgetAgentHibernationTabOutput } from '@/lib/agent-session/hibernation
 import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
 import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'
 // Use store-free registry to avoid a slice-evaluation cycle through terminal-parked-tab-watchers.
-import { retireParkedTerminalTab } from '@/components/terminal-pane/terminal-parked-watcher-registry'
+import { retireParkedTerminalTab } from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import { forgetNativeChatPromptDismissalsForTab } from '@/components/native-chat/native-chat-prompt-dismissals'
 import { retireAgentPaneAuthorityAliasesByOwnerTab } from './agent-pane-authority'
 import './agent-status/agent-status'

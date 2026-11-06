@@ -1,6 +1,6 @@
 import { paneResumeRecord } from './pane-resume-record'
 import { useAppStore } from '@/store/index'
-import type { PtyReplayDataMeta } from '../pty-transport-types'
+import type { PtyReplayDataMeta } from '../pty-transport/pty-transport-types'
 import { INITIAL_MODE_2031_REPLY_SCAN_STATE } from '../../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
 import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { executeTerminalStartupCommandPaste } from '../input/paste/terminal-startup-command-paste'

@@ -23,7 +23,7 @@ import { getCachedTerminalGroupIdForWorktree } from './terminal-unified-tab-look
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import type { MacOptionAsAlt } from './input/keyboard/terminal-option-shortcut-policy'
-import { useSystemPrefersDark } from './use-system-prefers-dark'
+import { useSystemPrefersDark } from '../../hooks/theme/use-system-prefers-dark'
 import { useNotificationDispatch } from './use-notification-dispatch'
 import type { TerminalPaneStoreController } from './use-terminal-pane-store-bindings'
 
