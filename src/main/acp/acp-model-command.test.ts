@@ -157,34 +157,46 @@ describe("OMP's own model command", () => {
     expect(options.appliedInput.get('model')).toBe('p/a')
   })
 
-  it('leaves the role unapplied and retires OMP when the command is not answered in time', async () => {
-    const options = new AcpStructuredOptions(OMP_ACP_DIALECT)
-    options.adoptSession({ configOptions: config('p/a', 'low') }, 'loaded')
-    const late = Promise.withResolvers<{ stopReason: string }>()
-    const retired = vi.fn()
-    const aborted = new AbortController()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the command reads only spec, options, turns.running and connection.prompt, which this fake provides.
-    const session = {
-      spec: acpLaunchSpecFor('omp')!,
-      options,
-      turns: { running: false },
-      connection: { prompt: () => late.promise }
-    } as unknown as AcpStructuredSession
-    const pending = acpModelCommandFor(session, {
-      agent: 'omp',
-      timeoutMs: 1_000,
-      signal: aborted.signal,
-      onUncertain: retired
-    })!('@worker_be')
-    aborted.abort()
-    await expect(pending).rejects.toThrow()
-    expect(retired).toHaveBeenCalledOnce()
-    // A late success cannot restore proof the abort retired.
-    late.resolve({ stopReason: 'end_turn' })
-    await Promise.resolve()
-    expect(options.appliedInput.has('model')).toBe(false)
-    expect(options.writing).toBe(0)
-  })
+  it.each(['aborted', 'timed out'] as const)(
+    'leaves the role unapplied and retires OMP when the command is %s',
+    async (ending) => {
+      const options = new AcpStructuredOptions(OMP_ACP_DIALECT)
+      options.adoptSession({ configOptions: config('p/a', 'low') }, 'loaded')
+      const late = Promise.withResolvers<void>()
+      const retired = vi.fn()
+      const aborted = new AbortController()
+      // A genuine late success: OMP's reply, its config push and a normal end, after Orca gave up.
+      const prompt = async () => {
+        await late.promise
+        options.commandReply += 'Model set to p/b.'
+        options.adoptConfigOptions(config('p/b', 'low'))
+        return { stopReason: 'end_turn' }
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the command reads only spec, options, turns.running and connection.prompt, which this fake provides.
+      const session = {
+        spec: acpLaunchSpecFor('omp')!,
+        options,
+        turns: { running: false },
+        connection: { prompt }
+      } as unknown as AcpStructuredSession
+      const pending = acpModelCommandFor(session, {
+        agent: 'omp',
+        timeoutMs: ending === 'timed out' ? 1 : 1_000,
+        signal: aborted.signal,
+        onUncertain: retired
+      })!('@worker_be')
+      if (ending === 'aborted') {
+        aborted.abort()
+      }
+      await expect(pending).rejects.toThrow()
+      expect(retired).toHaveBeenCalledOnce()
+      // A late success cannot restore proof the abort retired.
+      late.resolve()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(options.appliedInput.has('model')).toBe(false)
+      expect(options.writing).toBe(0)
+    }
+  )
 
   it('says a cancelled command left the message unsent', async () => {
     const cancelled = rig([])
@@ -205,8 +217,10 @@ describe("OMP's own model command", () => {
       details:
         'No model selected.\n\nUse /login, set an API key environment variable, or create ~/.omp/agent/models.yml\n\nThen use /model to select a model.'
     })
+    // OMP's own text stays in the log only; the user sees Orca's sentence.
     expect(acpNoModelSelected(OMP_ACP_DIALECT, options, noModel)).toEqual({
-      kind: 'modelNotSelected'
+      kind: 'modelNotSelected',
+      detail: { audience: 'log', text: expect.stringContaining('No model selected.') }
     })
     expect(OMP_ACP_DIALECT.authenticationRequired!(noModel)).toBe(false)
     // The saved selection stays; its proof is gone, so the next send writes it again.

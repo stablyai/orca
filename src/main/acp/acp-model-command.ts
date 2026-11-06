@@ -3,8 +3,10 @@
 
 import {
   agentSessionFailureFact,
+  providerDiagnostic,
   type SubmissionRejectionFact
 } from '../../shared/agent-session/failures/agent-session-failure'
+import { acpPromptErrorDetail } from './acp-turn-failures'
 import type { AcpAgentError } from './acp-errors'
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import type { AcpModelCommandReply } from './acp-dialects/acp-dialect'
@@ -115,7 +117,9 @@ export function acpNoModelSelected(
     return undefined
   }
   options.invalidateInput('model')
-  return agentSessionFailureFact('modelNotSelected')
+  return agentSessionFailureFact('modelNotSelected', {
+    detail: providerDiagnostic(acpPromptErrorDetail(dialect, error), 'log')
+  })
 }
 
 /** A role steer a Stop or teardown reached while it waited: it never reached the agent. */
