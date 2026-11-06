@@ -148,7 +148,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       return
     }
     for (const frame of split.frames) {
-      send(frame)
+      sendJson(frame)
     }
   }
 

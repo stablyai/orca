@@ -2,7 +2,7 @@
 
 import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
+import type { NativeChatLaunchDraft } from '@/components/native-chat/drafts/native-chat-launch-prompt'
 import { useNativeChatTerminalDraftPickup } from './use-native-chat-terminal-draft-pickup'
 
 const mocks = vi.hoisted(() => {

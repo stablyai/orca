@@ -257,7 +257,12 @@ it.each(['refused', 'adopted', 'stable-adopted', 'ensure-adopted', 'fresh-unavai
       isAlternateScreen: false,
       replay: 'provider backlog',
       shellReadyArmed: true,
-      openCodeCapabilities: { version: '2.0.16', pluginApi: 'v2', promptMode: 'prefill' },
+      openCodeCapabilities: {
+        version: '2.0.16',
+        pluginApi: 'v2',
+        v1SessionPolicyFiltersTools: false,
+        promptMode: 'prefill'
+      },
       ...(adopted
         ? { launchAgent: 'codex', launchConfig: config, launchToken: 'owner-token' }
         : {}),

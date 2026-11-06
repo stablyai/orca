@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_PROMPT_BRACKETED_PASTE_END } from '../../shared/agent-launch/startup/agent-prompt-injection'
 import { createAgentPromptSubmissionRuntime } from './terminal/input/agent-prompt-submission-runtime-test-fixture'
-import { dispatchPreambleSendOptions } from './orchestration/preamble'
+import { dispatchPreambleSendOptions } from './orchestration/workers/launch/worker-dispatch-preamble'
 
 vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   const listings = getWorktreeListingMocks()

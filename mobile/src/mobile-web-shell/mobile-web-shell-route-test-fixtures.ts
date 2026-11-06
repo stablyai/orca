@@ -120,7 +120,7 @@ export async function mountRoute(fileSystem: FakeGenerationFileSystem): Promise<
         createStore: () => createGenerationStore({ fileSystem }),
         mintSessionId: () => 'session-id',
         now: () => 0,
-        setTimer: () => () => {}
+        setForegroundTimer: () => () => {}
       }
     })
     latest.state = session.state

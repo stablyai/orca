@@ -11,7 +11,7 @@ import {
   createBrowserLinkTestStore,
   WORKSPACE,
   type BrowserLinkTestStore
-} from './browser-link-open.test-fixture'
+} from './browser/navigation/browser-link-open.test-fixture'
 import { openFileInBrowserTab } from './file-preview'
 import { captureLinkOpenIntent } from './link-open-intent'
 import {
@@ -19,8 +19,8 @@ import {
   ensureDocPreviewGrant,
   releaseDocPreviewGrant
 } from './doc-preview-grants'
-import type { BrowserOpenOutcome } from './browser-link-destination'
-import { openResolvedHtmlFileInBrowser } from '@/components/terminal-pane/terminal-file-link-browser-open'
+import type { BrowserOpenOutcome } from './browser/navigation/browser-link-destination'
+import { openResolvedHtmlFileInBrowser } from '@/components/terminal-pane/links/files/terminal-file-link-browser-open'
 import {
   detectedListingFixture,
   terminalTabFixture

@@ -1,4 +1,4 @@
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { ReadyRemoteFederatedWorkerStartReceipt } from './federated-attach-receipt'
 
 /** Records where a ready remote worker lives and that the server accepted its input. */

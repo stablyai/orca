@@ -1,3 +1,4 @@
+import type { AntigravityChatAuthConfig } from '../../shared/antigravity-chat-auth-config'
 import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -18,12 +19,12 @@ import {
 } from './acp-structured-adapter.test-support'
 import { GrokFixtureReplay } from './acp-structured-fixture-replay.test-support'
 import { framesOf, launch, openHostRig, RESUMES, send } from './acp-structured-host.test-support'
-import { CALLER } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+import { CALLER } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
 import {
   HOST_TEST_SESSION,
   hostTestAttachParams,
   hostTestOperationId
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { deferred } from './acp-scripted-agent.test-support'
 import { resolveAcpLaunchInvocation } from './acp-structured-launch-resolution'
 import { readAcpFixture, type AcpFixtureFrame } from './acp-timeline-fixture.test-support'
@@ -33,50 +34,64 @@ const result = (frame: AcpFixtureFrame | undefined) =>
   z.record(z.string(), z.unknown()).parse(frame?.message.result)
 afterEach(closeProviderTimelineRigs)
 
-it('signs a first chat in, asks in default mode, and answers a question with one of its choices', async () => {
-  const [initialized, opened, ...turn] = await readAcpFixture('antigravity-v1-question')
-  const replay = new GrokFixtureReplay(turn)
-  const rig = await openAcpAdapterRig({
-    spec: ANTIGRAVITY,
-    initialize: result(initialized),
-    script: (agent) => {
-      replay.attach(agent)
-      // The recorded server requires explicit authentication even with a fresh folder.
-      agent.on('session/new', (frame) =>
-        agent.frames.some((sent) => sent.method === 'authenticate')
-          ? agent.reply(frame, { ...result(opened), sessionId: PROVIDER_SESSION })
-          : agent.fail(frame, -32000, 'Authentication required')
+it.each<{ config: AntigravityChatAuthConfig | undefined; method: string }>([
+  { config: undefined, method: 'oauth-personal' },
+  {
+    config: {
+      method: 'oauth-business',
+      gcpProject: 'enterprise-project',
+      gcpLocation: 'us-central1'
+    },
+    method: 'oauth-business'
+  }
+])(
+  'signs a first chat in with $method, asks in default mode, and answers a question',
+  async ({ config, method }) => {
+    const [initialized, opened, ...turn] = await readAcpFixture('antigravity-v1-question')
+    const replay = new GrokFixtureReplay(turn)
+    const rig = await openAcpAdapterRig({
+      spec: ANTIGRAVITY,
+      launch: { antigravityChatAuth: config },
+      initialize: result(initialized),
+      script: (agent) => {
+        replay.attach(agent)
+        // The recorded server requires explicit authentication even with a fresh folder.
+        agent.on('session/new', (frame) =>
+          agent.frames.some((sent) => sent.method === 'authenticate')
+            ? agent.reply(frame, { ...result(opened), sessionId: PROVIDER_SESSION })
+            : agent.fail(frame, -32000, 'Authentication required')
+        )
+        agent.on('authenticate', (frame) => agent.reply(frame, {}))
+      }
+    })
+    await rig.acquire()
+    expect(rig.sent('authenticate')[0]?.params).toEqual({ methodId: method })
+    expect(rig.sent('session/set_config_option')[0]?.params).toMatchObject({ value: 'default' })
+    await sendHello(rig, 'send-1')
+    const question = await waitFor(async () => {
+      const found = (await rig.rig.rows()).find((row) => row.body.kind === 'question')
+      expect(found && replay.awaiting).toBe('reply')
+      return found!
+    })
+    expect(question.body).toMatchObject({ options: [{ label: 'red' }, { id: '2', label: 'blue' }] })
+    await rig.adapter.answerPrompt({
+      sessionId: SESSION,
+      itemId: question.itemId,
+      kind: 'question',
+      response: { kind: 'answers', answers: [{ questionId: 'q1', optionIds: ['2'] }] },
+      fence: 1,
+      commit: async () => {}
+    })
+    await waitFor(() => expect(replay.awaiting).toBeNull())
+    const reply = rig.child().agent.frames.find((frame) => !frame.method && frame.id === 2)
+    expect(reply?.result).toEqual({ outcome: { outcome: 'selected', optionId: '2' } })
+    await waitFor(async () =>
+      expect((await rig.rig.rows()).flatMap((row) => readAgentJournalTurn(row.body) ?? [])).toEqual(
+        [expect.objectContaining({ state: 'completed', outcome: 'success' })]
       )
-      agent.on('authenticate', (frame) => agent.reply(frame, {}))
-    }
-  })
-  await rig.acquire()
-  expect(rig.sent('authenticate')[0]?.params).toEqual({ methodId: 'oauth-personal' })
-  expect(rig.sent('session/set_config_option')[0]?.params).toMatchObject({ value: 'default' })
-  await sendHello(rig, 'send-1')
-  const question = await waitFor(async () => {
-    const found = (await rig.rig.rows()).find((row) => row.body.kind === 'question')
-    expect(found && replay.awaiting).toBe('reply')
-    return found!
-  })
-  expect(question.body).toMatchObject({ options: [{ label: 'red' }, { id: '2', label: 'blue' }] })
-  await rig.adapter.answerPrompt({
-    sessionId: SESSION,
-    itemId: question.itemId,
-    kind: 'question',
-    response: { kind: 'answers', answers: [{ questionId: 'q1', optionIds: ['2'] }] },
-    fence: 1,
-    commit: async () => {}
-  })
-  await waitFor(() => expect(replay.awaiting).toBeNull())
-  const reply = rig.child().agent.frames.find((frame) => !frame.method && frame.id === 2)
-  expect(reply?.result).toEqual({ outcome: { outcome: 'selected', optionId: '2' } })
-  await waitFor(async () =>
-    expect((await rig.rig.rows()).flatMap((row) => readAgentJournalTurn(row.body) ?? [])).toEqual([
-      expect.objectContaining({ state: 'completed', outcome: 'success' })
-    ])
-  )
-})
+    )
+  }
+)
 
 it('launches on its own private folder with file sign-in and no other Google credentials', async () => {
   const stateDirectory = await mkdtemp(join(tmpdir(), 'orca-antigravity-'))

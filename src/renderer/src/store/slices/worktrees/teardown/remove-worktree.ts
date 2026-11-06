@@ -4,7 +4,7 @@ import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/cre
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { runtimeTargetForOwnerEnvironment } from '../../../../runtime/runtime-client-target'
-import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control-huge-repo-warning-dismissals'
+import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
 import { forgetWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { readIpcErrorDetail } from '@/lib/ipc-error'
 import { isArchiveHookRemovalError } from '../../../../../../shared/worktree/archive-hook-removal-gate'
@@ -35,7 +35,7 @@ import {
   isRuntimeSelectorNotFoundError
 } from '../listing/runtime-worktree-rpc-errors'
 import { recordRemovedWorktreeSnapshotPrune } from './removed-worktree-snapshot-prune'
-import { clearSessionCommitDraftForWorktree } from '@/lib/source-control-commit-draft-session'
+import { clearSessionCommitDraftForWorktree } from '@/lib/source-control/drafts/source-control-commit-draft-session'
 import { dispatchWorktreeRemoval } from './dispatch-worktree-removal'
 import { tearDownRemovedWorktreeRendererState } from './removed-worktree-renderer-teardown'
 import {

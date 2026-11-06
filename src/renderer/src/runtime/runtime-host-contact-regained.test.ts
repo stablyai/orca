@@ -23,7 +23,7 @@ import { subscribeRuntimeHostContactRegained } from './runtime-host-contact-rega
 import {
   forgetStructuredSessionSelection,
   registerStructuredSelectionCatalogStore
-} from '@/lib/structured-agent-session-selection-controller'
+} from '@/lib/agent-session/options/structured-agent-session-selection-controller'
 
 function makeStatus(runtimeId: string): RuntimeStatus {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture carries only the fields the slice reads.

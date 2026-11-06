@@ -47,6 +47,14 @@ function removeLocalRepoSession(
     ? session
     : removeRepoFromWorkspaceSession(session, repoId)
 }
+function countSessionTerminalTabs(session: WorkspaceSessionState): number {
+  let count = 0
+  for (const tabs of Object.values(session.tabsByWorktree)) {
+    count += tabs.length
+  }
+  return count
+}
+
 type RepoLifecycleOperationsRuntime = Pick<
   StoreRuntimeState,
   | 'gitUsernameCache'
@@ -89,34 +97,27 @@ export class RepoLifecycleOperations {
 
   removeProjectForHost(target: RepoHostTarget): void {
     const state = this[repoLifecycleOperationsContext].runtime.state
-    const removedProjectIds = new Set(
-      state.repos
-        .filter(
-          (repo) =>
-            repo.id === target.id && getRepoExecutionHostId(repo) === getRepoExecutionHostId(target)
-        )
-        .map(getProjectIdentityKey)
-    )
     const id = target.id
     const hostId = getRepoExecutionHostId(target)
-    const repoRemoved = this[repoLifecycleOperationsContext].runtime.state.repos.some(
+    const removedProjectIds = new Set(
+      state.repos
+        .filter((repo) => repo.id === id && getRepoExecutionHostId(repo) === hostId)
+        .map(getProjectIdentityKey)
+    )
+    const repoRemoved = state.repos.some(
       (repo) => repo.id === id && getRepoExecutionHostId(repo) === hostId
     )
-    this[repoLifecycleOperationsContext].runtime.state.repos = this[
-      repoLifecycleOperationsContext
-    ].runtime.state.repos.filter((r) => !(r.id === id && getRepoExecutionHostId(r) === hostId))
+    state.repos = state.repos.filter((r) => !(r.id === id && getRepoExecutionHostId(r) === hostId))
     if (repoRemoved) {
       bumpLocalWorktreeScanGeneration(id)
     }
-    const idStillPresent = this[repoLifecycleOperationsContext].runtime.state.repos.some(
-      (r) => r.id === id
-    )
+    const idStillPresent = state.repos.some((r) => r.id === id)
     if (!idStillPresent) {
       retireLocalWorktreeScanGeneration(id)
       releaseWslStoppedWorktreeRescan(id)
       dropRepoRestoreHints(this, id)
-      delete this[repoLifecycleOperationsContext].runtime.state.sparsePresetsByRepo[id]
-      delete this[repoLifecycleOperationsContext].runtime.state.retiredWorktreeNamesByRepo?.[id]
+      delete state.sparsePresetsByRepo[id]
+      delete state.retiredWorktreeNamesByRepo?.[id]
     }
     syncProjectHostSetupCompatibilityState(this)
     retireRemovedProjectGroupingState(state, removedProjectIds)
@@ -124,21 +125,16 @@ export class RepoLifecycleOperations {
     const pairedHost = parseExecutionHostId(hostId)?.kind === 'runtime'
     pruneWorktreeStateForRepo(this, id, idStillPresent || pairedHost ? hostId : null)
     if (!idStillPresent && !pairedHost) {
-      this[repoLifecycleOperationsContext].runtime.state.workspaceSession = removeLocalRepoSession(
-        this[repoLifecycleOperationsContext].runtime.state.workspaceSession,
+      state.workspaceSession = removeLocalRepoSession(state.workspaceSession, id)
+      state.workspaceSessionsByHostId = removeRepoFromHostWorkspaceSessions(
+        state.workspaceSessionsByHostId,
         id
       )
-      this[repoLifecycleOperationsContext].runtime.state.workspaceSessionsByHostId =
-        removeRepoFromHostWorkspaceSessions(
-          this[repoLifecycleOperationsContext].runtime.state.workspaceSessionsByHostId,
-          id
-        )
     } else if (pairedHost) {
-      const session =
-        this[repoLifecycleOperationsContext].runtime.state.workspaceSessionsByHostId?.[hostId]
+      const session = state.workspaceSessionsByHostId?.[hostId]
       if (session) {
-        this[repoLifecycleOperationsContext].runtime.state.workspaceSessionsByHostId = {
-          ...this[repoLifecycleOperationsContext].runtime.state.workspaceSessionsByHostId,
+        state.workspaceSessionsByHostId = {
+          ...state.workspaceSessionsByHostId,
           [hostId]: removeRepoFromWorkspaceSession(session, id)
         }
       }
@@ -153,6 +149,7 @@ export class RepoLifecycleOperations {
     if (orphanRepoIds.size === 0) {
       return []
     }
+    const tabCountBefore = countSessionTerminalTabs(state.workspaceSession)
     for (const repoId of orphanRepoIds) {
       retireLocalWorktreeScanGeneration(repoId)
       releaseWslStoppedWorktreeRescan(repoId)
@@ -165,6 +162,10 @@ export class RepoLifecycleOperations {
       )
     }
     pruneDeregisteredRepoUiResidue(state.ui, orphanRepoIds)
+    console.info(
+      `[persistence] swept residue of ${orphanRepoIds.size} deregistered repo(s), dropping ${tabCountBefore - countSessionTerminalTabs(state.workspaceSession)} local terminal tab(s):`,
+      [...orphanRepoIds]
+    )
     return [...orphanRepoIds]
   }
 

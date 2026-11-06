@@ -6,16 +6,17 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import type { PublishedTab } from '../../../../shared/workspace-layout/workspace-layout-published'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { awaitsCodexRestartAnswer, blocksCodexPaneInput } from '../codex-restart-notice-state'
-import { ptyDataHandlers } from './pty-dispatcher'
-import { deliverPtyExitToHandlers } from './pty-exit-delivery'
+import './pty-transport/delivery/pty-dispatcher'
+import { ptyDataHandlers } from './pty-transport/shutdown/pty-shutdown-data-suspension'
+import { deliverPtyExitToHandlers } from './pty-transport/delivery/pty-exit-delivery'
 import {
   bufferPreHandlerPtyData,
   clearPreHandlerPtyState,
   drainPreHandlerPtyData,
   hasPreHandlerPtyExit,
   isPreHandlerPtyStateDiscarded
-} from './pty-pre-handler-buffer'
-import { parkedWatchersByTabId } from './terminal-parked-watcher-registry'
+} from './pty-transport/delivery/pty-pre-handler-buffer'
+import { parkedWatchersByTabId } from './parking/output-watchers/terminal-parked-watcher-registry'
 import { sweepUnclaimedCodexPaneRestarts } from './codex-detached-pane-restart'
 import {
   hasAddedPendingCodexPaneRestart,

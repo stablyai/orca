@@ -9,6 +9,8 @@ function withLifecycle(overrides: Pick<RpcClient, 'sendRequest'>): FakeSession {
   return Object.assign(new FakeSession('connected'), overrides)
 }
 import { useHostStatusGates, type HostStatusGates } from './host-status-gates'
+import { startRuntimeStatusProbe } from './runtime-status-probe'
+import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 
 const recordHostAppVersionMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 
@@ -380,6 +382,42 @@ describe('useHostStatusGates', () => {
     } finally {
       renderer?.unmount()
       vi.useRealTimers()
+    }
+  })
+
+  it('is not pending on its first render when the connection probe already landed', async () => {
+    const client = createFakeRpcClient({ getGeneration: () => 1, getLastConnectedAt: () => 1_000 })
+    const stopConnectionProbe = startRuntimeStatusProbe(client, () => {})
+    client.requests[0]!.resolve({
+      ok: true,
+      id: '1',
+      result: { appVersion: '1.4.191', capabilities: ['browser.screencast.v1'] },
+      _meta: { runtimeId: 'r1' }
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+    const renders: HostStatusGates[] = []
+    let renderer: ReactTestRenderer | undefined
+
+    function Probe(): null {
+      renders.push(useHostStatusGates({ hostId: 'host-1', client, connState: 'connected' }))
+      return null
+    }
+
+    try {
+      await act(async () => {
+        renderer = create(createElement(Probe))
+        await Promise.resolve()
+      })
+      expect(renders[0]).toMatchObject({
+        statusPending: false,
+        statusReadable: true,
+        desktopAppVersion: '1.4.191',
+        hostCapabilities: ['browser.screencast.v1']
+      })
+    } finally {
+      renderer?.unmount()
+      stopConnectionProbe()
     }
   })
 })

@@ -404,7 +404,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}}은(는) 설정한 대로 채팅으로 열립니다.",
       "defaultSurfaceSetAllChat": "모두 채팅으로 설정",
       "defaultSurfaceSetAllTerminal": "모두 터미널로 설정",
-      "sameAsChoice": "{{agent}}와 동일 · {{choice}}"
+      "sameAsChoice": "{{agent}}와 동일 · {{choice}}",
+      "chatUnavailableOnWindows": "{{value0}} Chat은 아직 Windows에서 사용할 수 없으므로 이 호스트에서는 {{value0}}이(가) 터미널에서 열립니다. macOS 또는 Linux 호스트의 채팅은 계속 사용할 수 있습니다."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "심볼릭 링크",
@@ -499,7 +500,7 @@
         "parakeetV2": "영어 전용. v3와 정확도는 비슷하며 속도는 더 빠릅니다. 문장 부호와 대소문자 지원.",
         "zipformerBilingual": "중국어 + 영어 혼용 지원. 지연 시간이 짧은 실시간 스트리밍.",
         "paraformerBilingual": "중국어(표준 중국어 + 방언) + 영어. 다양한 중국어 억양과 지역 방언에 강합니다.",
-        "zipformerStreamingEn": "영어 전용. 파라미터 2천만 개의 경량 모델로, 속도와 크기의 균형이 좋습니다.",
+        "zipformerStreamingEnRetired": "더 이상 제공되지 않습니다. 문장 앞부분이 누락됩니다. 삭제하여 공간을 확보하세요.",
         "zipformerStreamingZh": "중국어 전용. 파라미터 1,400만 개의 초경량 모델로, 자원이 제한된 기기에 적합합니다.",
         "zipformerStreamingKo": "한국어 전용. 지연 시간이 짧은 실시간 스트리밍.",
         "parakeetJa": "일본어 전용. 3만 5천 시간 이상의 자연 발화로 학습했습니다. 문장 부호 지원.",
@@ -705,7 +706,9 @@
         "cb4d287238": "서버 이름",
         "3affe7de3a": "이 브라우저가 연결할 수 있는 Orca 서버의 페어링 URL을 붙여넣습니다.",
         "e3bcd082ac": "Orca에 연결",
-        "mobileScopeRejected": "이 QR 코드는 제한된(모바일) 액세스 권한만 제공합니다. 전체 웹 앱을 사용하려면 설정 → 원격 Orca 서버 → 이 Orca 서버 공유 → 새 링크에서 브라우저 액세스 링크를 여세요."
+        "mobileScopeRejected": "이 QR 코드는 제한된(모바일) 액세스 권한만 제공합니다. 전체 웹 앱을 사용하려면 설정 → 원격 Orca 서버 → 이 Orca 서버 공유 → 새 링크에서 브라우저 액세스 링크를 여세요.",
+        "replaceSavedServer": "이 링크는 \"{{name}}\"({{endpoint}})과(와) 다른 서버에 연결합니다. 아래 엔드포인트를 신뢰하는 경우에만 연결하세요.",
+        "keepSavedServer": "저장된 서버 유지"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "이 실행 호스트에서는 Agent 세션 기록을 사용할 수 없습니다.",
@@ -1857,6 +1860,7 @@
         "cb55b0390f": "관리",
         "4f9313984d": "리뷰어",
         "02cbe2de44": "파이프라인",
+        "itemLoadFailed": "이 항목을 불러올 수 없습니다. 새로 고쳐 다시 시도하세요.",
         "be3d291837": "파일",
         "c996e2962c": "대화",
         "b3c156dd51": "새로고침",
@@ -2517,7 +2521,6 @@
         "9cd11ba218": "Jira",
         "11a828abf8": "GitLab",
         "acef77f7ca": "GitHub",
-        "524f095d55": "리뷰 필요",
         "7698af5263": "내 항목",
         "94f0339621": "나에게 할당됨",
         "c2268a9982": "모두",
@@ -2612,6 +2615,8 @@
         "loadGitHubWorkFailed": "GitHub 작업을 불러오지 못했습니다.",
         "gitlabViewIssues": "이슈",
         "gitlabViewMrs": "MR",
+        "gitlabInvolvementEveryone": "모두",
+        "gitlabInvolvementReviewing": "리뷰 중",
         "gitlabViewTodos": "내 할 일",
         "startWorkspaceFromMr": "MR {{number}}에서 워크스페이스 시작",
         "startWorkspaceFromIssue": "이슈 {{number}}에서 워크스페이스 시작",
@@ -3730,7 +3735,8 @@
             "chatUnavailableAfterSelection": "{{value0}} 채팅을 시작할 수 없습니다.",
             "chatCheckFailed": "채팅 가능 여부를 확인할 수 없습니다.",
             "terminalListNeedsServerUpdate": "터미널 에이전트를 나열하려면 이 서버의 Orca를 업데이트하세요",
-            "terminalListFailed": "이 워크스페이스의 터미널 에이전트를 나열할 수 없습니다"
+            "terminalListFailed": "이 워크스페이스의 터미널 에이전트를 나열할 수 없습니다",
+            "chatNotOnWindows": "Windows에서는 아직 채팅 불가"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "탭 전환",
@@ -5514,7 +5520,6 @@
           "savedInProjectSettings": "이 <settings>프로젝트의 설정</settings>에 저장됨"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "로컬 설정 저장",
           "3933401d28": "구성",
           "31b8b01a45": "설정",
           "4a98f907ae": "다시 시도",
@@ -5529,7 +5534,15 @@
           "5bfd5c8779": "설정 스크립트 닫기",
           "detectedFromSource": "<source>{{source}}</source>에서 감지됨",
           "ignoresSharedSetup": "이 저장소는 공유 <yaml>orca.yaml</yaml> 설정 스크립트를 무시합니다. 로컬 명령을 추가하거나 설정에서 소스를 변경하세요.",
-          "foundSetupCommandIn": "<source>{{source}}</source>에서 설정 명령을 찾았습니다. 새 워크트리에서 실행하려면 저장하세요."
+          "foundSetupCommandIn": "<source>{{source}}</source>에서 설정 명령을 찾았습니다. 새 워크트리에서 실행하려면 저장하세요.",
+          "reviewSetupScript": "설정 스크립트 검토"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "설정 스크립트 검토",
+          "description": "저장하면 Orca가 {{repo}}의 워크트리를 만들 때마다 실행됩니다.",
+          "setupScript": "설정 스크립트",
+          "archiveScript": "아카이브 스크립트",
+          "save": "로컬 설정 저장"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "취소",
@@ -7608,7 +7621,6 @@
         "MobileEmulatorSettingsPane": {
           "19d39113b6": "코딩 agents가 Orca CLI 명령을 사용하여 활성 모바일 에뮬레이터를 제어하도록 합니다.",
           "f2f8d97bb6": "에이전트 모바일 에뮬레이터 제어",
-          "143961d031": "기본 장치",
           "8aec2f99a0": "에뮬레이터 가용성 새로 고침",
           "ae1612c58c": "가용성",
           "f9af91ea26": "새 모바일 에뮬레이터 작업을 표시하고 에이전트가 활성 에뮬레이터에 연결할 수 있도록 합니다.",
@@ -7621,9 +7633,7 @@
           "d704fb5023": "설정 필요",
           "06b06429c6": "Android SDK 및 iOS 시뮬레이터 지원을 확인 중입니다.",
           "6d1483d4a0": "1개의 에뮬레이터 장치가 감지되었습니다.",
-          "0a452d4d3b": "{{value0}} 에뮬레이터 장치가 감지되었습니다.",
-          "f62a1bb759": "Orca는 장치가 감지된 후 에뮬레이터 장치를 자동으로 선택합니다.",
-          "b2fd62ea75": "새 에뮬레이터 탭 및 에이전트 연결 명령을 위한 기본 장치입니다. 자동 선택은 이미 실행 중인 장치를 선호합니다."
+          "0a452d4d3b": "{{value0}} 에뮬레이터 장치가 감지되었습니다."
         },
         "MobileNetworkInterfaceSection": {
           "b2c384cfd6": "인터페이스를 찾을 수 없습니다."
@@ -11280,7 +11290,7 @@
             "terminalRun": "터미널에서 명령 실행 (SSH 포함)"
           },
           "decisionFailed": "권한 결정을 저장할 수 없습니다. 다시 시도하세요.",
-          "fullAccessWarning": "전체 액세스: 일반 프로그램처럼 실행되며 파일을 읽고, 네트워크를 사용하고, 다른 프로그램을 실행할 수 있습니다.",
+          "fullAccessWarning": "전체 액세스: 일반 프로그램처럼 실행되며 파일을 읽고, 네트워크를 사용하고, 다른 프로그램을 실행하고, 터미널과 에이전트를 포함해 Orca를 제어할 수 있습니다.",
           "uiWarning": "화면을 그리기 위해 게시자의 코드를 Orca 안에서 실행합니다. Orca는 접근할 수 있는 항목을 보여 주고 사용 설정 전에 확인을 요청합니다."
         },
         "PluginConsentProvenance": {
@@ -12721,7 +12731,8 @@
           "oneDescription": "게시자: {{value0}}. 검토하기 전까지 업데이트되지 않습니다.",
           "manyDescription": "검토하기 전까지 업데이트되지 않습니다.",
           "review": "검토",
-          "dismiss": "닫기"
+          "dismiss": "닫기",
+          "movedInstalled": "검토할 때까지 꺼진 상태로 유지됩니다."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "이 폴더를 신뢰하는지 확인하세요",
@@ -15252,7 +15263,6 @@
                 "06e10d7356": "에뮬레이터 종료",
                 "e7a0d1897e": "홈",
                 "6bd8dff42a": "회전",
-                "3d836b879c": "에뮬레이터 선택",
                 "81b3571a07": "연결",
                 "868c0f2938": "작업 중…"
               }
@@ -16974,6 +16984,8 @@
           "noRunUsageYet": "아직 실행 사용량 없음",
           "noWorkspace": "워크스페이스 없음",
           "latestSavedOutput": "최근 저장된 출력",
+          "fullOutputUnavailable": "전체 출력을 불러오지 못했습니다.",
+          "retryFullOutput": "다시 시도",
           "backToList": "모든 자동화",
           "tableName": "이름",
           "tableProject": "프로젝트",
@@ -18643,8 +18655,12 @@
         "notDoneGoalChangeIncomplete": "목표 변경을 완료하지 못했습니다. 채팅을 확인하세요."
       },
       "composer": {
+        "planMode": "계획",
         "send": "보내기",
         "alternateSteerHint": "{{shortcut}}(으)로 지금 보내기",
+        "previewQueue": "대기열에 추가",
+        "previewSteer": "지금 보내기",
+        "previewSteerQueued": "다음 항목 보내기",
         "alternateQueueHint": "{{shortcut}}(으)로 대기열에 추가",
         "noPty": "라이브 terminal이 없습니다. 다시 연결하려면 다시 전환하세요.",
         "locked": "입력이 다른 장치에 의해 보류됩니다.",
@@ -19378,7 +19394,15 @@
         "hostUnavailable": "첨부 파일 호스트를 사용할 수 없습니다. 다시 연결한 후 시도하세요.",
         "connectionChanged": "연결이 변경되었습니다. 이 첨부 파일을 닫고 다시 여세요.",
         "readFailed": "호스트에서 이 첨부 파일을 읽을 수 없습니다. 다시 연결하고 시도하세요. 파일이 삭제되었거나 변경되었을 수 있습니다."
-      }
+      },
+      "composerWorkspace": {
+        "copyFailed": "복사하지 못했습니다",
+        "copyIdentity": "{{value0}} 복사",
+        "folder": "폴더",
+        "mainCheckout": "기본 체크아웃",
+        "worktree": "작업 트리"
+      },
+      "explicitChatWindows": "이 에이전트의 채팅은 아직 Windows에서 사용할 수 없습니다. 대신 터미널에서 여세요."
     },
     "tab": {
       "bar": {

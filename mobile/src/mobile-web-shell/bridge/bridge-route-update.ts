@@ -7,8 +7,11 @@ import { shellScreenRouteKey } from '../shell-screen-route'
 // Track no delivery: after a refused post, the next document’s ready receives the latest held route.
 export const BRIDGE_ROUTE_PARAM_CLEAR = 'route-param-clear'
 
+// A target the page opens inside its own document instead of the shell pushing a second one (page version 2).
+export const BRIDGE_OPEN_ROUTE_PARAM = 'open'
+
 // Close the clearable-param set so the page can consume only shell-provided requests, not edit arbitrary native route state.
-export const BRIDGE_CLEARABLE_ROUTE_PARAMS = ['paneKey'] as const
+export const BRIDGE_CLEARABLE_ROUTE_PARAMS = ['paneKey', BRIDGE_OPEN_ROUTE_PARAM] as const
 
 export type BridgeClearableRouteParam = (typeof BRIDGE_CLEARABLE_ROUTE_PARAMS)[number]
 

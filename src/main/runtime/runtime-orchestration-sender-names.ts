@@ -1,8 +1,8 @@
-import { splitPaneTitle } from './orchestration/sender-pane-title'
+import { splitPaneTitle } from './orchestration/mailbox/senders/sender-pane-title'
 import {
   senderDispatchLaunch,
   senderDispatchLaunchReader
-} from './orchestration/sender-dispatch-launch'
+} from './orchestration/mailbox/senders/sender-dispatch-launch'
 // Name another agent from host records when sending on its behalf or listing its worktree.ps row.
 
 import type { AgentMessageSender } from '../../shared/agent-session/agent-session-message-source'
@@ -13,7 +13,7 @@ import {
 import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
 import { structuredAgentSessionIdFromTabId } from '../../shared/agent-session/view/structured-agent-session-tab-id'
 import type { TerminalTab } from '../../shared/workspace-layout/terminal-tab-types'
-import type { OrchestrationDb } from './orchestration/db'
+import type { OrchestrationDb } from './orchestration/db/orchestration-db'
 import {
   orchestrationSenderName,
   structuredChatNaming,
@@ -23,13 +23,16 @@ import {
   type SenderNamingLayout,
   type SenderNamingSources,
   type TerminalSenderNaming
-} from './orchestration/orchestration-sender-name'
-import { agentMessageSender, observeSenderSnapshot } from './orchestration/agent-message-sender'
+} from './orchestration/mailbox/senders/orchestration-sender-name'
+import {
+  agentMessageSender,
+  observeSenderSnapshot
+} from './orchestration/mailbox/senders/agent-message-sender'
 import {
   type AgentSessionRecordReader,
   readAgentSessionRecordStore
-} from './orchestration/structured-session-lineage'
-import { terminalHostConnectionMatches } from './orchestration/worker-provider-session'
+} from './orchestration/addressing/session-lineage/structured-session-lineage'
+import { terminalHostConnectionMatches } from './orchestration/workers/transcripts/worker-provider-session'
 import type { RuntimeWorktreeAgentSource } from './workspaces/process-listing/runtime-worktree-agent-source'
 
 type RuntimeSenderNameDeps = {

@@ -6,6 +6,7 @@ import { usePrimeHosts } from '../transport/host-client-hooks'
 import { createHostConnectRefetchGate } from '../transport/host-connect-refetch-gate'
 import { selectHomeAutoConnectHostIds } from '../transport/home-host-auto-connect'
 import type { RpcClient } from '../transport/rpc-client'
+import { subscribeSharedClientEvents } from '../transport/shared-client-events'
 import type { ConnectionState, HostCatalogEntry, HostProfile } from '../transport/types'
 import { useAllHostClients } from '../transport/use-all-host-clients'
 import {
@@ -75,21 +76,11 @@ function wireMobileHomeHostSubscriptions(
     const reconnected = refetchGate.observe(state)
     if (state === 'connected') {
       unsubscribeNotifications ??= subscribeToDesktopNotifications(entry.client, entry.hostId)
-      unsubscribeClientEvents ??= entry.client.subscribe(
-        'runtime.clientEvents.subscribe',
-        null,
-        (payload) => {
-          if (
-            payload &&
-            typeof payload === 'object' &&
-            'type' in payload &&
-            typeof payload.type === 'string' &&
-            WORKTREE_CHANGE_EVENTS.has(payload.type)
-          ) {
-            refreshOnChange()
-          }
+      unsubscribeClientEvents ??= subscribeSharedClientEvents(entry.client, (event) => {
+        if (WORKTREE_CHANGE_EVENTS.has(event.type)) {
+          refreshOnChange()
         }
-      )
+      })
       // One stream per connection: each subscribe makes the desktop check usage, so focus must not resubscribe.
       unsubscribeAccounts ??= subscribeAccountsSnapshots(entry.client, {
         onSnapshot: (snapshot) =>

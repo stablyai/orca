@@ -19,14 +19,14 @@ import type {
 } from '../../../claude/claude-stream-json-connection'
 import { runClaudeControl } from '../../../claude/claude-agent-sdk-control-requests'
 import { claudeSessionIdForOrcaSession } from '../../../claude/structured/claude-structured-session-id'
-import type { AgentSessionAttachParams } from '../../../native-chat/agent-session-wire/structured-agent-session-attach'
-import { hostTestAttachParams } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
+import type { AgentSessionAttachParams } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
+import { hostTestAttachParams } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from '../structured-agent-session-runtime'
-import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
 /** The error a real CLI's exit reaches the adapter as: Orca's message, the stderr as a log detail. */
 /** A Claude Code with every version-gated flag and control Orca uses. */

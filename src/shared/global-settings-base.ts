@@ -1,4 +1,6 @@
 import type { ProjectGroupingPreferences } from './project-grouping'
+import type { AntigravityChatAuthSettings } from './antigravity-chat-auth-config'
+import type { EmulatorOpeningSettings } from './emulator-opening-preferences'
 import type { BrowserExtensionGlobalSettings } from './browser/extensions/browser-extension-settings'
 import type { ClaudeAgentViewSettings } from './claude-agent-view'
 import type { BrowserLinkOpeningSettings } from './browser-link-opening-settings'
@@ -22,6 +24,8 @@ import type { NestedWorkerDepthSettings } from './nested-worker-depth'
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = ProjectGroupingPreferences &
+  AntigravityChatAuthSettings &
+  EmulatorOpeningSettings &
   ClaudeAgentViewSettings &
   NativeChatGlobalSettings &
   NativeChatIdleStopSettings &

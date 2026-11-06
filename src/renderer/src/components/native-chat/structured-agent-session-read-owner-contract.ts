@@ -9,6 +9,7 @@ export type StructuredAgentSessionReadSnapshot = {
   loadingOlder: boolean
   /** Bumped whenever older-page reads are invalidated (open, snapshot, reset, dispose). */
   olderHistoryGeneration: number
+  initialHistoryAutoLoad: boolean
   providerSession?: AgentProviderSessionMetadata
   /** False from lost contact/read stop until state catches up to the host’s present. */
   current: boolean
@@ -30,6 +31,8 @@ export type StructuredAgentSessionReadOwner = {
   dispose: () => void
   getSnapshot: () => StructuredAgentSessionReadSnapshot
   loadOlder: () => Promise<NativeChatOlderPageResult>
+  retainHistory: () => () => void
+  trimHistory: () => void
   subscribe: (listener: () => void) => () => void
   subscribeCommandsChanged: (listener: () => void) => () => void
 }

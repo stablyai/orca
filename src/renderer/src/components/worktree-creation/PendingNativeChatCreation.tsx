@@ -2,14 +2,14 @@ import React from 'react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { retryBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
+import { retryBackgroundWorktreeCreation } from '@/lib/workspace/creation/worktree-creation-flow'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { holdNativeChatStagedInput } from '@/components/native-chat/native-chat-draft-attachment-staging'
 import {
   pendingCreationChatDraftScopeKey,
   pendingCreationHeldChatMessage,
   type PendingWorktreeCreation
-} from '@/lib/pending-worktree-creation'
+} from '@/lib/workspace/creation/pending-worktree-creation'
 import { shouldPreserveEditableFocus } from '@/components/terminal-pane/pane-helpers'
 import {
   NativeChatComposer,

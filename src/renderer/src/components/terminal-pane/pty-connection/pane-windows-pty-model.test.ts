@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
 import type { SshConnectionState } from '../../../../../shared/ssh-types'
-import type { PtyOwnerMachineState } from '../pty-owner-machine-platform'
+import type { PtyOwnerMachineState } from '../pty-transport/host-ownership/pty-owner-machine-platform'
 import {
   createPaneWindowsPtyModel,
   type PaneWindowsPtyModelContext

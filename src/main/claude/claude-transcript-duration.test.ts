@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { selectStructuredAgentSettledTurns } from '../../shared/agent-session/view/structured-agent-session-turn-timing'
-import { isStructuredRewindTarget } from '../native-chat/agent-session-wire/structured-rewind-cut'
+import { isStructuredRewindTarget } from '../native-chat/agent-session-wire/rewind/structured-rewind-cut'
 import { SID, chat, chatTurn } from './claude-transcript-catch-up-test-support'
 
 // Captured CLI 2.1.308 ancestry: retain source identities, clocks, content and cycle boundaries.

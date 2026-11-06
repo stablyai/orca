@@ -6,8 +6,8 @@ import type { PtyListedSession } from '../../../shared/terminal/pty/lifecycle/pt
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { wakeSleepingAgentsForWorktreeInBackground } from './wake-sleeping-agents-in-background'
-import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
+import { wakeSleepingAgentsForWorktreeInBackground } from './agent-session/resume/wake-sleeping-agents-in-background'
+import { waitForWorktreeAgentActivationGateForTests } from './workspace/activation/worktree-agent-activation-gate'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>

@@ -5,13 +5,43 @@ import type { HostStatusReply } from './host-status-reply-schema'
 import { isLogicalClientCutoverError } from './stable-logical-rpc-client'
 
 type ProbeClient = UnvalidatedRpcRequestPort &
-  Partial<Pick<RpcClient, 'getGeneration' | 'getLastConnectedAt'>>
-const observed = new WeakMap<object, { epoch: string; status: HostStatusReply | null }>()
+  Partial<Pick<RpcClient, 'getGeneration' | 'getLastConnectedAt' | 'requestRoute'>>
+type ProbeListener = {
+  onStatus: (status: HostStatusReply | null) => void
+  onAttemptFailed?: () => void
+}
+type SharedProbe = {
+  epoch: string
+  listeners: Set<ProbeListener>
+  retryNow: () => void
+  wake: () => void
+  stop: () => void
+}
+type EpochStatus = { epoch: string; status: HostStatusReply | null }
+const observed = new WeakMap<object, EpochStatus>()
+// Only answers this probe received; recorded proofs may merge in capabilities from an earlier read.
+const probed = new WeakMap<object, EpochStatus>()
+const sharedProbes = new WeakMap<object, SharedProbe>()
 export const runtimeStatusProbeEpoch = (client: ProbeClient) =>
   `${client.getGeneration?.()}:${client.getLastConnectedAt?.()}`
 export function readRuntimeStatusProbe(client: ProbeClient): HostStatusReply | null | undefined {
   const entry = observed.get(client)
   return entry?.epoch === runtimeStatusProbeEpoch(client) ? entry.status : undefined
+}
+
+// Why: a routed view answers status.get from a server behind the desktop, which can restart or reconnect while
+// this connection stays up, and a client with no connect time has no epoch to hold an answer to.
+function connectionEpoch(client: ProbeClient): string | null {
+  return client.requestRoute === undefined && typeof client.getLastConnectedAt?.() === 'number'
+    ? runtimeStatusProbeEpoch(client)
+    : null
+}
+
+/** The status this connection already proved, or undefined when it may not stand in for a new read. */
+export function readConnectionStatusProbe(client: ProbeClient): HostStatusReply | null | undefined {
+  const epoch = connectionEpoch(client)
+  const entry = probed.get(client)
+  return epoch !== null && entry?.epoch === epoch ? entry.status : undefined
 }
 
 export function recordRuntimeStatusProbe(
@@ -33,6 +63,65 @@ export function startRuntimeStatusProbe(
   onStatus: (status: HostStatusReply | null) => void,
   onAttemptFailed?: () => void
 ): (() => void) & { wake: () => void } {
+  const epoch = connectionEpoch(client)
+  if (epoch === null) {
+    const probe = runProbe(client, { onStatus, onAttemptFailed })
+    return Object.assign(probe.stop, { wake: probe.wake })
+  }
+  // Join a read already in flight; a new start after one landed reads again, since capabilities like
+  // screencast follow the desktop's window and settings, not the connection.
+  const running = sharedProbes.get(client)
+  const joined = running?.epoch === epoch ? running : startSharedProbe(client, epoch)
+  if (joined === running) {
+    // A new reader should not wait out a backoff it never saw fail.
+    joined.retryNow()
+  }
+  const listener: ProbeListener = { onStatus, onAttemptFailed }
+  joined.listeners.add(listener)
+  return Object.assign(
+    () => {
+      if (!joined.listeners.delete(listener) || joined.listeners.size > 0) {
+        return
+      }
+      joined.stop()
+      if (sharedProbes.get(client) === joined) {
+        sharedProbes.delete(client)
+      }
+    },
+    {
+      wake: () => {
+        if (joined.listeners.has(listener)) {
+          joined.wake()
+        }
+      }
+    }
+  )
+}
+
+function startSharedProbe(client: ProbeClient, epoch: string): SharedProbe {
+  const listeners = new Set<ProbeListener>()
+  const each = (notify: (listener: ProbeListener) => void) => [...listeners].forEach(notify)
+  const probe: SharedProbe = {
+    epoch,
+    listeners,
+    ...runProbe(client, {
+      onStatus: (status) => {
+        if (sharedProbes.get(client) === probe) {
+          sharedProbes.delete(client)
+        }
+        each((listener) => listener.onStatus(status))
+      },
+      onAttemptFailed: () => each((listener) => listener.onAttemptFailed?.())
+    })
+  }
+  sharedProbes.set(client, probe)
+  return probe
+}
+
+function runProbe(
+  client: ProbeClient,
+  listener: ProbeListener
+): { retryNow: () => void; wake: () => void; stop: () => void } {
   let cancelled = false
   let retryTimer: ReturnType<typeof setTimeout> | null = null
   let failureRetries = 0
@@ -40,6 +129,7 @@ export function startRuntimeStatusProbe(
   let dirty = false
 
   function attempt(): void {
+    retryTimer = null
     if (cancelled) {
       return
     }
@@ -48,7 +138,6 @@ export function startRuntimeStatusProbe(
       return
     }
     inFlight = true
-    // A woken probe can outlive a reconnect; only an answer from the current epoch is recorded.
     const epoch = runtimeStatusProbeEpoch(client)
     void hostStatusProbe.request(client).then(
       (reply) => {
@@ -62,9 +151,11 @@ export function startRuntimeStatusProbe(
           return
         }
         if (epoch === runtimeStatusProbeEpoch(client)) {
-          observed.set(client, { epoch, status: landed.status })
+          const entry = { epoch, status: landed.status }
+          observed.set(client, entry)
+          probed.set(client, entry)
         }
-        onStatus(landed.status)
+        listener.onStatus(landed.status)
         if (dirty) {
           dirty = false
           attempt()
@@ -86,30 +177,30 @@ export function startRuntimeStatusProbe(
       ? CUTOVER_RETRY_DELAY_MS
       : Math.min(FAILURE_RETRY_BASE_DELAY_MS * 2 ** failureRetries++, FAILURE_RETRY_MAX_DELAY_MS)
     dirty = false
-    retryTimer = setTimeout(() => {
-      retryTimer = null
-      attempt()
-    }, delay)
-    onAttemptFailed?.()
+    retryTimer = setTimeout(attempt, delay)
+    listener.onAttemptFailed?.()
   }
 
   attempt()
-  const stop = () => {
-    cancelled = true
-    if (retryTimer) {
-      clearTimeout(retryTimer)
-    }
-  }
-  return Object.assign(stop, {
-    wake: () => {
-      if (cancelled) {
-        return
+  return {
+    retryNow: () => {
+      if (retryTimer) {
+        clearTimeout(retryTimer)
+        attempt()
       }
+    },
+    wake: () => {
       if (retryTimer) {
         clearTimeout(retryTimer)
         retryTimer = null
       }
       attempt()
+    },
+    stop: () => {
+      cancelled = true
+      if (retryTimer) {
+        clearTimeout(retryTimer)
+      }
     }
-  })
+  }
 }

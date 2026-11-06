@@ -2,7 +2,7 @@ import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-se
 import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { ProviderTimelineIdentityScheme } from '../native-chat/agent-session-timeline/provider-timeline-identity'
-import type { StructuredAgentSessionTransitionJournal } from '../native-chat/agent-session-wire/structured-agent-session-transition'
+import type { StructuredAgentSessionTransitionJournal } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
 import { acpNamedTextKey } from './acp-turn-messages'
 
 export type AcpMessageOwner = {

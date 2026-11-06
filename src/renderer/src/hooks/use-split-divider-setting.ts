@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useAppStore } from '@/store'
-import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
+import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
 import { DEFAULT_TERMINAL_DIVIDER_DARK, DEFAULT_TERMINAL_DIVIDER_LIGHT } from '@/lib/terminal-theme'
 import { selectTerminalTheme } from '../../../shared/terminal-themes/terminal-theme-selection'
 

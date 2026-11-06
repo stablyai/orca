@@ -844,7 +844,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}} bleiben wie eingestellt Chats.",
       "defaultSurfaceSetAllChat": "Alle auf Chat setzen",
       "defaultSurfaceSetAllTerminal": "Alle auf Terminal setzen",
-      "sameAsChoice": "Wie {{agent}} · {{choice}}"
+      "sameAsChoice": "Wie {{agent}} · {{choice}}",
+      "chatUnavailableOnWindows": "{{value0}} Chat ist unter Windows noch nicht verfügbar, daher öffnet sich {{value0}} auf diesem Host in einem Terminal. Chats auf einem macOS- oder Linux-Host funktionieren weiterhin."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "Symbolischer Link",
@@ -953,7 +954,7 @@
         "parakeetV2": "Nur Englisch. Schneller als v3 bei ähnlicher Genauigkeit. Zeichensetzung und Groß- und Kleinschreibung.",
         "zipformerBilingual": "Chinesisch + Englisch mit Sprachwechsel. Echtzeit-Streaming mit geringer Latenz.",
         "paraformerBilingual": "Chinesisch (Mandarin + Dialekte) + Englisch. Stark bei Akzenten und regionalen Varianten des Chinesischen.",
-        "zipformerStreamingEn": "Nur Englisch. Schlankes Modell mit 20 Mio. Parametern und gutem Verhältnis von Geschwindigkeit und Größe.",
+        "zipformerStreamingEnRetired": "Wird nicht mehr angeboten: Es verschluckt den Anfang von Sätzen. Löschen Sie es, um Speicherplatz freizugeben.",
         "zipformerStreamingZh": "Nur Chinesisch. Sehr schlankes Modell mit 14 Mio. Parametern, ideal für Geräte mit wenig Ressourcen.",
         "zipformerStreamingKo": "Nur Koreanisch. Echtzeit-Streaming mit geringer Latenz.",
         "parakeetJa": "Nur Japanisch. Mit über 35.000 Stunden natürlicher Sprache trainiert. Mit Zeichensetzung.",
@@ -1160,7 +1161,9 @@
         "cb4d287238": "Servername",
         "3affe7de3a": "Eine Kopplungs-URL von einem Orca-Server einfügen, den dieser Browser erreichen kann.",
         "e3bcd082ac": "Mit Orca verbinden",
-        "mobileScopeRejected": "Dieser QR-Code gewährt eingeschränkten (mobilen) Zugriff. Für die vollständige Web-App den Browser-Zugriffslink unter Einstellungen → Laufzeitumgebungen → Diesen Orca-Server freigeben → Neuer Link öffnen."
+        "mobileScopeRejected": "Dieser QR-Code gewährt eingeschränkten (mobilen) Zugriff. Für die vollständige Web-App den Browser-Zugriffslink unter Einstellungen → Laufzeitumgebungen → Diesen Orca-Server freigeben → Neuer Link öffnen.",
+        "replaceSavedServer": "Dieser Link verbindet mit einem anderen Server als „{{name}}“ ({{endpoint}}). Verbinde dich nur, wenn du dem Endpunkt unten vertraust.",
+        "keepSavedServer": "Gespeicherten Server behalten"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "Der Agenten-Sitzungsverlauf ist für diesen Ausführungshost nicht verfügbar.",
@@ -2318,6 +2321,7 @@
         "cb55b0390f": "Verwalten",
         "4f9313984d": "Prüfer",
         "02cbe2de44": "Pipeline",
+        "itemLoadFailed": "Dieses Element konnte nicht geladen werden. Aktualisiere, um es erneut zu versuchen.",
         "be3d291837": "Dateien",
         "c996e2962c": "Unterhaltung",
         "b3c156dd51": "Aktualisieren",
@@ -3034,7 +3038,6 @@
         "9cd11ba218": "Jira",
         "11a828abf8": "GitLab",
         "acef77f7ca": "GitHub",
-        "524f095d55": "Review erforderlich",
         "7698af5263": "Eigene",
         "94f0339621": "Mir zugewiesen",
         "c2268a9982": "Alle",
@@ -3130,6 +3133,8 @@
         "loadGitHubWorkFailed": "GitHub-Aufgaben konnten nicht geladen werden.",
         "gitlabViewIssues": "Issues",
         "gitlabViewMrs": "MRs",
+        "gitlabInvolvementEveryone": "Alle Personen",
+        "gitlabInvolvementReviewing": "Als Reviewer",
         "gitlabViewTodos": "Meine Aufgaben",
         "startWorkspaceFromMr": "Arbeitsbereich aus MR {{number}} starten",
         "startWorkspaceFromIssue": "Arbeitsbereich aus Issue {{number}} starten",
@@ -4265,7 +4270,8 @@
             "chatUnavailableAfterSelection": "Ein Chat mit {{value0}} konnte nicht gestartet werden.",
             "startChat": "Chat mit {{value0}} starten",
             "cliTag": "(CLI)",
-            "agentsLoading": "Agenten werden geladen"
+            "agentsLoading": "Agenten werden geladen",
+            "chatNotOnWindows": "Unter Windows noch kein Chat"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Tab wechseln",
@@ -6156,7 +6162,6 @@
           "savedInProjectSettings": "In den <settings>Einstellungen dieses Projekts</settings> gespeichert"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "Lokales Setup speichern",
           "3933401d28": "Konfigurieren",
           "31b8b01a45": "Einstellungen",
           "4a98f907ae": "Erneut versuchen",
@@ -6171,7 +6176,15 @@
           "5bfd5c8779": "Setup-Skripte ausblenden",
           "detectedFromSource": "In <source>{{source}}</source> erkannt",
           "ignoresSharedSetup": "Dieses Repo ignoriert gemeinsame Einrichtungsskripte aus <yaml>orca.yaml</yaml>. Einen lokalen Befehl hinzufügen oder die Quelle in den Einstellungen ändern.",
-          "foundSetupCommandIn": "Ein Einrichtungsbefehl wurde in <source>{{source}}</source> gefunden. Speichern, um ihn für neue Worktrees auszuführen."
+          "foundSetupCommandIn": "Ein Einrichtungsbefehl wurde in <source>{{source}}</source> gefunden. Speichern, um ihn für neue Worktrees auszuführen.",
+          "reviewSetupScript": "Einrichtungsskript prüfen"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "Einrichtungsskript prüfen",
+          "description": "Nach dem Speichern wird dies bei jeder Worktree-Erstellung für {{repo}} durch Orca ausgeführt.",
+          "setupScript": "Einrichtungsskript",
+          "archiveScript": "Archivierungsskript",
+          "save": "Lokales Setup speichern"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "Abbrechen",
@@ -8291,7 +8304,6 @@
         "MobileEmulatorSettingsPane": {
           "19d39113b6": "Coding-Agenten die Steuerung des aktiven mobilen Emulators über Orca-CLI-Befehle ermöglichen.",
           "f2f8d97bb6": "Steuerung mobiler Emulatoren durch Agenten",
-          "143961d031": "Standardgerät",
           "8aec2f99a0": "Emulatorverfügbarkeit aktualisieren",
           "ae1612c58c": "Verfügbarkeit",
           "f9af91ea26": "Zeigt die Aktion „Neuer mobiler Emulator“ an und ermöglicht Agenten, sich mit dem aktiven Emulator zu verbinden.",
@@ -8304,9 +8316,7 @@
           "d704fb5023": "Einrichtung erforderlich",
           "06b06429c6": "Unterstützung für Android SDK und iOS Simulator wird geprüft.",
           "6d1483d4a0": "1 Emulatorgerät erkannt.",
-          "0a452d4d3b": "{{value0}} Emulatorgeräte erkannt.",
-          "f62a1bb759": "Orca wählt automatisch ein Emulatorgerät aus, sobald Geräte erkannt werden.",
-          "b2fd62ea75": "Standardgerät für neue Emulator-Tabs und Verbindungsbefehle von Agenten. Die automatische Auswahl bevorzugt ein bereits laufendes Gerät."
+          "0a452d4d3b": "{{value0}} Emulatorgeräte erkannt."
         },
         "MobileNetworkInterfaceSection": {
           "b2c384cfd6": "Keine Schnittstellen gefunden"
@@ -11907,7 +11917,7 @@
             "terminalRun": "Befehle in deinen Terminals ausführen, auch über SSH"
           },
           "decisionFailed": "Die Berechtigungsentscheidung konnte nicht gespeichert werden. Erneut versuchen.",
-          "fullAccessWarning": "Vollzugriff: läuft wie ein normales Programm und kann deine Dateien lesen, das Netzwerk nutzen und andere Programme ausführen.",
+          "fullAccessWarning": "Vollzugriff: läuft wie ein normales Programm und kann deine Dateien lesen, das Netzwerk nutzen, andere Programme ausführen und Orca steuern, einschließlich deiner Terminals und Agenten.",
           "uiWarning": "Führt den Code des Herausgebers in Orca aus, um seine Ansicht darzustellen. Orca zeigt, worauf er zugreifen kann, und fragt vor der Aktivierung."
         },
         "PluginConsentProvenance": {
@@ -13267,7 +13277,8 @@
           "oneDescription": "Veröffentlicht von {{value0}}. Es wird erst aktualisiert, wenn du es prüfst.",
           "manyDescription": "Sie werden erst aktualisiert, wenn du sie prüfst.",
           "review": "Prüfen",
-          "dismiss": "Schließen"
+          "dismiss": "Schließen",
+          "movedInstalled": "Es bleibt aus, bis du es prüfst."
         },
         "PluginThemeUseNow": {
           "assignedLight": "{{value0}} als helles Design festgelegt",
@@ -15912,7 +15923,6 @@
                 "06e10d7356": "Emulator herunterfahren",
                 "e7a0d1897e": "Startbildschirm",
                 "6bd8dff42a": "Drehen",
-                "3d836b879c": "Emulator auswählen",
                 "81b3571a07": "Verbinden",
                 "868c0f2938": "In Bearbeitung…"
               }
@@ -17628,6 +17638,8 @@
           "noRunUsageYet": "Noch keine Nutzungsdaten zu Ausführungen",
           "noWorkspace": "Kein Arbeitsbereich",
           "latestSavedOutput": "Zuletzt gespeicherte Ausgabe",
+          "fullOutputUnavailable": "Die vollständige Ausgabe konnte nicht geladen werden.",
+          "retryFullOutput": "Erneut versuchen",
           "backToList": "Alle Automatisierungen",
           "tableName": "Name",
           "tableProject": "Projekt",
@@ -19361,7 +19373,11 @@
       },
       "composer": {
         "send": "Senden",
+        "planMode": "Planen",
         "alternateSteerHint": "{{shortcut}} zum Steuern",
+        "previewQueue": "Einreihen",
+        "previewSteer": "Steuern",
+        "previewSteerQueued": "Wartende steuern",
         "alternateQueueHint": "{{shortcut}} zum Einreihen",
         "noPty": "Kein aktives Terminal — zurückwechseln, um die Verbindung wiederherzustellen.",
         "locked": "Die Eingabe wird von einem anderen Gerät gesteuert.",
@@ -20081,7 +20097,15 @@
         "hostUnavailable": "Der Host des Anhangs ist nicht verfügbar. Stelle die Verbindung erneut her und versuche es erneut.",
         "connectionChanged": "Die Verbindung hat sich geändert. Schließe diesen Anhang und öffne ihn erneut.",
         "readFailed": "Dieser Anhang konnte auf seinem Host nicht gelesen werden. Stelle die Verbindung erneut her und versuche es erneut. Die Datei wurde möglicherweise entfernt oder geändert."
-      }
+      },
+      "composerWorkspace": {
+        "copyFailed": "Kopieren fehlgeschlagen",
+        "copyIdentity": "{{value0}} kopieren",
+        "folder": "Ordner",
+        "mainCheckout": "Haupt-Checkout",
+        "worktree": "Worktree"
+      },
+      "explicitChatWindows": "Der Chat dieses Agenten ist unter Windows noch nicht verfügbar. Öffne ihn stattdessen in einem Terminal."
     },
     "tab": {
       "bar": {

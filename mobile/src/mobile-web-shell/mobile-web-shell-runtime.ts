@@ -3,6 +3,7 @@ import { encodeBase64Url } from '../transport/mobile-endpoint-supervisor-support
 import { BRIDGE_READY_RETRY_MAX_MS } from './bridge/bridge-client-init-handshake'
 import type { GenerationStore } from './generation-store'
 import { processGenerationStore } from './process-generation-store'
+import { setForegroundTimer } from './foreground-timer'
 
 // Use 32 random base64url bytes: each mount/remount needs a fresh id for the view’s private origin.
 const SESSION_ID_BYTES = 32
@@ -17,8 +18,8 @@ export type MobileWebShellRuntime = {
   createStore(): GenerationStore
   mintSessionId(): string
   now(): number
-  // Return cancellation; tests replace this seam instead of waiting on wall time.
-  setTimer(run: () => void, delayMs: number): () => void
+  // Count only foreground time and return cancellation; tests replace this seam instead of waiting on wall time.
+  setForegroundTimer(run: () => void, delayMs: number): () => void
 }
 
 export function createMobileWebShellRuntime(): MobileWebShellRuntime {
@@ -26,9 +27,6 @@ export function createMobileWebShellRuntime(): MobileWebShellRuntime {
     createStore: processGenerationStore,
     mintSessionId: () => encodeBase64Url(ExpoCrypto.getRandomBytes(SESSION_ID_BYTES)),
     now: Date.now,
-    setTimer: (run, delayMs) => {
-      const handle = setTimeout(run, delayMs)
-      return () => clearTimeout(handle)
-    }
+    setForegroundTimer
   }
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 
 // Decode Android scrcpy H.264 access units from IPC onto a canvas; iOS uses the MJPEG hook.
 

@@ -1,6 +1,6 @@
 import { getProjectGroupingIndexFromState } from '../store/project-host-setup-selector'
 import { useEffect } from 'react'
-import { getSystemPrefersDarkSnapshot } from '../components/terminal-pane/use-system-prefers-dark'
+import { getSystemPrefersDarkSnapshot } from '../hooks/theme/use-system-prefers-dark'
 import {
   canSkipRuntimeMobileSessionSyncKeyBuild,
   getRuntimeMobileSessionSyncKey,

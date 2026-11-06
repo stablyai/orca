@@ -8,8 +8,8 @@ import type * as ReactI18Next from 'react-i18next'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { encodePaletteIdentity } from '../../../../shared/palette-match/palette-ranking'
-import type { activateAndRevealWorkspace as ActivateWorkspace } from '@/lib/worktree-activation'
-import type { WorkspaceTabPaletteActivationResult } from '@/lib/workspace-tab-palette-activation'
+import type { activateAndRevealWorkspace as ActivateWorkspace } from '@/lib/workspace/activation/worktree-activation'
+import type { WorkspaceTabPaletteActivationResult } from '@/lib/workspace/search/tabs/workspace-tab-palette-activation'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -26,7 +26,7 @@ const { activateAndRevealWorkspace } = vi.hoisted(() => ({
   activateAndRevealWorkspace: vi.fn<typeof ActivateWorkspace>(() => ({ primaryTabId: null }))
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorkspace }))
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({ activateAndRevealWorkspace }))
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactI18Next>()
@@ -66,7 +66,7 @@ const { activateWorkspaceTabPaletteResult } = vi.hoisted(() => ({
     (_result: unknown): WorkspaceTabPaletteActivationResult => ({ status: 'activated' })
   )
 }))
-vi.mock('@/lib/workspace-tab-palette-activation', () => ({
+vi.mock('@/lib/workspace/search/tabs/workspace-tab-palette-activation', () => ({
   activateWorkspaceTabPaletteResult: (result: unknown) => activateWorkspaceTabPaletteResult(result)
 }))
 

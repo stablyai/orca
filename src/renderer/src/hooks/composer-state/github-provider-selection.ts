@@ -33,7 +33,7 @@ type GitHubProviderSelectionInput = Pick<
 
 import { useCallback } from 'react'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
+import { resolveGitHubWorkItemIdentity } from '../../../../shared/new-workspace/github-work-item-identity'
 import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import {
   buildGitHubWorkspaceSource as toGitHubLinkedWorkItem,

@@ -5,7 +5,7 @@ import {
   clearHugeRepoWarningDismissalsForTests,
   hasDismissedHugeRepoWarning,
   markHugeRepoWarningDismissed
-} from '@/lib/source-control-huge-repo-warning-dismissals'
+} from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
 import './worktrees'
 import { makeDetectedResult, qualifyDetectedResult } from './worktrees-detected-listing-fixtures'
 import { makeWorktree } from './worktrees-slice-test-fixtures'

@@ -32,7 +32,7 @@ import type { SourceControlCreatePrIntentTarget } from './use-create-pr-intent-t
 import type { SourceControlCreateReviewComposer } from './use-create-review-composer'
 import type { SourceControlHostedReviewCreated } from './use-hosted-review-created'
 import type { SourceControlHostedReviewState } from './use-hosted-review-state'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 /** Resolve unattended review fields without a composer; reveal only while the run owns the foreground worktree. */
 export function useSourceControlCreatePrIntentReview({

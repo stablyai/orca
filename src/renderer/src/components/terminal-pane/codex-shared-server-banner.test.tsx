@@ -22,7 +22,7 @@ const routing = vi.hoisted(() => ({
   revealFloatingWorkspacePanel: vi.fn(),
   createFloatingWorkspaceTerminalTab: vi.fn()
 }))
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorkspace: routing.activateAndRevealWorkspace
 }))
 vi.mock('@/lib/floating-workspace-panel-reveal', () => ({

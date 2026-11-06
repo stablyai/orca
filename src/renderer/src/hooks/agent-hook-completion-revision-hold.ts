@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import type { AgentCompletionStatusSnapshot } from '@/components/terminal-pane/agent-completion-coordinator-types'
+import type { AgentCompletionStatusSnapshot } from '@/components/terminal-pane/agent-completion/agent-completion-coordinator-types'
 import { NOTIFICATION_COOLDOWN_MS } from '../../../shared/notification-burst-cooldown'
 import type { NotificationDispatchResult } from '../../../shared/notification-settings-types'
 

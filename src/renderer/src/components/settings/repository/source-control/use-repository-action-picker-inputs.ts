@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
-import { sourceControlRepoAgentRows } from '@/lib/source-control-agent-picker'
+import { sourceControlRepoAgentRows } from '@/lib/source-control/ai/source-control-agent-picker'
 import { canSaveSourceControlActionSurface } from '../../source-control/SourceControlActionAgentPicker'
 import { SOURCE_CONTROL_ACTION_IDS } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { invalidateAgentPickerDrafts } from '../../../agent/agent-launch-picker-drafts'
