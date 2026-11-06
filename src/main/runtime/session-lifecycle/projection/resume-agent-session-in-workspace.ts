@@ -47,7 +47,7 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
       captureHostId: ExecutionHostId
       /** Names the new pane, so a retry of one request reconciles the pane it may have started. */
       mutationId: string
-      /** The exact launch the caller recorded; it wins over a pane record that may hold another launch of the conversation. */
+      /** The caller's complete recipe; without one, the conversation's own pane record supplies it. */
       launchConfig?: SleepingAgentLaunchConfig
       signal?: AbortSignal
     }
