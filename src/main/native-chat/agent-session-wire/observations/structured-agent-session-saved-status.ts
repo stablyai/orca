@@ -1,4 +1,4 @@
-import { isAgentSessionInteractionMode } from '../../../shared/agent-session/options/agent-session-interaction-mode'
+import { isAgentSessionInteractionMode } from '../../../../shared/agent-session/options/agent-session-interaction-mode'
 import type {
   StructuredAgentSessionStatusPublisher,
   StructuredAgentSessionStatusSink
