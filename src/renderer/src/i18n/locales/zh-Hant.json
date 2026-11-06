@@ -20345,6 +20345,19 @@
       "formatOnSave": {
         "failed": "無法格式化 {{file}}。將不經格式化直接儲存：{{reason}}"
       }
+    },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "subtitle": "選擇要在此窗格中開啟的內容。"
+      }
+    },
+    "contextualTours": {
+      "agentSessions": {
+        "splitChatPane": {
+          "title": "在聊天旁開啟窗格",
+          "action": "分割窗格"
+        }
+      }
     }
   },
   "dashboardPopout": {

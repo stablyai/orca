@@ -19963,6 +19963,19 @@
       "formatOnSave": {
         "failed": "{{file}} をフォーマットできませんでした。フォーマットせずに保存します: {{reason}}"
       }
+    },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "subtitle": "このペインで開くものを選択してください。"
+      }
+    },
+    "contextualTours": {
+      "agentSessions": {
+        "splitChatPane": {
+          "title": "チャットの横にペインを開く",
+          "action": "ペインを分割"
+        }
+      }
     }
   },
   "dashboardPopout": {

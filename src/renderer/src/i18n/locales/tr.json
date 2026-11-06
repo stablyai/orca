@@ -20641,6 +20641,19 @@
       "formatOnSave": {
         "failed": "{{file}} biçimlendirilemedi. Biçimlendirilmeden kaydediliyor: {{reason}}"
       }
+    },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "subtitle": "Bu bölmede ne açılacağını seçin."
+      }
+    },
+    "contextualTours": {
+      "agentSessions": {
+        "splitChatPane": {
+          "title": "Sohbetin yanında bir bölme açın",
+          "action": "Bölmeyi böl"
+        }
+      }
     }
   },
   "dashboardPopout": {

@@ -21624,6 +21624,19 @@
       "formatOnSave": {
         "failed": "Não foi possível formatar {{file}}. Salvando sem formatação: {{reason}}"
       }
+    },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "subtitle": "Escolha o que abrir neste painel."
+      }
+    },
+    "contextualTours": {
+      "agentSessions": {
+        "splitChatPane": {
+          "title": "Abra um painel ao lado do chat",
+          "action": "Dividir painel"
+        }
+      }
     }
   },
   "csv": {

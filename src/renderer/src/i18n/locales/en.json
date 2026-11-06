@@ -21347,6 +21347,10 @@
         },
         "split": {
           "bodyWithoutShortcut": "Right-click the pane for split options."
+        },
+        "splitChatPane": {
+          "title": "Open a pane beside the chat",
+          "action": "Split pane"
         }
       },
       "badgeNew": "New",
@@ -21357,6 +21361,11 @@
           "bodyWithoutShortcut": "Click this button, or {{modifier}}-click any project header.",
           "action": "Got it"
         }
+      }
+    },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "subtitle": "Choose what to open in this pane."
       }
     }
   },

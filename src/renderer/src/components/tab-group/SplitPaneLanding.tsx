@@ -1,0 +1,135 @@
+import { useMemo } from 'react'
+import { Bot, Globe, TerminalSquare } from 'lucide-react'
+import { useAppStore } from '../../store'
+import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
+import { translate } from '@/i18n/i18n'
+import {
+  ensureClientCreationActionAllowed,
+  showClientCreationActionError
+} from '@/lib/client-creation-action-error'
+import { openNewTerminalTabInWorkspace } from '@/store/terminals/terminal-active-workspace-creation'
+import { resolveTerminalAgentTabShortcut } from '../terminal-agent-tab-shortcut'
+import { launchAgentTabShortcut } from '../agent-tab-shortcut-launch'
+import {
+  LANDING_ACTION_BUTTON_CLASS,
+  LandingBrand,
+  LandingShortcutList,
+  type LandingShortcutItem
+} from '../landing-layout'
+
+/** Fills an empty split pane so the user picks what opens there; each action creates into this group. */
+export function SplitPaneLanding({
+  worktreeId,
+  groupId,
+  autoFocus
+}: {
+  worktreeId: string
+  groupId: string
+  autoFocus: boolean
+}): React.JSX.Element {
+  const newAgentLabel = translate(
+    'auto.components.editor.ReviewNotesSendMenuContent.a49800405b',
+    'New agent'
+  )
+  const newTerminalLabel = translate('auto.components.tab.bar.TabBar.d364f3c8d4', 'New Terminal')
+  const newBrowserLabel = translate('auto.components.tab.bar.TabBar.4833fb2cbe', 'New Browser Tab')
+  const newMarkdownLabel = translate('auto.components.tab.bar.TabBar.3d5d6c960d', 'New Markdown')
+  const closeLabel = translate(
+    'auto.components.tab.group.TabGroupPanel.closePaneColumn',
+    'Close split pane'
+  )
+
+  const newAgentShortcut = useShortcutKeyDetails('tab.newAgent')
+  const newTerminalShortcut = useShortcutKeyDetails('tab.newTerminal')
+  const newBrowserShortcut = useShortcutKeyDetails('tab.newBrowser')
+  const newMarkdownShortcut = useShortcutKeyDetails('tab.newMarkdown')
+  const closeShortcut = useShortcutKeyDetails('tab.close')
+  const shortcuts = useMemo<LandingShortcutItem[]>(
+    () =>
+      [
+        { id: 'agent', shortcut: newAgentShortcut, action: newAgentLabel },
+        { id: 'terminal', shortcut: newTerminalShortcut, action: newTerminalLabel },
+        { id: 'browser', shortcut: newBrowserShortcut, action: newBrowserLabel },
+        { id: 'markdown', shortcut: newMarkdownShortcut, action: newMarkdownLabel },
+        { id: 'close', shortcut: closeShortcut, action: closeLabel }
+      ].filter((item) => item.shortcut.keys.length > 0),
+    [
+      closeLabel,
+      closeShortcut,
+      newAgentLabel,
+      newAgentShortcut,
+      newBrowserLabel,
+      newBrowserShortcut,
+      newMarkdownLabel,
+      newMarkdownShortcut,
+      newTerminalLabel,
+      newTerminalShortcut
+    ]
+  )
+
+  const launchAgent = (): void => {
+    const shortcut = resolveTerminalAgentTabShortcut({
+      activeWorktreeId: worktreeId,
+      keybindings: useAppStore.getState().keybindings,
+      matchShortcut: (actionId) => actionId === 'tab.newAgent'
+    })
+    launchAgentTabShortcut(worktreeId, shortcut, () => groupStillEmpty(worktreeId, groupId))
+  }
+  const openTerminal = (): void => {
+    void openNewTerminalTabInWorkspace(useAppStore.getState, worktreeId, groupId).catch(
+      showClientCreationActionError
+    )
+  }
+  const openBrowser = (): void => {
+    if (!ensureClientCreationActionAllowed(worktreeId, 'managed-browser')) {
+      return
+    }
+    void useAppStore
+      .getState()
+      .openNewBrowserTabInActiveWorkspace(groupId)
+      .catch(showClientCreationActionError)
+  }
+
+  return (
+    <div className="absolute inset-0 flex items-center justify-center overflow-auto scrollbar-sleek bg-background">
+      <div className="w-full max-w-lg px-6">
+        <div className="flex flex-col items-center gap-4 py-8">
+          <LandingBrand />
+          <p className="text-sm text-muted-foreground text-center">
+            {translate(
+              'components.tabGroup.splitPaneLanding.subtitle',
+              'Choose what to open in this pane.'
+            )}
+          </p>
+          <div className="flex items-center justify-center gap-2.5 flex-wrap">
+            <button
+              type="button"
+              className={LANDING_ACTION_BUTTON_CLASS}
+              onClick={launchAgent}
+              autoFocus={autoFocus}
+            >
+              <Bot className="size-3.5" />
+              {newAgentLabel}
+            </button>
+            <button type="button" className={LANDING_ACTION_BUTTON_CLASS} onClick={openTerminal}>
+              <TerminalSquare className="size-3.5" />
+              {newTerminalLabel}
+            </button>
+            <button type="button" className={LANDING_ACTION_BUTTON_CLASS} onClick={openBrowser}>
+              <Globe className="size-3.5" />
+              {newBrowserLabel}
+            </button>
+          </div>
+          <LandingShortcutList shortcuts={shortcuts} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function groupStillEmpty(worktreeId: string, groupId: string): boolean {
+  const group = (useAppStore.getState().groupsByWorktree[worktreeId] ?? []).find(
+    (candidate) => candidate.id === groupId
+  )
+  return group !== undefined && group.tabOrder.length === 0
+}

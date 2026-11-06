@@ -20657,6 +20657,19 @@
       "formatOnSave": {
         "failed": "{{file}} konnte nicht formatiert werden. Wird ohne Formatierung gespeichert: {{reason}}"
       }
+    },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "subtitle": "Wähle aus, was in diesem Bereich geöffnet werden soll."
+      }
+    },
+    "contextualTours": {
+      "agentSessions": {
+        "splitChatPane": {
+          "title": "Einen Bereich neben dem Chat öffnen",
+          "action": "Bereich teilen"
+        }
+      }
     }
   },
   "dashboardPopout": {

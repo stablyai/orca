@@ -25,6 +25,8 @@ import { UNFOCUSED_SPLIT_GROUP_OPACITY } from './split-group-dim'
 import { useWindowBackdropActive } from '@/lib/window-backdrop'
 import { useThemeBackgroundStore } from '@/store/theme-background'
 import { EditorRevealFlash } from './EditorRevealFlash'
+import { SplitPaneLanding } from './SplitPaneLanding'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 const EMPTY_GROUPS: readonly TabGroup[] = []
@@ -380,6 +382,13 @@ export default function TabGroupPanel({
               <EditorRevealFlash viewStateId={activeTab.id} />
             </div>
           )}
+
+        {/* Why: the floating panel draws its own empty state. */}
+        {hasSplitGroups &&
+        model.group?.tabOrder.length === 0 &&
+        worktreeId !== FLOATING_TERMINAL_WORKTREE_ID ? (
+          <SplitPaneLanding worktreeId={worktreeId} groupId={groupId} autoFocus={isFocused} />
+        ) : null}
 
         {/* Why: terminal/browser/simulator/structured-chat panes render at the worktree level; tab activation only changes overlay visibility and never remounts a live surface. */}
       </div>

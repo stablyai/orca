@@ -21344,6 +21344,19 @@
       "formatOnSave": {
         "failed": "Не удалось отформатировать {{file}}. Сохранение без форматирования: {{reason}}"
       }
+    },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "subtitle": "Выберите, что открыть в этой панели."
+      }
+    },
+    "contextualTours": {
+      "agentSessions": {
+        "splitChatPane": {
+          "title": "Откройте панель рядом с чатом",
+          "action": "Разделить панель"
+        }
+      }
     }
   },
   "dashboardPopout": {

@@ -20769,6 +20769,19 @@
       "formatOnSave": {
         "failed": "Impossible de formater {{file}}. Enregistrement sans formatage : {{reason}}"
       }
+    },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "subtitle": "Choisissez ce qu’il faut ouvrir dans ce volet."
+      }
+    },
+    "contextualTours": {
+      "agentSessions": {
+        "splitChatPane": {
+          "title": "Ouvrir un volet à côté du chat",
+          "action": "Diviser le volet"
+        }
+      }
     }
   },
   "dashboardPopout": {

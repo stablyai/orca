@@ -19963,6 +19963,19 @@
       "formatOnSave": {
         "failed": "{{file}}을(를) 포맷할 수 없습니다. 포맷하지 않고 저장합니다: {{reason}}"
       }
+    },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "subtitle": "이 창에서 열 항목을 선택하세요."
+      }
+    },
+    "contextualTours": {
+      "agentSessions": {
+        "splitChatPane": {
+          "title": "채팅 옆에 창 열기",
+          "action": "창 분할"
+        }
+      }
     }
   },
   "dashboardPopout": {
