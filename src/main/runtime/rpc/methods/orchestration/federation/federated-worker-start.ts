@@ -34,6 +34,7 @@ import {
 import { releaseRetriedWorkerTerminal } from '../worker/retried-worker-terminal-release'
 import { withWorkerStartNext } from '../receipt-next'
 import { recordReadyFederatedDispatch } from './federated-worker-ready-record'
+import { resolveFederatedChildParent } from './federated-worker-child-parent'
 import { prepareWorkerStartCard } from '../../../../orchestration/worker-start-card'
 import {
   recordWorkerLaunchObservation,
@@ -56,13 +57,13 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
     )
   }
   const worktree = params.worktree ?? 'current'
-  if (worktree === 'current' || worktree === 'new-child') {
+  if (worktree === 'current') {
     throw new OrchestrationError(
       'invalid_argument',
-      '--on requires an exact remote worktree selector or new-top-level.'
+      '--on requires an exact remote worktree selector, new-child or new-top-level.'
     )
   }
-  const createsWorktree = worktree === 'new-top-level'
+  const createsWorktree = worktree === 'new-top-level' || worktree === 'new-child'
   assertWorkerLaunchPreferencesCreateTerminal(params)
   validateFederatedWorkerStartPlacement(params, createsWorktree)
   const requestedLaunch = createPendingWorkerLaunchReceipt({
@@ -100,6 +101,16 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
     capabilities: status.capabilities,
     serverName: server.name
   })
+  const childParent =
+    worktree === 'new-child'
+      ? await resolveFederatedChildParent({
+          runtime,
+          from: params.from,
+          callerSession: args.callerSession,
+          serverCapabilities: status.capabilities,
+          serverName: server.name
+        })
+      : undefined
   const supportsControlMail = status.capabilities?.includes(
     ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
   )
@@ -170,7 +181,11 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
           // Carry home dispatch depth so remote workers cannot re-enter as roots when nesting.
           depth: started.dispatch.depth,
           protocolVersion: federationProtocolVersion,
-          worktree,
+          // A server creates new-child as top-level plus this parent, so older servers parse it too.
+          worktree: createsWorktree ? 'new-top-level' : worktree,
+          ...(childParent && 'crossStoreParent' in childParent
+            ? { crossStoreParent: childParent.crossStoreParent }
+            : {}),
           name: params.name,
           repo: params.repo,
           baseBranch: params.baseBranch,
@@ -226,7 +241,8 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
           launch,
           timeoutMs: budgets.readinessTimeoutMs,
           effects: remote.effects ?? [],
-          residualResources: remote.residualResources ?? []
+          residualResources: remote.residualResources ?? [],
+          ...(childParent && 'warning' in childParent ? { warning: childParent.warning } : {})
         },
         reportsTurnStops
           ? undefined

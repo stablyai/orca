@@ -578,12 +578,19 @@
     "usageLimit": {
       "reached": "{{agent}} a atteint sa limite d’utilisation.",
       "reachedNamed": "{{agent}} a atteint sa limite {{window}}.",
-      "resetsAt": "Elle se réinitialise à {{when}}.",
       "theAgent": "L'agent",
       "windowCredits": "d’utilisation supplémentaire",
       "windowSession": "de session",
       "windowWeekly": "hebdomadaire",
-      "windowWeeklyModel": "hebdomadaire du modèle"
+      "windowWeeklyModel": "hebdomadaire du modèle",
+      "switchAccount": "Changer de compte",
+      "autoContinueCancelFailed": "Impossible d’annuler la reprise automatique. Réessayez.",
+      "autoContinueCancel": "Ne pas reprendre",
+      "statusResetAt": "Réinitialisé à {{time}}",
+      "statusResetsAt": "Réinitialisation à {{time}}",
+      "statusContinuesShortly": "Orca reprendra sous peu",
+      "statusContinuesThen": "Orca reprendra à ce moment-là",
+      "statusWontContinue": "Orca ne reprendra pas automatiquement"
     },
     "useImageUpload": {
       "attachFailed": "Échec de l'ajout",
@@ -656,6 +663,8 @@
     }
   },
   "common": {
+    "details": "Détails",
+    "hideDetails": "Masquer les détails",
     "back": "Retour",
     "cancel": "Annuler",
     "close": "Fermer",
@@ -856,8 +865,8 @@
       "pairingInvalid": "Appairage invalide",
       "pairingTemporarilyUnavailable": "Appairage temporairement indisponible",
       "repairHint": "Touchez pour appairer à nouveau votre ordinateur.",
+      "sameNetworkOnlyHint": "Se connecte uniquement sur le même Wi-Fi ou via Tailscale. Pour vous connecter de partout, connectez-vous sur votre ordinateur et appairez de nouveau",
       "unlockHint": "Déverrouillez votre téléphone, puis touchez pour réessayer.",
-      "updateDesktopHint": "Mettez à jour Orca sur votre ordinateur et connectez-vous pour y accéder où que vous soyez.",
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} en activité"
     },
     "hostDiagnosticsLink": {
@@ -888,6 +897,13 @@
       "openImage": "Ouvrir l'image",
       "wrapLines": "Retour à la ligne",
       "disableLineWrap": "Désactiver le retour à la ligne"
+    },
+    "markdownCallout": {
+      "note": "Remarque",
+      "tip": "Conseil",
+      "important": "Important",
+      "warning": "Avertissement",
+      "caution": "Attention"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Fermer le panneau"
@@ -2034,6 +2050,7 @@
       "agentStarting": "L'agent est encore en cours de démarrage.",
       "agentStillWorking": "L'agent est encore en train de travailler.",
       "answerUnconfirmed": "Votre réponse a été enregistrée, mais l'agent ne l'a pas confirmée.",
+      "pluginInputRequired": "{{agent}} s’est arrêté car le plugin « {{plugin}} » attend une saisie dans un volet de terminal. Désactivez le plugin pour les sessions de chat ou exécutez la tâche dans un terminal {{agent}}.",
       "antigravityNotSignedIn": "Antigravity n’est pas connecté. Connectez-vous dans Paramètres → Comptes → Antigravity. Puis renvoyez votre message.",
       "argumentsMissingValue": "Les arguments enregistrés nécessitent une valeur pour {{option}}.",
       "argumentsMultipleValues": "Les arguments enregistrés donnent plusieurs valeurs à {{option}}.",
@@ -3364,7 +3381,8 @@
       "moreFields_one": "+{{count}} champ",
       "moreFields_other": "+{{count}} champs",
       "noItems": "Aucun élément de projet",
-      "pullRequestSubtitle": "Pull request · {{repository}}{{number}}"
+      "pullRequestSubtitle": "Pull request · {{repository}}{{number}}",
+      "linkedPullRequestsOverflow": "+{{count}} de plus"
     },
     "githubProjectPickers": {
       "add": "Ajouter",

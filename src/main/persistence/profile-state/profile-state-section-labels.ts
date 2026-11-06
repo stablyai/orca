@@ -20,6 +20,7 @@ function sectionLabel(domain: string, translate: ProfileStateSectionLabelTransla
     case 'worktreeIdentityAliases':
     case 'worktreeLineageById':
     case 'workspaceLineageByChildKey':
+    case 'crossStoreLineageByChildKey':
       return translate('profileState.section.workspaceDetails', 'Workspace details')
     case 'settings':
       return translate('profileState.section.settings', 'Settings')

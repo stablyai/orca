@@ -5,11 +5,19 @@ import { translate } from '@/i18n/i18n'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
-import { isEligibleWorktreeParent } from '../../workspace-actions/parenting/worktree-parent-candidates'
+import { worktreeParentPlacementFor } from '../../workspace-actions/parenting/worktree-parent-candidates'
+import { showCrossStoreParentError } from '../../workspace-actions/parenting/worktree-parent-selection'
+import { useAllWorktrees } from '@/store/selectors'
+import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
+import { isCrossStoreParent } from '@/store/slices/worktrees/metadata/cross-store-parent-ref'
+import type { DraggedWorktreeCopies } from './dragged-worktree-copies'
 import { getCyclicProjectedWorktreeLineageIds } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
 import { getReorderedWorktreeIdsToUnnest } from './worktree-lineage-drag-drop'
 import { unnestWorktrees } from '../../workspace-actions/parenting/worktree-unnest'
-import { getWorktreeIdFromHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import {
+  getWorktreeHostIdentity,
+  getWorktreeIdFromHostIdentity
+} from '../../../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeDragGroup } from './worktree-manual-order'
 import type { WorktreeSidebarLineageDropTarget } from './row-state'
 
@@ -22,68 +30,114 @@ export function useWorktreeLineageDropCommit(args: {
   worktreeDragGroups: readonly WorktreeDragGroup[]
 }) {
   const { repoMap, worktreeMap, worktreeLineageById, worktreeDragGroups } = args
+  const worktrees = useAllWorktrees()
+  const parentIdentities = useAppStore(selectSidebarLineageParentIdentities)
   const assignWorktreeParent = useAppStore((s) => s.assignWorktreeParent)
+  const assignCrossStoreWorktreeParent = useAppStore((s) => s.assignCrossStoreWorktreeParent)
   const updateWorktreeLineage = useAppStore((s) => s.updateWorktreeLineage)
   const cyclicLineageIds = useMemo(
     () => getCyclicProjectedWorktreeLineageIds(worktreeLineageById, worktreeMap),
     [worktreeLineageById, worktreeMap]
   )
+  // Drops name rows by host identity: a parent or child may be on another machine than its twin.
+  const rowsByIdentity = useMemo(
+    () => new Map<string, Worktree>(worktrees.map((row) => [getWorktreeHostIdentity(row), row])),
+    [worktrees]
+  )
+
+  /** The picked rows and the parent row, when the picker would offer that parent to every one. */
+  const resolveLineageDrop = useCallback(
+    (
+      pickedCopies: DraggedWorktreeCopies,
+      parentIdentity: string
+    ): { children: Worktree[]; parent: Worktree } | null => {
+      const parent = rowsByIdentity.get(parentIdentity)
+      if (!parent || pickedCopies.length === 0) {
+        return null
+      }
+      const children: Worktree[] = []
+      for (const copy of pickedCopies) {
+        const child = rowsByIdentity.get(getWorktreeHostIdentity(copy))
+        const placement = child
+          ? worktreeParentPlacementFor({
+              child,
+              worktrees,
+              lineageById: worktreeLineageById,
+              worktreeMap,
+              repoMap,
+              cyclicLineageIds,
+              parentIdentities
+            })(parent)
+          : null
+        if (!child || !placement) {
+          return null
+        }
+        children.push(child)
+      }
+      return { children, parent }
+    },
+    [
+      cyclicLineageIds,
+      parentIdentities,
+      repoMap,
+      rowsByIdentity,
+      worktreeLineageById,
+      worktreeMap,
+      worktrees
+    ]
+  )
 
   const getEligibleLineageDropTarget = useCallback(
     (
       target: WorktreeSidebarLineageDropTarget,
-      draggedIds: readonly string[]
-    ): WorktreeSidebarLineageDropTarget => {
-      const parentId = target.lineageParentId
-      if (!parentId) {
-        return target
-      }
-      const canAssignAll = draggedIds.every((draggedId) => {
-        const child = worktreeMap.get(draggedId)
-        if (!child) {
-          return false
-        }
-        const candidateParent = worktreeMap.get(parentId)
-        return Boolean(
-          candidateParent &&
-          isEligibleWorktreeParent({
-            child,
-            candidateParent,
-            lineageById: worktreeLineageById,
-            worktreeMap,
-            repoMap,
-            cyclicLineageIds
-          })
-        )
-      })
-      return canAssignAll ? target : { ...target, lineageParentId: null }
-    },
-    [cyclicLineageIds, repoMap, worktreeLineageById, worktreeMap]
+      pickedCopies: DraggedWorktreeCopies
+    ): WorktreeSidebarLineageDropTarget =>
+      !target.lineageParentIdentity ||
+      resolveLineageDrop(pickedCopies, target.lineageParentIdentity)
+        ? target
+        : { ...target, lineageParentIdentity: null },
+    [resolveLineageDrop]
   )
 
   const commitWorktreeLineageParentDrop = useCallback(
-    (draggedIds: readonly string[], parentId: string): boolean => {
-      const target = getEligibleLineageDropTarget(
-        { status: null, isPinDrop: false, lineageParentId: parentId },
-        draggedIds
-      )
-      if (!target.lineageParentId) {
+    (pickedCopies: DraggedWorktreeCopies, parentIdentity: string): boolean => {
+      const drop = resolveLineageDrop(pickedCopies, parentIdentity)
+      if (!drop) {
         return false
       }
-      void Promise.all(
-        draggedIds.map((id) => assignWorktreeParent(id, { parentWorktreeId: parentId }))
-      ).catch((err) => {
-        console.error('Failed to nest workspace:', err)
-        toast.error(
-          translate(
-            'auto.components.sidebar.WorktreeList.failedNestWorkspace',
-            'Failed to nest workspace'
+      const { children, parent } = drop
+      const crossStore = children.filter((child) => isCrossStoreParent(child, parent))
+      const sameStore = children.filter((child) => !isCrossStoreParent(child, parent))
+      void (async () => {
+        try {
+          // Cross-machine refs are all validated before any write, so a refusal changes nothing.
+          if (crossStore.length > 0) {
+            await assignCrossStoreWorktreeParent(crossStore, parent)
+          }
+        } catch (error) {
+          showCrossStoreParentError(error)
+          return
+        }
+        await Promise.all(
+          sameStore.map((child) =>
+            assignWorktreeParent(child.id, {
+              parentWorktreeId: parent.id,
+              ...(child.hostId ? { executionHostId: child.hostId } : {})
+            })
           )
-        )
-      })
+        ).catch((err) => {
+          console.error('Failed to nest workspace:', err)
+          toast.error(
+            translate(
+              'auto.components.sidebar.WorktreeList.failedNestWorkspace',
+              'Failed to nest workspace'
+            )
+          )
+        })
+      })()
       return true
     },
-    [assignWorktreeParent, getEligibleLineageDropTarget]
+    [assignCrossStoreWorktreeParent, assignWorktreeParent, resolveLineageDrop]
   )
 
   const clearReorderedWorktreeParents = useCallback(

@@ -20,6 +20,7 @@ import {
   encodeCodexJournalQuestionOptionId
 } from './codex-prompt-registry-bounds'
 import { codexMcpToolApprovalDecisions } from './codex-mcp-tool-approval'
+import { codexFileChangeApprovalDetail } from './codex-file-change-approval-detail'
 
 const APPROVAL_DECISION_LABELS: Record<CodexApprovalDecision, string> = {
   accept: 'Allow',
@@ -78,14 +79,25 @@ export function codexApprovalItem(input: {
   if (input.method === CODEX_MCP_ELICITATION_METHOD) {
     return codexMcpToolApprovalItem(params)
   }
+  if (input.method === CODEX_FILE_CHANGE_APPROVAL_METHOD) {
+    const reason = readString(params, 'reason')
+    const grantRoot = readString(params, 'grantRoot')
+    return {
+      kind: 'approval',
+      title: 'Apply file changes?',
+      ...(reason ? { decisionReason: boundJournalPromptText(reason) } : {}),
+      ...(grantRoot ? { description: boundJournalPromptText(`Write access: ${grantRoot}`) } : {}),
+      detail: boundNullablePromptText(
+        codexFileChangeApprovalDetail(params.changes) ?? input.detail
+      ),
+      options: codexApprovalOptions(input.params),
+      resolution: { ...PENDING }
+    }
+  }
   return {
     kind: 'approval',
     title:
-      input.method === CODEX_FILE_CHANGE_APPROVAL_METHOD
-        ? 'Apply file changes?'
-        : input.method === CODEX_COMMAND_APPROVAL_METHOD
-          ? 'Run a command?'
-          : 'Approve this action?',
+      input.method === CODEX_COMMAND_APPROVAL_METHOD ? 'Run a command?' : 'Approve this action?',
     detail: boundNullablePromptText(approvalDetail(params) ?? input.detail),
     options: codexApprovalOptions(input.params),
     resolution: { ...PENDING }

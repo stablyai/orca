@@ -539,12 +539,19 @@
     "usageLimit": {
       "reached": "{{agent}}이(가) 사용 한도에 도달했습니다.",
       "reachedNamed": "{{agent}}이(가) {{window}} 한도에 도달했습니다.",
-      "resetsAt": "{{when}}에 초기화됩니다.",
       "theAgent": "에이전트",
       "windowCredits": "추가 사용량",
       "windowSession": "세션",
       "windowWeekly": "주간",
-      "windowWeeklyModel": "모델별 주간"
+      "windowWeeklyModel": "모델별 주간",
+      "switchAccount": "계정 전환",
+      "autoContinueCancelFailed": "자동 계속을 취소하지 못했습니다. 다시 시도하세요.",
+      "autoContinueCancel": "계속하지 않기",
+      "statusResetAt": "{{time}}에 재설정됨",
+      "statusResetsAt": "{{time}}에 재설정",
+      "statusContinuesShortly": "Orca가 곧 계속합니다",
+      "statusContinuesThen": "그때 Orca가 계속합니다",
+      "statusWontContinue": "Orca가 자동으로 계속하지 않습니다"
     },
     "useImageUpload": {
       "attachFailed": "첨부 실패",
@@ -617,6 +624,8 @@
     }
   },
   "common": {
+    "details": "세부 정보",
+    "hideDetails": "세부 정보 숨기기",
     "back": "뒤로",
     "cancel": "취소",
     "close": "닫기",
@@ -814,8 +823,8 @@
       "pairingInvalid": "페어링이 유효하지 않음",
       "pairingTemporarilyUnavailable": "페어링 일시 사용 불가",
       "repairHint": "탭하여 데스크톱과 다시 페어링하세요.",
+      "sameNetworkOnlyHint": "같은 Wi-Fi 또는 Tailscale에서만 연결됩니다. 어디서나 연결하려면 데스크톱에서 로그인한 후 다시 페어링하세요",
       "unlockHint": "휴대폰 잠금을 해제한 후 탭하여 다시 시도하세요.",
-      "updateDesktopHint": "어디서나 연결하려면 데스크톱 Orca를 업데이트하고 로그인하세요.",
       "worktreeAccessibilitySummary": "{{summary}}, 활성 {{activeCount}}개"
     },
     "hostDiagnosticsLink": {
@@ -846,6 +855,13 @@
       "openImage": "이미지 열기",
       "wrapLines": "줄 바꿈",
       "disableLineWrap": "줄 바꿈 끄기"
+    },
+    "markdownCallout": {
+      "note": "참고",
+      "tip": "팁",
+      "important": "중요",
+      "warning": "경고",
+      "caution": "주의"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "하단 패널 닫기"
@@ -3271,7 +3287,8 @@
       "moreFields_one": "필드 +{{count}}개",
       "moreFields_other": "필드 +{{count}}개",
       "noItems": "프로젝트 항목이 없습니다.",
-      "pullRequestSubtitle": "PR · {{repository}}{{number}}"
+      "pullRequestSubtitle": "PR · {{repository}}{{number}}",
+      "linkedPullRequestsOverflow": "+{{count}}개 더"
     },
     "githubProjectPickers": {
       "add": "추가",

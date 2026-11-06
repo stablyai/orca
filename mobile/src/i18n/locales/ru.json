@@ -613,7 +613,6 @@
     "usageLimit": {
       "reached": "{{agent}} достиг лимита использования.",
       "reachedNamed": "{{agent}} достиг лимита: {{window}}.",
-      "resetsAt": "Сброс: {{when}}.",
       "theAgent": "Агент",
       "windowCredits": "дополнительное использование",
       "windowSession": "на сессию",
@@ -691,6 +690,8 @@
     }
   },
   "common": {
+    "details": "Подробности",
+    "hideDetails": "Скрыть подробности",
     "back": "Назад",
     "cancel": "Отмена",
     "close": "Закрыть",
@@ -894,8 +895,8 @@
       "pairingInvalid": "Сопряжение недействительно",
       "pairingTemporarilyUnavailable": "Сопряжение временно недоступно",
       "repairHint": "Нажмите, чтобы повторно выполнить сопряжение с компьютером",
+      "sameNetworkOnlyHint": "Подключается только в той же сети Wi-Fi или через Tailscale. Чтобы подключаться откуда угодно, войдите в учётную запись на компьютере и выполните сопряжение заново",
       "unlockHint": "Разблокируйте телефон, затем нажмите, чтобы повторить попытку",
-      "updateDesktopHint": "Обновите Orca на компьютере и войдите в учётную запись, чтобы подключаться откуда угодно",
       "worktreeAccessibilitySummary": "{{summary}}, активных: {{activeCount}}"
     },
     "hostDiagnosticsLink": {
@@ -926,6 +927,13 @@
       "openImage": "Открыть изображение",
       "wrapLines": "Переносить строки",
       "disableLineWrap": "Выключить перенос строк"
+    },
+    "markdownCallout": {
+      "note": "Заметка",
+      "tip": "Совет",
+      "important": "Важно",
+      "warning": "Предупреждение",
+      "caution": "Осторожно"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Закрыть панель"
@@ -3453,7 +3461,8 @@
       "moreFields_one": "+{{count}} поле",
       "moreFields_other": "+{{count}} поля",
       "noItems": "В проекте нет элементов",
-      "pullRequestSubtitle": "Пул-реквест · {{repository}}{{number}}"
+      "pullRequestSubtitle": "Пул-реквест · {{repository}}{{number}}",
+      "linkedPullRequestsOverflow": "Ещё {{count}}"
     },
     "githubProjectPickers": {
       "add": "Добавить",

@@ -23,6 +23,8 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
     viewport?: { cols: number; rows: number }
     /** Stable across this pane's reattaches so the host can dedupe replayed input. */
     inputSessionId?: string
+    /** A terminal pane pauses output while hidden, so the host may count it as showing the terminal. */
+    reportsPaneVisibility?: boolean
     callbacks: RemoteRuntimeMultiplexedTerminalCallbacks
   }): Promise<RemoteRuntimeMultiplexedTerminal> {
     const streamId = this.allocateStreamId()
@@ -150,6 +152,7 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
             ackOutputSourceRanges: 1,
             outputPause: 1,
             outputPauseDropNotice: 1,
+            ...(args.reportsPaneVisibility ? { paneVisibility: 1 } : {}),
             writeUnavailable: 1,
             ...(args.client.type === 'desktop'
               ? { desktopViewportClaims: 1, endpointLossNotice: 1 }

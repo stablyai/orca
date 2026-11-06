@@ -6,7 +6,12 @@ import {
   type AcpCompactionFrame
 } from './acp-compaction-turn'
 import type { AcpDialect, AcpTurnEnding } from './acp-dialects/acp-dialect'
-import type { AcpTurnFailures } from './acp-turn-failures'
+import {
+  acpAuthenticationRequired,
+  acpPromptErrorDetail,
+  type AcpTurnFailures
+} from './acp-turn-failures'
+import { AcpAgentError } from './acp-errors'
 import { hookOutcomeRowBody } from '../../shared/agent-session/journal/agent-session-hook-outcome'
 import type { SessionUpdate } from './generated/acp-protocol.generated'
 
@@ -31,6 +36,32 @@ export class AcpPromptTurns {
     private readonly dialect: AcpDialect,
     private readonly agentName?: string
   ) {}
+
+  failure(
+    clientMessageId: string,
+    error: Error,
+    at: number,
+    failures: AcpTurnFailures
+  ): AcpTurnEnding | ProviderTimelineEvent[] {
+    const detail =
+      error instanceof AcpAgentError ? acpPromptErrorDetail(this.dialect, error) : undefined
+    const failure =
+      error instanceof AcpAgentError ? this.dialect.promptFailure?.(error, at) : undefined
+    const ending = {
+      ...failure,
+      stopReason: failure?.stopReason ?? 'error',
+      at,
+      failureDetail: detail,
+      notSignedIn: acpAuthenticationRequired(this.dialect, error)
+    }
+    if (this.current?.clientMessageId !== clientMessageId) {
+      // A late answer may supply a failure reason missing from the provider's end.
+      return this.last?.clientMessageId === clientMessageId && failures.has(this.last.turn)
+        ? failures.row(this.last.turn, ending)
+        : []
+    }
+    return ending
+  }
 
   /** Reuse the host's already-open command turn for compaction. */
   open(

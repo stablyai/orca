@@ -15,6 +15,7 @@ import {
   deleteStructuredAgentLaunchRecord,
   hasStructuredAgentLaunchCancellationTombstonePersisted,
   readStructuredAgentLaunchRecord,
+  updateStructuredAgentLaunchRecords,
   writeStructuredAgentLaunchRecord
 } from './structured-agent-session-launch-persistence'
 import {
@@ -65,9 +66,12 @@ export function resetStructuredAgentLaunchRegistryForTests(): void {
 }
 
 export function notifyStructuredLaunchListeners(): void {
-  for (const state of structuredLaunchesBySessionId.values()) {
-    persistStructuredLaunchState(state)
+  function* changes(): Generator<readonly [string, StructuredAgentLaunchPersistedRecord | null]> {
+    for (const state of structuredLaunchesBySessionId.values()) {
+      yield [state.intent.sessionId, structuredLaunchRecord(state)]
+    }
   }
+  updateStructuredAgentLaunchRecords(changes())
   for (const listener of structuredLaunchListeners) {
     listener()
   }
@@ -112,15 +116,25 @@ export function deleteStructuredLaunchStateIfCurrent(state: StructuredLaunchStat
 }
 
 function persistStructuredLaunchState(state: StructuredLaunchState): void {
+  const record = structuredLaunchRecord(state)
+  if (record) {
+    writeStructuredAgentLaunchRecord(record)
+  } else {
+    deleteStructuredAgentLaunchRecord(state.intent.sessionId)
+  }
+}
+
+function structuredLaunchRecord(
+  state: StructuredLaunchState
+): StructuredAgentLaunchPersistedRecord | null {
   const lifecycle = launchStateLifecycle(state)
   if (lifecycle === 'published' || lifecycle === 'cancelled') {
-    deleteStructuredAgentLaunchRecord(state.intent.sessionId)
-    return
+    return null
   }
-  writeStructuredAgentLaunchRecord({
+  return {
     ...structuredAgentLaunchRecordFor(state.intent, lifecycle),
     ...(lifecycle === 'failed' ? { failedAt: state.callers.failedAt } : {})
-  })
+  }
 }
 
 export function getPersistedStructuredAgentLaunchRecord(
@@ -168,7 +182,12 @@ export function getStructuredAgentSessionLaunchFailure(
   sessionId: string
 ): StructuredLaunchFailure | null {
   const state = getStructuredLaunchStateBySessionId(sessionId)
-  return state && state.intent.worktreeId === worktreeId && launchStateLifecycle(state) === 'failed'
+  if (!state || state.intent.worktreeId !== worktreeId) {
+    return null
+  }
+  const lifecycle = launchStateLifecycle(state)
+  return lifecycle === 'failed' ||
+    (lifecycle === 'visibility-unknown' && !!state.intent.params.firstMessage)
     ? (state.failure ?? null)
     : null
 }

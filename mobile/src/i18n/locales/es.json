@@ -578,12 +578,19 @@
     "usageLimit": {
       "reached": "{{agent}} alcanzó su límite de uso.",
       "reachedNamed": "{{agent}} alcanzó su límite {{window}}.",
-      "resetsAt": "Próximo restablecimiento: {{when}}.",
       "theAgent": "El agente",
       "windowCredits": "de uso adicional",
       "windowSession": "de sesión",
       "windowWeekly": "semanal",
-      "windowWeeklyModel": "semanal del modelo"
+      "windowWeeklyModel": "semanal del modelo",
+      "switchAccount": "Cambiar de cuenta",
+      "autoContinueCancelFailed": "No se pudo cancelar la continuación automática. Inténtalo de nuevo.",
+      "autoContinueCancel": "No continuar",
+      "statusResetAt": "Se restableció a las {{time}}",
+      "statusResetsAt": "Se restablece a las {{time}}",
+      "statusContinuesShortly": "Orca continuará en breve",
+      "statusContinuesThen": "Orca continuará entonces",
+      "statusWontContinue": "Orca no continuará automáticamente"
     },
     "useImageUpload": {
       "attachFailed": "No se pudo adjuntar",
@@ -656,6 +663,8 @@
     }
   },
   "common": {
+    "details": "Detalles",
+    "hideDetails": "Ocultar detalles",
     "back": "Atrás",
     "cancel": "Cancelar",
     "close": "Cerrar",
@@ -856,8 +865,8 @@
       "pairingInvalid": "Emparejamiento no válido",
       "pairingTemporarilyUnavailable": "Emparejamiento no disponible temporalmente",
       "repairHint": "Toca para volver a emparejar tu escritorio.",
+      "sameNetworkOnlyHint": "Solo se conecta en la misma red Wi-Fi o por Tailscale. Para conectarte desde cualquier lugar, inicia sesión en tu escritorio y vuelve a emparejar",
       "unlockHint": "Desbloquea tu teléfono y toca para reintentar.",
-      "updateDesktopHint": "Actualiza Orca en el escritorio e inicia sesión para conectarte desde cualquier lugar.",
       "worktreeAccessibilitySummary": "{{summary}}, activos: {{activeCount}}"
     },
     "hostDiagnosticsLink": {
@@ -888,6 +897,13 @@
       "openImage": "Abrir imagen",
       "wrapLines": "Ajustar líneas",
       "disableLineWrap": "Desactivar ajuste de línea"
+    },
+    "markdownCallout": {
+      "note": "Nota",
+      "tip": "Consejo",
+      "important": "Importante",
+      "warning": "Advertencia",
+      "caution": "Precaución"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Cerrar panel"
@@ -3364,7 +3380,8 @@
       "moreFields_one": "+{{count}} campo",
       "moreFields_other": "+{{count}} campos",
       "noItems": "No hay elementos en el proyecto",
-      "pullRequestSubtitle": "Pull request · {{repository}}{{number}}"
+      "pullRequestSubtitle": "Pull request · {{repository}}{{number}}",
+      "linkedPullRequestsOverflow": "+{{count}} más"
     },
     "githubProjectPickers": {
       "add": "Agregar",

@@ -163,11 +163,17 @@ export function useMobileHomeHostConnections(
     }
   }, [hosts, primeHosts])
 
-  useEffect(() => {
+  // Reconcile during render: allClients rebuilds per host tick, and an effect would commit Home twice.
+  const [reconciledFrom, setReconciledFrom] = useState<{
+    allClients: typeof allClients
+    hostCatalog: HostCatalogEntry[]
+  } | null>(null)
+  if (reconciledFrom?.allClients !== allClients || reconciledFrom.hostCatalog !== hostCatalog) {
+    setReconciledFrom({ allClients, hostCatalog })
     setHostAttempts((previous) => readMobileHomeReconnectAttempts(previous, allClients))
     setHostLastConnected((previous) => readMobileHomeLastConnected(previous, allClients))
     setHostStates((previous) => reconcileMobileHomeHostStates(previous, allClients, hostCatalog))
-  }, [allClients, hostCatalog])
+  }
 
   useEffect(() => {
     const clientsByHostId = new Map(allClients.map((entry) => [entry.hostId, entry.client]))
