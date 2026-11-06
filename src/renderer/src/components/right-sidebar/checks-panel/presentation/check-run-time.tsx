@@ -171,10 +171,12 @@ export function CheckRunTime({ check }: { check: PRCheckDetail }): React.JSX.Ele
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className="flex shrink-0 items-center gap-1 text-[11px] whitespace-nowrap text-muted-foreground tabular-nums">
-          {facts.fixedText && <span>{age ? `${facts.fixedText} ·` : facts.fixedText}</span>}
+        {/* Gives up width before the name does: truncates in a narrow sidebar instead of squeezing names to nothing. */}
+        <span className="min-w-0 truncate text-[11px] text-muted-foreground tabular-nums">
+          {facts.fixedText}
+          {facts.fixedText && age ? ' · ' : null}
           {/* The age is the only part that changes over time; its reserved width keeps "9m ago" to "10m ago" from re-truncating the name. */}
-          {age && <span className="min-w-[8ch] text-right">{age}</span>}
+          {age && <span className="inline-block min-w-[8ch] text-right">{age}</span>}
         </span>
       </TooltipTrigger>
       {facts.details.length > 0 && (

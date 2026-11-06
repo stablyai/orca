@@ -171,11 +171,11 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
                         conclusion === 'pending' && 'animate-spin motion-reduce:animate-none'
                       )}
                     />
-                    <span className="flex-1 truncate text-[12px] text-foreground">
+                    <span className="min-w-12 flex-1 truncate text-[12px] text-foreground">
                       {check.name}
                     </span>
+                    <CheckRunTime check={check} />
                     <span className="flex shrink-0 items-center gap-1">
-                      <CheckRunTime check={check} />
                       <span className="text-[11px] text-muted-foreground">
                         {getCheckStatusLabel(check)}
                       </span>
@@ -266,7 +266,7 @@ function PipelineCheckRow({ check }: { check: PRCheckDetail }): React.JSX.Elemen
           conclusion === 'pending' && 'animate-spin motion-reduce:animate-none'
         )}
       />
-      <span className="flex-1 truncate text-[12px] text-foreground">{check.name}</span>
+      <span className="min-w-12 flex-1 truncate text-[12px] text-foreground">{check.name}</span>
       <CheckRunTime check={check} />
       <span className="text-[11px] text-muted-foreground">
         {getLocalizedCheckStatusLabel(check)}
