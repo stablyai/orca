@@ -1,6 +1,7 @@
 import { afterEach, vi, type Mock } from 'vitest'
 import Database from '../sqlite/sync-database'
 import type {
+  FollowUpAction,
   FollowUpHostInputs,
   FollowUpObservation,
   FollowUpObservationSource,
@@ -13,6 +14,7 @@ import type { RuntimeStore } from '../runtime/runtime-store-contract'
 import { installPrFollowUps } from './install'
 import { installationActivity } from './install-activity.test-fixture'
 import { FollowUpStore } from './store'
+import type { FollowUpEngineDependencies } from './engine-contract'
 import { launchFollowUp, recoverFollowUpLaunch } from './launch'
 
 vi.mock('./launch', () => ({
@@ -227,6 +229,10 @@ export function installation(
       await flush()
     },
     records,
+    commitAction: (action: FollowUpAction) => {
+      const deps: FollowUpEngineDependencies = Reflect.get(host.engine, 'deps')
+      deps.store.saveAction(action)
+    },
     db,
     now,
     prepare,

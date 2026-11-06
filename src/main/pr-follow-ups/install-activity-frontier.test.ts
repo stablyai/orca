@@ -123,87 +123,13 @@ it.each([10, 100])('adds no evidence rows for %i unchanged reconcile ticks', asy
   expect(size()).toBe(before + 1)
 })
 
-it.each([
-  ['chat', 10],
-  ['chat', 100],
-  ['terminal', 10],
-  ['terminal', 100]
-] as const)(
-  'routes known identities and operations precisely through %s with %i retained PRs on one instance, including restart',
-  async (surface, count) => {
-    const h = installation(count, false, surface, false, true)
-    await h.flush()
-    for (const restart of [false, true]) {
-      if (restart) {
-        await h.restart()
-      }
-      const histories = new Set<string>()
-      let rows = 0
-      const prepare = h.db.prepare.bind(h.db)
-      const spy = vi.spyOn(h.db, 'prepare').mockImplementation((query) => {
-        const statement = prepare(query)
-        return new Proxy(statement, {
-          get(owner, field) {
-            if (field !== 'all' && field !== 'get' && field !== 'run') {
-              return Reflect.get(owner, field)
-            }
-            return (...args: Database.BindValue[]) => {
-              for (const arg of args) {
-                if (typeof arg === 'string' && /^pr[0-9]+$/.test(arg)) {
-                  histories.add(arg)
-                }
-              }
-              const result = statement[field](...args)
-              if (field !== 'run') {
-                rows += Array.isArray(result) ? result.length : result ? 1 : 0
-              }
-              return result
-            }
-          }
-        })
-      })
-      const reconcile = vi.spyOn(h.engine, 'reconcile')
-      const live = vi.mocked(h.inputs.live).mockClear()
-      h.stream('unrelated', false, h.now + 5)
-      sessionCrewChanges.notify(
-        Object.assign(new Set(['records'] as const), {
-          recordAuthorities: [{ recordId: 'unrelated', workspaceIds: ['w0'] }]
-        })
-      )
-      await h.flush()
-      expect(histories.size).toBe(0)
-      expect(rows).toBe(0)
-      h.stream('pane-w1', false, h.now + 10)
-      await h.flush()
-      expect([...histories]).toEqual(['pr1'])
-      expect(live).toHaveBeenCalledTimes(1)
-      expect(rows).toBeLessThanOrEqual(20)
-      histories.clear()
-      sessionCrewChanges.notify(
-        Object.assign(new Set(['records'] as const), {
-          recordAuthorities: [{ operationIds: ['old-pr1'], workspaceIds: ['w0'] }]
-        })
-      )
-      await h.flush()
-      expect([...histories]).toEqual(['pr1'])
-      expect(live).toHaveBeenCalledTimes(2)
-      const jobs = reconcile.mock.calls.filter(([keys]) => keys && [...keys].length)
-      expect(jobs).toHaveLength(2)
-      expect(jobs.every(([keys]) => [...keys!].join() === 'pr1')).toBe(true)
-      spy.mockRestore()
-      reconcile.mockRestore()
-    }
-    const reconcile = vi.spyOn(h.engine, 'reconcile')
-    h.status(true, h.now + 20)
-    await h.flush()
-    expect(reconcile.mock.calls.some(([keys]) => keys && [...keys].includes('pr0'))).toBe(true)
-    expect(h.engine.forWorkspace('w0')).not.toBeNull()
-  }
+const mixedCases = (['separate', 'shared', 'moved'] as const).flatMap((layout) =>
+  (['known-first', 'unmatched-first'] as const).map((order) => ({ layout, order }))
 )
 
-it.each(['separate', 'shared', 'moved'] as const)(
-  'recovers an identity-less obligation on the first mixed committed event with %s workspace authorities',
-  async (layout) => {
+it.each(mixedCases)(
+  'recovers on the first mixed committed event with $layout authorities, $order',
+  async ({ layout, order }) => {
     const h = installation(2, false, 'chat', false, layout === 'shared')
     await h.flush()
     if (layout === 'shared') {
@@ -230,15 +156,16 @@ it.each(['separate', 'shared', 'moved'] as const)(
       )
     recover.mockClear()
     const reconcile = vi.spyOn(h.engine, 'reconcile')
+    const authorities = [
+      { recordId: 'pane-w1', workspaceIds: [knownWorkspace] },
+      {
+        recordId: 'late-record',
+        workspaceIds: layout === 'moved' ? ['w0', 'moved-workspace'] : ['w0']
+      }
+    ]
     sessionCrewChanges.notify(
       Object.assign(new Set(['records'] as const), {
-        recordAuthorities: [
-          { recordId: 'pane-w1', workspaceIds: [knownWorkspace] },
-          {
-            recordId: 'late-record',
-            workspaceIds: layout === 'moved' ? ['w0', 'moved-workspace'] : ['w0']
-          }
-        ]
+        recordAuthorities: order === 'known-first' ? authorities : authorities.toReversed()
       })
     )
     await h.flush()
@@ -249,7 +176,7 @@ it.each(['separate', 'shared', 'moved'] as const)(
     })
     expect(
       reconcile.mock.calls.filter(([keys]) => keys && [...keys].length).map(([keys]) => [...keys!])
-    ).toEqual([['pr1', 'pr0']])
+    ).toEqual([order === 'known-first' ? ['pr1', 'pr0'] : ['pr0', 'pr1']])
     expect(h.engine.prKeysForAuthorities([{ recordId: 'late-record' }])).toEqual(['pr0'])
     expect(launchFollowUp).not.toHaveBeenCalled()
   }

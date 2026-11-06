@@ -4,21 +4,23 @@ import { installation } from './install-scheduling.test-fixture'
 import { recoverFollowUpLaunch } from './launch'
 import { sessionCrewChanges } from '../runtime/orchestration/crew/crew-changes'
 
-it.each([
-  ['chat', 10],
-  ['chat', 100],
-  ['terminal', 10],
-  ['terminal', 100]
-] as const)(
-  'routes known records, operations and %s status past %i unrelated unresolved obligations on the same instance',
-  async (surface, count) => {
+const knownCases = (['accepted', 'unresolved'] as const).flatMap((population) =>
+  (['chat', 'terminal'] as const).flatMap((surface) =>
+    [10, 100].map((count) => ({ population, surface, count }))
+  )
+)
+
+it.each(knownCases)(
+  'routes records, operations and $surface status past $count unrelated $population obligations',
+  async ({ surface, count, population }) => {
     const h = installation(count + 1, false, surface, false, true)
     await h.flush()
     for (let index = 0; index <= count; index++) {
-      if (index !== 1) {
+      if (population === 'unresolved' && index !== 1) {
         h.records.saveAction({
           ...h.records.action(`active-pr${index}`)!,
           status: 'unconfirmed',
+          instanceId: `unresolved-owner-${index}`,
           sessionId: undefined,
           paneKey: undefined,
           sessionStartedAt: undefined
@@ -59,6 +61,18 @@ it.each([
       const reconcile = vi.spyOn(h.engine, 'reconcile')
       const recover = vi.mocked(recoverFollowUpLaunch).mockClear()
       const live = vi.mocked(h.inputs.live).mockClear()
+      // An unrelated event has no recipients when every retained action is already known.
+      if (population === 'accepted') {
+        h.stream('unrelated', false, h.now + 5)
+        sessionCrewChanges.notify(
+          Object.assign(new Set(['records'] as const), {
+            recordAuthorities: [{ recordId: 'unrelated', workspaceIds: ['w0'] }]
+          })
+        )
+        await h.flush()
+        expect(histories.size).toBe(0)
+        expect(rows).toBe(0)
+      }
       const triggers = [
         () =>
           sessionCrewChanges.notify(
@@ -97,14 +111,36 @@ it.each([
           reconcile.mock.calls.filter(([keys]) => keys && [...keys].length).map(([keys]) => keys)
         ).toEqual([['pr1']])
       }
-      // Narrow reevaluation must not discard durable pre-acceptance capture on this owner.
+      // Every unresolved owner captures evidence even though only pr1 is reevaluated.
       expect(
         h.db
-          .prepare('SELECT COUNT(*) AS n FROM followup_activity WHERE identity = ?')
-          .get('pane-w1')?.n
-      ).toBeGreaterThan(0)
+          .prepare(
+            'SELECT DISTINCT instance_id FROM followup_activity WHERE identity = ? AND at = ? ORDER BY instance_id'
+          )
+          .all('pane-w1', h.now + 10)
+          .map((row) => row.instance_id)
+          .sort()
+      ).toEqual(
+        (population === 'unresolved'
+          ? [
+              'i0',
+              ...Array.from(
+                { length: count + 1 },
+                (_, index) => `unresolved-owner-${index}`
+              ).filter((id) => id !== 'unresolved-owner-1')
+            ]
+          : ['i0']
+        ).sort()
+      )
       sql.mockRestore()
       reconcile.mockRestore()
+    }
+    if (population === 'accepted') {
+      const reconcile = vi.spyOn(h.engine, 'reconcile')
+      h.status(true, h.now + 20)
+      await h.flush()
+      expect(reconcile.mock.calls.some(([keys]) => keys && [...keys].includes('pr0'))).toBe(true)
+      expect(h.engine.forWorkspace('w0')).not.toBeNull()
     }
   }
 )
