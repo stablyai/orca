@@ -4,12 +4,17 @@ import { bridgeId, clientFrame, flushBridge } from './bridge-host-test-fakes'
 import { harness, subscribeFrame } from './bridge-host-test-harness'
 
 const PROVEN: HostStatusReply = { protocolVersion: 10, minCompatibleMobileVersion: 1 }
+const STORE_READ = { values: ['cached-rows'], deferred: [] }
 
 // A cached page renders before this connection's verdict; nothing it sends may reach the desktop until then.
 describe('the connection verdict hold', () => {
   function heldBridge() {
     const verdict: { status: HostStatusReply | null } = { status: null }
-    const bridge = harness({ ready: true, readHostStatus: () => verdict.status })
+    const bridge = harness({
+      ready: true,
+      readHostStatus: () => verdict.status,
+      serveNativeVerb: async () => STORE_READ
+    })
     return { bridge, verdict }
   }
 
@@ -44,6 +49,9 @@ describe('the connection verdict hold', () => {
     expect(bridge.client.requests.map((request) => request.method)).toEqual(['status.get'])
     expect(bridge.client.streams).toEqual([])
     expect(bridge.nativeCalls).toEqual([{ verb: 'native.store.rows', params: storeRead }])
+    expect(
+      bridge.frames().find((frame) => frame.type === 'reply' && frame.id === bridgeId(5))
+    ).toMatchObject({ payload: { ok: true, result: STORE_READ } })
     expect(bridge.frames().findLast((frame) => frame.type === 'state')).toMatchObject({
       connection: { state: 'handshaking' }
     })
