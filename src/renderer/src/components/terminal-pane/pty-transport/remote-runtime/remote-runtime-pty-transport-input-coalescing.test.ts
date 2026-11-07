@@ -10,8 +10,8 @@ import {
   TERMINAL_INPUT_MAX_BYTES
 } from '../../../../../../shared/terminal/input/terminal-input'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../../../shared/clipboard-text'
-import { createRemoteRuntimeTransportMocks } from '../../remote-runtime-pty-transport-test-harness'
-import type { MultiplexSubscriptionCallbacks } from '../../remote-runtime-pty-transport-stream-fixtures'
+import { createRemoteRuntimeTransportMocks } from '../remote/remote-runtime-pty-transport-test-harness'
+import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pty-transport-stream-fixtures'
 
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {

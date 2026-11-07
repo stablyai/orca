@@ -10,12 +10,12 @@ import {
   pendingCreationHeldChatMessage,
   type PendingWorktreeCreation
 } from '@/lib/workspace/creation/pending-worktree-creation'
-import { shouldPreserveEditableFocus } from '@/components/terminal-pane/pane-helpers'
-import {
-  NativeChatComposer,
-  type NativeChatComposerHandle
-} from '@/components/native-chat/NativeChatComposer'
-import type { NativeChatStructuredComposerTransport } from '@/components/native-chat/native-chat-composer-types'
+import { shouldPreserveEditableFocus } from '@/lib/editable-focus-preservation'
+import { NativeChatComposer } from '@/components/native-chat/NativeChatComposer'
+import type {
+  NativeChatComposerHandle,
+  NativeChatStructuredComposerTransport
+} from '@/components/native-chat/native-chat-composer-types'
 import { useNativeChatComposerError } from '@/components/native-chat/use-native-chat-composer-notice'
 import type { NativeChatComposerNotice } from '@/components/native-chat/native-chat-composer-notice'
 import { NativeChatEmptyState } from '@/components/native-chat/NativeChatEmptyState'

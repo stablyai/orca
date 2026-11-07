@@ -1,5 +1,5 @@
 import type { IDisposable } from '@xterm/xterm'
-import type { resolveTerminalPaneOwnerContext } from '../terminal-pane-owner-context'
+import type { resolveTerminalPaneOwnerContext } from '../host-state/terminal-pane-owner-context'
 import type { HasPty } from '../terminal-dead-session-reconcile'
 import { useAppStore } from '@/store'
 import { consumeRestartReplacement } from './spawn/restart-replacement-on-show'

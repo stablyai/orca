@@ -269,7 +269,7 @@ const { requestTerminalPaneRecovery } = vi.hoisted(() => ({
   requestTerminalPaneRecovery: vi.fn(async () => true)
 }))
 vi.mock(
-  '../../src/renderer/src/components/terminal-pane/terminal-pane-recovery',
+  '../../src/renderer/src/components/terminal-pane/render-health/recovery/terminal-pane-recovery',
   async (importOriginal) => ({
     ...(await importOriginal<Record<string, unknown>>()),
     requestTerminalPaneRecovery
@@ -327,7 +327,7 @@ describe('account restart through renderer connection and host spawn', () => {
     const { createIpcPtyTransport } =
       await import('../../src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport')
     const { useTerminalPaneProcessExitActions } =
-      await import('../../src/renderer/src/components/terminal-pane/use-terminal-pane-process-exit-actions')
+      await import('../../src/renderer/src/components/terminal-pane/controller/use-terminal-pane-process-exit-actions')
     const oldTransport = createIpcPtyTransport({ worktreeId, tabId, leafId })
     oldTransport.attach({ existingPtyId: 'pty-old', callbacks: {} })
     const pane = createPane(1)
