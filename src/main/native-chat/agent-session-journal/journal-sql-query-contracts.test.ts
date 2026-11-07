@@ -135,6 +135,16 @@ it('keeps fence candidates including ended sends, alias insertion order, strict 
     'tail-second'
   ])
   expect(q.newestTurnBySequence(c.command.state)).toEqual({ turnId: 'b', state: 'completed' })
+  expect(q.latestItemForTurn(c.command.state, 'a')?.itemId).toBe('turn-a')
+  c.command.state.items.set(
+    'orca:hidden-turn',
+    item('orca:hidden-turn', 20, { kind: 'turn', turnId: 'a', state: 'completed' })
+  )
+  c.command.state.inputs.rejections.set('hidden-turn', send('hidden-turn'))
+  expect(q.latestItemForTurn(c.command.state, 'a')?.itemId).toBe('turn-a')
+  c.command.state.inputs.rejections.delete('hidden-turn')
+  expect(q.latestItemForTurn(c.command.state, 'a')?.itemId).toBe('orca:hidden-turn')
+  c.command.state.items.delete('orca:hidden-turn')
   const sourceOnly = command()
   sourceOnly.command.state.submissions.get('ended')!.fence = 3
   sourceOnly.command.flush()

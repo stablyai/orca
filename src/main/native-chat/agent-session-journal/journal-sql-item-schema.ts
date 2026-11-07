@@ -47,7 +47,7 @@ CREATE INDEX IF NOT EXISTS journal_proj_items_turn
   WHERE turn_id IS NOT NULL OR context_clear=1;
 CREATE INDEX IF NOT EXISTS journal_proj_items_named_turn
   ON journal_proj_items(session_id, epoch, turn_id, sequence DESC, sequence_index DESC, ordinal DESC)
-  WHERE hidden=0;
+  WHERE turn_id IS NOT NULL AND hidden=0;
 CREATE INDEX IF NOT EXISTS journal_proj_items_clear
   ON journal_proj_items(session_id, epoch, sequence DESC) WHERE context_clear=1;
 CREATE INDEX IF NOT EXISTS journal_proj_items_live_work
