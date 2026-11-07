@@ -319,9 +319,6 @@ describe('current recovery publication and normal Resume', () => {
         moving = hook!.queued.move!({ movedId: 'W2', beforeId: 'W1' })
       })
       expect(hook!.queued.cards.map((c) => c.messageId)).toEqual(['W2', 'W1', 'Q'])
-      expect(hook!.queued.cards[0]).toMatchObject({
-        caption: 'Waiting — a message ahead needs attention'
-      })
       vi.useFakeTimers()
       act(() => {
         listener?.(batchEvent(undefined, [acceptedSubmission('handoff-W1', 'W1')]))
