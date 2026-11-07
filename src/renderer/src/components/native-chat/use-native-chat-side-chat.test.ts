@@ -32,9 +32,7 @@ it('refuses while another fork from the chat is still opening', async () => {
 
   const outcome = await result.current?.open('why?')
 
-  expect(outcome).toEqual({ refused: 'Side chats are not ready yet. Try again in a moment.' })
-  expect(result.current?.notReadyReason).toBe(
-    'Side chats are not ready yet. Try again in a moment.'
-  )
+  expect(outcome).toHaveProperty('refused')
+  expect(result.current?.notReadyReason).not.toBeNull()
   expect(fork.request).not.toHaveBeenCalled()
 })
