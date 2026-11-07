@@ -1,3 +1,6 @@
+import { useAppStore } from '@/store'
+import { resolveDefaultAgentForWorktree } from '@/lib/agent-tab-shortcuts'
+import { agentTabLaunchStore } from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
@@ -6,11 +9,20 @@ import { captureAgentTabLaunchContext } from '@/components/agent-tab-launch-cont
 import { activateAndRevealWorkspaceWithOutcome } from '@/lib/workspace/activation/worktree-activation'
 import { reportAgentWorkspaceActivation } from '@/lib/worktree-activation-outcome'
 
-export function launchOnboardingCompletionAgent(
+export async function launchOnboardingCompletionAgent(
   worktreeId: string,
-  agent: TuiAgent,
+  agent: TuiAgent | null | undefined,
   workspaceExecutionHostId?: ExecutionHostId
-): void {
+): Promise<void> {
+  if (agent === undefined) {
+    agent = await resolveDefaultAgentForWorktree(
+      () => agentTabLaunchStore(useAppStore.getState(), { worktreeId, workspaceExecutionHostId }),
+      worktreeId
+    ).catch(() => null)
+  }
+  if (!agent) {
+    return
+  }
   launchAgentInNewTabWithOutcome({
     requestId: newAgentLaunchRequestId(),
     ...captureAgentTabLaunchContext(worktreeId),
