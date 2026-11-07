@@ -54,8 +54,12 @@ export type JournalSqlStorePreparation = {
 
 /** Return all host facts anew; a rollback invalidates staged store drafts from the prior attempt. */
 type Prepare = (
+  context: JournalReceiptStage
+) => JournalSqlStorePreparation | Promise<JournalSqlStorePreparation>
+
+type AnswerFacts = (
   context: JournalReceiptStage,
-  needs: JournalHostFactsNeeded | undefined
+  needs: JournalHostFactsNeeded
 ) => JournalSqlStorePreparation | Promise<JournalSqlStorePreparation>
 
 /** A live ownership token and worker ports; no reduced chat or writable connection lives here. */
@@ -99,13 +103,19 @@ export class SqlAgentSessionJournal {
     }
   }
 
-  write(operation: JournalSqlStoreOperation, prepare?: Prepare): Promise<JournalWriterCommit> {
+  write(
+    operation: JournalSqlStoreOperation,
+    prepare?: Prepare,
+    answerFacts?: AnswerFacts
+  ): Promise<JournalWriterCommit> {
     return this.admit(async (writer) => {
       const savedAt = this.now()
       let needs: JournalHostFactsNeeded | undefined
       for (;;) {
         const context: JournalReceiptStage = { savedAt, row: receiptRow(operation) }
-        const preparation: JournalSqlStorePreparation = (await prepare?.(context, needs)) ?? {}
+        const preparation: JournalSqlStorePreparation = needs
+          ? await answerFacts!(context, needs)
+          : ((await prepare?.(context)) ?? {})
         const facts: JournalWriterHostFacts = { identity: this.identity, ...preparation.facts }
         let staged: JournalStagedReceipt | undefined
         let commit: JournalWriterCommit
@@ -126,7 +136,7 @@ export class SqlAgentSessionJournal {
         } catch (error) {
           preparation.settle?.(undefined)
           staged?.settle(undefined)
-          if (!(error instanceof JournalHostFactsNeededError) || !prepare) {
+          if (!(error instanceof JournalHostFactsNeededError) || !answerFacts) {
             throw error
           }
           needs = error.needs

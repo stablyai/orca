@@ -173,8 +173,14 @@ it('releases a rolled-back stage before answering host facts and keeps the retry
   })
   let released = false
   let adopted = false
-  const retry = journal.write(item('retried'), (_context, needs) => {
-    if (needs) {
+  const retry = journal.write(
+    item('retried'),
+    () => ({
+      receipt: receipt((committed) => {
+        released = !committed
+      })
+    }),
+    (_context, needs) => {
       expect(released).toBe(true)
       return {
         facts: { rewound: needs.rewound },
@@ -183,18 +189,37 @@ it('releases a rolled-back stage before answering host facts and keeps the retry
         })
       }
     }
-    return {
-      receipt: receipt((committed) => {
-        released = !committed
-      })
-    }
-  })
+  )
   const next = journal.write(item('later'))
   await retry
   expect(adopted).toBe(true)
   await next
   expect(await journal.reads.item('orca:item')).toMatchObject({
     revision: 2,
+    body: { text: 'later' }
+  })
+})
+
+it('returns unanswered host-fact requests without replaying the command', async () => {
+  const { database, journal } = await fixture()
+  const needed = new JournalHostFactsNeededError({
+    rewound: { cursor: { epoch: 'proof', sequence: 8 }, cancel: null }
+  })
+  await database.serialize('session', (writer) => {
+    vi.spyOn(writer, 'write').mockRejectedValueOnce(needed)
+  })
+  let adopted = true
+  await expect(
+    journal.write(item('unanswered'), () => ({
+      receipt: receipt((committed) => {
+        adopted = committed
+      })
+    }))
+  ).rejects.toBe(needed)
+  expect(adopted).toBe(false)
+  await journal.write(item('later'))
+  expect(await journal.reads.item('orca:item')).toMatchObject({
+    revision: 1,
     body: { text: 'later' }
   })
 })
