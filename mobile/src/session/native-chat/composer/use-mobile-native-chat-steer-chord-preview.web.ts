@@ -1,7 +1,12 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { hostOs } from '../../../platform/host-os'
-import { useNativeChatSteerChordPreview } from '../../../../../src/shared/native-chat/input/use-native-chat-steer-chord-preview'
+import { createNativeChatSteerChordPreviewHook } from '../../../../../src/shared/native-chat/input/use-native-chat-steer-chord-preview'
 import type { MobileNativeChatSteerChordPreviewInput } from './use-mobile-native-chat-steer-chord-preview'
+
+const useNativeChatSteerChordPreview = createNativeChatSteerChordPreviewHook({
+  useEffect,
+  useState
+})
 
 /** Desktop's held Cmd/Ctrl cue on a hardware keyboard: Send shows what Cmd/Ctrl+Enter would do. */
 export function useMobileNativeChatSteerChordPreview({

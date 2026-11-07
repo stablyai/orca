@@ -1,6 +1,7 @@
 import type { RefObject } from 'react'
 import type { TextInput } from 'react-native'
 import { isStructuredAgentSessionHostCommand } from '../../../../../src/shared/agent-session/view/structured-agent-session-composer'
+import { agentSessionInteractionCommand } from '../../../../../src/shared/agent-session/options/agent-session-interaction-mode'
 import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
 import type { SessionOptionDescriptor } from '../../../../../src/shared/native-chat/input/native-chat-session-options'
 import { MobileNativeChatStopButton } from '../input/MobileNativeChatStopButton'
@@ -8,6 +9,7 @@ import { MobileNativeChatControlSwap } from '../input/mobile-native-chat-control
 import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
 import { mobileNativeChatComposerShowsStop } from './mobile-native-chat-composer-layout'
 import type { MobileNativeChatStructuredComposer } from './mobile-native-chat-structured-composer'
+import { readMobileNativeChatPickedSkills } from './mobile-native-chat-draft-store'
 import {
   MobileNativeChatSendButton,
   MobileNativeChatSteerPreviewButton
@@ -19,6 +21,7 @@ import { useMobileNativeChatSteerChordPreview } from './use-mobile-native-chat-s
 export function MobileNativeChatComposerSendSlot({
   fieldRef,
   value,
+  draftScopeKey,
   attachmentCount,
   structured,
   agent,
@@ -34,6 +37,7 @@ export function MobileNativeChatComposerSendSlot({
 }: {
   fieldRef: RefObject<TextInput | null>
   value: string
+  draftScopeKey: string | null | undefined
   attachmentCount: number
   structured: MobileNativeChatStructuredComposer | null
   agent: string | null
@@ -52,9 +56,15 @@ export function MobileNativeChatComposerSendSlot({
     fieldRef,
     hasDraft: value.trim() !== '' || attachmentCount > 0,
     followUp,
-    // A typed chat command runs as itself, so the chord sends it no differently.
+    // A typed chat command runs as itself, so the chord sends it no differently; a picked
+    // interaction-mode skill (/plan) is a message, as the phone's send reads it.
     deliversMessage:
       !structured ||
+      (agentSessionInteractionCommand(agent ?? '', value) !== null &&
+        draftScopeKey != null &&
+        readMobileNativeChatPickedSkills(draftScopeKey).some(
+          (skill) => value.trimEnd() === `/${skill.name}`
+        )) ||
       !isStructuredAgentSessionHostCommand(
         value,
         structured.threadGoal?.changes === 'host',

@@ -27,8 +27,6 @@ const MOVE_KEY = '\u0000move'
 export type MobileNativeChatQueuedMessagesHandle = {
   /** Runs the head card's own Steer, or with no turn running its Send; false where that press is unavailable. */
   steerHead: (alternateSteers: boolean) => boolean
-  /** Lights the head card while the composer previews sending it (Steer queued). */
-  lightHead: (lit: boolean) => void
 }
 
 /** The card an empty Cmd/Ctrl+Enter presses, or null where it presses none. */
@@ -61,6 +59,10 @@ export type MobileNativeChatQueuedMessagesProps = {
   pause?: AgentSessionQueuePause | null
   onResume?: () => Promise<boolean>
   steerHeld?: boolean
+  /** Lights the head card while the composer previews sending it (Steer queued). */
+  headLit?: boolean
+  /** Each change to the cards with an action on its way, so the composer offers no press they'd refuse. */
+  onBusyChange?: (ids: ReadonlySet<string>) => void
   /** The agent is working: a steerable card's action reads Steer, otherwise Send. */
   agentWorking?: boolean
 }
@@ -77,6 +79,8 @@ export function MobileNativeChatQueuedMessages({
   pause,
   onResume,
   steerHeld = false,
+  headLit = false,
+  onBusyChange,
   agentWorking = false
 }: MobileNativeChatQueuedMessagesProps): React.JSX.Element | null {
   useMobileColorScheme()
@@ -88,7 +92,6 @@ export function MobileNativeChatQueuedMessages({
   const inFlightRef = useRef(new Set<string>())
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(true)
-  const [headLit, setHeadLit] = useState(false)
   const largeText = useLargeSystemText()
   const run = (
     messageId: string,
@@ -101,12 +104,14 @@ export function MobileNativeChatQueuedMessages({
     }
     keys.forEach((key) => inFlightRef.current.add(key))
     setBusyIds(new Set(inFlightRef.current))
+    onBusyChange?.(inFlightRef.current)
     void (async () => {
       try {
         await action(messageId)
       } finally {
         keys.forEach((key) => inFlightRef.current.delete(key))
         setBusyIds(new Set(inFlightRef.current))
+        onBusyChange?.(inFlightRef.current)
       }
     })()
     return true
@@ -118,8 +123,7 @@ export function MobileNativeChatQueuedMessages({
         alternateSteers
       )
       return head !== null && run(head, onSend)
-    },
-    lightHead: setHeadLit
+    }
   }))
   if (!cards || cards.length === 0) {
     if (!expanded) {

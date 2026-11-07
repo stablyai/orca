@@ -389,6 +389,7 @@ export function MobileNativeChatComposer({
                 {...{
                   fieldRef,
                   value,
+                  draftScopeKey,
                   attachmentCount,
                   structured,
                   agent,

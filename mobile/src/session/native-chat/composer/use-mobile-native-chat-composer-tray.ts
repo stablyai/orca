@@ -4,6 +4,7 @@ import {
   useCallback,
   useMemo,
   useRef,
+  useState,
   type ReactNode,
   type RefObject
 } from 'react'
@@ -61,7 +62,9 @@ export function useMobileNativeChatComposerTray({
     (alternateSteers: boolean) => queuedRef.current?.steerHead(alternateSteers) ?? false,
     []
   )
-  const light = useCallback((lit: boolean) => queuedRef.current?.lightHead(lit), [])
+  // Held here, not in the list, so a chat switch mid-preview mounts the new list already lit.
+  const [headLit, light] = useState(false)
+  const [busy, setBusy] = useState<{ sessionKey: string; ids: ReadonlySet<string> } | null>(null)
   const {
     cards,
     onSend,
@@ -75,6 +78,7 @@ export function useMobileNativeChatComposerTray({
     steerHeld,
     agentWorking
   } = queued
+  const busyIds = busy?.sessionKey === sessionKey ? busy.ids : undefined
   return useMemo(
     () => ({
       content: createElement(
@@ -107,16 +111,21 @@ export function useMobileNativeChatComposerTray({
           pause,
           onResume,
           steerHeld,
+          headLit,
+          onBusyChange: (ids: ReadonlySet<string>) => setBusy({ sessionKey, ids: new Set(ids) }),
           agentWorking
         })
       ),
       composerInputRef,
       steerHead: {
-        steers: (alternateSteers: boolean) =>
-          mobileNativeChatChordHeadId(
+        steers: (alternateSteers: boolean) => {
+          const head = mobileNativeChatChordHeadId(
             { cards, steerHeld, agentWorking, editor },
             alternateSteers
-          ) !== null,
+          )
+          // A card whose own action is on its way would refuse the press, as desktop hides it then.
+          return head !== null && busyIds?.has(head) !== true
+        },
         run,
         light
       }
@@ -136,6 +145,8 @@ export function useMobileNativeChatComposerTray({
       pause,
       sessionKey,
       steerHeld,
+      headLit,
+      busyIds,
       run,
       light,
       agentWorking

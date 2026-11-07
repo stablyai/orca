@@ -1,14 +1,19 @@
 // @vitest-environment happy-dom
 
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { NativeChatFollowUpBehavior } from './native-chat-follow-up-behavior'
 import {
   NATIVE_CHAT_STEER_CHORD_HOLD_MS,
-  useNativeChatSteerChordPreview
+  createNativeChatSteerChordPreviewHook
 } from './use-native-chat-steer-chord-preview'
+
+const useNativeChatSteerChordPreview = createNativeChatSteerChordPreviewHook({
+  useEffect,
+  useState
+})
 
 type Props = {
   alternateSend: NativeChatFollowUpBehavior | undefined
