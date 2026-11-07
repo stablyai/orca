@@ -34,11 +34,9 @@ import {
   type DeviceStoreKeychain
 } from './device-store-key'
 import { sealDeviceStoreValue, type DeviceStoreTable } from './device-store-seal'
+import { DEVICE_STORE_MAX_VALUE_LENGTH } from './device-store-value-codec'
 
 export type { DeviceStoreTable } from './device-store-seal'
-
-// Encoded length (base64 of gzipped JSON), about 3-5 MB of JSON; writers trim or skip larger values.
-export const DEVICE_STORE_MAX_VALUE_LENGTH = 512 * 1024
 
 export type DeviceStoreWriteOp = { readonly key: string; readonly value: string | null }
 export type DeviceStoreRefusal = 'too-large' | 'over-cap' | 'unavailable'
