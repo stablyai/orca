@@ -12,6 +12,7 @@ function sourceFor(args: {
   pairingRevision: number
 }) {
   const forgetStoredToken = vi.fn()
+  const forgetPairing = vi.fn()
   const source = createWebRuntimeCredentialSource({
     environment: {
       environmentId: 'env-1',
@@ -24,9 +25,9 @@ function sourceFor(args: {
     store: args.store,
     subtle,
     forgetStoredToken,
-    forgetPairing: vi.fn()
+    forgetPairing
   })
-  return { source, forgetStoredToken }
+  return { source, forgetStoredToken, forgetPairing }
 }
 
 async function migrateOnce(store: WebDeviceKeyStore, pairingRevision: number): Promise<string> {
@@ -62,5 +63,30 @@ describe('browser credential plans', () => {
     })
     expect(await store.get('host-key|env-1')).toMatchObject({ state: 'active', pairingRevision: 2 })
     expect(stale.forgetStoredToken).not.toHaveBeenCalled()
+  })
+
+  it('a forgotten token with no key left drops the pairing for re-pairing', async () => {
+    const { source, forgetPairing } = sourceFor({
+      store: createMemoryWebDeviceKeyStore(),
+      deviceToken: 'migrated:keyed-1',
+      pairingRevision: 1
+    })
+    expect(await source.nextPlan(true)).toEqual({
+      kind: 'legacy-token',
+      deviceToken: 'migrated:keyed-1'
+    })
+    expect(forgetPairing).toHaveBeenCalledTimes(1)
+  })
+
+  it('a forgotten token whose key is still stored keeps signing in with it', async () => {
+    const store = createMemoryWebDeviceKeyStore()
+    await migrateOnce(store, 1)
+    const { source, forgetPairing } = sourceFor({
+      store,
+      deviceToken: 'migrated:keyed-1',
+      pairingRevision: 1
+    })
+    expect(await source.nextPlan(true)).toMatchObject({ kind: 'device-key', deviceId: 'keyed-1' })
+    expect(forgetPairing).not.toHaveBeenCalled()
   })
 })

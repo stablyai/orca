@@ -1,16 +1,23 @@
 import { webcrypto } from 'node:crypto'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   encodeDeviceProofMessage,
   verifyDeviceProof
 } from '../../../shared/remote-runtime/pairing/device-key-proof'
 import { getOrCreatePendingWebDeviceKey, webDeviceSigningKey } from './web-device-key'
 
-import { createMemoryWebDeviceKeyStore } from './web-device-key-store'
+import {
+  createIndexedDbWebDeviceKeyStore,
+  createMemoryWebDeviceKeyStore
+} from './web-device-key-store'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Node's webcrypto implements the SubtleCrypto surface these helpers call.
 const subtle = webcrypto.subtle as unknown as SubtleCrypto
 const transcriptHashB64 = Buffer.alloc(32, 7).toString('base64')
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 async function proof(key: { sign: (m: Uint8Array) => Promise<Uint8Array> }) {
   const message = encodeDeviceProofMessage('register', Buffer.from(transcriptHashB64, 'base64'))
@@ -44,5 +51,13 @@ describe('browser device keys', () => {
     ])
     expect(second.publicKeyB64).toBe(first.publicKeyB64)
     expect((await store.get('h|e'))?.publicKeyB64).toBe(first.publicKeyB64)
+  })
+
+  it('asks the browser not to evict the storage that holds device keys', () => {
+    const persist = vi.fn(() => Promise.resolve(true))
+    vi.stubGlobal('navigator', { storage: { persist } })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the store opens IndexedDB lazily, so the factory is never touched here.
+    createIndexedDbWebDeviceKeyStore({} as IDBFactory)
+    expect(persist).toHaveBeenCalledTimes(1)
   })
 })
