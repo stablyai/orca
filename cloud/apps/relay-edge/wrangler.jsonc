@@ -1,7 +1,8 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  // Top level = local `wrangler dev` only. It has no routes and workers.dev is off, so a
-  // deploy without --env publishes nothing reachable.
+  // Local `wrangler dev` and tests only. It has no routes and workers.dev is off, so a deploy
+  // from this file publishes nothing reachable. Deployed environments (names, hostnames, ids,
+  // limits) live in a private deploy config, not in this repo.
   "name": "orca-relay-edge-local",
   "main": "src/index.ts",
   "compatibility_date": "2026-11-01",
@@ -39,121 +40,5 @@
     "PING_INTERVAL_MS": "30000",
     "SILENCE_TIMEOUT_MS": "75000",
     "ORPHAN_GRACE_MS": "30000"
-  },
-  "env": {
-    // Production: the edge hostname. Object backend; real auth JWKS; no debug or reset routes.
-    // Secrets (from stdin): ADMIN_SIGNING_KEY (shared with the director's
-    // ORCA_RELAY_EDGE_ADMIN_SIGNING_KEY), later ERASE_SIGNING_KEY (the erasure job's).
-    // Directors send no host here until their edge cohort is configured.
-    "production": {
-      "name": "orca-relay-edge",
-      "workers_dev": false,
-      "preview_urls": false,
-      "routes": [{ "pattern": "edge.relay.orca.dev", "custom_domain": true }],
-      "durable_objects": {
-        "bindings": [
-          { "name": "HOST_RELAY", "class_name": "HostRelay" },
-          { "name": "SPLICE_RELAY", "class_name": "SpliceRelay" }
-        ],
-        "code_update_strategy": { "mode": "deferred", "max_delay": 300 }
-      },
-      "analytics_engine_datasets": [{ "binding": "METRICS", "dataset": "orca_relay_edge_production" }],
-      "ratelimits": [{ "name": "PREAUTH_LIMITER", "namespace_id": "1002", "simple": { "limit": 600, "period": 60 } }],
-      "vars": {
-        "EDGE_BACKEND": "object",
-        "EDGE_CELL_ID": "edge",
-        "ADMIN_ISSUER": "https://relay.onorca.dev",
-        "ERASE_ISSUER": "orca-account-erasure",
-        "RELAY_JWKS_URL": "https://login.onorca.dev/.well-known/jwks.json",
-        "RELAY_AUTH_ISSUER": "https://login.onorca.dev",
-        "RELAY_JWT_AUDIENCE": "orca-relay",
-        "PING_INTERVAL_MS": "45000",
-        "SILENCE_TIMEOUT_MS": "75000",
-        "ORPHAN_GRACE_MS": "30000",
-        "EDGE_VERSION": "prod-v1"
-      }
-    },
-    // Phase 2 on Cloudflare: object backend (no database), test signing key and test JWKS as
-    // secrets, workers.dev only, debug routes on. Not for real clients.
-    "phase2": {
-      "name": "orca-relay-edge-phase2",
-      "workers_dev": true,
-      "preview_urls": false,
-      "durable_objects": {
-        "bindings": [
-          { "name": "HOST_RELAY", "class_name": "HostRelay" },
-          { "name": "SPLICE_RELAY", "class_name": "SpliceRelay" }
-        ],
-        "code_update_strategy": { "mode": "deferred", "max_delay": 300 }
-      },
-      "analytics_engine_datasets": [{ "binding": "METRICS", "dataset": "orca_relay_edge_phase2" }],
-      // Per source per colo, phone and data counted apart. Sized for carrier NAT: one address can
-      // front many phones, and a whole region reconnects after an edge deploy.
-      "ratelimits": [{ "name": "PREAUTH_LIMITER", "namespace_id": "1001", "simple": { "limit": 600, "period": 60 } }],
-      "vars": {
-        "EDGE_BACKEND": "object",
-        "EDGE_CELL_ID": "edge",
-        "ADMIN_ISSUER": "https://director.phase2-test.invalid",
-        "ERASE_ISSUER": "orca-account-erasure",
-        "RELAY_JWT_AUDIENCE": "orca-relay",
-        "PING_INTERVAL_MS": "45000",
-        "SILENCE_TIMEOUT_MS": "75000",
-        "ORPHAN_GRACE_MS": "30000",
-        "SPIKE_DEBUG": "1",
-        "EDGE_VERSION": "phase2-v1"
-      }
-    },
-    // R6/R8 staging: staging Cloud SQL through Hyperdrive over a Workers VPC tunnel. workers.dev
-    // only; test JWKS inline (synthetic hosts), debug routes on. Not for real clients.
-    "staging": {
-      "name": "orca-relay-edge-staging",
-      "workers_dev": true,
-      "preview_urls": false,
-      "durable_objects": {
-        "bindings": [
-          { "name": "HOST_RELAY", "class_name": "HostRelay" },
-          { "name": "SPLICE_RELAY", "class_name": "SpliceRelay" }
-        ],
-        "code_update_strategy": { "mode": "deferred", "max_delay": 300 }
-      },
-      "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "176d8b75917642b0b7725e15745338ed" }],
-      "analytics_engine_datasets": [{ "binding": "METRICS", "dataset": "orca_relay_edge_staging" }],
-      "vars": {
-        "EDGE_BACKEND": "postgres",
-        "EDGE_CELL_ID": "edge",
-        "RELAY_JWT_AUDIENCE": "orca-relay",
-        "PING_INTERVAL_MS": "45000",
-        "SILENCE_TIMEOUT_MS": "75000",
-        "ORPHAN_GRACE_MS": "30000",
-        "SPIKE_DEBUG": "1",
-        "EDGE_VERSION": "staging-v1"
-      }
-    },
-    // Cloudflare de-risk spike: workers.dev only, no custom domains or routes, test keys only.
-    // RELAY_JWKS (public test key) and SPIKE_RESUME_TOKEN_HASHES are set with `wrangler secret put`.
-    "spike": {
-      "name": "orca-relay-edge-spike",
-      "workers_dev": true,
-      "preview_urls": false,
-      "durable_objects": {
-        "bindings": [
-          { "name": "HOST_RELAY", "class_name": "HostRelay" },
-          { "name": "SPLICE_RELAY", "class_name": "SpliceRelay" }
-        ],
-        // Per-deploy override: --durable-objects-code-update-mode "deferred 120s"
-        "code_update_strategy": { "mode": "deferred", "max_delay": 300 }
-      },
-      "analytics_engine_datasets": [{ "binding": "METRICS", "dataset": "orca_relay_edge_spike" }],
-      "vars": {
-        // No database on the spike: stub credentials, no epoch check (load tests only).
-        "EDGE_BACKEND": "spike",
-        "RELAY_JWT_AUDIENCE": "orca-relay",
-        "PING_INTERVAL_MS": "45000",
-        "SILENCE_TIMEOUT_MS": "75000",
-        "ORPHAN_GRACE_MS": "30000",
-        "SPIKE_DEBUG": "1",
-        "EDGE_VERSION": "v1"
-      }
-    }
   }
 }

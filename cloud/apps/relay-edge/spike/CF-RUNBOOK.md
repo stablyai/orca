@@ -1,5 +1,7 @@
 # Relay edge: Cloudflare de-risk runbook
 
+The `--env spike` commands below need the private deploy config: add `-c <deploy config>/edge.jsonc` (copied into this directory), or use its `deploy.sh edge spike <orca checkout>`.
+
 The spike runs on workers.dev only, as `orca-relay-edge-spike`: no routes, no custom domains, test keys only.
 Run from `cloud/apps/relay-edge`. Answers tracker risks R1, R2, R3, R4, R9 and R12.
 
