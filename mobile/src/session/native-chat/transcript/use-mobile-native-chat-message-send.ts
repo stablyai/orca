@@ -6,6 +6,7 @@ import {
   readMobileNativeChatInputClear,
   sendMobileNativeChatMessageWithOutcome,
   typeMobileNativeChatCommandWithOutcome,
+  type MobileNativeChatSendIntent,
   type MobileNativeChatSendOutcome
 } from '../mobile-native-chat-send'
 import type { CatalogCommandDelivery } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog-types'
@@ -34,7 +35,8 @@ export type MobileNativeChatMessageSend = {
     deadline?: number,
     // Only a structured send carries them; a terminal chat's images were pasted before this.
     _attachments?: readonly unknown[],
-    sentAt?: number
+    sentAt?: number,
+    intent?: MobileNativeChatSendIntent
   ) => Promise<MobileNativeChatSendOutcome>
   dispatchCommand: (
     text: string,
@@ -89,7 +91,8 @@ export function useMobileNativeChatMessageSend(args: {
       syncComposer: boolean,
       recordControlSend: boolean,
       sharedDeadline?: number,
-      sentAt?: number
+      sentAt?: number,
+      onHandBack?: () => void
     ): Promise<MobileNativeChatSendOutcome> => {
       // Trim only outgoing bytes to prevent rapid-send concatenation; restore the exact typed draft on rejection.
       const text = draftText.trimEnd()
@@ -185,6 +188,7 @@ export function useMobileNativeChatMessageSend(args: {
               return
             }
             restoreRejectedDraft(origin, draftText)
+            onHandBack?.()
             onSendError(UNCONFIRMED_SEND_RESTORED_MESSAGE)
           })
         } else {
@@ -234,8 +238,9 @@ export function useMobileNativeChatMessageSend(args: {
       images?: string[],
       deadline?: number,
       _attachments?: readonly unknown[],
-      sentAt?: number
-    ) => sendMessage(text, images, true, true, deadline, sentAt),
+      sentAt?: number,
+      intent?: MobileNativeChatSendIntent
+    ) => sendMessage(text, images, true, true, deadline, sentAt, intent?.onHandBack),
     [sendMessage]
   )
 
