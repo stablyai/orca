@@ -1,7 +1,9 @@
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { getPtyExecutionHost } from '../../../shared/terminal/pty/lifecycle/terminal-execution-host'
-import type { AppState } from '@/store/types'
-import { collectPtyIdsForTab } from '@/store/slices/terminal-tab-retirement'
+import {
+  collectPtyIdsForTab,
+  type TerminalTabRetirementState
+} from '@/store/slices/terminal-tab-retirement'
 import { resolveTerminalWorktreeRoute, type TerminalWorktreeRoute } from './terminal-worktree-route'
 
 function routeForHost(hostId: string | null | undefined): TerminalWorktreeRoute | null {
@@ -15,7 +17,7 @@ function routeForHost(hostId: string | null | undefined): TerminalWorktreeRoute 
 // Route by paired PTY owner (#31983), catalog, sole PTY host, then unified-tab host.
 // Return null before host evidence hydrates (#11308); per-PTY teardown still fails closed.
 export function resolveTerminalCloseRoute(
-  state: AppState,
+  state: TerminalTabRetirementState,
   worktreeId: string,
   terminalTabId: string
 ): TerminalWorktreeRoute | null {

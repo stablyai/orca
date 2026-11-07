@@ -9,6 +9,7 @@ import {
   type TerminalTabRetirementState
 } from '@/store/slices/terminal-tab-retirement'
 import { reserveTerminalRetirementTeardowns } from '@/store/slices/terminal-retirement-teardown-reservation'
+import { resolveTerminalCloseRoute } from '@/lib/terminal-close-route'
 import { notifyDaemonSessionInventoryInvalidated } from '../status-bar/daemon-session-inventory-invalidation'
 
 const CLOSE_BATCH_SIZE = 2
@@ -62,23 +63,28 @@ type KillAllTerminalSurfaceDependencies = {
   reportSummary: (summary: KillAllTerminalSurfacesSummary) => void
 }
 
+/** A paired server's tab mirrors that server's terminal, and closing it stops the terminal there. */
+function isPairedServerTab(state: KillAllTerminalSurfaceState, worktreeId: string, tabId: string) {
+  return Boolean(resolveTerminalCloseRoute(state, worktreeId, tabId)?.runtimeEnvironmentId)
+}
+
+/** The terminal tabs Kill all closes: every one but a paired server's, which stay with that server. */
 export function snapshotKillAllTerminalSurfaceIds(
   state: KillAllTerminalSurfaceState = useAppStore.getState()
 ): string[] {
-  const targetIds = new Set<string>()
-  for (const tabs of Object.values(state.tabsByWorktree)) {
-    for (const tab of tabs) {
-      targetIds.add(tab.id)
+  const seen = new Map<string, boolean>()
+  const consider = (worktreeId: string, tabId: string): void => {
+    if (!seen.has(tabId)) {
+      seen.set(tabId, !isPairedServerTab(state, worktreeId, tabId))
     }
   }
-  for (const tabs of Object.values(state.unifiedTabsByWorktree)) {
-    for (const tab of tabs) {
-      if (tab.contentType === 'terminal') {
-        targetIds.add(tab.entityId)
-      }
-    }
+  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
+    tabs.forEach((tab) => consider(worktreeId, tab.id))
   }
-  return [...targetIds]
+  for (const [worktreeId, tabs] of Object.entries(state.unifiedTabsByWorktree)) {
+    tabs.forEach((tab) => tab.contentType === 'terminal' && consider(worktreeId, tab.entityId))
+  }
+  return [...seen].filter(([, isTarget]) => isTarget).map(([tabId]) => tabId)
 }
 
 function getTargetIndex(
@@ -175,11 +181,15 @@ export async function runKillAllTerminalSurfaces(
   const createCloseWave = (state: KillAllTerminalSurfaceState) => {
     const remainingIdSet = new Set(remainingTargetIds)
     const { ownerByTargetId, terminalIdsByWorktree } = getTargetIndex(state, remainingIdSet)
-    const presentTargetIds = [...remainingTargetIds].filter((targetId) =>
-      ownerByTargetId.has(targetId)
+    // A target that now resolves to a paired server is left with that server, like an absent one.
+    const presentTargetIds = [...remainingTargetIds].filter(
+      (targetId) =>
+        ownerByTargetId.has(targetId) &&
+        !isPairedServerTab(state, ownerByTargetId.get(targetId)!, targetId)
     )
+    const presentTargetIdSet = new Set(presentTargetIds)
     for (const targetId of remainingTargetIds) {
-      if (!ownerByTargetId.has(targetId)) {
+      if (!presentTargetIdSet.has(targetId)) {
         remainingTargetIds.delete(targetId)
       }
     }

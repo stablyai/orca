@@ -186,7 +186,7 @@ function resolveFloatingScopeOwnership(
 }
 
 export function resolveTerminalWorktreeRoute(
-  state: AppState,
+  state: WorktreeRuntimeOwnerState,
   worktreeId: string | null | undefined
 ): TerminalWorktreeRoute | null {
   const ownership = resolveTerminalHostOwnership(state, worktreeId, 'spawn')
