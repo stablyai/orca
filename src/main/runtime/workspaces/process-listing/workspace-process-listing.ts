@@ -53,6 +53,7 @@ import {
   runtimeHiddenHostIds,
   runtimeHiddenRepos,
   runtimeVisibleRepos,
+  runtimeVisibleFolderWorkspaces,
   withoutHiddenHosts
 } from '../catalog/runtime-visible-catalog'
 import { isWorkspaceNotificationMuted } from '../../push/notifications/workspace-notification-mute'
@@ -79,8 +80,10 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
     )
     const freshPtyLiveness = await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
     const repoById = new Map((this.store?.getRepos() ?? []).map((repo) => [repo.id, repo]))
+    const visibleFolders = runtimeVisibleFolderWorkspaces(this.store)
     const summaries = buildRuntimeWorktreePsSummaries({
       store: this.store,
+      folderWorkspaces: visibleFolders,
       resolvedWorktrees,
       platformByRepoId
     })
@@ -141,7 +144,10 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
     const page = buildWorktreeListingPage(
       sorted,
       limit,
-      withoutHiddenHosts(this.listKnownExecutionHostIds(), runtimeHiddenHostIds(this.store))
+      withoutHiddenHosts(
+        this.listKnownExecutionHostIds(),
+        runtimeHiddenHostIds(this.store, visibleFolders)
+      )
     )
     return includeAgentWait ? attachRuntimeWorktreeAgentRowWaits(page, rowSources, this) : page
   }

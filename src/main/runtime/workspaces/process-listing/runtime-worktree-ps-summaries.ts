@@ -10,11 +10,13 @@ import { getWorkspaceRowKindFacts } from '../../../../shared/worktree/workspace-
 import { readWorkspaceReviewPR } from '../../../../shared/sidebar-list/workspace-review-facts'
 import { withOwnerRepos } from '../../../../shared/sidebar-list/workspace-rows'
 import { UNCACHED_LINKED_PR_STATE } from '../../../../shared/runtime-worktree-contracts'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { RuntimeStore } from '../../runtime-store-contract'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 
 export function buildRuntimeWorktreePsSummaries(args: {
   store: RuntimeStore | null
+  folderWorkspaces: readonly FolderWorkspace[]
   resolvedWorktrees: readonly ResolvedWorktree[]
   platformByRepoId: ReadonlyMap<string, NodeJS.Platform>
 }): Map<string, RuntimeWorktreePsSummary> {
@@ -109,7 +111,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
   const projectGroupById = new Map(
     (args.store?.getProjectGroups?.() ?? []).map((group) => [group.id, group])
   )
-  for (const folderWorkspace of args.store?.getFolderWorkspaces?.() ?? []) {
+  for (const folderWorkspace of args.folderWorkspaces) {
     const projectGroup = projectGroupById.get(folderWorkspace.projectGroupId)
     if (!projectGroup?.parentPath) {
       continue

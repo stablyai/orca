@@ -34,6 +34,7 @@ describe('buildRuntimeWorktreePsSummaries', () => {
 
     const summary = buildRuntimeWorktreePsSummaries({
       store,
+      folderWorkspaces: [],
       resolvedWorktrees: [worktree],
       platformByRepoId: new Map()
     }).get(worktree.id)
@@ -70,6 +71,7 @@ describe('buildRuntimeWorktreePsSummaries', () => {
 
     const summary = buildRuntimeWorktreePsSummaries({
       store,
+      folderWorkspaces: [],
       resolvedWorktrees: [worktree],
       platformByRepoId: new Map()
     }).get(worktree.id)
@@ -103,6 +105,7 @@ describe('buildRuntimeWorktreePsSummaries', () => {
 
     const summary = buildRuntimeWorktreePsSummaries({
       store,
+      folderWorkspaces: [],
       resolvedWorktrees: [worktree],
       platformByRepoId: new Map()
     }).get(worktree.id)
@@ -157,6 +160,7 @@ describe('buildRuntimeWorktreePsSummaries', () => {
 
     const summaries = buildRuntimeWorktreePsSummaries({
       store,
+      folderWorkspaces: [],
       resolvedWorktrees: worktrees,
       platformByRepoId: new Map()
     })
@@ -218,6 +222,7 @@ describe('buildRuntimeWorktreePsSummaries', () => {
 
     const summary = buildRuntimeWorktreePsSummaries({
       store,
+      folderWorkspaces: [],
       resolvedWorktrees: [worktree],
       platformByRepoId: new Map()
     }).get(worktree.id)
@@ -259,6 +264,7 @@ describe('buildRuntimeWorktreePsSummaries', () => {
 
     const summary = buildRuntimeWorktreePsSummaries({
       store,
+      folderWorkspaces: [],
       resolvedWorktrees: [worktree],
       platformByRepoId: new Map()
     }).get(worktree.id)
