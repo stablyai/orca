@@ -3,14 +3,16 @@ import type { RpcClient } from '../transport/rpc-client'
 import { FLOATING_WORKSPACE_WORKTREE_ID } from './floating-workspace'
 import { WORKSPACE_ON_OTHER_RUNTIME } from '../../../src/shared/protocol-version'
 import {
-  loadMobileNewTabAgentOptions,
-  MobileWorkspaceOnOtherRuntimeError
+  loadMobileAgentLaunchContext,
+  MobileWorkspaceOnOtherRuntimeError,
+  newTabAgentOptionsFrom
 } from './mobile-new-tab-agent-loader'
 
 async function loadOptions(
-  args: Parameters<typeof loadMobileNewTabAgentOptions>[0]
+  args: Parameters<typeof loadMobileAgentLaunchContext>[0]
 ): Promise<unknown[]> {
-  return (await loadMobileNewTabAgentOptions(args)).options
+  const context = await loadMobileAgentLaunchContext(args)
+  return newTabAgentOptionsFrom(context.settings, context.detectedAgents)
 }
 
 function createClient(

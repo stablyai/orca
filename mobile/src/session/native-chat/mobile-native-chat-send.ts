@@ -37,7 +37,11 @@ export type MobileNativeChatSendOutcome = 'accepted' | 'rejected' | 'unknown' | 
 export type MobileNativeChatSendIntent = {
   alternate?: true
   goal?: true
+  /** Continues this usage-limit cut; the host refuses it once the chat has moved on. */
+  usageLimitContinuationOfTurnItemId?: string
   onCreated?: (clientMessageId: string) => void
+  /** Runs when an unconfirmed send's text goes back to the composer, so its attachments can follow. */
+  onHandBack?: () => void
 }
 
 export type MobileNativeChatWriteOutcome = Exclude<MobileNativeChatSendOutcome, 'queued'>

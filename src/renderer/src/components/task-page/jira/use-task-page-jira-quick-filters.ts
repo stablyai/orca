@@ -3,7 +3,7 @@ import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import {
   readJiraQuickFilterState,
   writeJiraQuickFilterState
-} from '@/runtime/runtime-jira-quick-filter-state'
+} from '@/runtime/jira/runtime-jira-quick-filter-state'
 import {
   normalizeJiraQuickFilterState,
   type JiraQuickFilterState

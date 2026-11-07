@@ -1,5 +1,5 @@
-import '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { AgentSessionAcquisitionRefusal } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-errors'
+import '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { AgentSessionAcquisitionRefusal } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import {
   providerDiagnostic,
   withProviderDiagnostic

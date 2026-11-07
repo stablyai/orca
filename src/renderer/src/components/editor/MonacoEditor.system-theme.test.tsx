@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { resetSystemPrefersDarkSubscriptionForTests } from '@/components/terminal-pane/use-system-prefers-dark'
+import { resetSystemPrefersDarkSubscriptionForTests } from '@/hooks/theme/use-system-prefers-dark'
 
 const editorProps: { current: Record<string, unknown> | null } = vi.hoisted(() => ({
   current: null

@@ -5,18 +5,7 @@
 import { execFileSync } from 'node:child_process'
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-
-// electron-updater compares `minimumSystemVersion` with os.release(), the Darwin version.
-export function darwinVersionForMacos(macosVersion) {
-  const major = Number.parseInt(String(macosVersion).split('.')[0] ?? '', 10)
-  if (major >= 11 && major <= 15) {
-    return `${major + 9}.0.0`
-  }
-  if (major >= 26) {
-    return `${major - 1}.0.0`
-  }
-  throw new Error(`Unsupported LSMinimumSystemVersion: ${macosVersion}`)
-}
+import { darwinVersionForMacos } from '../../../../src/shared/macos-darwin-floor.ts'
 
 export function withMinimumSystemVersion(manifest, darwinVersion) {
   const lines = manifest

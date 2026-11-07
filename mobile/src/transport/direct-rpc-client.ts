@@ -1,6 +1,6 @@
 import type { ConnectOptions, RpcClient, SendRequestOptions } from './rpc-client'
 import { DirectConnectionLog } from './direct-connection-log'
-import { RpcClientAuthenticationRetry } from './rpc-client-authentication-retry'
+import { AUTH_REJECTED, RpcClientAuthenticationRetry } from './rpc-client-authentication-retry'
 import { RpcClientConnectionState } from './rpc-client-connection-state'
 import {
   RpcClientReconnectSchedule,
@@ -262,7 +262,7 @@ export class DirectRpcClient implements RpcClient {
     if (!response.ok && response.error.code === 'unauthorized') {
       // Settle this correlated refusal before marking other written requests unknown.
       this.requests.resolve(response)
-      return this.authenticationRetry.reject('Unauthorized — pairing may be revoked')
+      return this.authenticationRetry.reject(AUTH_REJECTED)
     }
     if (!this.streams.handleResponse(response)) {
       this.requests.resolve(response)

@@ -110,7 +110,8 @@
       "pastePairingCode": "Oder Kopplungscode einfügen",
       "scanCodeStep": "QR-Code scannen",
       "title": "Mit Desktop koppeln",
-      "tryAgain": "Erneut versuchen"
+      "tryAgain": "Erneut versuchen",
+      "codeExpiredOrReplaced": "Dieser Kopplungscode ist abgelaufen oder wurde ersetzt. Zeige auf deinem Computer einen neuen Code an und scanne erneut."
     },
     "terminalSettings": {
       "defaultText": "Standard (100 %)",
@@ -186,6 +187,7 @@
       "sendMessage": "Nachricht senden",
       "sendQueue": "Einreihen",
       "sendSteer": "Steuern",
+      "sendSteerQueued": "Wartende steuern",
       "sendQueueHint": "Läuft nach dem aktuellen Durchgang",
       "sendSteerHint": "Fließt in das ein, was der Agent gerade tut"
     },
@@ -219,7 +221,9 @@
       "historyRepaired": "Ein Teil des Chatverlaufs konnte nicht geladen werden."
     },
     "message": {
-      "copyMessage": "Nachricht kopieren"
+      "copyMessage": "Nachricht kopieren",
+      "forkFromResponse": "Ab dieser Antwort abzweigen",
+      "forkFromResponseHint": "Ein neuer Chat mit dieser vollständigen Antwort bis zum Ende des Durchgangs"
     },
     "messageActionsSheet": {
       "clipboardRejected": "Die Zwischenablage hat den Text abgewiesen.",
@@ -301,7 +305,8 @@
       "truncatedResponse": "Anbieterantwort gekürzt (ursprüngliche Größe: {{bytes}} Bytes).",
       "modelFallback": "Claude hat das Modell gewechselt: {{from}} → {{to}}.",
       "signIn": "Anmelden",
-      "signInHint": "Öffnet ein Terminal auf dem Computer, auf dem dieser Chat läuft"
+      "signInHint": "Öffnet ein Terminal auf dem Computer, auf dem dieser Chat läuft",
+      "forkedFrom": "Abgezweigt von"
     },
     "orcaStop": {
       "canContinue": "Die Unterhaltung kann fortgesetzt werden.",
@@ -543,12 +548,19 @@
     "usageLimit": {
       "reached": "{{agent}} hat das Nutzungslimit erreicht.",
       "reachedNamed": "{{agent}} hat das Limit erreicht ({{window}}).",
-      "resetsAt": "Nächste Zurücksetzung: {{when}}.",
       "theAgent": "Der Agent",
       "windowCredits": "Zusätzliche Nutzung",
       "windowSession": "Sitzung",
       "windowWeekly": "Wöchentliche Nutzung",
-      "windowWeeklyModel": "Wöchentliche Modellnutzung"
+      "windowWeeklyModel": "Wöchentliche Modellnutzung",
+      "switchAccount": "Konto wechseln",
+      "autoContinueCancelFailed": "Die automatische Fortsetzung konnte nicht abgebrochen werden. Versuche es erneut.",
+      "autoContinueCancel": "Nicht fortsetzen",
+      "statusResetAt": "Zurückgesetzt um {{time}}",
+      "statusResetsAt": "Wird um {{time}} zurückgesetzt",
+      "statusContinuesShortly": "Orca setzt gleich fort",
+      "statusContinuesThen": "Orca setzt dann fort",
+      "statusWontContinue": "Orca setzt nicht automatisch fort"
     },
     "useImageUpload": {
       "attachFailed": "Anhängen fehlgeschlagen",
@@ -618,9 +630,17 @@
       "outcomeUnknownReturned": "Orca konnte nicht bestätigen, ob das Gespräch zu dieser Nachricht zurückgesetzt wurde. Die Nachricht steht wieder im Eingabefeld, und Orca prüft das Gespräch vor dem Senden der nächsten Nachricht.",
       "timeout": "Der Chat wurde nach dem Zurücksetzen zu dieser Nachricht nicht aktualisiert. Erneut öffnen, um den neuesten Stand zu sehen.",
       "pending": "Warten, bis das Gespräch zur früheren Nachricht zurückgesetzt wurde."
+    },
+    "fork": {
+      "busy": "Ein anderer Chat oder ein Terminal wird geöffnet. Warte und zweige dann den {{agent}}-Chat erneut ab.",
+      "unconfirmed": "{{agent}} konnte das Abzweigen nicht bestätigen. Der Chat wurde möglicherweise dennoch geöffnet; prüfe den Sitzungsverlauf, bevor du erneut abzweigst.",
+      "failed": "{{agent}} konnte diesen Chat nicht abzweigen. {{detail}}",
+      "unsupported": "Auf diesem Host läuft eine ältere Orca-Version. Aktualisiere Orca auf dem Host und versuche es erneut."
     }
   },
   "common": {
+    "details": "Details",
+    "hideDetails": "Details ausblenden",
     "back": "Zurück",
     "cancel": "Abbrechen",
     "close": "Schließen",
@@ -851,6 +871,13 @@
       "wrapLines": "Zeilen umbrechen",
       "disableLineWrap": "Zeilenumbruch deaktivieren"
     },
+    "markdownCallout": {
+      "note": "Hinweis",
+      "tip": "Tipp",
+      "important": "Wichtig",
+      "warning": "Warnung",
+      "caution": "Vorsicht"
+    },
     "mountedBottomDrawer": {
       "dismissDrawer": "Bereich schließen"
     },
@@ -1056,6 +1083,12 @@
     "mermaidDiagram": {
       "expand": "Diagramm vergrößern",
       "label": "Mermaid-Diagramm"
+    },
+    "native-chat": {
+      "composer": {
+        "planMode": "Planen",
+        "exitPlanMode": "Planungsmodus verlassen"
+      }
     }
   },
   "connection": {
@@ -1265,7 +1298,6 @@
       "connecting": "Verbindung zum Desktop wird hergestellt…",
       "emptyState": "Keine Dateien gefunden",
       "loadFailed": "Dateien konnten nicht geladen werden.",
-      "loadInterrupted": "Laden des Ordners unterbrochen",
       "title": "Dateien",
       "truncatedList": "{{worktreeLabel}} – Erste 5000 werden angezeigt",
       "waiting": "Warten auf den Desktop…"
@@ -1485,7 +1517,8 @@
       "removeHost": "Host entfernen",
       "removeHostMessage": "„{{name}}“ entfernen? Eine erneute Kopplung ist später möglich.",
       "sleep": "In Ruhezustand versetzen",
-      "unpin": "Anheftung aufheben"
+      "unpin": "Anheftung aufheben",
+      "rename": "Umbenennen"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Checks: fehlgeschlagen",
@@ -1567,6 +1600,12 @@
       "thisComputer": "Dieser Computer",
       "waitingForDesktop": "Es wird noch auf den Desktop gewartet",
       "workspaceOptions": "Arbeitsbereichsoptionen"
+    },
+    "workspaceRenameSheet": {
+      "title": "Arbeitsbereich umbenennen",
+      "emptyUsesBranch": "Leer lassen, um den Branchnamen zu verwenden.",
+      "emptyUsesFolder": "Leer lassen, um den Ordnernamen zu verwenden.",
+      "failed": "Der Arbeitsbereich konnte nicht umbenannt werden. {{reason}}"
     }
   },
   "navigation": {
@@ -1941,13 +1980,11 @@
       "saveNote": "Notiz speichern"
     },
     "diffReviewLoaders": {
-      "changesLoadFailed": "Änderungen konnten nicht geladen werden.",
       "committedChangesFailed": "Committete Änderungen konnten nicht geladen werden.",
       "committedChangesUnavailable": "Committete Änderungen nicht verfügbar",
       "committedDiffUnavailable": "Diff der committeten Änderungen ist nicht verfügbar.",
       "desktopUpdateRequired": "Orca auf dem Desktop aktualisieren, um Änderungen auf dem Mobilgerät zu prüfen.",
       "diffLoadFailed": "Diff konnte nicht geladen werden.",
-      "invalidSourceControlResponse": "Die Antwort der Quellcodeverwaltung war ungültig.",
       "reviewNotesLoadFailed": "Review-Notizen konnten nicht geladen werden."
     },
     "diffReviewQueue": {
@@ -2033,6 +2070,8 @@
       "managedAccountEnvOverride": "Dieser Claude-Start legt eigene Variablen für die Anthropic-Anmeldung fest. Diese entfernen, um ein verwaltetes Claude-Konto zu verwenden.",
       "managedAccountUnsupported": "Auch wenn in WSL ein Claude-Konto hinzugefügt wurde, benötigen Claude-Chats ein Claude-Konto unter Windows.",
       "modelUnavailable": "{{agent}} konnte {{detail}} nicht verwenden. Ein anderes Modell auswählen und erneut senden.",
+      "modelUnavailableUpdate": "{{agent}} konnte {{detail}} nicht verwenden. {{agent}} auf {{minimumVersion}} oder neuer aktualisieren, damit es nach einem Neustart erhalten bleibt, oder ein anderes Modell auswählen und erneut senden.",
+      "modelNotSelected": "{{agent}} hat kein Modell ausgewählt. Modellauswahl und {{agent}}-Anmeldung prüfen und erneut senden.",
       "noTurnToStop": "{{agent}} hatte keinen laufenden Durchgang, der gestoppt werden konnte.",
       "notDelivered": "Diese Nachricht wurde nicht zugestellt.",
       "notDeliveredSendAgain": "Diese Nachricht wurde nicht zugestellt. Zum Fortfahren erneut senden.",
@@ -2080,7 +2119,8 @@
       "usageLimitWindowWeeklyModel": "Wöchentliche Modellnutzung",
       "waitForBackgroundTasks": "Warten, bis die Hintergrundaufgaben abgeschlossen sind.",
       "waitForStart": "Warten, bis der Agent vollständig gestartet ist.",
-      "writeFailed": "Orca konnte diese Nachricht nicht an den Agenten übergeben, daher wurde sie nicht gesendet."
+      "writeFailed": "Orca konnte diese Nachricht nicht an den Agenten übergeben, daher wurde sie nicht gesendet.",
+      "pluginInputRequired": "{{agent}} wurde angehalten, weil das Plugin „{{plugin}}“ in einem Terminalbereich auf eine Eingabe wartet. Deaktiviere das Plugin für Chatsitzungen oder führe die Aufgabe in einem {{agent}}-Terminal aus."
     },
     "fileReader": {
       "copyReviewNotes": "Review-Notizen kopieren",
@@ -2311,7 +2351,8 @@
       "terminalName": "Terminal-Name",
       "unsavedMarkdown": "Ungespeicherte Markdown-Änderungen",
       "urlPrompt": "URL eingeben oder für einen neuen Tab leer lassen.",
-      "allowAutoClose": "Automatisches Schließen erlauben"
+      "allowAutoClose": "Automatisches Schließen erlauben",
+      "renameTerminalFailed": "Das Terminal konnte nicht umbenannt werden. {{reason}}"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "Auf dem Host dieses Arbeitsbereichs wurde kein aktivierter KI-Agent erkannt.",
@@ -3275,7 +3316,8 @@
       "moreFields_one": "+{{count}} Feld",
       "moreFields_other": "+{{count}} Felder",
       "noItems": "Keine Projekteinträge",
-      "pullRequestSubtitle": "Pull Request · {{repository}}{{number}}"
+      "pullRequestSubtitle": "Pull Request · {{repository}}{{number}}",
+      "linkedPullRequestsOverflow": "+{{count}} weitere"
     },
     "githubProjectPickers": {
       "add": "Hinzufügen",
@@ -3966,6 +4008,8 @@
       "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "Das ursprüngliche Agentenfenster ist nicht verfügbar. Gespeicherte Ausgaben bleiben hier.",
       "openAgent": "Agenten öffnen",
       "retryHistory": "Verlauf erneut laden",
+      "fullOutputUnavailable": "Die vollständige Ausgabe konnte nicht geladen werden.",
+      "retryFullOutput": "Erneut versuchen",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "Keine passenden Ausführungen im geladenen Verlauf. Lade weitere, um fortzufahren.",
       "noMatchingRunsYet": "Noch keine passenden Ausführungen.",
       "runSummary": "{{title}}, {{status}}, {{date}}",
@@ -4007,7 +4051,11 @@
       "notReported": "Nicht gemeldet",
       "searchOptions": "Optionen suchen",
       "task": "Aufgabe",
-      "review": "Prüfen"
+      "review": "Prüfen",
+      "discardChangesTitle": "Änderungen verwerfen?",
+      "discardChangesMessage": "Nicht gespeicherte Änderungen an dieser Automatisierung gehen verloren.",
+      "discard": "Verwerfen",
+      "keepEditing": "Weiter bearbeiten"
     },
     "orphanIssues": {
       "hostReselection": "Bearbeite diese Automatisierung und wähle ihren Host erneut aus, bevor du sie ausführst.",

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { resetStaleDocumentVisibilityForTesting } from '@/components/terminal-pane/stale-document-visibility'
+import { resetStaleDocumentVisibilityForTesting } from '@/components/terminal-pane/viewport/visibility/stale-document-visibility'
 import {
   installWindowVisibilitySubscriptionParking,
   WINDOW_VISIBILITY_SUBSCRIPTION_RETRY_INITIAL_MS,

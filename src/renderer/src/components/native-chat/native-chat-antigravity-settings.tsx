@@ -2,6 +2,7 @@ import { Trans } from 'react-i18next'
 import { i18n, translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { agentSessionSignInFor } from '../../../../shared/agent-session/lifecycle/agent-session-sign-in'
+import { NativeChatActionButton } from './NativeChatActionButton'
 
 export function nativeChatAntigravitySignInContent(
   failureKind: string | undefined,
@@ -19,11 +20,10 @@ export function nativeChatAntigravitySignInContent(
       )}
       components={{
         settings: (
-          <a
+          <NativeChatActionButton
+            primary
             href="#accounts-antigravity"
-            className="text-chat-foreground underline underline-offset-2 hover:text-chat-foreground-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={(event) => {
-              event.preventDefault()
+            onClick={() => {
               const { openSettingsTarget, openSettingsPage } = useAppStore.getState()
               openSettingsTarget({
                 pane: 'accounts',

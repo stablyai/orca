@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { dirname, basename } from '@/lib/path'
 import { getConnectionId } from '@/lib/connection-context'
 import { useAppStore } from '@/store/index'
-import { importExternalPathsToRuntime } from '@/runtime/runtime-file-import-client'
+import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-file-import-client'
 import {
   acquireEditorFileOperation,
   getEditorFileOperationContext
@@ -19,7 +19,7 @@ import { showRichMarkdownImageInsertionCanceled } from './rich-markdown-image-in
 import type { RichMarkdownImageInsertionRange } from './rich-markdown-image-insertion-target'
 import { richMarkdownClipboardInsertionOrderKey } from '../clipboard/rich-markdown-clipboard-insertion-order'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { LocalFileAccess } from '../../../../../../shared/local-file-access'
 
 export type RichMarkdownImageInsertArgs = {

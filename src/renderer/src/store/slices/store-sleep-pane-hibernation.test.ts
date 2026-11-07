@@ -10,7 +10,7 @@ import {
   makeWorktree,
   seedStore
 } from './store-test-helpers'
-import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
+import { shutdownBufferCaptures } from '@/components/terminal-pane/snapshots/shutdown-buffer-captures'
 import {
   applySleepRuntimeRpcDefault,
   createStoreCascadesMockApi
@@ -23,7 +23,9 @@ vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
 
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({}))
+
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension', () => ({
   restorePtyDataHandlersAfterFailedShutdown: mockRestorePtyDataHandlersAfterFailedShutdown,
   unregisterPtyDataHandlers: mockUnregisterPtyDataHandlers
 }))

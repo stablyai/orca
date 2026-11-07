@@ -6,7 +6,7 @@ import {
   getRuntimeCommitMessageSettings,
   type RuntimeGitContext,
   type RuntimeGenerateCommitMessageOverrides
-} from './runtime-git-client-context'
+} from './source-control/git/runtime-git-client-context'
 import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 
 export async function antigravityGenerationCompatibilityError(

@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { createRef, useSyncExternalStore } from 'react'
+import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 
 import '@testing-library/jest-dom/vitest'
 
@@ -7,6 +9,12 @@ import { render } from './native-chat-tooltip-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Why: these fixtures have neither inline visual owners nor sender navigation.
+const historyHost = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
+vi.mock('@/runtime/structured-agent-session-client', () => ({
+  callStructuredAgentSession: historyHost.call,
+  subscribeStructuredAgentSession: historyHost.subscribe
+}))
+
 const unusedChatLeaves = vi.hoisted(() => ({
   inlineVisual: vi.fn(() => {
     throw new Error('Unexpected inline visual in transcript fixture')
@@ -27,6 +35,9 @@ afterEach(() => {
 })
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { NativeChatMessageList } from './NativeChatMessageList'
+import { createReadOwner } from './structured-agent-session-read-owner-create'
+import type { AgentSessionHistoryPage } from '../../../../shared/agent-session/agent-session-wire'
+import { useAppStore } from '@/store'
 import { transcriptWindowTop } from './native-chat-window-test-layout'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
@@ -178,6 +189,171 @@ describe('older history auto-load', () => {
     restoreLayout()
     layout.aboveTranscriptPx = 0
     layout.aboveSpacerPx = null
+  })
+
+  it('keeps a returned window bounded through an intersecting sentinel and resumes on manual history intent', async () => {
+    restoreLayout()
+    restoreLayout = stubLayout({
+      scrollGeometry: true,
+      offsetChain: true,
+      viewportHeight: () => 50
+    })
+    const handle = createRef<NativeChatMessageListHandle>()
+    let generation = 0
+    let hasMore = true
+    const loadEarlier = vi.fn(async (): Promise<NativeChatOlderPageResult> => {
+      generation++
+      hasMore = false
+      refresh()
+      return 'applied'
+    })
+    const trimHistory = () => {
+      generation++
+      refresh()
+    }
+    const element = () => (
+      <NativeChatMessageList
+        ref={handle}
+        session={{
+          ...session(markers(0, 3)),
+          hasMore,
+          loadEarlier,
+          trimHistory,
+          olderHistoryGeneration: generation
+        }}
+        isWorking={false}
+        expandSignal={false}
+      />
+    )
+    const view = render(element())
+    function refresh() {
+      view.rerender(element())
+    }
+    await settle()
+    // A send while already following preserves initial autofill.
+    act(() => handle.current?.revealLatest(true))
+    expect(generation).toBe(0)
+    const scroller = view.container.querySelector<HTMLElement>('[data-native-chat-scroll]')!
+    fireEvent.wheel(scroller, { deltaY: -20 })
+    scroller.scrollTop -= 20
+    fireEvent.scroll(scroller)
+    // The send's near-end predicate remains true after a real departure.
+    act(() => handle.current?.revealLatest(true))
+    sentinelInRange = true
+    deliverIntersections()
+    await settle()
+    deliverIntersections()
+    await settle()
+    expect(loadEarlier).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Load earlier messages' }))
+    await settle()
+    deliverIntersections()
+    expect(loadEarlier).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('button', { name: 'Load earlier messages' })).toBeNull()
+  })
+
+  it('retires shared initial autofill across two views and still pages after deliberate history intent', async () => {
+    restoreLayout()
+    restoreLayout = stubLayout({
+      scrollGeometry: true,
+      offsetChain: true,
+      viewportHeight: () => 50
+    })
+    const page = (oldest: number, direction: 'tail' | 'before'): AgentSessionHistoryPage => ({
+      sessionId: 'shared-history',
+      epoch: 'epoch',
+      direction,
+      items: Array.from({ length: 200 }, (_, index) => ({
+        itemId: `item-${oldest + index}`,
+        revision: 1,
+        sequence: oldest + index,
+        observedAt: oldest + index,
+        body: {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: 'folded history' }]
+        }
+      })),
+      removedItemIds: [],
+      submissions: [],
+      window: {
+        oldest: { epoch: 'epoch', sequence: oldest },
+        newest: { epoch: 'epoch', sequence: oldest + 199 },
+        nextCursor: { epoch: 'epoch', sequence: oldest }
+      },
+      liveCursor: { epoch: 'epoch', sequence: 2000 },
+      hasOlder: true,
+      hasNewer: false
+    })
+    historyHost.subscribe.mockResolvedValue({ unsubscribe: () => {} })
+    historyHost.call.mockImplementation(async (_target, method, params) => {
+      if (method !== 'agentSession.history') {
+        throw new Error('Unexpected host call')
+      }
+      return { ok: true, page: page(params.cursor.sequence - 200, 'before') }
+    })
+    const owner = createReadOwner('shared-history-test', 'shared-history', { kind: 'local' })
+    owner.publishCreated(page(1801, 'tail'))
+    const deactivate = owner.activate({
+      getState: useAppStore.getState,
+      subscribeRetryNow: () => () => {}
+    })
+    const handle = createRef<NativeChatMessageListHandle>()
+    function View({ first = false }: { first?: boolean }) {
+      const snapshot = useSyncExternalStore(owner.subscribe, owner.getSnapshot)
+      return (
+        <NativeChatMessageList
+          ref={first ? handle : undefined}
+          session={{
+            ...session(markers(0, 3)),
+            sessionId: 'shared-history',
+            hasMore: snapshot.state.hasOlder,
+            loadingEarlier: snapshot.loadingOlder,
+            olderHistoryGeneration: snapshot.olderHistoryGeneration,
+            initialHistoryAutoLoad: snapshot.initialHistoryAutoLoad,
+            retainHistory: owner.retainHistory,
+            trimHistory: owner.trimHistory,
+            loadEarlier: owner.loadOlder
+          }}
+          isWorking={false}
+          expandSignal={false}
+        />
+      )
+    }
+    try {
+      // Prime expanded source history before the live edge becomes intersecting.
+      for (let pageIndex = 0; pageIndex < 6; pageIndex++) {
+        await owner.loadOlder()
+      }
+      const view = render(
+        <>
+          <View first />
+          <View />
+        </>
+      )
+      await settle()
+      historyHost.call.mockClear()
+      const scroller = view.container.querySelector<HTMLElement>('[data-native-chat-scroll]')!
+      fireEvent.wheel(scroller, { deltaY: -20 })
+      scroller.scrollTop -= 20
+      fireEvent.scroll(scroller)
+      act(() => handle.current?.revealLatest(true))
+      expect(owner.getSnapshot().state.items).toHaveLength(1024)
+      sentinelInRange = true
+      deliverIntersections()
+      await settle()
+      deliverIntersections()
+      await settle()
+      expect(historyHost.call).not.toHaveBeenCalled()
+      fireEvent.click(screen.getAllByRole('button', { name: 'Load earlier messages' })[1]!)
+      await settle()
+      expect(historyHost.call).toHaveBeenCalledOnce()
+      expect(owner.getSnapshot().state.items).toHaveLength(1224)
+      view.unmount()
+    } finally {
+      deactivate()
+      owner.dispose()
+    }
   })
 
   it('stops, and shows neither status nor button, once history runs out', async () => {

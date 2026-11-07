@@ -11,8 +11,8 @@ import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
 import {
   focusRendererTerminalHandle,
   focusRuntimeTerminalHandle
-} from '@/components/terminal-pane/terminal-handle-links'
-import { showAgentPaneUnavailable } from '@/components/terminal-pane/stale-agent-row'
+} from '@/components/terminal-pane/links/handles/terminal-handle-links'
+import { showAgentPaneUnavailable } from '@/components/terminal-pane/agent-status/stale-agent-row'
 import {
   activateAiVaultStructuredSession,
   structuredSessionOpenFeedback,

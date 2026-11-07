@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { createTestStore, makeWorktree } from './store-test-helpers'
-import { workItemsCacheKey } from '../github/cache-identity'
+import { workItemsCacheKey } from '../github/cache/cache-identity'
 
 import type { Repo } from '../../../../shared/repo-types'
 import { toast } from 'sonner'

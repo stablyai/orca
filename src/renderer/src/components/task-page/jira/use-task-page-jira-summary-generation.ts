@@ -6,7 +6,7 @@ import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import {
   generateRuntimeJiraIssueSummary,
   cancelRuntimeJiraIssueSummary
-} from '@/runtime/runtime-jira-summary-generation-client'
+} from '@/runtime/jira/runtime-jira-summary-generation-client'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { JiraIssueSummaryGenerationRequest } from '../../../../../shared/jira/jira-issue-summary-generation'
 import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'

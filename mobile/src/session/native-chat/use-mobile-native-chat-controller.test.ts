@@ -1,7 +1,8 @@
 import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../src/shared/agent-launch/startup/agent-tui-input-clear'
 import { mobileNativeChatDraftDestination } from './composer/mobile-native-chat-draft-inputs'
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../../test-support/query-client-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SessionOptionDescriptor } from '../../../../src/shared/native-chat/input/native-chat-session-options'
 import type { RpcClient } from '../../transport/rpc-client'
@@ -232,7 +233,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     captureSendOrigin.mockReturnValue(ORIGIN)
     structuredSendWithOutcome.mockResolvedValue('accepted')
     act(() => {
-      renderer = create(createElement(Harness))
+      renderer = createWithQueryClient(createElement(Harness))
     })
   })
   afterEach(() => {
@@ -391,7 +392,7 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
     setTranscript('ready')
     promptsState.ask = PROMPT
     act(() => {
-      renderer = create(createElement(Harness))
+      renderer = createWithQueryClient(createElement(Harness))
     })
   })
 
@@ -460,7 +461,7 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
     act(() => renderer?.unmount())
     setTranscript('loading')
     act(() => {
-      renderer = create(createElement(Harness))
+      renderer = createWithQueryClient(createElement(Harness))
     })
 
     expect(controller?.nativeChatAsk).not.toBeNull()
@@ -603,7 +604,7 @@ describe('useMobileNativeChatController terminal turn', () => {
     workingTab.agentStatus.turnStartedAt = turnStartedAt
     workingTab.agentStatus.lastAssistantMessage = 'Partial reply'
     act(() => {
-      renderer = create(createElement(Harness))
+      renderer = createWithQueryClient(createElement(Harness))
     })
   })
 

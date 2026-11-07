@@ -1,9 +1,14 @@
 import { ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID } from '../settings/chat/native-chat-turn-diff-setting-target'
 import { DiffLineCounts } from '../right-sidebar/source-control/listing/diff-line-counts'
 import { NativeChatDiffCard } from './NativeChatDiffCard'
 import { NativeChatExpandable } from './NativeChatExpandable'
+import {
+  NativeChatCardHideButton,
+  NATIVE_CHAT_HIDEABLE_CARD_CLASS
+} from './NativeChatCardHideButton'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { nativeChatEditFileBaseName } from '../../../../shared/native-chat/tools/native-chat-edit-model'
 import {
@@ -72,7 +77,9 @@ export function NativeChatTurnDiffRollup({
   const files = showAll ? diff.files : diff.files.slice(0, NATIVE_CHAT_TURN_DIFF_FILE_LIMIT)
   const remaining = diff.files.length - files.length
   return (
-    <div className="rounded-lg border border-chat-code-border p-2 text-xs text-chat-foreground-faint">
+    <div
+      className={`${NATIVE_CHAT_HIDEABLE_CARD_CLASS} rounded-lg border border-chat-code-border p-2 text-xs text-chat-foreground-faint`}
+    >
       <div className="flex min-w-0 items-center gap-1.5 px-1 pb-1">
         <span className="min-w-0 truncate">
           {translate('components.native-chat.turnDiff.changedFiles', '{{count}} changed files', {
@@ -84,6 +91,14 @@ export function NativeChatTurnDiffRollup({
         {diff.truncated ? (
           <span>{translate('components.native-chat.turnDiff.partial', 'Partial diff')}</span>
         ) : null}
+        <NativeChatCardHideButton
+          updates={{ nativeChatTurnDiffSummary: false }}
+          settingSectionId={NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID}
+          hiddenMessage={translate(
+            'components.native-chat.turnDiff.hidden',
+            "Orca won't show turn diffs anymore"
+          )}
+        />
       </div>
       <div className="space-y-1">
         {files.map((file) => (

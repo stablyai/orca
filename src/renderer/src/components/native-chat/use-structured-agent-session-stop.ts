@@ -1,9 +1,21 @@
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { AgentSessionCancelResult } from '../../../../shared/agent-session/agent-session-wire'
 import { useStructuredAgentSessionHostStopsConversation } from '@/runtime/structured-agent-session-host-capability'
 import { agentStopDisplayStatus } from '../../../../shared/agent-status/lifecycle/agent-stop-display-status'
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import { useStructuredAgentSessionStopPress } from './use-structured-agent-session-stop-press'
 import type { useStructuredAgentSessionTransportState } from './use-structured-agent-session-transport-state'
+
+export function stopStructuredAgentSessionBackgroundTask(
+  mutate: StructuredAgentSessionMutate,
+  taskId?: string
+) {
+  return mutate<AgentSessionCancelResult>('agentSession.cancel', 'agentSession.cancel', {
+    turnId: 'background-tasks',
+    scope: 'background-tasks',
+    ...(taskId ? { taskId } : {})
+  })
+}
 
 /** This session's Stop: whether the chat reads "Stopping…", and the request itself. */
 export function useStructuredAgentSessionStop(input: {

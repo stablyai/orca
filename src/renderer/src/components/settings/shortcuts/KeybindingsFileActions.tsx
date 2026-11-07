@@ -117,7 +117,7 @@ export function KeybindingsFileActions(): React.JSX.Element {
     }
   }
 
-  const openKeybindingsInExternalEditor = async (command: 'code' | 'cursor'): Promise<void> => {
+  const openKeybindingsInExternalEditor = async (editorId: 'vscode' | 'cursor'): Promise<void> => {
     try {
       const filePath = await prepareKeybindingsPath()
       if (!filePath) {
@@ -131,7 +131,7 @@ export function KeybindingsFileActions(): React.JSX.Element {
       }
       const result = await window.api.shell.openInExternalEditor({
         path: filePath,
-        command,
+        builtInEditorId: editorId,
         ownerHostId: LOCAL_EXECUTION_HOST_ID
       })
       if (!result.ok) {
@@ -190,7 +190,7 @@ export function KeybindingsFileActions(): React.JSX.Element {
               'Open with Default App'
             )}
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => void openKeybindingsInExternalEditor('code')}>
+          <DropdownMenuItem onSelect={() => void openKeybindingsInExternalEditor('vscode')}>
             <Code2 className="size-3.5" />
             {translate(
               'auto.components.settings.KeybindingsFileActions.1637f64033',

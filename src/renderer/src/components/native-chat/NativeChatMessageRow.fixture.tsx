@@ -3,6 +3,9 @@ import type { AgentJournalSubmission } from '../../../../shared/agent-session/jo
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { MessageRow } from './NativeChatMessageRow'
 import { useStructuredAgentSessionDeliveryNotices } from './use-structured-agent-session-delivery-notices'
+import { NativeChatSignInContext } from './native-chat-sign-in'
+
+const signInView = { signingIn: false, signIn: () => {} }
 
 function RecordedSteer({ state }: { state: AgentJournalSubmission['dispatchState'] }) {
   const notices = useStructuredAgentSessionDeliveryNotices({
@@ -54,6 +57,61 @@ export const rejected = defineFixture({
   render: () => <RecordedSteer state="rejected" />
 })
 
+export const signedOut = defineFixture({
+  width: 640,
+  render: () => (
+    <NativeChatSignInContext.Provider value={signInView}>
+      <div className="native-chat-appearance p-4">
+        <MessageRow
+          agentName="OpenCode"
+          message={{
+            id: 'signed-out',
+            role: 'system',
+            timestamp: 0,
+            source: 'transcript',
+            blocks: [
+              {
+                type: 'text',
+                tone: 'error',
+                text: 'Sign in to OpenCode.',
+                failure: { kind: 'notSignedIn' }
+              }
+            ]
+          }}
+          expandSignal={false}
+          onScrollMessageToTop={() => {}}
+        />
+      </div>
+    </NativeChatSignInContext.Provider>
+  )
+})
+
+export const signedOutDelivery = defineFixture({
+  width: 640,
+  render: () => (
+    <NativeChatSignInContext.Provider value={signInView}>
+      <div className="native-chat-appearance p-4">
+        <MessageRow
+          agentName="Pi"
+          message={{
+            id: 'signed-out-delivery',
+            role: 'user',
+            timestamp: 0,
+            source: 'transcript',
+            blocks: [{ type: 'text', text: 'Check the deploy logs.' }]
+          }}
+          deliveryNotice={{
+            text: 'Sign in to Pi by running pi and using /login, then send again.',
+            failureKind: 'notSignedIn'
+          }}
+          expandSignal={false}
+          onScrollMessageToTop={() => {}}
+        />
+      </div>
+    </NativeChatSignInContext.Provider>
+  )
+})
+
 export const dollars = defineFixture({
   width: 640,
   render: () => (
@@ -92,4 +150,39 @@ export const dollars = defineFixture({
       />
     </div>
   )
+})
+
+export const advisor = defineFixture({
+  width: 640,
+  render: () => (
+    <div className="native-chat-appearance p-4">
+      <MessageRow
+        message={{
+          id: 'advisor',
+          role: 'assistant',
+          timestamp: 0,
+          source: 'transcript',
+          blocks: [
+            { type: 'tool-call', name: 'advisor', input: {}, callId: 'server', state: 'completed' },
+            {
+              type: 'tool-result',
+              callId: 'server',
+              output:
+                '{"type":"advisor_redacted_result","encrypted_content":"redacted-advisor-content"}'
+            }
+          ]
+        }}
+        expandSignal
+        onScrollMessageToTop={() => {}}
+      />
+    </div>
+  ),
+  interact: async (frame) => {
+    const members = frame.querySelectorAll<HTMLButtonElement>(
+      '[data-native-chat-tool-run-members] button[aria-expanded="false"]'
+    )
+    for (const member of members) {
+      member.click()
+    }
+  }
 })

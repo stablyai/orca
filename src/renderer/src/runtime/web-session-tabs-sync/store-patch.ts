@@ -14,7 +14,7 @@ import {
 } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { normalizeTurnCompletedAtField } from '../../../../shared/agent-status/contracts/agent-status-field-normalization'
 import { isSeenHostReplay } from '@/hooks/ipc-events/agent-status-routing'
-import { isClientAuthoritativeAgentStatusPane } from '@/components/terminal-pane/renderer-owned-agent-status-registry'
+import { isClientAuthoritativeAgentStatusPane } from '@/components/terminal-pane/agent-status/renderer-owned-agent-status-registry'
 import { observeAgentHookCompletionForNotification } from '@/hooks/agent-hook-completion-notifications'
 import { remapHostAgentStatus } from './agent-status-primitives'
 import { agentStatusEntryEqual } from './state-equality-core'
@@ -74,7 +74,7 @@ export function applyWebSessionTabsStorePatch(
           if (surface.type !== 'terminal') {
             continue
           }
-          const remapped = remapHostAgentStatus(surface)
+          const remapped = remapHostAgentStatus(surface, snapshot.worktree)
           const accepted = remapped ? nextAgentStatuses[remapped.paneKey] : undefined
           const turnCompletedAt = remapped
             ? normalizeTurnCompletedAtField(surface.turnCompletedAt, remapped.state)

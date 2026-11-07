@@ -9,7 +9,9 @@ import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({}))
+
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension', () => ({
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: vi.fn()
 }))
@@ -49,7 +51,7 @@ import {
   clearNativeChatPendingAttachmentsForTests,
   settleNativeChatPendingAttachment
 } from '@/components/native-chat/native-chat-pending-attachment-cache'
-import { resolveNativeChatDraftOwner } from '@/lib/native-chat-draft-owner'
+import { resolveNativeChatDraftOwner } from '@/components/native-chat/drafts/native-chat-draft-owner'
 
 const WT1 = 'repo1::/path/wt1'
 const WT2 = 'repo1::/path/wt2'

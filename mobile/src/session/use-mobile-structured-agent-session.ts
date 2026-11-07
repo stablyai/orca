@@ -26,6 +26,7 @@ import { useMobileStructuredStopPress } from './use-mobile-structured-stop-press
 import { useMobileStructuredSessionHostStopping } from './use-mobile-structured-session-host-stopping'
 import { useMobileStructuredPromptResponses } from './use-mobile-structured-prompt-responses'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
+import { useHostModelCatalogCache } from './mobile-host-model-catalog-query'
 import { useMobileStructuredCommandController } from './use-mobile-structured-command-controller'
 import { useMobileStructuredSessionOptionStamp } from './use-mobile-structured-session-option-stamp'
 import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
@@ -49,6 +50,7 @@ import {
 } from './use-mobile-structured-thread-goal'
 import { useMobileStructuredTranscript } from './use-mobile-structured-transcript'
 import { useMobileStructuredAgentRewind } from './use-mobile-structured-agent-rewind'
+import { useMobileNativeChatUsageLimit } from './native-chat/use-mobile-native-chat-usage-limit'
 
 export function useMobileStructuredAgentSession(
   args: MobileStructuredAgentSessionArgs
@@ -56,6 +58,7 @@ export function useMobileStructuredAgentSession(
   const {
     agent,
     client,
+    hostId,
     pairedHostClient: paired,
     connected,
     sessionId,
@@ -94,6 +97,7 @@ export function useMobileStructuredAgentSession(
   const turnId = runningStructuredAgentSessionTurnId(state)
   const options = useMobileStructuredAgentOptions({
     agent,
+    modelCatalogCache: useHostModelCatalogCache({ hostId, client, agent, enabled }),
     client,
     sessionId,
     enabled,
@@ -220,6 +224,10 @@ export function useMobileStructuredAgentSession(
     send: sendWithOutcomeUngated
   })
   useMobileStructuredThreadGoalSend(goal.sendRef, sendWithOutcome)
+  const usageLimit = useMobileNativeChatUsageLimit(args, state, {
+    busy: isWorking || queueSendsNext || sendsOut.sending(),
+    send: sendWithOutcome
+  })
   const queued = useMobileStructuredQueuedMessageControls({
     ...args,
     appendComposerText: args.appendComposerText,
@@ -277,6 +285,7 @@ export function useMobileStructuredAgentSession(
     turnIndicator,
     ...turnTiming,
     sendWithOutcome,
+    holdUnconfirmed: sends.holdUnconfirmed,
     cancel: () => void stopPress.track(() => requestCancel()),
     cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) =>
       requestCancel(prompt ?? pendingStructuredPromptIdentity(stateRef.current)),
@@ -294,6 +303,7 @@ export function useMobileStructuredAgentSession(
       isWorking || queueSendsNext
     ),
     threadGoal: goal.threadGoal,
-    rewind
+    rewind,
+    usageLimit
   }
 }

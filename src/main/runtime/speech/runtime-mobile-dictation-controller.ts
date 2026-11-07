@@ -85,7 +85,8 @@ export class RuntimeMobileDictationController {
         modelId,
         (event) => this.acceptEvent(params.dictationId, event),
         undefined,
-        owner
+        owner,
+        voice.dictationLanguage
       )
       if (this.session?.id !== params.dictationId) {
         throw new Error('dictation_canceled')

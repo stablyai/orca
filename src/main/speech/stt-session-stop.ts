@@ -1,9 +1,11 @@
-import type { Worker } from 'node:worker_threads'
 import type { SttSessionState } from './stt-session-state'
+import type { SttWorkerProcess } from './stt-worker-process'
 import { waitForSttWorkerStop, type SttWorkerStopOutcome } from './stt-worker-stop'
 import { IDLE_WORKER_TEARDOWN_MS } from './stt-session-timeouts'
 
 const STOP_DICTATION_TIMEOUT_MS = 60_000
+// A cancel waits only this long behind a busy decode, then kills the worker.
+const DISCARD_DICTATION_TIMEOUT_MS = 2_000
 
 export async function stopSttDictation(
   state: SttSessionState,
@@ -82,7 +84,10 @@ export async function stopSttDictation(
   stopPromise = waitForSttWorkerStop({
     worker,
     capturedSink,
-    timeoutMs: STOP_DICTATION_TIMEOUT_MS,
+    // A model still loading answers after its load; killing it would strand the pending start.
+    timeoutMs:
+      options.discard && !state.starting ? DISCARD_DICTATION_TIMEOUT_MS : STOP_DICTATION_TIMEOUT_MS,
+    discard: options.discard === true,
     finish: (outcome) => finishSttWorkerStop(state, worker, outcome)
   }).finally(() => {
     if (state.stopInFlight?.worker === worker && state.stopInFlight.promise === stopPromise) {
@@ -101,7 +106,7 @@ export async function stopSttDictation(
 
 function finishSttWorkerStop(
   state: SttSessionState,
-  worker: Worker,
+  worker: SttWorkerProcess,
   outcome: SttWorkerStopOutcome
 ): void {
   if (outcome === 'stopped') {
@@ -115,7 +120,7 @@ function finishSttWorkerStop(
   cleanupActiveSttWorkerLifecycleListeners(state)
   worker.removeAllListeners()
   if (outcome !== 'exit') {
-    void worker.terminate().catch(() => undefined)
+    void worker.terminate()
   }
   if (state.worker === worker) {
     clearSttWorkerState(state)
@@ -130,7 +135,7 @@ export async function prepareSttModelForDeletion(
     throw new Error('voice_model_in_use')
   }
   if (state.worker && state.activeModelId === modelId) {
-    await teardownIdleSttWorker(state, { ignoreTerminateErrors: false })
+    await teardownIdleSttWorker(state)
     if (state.worker && state.activeModelId === modelId) {
       throw new Error('voice_model_in_use')
     }
@@ -152,40 +157,26 @@ function scheduleSttIdleTeardown(state: SttSessionState): void {
   state.idleTeardownTimer.unref?.()
 }
 
-async function teardownIdleSttWorker(
-  state: SttSessionState,
-  options: { ignoreTerminateErrors?: boolean } = { ignoreTerminateErrors: true }
-): Promise<void> {
+async function teardownIdleSttWorker(state: SttSessionState): Promise<void> {
   clearSttIdleTeardownTimer(state)
   if (!state.worker || state.activeOwner || state.startingOwner) {
     return
   }
-  await teardownSttWorker(state, state.worker, options)
+  await teardownSttWorker(state, state.worker)
 }
 
 export async function teardownSttWorker(
   state: SttSessionState,
-  worker: Worker,
-  options: { ignoreTerminateErrors?: boolean } = { ignoreTerminateErrors: true }
+  worker: SttWorkerProcess
 ): Promise<void> {
   clearSttIdleTeardownTimer(state)
   if (state.stopInFlight?.worker === worker) {
     await state.stopInFlight.promise
   }
-  try {
-    worker.postMessage({ type: 'teardown' })
-  } catch {
-    // The worker may already have exited on a forced stop path.
-  }
   cleanupActiveSttWorkerLifecycleListeners(state)
   worker.removeAllListeners()
-  try {
-    await worker.terminate()
-  } catch (error) {
-    if (!options.ignoreTerminateErrors) {
-      throw error
-    }
-  }
+  // Resolves once the process is gone, so its model files are free to delete.
+  await worker.terminate()
   if (state.worker === worker) {
     clearSttWorkerState(state)
   }
@@ -210,6 +201,7 @@ function clearSttWorkerState(state: SttSessionState): void {
   state.worker = null
   state.activeModelId = null
   state.activeHotwordsFilePath = undefined
+  state.activeLanguage = undefined
   state.activeOwner = null
   state.eventSink = null
 }

@@ -17,6 +17,7 @@ import type { GitStageWorktreeScope } from '../../shared/git/paths/git-stage-wor
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { GitPushTarget, GitWorktreeInfo } from '../../shared/worktree/types'
 import type {
+  GitHistoryItemRef,
   GitHistoryOptions,
   GitHistoryResult
 } from '../../shared/git/history/git-history-types'
@@ -35,6 +36,7 @@ export type IGitProvider = {
     area?: GitStagingArea
   ): Promise<GitStatusResult>
   checkIgnoredPaths(worktreePath: string, relativePaths: string[]): Promise<string[]>
+  getHistoryRefs(worktreePath: string, query?: string): Promise<GitHistoryItemRef[]>
   getHistory(worktreePath: string, options?: GitHistoryOptions): Promise<GitHistoryResult>
   commit(worktreePath: string, message: string): Promise<{ success: boolean; error?: string }>
   completeMerge(worktreePath: string): Promise<{ success: boolean; error?: string }>
@@ -64,7 +66,8 @@ export type IGitProvider = {
   detectConflictOperation(worktreePath: string): Promise<GitConflictOperation>
   abortMerge(worktreePath: string): Promise<void>
   abortRebase(worktreePath: string): Promise<void>
-  checkoutBranch(worktreePath: string, branch: string): Promise<void>
+  /** `skippedPaths`: files git could not replace (held open on Windows) though the switch landed. */
+  checkoutBranch(worktreePath: string, branch: string): Promise<{ skippedPaths: string[] }>
   listLocalBranches(worktreePath: string): Promise<{ current: string | null; branches: string[] }>
   getBranchCompare(
     worktreePath: string,

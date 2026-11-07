@@ -1,6 +1,8 @@
+import { GitGraphTab } from './git-graph/git-graph-tab'
 import { useAppStore } from '@/store'
 import type { ActivePluginCustomEditor } from '@/store/plugin-custom-editors'
-import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
+import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
+import type { PendingEditorReveal } from '@/store/slices/editor/types/pending-editor-reveal'
 import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import { CheckRunDetailsPanel } from './check-details/panel/CheckRunDetailsPanel'
@@ -130,6 +132,10 @@ export function EditorContent({
       activeFile.diffSource === 'combined-uncommitted' ||
       activeFile.diffSource === 'combined-branch' ||
       activeFile.diffSource === 'combined-commit')
+
+  if (activeFile.mode === 'git-graph') {
+    return <GitGraphTab key={activeFile.worktreeId} worktreeId={activeFile.worktreeId} />
+  }
 
   if (activeFile.mode === 'check-details') {
     const checkRunDetails = activeFile.checkRunDetails

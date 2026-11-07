@@ -5,7 +5,7 @@ import {
   CACHED_BELOW_HOST_FLOOR,
   LINK_LOST,
   MANIFEST_WIRE,
-  afterCacheRead,
+  awaitingManifest,
   gates,
   manifestFacts,
   run
@@ -27,14 +27,14 @@ function refusedUnder(
   cached = CACHED,
   cause = BUNDLE_REFUSED
 ): MobileWebShellStep {
-  const fetching = run(afterCacheRead(cached).session, { type: 'manifest-read', manifest: NEWER })
+  const fetching = run(awaitingManifest(cached).session, { type: 'manifest-read', manifest: NEWER })
   const moved = run(fetching.session, { type: 'gates-changed', gates: gates(patch) })
   return run(moved.session, { type: 'download-failed', cause })
 }
 
 describe('every exit from a failed update read leaves one record', () => {
   it('nothing on disk: the failure screen, with the offered generation named', () => {
-    const fetching = run(afterCacheRead(null).session, { type: 'manifest-read', manifest: NEWER })
+    const fetching = run(awaitingManifest(null).session, { type: 'manifest-read', manifest: NEWER })
     const step = run(fetching.session, { type: 'download-failed', cause: BUNDLE_REFUSED })
     expect(step.session.state).toMatchObject({ kind: 'failed', reason: 'download-failed' })
     expect(recorded(step)).toEqual([
@@ -50,7 +50,7 @@ describe('every exit from a failed update read leaves one record', () => {
   })
 
   it('the manifest read itself failed: nothing was offered, the cached generation opens', () => {
-    const step = run(afterCacheRead(CACHED).session, {
+    const step = run(awaitingManifest(CACHED).session, {
       type: 'download-failed',
       cause: { reason: 'host-refused', hostCode: 'mobile_web_bundle_read_limited' }
     })
@@ -125,15 +125,20 @@ describe('every exit from a failed update read leaves one record', () => {
     expect(recorded(step)).toMatchObject([{ outcome: 'wall', wall: 'bundle-unavailable' }])
   })
 
-  it('gates still dialling or pending leave the session waiting', () => {
+  it('gates still dialling or pending open the cached generation before the verdict', () => {
     expect(recorded(refusedUnder({ reachability: 'connecting' }))).toMatchObject([
-      { outcome: 'waiting' }
+      { outcome: 'opened-cached' }
     ])
-    expect(recorded(refusedUnder({ statusPending: true }))).toMatchObject([{ outcome: 'waiting' }])
+    expect(recorded(refusedUnder({ statusPending: true }))).toMatchObject([
+      { outcome: 'opened-cached' }
+    ])
   })
 
   it('a stale flow reports into nothing and records nothing', () => {
-    const fetching = run(afterCacheRead(CACHED).session, { type: 'manifest-read', manifest: NEWER })
+    const fetching = run(awaitingManifest(CACHED).session, {
+      type: 'manifest-read',
+      manifest: NEWER
+    })
     const step = run(fetching.session, {
       type: 'download-failed',
       flow: fetching.session.flow - 1,
@@ -143,12 +148,12 @@ describe('every exit from a failed update read leaves one record', () => {
   })
 
   it('a new flow forgets the generation the last one was offered', () => {
-    const fetching = run(afterCacheRead(null).session, { type: 'manifest-read', manifest: NEWER })
+    const fetching = run(awaitingManifest(null).session, { type: 'manifest-read', manifest: NEWER })
     const failed = run(fetching.session, { type: 'download-failed', cause: BUNDLE_REFUSED })
     const retried = run(
       failed.session,
       { type: 'retry-pressed' },
-      { type: 'cache-read', generation: CACHED }
+      { type: 'cache-read', generation: null }
     )
     const step = run(retried.session, { type: 'download-failed', cause: LINK_LOST })
     expect(recorded(step)).toMatchObject([{ offeredBuildId: null }])
@@ -172,7 +177,10 @@ describe('a newer generation committed clears the record, and nothing else does'
   }
 
   it('forgets once the offered generation lands', () => {
-    const fetching = run(afterCacheRead(CACHED).session, { type: 'manifest-read', manifest: NEWER })
+    const fetching = run(awaitingManifest(CACHED).session, {
+      type: 'manifest-read',
+      manifest: NEWER
+    })
     const step = run(fetching.session, { type: 'download-staged' }, activated(NEWER.buildId))
     expect(step.session.state).toMatchObject({ kind: 'ready', buildId: NEWER.buildId })
     expect(forgets(step)).toBe(true)
@@ -181,20 +189,26 @@ describe('a newer generation committed clears the record, and nothing else does'
   it('forgets when the host moved between the manifest read and the fetch', () => {
     // Fetch rereads the manifest, so a committed download can be newer than the offered build and must still clear failure history.
     const MOVED = 'd'.repeat(64)
-    const fetching = run(afterCacheRead(CACHED).session, { type: 'manifest-read', manifest: NEWER })
+    const fetching = run(awaitingManifest(CACHED).session, {
+      type: 'manifest-read',
+      manifest: NEWER
+    })
     const step = run(fetching.session, { type: 'download-staged' }, activated(MOVED))
     expect(step.session.state).toMatchObject({ kind: 'ready', buildId: MOVED })
     expect(forgets(step)).toBe(true)
   })
 
   it('keeps the record when the fallback opens the cached generation', () => {
-    const fetching = run(afterCacheRead(CACHED).session, { type: 'manifest-read', manifest: NEWER })
+    const fetching = run(awaitingManifest(CACHED).session, {
+      type: 'manifest-read',
+      manifest: NEWER
+    })
     const failed = run(fetching.session, { type: 'download-failed', cause: BUNDLE_REFUSED })
     expect(forgets(run(failed.session, activated(CACHED.buildId)))).toBe(false)
   })
 
   it('keeps it for a same-build cache hit, which committed nothing', () => {
-    const hit = run(afterCacheRead(CACHED).session, {
+    const hit = run(awaitingManifest(CACHED).session, {
       type: 'manifest-read',
       manifest: manifestFacts(MANIFEST_WIRE)
     })
@@ -203,7 +217,7 @@ describe('a newer generation committed clears the record, and nothing else does'
 
   it('keeps it for an offline open', () => {
     const offline = run(
-      afterCacheRead(null).session,
+      awaitingManifest(null).session,
       { type: 'gates-changed', gates: gates({ reachability: 'unreachable' }) },
       { type: 'retry-pressed' },
       { type: 'cache-read', generation: CACHED }

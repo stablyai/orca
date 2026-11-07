@@ -859,6 +859,19 @@ describe('mobile endpoint supervisor', () => {
     supervisor.stop()
   })
 
+  it('dials the relay at once when the last good path was not direct on this network', async () => {
+    const logical = new FakeLogicalClient('connecting', 'lan')
+    const deps = dependencies({ lastGoodPathWasDirectHere: vi.fn(async () => false) })
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
+
+    await supervisor.start()
+    await vi.advanceTimersByTimeAsync(0)
+
+    await vi.waitFor(() => expect(logical.getActivePath()).toBe('relay'))
+    expect(deps.recordGoodPath).toHaveBeenLastCalledWith(host.id, 'relay')
+    supervisor.stop()
+  })
+
   it('cancels the grace race when the direct dial authenticates first', async () => {
     const logical = new FakeLogicalClient('connecting', 'lan')
     const deps = dependencies()

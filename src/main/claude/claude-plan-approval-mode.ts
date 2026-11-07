@@ -20,6 +20,21 @@ export function claudePlanApprovalMode(
   }
 }
 
+/** Keep a provider's startup restriction until an approved plan successfully restores the requested policy. */
+export function claudeBuildPermissionMode(
+  session: Pick<ClaudeSession, 'launchIntent' | 'firstRootInit' | 'appliedInputOptions'>
+): PermissionMode {
+  const opened = session.firstRootInit?.permissionMode
+  return claudePlanApprovalMode({
+    launchIntent: {
+      permissionMode:
+        session.appliedInputOptions.get('buildPermissionMode') ??
+        (opened !== 'plan' ? opened : undefined) ??
+        session.launchIntent?.permissionMode
+    }
+  })
+}
+
 function logPlanExitFailure(error: unknown): void {
   try {
     console.warn('[claude] leaving Plan mode after an approved plan failed:', error)
@@ -35,9 +50,10 @@ export function leaveClaudePlanModeOnApproval(
   session: Pick<
     ClaudeSession,
     'launchIntent' | 'firstRootInit' | 'reportedOptions' | 'orderedPermissionMode'
-  > & {
-    connection: Pick<ClaudeSession['connection'], 'setPermissionMode'>
-  },
+  > &
+    Partial<Pick<ClaudeSession, 'appliedInputOptions'>> & {
+      connection: Pick<ClaudeSession['connection'], 'setPermissionMode'>
+    },
   prompt: Pick<ClaudePendingPrompt, 'toolName'>,
   reply: PermissionResult
 ): void {
@@ -48,7 +64,11 @@ export function leaveClaudePlanModeOnApproval(
     return
   }
   try {
-    session.connection.setPermissionMode(claudePlanApprovalMode(session)).catch(logPlanExitFailure)
+    const restored = claudePlanApprovalMode(session)
+    session.connection.setPermissionMode(restored).then(() => {
+      session.appliedInputOptions?.set('interactionMode', 'default')
+      session.appliedInputOptions?.set('buildPermissionMode', restored)
+    }, logPlanExitFailure)
   } catch (error) {
     logPlanExitFailure(error)
   }

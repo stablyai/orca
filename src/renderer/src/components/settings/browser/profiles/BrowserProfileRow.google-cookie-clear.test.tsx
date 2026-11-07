@@ -6,8 +6,11 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { StrictMode, type ReactNode } from 'react'
 import { useStore } from 'zustand'
 import { ConfirmationDialogContext } from '../../../confirmation-dialog-context'
-import { createTestStore, createBrowserMockApi } from '@/store/slices/browser-slice-test-harness'
-import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/browser-host-state'
+import {
+  createTestStore,
+  createBrowserMockApi
+} from '@/store/slices/browser/browser-slice-test-harness'
+import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/hosts/browser-host-state'
 import type { AppState } from '@/store/types'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
 import type { GoogleCookieClearLocalTarget } from '../../../../../../shared/browser-google-cookie-clear'

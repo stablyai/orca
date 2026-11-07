@@ -70,21 +70,25 @@ async function renderPane(): Promise<{
   renderer: ReactTestRenderer
   stream: Subscription | undefined
   subscriptions: Subscription[]
+  sendRequest: ReturnType<typeof vi.fn>
 }> {
   pageCounter += 1
   const subscriptions: Subscription[] = []
-  const client = {
-    subscribe: (
-      _method: string,
-      _params: unknown,
-      listener: (payload: unknown) => void,
-      options?: { onBinaryFrame?: (frame: BrowserScreencastFrame) => void }
-    ) => {
+  const sendRequest = vi.fn().mockResolvedValue({})
+  const client: RpcClient = {
+    sendRequest,
+    subscribe: (_method, _params, listener, options) => {
       subscriptions.push({ listener, onBinaryFrame: options?.onBinaryFrame })
       return () => {}
     },
-    request: vi.fn()
-  } as unknown as RpcClient
+    updateTerminalSubscriptionViewport: vi.fn(),
+    getState: () => 'connected',
+    getReconnectAttempt: () => 0,
+    getLastConnectedAt: () => null,
+    onStateChange: () => () => {},
+    notifyForeground: vi.fn(),
+    close: vi.fn()
+  }
 
   const tab: MobileBrowserTab = {
     type: 'browser',
@@ -129,18 +133,19 @@ async function renderPane(): Promise<{
   act(() => {
     viewport.props.onLayout({ nativeEvent: { layout: { width: 360, height: 640 } } })
   })
-  return { renderer: mounted, stream: subscriptions[0], subscriptions }
+  return { renderer: mounted, stream: subscriptions[0], subscriptions, sendRequest }
 }
 
 async function renderStreamingPane(): Promise<{
   renderer: ReactTestRenderer
   stream: Subscription
+  sendRequest: ReturnType<typeof vi.fn>
 }> {
-  const { renderer, stream } = await renderPane()
+  const { renderer, stream, sendRequest } = await renderPane()
   if (!stream) {
     throw new Error('browser.screencast subscription not created')
   }
-  return { renderer, stream }
+  return { renderer, stream, sendRequest }
 }
 
 function errorMessages(renderer: ReactTestRenderer): string[] {
@@ -194,5 +199,28 @@ describe('MobileBrowserPane against a shell with no binary screencast lane', () 
     } finally {
       vi.mocked(useBrowserBinaryScreencastGrant).mockReturnValue(true)
     }
+  })
+})
+
+describe('MobileBrowserPane frame acks', () => {
+  // Old hosts strip the opt-in and would refuse the unknown ack method.
+  it('acks received frames only after ready echoes frameAck', async () => {
+    const legacy = await renderStreamingPane()
+    act(() => {
+      legacy.stream.listener({ type: 'ready', subscriptionId: 'sub-legacy', tab: {} })
+      legacy.stream.onBinaryFrame?.(makeFrame())
+    })
+    expect(legacy.sendRequest).not.toHaveBeenCalled()
+
+    const credited = await renderStreamingPane()
+    act(() => {
+      credited.stream.listener({ type: 'ready', subscriptionId: 'sub-1', frameAck: true, tab: {} })
+      credited.stream.onBinaryFrame?.(makeFrame())
+    })
+    expect(credited.sendRequest).toHaveBeenCalledWith('browser.screencast.ack', {
+      worktree: `id:wt-${pageCounter}`,
+      subscriptionId: 'sub-1',
+      seq: 1
+    })
   })
 })

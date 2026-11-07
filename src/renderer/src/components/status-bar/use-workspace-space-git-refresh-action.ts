@@ -4,7 +4,7 @@ import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-s
 import { getWorkspaceSpaceWorktreeIdentity } from './workspace-space-delete-selection'
 import { useAppStore } from '../../store'
 import { findRepoForHost } from '../../store/slices/repo-host-identity'
-import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
+import { getRuntimeGitStatus } from '@/runtime/source-control/git/runtime-git-status-client'
 import type { useWorkspaceSpaceManagerBindings } from './use-workspace-space-manager-bindings'
 import { translate } from '@/i18n/i18n'
 

@@ -53,7 +53,8 @@ beforeAll(async () => {
       commandDockModule: join(sessionDir, 'MobileSessionCommandDock'),
       keyDefinitionsModule: join(terminalDir, 'terminal-key-definitions'),
       accessorySelectionModule: join(sessionDir, 'use-mobile-session-accessory-selection'),
-      dockKeysModule: join(sessionDir, 'use-terminal-dock-keys')
+      dockKeysModule: join(sessionDir, 'use-terminal-dock-keys'),
+      liveInputCaptureModule: join(sessionDir, 'live-input-capture')
     })
   )
   const built = await buildMobileWebAppBundle({

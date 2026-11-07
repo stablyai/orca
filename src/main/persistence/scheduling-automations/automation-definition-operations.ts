@@ -38,6 +38,7 @@ import {
   getAutomationContextsForRepo,
   automationContextAfterUpdate,
   getAutomationSchedulerOwner,
+  applyAutomationSetupTrust,
   normalizeAutomationSessionReuse,
   normalizeAutomationSetupDecisionForWorkspaceMode
 } from './automation-context-migration'
@@ -142,6 +143,7 @@ export function createAutomation(
     createdAt: now,
     updatedAt: now
   }
+  applyAutomationSetupTrust(automation, input)
   assertAutomationExtraAgentArgs(automation)
   operations.state.automations = [...(operations.state.automations ?? []), automation]
   operations.recordCreated()
@@ -246,15 +248,12 @@ export function updateAutomation(
           ? (definedUpdates.baseBranch ?? null)
           : (current.baseBranch ?? null)
         : null,
-    setupDecision:
-      workspaceMode === 'new_per_run'
-        ? Object.hasOwn(definedUpdates, 'setupDecision')
-          ? normalizeAutomationSetupDecisionForWorkspaceMode(
-              workspaceMode,
-              definedUpdates.setupDecision
-            )
-          : normalizeAutomationSetupDecisionForWorkspaceMode(workspaceMode, current.setupDecision)
-        : undefined,
+    setupDecision: normalizeAutomationSetupDecisionForWorkspaceMode(
+      workspaceMode,
+      Object.hasOwn(definedUpdates, 'setupDecision')
+        ? definedUpdates.setupDecision
+        : current.setupDecision
+    ),
     reuseSession:
       workspaceMode === 'existing'
         ? (updates.reuseSession ?? current.reuseSession ?? false)
@@ -269,6 +268,7 @@ export function updateAutomation(
   if (retainContexts && !Object.hasOwn(current, 'sourceContext')) {
     delete merged.sourceContext
   }
+  applyAutomationSetupTrust(merged, definedUpdates, current)
   delete merged.launchSetup
   for (const key of ['surface', 'launchPreferences', 'agentArgs', 'extraAgentArgs'] as const) {
     delete merged[key]

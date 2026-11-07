@@ -1,9 +1,12 @@
+import type { LocalAccountRuntimeTarget } from '../../../shared/local-account-runtime'
 import type { BrowserWindow } from 'electron'
 import type {
+  AntigravityAccountUsage,
   InactiveAccountUsage,
   ProviderRateLimits,
   RateLimitState
 } from '../../../shared/rate-limit-types'
+import type { AntigravityAccountUsageRecorder } from '../antigravity-account-usage'
 import {
   type ActiveRateLimitProvider,
   type InactiveCodexAccountInfo,
@@ -14,6 +17,7 @@ import {
   type OpenCodeGoRateLimitConfig,
   type MiniMaxRateLimitConfig,
   type AntigravityUsageEnabledResolver,
+  type MuseUsageEnabledResolver,
   type ZcodePlanRateLimitConfig,
   type GeminiCliOAuthEnabledResolver,
   type NormalizedCodexAccountSelectionTarget,
@@ -35,7 +39,8 @@ export abstract class RateLimitServiceState {
     minimax: null,
     grok: null,
     cursor: null,
-    zcode: null
+    zcode: null,
+    muse: null
   }
   protected grokAuthConfigured = readGrokAuthSession().status === 'ok'
   // Async Keychain/desktop DB probing belongs in fetch cycles, never synchronous construction.
@@ -55,7 +60,8 @@ export abstract class RateLimitServiceState {
     grok: 0,
     antigravity: 0,
     cursor: 0,
-    zcode: 0
+    zcode: 0,
+    muse: 0
   }
   // Failures increase activation backoff; success/unavailable resets it.
   protected activeFailureStreakByProvider: Record<ActiveRateLimitProvider, number> = {
@@ -68,7 +74,8 @@ export abstract class RateLimitServiceState {
     grok: 0,
     antigravity: 0,
     cursor: 0,
-    zcode: 0
+    zcode: 0,
+    muse: 0
   }
   protected mainWindow: BrowserWindow | null = null
   /** Paired clients streaming usage (accounts.subscribe); headless hosts have no window to watch. */
@@ -112,6 +119,10 @@ export abstract class RateLimitServiceState {
   protected zcodePlanConfigResolver: (() => ZcodePlanRateLimitConfig) | null = null
   protected geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
   protected antigravityUsageEnabledResolver: AntigravityUsageEnabledResolver | null = null
+  protected antigravityFetchTarget: LocalAccountRuntimeTarget = { runtime: 'host', wslDistro: null }
+  protected antigravityAccountUsageRecorder: AntigravityAccountUsageRecorder | null = null
+  protected antigravityAccounts: AntigravityAccountUsage[] = []
+  protected museUsageEnabledResolver: MuseUsageEnabledResolver | null = null
   protected inactiveClaudeAccountsResolver: (() => InactiveClaudeAccountInfo[]) | null = null
   protected inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null
   protected networkProxySettingsResolver: (() => NetworkProxySettings) | null = null

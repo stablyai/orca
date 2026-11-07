@@ -1,12 +1,17 @@
-import type { Worker } from 'node:worker_threads'
 import type { SttEventSink } from './stt-service'
+import {
+  STT_WORKER_EXITED_ERROR,
+  STT_WORKER_HUNG_ERROR,
+  type SttWorkerProcess
+} from './stt-worker-process'
 
 export type SttWorkerStopOutcome = 'stopped' | 'error' | 'exit' | 'timeout'
 
 export function waitForSttWorkerStop(args: {
-  worker: Worker
+  worker: SttWorkerProcess
   capturedSink: SttEventSink | null
   timeoutMs: number
+  discard: boolean
   finish: (outcome: SttWorkerStopOutcome) => void
 }): Promise<void> {
   return new Promise<void>((resolve) => {
@@ -30,6 +35,13 @@ export function waitForSttWorkerStop(args: {
       settled = true
       cleanup()
       if (outcome !== 'stopped' && !receivedStopped) {
+        // A canceled dictation wants no text; a finishing one lost its tail and must say so.
+        if (!args.discard && (outcome === 'exit' || outcome === 'timeout')) {
+          args.capturedSink?.({
+            type: 'error',
+            error: outcome === 'exit' ? STT_WORKER_EXITED_ERROR : STT_WORKER_HUNG_ERROR
+          })
+        }
         args.capturedSink?.({ type: 'stopped' })
       }
       args.finish(outcome)

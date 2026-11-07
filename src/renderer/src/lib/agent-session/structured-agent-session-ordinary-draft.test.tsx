@@ -13,7 +13,7 @@ import type { NativeChatComposerInput } from '@/components/native-chat/native-ch
 import { promptEditor } from '@/components/native-chat/native-chat-prompt-editor.test-support'
 import { expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import { adoptAgentSessionLaunchVerdict } from '../agent-session-launch-plan'
+import { adoptAgentSessionLaunchVerdict } from './launch/routing/agent-session-launch-plan'
 import { beginStructuredAgentSessionProvisionalLaunch } from './structured-agent-session-provisional-tab'
 import {
   getStructuredLaunchStateBySessionId,
