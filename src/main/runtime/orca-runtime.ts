@@ -1,3 +1,4 @@
+import type { RecipeWorkspaceRemoveParams } from '../ephemeral-vm/workspace-removal'
 import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
 import { conversationRecordReader } from './orchestration/addressing/session-lineage/structured-session-lineage'
 import type { RuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
@@ -64,6 +65,28 @@ const OrcaRuntimeSidebarBase: typeof OrcaRuntimeWithAgentTransitions = ORCA_SIDE
 
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The existing Linear installer supplies the canonical prototype surface.
 class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
+  private recipeWorkspaceRemoval: {
+    owns: (params: RecipeWorkspaceRemoveParams) => boolean
+    remove: (params: RecipeWorkspaceRemoveParams) => Promise<{ removed: true }>
+  } | null = null
+
+  setRecipeWorkspaceRemoval(
+    removal: NonNullable<OrcaRuntimeService['recipeWorkspaceRemoval']>
+  ): void {
+    this.recipeWorkspaceRemoval = removal
+  }
+
+  ownsRecipeWorkspaceRemoval(params: RecipeWorkspaceRemoveParams): boolean {
+    return this.recipeWorkspaceRemoval?.owns(params) ?? false
+  }
+
+  removeRecipeWorkspace(params: RecipeWorkspaceRemoveParams): Promise<{ removed: true }> {
+    if (!this.recipeWorkspaceRemoval) {
+      throw new Error('Recipe workspace removal is unavailable.')
+    }
+    return this.recipeWorkspaceRemoval.remove(params)
+  }
+
   /** Sidebar facts are absent unless ORCA_SIDEBAR_INPUTS=main. */
   get sidebarFacts() {
     return sidebarFactsRuntime(this)

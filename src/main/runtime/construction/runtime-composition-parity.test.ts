@@ -3,6 +3,7 @@ import { join, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { RUNTIME_CAPABILITIES } from '../../../shared/protocol-version'
 import { SSH_TARGET_MANAGEMENT_RUNTIME_CAPABILITY } from '../../../shared/ssh-target-management'
+import { WORKTREE_RECIPE_REMOVAL_RUNTIME_CAPABILITY } from '../../../shared/worktree-runtime-capabilities'
 import { SKILL_INSTALL_CAPABILITY } from '../../../shared/skill-install-capability'
 
 /** Optional services can silently diverge between Electron/orcad (#30120, #31112, #31174).
@@ -28,6 +29,13 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     missingOn: 'orcad',
     reason: 'Skill sharing uses the desktop sign-in; installs from Git still work on orcad.',
     advertisedUnserved: [SKILL_INSTALL_CAPABILITY]
+  },
+  {
+    wiring: 'runtime.setRecipeWorkspaceRemoval',
+    missingOn: 'orcad',
+    reason:
+      'Recipe VMs are provisioned from the desktop; orcad holds none, so it has none to destroy.',
+    advertisedUnserved: [WORKTREE_RECIPE_REMOVAL_RUNTIME_CAPABILITY]
   },
   {
     wiring: 'registerSshHandlers',

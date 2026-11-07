@@ -2,6 +2,8 @@ import { z } from 'zod'
 import { WORKTREE_REMOVE_BRANCH_POLICY_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
 import type { RuntimeWorktreeRemoveResult } from '../../shared/runtime-types'
 import { worktreeRemovalReplyTimeoutMs } from '../../shared/worktree/archive-hook-removal-gate'
+import type { RuntimeCallOptions } from '../runtime/types'
+import { removeOwnedRecipeWorkspace } from '../runtime/owned-recipe-workspace-removal'
 import { RuntimeClientError, type RuntimeClient, type RuntimeRpcSuccess } from '../runtime-client'
 
 export type WorktreeRemovalRequest = {
@@ -27,32 +29,40 @@ export async function requestWorktreeRemoval(
     waitForBackgroundRemoval: true
   }
   try {
-    return await client.call<RuntimeWorktreeRemoveResult>('worktree.rm', legacy, {
-      timeoutMs: worktreeRemovalReplyTimeoutMs(request.runHooks),
-      requestSelection: {
-        paramsForStatus: (raw) => {
-          const parsed = BranchPolicyStatus.safeParse(raw)
-          if (!parsed.success) {
-            throw new RuntimeClientError(
-              'invalid_runtime_response',
-              'The Orca host returned an invalid status response.'
-            )
-          }
-          if (
-            parsed.data.capabilities?.includes(WORKTREE_REMOVE_BRANCH_POLICY_RUNTIME_CAPABILITY)
-          ) {
-            return deleteBranch === undefined ? legacy : { ...legacy, deleteBranch }
-          }
-          console.error(
-            'warning: This Orca host is older and uses its existing branch policy. Keep-by-default and --delete-branch do not apply.'
+    const requestSelection: NonNullable<RuntimeCallOptions['requestSelection']> = {
+      paramsForStatus: (raw) => {
+        const parsed = BranchPolicyStatus.safeParse(raw)
+        if (!parsed.success) {
+          throw new RuntimeClientError(
+            'invalid_runtime_response',
+            'The Orca host returned an invalid status response.'
           )
-          return legacy
-        },
-        onDispatch: () => {
-          dispatched = true
         }
+        if (parsed.data.capabilities?.includes(WORKTREE_REMOVE_BRANCH_POLICY_RUNTIME_CAPABILITY)) {
+          return deleteBranch === undefined ? legacy : { ...legacy, deleteBranch }
+        }
+        console.error(
+          'warning: This Orca host is older and uses its existing branch policy. Keep-by-default and --delete-branch do not apply.'
+        )
+        return legacy
+      },
+      onDispatch: () => {
+        dispatched = true
       }
-    })
+    }
+    // A recipe workspace goes back to the host that provisioned it; everything else removes in place.
+    return (
+      (await removeOwnedRecipeWorkspace<RuntimeWorktreeRemoveResult>(
+        client,
+        'worktree.rm',
+        legacy,
+        requestSelection
+      )) ??
+      (await client.call<RuntimeWorktreeRemoveResult>('worktree.rm', legacy, {
+        timeoutMs: worktreeRemovalReplyTimeoutMs(request.runHooks),
+        requestSelection
+      }))
+    )
   } catch (error) {
     // The host keeps deleting after this client stops waiting.
     if (dispatched && error instanceof RuntimeClientError && error.code === 'runtime_timeout') {
