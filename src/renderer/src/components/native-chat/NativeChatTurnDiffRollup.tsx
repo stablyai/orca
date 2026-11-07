@@ -1,12 +1,14 @@
-import { ChevronRight, EyeOff } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID } from '../settings/chat/native-chat-turn-diff-setting-target'
 import { DiffLineCounts } from '../right-sidebar/source-control/listing/diff-line-counts'
 import { NativeChatDiffCard } from './NativeChatDiffCard'
 import { NativeChatExpandable } from './NativeChatExpandable'
-import { hideNativeChatCardKind } from './native-chat-card-kind-hidden-toast'
+import {
+  NativeChatCardHideButton,
+  NATIVE_CHAT_HIDEABLE_CARD_CLASS
+} from './NativeChatCardHideButton'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { nativeChatEditFileBaseName } from '../../../../shared/native-chat/tools/native-chat-edit-model'
 import {
@@ -63,14 +65,6 @@ function TurnDiffFileRow({ file }: { file: NativeChatTurnDiffFile }): React.JSX.
   )
 }
 
-function hideTurnDiffs(): Promise<void> {
-  return hideNativeChatCardKind(
-    { nativeChatTurnDiffSummary: false },
-    NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID,
-    translate('components.native-chat.turnDiff.hidden', "Orca won't show turn diffs anymore")
-  )
-}
-
 export function NativeChatTurnDiffRollup({
   diff
 }: {
@@ -83,7 +77,9 @@ export function NativeChatTurnDiffRollup({
   const files = showAll ? diff.files : diff.files.slice(0, NATIVE_CHAT_TURN_DIFF_FILE_LIMIT)
   const remaining = diff.files.length - files.length
   return (
-    <div className="group/turn-diff rounded-lg border border-chat-code-border p-2 text-xs text-chat-foreground-faint">
+    <div
+      className={`${NATIVE_CHAT_HIDEABLE_CARD_CLASS} rounded-lg border border-chat-code-border p-2 text-xs text-chat-foreground-faint`}
+    >
       <div className="flex min-w-0 items-center gap-1.5 px-1 pb-1">
         <span className="min-w-0 truncate">
           {translate('components.native-chat.turnDiff.changedFiles', '{{count}} changed files', {
@@ -95,25 +91,14 @@ export function NativeChatTurnDiffRollup({
         {diff.truncated ? (
           <span>{translate('components.native-chat.turnDiff.partial', 'Partial diff')}</span>
         ) : null}
-        {/* Shown on card hover or keyboard focus, like the transcript's other row actions. The
-            negative margin keeps the header one text line tall, as the row-height estimate assumes. */}
-        <span className="-my-1 ml-auto flex shrink-0 transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover/turn-diff:pointer-events-auto group-hover/turn-diff:opacity-100 has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:opacity-100">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label={translate('components.native-chat.turnDiff.hide', 'Hide')}
-                onClick={() => void hideTurnDiffs()}
-              >
-                <EyeOff aria-hidden className="size-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>
-              {translate('components.native-chat.turnDiff.hide', 'Hide')}
-            </TooltipContent>
-          </Tooltip>
-        </span>
+        <NativeChatCardHideButton
+          updates={{ nativeChatTurnDiffSummary: false }}
+          settingSectionId={NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID}
+          hiddenMessage={translate(
+            'components.native-chat.turnDiff.hidden',
+            "Orca won't show turn diffs anymore"
+          )}
+        />
       </div>
       <div className="space-y-1">
         {files.map((file) => (
