@@ -9453,7 +9453,9 @@
           "openAiKeyName": "OpenAI transkripsiyon anahtarınız",
           "dictationShortcutDescription": "Odaktaki herhangi bir bölmeye metin dikte etmek için {{shortcut}} tuşlarına basın.",
           "dictationModeAuto": "Otomatik",
-          "dictationModesWithAutoDescription": "Otomatik: bırakana kadar dikte etmek için {{shortcut}} tuşlarını basılı tutun veya başlatıp durdurmak için kısaca dokunun. Basılı tut: {{shortcut}} basılıyken dikte edin. Aç/kapat: başlatmak için {{shortcut}} tuşlarına bir kez, durdurmak için tekrar basın."
+          "dictationModesWithAutoDescription": "Otomatik: bırakana kadar dikte etmek için {{shortcut}} tuşlarını basılı tutun veya başlatıp durdurmak için kısaca dokunun. Basılı tut: {{shortcut}} basılıyken dikte edin. Aç/kapat: başlatmak için {{shortcut}} tuşlarına bir kez, durdurmak için tekrar basın.",
+          "speechGpuLabel": "GPU kullan",
+          "speechGpuDescription": "Konuşmayı çalıştığında ekran kartında, başarısız olduğunda CPU’da tanır. Dikte bilgisayarınızı donduruyor veya yeniden başlatıyorsa kapatın."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} kaldırılsın mı",

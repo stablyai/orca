@@ -8773,7 +8773,9 @@
           "openAiKeyName": "您的 OpenAI 转录密钥",
           "dictationShortcutDescription": "按 {{shortcut}} 可将文本听写到当前聚焦的任意窗格中。",
           "dictationModeAuto": "自动",
-          "dictationModesWithAutoDescription": "自动：按住 {{shortcut}} 听写，松开即停止；轻按则开始或停止。按住：按住 {{shortcut}} 期间进行听写。切换：按一次 {{shortcut}} 开始，再按一次停止。"
+          "dictationModesWithAutoDescription": "自动：按住 {{shortcut}} 听写，松开即停止；轻按则开始或停止。按住：按住 {{shortcut}} 期间进行听写。切换：按一次 {{shortcut}} 开始，再按一次停止。",
+          "speechGpuLabel": "使用 GPU",
+          "speechGpuDescription": "显卡可用时在显卡上识别语音，失败时改用 CPU。如果听写导致电脑卡死或重启，请关闭。"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "删除 {{value0}}",

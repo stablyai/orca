@@ -9066,7 +9066,9 @@
           "openAiKeyName": "Su clave de transcripción OpenAI",
           "dictationShortcutDescription": "Pulsa {{shortcut}} para dictar texto en cualquier panel con foco.",
           "dictationModeAuto": "Automático",
-          "dictationModesWithAutoDescription": "Automático: mantén {{shortcut}} para dictar hasta que lo sueltes, o tócalo para empezar y parar. Mantener: dicta mientras {{shortcut}} se mantiene presionado. Alternar: pulsa {{shortcut}} una vez para empezar y otra para parar."
+          "dictationModesWithAutoDescription": "Automático: mantén {{shortcut}} para dictar hasta que lo sueltes, o tócalo para empezar y parar. Mantener: dicta mientras {{shortcut}} se mantiene presionado. Alternar: pulsa {{shortcut}} una vez para empezar y otra para parar.",
+          "speechGpuLabel": "Usar GPU",
+          "speechGpuDescription": "Reconoce la voz en la tarjeta gráfica cuando funciona y en la CPU cuando falla. Desactívalo si el dictado congela o reinicia tu equipo."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Quitar {{value0}}",

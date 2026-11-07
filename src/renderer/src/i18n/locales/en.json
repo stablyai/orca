@@ -9808,7 +9808,9 @@
           "openAiKeyName": "Your OpenAI transcription key",
           "dictationShortcutDescription": "Press {{shortcut}} to dictate text into any focused pane.",
           "dictationModeAuto": "Auto",
-          "dictationModesWithAutoDescription": "Auto: hold {{shortcut}} to dictate until you let go, or tap it to start and stop. Hold: dictate while {{shortcut}} is held. Toggle: press {{shortcut}} once to start, again to stop."
+          "dictationModesWithAutoDescription": "Auto: hold {{shortcut}} to dictate until you let go, or tap it to start and stop. Hold: dictate while {{shortcut}} is held. Toggle: press {{shortcut}} once to start, again to stop.",
+          "speechGpuLabel": "Use GPU",
+          "speechGpuDescription": "Recognize speech on the graphics card when it works, and on the CPU when it fails. Turn off if dictation freezes or restarts your computer."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Remove {{value0}}",
