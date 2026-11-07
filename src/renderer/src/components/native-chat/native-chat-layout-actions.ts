@@ -92,7 +92,9 @@ export function runNativeChatSplitTarget(
     })
   } else {
     // The new pane shows the split landing so the user picks what opens there.
-    useAppStore.getState().createEmptySplitGroup(source.worktreeId, target.groupId, direction)
+    useAppStore
+      .getState()
+      .createEmptySplitGroup(source.worktreeId, target.groupId, direction, { landing: true })
   }
   useAppStore.getState().recordFeatureInteraction('tab-splits')
   return true

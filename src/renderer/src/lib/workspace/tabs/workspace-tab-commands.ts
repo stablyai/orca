@@ -11,7 +11,7 @@ import {
   handleSwitchTerminalTab
 } from '@/hooks/ipc-tab-switch'
 import { selectEmptyFloatingWorkspacePanelVisible } from '@/store/floating-workspace-panel-selector'
-import { findFocusedEmptySplitGroup } from '@/store/slices/tabs/focused-empty-split-group'
+import { findFocusedSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 import {
   isFloatingWorkspacePanelFocused,
   switchFloatingWorkspaceRecentTab,
@@ -104,9 +104,9 @@ function resolveCloseTarget(
   return null
 }
 
-// An empty split pane (its landing showing) has no tab to close, so Close collapses the pane.
-function closeFocusedEmptySplitGroup(state: TabState): boolean {
-  const group = findFocusedEmptySplitGroup(state, state.activeWorktreeId)
+// A split landing has no tab to close, so Close collapses the pane.
+function closeFocusedSplitLanding(state: TabState): boolean {
+  const group = findFocusedSplitLandingGroup(state, state.activeWorktreeId)
   return group !== null && state.closeEmptyGroup(group.worktreeId, group.id)
 }
 
@@ -122,7 +122,7 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
       if (isFloatingWorkspacePanelFocused()) {
         return false
       }
-      if (closeFocusedEmptySplitGroup(state)) {
+      if (closeFocusedSplitLanding(state)) {
         return true
       }
     }

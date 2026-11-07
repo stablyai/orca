@@ -26,7 +26,7 @@ import { useWindowBackdropActive } from '@/lib/window-backdrop'
 import { useThemeBackgroundStore } from '@/store/theme-background'
 import { EditorRevealFlash } from './EditorRevealFlash'
 import { SplitPaneLanding } from './SplitPaneLanding'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { isSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 const EMPTY_GROUPS: readonly TabGroup[] = []
@@ -85,6 +85,9 @@ export default function TabGroupPanel({
     tabBarOrder,
     terminalTabs
   } = model
+  const showsSplitLanding = useAppStore((state) =>
+    isSplitLandingGroup(state, worktreeId, model.group ?? undefined)
+  )
   // Why: one strip owns the worktree's client-hosted rows, or every split repeats them.
   const ownsClientHostedRows = useAppStore(
     (state) =>
@@ -383,10 +386,7 @@ export default function TabGroupPanel({
             </div>
           )}
 
-        {/* Why: the floating panel draws its own empty state. */}
-        {hasSplitGroups &&
-        model.group?.tabOrder.length === 0 &&
-        worktreeId !== FLOATING_TERMINAL_WORKTREE_ID ? (
+        {showsSplitLanding ? (
           <SplitPaneLanding worktreeId={worktreeId} groupId={groupId} autoFocus={isFocused} />
         ) : null}
 

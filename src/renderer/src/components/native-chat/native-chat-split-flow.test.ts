@@ -115,6 +115,19 @@ it('Close on the empty pane collapses the split back to the chat', () => {
   expect(state.groupsByWorktree[worktreeId].map((group) => group.id)).toEqual([source.groupId])
   expect(state.activeGroupIdByWorktree[worktreeId]).toBe(source.groupId)
   expect(state.unifiedTabsByWorktree[worktreeId]).toEqual([source])
+  expect(state.splitLandingGroupIds).toEqual({})
+})
+
+it('Close leaves an empty split that is waiting on chosen content', () => {
+  const worktreeId = folderWorkspaceKey('pending-folder')
+  const { source } = sourceChat(worktreeId)
+  store.setState({ activeWorktreeId: worktreeId })
+  const pending = store.getState().createEmptySplitGroup(worktreeId, source.groupId, 'right')
+  expect(dispatchWorkspaceTabCommand({ type: 'close' })).toBe(false)
+  expect(store.getState().groupsByWorktree[worktreeId].map((group) => group.id)).toEqual([
+    source.groupId,
+    pending
+  ])
 })
 
 it('settles real host terminal creation after later navigation', async () => {
