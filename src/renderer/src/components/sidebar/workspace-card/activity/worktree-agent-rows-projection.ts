@@ -120,13 +120,11 @@ export function createWorktreeAgentRowsSelector(worktreeId: string, hostId?: Exe
   }
 }
 
-/** Gate all model inputs before walking any workspace, including orchestration's ownership inputs. */
-export function worktreeAgentProjectionInputs(state: AppState): readonly unknown[] {
+/** Structural changes can alter agent ownership; live status and acknowledgements invalidate only their owners. */
+export function worktreeAgentStructureInputs(state: AppState): readonly unknown[] {
   return [
     state.tabsByWorktree,
     state.unifiedTabsByWorktree,
-    state.agentStatusByPaneKey,
-    state.agentStatusEpoch,
     state.migrationUnsupportedByPtyId,
     state.retainedAgentsByPaneKey,
     state.runtimePaneTitlesByTabId,
@@ -134,8 +132,16 @@ export function worktreeAgentProjectionInputs(state: AppState): readonly unknown
     state.terminalLayoutsByTabId,
     state.runtimeAgentOrchestrationByPaneKey,
     state.paneForegroundAgentByPaneKey,
-    state.acknowledgedAgentsByPaneKey,
     selectWorktreesByRepo(state),
     ...structuredAgentSessionOwnerInputs(state)
+  ]
+}
+
+export function worktreeAgentProjectionInputs(state: AppState): readonly unknown[] {
+  return [
+    ...worktreeAgentStructureInputs(state),
+    state.agentStatusByPaneKey,
+    state.agentStatusEpoch,
+    state.acknowledgedAgentsByPaneKey
   ]
 }

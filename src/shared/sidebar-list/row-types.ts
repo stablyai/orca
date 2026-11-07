@@ -71,6 +71,7 @@ export type WorktreeRow = {
   lineageCollapsed?: boolean
   /** Every workspace nested under this one, collapsed or not; host-qualified. */
   lineageDescendantIdentities?: WorktreeLineageSource
+  lineageDescendantsHidden?: boolean
   hostContextLabel?: string
   showProjectName?: boolean
 }
@@ -119,6 +120,10 @@ export type PendingCreationRow = {
 }
 
 export type FolderWorkspaceRow = {
+  occurrence?: WorktreeOccurrence<Worktree>
+  lineageChildIdentities?: readonly HostScopedWorktreeKey[]
+  lineageDescendantIdentities?: WorktreeLineageSource
+  lineageDescendantsHidden?: boolean
   type: 'folder-workspace'
   key: string
   folderWorkspace: FolderWorkspace

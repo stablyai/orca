@@ -150,7 +150,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         parentCardContent
       )}
 
-      {lineageChildren ? (
+      {lineageChildren && (!slotLayout || cardOpen.open) ? (
         <div
           className={cn(
             'space-y-1',

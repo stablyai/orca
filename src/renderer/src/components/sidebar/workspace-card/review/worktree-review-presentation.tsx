@@ -71,6 +71,12 @@ export function getReviewStateTone(state: WorktreeCardPrDisplay['state']): strin
   return 'text-muted-foreground opacity-70'
 }
 
+export function getReviewTone(
+  review: Pick<WorktreeCardPrDisplay, 'state' | 'status' | 'checksSummary'>
+): string {
+  return getCheckTone(review) ?? getReviewStateTone(review.state)
+}
+
 export function ReviewIcon({
   review,
   className,
@@ -87,9 +93,6 @@ export function ReviewIcon({
     variant === 'provider' && review.provider === 'gitlab' ? GitMerge : PullRequestIcon
   const Icon = getReviewStateIcon(review.state) ?? providerIcon
   return createElement(Icon, {
-    className: cn(
-      className,
-      (showChecks ? getCheckTone(review) : null) ?? getReviewStateTone(review.state)
-    )
+    className: cn(className, showChecks ? getReviewTone(review) : getReviewStateTone(review.state))
   })
 }

@@ -4,7 +4,7 @@ import { webRuntimeState } from './web-runtime-session'
 
 type CardStyleSettings = Pick<
   Partial<GlobalSettings>,
-  'experimentalNewWorktreeCardStyle' | 'worktreeCardStyle'
+  'experimentalNewWorktreeCardStyle' | 'worktreeCardStyle' | 'worktreeCardDetailsRow'
 >
 
 /** Mirror the host's card style, and remember whether this host accepts the three-way field. */
@@ -14,6 +14,8 @@ export function readHostWorktreeCardStyle(
   environmentStillActive: boolean
 ): CardStyleSettings {
   if (environmentStillActive) {
+    webRuntimeState.worktreeCardDetailsRowRuntimeEnvironmentId =
+      typeof host.worktreeCardDetailsRow === 'boolean' ? environmentId : null
     webRuntimeState.worktreeCardStyleRuntimeEnvironmentId = isWorktreeCardStyle(
       host.worktreeCardStyle
     )
@@ -21,6 +23,7 @@ export function readHostWorktreeCardStyle(
       : null
   }
   return {
+    worktreeCardDetailsRow: host.worktreeCardDetailsRow === true,
     ...(typeof host.experimentalNewWorktreeCardStyle === 'boolean'
       ? { experimentalNewWorktreeCardStyle: host.experimentalNewWorktreeCardStyle }
       : {}),
@@ -36,6 +39,10 @@ export function hostWorktreeCardStyleUpdate(
   environmentId: string
 ): CardStyleSettings {
   return {
+    ...(typeof updates.worktreeCardDetailsRow === 'boolean' &&
+    webRuntimeState.worktreeCardDetailsRowRuntimeEnvironmentId === environmentId
+      ? { worktreeCardDetailsRow: updates.worktreeCardDetailsRow }
+      : {}),
     ...(typeof updates.experimentalNewWorktreeCardStyle === 'boolean'
       ? { experimentalNewWorktreeCardStyle: updates.experimentalNewWorktreeCardStyle }
       : {}),
