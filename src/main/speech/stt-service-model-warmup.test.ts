@@ -20,7 +20,11 @@ vi.mock('./model-catalog', () => ({
 type FakeChild = { worker: SttWorkerChildProcess; modelDir: string; killed: boolean }
 
 function createService(
-  options: { status?: Record<string, SpeechModelStatus>; answerInit?: boolean | 'error' } = {}
+  options: {
+    status?: Record<string, SpeechModelStatus>
+    answerInit?: boolean | 'error'
+    modelStateGate?: Promise<void>
+  } = {}
 ): { service: SttService; children: FakeChild[] } {
   const children: FakeChild[] = []
   const spawn = (): SttWorkerChildProcess => {
@@ -51,7 +55,10 @@ function createService(
     return child.worker
   }
   const models = {
-    getModelState: async (id: string) => ({ id, status: options.status?.[id] ?? 'ready' }),
+    getModelState: async (id: string) => {
+      await options.modelStateGate
+      return { id, status: options.status?.[id] ?? 'ready' }
+    },
     getModelDir: (id: string) => `/models/${id}`
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: local starts read only getModelState and getModelDir.
@@ -121,6 +128,30 @@ describe('SttService model pre-warm', () => {
 
     await service.prewarm('model-a', undefined, true)
     expect(children).toHaveLength(2)
+  })
+
+  it('does not count a load cut short by an unload as a failure', async () => {
+    const { service, children } = createService({ answerInit: false })
+    const warming = service.prewarm('model-a')
+    await vi.waitFor(() => expect(children[0]?.modelDir).toBe('/models/model-a'))
+
+    await service.unloadIdleModel()
+    await warming
+    void service.prewarm('model-a')
+
+    await vi.waitFor(() => expect(children).toHaveLength(2))
+  })
+
+  it('does not load the model when voice is turned off while it checks the model', async () => {
+    const gate = Promise.withResolvers<void>()
+    const { service, children } = createService({ modelStateGate: gate.promise })
+    const warming = service.prewarm('model-a')
+
+    await service.unloadIdleModel()
+    gate.resolve()
+    await warming
+
+    expect(children).toHaveLength(0)
   })
 
   it('unloads a pre-warmed model after the default 15 idle minutes', async () => {

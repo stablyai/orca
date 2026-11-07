@@ -190,6 +190,7 @@ export function spawnSttEngine(
     ...config,
     worker,
     detach,
+    retired: false,
     ready: readyPromise.catch((error: unknown) => {
       failSttEngine(state, engine, STT_WORKER_EXITED_ERROR)
       throw error

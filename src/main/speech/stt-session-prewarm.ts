@@ -20,6 +20,8 @@ export async function prewarmSttModel(
   language: string | undefined,
   retryFailed: boolean
 ): Promise<void> {
+  const generation = ++state.prewarmGeneration
+  const superseded = (): boolean => generation !== state.prewarmGeneration
   if (retryFailed) {
     state.prewarmFailedModelId = null
   }
@@ -46,7 +48,7 @@ export async function prewarmSttModel(
     (await state.modelManager.getModelState(modelId)).status === 'ready'
   for (;;) {
     // Never disturb a dictation; whatever it loaded is what the user is using.
-    if (state.sessions.size > 0) {
+    if (superseded() || state.sessions.size > 0) {
       return
     }
     const current = state.engine
@@ -65,8 +67,10 @@ export async function prewarmSttModel(
     try {
       await engine.ready
     } catch (error) {
-      state.prewarmFailedModelId = modelId
-      console.warn('[speech] Model pre-warm failed:', modelId, error)
+      if (!engine.retired) {
+        state.prewarmFailedModelId = modelId
+        console.warn('[speech] Model pre-warm failed:', modelId, error)
+      }
       return
     }
     if (state.engine === engine && sttEngineUsers(state, engine).length === 0) {

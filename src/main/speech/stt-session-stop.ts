@@ -184,6 +184,7 @@ export async function teardownIdleSttEngine(
 
 /** Only for a process no session uses. */
 export async function teardownSttEngine(state: SttSessionState, engine: SttEngine): Promise<void> {
+  engine.retired = true
   if (state.engine === engine) {
     state.engine = null
     clearSttIdleTeardownTimer(state)

@@ -84,6 +84,8 @@ export class SttService {
   }
 
   unloadIdleModel(): Promise<void> {
+    // A pre-warm still reading the model state must not load it after this.
+    this.state.prewarmGeneration += 1
     return teardownIdleSttEngine(this.state)
   }
 }

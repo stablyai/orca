@@ -18,6 +18,8 @@ export type SttEngine = SttRecognizerConfig & {
   worker: SttWorkerProcess
   ready: Promise<void>
   detach: () => void
+  /** Torn down on purpose, so a load it cut short is not a failure of the model. */
+  retired: boolean
 }
 
 export type SttSession = {
@@ -44,6 +46,8 @@ export type SttSessionState = {
   idleUnloadMs: number | null
   /** Pre-warm skips a model that failed to load until a dictation loads it, so focus does not retry it forever. */
   prewarmFailedModelId: string | null
+  /** Bumped by each pre-warm and unload; an older pre-warm that sees a newer one stops. */
+  prewarmGeneration: number
 }
 
 export function createSttSessionState(
@@ -58,7 +62,8 @@ export function createSttSessionState(
     nextStreamId: 0,
     idleTeardownTimer: null,
     idleUnloadMs: voiceModelUnloadDelayMs(undefined),
-    prewarmFailedModelId: null
+    prewarmFailedModelId: null,
+    prewarmGeneration: 0
   }
 }
 
