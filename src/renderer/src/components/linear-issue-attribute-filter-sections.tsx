@@ -7,6 +7,7 @@ import {
 } from '@/components/github/PRFilterPickers'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { translateUnassignedLabel } from '@/i18n/unassigned-label'
 import {
   LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_LABEL_IDS,
   LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS,
@@ -108,10 +109,7 @@ export function LinearIssueFilterSectionMenu({
       summary: plainSummary(
         value.assignee
           ? value.assignee.kind === 'unassigned'
-            ? translate(
-                'auto.components.linear-issue-attribute-filter-sections.unassigned',
-                'Unassigned'
-              )
+            ? translateUnassignedLabel()
             : translate(
                 'auto.components.linear-issue-attribute-filter-sections.selected',
                 'selected'
@@ -240,10 +238,7 @@ export function LinearIssueFilterSectionDetail({
                 })
               }
             >
-              {translate(
-                'auto.components.linear-issue-attribute-filter-sections.unassigned',
-                'Unassigned'
-              )}
+              {translateUnassignedLabel()}
             </button>
           </div>
         ) : null}
@@ -309,10 +304,7 @@ export function LinearIssueFilterSectionDetail({
         options={[
           {
             key: '__unassigned__',
-            primary: translate(
-              'auto.components.linear-issue-attribute-filter-sections.unassigned',
-              'Unassigned'
-            )
+            primary: translateUnassignedLabel()
           },
           ...assigneeOptions
         ]}

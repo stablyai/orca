@@ -24,6 +24,7 @@ import { buildProjectHostSetupOptions } from '@/lib/project-host-setup-options'
 import { buildNewWorkspaceCreateTargetOptions } from '@/lib/new-workspace-project-options'
 import { getRuntimeEnvironmentIdForRepo } from '@/lib/repo-runtime-owner'
 import { useEphemeralVmRecipeOptions } from '@/hooks/useEphemeralVmRecipeOptions'
+import { selectProjectFirstReason } from './runtime-target-selection-copy'
 
 export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSelectionInput) {
   const {
@@ -157,7 +158,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
   // Quote for the repo execution host’s OS, not the client’s (#22204).
   const selectedRepoAgentLaunchFact = useMemo((): ExecutionHostPlatformFact => {
     if (!selectedRepo) {
-      return { kind: 'withheld', reason: 'Select a project first.' }
+      return { kind: 'withheld', reason: selectProjectFirstReason() }
     }
     return resolveRepoExecutionHostPlatform(
       { sshConnectionStates, sshStateByEnvironment, runtimeStatusByEnvironmentId },

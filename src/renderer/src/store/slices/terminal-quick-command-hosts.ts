@@ -75,7 +75,13 @@ async function mutateLocalCommands(
     return true
   } catch (error) {
     // Why: main refuses an unstorable list with its own sentence; drop Electron's IPC wrapper.
-    const message = extractIpcErrorMessage(error, 'Failed to save quick command.')
+    const message = extractIpcErrorMessage(
+      error,
+      translate(
+        'auto.store.slices.terminalQuickCommandHosts.saveFailed',
+        'Failed to save quick command.'
+      )
+    )
     toast.error(
       translate(
         'auto.store.slices.terminal.quick.command.hosts.5b7d781d67',
@@ -122,7 +128,13 @@ async function mutateRemoteCommands(
       if (getRuntimeEnvironmentConnectionGeneration(environmentId) !== connectionGeneration) {
         return
       }
-      const message = error instanceof Error ? error.message : 'Failed to save quick command.'
+      const message =
+        error instanceof Error
+          ? error.message
+          : translate(
+              'auto.store.slices.terminalQuickCommandHosts.saveFailed',
+              'Failed to save quick command.'
+            )
       updateEntry(set, environmentId, (current) => ({
         commands: current?.commands ?? [],
         connectionGeneration,

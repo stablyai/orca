@@ -19,6 +19,7 @@ import {
 import { AgentIcon, getAgentCatalog } from '@/lib/agent-catalog'
 import { searchAgentPickerEntries } from '@/lib/agent-picker-search'
 import { translate } from '@/i18n/i18n'
+import { translateExecutionHostLabel } from '@/components/sidebar/execution-host-label'
 import { useBoundedHostRows } from '@/components/host-picker/use-bounded-host-rows'
 import { HostListSearchField } from '@/components/host-picker/HostListSearchField'
 import { HostListOverflowNote } from '@/components/host-picker/HostListOverflowNote'
@@ -153,7 +154,10 @@ function AutomationHostFilterRows({
 }): React.JSX.Element {
   const selected = new Set(selectedHostKeys)
   const rows = useBoundedHostRows(
-    entries.map((entry) => ({ id: entry.stableKey, label: entry.label })),
+    entries.map((entry) => ({
+      id: entry.stableKey,
+      label: translateExecutionHostLabel(entry.label)
+    })),
     selected
   )
   return (

@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { translateExecutionHostDetail } from '../../execution-host-label'
 import type { HostHeaderRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 
 export function getHostHeaderDetail(
@@ -48,7 +49,7 @@ export function getHostHeaderDetail(
   }
   // Transport details add context only for remote hosts.
   if (row.kind !== 'local') {
-    return { text: row.detail, isWarning: false }
+    return { text: translateExecutionHostDetail(row.detail), isWarning: false }
   }
   return null
 }

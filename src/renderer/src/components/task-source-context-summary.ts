@@ -5,6 +5,7 @@ import type { ExecutionHostHealth } from '../../../shared/execution-host-registr
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import type { TaskProvider } from '../../../shared/task-providers'
 import type { TaskProviderIdentity, TaskSourceContext } from '../../../shared/task-source-context'
+import { translateExecutionHostLabel } from './sidebar/execution-host-label'
 import {
   accountTitlePart,
   availabilityTitlePart,
@@ -43,7 +44,7 @@ export type TaskSourceHostAvailability = {
 type HostLabelLookup = ReadonlyMap<string, string> | undefined
 
 function getHostLabel(hostId: ExecutionHostScope, hostLabelById: HostLabelLookup): string {
-  return hostLabelById?.get(hostId) ?? getExecutionHostLabel(hostId)
+  return translateExecutionHostLabel(hostLabelById?.get(hostId) ?? getExecutionHostLabel(hostId))
 }
 
 type RepoBackedTaskSourceSummaryArgs = {

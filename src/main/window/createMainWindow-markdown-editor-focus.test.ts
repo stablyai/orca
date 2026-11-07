@@ -579,10 +579,10 @@ describe('createMainWindow', () => {
       { type: 'separator' },
       expect.objectContaining({ label: 'Add to dictionary' }),
       { type: 'separator' },
-      { role: 'cut' },
-      { role: 'copy' },
+      { role: 'cut', label: 'Cut' },
+      { role: 'copy', label: 'Copy' },
       expect.objectContaining({ label: 'Paste' }),
-      { role: 'selectAll' }
+      { role: 'selectAll', label: 'Select All' }
     ])
     expect(buildFromTemplateMock).toHaveBeenNthCalledWith(
       2,

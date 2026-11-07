@@ -105,7 +105,15 @@ function PopoutSettingsSync(): null {
 }
 
 function PopoutRoot(): React.JSX.Element {
-  useTranslation()
+  const { i18n } = useTranslation()
+
+  useEffect(() => {
+    document.title = translate(
+      'auto.main.window.dashboard.popout.window.title',
+      'Orca Agent Dashboard'
+    )
+  }, [i18n.language])
+
   return (
     <RecoverableRenderErrorBoundary
       boundaryId="dashboard-popout.root"

@@ -20,6 +20,7 @@ import {
   getExecutionHostIdForWorktree,
   runtimeEnvironmentIdOrLocalUnlessTwin
 } from './workspace/ownership/worktree-runtime-owner'
+import { translate } from '@/i18n/i18n'
 
 /** Withhold unreported execution OS; quoting with client/endpoint guesses would target the wrong shell and must stop launch. */
 export type ExecutionHostPlatformFact =
@@ -51,13 +52,27 @@ type WorktreeHostFactsState = HostFactsState &
     | 'worktreesByRepo'
   >
 
-const SSH_PLATFORM_WITHHELD =
-  'The SSH host has not reported its operating system yet. Connect to it and try again.'
-const RUNTIME_PLATFORM_WITHHELD =
-  'The Orca server has not reported its operating system yet. Reconnect to it and try again.'
-const RUNTIME_PLATFORM_UPDATE =
-  'This Orca server does not report its operating system. Update the server to launch agents on it.'
-const HOST_UNRESOLVED_WITHHELD = 'Orca cannot tell which host owns this workspace yet.'
+// Why: resolved at call time so the reason follows the active UI language.
+const sshPlatformWithheld = (): string =>
+  translate(
+    'auto.lib.executionHostFacts.sshPlatformWithheld',
+    'The SSH host has not reported its operating system yet. Connect to it and try again.'
+  )
+const runtimePlatformWithheld = (): string =>
+  translate(
+    'auto.lib.executionHostFacts.runtimePlatformWithheld',
+    'The Orca server has not reported its operating system yet. Reconnect to it and try again.'
+  )
+const runtimePlatformUpdate = (): string =>
+  translate(
+    'auto.lib.executionHostFacts.runtimePlatformUpdate',
+    'This Orca server does not report its operating system. Update the server to launch agents on it.'
+  )
+const hostUnresolvedWithheld = (): string =>
+  translate(
+    'auto.lib.executionHostFacts.hostUnresolvedWithheld',
+    'Orca cannot tell which host owns this workspace yet.'
+  )
 
 function resolveLocalPlatform(
   projectRuntime: ProjectExecutionRuntimeResolution | undefined,
@@ -86,7 +101,7 @@ function resolveHostPlatform(
 ): ExecutionHostPlatformFact {
   const { host } = args
   if (!host) {
-    return { kind: 'withheld', reason: HOST_UNRESOLVED_WITHHELD }
+    return { kind: 'withheld', reason: hostUnresolvedWithheld() }
   }
   if (host.kind === 'local') {
     const platform = resolveLocalPlatform(args.projectRuntime(), args.workspacePath)
@@ -101,17 +116,17 @@ function resolveHostPlatform(
       : state.sshConnectionStates.get(sshTargetId)
     return sshState?.remotePlatform
       ? { kind: 'known', platform: sshState.remotePlatform, hostKind: 'ssh' }
-      : { kind: 'withheld', reason: SSH_PLATFORM_WITHHELD }
+      : { kind: 'withheld', reason: sshPlatformWithheld() }
   }
   if (host.kind !== 'runtime') {
-    return { kind: 'withheld', reason: HOST_UNRESOLVED_WITHHELD }
+    return { kind: 'withheld', reason: hostUnresolvedWithheld() }
   }
   const status = lastVerifiedRuntimeStatus(
     state.runtimeStatusByEnvironmentId.get(host.environmentId)
   )
   const hostPlatform = status?.hostPlatform
   if (!hostPlatform) {
-    const reason = status ? RUNTIME_PLATFORM_UPDATE : RUNTIME_PLATFORM_WITHHELD
+    const reason = status ? runtimePlatformUpdate() : runtimePlatformWithheld()
     return { kind: 'withheld', reason }
   }
   // Why: a WSL UNC workspace on a Windows server runs its agents inside that distro.

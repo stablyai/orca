@@ -6,6 +6,7 @@ import { translate } from '@/i18n/i18n'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '../../store'
 import { STATUS_LABELS, statusColor } from '../settings/ssh/targets/SshTargetCard'
+import { formatSshUserFacingError } from '../settings/ssh/targets/ssh-user-facing-error'
 import { canConnectSshStatus } from '@/ssh/ssh-connection-recoverability'
 import { sshConnectVerb } from '@/ssh/ssh-connect-verb'
 import {
@@ -69,7 +70,7 @@ export function SshTargetStatusRow({
     } catch (err) {
       toast.error(
         err instanceof Error
-          ? err.message
+          ? formatSshUserFacingError(err.message)
           : translate('auto.components.status.bar.SshStatusSegment.bf07aee59e', 'Disconnect failed')
       )
     } finally {

@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Popover, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -21,6 +22,7 @@ import {
 import { AddHostSubmenuRow } from './RunTargetSubmenus'
 import RunTargetRowList from './RunTargetRowList'
 import RunTargetField from './RunTargetField'
+import { translateExecutionHostLabel } from '@/components/sidebar/execution-host-label'
 import { HostListOverflowNote } from '@/components/host-picker/HostListOverflowNote'
 
 type RunTargetComboboxProps = {
@@ -53,6 +55,7 @@ export default function RunTargetCombobox({
   onConnectHost,
   onSetLocation
 }: RunTargetComboboxProps): React.JSX.Element {
+  useTranslation()
   const [submenu, setSubmenu] = useState<'recipes' | 'add-host' | null>(null)
   // Track in-flight connects per host so one stalling connect never blocks the others.
   const [connectingHostIds, setConnectingHostIds] = useState<ReadonlySet<string>>(() => new Set())
@@ -203,7 +206,7 @@ export default function RunTargetCombobox({
 
   const fieldLabel = selectedRecipe
     ? `${getEphemeralVmLabel()} / ${selectedRecipe.name}`
-    : (selectedHost?.label ?? '')
+    : translateExecutionHostLabel(selectedHost?.label ?? '')
   const fieldDetail = selectedRecipe ? getRecipeDetail(selectedRecipe) : (selectedHost?.path ?? '')
 
   return (

@@ -16,6 +16,8 @@ function kindLabel(kind: PluginFilterKind): string {
       return translate('auto.components.settings.PluginFilterPopover.commands', 'Commands & panels')
     case 'machines':
       return translate('auto.components.settings.PluginFilterPopover.remoteVms', 'Remote/VMs')
+    case 'games':
+      return translate('auto.components.settings.PluginFilterPopover.games', 'Games')
   }
 }
 

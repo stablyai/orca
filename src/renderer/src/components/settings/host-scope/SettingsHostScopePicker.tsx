@@ -6,7 +6,7 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { translate } from '@/i18n/i18n'
-import { getLocalExecutionHostLabel } from '../../../../../shared/execution-host'
+import { translateLocalExecutionHostLabel } from '../../sidebar/execution-host-label'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
@@ -63,7 +63,7 @@ export function SettingsHostScopePicker({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={LOCAL_VALUE}>{getLocalExecutionHostLabel()}</SelectItem>
+          <SelectItem value={LOCAL_VALUE}>{translateLocalExecutionHostLabel()}</SelectItem>
           {environments.map((environment) => (
             <SelectItem key={environment.id} value={`${ENVIRONMENT_VALUE_PREFIX}${environment.id}`}>
               {environment.name}

@@ -1018,6 +1018,21 @@
     }
   },
   "browser": {
+    "googleCookieClear": {
+      "heading": "Cookies do Google",
+      "signInKeyword": "login",
+      "unavailable": "Indisponível para este perfil no host selecionado.",
+      "explanation": "O Google vincula os inícios de sessão ao navegador em que foram feitos, então o Orca não importa cookies do Google de outros navegadores. Se o Google ficar preso na conta errada ou encerrar sua sessão repetidamente, limpe os cookies do Google do perfil ativo e entre novamente no Google pelo Orca. Outros sites continuam conectados.",
+      "action": "Limpar cookies do Google…",
+      "confirmTitle": "Limpar os cookies do Google de {{profile}}?",
+      "confirmDescription": "Você será desconectado do Google no navegador do Orca para este perfil. Outros sites continuam conectados.",
+      "clear": "Limpar",
+      "cancel": "Cancelar",
+      "cleared": "Cookies do Google limpos de {{profile}}.",
+      "empty": "Não há cookies do Google para limpar em {{profile}}.",
+      "remaining": "Não foi possível remover alguns cookies do Google de {{profile}}. Tente novamente.",
+      "unverified": "Não foi possível verificar os cookies do Google de {{profile}}. Tente novamente."
+    },
     "history": {
       "clear": "Limpar histórico de navegação",
       "clearAllTime": "Todo o período",
@@ -2814,6 +2829,35 @@
         "title": "Adicione pastas de unidades do Windows neste computador",
         "descriptionWithPath": "{{value0}} está em uma unidade do Windows. O Git no WSL relata falsas alterações de fim de linha nela, não detecta edições feitas pelo Windows e faz buscas nela lentamente.",
         "description": "Esta pasta está em uma unidade do Windows. O Git no WSL relata falsas alterações de fim de linha nela, não detecta edições feitas pelo Windows e faz buscas nela lentamente."
+      },
+      "cli": {
+        "detail": {
+          "registerForWsl": "Registre {{path}} para usar o Orca pelo WSL.",
+          "registerForTerminal": "Registre {{path}} para usar o Orca pelo terminal.",
+          "registerForWindowsShell": "Registre {{path}} para usar o Orca pelo Prompt de Comando ou PowerShell.",
+          "devLauncherOnly": "O modo de desenvolvimento usa um launcher gerado apenas para validação.",
+          "differentLauncher": "{{path}} aponta para outro launcher.",
+          "launcherMissing": "O launcher da CLI incluído está ausente nesta versão do Orca.",
+          "noWslDistro": "Nenhuma distribuição WSL está disponível.",
+          "notOrcaLauncherScript": "{{path}} existe, mas não é um script inicializador do Orca.",
+          "notOrcaSymlink": "{{path}} existe, mas não é um link simbólico do Orca.",
+          "olderLauncher": "{{path}} contém um launcher do Orca mais antigo.",
+          "platformUnsupported": "O registro da CLI não está implementado nesta plataforma.",
+          "readlinkPermissionDenied": "O Orca não tem permissão para inspecionar {{path}}. Verifique as permissões do caminho e do diretório pai e tente novamente.",
+          "registeredAt": "Registrado em {{path}}.",
+          "registeredInDistroAt": "Registrado em {{distro}} em {{path}}.",
+          "registrationUnavailable": "O registro da CLI não está disponível nesta versão.",
+          "unreadableSymlink": "Não é possível ler {{path}}. Registre novamente para repará-lo.",
+          "windowsLauncherMissing": "O launcher da CLI do Orca para Windows está ausente.",
+          "windowsPathCheckFailed": "O launcher do Orca existe, mas o Orca não conseguiu verificar o PATH do seu usuário do Windows.",
+          "windowsPathTimedOut": "O comando de PATH do Windows atingiu o tempo limite após {{ms}} ms.",
+          "wslCommandTimedOut": "O comando do WSL atingiu o tempo limite após {{ms}} ms.",
+          "wslDistroUnreachable": "Não foi possível alcançar a distribuição WSL. Tente novamente.",
+          "wslHomeUnresolved": "Não foi possível resolver o diretório inicial do WSL.",
+          "wslInteropUnavailable": "A interoperabilidade WSL-Windows não está disponível; o Orca não pode iniciar a CLI do Windows pelo WSL.",
+          "wslRegistrationUnavailable": "O registro da CLI do WSL não está disponível.",
+          "wslWindowsOnly": "O registro da CLI do WSL está disponível apenas no Windows."
+        }
       }
     },
     "components": {
@@ -5516,7 +5560,6 @@
           }
         },
         "AppearancePane": {
-          "3057983501": "Não atribuído",
           "2edf606c46": "Minimizar para a Bandeja ao Fechar",
           "b707773a0d": "Quando ativado, fechar a janela mantém o Orca em execução na bandeja do sistema em vez de encerrá-lo.",
           "0cd9b8228f": "Escolha o ícone do app exibido no Dock e no alternador de janelas.",
@@ -6520,11 +6563,11 @@
             "secrets": "Guardar os próprios segredos criptografados",
             "settingsOwn": "Ler e alterar as próprias configurações",
             "terminalRun": "Executar comandos nos seus terminais, incluindo SSH",
-            "agentsRead": "Receber avisos quando o status de um agente mudar"
+            "agentsRead": "Receber notificações quando o status do agente mudar"
           },
           "decisionFailed": "Não foi possível salvar a decisão de permissão. Tente novamente.",
           "fullAccessWarning": "Acesso total: é executado como um programa normal e pode ler seus arquivos, usar a rede, executar outros programas e controlar o Orca, incluindo seus terminais e agentes.",
-          "uiWarning": "Executa o código do publicador dentro do Orca para desenhar sua visualização. O Orca mostra o que ele pode acessar e pergunta antes de ativá-lo."
+          "uiWarning": "Executa o código do editor dentro do Orca para desenhar a visualização. O Orca mostra a que ele pode acessar e pergunta antes de ativá-lo."
         },
         "SparsePresetSettingsSection": {
           "6fa754d20f": "Excluir",
@@ -9351,7 +9394,7 @@
         },
         "PluginInstallConsent": {
           "noOtherAccess": "Nenhum outro acesso",
-          "replacesShortcut": "{{value0}} ({{value1}}) substitui seu atalho de {{value2}}.",
+          "replacesShortcut": "{{value0}} ({{value1}}) substitui seu atalho para {{value2}}.",
           "updatesKeepApproval": "Atualizações só perguntam de novo por novo acesso",
           "fullAccessUpdates": "Atualizações podem mudar o código sem perguntar",
           "editsFileTypes": "Abre e edita arquivos {{value0}} no Orca. Pode ler os arquivos que abre.",
@@ -9527,7 +9570,7 @@
           "installing": "Instalando…",
           "reviewLabel": "Revisar e instalar {{value0}}",
           "review": "Revisar e instalar",
-          "retry": "Tentar de novo"
+          "retry": "Tentar novamente"
         },
         "PluginContributionActionLanguage": {
           "switch": "Mudar idioma",
@@ -9560,7 +9603,7 @@
           "commands": "Comandos e painéis",
           "catalogLabel": "Filtrar por catálogo",
           "editors": "Editores",
-          "remoteVms": "Remoto/VMs",
+          "remoteVms": "Remotos/VMs",
           "games": "Jogos",
           "agents": "Agentes",
           "integrations": "Integrações"
@@ -9604,7 +9647,7 @@
         "pluginConsentCopy": {
           "addsCommands": "Adiciona comandos",
           "addsPanel": "Adiciona um painel",
-          "contentOnly": "Só conteúdo",
+          "contentOnly": "Somente conteúdo",
           "fullAccess": "Acesso total",
           "addsVmRecipes": "Adiciona receitas de VM",
           "opensAndEditsFiles": "Abre e edita arquivos",
@@ -9661,7 +9704,7 @@
         },
         "PluginPageHero": {
           "screenshots": "Capturas de tela",
-          "openScreenshot": "Abrir captura de tela: {{value0}}",
+          "openScreenshot": "Abrir captura: {{value0}}",
           "position": "{{value0}} de {{value1}}",
           "previous": "Captura anterior",
           "next": "Próxima captura"
@@ -12803,6 +12846,20 @@
           "needsInput": "Precisa de interação",
           "running": "Em execução",
           "idle": "Ocioso"
+        },
+        "hostSection": {
+          "localWindows": "Windows local",
+          "localMac": "Mac local",
+          "localLinux": "Linux local",
+          "thisComputer": "Este computador",
+          "host": "Host"
+        },
+        "workspaceBoardStatus": {
+          "todo": "A fazer",
+          "inProgress": "Em andamento",
+          "inReview": "Em revisão",
+          "done": "Concluído",
+          "numbered": "Status {{number}}"
         }
       },
       "editor": {
@@ -18016,7 +18073,6 @@
               "f4c79cff5f": "Revise o erro do espaço de trabalho abaixo e atualize.",
               "ef90b21366": "Nenhuma visualização encontrada",
               "c0a50f96a4": "Não foi possível carregar as visualizações",
-              "df4bd63c1d": "Não atribuído",
               "30402d2c6e": "Tente buscar ou atualizar.",
               "a2f31c4cd6": "Nenhum projeto do Linear encontrado",
               "c9b6e9f90d": "Não foi possível carregar os projetos do Linear",
@@ -18668,7 +18724,6 @@
         "23886c7eec": "Adicionar rótulo",
         "7f7b89b631": "Rótulos: {{value0}}",
         "b2376d0179": "Carregando membros",
-        "866316f22c": "Não atribuído",
         "b5675b0694": "Salvar",
         "ceeb8c6153": "Limpar",
         "fbb90300e2": "Estimativa personalizada",
@@ -19291,7 +19346,6 @@
         "status": "Status",
         "priority": "Prioridade",
         "assignee": "Responsável",
-        "unassigned": "Não atribuído",
         "labels": "Rótulos",
         "countSelected": "{{count}} selecionado(s)",
         "partialCoverageMarker": "· parcial",
@@ -19570,7 +19624,7 @@
           "searchPlaceholder": "Pesquisar plugins",
           "updates": "Atualizações",
           "clearSearch": "Limpar busca",
-          "notInstalled": "Não instalados"
+          "notInstalled": "Não instalado"
         },
         "PluginListRow": {
           "official": "Oficial"
@@ -19606,7 +19660,9 @@
         "failingChip": "{{value0}} com falha",
         "pendingChip": "{{value0}} pendentes",
         "needsActionChip": "{{value0}} ação necessária",
-        "unresolvedChip": "{{value0}} não resolvidas"
+        "unresolvedChip": "{{value0}} não resolvidas",
+        "noChecks": "Nenhuma verificação encontrada",
+        "passingSummary": "{{value0}} de {{value1}} verificações aprovadas"
       },
       "ComposerParentWorktreePicker": {
         "label": "Worktree pai",

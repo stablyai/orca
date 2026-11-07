@@ -4,6 +4,7 @@ import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { ProjectOptionDetail } from '@/components/new-workspace/ProjectComboboxRow'
 import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/host/WorktreeHostContextBadge'
 import { useSidebarHostScopeOptions } from '@/components/sidebar/worktree-list/controls/use-sidebar-host-scope-options'
+import { translateExecutionHostLabel } from '@/components/sidebar/execution-host-label'
 import { translate } from '@/i18n/i18n'
 import { resolveWorktreeBranchLabel } from '@/lib/worktree-default-display-name'
 import { getHostContextLabel } from '../../../shared/worktree/host-context-labels'
@@ -366,7 +367,7 @@ export function ResumeOnRestartGroups({
   const ancestorsOf = useLineageAncestors(allWorkspaces)
   const { hostOptions } = useSidebarHostScopeOptions()
   const hostLabelById = useMemo(
-    () => new Map(hostOptions.map((host) => [host.id, host.label])),
+    () => new Map(hostOptions.map((host) => [host.id, translateExecutionHostLabel(host.label)])),
     [hostOptions]
   )
   const expansion = useResumeTreeExpansion()

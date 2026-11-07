@@ -12,6 +12,8 @@ import {
 import { LinearPriorityIcon } from '@/components/linear-priority-icon'
 import { getLinearPriorityLabel } from '@/components/task-page/task-page-localized-options'
 import { translate } from '@/i18n/i18n'
+import { translateUnassignedLabel } from '@/i18n/unassigned-label'
+import { translateDefaultWorkflowStateLabel } from '@/components/sidebar/workspace-board-status-label'
 import {
   LINEAR_EDIT_CHIP_CLASS,
   LINEAR_EDIT_MENU_ITEM_CLASS,
@@ -72,7 +74,7 @@ export function renderLinearIssueChipsLayout(
               className="inline-block size-2 shrink-0 rounded-full"
               style={getLinearStateMarkerStyle(localState.color)}
             />
-            <span className="truncate">{localState.name}</span>
+            <span className="truncate">{translateDefaultWorkflowStateLabel(localState.name)}</span>
             <LinearEditChipAdornment loading={states.loading} pending={statePending} />
           </button>
         </PopoverTrigger>
@@ -100,7 +102,7 @@ export function renderLinearIssueChipsLayout(
                     className="inline-block size-2 rounded-full"
                     style={{ backgroundColor: s.color }}
                   />
-                  {s.name}
+                  {translateDefaultWorkflowStateLabel(s.name)}
                 </button>
               ))}
             </div>
@@ -234,7 +236,7 @@ export function renderLinearIssueChipsLayout(
               onClick={() => handleAssigneeChange('__unassign__')}
               className={cn(LINEAR_EDIT_MENU_ITEM_CLASS, !localAssignee && 'bg-accent/50')}
             >
-              {translate('auto.components.LinearItemDrawer.866316f22c', 'Unassigned')}
+              {translateUnassignedLabel()}
             </button>
             {members.error ? (
               <div className="px-2 py-3 text-center text-[12px] text-destructive">

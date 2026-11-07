@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Cloud, Copy, FolderGit2, GitBranch, Laptop, LocateFixed, Server } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -19,6 +20,7 @@ import {
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import CommentMarkdown from '../sidebar/CommentMarkdown'
+import { translateExecutionHostLabel } from '../sidebar/execution-host-label'
 import {
   DetailHeader,
   MetadataActionIcon
@@ -43,13 +45,14 @@ export function ActivityThreadHoverCardSummary({
   onJumpToWorkspace?: (event: React.MouseEvent) => void
   canJumpToWorkspace?: boolean
 }): React.JSX.Element {
+  useTranslation()
   const { worktree, repo } = thread
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const executionHostId = getWorktreeExecutionHostId(worktree, repo ?? undefined)
   const parsedHost = parseExecutionHostId(executionHostId)
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
-  const hostDisplayLabel = useMemo(() => {
+  const customHostDisplayLabel = useMemo(() => {
     const override = hostLabelOverrides.get(executionHostId)
     if (override) {
       return override
@@ -66,8 +69,10 @@ export function ActivityThreadHoverCardSummary({
         return target
       }
     }
-    return getExecutionHostLabel(executionHostId)
+    return null
   }, [executionHostId, hostLabelOverrides, parsedHost, runtimeEnvironments, sshTargetLabels])
+  const hostDisplayLabel =
+    customHostDisplayLabel ?? translateExecutionHostLabel(getExecutionHostLabel(executionHostId))
   const branchIdentityDisplay = useMemo(() => getWorktreeGitIdentityDisplay(worktree), [worktree])
   const { taskTitle, needsAttention } = activityThreadRowCopy(thread)
   const workspaceTitle = getActivityThreadWorkspaceTitle(worktree)
