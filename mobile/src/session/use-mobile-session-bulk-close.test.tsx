@@ -23,7 +23,12 @@ describe('pending terminal activation', () => {
     const applied: unknown[] = []
     const attemptRef: { current: string | null } = { current: null }
     const pendingTab = (id: string) =>
-      mountFixture<MobileSessionTab>({ id, type: 'terminal', title: id, terminal: null })
+      mountFixture<Extract<MobileSessionTab, { type: 'terminal' }>>({
+        id,
+        type: 'terminal',
+        title: id,
+        terminal: null
+      })
     let route = { worktreeId: 'wt-1', tab: pendingTab('tab-1') }
 
     function Harness() {
