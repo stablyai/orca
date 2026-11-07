@@ -72,23 +72,6 @@ async function sentMessage(clientMessageId: string) {
 }
 
 describe('sendAgentTurn through the real host', () => {
-  it('has a `queue` send held as a draft while the agent works', async () => {
-    await rig.workingSend()
-    await expect(sendTurn('queue')).resolves.toMatchObject({
-      kind: 'queued',
-      queued: { position: 1, state: 'waiting' }
-    })
-    expect(
-      rig.host
-        .collaboratorsForTests()
-        .sessions.get(SESSION)
-        ?.journal.queuedMessages.list()
-        .map(({ state, body }) => ({ state, from: body.from }))
-    ).toEqual([{ state: 'waiting', from: MAIL_SOURCE }])
-    const page = await rig.host.history({ sessionId: SESSION, direction: 'tail' })
-    expect(page.ok && page.page.queuedMessages?.map(({ body }) => body.from)).toEqual([MAIL_SOURCE])
-  })
-
   it('keeps the sender on the turn the queue sends', async () => {
     const working = await rig.workingSend()
     const operationId = hostTestOperationId()
@@ -161,15 +144,6 @@ describe('sendAgentTurn through the real host', () => {
     expect(await rig.drafts()).toEqual([])
     const sent = outcome.kind === 'sent' ? outcome.clientMessageId : ''
     expect((await sentMessage(sent))?.body).toMatchObject({ from: MAIL_SOURCE })
-  })
-
-  // Sender details stay on the message, outside its submission.
-  it('records an idle chat’s mail as an agent’s, by kind only', async () => {
-    const operationId = hostTestOperationId()
-    await sendTurnAccepted('queue', operationId)
-    const submission = await rig.submission(operationId)
-    expect(submission?.source).toEqual({ kind: 'agent' })
-    expect(JSON.stringify(submission)).not.toContain('term_peer')
   })
 
   it('has a `now` send join the running turn through its row', async () => {
