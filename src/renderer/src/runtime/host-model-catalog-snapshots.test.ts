@@ -105,7 +105,7 @@ describe('host model catalog snapshots', () => {
     const preload = preloadHostModelCatalogSnapshots(LOCAL, ['claude'], { savedOnly: true })
     const chat = list(true)
     recordHostModelCatalogSnapshot(LOCAL, 'claude', 'wt-1', chat)
-    answer({ ...list(false), fetchedAt: 0 })
+    answer(list(false))
     await preload
     expect(readHostModelCatalogSnapshot(LOCAL, 'claude', NEW_CHAT)).toBe(chat)
   })
