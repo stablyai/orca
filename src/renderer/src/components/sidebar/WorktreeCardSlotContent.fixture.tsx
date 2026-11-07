@@ -1,4 +1,5 @@
 import React from 'react'
+import { useAppStore } from '@/store'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
@@ -298,17 +299,22 @@ export const nesting = defineFixture({
   width: SIDEBAR_WIDTH,
   setup: () => {
     seedWorkspaces(NESTED, now)
-    seedOpenCards(['wt-parent', 'wt-child'])
+    // The parent isn't opened by hand: it's open because it holds the active child.
+    seedOpenCards(['wt-child'])
+    useAppStore.setState({ activeWorktreeId: 'wt-child' })
   },
   render: () => (
     <SidebarFrame>
       <Card
+        // The sidebar frames a parent as active while its active child is shown inside it.
+        active
         worktree={nestedWorktrees.get('wt-parent')!}
         childCount={1}
         descendantIds={['wt-child', 'wt-grandchild']}
       >
         <Card
           nested
+          active
           worktree={nestedWorktrees.get('wt-child')!}
           childCount={1}
           descendantIds={['wt-grandchild']}

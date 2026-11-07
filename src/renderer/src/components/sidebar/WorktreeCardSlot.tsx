@@ -193,7 +193,7 @@ export type TitleTimeToggle = {
   label: string
   disabled: boolean
   onPointerDown: React.PointerEventHandler<HTMLButtonElement>
-  onToggle: () => void
+  onToggle: (event: React.MouseEvent<HTMLButtonElement>) => void
 }
 
 /**
@@ -204,12 +204,14 @@ export function WorktreeCardTitleTime({
   exceptions,
   at,
   now,
-  toggle
+  toggle,
+  disclosureOnly = false
 }: {
   exceptions: readonly SlotException[]
   at: number | null
   now: number
   toggle: TitleTimeToggle | null
+  disclosureOnly?: boolean
 }): React.JSX.Element {
   const time = (
     <WorktreeCardSlot
@@ -231,13 +233,23 @@ export function WorktreeCardTitleTime({
       onPointerDown={toggle.onPointerDown}
       onClick={(event) => {
         event.stopPropagation()
-        toggle.onToggle()
+        toggle.onToggle(event)
       }}
     >
-      <span className="[grid-area:1/1] inline-flex items-center can-hover:group-hover/worktree-card:invisible group-focus-visible/title-time:invisible">
+      <span
+        className={cn(
+          '[grid-area:1/1] inline-flex items-center can-hover:group-hover/worktree-card:invisible group-focus-visible/title-time:invisible',
+          disclosureOnly && 'invisible'
+        )}
+      >
         {time}
       </span>
-      <span className="invisible [grid-area:1/1] inline-flex size-4 items-center justify-center can-hover:group-hover/worktree-card:visible group-focus-visible/title-time:visible">
+      <span
+        className={cn(
+          '[grid-area:1/1] inline-flex size-4 items-center justify-center can-hover:group-hover/worktree-card:visible group-focus-visible/title-time:visible',
+          !disclosureOnly && 'invisible'
+        )}
+      >
         <ChevronRight
           className={cn(
             'size-3 transition-transform motion-reduce:transition-none',

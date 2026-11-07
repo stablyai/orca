@@ -124,7 +124,7 @@ export function WorktreeCardSlotContent({
     childWorkspaceShortLabel,
     settings
   } = card
-  const agents = useWorktreeAgentRows(worktree.id)
+  const agents = useWorktreeAgentRows(worktree.id, true, worktree.hostId)
   const signals = useSlotAgentSignals(agents)
   const lines = signals.rootLines
   const now = useNow(30_000)
@@ -147,13 +147,16 @@ export function WorktreeCardSlotContent({
   // An open card lists its agents directly; opening the card is the only fold.
   const showLines = open && hasLines
   const agentUnread = signals.allSignals.some((signal) => signal.kind === 'unread')
-  // The icon badge and pills summarize the whole card, so they read the same open or closed.
+  // Any unread source counts (a terminal tab, a pane, the user's mark) unless a visible line already shows it.
+  const workspaceUnread =
+    worktree.isUnread && !(showLines && agentUnread) ? { manual: !hasLiveMarker } : null
+  // The icon badge and pills speak for what's hidden; a visible agent line shows its own state.
   const titleSlot = titleRowSlot({
     offline,
     lines: signals.allSignals,
     collapsedLineage,
-    workspaceUnread: worktree.isUnread ? { manual: !hasLiveMarker } : null,
-    ownLinesShown: false,
+    workspaceUnread,
+    ownLinesShown: showLines,
     lastActivityAt: worktree.lastActivityAt > 0 ? worktree.lastActivityAt : null,
     lineageLatestAt
   })
@@ -164,20 +167,29 @@ export function WorktreeCardSlotContent({
         exception.kind === 'unread' || exception.kind === 'working'
     ) ?? null
   const worktreeLastActivityAt = worktree.lastActivityAt > 0 ? worktree.lastActivityAt : null
-  const workspaceUnreadShown = worktree.isUnread
+  const workspaceUnreadShown = workspaceUnread !== null
   const resolveTitleTargets = useCallback(
     (kind: SlotException['kind']) =>
       slotTargetsOfKind(
         [
-          ...slotTargetsFromAgentLines(worktree.id, signals),
+          ...(showLines ? [] : slotTargetsFromAgentLines(worktree.id, signals, worktree.hostId)),
           ...(lineageHidden ? collectLineageSlotTargets(useAppStore.getState(), descendants) : []),
           ...(workspaceUnreadShown
-            ? [workspaceUnreadTarget(worktree.id, worktreeLastActivityAt)]
+            ? [workspaceUnreadTarget(worktree.id, worktreeLastActivityAt, worktree.hostId)]
             : [])
         ],
         kind
       ),
-    [descendants, lineageHidden, signals, workspaceUnreadShown, worktree.id, worktreeLastActivityAt]
+    [
+      descendants,
+      lineageHidden,
+      showLines,
+      signals,
+      workspaceUnreadShown,
+      worktree.id,
+      worktree.hostId,
+      worktreeLastActivityAt
+    ]
   )
   const showDetailsRow =
     settings?.worktreeCardDetailsRow === true &&
@@ -208,6 +220,7 @@ export function WorktreeCardSlotContent({
         <div className="mt-[3px] flex min-w-0 pr-1.5 pl-[28px]">
           <WorktreeCardChildrenChip
             childIdentities={lineageChildIdentities}
+            lineageSource={descendants}
             collapsed={lineageCollapsed}
             label={childWorkspaceShortLabel}
             ariaLabel={lineageChildAriaLabel}
@@ -218,18 +231,22 @@ export function WorktreeCardSlotContent({
     </>
   )
 
+  const toggleCard = (event: React.MouseEvent<HTMLButtonElement>): void => {
+    dispatchSuppressScrollAdjustment()
+    // Opening a card shows everything it holds, its child workspaces included.
+    if (!open && lineageCollapsed && onLineageToggle) {
+      onLineageToggle(event)
+    }
+    onToggleOpen()
+  }
   const openToggleLabel = open
     ? translate('sidebar.cardSlot.closeCard', 'Hide workspace activity')
     : translate('sidebar.cardSlot.openCard', 'Show workspace activity')
-  // The line ties everything below the title to this card; a lone title row has nothing to tie.
-  const showThread = showDetailsRow || (open && canOpen)
 
   return (
     <div
-      className={cn(
-        'flex w-full min-w-0 flex-col overflow-hidden',
-        showThread && 'worktree-card-slot-thread'
-      )}
+      // Clip sideways only: the leading icon's older tabs peek above the title row.
+      className="flex w-full min-w-0 flex-col overflow-x-clip"
       data-worktree-card-open={open || undefined}
       data-worktree-card-parent-content=""
       data-worktree-card-style="experimental-2"
@@ -242,7 +259,7 @@ export function WorktreeCardSlotContent({
           <div
             className={cn(
               'flex h-5 min-w-0 items-center gap-1.5 pr-1.5',
-              subtreeHidden && 'worktree-card-thread-stub mb-1.5'
+              subtreeHidden && 'relative mb-3'
             )}
           >
             <WorktreeCardLeadingIcon
@@ -251,6 +268,27 @@ export function WorktreeCardSlotContent({
               offline={offline}
               resolveTargets={resolveTitleTargets}
             />
+            {subtreeHidden ? (
+              // The stub under a closed card says it holds child workspaces; clicking it opens them.
+              <button
+                type="button"
+                className="worktree-card-thread-stub"
+                aria-label={translate(
+                  'auto.components.sidebar.WorktreeList.showChildWorkspaces',
+                  'Show {{count}} child workspaces',
+                  {
+                    count: card.lineageChildCount,
+                    defaultValue_one: 'Show {{count}} child workspace'
+                  }
+                )}
+                disabled={pickingSendTarget}
+                onPointerDown={card.stopQuickActionPointerPropagation}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  toggleCard(event)
+                }}
+              />
+            ) : null}
             <WorktreeTitleInlineRename
               displayName={visibleCardTitle}
               disabled={isDeleting || affiliateListMode}
@@ -287,11 +325,13 @@ export function WorktreeCardSlotContent({
                 <SshHostSlot card={card} label={host.label} />
               ) : titleSlot.kind === 'offline' ? (
                 <WorktreeCardSlot signal={titleSlot} now={now} />
-              ) : (
+              ) : null}
+              {!offline || canOpen ? (
                 <WorktreeCardTitleTime
                   exceptions={titleExceptions}
-                  at={titleSlot.at}
+                  at={titleSlot.kind === 'status' ? titleSlot.at : null}
                   now={now}
+                  disclosureOnly={offline}
                   toggle={
                     canOpen
                       ? {
@@ -299,15 +339,12 @@ export function WorktreeCardSlotContent({
                           label: openToggleLabel,
                           disabled: pickingSendTarget,
                           onPointerDown: card.stopQuickActionPointerPropagation,
-                          onToggle: () => {
-                            dispatchSuppressScrollAdjustment()
-                            onToggleOpen()
-                          }
+                          onToggle: toggleCard
                         }
                       : null
                   }
                 />
-              )}
+              ) : null}
             </span>
           </div>
           {showDetailsRow ? (

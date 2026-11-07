@@ -1,3 +1,4 @@
+import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import React, { useCallback, useState } from 'react'
 import { Activity, CircleX } from 'lucide-react'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
@@ -65,25 +66,25 @@ function SlotTargetMenuItem({
 }): React.JSX.Element {
   // The menu is transient, so a snapshot of the name is enough.
   const workspaceName =
-    useAppStore.getState().getKnownWorktreeById(target.worktreeId)?.displayName ?? ''
+    useAppStore.getState().getKnownWorktreeById(target.worktreeId, target.executionHostId)
+      ?.displayName ?? ''
   return (
-    <DropdownMenuItem
-      className="grid grid-cols-[10px_12px_minmax(0,1fr)_auto] gap-x-1.5 gap-y-0.5 text-xs"
-      onSelect={() => openSlotTarget(target)}
-    >
-      <span className="flex justify-center">
-        <SlotKindGlyph kind={target.kind} />
-      </span>
-      {target.agentType ? <AgentTypeIcon agentType={target.agentType} size={12} /> : <span />}
-      <span className="truncate">{targetText(target)}</span>
-      <span className="text-3xs text-muted-foreground tabular-nums">
-        {target.at === null ? '' : formatShortTimeAgo(target.at, now)}
-      </span>
-      {workspaceName ? (
-        <span className="col-start-3 col-end-5 truncate text-2xs text-muted-foreground">
-          {workspaceName}
+    <DropdownMenuItem onSelect={() => openSlotTarget(target)}>
+      <div className="grid w-full grid-cols-[10px_12px_minmax(0,1fr)_auto] gap-x-1.5 gap-y-0.5 text-xs">
+        <span className="flex justify-center">
+          <SlotKindGlyph kind={target.kind} />
         </span>
-      ) : null}
+        {target.agentType ? <AgentTypeIcon agentType={target.agentType} size={12} /> : <span />}
+        <span className="truncate">{targetText(target)}</span>
+        <span className="text-3xs text-muted-foreground tabular-nums">
+          {target.at === null ? '' : formatShortTimeAgo(target.at, now)}
+        </span>
+        {workspaceName ? (
+          <span className="col-start-3 col-end-5 truncate text-2xs text-muted-foreground">
+            {workspaceName}
+          </span>
+        ) : null}
+      </div>
     </DropdownMenuItem>
   )
 }
@@ -103,11 +104,11 @@ export function SlotJumpTrigger({
   className?: string
   children: React.ReactNode
 }): React.JSX.Element {
-  const [menu, setMenu] = useState<{ targets: SlotTarget[]; openedAt: number } | null>(null)
+  const [menu, setMenu] = useState<{ sources: SlotTarget[]; openedAt: number } | null>(null)
   const activate = useCallback(() => {
     const targets = resolveTargets()
     if (targets.length > 1) {
-      setMenu({ targets, openedAt: Date.now() })
+      setMenu({ sources: targets, openedAt: Date.now() })
     } else if (targets[0]) {
       openSlotTarget(targets[0])
     }
@@ -151,9 +152,9 @@ export function SlotJumpTrigger({
       {menu ? (
         <DropdownMenuContent align="end" className="w-64">
           <DropdownMenuLabel>{label}</DropdownMenuLabel>
-          {menu.targets.map((target) => (
+          {menu.sources.map((target) => (
             <SlotTargetMenuItem
-              key={`${target.worktreeId}\n${target.paneKey ?? ''}`}
+              key={`${composeWorktreeHostIdentity(target.executionHostId, target.worktreeId)}\n${target.paneKey ?? ''}`}
               target={target}
               now={menu.openedAt}
             />

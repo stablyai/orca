@@ -1,3 +1,6 @@
+import { setWorktreeCardDisclosure } from './workspace-card/surface/worktree-card-open-state'
+import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type {
   AgentStatusEntry,
   AgentType
@@ -13,6 +16,7 @@ import type { SlotLineKind, SlotLineSignal, SlotSignal } from './worktree-card-s
 /** The agent (or unread workspace) behind a rolled-up slot signal, so clicking the slot can open it. */
 export type SlotTarget = SlotLineSignal & {
   worktreeId: string
+  executionHostId?: ExecutionHostId
   /** Null for a workspace marked unread with no agent behind it. */
   paneKey: string | null
   retained: boolean
@@ -24,7 +28,8 @@ const TARGET_KINDS: ReadonlySet<SlotLineKind> = new Set(['needs', 'failed', 'unr
 
 export function slotTargetsFromAgentLines(
   worktreeId: string,
-  signals: SlotAgentSignals
+  signals: SlotAgentSignals,
+  executionHostId?: ExecutionHostId
 ): SlotTarget[] {
   const targets: SlotTarget[] = []
   for (const { agent, signal } of signals.lineByPaneKey.values()) {
@@ -34,6 +39,7 @@ export function slotTargetsFromAgentLines(
     targets.push({
       ...signal,
       worktreeId,
+      executionHostId,
       // Subagents have no pane of their own; they open their spawning parent.
       paneKey: agent.activationPaneKey ?? agent.paneKey,
       retained: agent.rowSource === 'retained',
@@ -44,11 +50,16 @@ export function slotTargetsFromAgentLines(
   return targets
 }
 
-export function workspaceUnreadTarget(worktreeId: string, at: number | null): SlotTarget {
+export function workspaceUnreadTarget(
+  worktreeId: string,
+  at: number | null,
+  executionHostId?: ExecutionHostId
+): SlotTarget {
   return {
     kind: 'unread',
     at,
     worktreeId,
+    executionHostId,
     paneKey: null,
     retained: false,
     agentType: null,
@@ -63,13 +74,19 @@ export function slotTargetsOfKind(
 ): SlotTarget[] {
   const ofKind = targets.filter((target) => target.kind === kind)
   const withAgent = new Set(
-    ofKind.filter((target) => target.paneKey !== null).map((target) => target.worktreeId)
+    ofKind
+      .filter((target) => target.paneKey !== null)
+      .map((target) => composeWorktreeHostIdentity(target.executionHostId, target.worktreeId))
   )
   const seen = new Set<string>()
   return ofKind
-    .filter((target) => target.paneKey !== null || !withAgent.has(target.worktreeId))
+    .filter(
+      (target) =>
+        target.paneKey !== null ||
+        !withAgent.has(composeWorktreeHostIdentity(target.executionHostId, target.worktreeId))
+    )
     .filter((target) => {
-      const key = `${target.worktreeId}\n${target.paneKey ?? ''}`
+      const key = `${composeWorktreeHostIdentity(target.executionHostId, target.worktreeId)}\n${target.paneKey ?? ''}`
       if (seen.has(key)) {
         return false
       }
@@ -81,16 +98,30 @@ export function slotTargetsOfKind(
 
 /** Open the target the way its own row would, after unfolding its card's agent list. */
 export function openSlotTarget(target: SlotTarget): void {
+  setWorktreeCardDisclosure(
+    composeWorktreeHostIdentity(target.executionHostId, target.worktreeId),
+    { open: true, closedOver: null }
+  )
   const parsed = target.paneKey ? parsePaneKey(target.paneKey) : null
   if (!target.paneKey || !parsed) {
-    activateAndRevealWorkspace(target.worktreeId)
+    activateAndRevealWorkspace(target.worktreeId, { executionHostId: target.executionHostId })
     return
   }
   expandWorktreeAgentList(target.worktreeId)
   if (target.retained) {
-    activateRetainedAgentRow(target.worktreeId, parsed.tabId, target.paneKey)
+    activateRetainedAgentRow(
+      target.worktreeId,
+      parsed.tabId,
+      target.paneKey,
+      target.executionHostId
+    )
   } else {
-    activateWorktreeAgentPane(target.worktreeId, parsed.tabId, target.paneKey)
+    activateWorktreeAgentPane(
+      target.worktreeId,
+      parsed.tabId,
+      target.paneKey,
+      target.executionHostId
+    )
   }
 }
 
@@ -102,7 +133,9 @@ export function slotTargetKind(signal: SlotSignal): SlotLineKind | null {
     case 'unread':
     case 'working':
       return signal.kind
-    default:
+    case 'offline':
+    case 'quiet':
+    case 'time':
       return null
   }
 }

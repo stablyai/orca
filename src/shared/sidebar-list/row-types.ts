@@ -1,3 +1,4 @@
+import type { WorktreeLineageSource } from './worktree-lineage-range'
 import type { WorktreeOccurrence } from '../worktree-occurrence-plan'
 import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../project-group-types'
@@ -69,7 +70,7 @@ export type WorktreeRow = {
   lineageGroupKey?: string
   lineageCollapsed?: boolean
   /** Every workspace nested under this one, collapsed or not; host-qualified. */
-  lineageDescendantIdentities?: readonly HostScopedWorktreeKey[]
+  lineageDescendantIdentities?: WorktreeLineageSource
   hostContextLabel?: string
   showProjectName?: boolean
 }

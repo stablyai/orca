@@ -1,3 +1,5 @@
+import { collectRenderedSidebarRowKeys } from './rendered-row-keys'
+import { useCardDisclosureRows } from './worktree-card-disclosure-rows'
 import React, { useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store'
@@ -161,6 +163,11 @@ const WorktreeList = React.memo(function WorktreeList({
     prCache,
     agentSendTargetWorktreeId
   })
+  const disclosedSectionRows = useCardDisclosureRows(rowModel.sectionRows, rowModel.occurrencePlan)
+  const disclosedRowKeys = useMemo(
+    () => collectRenderedSidebarRowKeys(disclosedSectionRows),
+    [disclosedSectionRows]
+  )
   const visibleProjectRepoIdsBySection = useMemo(
     () => new Map(rowModel.occurrencePlan.sections.map(({ key, group }) => [key, group.repoIds])),
     [rowModel.occurrencePlan]
@@ -194,7 +201,7 @@ const WorktreeList = React.memo(function WorktreeList({
     )
   }, [allProjectsCollapsed, projectCollapseKeys, setCollapsedGroups])
   const selection = useSidebarWorktreeSelection({
-    sectionRows: rowModel.sectionRows,
+    sectionRows: disclosedSectionRows,
     pinnedDisplayPolicy
   })
   const statusMutations = useWorktreeStatusMutations({
@@ -247,7 +254,7 @@ const WorktreeList = React.memo(function WorktreeList({
 
   useSidebarRevealRequests({
     groupBy,
-    renderedSidebarRowKeys: rowModel.renderedSidebarRowKeys,
+    renderedSidebarRowKeys: disclosedRowKeys,
     visibleWorktrees,
     visibleFolderWorkspaces: visibleScope.visibleFolderWorkspacesForRows,
     currentSidebarWorktreeId,
@@ -320,7 +327,7 @@ const WorktreeList = React.memo(function WorktreeList({
       <VirtualizedWorktreeViewport
         // Wake moves status headers; preserve viewport identity across those changes.
         key={`group:${groupBy}:host:${filterState.visibleWorkspaceHostIds?.join(',') ?? 'all'}:lineage`}
-        rows={rowModel.sectionRows}
+        rows={disclosedSectionRows}
         hostOptions={rowModel.hostOptions}
         occurrencePlan={rowModel.occurrencePlan}
         visibleProjectRepoIdsBySection={visibleProjectRepoIdsBySection}

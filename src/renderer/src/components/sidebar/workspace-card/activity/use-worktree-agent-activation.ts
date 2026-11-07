@@ -1,6 +1,7 @@
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
-import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { activateTerminalTabOnOwner } from '@/lib/terminal-tab-owner-activation'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
@@ -18,7 +19,8 @@ export function useWorktreeAgentActivation(worktreeId: string) {
 export function activateWorktreeAgentPane(
   worktreeId: string,
   tabId: string,
-  paneKey: string
+  paneKey: string,
+  executionHostId?: ExecutionHostId
 ): void {
   const parsed = parsePaneKey(paneKey)
   if (!parsed) {
@@ -36,7 +38,9 @@ export function activateWorktreeAgentPane(
     return
   }
   // Use shared activation for cross-repo reveal and navigation history.
-  activateAndRevealWorktree(worktreeId)
+  if (activateAndRevealWorkspace(worktreeId, { executionHostId }) === false) {
+    return
+  }
   const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
   if (tabs.some((t) => t.id === tabId)) {
     activateTabAndFocusPane(tabId, parsed.leafId, {

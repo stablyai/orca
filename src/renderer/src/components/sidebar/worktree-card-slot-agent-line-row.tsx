@@ -15,7 +15,8 @@ import { getCompactAgentSecondary } from './workspace-card/activity/worktree-car
 import type { AgentSendTarget } from './workspace-card/activity/use-worktree-agent-list-model'
 import type { SlotAgentLine } from './worktree-card-slot-agent-signals'
 import { slotForLine, type SlotLineSignal } from './worktree-card-slot-signal'
-import { WorktreeCardSlot } from './WorktreeCardSlot'
+import { slotLabel, WorktreeCardSlot } from './WorktreeCardSlot'
+import { SlotKindGlyph } from './worktree-card-slot-jump'
 
 function lineText(agent: DashboardAgentRow, conversationName: string | null, now: number): string {
   const secondary = getCompactAgentSecondary(agent, now)
@@ -145,6 +146,18 @@ export const SlotAgentLineRow = React.memo(function SlotAgentLineRow({
     [agent.paneKey, onDismiss]
   )
 
+  // Unread and working move onto the agent icon; the slot keeps their time in the same tone.
+  const iconBadge =
+    !isSubagent && !offline && (displaySignal.kind === 'unread' || displaySignal.kind === 'working')
+  const lineSlot = iconBadge ? (
+    <WorktreeCardSlot
+      signal={{ kind: 'time', at: displaySignal.at }}
+      now={now}
+      timeTone={displaySignal.kind === 'unread' ? 'unread' : 'working'}
+    />
+  ) : (
+    <WorktreeCardSlot signal={slotForLine(displaySignal)} now={now} stale={offline} />
+  )
   const slot = sendTarget ? (
     sendTarget.status === 'eligible' ? (
       <span className="inline-flex h-4 shrink-0 items-center gap-1 rounded border border-worktree-sidebar-border px-1.5 text-3xs font-medium text-foreground">
@@ -173,11 +186,11 @@ export const SlotAgentLineRow = React.memo(function SlotAgentLineRow({
         <X className="size-3" />
       </button>
       <span className="transition-opacity peer-focus-visible:opacity-0 can-hover:group-hover/slot-line:opacity-0">
-        <WorktreeCardSlot signal={slotForLine(displaySignal)} now={now} stale={offline} />
+        {lineSlot}
       </span>
     </span>
   ) : (
-    <WorktreeCardSlot signal={slotForLine(displaySignal)} now={now} stale={offline} />
+    lineSlot
   )
 
   return (
@@ -205,8 +218,22 @@ export const SlotAgentLineRow = React.memo(function SlotAgentLineRow({
     >
       {/* A subagent's type is its name, not a provider; nesting already says whose it is. */}
       {isSubagent ? null : (
-        <span className="inline-flex shrink-0" aria-label={agentLabel}>
+        <span className="relative inline-flex shrink-0" aria-label={agentLabel}>
           <AgentTypeIcon agentType={agent.agentType} size={13} />
+          {iconBadge ? (
+            // Unread and working sit on the agent's own icon, as they do on the card's leading icon.
+            <span
+              className="worktree-agent-line-badge"
+              data-worktree-card-slot={displaySignal.kind}
+              title={slotLabel(slotForLine(displaySignal))}
+            >
+              <SlotKindGlyph
+                kind={displaySignal.kind}
+                monitoring={displaySignal.monitoring === true}
+                spinnerClassName="size-[7px]"
+              />
+            </span>
+          ) : null}
         </span>
       )}
       <span

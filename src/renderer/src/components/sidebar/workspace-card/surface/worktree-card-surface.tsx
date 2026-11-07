@@ -64,7 +64,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
   } = card
   const slotLayout = card.worktreeCardStyle === 'experimental-2'
   const isSleeping = useIsSleepingWorktree(worktree.id)
-  const cardOpen = useWorktreeCardOpen(worktree.id, card.lineageDescendantIdentities)
+  const cardOpen = useWorktreeCardOpen(worktree, card.lineageDescendantIdentities, slotLayout)
   const geometryFor = (statusLane: boolean) =>
     getWorktreeCardFrameGeometry({ flushSurface, contentIndent, statusLane })
   const { content: templateContent, frame } = renderWorkspaceCardTemplate(
@@ -150,7 +150,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         parentCardContent
       )}
 
-      {lineageChildren && (!slotLayout || cardOpen.open) ? (
+      {lineageChildren ? (
         <div
           className={cn(
             'space-y-1',
