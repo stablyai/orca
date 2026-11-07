@@ -95,4 +95,16 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
       'review'
     ])
   })
+
+  it('puts a host command whose reply was lost back in the box', async () => {
+    sendStructured.mockResolvedValue('unknown')
+    mount('codex')
+
+    await expect(sendWithOutcome('/compact')).resolves.toBe('unknown')
+
+    expect(holdUnconfirmed).not.toHaveBeenCalled()
+    expect(restoreRejectedDraft).toHaveBeenCalledWith(ORIGIN, '/compact', {
+      preserveConversationCommands: true
+    })
+  })
 })
