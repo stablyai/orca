@@ -11,7 +11,10 @@ type Observer = {
 }
 type Reads = {
   settings?: () => Promise<AgentPickerEntry[] | undefined>
-  catalog: (entry: AgentPickerEntry) => Promise<AgentPickerEntry['catalog'] | undefined>
+  catalog: (
+    entry: AgentPickerEntry,
+    interim: (catalog: AgentPickerEntry['catalog']) => void
+  ) => Promise<AgentPickerEntry['catalog'] | undefined>
   support: (entry: AgentPickerEntry) => Promise<AgentPickerEntry['structured'] | undefined>
 }
 type SupportRead = {
@@ -161,7 +164,10 @@ class AgentPickerAcquisition {
       const read =
         kind === 'catalog'
           ? this.reads
-              .catalog(entry)
+              .catalog(entry, (catalog) => {
+                this.entries = this.entries.map((e, i) => (i === index ? { ...e, catalog } : e))
+                this.publish()
+              })
               .then((catalog) => {
                 this.entries = this.entries.map((e, i) =>
                   i === index

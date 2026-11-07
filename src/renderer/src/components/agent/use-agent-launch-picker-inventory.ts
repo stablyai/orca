@@ -228,16 +228,28 @@ export function useAgentLaunchPickerInventorySource(
                     }))
                   : undefined
               },
-        catalog: async (entry) =>
-          await callStructuredAgentSession<AgentSessionModelCatalogResult>(
-            target,
-            'agentSession.modelCatalog',
-            {
-              ...(selector ? { worktree: selector } : {}),
-              agent: entry.agent,
-              waitForListing: true
-            }
-          ),
+        catalog: async (entry, interim) => {
+          const read = (waitForListing: boolean) =>
+            callStructuredAgentSession<AgentSessionModelCatalogResult>(
+              target,
+              'agentSession.modelCatalog',
+              {
+                ...(selector ? { worktree: selector } : {}),
+                agent: entry.agent,
+                ...(waitForListing ? { waitForListing } : {})
+              }
+            )
+          // Show the saved listing at once; the waiting read joins the same host refresh.
+          const saved = await read(false)
+          if (saved.origin === 'unknown') {
+            return await read(true)
+          }
+          if (!saved.listingInProgress) {
+            return saved
+          }
+          interim(saved)
+          return await read(true)
+        },
         support: async (entry) => {
           if (!selector) {
             return undefined
