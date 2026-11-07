@@ -17,10 +17,18 @@ export function logcatArgs(
   return args
 }
 
-export type LogcatEntry = { timestamp?: string; level?: string; tag?: string; message: string }
+export type LogcatEntry = {
+  timestamp?: string
+  pid?: number
+  tid?: number
+  level?: string
+  tag?: string
+  message: string
+}
 
 // Match only the first colon so colons inside messages survive.
-const LOGCAT_LINE = /^(\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\s+\d+\s+\d+\s+([A-Z])\s+([^:]+):(.*)$/
+const LOGCAT_LINE =
+  /^(\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\s+(\d+)\s+(\d+)\s+([A-Z])\s+([^:]+):(.*)$/
 
 export function parseLogcatLine(line: string): LogcatEntry {
   const trimmed = line.trim()
@@ -30,8 +38,10 @@ export function parseLogcatLine(line: string): LogcatEntry {
   }
   return {
     timestamp: match[1],
-    level: match[2],
-    tag: match[3].trim(),
-    message: match[4].trim()
+    pid: Number(match[2]),
+    tid: Number(match[3]),
+    level: match[4],
+    tag: match[5].trim(),
+    message: match[6].trim()
   }
 }
