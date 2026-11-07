@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { getIndexedWorktreesById } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import type { Tab } from '../../../../shared/tab-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { isAgentStatusFresh } from '../../../../shared/agent-status/contracts/agent-status-freshness'
@@ -54,7 +54,7 @@ export function orderWorktreeLeadingTabs(state: AppState, worktreeId: string): T
   const smart = state.sortBy === 'smart'
   const terminalTabs = state.tabsByWorktree[worktreeId]
   const worktreeLastActivityAt = smart
-    ? (findWorktreeById(state.worktreesByRepo, worktreeId)?.lastActivityAt ?? 0)
+    ? (getIndexedWorktreesById(state.worktreesByRepo, worktreeId)[0]?.lastActivityAt ?? 0)
     : 0
   const paneSources: TabPaneInputSources = {
     entriesByTabId: byTabId,

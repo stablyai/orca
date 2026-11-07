@@ -1,6 +1,5 @@
 import type { StateCreator } from 'zustand'
 import type { AgentAttentionUnreadReason } from '@/attention/agent-attention-contract'
-import { emitAgentSubjectReads } from '@/attention/agent-subject-read-actions'
 import type { AppState } from '../../types'
 import type { WorkspaceAttentionSlice } from './workspace-attention-contract'
 import {
@@ -73,6 +72,24 @@ export const createWorkspaceAttentionSlice: StateCreator<
     return removed
   }
   const paneAttentionEnabled = (): boolean => get().settings?.experimentalTerminalAttention === true
+  const setWorkspacesMarkedUnreadByUser = (worktreeIds: readonly string[], marked: boolean): void =>
+    set((s) => {
+      const changed = worktreeIds.filter(
+        (worktreeId) => Boolean(s.workspacesMarkedUnreadByUser[worktreeId]) !== marked
+      )
+      if (changed.length === 0) {
+        return s
+      }
+      const next = { ...s.workspacesMarkedUnreadByUser }
+      for (const worktreeId of changed) {
+        if (marked) {
+          next[worktreeId] = true
+        } else {
+          delete next[worktreeId]
+        }
+      }
+      return { workspacesMarkedUnreadByUser: next }
+    })
 
   return {
     unreadTerminalTabs: {},
@@ -107,6 +124,10 @@ export const createWorkspaceAttentionSlice: StateCreator<
       }
     },
     readOnScreenAttention: ({ workspaceIds, targets }, { screenArrived }) => {
+      // Arriving fulfils "come back to this", even while other tabs still hold markers.
+      if (screenArrived) {
+        setWorkspacesMarkedUnreadByUser(workspaceIds, false)
+      }
       // Read marker-free flags on screen arrival (manual unread/restart/peer), not on every scan.
       if (removeAndDismiss(targets.map((target) => target.tabId)) !== null || screenArrived) {
         for (const workspaceId of workspaceIds) {
@@ -114,17 +135,52 @@ export const createWorkspaceAttentionSlice: StateCreator<
         }
       }
     },
+    workspacesMarkedUnreadByUser: {},
     setWorkspaceUnreadByUser: (worktreeId, isUnread, executionHostId) => {
-      if (!isUnread) {
-        noteWorkspaceRead(worktreeId)
-        const removed = removeAndDismiss(workspaceMarkerTabIds(get(), worktreeId))
-        // Journal-positioned chat alerts retire only with the explicit read that bounds them.
-        if (removed) {
-          emitAgentSubjectReads([...removed.paneKeys], undefined, 'explicit')
+      setWorkspacesMarkedUnreadByUser([worktreeId], isUnread)
+      if (isUnread) {
+        void get().updateWorktreeMeta(worktreeId, { isUnread }, { executionHostId })
+        return
+      }
+      noteWorkspaceRead(worktreeId)
+      const removed = removeAndDismiss(workspaceMarkerTabIds(get(), worktreeId))
+      // Update only the clicked host’s row; markers stay workspace-wide because tab keys omit host.
+      // Before the acknowledgement below, so its settle finds the flag already down and skips a second persist.
+      void get().updateWorktreeMeta(worktreeId, { isUnread }, { executionHostId })
+      // Mark read reads the agents too, or their lines keep the dot the user just cleared.
+      // Journal-positioned chat alerts retire only with this explicit read that bounds them.
+      const paneKeys = new Set([
+        ...(removed?.paneKeys ?? []),
+        ...workspaceAgentPaneKeys(get(), worktreeId)
+      ])
+      if (paneKeys.size > 0) {
+        get().acknowledgeAgents([...paneKeys], undefined, 'explicit')
+      }
+    },
+    settleWorkspacesAfterExplicitRead: (worktreeIds) => {
+      const marked = get().workspacesMarkedUnreadByUser
+      for (const worktreeId of new Set(worktreeIds)) {
+        // The user's own mark is a source of its own; reading an agent there doesn't answer it.
+        if (!marked[worktreeId]) {
+          settleWorkspaceUnreadFlag(set, get, worktreeId, onScreenHostId(get(), worktreeId))
         }
       }
-      // Update only the clicked host’s row; markers stay workspace-wide because tab keys omit host.
-      void get().updateWorktreeMeta(worktreeId, { isUnread }, { executionHostId })
     }
   }
+}
+
+/** Every agent pane, live or retained, that belongs to the workspace. */
+function workspaceAgentPaneKeys(state: AppState, worktreeId: string): string[] {
+  const keys: string[] = []
+  for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
+    if (entry.worktreeId === worktreeId) {
+      keys.push(paneKey)
+    }
+  }
+  for (const [paneKey, retained] of Object.entries(state.retainedAgentsByPaneKey)) {
+    if (retained.worktreeId === worktreeId) {
+      keys.push(paneKey)
+    }
+  }
+  return keys
 }

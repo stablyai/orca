@@ -53,22 +53,34 @@ export function workspaceMarkerTabIds(
   return new Set(workspaceMarkerTabs(sources, workspaceId).map((tab) => tab.id))
 }
 
+/** The live tabs holding a tab or completion marker: where the workspace's unread actually is. */
+export function workspaceLiveMarkerTabIds(
+  sources: LiveMarkerSources & { unreadAgentCompletionPanes: MarkerRecord },
+  workspaceId: string
+): string[] {
+  const completionTabIds = new Set(
+    Object.keys(sources.unreadAgentCompletionPanes).map(paneKeyTabId)
+  )
+  return workspaceMarkerTabs(sources, workspaceId)
+    .filter(
+      (tab) =>
+        Boolean(sources.unreadTerminalTabs?.[tab.id]) ||
+        // Why the current session's key only: a tab rebound to a new session no longer owns the old one.
+        (tab.sessionId === null
+          ? completionTabIds.has(tab.id)
+          : Boolean(
+              sources.unreadAgentCompletionPanes[
+                structuredAgentSessionPaneKey(tab.id, tab.sessionId)
+              ]
+            ))
+    )
+    .map((tab) => tab.id)
+}
+
 /** What the workspace flag follows: a tab or completion marker on a live tab. */
 export function workspaceHasLiveMarker(
   sources: LiveMarkerSources & { unreadAgentCompletionPanes: MarkerRecord },
   workspaceId: string
 ): boolean {
-  const completionTabIds = new Set(
-    Object.keys(sources.unreadAgentCompletionPanes).map(paneKeyTabId)
-  )
-  return workspaceMarkerTabs(sources, workspaceId).some(
-    (tab) =>
-      Boolean(sources.unreadTerminalTabs?.[tab.id]) ||
-      // Why the current session's key only: a tab rebound to a new session no longer owns the old one.
-      (tab.sessionId === null
-        ? completionTabIds.has(tab.id)
-        : Boolean(
-            sources.unreadAgentCompletionPanes[structuredAgentSessionPaneKey(tab.id, tab.sessionId)]
-          ))
-  )
+  return workspaceLiveMarkerTabIds(sources, workspaceId).length > 0
 }

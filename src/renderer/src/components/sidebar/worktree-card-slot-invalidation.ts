@@ -1,7 +1,7 @@
 import type { AppState } from '@/store/types'
 import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
-import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/structured-agent-session-tabs'
+import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { getTabIdToWorktreeId } from './workspace-card/activity/worktree-agent-row-selectors'
 import {

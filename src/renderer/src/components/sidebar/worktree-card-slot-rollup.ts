@@ -1,6 +1,6 @@
 import { createLineageSlotReader, type WorkspaceSlot } from './worktree-card-slot-range'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   toLineageSlotRecord,
   fromLineageSlotRecord,
@@ -10,7 +10,7 @@ import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { getIndexedWorktreesById } from '@/store/worktree-repo-index'
+import { getIndexedWorktreesById } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   getWorktreeHostIdentity,
@@ -36,6 +36,7 @@ import {
   type SlotSignal
 } from './worktree-card-slot-signal'
 import {
+  expandWorkspaceUnreadTargets,
   slotTargetsFromAgentLines,
   slotTargetsOfKind,
   workspaceUnreadTarget,
@@ -125,6 +126,16 @@ function ownSlot(
 }
 
 const { slotsForTree, descendantSlot } = createLineageSlotReader(ownSlot)
+
+/** What the card shows as unread: its flag, or an agent result the user hasn't read. */
+export function selectWorkspaceShowsUnread(state: AppState, worktree: Worktree): boolean {
+  return (
+    worktree.isUnread ||
+    ownSlot(state, getWorktreeHostIdentity(worktree), worktree).targets.some(
+      (target) => target.kind === 'unread'
+    )
+  )
+}
 
 export function collectLineageSlotTargets(
   state: AppState,
@@ -263,16 +274,19 @@ export function collectLineageChildTargetsOfKind(
   source?: WorktreeLineageSource
 ): SlotTarget[] {
   return slotTargetsOfKind(
-    children.flatMap((child) => {
-      if (childSlot(state, child, source)?.kind !== kind) {
-        return []
-      }
-      const range = childRange(source, child)
-      return [
-        ...ownSlot(state, child).targets,
-        ...(range ? collectLineageSlotTargets(state, range) : [])
-      ]
-    }),
+    expandWorkspaceUnreadTargets(
+      state,
+      children.flatMap((child) => {
+        if (childSlot(state, child, source)?.kind !== kind) {
+          return []
+        }
+        const range = childRange(source, child)
+        return [
+          ...ownSlot(state, child).targets,
+          ...(range ? collectLineageSlotTargets(state, range) : [])
+        ]
+      })
+    ),
     kind
   )
 }

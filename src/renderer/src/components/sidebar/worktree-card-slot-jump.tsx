@@ -50,11 +50,26 @@ export function SlotKindGlyph({
   }
 }
 
+function tabTitle(worktreeId: string, tabId: string): string | null {
+  const state = useAppStore.getState()
+  const terminal = state.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)
+  const unified = state.unifiedTabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)
+  return terminal?.customTitle || terminal?.title || unified?.label || null
+}
+
 function targetText(target: SlotTarget): string {
-  if (!target.entry) {
-    return translate('sidebar.cardSlot.workspaceMarkedUnread', 'Workspace marked unread')
+  if (target.entry) {
+    return getAgentRowPrimaryText(target.entry) || formatAgentTypeLabel(target.agentType)
   }
-  return getAgentRowPrimaryText(target.entry) || formatAgentTypeLabel(target.agentType)
+  if (target.tabId !== undefined) {
+    return (
+      tabTitle(target.worktreeId, target.tabId) ??
+      translate('sidebar.cardSlot.unreadTab', 'Unread tab')
+    )
+  }
+  return target.markedByUser
+    ? translate('sidebar.cardSlot.markedUnread', 'Marked unread by you')
+    : translate('sidebar.cardSlot.workspaceUnread', 'Unread in this workspace')
 }
 
 function SlotTargetMenuItem({
@@ -154,7 +169,7 @@ export function SlotJumpTrigger({
           <DropdownMenuLabel>{label}</DropdownMenuLabel>
           {menu.sources.map((target) => (
             <SlotTargetMenuItem
-              key={`${composeWorktreeHostIdentity(target.executionHostId, target.worktreeId)}\n${target.paneKey ?? ''}`}
+              key={`${composeWorktreeHostIdentity(target.executionHostId, target.worktreeId)}\n${target.paneKey ?? ''}\n${target.tabId ?? ''}`}
               target={target}
               now={menu.openedAt}
             />

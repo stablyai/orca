@@ -35,10 +35,14 @@ export type WorkspaceAttentionSlice = {
   markAgentAttentionUnread: (write: AgentAttentionUnreadWrite) => void
   /** Read all markers of tabs shown in a focused, present window. screenArrived includes tab/workspace/host/focus changes and settles flags even without removed markers. */
   readOnScreenAttention: (screen: OnScreenAttention, options: { screenArrived: boolean }) => void
-  /** Sidebar "Mark as read" (also removes every marker in the workspace) / "Mark as unread". */
+  /** Workspaces the user marked unread this session, so the slot can say so instead of guessing. Renderer-local. */
+  workspacesMarkedUnreadByUser: Record<string, true>
+  /** Sidebar "Mark as read" (also removes every marker and reads every agent in the workspace) / "Mark as unread". */
   setWorkspaceUnreadByUser: (
     worktreeId: string,
     isUnread: boolean,
     executionHostId: ExecutionHostId
   ) => void
+  /** An explicit read elsewhere (Activity, dashboard, a jump) lowers flags left with nothing unread behind them. */
+  settleWorkspacesAfterExplicitRead: (worktreeIds: Iterable<string>) => void
 }

@@ -3,7 +3,8 @@ import { buildWorktreeLineageRanges } from '../../../../shared/sidebar-list/work
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { makeTab, makeWorktree } from '@/store/slices/store-test-helpers'
+import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'

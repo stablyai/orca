@@ -8,7 +8,6 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { canConnectSshStatus, isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 import { useAppStore } from '@/store'
-import { workspaceHasLiveMarker } from '@/store/slices/workspace-attention/workspace-live-markers'
 import type { WorktreeCardController } from './workspace-card/controller/use-worktree-card-controller'
 import { useWorktreeAgentRows } from './workspace-card/activity/useWorktreeAgentRows'
 import { selectAgentRowsUnread } from './workspace-card/activity/worktree-card-agent-ack-inputs'
@@ -35,6 +34,7 @@ import { WorktreeCardSlot, WorktreeCardTitlePills, WorktreeCardTitleTime } from 
 import { WorktreeCardLeadingIcon, type LeadingIconBadge } from './worktree-card-leading-icon'
 import { WorktreeCardPrRollup } from './worktree-card-pr-rollup'
 import {
+  expandWorkspaceUnreadTargets,
   slotTargetsFromAgentLines,
   slotTargetsOfKind,
   workspaceUnreadTarget
@@ -131,7 +131,7 @@ export function WorktreeCardSlotContent({
   const host = getWorktreeCardHost(card)
   const sshDown = host?.kind === 'ssh' && host.down
   const offline = isRuntimeDisconnected || sshDown
-  const hasLiveMarker = useAppStore((s) => workspaceHasLiveMarker(s, worktree.id))
+  const markedByUser = useAppStore((s) => Boolean(s.workspacesMarkedUnreadByUser[worktree.id]))
   // Picking a send target turns the agent lines into the picker, so they can't stay folded.
   const pickingSendTarget = useAppStore(
     (s) => selectSendTargetControlInputs(s, worktree.id).targetMode !== null
@@ -149,7 +149,7 @@ export function WorktreeCardSlotContent({
   const agentUnread = signals.allSignals.some((signal) => signal.kind === 'unread')
   // Any unread source counts (a terminal tab, a pane, the user's mark) unless a visible line already shows it.
   const workspaceUnread =
-    worktree.isUnread && !(showLines && agentUnread) ? { manual: !hasLiveMarker } : null
+    worktree.isUnread && !(showLines && agentUnread) ? { manual: markedByUser } : null
   // The icon badge and pills speak for what's hidden; a visible agent line shows its own state.
   const titleSlot = titleRowSlot({
     offline,
@@ -169,17 +169,19 @@ export function WorktreeCardSlotContent({
   const worktreeLastActivityAt = worktree.lastActivityAt > 0 ? worktree.lastActivityAt : null
   const workspaceUnreadShown = workspaceUnread !== null
   const resolveTitleTargets = useCallback(
-    (kind: SlotException['kind']) =>
-      slotTargetsOfKind(
-        [
+    (kind: SlotException['kind']) => {
+      const state = useAppStore.getState()
+      return slotTargetsOfKind(
+        expandWorkspaceUnreadTargets(state, [
           ...(showLines ? [] : slotTargetsFromAgentLines(worktree.id, signals, worktree.hostId)),
-          ...(lineageHidden ? collectLineageSlotTargets(useAppStore.getState(), descendants) : []),
+          ...(lineageHidden ? collectLineageSlotTargets(state, descendants) : []),
           ...(workspaceUnreadShown
             ? [workspaceUnreadTarget(worktree.id, worktreeLastActivityAt, worktree.hostId)]
             : [])
-        ],
+        ]),
         kind
-      ),
+      )
+    },
     [
       descendants,
       lineageHidden,
