@@ -66,7 +66,9 @@ export class SessionSearchTypoRepair {
     if (lowered.length < MIN_TERM_LENGTH || lowered.length > MAX_TERM_LENGTH) {
       return null
     }
-    const ownExpression = orExpression(planSessionSearchQuery(term).terms)
+    const ownExpression = orExpression(
+      planSessionSearchQuery(term).terms.filter((spelling) => spelling.toLowerCase() === lowered)
+    )
     if (this.countRows(ownExpression, postings) > 0 || postings.exhausted) {
       return null
     }
