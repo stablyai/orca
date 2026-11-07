@@ -5,7 +5,10 @@ import { homedir } from 'node:os'
 import type { AcpLaunchSpec } from '../acp/acp-launch-specs'
 import { ANTIGRAVITY_ACP_DIALECT } from '../acp/acp-dialects/antigravity-dialect'
 import type { StructuredAgentSessionHistory } from '../native-chat/structured-agent-cli-conversations'
-import { resolveAntigravityChatAuthConfig } from '../../shared/antigravity-chat-auth-config'
+import {
+  AntigravityChatAuthConfigSchema,
+  resolveAntigravityChatAuthConfig
+} from '../../shared/antigravity-chat-auth-config'
 import { agentSessionSignInFor } from '../../shared/agent-session/lifecycle/agent-session-sign-in'
 import { ANTIGRAVITY_ACP_COMMAND, ANTIGRAVITY_ACP_RUNTIME } from './antigravity-acp-runtime'
 import { ANTIGRAVITY_ACP_ENV, scrubAntigravityAcpEnvironment } from './antigravity-acp-environment'
@@ -16,6 +19,7 @@ import {
   antigravityChatSignIn
 } from './antigravity-chat-account'
 import { ANTIGRAVITY_CHAT_HOME_FOLDER } from './antigravity-chat-home'
+import { assertAntigravityChatAuthPublished } from './antigravity-chat-auth-publication'
 import { readAntigravitySignInLine } from './antigravity-sign-in-url'
 import {
   ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION,
@@ -110,13 +114,28 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   keepsEverySession: true
 }
 
+// The host's agy ignores Orca's account type, so any other saved choice, a malformed one, or one
+// still being saved keeps new chats on Orca's runtime, whose sign-in honors it.
+function savedChatAuthIsPersonal(value: unknown): boolean {
+  try {
+    assertAntigravityChatAuthPublished(value)
+  } catch {
+    return false
+  }
+  const parsed = AntigravityChatAuthConfigSchema.safeParse(
+    value === undefined ? { method: 'oauth-personal' } : value
+  )
+  return parsed.success && parsed.data.method === 'oauth-personal'
+}
+
 export const ANTIGRAVITY_LAUNCH_SPEC = {
   ...ANTIGRAVITY_MANAGED_LAUNCH_SPEC,
   hostBackend: {
     spec: ANTIGRAVITY_HOST_LAUNCH_SPEC,
     pins: isAntigravityHostAccountHome,
     // Someone signed in to Orca's own Chat keeps it; the host's agy needs its own sign-in.
-    select: async ({ command, env, envToDelete, homePath, stateDirectory }) =>
+    select: async ({ command, env, envToDelete, homePath, stateDirectory, settings }) =>
+      savedChatAuthIsPersonal(settings.antigravityChatAuth) &&
       antigravityChatSignIn.get().value.auth !== 'signedIn' &&
       !(await hasManagedAntigravityChatSignIn(
         join(stateDirectory, ANTIGRAVITY_CHAT_HOME_FOLDER)

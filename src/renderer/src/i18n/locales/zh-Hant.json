@@ -1160,7 +1160,7 @@
         "insecureOrigin": "Orca 拒絕從此頁面配對：它是另一臺機器上的純 http 頁面，因此網路路徑上的任何人都可以替換它並取走配對碼。請透過 https、本機的 localhost 或 SSH 隧道開啟網頁用戶端。如仍要允許，伺服器操作員可以使用 ORCA_ALLOW_INSECURE_WEB_PAIRING=1 重新啟動 Orca。",
         "deviceDowngraded": "此 Orca 伺服器不再支援此瀏覽器的登入金鑰（可能已被降級）。請更新伺服器，或重新配對此瀏覽器。",
         "unauthorized": "未授權。請重新配對此網頁用戶端。",
-        "unauthorizedNewLink": "未授權。請索取新的配對連結。"
+        "unauthorizedLinkUsedOrExpired": "未授權。此配對連結可能已過期或已被使用。請在 Orca 中建立新的配對連結並開啟。"
       }
     },
     "store": {
@@ -22732,6 +22732,17 @@
         "effortRepeated": "額外引數重複設定了推理強度。"
       },
       "hostUpdateRequired": "請更新此主機上的 Orca 以使用額外引數。"
+    },
+    "setupTrust": {
+      "reviewTitle": "要核准此自動化的新設定命令嗎？",
+      "reviewBody": "由於分支的 <code>orca.yaml</code> 設定命令已變更，某次執行略過了設定。核准後，之後的執行將使用這些命令。僅在你信任 <repo/> 時核准。",
+      "approve": "核准",
+      "approved": "已核准設定。此自動化之後的執行將執行它。",
+      "skippedSinceApproved": "由於分支的 orca.yaml 設定命令已變更，此次執行未執行設定。這些命令此後已獲核准，之後的執行將執行它們。",
+      "skippedReview": "設定未執行：此次執行分支中的 orca.yaml 設定命令與此自動化已核准的命令不同。請審查它們，以便之後的執行執行設定。",
+      "reviewAction": "審查並核准設定",
+      "listSkipped": "已略過設定",
+      "listSkippedTitle": "由於分支的 orca.yaml 設定命令已變更，上次執行略過了設定。請從動作選單中審查。"
     }
   },
   "codeHost": {

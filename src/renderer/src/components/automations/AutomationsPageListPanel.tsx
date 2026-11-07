@@ -104,6 +104,7 @@ export function AutomationsPageListPanel({
       runNow={(row) => void runActions.runNow(row)}
       openEditDialog={(row) => void editorActions.openEditDialog(row)}
       toggleAutomation={(row) => void managementActions.toggleAutomation(row)}
+      reviewSkippedSetup={managementActions.reviewSkippedSetup}
       requestDeleteAutomation={managementActions.requestDeleteAutomation}
       requestExternalAction={externalActions.requestExternalAction}
       openCreateDialog={editorActions.openCreateDialog}

@@ -1,3 +1,4 @@
+import { pickApprovedSetupHashes } from '../../../../../../shared/worktree/approved-setup-hashes'
 import { agentLaunchRecoveryMessage, notifyAgentLaunchFailure } from '@/lib/agent-launch-failure'
 import { prepareDirectWorkItemSetup } from './direct-work-item-setup'
 import type { DirectWorkItemLaunchResult } from './direct-work-item-setup'
@@ -198,9 +199,7 @@ export async function launchWorkItemDirect(
       resolvedCompareBaseRef,
       {
         executionHostId: context.executionHostId,
-        ...(confirmedSetup.approvedSetupHash !== undefined
-          ? { approvedSetupHash: confirmedSetup.approvedSetupHash }
-          : {})
+        ...pickApprovedSetupHashes(confirmedSetup)
       }
     )
     const worktreeId = result.worktree.id

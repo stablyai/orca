@@ -39,7 +39,13 @@ describe('createMarkdownTokensProvider', () => {
       })
     )
     const [heading, list] = tokenizeLines(provider, ['## Quick', '- **State:** open'])
-    expect(new Set(heading)).toEqual(new Set(['md.markup.heading.markdown']))
+    expect(new Set(heading)).toEqual(
+      new Set([
+        'md.punctuation.definition.heading.markdown',
+        'md.markup.heading.markdown',
+        'md.entity.name.section.markdown'
+      ])
+    )
     expect(list).toEqual([
       'md.punctuation.definition.list.begin.markdown',
       'md.text.html.markdown',

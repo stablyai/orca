@@ -55,7 +55,7 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
     repo,
     yamlHooks,
     effectiveDecision,
-    request.approvedSetupHash
+    request
   )
   // Only the approved content may run; the client re-prompts with the branch's.
   const runDecision = setupTrustMismatch ? 'skip' : effectiveDecision

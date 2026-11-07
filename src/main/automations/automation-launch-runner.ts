@@ -101,6 +101,7 @@ export async function runAutomationLaunch(ctx: AutomationLaunchContext): Promise
     // Watched completions omit the precheck result.
     ...(precheckResult ? { precheckResult } : {}),
     ...(launch.setupSkippedReason ? { setupSkippedReason: launch.setupSkippedReason } : {}),
+    ...(launch.setupSkippedContent ? { setupSkippedContent: launch.setupSkippedContent } : {}),
     error: null
   })
   if (!updated.applied) {

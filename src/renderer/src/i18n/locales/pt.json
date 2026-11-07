@@ -1853,7 +1853,7 @@
         "insecureOrigin": "O Orca recusou o pareamento nesta página: ela usa http sem criptografia em outra máquina, então qualquer pessoa no caminho da rede poderia substituí-la e obter o código de pareamento. Abra o cliente web por https, em localhost neste computador ou por um túnel SSH. Para permitir mesmo assim, o operador do servidor pode reiniciar o Orca com ORCA_ALLOW_INSECURE_WEB_PAIRING=1.",
         "deviceDowngraded": "Este servidor Orca não oferece mais suporte à chave de login deste navegador (ele pode ter voltado a uma versão anterior). Atualize o servidor ou pareie este navegador novamente.",
         "unauthorized": "Não autorizado. Pareie este cliente web novamente.",
-        "unauthorizedNewLink": "Não autorizado. Peça um novo link de pareamento."
+        "unauthorizedLinkUsedOrExpired": "Não autorizado. Este link de pareamento pode ter expirado ou já ter sido usado. Crie um novo link de pareamento no Orca e abra-o."
       }
     },
     "i18n": {
@@ -23476,6 +23476,17 @@
         "effortRepeated": "Os argumentos extras definem o esforço mais de uma vez."
       },
       "hostUpdateRequired": "Atualize o Orca neste host para usar argumentos extras."
+    },
+    "setupTrust": {
+      "reviewTitle": "Aprovar os novos comandos de configuração desta automação?",
+      "reviewBody": "Uma execução pulou a configuração porque os comandos de configuração no <code>orca.yaml</code> da branch mudaram. Ao aprovar, as próximas execuções usarão esses comandos. Aprove apenas se você confia em <repo/>.",
+      "approve": "Aprovar",
+      "approved": "Configuração aprovada. As próximas execuções desta automação vão executá-la.",
+      "skippedSinceApproved": "A configuração não foi executada nesta execução porque os comandos de configuração no orca.yaml da branch mudaram. Eles já foram aprovados, então as próximas execuções vão executá-los.",
+      "skippedReview": "A configuração não foi executada: a branch desta execução tem comandos de configuração no orca.yaml diferentes dos aprovados para esta automação. Revise-os para que as próximas execuções executem a configuração.",
+      "reviewAction": "Revisar e aprovar a configuração",
+      "listSkipped": "Configuração pulada",
+      "listSkippedTitle": "A última execução pulou a configuração porque os comandos de configuração no orca.yaml da branch mudaram. Revise-os no menu de ações."
     }
   },
   "codeHost": {
