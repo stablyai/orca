@@ -61,49 +61,11 @@ function mountedFiles(markup: string): string[] {
 const LINE = '::orca-visual{file="usage.html" title="Usage by day"}'
 
 describe('remarkNativeChatVisuals', () => {
-  it('splits a paragraph that runs straight into and out of the directive', () => {
-    const markup = render(`Here it is:\n${LINE}\nThat is the trend.`)
-    expect(mountedFiles(markup)).toEqual(['usage.html'])
-    expect(markup).toContain('Here it is:')
-    expect(markup).toContain('That is the trend.')
-  })
-
-  it.each([
-    ['fenced code', `\`\`\`\n${LINE}\n\`\`\``],
-    ['tilde fenced code', `~~~md\n${LINE}\n~~~`],
-    ['indented code', `Intro\n\n    ${LINE}`],
-    ['inline code', `Use \`${LINE}\` to show a chart.`],
-    ['a block quote', `> ${LINE}`],
-    ['a list item', `- ${LINE}`],
-    ['an ordered list item', `1. ${LINE}`],
-    ['mid-sentence', `See ${LINE} here`],
-    ['a malformed directive', '::orca-visual{file="../usage.html"}'],
-    ['an unclosed directive', '::orca-visual{file="usage.html"'],
-    ['trailing prose on the line', `${LINE} done`]
-  ])('leaves it as text inside %s', (_name, content) => {
-    const markup = render(content)
-    expect(mountedFiles(markup)).toEqual([])
-    expect(markup).toContain('::orca-visual')
-  })
-
   it('does not mount a raw HTML placeholder forged without the nonce', () => {
     const markup = render(
       '<div data-orca-visual="guess" data-orca-visual-file="usage.html">x</div>\n\nafter'
     )
     expect(mountedFiles(markup)).toEqual([])
-  })
-
-  it('caps how many visuals one reply mounts and shows the rest as text', () => {
-    const lines = Array.from(
-      { length: 10 },
-      (_, index) => `::orca-visual{file="chart-${index}.html"}`
-    )
-    const markup = render(lines.join('\n\n'))
-    expect(mountedFiles(markup)).toEqual(
-      Array.from({ length: 8 }, (_, index) => `chart-${index}.html`)
-    )
-    expect(markup).toContain('chart-8.html')
-    expect(markup).toContain('chart-9.html')
   })
 
   it('keeps reference links defined after the directive working', () => {

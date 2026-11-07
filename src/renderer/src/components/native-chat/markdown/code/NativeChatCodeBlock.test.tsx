@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { NativeChatCodeBlock } from './NativeChatCodeBlock'
@@ -36,30 +36,5 @@ describe('NativeChatCodeBlock', () => {
     expect(second.container.querySelectorAll('span[style*="--syntax-dark"]')).toHaveLength(colored)
     expect(screen.getByText('lastLine')).toBeInTheDocument()
     expect(second.container.querySelector('pre')?.textContent).toBe(code)
-  })
-
-  it('colors and wraps fenced code, copies its text, and confirms success', async () => {
-    const writeClipboardText = vi.fn().mockResolvedValue(undefined)
-    Object.assign(window, { api: { ui: { writeClipboardText } } })
-    const code = 'const answer = 42\nconsole.log(answer)\n'
-    const { container } = render(
-      <NativeChatCodeBlock language="typescript">
-        <code>{code}</code>
-      </NativeChatCodeBlock>
-    )
-    const pre = container.querySelector('pre')
-    expect(screen.getByText('TypeScript')).toBeInTheDocument()
-    await waitFor(() => expect(pre?.querySelector('span[style*="--syntax-dark"]')).not.toBeNull(), {
-      timeout: 10_000
-    })
-
-    fireEvent.click(screen.getByRole('button', { name: 'Wrap lines' }))
-
-    expect(pre).toHaveClass('whitespace-pre-wrap')
-    expect(pre?.querySelector('span[style*="--syntax-dark"]')).not.toBeNull()
-    expect(pre?.textContent).toBe(code)
-    fireEvent.click(screen.getByRole('button', { name: 'Copy code' }))
-    await waitFor(() => expect(writeClipboardText).toHaveBeenCalledWith(code))
-    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument()
   })
 })

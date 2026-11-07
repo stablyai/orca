@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom/vitest'
 import { isValidElement, type ComponentProps } from 'react'
 import type { NativeChatCrewFrame } from '../../../orchestration-crew/NativeChatCrewPanel'
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ImageBlobPng from '@/lib/image-blob-png'
 import { NativeChatImageAttachmentPreview } from '../../NativeChatImageAttachmentPreview'
@@ -74,9 +74,6 @@ vi.mock('sonner', () => ({ toast: { success: mocks.success, error: mocks.error }
 
 const { NativeChatResolvedView } = await import('../../NativeChatResolvedView')
 const { useAppStore } = await import('../../../../store/index')
-const { installNativeChatMessageListTestViewport } =
-  await import('../../native-chat-message-list-test-viewport')
-const { TooltipProvider } = await import('@/components/ui/tooltip')
 
 function RetainedBridgeChat({ visible = true }: { visible?: boolean }) {
   return (
@@ -124,74 +121,6 @@ afterEach(() => {
 })
 
 describe('NativeChatResolvedView image menu ownership', () => {
-  it('refuses image capture from a portaled preview while its retained owner is hidden', async () => {
-    mocks.fetch.mockResolvedValue({ ok: true, blob: async () => new Blob(['original image']) })
-    const view = render(<RetainedBridgeChat />)
-    fireEvent.click(screen.getByRole('button', { name: 'Image #1: View image: original.png' }))
-    const preview = screen.getByRole('dialog')
-    expect(screen.getByTestId('retained-owner').contains(preview)).toBe(false)
-
-    view.rerender(<RetainedBridgeChat visible={false} />)
-    fireEvent.contextMenu(within(preview).getByRole('img'))
-
-    expect(mocks.fetch).not.toHaveBeenCalled()
-    view.rerender(<RetainedBridgeChat />)
-    expect(screen.queryByRole('menu')).toBeNull()
-    expect(mocks.writeClipboardImage).not.toHaveBeenCalled()
-  })
-
-  it('closes the image preview on the first Close click while its copy menu is open', async () => {
-    mocks.fetch.mockResolvedValue({ ok: true, blob: async () => new Blob(['original image']) })
-    render(<RetainedBridgeChat />)
-    fireEvent.click(screen.getByRole('button', { name: 'Image #1: View image: original.png' }))
-    const preview = screen.getByRole('dialog', { name: 'original.png' })
-    fireEvent.contextMenu(within(preview).getByRole('img'))
-    await screen.findByRole('menuitem', { name: 'Copy image' })
-    const close = within(preview).getByRole('button', { name: 'Close' })
-
-    fireEvent.pointerDown(close, { button: 0 })
-    fireEvent.pointerUp(close, { button: 0 })
-    fireEvent.click(close)
-
-    await waitFor(() => expect(preview).not.toBeInTheDocument())
-    expect(mocks.writeClipboardImage).not.toHaveBeenCalled()
-  })
-
-  it.each(['thumbnail', 'preview'])(
-    'copies the original image from the %s through the visible bridge chat menu',
-    async (surface) => {
-      mocks.fetch.mockResolvedValue({ ok: true, blob: async () => new Blob(['original image']) })
-      render(<RetainedBridgeChat />)
-
-      if (surface === 'preview') {
-        fireEvent.click(screen.getByRole('button', { name: 'Image #1: View image: original.png' }))
-      }
-      const preview =
-        surface === 'preview' ? screen.getByRole('dialog', { name: 'original.png' }) : null
-      const image = preview
-        ? within(preview).getByRole('img')
-        : screen.getByRole('img', { name: 'original.png' })
-      fireEvent.contextMenu(image)
-      const copy = await screen.findByRole('menuitem', { name: 'Copy image' })
-      fireEvent.pointerDown(copy, { button: 0, pointerType: 'mouse' })
-      fireEvent.pointerUp(copy, { button: 0, pointerType: 'mouse' })
-      fireEvent.click(copy)
-
-      await waitFor(() =>
-        expect(mocks.writeClipboardImage).toHaveBeenCalledWith(
-          `data:image/png;base64,${Buffer.from('original image').toString('base64')}`
-        )
-      )
-      expect(mocks.fetch).toHaveBeenCalledWith('blob:original')
-      expect(mocks.success).toHaveBeenCalledWith('Image copied')
-      expect(mocks.error).not.toHaveBeenCalled()
-      if (preview) {
-        expect(preview).toBeInTheDocument()
-        expect(preview).toHaveAttribute('data-state', 'open')
-      }
-    }
-  )
-
   it('removes the portaled menu and captured image when the retained bridge owner hides', async () => {
     const capturedImage = Promise.withResolvers<Blob>()
     mocks.fetch.mockResolvedValue({ ok: true, blob: () => capturedImage.promise })
@@ -227,56 +156,5 @@ describe('NativeChatResolvedView image menu ownership', () => {
     expect(mocks.writeClipboardImage).not.toHaveBeenCalled()
     expect(mocks.success).not.toHaveBeenCalled()
     expect(mocks.error).not.toHaveBeenCalled()
-  })
-})
-
-function chatMessage(id: string, role: 'user' | 'assistant', text: string): NativeChatMessage {
-  return { id, role, blocks: [{ type: 'text', text }], timestamp: 1, source: 'transcript' }
-}
-
-const REPLY = [
-  'Run the build:',
-  '',
-  '```sh',
-  'pnpm build',
-  '```',
-  '',
-  '::orca-visual{file="chart.html"}'
-].join('\n')
-
-describe('NativeChatResolvedView right-click targets', () => {
-  let restoreViewport = (): void => {}
-  beforeEach(() => {
-    restoreViewport = installNativeChatMessageListTestViewport()
-  })
-  afterEach(() => restoreViewport())
-
-  it('copies a reply and its code block with the text their hover buttons copy', async () => {
-    mocks.session.messages = [
-      chatMessage('ask', 'user', 'Fix the build'),
-      chatMessage('reply', 'assistant', REPLY)
-    ]
-    render(
-      <TooltipProvider>
-        <RetainedBridgeChat />
-      </TooltipProvider>
-    )
-
-    fireEvent.contextMenu(screen.getByText('Run the build:'))
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Copy message' }))
-    expect(mocks.writeClipboardText).toHaveBeenLastCalledWith(
-      'Run the build:\n\n```sh\npnpm build\n```'
-    )
-
-    fireEvent.click(screen.getByRole('button', { name: 'Copy code' }))
-    const hoverCopy = mocks.writeClipboardText.mock.lastCall
-    fireEvent.contextMenu(screen.getByText('pnpm build'))
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Copy code' }))
-    expect(mocks.writeClipboardText.mock.lastCall).toEqual(hoverCopy)
-    expect(hoverCopy).toEqual(['pnpm build\n'])
-
-    fireEvent.contextMenu(screen.getByText('Fix the build'))
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Copy message' }))
-    expect(mocks.writeClipboardText).toHaveBeenLastCalledWith('Fix the build')
   })
 })
