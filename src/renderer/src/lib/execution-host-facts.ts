@@ -1,7 +1,8 @@
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
-  type ParsedExecutionHost
+  type ParsedExecutionHost,
+  type ExecutionHostId
 } from '../../../shared/execution-host'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
@@ -10,7 +11,10 @@ import type { AgentStartupShell } from '../../../shared/agent-launch/startup/tui
 import { resolveHostAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { isWslUncPath } from '../../../shared/wsl-paths'
 import type { AppState } from '@/store/types'
-import { getConnectionIdFromState } from './connection-owner-resolution'
+import {
+  getConnectionIdForWorktreeCopy,
+  getConnectionIdFromState
+} from './connection-owner-resolution'
 import { getLocalProjectExecutionRuntimeContext } from './local-preflight-context'
 import { CLIENT_PLATFORM } from './new-workspace'
 import type { ResolvedAgentBackgroundTarget } from './agent-session/launch/background/agent-background-session-contract'
@@ -20,26 +24,8 @@ import {
   runtimeEnvironmentIdOrLocalUnlessTwin
 } from './workspace/ownership/worktree-runtime-owner'
 
-/** Withhold unreported execution OS; quoting with client/endpoint guesses would target the wrong shell and must stop launch. */
-export type ExecutionHostPlatformFact =
-  | {
-      kind: 'known'
-      platform: NodeJS.Platform
-      hostKind: ParsedExecutionHost['kind']
-      /** A paired server's own Windows terminal shell, when it reported one. */
-      terminalWindowsShell?: string | null
-    }
-  | {
-      kind: 'withheld'
-      reason: string
-      recovery:
-        | 'connectSsh'
-        | 'sshUnavailable'
-        | 'reconnectServer'
-        | 'updateServer'
-        | 'refreshProjects'
-      pending?: boolean
-    }
+import type { ExecutionHostPlatformFact } from './execution-host-platform-fact'
+export type { ExecutionHostPlatformFact } from './execution-host-platform-fact'
 
 type HostFactsState = Pick<
   AppState,
@@ -218,7 +204,8 @@ export function resolveWorktreeExecutionHostPlatform(
   state: WorktreeHostFactsState,
   worktreeId: string,
   workspacePath: string | null | undefined,
-  resolvedTarget?: ResolvedAgentBackgroundTarget
+  resolvedTarget?: ResolvedAgentBackgroundTarget,
+  executionHostId?: ExecutionHostId
 ): ExecutionHostPlatformFact {
   if (resolvedTarget) {
     return resolveRepoWorktreePlatformFact(
@@ -231,7 +218,12 @@ export function resolveWorktreeExecutionHostPlatform(
   return resolveHostPlatform(state, {
     // Why the routing default: an owner-less row launches where routing sends it, and a row-less
     // setup terminal on the focused default, so read that host.
-    ...targetOnHost(state, worktreeId, getExecutionHostIdForWorktree(state, worktreeId)),
+    ...targetOnHost(
+      state,
+      worktreeId,
+      getExecutionHostIdForWorktree(state, worktreeId),
+      executionHostId
+    ),
     workspacePath,
     projectRuntime: () => getLocalProjectExecutionRuntimeContext(state, worktreeId)
   })
@@ -251,13 +243,18 @@ export function resolveWorktreeResourceTarget(
 function targetOnHost(
   state: Omit<WorktreeHostFactsState, 'settings'>,
   worktreeId: string,
-  hostId: string
+  hostId: string,
+  executionHostId?: ExecutionHostId
 ): ExecutionHostTarget {
   const host = parseExecutionHostId(hostId)
   return {
     host,
     nestedSshTargetId:
-      host?.kind === 'runtime' ? (getConnectionIdFromState(state, worktreeId) ?? null) : null,
+      host?.kind === 'runtime'
+        ? ((executionHostId
+            ? getConnectionIdForWorktreeCopy(state, worktreeId, executionHostId)
+            : getConnectionIdFromState(state, worktreeId)) ?? null)
+        : null,
     sshOwnerEnvironmentId:
       host?.kind === 'ssh' ? runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId) : null
   }

@@ -9,9 +9,9 @@ import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-run
 import {
   clearOpenAiSpeechApiKey,
   getOpenAiSpeechApiKeyProtection,
-  hasOpenAiSpeechApiKey,
-  saveOpenAiSpeechApiKey
+  hasOpenAiSpeechApiKey
 } from '../speech/openai-api-key-store'
+import { saveVerifiedOpenAiSpeechApiKey } from '../speech/openai-api-key-verification'
 import type { Store } from '../persistence/loading-store/store'
 
 export function registerSpeechHandlers(store: Store): void {
@@ -28,7 +28,7 @@ export function registerSpeechHandlers(store: Store): void {
   })
 
   ipcMain.handle('speech:saveOpenAiApiKey', async (_event, apiKey: string) => {
-    saveOpenAiSpeechApiKey(apiKey)
+    await saveVerifiedOpenAiSpeechApiKey(apiKey)
     return { configured: true, protection: getOpenAiSpeechApiKeyProtection() }
   })
 
@@ -207,7 +207,8 @@ export function registerSpeechHandlers(store: Store): void {
             }
           },
           resolvedHotwordsPath,
-          owner
+          owner,
+          store.getSettings().voice?.dictationLanguage
         )
         // Coalesced starts install no sink; only an accepted start supersedes the close hook.
         if (sessionReady) {
@@ -232,7 +233,7 @@ export function registerSpeechHandlers(store: Store): void {
     async (_event, buffer: Buffer, sampleRate: number, sessionId = 'desktop') => {
       // Preload uses Buffer because contextBridge/IPC can zero Float32Array data.
       const samples = new Float32Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 4)
-      getSpeechSttService(store).feedAudio(
+      return getSpeechSttService(store).feedAudio(
         samples,
         sampleRate,
         getDesktopOwner(_event.sender.id, sessionId)

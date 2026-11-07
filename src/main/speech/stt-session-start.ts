@@ -1,4 +1,5 @@
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
+import { engineDictationLanguage } from '../../shared/dictation-language'
 import { getCatalogModel } from './model-catalog'
 import { OpenAiTranscriptionSession } from './openai-transcription-client'
 import { readOpenAiSpeechApiKey } from './openai-api-key-store'
@@ -28,7 +29,8 @@ export async function startSttDictation(
   modelId: string,
   sink: SttEventSink,
   hotwordsFilePath?: string,
-  owner = 'desktop'
+  owner = 'desktop',
+  language?: string
 ): Promise<void> {
   if (state.starting) {
     if (state.startingOwner !== owner) {
@@ -45,7 +47,7 @@ export async function startSttDictation(
   clearSttIdleTeardownTimer(state)
 
   try {
-    await startSttSession(state, modelId, sink, hotwordsFilePath, owner)
+    await startSttSession(state, modelId, sink, hotwordsFilePath, owner, language)
     if (state.canceledOwners.delete(owner)) {
       await stopSttDictation(state, owner, { cancelStarting: false, discard: true })
       throw new Error('dictation_canceled')
@@ -64,12 +66,14 @@ async function startSttSession(
   modelId: string,
   sink: SttEventSink,
   hotwordsFilePath: string | undefined,
-  owner: string
+  owner: string,
+  language: string | undefined
 ): Promise<void> {
   const manifest = getCatalogModel(modelId)
   if (!manifest) {
     throw new Error(`Unknown model: ${modelId}`)
   }
+  const engineLanguage = engineDictationLanguage(manifest, language)
 
   if (manifest.provider === 'openai') {
     if (state.worker) {
@@ -81,7 +85,11 @@ async function startSttSession(
     if (modelState.status !== 'ready') {
       throw new Error(`Model not ready: ${modelState.status}`)
     }
-    state.cloudSession = new OpenAiTranscriptionSession(modelId, readOpenAiSpeechApiKey)
+    state.cloudSession = new OpenAiTranscriptionSession(
+      modelId,
+      readOpenAiSpeechApiKey,
+      engineLanguage
+    )
     state.activeModelId = modelId
     state.activeHotwordsFilePath = undefined
     state.eventSink = sink
@@ -97,6 +105,7 @@ async function startSttSession(
     reusableWorker &&
     state.activeModelId === modelId &&
     state.activeHotwordsFilePath === hotwordsFilePath &&
+    state.activeLanguage === engineLanguage &&
     state.stopInFlight?.worker !== reusableWorker
   ) {
     if (!state.activeOwner) {
@@ -110,6 +119,7 @@ async function startSttSession(
       state.worker === reusableWorker &&
       state.activeModelId === modelId &&
       state.activeHotwordsFilePath === hotwordsFilePath &&
+      state.activeLanguage === engineLanguage &&
       state.stopInFlight?.worker !== reusableWorker
     ) {
       state.eventSink = sink
@@ -136,6 +146,7 @@ async function startSttSession(
   state.worker = worker
   state.activeModelId = modelId
   state.activeHotwordsFilePath = hotwordsFilePath
+  state.activeLanguage = engineLanguage
   state.eventSink = sink
 
   const readyPromise = waitForSttWorkerReady(worker, START_DICTATION_TIMEOUT_MS)
@@ -157,7 +168,8 @@ async function startSttSession(
     sampleRate: manifest.sampleRate,
     files: manifest.files ?? [],
     hotwordsFilePath,
-    modelingUnit: manifest.modelingUnit
+    modelingUnit: manifest.modelingUnit,
+    language: engineLanguage
   })
 
   try {

@@ -1,3 +1,4 @@
+import { refuseAgentTabLaunch } from './launch-agent-tab-refusal'
 import {
   launchNewTabPromptThroughHost,
   newTabPromptLaunchesThroughHost
@@ -18,12 +19,16 @@ import { tuiAgentToAgentKind } from '../../../../../../shared/agent-kind'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery'
 import { pasteAgentLaunchPromptOnceReady } from '@/lib/agent-session/launch/prompt/launch-agent-tab-prompt-paste'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { snapshotAgentTabLaunchArgs } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-args'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { launchAgentInWebHostTab } from '@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
 import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { readAgentLaunchPreferencesForWorktree } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
-import { resolveAgentLaunchExecutionContext } from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
+import {
+  agentTabLaunchStore,
+  resolveAgentLaunchExecutionContext
+} from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
 import { launchStructuredAgentFromNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-structured-route'
 import '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../../../shared/workspace-launch-kind'
@@ -44,15 +49,23 @@ import {
  * Returns `null` for cancellation; preparation failures return a notified refusal.
  */
 export function launchAgentInNewTabWithOutcome(
-  args: LaunchAgentInNewTabArgs
+  args: LaunchAgentInNewTabArgs,
+  notifyFailure = true
 ): AgentTabLaunchOutcome {
-  args = {
-    ...args,
-    ...(args.sessionOptions !== undefined ? { sessionOptions: { ...args.sessionOptions } } : {}),
-    ...(args.chatSessionOptions !== undefined
-      ? { chatSessionOptions: { ...args.chatSessionOptions } }
-      : {})
+  const notify = () => notifyAgentLaunchFailure(args.agent)
+  try {
+    return openAgentInNewTab(args, notifyFailure, notify)
+  } catch {
+    return refuseAgentTabLaunch(args, agentLaunchCheckSettingsMessage(), notify, notifyFailure)
   }
+}
+
+function openAgentInNewTab(
+  args: LaunchAgentInNewTabArgs,
+  notifyFailure: boolean,
+  notify: () => void
+): AgentTabLaunchOutcome {
+  args = snapshotAgentTabLaunchArgs(args)
   const {
     agent,
     worktreeId,
@@ -71,7 +84,7 @@ export function launchAgentInNewTabWithOutcome(
     beforeSurfaceOpen,
     activate
   } = args
-  const store = useAppStore.getState()
+  const store = agentTabLaunchStore(useAppStore.getState(), args)
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
@@ -96,7 +109,12 @@ export function launchAgentInNewTabWithOutcome(
     ...(args.promptKeptByCaller ? { promptKeptByCaller: true as const } : {})
   })
   if ('awaited' in route) {
-    return launchOnceHostAnswered(route, args, (next) => launchAgentInNewTabWithOutcome(next))
+    return launchOnceHostAnswered(
+      route,
+      args,
+      (next) => launchAgentInNewTabWithOutcome(next, notifyFailure),
+      notifyFailure && !args.presentsRefusal ? notify : undefined
+    )
   }
   const { plan } = route
   if (plan?.route === 'structured-native-chat') {
@@ -109,16 +127,19 @@ export function launchAgentInNewTabWithOutcome(
       ...(args.onStructuredHostDeclined ? { onHostDeclined: args.onStructuredHostDeclined } : {}),
       // The host's "no" opens this same launch as a terminal, with the caller's arguments.
       openTerminal: (terminalPlan, terminalActivate) =>
-        launchAgentInNewTabWithOutcome({
-          ...args,
-          beforeSurfaceOpen: undefined,
-          // A terminal opened behind the visible chat leaves its refusal to that chat's notice.
-          ...(terminalActivate === false
-            ? { prompt: undefined, activate: false, presentsRefusal: true as const }
-            : {}),
-          requestId: undefined,
-          agentSessionLaunchPlan: terminalPlan
-        })
+        launchAgentInNewTabWithOutcome(
+          {
+            ...args,
+            beforeSurfaceOpen: undefined,
+            // A terminal opened behind the visible chat leaves its refusal to that chat's notice.
+            ...(terminalActivate === false
+              ? { prompt: undefined, activate: false, presentsRefusal: true as const }
+              : {}),
+            requestId: undefined,
+            agentSessionLaunchPlan: terminalPlan
+          },
+          notifyFailure
+        )
     })
     if (!structured) {
       args.focusIntent?.cancel()
@@ -127,18 +148,11 @@ export function launchAgentInNewTabWithOutcome(
     return structured
   }
 
-  // One owner presents a preparation refusal: a visible surface given its text, else this toast.
-  const refuse = (recovery: string, notify: () => void): AgentTabLaunchOutcome => {
-    args.focusIntent?.cancel()
-    if (!args.presentsRefusal) {
-      notify()
-    }
-    return {
-      refused: { delivered: false, failureNotified: true },
-      ...(args.presentsRefusal ? { recovery } : {})
-    }
-  }
-  const executionContext = resolveAgentLaunchExecutionContext(store, { worktreeId, launchPlatform })
+  const executionContext = resolveAgentLaunchExecutionContext(store, {
+    worktreeId,
+    launchPlatform,
+    workspaceExecutionHostId: args.workspaceExecutionHostId
+  })
   if ('unavailable' in executionContext) {
     // A host still connecting is a wait, not a failure: decline like a disabled control, without a
     // message; the caller keeps its prompt and treats the outcome as handled.
@@ -147,13 +161,18 @@ export function launchAgentInNewTabWithOutcome(
       return { refused: { delivered: false, failureNotified: true } }
     }
     const recovery = agentLaunchRecoveryMessage(executionContext.unavailable.recovery)
-    return refuse(recovery, () => notifyAgentLaunchFailure(agent, recovery))
+    return refuseAgentTabLaunch(
+      args,
+      recovery,
+      () => notifyAgentLaunchFailure(agent, recovery),
+      notifyFailure
+    )
   }
   const { resolvedLaunchPlatform, isRemote, queuedShell } = executionContext
   const terminalShell = queuedShell ?? (resolvedLaunchPlatform === 'win32' ? 'powershell' : 'posix')
   const argsProblem = invalidTerminalArgsMessage(agent, agentArgs, terminalShell)
   if (argsProblem) {
-    return refuse(argsProblem, () => toast.error(argsProblem))
+    return refuseAgentTabLaunch(args, argsProblem, () => toast.error(argsProblem), notifyFailure)
   }
   const buildStartup = (
     agentLaunchChoices = readAgentLaunchPreferencesForWorktree(store, worktreeId).agentLaunchChoices
@@ -183,6 +202,7 @@ export function launchAgentInNewTabWithOutcome(
       agent,
       worktreeId,
       environmentId: runtimeEnvironmentId,
+      workspaceExecutionHostId: args.workspaceExecutionHostId,
       groupId,
       cwd: initialCwd,
       buildStartup,
@@ -208,7 +228,7 @@ export function launchAgentInNewTabWithOutcome(
   const { startupPlan, pasteDraftAfterLaunch, submitPastedPrompt } = buildStartup()
   let promptDeliveryResult: Promise<{ delivered: boolean; failureNotified: boolean }> | undefined
   if (!startupPlan) {
-    return refuse(agentLaunchCheckSettingsMessage(), () => notifyAgentLaunchFailure(agent))
+    return refuseAgentTabLaunch(args, agentLaunchCheckSettingsMessage(), notify, notifyFailure)
   }
 
   if (beforeSurfaceOpen?.({ kind: 'local-terminal' }) === false) {

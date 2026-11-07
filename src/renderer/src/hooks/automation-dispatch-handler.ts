@@ -231,6 +231,9 @@ export async function handleAutomationDispatchRequest({
         terminalPaneKey: result.paneKey,
         terminalPtyId: result.ptyId,
         precheckResult: resolved.context.precheckResult,
+        ...(resolved.context.setupSkippedReason
+          ? { setupSkippedReason: resolved.context.setupSkippedReason }
+          : {}),
         error: null
       })
       await completion.settlePendingAfterDispatch()

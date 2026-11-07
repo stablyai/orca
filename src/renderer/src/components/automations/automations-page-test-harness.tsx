@@ -168,7 +168,8 @@ vi.mock('@/runtime/runtime-hooks-client', () => ({
 }))
 
 vi.mock('@/lib/ensure-hooks-confirmed', () => ({
-  ensureHooksConfirmed: vi.fn(async () => 'inherit')
+  ensureHooksConfirmed: vi.fn(async () => 'inherit'),
+  ensureHooksApproved: vi.fn(async () => ({ decision: 'run' }))
 }))
 
 vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
