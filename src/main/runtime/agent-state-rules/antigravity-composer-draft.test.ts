@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { finalReplayFrame } from '../agent-transcript-replay-test-harness'
-import { evaluateAgentStateRules } from './agent-state-rules-engine'
+import { evaluateAgentStateRules } from '../../../shared/agent-state-rules/agent-state-rules-engine'
 
 const verdict = (lines: readonly string[]) =>
   evaluateAgentStateRules('antigravity', { readScreenLines: () => lines })?.state

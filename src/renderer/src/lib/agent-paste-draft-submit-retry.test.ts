@@ -27,6 +27,10 @@ const testState = vi.hoisted(() => ({
   subscribeToRuntimeTerminalData: vi.fn()
 }))
 
+// These cases drive the legacy adapter: a paired host older than the generated-input transaction.
+vi.mock('@/runtime/generated-terminal-input-client', () => ({
+  sendGeneratedTerminalInput: async () => null
+}))
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => testState.appState,
@@ -50,12 +54,30 @@ vi.mock('../../../shared/remote-runtime/remote-runtime-pty-id', async (importOri
   isRemoteRuntimePtyId: testState.isRemoteRuntimePtyId
 }))
 vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
-  sendRuntimePtyInputVerified: testState.sendRuntimePtyInputVerified
+  // Like the real writer: told of its handoff synchronously, just before the bytes go.
+  sendRuntimePtyInputVerified: (...args: unknown[]) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: sendRuntimePtyInputVerified's fourth argument is its optional options.
+    ;(args[3] as { beforeSend?: () => void } | undefined)?.beforeSend?.()
+    return testState.sendRuntimePtyInputVerified(...args)
+  }
 }))
 
 vi.mock('@/runtime/runtime-terminal-stream', () => ({
   subscribeToRuntimeTerminalData: testState.subscribeToRuntimeTerminalData
 }))
+
+vi.mock('@/components/terminal-pane/snapshots/pty-buffer-serializer', () => ({
+  readPtyInputScreen: async () => ({ lines: ['❯ '], alternateScreen: false }),
+  readPtyBracketedPasteMode: () => false
+}))
+// The notice a producer reports; this window's runtime is absent here, so it shows directly.
+vi.mock('./agent-session/launch/prompt/launch-agent-paste-timeout-notice', () => {
+  const showGeneratedInputNotice = vi.fn()
+  return {
+    showGeneratedInputNotice,
+    noticeGeneratedInputFailure: (args: unknown) => showGeneratedInputNotice(args)
+  }
+})
 
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
 const CODEX_COMPOSER_PROMPT_RENDER = '\x1b[1m›\x1b[0m Ask Codex to do anything'
@@ -91,6 +113,10 @@ describe('post-paste submit retry Enter', () => {
     testState.sendRuntimePtyInputVerified.mockReset()
     testState.sendRuntimePtyInputVerified.mockResolvedValue(true)
     testState.inspectRuntimeTerminalProcess.mockReset()
+    testState.inspectRuntimeTerminalProcess.mockResolvedValue({
+      foregroundProcess: 'node',
+      hasChildProcesses: true
+    })
     testState.subscribeToRuntimeTerminalData.mockReset()
   })
 
@@ -162,7 +188,7 @@ async function signalCodexComposerReady(): Promise<void> {
   await flushMicrotasks()
 }
 
-async function flushMicrotasks(iterations = 2): Promise<void> {
+async function flushMicrotasks(iterations = 30): Promise<void> {
   for (let index = 0; index < iterations; index += 1) {
     await Promise.resolve()
   }

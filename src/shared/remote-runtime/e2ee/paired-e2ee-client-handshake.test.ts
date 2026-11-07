@@ -131,14 +131,33 @@ describe('paired E2EE client handshake: legacy framing', () => {
     })
     await expect(handshake.sealAuth(token)).rejects.toThrow('too large')
   })
+
+  it('runs a guarded frame’s final admission after sealing, returning nothing it refused', () => {
+    const handshake = legacyHandshake()
+    const refusal = new Error('ended')
+    expect(() =>
+      handshake.channel.sealText('refused', () => {
+        throw refusal
+      })
+    ).toThrow(refusal)
+    fixedNonce(6)
+    const admitted = vi.fn()
+    const guarded = handshake.channel.sealText('exact', admitted)
+    expect(admitted).toHaveBeenCalledOnce()
+    expect(guarded).toBe(handshake.channel.sealText('exact'))
+  })
 })
 
 describe('paired E2EE client handshake: v2 framing', () => {
-  function v2Handshake() {
+  function v2Handshake(primitives: Partial<typeof NODE_PAIRED_E2EE_PRIMITIVES> = {}) {
     const fixture = createMobileE2EEV2Fixture()
     const handshake = createPairedE2EEClientHandshake({
       // Why: the normative vector fixes the ECDH output, not a real key pair.
-      primitives: { ...NODE_PAIRED_E2EE_PRIMITIVES, deriveSharedKey: () => fixture.sharedSecret },
+      primitives: {
+        ...NODE_PAIRED_E2EE_PRIMITIVES,
+        deriveSharedKey: () => fixture.sharedSecret,
+        ...primitives
+      },
       hostPublicKeyB64: fixture.ready.desktopPublicKeyB64,
       framing: 'v2',
       transport: 'relay',
@@ -219,6 +238,64 @@ describe('paired E2EE client handshake: v2 framing', () => {
     expect(handshake.channel.openText(first)).toBe('one')
     expect(handshake.channel.openText(first)).toBeNull()
     expect(handshake.channel.openText(seal('two', 1n))).toBe('two')
+  })
+
+  // The host accepts only the next counter, so a frame that never left must not spend one.
+  function hostOpens(frame: Uint8Array, payloadKind: 'text' | 'binary', expectedCounter: bigint) {
+    const plaintext = openMobileE2EEV2Frame({
+      frame,
+      key: Buffer.from(MOBILE_E2EE_V2_VECTOR.mobileToDesktopKeyHex, 'hex'),
+      sessionId: Buffer.from(MOBILE_E2EE_V2_VECTOR.sessionIdHex, 'hex'),
+      direction: 'mobile-to-desktop',
+      payloadKind,
+      expectedCounter
+    })
+    return plaintext && Buffer.from(plaintext).toString()
+  }
+
+  it('spends no counter on a frame its admission refused or whose encoding failed', () => {
+    let encodingFails = false
+    const { fixture, handshake } = v2Handshake({
+      encodeBase64: (bytes) => {
+        if (encodingFails) {
+          throw new Error('encoding failed')
+        }
+        return NODE_PAIRED_E2EE_PRIMITIVES.encodeBase64(bytes)
+      }
+    })
+    handshake.acceptReadyText(JSON.stringify(fixture.ready))
+    const refusal = new Error('ended')
+    const admit = vi.fn(() => {
+      throw refusal
+    })
+    expect(() => handshake.channel.sealText('refused', admit)).toThrow(refusal)
+    expect(admit).toHaveBeenCalledOnce()
+    encodingFails = true
+    expect(() => handshake.channel.sealText('unencoded', () => {})).toThrow('encoding failed')
+    encodingFails = false
+
+    const admitted = vi.fn()
+    const guarded = handshake.channel.sealText('guarded', admitted)
+    expect(admitted).toHaveBeenCalledOnce()
+    expect(hostOpens(Buffer.from(guarded, 'base64'), 'text', 0n)).toBe('guarded')
+    const plain = handshake.channel.sealText('plain')
+    expect(hostOpens(Buffer.from(plain, 'base64'), 'text', 1n)).toBe('plain')
+    const binary = handshake.channel.sealBinary(new TextEncoder().encode('bytes'))
+    expect(hostOpens(binary, 'binary', 2n)).toBe('bytes')
+  })
+
+  it('refuses a frame built inside another frame’s construction without spending either', () => {
+    const { fixture, handshake } = v2Handshake()
+    handshake.acceptReadyText(JSON.stringify(fixture.ready))
+    let inner: unknown = null
+    expect(() =>
+      handshake.channel.sealText('outer', () => {
+        inner = handshake.channel.sealBinary(new Uint8Array([1]))
+      })
+    ).toThrow('E2EE v2 frame construction re-entered')
+    expect(inner).toBeNull()
+    const next = handshake.channel.sealText('next')
+    expect(hostOpens(Buffer.from(next, 'base64'), 'text', 0n)).toBe('next')
   })
 })
 

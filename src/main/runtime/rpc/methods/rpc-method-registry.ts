@@ -9,6 +9,7 @@ import { REPO_METHODS } from './projects/repo'
 import { WORKTREE_METHODS } from './workspaces/worktree'
 import { REFERENCE_METHODS } from './reference/reference'
 import { TERMINAL_METHODS } from './terminal/terminal'
+import { GENERATED_INPUT_METHODS } from './terminal/generated-input'
 import { TERMINAL_ORPHAN_METHODS } from './terminal/terminal-orphan'
 import { BROWSER_CORE_METHODS } from './browser/browser-core'
 import { BROWSER_IDENTITY_METHODS } from './browser/browser-identity-rpc'
@@ -102,6 +103,7 @@ export const ALL_RPC_METHODS = [
   ...AGENT_LAUNCH_METHODS,
   ...CONNECTOR_METHODS,
   ...TERMINAL_METHODS,
+  ...GENERATED_INPUT_METHODS,
   ...TERMINAL_ORPHAN_METHODS,
   ...BROWSER_CORE_METHODS,
   ...BROWSER_IDENTITY_METHODS,

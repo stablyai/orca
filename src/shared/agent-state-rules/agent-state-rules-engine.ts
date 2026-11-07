@@ -1,5 +1,5 @@
-import type { AgentStatus } from '../../../shared/agent-status/title/agent-title-core'
-import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentStatus } from '../agent-status/title/agent-title-core'
+import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import { compileScreenCondition } from './agent-state-rule-matchers'
 import { compiledFromActiveAgentStateRules } from './active-agent-state-rules'
 import {
@@ -84,8 +84,9 @@ function compileCondition(
 }
 
 export function compileAgentRules(file: AgentStateRulesFile): CompiledRule[] {
-  return file.rules
-    .toSorted((left, right) => right.priority - left.priority)
+  // A copied sort the phone's JavaScript engine supports (it lacks toSorted).
+  return [...file.rules]
+    .sort((left, right) => right.priority - left.priority)
     .map((rule) => ({
       verdict: { ruleId: rule.id, ...rule.answer },
       region: rule.when.region,

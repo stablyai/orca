@@ -1,4 +1,5 @@
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import { showGeneratedInputNotice } from '../lib/agent-session/launch/prompt/launch-agent-paste-timeout-notice'
 import {
   deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab
@@ -85,16 +86,31 @@ export async function deliverCreatedWebRuntimeAgentSessionPrompt(
     return false
   }
   if (args.promptAfterReady !== undefined) {
-    if (!created.hostTabId) {
-      return false
+    // One report of an undelivered prompt, with its exact text, unless the host keeps it.
+    let certainty: 'not-sent' | 'unconfirmed' = created.hostTabId ? 'unconfirmed' : 'not-sent'
+    let retained = false
+    const delivered = created.hostTabId
+      ? await deliverLaunchPromptToAgentTab({
+          tabId: toWebTerminalSurfaceTabId(created.hostTabId),
+          content: args.promptAfterReady,
+          agent: args.agent,
+          submit: args.submitPrompt === true,
+          forcePaste: args.forcePromptPaste === true,
+          onTimeout: (refused = 'not-sent', kept = false) => {
+            certainty = refused
+            retained = kept
+          }
+        }).catch(() => false)
+      : false
+    if (!delivered && !retained) {
+      showGeneratedInputNotice({
+        agent: args.agent,
+        text: args.promptAfterReady,
+        certainty,
+        submitted: args.submitPrompt === true
+      })
     }
-    return await deliverLaunchPromptToAgentTab({
-      tabId: toWebTerminalSurfaceTabId(created.hostTabId),
-      content: args.promptAfterReady,
-      agent: args.agent,
-      submit: args.submitPrompt === true,
-      forcePaste: args.forcePromptPaste === true
-    }).catch(() => false)
+    return delivered
   }
   if (args.launchDraft !== undefined && created.hostTabId) {
     seedNativeChatLaunchDraftForAgentTab({

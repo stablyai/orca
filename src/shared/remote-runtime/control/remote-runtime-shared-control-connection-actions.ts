@@ -20,12 +20,14 @@ export function sendSharedControlRequest(args: {
   sharedControlSend.sendSharedControlRequest({
     pendingRequests: args.pendingRequests,
     requestId: args.requestId,
-    send: (serialized) =>
+    send: (serialized, beforeSend, onSendAttempt) =>
       sharedControlProtocol.sendSharedControlEncryptedSerialized({
         state: args.state,
         ws: args.ws,
         handshake: args.handshake,
-        serialized
+        serialized,
+        beforeSend,
+        onSendAttempt
       }),
     reject: (id, error) =>
       sharedControlState.rejectSharedControlPendingRequest(args.pendingRequests, id, error)

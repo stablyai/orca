@@ -1,30 +1,26 @@
+import { waitForGeneratedAgentInput } from '../../../../shared/generated-agent-input-readiness'
+import {
+  admitsGeneratedInput,
+  type GeneratedInputScreen
+} from '../../../../shared/generated-agent-input-admission'
 import type { TerminalReadinessCreation } from '../../terminal/wait/launched-agent-composer-readiness'
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
-import { isExpectedAgentProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
 import {
-  createDraftPasteReadyScanner,
-  resolvePasteReadySignal
-} from '../../../../shared/draft-paste-ready-scanner'
+  isExpectedAgentProcess,
+  isAgentForegroundWrapperProcess
+} from '../../../../shared/agent-status/process/agent-process-recognition'
+import { resolvePasteReadySignal } from '../../../../shared/draft-paste-ready-scanner'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../../shared/draft-paste-ready-timeout'
 import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
-import type {
-  WorktreeStartupDraftPaste,
-  WorktreeStartupFollowup
-} from './runtime-worktree-agent-startup'
+import type { GeneratedInputOutcome } from '../../../../shared/generated-terminal-input'
+import type { WorktreeStartupFollowup } from './runtime-worktree-agent-startup'
 import {
   deliverTerminalAgentLaunchPrompt,
   type TerminalPromptRuntime
 } from '../../rpc/methods/agent-launch/agent-launch-terminal-prompt'
-
-const BRACKETED_PASTE_BEGIN = '\x1b[200~'
-const BRACKETED_PASTE_END = '\x1b[201~'
-const BRACKETED_PASTE_QUIET_MS = 1500
-// Shells enable bracketed paste at their prompt; only markers after the last command handoff (?2004l) belong to the agent.
-const DECRST_BRACKETED_PASTE = '\x1b[?2004l'
-// Bound the final foreground read so a past-due wait cannot hang on SSH's 30s channel timeout.
-const DEADLINE_SETTLE_CHECK_MS = 2_000
+import { deliverGeneratedTerminalInput } from '../../terminal/input/generated-terminal-input-delivery'
 
 export type WorktreeStartupReadinessHost = {
   getPtyId: (handle: string) => string | null
@@ -32,29 +28,29 @@ export type WorktreeStartupReadinessHost = {
   hasChildProcesses?: (ptyId: string) => Promise<boolean>
   subscribeToData: (ptyId: string, listener: (data: string) => void) => () => void
   readRecentOutput: (ptyId: string) => string | undefined
+  /** The host's current screen: null while its model catches up, 'unknown' when it has none. */
+  readInputScreen?: (ptyId: string) => Promise<GeneratedInputScreen>
+  /** The host model's current bracketed-paste mode, for an observer that missed its byte. */
+  bracketedPaste?: (ptyId: string) => boolean
+  generation?: (ptyId: string) => number
   write: (ptyId: string, data: string, inputKind: TerminalInputKind) => void
-}
-
-export function pasteWorktreeStartupDraftWhenReady(
-  host: WorktreeStartupReadinessHost,
-  handle: string,
-  draft: WorktreeStartupDraftPaste
-): void {
-  void waitForWorktreeStartupDraft(host, handle, draft.agent)
-    .then((ptyId) => {
-      if (!ptyId) {
-        console.warn('[worktree-create] agent did not become ready for draft paste')
-        return
-      }
-      host.write(ptyId, `${BRACKETED_PASTE_BEGIN}${draft.content}${BRACKETED_PASTE_END}`, 'launch')
-    })
-    .catch((error) => console.warn('[worktree-create] failed to paste startup draft:', error))
 }
 
 export type StartupFollowupPromptOptions = {
   signal?: AbortSignal
   agentLaunch?: boolean
   terminalCreation?: TerminalReadinessCreation
+  /** The prompt was not delivered: proven not written, or possibly written in part. */
+  onRefused?: (certainty: 'not-sent' | 'unconfirmed') => void
+}
+
+export function generatedInputRefusalCertainty(
+  outcome: GeneratedInputOutcome
+): 'not-sent' | 'unconfirmed' | null {
+  if (outcome === 'delivered' || outcome === 'staged') {
+    return null
+  }
+  return outcome === 'unconfirmed' ? 'unconfirmed' : 'not-sent'
 }
 
 /** A post-start agent's first prompt: its process in front can still drop typed text (#10336). */
@@ -75,12 +71,26 @@ export async function deliverStartupFollowupPrompt(
         console.warn(
           '[agent-startup] agent did not come to the front; its prompt was not delivered'
         )
+        options.onRefused?.('not-sent')
         return false
       }
       // WSL and SSH-to-Windows cannot prove a lone shell either: keep their typed follow-up; agent.launch refused there.
       if (!options.agentLaunch && runtime.launchedAgentHostProvesShellAlone?.(ptyId) !== true) {
-        host.write(ptyId, `${prompt}\r`, 'launch')
-        return true
+        // Typed bytes still go through this PTY's one admitted transaction, Enter rechecked.
+        const outcome = await deliverGeneratedTerminalInput(runtime, handle, {
+          text: prompt,
+          submit: true,
+          agent,
+          framing: 'typed',
+          // Main typed this once the agent was in front; only a seen dialog or shell refuses.
+          intent: 'running',
+          ...(signal ? { signal } : {})
+        })
+        const refused = generatedInputRefusalCertainty(outcome)
+        if (refused) {
+          options.onRefused?.(refused)
+        }
+        return refused === null
       }
     }
     return await deliverTerminalAgentLaunchPrompt({
@@ -91,9 +101,11 @@ export async function deliverStartupFollowupPrompt(
       terminalCreation: options.terminalCreation,
       text: prompt,
       unprovableHost: 'write-if-shell-provable',
+      ...(options.onRefused ? { onRefused: options.onRefused } : {}),
       ...(signal ? { signal } : {})
     })
   } catch (error) {
+    options.onRefused?.('not-sent')
     console.warn('[agent-startup] failed to deliver the startup prompt:', error)
     return false
   }
@@ -156,147 +168,41 @@ export function waitForWorktreeStartupDraft(
     return Promise.resolve(null)
   }
   const signal = resolvePasteReadySignal(TUI_AGENT_CONFIG[agent], options.submit === true)
-  const isShellInFront = options.isShellInFront
-  return new Promise((resolve) => {
-    let settled = false
-    let scanner = createDraftPasteReadyScanner(signal)
-    let quietTimer: NodeJS.Timeout | null = null
-    // After submit grace expires, each subsequent matching read is a signal and must pass settle checks.
-    let graceTimer: NodeJS.Timeout | null = null
-    let graceElapsed = false
-    let hardTimer: NodeJS.Timeout | null = null
-    let deadlineCheckTimer: NodeJS.Timeout | null = null
-    let unsubscribe: (() => void) | null = null
-    // A check begun before a shell handoff cannot settle after it.
-    let handoffs = 0
-    let handoffCarry = ''
-    let checking = false
-    /** The hand-off count at a signal that fired while a check ran. */
-    let recheckAt: number | null = null
-    const onAbort = (): void => finish(null)
-    const finish = (value: string | null): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      if (quietTimer) {
-        clearTimeout(quietTimer)
-      }
-      clearGrace()
-      if (hardTimer) {
-        clearTimeout(hardTimer)
-      }
-      if (deadlineCheckTimer) {
-        clearTimeout(deadlineCheckTimer)
-      }
-      unsubscribe?.()
-      options.signal?.removeEventListener('abort', onAbort)
-      resolve(value)
-    }
-    const clearGrace = (): void => {
-      if (graceTimer) {
-        clearTimeout(graceTimer)
-        graceTimer = null
-      }
-      graceElapsed = false
-    }
-    /** The screen holds nothing the input must not answer and no shell is proven in front. */
-    const passesSettleChecks = async (): Promise<boolean> =>
-      (!options.accept || (await options.accept(ptyId))) &&
-      !(isShellInFront && (await isShellInFront(ptyId)))
-    /** Settles a fired signal once its screen is clear and no shell is proven in front. */
-    const settleSignal = async (signalHandoffs: number): Promise<void> => {
-      checking = true
-      try {
-        if (!(await passesSettleChecks())) {
-          return
+  const generation = host.generation?.(ptyId)
+  return waitForGeneratedAgentInput(
+    {
+      subscribe: (observe) => host.subscribeToData(ptyId, observe),
+      replay: () => host.readRecentOutput(ptyId),
+      ...(host.bracketedPaste ? { bracketedPaste: () => host.bracketedPaste!(ptyId) } : {}),
+      // Launch readiness observes with the same rule every generated write is admitted by.
+      accept: async (quiet) => {
+        if (options.accept && !(await options.accept(ptyId))) {
+          return false
         }
-        if (signalHandoffs === handoffs) {
-          finish(ptyId)
+        if (options.isShellInFront && (await options.isShellInFront(ptyId))) {
+          return false
         }
-      } catch {
-        // Failed settle checks wait for the next agent signal.
-      } finally {
-        checking = false
-        const next = recheckAt
-        recheckAt = null
-        if (next === handoffs && !settled) {
-          void settleSignal(next)
-        }
+        const foreground = await host.getForegroundProcess(ptyId)
+        const hasChildProcesses =
+          foreground !== null && isAgentForegroundWrapperProcess(foreground)
+            ? ((await host.hasChildProcesses?.(ptyId)) ?? false)
+            : false
+        const screen = host.readInputScreen
+          ? await host.readInputScreen(ptyId)
+          : { lines: [], alternateScreen: false }
+        return (
+          host.getPtyId(handle) === ptyId &&
+          host.generation?.(ptyId) === generation &&
+          admitsGeneratedInput({
+            agent,
+            screen,
+            quiet,
+            process: foreground ? { known: true, foreground, hasChildProcesses } : { known: false }
+          })
+        )
       }
-    }
-    const onSignal = (): void => {
-      if (checking) {
-        recheckAt = handoffs
-        return
-      }
-      void settleSignal(handoffs)
-    }
-    /** The part of a chunk after the shell's last hand-off in it, resetting the scan at one. */
-    const sinceShellHandoff = (chunk: string): string => {
-      const window = handoffCarry + chunk
-      // Retain one byte less than the sequence to rejoin split handoffs without double counting.
-      handoffCarry = window.slice(-(DECRST_BRACKETED_PASTE.length - 1))
-      const handoff = window.lastIndexOf(DECRST_BRACKETED_PASTE)
-      if (handoff === -1) {
-        return chunk
-      }
-      handoffs += 1
-      scanner = createDraftPasteReadyScanner(signal)
-      if (quietTimer) {
-        clearTimeout(quietTimer)
-        quietTimer = null
-      }
-      clearGrace()
-      return window.slice(handoff + DECRST_BRACKETED_PASTE.length)
-    }
-    const observe = (chunk: string): void => {
-      if (settled) {
-        return
-      }
-      const data = isShellInFront ? sinceShellHandoff(chunk) : chunk
-      const result = scanner.observe(data)
-      if (result.ready) {
-        return onSignal()
-      }
-      if (result.readyAfterMs === null) {
-        clearGrace()
-      } else if (typeof result.readyAfterMs === 'number') {
-        if (graceElapsed) {
-          onSignal()
-        } else if (!graceTimer) {
-          graceTimer = setTimeout(() => {
-            graceTimer = null
-            graceElapsed = true
-            onSignal()
-          }, result.readyAfterMs)
-        }
-      }
-      if (result.armQuietTimer && !options.requireComposerMarker) {
-        if (quietTimer) {
-          clearTimeout(quietTimer)
-        }
-        quietTimer = setTimeout(onSignal, BRACKETED_PASTE_QUIET_MS)
-      }
-    }
-    options.signal?.addEventListener('abort', onAbort)
-    unsubscribe = host.subscribeToData(ptyId, observe)
-    // A deadline during submit grace gets one final settle check.
-    const onDeadline = (): void => {
-      if (!graceTimer && !graceElapsed) {
-        return finish(null)
-      }
-      const deadlineHandoffs = handoffs
-      deadlineCheckTimer = setTimeout(() => finish(null), DEADLINE_SETTLE_CHECK_MS)
-      void passesSettleChecks().then(
-        (passes) => finish(passes && deadlineHandoffs === handoffs ? ptyId : null),
-        () => finish(null)
-      )
-    }
-    hardTimer = setTimeout(onDeadline, options.timeoutMs ?? resolveDraftPasteReadyTimeoutMs(agent))
-    const replay = host.readRecentOutput(ptyId)
-    if (replay) {
-      observe(replay)
-    }
-  })
+    },
+    signal,
+    { ...options, timeoutMs: options.timeoutMs ?? resolveDraftPasteReadyTimeoutMs(agent) }
+  ).then((ready) => (ready ? ptyId : null))
 }

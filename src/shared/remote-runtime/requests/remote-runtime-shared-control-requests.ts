@@ -4,6 +4,7 @@ import { serializeRemoteRuntimeRpcRequest } from '../remote-runtime-memory-limit
 import {
   prepareRemoteRuntimeRequest,
   releaseRemoteRuntimePreparedRequest,
+  takeRemoteRuntimePreparedRequestAtHandoff,
   type RemoteRuntimePreparedRequest
 } from './remote-runtime-prepared-request-admission'
 import { remoteRuntimeTimeoutError } from './remote-runtime-request-frames'
@@ -16,6 +17,10 @@ import { serializePreparedRemoteRuntimeRequest } from './remote-runtime-request-
 import { toRemoteRuntimeClientError } from '../control/remote-runtime-shared-control-protocol'
 import { rejectSharedControlPendingRequest } from '../control/remote-runtime-shared-control-state'
 import type { SharedControlPendingRequest } from '../control/remote-runtime-shared-control-types'
+import {
+  remoteRuntimeRequestDispatchCutoff,
+  remoteRuntimeRequestDispatchObserver
+} from './remote-runtime-request-dispatch-observation'
 
 const MAX_RETAINED_METHOD_CHARS = 256
 
@@ -26,9 +31,10 @@ export function requestSharedControl<TResult>(args: {
   params: unknown
   timeoutMs: number
   envelope?: RuntimeOrchestrationEnvelope
+  /** Waits for the socket; `signal` withdraws this request's wait once the request is settled. */
+  ensureReady: (signal: AbortSignal) => Promise<void>
   /** Picks the params actually sent, e.g. the prefix of a batch that fits the host's request bound. */
   prepareRequest?: RuntimeRequestPreparation
-  ensureReady: () => Promise<void>
   send: (requestId: string) => void
   retireRequestId?: (requestId: string) => void
   signal?: AbortSignal
@@ -42,23 +48,24 @@ export function requestSharedControl<TResult>(args: {
     return Promise.reject(abortSignalReason(args.signal))
   }
   const requestId = randomUUID()
+  // The caller's preparation picks what is sent, at preparation and again at the handoff.
+  const serialize = (params: unknown): string =>
+    serializePreparedRemoteRuntimeRequest(
+      (selectedParams, envelope) =>
+        serializeRemoteRuntimeRpcRequest({
+          requestId,
+          deviceToken: args.deviceToken,
+          method: args.method,
+          params: selectedParams,
+          envelope
+        }),
+      params,
+      args.envelope,
+      args.prepareRequest
+    )
   let preparedRequest: RemoteRuntimePreparedRequest
   try {
-    preparedRequest = prepareRemoteRuntimeRequest(pendingRequests, () =>
-      serializePreparedRemoteRuntimeRequest(
-        (params, envelope) =>
-          serializeRemoteRuntimeRpcRequest({
-            requestId,
-            deviceToken: args.deviceToken,
-            method: args.method,
-            params,
-            envelope
-          }),
-        args.params,
-        args.envelope,
-        args.prepareRequest
-      )
-    )
+    preparedRequest = prepareRemoteRuntimeRequest(pendingRequests, () => serialize(args.params))
   } catch (error) {
     return Promise.reject(error)
   }
@@ -85,20 +92,27 @@ export function requestSharedControl<TResult>(args: {
       reject,
       timeout,
       preparedRequest,
-      refreshTimeoutOnKeepalive: args.refreshTimeoutOnKeepalive ?? false
+      refreshTimeoutOnKeepalive: args.refreshTimeoutOnKeepalive ?? false,
+      onFrameSent: remoteRuntimeRequestDispatchObserver(args.params),
+      assertInTime: remoteRuntimeRequestDispatchCutoff(args.params)
     })
     args.signal?.addEventListener('abort', onAbort, { once: true })
-    const removeAbortListener = (): void => args.signal?.removeEventListener('abort', onAbort)
+    // However it settles, its wait for readiness goes too: nothing keeps its continuation or params.
+    const readiness = new AbortController()
+    const detachWaits = (): void => {
+      args.signal?.removeEventListener('abort', onAbort)
+      readiness.abort()
+    }
     const pending = pendingRequests.get(requestId)
     if (pending) {
       const resolvePending = pending.resolve
       const rejectPending = pending.reject
       pending.resolve = (response) => {
-        removeAbortListener()
+        detachWaits()
         resolvePending(response)
       }
       pending.reject = (error) => {
-        removeAbortListener()
+        detachWaits()
         rejectPending(error)
       }
     }
@@ -106,10 +120,18 @@ export function requestSharedControl<TResult>(args: {
       onAbort()
       return
     }
-    void ensureReady().then(
+    void ensureReady(readiness.signal).then(
       () => {
         try {
           args.beforeSend?.()
+          // Its bytes are chosen now, after readiness: the early ones cannot carry its budget.
+          const ready = pendingRequests.get(requestId)
+          const request = ready
+            ? takeRemoteRuntimePreparedRequestAtHandoff(ready, args.params, serialize)
+            : null
+          if (ready?.preparedRequest && request !== null) {
+            ready.preparedRequest.serializedRequest = request
+          }
         } catch (error) {
           rejectSharedControlPendingRequest(
             pendingRequests,

@@ -1,4 +1,5 @@
 import { TERMINAL_LIMIT_RUNTIME_CAPABILITY } from './terminal-limit-policy'
+import { GENERATED_INPUT_RUNTIME_CAPABILITY } from '../../generated-terminal-input'
 import { TERMINAL_ORDERED_INPUT_CAPABILITY } from '../input/terminal-ordered-input'
 import { PROGRAM_STATUS_RUNTIME_CAPABILITY } from '../../program-status/protocol'
 import { TERMINAL_QUICK_COMMAND_RUNTIME_CAPABILITIES } from '../quick-commands/terminal-quick-command-capabilities'
@@ -31,7 +32,27 @@ export const TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY =
 // Why: an older host strips terminal.split's `retrySplit` and splits again, duplicating the command.
 export const TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY = 'terminal.split-retry.v1' as const
 
+/** Bounded notice stream and pages for refused detached sends (terminal.generatedInputNotices.*). */
+export const GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY =
+  'terminal.generated-input-recovery.v1' as const
+
+/** The whole recovery contract: operation identity on sends, terminal.generatedInputNotices.register,
+ *  window-private notices and dismissal that outlasts a late completion. Without it a host is an
+ *  old recovery host: the initiating runtime keeps the notice. */
+export const GENERATED_INPUT_REGISTER_RUNTIME_CAPABILITY =
+  'terminal.generated-input-notices.register.v1' as const
+
+/** This host refuses a generated send whose qualified terminal names another runtime, before
+ *  staging, resolving or writing anything. Only it makes a retained send's recovery receipt the
+ *  runtime that actually runs it. */
+export const GENERATED_INPUT_FENCED_SEND_RUNTIME_CAPABILITY =
+  'terminal.generated-input.fenced-send.v1' as const
+
 export const TERMINAL_RUNTIME_CAPABILITIES = [
+  GENERATED_INPUT_RUNTIME_CAPABILITY,
+  GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY,
+  GENERATED_INPUT_REGISTER_RUNTIME_CAPABILITY,
+  GENERATED_INPUT_FENCED_SEND_RUNTIME_CAPABILITY,
   TERMINAL_ORDERED_INPUT_CAPABILITY,
   TERMINAL_LIMIT_RUNTIME_CAPABILITY,
   'terminal.binary-stream.v1',

@@ -5,16 +5,19 @@ import {
   runtimeEnvironmentSetupFailure
 } from '../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 import { assertCrewSourceCurrent } from './runtime-environment-subscription-setup'
-import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
+import {
+  callRuntimeEnvironmentStatus,
+  type RuntimeEnvironmentCallOptions
+} from './runtime-environment-status-call'
 import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { prepareFencedRuntimeRequest } from './runtime-environment-request-preparation'
 import {
-  requireWslHostWithoutStart,
   resolveManagedRuntimeEnvironment,
   type ManagedRuntimeCallPreparation
 } from './runtime-environment-managed-tunnel'
+import { waitForManagedPreparation } from './runtime-environment-managed-resolution-wait'
 import { recordRuntimeEnvironmentUsage } from '../../../shared/remote-runtime/host-store/runtime-environment-usage-record'
 import type * as Rpc from '../../../shared/runtime-rpc-envelope'
 import {
@@ -28,7 +31,6 @@ import {
   sendRemoteRuntimeConnectionRequestAbortable,
   sendRemoteRuntimeRequestAbortable
 } from './runtime-environment-abortable-requests'
-import { runtimeEnvironmentRevisionFailure } from './runtime-environment-revision-guard'
 import {
   executeSupportRoutedCall,
   shouldRouteCallBySupport,
@@ -48,36 +50,15 @@ export async function callRuntimeEnvironment(
   timeoutMs?: number,
   expectedEnvironmentPairingRevision?: number,
   envelope?: Rpc.RuntimeOrchestrationEnvelope,
-  options?: {
-    prepareRequest?: Rpc.RuntimeRequestPreparation
-    signal?: AbortSignal
-    expectedEnvironmentRuntimeId?: string
-    preparation?: ManagedRuntimeCallPreparation
-  }
+  options?: RuntimeEnvironmentCallOptions
 ): Promise<Rpc.RuntimeRpcResponse<unknown>> {
   if (method === 'status.get') {
-    let statusOptions = options
-    // Why: the status probe dials on its own, so a no-start caller's WSL host is checked first.
-    if (options?.preparation) {
-      const { preparation, ...rest } = options
-      await requireWslHostWithoutStart(userDataPath, selector, preparation)
-      statusOptions = rest
-    }
-    const environment = resolveEnvironment(userDataPath, selector)
-    const failure = runtimeEnvironmentRevisionFailure(
-      environment,
+    return callRuntimeEnvironmentStatus(
+      userDataPath,
+      selector,
+      timeoutMs,
       expectedEnvironmentPairingRevision,
-      method
-    )
-    return (
-      failure ??
-      getRuntimeEnvironmentStatus(
-        userDataPath,
-        selector,
-        timeoutMs,
-        statusOptions,
-        expectedEnvironmentPairingRevision === undefined
-      )
+      options
     )
   }
   const environment = resolveEnvironment(userDataPath, selector)
@@ -88,15 +69,19 @@ export async function callRuntimeEnvironment(
       environment.id,
       method,
       async () => {
-        const prepared = await prepareFencedRuntimeRequest(
-          userDataPath,
-          environment.id,
-          method,
-          options?.preparation,
-          {
-            pairingRevision: expectedEnvironmentPairingRevision,
-            runtimeId: options?.expectedEnvironmentRuntimeId
-          },
+        const prepared = await waitForManagedPreparation(
+          () =>
+            prepareFencedRuntimeRequest(
+              userDataPath,
+              environment.id,
+              method,
+              options?.preparation,
+              {
+                pairingRevision: expectedEnvironmentPairingRevision,
+                runtimeId: options?.expectedEnvironmentRuntimeId
+              },
+              options?.signal
+            ),
           options?.signal
         )
         if (prepared.failure) {
@@ -200,7 +185,10 @@ export async function subscribeRuntimeEnvironment(
   crewAttempt?.assertCurrent()
   const environment = crewAttempt
     ? resolveEnvironment(userDataPath, selector)
-    : await resolveManagedRuntimeEnvironment(userDataPath, selector, preparation, method, signal)
+    : await waitForManagedPreparation(
+        () => resolveManagedRuntimeEnvironment(userDataPath, selector, preparation, method, signal),
+        signal
+      )
   crewAttempt?.assertCurrent()
   if (crewAttempt) {
     assertCrewSourceCurrent(environment)

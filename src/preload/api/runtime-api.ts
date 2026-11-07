@@ -14,6 +14,7 @@ import type {
   RuntimeTerminalDriverState
 } from '../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeEnvironmentCallResult } from '../../shared/runtime-environment-selected-pairing'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import type { SidebarInputsChangedEvent } from '../../shared/sidebar-list/sidebar-inputs-feed-contract'
 import type {
@@ -123,7 +124,7 @@ export type RuntimeApi = {
       selector: string
       timeoutMs?: number
       observeOnly?: true
-    }) => Promise<RuntimeRpcResponse<RuntimeStatus>>
+    }) => Promise<RuntimeEnvironmentCallResult<RuntimeStatus>>
     onSharedControlDiagnostics?: (
       callback: (event: {
         environmentId: string
@@ -147,7 +148,11 @@ export type RuntimeApi = {
       timeoutMs?: number
       expectedEnvironmentPairingRevision?: number
       expectedEnvironmentRuntimeId?: string
-    }) => Promise<RuntimeRpcResponse<unknown>>
+      /** Local only: the window's accepted generated request a terminal.send carries. */
+      generatedInputOperationId?: string
+      /** Local only: that request's own end on this machine. */
+      generatedInputEnd?: number
+    }) => Promise<RuntimeEnvironmentCallResult>
     subscribeCrewAttempt?: (
       args: CrewSubscriptionAttemptArgs,
       callbacks: CrewSubscriptionAttemptCallbacks
@@ -162,6 +167,10 @@ export type RuntimeApi = {
         timeoutMs?: number
         expectedEnvironmentPairingRevision?: number
         expectedEnvironmentRuntimeId?: string
+        /** Local only: the window's accepted generated request this call carries. */
+        generatedInputOperationId?: string
+        /** Local only: that request's own end on this machine. */
+        generatedInputEnd?: number
       },
       callbacks: {
         onResponse: (response: RuntimeRpcResponse<unknown>) => void

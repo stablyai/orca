@@ -356,7 +356,7 @@ export class HeadlessEmulator {
     this.terminal.dispose()
   }
 
-  private getModes(): TerminalModes {
+  getModes(): TerminalModes {
     return readTerminalModes(this.terminal)
   }
 }

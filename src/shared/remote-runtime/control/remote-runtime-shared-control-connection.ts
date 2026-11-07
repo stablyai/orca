@@ -72,7 +72,7 @@ export class RemoteRuntimeSharedControlConnection {
       params,
       timeoutMs,
       envelope,
-      ensureReady: () => this.ensureReadyWithTimeout(timeoutMs, signal),
+      ensureReady: (readiness) => this.ensureReadyWithTimeout(timeoutMs, readiness),
       send: (requestId) =>
         sharedControlActions.sendSharedControlRequest({
           pendingRequests: this.pendingRequests,

@@ -168,7 +168,7 @@ describe('runtime terminal owner routing', () => {
       await vi.advanceTimersByTimeAsync(0)
 
       await expect(accepted).resolves.toBe(true)
-      expect(localWriteAccepted).toHaveBeenCalledWith('local-pty', text, 'driving')
+      expect(localWriteAccepted).toHaveBeenCalledWith('local-pty', text, 'driving', undefined)
       expect(localWrite).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()

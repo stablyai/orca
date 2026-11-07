@@ -6,9 +6,10 @@ const DEVICE_STORE_GRANT = 'native.store.rows'
 
 export const MOBILE_WEB_PAGE_ROUTES = [
   // Home needs navigate/storage for session hops and app pins; shared protocol-wall Update action needs externalLink. Wide ownsHostArea permits sidebar.
+  // Every host route's shared layout shows the host's unsent-prompt notices, whose Copy writes the clipboard.
   {
     pathname: '/h/[hostId]',
-    grants: ['navigate', 'storage', 'externalLink', 'haptics'],
+    grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
     optionalGrants: [DEVICE_STORE_GRANT],
     canOwnHostArea: true,
     canOwnHostAreaAcrossLayouts: true
@@ -16,7 +17,7 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   // History needs navigate for session/resume, storage for shared sidebar width and externalLink for layout protocol wall.
   {
     pathname: '/h/[hostId]/agent-history/[worktreeId]',
-    grants: ['navigate', 'storage', 'externalLink', 'haptics'],
+    grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
     optionalGrants: [DEVICE_STORE_GRANT]
   },
   // Tasks needs navigate/storage plus provider externalLink and comment-review clipboard writes; grants persist from opening route.
@@ -27,19 +28,19 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   },
   {
     pathname: '/h/[hostId]/automations',
-    grants: ['navigate', 'storage', 'externalLink', 'haptics'],
+    grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
     optionalGrants: [DEVICE_STORE_GRANT]
   },
   // Accounts needs navigate/storage/externalLink for Back/shared layout wall; haptics census requires seam grant.
   {
     pathname: '/h/[hostId]/accounts',
-    grants: ['navigate', 'storage', 'externalLink', 'haptics'],
+    grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
     optionalGrants: [DEVICE_STORE_GRANT]
   },
   // Create Workspace overlay needs navigate to close/open session; shared form/layout supply other grants.
   {
     pathname: '/h/[hostId]/new-workspace',
-    grants: ['navigate', 'storage', 'externalLink', 'haptics'],
+    grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
     optionalGrants: [DEVICE_STORE_GRANT]
   },
   // Explorer grants cover preview too so push stays in document under opening session’s grants; uncovered target hands off and reopens under its own.

@@ -157,6 +157,10 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
       hasChildProcesses: (ptyId) =>
         this.ptyController!.hasChildProcesses?.(ptyId) ?? Promise.resolve(false),
       subscribeToData: (ptyId, listener) => this.subscribeToTerminalData(ptyId, listener),
+      generation: (ptyId) => this.getPtyLifecycleGeneration(ptyId),
+      readInputScreen: (ptyId) => this.readGeneratedInputScreen(ptyId),
+      bracketedPaste: (ptyId) =>
+        this.headlessTerminals.get(ptyId)?.emulator.getModes().bracketedPaste === true,
       readRecentOutput: (ptyId) => this.recentPtyOutputById.get(ptyId)?.read(),
       write: (ptyId, data, inputKind) => this.ptyController?.write(ptyId, data, inputKind)
     }

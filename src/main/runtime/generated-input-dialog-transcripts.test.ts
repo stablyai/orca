@@ -1,0 +1,106 @@
+import { afterEach, expect, it, vi } from 'vitest'
+import { findAgentInputDialogIndex } from '../../shared/agent-input-dialog'
+import { finalReplayFrame } from './agent-transcript-replay-test-harness'
+import { TUI_AGENT_CONFIG } from '../../shared/agent-launch/catalog/tui-agent-config'
+import { waitForWorktreeStartupDraft } from './workspaces/startup/runtime-worktree-startup-readiness'
+
+afterEach(() => vi.useRealTimers())
+
+it.each([
+  'antigravity-busy-mid-turn',
+  'antigravity-busy-turn-ended',
+  'antigravity-1-2-14-busy-thinking',
+  'antigravity-1-2-14-busy-streaming',
+  'cline-3-0-66-busy-streaming'
+])('preserves generated followups on the recorded busy footer: %s', async (name) => {
+  const { ruledScreenLines } = await finalReplayFrame(name, 120, 40)
+  expect(
+    findAgentInputDialogIndex(ruledScreenLines.join('\n')),
+    ruledScreenLines.join('\n')
+  ).toBeNull()
+  vi.useFakeTimers()
+  const agent = name.startsWith('cline') ? 'cline' : 'antigravity'
+  const result = waitForWorktreeStartupDraft(
+    {
+      getPtyId: () => 'busy-agent',
+      getForegroundProcess: async () => TUI_AGENT_CONFIG[agent].expectedProcess,
+      subscribeToData: () => () => {},
+      readRecentOutput: () => undefined,
+      readInputScreen: async () => ({ lines: ruledScreenLines, alternateScreen: false }),
+      // The host's emulator holds the live mode; no replayed 2004 byte is needed.
+      bracketedPaste: () => true,
+      write: vi.fn()
+    },
+    'handle',
+    agent,
+    { submit: true }
+  )
+  await vi.advanceTimersByTimeAsync(1650)
+  await expect(result).resolves.toBe('busy-agent')
+})
+
+it('delivers to a recorded default-quiet composer on late attach with no 2004 replay', async () => {
+  const { ruledScreenLines } = await finalReplayFrame('cline-3-0-66-ready', 120, 40)
+  vi.useFakeTimers()
+  const result = waitForWorktreeStartupDraft(
+    {
+      getPtyId: () => 'late-cline',
+      getForegroundProcess: async () => 'cline',
+      subscribeToData: () => () => {},
+      readRecentOutput: () => undefined,
+      readInputScreen: async () => ({ lines: ruledScreenLines, alternateScreen: false }),
+      // The host's emulator holds the live mode; no replayed 2004 byte is needed.
+      bracketedPaste: () => true,
+      write: vi.fn()
+    },
+    'handle',
+    'cline',
+    { submit: true }
+  )
+  await vi.advanceTimersByTimeAsync(1650)
+  await expect(result).resolves.toBe('late-cline')
+})
+
+it('recognizes recorded trust ownership and the later answered composer', async () => {
+  const dialog = await finalReplayFrame('claude-dialog-trust-workspace', 120, 40)
+  const answered = await finalReplayFrame('claude-dialog-trust-workspace-answered', 120, 40)
+  expect(findAgentInputDialogIndex(dialog.ruledScreenLines.join('\n'))).not.toBeNull()
+  expect(findAgentInputDialogIndex(answered.ruledScreenLines.join('\n'))).toBeNull()
+})
+
+it('recognizes bypass selection rows without treating the selected option as a composer', () => {
+  expect(
+    findAgentInputDialogIndex(
+      'Bypass Permissions\n❯ 1. No, exit\n  2. Yes, I accept\nEnter to confirm · Esc to cancel'
+    )
+  ).not.toBeNull()
+  expect(findAgentInputDialogIndex('quoted Esc to cancel\n❯\u00a0')).toBeNull()
+})
+
+it('does not confuse a cancellable input dialog with a running-turn footer', () => {
+  expect(findAgentInputDialogIndex('Enter your API key\n❯ \nEsc to cancel')).not.toBeNull()
+})
+
+it.each([
+  ['qoder-trust-dialog', 100, 32],
+  ['cline-3-0-66-permission', 120, 40],
+  ['antigravity-dialog-model-picker', 120, 40],
+  ['antigravity-1-2-14-trust-dialog', 120, 40]
+])(
+  'refuses the recorded dialog %s, whose menu or key choices own input',
+  async (name, cols, rows) => {
+    const { ruledScreenLines } = await finalReplayFrame(name, cols, rows)
+    expect(findAgentInputDialogIndex(ruledScreenLines.join('\n'))).not.toBeNull()
+  }
+)
+
+it('treats the text it just typed as composer content, however it reads', () => {
+  const typed = 'Document this UI:\nPress enter to confirm'
+  const screen = '❯ Document this UI:\n  Press enter to confirm\n? for shortcuts'
+  expect(findAgentInputDialogIndex(screen, typed)).toBeNull()
+  expect(
+    findAgentInputDialogIndex('❯ Explain why users should allow press enter to continue')
+  ).toBeNull()
+  // The same rows are a dialog when this operation did not type them.
+  expect(findAgentInputDialogIndex(screen)).not.toBeNull()
+})

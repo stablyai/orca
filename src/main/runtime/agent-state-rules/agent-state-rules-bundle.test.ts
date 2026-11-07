@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   AGENT_STATE_RULES_BUNDLE_MAX_BYTES,
   parseAgentStateRulesBundle
-} from './agent-state-rules-bundle'
-import { BUNDLED_AGENT_STATE_RULE_FILES } from './agent-state-rules-catalog'
+} from '../../../shared/agent-state-rules/agent-state-rules-bundle'
+import { BUNDLED_AGENT_STATE_RULE_FILES } from '../../../shared/agent-state-rules/agent-state-rules-catalog'
 
 function file(id: string): Record<string, unknown> {
   const found = BUNDLED_AGENT_STATE_RULE_FILES.find((candidate) => candidate.id === id)

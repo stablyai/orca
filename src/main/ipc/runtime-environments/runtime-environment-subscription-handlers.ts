@@ -15,6 +15,9 @@ import { abortWhenRendererGone } from '../renderer-lifetime-abort'
 import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime/remote-runtime-client'
 import { getRuntimeEnvironmentTransportGeneration } from './runtime-environment-transport-generation'
 import { subscribeRuntimeEnvironment } from './runtime-environment-transport-routing'
+import { registerSubscriptionBinaryHandler } from './runtime-environment-binary-payload'
+import { acceptRemoteGeneratedInput } from './runtime-environment-generated-input-notice-hosts'
+import { generatedInputDispatch } from './runtime-environment-generated-input-dispatch'
 
 export type {
   RetainedRemoteRuntimeSubscription,
@@ -29,7 +32,8 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(
     remoteRuntimeSubscriptions,
     pendingSubscriptions,
     recordLayoutFrame,
-    createAssociationObserver
+    createAssociationObserver,
+    acceptGeneratedInput
   } = args
   ipcMain.handle(
     'runtimeEnvironments:subscribe',
@@ -44,6 +48,9 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(
       let failure: SubscriptionSetup.RuntimeEnvironmentSetupFailure | undefined
       let setupSignal: AbortSignal | undefined
       let operation: 'environment-resolution' | 'subscription' = 'environment-resolution'
+      // Before any refusal or wait: a cancellable generated request is held by this window's runtime.
+      const { observer: observeGeneratedInput, pairingRevision: pinned } =
+        acceptRemoteGeneratedInput(acceptGeneratedInput, event, args) ?? {}
       try {
         assertCrewSubscriptionInputs(
           args,
@@ -52,10 +59,9 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(
           remoteRuntimeSubscriptions,
           pendingSubscriptions
         )
-        const { environment, pairingRevision } = resolveSubscriptionEnvironment(
-          getUserDataPath(),
-          args
-        )
+        // The pairing this window's request was first resolved to holds for every call of it.
+        const resolved = resolveSubscriptionEnvironment(getUserDataPath(), args, pinned)
+        const { environment, pairingRevision } = resolved
         const transportGeneration = getRuntimeEnvironmentTransportGeneration(environment.id)
         const transportIsCurrent = (): boolean =>
           getRuntimeEnvironmentTransportGeneration(environment.id) === transportGeneration
@@ -93,7 +99,10 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(
         let rendererGone = sender.isDestroyed()
         let subscription: RemoteRuntimeSubscription | null = null
         const rendererLifetime = abortWhenRendererGone(sender)
+        // A generated request's own end closes it if its frame has not left by then.
+        const dispatch = generatedInputDispatch(args.method, args.params, args.generatedInputEnd)
         const disposeRendererLifetime = (): void => {
+          dispatch?.dispose()
           associationObserver?.dispose()
           rendererLifetime.dispose()
           rendererLifetime.signal.removeEventListener('abort', closeSubscription)
@@ -135,6 +144,7 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(
         pendingSubscriptions.set(subscriptionId, pending)
         // A reload replaces the owning document without destroying its WebContents.
         rendererLifetime.signal.addEventListener('abort', closeSubscription, { once: true })
+        dispatch?.signal.addEventListener('abort', closeSubscription, { once: true })
         try {
           operation = 'subscription'
           subscription = await subscribeRuntimeEnvironment(
@@ -145,6 +155,10 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(
             args.timeoutMs,
             {
               onEvent: (payload) => {
+                // The host's answer settles the window's record even when the window went away.
+                if (payload.type === 'response') {
+                  observeGeneratedInput?.answered(payload.response)
+                }
                 if (
                   rendererGone ||
                   (pendingSubscriptions.get(subscriptionId) !== pending &&
@@ -177,6 +191,7 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(
                 }
               },
               onClose: () => {
+                observeGeneratedInput?.answered(null)
                 transportClosed = true
                 if (rendererGone) {
                   return
@@ -201,6 +216,7 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(
               : undefined
           )
         } catch (error) {
+          observeGeneratedInput?.answered(null)
           if (pendingSubscriptions.get(subscriptionId) === pending) {
             pendingSubscriptions.delete(subscriptionId)
           }
@@ -252,6 +268,7 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(
           ? { subscriptionId, ok: true as const }
           : { subscriptionId, requestId: subscription.requestId }
       } catch (error) {
+        observeGeneratedInput?.answered(null)
         if (!crewResult) {
           throw error
         }
@@ -276,33 +293,5 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(
       return { unsubscribed: true }
     }
   )
-  ipcMain.on(
-    'runtimeEnvironments:subscriptionBinary',
-    (event, args: { subscriptionId?: unknown; bytes?: unknown }) => {
-      if (typeof args.subscriptionId !== 'string') {
-        return
-      }
-      const bytes = toBinaryPayload(args.bytes)
-      if (!bytes) {
-        return
-      }
-      const subscription = remoteRuntimeSubscriptions.get(args.subscriptionId)
-      if (subscription?.ownerWebContentsId === event.sender.id) {
-        subscription.sendBinary(bytes)
-      }
-    }
-  )
-}
-
-function toBinaryPayload(value: unknown): Uint8Array<ArrayBufferLike> | null {
-  if (value instanceof Uint8Array) {
-    return value
-  }
-  if (value instanceof ArrayBuffer) {
-    return new Uint8Array(value)
-  }
-  if (ArrayBuffer.isView(value)) {
-    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
-  }
-  return null
+  registerSubscriptionBinaryHandler(remoteRuntimeSubscriptions)
 }

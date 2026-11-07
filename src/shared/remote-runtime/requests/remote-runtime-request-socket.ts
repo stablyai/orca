@@ -25,7 +25,7 @@ import {
 import {
   prepareRemoteRuntimeRequest,
   releaseRemoteRuntimePreparedRequest,
-  takeRemoteRuntimePreparedRequest
+  takeRemoteRuntimePreparedRequestAtHandoff
 } from './remote-runtime-prepared-request-admission'
 import { RemoteRuntimeRequestResponseRouter } from './remote-runtime-request-response-router'
 import { serializePreparedRemoteRuntimeRequest } from './remote-runtime-request-preparation'
@@ -37,6 +37,11 @@ import type {
 } from '../../runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../runtime-session-contracts'
 import { isSafeTimerDelayMs, MAX_TIMER_DELAY_MS } from '../../timer-delay'
+
+import {
+  remoteRuntimeRequestDispatchCutoff,
+  remoteRuntimeRequestDispatchObserver
+} from './remote-runtime-request-dispatch-observation'
 
 export async function sendRemoteRuntimeRequestOnSocket<TResult>(
   connection: PairedRuntimeConnection,
@@ -60,6 +65,8 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
     )
   }
   const requestId = randomUUID()
+  const observeSent = remoteRuntimeRequestDispatchObserver(params)
+  const assertInTime = remoteRuntimeRequestDispatchCutoff(params)
   const statusRequestId = validateStatus ? randomUUID() : null
   const serializedStatusRequest = statusRequestId
     ? serializeRemoteRuntimePayload({
@@ -165,21 +172,37 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
 
       function sendRequestedRpc(status?: unknown): void {
         try {
+          let sentParams = params
           if (requestSelection) {
-            const selectedParams = requestSelection.paramsForStatus(status)
+            sentParams = requestSelection.paramsForStatus(status)
             releaseRemoteRuntimePreparedRequest(pendingRequest)
-            pendingRequest.preparedRequest = prepare(selectedParams)
+            pendingRequest.preparedRequest = prepare(sentParams)
           }
-          const request = takeRemoteRuntimePreparedRequest(pendingRequest)
+          // Its bytes are chosen now, after authentication: the early ones cannot carry its budget.
+          const request = takeRemoteRuntimePreparedRequestAtHandoff(
+            pendingRequest,
+            sentParams,
+            (selectedParams) =>
+              serializePreparedRemoteRuntimeRequest(
+                serialize,
+                selectedParams,
+                envelope,
+                prepareRequest
+              )
+          )
           if (request === null) {
             throw new RemoteRuntimeClientError(
               'remote_runtime_unavailable',
               'Remote Orca runtime request was released before it could be sent.'
             )
           }
-          const frame = handshake.channel.sealText(request)
+          const frame = handshake.channel.sealText(request, assertInTime)
           requestSelection?.onDispatch?.()
-          ws?.send(frame)
+          if (ws) {
+            // Handed to the socket from here: an error past this point leaves it possibly sent.
+            observeSent?.()
+            ws.send(frame)
+          }
         } catch (error) {
           finishError(error instanceof Error ? error : new Error(String(error)))
         }

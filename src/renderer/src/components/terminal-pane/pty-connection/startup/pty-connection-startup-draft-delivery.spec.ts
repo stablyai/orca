@@ -1,4 +1,7 @@
-import { bindPtyConnectionTestMocks } from '../test-fixtures/pty-connection-mocks.spec'
+import {
+  bindPtyConnectionTestMocks,
+  ptyConnectionTestMocks
+} from '../test-fixtures/pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { beginAgentStartupDeliveryAttempt } from '@/lib/agent-startup-delayed-delivery'
@@ -95,6 +98,13 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
         }
       })
       vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('codex')
+      // The host waits for the agent; at 20 s it reports the draft refused before any write.
+      const refused = Promise.withResolvers<'not-sent'>()
+      ptyConnectionTestMocks.sendGeneratedTerminalInput.mockReset()
+      ptyConnectionTestMocks.sendGeneratedTerminalInput.mockImplementation(async () =>
+        waitMs === 20_000 ? refused.promise : 'staged'
+      )
+      ptyConnectionTestMocks.toastMessage.mockClear()
 
       const binding = connectPanePty(
         ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks))
@@ -114,18 +124,45 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
           mock: { calls: [(data: string) => void][] }
         }
       ).mock.calls[0]?.[0]('USER_DRAFT')
-      ;(mockStoreState.recordTerminalInput as ReturnType<typeof vi.fn>).mockClear()
+      const hosted = ptyConnectionTestMocks.sendGeneratedTerminalInput
+      capturedDataCallback.current?.('\x1b[?2004hWaiting for Codex...')
       await vi.advanceTimersByTimeAsync(waitMs)
-      expect(transport.sendInputAccepted).not.toHaveBeenCalled()
-      capturedDataCallback.current?.('\x1b[?2004h\x1b[2K› ')
+      // The spawned pane's tab now names its PTY, as the store records after spawn.
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-codex' }] }
+      }
+      refused.resolve('not-sent')
       await flushAsyncTicks()
 
+      // Exactly one handoff of the exact draft; the user's own keys still went live first.
+      expect(hosted).toHaveBeenCalledOnce()
+      expect(hosted).toHaveBeenCalledWith(
+        'pty-codex',
+        expect.objectContaining({
+          text: 'https://github.com/stablyai/orca/issues/42',
+          submit: false,
+          agent: 'codex',
+          inputKind: 'launch',
+          intent: 'startup'
+        }),
+        // No takeover cancellation: a startup draft is not held keys. The host keeps a failure notice.
+        undefined,
+        expect.any(Function),
+        expect.any(Function),
+        // The accepted request's own end, from the producer's call.
+        { end: expect.any(Number) }
+      )
+      expect(transport.sendInputAccepted).not.toHaveBeenCalled()
+      expect(transport.sendInput.mock.calls.map(([data]) => data)).toEqual(['\x1b[I', 'USER_DRAFT'])
+      expect(window.api.pty.writeAccepted).not.toHaveBeenCalled()
+
       if (waitMs === 20_000) {
-        expect(transport.sendInputAccepted).not.toHaveBeenCalled()
-        expect(transport.sendInput.mock.calls.map(([data]) => data)).toEqual([
-          '\x1b[I',
-          'USER_DRAFT'
-        ])
+        // Refused: the exact draft is offered back once, and nothing else is written. This window's
+        // runtime is absent here, so the notice is shown directly once keeping it fails.
+        await vi.advanceTimersByTimeAsync(0)
+        await flushAsyncTicks(20)
+        expect(ptyConnectionTestMocks.toastMessage).toHaveBeenCalledOnce()
         binding.dispose()
         expect(
           claimStartupDelivery({
@@ -136,18 +173,7 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
         ).toBe(false)
         return
       }
-
-      expect(transport.sendInputAccepted).toHaveBeenCalledWith(
-        '\x1b[200~https://github.com/stablyai/orca/issues/42\x1b[201~',
-        'launch'
-      )
-      expect(transport.sendInput.mock.calls.map(([data]) => data)).toEqual([
-        '\x1b[I',
-        'USER_DRAFT',
-        '\x1b[200~https://github.com/stablyai/orca/issues/42\x1b[201~'
-      ])
-      expect(window.api.pty.writeAccepted).not.toHaveBeenCalled()
-      expect(mockStoreState.recordTerminalInput).toHaveBeenCalledOnce()
+      // A staged draft counts as input, so hibernation keeps the composed draft.
       expect(mockStoreState.recordTerminalInput).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1))
     })
 
@@ -191,6 +217,8 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
         }
       })
 
+      ptyConnectionTestMocks.sendGeneratedTerminalInput.mockReset()
+      ptyConnectionTestMocks.sendGeneratedTerminalInput.mockResolvedValue('staged')
       connectPanePty(
         ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks2))
       )
@@ -212,17 +240,23 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
       }
       await flushAsyncTicks()
       expect(capturedDataCallback.current).not.toBeNull()
+      const hosted = ptyConnectionTestMocks.sendGeneratedTerminalInput
       capturedDataCallback.current?.('\x1b[?2004hWaiting for setup to finish...')
-      expect(transport.sendInputAccepted).not.toHaveBeenCalled()
-
       capturedDataCallback.current?.('\x1b[?2004h\x1b[2K› ')
       await flushAsyncTicks()
 
-      expect(transport.sendInputAccepted).toHaveBeenCalledTimes(1)
-      expect(transport.sendInputAccepted).toHaveBeenCalledWith(
-        '\x1b[200~Linked Linear issue: STA-905\x1b[201~',
-        'launch'
+      // The pane still owns the draft through setup and hands it to the host exactly once.
+      expect(hosted).toHaveBeenCalledOnce()
+      expect(hosted).toHaveBeenCalledWith(
+        'pty-codex',
+        expect.objectContaining({ text: 'Linked Linear issue: STA-905', submit: false }),
+        undefined,
+        expect.any(Function),
+        expect.any(Function),
+        // The accepted request's own end, from the producer's call.
+        { end: expect.any(Number) }
       )
+      expect(transport.sendInputAccepted).not.toHaveBeenCalled()
     })
 
     it('releases startup draft delivery when disposed before deferred connect starts', async () => {

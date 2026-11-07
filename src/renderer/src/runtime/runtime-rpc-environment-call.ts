@@ -15,6 +15,8 @@ async function callRuntimeEnvironmentOnce(args: {
   signal?: AbortSignal
   expectedEnvironmentPairingRevision?: number
   expectedEnvironmentRuntimeId?: string
+  generatedInputOperationId?: string
+  generatedInputEnd?: number
 }): Promise<unknown> {
   if (args.signal) {
     return callAbortableRuntimeEnvironment(
@@ -24,7 +26,9 @@ async function callRuntimeEnvironmentOnce(args: {
       args.timeoutMs,
       args.signal,
       args.expectedEnvironmentPairingRevision,
-      args.expectedEnvironmentRuntimeId
+      args.expectedEnvironmentRuntimeId,
+      args.generatedInputOperationId,
+      args.generatedInputEnd
     )
   }
   return window.api.runtimeEnvironments.call({
@@ -33,6 +37,10 @@ async function callRuntimeEnvironmentOnce(args: {
     params: args.params,
     timeoutMs: args.timeoutMs,
     expectedEnvironmentPairingRevision: args.expectedEnvironmentPairingRevision,
-    expectedEnvironmentRuntimeId: args.expectedEnvironmentRuntimeId
+    expectedEnvironmentRuntimeId: args.expectedEnvironmentRuntimeId,
+    ...(args.generatedInputOperationId
+      ? { generatedInputOperationId: args.generatedInputOperationId }
+      : {}),
+    ...(args.generatedInputEnd === undefined ? {} : { generatedInputEnd: args.generatedInputEnd })
   })
 }

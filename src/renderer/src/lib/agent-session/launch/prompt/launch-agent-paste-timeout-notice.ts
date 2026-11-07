@@ -1,60 +1,79 @@
-import { toast } from 'sonner'
-import { useAppStore } from '@/store/index'
-import { track } from '@/lib/telemetry'
-import { tuiAgentToAgentKind } from '../../../../../../shared/agent-kind'
-import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { keepGeneratedInputNotice } from '../../../generated-paste-notice'
+import { showGeneratedInputNotice } from '../../../generated-input-notice-toast'
+import { projectFallbackGeneratedInputNotice } from '@/runtime/generated-input-notice-toast-projection'
 
-/** Report otherwise-silent lost launch text; wasNotified lets deferred callers suppress duplicate toasts. */
+export { showGeneratedInputNotice }
+
+/** A producer's failure notice: kept by this window's runtime, which survives a reload and shows
+ *  it through the notice feed. When that runtime's answer does not come in time, the same
+ *  operation is shown directly under its own id, so a late answer refines that one notice and its
+ *  Dismiss discards the operation itself. A slow answer is never a second operation. */
+export function noticeGeneratedInputFailure(
+  args: Parameters<typeof showGeneratedInputNotice>[0] & { operationId?: string }
+): void {
+  const operationId = args.operationId ?? createBrowserUuid()
+  void keepGeneratedInputNotice({ ...args, operationId }).then((kept) => {
+    if (!kept) {
+      projectFallbackGeneratedInputNotice({
+        operationId,
+        text: args.text,
+        agent: args.agent,
+        certainty: args.certainty,
+        submitted: args.submitted
+      })
+    }
+  })
+}
+
 export function createPasteReadinessTimeoutNotice(args: {
   worktreeId: string
   tabId: string
   agent: TuiAgent
   submitted: boolean
-  /** Text the user typed that only lives here; the toast offers it back instead of losing it. */
-  droppedText?: string
-}): { onTimeout: () => void; wasNotified: () => boolean } {
+  content: string
+  operationId?: string
+}): {
+  onTimeout: (
+    certainty?: 'not-sent' | 'unconfirmed',
+    retained?: boolean,
+    operationId?: string
+  ) => void
+  wasNotified: () => boolean
+} {
   let notified = false
   return {
     wasNotified: () => notified,
-    onTimeout: () => {
-      const state = useAppStore.getState()
-      const currentTab = (state.tabsByWorktree[args.worktreeId] ?? []).find(
-        (tab) => tab.id === args.tabId
-      )
-      if (currentTab?.ptyId === null) {
-        // Why: PTY never spawned = genuine launch failure; stay silent so the caller emits the sole notice.
+    // `retained`: the host keeps this notice in its runtime session, so it is not shown twice.
+    // `operationId`: the request this failure ends, when it was accepted after this notice was made.
+    onTimeout: (certainty = 'not-sent', retained = false, operationId = args.operationId) => {
+      if (notified) {
         return
       }
-      if (!currentTab || (state.activeWorktreeId !== args.worktreeId && !args.droppedText)) {
-        // Why: user cancelled (closed tab / switched worktrees); mark notified so the deferred caller suppresses its toast too.
-        notified = true
+      const tab = (useAppStore.getState().tabsByWorktree[args.worktreeId] ?? []).find(
+        (candidate) => candidate.id === args.tabId
+      )
+      if (tab?.ptyId === null) {
+        // The pane never spawned: a launch failure, which its caller reports as the sole notice.
         return
       }
-      toast.message(
-        translate(
-          'auto.lib.launch.agent.in.new.tab.a5a1f7033f',
-          "Your {{value0}} wasn't sent — paste it once the agent is ready.",
-          { value0: args.submitted ? 'prompt' : 'notes' }
-        ),
-        args.droppedText ? copyDroppedTextAction(args.droppedText) : undefined
-      )
       notified = true
+      if (!retained) {
+        noticeGeneratedInputFailure({
+          agent: args.agent,
+          text: args.content,
+          certainty,
+          submitted: args.submitted,
+          operationId
+        })
+      }
       track('agent_error', {
         error_class: 'paste_readiness_timeout',
         agent_kind: tuiAgentToAgentKind(args.agent)
       })
-    }
-  }
-}
-
-function copyDroppedTextAction(text: string): { action: { label: string; onClick: () => void } } {
-  return {
-    action: {
-      label: translate('menu.copy', 'Copy'),
-      onClick: () => {
-        void window.api.ui.writeClipboardText(text)
-      }
     }
   }
 }

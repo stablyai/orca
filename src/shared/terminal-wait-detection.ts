@@ -1,23 +1,23 @@
 import { isQoderComposerReady } from './qoder-terminal-readiness'
-import { memoizeTitleClassification } from '../../../../shared/agent-status/title/terminal-title-classification-memo'
-import { detectAgentStatusFromTitle } from '../../../../shared/agent-status/title/agent-title-status'
-import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
-import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/runtime-terminal-contracts'
-import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import { memoizeTitleClassification } from './agent-status/title/terminal-title-classification-memo'
+import { detectAgentStatusFromTitle } from './agent-status/title/agent-title-status'
+import type { AgentStatus } from './agent-status/title/agent-title-core'
+import type { RuntimeTerminalWaitBlockedReason } from './runtime-terminal-contracts'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import {
   evaluateAgentStateRules,
   hasQuietReadyRules,
   holdsReadyTextToQuiet,
   type AgentStateVerdict
-} from '../../agent-state-rules/agent-state-rules-engine'
-import { findPromptAnchorIndexes } from '../../agent-state-rules/agent-state-text-anchors'
-import { showsIdleTitleAnchor } from '../../agent-state-rules/agent-state-title-anchors'
-import { compiledFromActiveAgentStateRules } from '../../agent-state-rules/active-agent-state-rules'
+} from './agent-state-rules/agent-state-rules-engine'
+import { findPromptAnchorIndexes } from './agent-state-rules/agent-state-text-anchors'
+import { showsIdleTitleAnchor } from './agent-state-rules/agent-state-title-anchors'
+import { compiledFromActiveAgentStateRules } from './agent-state-rules/active-agent-state-rules'
 import {
   findTerminalWaitBlockedSignal,
   isSettledAfter,
   isUnblockedAfter
-} from '../../agent-state-rules/blocked-text-layer'
+} from './agent-state-rules/blocked-text-layer'
 
 // Include Orca ready titles and agents that state rest in words.
 const EXPLICIT_IDLE_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i

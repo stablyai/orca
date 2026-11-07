@@ -268,6 +268,14 @@ import {
   FolderWorkspaceUpdate
 } from './folder-workspace-params'
 import {
+  DismissGeneratedInputNoticeParams,
+  GeneratedInputNoticesPageParams,
+  GeneratedInputNoticesSubscribeParams,
+  GeneratedInputNoticesUnsubscribeParams,
+  RegisterGeneratedInputNoticeParams,
+  TerminalSendGeneratedInputParams
+} from './generated-input-params'
+import {
   GitBranchCompare,
   GitBranchDiff,
   GitBulkPaths,
@@ -1528,8 +1536,13 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.closeTab': TerminalHandle,
   'terminal.create': TerminalCreateParams,
   'terminal.createAgentSession': CreateAgentSessionParams,
+  'terminal.dismissGeneratedInputNotice': DismissGeneratedInputNoticeParams,
   'terminal.ensureAgentSession': EnsureAgentSessionParams,
   'terminal.focus': TerminalFocus,
+  'terminal.generatedInputNotices.page': GeneratedInputNoticesPageParams,
+  'terminal.generatedInputNotices.register': RegisterGeneratedInputNoticeParams,
+  'terminal.generatedInputNotices.subscribe': GeneratedInputNoticesSubscribeParams,
+  'terminal.generatedInputNotices.unsubscribe': GeneratedInputNoticesUnsubscribeParams,
   'terminal.getAutoRestoreFit': TerminalGetAutoRestoreFitParams,
   'terminal.getDisplayMode': TerminalHandle,
   'terminal.inspectProcess': TerminalInspectProcess,
@@ -1549,6 +1562,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.restoreFit': TerminalHandle,
   'terminal.reveal': TerminalReveal,
   'terminal.send': TerminalSend,
+  'terminal.sendGeneratedInput': TerminalSendGeneratedInputParams,
   'terminal.setAutoRestoreFit': TerminalSetAutoRestoreFit,
   'terminal.setDisplayMode': TerminalSetDisplayMode,
   'terminal.setPaneTitle': TerminalSetPaneTitle,

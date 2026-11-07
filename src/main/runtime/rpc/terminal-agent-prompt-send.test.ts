@@ -6,6 +6,7 @@ import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { createAgentPromptSubmissionRuntime } from '../terminal/input/agent-prompt-submission-runtime-test-fixture'
 import { TERMINAL_METHODS } from './methods/terminal/terminal'
+import type { OrcaRuntimeService } from '../orca-runtime'
 
 vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
   const facade = getWorktreeListingMocks()
@@ -27,6 +28,15 @@ const { getWorktreeListingMocks } = vi.hoisted(() => {
 
 function makeRequest(params: unknown): RpcRequest {
   return { id: 'request', authToken: 'token', method: 'terminal.send', params }
+}
+
+function makeRuntime(overrides: Partial<OrcaRuntimeService>): OrcaRuntimeService {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these cases call only the runtime members they override.
+  return {
+    getRuntimeId: () => 'test-runtime',
+    isTerminalRunningAgent: vi.fn().mockResolvedValue(false),
+    ...overrides
+  } as OrcaRuntimeService
 }
 
 describe('terminal agent prompt send RPC', () => {
@@ -64,4 +74,42 @@ describe('terminal agent prompt send RPC', () => {
       expect(writes).toEqual([])
     }
   )
+
+  // Admission is not settlement support: an agent the runtime knows still goes through the host's
+  // one operation, with a receipt of accepted input instead of turn observation.
+  it('takes a prompt to an agent without turn settlement through the host operation', async () => {
+    const sendTerminal = vi.fn()
+    const sendTerminalAgentPrompt = vi.fn().mockResolvedValue({
+      handle: 'terminal-1',
+      accepted: true,
+      bytesWritten: 4
+    })
+    const runtime = makeRuntime({
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
+      isTerminalRunningSettledPromptAgent: vi.fn().mockResolvedValue(false),
+      isTerminalRunningAgent: vi.fn().mockResolvedValue(true),
+      sendTerminal,
+      sendTerminalAgentPrompt
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest({
+        terminal: 'terminal-1',
+        text: 'yes',
+        enter: true,
+        agentPrompt: true,
+        client: { id: 'orca-cli', type: 'desktop' }
+      })
+    )
+
+    expect(response.ok).toBe(true)
+    expect(sendTerminal).not.toHaveBeenCalled()
+    expect(sendTerminalAgentPrompt).toHaveBeenCalledWith(
+      'terminal-1',
+      'yes',
+      expect.objectContaining({ inputKind: 'driving', acceptQueued: true, observationTimeoutMs: 0 })
+    )
+  })
 })

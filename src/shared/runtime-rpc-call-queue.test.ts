@@ -1,3 +1,4 @@
+import { getEventListeners } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import { RuntimeRpcCallQueueOverloadError, RuntimeRpcCallQueuePool } from './runtime-rpc-call-queue'
 
@@ -243,5 +244,102 @@ describe('runtime RPC call queue', () => {
     await expect(
       queue.enqueue('runtime-b', 'status.get', async () => 'recovered', 10)
     ).resolves.toBe('recovered')
+  })
+
+  // P19: with every slot held, N waiting calls are retired by their own signals. Each is unlinked
+  // directly: constant lane work per call, no search or shift of the calls behind it, and its
+  // payload, links and abort listener are dropped before any slot frees.
+  it.each([10, 100])('retires %i waiting calls directly while every slot stays held', async (n) => {
+    const queue = new RuntimeRpcCallQueuePool()
+    let release: () => void = () => {}
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const active = Array.from({ length: 8 }, () =>
+      queue.enqueue('runtime-a', 'terminal.send', () => held)
+    )
+    type Entry = { run: unknown; waiting: boolean; previous: unknown; next: unknown }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: RuntimeRpcCallQueue keeps its lanes as `queues`, each with a `foreground` lane.
+    const lanes = (queue as unknown as { queues: Map<string, { foreground: object }> }).queues
+    const state = lanes.get('runtime-a')!
+    const entries: Entry[] = []
+    let laneWrites = 0
+    state.foreground = new Proxy(state.foreground, {
+      set(target, key, value, receiver) {
+        laneWrites += 1
+        if (key === 'tail' && value && !entries.includes(value)) {
+          entries.push(value)
+        }
+        return Reflect.set(target, key, value, receiver)
+      }
+    })
+    const controllers = Array.from({ length: n }, () => new AbortController())
+    const run = vi.fn(async () => 'payload')
+    const retired = controllers.map((controller) =>
+      queue
+        .enqueue('runtime-a', 'terminal.send', run, 1, controller.signal)
+        .catch((error: Error) => error.name)
+    )
+    const successor = queue.enqueue('runtime-a', 'terminal.send', async () => 'successor')
+    expect(entries).toHaveLength(n + 1)
+
+    laneWrites = 0
+    for (const controller of controllers) {
+      controller.abort()
+    }
+    expect(laneWrites).toBeLessThanOrEqual(3 * n)
+    for (const [index, entry] of entries.slice(0, n).entries()) {
+      expect(entry).toMatchObject({ run: null, waiting: false, previous: null, next: null })
+      expect(getEventListeners(controllers[index].signal, 'abort')).toHaveLength(0)
+    }
+    await expect(Promise.all(retired)).resolves.toEqual(Array(n).fill('AbortError'))
+    expect(run).not.toHaveBeenCalled()
+    expect(state.foreground).toMatchObject({ size: 1 })
+
+    release()
+    await Promise.all(active)
+    await expect(successor).resolves.toBe('successor')
+    expect(lanes.size).toBe(0)
+  })
+
+  it('keeps FIFO order after retiring a waiting prefix, middle and tail, and ignores a cancel once started', async () => {
+    const queue = new RuntimeRpcCallQueuePool(1, 1)
+    let release: () => void = () => {}
+    const startedFirst = new AbortController()
+    const first = queue.enqueue(
+      'runtime-a',
+      'status.get',
+      () =>
+        new Promise<string>((resolve) => {
+          release = () => resolve('first')
+        }),
+      1,
+      startedFirst.signal
+    )
+    const started: number[] = []
+    const controllers = Array.from({ length: 6 }, () => new AbortController())
+    const calls = controllers.map((controller, index) =>
+      queue
+        .enqueue(
+          'runtime-a',
+          'status.get',
+          async () => {
+            started.push(index)
+            return index
+          },
+          1,
+          controller.signal
+        )
+        .catch(() => 'retired')
+    )
+    for (const index of [0, 2, 5]) {
+      controllers[index].abort()
+    }
+    // Already started: its cancellation neither removes nor rejects it.
+    startedFirst.abort()
+    release()
+    await expect(first).resolves.toBe('first')
+    await expect(Promise.all(calls)).resolves.toEqual(['retired', 1, 'retired', 3, 4, 'retired'])
+    expect(started).toEqual([1, 3, 4])
   })
 })

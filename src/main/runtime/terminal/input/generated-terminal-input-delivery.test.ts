@@ -1,0 +1,729 @@
+import { getEventListeners } from 'node:events'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { PluginHookChainOutcome } from '../../../../shared/plugins/workers/plugin-hook-chain'
+import { setPluginHookRunner } from '../../../plugins/hooks/plugin-hook-dispatch'
+import { createAgentPromptSubmissionRuntime } from './agent-prompt-submission-runtime-test-fixture'
+import { deliverGeneratedTerminalInput } from './generated-terminal-input-delivery'
+import type { OrcaRuntimeService } from '../../orca-runtime'
+import { finalReplayFrame, readRuntimeFixture } from '../../agent-transcript-replay-test-harness'
+
+// The terminal's worktree as the catalog lists it; the rest of each module is real.
+vi.mock('../../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktrees: vi
+    .fn()
+    .mockResolvedValue([
+      { path: '/tmp/worktree-a', head: 'abc', branch: 'b', isBare: false, isMainWorktree: false }
+    ])
+}))
+vi.mock('../../../git/worktrees/catalog/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreesStrict: vi
+    .fn()
+    .mockResolvedValue([
+      { path: '/tmp/worktree-a', head: 'abc', branch: 'b', isBare: false, isMainWorktree: false }
+    ])
+}))
+
+const READY = '\x1b[?2004h\x1b[?2031h❯ '
+const DIALOG =
+  '\x1b[2J\x1b[HBypass Permissions\r\n❯ 1. No, exit\r\n  2. Yes, I accept\r\nEnter to confirm · Esc to cancel'
+
+describe('one host transaction for generated input', () => {
+  it('withholds Enter when a dialog takes input after the text was written, and never resends', async () => {
+    const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+      (current, data) => {
+        if (data.includes('exact prompt')) {
+          current.onPtyData('pty-prompt', DIALOG, 0)
+        }
+      },
+      'claude'
+    )
+    runtime.onPtyData('pty-prompt', READY, 0)
+    const outcome = await deliverGeneratedTerminalInput(runtime, handle, {
+      text: 'exact prompt',
+      submit: true,
+      agent: 'claude'
+    })
+    expect(outcome).toBe('unconfirmed')
+    expect(writes.filter((data) => data.includes('exact prompt'))).toHaveLength(1)
+    expect(writes).not.toContain('\r')
+  })
+
+  it('spends queue residency from the same deadline and retires a queued write without a byte', async () => {
+    const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(() => {}, 'claude')
+    runtime.onPtyData('pty-prompt', DIALOG, 0)
+    // The head waits at the dialog; the second expires while queued behind it.
+    const head = deliverGeneratedTerminalInput(runtime, handle, {
+      text: 'first',
+      submit: true,
+      agent: 'claude',
+      timeoutMs: 300
+    })
+    const queued = deliverGeneratedTerminalInput(runtime, handle, {
+      text: 'second',
+      submit: true,
+      agent: 'claude',
+      timeoutMs: 50
+    })
+    // The dialog is answered the moment the head gives up: a budget restarted at the queue head
+    // would now admit the second prompt.
+    void head.then(() => runtime.onPtyData('pty-prompt', `\x1b[2J\x1b[H${READY}`, 0))
+    await expect(head).resolves.toBe('not-sent')
+    await expect(queued).resolves.toBe('not-sent')
+    expect(writes).toEqual([])
+  })
+
+  it('settles a queued operation at its own deadline while the head still holds the queue', async () => {
+    const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(() => {}, 'claude')
+    runtime.onPtyData('pty-prompt', DIALOG, 0)
+    const head = deliverGeneratedTerminalInput(runtime, handle, {
+      text: 'first',
+      submit: true,
+      agent: 'claude',
+      timeoutMs: 3_000
+    })
+    let headSettled = false
+    void head.then(() => {
+      headSettled = true
+    })
+    const queued = await deliverGeneratedTerminalInput(runtime, handle, {
+      text: 'second',
+      submit: true,
+      agent: 'claude',
+      timeoutMs: 30
+    })
+    // Retired at its own budget, not when the dialog-held head finally gives up.
+    expect(queued).toBe('not-sent')
+    expect(headSettled).toBe(false)
+    // The head's late end drains the queued run, which finds its deadline passed and writes nothing.
+    runtime.onPtyData('pty-prompt', `\x1b[2J\x1b[H${READY}`, 0)
+    await expect(head).resolves.toBe('delivered')
+    expect(writes.some((data) => data.includes('second'))).toBe(false)
+  })
+
+  // H4: a direct caller of sendTerminalAgentPrompt (CLI, dispatch) is retired at its own deadline
+  // or abort while queued, and its turn never writes later.
+  it.each(['deadline', 'abort'] as const)(
+    'retires a direct queued caller at its %s while the head holds the queue',
+    async (ending) => {
+      const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+        () => {},
+        'claude'
+      )
+      runtime.onPtyData('pty-prompt', DIALOG, 0)
+      const head = deliverGeneratedTerminalInput(runtime, handle, {
+        text: 'first',
+        submit: true,
+        agent: 'claude',
+        timeoutMs: 1_000
+      })
+      const aborter = new AbortController()
+      const started = Date.now()
+      const direct = runtime.sendTerminalAgentPrompt(handle, 'second', {
+        inputKind: 'driving',
+        acceptQueued: true,
+        requestId: 'direct',
+        observationTimeoutMs: 0,
+        ...(ending === 'deadline' ? { inputDeadline: Date.now() + 50 } : { signal: aborter.signal })
+      })
+      if (ending === 'abort') {
+        setTimeout(() => aborter.abort(), 50)
+      }
+      await expect(direct).rejects.toThrow(
+        ending === 'deadline' ? /could not take/ : 'request_aborted'
+      )
+      expect(Date.now() - started).toBeLessThan(500)
+      runtime.onPtyData('pty-prompt', `\x1b[2J\x1b[H${READY}`, 0)
+      await expect(head).resolves.toBe('delivered')
+      expect(writes.some((data) => data.includes('second'))).toBe(false)
+    }
+  )
+
+  // H4: a retry's screen read near expiry does not hold the result past the deadline.
+  it('settles a submitted prompt on time when its retry read is still pending at the deadline', async () => {
+    const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(() => {}, 'dsh')
+    runtime.onPtyData('pty-prompt', READY, 0)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reaches the host's protected screen read on OrcaRuntimeService to stall it.
+    const host = runtime as unknown as {
+      readCurrentTerminalWaitScreen: (ptyId: string) => Promise<unknown>
+    }
+    const real = host.readCurrentTerminalWaitScreen.bind(runtime)
+    let stalledReads = 0
+    vi.spyOn(host, 'readCurrentTerminalWaitScreen').mockImplementation(async (ptyId) => {
+      if (!writes.includes('\r')) {
+        return await real(ptyId)
+      }
+      stalledReads += 1
+      return await new Promise(() => {})
+    })
+    const started = Date.now()
+    const outcome = await deliverGeneratedTerminalInput(runtime, handle, {
+      text: 'held draft',
+      submit: true,
+      agent: 'dsh',
+      composerReady: true,
+      timeoutMs: 1_500
+    })
+    // The definite outcome does not wait for the optional retry, which ends with the deadline.
+    expect(outcome).toBe('delivered')
+    expect(Date.now() - started).toBeLessThan(1_500)
+    await vi.waitFor(() => expect(stalledReads).toBeGreaterThan(0), { timeout: 1_500 })
+    const settledWrites = writes.length
+    // ast-grep-ignore: test-no-real-time-wait -- the operation's own real timers must run out to show no later write.
+    await new Promise((resolve) => setTimeout(resolve, 1_600))
+    expect(writes).toHaveLength(settledWrites)
+  })
+
+  it.each(['never answers', 'answers after the deadline'])(
+    'writes nothing when the final foreground read %s',
+    async (variant) => {
+      const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+        () => {},
+        'claude'
+      )
+      runtime.onPtyData('pty-prompt', READY, 0)
+      const controller =
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture's controller is this plain object; only its process read is replaced.
+        (runtime as unknown as { ptyController: { getForegroundProcess: () => Promise<string> } })
+          .ptyController
+      const answers: ((process: string) => void)[] = []
+      controller.getForegroundProcess = () => new Promise((resolve) => answers.push(resolve))
+      const outcome = await deliverGeneratedTerminalInput(runtime, handle, {
+        text: 'late',
+        submit: true,
+        agent: 'claude',
+        timeoutMs: 60
+      })
+      expect(outcome).toBe('not-sent')
+      // The read answers only once the operation has already settled.
+      if (variant !== 'never answers') {
+        answers.forEach((answer) => answer('claude'))
+      }
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(writes).toEqual([])
+    }
+  )
+
+  // Cline runs under node with no turn settlement; its recorded approval prompt must keep its keys.
+  it('never types a prompt into Cline at its recorded "Approve tool call?" prompt', async () => {
+    const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(() => {}, 'cline')
+    vi.spyOn(runtime, 'getTerminalSize').mockReturnValue({ cols: 120, rows: 40 })
+    const recorded = readFileSync(
+      join(__dirname, '../../__fixtures__/cline-3-0-66-permission.txt'),
+      'utf8'
+    )
+    runtime.onPtyData('pty-prompt', recorded, 0)
+    const outcome = await deliverGeneratedTerminalInput(runtime, handle, {
+      text: 'yes',
+      submit: true,
+      agent: 'cline',
+      timeoutMs: 300
+    })
+    expect(outcome).toBe('not-sent')
+    expect(writes).toEqual([])
+  })
+
+  // A late observer of an idle Codex or OpenCode has only the current grid and modes: no startup
+  // byte that a scanner could read.
+  it.each([
+    ['codex', 'codex-0157-plain-ready', 'startup'],
+    ['codex', 'codex-0157-plain-ready', 'running'],
+    ['opencode2', 'opencode-2-0-21-timed-cold-standalone', 'startup'],
+    ['opencode2', 'opencode-2-0-21-timed-cold-standalone', 'running']
+  ] as const)(
+    'stages a draft into a recorded idle %s grid with empty replay (%s, %s)',
+    async (agent, fixture, intent) => {
+      const { ruledScreenLines: lines } = await finalReplayFrame(fixture, 120, 40)
+      vi.useFakeTimers()
+      vi.setSystemTime(10_000)
+      try {
+        const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+          () => {},
+          agent
+        )
+        if (agent === 'opencode2') {
+          runtime.onPtyData('pty-prompt', '\x1b[?1049h\x1b[?2004h', 0)
+        }
+        vi.spyOn(
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: spies the host's protected screen read to stand in a recorded grid.
+          runtime as unknown as { readGeneratedInputScreen: () => Promise<unknown> },
+          'readGeneratedInputScreen'
+        ).mockResolvedValue({ lines, alternateScreen: agent === 'opencode2' })
+        const result = deliverGeneratedTerminalInput(runtime, handle, {
+          text: 'late followup',
+          submit: false,
+          agent,
+          intent,
+          timeoutMs: 3_000
+        })
+        await vi.advanceTimersByTimeAsync(3_100)
+        await expect(result).resolves.toBe('staged')
+        expect(writes).toHaveLength(1)
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+})
+
+describe('generated input behind an agent.prompt.before hook', () => {
+  afterEach(() => setPluginHookRunner(null))
+
+  function installPromptHook(
+    decide: (payload: unknown) => PluginHookChainOutcome | Promise<PluginHookChainOutcome>
+  ) {
+    const run = vi.fn(async (_event: unknown, payload: unknown) => decide(payload))
+    setPluginHookRunner({ wants: (event) => event === 'agent.prompt.before', run })
+    return run
+  }
+
+  // The request's lifetime starts at acceptance: a hook that outlives it delivers nothing later.
+  it.each(['deadline', 'abort'] as const)(
+    'settles on time when a hook stalls past the %s, writes nothing later, and the next send succeeds',
+    async (ending) => {
+      const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+        () => {},
+        'claude'
+      )
+      runtime.onPtyData('pty-prompt', READY, 0)
+      let answer!: (outcome: PluginHookChainOutcome) => void
+      const run = installPromptHook(
+        () => new Promise<PluginHookChainOutcome>((resolve) => (answer = resolve))
+      )
+      const aborter = new AbortController()
+      const started = Date.now()
+      const stalled = deliverGeneratedTerminalInput(runtime, handle, {
+        text: 'stalled',
+        submit: true,
+        agent: 'claude',
+        timeoutMs: ending === 'deadline' ? 100 : 5_000,
+        signal: aborter.signal
+      })
+      if (ending === 'abort') {
+        setTimeout(() => aborter.abort(), 50)
+      }
+      await expect(stalled).resolves.toBe('not-sent')
+      expect(Date.now() - started).toBeLessThan(1_000)
+      answer({ kind: 'continue', payload: { prompt: 'stalled' } })
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(writes.some((data) => data.includes('stalled'))).toBe(false)
+      expect(run).toHaveBeenCalledOnce()
+      setPluginHookRunner(null)
+      await expect(
+        deliverGeneratedTerminalInput(runtime, handle, {
+          text: 'next',
+          submit: true,
+          agent: 'claude',
+          composerReady: true,
+          timeoutMs: 3_000
+        })
+      ).resolves.toBe('delivered')
+      expect(writes.filter((data) => data.includes('next'))).toHaveLength(1)
+    }
+  )
+
+  it('delivers a rewritten prompt and refuses a denied one, running the hook once each', async () => {
+    const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(() => {}, 'claude')
+    runtime.onPtyData('pty-prompt', READY, 0)
+    const rewrite = installPromptHook((payload) => ({
+      kind: 'continue',
+      payload: { ...Object(payload), prompt: 'rewritten by plugin' }
+    }))
+    await expect(
+      deliverGeneratedTerminalInput(runtime, handle, {
+        text: 'original',
+        submit: true,
+        agent: 'claude',
+        composerReady: true,
+        timeoutMs: 3_000
+      })
+    ).resolves.toBe('delivered')
+    expect(rewrite).toHaveBeenCalledOnce()
+    expect(writes.filter((data) => data.includes('rewritten by plugin'))).toHaveLength(1)
+    expect(writes.some((data) => data.includes('original'))).toBe(false)
+
+    const deny = installPromptHook(() => ({ kind: 'deny', pluginKey: 'acme.guard', reason: 'no' }))
+    const before = writes.length
+    await expect(
+      deliverGeneratedTerminalInput(runtime, handle, {
+        text: 'denied',
+        submit: true,
+        agent: 'claude',
+        composerReady: true,
+        timeoutMs: 3_000
+      })
+    ).resolves.toBe('not-sent')
+    expect(deny).toHaveBeenCalledOnce()
+    expect(writes).toHaveLength(before)
+  })
+})
+
+// J7: a default leaf send looks its leaf up again when its turn opens; a replacement PTY is a new
+// target, admitted from its own evidence, before any byte.
+describe('generated input retargeted to a replacement PTY', () => {
+  async function retargetedSend(replacementScreen: string, inputDeadline: number) {
+    const targets: string[] = []
+    const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+      () => {},
+      'claude',
+      (_runtime, ptyId) => {
+        targets.push(ptyId)
+        return true
+      }
+    )
+    runtime.onPtyData('pty-prompt', READY, 0)
+    runtime.registerPty('pty-replacement', 'repo-1::/tmp/worktree-a', null)
+    runtime.onPtyData('pty-replacement', replacementScreen, 0)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reaches the host's protected writer and handle lookup on OrcaRuntimeService.
+    const host = runtime as unknown as {
+      ptysById: Map<string, { connected: boolean }>
+      getLivePtyForHandle: (handle: string) => unknown
+      assertLiveTerminalHandleTargetsPty: (handle: string, ptyId: string) => void
+      writeTerminalAgentPrompt: (...args: unknown[]) => Promise<{ submits: number }>
+    }
+    // The handle now names the replacement, as after a respawn.
+    const replacement = host.ptysById.get('pty-replacement')!
+    replacement.connected = true
+    vi.spyOn(host, 'getLivePtyForHandle').mockReturnValue({ pty: replacement })
+    vi.spyOn(host, 'assertLiveTerminalHandleTargetsPty').mockImplementation(() => {})
+    const sent = host.writeTerminalAgentPrompt(
+      handle,
+      'pty-prompt',
+      0,
+      '\x1b[200~replaced\x1b[201~',
+      {
+        inputKind: 'driving',
+        generatedAgent: 'claude',
+        composerReady: true,
+        inputDeadline,
+        promptForSchedule: 'replaced',
+        acceptQueued: true,
+        requestId: 'retarget',
+        observationTimeoutMs: 0
+      },
+      undefined,
+      { resolve: () => 'pty-replacement', payloadFor: () => '\x1b[200~replaced\x1b[201~' }
+    )
+    return { sent, writes, targets }
+  }
+
+  it('writes to a ready replacement PTY, never the PTY it was accepted on', async () => {
+    const { sent, writes, targets } = await retargetedSend(READY, Date.now() + 3_000)
+    await expect(sent).resolves.toMatchObject({ submits: expect.any(Number) })
+    expect(writes.filter((data) => data.includes('replaced'))).toHaveLength(1)
+    expect(new Set(targets)).toEqual(new Set(['pty-replacement']))
+  })
+
+  it('writes nothing to a replacement PTY showing a dialog, on time', async () => {
+    const started = Date.now()
+    const { sent, writes } = await retargetedSend(DIALOG, Date.now() + 300)
+    await expect(sent).rejects.toThrow()
+    expect(Date.now() - started).toBeLessThan(1_500)
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(writes).toEqual([])
+  })
+})
+
+// K1: a default leaf send re-resolved to a replacement running another agent takes every
+// sequence fact (readiness rules, framing, Enter reserve and classification) from the replacement.
+describe('generated input retargeted to a replacement running another agent', () => {
+  type Pty = { connected: boolean; launchAgent?: string; ptyId: string }
+  const internals = (runtime: OrcaRuntimeService) =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reaches the host's protected PTY table and handle lookups on OrcaRuntimeService.
+    runtime as unknown as {
+      ptysById: Map<string, Pty>
+      getLivePtyForHandle: (handle: string) => unknown
+      getLiveLeafForHandle: (handle: string) => unknown
+      assertLiveTerminalHandleTargetsPty: (handle: string, ptyId: string) => void
+      writeTerminalAgentPrompt: (...args: unknown[]) => Promise<{ submits: number }>
+      getPtyLifecycleSignal: (ptyId: string) => AbortSignal
+    }
+
+  /** A default leaf whose queued send is replaced by `agent` running on a new PTY. */
+  async function leafReplacedBy(
+    original: 'claude' | 'omp',
+    onWrite: Parameters<typeof createAgentPromptSubmissionRuntime>[0] = () => {}
+  ) {
+    const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(onWrite, original)
+    const host = internals(runtime)
+    const leaf = { ...host.ptysById.get('pty-prompt')!, writable: true, ptyId: 'pty-prompt' }
+    vi.spyOn(host, 'getLivePtyForHandle').mockReturnValue(null)
+    vi.spyOn(host, 'getLiveLeafForHandle').mockImplementation(() => ({ leaf }))
+    vi.spyOn(host, 'assertLiveTerminalHandleTargetsPty').mockImplementation((_handle, ptyId) => {
+      if (ptyId !== leaf.ptyId) {
+        throw new Error('terminal_handle_stale')
+      }
+    })
+    let release!: () => void
+    const held = new Promise<void>((resolve) => (release = resolve))
+    // The head holds the queue at its write guard while the leaf is replaced.
+    const head = deliverGeneratedTerminalInput(runtime, handle, {
+      text: 'head',
+      submit: false,
+      agent: original,
+      beforeWrite: () => held,
+      timeoutMs: 1_000
+    })
+    const replace = (ptyId: string, agent: string, screen: string) => {
+      runtime.registerPty(ptyId, 'repo-1::/tmp/worktree-a', null)
+      host.ptysById.get(ptyId)!.launchAgent = agent
+      leaf.ptyId = ptyId
+      runtime.onPtyData(ptyId, screen, 0)
+    }
+    return { runtime, handle, writes, head, release, replace }
+  }
+
+  // R6-1: the old agent's readiness rules once refused a ready Claude replacement at 60 s.
+  it('delivers to a ready Claude replacement of a queued Codex send', async () => {
+    vi.useFakeTimers()
+    try {
+      const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+        () => {},
+        'codex'
+      )
+      const host = internals(runtime)
+      runtime.registerPty('pty-replacement', 'repo-1::/tmp/worktree-a', null)
+      const replacement = host.ptysById.get('pty-replacement')!
+      replacement.launchAgent = 'claude'
+      replacement.connected = true
+      runtime.onPtyData('pty-replacement', readRuntimeFixture('claude-ready-task-wakeup'), 0)
+      vi.spyOn(host, 'getLivePtyForHandle').mockReturnValue({ pty: replacement })
+      vi.spyOn(host, 'assertLiveTerminalHandleTargetsPty').mockImplementation(() => {})
+      const payload = '\x1b[200~replaced\x1b[201~'
+      const sent = host.writeTerminalAgentPrompt(
+        handle,
+        'pty-prompt',
+        0,
+        payload,
+        {
+          inputKind: 'driving',
+          composerReady: true,
+          inputDeadline: Date.now() + 60_000,
+          promptForSchedule: 'replaced',
+          acceptQueued: true,
+          requestId: 'retarget',
+          observationTimeoutMs: 0
+        },
+        undefined,
+        { resolve: () => 'pty-replacement', payloadFor: () => payload }
+      )
+      const settled = sent.then(
+        () => 'delivered',
+        () => 'refused'
+      )
+      await vi.advanceTimersByTimeAsync(10_000)
+      await expect(settled).resolves.toBe('delivered')
+      expect(writes.filter((data) => data.includes('replaced'))).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each([false, true])(
+    'reports a Claude send replaced by OMP delivered once its text carries Enter (observedReady %s)',
+    async (observedReady) => {
+      vi.useFakeTimers()
+      try {
+        const { runtime, handle, writes, head, release, replace } = await leafReplacedBy('claude')
+        runtime.onPtyData('pty-prompt', READY, 0)
+        await vi.advanceTimersByTimeAsync(1)
+        const result = deliverGeneratedTerminalInput(runtime, handle, {
+          text: 'new OMP prompt',
+          submit: true,
+          agent: 'claude',
+          observedReady,
+          composerReady: true,
+          timeoutMs: 3_000
+        })
+        await vi.advanceTimersByTimeAsync(1)
+        replace('pty-omp', 'omp', readRuntimeFixture('omp-18-composer'))
+        release()
+        await vi.advanceTimersByTimeAsync(3_100)
+        await expect(result).resolves.toBe('delivered')
+        await head
+        expect(
+          writes.filter((data) => data.includes('new OMP prompt') && data.endsWith('\r'))
+        ).toHaveLength(1)
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+
+  it('reports an OMP send replaced by Claude unconfirmed when a dialog withholds its Enter', async () => {
+    vi.useFakeTimers()
+    try {
+      const { runtime, handle, writes, head, release, replace } = await leafReplacedBy(
+        'omp',
+        (current, data) => {
+          if (data.includes('Claude followup')) {
+            current.onPtyData('pty-claude', DIALOG, 0)
+          }
+        }
+      )
+      runtime.onPtyData('pty-prompt', readRuntimeFixture('omp-18-composer'), 0)
+      await vi.advanceTimersByTimeAsync(1)
+      const result = deliverGeneratedTerminalInput(runtime, handle, {
+        text: 'Claude followup',
+        submit: true,
+        agent: 'omp',
+        composerReady: true,
+        timeoutMs: 3_000
+      })
+      await vi.advanceTimersByTimeAsync(1)
+      replace('pty-claude', 'claude', READY)
+      release()
+      await vi.advanceTimersByTimeAsync(3_100)
+      await expect(result).resolves.toBe('unconfirmed')
+      await head
+      expect(writes).toEqual(['\x1b[200~Claude followup\x1b[201~'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // K5: a finished request leaves nothing on the PTY's long-lived lifecycle signal.
+  it.each([10, 100])('leaves no lifecycle listener behind after %i sends', async (count) => {
+    vi.useFakeTimers()
+    try {
+      const { runtime, handle } = await createAgentPromptSubmissionRuntime(() => {}, 'claude')
+      runtime.onPtyData('pty-prompt', READY, 0)
+      const signal = internals(runtime).getPtyLifecycleSignal('pty-prompt')
+      const baseline = getEventListeners(signal, 'abort').length
+      for (let index = 0; index < count; index += 1) {
+        await expect(
+          deliverGeneratedTerminalInput(runtime, handle, {
+            text: `done ${index}`,
+            submit: false,
+            agent: 'claude',
+            timeoutMs: 1_000
+          })
+        ).resolves.toBe('staged')
+        await vi.advanceTimersByTimeAsync(0)
+      }
+      expect(getEventListeners(signal, 'abort').length - baseline).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+// Q2: a generated send's current screen is authoritative. Lifecycle status that still says
+// "permission" after the user answered (its text left above the new composer) never refuses it;
+// only a permission event after its own text commit, or a current dialog, does.
+describe('generated input and permission history', () => {
+  const PERMISSION_TITLE = '\x1b]0;Codex waiting for permission\x07'
+  const sized = (runtime: OrcaRuntimeService) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: sizes the host's headless model to the recording, through its protected members.
+    const host = runtime as unknown as {
+      ptyController: { getSize?: () => { cols: number; rows: number } }
+      resizeHeadlessTerminal: (ptyId: string, cols: number, rows: number) => void
+    }
+    host.ptyController.getSize = () => ({ cols: 120, rows: 40 })
+    host.resizeHeadlessTerminal('pty-prompt', 120, 40)
+  }
+
+  it.each(['answered, its text left above the composer', 'answered, screen cleared'])(
+    'holds a Codex prompt at its recorded trust screen, then delivers it once %s',
+    async (answer) => {
+      const { ruledScreenLines } = await finalReplayFrame('codex-0-158-0-trustprompt', 120, 40)
+      vi.useFakeTimers()
+      vi.setSystemTime(10_000)
+      try {
+        const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+          () => {},
+          'codex',
+          () => true
+        )
+        sized(runtime)
+        runtime.onPtyData('pty-prompt', readRuntimeFixture('codex-0-158-0-trustprompt'), 0)
+        const result = deliverGeneratedTerminalInput(runtime, handle, {
+          text: 'exact generated context',
+          submit: true,
+          agent: 'codex',
+          composerReady: true,
+          intent: 'startup',
+          timeoutMs: 60_000
+        })
+        await vi.advanceTimersByTimeAsync(8_300)
+        expect(writes).toEqual([])
+        runtime.onPtyData(
+          'pty-prompt',
+          answer.startsWith('answered, its text')
+            ? `\x1b[?2004h\x1b[?1049h\x1b[2J\x1b[H\x1b[?2026h\x1b[?25l${ruledScreenLines.join('\r\n')}` +
+                '\x1b[37;1H› Ask Codex to do anything\x1b[39;3Hgpt-5 high · folder' +
+                '\x1b[40;3H? for shortcuts\x1b[37;3H\x1b[?25h\x1b[?2026l'
+            : readRuntimeFixture('codex-fullscreen-startup'),
+          0
+        )
+        await vi.advanceTimersByTimeAsync(8_000)
+        await expect(result).resolves.toBe('delivered')
+        expect(writes.filter((data) => data.includes('exact generated context'))).toHaveLength(1)
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+
+  it('withholds Enter on a permission event after its text, and reports it unconfirmed', async () => {
+    const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+      (current, data) => {
+        if (data.includes('needs approval next')) {
+          current.onPtyData('pty-prompt', PERMISSION_TITLE, Date.now())
+        }
+      }
+    )
+    runtime.onPtyData('pty-prompt', READY, 0)
+    await expect(
+      deliverGeneratedTerminalInput(runtime, handle, {
+        text: 'needs approval next',
+        submit: true,
+        agent: 'aider',
+        composerReady: true,
+        timeoutMs: 3_000
+      })
+    ).resolves.toBe('unconfirmed')
+    expect(writes.filter((data) => data.includes('needs approval next'))).toHaveLength(1)
+    expect(writes).not.toContain('\r')
+  })
+
+  it.each([false, true])(
+    'stops optional Enter retries on a later permission event (permission %s)',
+    async (permission) => {
+      vi.useFakeTimers()
+      try {
+        const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+          (current, data) => {
+            if (permission && data === '\r') {
+              current.onPtyData('pty-prompt', PERMISSION_TITLE, Date.now())
+            }
+          },
+          // Codex retries a blind Enter on a ready composer when no turn starts.
+          'codex'
+        )
+        runtime.onPtyData('pty-prompt', READY, 0)
+        const result = deliverGeneratedTerminalInput(runtime, handle, {
+          text: 'retry me',
+          submit: true,
+          agent: 'codex',
+          composerReady: true,
+          timeoutMs: 20_000
+        })
+        await vi.advanceTimersByTimeAsync(20_000)
+        await expect(result).resolves.toBe('delivered')
+        const enters = writes.filter((data) => data === '\r').length
+        // Without a permission event the held prompt is retried; with one, never again.
+        if (permission) {
+          expect(enters).toBe(1)
+        } else {
+          expect(enters).toBeGreaterThan(1)
+        }
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+})

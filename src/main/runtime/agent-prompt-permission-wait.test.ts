@@ -130,4 +130,23 @@ describe('agent prompt writer: onPermission wait', () => {
     await vi.runAllTimersAsync()
     expect(writes).toEqual([])
   })
+
+  // The wait has no timeout of its own: an answer however late still lets the prompt go.
+  it('writes once a permission prompt is answered after more than a minute', async () => {
+    vi.useFakeTimers()
+    const { runtime, handle, writes } = await createRuntime()
+    runtime.onPtyData('pty-prompt', PERMISSION_TITLE, Date.now())
+    const sent = runtime.sendTerminalAgentPrompt(handle, 'late answer', {
+      inputKind: 'driving',
+      onPermission: 'wait'
+    })
+    await vi.advanceTimersByTimeAsync(61_000)
+    expect(writes).toEqual([])
+
+    runtime.onPtyData('pty-prompt', IDLE_TITLE, Date.now())
+    await vi.runAllTimersAsync()
+
+    await expect(sent).resolves.toMatchObject({ accepted: true })
+    expect(pasted(writes, 'late answer')).toBe(1)
+  })
 })

@@ -1,20 +1,25 @@
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalInputKind } from '../../../shared/terminal/input/terminal-input-kind'
-import { TUI_AGENT_CONFIG } from '../../../shared/agent-launch/catalog/tui-agent-config'
-import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from '../../../shared/agent-launch/startup/agent-prompt-injection'
-import { resolveDraftPasteReadyTimeoutMs } from '../../../shared/draft-paste-ready-timeout'
-import { resolvePasteReadySignal } from '../../../shared/draft-paste-ready-scanner'
+import { GENERATED_AGENT_INPUT_TIMEOUT_MS } from '../../../shared/generated-agent-input-readiness'
+import type { GeneratedInputOutcome } from '../../../shared/generated-terminal-input'
+import { sendGeneratedTerminalInput } from '@/runtime/generated-terminal-input-client'
+import {
+  generatedInputAttempt,
+  type GeneratedInputAttempt
+} from '@/runtime/generated-input-attempt'
 import { useAppStore } from '@/store'
-import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
-import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
-import '@/components/terminal-pane/input/paste/terminal-bracketed-paste'
-import '../../../shared/terminal/input/terminal-bracketed-paste-text'
-import { runTerminalPtyInputTransaction } from '@/components/terminal-pane/input/paste/terminal-pty-input-transaction'
-import { waitForAgentReady } from './agent-ready-wait'
-import { sendAgentDraftPasteContentNow } from './agent-draft-paste-content'
 import { agentDeliversDraftViaNativePrefill } from './agent-native-draft-prefill'
-import { waitForAgentDraftInputReady } from './agent-draft-readiness'
-import { isExpectedAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
+import { createLegacyGeneratedInputSource } from './agent-draft-readiness'
+import { runGeneratedInputOperation } from '../../../shared/generated-input-operation'
+import { GeneratedInputLifetime } from '../../../shared/generated-input-lifetime'
+import { noticeGeneratedInputFailure } from './agent-session/launch/prompt/launch-agent-paste-timeout-notice'
+import {
+  acceptGeneratedInput,
+  deliverKeepingNotice,
+  keepGeneratedInputNotice,
+  type GeneratedSend
+} from './generated-paste-notice'
+import { settleGeneratedInputNotice } from '@/runtime/generated-input-notice-registration'
 export {
   AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES,
   AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES,
@@ -26,12 +31,19 @@ export {
 
 // Bracketed paste keeps prompt insertion atomic; callers separately choose whether to submit with Enter.
 
-const POST_PASTE_SUBMIT_DELAY_MS = AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS
-
 // Budget PTY creation and composer readiness separately: slow spawn must neither consume composer grace nor delay failed-launch reporting (STA-3367).
 const PTY_SPAWN_TIMEOUT_MS = 8000
 
-/** Paste after DECSET 2004 plus the agent’s composer signal/quiet window. Drafts stay editable unless submit appends Enter; false means no paste. timeoutMs controls readiness only, and onTimeout reports missing readiness. */
+/** A refused or uncertain paste. `retained`: the host keeps its notice, so none is shown here. */
+export type GeneratedPasteRefusal = (
+  certainty?: 'not-sent' | 'unconfirmed',
+  retained?: boolean,
+  /** The accepted request this refusal ends, for the caller's own notice of it. */
+  operationId?: string
+) => void
+
+/** Resolve the tab's PTY, then hand the text to that PTY's host; only submit appends Enter. Refusals
+ *  retain the text, including uncertain partial writes. */
 export async function pasteDraftWhenAgentReady(args: {
   tabId: string
   content: string
@@ -39,62 +51,56 @@ export async function pasteDraftWhenAgentReady(args: {
   submit?: boolean
   forcePaste?: boolean
   timeoutMs?: number
-  onTimeout?: () => void
+  onTimeout?: GeneratedPasteRefusal
   onUnconfirmedDelivery?: () => void
   /** The launch pane's PTY once its spawn says the agent started there; null when it didn't. */
   launchPty?: Promise<string | null>
+  /** The request's operation id when an earlier attempt already accepted it (the allowed
+   *  fresh-session fallback of a reused automation session). */
+  operationId?: string
 }): Promise<boolean> {
-  const { tabId, content, agent, submit, forcePaste, timeoutMs, onTimeout, onUnconfirmedDelivery } =
-    args
-
-  const agentConfig = agent ? TUI_AGENT_CONFIG[agent] : null
-
+  const { tabId, content, agent, submit, forcePaste, timeoutMs, onTimeout } = args
   // Native-prefill agents already received the draft; skip redundant paste unless explicitly forced.
   if (agentDeliversDraftViaNativePrefill(agent, forcePaste)) {
     return false
   }
-
-  const readySignal = resolvePasteReadySignal(agentConfig, submit === true)
-  const readinessTimeoutMs = resolveDraftPasteReadyTimeoutMs(agent, timeoutMs)
-  const readinessResult = waitForAgentDraftInputReadyOnTab({
-    tabId,
-    spawnTimeoutMs: PTY_SPAWN_TIMEOUT_MS,
-    readinessTimeoutMs,
-    readySignal,
-    ...(args.launchPty ? { launchPty: args.launchPty } : {})
+  const deadline = Date.now() + (timeoutMs ?? GENERATED_AGENT_INPUT_TIMEOUT_MS)
+  // The text is this window's runtime's obligation before the wait for a terminal.
+  const operationId = acceptGeneratedInput({
+    text: content,
+    agent,
+    submit: submit === true,
+    ...(args.operationId ? { operationId: args.operationId } : {})
   })
+  const report = { agent, content, submit: submit === true, onTimeout, operationId }
+  const ptyId = await waitForTabPty(tabId, args.launchPty)
   // Why: a pane that didn't start is the caller's own outcome to report, not a readiness timeout.
-  if (args.launchPty && !(await args.launchPty)) {
+  if (args.launchPty && !ptyId) {
+    settleGeneratedInputNotice(operationId)
     return false
   }
-  const readiness = await readinessResult
-  if (!readiness) {
-    onTimeout?.()
-    return false
+  if (!ptyId) {
+    const kept = await keepGeneratedInputNotice({
+      agent,
+      text: content,
+      ...(submit === true ? {} : { submitted: false }),
+      operationId
+    })
+    return reportGeneratedPaste('not-sent', { ...report, retained: kept })
   }
-
-  const { ptyId } = readiness
-  if (!readiness.ready) {
-    // Early readiness bytes may precede this observer; process/title ownership allows best-effort fallback, but Codex may still own a startup dialog or discard provisional input.
-    const fallbackReady =
-      agentConfig && agent !== 'codex'
-        ? await waitForAgentReady(tabId, agentConfig.expectedProcess, { timeoutMs: 1000 })
-        : { ready: false }
-    if (!fallbackReady.ready) {
-      onTimeout?.()
-      return false
-    }
-    // Process existence does not prove composer readiness; report blind writes separately (#22479).
-    onUnconfirmedDelivery?.()
-  }
-
-  return await sendBracketedPasteToAgent({
+  let retained = false
+  const outcome = await deliverGeneratedPaste({
     ptyId,
     content,
     submit: submit === true,
     agent,
-    inputKind: 'launch'
+    inputKind: 'launch',
+    intent: 'startup',
+    deadline,
+    operationId,
+    onNoticeRetained: () => (retained = true)
   })
+  return reportGeneratedPaste(outcome, { ...report, retained })
 }
 
 export async function pasteDraftToAgentPtyWhenReady(args: {
@@ -104,56 +110,62 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
   submit?: boolean
   forcePaste?: boolean
   timeoutMs?: number
-  onTimeout?: () => void
+  onTimeout?: GeneratedPasteRefusal
   onUnconfirmedDelivery?: () => void
-  /** Last check after readiness; false drops the paste. */
-  beforePaste?: () => Promise<boolean>
+  /** Default startup: the agent was just launched. A running agent refuses only on blocking evidence. */
+  intent?: 'startup' | 'running'
+  /** Every frame needs this agent (or a wrapper with a child) in front. */
+  requireConsumer?: boolean
+  /** The id its text was already accepted under. */
+  operationId?: string
 }): Promise<boolean> {
-  const { ptyId, content, agent, submit, forcePaste, timeoutMs, onTimeout, onUnconfirmedDelivery } =
-    args
-  const agentConfig = agent ? TUI_AGENT_CONFIG[agent] : null
-
+  const { ptyId, content, agent, submit, forcePaste, timeoutMs, onTimeout } = args
   if (agentDeliversDraftViaNativePrefill(agent, forcePaste)) {
     return false
   }
-
-  const readySignal = resolvePasteReadySignal(agentConfig, submit === true)
-  const budget = resolveDraftPasteReadyTimeoutMs(agent, timeoutMs)
-  const ready = await waitForAgentDraftInputReady(ptyId, budget, readySignal)
-  if (!ready) {
-    const fallbackReady =
-      agentConfig && agent !== 'codex'
-        ? await waitForExpectedAgentOnPty(ptyId, agentConfig.expectedProcess, 1000)
-        : false
-    if (!fallbackReady) {
-      onTimeout?.()
-      return false
-    }
-    onUnconfirmedDelivery?.()
-  }
-  if (args.beforePaste && !(await args.beforePaste())) {
-    return false
-  }
-
-  return await sendBracketedPasteToAgent({
+  // Accepted once, here: every outcome, refusal and late answer below names this one request.
+  const operationId = acceptGeneratedInput({
+    text: content,
+    agent,
+    submit: submit === true,
+    ptyId,
+    ...(args.operationId ? { operationId: args.operationId } : {})
+  })
+  let retained = false
+  const outcome = await deliverGeneratedPaste({
     ptyId,
     content,
     submit: submit === true,
     agent,
-    inputKind: 'launch'
+    inputKind: 'launch',
+    intent: args.intent ?? 'startup',
+    deadline: Date.now() + (timeoutMs ?? GENERATED_AGENT_INPUT_TIMEOUT_MS),
+    ...(args.requireConsumer ? { requireConsumer: true } : {}),
+    operationId,
+    onNoticeRetained: () => (retained = true)
   })
+  const report = { agent, content, submit: submit === true, onTimeout, operationId, retained }
+  return reportGeneratedPaste(outcome, report)
 }
 
+/** A reused automation session: the typed outcome decides whether a fresh session may start. */
 export async function submitPromptToAgentPty(args: {
   tabId: string
   ptyId: string
   content: string
-}): Promise<boolean> {
-  return await sendBracketedPasteToAgent({
+  agent?: TuiAgent
+  /** The automation request's one id, carried into its allowed fresh-session fallback. */
+  operationId?: string
+}): Promise<GeneratedInputOutcome> {
+  return deliverGeneratedPaste({
     ptyId: args.ptyId,
     content: args.content,
     submit: true,
-    inputKind: 'driving'
+    agent: args.agent,
+    inputKind: 'driving',
+    intent: 'running',
+    deadline: Date.now() + GENERATED_AGENT_INPUT_TIMEOUT_MS,
+    ...(args.operationId ? { operationId: args.operationId } : {})
   })
 }
 
@@ -161,160 +173,169 @@ export async function sendBracketedPasteToRunningAgent(args: {
   ptyId: string
   content: string
 }): Promise<boolean> {
-  return await sendBracketedPasteToAgent({ ...args, submit: true, inputKind: 'driving' })
-}
-
-async function sendBracketedPasteToAgent(args: {
-  ptyId: string
-  content: string
-  submit: boolean
-  agent?: TuiAgent
-  inputKind: TerminalInputKind
-}): Promise<boolean> {
-  const { ptyId, content, submit, agent } = args
-  const { inputKind } = args
-  const submitRetryDelayMs = agent ? TUI_AGENT_CONFIG[agent]?.submitRetryDelayMs : undefined
-  try {
-    // Keep paste, Enter and retry under one PTY lock or another paste could submit a half-written prompt.
-    return await runTerminalPtyInputTransaction(ptyId, async () => {
-      const pasted = await sendAgentDraftPasteContentNow(ptyId, content, inputKind)
-      if (!pasted || !submit) {
-        return pasted
-      }
-
-      // Defer Enter to the next turn so Claude processes bracketed-paste termination before submission.
-      await new Promise<void>((resolve) => window.setTimeout(resolve, POST_PASTE_SUBMIT_DELAY_MS))
-      const submitted = await sendRuntimePtyInputVerified(ptyId, '\r', inputKind)
-
-      if (submitRetryDelayMs !== undefined) {
-        // Some composers render before accepting Enter; retry best-effort without downgrading the first submission verdict.
-        await new Promise<void>((resolve) => window.setTimeout(resolve, submitRetryDelayMs))
-        try {
-          await sendRuntimePtyInputVerified(ptyId, '\r', inputKind)
-        } catch {
-          // Why: a rejected retry leaves the first Enter's verdict untouched.
-        }
-      }
-
-      return submitted
-    })
-  } catch {
-    return false
-  }
-}
-
-function waitForAgentDraftInputReadyOnTab(args: {
-  tabId: string
-  spawnTimeoutMs: number
-  readinessTimeoutMs: number
-  readySignal: Parameters<typeof waitForAgentDraftInputReady>[2]
-  launchPty?: Promise<string | null>
-}): Promise<{ ptyId: string; ready: boolean } | null> {
-  return new Promise((resolve) => {
-    const readinessByPtyId = new Map<string, Promise<boolean>>()
-    let settled = false
-    let spawnTimer: number | null = null
-    let unsubscribeStore: (() => void) | null = null
-    const finish = (result: { ptyId: string; ready: boolean } | null): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      if (spawnTimer !== null) {
-        window.clearTimeout(spawnTimer)
-      }
-      unsubscribeStore?.()
-      resolve(result)
-    }
-    const watchPty = (ptyId: string): Promise<boolean> => {
-      const existing = readinessByPtyId.get(ptyId)
-      if (existing) {
-        return existing
-      }
-      const readiness = waitForAgentDraftInputReady(
-        ptyId,
-        args.readinessTimeoutMs,
-        args.readySignal
-      )
-      readinessByPtyId.set(ptyId, readiness)
-      return readiness
-    }
-    const deliverPty = (ptyId: string): void => {
-      if (settled) {
-        return
-      }
-      if (spawnTimer !== null) {
-        window.clearTimeout(spawnTimer)
-      }
-      unsubscribeStore?.()
-      void watchPty(ptyId).then((ready) => finish({ ptyId, ready }))
-    }
-    const bindFromState = (state: ReturnType<typeof useAppStore.getState>): void => {
-      const ptyIds = state.ptyIdsByTabId[args.tabId] ?? []
-      if (args.launchPty) {
-        // Each pane's readiness attaches before its primary handler drains startup bytes.
-        for (const ptyId of ptyIds) {
-          watchPty(ptyId)
-        }
-      } else if (ptyIds[0]) {
-        deliverPty(ptyIds[0])
-      }
-    }
-    if (args.launchPty) {
-      void args.launchPty.then((ptyId) => (ptyId ? deliverPty(ptyId) : finish(null)))
-    } else {
-      spawnTimer = window.setTimeout(() => finish(null), args.spawnTimeoutMs)
-    }
-    unsubscribeStore = useAppStore.subscribe(bindFromState)
-    bindFromState(useAppStore.getState())
+  return await pasteDraftToAgentPtyWhenReady({
+    ...args,
+    submit: true,
+    forcePaste: true,
+    intent: 'running'
   })
 }
 
-async function waitForExpectedAgentOnPty(
-  ptyId: string,
-  expectedProcess: string,
-  timeoutMs: number
-): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    try {
-      const process = await withDeadline(
-        inspectRuntimeTerminalProcess(ptyId),
-        Math.max(0, deadline - Date.now())
-      )
-      if (!process) {
-        return false
-      }
-      const foreground = process.foregroundProcess?.toLowerCase() ?? ''
-      if (isExpectedAgentProcess(foreground, expectedProcess)) {
-        return true
-      }
-    } catch {
-      // Ignore transient PTY inspection failures and keep polling.
-    }
-    const delayMs = Math.min(120, Math.max(0, deadline - Date.now()))
-    if (delayMs > 0) {
-      await new Promise<void>((resolve) => window.setTimeout(resolve, delayMs))
-    }
+function reportGeneratedPaste(
+  outcome: GeneratedInputOutcome,
+  args: {
+    agent?: TuiAgent
+    content: string
+    submit: boolean
+    onTimeout?: GeneratedPasteRefusal
+    retained?: boolean
+    operationId: string
+  }
+): boolean {
+  if (outcome === 'delivered' || outcome === 'staged') {
+    return true
+  }
+  const certainty = outcome === 'unconfirmed' ? 'unconfirmed' : 'not-sent'
+  if (args.onTimeout) {
+    args.onTimeout(certainty, args.retained === true, args.operationId)
+  } else if (!args.retained) {
+    // The same accepted request, with the intent it was accepted under.
+    noticeGeneratedInputFailure({
+      agent: args.agent,
+      text: args.content,
+      certainty,
+      ...(args.submit ? {} : { submitted: false }),
+      operationId: args.operationId
+    })
   }
   return false
 }
 
-function withDeadline<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
-  if (timeoutMs <= 0) {
-    return Promise.resolve(null)
-  }
-  return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(() => resolve(null), timeoutMs)
-    promise.then(
-      (value) => {
-        window.clearTimeout(timer)
-        resolve(value)
+export type GeneratedPaste = {
+  ptyId: string
+  content: string
+  submit: boolean
+  agent?: TuiAgent
+  inputKind: Extract<TerminalInputKind, 'launch' | 'driving'>
+  /** startup waits for positive readiness; running (main's direct sends) refuses only on blocking evidence. */
+  intent: 'startup' | 'running'
+  deadline: number
+  /** Ends the request (a person took the terminal over); a lost answer reads as unconfirmed. */
+  signal?: AbortSignal
+  /** Every frame needs the expected agent (or a wrapper with a child) in front. */
+  requireConsumer?: boolean
+  /** The caller reports failures: called when a runtime owner kept the notice instead, so the
+   *  caller shows none of its own. */
+  onNoticeRetained?: () => void
+  /** The id this request's text was accepted under; one is made when absent. */
+  operationId?: string
+  /** The accepted request this delivery continues (its end and selected route), when a caller
+   *  already began one; else one begins here from `deadline`. */
+  attempt?: GeneratedInputAttempt
+}
+
+/** A capable host admits and writes in one transaction; only an older host gets the client adapter.
+ *  A caller that reports failures has its notice kept by one runtime owner (see deliverKeepingNotice). */
+export async function deliverGeneratedPaste(paste: GeneratedPaste): Promise<GeneratedInputOutcome> {
+  const attempt = paste.attempt ?? generatedInputAttempt(paste.deadline)
+  const send: GeneratedSend = async (extra, onReply, onRoute) => {
+    const hosted = await sendGeneratedTerminalInput(
+      paste.ptyId,
+      {
+        text: paste.content,
+        submit: paste.submit,
+        agent: paste.agent ?? null,
+        inputKind: paste.inputKind,
+        intent: paste.intent,
+        timeoutMs: Math.max(0, paste.deadline - Date.now()),
+        ...(paste.requireConsumer ? { requireConsumer: true } : {}),
+        ...extra
       },
-      (error) => {
-        window.clearTimeout(timer)
-        reject(error)
-      }
+      paste.signal,
+      onReply,
+      onRoute,
+      attempt
     )
+    return hosted !== null
+      ? { outcome: hosted, hosted: true }
+      : { outcome: await pasteThroughLegacyHost(paste, extra.operationId, attempt), hosted: false }
+  }
+  if (!paste.onNoticeRetained) {
+    // A caller with its own failure surface still carries the request's identity.
+    return (
+      await send(
+        paste.operationId ? { operationId: paste.operationId } : {},
+        () => {},
+        () => {}
+      )
+    ).outcome
+  }
+  const { outcome, kept } = await deliverKeepingNotice(paste, send)
+  if (kept) {
+    paste.onNoticeRetained()
+  }
+  return outcome
+}
+
+/** An older host: the same operation, with this client's evidence and the existing input route. */
+async function pasteThroughLegacyHost(
+  paste: GeneratedPaste,
+  operationId: string | undefined,
+  attempt: GeneratedInputAttempt
+): Promise<GeneratedInputOutcome> {
+  const result = await runGeneratedInputOperation(
+    createLegacyGeneratedInputSource({
+      ptyId: paste.ptyId,
+      content: paste.content,
+      agent: paste.agent,
+      inputKind: paste.inputKind,
+      // The runtime that writes each frame settles the accepted request; this window may be gone.
+      ...(operationId ? { operationId } : {}),
+      // The same end and selected route as the hosted attempt that found this host older.
+      attempt,
+      ...(paste.signal ? { signal: paste.signal } : {})
+    }),
+    {
+      agent: paste.agent ?? null,
+      submit: paste.submit,
+      intent: paste.intent,
+      requireConsumer: paste.requireConsumer,
+      // The request's lifetime starts at the producer's call.
+      lifetime: new GeneratedInputLifetime({
+        deadline: attempt.end,
+        signal: paste.signal,
+        submit: paste.submit
+      })
+    }
+  )
+  return result.outcome
+}
+
+/** The tab's PTY once it binds: the launch pane's own when given, else the first within spawn time. */
+function waitForTabPty(tabId: string, launchPty?: Promise<string | null>): Promise<string | null> {
+  if (launchPty) {
+    return launchPty
+  }
+  return new Promise((resolve) => {
+    let settled = false
+    let unsubscribeStore: (() => void) | null = null
+    const finish = (ptyId: string | null): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      window.clearTimeout(spawnTimer)
+      unsubscribeStore?.()
+      resolve(ptyId)
+    }
+    const spawnTimer = window.setTimeout(() => finish(null), PTY_SPAWN_TIMEOUT_MS)
+    const bindFromState = (state: ReturnType<typeof useAppStore.getState>): void => {
+      const ptyId = state.ptyIdsByTabId[tabId]?.[0]
+      if (ptyId) {
+        finish(ptyId)
+      }
+    }
+    unsubscribeStore = useAppStore.subscribe(bindFromState)
+    bindFromState(useAppStore.getState())
   })
 }

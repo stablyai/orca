@@ -15,6 +15,10 @@ type RuntimeEnvironmentSubscribeArgs = {
   timeoutMs?: number
   expectedEnvironmentPairingRevision?: number
   expectedEnvironmentRuntimeId?: string
+  /** Local only: the window's accepted generated request this call carries. */
+  generatedInputOperationId?: string
+  /** Local only: that request's own end on this machine. */
+  generatedInputEnd?: number
 }
 
 type RuntimeEnvironmentSubscriptionCallbacks = {

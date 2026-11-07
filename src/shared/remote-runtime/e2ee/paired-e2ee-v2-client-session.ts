@@ -26,6 +26,8 @@ export class PairedE2EEV2ClientSession {
   private outboundCounter = 0n
   private schedule: PairedE2EEV2KeySchedule | null = null
   private transcriptHashB64Value: string | null = null
+  // Why: two frames built at once would share one counter, so one nonce under this key.
+  private constructing = false
 
   private constructor(
     private readonly primitives: PairedE2EEPrimitives,
@@ -111,12 +113,18 @@ export class PairedE2EEV2ClientSession {
     return this.open(frame, 'binary')
   }
 
-  sealText(plaintext: string): string {
-    return this.primitives.encodeBase64(this.seal(new TextEncoder().encode(plaintext), 'text'))
+  sealText(plaintext: string, beforeCommit?: () => void): string {
+    return this.seal(
+      (counter) =>
+        this.primitives.encodeBase64(
+          this.buildFrame(new TextEncoder().encode(plaintext), 'text', counter)
+        ),
+      beforeCommit
+    )
   }
 
   sealBinary(plaintext: Uint8Array): Uint8Array<ArrayBuffer> {
-    return this.seal(plaintext, 'binary')
+    return this.seal((counter) => this.buildFrame(plaintext, 'binary', counter))
   }
 
   private open(frame: Uint8Array, payloadKind: 'text' | 'binary'): Uint8Array | null {
@@ -138,21 +146,40 @@ export class PairedE2EEV2ClientSession {
     return plaintext
   }
 
-  private seal(plaintext: Uint8Array, payloadKind: 'text' | 'binary'): Uint8Array<ArrayBuffer> {
+  /** Builds the complete frame at the current counter, then admits it, and only then spends the
+   *  counter: a refused or failed frame is never returned, so its nonce was never exposed. */
+  private seal<T>(build: (counter: bigint) => T, beforeCommit?: () => void): T {
+    if (this.constructing) {
+      throw new Error('E2EE v2 frame construction re-entered')
+    }
+    this.constructing = true
+    try {
+      const frame = build(this.outboundCounter)
+      beforeCommit?.()
+      this.outboundCounter++
+      return frame
+    } finally {
+      this.constructing = false
+    }
+  }
+
+  private buildFrame(
+    plaintext: Uint8Array,
+    payloadKind: 'text' | 'binary',
+    counter: bigint
+  ): Uint8Array<ArrayBuffer> {
     if (!this.schedule) {
       throw new Error('E2EE v2 ready has not been accepted')
     }
-    const frame = sealMobileE2EEV2Frame({
+    return sealMobileE2EEV2Frame({
       payload: plaintext,
       key: this.schedule.mobileToDesktopKey,
       sessionId: this.schedule.sessionId,
       direction: 'mobile-to-desktop',
       payloadKind,
-      counter: this.outboundCounter,
+      counter,
       sealSecretbox: this.primitives.sealSecretbox
     })
-    this.outboundCounter++
-    return frame
   }
 
   private decodeCanonicalBase64(value: string): Uint8Array | null {

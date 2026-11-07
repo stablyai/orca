@@ -126,8 +126,11 @@ export function isRuntimeEnvironmentContinuationPending(
 
 export function captureRuntimeEnvironmentRequestRevision(
   environmentId: string,
-  expectedRevision?: number
+  /** Null: captured earlier as unknown, so it is not read again now. */
+  expectedRevision?: number | null
 ): number | undefined {
   // Why: callers capture before awaits so a same-id re-pair cannot retarget their request.
-  return expectedRevision ?? getRuntimeEnvironmentRevision(environmentId)
+  return expectedRevision === null
+    ? undefined
+    : (expectedRevision ?? getRuntimeEnvironmentRevision(environmentId))
 }

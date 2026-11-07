@@ -195,9 +195,7 @@ export const createRuntimeStatusSlice: (
     // must re-claim it just like a restart does.
     const contactRegained = previous?.status === null && status.status !== null
     // Reachable status clears offline compatibility failures before reuse-flagged refetches can pin them.
-    if (status.status !== null) {
-      clearRecentRuntimeCompatibilityFailure(environmentId, status.status)
-    }
+    clearRecentRuntimeCompatibilityFailure(environmentId, status)
     set((s) => {
       const sessionEnded = status.status === null && previous?.status != null
       // A reachable answer where we held none (never asked, or recorded unreachable) or

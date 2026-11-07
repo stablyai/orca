@@ -1,4 +1,5 @@
 import { selectFreshExplicitAgentStatus } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
+import { acquireQueueTurn } from './agent-prompt-queue-turn'
 import { OrcaRuntimeWithPluginHookedTerminalInput } from './terminal-plugin-hooked-input'
 import type { RuntimeTerminalAgentStatus } from '../../../../shared/runtime-types'
 import type { RuntimeTerminalAgentStatusSnapshot } from '../query/runtime-terminal-agent-status-query'
@@ -17,26 +18,18 @@ import type { AgentStatus } from '../../../../shared/agent-status/title/agent-ti
 export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWithPluginHookedTerminalInput {
   protected abstract getPaneKeyForTerminalHandle(handle: string): string | null
 
-  protected async serializeAgentPromptSubmission<T>(
+  /** This prompt's turn in the PTY's generation-scoped input queue. Aborting while queued gives
+   *  up the turn at once, holding nothing; later prompts still wait for the ones before it. */
+  protected acquireAgentPromptTurn(
     ptyId: string,
     generation: number,
-    submit: () => Promise<T>
-  ): Promise<T> {
-    const queueKey = `${ptyId}\u0000${generation}`
-    const previous = this.agentPromptSubmissionTailByPtyId.get(queueKey) ?? Promise.resolve()
-    const submission = previous.catch(() => undefined).then(submit)
-    const tail = submission.then(
-      () => undefined,
-      () => undefined
+    signal?: AbortSignal
+  ): Promise<() => void> {
+    return acquireQueueTurn(
+      this.agentPromptSubmissionTailByPtyId,
+      `${ptyId}\u0000${generation}`,
+      signal
     )
-    this.agentPromptSubmissionTailByPtyId.set(queueKey, tail)
-    try {
-      return await submission
-    } finally {
-      if (this.agentPromptSubmissionTailByPtyId.get(queueKey) === tail) {
-        this.agentPromptSubmissionTailByPtyId.delete(queueKey)
-      }
-    }
   }
 
   async getTerminalAgentStatus(handle: string): Promise<RuntimeTerminalAgentStatus> {

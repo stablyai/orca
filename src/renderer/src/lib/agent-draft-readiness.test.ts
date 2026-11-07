@@ -4,7 +4,7 @@ import {
   clearPreHandlerPtyState,
   drainPreHandlerPtyData
 } from '@/components/terminal-pane/pty-transport/delivery/pty-pre-handler-buffer'
-import { waitForAgentDraftInputReady } from './agent-draft-readiness'
+import { waitForPaneAgentToLookReady } from './agent-draft-readiness'
 import type * as RemoteRuntimePtyIdModule from '../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const testState = vi.hoisted(() => ({
@@ -24,11 +24,23 @@ vi.mock('../../../shared/remote-runtime/remote-runtime-pty-id', async (importOri
   isRemoteRuntimePtyId: () => false
 }))
 
+vi.mock('@/components/terminal-pane/snapshots/pty-buffer-serializer', () => ({
+  readPtyInputScreen: async () => ({ lines: ['❯ '], alternateScreen: false }),
+  readPtyBracketedPasteMode: () => true
+}))
+vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+  inspectRuntimeTerminalProcess: async () => ({
+    foregroundProcess: 'codex',
+    hasChildProcesses: true
+  })
+}))
+
 const PTY_ID = 'pty-buffered-codex'
 const CODEX_COMPOSER = '\x1b[?1049h\x1b[1m›\x1b[0m Implement {feature}'
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
 
-describe('waitForAgentDraftInputReady', () => {
+// Held keys' pane observation, before their one handoff to the generated-input operation.
+describe('waitForPaneAgentToLookReady', () => {
   afterEach(() => {
     clearPreHandlerPtyState(PTY_ID)
     testState.observer = null
@@ -44,7 +56,7 @@ describe('waitForAgentDraftInputReady', () => {
     const primary = vi.fn()
 
     await expect(
-      waitForAgentDraftInputReady(PTY_ID, 20_000, 'codex-composer-prompt')
+      waitForPaneAgentToLookReady(PTY_ID, 'codex', 20_000, new AbortController().signal)
     ).resolves.toBe(true)
     drainPreHandlerPtyData(PTY_ID, primary)
 

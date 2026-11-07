@@ -27,9 +27,12 @@ import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-
 import { runtimeEnvironmentChangedFailure } from './runtime-environment-revision-guard'
 import { resolveManagedRuntimeEnvironment } from './runtime-environment-managed-tunnel'
 
-const statusListeners = new Set<() => void>()
+const statusListeners = new Set<(environmentId: string) => void>()
 
-export function onRuntimeEnvironmentStatusPublished(listener: () => void): () => void {
+/** Each publication names the environment whose status changed. */
+export function onRuntimeEnvironmentStatusPublished(
+  listener: (environmentId: string) => void
+): () => void {
   statusListeners.add(listener)
   return () => statusListeners.delete(listener)
 }
@@ -144,7 +147,7 @@ export function createRuntimeEnvironmentStatusOwner(
     publish: (snapshot) => {
       getRuntimeDesktopSurface().sendToRenderers?.(RUNTIME_HOST_STATUS_CHANNEL, snapshot)
       for (const listener of statusListeners) {
-        listener()
+        listener(environment.id)
       }
     }
   })

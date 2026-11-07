@@ -7,6 +7,10 @@ import {
   retainedRemoteRuntimeJsonStringBytes
 } from '../remote-runtime-memory-limits'
 import type { RuntimeRpcResponse } from '../../runtime-rpc-envelope'
+import {
+  remoteRuntimeRequestDispatchExpiredError,
+  remoteRuntimeRequestParamsAtHandoff
+} from './remote-runtime-request-dispatch-observation'
 
 export type RemoteRuntimePreparedRequest = {
   retainedBytes: number
@@ -19,6 +23,10 @@ export type RemoteRuntimePendingRequest<TResult> = {
   reject: (error: Error) => void
   timeout: ReturnType<typeof setTimeout>
   preparedRequest: RemoteRuntimePreparedRequest | null
+  /** Local only: told when this request's own frame is handed to the socket. */
+  onFrameSent?: () => void
+  /** Throws when the request's end passed after its frame was sealed: it is not sent. */
+  assertInTime?: () => void
 }
 
 type PendingPreparedRequest = {
@@ -65,6 +73,22 @@ export function takeRemoteRuntimePreparedRequest(pending: PendingPreparedRequest
   const serializedRequest = prepared.serializedRequest
   prepared.serializedRequest = null
   return serializedRequest
+}
+
+/** Takes the frame's bytes at its actual handoff: the prepared ones, or `params` serialized again
+ *  carrying only the time left (admission stays charged at the reserved size). Null when they were
+ *  released; throws when the request's end passed, so nothing of it may be sent. */
+export function takeRemoteRuntimePreparedRequestAtHandoff(
+  pending: PendingPreparedRequest,
+  params: unknown,
+  serialize: (params: unknown) => string
+): string | null {
+  const atHandoff = remoteRuntimeRequestParamsAtHandoff(params)
+  if (!atHandoff) {
+    throw remoteRuntimeRequestDispatchExpiredError()
+  }
+  const prepared = takeRemoteRuntimePreparedRequest(pending)
+  return prepared !== null && atHandoff.params !== params ? serialize(atHandoff.params) : prepared
 }
 
 export function releaseRemoteRuntimePreparedRequest(pending: PendingPreparedRequest): void {

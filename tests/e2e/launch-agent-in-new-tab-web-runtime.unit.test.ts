@@ -17,6 +17,7 @@ import '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { composeAgentLaunchProfile } from '../../src/shared/agent-launch/choices/tui-agent-launch-defaults'
 import { projectAgentLaunchSettings } from '../../src/shared/agent-launch/choices/agent-launch-settings'
 import { describe, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
 import { CreateAgentSessionParams } from '../../src/shared/rpc-contract/agent-session-params'
 
 describe('launchAgentInNewTab paired web runtime', () => {
@@ -452,8 +453,14 @@ describe('launchAgentInNewTab paired web runtime', () => {
     await expect(
       newAgentPromptOutcome({ delivery: result!.promptDeliveryResult! })
     ).resolves.toEqual({ delivered: false })
-    expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith(
-      expect.stringMatching(/opened a terminal for Claude.*Send the prompt/)
+    // The one report is the persistent notice that keeps the exact prompt for Copy.
+    expect(mocks.toastError).not.toHaveBeenCalled()
+    expect(vi.mocked(toast.message)).toHaveBeenCalledExactlyOnceWith(
+      expect.stringMatching(/Claude may have received part of your prompt/),
+      expect.objectContaining({
+        duration: Infinity,
+        action: expect.objectContaining({ label: 'Copy prompt' })
+      })
     )
     expect(store.seedNativeChatLaunchPrompt).toHaveBeenCalledWith(
       expect.objectContaining({ text: 'keep this task' })

@@ -6,6 +6,7 @@ import type {
 } from '../../../../shared/runtime-types'
 import type { AgentTransitionDetector } from '../../../agent-hooks/agent-transition-detector'
 import { OrcaRuntimeWithWriteTerminalAgentPrompt } from './terminal-agent-prompt'
+import type { AgentPromptRetarget } from './terminal-agent-prompt-source'
 import {
   AgentPromptPermissionReturnedError,
   waitWhileAgentPromptBlocked
@@ -14,16 +15,27 @@ import {
 export abstract class OrcaRuntimeWithSubmitTerminalAgentPrompt extends OrcaRuntimeWithWriteTerminalAgentPrompt {
   abstract readonly agentTransitions: Pick<AgentTransitionDetector, 'subscribe'>
 
-  /** Every prompt write judges a restored permission wait on the screen as it is now (#35962). */
+  /** Every prompt write judges a restored permission wait on the screen as it is now (#35962).
+   *  The write that follows still runs its own turn checks and keeps the request's one end. */
   protected override writeTerminalAgentPrompt(
     handle: string,
     ptyId: string,
     generation: number,
     pastePayload: string,
-    options: RuntimeAgentPromptWriteOptions
+    options: RuntimeAgentPromptWriteOptions,
+    atTurn?: (ptyId: string) => void,
+    retarget?: AgentPromptRetarget
   ): Promise<{ submits: number; prompt?: RuntimeTerminalPromptDelivery }> {
     const write = () =>
-      super.writeTerminalAgentPrompt(handle, ptyId, generation, pastePayload, options)
+      super.writeTerminalAgentPrompt(
+        handle,
+        ptyId,
+        generation,
+        pastePayload,
+        options,
+        atTurn,
+        retarget
+      )
     return this.refreshRestoredWait(handle, ptyId)?.then(write) ?? write()
   }
 
@@ -40,15 +52,18 @@ export abstract class OrcaRuntimeWithSubmitTerminalAgentPrompt extends OrcaRunti
         await this.waitWhileTerminalAgentPromptBlocked(handle, ptyId, generation, options)
       }
       try {
-        const delivery = await this.serializeAgentPromptSubmission(ptyId, generation, async () => {
-          this.assertLiveTerminalHandleTargetsPty(handle, ptyId)
-          this.assertAgentPromptGeneration(ptyId, generation)
-          this.assertAgentPromptExpectedBinding(handle, options.expectedBinding)
-          return await this.writeTerminalAgentPrompt(handle, ptyId, generation, payload, {
-            ...options,
-            promptForSchedule: prompt
-          })
-        })
+        const delivery = await this.writeTerminalAgentPrompt(
+          handle,
+          ptyId,
+          generation,
+          payload,
+          { ...options, promptForSchedule: prompt },
+          () => {
+            this.assertLiveTerminalHandleTargetsPty(handle, ptyId)
+            this.assertAgentPromptGeneration(ptyId, generation)
+            this.assertAgentPromptExpectedBinding(handle, options.expectedBinding)
+          }
+        )
         const bytesWritten = Buffer.byteLength(payload, 'utf8') + delivery.submits
         return {
           handle,
@@ -92,7 +107,8 @@ export abstract class OrcaRuntimeWithSubmitTerminalAgentPrompt extends OrcaRunti
           }
         : {}),
       subscribeExit: (exited) => this.subscribeToPtyExit(ptyId, exited),
-      signal: agentPromptObservationSignal(options)
+      // The request's lifetime: no timeout of its own unless the caller set a deadline (main).
+      signal: options.generatedLifetime?.signal ?? agentPromptObservationSignal(options)
     })
   }
 }

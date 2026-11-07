@@ -20,7 +20,7 @@ import {
   getPtyDisplayRecord,
   type TitleDisplayClear
 } from '../../workspaces/process-listing/runtime-worktree-status-projection'
-import { detectTerminalWaitBlockedReason } from '../wait/terminal-wait-detection'
+import { detectTerminalWaitBlockedReason } from '../../../../shared/terminal-wait-detection'
 import { getTerminalState } from '../wait/terminal-wait-results'
 import { buildTerminalWaitText } from '../wait/terminal-wait-tail-state'
 

@@ -5,7 +5,7 @@ import {
 } from '../../../../shared/agent-status/process/agent-process-recognition'
 import { isOpenCodeNativeTitle } from '../../../../shared/agent-status/title/providers/opencode-terminal-title'
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
-import { isKnownReadyPromptPreview } from '../wait/terminal-wait-detection'
+import { isKnownReadyPromptPreview } from '../../../../shared/terminal-wait-detection'
 import { buildTerminalWaitText } from '../wait/terminal-wait-tail-state'
 import type {
   RuntimeLeafRecord,

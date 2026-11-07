@@ -1,7 +1,8 @@
 import type { PtyRendererDelivery } from '../session'
 import { getPtyIpc } from '../pty-host-bindings'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import { createPtyWriteInput } from './write-input'
+import { createPtyWriteInput, type PtyWritePayload } from './write-input'
+import { followLocalGeneratedInputWrite } from '../../../runtime/generated-agent-input-notices-ingress'
 import { installPtyTerminalAttentionIpcHandler } from './terminal-attention'
 
 export function installPtyWriteIpcHandlers(deps: {
@@ -19,6 +20,43 @@ export function installPtyWriteIpcHandlers(deps: {
   } = createPtyWriteInput(deps)
 
   const hostViewportClaimTails = new Map<string, Promise<boolean>>()
+  // A write of a window's accepted generated request settles that request where it happens, even
+  // when the window that asked is gone.
+  const followed = (
+    sender: { id: number },
+    args: PtyWritePayload,
+    write: (payload: PtyWritePayload) => boolean | Promise<boolean>
+  ): boolean | Promise<boolean> => {
+    const follow =
+      runtime && args.generatedInputOperationId
+        ? followLocalGeneratedInputWrite(
+            runtime.generatedInputNotices,
+            args.generatedInputOperationId,
+            `desktop-window:${sender.id}`
+          )
+        : null
+    if (!follow) {
+      return write(args)
+    }
+    const settle = (accepted: boolean): boolean => {
+      follow.settled(accepted ? 'accepted' : 'refused')
+      return accepted
+    }
+    // Written at once, in the same order as any other write.
+    let result: boolean | Promise<boolean>
+    try {
+      result = write({ ...args, onProviderHandoff: follow.handedOff })
+    } catch (error) {
+      follow.settled('unknown')
+      throw error
+    }
+    return typeof result === 'boolean'
+      ? settle(result)
+      : result.then(settle, (error: unknown) => {
+          follow.settled('unknown')
+          throw error
+        })
+  }
   // Input from every client lands here; agent sleep reads it back with who else is viewing.
   installPtyTerminalAttentionIpcHandler(deps)
 
@@ -27,20 +65,22 @@ export function installPtyWriteIpcHandlers(deps: {
       return
     }
     const claimTail = hostViewportClaimTails.get(args.id)
-    if (claimTail) {
-      void claimTail.then((claimed) => (claimed ? writePtyInput(args) : false))
-      return
-    }
-    writePtyInput(args)
+    const write = (payload: PtyWritePayload) =>
+      claimTail
+        ? claimTail.then((claimed) => (claimed ? writePtyInput(payload) : false))
+        : writePtyInput(payload)
+    void Promise.resolve(followed(event.sender, args, write)).catch(() => {})
   })
   ipcMain.handle('pty:writeAccepted', (event, args: unknown): boolean | Promise<boolean> => {
     if (!isPtyWriteEventFromMainWindow(event) || !isPtyWritePayload(args)) {
       return false
     }
     const claimTail = hostViewportClaimTails.get(args.id)
-    return claimTail
-      ? claimTail.then((claimed) => (claimed ? writePtyInputAccepted(args) : false))
-      : writePtyInputAccepted(args)
+    return followed(event.sender, args, (payload) =>
+      claimTail
+        ? claimTail.then((claimed) => (claimed ? writePtyInputAccepted(payload) : false))
+        : writePtyInputAccepted(payload)
+    )
   })
 
   ipcMain.removeAllListeners('pty:claimViewport')

@@ -98,14 +98,19 @@ export const ptySessionControlApi = {
     resumeProviderSession?: TerminalLaunchResult['resumeProviderSession']
     shellReadyArmed?: boolean
   }> => ipcRenderer.invoke('pty:spawn', opts),
-  write: (id: string, data: string, inputKind: TerminalInputKind): void => {
-    ipcRenderer.send('pty:write', { id, data, inputKind })
+  write: (
+    id: string,
+    data: string,
+    inputKind: TerminalInputKind,
+    options?: { generatedInputOperationId?: string }
+  ): void => {
+    ipcRenderer.send('pty:write', { id, data, inputKind, ...options })
   },
   writeAccepted: (
     id: string,
     data: string,
     inputKind: TerminalInputKind,
-    options?: { requireWriteSettlement?: true }
+    options?: { requireWriteSettlement?: true; generatedInputOperationId?: string }
   ): Promise<boolean> =>
     ipcRenderer.invoke('pty:writeAccepted', { id, data, inputKind, ...options }),
   onWriteUnavailable: (callback: (payload: { id: string }) => void): (() => void) => {

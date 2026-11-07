@@ -64,16 +64,47 @@ describe('startup follow-up prompt', () => {
     expect(f.write).not.toHaveBeenCalled()
   })
 
-  // WSL and SSH-to-Windows reads cannot prove a lone shell, so they keep main's behaviour per caller.
-  it('types the follow-up on WSL or SSH-to-Windows once the agent is in front, as before', async () => {
-    const f = fixture('kimi', false, false, 'unknown')
-
-    await expect(
-      deliverStartupFollowupPrompt(f.runtime, f.host, 'term-1', { agent: 'kimi', prompt: 'go' })
-    ).resolves.toBe(true)
-    expect(f.write).toHaveBeenCalledWith('pty-1', 'go\r', 'launch')
-    expect(f.sendTerminalAgentPrompt).not.toHaveBeenCalled()
-  })
+  // WSL and SSH-to-Windows reads cannot prove a lone shell; their typed bytes still go through
+  // the host's one generated-input transaction, which waits, rechecks before Enter and reports.
+  it.each([
+    [{ accepted: true }, true, undefined],
+    [new Error('Kimi could not take your prompt'), false, 'not-sent'],
+    ['pasted', false, 'unconfirmed']
+  ] as const)(
+    'types WSL or SSH-to-Windows follow-ups through the host transaction (%#)',
+    async (answer, delivered, refused) => {
+      const f = fixture('kimi', false, false, 'unknown')
+      f.sendTerminalAgentPrompt.mockImplementation(
+        async (handle: string, _text?: string, options?: { onPasteWritten?: () => void }) => {
+          if (answer instanceof Error) {
+            throw answer
+          }
+          if (answer === 'pasted') {
+            options?.onPasteWritten?.()
+            throw new Error('Kimi could not take your prompt')
+          }
+          return { handle, accepted: true, bytesWritten: 2 }
+        }
+      )
+      const onRefused = vi.fn()
+      await expect(
+        deliverStartupFollowupPrompt(
+          f.runtime,
+          f.host,
+          'term-1',
+          { agent: 'kimi', prompt: 'go' },
+          { onRefused }
+        )
+      ).resolves.toBe(delivered)
+      expect(f.sendTerminalAgentPrompt).toHaveBeenCalledWith(
+        'term-1',
+        'go',
+        expect.objectContaining({ framing: 'typed', submit: true, generatedAgent: 'kimi' })
+      )
+      expect(f.write).not.toHaveBeenCalled()
+      expect(onRefused.mock.calls).toEqual(refused ? [[refused]] : [])
+    }
+  )
 
   it('still refuses an agent.launch prompt on WSL or SSH-to-Windows, as before', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -262,7 +293,7 @@ describe('OpenCode submit readiness', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('takes the box at the deadline when the grace would outlast the budget', async () => {
+  it('refuses at the deadline when the grace would outlast the budget', async () => {
     vi.useFakeTimers()
     const h = fixture()
     const result = settle(
@@ -277,7 +308,7 @@ describe('OpenCode submit readiness', () => {
     await vi.advanceTimersByTimeAsync(999)
     expect(result.value).toBeUndefined()
     await vi.advanceTimersByTimeAsync(1)
-    expect(result.value).toBe('pty-1')
+    expect(result.value).toBeNull()
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -357,13 +388,13 @@ describe('OpenCode submit readiness', () => {
       expect(vi.getTimerCount()).toBe(0)
     })
 
-    it('takes the box at the deadline inside a pending grace with the agent in front', async () => {
+    it('refuses at the deadline inside a pending grace with the agent in front', async () => {
       vi.useFakeTimers()
       const h = fixture()
       const result = waitWith(h, { isShellInFront: async () => false, timeoutMs: 3000 })
       h.emit(BOX)
       await vi.advanceTimersByTimeAsync(3000)
-      expect(result.value).toBe('pty-1')
+      expect(result.value).toBeNull()
       expect(vi.getTimerCount()).toBe(0)
     })
 
@@ -442,7 +473,7 @@ describe('OpenCode submit readiness', () => {
       expect(vi.getTimerCount()).toBe(0)
     })
 
-    it('takes the box at the deadline after a refused grace once the agent is in front', async () => {
+    it('never takes the box at the deadline after a refused grace, even once the agent is in front', async () => {
       vi.useFakeTimers()
       const h = fixture()
       let shellInFront = true
@@ -450,22 +481,21 @@ describe('OpenCode submit readiness', () => {
       h.emit(BOX)
       await vi.advanceTimersByTimeAsync(OPENCODE_AGENT_ROW_GRACE_MS)
       expect(result.value).toBeUndefined()
+      // Nothing new is painted, and a deadline is never evidence: the agent's next signal decides.
       shellInFront = false
       await vi.advanceTimersByTimeAsync(8000 - OPENCODE_AGENT_ROW_GRACE_MS)
-      expect(result.value).toBe('pty-1')
+      expect(result.value).toBeNull()
     })
 
-    it('gives up when the deadline check never answers', async () => {
+    it('ends at the hard deadline even when its observer never answers', async () => {
       vi.useFakeTimers()
       const h = fixture()
       const check = pendingRead()
-      const result = waitWith(h, { isShellInFront: check.read, timeoutMs: 3000 })
+      const result = waitWith(h, { isShellInFront: check.read, timeoutMs: 6000 })
       h.emit(BOX)
-      await vi.advanceTimersByTimeAsync(3000)
+      await vi.advanceTimersByTimeAsync(OPENCODE_AGENT_ROW_GRACE_MS)
       expect(check.read).toHaveBeenCalled()
-      await vi.advanceTimersByTimeAsync(1999)
-      expect(result.value).toBeUndefined()
-      await vi.advanceTimersByTimeAsync(1)
+      await vi.advanceTimersByTimeAsync(6000 - OPENCODE_AGENT_ROW_GRACE_MS)
       expect(result.value).toBeNull()
       expect(vi.getTimerCount()).toBe(0)
     })

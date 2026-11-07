@@ -105,7 +105,7 @@ export function readsAgentLaunchTabClosed(
 }
 
 /** The CLI (no declared client) ships with this host; any other caller must say it reads the word. */
-function readsUnconfirmedLaunchPrompt(
+export function readsUnconfirmedLaunchPrompt(
   context: Pick<RpcContext, 'clientKind' | 'clientCapabilities'>
 ): boolean {
   return (

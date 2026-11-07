@@ -49,6 +49,7 @@ import { watchRuntimeEnvironmentPreference } from './runtime-environment-prefere
 import { publishRuntimeEnvironmentCatalogChanged } from './runtime-environment-catalog-broadcast'
 import { isGatedOffWslHost } from '../../wsl/host-lifecycle/wsl-host-gate'
 import { resetDesktopBrowserBridgeEnvironment } from '../browser/desktop-browser-bridge-reconcile'
+import type { RemoteGeneratedInputIngress } from '../runtime'
 
 const remoteRuntimeSubscriptions = new Map<string, RetainedRemoteRuntimeSubscription>()
 const getUserDataPath = getRuntimeEnvironmentRegistryRoot
@@ -117,7 +118,10 @@ function reactivateRuntimeEnvironmentStatus(environmentId: string): void {
 const pendingSubscriptions = new Map<string, PendingRuntimeSubscription>()
 let stopPreferenceWatch: (() => void) | undefined
 
-export function registerRuntimeEnvironmentHandlers(store: Store): void {
+export function registerRuntimeEnvironmentHandlers(
+  store: Store,
+  acceptGeneratedInput?: RemoteGeneratedInputIngress
+): void {
   stopPreferenceWatch?.()
   stopPreferenceWatch = watchRuntimeEnvironmentPreference(store, getUserDataPath(), () => {
     // CLI and recipe removals skip the Settings path; drop their session partitions here too.
@@ -154,8 +158,11 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
     getUserDataPath,
     invalidateTransport: invalidateRuntimeEnvironmentTransport
   })
-  registerRuntimeEnvironmentPassiveHandlers(getUserDataPath, (environment, method, response) =>
-    recordHostRepoCatalogAnswer(store, environment, method, response)
+  registerRuntimeEnvironmentPassiveHandlers(
+    getUserDataPath,
+    (environment, method, response) =>
+      recordHostRepoCatalogAnswer(store, environment, method, response),
+    acceptGeneratedInput
   )
   setManagedOrcadPairingRepairedListener(invalidateRuntimeEnvironmentTransport)
   setRefusedPairingHandlers({
@@ -196,6 +203,7 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
     remoteRuntimeSubscriptions,
     pendingSubscriptions,
     recordLayoutFrame: (environmentId, method, response) =>
-      recordRemoteLayoutFrame(store, environmentId, method, response)
+      recordRemoteLayoutFrame(store, environmentId, method, response),
+    acceptGeneratedInput
   })
 }

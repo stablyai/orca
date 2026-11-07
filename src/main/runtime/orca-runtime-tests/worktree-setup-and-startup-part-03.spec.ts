@@ -416,8 +416,8 @@ describe('OrcaRuntimeService', () => {
     expect(write).not.toHaveBeenCalled()
 
     runtime.onPtyData('pty-startup-draft', '›', Date.now())
-    await Promise.resolve()
-    await Promise.resolve()
+    // The host's admission reads settle without any time passing.
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(write).toHaveBeenCalledWith(
       'pty-startup-draft',
@@ -551,8 +551,8 @@ describe('OrcaRuntimeService', () => {
 
     await vi.advanceTimersByTimeAsync(10_000)
     runtime.onPtyData('pty-opencode-draft-budget', '\x1b[?2004h\x1b[?25h', Date.now())
-    await Promise.resolve()
-    await Promise.resolve()
+    // The host's admission reads settle without any time passing.
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(write).toHaveBeenCalledWith(
       'pty-opencode-draft-budget',

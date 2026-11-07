@@ -1,3 +1,4 @@
+import * as generatedInputNotices from '@/runtime/generated-agent-input-notices'
 import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
 import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-exit-deferral'
 import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/pty-transport/output/terminal-side-effect-facts-handler'
@@ -219,6 +220,8 @@ export function registerRuntimeClientIpcBridge(
       })
   }
 
+  unsubs.push(generatedInputNotices.subscribeWindowGeneratedInputNotices())
+
   setRuntimeEnvironmentCatalogRefresher(async () => {
     useAppStore.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
   })
@@ -273,7 +276,8 @@ export function registerRuntimeClientIpcBridge(
         },
         { hostsBrowserPages: hostsBrowserPagesFor(environmentId) }
       )
-      return subscription
+      // Notices ride their own bounded stream from the runtime that owns them, beside these events.
+      return generatedInputNotices.withEnvironmentGeneratedInputNotices(environmentId, subscription)
     },
     onEvent: handleRuntimeClientEvent
   })

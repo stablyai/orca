@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import { BrowserWindow, ipcMain, type WebContents } from 'electron'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
   RuntimeBrowserDriverState,
@@ -16,6 +16,18 @@ import { DESKTOP_RPC_CALLER } from '../runtime/rpc/rpc-caller-identity'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
 import { DesktopRuntimeSenderLifecycle } from './desktop-runtime-sender-lifecycle'
 import { publishMobileProjectSections } from '../runtime/sidebar-inputs/mobile-project-sections-snapshot'
+import {
+  GeneratedInputIngress,
+  type GeneratedInputReplyObserver
+} from '../runtime/generated-agent-input-notices-ingress'
+import type { GeneratedInputNoticeOwner } from '../runtime/generated-agent-input-notices'
+import {
+  noticeOriginOf,
+  remoteGeneratedInputIngress,
+  type RemoteGeneratedInputIngress
+} from './runtime-remote-generated-input-ingress'
+export type { RemoteGeneratedInputIngress } from './runtime-remote-generated-input-ingress'
+export { forwardGeneratedInputNoticesToHosts } from './runtime-environments/runtime-environment-generated-input-notice-hosts'
 
 function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -26,9 +38,24 @@ function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
   return Promise.race([pending, deadline]).finally(() => clearTimeout(timer))
 }
 
-export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
+export function registerRuntimeHandlers(runtime: OrcaRuntimeService): RemoteGeneratedInputIngress {
   const pendingTerminalFitRestores = new Map<string, Promise<boolean>>()
   const desktopSenders = new DesktopRuntimeSenderLifecycle(runtime)
+  const generatedInput = new GeneratedInputIngress(runtime.generatedInputNotices)
+  const acceptGeneratedInput = (
+    sender: WebContents,
+    method: string,
+    params: unknown,
+    owner?: GeneratedInputNoticeOwner,
+    operationId?: string
+  ): GeneratedInputReplyObserver | null =>
+    generatedInput.accept(
+      method,
+      params,
+      { origin: noticeOriginOf(sender), connection: desktopSenders.connectionIdFor(sender) },
+      owner,
+      operationId
+    )
   ipcMain.removeHandler('runtime:syncWindowGraph')
   ipcMain.removeHandler('runtime:getStatus')
   ipcMain.removeHandler('runtime:call')
@@ -83,6 +110,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       if (event.senderFrame !== event.sender.mainFrame) {
         throw new Error('Runtime RPC call must originate from the current main frame')
       }
+      acceptGeneratedInput(event.sender, args.method, args.params)
       return new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatch(
         {
           id: 'desktop-ipc',
@@ -92,6 +120,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
         },
         {
           clientId: 'desktop-renderer',
+          noticeOrigin: noticeOriginOf(event.sender),
           caller: DESKTOP_RPC_CALLER,
           clientKind: 'runtime',
           connectionId: desktopSenders.connectionIdFor(event.sender),
@@ -117,6 +146,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       const controller = new AbortController()
       senderSubscriptions.set(args.subscriptionId, controller)
       const channel = `runtime:subscription:${args.subscriptionId}`
+      acceptGeneratedInput(event.sender, args.method, args.params)
       // Streaming outlives dispatch setup; unsubscribe or sender retirement owns cancellation.
       void new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatchStreamingObjects(
         {
@@ -133,6 +163,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
         {
           signal: controller.signal,
           clientId: 'desktop-renderer',
+          noticeOrigin: noticeOriginOf(event.sender),
           caller: DESKTOP_RPC_CALLER,
           clientKind: 'runtime',
           connectionId,
@@ -242,4 +273,5 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       }
     }
   )
+  return remoteGeneratedInputIngress(runtime, acceptGeneratedInput)
 }

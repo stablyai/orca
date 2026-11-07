@@ -1,0 +1,1443 @@
+diff --git a/dist/index.mjs b/dist/index.mjs
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -122,78 +122,126 @@
+ class Observer {
+     constructor(){
+-        // We use arrow functions to maintain the correct `this` reference
+-        this.subscribe = (subscriber)=>{
+-            this.subscribers.push(subscriber);
++        this.history = new Map();
++        this.presented = new Map();
++        this.dismissedToasts = new Set();
++        this.rowListeners = new Map();
++        this.structureListeners = new Set();
++        this.objectListeners = new Set();
++        this.pendingIds = new Set();
++        this.pendingStructure = false;
++        this.depth = 0;
++        this.exits = new Map();
++        this.ids = null;
++        this.objects = null;
++        this.subscribeId = (id, listener)=>{
++            let listeners = this.rowListeners.get(id);
++            if (!listeners) this.rowListeners.set(id, listeners = new Set());
++            listeners.add(listener);
+             return ()=>{
+-                const index = this.subscribers.indexOf(subscriber);
+-                this.subscribers.splice(index, 1);
++                listeners.delete(listener);
++                if (!listeners.size) {
++                    this.rowListeners.delete(id);
++                    const row = this.presented.get(id);
++                    if (row?.delete) this.batch(()=>{ this.cancelExit(id); this.removeNow(id); });
++                }
+             };
+         };
+-        this.publish = (data)=>{
+-            this.subscribers.forEach((subscriber)=>subscriber(data));
+-        };
+-        this.addToast = (data)=>{
+-            this.publish(data);
+-            this.toasts = [
+-                ...this.toasts,
+-                data
+-            ];
+-        };
+-        this.create = (data)=>{
+-            var _data_id;
+-            const { message, ...rest } = data;
+-            const id = typeof (data == null ? void 0 : data.id) === 'number' || ((_data_id = data.id) == null ? void 0 : _data_id.length) > 0 ? data.id : toastsCounter++;
+-            const alreadyExists = this.toasts.find((toast)=>{
+-                return toast.id === id;
+-            });
+-            const dismissible = data.dismissible === undefined ? true : data.dismissible;
+-            if (this.dismissedToasts.has(id)) {
+-                this.dismissedToasts.delete(id);
+-            }
+-            if (alreadyExists) {
+-                this.toasts = this.toasts.map((toast)=>{
+-                    if (toast.id === id) {
+-                        this.publish({
+-                            ...toast,
+-                            ...data,
+-                            id,
+-                            title: message
+-                        });
+-                        return {
+-                            ...toast,
+-                            ...data,
+-                            id,
+-                            dismissible,
+-                            title: message
+-                        };
+-                    }
+-                    return toast;
+-                });
+-            } else {
+-                this.addToast({
+-                    title: message,
+-                    ...rest,
+-                    dismissible,
+-                    id
+-                });
+-            }
++        this.subscribeStructure = (listener)=>{
++            this.structureListeners.add(listener);
++            return ()=>this.structureListeners.delete(listener);
++        };
++        this.subscribePresentation = this.subscribeStructure;
++        this.subscribeObjects = (listener)=>{
++            this.objectListeners.add(listener);
++            return ()=>this.objectListeners.delete(listener);
++        };
++        this.getIds = ()=>this.ids || (this.ids = Array.from(this.presented.keys()).reverse());
++        this.getObjects = ()=>this.objects || (this.objects = this.getIds().map((id)=>this.presented.get(id)).filter((toast)=>!toast.delete));
++        this.flush = ()=>{
++            if (this.depth) return;
++            const ids = this.pendingIds;
++            const structure = this.pendingStructure;
++            this.pendingIds = new Set();
++            this.pendingStructure = false;
++            for (const id of ids) for (const listener of this.rowListeners.get(id) || []) listener();
++            if (structure) for (const listener of this.structureListeners) listener();
++            if (ids.size || structure) for (const listener of this.objectListeners) listener();
++        };
++        this.batch = (run)=>{
++            this.depth++;
++            try { return run(); } finally { this.depth--; this.flush(); }
++        };
++        this.changed = (id, structure)=>{
++            this.pendingIds.add(id);
++            this.objects = null;
++            if (structure) { this.ids = null; this.pendingStructure = true; }
++            this.flush();
++        };
++        this.create = (data)=>this.batch(()=>{
++            const {message, ...rest} = data;
++            const id = typeof data.id === 'number' || data.id?.length > 0 ? data.id : toastsCounter++;
++            const previous = this.history.get(id);
++            const next = {...previous, ...rest, id, dismissible: data.dismissible === undefined ? true : data.dismissible, title: message};
++            const row = this.presented.get(id);
++            if (row && !row.delete && Object.keys(next).length === Object.keys(previous).length && Object.keys(next).every((key)=>Object.is(next[key], previous[key]))) return id;
++            this.history.set(id, next);
++            this.dismissedToasts.delete(id);
++            this.presented.set(id, next);
++            this.cancelExit(id);
++            this.changed(id, !row || row.position !== next.position || row.toasterId !== next.toasterId || row.delete);
+             return id;
+-        };
++        });
++        this.addToast = (data)=>this.create({...data, message: data.title});
+         this.dismiss = (id)=>{
+-            if (id) {
+-                this.dismissedToasts.add(id);
+-                requestAnimationFrame(()=>this.subscribers.forEach((subscriber)=>subscriber({
+-                            id,
+-                            dismiss: true
+-                        })));
+-            } else {
+-                this.toasts.forEach((toast)=>{
+-                    this.subscribers.forEach((subscriber)=>subscriber({
+-                            id: toast.id,
+-                            dismiss: true
+-                        }));
+-                });
+-            }
++            this.batch(()=>{
++                const group = {pending: 0, ready: new Map()};
++                const dismissOne = (key)=>{
++                    const row = this.presented.get(key);
++                    this.dismissedToasts.add(key);
++                    if (!row || row.delete) return;
++                    if (this.rowListeners.get(key)?.size) {
++                        group.pending++;
++                        this.exits.set(key, group);
++                        this.presented.set(key, {...row, delete: true});
++                    } else this.presented.delete(key);
++                    this.changed(key, true);
++                };
++                if (id !== undefined) dismissOne(id);
++                else for (const key of this.presented.keys()) dismissOne(key);
++            });
+             return id;
++        };
++        this.removeNow = (id)=>{
++            this.dismissedToasts.add(id);
++            this.presented.delete(id);
++            this.changed(id, true);
++        };
++        this.finishExit = (group)=>{
++            if (group.pending) return;
++            this.batch(()=>{
++                for (const id of group.ready.keys()) {
++                    this.exits.delete(id);
++                    this.removeNow(id);
++                }
++                group.ready.clear();
++            });
++        };
++        this.cancelExit = (id)=>{
++            const group = this.exits.get(id);
++            if (!group) return;
++            this.exits.delete(id);
++            if (!group.ready.delete(id)) group.pending--;
++            this.finishExit(group);
++        };
++        this.remove = (id, expected)=>{
++            if (this.presented.get(id) !== expected) return;
++            const group = this.exits.get(id);
++            if (!group) { this.removeNow(id); return; }
++            if (!group.ready.has(id)) {
++                group.ready.set(id, expected);
++                group.pending--;
++            }
++            // One bulk dismissal publishes once, after all its row exit animations finish.
++            this.finishExit(group);
+         };
+         this.message = (message, data)=>{
+@@ -361,10 +409,5 @@
+             return id;
+         };
+-        this.getActiveToasts = ()=>{
+-            return this.toasts.filter((toast)=>!this.dismissedToasts.has(toast.id));
+-        };
+-        this.subscribers = [];
+-        this.toasts = [];
+-        this.dismissedToasts = new Set();
++        this.getActiveToasts = ()=>Array.from(this.history.values()).filter((toast)=>!this.dismissedToasts.has(toast.id));
+     }
+ }
+@@ -384,5 +427,5 @@
+ };
+ const basicToast = toastFunction;
+-const getHistory = ()=>ToastState.toasts;
++const getHistory = ()=>Array.from(ToastState.history.values());
+ const getToasts = ()=>ToastState.getActiveToasts();
+ // We use `Object.assign` to maintain the correct types as we would lose them otherwise
+@@ -399,5 +442,6 @@
+ }, {
+     getHistory,
+-    getToasts
++    getToasts,
++    batch: ToastState.batch
+ });
+ 
+@@ -440,12 +484,15 @@
+ const Toast = (props)=>{
+     var _toast_classNames, _toast_classNames1, _toast_classNames2, _toast_classNames3, _toast_classNames4, _toast_classNames5, _toast_classNames6, _toast_classNames7, _toast_classNames8;
+-    const { invert: ToasterInvert, toast, unstyled, interacting, setHeights, visibleToasts, heights, index, toasts, expanded, removeToast, defaultRichColors, closeButton: closeButtonFromToaster, style, cancelButtonStyle, actionButtonStyle, className = '', descriptionClassName = '', duration: durationFromToaster, position, gap, expandByDefault, classNames, icons, closeButtonAriaLabel = 'Close toast' } = props;
++    const { invert: ToasterInvert, toast, unstyled, interacting, measure, visibleToasts, geometry, index, toastCount, expanded, removeToast, defaultRichColors, closeButton: closeButtonFromToaster, style, cancelButtonStyle, actionButtonStyle, className = '', descriptionClassName = '', duration: durationFromToaster, position, gap, expandByDefault, classNames, icons, closeButtonAriaLabel = 'Close toast' } = props;
+     const [swipeDirection, setSwipeDirection] = React.useState(null);
+     const [swipeOutDirection, setSwipeOutDirection] = React.useState(null);
+     const [mounted, setMounted] = React.useState(false);
+-    const [removed, setRemoved] = React.useState(false);
++    const [removedToast, setRemovedToast] = React.useState(null);
++    const removed = removedToast === toast;
+     const [swiping, setSwiping] = React.useState(false);
+-    const [swipeOut, setSwipeOut] = React.useState(false);
+-    const [isSwiped, setIsSwiped] = React.useState(false);
++    const [swipeOutToast, setSwipeOutToast] = React.useState(null);
++    const swipeOut = swipeOutToast === toast;
++    const [isSwipedToast, setIsSwipedToast] = React.useState(null);
++    const isSwiped = isSwipedToast === toast;
+     const [offsetBeforeRemove, setOffsetBeforeRemove] = React.useState(0);
+     const [initialHeight, setInitialHeight] = React.useState(0);
+@@ -459,9 +506,5 @@
+     const toastClassname = toast.className || '';
+     const toastDescriptionClassname = toast.descriptionClassName || '';
+-    // Height index is used to calculate the offset as it gets updated before the toast array, which means we can calculate the new layout faster.
+-    const heightIndex = React.useMemo(()=>heights.findIndex((height)=>height.toastId === toast.id) || 0, [
+-        heights,
+-        toast.id
+-    ]);
++    const heightIndex = geometry?.heightIndex ?? -1;
+     const closeButton = React.useMemo(()=>{
+         var _toast_closeButton;
+@@ -480,16 +523,5 @@
+     const pointerStartRef = React.useRef(null);
+     const [y, x] = position.split('-');
+-    const toastsHeightBefore = React.useMemo(()=>{
+-        return heights.reduce((prev, curr, reducerIndex)=>{
+-            // Calculate offset up until current toast
+-            if (reducerIndex >= heightIndex) {
+-                return prev;
+-            }
+-            return prev + curr.height;
+-        }, 0);
+-    }, [
+-        heights,
+-        heightIndex
+-    ]);
++    const toastsHeightBefore = geometry?.heightBefore ?? 0;
+     const isDocumentHidden = useIsDocumentHidden();
+     const invert = toast.invert || ToasterInvert;
+@@ -510,25 +542,18 @@
+     React.useEffect(()=>{
+         const toastNode = toastRef.current;
+-        if (toastNode) {
++        if (toastNode && !toast.delete) {
+             const height = toastNode.getBoundingClientRect().height;
+-            // Add toast height to heights array after the toast is mounted
+             setInitialHeight(height);
+-            setHeights((h)=>[
+-                    {
+-                        toastId: toast.id,
+-                        height,
+-                        position: toast.position
+-                    },
+-                    ...h
+-                ]);
+-            return ()=>setHeights((h)=>h.filter((height)=>height.toastId !== toast.id));
++            measure(toast.id, height);
++            return ()=>measure(toast.id, null);
+         }
+     }, [
+-        setHeights,
+-        toast.id
++        measure,
++        toast.id,
++        toast.delete
+     ]);
+     React.useLayoutEffect(()=>{
+         // Keep height up to date with the content in case it updates
+-        if (!mounted) return;
++        if (!mounted || toast.delete) return;
+         const toastNode = toastRef.current;
+         const originalHeight = toastNode.style.height;
+@@ -537,37 +562,21 @@
+         toastNode.style.height = originalHeight;
+         setInitialHeight(newHeight);
+-        setHeights((heights)=>{
+-            const alreadyExists = heights.find((height)=>height.toastId === toast.id);
+-            if (!alreadyExists) {
+-                return [
+-                    {
+-                        toastId: toast.id,
+-                        height: newHeight,
+-                        position: toast.position
+-                    },
+-                    ...heights
+-                ];
+-            } else {
+-                return heights.map((height)=>height.toastId === toast.id ? {
+-                        ...height,
+-                        height: newHeight
+-                    } : height);
+-            }
+-        });
++        measure(toast.id, newHeight);
+     }, [
+         mounted,
+         toast.title,
+         toast.description,
+-        setHeights,
++        measure,
+         toast.id,
+         toast.jsx,
+         toast.action,
+-        toast.cancel
++        toast.cancel,
++        toast.delete
+     ]);
+     const deleteToast = React.useCallback(()=>{
+         // Save the offset for the exit swipe animation
+-        setRemoved(true);
++        setRemovedToast(toast);
+         setOffsetBeforeRemove(offset.current);
+-        setHeights((h)=>h.filter((height)=>height.toastId !== toast.id));
++        measure(toast.id, null);
+         setTimeout(()=>{
+             removeToast(toast);
+@@ -576,5 +585,5 @@
+         toast,
+         removeToast,
+-        setHeights,
++        measure,
+         offset
+     ]);
+@@ -669,5 +678,5 @@
+             '--index': index,
+             '--toasts-before': index,
+-            '--z-index': toasts.length - index,
++            '--z-index': toastCount - index,
+             '--offset': `${removed ? offsetBeforeRemove : offset.current}px`,
+             '--initial-height': expandByDefault ? 'auto' : `${initialHeight}px`,
+@@ -712,5 +721,5 @@
+                 }
+                 deleteToast();
+-                setSwipeOut(true);
++                setSwipeOutToast(toast);
+                 return;
+             } else {
+@@ -719,5 +728,5 @@
+                 (_toastRef_current3 = toastRef.current) == null ? void 0 : _toastRef_current3.style.setProperty('--swipe-amount-y', `0px`);
+             }
+-            setIsSwiped(false);
++            setIsSwipedToast(null);
+             setSwiping(false);
+             setSwipeDirection(null);
+@@ -772,5 +781,5 @@
+             }
+             if (Math.abs(swipeAmount.x) > 0 || Math.abs(swipeAmount.y) > 0) {
+-                setIsSwiped(true);
++                setIsSwipedToast(toast);
+             }
+             (_toastRef_current = toastRef.current) == null ? void 0 : _toastRef_current.style.setProperty('--swipe-amount-x', `${swipeAmount.x}px`);
+@@ -873,44 +882,147 @@
+     return styles;
+ }
++class ToastLayout {
++    constructor(){
++        this.active = true;
++        this.heights = new Map();
++        this.rows = new Map();
++        this.items = new Map();
++        this.listeners = new Map();
++        this.frontListeners = new Set();
++        this.pending = new Set();
++        this.dirty = new Set();
++        this.front = 0;
++        this.ids = null;
++        this.measure = this.measure.bind(this);
++        this.subscribeFront = (listener)=>{
++            this.frontListeners.add(listener);
++            return ()=>this.frontListeners.delete(listener);
++        };
++        this.getFront = ()=>this.front;
++    }
++    subscribe(id, listener){
++        let listeners = this.listeners.get(id);
++        if (!listeners) this.listeners.set(id, listeners = new Set());
++        listeners.add(listener);
++        return ()=>{
++            listeners.delete(listener);
++            if (!listeners.size) this.listeners.delete(id);
++        };
++    }
++    configure(ids, defaultPosition){
++        if (this.ids === ids && this.defaultPosition === defaultPosition) return;
++        this.ids = ids;
++        this.defaultPosition = defaultPosition;
++        this.groups = new Map([[defaultPosition, []]]);
++        this.liveGroups = new Map();
++        this.needsRebuild = false;
++        this.rows.clear();
++        this.pending.clear();
++        for (const id of ids) {
++            const toast = ToastState.presented.get(id);
++            const position = toast.position || defaultPosition;
++            let group = this.groups.get(position);
++            if (!group) this.groups.set(position, group = []);
++            group.push(id);
++            if (toast.delete) {
++                this.rows.set(id, {order: this.rows.size});
++                this.heights.delete(id);
++                continue;
++            }
++            let live = this.liveGroups.get(position);
++            if (!live) this.liveGroups.set(position, live = []);
++            this.rows.set(id, {group: live, index: live.length, order: this.rows.size});
++            live.push(id);
++            if (!this.heights.has(id)) this.pending.add(id);
++        }
++        for (const id of this.heights.keys()) if (!this.rows.has(id)) this.heights.delete(id);
++        for (const id of this.items.keys()) if (!this.rows.has(id)) this.items.delete(id);
++        this.rebuild();
++        this.findFront(0);
++    }
++    setItem(id, value){
++        const old = this.items.get(id);
++        if (old && old.heightIndex === value.heightIndex && old.heightBefore === value.heightBefore && old.countBefore === value.countBefore) return;
++        this.items.set(id, value);
++        this.dirty.add(id);
++    }
++    rebuild(){
++        for (const group of this.liveGroups.values()) {
++            let count = 0;
++            let height = 0;
++            for (const id of group) {
++                const measured = this.heights.has(id);
++                this.setItem(id, {heightIndex: measured ? count : -1, heightBefore: height, countBefore: count});
++                if (measured) { count++; height += this.heights.get(id); }
++            }
++        }
++    }
++    measure(id, height){
++        if (!this.active) return;
++        const row = this.rows.get(id);
++        if (!row?.group) return;
++        const had = this.heights.has(id);
++        const previous = this.heights.get(id) || 0;
++        this.pending.delete(id);
++        if (height === null) this.heights.delete(id);
++        else this.heights.set(id, height);
++        if (had === (height !== null) && previous === (height || 0)) return;
++        if (this.pending.size) { this.needsRebuild = true; return; }
++        if (this.needsRebuild) {
++            this.needsRebuild = false;
++            this.rebuild();
++            this.findFront(0);
++        } else {
++            const delta = (height || 0) - previous;
++            const count = Number(height !== null) - Number(had);
++            const item = this.items.get(id);
++            if (count) {
++                this.setItem(id, {...item, heightIndex: height === null ? -1 : item.countBefore});
++            }
++            for (let index = row.index + 1; index < row.group.length; index++) {
++                const nextId = row.group[index];
++                const next = this.items.get(nextId);
++                this.setItem(nextId, {heightIndex: next.heightIndex < 0 ? -1 : next.heightIndex + count, heightBefore: next.heightBefore + delta, countBefore: next.countBefore + count});
++            }
++        }
++        if (id === this.frontId && height === null) this.findFront(row.order + 1);
++        else if (height !== null && (this.frontId === undefined || row.order < this.rows.get(this.frontId).order)) this.frontId = id;
++        this.flush();
++    }
++    findFront(start){
++        this.frontId = undefined;
++        if (!this.heights.size) return;
++        for (let index = start; index < this.ids.length; index++) {
++            if (this.heights.has(this.ids[index])) { this.frontId = this.ids[index]; break; }
++        }
++    }
++    flush(){
++        if (!this.active) return;
++        const dirty = this.dirty;
++        this.dirty = new Set();
++        for (const id of dirty) for (const listener of this.listeners.get(id) || []) listener();
++        const front = this.frontId === undefined ? 0 : this.heights.get(this.frontId) || 0;
++        if (front !== this.front) {
++            this.front = front;
++            for (const listener of this.frontListeners) listener();
++        }
++    }
++}
++const IndexedToast = React.memo(function IndexedToast(props){
++    const {toastId, layout, ...rest} = props;
++    const subscribe = React.useCallback((listener)=>ToastState.subscribeId(toastId, listener), [toastId]);
++    const getSnapshot = React.useCallback(()=>ToastState.presented.get(toastId), [toastId]);
++    const toast = React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
++    const subscribeLayout = React.useCallback((listener)=>layout.subscribe(toastId, listener), [layout, toastId]);
++    const getLayout = React.useCallback(()=>layout.items.get(toastId), [layout, toastId]);
++    const geometry = React.useSyncExternalStore(subscribeLayout, getLayout, getLayout);
++    return toast ? React.createElement(Toast, {...rest, toast, geometry, measure: layout.measure}) : null;
++});
++function useSonnerIds(){
++    const objects = React.useSyncExternalStore(ToastState.subscribeStructure, ToastState.getIds, ToastState.getIds);
++    return React.useMemo(()=>objects.filter((id)=>!ToastState.presented.get(id).delete), [objects]);
++}
+ function useSonner() {
+-    const [activeToasts, setActiveToasts] = React.useState([]);
+-    React.useEffect(()=>{
+-        return ToastState.subscribe((toast)=>{
+-            if (toast.dismiss) {
+-                setTimeout(()=>{
+-                    ReactDOM.flushSync(()=>{
+-                        setActiveToasts((toasts)=>toasts.filter((t)=>t.id !== toast.id));
+-                    });
+-                });
+-                return;
+-            }
+-            // Prevent batching, temp solution.
+-            setTimeout(()=>{
+-                ReactDOM.flushSync(()=>{
+-                    setActiveToasts((toasts)=>{
+-                        const indexOfExistingToast = toasts.findIndex((t)=>t.id === toast.id);
+-                        // Update the toast if it already exists
+-                        if (indexOfExistingToast !== -1) {
+-                            return [
+-                                ...toasts.slice(0, indexOfExistingToast),
+-                                {
+-                                    ...toasts[indexOfExistingToast],
+-                                    ...toast
+-                                },
+-                                ...toasts.slice(indexOfExistingToast + 1)
+-                            ];
+-                        }
+-                        return [
+-                            toast,
+-                            ...toasts
+-                        ];
+-                    });
+-                });
+-            });
+-        });
+-    }, []);
+-    return {
+-        toasts: activeToasts
+-    };
++    return {toasts: React.useSyncExternalStore(ToastState.subscribeObjects, ToastState.getObjects, ToastState.getObjects)};
+ }
+ const Toaster = /*#__PURE__*/ React.forwardRef(function Toaster(props, ref) {
+@@ -919,23 +1031,16 @@
+         'KeyT'
+     ], expand, closeButton, className, offset, mobileOffset, theme = 'light', richColors, duration, style, visibleToasts = VISIBLE_TOASTS_AMOUNT, toastOptions, dir = getDocumentDirection(), gap = GAP, icons, containerAriaLabel = 'Notifications' } = props;
+-    const [toasts, setToasts] = React.useState([]);
+-    const filteredToasts = React.useMemo(()=>{
+-        if (id) {
+-            return toasts.filter((toast)=>toast.toasterId === id);
+-        }
+-        return toasts.filter((toast)=>!toast.toasterId);
+-    }, [
+-        toasts,
+-        id
+-    ]);
+-    const possiblePositions = React.useMemo(()=>{
+-        return Array.from(new Set([
+-            position
+-        ].concat(filteredToasts.filter((toast)=>toast.position).map((toast)=>toast.position))));
+-    }, [
+-        filteredToasts,
+-        position
+-    ]);
+-    const [heights, setHeights] = React.useState([]);
++    const toasts = React.useSyncExternalStore(ToastState.subscribePresentation, ToastState.getIds, ToastState.getIds);
++    const filteredToasts = React.useMemo(()=>toasts.map((key)=>ToastState.presented.get(key)).filter((toast)=>id ? toast.toasterId === id : !toast.toasterId), [toasts, id]);
++    const rowIds = React.useMemo(()=>filteredToasts.map((toast)=>toast.id), [filteredToasts]);
++    const layout = React.useMemo(()=>new ToastLayout(), []);
++    layout.configure(rowIds, position);
++    const possiblePositions = Array.from(layout.groups.keys());
++    const frontHeight = React.useSyncExternalStore(layout.subscribeFront, layout.getFront, layout.getFront);
++    React.useLayoutEffect(()=>{
++        layout.active = true;
++        return ()=>{ layout.active = false; };
++    }, [layout]);
++    React.useLayoutEffect(()=>layout.flush());
+     const [expanded, setExpanded] = React.useState(false);
+     const [interacting, setInteracting] = React.useState(false);
+@@ -945,52 +1050,5 @@
+     const lastFocusedElementRef = React.useRef(null);
+     const isFocusWithinRef = React.useRef(false);
+-    const removeToast = React.useCallback((toastToRemove)=>{
+-        setToasts((toasts)=>{
+-            var _toasts_find;
+-            if (!((_toasts_find = toasts.find((toast)=>toast.id === toastToRemove.id)) == null ? void 0 : _toasts_find.delete)) {
+-                ToastState.dismiss(toastToRemove.id);
+-            }
+-            return toasts.filter(({ id })=>id !== toastToRemove.id);
+-        });
+-    }, []);
+-    React.useEffect(()=>{
+-        return ToastState.subscribe((toast)=>{
+-            if (toast.dismiss) {
+-                // Prevent batching of other state updates
+-                requestAnimationFrame(()=>{
+-                    setToasts((toasts)=>toasts.map((t)=>t.id === toast.id ? {
+-                                ...t,
+-                                delete: true
+-                            } : t));
+-                });
+-                return;
+-            }
+-            // Prevent batching, temp solution.
+-            setTimeout(()=>{
+-                ReactDOM.flushSync(()=>{
+-                    setToasts((toasts)=>{
+-                        const indexOfExistingToast = toasts.findIndex((t)=>t.id === toast.id);
+-                        // Update the toast if it already exists
+-                        if (indexOfExistingToast !== -1) {
+-                            return [
+-                                ...toasts.slice(0, indexOfExistingToast),
+-                                {
+-                                    ...toasts[indexOfExistingToast],
+-                                    ...toast
+-                                },
+-                                ...toasts.slice(indexOfExistingToast + 1)
+-                            ];
+-                        }
+-                        return [
+-                            toast,
+-                            ...toasts
+-                        ];
+-                    });
+-                });
+-            });
+-        });
+-    }, [
+-        toasts
+-    ]);
++    const removeToast = React.useCallback((toast)=>ToastState.remove(toast.id, toast), []);
+     React.useEffect(()=>{
+         if (theme !== 'system') {
+@@ -1101,5 +1159,5 @@
+             "data-x-position": x,
+             style: {
+-                '--front-toast-height': `${((_heights_ = heights[0]) == null ? void 0 : _heights_.height) || 0}px`,
++                '--front-toast-height': `${frontHeight}px`,
+                 '--width': `${TOAST_WIDTH}px`,
+                 '--gap': `${gap}px`,
+@@ -1141,11 +1199,12 @@
+             },
+             onPointerUp: ()=>setInteracting(false)
+-        }, filteredToasts.filter((toast)=>!toast.position && index === 0 || toast.position === position).map((toast, index)=>{
++        }, (layout.groups.get(position) || []).map((toastId, index)=>{
+             var _toastOptions_duration, _toastOptions_closeButton;
+-            return /*#__PURE__*/ React.createElement(Toast, {
+-                key: toast.id,
++            return /*#__PURE__*/ React.createElement(IndexedToast, {
++                key: toastId,
+                 icons: icons,
+                 index: index,
+-                toast: toast,
++                toastId: toastId,
++                layout: layout,
+                 defaultRichColors: richColors,
+                 duration: (_toastOptions_duration = toastOptions == null ? void 0 : toastOptions.duration) != null ? _toastOptions_duration : duration,
+@@ -1164,7 +1223,5 @@
+                 closeButtonAriaLabel: toastOptions == null ? void 0 : toastOptions.closeButtonAriaLabel,
+                 removeToast: removeToast,
+-                toasts: filteredToasts.filter((t)=>t.position == toast.position),
+-                heights: heights.filter((h)=>h.position == toast.position),
+-                setHeights: setHeights,
++                toastCount: layout.groups.get(position).length,
+                 expandByDefault: expand,
+                 gap: gap,
+@@ -1176,3 +1233,3 @@
+ });
+ 
+-export { Toaster, toast, useSonner };
++export { Toaster, toast, useSonner, useSonnerIds };
+diff --git a/dist/index.js b/dist/index.js
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -129,78 +129,126 @@
+ class Observer {
+     constructor(){
+-        // We use arrow functions to maintain the correct `this` reference
+-        this.subscribe = (subscriber)=>{
+-            this.subscribers.push(subscriber);
++        this.history = new Map();
++        this.presented = new Map();
++        this.dismissedToasts = new Set();
++        this.rowListeners = new Map();
++        this.structureListeners = new Set();
++        this.objectListeners = new Set();
++        this.pendingIds = new Set();
++        this.pendingStructure = false;
++        this.depth = 0;
++        this.exits = new Map();
++        this.ids = null;
++        this.objects = null;
++        this.subscribeId = (id, listener)=>{
++            let listeners = this.rowListeners.get(id);
++            if (!listeners) this.rowListeners.set(id, listeners = new Set());
++            listeners.add(listener);
+             return ()=>{
+-                const index = this.subscribers.indexOf(subscriber);
+-                this.subscribers.splice(index, 1);
++                listeners.delete(listener);
++                if (!listeners.size) {
++                    this.rowListeners.delete(id);
++                    const row = this.presented.get(id);
++                    if (row?.delete) this.batch(()=>{ this.cancelExit(id); this.removeNow(id); });
++                }
+             };
+         };
+-        this.publish = (data)=>{
+-            this.subscribers.forEach((subscriber)=>subscriber(data));
+-        };
+-        this.addToast = (data)=>{
+-            this.publish(data);
+-            this.toasts = [
+-                ...this.toasts,
+-                data
+-            ];
+-        };
+-        this.create = (data)=>{
+-            var _data_id;
+-            const { message, ...rest } = data;
+-            const id = typeof (data == null ? void 0 : data.id) === 'number' || ((_data_id = data.id) == null ? void 0 : _data_id.length) > 0 ? data.id : toastsCounter++;
+-            const alreadyExists = this.toasts.find((toast)=>{
+-                return toast.id === id;
+-            });
+-            const dismissible = data.dismissible === undefined ? true : data.dismissible;
+-            if (this.dismissedToasts.has(id)) {
+-                this.dismissedToasts.delete(id);
+-            }
+-            if (alreadyExists) {
+-                this.toasts = this.toasts.map((toast)=>{
+-                    if (toast.id === id) {
+-                        this.publish({
+-                            ...toast,
+-                            ...data,
+-                            id,
+-                            title: message
+-                        });
+-                        return {
+-                            ...toast,
+-                            ...data,
+-                            id,
+-                            dismissible,
+-                            title: message
+-                        };
+-                    }
+-                    return toast;
+-                });
+-            } else {
+-                this.addToast({
+-                    title: message,
+-                    ...rest,
+-                    dismissible,
+-                    id
+-                });
+-            }
++        this.subscribeStructure = (listener)=>{
++            this.structureListeners.add(listener);
++            return ()=>this.structureListeners.delete(listener);
++        };
++        this.subscribePresentation = this.subscribeStructure;
++        this.subscribeObjects = (listener)=>{
++            this.objectListeners.add(listener);
++            return ()=>this.objectListeners.delete(listener);
++        };
++        this.getIds = ()=>this.ids || (this.ids = Array.from(this.presented.keys()).reverse());
++        this.getObjects = ()=>this.objects || (this.objects = this.getIds().map((id)=>this.presented.get(id)).filter((toast)=>!toast.delete));
++        this.flush = ()=>{
++            if (this.depth) return;
++            const ids = this.pendingIds;
++            const structure = this.pendingStructure;
++            this.pendingIds = new Set();
++            this.pendingStructure = false;
++            for (const id of ids) for (const listener of this.rowListeners.get(id) || []) listener();
++            if (structure) for (const listener of this.structureListeners) listener();
++            if (ids.size || structure) for (const listener of this.objectListeners) listener();
++        };
++        this.batch = (run)=>{
++            this.depth++;
++            try { return run(); } finally { this.depth--; this.flush(); }
++        };
++        this.changed = (id, structure)=>{
++            this.pendingIds.add(id);
++            this.objects = null;
++            if (structure) { this.ids = null; this.pendingStructure = true; }
++            this.flush();
++        };
++        this.create = (data)=>this.batch(()=>{
++            const {message, ...rest} = data;
++            const id = typeof data.id === 'number' || data.id?.length > 0 ? data.id : toastsCounter++;
++            const previous = this.history.get(id);
++            const next = {...previous, ...rest, id, dismissible: data.dismissible === undefined ? true : data.dismissible, title: message};
++            const row = this.presented.get(id);
++            if (row && !row.delete && Object.keys(next).length === Object.keys(previous).length && Object.keys(next).every((key)=>Object.is(next[key], previous[key]))) return id;
++            this.history.set(id, next);
++            this.dismissedToasts.delete(id);
++            this.presented.set(id, next);
++            this.cancelExit(id);
++            this.changed(id, !row || row.position !== next.position || row.toasterId !== next.toasterId || row.delete);
+             return id;
+-        };
++        });
++        this.addToast = (data)=>this.create({...data, message: data.title});
+         this.dismiss = (id)=>{
+-            if (id) {
+-                this.dismissedToasts.add(id);
+-                requestAnimationFrame(()=>this.subscribers.forEach((subscriber)=>subscriber({
+-                            id,
+-                            dismiss: true
+-                        })));
+-            } else {
+-                this.toasts.forEach((toast)=>{
+-                    this.subscribers.forEach((subscriber)=>subscriber({
+-                            id: toast.id,
+-                            dismiss: true
+-                        }));
+-                });
+-            }
++            this.batch(()=>{
++                const group = {pending: 0, ready: new Map()};
++                const dismissOne = (key)=>{
++                    const row = this.presented.get(key);
++                    this.dismissedToasts.add(key);
++                    if (!row || row.delete) return;
++                    if (this.rowListeners.get(key)?.size) {
++                        group.pending++;
++                        this.exits.set(key, group);
++                        this.presented.set(key, {...row, delete: true});
++                    } else this.presented.delete(key);
++                    this.changed(key, true);
++                };
++                if (id !== undefined) dismissOne(id);
++                else for (const key of this.presented.keys()) dismissOne(key);
++            });
+             return id;
++        };
++        this.removeNow = (id)=>{
++            this.dismissedToasts.add(id);
++            this.presented.delete(id);
++            this.changed(id, true);
++        };
++        this.finishExit = (group)=>{
++            if (group.pending) return;
++            this.batch(()=>{
++                for (const id of group.ready.keys()) {
++                    this.exits.delete(id);
++                    this.removeNow(id);
++                }
++                group.ready.clear();
++            });
++        };
++        this.cancelExit = (id)=>{
++            const group = this.exits.get(id);
++            if (!group) return;
++            this.exits.delete(id);
++            if (!group.ready.delete(id)) group.pending--;
++            this.finishExit(group);
++        };
++        this.remove = (id, expected)=>{
++            if (this.presented.get(id) !== expected) return;
++            const group = this.exits.get(id);
++            if (!group) { this.removeNow(id); return; }
++            if (!group.ready.has(id)) {
++                group.ready.set(id, expected);
++                group.pending--;
++            }
++            // One bulk dismissal publishes once, after all its row exit animations finish.
++            this.finishExit(group);
+         };
+         this.message = (message, data)=>{
+@@ -368,10 +416,5 @@
+             return id;
+         };
+-        this.getActiveToasts = ()=>{
+-            return this.toasts.filter((toast)=>!this.dismissedToasts.has(toast.id));
+-        };
+-        this.subscribers = [];
+-        this.toasts = [];
+-        this.dismissedToasts = new Set();
++        this.getActiveToasts = ()=>Array.from(this.history.values()).filter((toast)=>!this.dismissedToasts.has(toast.id));
+     }
+ }
+@@ -391,5 +434,5 @@
+ };
+ const basicToast = toastFunction;
+-const getHistory = ()=>ToastState.toasts;
++const getHistory = ()=>Array.from(ToastState.history.values());
+ const getToasts = ()=>ToastState.getActiveToasts();
+ // We use `Object.assign` to maintain the correct types as we would lose them otherwise
+@@ -406,5 +449,6 @@
+ }, {
+     getHistory,
+-    getToasts
++    getToasts,
++    batch: ToastState.batch
+ });
+ 
+@@ -447,12 +491,15 @@
+ const Toast = (props)=>{
+     var _toast_classNames, _toast_classNames1, _toast_classNames2, _toast_classNames3, _toast_classNames4, _toast_classNames5, _toast_classNames6, _toast_classNames7, _toast_classNames8;
+-    const { invert: ToasterInvert, toast, unstyled, interacting, setHeights, visibleToasts, heights, index, toasts, expanded, removeToast, defaultRichColors, closeButton: closeButtonFromToaster, style, cancelButtonStyle, actionButtonStyle, className = '', descriptionClassName = '', duration: durationFromToaster, position, gap, expandByDefault, classNames, icons, closeButtonAriaLabel = 'Close toast' } = props;
++    const { invert: ToasterInvert, toast, unstyled, interacting, measure, visibleToasts, geometry, index, toastCount, expanded, removeToast, defaultRichColors, closeButton: closeButtonFromToaster, style, cancelButtonStyle, actionButtonStyle, className = '', descriptionClassName = '', duration: durationFromToaster, position, gap, expandByDefault, classNames, icons, closeButtonAriaLabel = 'Close toast' } = props;
+     const [swipeDirection, setSwipeDirection] = React__default.default.useState(null);
+     const [swipeOutDirection, setSwipeOutDirection] = React__default.default.useState(null);
+     const [mounted, setMounted] = React__default.default.useState(false);
+-    const [removed, setRemoved] = React__default.default.useState(false);
++    const [removedToast, setRemovedToast] = React__default.default.useState(null);
++    const removed = removedToast === toast;
+     const [swiping, setSwiping] = React__default.default.useState(false);
+-    const [swipeOut, setSwipeOut] = React__default.default.useState(false);
+-    const [isSwiped, setIsSwiped] = React__default.default.useState(false);
++    const [swipeOutToast, setSwipeOutToast] = React__default.default.useState(null);
++    const swipeOut = swipeOutToast === toast;
++    const [isSwipedToast, setIsSwipedToast] = React__default.default.useState(null);
++    const isSwiped = isSwipedToast === toast;
+     const [offsetBeforeRemove, setOffsetBeforeRemove] = React__default.default.useState(0);
+     const [initialHeight, setInitialHeight] = React__default.default.useState(0);
+@@ -466,9 +513,5 @@
+     const toastClassname = toast.className || '';
+     const toastDescriptionClassname = toast.descriptionClassName || '';
+-    // Height index is used to calculate the offset as it gets updated before the toast array, which means we can calculate the new layout faster.
+-    const heightIndex = React__default.default.useMemo(()=>heights.findIndex((height)=>height.toastId === toast.id) || 0, [
+-        heights,
+-        toast.id
+-    ]);
++    const heightIndex = geometry?.heightIndex ?? -1;
+     const closeButton = React__default.default.useMemo(()=>{
+         var _toast_closeButton;
+@@ -487,16 +530,5 @@
+     const pointerStartRef = React__default.default.useRef(null);
+     const [y, x] = position.split('-');
+-    const toastsHeightBefore = React__default.default.useMemo(()=>{
+-        return heights.reduce((prev, curr, reducerIndex)=>{
+-            // Calculate offset up until current toast
+-            if (reducerIndex >= heightIndex) {
+-                return prev;
+-            }
+-            return prev + curr.height;
+-        }, 0);
+-    }, [
+-        heights,
+-        heightIndex
+-    ]);
++    const toastsHeightBefore = geometry?.heightBefore ?? 0;
+     const isDocumentHidden = useIsDocumentHidden();
+     const invert = toast.invert || ToasterInvert;
+@@ -517,25 +549,18 @@
+     React__default.default.useEffect(()=>{
+         const toastNode = toastRef.current;
+-        if (toastNode) {
++        if (toastNode && !toast.delete) {
+             const height = toastNode.getBoundingClientRect().height;
+-            // Add toast height to heights array after the toast is mounted
+             setInitialHeight(height);
+-            setHeights((h)=>[
+-                    {
+-                        toastId: toast.id,
+-                        height,
+-                        position: toast.position
+-                    },
+-                    ...h
+-                ]);
+-            return ()=>setHeights((h)=>h.filter((height)=>height.toastId !== toast.id));
++            measure(toast.id, height);
++            return ()=>measure(toast.id, null);
+         }
+     }, [
+-        setHeights,
+-        toast.id
++        measure,
++        toast.id,
++        toast.delete
+     ]);
+     React__default.default.useLayoutEffect(()=>{
+         // Keep height up to date with the content in case it updates
+-        if (!mounted) return;
++        if (!mounted || toast.delete) return;
+         const toastNode = toastRef.current;
+         const originalHeight = toastNode.style.height;
+@@ -544,37 +569,21 @@
+         toastNode.style.height = originalHeight;
+         setInitialHeight(newHeight);
+-        setHeights((heights)=>{
+-            const alreadyExists = heights.find((height)=>height.toastId === toast.id);
+-            if (!alreadyExists) {
+-                return [
+-                    {
+-                        toastId: toast.id,
+-                        height: newHeight,
+-                        position: toast.position
+-                    },
+-                    ...heights
+-                ];
+-            } else {
+-                return heights.map((height)=>height.toastId === toast.id ? {
+-                        ...height,
+-                        height: newHeight
+-                    } : height);
+-            }
+-        });
++        measure(toast.id, newHeight);
+     }, [
+         mounted,
+         toast.title,
+         toast.description,
+-        setHeights,
++        measure,
+         toast.id,
+         toast.jsx,
+         toast.action,
+-        toast.cancel
++        toast.cancel,
++        toast.delete
+     ]);
+     const deleteToast = React__default.default.useCallback(()=>{
+         // Save the offset for the exit swipe animation
+-        setRemoved(true);
++        setRemovedToast(toast);
+         setOffsetBeforeRemove(offset.current);
+-        setHeights((h)=>h.filter((height)=>height.toastId !== toast.id));
++        measure(toast.id, null);
+         setTimeout(()=>{
+             removeToast(toast);
+@@ -583,5 +592,5 @@
+         toast,
+         removeToast,
+-        setHeights,
++        measure,
+         offset
+     ]);
+@@ -676,5 +685,5 @@
+             '--index': index,
+             '--toasts-before': index,
+-            '--z-index': toasts.length - index,
++            '--z-index': toastCount - index,
+             '--offset': `${removed ? offsetBeforeRemove : offset.current}px`,
+             '--initial-height': expandByDefault ? 'auto' : `${initialHeight}px`,
+@@ -719,5 +728,5 @@
+                 }
+                 deleteToast();
+-                setSwipeOut(true);
++                setSwipeOutToast(toast);
+                 return;
+             } else {
+@@ -726,5 +735,5 @@
+                 (_toastRef_current3 = toastRef.current) == null ? void 0 : _toastRef_current3.style.setProperty('--swipe-amount-y', `0px`);
+             }
+-            setIsSwiped(false);
++            setIsSwipedToast(null);
+             setSwiping(false);
+             setSwipeDirection(null);
+@@ -779,5 +788,5 @@
+             }
+             if (Math.abs(swipeAmount.x) > 0 || Math.abs(swipeAmount.y) > 0) {
+-                setIsSwiped(true);
++                setIsSwipedToast(toast);
+             }
+             (_toastRef_current = toastRef.current) == null ? void 0 : _toastRef_current.style.setProperty('--swipe-amount-x', `${swipeAmount.x}px`);
+@@ -880,44 +889,147 @@
+     return styles;
+ }
++class ToastLayout {
++    constructor(){
++        this.active = true;
++        this.heights = new Map();
++        this.rows = new Map();
++        this.items = new Map();
++        this.listeners = new Map();
++        this.frontListeners = new Set();
++        this.pending = new Set();
++        this.dirty = new Set();
++        this.front = 0;
++        this.ids = null;
++        this.measure = this.measure.bind(this);
++        this.subscribeFront = (listener)=>{
++            this.frontListeners.add(listener);
++            return ()=>this.frontListeners.delete(listener);
++        };
++        this.getFront = ()=>this.front;
++    }
++    subscribe(id, listener){
++        let listeners = this.listeners.get(id);
++        if (!listeners) this.listeners.set(id, listeners = new Set());
++        listeners.add(listener);
++        return ()=>{
++            listeners.delete(listener);
++            if (!listeners.size) this.listeners.delete(id);
++        };
++    }
++    configure(ids, defaultPosition){
++        if (this.ids === ids && this.defaultPosition === defaultPosition) return;
++        this.ids = ids;
++        this.defaultPosition = defaultPosition;
++        this.groups = new Map([[defaultPosition, []]]);
++        this.liveGroups = new Map();
++        this.needsRebuild = false;
++        this.rows.clear();
++        this.pending.clear();
++        for (const id of ids) {
++            const toast = ToastState.presented.get(id);
++            const position = toast.position || defaultPosition;
++            let group = this.groups.get(position);
++            if (!group) this.groups.set(position, group = []);
++            group.push(id);
++            if (toast.delete) {
++                this.rows.set(id, {order: this.rows.size});
++                this.heights.delete(id);
++                continue;
++            }
++            let live = this.liveGroups.get(position);
++            if (!live) this.liveGroups.set(position, live = []);
++            this.rows.set(id, {group: live, index: live.length, order: this.rows.size});
++            live.push(id);
++            if (!this.heights.has(id)) this.pending.add(id);
++        }
++        for (const id of this.heights.keys()) if (!this.rows.has(id)) this.heights.delete(id);
++        for (const id of this.items.keys()) if (!this.rows.has(id)) this.items.delete(id);
++        this.rebuild();
++        this.findFront(0);
++    }
++    setItem(id, value){
++        const old = this.items.get(id);
++        if (old && old.heightIndex === value.heightIndex && old.heightBefore === value.heightBefore && old.countBefore === value.countBefore) return;
++        this.items.set(id, value);
++        this.dirty.add(id);
++    }
++    rebuild(){
++        for (const group of this.liveGroups.values()) {
++            let count = 0;
++            let height = 0;
++            for (const id of group) {
++                const measured = this.heights.has(id);
++                this.setItem(id, {heightIndex: measured ? count : -1, heightBefore: height, countBefore: count});
++                if (measured) { count++; height += this.heights.get(id); }
++            }
++        }
++    }
++    measure(id, height){
++        if (!this.active) return;
++        const row = this.rows.get(id);
++        if (!row?.group) return;
++        const had = this.heights.has(id);
++        const previous = this.heights.get(id) || 0;
++        this.pending.delete(id);
++        if (height === null) this.heights.delete(id);
++        else this.heights.set(id, height);
++        if (had === (height !== null) && previous === (height || 0)) return;
++        if (this.pending.size) { this.needsRebuild = true; return; }
++        if (this.needsRebuild) {
++            this.needsRebuild = false;
++            this.rebuild();
++            this.findFront(0);
++        } else {
++            const delta = (height || 0) - previous;
++            const count = Number(height !== null) - Number(had);
++            const item = this.items.get(id);
++            if (count) {
++                this.setItem(id, {...item, heightIndex: height === null ? -1 : item.countBefore});
++            }
++            for (let index = row.index + 1; index < row.group.length; index++) {
++                const nextId = row.group[index];
++                const next = this.items.get(nextId);
++                this.setItem(nextId, {heightIndex: next.heightIndex < 0 ? -1 : next.heightIndex + count, heightBefore: next.heightBefore + delta, countBefore: next.countBefore + count});
++            }
++        }
++        if (id === this.frontId && height === null) this.findFront(row.order + 1);
++        else if (height !== null && (this.frontId === undefined || row.order < this.rows.get(this.frontId).order)) this.frontId = id;
++        this.flush();
++    }
++    findFront(start){
++        this.frontId = undefined;
++        if (!this.heights.size) return;
++        for (let index = start; index < this.ids.length; index++) {
++            if (this.heights.has(this.ids[index])) { this.frontId = this.ids[index]; break; }
++        }
++    }
++    flush(){
++        if (!this.active) return;
++        const dirty = this.dirty;
++        this.dirty = new Set();
++        for (const id of dirty) for (const listener of this.listeners.get(id) || []) listener();
++        const front = this.frontId === undefined ? 0 : this.heights.get(this.frontId) || 0;
++        if (front !== this.front) {
++            this.front = front;
++            for (const listener of this.frontListeners) listener();
++        }
++    }
++}
++const IndexedToast = React__default.default.memo(function IndexedToast(props){
++    const {toastId, layout, ...rest} = props;
++    const subscribe = React__default.default.useCallback((listener)=>ToastState.subscribeId(toastId, listener), [toastId]);
++    const getSnapshot = React__default.default.useCallback(()=>ToastState.presented.get(toastId), [toastId]);
++    const toast = React__default.default.useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
++    const subscribeLayout = React__default.default.useCallback((listener)=>layout.subscribe(toastId, listener), [layout, toastId]);
++    const getLayout = React__default.default.useCallback(()=>layout.items.get(toastId), [layout, toastId]);
++    const geometry = React__default.default.useSyncExternalStore(subscribeLayout, getLayout, getLayout);
++    return toast ? React__default.default.createElement(Toast, {...rest, toast, geometry, measure: layout.measure}) : null;
++});
++function useSonnerIds(){
++    const objects = React__default.default.useSyncExternalStore(ToastState.subscribeStructure, ToastState.getIds, ToastState.getIds);
++    return React__default.default.useMemo(()=>objects.filter((id)=>!ToastState.presented.get(id).delete), [objects]);
++}
+ function useSonner() {
+-    const [activeToasts, setActiveToasts] = React__default.default.useState([]);
+-    React__default.default.useEffect(()=>{
+-        return ToastState.subscribe((toast)=>{
+-            if (toast.dismiss) {
+-                setTimeout(()=>{
+-                    ReactDOM__default.default.flushSync(()=>{
+-                        setActiveToasts((toasts)=>toasts.filter((t)=>t.id !== toast.id));
+-                    });
+-                });
+-                return;
+-            }
+-            // Prevent batching, temp solution.
+-            setTimeout(()=>{
+-                ReactDOM__default.default.flushSync(()=>{
+-                    setActiveToasts((toasts)=>{
+-                        const indexOfExistingToast = toasts.findIndex((t)=>t.id === toast.id);
+-                        // Update the toast if it already exists
+-                        if (indexOfExistingToast !== -1) {
+-                            return [
+-                                ...toasts.slice(0, indexOfExistingToast),
+-                                {
+-                                    ...toasts[indexOfExistingToast],
+-                                    ...toast
+-                                },
+-                                ...toasts.slice(indexOfExistingToast + 1)
+-                            ];
+-                        }
+-                        return [
+-                            toast,
+-                            ...toasts
+-                        ];
+-                    });
+-                });
+-            });
+-        });
+-    }, []);
+-    return {
+-        toasts: activeToasts
+-    };
++    return {toasts: React__default.default.useSyncExternalStore(ToastState.subscribeObjects, ToastState.getObjects, ToastState.getObjects)};
+ }
+ const Toaster = /*#__PURE__*/ React__default.default.forwardRef(function Toaster(props, ref) {
+@@ -926,23 +1038,16 @@
+         'KeyT'
+     ], expand, closeButton, className, offset, mobileOffset, theme = 'light', richColors, duration, style, visibleToasts = VISIBLE_TOASTS_AMOUNT, toastOptions, dir = getDocumentDirection(), gap = GAP, icons, containerAriaLabel = 'Notifications' } = props;
+-    const [toasts, setToasts] = React__default.default.useState([]);
+-    const filteredToasts = React__default.default.useMemo(()=>{
+-        if (id) {
+-            return toasts.filter((toast)=>toast.toasterId === id);
+-        }
+-        return toasts.filter((toast)=>!toast.toasterId);
+-    }, [
+-        toasts,
+-        id
+-    ]);
+-    const possiblePositions = React__default.default.useMemo(()=>{
+-        return Array.from(new Set([
+-            position
+-        ].concat(filteredToasts.filter((toast)=>toast.position).map((toast)=>toast.position))));
+-    }, [
+-        filteredToasts,
+-        position
+-    ]);
+-    const [heights, setHeights] = React__default.default.useState([]);
++    const toasts = React__default.default.useSyncExternalStore(ToastState.subscribePresentation, ToastState.getIds, ToastState.getIds);
++    const filteredToasts = React__default.default.useMemo(()=>toasts.map((key)=>ToastState.presented.get(key)).filter((toast)=>id ? toast.toasterId === id : !toast.toasterId), [toasts, id]);
++    const rowIds = React__default.default.useMemo(()=>filteredToasts.map((toast)=>toast.id), [filteredToasts]);
++    const layout = React__default.default.useMemo(()=>new ToastLayout(), []);
++    layout.configure(rowIds, position);
++    const possiblePositions = Array.from(layout.groups.keys());
++    const frontHeight = React__default.default.useSyncExternalStore(layout.subscribeFront, layout.getFront, layout.getFront);
++    React__default.default.useLayoutEffect(()=>{
++        layout.active = true;
++        return ()=>{ layout.active = false; };
++    }, [layout]);
++    React__default.default.useLayoutEffect(()=>layout.flush());
+     const [expanded, setExpanded] = React__default.default.useState(false);
+     const [interacting, setInteracting] = React__default.default.useState(false);
+@@ -952,52 +1057,5 @@
+     const lastFocusedElementRef = React__default.default.useRef(null);
+     const isFocusWithinRef = React__default.default.useRef(false);
+-    const removeToast = React__default.default.useCallback((toastToRemove)=>{
+-        setToasts((toasts)=>{
+-            var _toasts_find;
+-            if (!((_toasts_find = toasts.find((toast)=>toast.id === toastToRemove.id)) == null ? void 0 : _toasts_find.delete)) {
+-                ToastState.dismiss(toastToRemove.id);
+-            }
+-            return toasts.filter(({ id })=>id !== toastToRemove.id);
+-        });
+-    }, []);
+-    React__default.default.useEffect(()=>{
+-        return ToastState.subscribe((toast)=>{
+-            if (toast.dismiss) {
+-                // Prevent batching of other state updates
+-                requestAnimationFrame(()=>{
+-                    setToasts((toasts)=>toasts.map((t)=>t.id === toast.id ? {
+-                                ...t,
+-                                delete: true
+-                            } : t));
+-                });
+-                return;
+-            }
+-            // Prevent batching, temp solution.
+-            setTimeout(()=>{
+-                ReactDOM__default.default.flushSync(()=>{
+-                    setToasts((toasts)=>{
+-                        const indexOfExistingToast = toasts.findIndex((t)=>t.id === toast.id);
+-                        // Update the toast if it already exists
+-                        if (indexOfExistingToast !== -1) {
+-                            return [
+-                                ...toasts.slice(0, indexOfExistingToast),
+-                                {
+-                                    ...toasts[indexOfExistingToast],
+-                                    ...toast
+-                                },
+-                                ...toasts.slice(indexOfExistingToast + 1)
+-                            ];
+-                        }
+-                        return [
+-                            toast,
+-                            ...toasts
+-                        ];
+-                    });
+-                });
+-            });
+-        });
+-    }, [
+-        toasts
+-    ]);
++    const removeToast = React__default.default.useCallback((toast)=>ToastState.remove(toast.id, toast), []);
+     React__default.default.useEffect(()=>{
+         if (theme !== 'system') {
+@@ -1108,5 +1166,5 @@
+             "data-x-position": x,
+             style: {
+-                '--front-toast-height': `${((_heights_ = heights[0]) == null ? void 0 : _heights_.height) || 0}px`,
++                '--front-toast-height': `${frontHeight}px`,
+                 '--width': `${TOAST_WIDTH}px`,
+                 '--gap': `${gap}px`,
+@@ -1148,11 +1206,12 @@
+             },
+             onPointerUp: ()=>setInteracting(false)
+-        }, filteredToasts.filter((toast)=>!toast.position && index === 0 || toast.position === position).map((toast, index)=>{
++        }, (layout.groups.get(position) || []).map((toastId, index)=>{
+             var _toastOptions_duration, _toastOptions_closeButton;
+-            return /*#__PURE__*/ React__default.default.createElement(Toast, {
+-                key: toast.id,
++            return /*#__PURE__*/ React__default.default.createElement(IndexedToast, {
++                key: toastId,
+                 icons: icons,
+                 index: index,
+-                toast: toast,
++                toastId: toastId,
++                layout: layout,
+                 defaultRichColors: richColors,
+                 duration: (_toastOptions_duration = toastOptions == null ? void 0 : toastOptions.duration) != null ? _toastOptions_duration : duration,
+@@ -1171,7 +1230,5 @@
+                 closeButtonAriaLabel: toastOptions == null ? void 0 : toastOptions.closeButtonAriaLabel,
+                 removeToast: removeToast,
+-                toasts: filteredToasts.filter((t)=>t.position == toast.position),
+-                heights: heights.filter((h)=>h.position == toast.position),
+-                setHeights: setHeights,
++                toastCount: layout.groups.get(position).length,
+                 expandByDefault: expand,
+                 gap: gap,
+@@ -1186,2 +1243,3 @@
+ exports.toast = toast;
+ exports.useSonner = useSonner;
++exports.useSonnerIds = useSonnerIds;
+diff --git a/dist/index.d.mts b/dist/index.d.mts
+--- a/dist/index.d.mts
++++ b/dist/index.d.mts
+@@ -143,4 +143,5 @@
+     };
+     dismiss: (id?: number | string) => string | number;
++    batch: <T>(run: () => T) => T;
+     loading: (message: titleT | React.ReactNode, data?: ExternalToast) => string | number;
+ } & {
+@@ -149,4 +150,5 @@
+ };
+ 
++declare function useSonnerIds(): readonly (string | number)[];
+ declare function useSonner(): {
+     toasts: ToastT[];
+@@ -154,4 +156,4 @@
+ declare const Toaster: React.ForwardRefExoticComponent<ToasterProps & React.RefAttributes<HTMLElement>>;
+ 
+-export { Toaster, toast, useSonner };
++export { Toaster, toast, useSonner, useSonnerIds };
+ export type { Action, ExternalToast, ToastClassnames, ToastT, ToastToDismiss, ToasterProps };
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -143,4 +143,5 @@
+     };
+     dismiss: (id?: number | string) => string | number;
++    batch: <T>(run: () => T) => T;
+     loading: (message: titleT | React.ReactNode, data?: ExternalToast) => string | number;
+ } & {
+@@ -149,4 +150,5 @@
+ };
+ 
++declare function useSonnerIds(): readonly (string | number)[];
+ declare function useSonner(): {
+     toasts: ToastT[];
+@@ -154,4 +156,4 @@
+ declare const Toaster: React.ForwardRefExoticComponent<ToasterProps & React.RefAttributes<HTMLElement>>;
+ 
+-export { Toaster, toast, useSonner };
++export { Toaster, toast, useSonner, useSonnerIds };
+ export type { Action, ExternalToast, ToastClassnames, ToastT, ToastToDismiss, ToasterProps };

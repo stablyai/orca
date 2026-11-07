@@ -80,6 +80,8 @@ describe('a dsh launch prompt whose first Enter the launchpad refused', () => {
             observationTimeoutMs: 0
           }
     )
+    // A refusal can settle while the clock runs; it is read below, not left unhandled.
+    void submission.catch(() => undefined)
     await vi.advanceTimersByTimeAsync(40_000)
     await expect(submission).resolves.toMatchObject({ accepted: true })
     return {
@@ -96,10 +98,8 @@ describe('a dsh launch prompt whose first Enter the launchpad refused', () => {
   })
 
   it('never presses Enter into the first-run guide that covers the launchpad', async () => {
-    await expect(launchDsh(fixture('first-run-guide'), Infinity)).resolves.toEqual({
-      enters: 1,
-      pastes: 1
-    })
+    // The guide takes Enter ("act on this step"), so the generated Enter is withheld outright.
+    await expect(launchDsh(fixture('first-run-guide'), Infinity)).rejects.toThrow(/DeepSeek Har/)
   })
 
   it('stops once the launchpad no longer holds the prompt', async () => {

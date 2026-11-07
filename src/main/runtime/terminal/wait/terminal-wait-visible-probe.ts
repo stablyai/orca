@@ -7,8 +7,8 @@ import {
   detectTerminalWaitBlockedReason,
   isKnownReadyPromptBody,
   isKnownReadyPromptSettled
-} from './terminal-wait-detection'
-import { readsTrustedScreen } from '../../agent-state-rules/agent-state-rules-engine'
+} from '../../../../shared/terminal-wait-detection'
+import { readsTrustedScreen } from '../../../../shared/agent-state-rules/agent-state-rules-engine'
 import { restoreProjectedComposerDraft } from '../view/orca-runtime-terminal-projection'
 import type {
   RuntimeTerminalWait,

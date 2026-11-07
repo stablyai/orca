@@ -5,7 +5,7 @@ import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/runtim
 import {
   detectExplicitIdleStatusFromTitle,
   detectTerminalWaitBlockedReason
-} from './terminal-wait-detection'
+} from '../../../../shared/terminal-wait-detection'
 import { isOpenCodeNativeTitle } from '../../../../shared/agent-status/title/providers/opencode-terminal-title'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'

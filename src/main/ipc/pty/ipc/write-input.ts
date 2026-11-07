@@ -37,6 +37,10 @@ export type PtyWritePayload = {
   data: string
   inputKind: TerminalInputKind
   requireWriteSettlement?: true
+  /** The window's accepted generated request this write carries. */
+  generatedInputOperationId?: string
+  /** Main only: called when the bytes are handed to the terminal's provider. */
+  onProviderHandoff?: () => void
 }
 export type PtyViewportClaimPayload = { id: string; cols: number; rows: number }
 
@@ -80,6 +84,7 @@ export function createPtyWriteInput(deps: {
       return false
     }
     noteRendererPtyInput(args)
+    args.onProviderHandoff?.()
     const chunks = iterateTerminalInputChunks(data)
     const first = chunks.next()
     if (first.done) {

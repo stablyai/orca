@@ -7,15 +7,15 @@ import {
   activateAgentStateRules,
   BUNDLED_AGENT_STATE_RULES,
   getActiveAgentStateRules
-} from './active-agent-state-rules'
-import { BUNDLED_AGENT_STATE_RULES_VERSION } from './agent-state-rules-bundle'
-import { BUNDLED_AGENT_STATE_RULE_FILES } from './agent-state-rules-catalog'
+} from '../../../shared/agent-state-rules/active-agent-state-rules'
+import { BUNDLED_AGENT_STATE_RULES_VERSION } from '../../../shared/agent-state-rules/agent-state-rules-bundle'
+import { BUNDLED_AGENT_STATE_RULE_FILES } from '../../../shared/agent-state-rules/agent-state-rules-catalog'
 import {
   AgentStateRulesLiveUpdater,
   type AgentStateRulesLiveUpdateDeps
 } from './agent-state-rules-live-update'
-import { detectExplicitIdleStatusFromTitle } from '../terminal/wait/terminal-wait-detection'
-import { showsIdleTitleAnchor } from './agent-state-title-anchors'
+import { detectExplicitIdleStatusFromTitle } from '../../../shared/terminal-wait-detection'
+import { showsIdleTitleAnchor } from '../../../shared/agent-state-rules/agent-state-title-anchors'
 
 const NEWER = 9999
 

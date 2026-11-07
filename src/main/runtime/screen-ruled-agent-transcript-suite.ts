@@ -14,8 +14,8 @@ import {
 import {
   isKnownReadyPromptBody,
   isQuietReadyScreenBody
-} from './terminal/wait/terminal-wait-detection'
-import { evaluateAgentStateRules } from './agent-state-rules/agent-state-rules-engine'
+} from '../../shared/terminal-wait-detection'
+import { evaluateAgentStateRules } from '../../shared/agent-state-rules/agent-state-rules-engine'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 
 export type ScreenRuledFixture = { name: string; cols: number; rows: number; what: string }

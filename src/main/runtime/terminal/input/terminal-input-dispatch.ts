@@ -31,18 +31,15 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     record: TerminalHandleRecord
     leaf: RuntimeLeafRecord
   }
-  protected abstract serializeAgentPromptSubmission<T>(
-    ptyId: string,
-    generation: number,
-    submit: () => Promise<T>
-  ): Promise<T>
   protected abstract assertAgentPromptGeneration(ptyId: string, expected: number): void
   protected abstract writeTerminalAgentPrompt(
     handle: string,
     ptyId: string,
     generation: number,
     pastePayload: string,
-    options: RuntimeAgentPromptWriteOptions
+    options: RuntimeAgentPromptWriteOptions,
+    atTurn?: (ptyId: string) => void,
+    retarget?: { resolve: () => string | null; payloadFor: (ptyId: string) => string }
   ): Promise<{ submits: number; prompt?: RuntimeTerminalPromptDelivery }>
   /** The opt-in path (`onPermission: 'wait'`, `expectedBinding`), pinned to `ptyId`. */
   protected abstract submitTerminalAgentPrompt(
@@ -234,6 +231,9 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
   ): Promise<RuntimeTerminalSend> {
     // Why the consuming agent: the foreground process reads the bytes; launchAgent covers startup.
     const payloadFor = (ptyId: string): string => {
+      if (options.framing === 'typed') {
+        return prompt
+      }
       // Why: a launch prompt replaced the desktop's draft paste, so it sends that paste's bytes.
       if (options.inputKind === 'launch') {
         return wrapTerminalBracketedPasteText(prompt)
@@ -247,7 +247,9 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     }
     // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
     const starting = ORCA_LAYOUT_OWNER_IS_MAIN
-      ? this.startRestoredHandlePane(handle, { signal: agentPromptObservationSignal(options) })
+      ? this.startRestoredHandlePane(handle, {
+          signal: options.generatedLifetime?.signal ?? agentPromptObservationSignal(options)
+        })
       : null
     if (starting) {
       const target = await starting
@@ -269,16 +271,15 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
         return await this.submitTerminalAgentPrompt(handle, pty.pty.ptyId, prompt, payload, options)
       }
       const generation = this.getPtyLifecycleGeneration(pty.pty.ptyId)
-      const delivery = await this.serializeAgentPromptSubmission(
+      const delivery = await this.writeTerminalAgentPrompt(
+        handle,
         pty.pty.ptyId,
         generation,
-        async () => {
+        payload,
+        { ...options, promptForSchedule: prompt },
+        () => {
           this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
           this.assertAgentPromptGeneration(pty.pty.ptyId, generation)
-          return await this.writeTerminalAgentPrompt(handle, pty.pty.ptyId, generation, payload, {
-            ...options,
-            promptForSchedule: prompt
-          })
         }
       )
       const bytesWritten = Buffer.byteLength(payload, 'utf8') + delivery.submits
@@ -304,14 +305,17 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       return await this.submitTerminalAgentPrompt(handle, leaf.ptyId, prompt, payload, options)
     }
     const generation = this.getPtyLifecycleGeneration(leaf.ptyId)
-    const delivery = await this.serializeAgentPromptSubmission(leaf.ptyId, generation, async () => {
-      this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId!)
-      this.assertAgentPromptGeneration(leaf.ptyId!, generation)
-      return await this.writeTerminalAgentPrompt(handle, leaf.ptyId!, generation, payload, {
-        ...options,
-        promptForSchedule: prompt
-      })
-    })
+    // A default leaf send writes to the PTY the leaf names when its turn opens (a replacement is
+    // admitted afresh); once a byte may have left it is pinned to that PTY.
+    const delivery = await this.writeTerminalAgentPrompt(
+      handle,
+      leaf.ptyId,
+      generation,
+      payload,
+      { ...options, promptForSchedule: prompt },
+      (ptyId) => this.assertLiveTerminalHandleTargetsPty(handle, ptyId),
+      { resolve: () => leaf.ptyId, payloadFor }
+    )
     const bytesWritten = Buffer.byteLength(payload, 'utf8') + delivery.submits
     return {
       handle,

@@ -268,16 +268,8 @@ export async function launchAgentInWebHostTab(args: {
     if (hasPrompt && promptDelivered) {
       onPromptDelivered?.()
     }
+    // Its delivery already said, once, that the prompt did not go.
     const failureNotified = hasPrompt && !promptDelivered
-    if (failureNotified) {
-      toast.error(
-        translate(
-          'agentLaunch.terminalPromptFailed',
-          'Orca opened a terminal for {{value0}}, but could not pass it your prompt. Send the prompt in that terminal.',
-          { value0: structuredAgentLabel(agent) }
-        )
-      )
-    }
     return {
       delivered: promptDelivered,
       failureNotified,

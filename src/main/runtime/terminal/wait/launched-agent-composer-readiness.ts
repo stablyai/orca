@@ -16,8 +16,8 @@ import { draftPasteReadySignalHasMarker } from '../../../../shared/draft-paste-r
 import { nameOnlyIdleNeedsCorroboration } from './tui-idle-evidence'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { failOnLaunchedAgentExit, type LaunchedAgentExitRuntime } from './launched-agent-exit-watch'
-import { showsHoldAnchor } from '../../agent-state-rules/agent-state-text-anchors'
-import { detectTerminalWaitBlockedReason } from './terminal-wait-detection'
+import { showsHoldAnchor } from '../../../../shared/agent-state-rules/agent-state-text-anchors'
+import { detectTerminalWaitBlockedReason } from '../../../../shared/terminal-wait-detection'
 
 export type LaunchedAgentReadinessLane = 'composer-marker' | 'tui-idle'
 

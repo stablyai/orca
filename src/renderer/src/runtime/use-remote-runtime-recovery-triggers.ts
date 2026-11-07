@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { retryLocalGeneratedInputNoticeRecovery } from './generated-agent-input-notices'
 import { retryAllRemoteRuntimePtyRecoveriesNow } from '@/components/terminal-pane/pty-transport/remote-runtime/recovery/remote-runtime-pty-recovery-state'
 import { reviveRemoteRuntimePtyRecoveriesForEnvironment } from '@/components/terminal-pane/pty-transport/remote-runtime/recovery/remote-runtime-pty-control-ready-revivers'
 
@@ -8,6 +9,7 @@ export function useRemoteRuntimeRecoveryTriggers(): void {
       // Why: shared control and pane recovery own independent backoff timers.
       void window.api?.runtimeEnvironments?.retryConnectionsNow?.().catch(() => undefined)
       retryAllRemoteRuntimePtyRecoveriesNow()
+      retryLocalGeneratedInputNoticeRecovery()
     }
     window.addEventListener('online', advanceRemoteRuntimeRecoveryBackoffs)
     const unsubscribeSystemResumed =
@@ -24,6 +26,7 @@ export function useRemoteRuntimeRecoveryTriggers(): void {
               readyByEnvironment.set(environmentId, ready)
               if (ready && !wasReady) {
                 reviveRemoteRuntimePtyRecoveriesForEnvironment(environmentId)
+                retryLocalGeneratedInputNoticeRecovery()
               }
             }
           )

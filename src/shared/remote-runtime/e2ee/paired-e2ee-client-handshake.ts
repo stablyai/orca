@@ -31,7 +31,10 @@ export type PairedE2EEAuthReply =
   | { kind: 'invalid' }
 
 export type PairedE2EEChannel = {
-  sealText: (plaintext: string) => string
+  /** `beforeCommit`: a guarded send's final admission, run once the whole frame is built and
+   *  encoded but before it spends any sequence or is returned. Its throw propagates and the frame
+   *  never leaves the channel. */
+  sealText: (plaintext: string, beforeCommit?: () => void) => string
   // null = not authentic (or not yet keyed).
   openText: (frame: string) => string | null
   sealBinary: (plaintext: Uint8Array) => Uint8Array<ArrayBuffer>
@@ -155,7 +158,11 @@ export function createPairedE2EELegacyChannel(
   sharedKey: Uint8Array
 ): PairedE2EEChannel {
   return {
-    sealText: (plaintext) => primitives.sealLegacyText(plaintext, sharedKey),
+    sealText: (plaintext, beforeCommit) => {
+      const frame = primitives.sealLegacyText(plaintext, sharedKey)
+      beforeCommit?.()
+      return frame
+    },
     openText: (frame) => primitives.openLegacyText(frame, sharedKey),
     sealBinary: (plaintext) => primitives.sealLegacyBinary(plaintext, sharedKey),
     openBinary: (frame) => primitives.openLegacyBinary(frame, sharedKey)

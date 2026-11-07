@@ -109,15 +109,18 @@ describe('agent prompt into a pane reattached at a permission dialog (#35962)', 
 
   it('sends once a provider-owned screen shows the dialog dismissed', async () => {
     // Esc posts no hook, so only the provider's current frame can retire the restored wait.
+    let pane: OrcaRuntimeService | undefined
     const { runtime, handle } = await createReattachedClaudePane(PERMISSION_DIALOG, {
       serializeProviderBuffer: async () => ({
         data: COMPOSER,
         cols: 80,
         rows: 24,
-        seq: 0,
+        // A provider's frame reports how far it has caught up, so the send's own echo is not stale.
+        seq: pane?.getPtyOutputSequence(PTY_ID) ?? 0,
         source: 'headless' as const
       })
     })
+    pane = runtime
     runtime.seedHeadlessTerminal(PTY_ID, PERMISSION_DIALOG, undefined, {
       preferProviderIfExisting: true
     })

@@ -16,6 +16,7 @@ import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-
 import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { getAcceptedRuntimeEnvironmentCapabilityOutcome } from './runtime-environment-capability-evidence'
 import { getRuntimeEnvironmentStatusSnapshot } from './runtime-environment-request-connections'
+import type { RemoteGeneratedInputIngress } from '../runtime'
 
 export type RuntimeEnvironmentSubscribeArgs = {
   selector: string
@@ -26,6 +27,10 @@ export type RuntimeEnvironmentSubscribeArgs = {
   expectedEnvironmentPairingRevision?: number
   expectedEnvironmentRuntimeId?: string | null
   setupResult?: 'crew'
+  /** Local only: the window's accepted generated request this call carries. */
+  generatedInputOperationId?: string
+  /** Local only: the end its renderer accepted that request with (this machine's clock). */
+  generatedInputEnd?: number
 }
 
 export function assertCrewSubscriptionInputs(
@@ -61,8 +66,11 @@ export function assertCrewSubscriptionInputs(
 
 export function resolveSubscriptionEnvironment(
   userDataPath: string,
-  args: RuntimeEnvironmentSubscribeArgs
+  args: RuntimeEnvironmentSubscribeArgs,
+  /** The pairing main first resolved this window's generated request to, which binds it. */
+  pinnedPairingRevision?: number
 ) {
+  const expectedPairingRevision = pinnedPairingRevision ?? args.expectedEnvironmentPairingRevision
   const environment = resolveEnvironment(userDataPath, args.selector)
   if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
     throw new RuntimeEnvironmentSetupGuardError('runtime_manually_disconnected', {
@@ -70,10 +78,7 @@ export function resolveSubscriptionEnvironment(
     })
   }
   const pairingRevision = environment.pairingRevision ?? environment.createdAt
-  if (
-    args.expectedEnvironmentPairingRevision !== undefined &&
-    pairingRevision !== args.expectedEnvironmentPairingRevision
-  ) {
+  if (expectedPairingRevision !== undefined && pairingRevision !== expectedPairingRevision) {
     throw new RuntimeEnvironmentSetupGuardError(
       'Runtime environment pairing changed; refresh and try again',
       { kind: 'source-retired' }
@@ -234,6 +239,7 @@ export type RuntimeEnvironmentSubscriptionHandlerDependencies = {
     method: string,
     response: RuntimeRpcResponse<unknown>
   ) => void
+  acceptGeneratedInput?: RemoteGeneratedInputIngress
 }
 
 export function runtimeEnvironmentSubscriptionId(args: RuntimeEnvironmentSubscribeArgs): string {

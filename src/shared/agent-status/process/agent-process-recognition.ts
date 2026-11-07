@@ -188,7 +188,11 @@ export function isExpectedAgentProcess(
       /^(?:qoderclicn|qodercn)(?:-\d.*)?$/.test(normalizedProcess)) ||
     (['qoder', 'qodercli'].includes(normalizedExpected) &&
       /^(?:qoder|qodercli(?:-\d.*)?)$/.test(normalizedProcess)) ||
-    (normalizedExpected === 'muse' && normalizedProcess.startsWith('muse-bin-'))
+    (normalizedExpected === 'muse' && normalizedProcess.startsWith('muse-bin-')) ||
+    // Packaged and versioned binaries (codex-aarch64-ap, grok-1.2) share their launcher's identity.
+    (agentForNormalizedProcess(normalizedProcess) !== undefined &&
+      agentForNormalizedProcess(normalizedProcess) ===
+        agentForNormalizedProcess(normalizedExpected))
   )
 }
 

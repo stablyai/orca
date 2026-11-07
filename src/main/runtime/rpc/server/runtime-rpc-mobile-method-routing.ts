@@ -5,6 +5,13 @@ import { PAIRED_DESKTOP_METHODS } from './runtime-rpc-mobile-paired-desktop-meth
 export type MobileRpcMethodRoute = 'execution-host' | 'paired-desktop'
 
 export const EXECUTION_HOST_METHODS = [
+  // A refused send's notice lives on the runtime that ran it; read and dismiss it there.
+  'terminal.dismissGeneratedInputNotice',
+  'terminal.generatedInputNotices.page',
+  'terminal.generatedInputNotices.subscribe',
+  'terminal.generatedInputNotices.unsubscribe',
+  // Generated text is admitted and written by the host that owns the terminal.
+  'terminal.sendGeneratedInput',
   'ui.getJiraQuickFilters',
   'ui.setJiraQuickFilters',
   'ui.getJiraSavedFilters',

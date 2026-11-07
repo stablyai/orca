@@ -9,6 +9,12 @@
       "messages_other": "{{count}} messages"
     }
   },
+  "agentPrompt": {
+    "moreNotesNotSent_one": "{{count}} more notes not sent",
+    "moreNotesNotSent_other": "{{count}} more notes not sent",
+    "morePromptsNotSent_one": "{{count}} more prompt not sent",
+    "morePromptsNotSent_other": "{{count}} more prompts not sent"
+  },
   "app": {
     "terminalSettings": {
       "restoreAfterMinutes_one": "After {{count}} minute",

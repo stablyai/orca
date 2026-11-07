@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import {
   isTerminalInputPaused,
   TerminalInputPausedError
@@ -189,13 +190,20 @@ export const TERMINAL_SEND_METHODS = [
                 }
               }
             : undefined
-        const useSettledAgentPrompt =
+        const agentPromptCandidate =
           params.agentPrompt === true &&
           hasText &&
           params.enter === true &&
           params.interrupt !== true &&
-          params.client?.type === 'desktop' &&
+          params.client?.type === 'desktop'
+        const useSettledAgentPrompt =
+          agentPromptCandidate &&
           (await runtime.isTerminalRunningSettledPromptAgent(params.terminal))
+        // Admission is not settlement support: an agent the runtime knows (Cline under node) still
+        // takes the generated prompt through the host's one operation; a plain shell stays direct.
+        const useGeneratedAgentPrompt =
+          useSettledAgentPrompt ||
+          (agentPromptCandidate && (await runtime.isTerminalRunningAgent(params.terminal)))
         const reserveWrite =
           params.inputKind !== 'query-reply' && leaf?.ptyId && mobileFloorClientId
             ? (ptyId: string): void => {
@@ -210,7 +218,7 @@ export const TERMINAL_SEND_METHODS = [
         let result
         let acceptedPromptCheckpoint: { send: RuntimeTerminalSend } | undefined
         try {
-          result = useSettledAgentPrompt
+          result = useGeneratedAgentPrompt
             ? await runtime.sendTerminalAgentPrompt(params.terminal, params.text!, {
                 inputKind: 'driving',
                 inputSource,
@@ -226,7 +234,10 @@ export const TERMINAL_SEND_METHODS = [
                         recordMutationReceipt?.(acceptedPromptCheckpoint)
                       }
                     }
-                  : {})
+                  : useSettledAgentPrompt
+                    ? {}
+                    : // No turn verifier for this agent: the receipt reports accepted input.
+                      { acceptQueued: true, observationTimeoutMs: 0, requestId: randomUUID() })
               })
             : await runtime.sendTerminal(
                 params.terminal,

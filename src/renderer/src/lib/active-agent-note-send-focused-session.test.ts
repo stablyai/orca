@@ -9,6 +9,7 @@ import {
 const testState = vi.hoisted(() => ({
   appState: null as unknown as NoteSendAppState,
   callRuntimeRpc: vi.fn(),
+  sendGenerated: vi.fn(),
   RuntimeRpcCallError: class RuntimeRpcCallError extends Error {
     readonly code: string
     readonly response: unknown
@@ -32,6 +33,9 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: testState.callRuntimeRpc }))
+vi.mock('@/runtime/generated-terminal-input-client', () => ({
+  sendGeneratedTerminalInputToHandle: testState.sendGenerated
+}))
 vi.mock('@/runtime/runtime-rpc-result', () => ({
   RuntimeRpcCallError: testState.RuntimeRpcCallError
 }))
@@ -40,6 +44,9 @@ describe('active agent note send', () => {
   beforeEach(() => {
     testState.appState = createNoteSendAppState()
     testState.callRuntimeRpc.mockReset()
+    testState.sendGenerated.mockReset()
+    // The local runtime always runs the generated-input operation itself.
+    testState.sendGenerated.mockResolvedValue('delivered')
   })
 
   it('keeps active-focused sends compatible when an older runtime lacks agentStatus', async () => {
@@ -102,19 +109,18 @@ describe('active agent note send', () => {
       'terminal.isRunningAgent',
       'terminal.wait',
       'terminal.agentStatus',
-      'terminal.isRunningAgent',
-      'terminal.send'
+      'terminal.isRunningAgent'
     ])
-    expect(testState.callRuntimeRpc).toHaveBeenLastCalledWith(
+    // Even without agentStatus, the notes go through the same generated-input operation.
+    expect(testState.sendGenerated).toHaveBeenCalledExactlyOnceWith(
       { kind: 'local' },
-      'terminal.send',
-      {
-        terminal: 'term-1',
-        text: 'File: src/app.ts',
-        enter: true,
-        client: { id: 'orca-desktop', type: 'desktop' }
-      },
-      { timeoutMs: 15000 }
+      'term-1',
+      expect.objectContaining({ text: 'File: src/app.ts', submit: true }),
+      undefined,
+      undefined,
+      undefined,
+      // One accepted request's end, carried into any older-host fallback.
+      { end: expect.any(Number) }
     )
   })
 

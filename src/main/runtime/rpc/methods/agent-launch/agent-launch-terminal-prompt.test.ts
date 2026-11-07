@@ -102,24 +102,30 @@ describe('writing a launch prompt into a terminal agent', () => {
     expect(options.composerReady).toBe(true)
   })
 
-  it('does not write when the composer never opened', async () => {
-    const stub = runtimeStub({ wait: { satisfied: false, status: 'blocked' } })
-    const delivered = await deliverTerminalAgentLaunchPrompt({
+  it('leaves an unsatisfied launch wait to the host, which admits only on its own evidence', async () => {
+    const stub = runtimeStub({ wait: { satisfied: false, status: 'running' } })
+    await deliverTerminalAgentLaunchPrompt({
       runtime: stub.runtime,
       handle: 'term_1',
-      agent: 'claude',
+      agent: 'goose',
       freshLaunch: true,
       text: 'do the thing'
     })
 
-    // A trust or update prompt is on screen; the text would answer whatever it asked.
-    expect(delivered).toBe(false)
-    expect(stub.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+    // The wait is an observation, not a second gate: the transaction still waits and vetoes.
+    const options = stub.sendTerminalAgentPrompt.mock.calls[0]![2]
+    expect(options).not.toHaveProperty('observedReady')
+    expect(options.inputDeadline).toEqual(expect.any(Number))
   })
 
   it('reports a stalled submission as delivered, because the stall is raised after the write', async () => {
     const stub = runtimeStub({
-      send: async () => {
+      send: async (_handle, _text, options) => {
+        for (const written of [options.onPasteWritten, options.onSubmitWritten]) {
+          if (typeof written === 'function') {
+            written()
+          }
+        }
         throw new Error(AGENT_PROMPT_STALLED_ERROR)
       }
     })
@@ -314,20 +320,6 @@ describe('writing a launch prompt into a terminal agent', () => {
     }
   )
 
-  it('keeps the text when an agent shows no readiness evidence at all', async () => {
-    const stub = runtimeStub({ wait: { satisfied: false, status: 'running' } })
-
-    const delivered = await deliverTerminalAgentLaunchPrompt({
-      runtime: stub.runtime,
-      handle: 'term_1',
-      agent: 'goose',
-      freshLaunch: true,
-      text: 'do the thing'
-    })
-
-    expect(delivered).toBe(false)
-    expect(stub.sendTerminalAgentPrompt).not.toHaveBeenCalled()
-  })
   it('never lets a re-wait fall back to the terminal wait’s 5-minute default', async () => {
     // A late 1 s re-check sleep can land past the deadline; 0 would read as "use the default".
     const stub = runtimeStub({
@@ -565,7 +557,7 @@ describe('cancelling a launch prompt', () => {
     ).resolves.toBe(false)
   })
 
-  it('passes no signal or acceptance hook when the caller gave no signal', async () => {
+  it('tracks accepted Enter even when the caller gave no signal', async () => {
     const stub = runtimeStub({})
 
     await deliverTerminalAgentLaunchPrompt({
@@ -578,7 +570,7 @@ describe('cancelling a launch prompt', () => {
 
     const options = stub.sendTerminalAgentPrompt.mock.calls[0]![2]
     expect(options).not.toHaveProperty('signal')
-    expect(options).not.toHaveProperty('onSubmitWritten')
+    expect(options.onSubmitWritten).toEqual(expect.any(Function))
     expect(stub.waitForTerminal.mock.calls[0]![1]).not.toHaveProperty('signal')
   })
 })

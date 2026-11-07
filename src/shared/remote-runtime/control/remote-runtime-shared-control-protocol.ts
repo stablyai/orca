@@ -2,6 +2,7 @@ import type { PairedE2EEClientHandshake } from '../e2ee/paired-e2ee-client-hands
 import type WebSocket from 'ws'
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { serializeRemoteRuntimePayload } from '../remote-runtime-memory-limits'
+import { sealRemoteRuntimeRequest } from '../requests/remote-runtime-request-dispatch-observation'
 import {
   invalidRemoteRuntimeResponseError,
   parseRemoteRuntimeRpcFrame
@@ -79,6 +80,15 @@ export function getCleanupRequest(
       subscription.remoteSubscriptionId
     )
   }
+  if (
+    subscription.method === 'terminal.generatedInputNotices.subscribe' &&
+    subscription.remoteSubscriptionId
+  ) {
+    return cleanupBySubscriptionId(
+      'terminal.generatedInputNotices.unsubscribe',
+      subscription.remoteSubscriptionId
+    )
+  }
   if (subscription.method === 'files.watch' && subscription.remoteSubscriptionId) {
     return cleanupBySubscriptionId('files.unwatch', subscription.remoteSubscriptionId)
   }
@@ -135,6 +145,12 @@ export function sendSharedControlEncryptedSerialized(args: {
   ws: WebSocket | null
   handshake: PairedE2EEClientHandshake | null
   serialized: string
+  /** The seal's final admission, before the frame spends any sequence: its throw propagates and
+   *  nothing is sent. A failure of the seal itself still returns false. */
+  beforeSend?: () => void
+  /** Told just before the frame is handed to the socket: from here it may have been sent, even
+   *  if the send then throws. Notification only; it never gates the send. */
+  onSendAttempt?: () => void
 }): boolean {
   if (
     (args.state !== 'ready' && args.state !== 'awaiting_authenticated') ||
@@ -144,8 +160,19 @@ export function sendSharedControlEncryptedSerialized(args: {
   ) {
     return false
   }
+  let sealed: ReturnType<typeof sealRemoteRuntimeRequest>
   try {
-    args.ws.send(args.handshake.channel.sealText(args.serialized))
+    sealed = sealRemoteRuntimeRequest(args.handshake.channel, args.serialized, args.beforeSend)
+  } catch {
+    return false
+  }
+  if ('expired' in sealed) {
+    throw sealed.expired
+  }
+  const { frame } = sealed
+  args.onSendAttempt?.()
+  try {
+    args.ws.send(frame)
     return true
   } catch {
     return false

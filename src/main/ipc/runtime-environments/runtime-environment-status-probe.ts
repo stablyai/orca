@@ -7,6 +7,7 @@ import {
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
+import type { RuntimeEnvironmentSelectedPairing } from '../../../shared/runtime-environment-selected-pairing'
 import { getRuntimeEnvironmentCapabilityIncarnation } from './runtime-environment-capability-evidence'
 import { getRuntimeEnvironmentStatusOwner } from './runtime-environment-request-connections'
 import {
@@ -23,9 +24,12 @@ export async function getRuntimeEnvironmentStatus(
   timeoutMs?: number,
   options?: { observeOnly?: true; signal?: AbortSignal; reconnect?: true },
   /** False for a caller pinned to this pairing revision, which a re-pair must fail instead. */
-  followRepair = true
+  followRepair = true,
+  /** Told which pairing this probe selected when it answers. */
+  observeSelection?: (selected: RuntimeEnvironmentSelectedPairing) => void
 ): Promise<RuntimeRpcResponse<RuntimeStatus>> {
   const environment = resolveEnvironment(userDataPath, selector)
+  const selected = environment.pairingRevision ?? environment.createdAt
   if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
     return {
       id: 'status.get',
@@ -44,10 +48,14 @@ export async function getRuntimeEnvironmentStatus(
   // A retired request must not publish old status or borrow its replacement's diagnostics.
   if (getRuntimeEnvironmentCapabilityIncarnation(environment.id) !== incarnation) {
     // Follow one repair started by this probe; the successor owner verifies the new pairing.
+    // The successor answers for the repaired host; it is never told as this selection's answer.
     return followRepair && repairedSameServer(userDataPath, environment)
-      ? getRuntimeEnvironmentStatus(userDataPath, environment.id, timeoutMs, options, false)
+      ? getRuntimeEnvironmentStatus(userDataPath, environment.id, timeoutMs, options, false, () =>
+          observeSelection?.({ revision: selected, crossedRepair: true })
+        )
       : runtimeEnvironmentChangedFailure(environment, 'status.get')
   }
+  observeSelection?.({ revision: selected })
   return attachRemoteControlDiagnostics(
     withTailscaleHintForResponse(
       response,

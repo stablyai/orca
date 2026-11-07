@@ -62,6 +62,24 @@ export function bindRegisterPaneSerializer(session: ConnectPanePtySession): void
         }
       },
       {
+        bracketedPasteMode: () => session.pane.terminal.modes.bracketedPasteMode,
+        readInputScreen: async () => {
+          await waitForTerminalOutputParsed(session.pane.terminal)
+          if (
+            session.disposed ||
+            session.transport.getPtyId() !== ptyId ||
+            isTerminalWritePipelineCertifiedDead(session.pane.terminal)
+          ) {
+            return null
+          }
+          const { buffer, rows } = session.pane.terminal
+          const lines = Array.from(
+            { length: rows },
+            (_, index) =>
+              buffer.active.getLine(buffer.active.baseY + index)?.translateToString(true) ?? ''
+          )
+          return { lines, alternateScreen: buffer.active.type === 'alternate' }
+        },
         clear: () => {
           session.clearHiddenOutputRestoreState()
           discardTerminalOutput(session.pane.terminal)
