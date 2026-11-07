@@ -50,10 +50,9 @@ function getSharedClient(): OpenCodeSqliteWorkerClient {
 type SqliteParseArgs = Omit<Parameters<OpenCodeSqliteWorkerClient['parse']>[0], 'agent'>
 type SqliteCaptureArgs = Omit<Parameters<OpenCodeSqliteWorkerClient['capture']>[0], 'agent'>
 
-type SqliteListArgs = Omit<Parameters<OpenCodeSqliteWorkerClient['list']>[0], 'agent'> & {
-  /** A scoped list counts its databases for scan progress when no unscoped list runs beside it. */
-  reportsProgress?: boolean
-}
+type ClientListArgs = Parameters<OpenCodeSqliteWorkerClient['list']>[0]
+// A scoped list counts its databases for scan progress when no unscoped list runs beside it.
+type SqliteListArgs = Omit<ClientListArgs, 'agent'> & { reportsProgress?: boolean }
 
 export function listOpenCodeSqliteSessionsViaWorker(
   args: SqliteListArgs
@@ -110,7 +109,7 @@ export function captureZcodeSqliteSessionViaWorker(
 }
 
 async function listForHost(
-  args: SqliteListArgs & { agent?: Parameters<OpenCodeSqliteWorkerClient['list']>[0]['agent'] }
+  args: SqliteListArgs & Pick<ClientListArgs, 'agent'>
 ): Promise<SessionFileCandidate[]> {
   const agent = args.agent ?? 'opencode'
   const reports = !args.scopePaths?.length || args.reportsProgress === true
