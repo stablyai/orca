@@ -490,8 +490,17 @@ it('keeps an unconfirmed comment with a notice until the reloaded thread shows t
       text: 'Not confirmed. Check the thread before sending again.'
     }
   })
-  const theirs = { id: 40, body: 'Ship it', createdAt: '', author: 'alice' }
-  await act(async () => f.read().setDetailPayload({ ...details(f.a), comments: [theirs] }))
+  const now = new Date().toISOString()
+  const theirs = { id: 40, body: 'Ship it', createdAt: now, author: 'alice' }
+  // Mine, from long before the send, that the refresh read for the first time.
+  const myOlder = {
+    id: 39,
+    body: 'Ship it',
+    createdAt: '2026-01-01T00:00:00Z',
+    author: 'me',
+    viewerDidAuthor: true
+  }
+  await act(async () => f.read().setDetailPayload({ ...details(f.a), comments: [myOlder, theirs] }))
   expect(f.read()).toMatchObject({
     itemCommentDraft: 'Ship it',
     commentSendNotice: { slot: 'comment' }
@@ -500,8 +509,9 @@ it('keeps an unconfirmed comment with a notice until the reloaded thread shows t
     f.read().setDetailPayload({
       ...details(f.a),
       comments: [
+        myOlder,
         theirs,
-        { id: 41, body: 'Ship it', createdAt: '', author: 'me', viewerDidAuthor: true }
+        { id: 41, body: 'Ship it', createdAt: now, author: 'me', viewerDidAuthor: true }
       ]
     })
   )
