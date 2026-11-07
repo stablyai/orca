@@ -20,6 +20,7 @@ import type {
   JiraPrioritiesBySite
 } from '../../jira-issue-sorter'
 import { jiraListPrioritiesForTarget } from '@/runtime/runtime-jira-detail-client'
+import { loadJiraCurrentSprint, saveJiraCurrentSprint } from '../../jira-current-sprint-storage'
 import { loadJiraLinkedView, saveJiraLinkedView } from '../../jira-linked-view-storage'
 import { loadJiraViewMode, saveJiraViewMode, type JiraViewMode } from '../../jira-view-mode-storage'
 import {
@@ -108,7 +109,11 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
     setJiraViewModeState(mode)
     saveJiraViewMode(mode)
   }, [])
-  const [jiraCurrentSprint, setJiraCurrentSprint] = useState(false)
+  const [jiraCurrentSprint, setJiraCurrentSprintState] = useState(loadJiraCurrentSprint)
+  const setJiraCurrentSprint = useCallback((enabled: boolean) => {
+    setJiraCurrentSprintState(enabled)
+    saveJiraCurrentSprint(enabled)
+  }, [])
   const [jiraRefreshNonce, setJiraRefreshNonce] = useState(0)
   const [jiraProjectStatusOrder, setJiraProjectStatusOrder] = useState<{
     order: JiraProjectStatusOrder
