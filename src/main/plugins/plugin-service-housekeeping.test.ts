@@ -17,7 +17,11 @@ vi.mock('../ipc/filesystem/watcher-process/parcel-watcher-process', () => ({
 }))
 
 type NativeWatch = { callback: WatcherProcessCallback; hooks: WatcherProcessHooks }
+type NativeSubscription = NativeWatch & { root: string; shallow: boolean; live: boolean }
 const nativeWatches = new Map<string, NativeWatch>()
+let subscribeLog: NativeSubscription[] = []
+// Roots whose native registration rejects although the directory exists (e.g. unreachable UNC).
+const rejectingRoots = new Set<string>()
 const originalPlatform = process.platform
 let fixture: string
 let healthy: string
@@ -32,15 +36,26 @@ beforeEach(async () => {
   await Promise.all([mkdir(healthy), mkdir(failing)])
   Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
   nativeWatches.clear()
+  subscribeLog = []
+  rejectingRoots.clear()
   vi.mocked(subscribeViaWatcherProcess).mockImplementation(
-    (root, callback, _options, hooks = {}) => {
-      if (!existsSync(root)) {
+    (root, callback, watchOptions, hooks = {}) => {
+      if (!existsSync(root) || rejectingRoots.has(root)) {
         return Promise.reject(new Error('Missing directory'))
       }
-      nativeWatches.set(root, { callback, hooks })
+      const shallow = watchOptions.mode === 'shallow'
+      const entry: NativeSubscription = { root, shallow, callback, hooks, live: true }
+      subscribeLog.push(entry)
+      if (!shallow) {
+        nativeWatches.set(root, { callback, hooks })
+      }
       return new Promise((resolve) => {
         queueMicrotask(() => {
-          resolve({ unsubscribe: async () => {} })
+          resolve({
+            unsubscribe: async () => {
+              entry.live = false
+            }
+          })
           if (root === failing) {
             queueMicrotask(() => hooks.onTerminalError?.(new Error('Failed to read changes')))
           }
@@ -69,6 +84,14 @@ afterEach(async () => {
 
 function revision(root: string): string {
   return pluginFrameContentRevision({ rootDir: root, contentHash: null })
+}
+
+function liveSubscriptions(root: string, shallow = false): number {
+  return subscribeLog.filter((s) => s.root === root && s.shallow === shallow && s.live).length
+}
+
+function registrations(root: string): number {
+  return subscribeLog.filter((s) => s.root === root && !s.shallow).length
 }
 
 function native(root: string): NativeWatch {
@@ -172,4 +195,101 @@ it('ignores binding checks that finish after disposal and leaves no timers', asy
   expect(revision(failing)).toBe(failedRevision)
   expect(vi.getTimerCount()).toBe(0)
   check.mockRestore()
+})
+
+it('adds and removes roots without touching the others or leaking subscriptions', async () => {
+  const healthyRevision = revision(healthy)
+  const extra = join(fixture, 'extra')
+  await mkdir(extra)
+  for (let cycle = 0; cycle < 3; cycle += 1) {
+    options = { ...options, devPaths: [healthy, extra] }
+    housekeeping.sync(options)
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(liveSubscriptions(extra)).toBe(1)
+    options = { ...options, devPaths: [healthy] }
+    housekeeping.sync(options)
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(liveSubscriptions(extra)).toBe(0)
+  }
+  expect(revision(healthy)).toBe(healthyRevision)
+  expect(registrations(healthy)).toBe(1)
+  expect(liveSubscriptions(healthy)).toBe(1)
+  // Equivalent spellings of the same folder share one watcher.
+  options = { ...options, devPaths: [healthy, `${healthy}/./`] }
+  housekeeping.sync(options)
+  await vi.advanceTimersByTimeAsync(1_000)
+  expect(registrations(healthy)).toBe(1)
+  housekeeping.dispose()
+  await vi.advanceTimersByTimeAsync(1_000)
+  expect(subscribeLog.filter((s) => s.live)).toHaveLength(0)
+  expect(vi.getTimerCount()).toBe(0)
+})
+
+it('retries a root whose registration keeps rejecting once per maintenance tick', async () => {
+  const unreachable = join(fixture, 'unreachable')
+  await mkdir(unreachable)
+  rejectingRoots.add(unreachable)
+  const refresh = vi.fn(() => housekeeping.sync(options))
+  options = { ...options, devPaths: [healthy, unreachable], refresh }
+  housekeeping.sync(options)
+  await vi.advanceTimersByTimeAsync(1_000)
+  const healthyRevision = revision(healthy)
+  refresh.mockClear()
+  const attempts = vi
+    .mocked(subscribeViaWatcherProcess)
+    .mock.calls.filter(([root]) => root === unreachable)
+  expect(attempts).toHaveLength(1)
+  for (let tick = 2; tick <= 4; tick += 1) {
+    await vi.advanceTimersByTimeAsync(60_000)
+    // Why waitFor: the binding check reads the real filesystem.
+    await vi.waitFor(() =>
+      expect(
+        vi.mocked(subscribeViaWatcherProcess).mock.calls.filter(([root]) => root === unreachable)
+      ).toHaveLength(tick)
+    )
+    await vi.advanceTimersByTimeAsync(1_000)
+  }
+  expect(revision(healthy)).toBe(healthyRevision)
+  expect(registrations(healthy)).toBe(1)
+  // A retry that keeps failing does not rediscover every plugin each tick.
+  expect(refresh).not.toHaveBeenCalled()
+  // Once reachable, the next tick binds it and later edits reload it.
+  rejectingRoots.delete(unreachable)
+  const unreachableRevision = revision(unreachable)
+  await vi.advanceTimersByTimeAsync(60_000)
+  await vi.waitFor(() => expect(revision(unreachable)).not.toBe(unreachableRevision))
+  native(unreachable).callback(null, [{ type: 'update', path: join(unreachable, 'a.js') }])
+  expect(pluginDevChangeCount(unreachable)).toBe(1)
+  expect(revision(healthy)).toBe(healthyRevision)
+})
+
+it('keeps sibling roots independent on Linux, where each watches its parent', async () => {
+  housekeeping.dispose()
+  subscribeLog = []
+  Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+  const sibling = join(fixture, 'sibling')
+  await mkdir(sibling)
+  options = { ...options, devPaths: [healthy, sibling] }
+  housekeeping = new PluginServiceHousekeeping()
+  housekeeping.sync(options)
+  await vi.advanceTimersByTimeAsync(1_000)
+  const parent = subscribeLog.filter((s) => s.shallow && s.live)
+  expect(parent).toHaveLength(2)
+  const healthyRevision = revision(healthy)
+  const siblingRevision = revision(sibling)
+
+  // The sibling is deleted and recreated: its parent watch recovers it without a maintenance tick.
+  await rm(sibling, { recursive: true })
+  native(sibling).callback(null, [{ type: 'delete', path: sibling }])
+  await vi.advanceTimersByTimeAsync(1_000)
+  await mkdir(sibling)
+  const siblingParent = subscribeLog.findLast((s) => s.shallow && s.live)
+  siblingParent?.callback(null, [{ type: 'create', path: sibling }])
+  await vi.advanceTimersByTimeAsync(1_000)
+  expect(revision(sibling)).not.toBe(siblingRevision)
+  expect(revision(healthy)).toBe(healthyRevision)
+  expect(registrations(healthy)).toBe(1)
+  expect(subscribeLog.filter((s) => s.shallow && s.live)).toHaveLength(2)
+  native(healthy).callback(null, [{ type: 'update', path: join(healthy, 'panel.html') }])
+  expect(revision(healthy)).not.toBe(healthyRevision)
 })

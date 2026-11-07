@@ -67,7 +67,11 @@ export class PluginServiceHousekeeping {
         watch.bindingCheck = null
         if (changed !== null && (changed || watch.retry)) {
           this.startWatcher(root, watch)
-          this.retryRefresh?.()
+          // Why only on a new binding: a retry that subscribes refreshes itself, and one that keeps
+          // failing (an unreachable share) must not rediscover every plugin each tick.
+          if (changed) {
+            this.retryRefresh?.()
+          }
         }
       })
     }
