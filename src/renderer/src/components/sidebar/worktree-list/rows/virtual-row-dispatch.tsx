@@ -177,7 +177,7 @@ function renderLineageGroupVirtualRow(
   )
 }
 
-// Each row renderer owns its frame because sticky headers, lineage groups and plain cards position differently.
+/** Each row renderer owns its frame because sticky headers, lineage groups and plain cards position differently. */
 function renderWorktreeVirtualRowFrame(
   ctx: WorktreeVirtualRowContext,
   row: RenderRow,

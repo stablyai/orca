@@ -48,6 +48,7 @@ type BuildArgs = {
   ) => void
 }
 
+/** Collects what every virtual row renderer reads for the current viewport. */
 export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtualRowContext {
   const { props, runtime, session, statusDrag, headerDrag, primaryActive, reveal } = args
   return {

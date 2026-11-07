@@ -16,7 +16,7 @@ type NoticeRowFrameProps = {
   children: React.ReactNode
 }
 
-// Share the absolute virtual frame across non-card rows.
+/** Shares the absolute virtual frame across non-card rows. */
 function NoticeRowFrame({
   vItem,
   measureVirtualRowElement,
