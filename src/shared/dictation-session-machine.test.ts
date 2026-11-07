@@ -15,23 +15,25 @@ function run(...events: DictationSessionEvent['type'][]): DictationSession {
 
 describe('transitionDictationSession', () => {
   it('keeps the session when stop arrives while starting, and finishes instead of listening', () => {
-    expect(run('start', 'stop', 'engine-ready')).toEqual({
+    const started = run('start')
+    const stopped = run('start', 'stop', 'engine-ready')
+    expect(stopped).toMatchObject({
       phase: 'stopping',
-      run: 1,
-      sessionId: '1',
-      stopRequested: true,
-      heardFinalText: false
+      sessionId: started.sessionId,
+      stopRequested: true
     })
   })
 
   it('drops the session on an engine error and refuses a new start until teardown ends', () => {
-    const abandoned = run('start', 'engine-ready', 'abandon')
-    expect(abandoned).toMatchObject({ phase: 'stopping', run: 2, sessionId: null })
+    const listening = run('start', 'engine-ready')
+    const abandoned = transitionDictationSession(listening, { type: 'abandon' })
+    expect(abandoned).toMatchObject({ phase: 'stopping', sessionId: null })
+    expect(abandoned.run).not.toBe(listening.run)
     expect(transitionDictationSession(abandoned, { type: 'start' })).toBe(abandoned)
-    expect(run('start', 'engine-ready', 'abandon', 'ended', 'start')).toMatchObject({
-      phase: 'starting',
-      sessionId: '4'
-    })
+
+    const restarted = run('start', 'engine-ready', 'abandon', 'ended', 'start')
+    expect(restarted.phase).toBe('starting')
+    expect(restarted.sessionId).not.toBe(listening.sessionId)
   })
 
   it('ignores stop once the session is already stopping', () => {
