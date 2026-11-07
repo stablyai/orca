@@ -211,7 +211,7 @@ describe('MobileSocketWiring', () => {
     expect(onReady).not.toHaveBeenCalled()
 
     authenticate(new FakeSocket(), 'valid-token')
-    expect(registry.updateLastSeenDeferred).toHaveBeenCalledWith('device-1', 'public')
+    expect(registry.updateLastSeenDeferred).toHaveBeenCalledWith('device-1', 'public', 'legacy')
     expect(onReady.mock.calls[0]?.[0]).toMatchObject({
       transport: { transport: 'direct', sourceClass: 'public' }
     })

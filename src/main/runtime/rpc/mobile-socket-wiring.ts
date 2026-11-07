@@ -247,7 +247,8 @@ export class MobileSocketWiring {
           // Do not delay e2ee_authenticated for the secure-file rewrite.
           this.deviceRegistry.updateLastSeenDeferred(
             device.deviceId,
-            metadata.transport === 'direct' ? metadata.sourceClass : undefined
+            metadata.transport === 'direct' ? metadata.sourceClass : undefined,
+            channel.transcriptHashB64 ? 'v2' : 'legacy'
           )
           this.onReady?.(socket)
         },
