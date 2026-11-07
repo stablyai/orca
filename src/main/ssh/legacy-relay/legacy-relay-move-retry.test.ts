@@ -19,7 +19,9 @@ import {
 } from './legacy-relay-bridge-registry'
 import {
   type BridgedMoveRetryDeps,
+  noteBridgedExit,
   onLastBridgedTerminalExit,
+  settleBridgedExits,
   retryMoveAfterLastBridgedExit
 } from './legacy-relay-move-retry'
 
@@ -108,6 +110,16 @@ describe('the last bridged relay terminal', () => {
     expect(legacyRelayBridgedPanes()).toEqual([
       expect.objectContaining({ ptyId: PTY, state: 'unverifiable' })
     ])
+  })
+
+  it('never lets an exit a replaced bridge saw count for its successor', () => {
+    const report = vi.fn()
+    noteBridgedExit({}, TARGET, { report })
+
+    settleBridgedExits({}, () => true)
+
+    expect(report).toHaveBeenCalledWith(TARGET, 'terminal_exited', 0)
+    expect(lastExits).toEqual([])
   })
 
   it('waits for every bridged pane, not just the first to exit', async () => {

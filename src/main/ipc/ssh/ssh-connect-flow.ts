@@ -18,13 +18,15 @@ import {
   recheckWhenManagedFenceClears,
   publishHostServerDecisionFailure,
   publishBridgedUnservedHostServer,
-  publishKeptHostServer,
+  restoreKeptHostServer,
   publishManagedServerConnect,
   publishUnservedHostServer
 } from './ssh-host-server-connect'
 import {
   admittedConnectAuthority,
   assertSshConnectsNotFenced,
+  type ConnectAttempt,
+  type QuietConnect,
   connectInFlight,
   isCurrentConnectAttempt
 } from './ssh-connect-attempt-registry'
@@ -99,6 +101,10 @@ async function admitConnect(
   let replacePendingTransport = false
   if (existing) {
     if (isCurrentConnectAttempt(targetId, existing.authority)) {
+      // A user's connect joining a quiet retry makes it an ordinary connect (#29626).
+      if (!quiet && existing.quiet) {
+        existing.quiet.active = false
+      }
       return existing.promise
     }
   }
@@ -118,14 +124,26 @@ async function admitConnect(
   // Shutdown fences and snapshots synchronously; register below or fail here without an admission gap.
   assertSshConnectsNotFenced()
 
-  const promise = quiet
-    ? doQuietConnect(targetId, replacePendingTransport)
+  let registered: ConnectAttempt | undefined
+  const quietMode: QuietConnect | undefined = quiet
+    ? {
+        active: true,
+        rotated: (authority) => {
+          if (registered) {
+            registered.authority = authority
+          }
+        }
+      }
+    : undefined
+  const promise = quietMode
+    ? doQuietConnect(targetId, replacePendingTransport, quietMode)
     : doConnect(targetId, replacePendingTransport, automatic)
-  const attempt = {
+  const attempt: ConnectAttempt = {
     authority: getSshProviderAuthority(targetId),
     promise,
-    ...(quiet ? { quiet: true as const } : {})
+    ...(quietMode ? { quiet: quietMode } : {})
   }
+  registered = attempt
   connectInFlight.set(targetId, attempt)
   try {
     return await promise
@@ -139,28 +157,25 @@ async function admitConnect(
 /** COMPAT(legacy-relay-bridge): only a finished move publishes; any other outcome restores the kept host. */
 async function doQuietConnect(
   targetId: string,
-  replacePendingTransport: boolean
+  replacePendingTransport: boolean,
+  quiet: QuietConnect
 ): Promise<SshConnectionState> {
-  const kept = getSshHostServerStatus(targetId)
   // Replacing a pending transport would hang up the session the kept host still uses.
   if (
     replacePendingTransport ||
-    !kept ||
-    !isSshHostKeptForBridgedTerminals(kept) ||
+    !isSshHostKeptForBridgedTerminals(getSshHostServerStatus(targetId)) ||
     connectionManager!.getState(targetId)?.status !== 'connected'
   ) {
     throw createCancelledConnectAttemptError()
   }
-  return doConnect(targetId, replacePendingTransport, true, () =>
-    publishKeptHostServer(targetId, kept)
-  )
+  return doConnect(targetId, false, true, quiet)
 }
 
 async function doConnect(
   targetId: string,
   replacePendingTransport = false,
   automatic = false,
-  keepOnRefusal?: () => SshConnectionState
+  quiet?: QuietConnect
 ): Promise<SshConnectionState> {
   const target = getSshTargetRegistryStore()!.getTarget(targetId)
   if (!target) {
@@ -171,7 +186,8 @@ async function doConnect(
     throw createSshUserDisconnectedError(target.label)
   }
 
-  const authority = rotateSshProviderAuthority(targetId)
+  // A quiet retry rotates only once its move succeeds; a refusal must not cancel provider requests.
+  let authority = quiet ? getSshProviderAuthority(targetId) : rotateSshProviderAuthority(targetId)
   if (replacePendingTransport) {
     await connectionManager!.disconnect(targetId)
     if (!isCurrentConnectAttempt(targetId, authority)) {
@@ -188,7 +204,7 @@ async function doConnect(
         await abandonDecisionTransport(targetId, owner, authority)
         throw createCancelledConnectAttemptError()
       }
-      if (keepOnRefusal) {
+      if (quiet?.active) {
         // The host is still connected and bridged; a retry no one asked for surfaces no failure.
         assertSshConnectsNotFenced()
         console.warn(`[ssh] Retried move for ${targetId} failed; the host stays as it was:`, error)
@@ -207,9 +223,9 @@ async function doConnect(
     throw createCancelledConnectAttemptError()
   }
   adoptCurrentTransport(targetId, owner)
-  if (keepOnRefusal && server.route === 'unserved' && !server.bridged) {
+  if (quiet?.active && server.route === 'unserved' && !server.bridged) {
     // COMPAT(legacy-relay-bridge): only a finished move replaces the kept host's status.
-    return keepOnRefusal()
+    return restoreKeptHostServer(targetId)
   }
   if (server.route === 'managed') {
     if (server.fenceHeld) {
@@ -222,6 +238,10 @@ async function doConnect(
     if (!isCurrentConnectAttempt(targetId, authority)) {
       await abandonDecisionTransport(targetId, owner, authority)
       throw createCancelledConnectAttemptError()
+    }
+    if (quiet) {
+      authority = rotateSshProviderAuthority(targetId)
+      quiet.rotated(authority)
     }
     const published = publishManagedServerConnect(
       targetId,

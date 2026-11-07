@@ -151,7 +151,7 @@ function bridgeFor(targetId: string): LegacyRelayTargetBridge | null {
         heldPanes.delete(targetId)
         stopsFor(targetId).flush(bridge)
         reportDailyRelayActivity(targetId, bridge.livePaneCount(), installed.report)
-        settleBridgedExits(targetId, () => !bridge.snapshot().length && !hasListedLeases(targetId))
+        settleBridgedExits(bridge, () => !bridge.snapshot().length && !hasListedLeases(targetId))
       }
       installed.onPanesChanged(legacyRelayBridgedPanes())
     },
@@ -161,7 +161,7 @@ function bridgeFor(targetId: string): LegacyRelayTargetBridge | null {
       stopsFor(targetId).exited(ptyId)
       installed.onExit(ptyId, code)
     },
-    onTerminalExited: () => noteBridgedExit(targetId, installed),
+    onTerminalExited: () => noteBridgedExit(bridge, targetId, installed),
     owners: ownersFor(targetId)
   })
   bridges.set(targetId, bridge)

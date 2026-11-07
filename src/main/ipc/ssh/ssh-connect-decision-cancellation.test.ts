@@ -25,12 +25,16 @@ import { recordSshConnectionOpened } from '../../ssh/connection/ssh-connection-a
 import {
   decideHostServer,
   publishHostServerDecisionFailure,
-  publishKeptHostServer,
+  restoreKeptHostServer,
   publishManagedServerConnect,
   publishUnservedHostServer
 } from './ssh-host-server-connect'
 import { connectTarget } from './ssh-connect-flow'
 import { connectInFlight } from './ssh-connect-attempt-registry'
+import {
+  getSshProviderAuthority,
+  isCurrentSshProviderAuthority
+} from '../../ssh/ssh-provider-authority'
 import { clearSshHostServerStatus, setSshHostServerStatus } from '../../ssh/ssh-host-server-status'
 import {
   startLegacyRelayBridge,
@@ -90,6 +94,12 @@ describe('a quiet retry of a bridged host move (#29626)', () => {
     terminals: 1,
     bridged: true
   }
+  const elsewhere = {
+    route: 'unserved',
+    reason: 'relay_terminals_live',
+    terminals: 1,
+    terminalsElsewhere: true
+  } as const
 
   beforeEach(async () => {
     await harness.reset()
@@ -102,7 +112,7 @@ describe('a quiet retry of a bridged host move (#29626)', () => {
   })
 
   function expectHostKept(): void {
-    expect(publishKeptHostServer).toHaveBeenCalledWith('ssh-1', kept)
+    expect(restoreKeptHostServer).toHaveBeenCalledWith('ssh-1')
     expect(publishUnservedHostServer).not.toHaveBeenCalled()
     expect(publishHostServerDecisionFailure).not.toHaveBeenCalled()
     expect(mockConnectionManager.disconnect).not.toHaveBeenCalled()
@@ -110,21 +120,20 @@ describe('a quiet retry of a bridged host move (#29626)', () => {
     expect(stopLegacyRelayBridge).not.toHaveBeenCalled()
   }
 
-  it('keeps the host connected and bridged when another terminal still refuses the move', async () => {
-    vi.mocked(decideHostServer).mockResolvedValueOnce({
-      route: 'unserved',
-      reason: 'relay_terminals_live',
-      terminals: 1,
-      terminalsElsewhere: true
-    })
+  it('keeps the host and its authority when another terminal still refuses the move', async () => {
+    const authority = { ...getSshProviderAuthority('ssh-1') }
+    vi.mocked(decideHostServer).mockResolvedValueOnce(elsewhere)
 
     await expect(connectTarget('ssh-1', { quiet: true })).resolves.toMatchObject({
       status: 'connected'
     })
     expectHostKept()
+    expect(getSshProviderAuthority('ssh-1')).toEqual(authority)
+    expect(isCurrentSshProviderAuthority(authority)).toBe(true)
   })
 
-  it('keeps the host connected and bridged when the retried decision throws', async () => {
+  it('keeps the host and its authority when the retried decision throws', async () => {
+    const generation = getSshProviderAuthority('ssh-1').connectionGeneration
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.mocked(decideHostServer).mockRejectedValueOnce(new Error('conversion failed'))
 
@@ -132,20 +141,23 @@ describe('a quiet retry of a bridged host move (#29626)', () => {
       status: 'connected'
     })
     expectHostKept()
+    expect(getSshProviderAuthority('ssh-1').connectionGeneration).toBe(generation)
   })
 
-  it('marks its attempt quiet so setup progress does not replace the kept status', async () => {
-    let quiet: boolean | undefined
+  it('shows no progress, then rotates authority and publishes once the move succeeds', async () => {
+    const generation = getSshProviderAuthority('ssh-1').connectionGeneration
+    let active: boolean | undefined
     vi.mocked(decideHostServer).mockImplementationOnce(async () => {
       // Progress reports only after the decision's first await, once the attempt is registered.
       await Promise.resolve()
-      quiet = connectInFlight.get('ssh-1')?.quiet
+      active = connectInFlight.get('ssh-1')?.quiet?.active
       return { route: 'managed', environmentId: 'env-1' }
     })
 
     await connectTarget('ssh-1', { quiet: true })
 
-    expect(quiet).toBe(true)
+    expect(active).toBe(true)
+    expect(getSshProviderAuthority('ssh-1').connectionGeneration).toBeGreaterThan(generation)
     expect(publishManagedServerConnect).toHaveBeenCalledWith(
       'ssh-1',
       'env-1',
@@ -154,7 +166,25 @@ describe('a quiet retry of a bridged host move (#29626)', () => {
       undefined,
       undefined
     )
-    expect(publishKeptHostServer).not.toHaveBeenCalled()
+    expect(restoreKeptHostServer).not.toHaveBeenCalled()
+  })
+
+  it('surfaces the refusal to a user connect that joined the retry', async () => {
+    let decide = (): void => {}
+    vi.mocked(decideHostServer).mockImplementationOnce(
+      () => new Promise((resolve) => (decide = () => resolve(elsewhere)))
+    )
+
+    const retry = connectTarget('ssh-1', { quiet: true })
+    await vi.waitFor(() => expect(connectInFlight.get('ssh-1')?.quiet?.active).toBe(true))
+    const user = connectTarget('ssh-1')
+    await vi.waitFor(() => expect(connectInFlight.get('ssh-1')?.quiet?.active).toBe(false))
+    decide()
+
+    await expect(user).rejects.toThrow('This SSH host isn’t supported')
+    await expect(retry).rejects.toThrow('This SSH host isn’t supported')
+    expect(publishUnservedHostServer).toHaveBeenCalledTimes(1)
+    expect(restoreKeptHostServer).not.toHaveBeenCalled()
   })
 
   it('does nothing once the host is no longer kept for bridged terminals', async () => {

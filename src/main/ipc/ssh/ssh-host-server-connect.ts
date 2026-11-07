@@ -12,6 +12,7 @@ import { unservedHostServerMessage, unservedServerStatus } from '../../ssh/ssh-h
 import {
   clearSshHostServerStatus,
   getSshHostServerStatus,
+  isSshHostKeptForBridgedTerminals,
   setSshHostServerStatus
 } from '../../ssh/ssh-host-server-status'
 import { connectionManager, getCurrentMainWindow } from './ssh-ipc-context'
@@ -106,7 +107,30 @@ export function publishBridgedUnservedHostServer(
   return publishKeptHostServer(target.id, unservedServerStatus(decision))
 }
 
-/** Publish the host connected with this status; a refused automatic retry restores its own. */
+/**
+ * COMPAT(legacy-relay-bridge): after a refused quiet retry, republish the host only if it is still
+ * kept for bridged terminals, and as connected only if its transport still is.
+ */
+export function restoreKeptHostServer(targetId: string): SshConnectionState {
+  const status = getSshHostServerStatus(targetId)
+  const fallback: SshConnectionState = {
+    targetId,
+    status: 'disconnected',
+    error: null,
+    reconnectAttempt: 0
+  }
+  const state = connectionManager!.getState(targetId) ?? fallback
+  if (!status || !isSshHostKeptForBridgedTerminals(status)) {
+    return getPublicSshState(targetId) ?? state
+  }
+  if (state.status === 'connected') {
+    return publishKeptHostServer(targetId, status)
+  }
+  broadcastSshState(getCurrentMainWindow, targetId, { ...state, managedServer: status })
+  return getPublicSshState(targetId) ?? state
+}
+
+/** Publish the host connected with this status. */
 export function publishKeptHostServer(
   targetId: string,
   managedServer: SshManagedServerStatus

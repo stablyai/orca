@@ -5,8 +5,8 @@
  */
 import type { LegacyRelayBridgeHost } from './legacy-relay-bridge-registry'
 
-/** Targets whose bridge saw a relay-proven exit since its last pane publication. */
-const exitedSincePublish = new Set<string>()
+/** Bridges with a relay-proven exit since their last pane publication; disposed ones drop out. */
+const exitedSincePublish = new WeakMap<object, string>()
 let lastExitListener: ((targetId: string) => void) | null = null
 const retrying = new Set<string>()
 
@@ -14,14 +14,20 @@ export function onLastBridgedTerminalExit(listener: ((targetId: string) => void)
   lastExitListener = listener
 }
 
-export function noteBridgedExit(targetId: string, host: Pick<LegacyRelayBridgeHost, 'report'>) {
-  exitedSincePublish.add(targetId)
+export function noteBridgedExit(
+  bridge: object,
+  targetId: string,
+  host: Pick<LegacyRelayBridgeHost, 'report'>
+): void {
+  exitedSincePublish.set(bridge, targetId)
   host.report(targetId, 'terminal_exited', 0)
 }
 
 /** `servesNone`: no pane is left, live or unverifiable, and no closed tab's stop is owed. */
-export function settleBridgedExits(targetId: string, servesNone: () => boolean): void {
-  if (exitedSincePublish.delete(targetId) && servesNone()) {
+export function settleBridgedExits(bridge: object, servesNone: () => boolean): void {
+  const targetId = exitedSincePublish.get(bridge)
+  exitedSincePublish.delete(bridge)
+  if (targetId !== undefined && servesNone()) {
     lastExitListener?.(targetId)
   }
 }
