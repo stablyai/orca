@@ -1,6 +1,6 @@
 import type { Root, RootContent } from 'mdast'
 import type { Token } from './mobile-markdown-code-nodes'
-import { hasDetailsMarkup } from './mobile-markdown-details'
+import { hasDetailsSectionTag } from './mobile-markdown-details'
 import type { MathEnv } from './mobile-markdown-math'
 import { markdownTokens, parseMobileMarkdownTree } from './mobile-markdown-tree'
 
@@ -62,7 +62,7 @@ export function parseGrowingMobileMarkdownTree(
     return { root, cache: null }
   }
   // A lone \r ends a line for markdown-it but not for the line counting here; `<details>` sections span blocks.
-  if (source.includes('\r') || hasDetailsMarkup(source)) {
+  if (source.includes('\r') || hasDetailsSectionTag(source)) {
     return whole()
   }
   const resume =
