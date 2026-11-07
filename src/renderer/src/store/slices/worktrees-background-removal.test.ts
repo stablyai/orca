@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import 'sonner'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
-import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
 import { _resetHostWorktreeRemovalsForTests } from './worktrees/teardown/host-worktree-removal-state'
 import {
   _resetBackgroundWorktreeRemovalBridgeForTests,

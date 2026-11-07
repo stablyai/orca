@@ -77,10 +77,8 @@
 1 src/renderer/src/components/crash-report/CrashReportDialog.tsx
 1 src/renderer/src/components/crash-report/CrashReportDialogSurface.tsx
 3 src/renderer/src/components/crash-report/use-crash-report-copy.ts
-1 src/renderer/src/components/dashboard-popout/useDashboardSnapshot.ts
-2 src/renderer/src/components/dashboard/useAgentBucketCounts.ts
+1 src/renderer/src/components/dashboard/useAgentBucketCounts.ts
 1 src/renderer/src/components/dashboard/useLiveDashboardSnapshot.ts
-1 src/renderer/src/components/dashboard/useRetainedAgents.ts
 2 src/renderer/src/components/diff-comments/DiffCommentCard.tsx
 5 src/renderer/src/components/diff-comments/DiffCommentPopover.tsx
 2 src/renderer/src/components/diff-comments/diff-comment-draft-zone.ts
@@ -137,7 +135,6 @@
 1 src/renderer/src/components/editor/rich-markdown/review/useRichMarkdownReviewData.ts
 1 src/renderer/src/components/editor/rich-markdown/review/useRichMarkdownReviewRailController.ts
 12 src/renderer/src/components/editor/rich-markdown/tables/RichMarkdownTableControls.tsx
-2 src/renderer/src/components/editor/rich-markdown/tables/use-rich-markdown-table-control-target.ts
 2 src/renderer/src/components/editor/use-editor-group-file-drop-owner.ts
 1 src/renderer/src/components/editor/use-monaco-content-sync-bridge.ts
 1 src/renderer/src/components/editor/use-monaco-editor-mount.ts
@@ -165,8 +162,7 @@
 1 src/renderer/src/components/feature-wall/WorkbenchTerminalSplitMenu.tsx
 1 src/renderer/src/components/feature-wall/agents-orchestration/OrchestrationPage.tsx
 2 src/renderer/src/components/feature-wall/agents-orchestration/UsageAccountsCard.tsx
-1 src/renderer/src/components/feature-wall/use-feature-wall-session-depth.ts
-3 src/renderer/src/components/feature-wall/use-feature-wall-tour-telemetry.ts
+2 src/renderer/src/components/feature-wall/use-feature-wall-tour-telemetry.ts
 3 src/renderer/src/components/feature-wall/useAiCommitPrSettings.ts
 1 src/renderer/src/components/floating-terminal/FloatingTerminalIconContextMenu.tsx
 3 src/renderer/src/components/floating-terminal/FloatingTerminalToggleButton.tsx
@@ -211,9 +207,8 @@
 2 src/renderer/src/components/mobile/use-mobile-page-paired-devices.ts
 1 src/renderer/src/components/mobile/use-mobile-pairing-generation.ts
 1 src/renderer/src/components/native-chat-restart-runtimes.ts
-1 src/renderer/src/components/native-chat-resume-on-restart-store.ts
 1 src/renderer/src/components/native-chat/AddToChatMenu.tsx
-2 src/renderer/src/components/native-chat/NativeChatAccountUsageCard.tsx
+1 src/renderer/src/components/native-chat/NativeChatAccountUsageCard.tsx
 6 src/renderer/src/components/native-chat/NativeChatAutocompleteMenus.tsx
 1 src/renderer/src/components/native-chat/NativeChatComposerField.tsx
 2 src/renderer/src/components/native-chat/NativeChatComposerToolbar.tsx
@@ -237,21 +232,19 @@
 8 src/renderer/src/components/native-chat/use-native-chat-composer-attachments.ts
 1 src/renderer/src/components/native-chat/use-native-chat-composer-keydown.ts
 1 src/renderer/src/components/native-chat/use-native-chat-context-clear-floor.ts
-3 src/renderer/src/components/native-chat/use-native-chat-find-matches.ts
 1 src/renderer/src/components/native-chat/use-native-chat-find.ts
 6 src/renderer/src/components/native-chat/use-native-chat-fork.ts
 1 src/renderer/src/components/native-chat/use-native-chat-hand-off.tsx
-1 src/renderer/src/components/native-chat/use-native-chat-history-retention.ts
 1 src/renderer/src/components/native-chat/use-native-chat-launch-prompt-delivery-notice.ts
-3 src/renderer/src/components/native-chat/use-native-chat-live-session.ts
-4 src/renderer/src/components/native-chat/use-native-chat-message-rail.ts
+2 src/renderer/src/components/native-chat/use-native-chat-live-session.ts
+3 src/renderer/src/components/native-chat/use-native-chat-message-rail.ts
 1 src/renderer/src/components/native-chat/use-native-chat-mobile-hold-notice.ts
 2 src/renderer/src/components/native-chat/use-native-chat-paste-lifetime.ts
 1 src/renderer/src/components/native-chat/use-native-chat-pending-delivery.ts
 2 src/renderer/src/components/native-chat/use-native-chat-provisional-launch.ts
 2 src/renderer/src/components/native-chat/use-native-chat-resolved-path-attachments.ts
-4 src/renderer/src/components/native-chat/use-native-chat-retained-session.ts
-2 src/renderer/src/components/native-chat/use-native-chat-selected-history.ts
+3 src/renderer/src/components/native-chat/use-native-chat-retained-session.ts
+1 src/renderer/src/components/native-chat/use-native-chat-selected-history.ts
 1 src/renderer/src/components/native-chat/use-native-chat-session-context-actions.tsx
 1 src/renderer/src/components/native-chat/use-native-chat-session-option-command.ts
 2 src/renderer/src/components/native-chat/use-native-chat-skills.ts
@@ -278,7 +271,6 @@
 2 src/renderer/src/components/onboarding/AgentStep.tsx
 2 src/renderer/src/components/onboarding/NotificationStep.tsx
 8 src/renderer/src/components/onboarding/OnboardingFlow.tsx
-1 src/renderer/src/components/onboarding/OnboardingInlineCommandTerminal.tsx
 3 src/renderer/src/components/onboarding/OnboardingLanguageSwitcher.tsx
 1 src/renderer/src/components/onboarding/ThemeLookCarousel.tsx
 1 src/renderer/src/components/onboarding/ThemeLookGallery.tsx
@@ -295,7 +287,6 @@
 3 src/renderer/src/components/plugins/dialogs/PluginMarketplaceSourceDialog.tsx
 1 src/renderer/src/components/plugins/frames/use-plugin-frame-entry.ts
 1 src/renderer/src/components/plugins/frames/use-plugin-frame-host.ts
-1 src/renderer/src/components/plugins/frames/use-plugin-panel-theme-revision.ts
 4 src/renderer/src/components/plugins/list/PluginsSettingsSection.tsx
 1 src/renderer/src/components/plugins/page/PluginContributionActionCommand.tsx
 2 src/renderer/src/components/plugins/state/use-plugin-catalog.ts
@@ -303,7 +294,7 @@
 1 src/renderer/src/components/plugins/state/use-plugin-install-action.ts
 2 src/renderer/src/components/plugins/state/use-plugin-marketplace-lifecycle.ts
 1 src/renderer/src/components/plugins/state/use-plugin-settings-writes.ts
-3 src/renderer/src/components/ports/WorkspacePortScanner.tsx
+1 src/renderer/src/components/ports/WorkspacePortScanner.tsx
 2 src/renderer/src/components/provider-accounts/AntigravityChatAuthForm.tsx
 1 src/renderer/src/components/pull-request-page/checks/tab.tsx
 2 src/renderer/src/components/pull-request-page/comments/composer.tsx
@@ -360,7 +351,6 @@
 1 src/renderer/src/components/right-sidebar/hosted-review/provider-actions/HostedReviewActions.tsx
 6 src/renderer/src/components/right-sidebar/hosted-review/provider-actions/use-hosted-review-actions.ts
 2 src/renderer/src/components/right-sidebar/hosted-review/provider-actions/use-ready-hosted-review-action.ts
-1 src/renderer/src/components/right-sidebar/plugin-panels/declarative/use-plugin-declarative-tree.ts
 1 src/renderer/src/components/right-sidebar/source-control/ai/text-generation-dialog-form.tsx
 1 src/renderer/src/components/right-sidebar/source-control/ai/text-generation-dialog.tsx
 1 src/renderer/src/components/right-sidebar/source-control/ai/use-conflict-recovery-composer.ts
@@ -389,7 +379,6 @@
 1 src/renderer/src/components/right-sidebar/source-control/review/use-hosted-review-provider-hint.ts
 1 src/renderer/src/components/right-sidebar/source-control/sync/git-history-panel.tsx
 1 src/renderer/src/components/right-sidebar/source-control/sync/git-status-file-watch-refresh.ts
-1 src/renderer/src/components/right-sidebar/source-control/sync/git-status-push-signal-refresh.ts
 1 src/renderer/src/components/right-sidebar/source-control/sync/use-branch-compare.ts
 1 src/renderer/src/components/right-sidebar/source-control/sync/use-conflict-abort.ts
 1 src/renderer/src/components/right-sidebar/source-control/sync/use-remote-action-runner.ts
@@ -572,7 +561,7 @@
 1 src/renderer/src/components/status-bar/RuntimeHostStatusRow.tsx
 2 src/renderer/src/components/status-bar/SshTargetStatusRow.tsx
 1 src/renderer/src/components/status-bar/icons.tsx
-4 src/renderer/src/components/status-bar/status-bar-density.ts
+3 src/renderer/src/components/status-bar/status-bar-density.ts
 2 src/renderer/src/components/status-bar/use-codex-switcher-controller.ts
 1 src/renderer/src/components/status-bar/use-owner-usage-rate-limits.ts
 1 src/renderer/src/components/status-bar/use-provider-account-list.ts
@@ -605,7 +594,6 @@
 1 src/renderer/src/components/task-page/github/use-task-page-github-quiet-refresh-effect.ts
 5 src/renderer/src/components/task-page/github/use-task-page-github-quiet-refresh.ts
 3 src/renderer/src/components/task-page/github/use-task-page-github-search-pagination.ts
-3 src/renderer/src/components/task-page/github/use-task-page-pr-check-hydration.ts
 4 src/renderer/src/components/task-page/github/use-task-page-work-items-cache-selection.ts
 1 src/renderer/src/components/task-page/gitlab/use-task-page-gitlab-loading.ts
 2 src/renderer/src/components/task-page/jira/task-page-jira-board-view.tsx
@@ -688,7 +676,6 @@
 2 src/renderer/src/components/workspace-cleanup/use-workspace-cleanup-git-evidence.ts
 1 src/renderer/src/components/workspace-cleanup/workspace-cleanup-candidate-list.tsx
 2 src/renderer/src/components/workspace-emoji/useWorkspaceEmojiShortcodeInput.ts
-1 src/renderer/src/components/workspace-space/SpaceWindowStatePublisher.tsx
 1 src/renderer/src/components/worktree-jump/use-worktree-jump-palette-list-entries.ts
 1 src/renderer/src/components/worktree-jump/use-worktree-jump-palette-local-state.ts
 1 src/renderer/src/components/worktree-jump/use-worktree-jump-palette-open-tabs.ts

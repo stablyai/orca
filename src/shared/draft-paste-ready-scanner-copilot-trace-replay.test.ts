@@ -3,7 +3,6 @@
 import { describe, expect, it } from 'vitest'
 import { createDraftPasteReadyScanner } from './draft-paste-ready-scanner'
 import type { DraftPasteReadySignal } from './agent-launch/catalog/tui-agent-config-types'
-import { TUI_AGENT_CONFIG } from './agent-launch/catalog/tui-agent-config'
 import {
   COPILOT_STARTUP_PTY_TRACE,
   COPILOT_TRUST_MENU_PTY_TRACE,
@@ -35,10 +34,6 @@ function replay(
 }
 
 describe('copilot-composer-prompt startup replay', () => {
-  it('is the signal Copilot launches wait on', () => {
-    expect(TUI_AGENT_CONFIG.copilot.draftPasteReadySignal).toBe('copilot-composer-prompt')
-  })
-
   it('delivers on the composer row instead of after the loading spinner settles', () => {
     expect(replay('render-quiet-after-bracketed-paste', COPILOT_STARTUP_PTY_TRACE)).toEqual({
       readyAtMs: null,

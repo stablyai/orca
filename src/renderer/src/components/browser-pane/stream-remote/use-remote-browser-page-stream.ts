@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 
 import { decodeBrowserScreencastFrame } from '../../../../../shared/browser-screencast-protocol'
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'

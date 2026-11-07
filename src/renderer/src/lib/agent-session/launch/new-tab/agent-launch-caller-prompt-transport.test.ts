@@ -62,7 +62,7 @@ vi.mock('@/lib/agent-paste-draft', () => ({
 vi.mock('@/lib/agent-ready-wait', () => ({
   waitForAgentReady: vi.fn(async () => ({ ready: true, reason: 'foreground-match' }))
 }))
-vi.mock('@/runtime/local-runtime-capabilities', () => ({
+vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', () => ({
   readLocalRuntimeCapabilitiesOrUnknown: () => []
 }))
 // The host starts an AI button's agent in the tab's pane and answers; the window then pastes.
@@ -73,8 +73,10 @@ const callRuntimeRpc = vi.hoisted(() =>
     receipt: { mode: 'terminal', preferred: 'terminal', reason: 'user_default', detail: 'x' }
   }))
 )
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc }))
-vi.mock('@/runtime/runtime-rpc-result', () => ({ RuntimeRpcCallError: Error }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc
+}))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-result', () => ({ RuntimeRpcCallError: Error }))
 
 /** What the window's own launch command carries; a launch started by the host queues none. */
 function commandCarries(text: string): boolean {

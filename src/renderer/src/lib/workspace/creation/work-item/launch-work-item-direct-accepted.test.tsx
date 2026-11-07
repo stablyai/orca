@@ -21,9 +21,9 @@ import { projectRelationsTableFixture } from '../../../../../../shared/github/pr
 import {
   publicRuntimeEnvironment,
   connectedRuntimeStatus
-} from '@/runtime/paired-runtime-environment-test-fixture'
+} from '@/runtime/rpc/testing/paired-runtime-environment-test-fixture'
 import { runtimeEnvironmentStatusFromSnapshot } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import {
   resource,
   clearHostAgentMenuSettingsForTests

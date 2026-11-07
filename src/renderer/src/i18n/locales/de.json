@@ -8362,7 +8362,8 @@
           "diagnosticsCopyFailed": "Diagnosedaten konnten nicht kopiert werden",
           "5e2c7a1f84": "Während ein Terminal auf dem Smartphone verwendet wird, verkleinert Orca es auf die Bildschirmgröße des Smartphones. Diese Einstellung legt fest, ob es beim Schließen oder Verlassen der App in Smartphone-Größe bleibt (damit interaktive CLI-Tools ihr Layout beibehalten) oder wieder an den Desktop angepasst wird. Über „Wiederherstellen“ oder „Alle wiederherstellen“ im Banner lässt sich die Größe jederzeit manuell anpassen.",
           "codeRefreshesAutomatically": "Der Code wird automatisch erneuert. Ein kopierter Code funktioniert bis zu 10 Minuten.",
-          "legacyEncryption": "Verwendet ältere Verschlüsselung. Aktualisiere die Orca-App auf diesem Gerät."
+          "legacyEncryption": "Verwendet ältere Verschlüsselung. Aktualisiere die Orca-App auf diesem Gerät.",
+          "olderPairingMethod": "Verwendet eine ältere Kopplungsmethode. Aktualisiere die Orca-App auf diesem Telefon."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -8769,6 +8770,7 @@
           "6f6d5188ed": "Zugriff für {{value0}} widerrufen",
           "434e4a6af6": "Aktueller Link",
           "df142657a5": "Noch nicht verwendet",
+          "olderPairingMethod": "Verwendet eine ältere Kopplungsmethode. Aktualisiere Orca auf dem Gerät, das diesen Link verwendet.",
           "b18d1764ef": "Zuletzt verwendet: {{value0}}",
           "linkName": "Link · {{value0}}",
           "activeLinks": "Aktive Links",

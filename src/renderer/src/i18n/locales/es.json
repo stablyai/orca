@@ -7969,7 +7969,8 @@
           "diagnosticsCopyFailed": "No se pudieron copiar los diagnósticos",
           "5e2c7a1f84": "Mientras usas un terminal en tu teléfono, Orca lo reduce para que se ajuste a la pantalla de tu teléfono. Cuando cierra la aplicación o la abandona, esto controla si permanece en el tamaño del teléfono (para que las herramientas CLI interactivas no vuelvan a fluir) o cambia de tamaño a su escritorio. Siempre puedes usar Restaurar o Restaurar todo en el banner para cambiar el tamaño manualmente.",
           "codeRefreshesAutomatically": "El código se actualiza automáticamente. Un código copiado funciona hasta 10 minutos.",
-          "legacyEncryption": "Usa un cifrado anterior. Actualiza la app de Orca en este dispositivo."
+          "legacyEncryption": "Usa un cifrado anterior. Actualiza la app de Orca en este dispositivo.",
+          "olderPairingMethod": "Usa un método de vinculación antiguo. Actualiza la app de Orca en este teléfono."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -8371,6 +8372,7 @@
           "6f6d5188ed": "Revocar {{value0}}",
           "434e4a6af6": "Enlace actual",
           "df142657a5": "Aún no se ha usado",
+          "olderPairingMethod": "Usa un método de vinculación antiguo. Actualiza Orca en el dispositivo que usa este enlace.",
           "b18d1764ef": "Usado por última vez {{value0}}",
           "linkName": "Enlace · {{value0}}",
           "activeLinks": "Enlaces activos",

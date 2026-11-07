@@ -2,6 +2,7 @@ import { useEffect, useCallback, useRef } from 'react'
 import { AppState } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { useMobileDictation } from '../hooks/use-mobile-dictation'
+import { usePhoneDictationReady } from '../hooks/use-phone-dictation-ready'
 import { triggerError } from '../platform/haptics'
 import { useClipboardWriter } from '../platform/clipboard'
 import {
@@ -129,8 +130,12 @@ export function useMobileSessionNativeChatDictation(
   }
 
   const destination = useMobileDictationDestination(nativeChatController)
-  // Starting needs the host, but a reconnect must not end a recording: the host keeps the session through it.
-  const dictationCanStart = showNativeChat ? connState === 'connected' : canSend
+  // The phone's own recognizer needs no computer setup, and chat inserts its words on the phone.
+  const phoneDictation = usePhoneDictationReady()
+  // Starting needs the host (unless the phone hears chat itself), but a reconnect must not end a recording: the host keeps the session through it.
+  const dictationCanStart = showNativeChat
+    ? connState === 'connected' || phoneDictation.ready
+    : canSend
   const dictation = useMobileDictation({
     client,
     enabled: (showNativeChat || canCompose) && dictationEnabled,
@@ -174,7 +179,7 @@ export function useMobileSessionNativeChatDictation(
     if (!dictationCanStart) {
       return
     }
-    if (dictationNeedsSetupRef.current) {
+    if (dictationNeedsSetupRef.current && !phoneDictation.readyRef.current) {
       // Explain setup before the OS microphone prompt: mic access cannot help until the host can transcribe.
       setShowDictationSetup(true)
       return
@@ -193,6 +198,7 @@ export function useMobileSessionNativeChatDictation(
     destination.captureDestination,
     dictation,
     dictationCanStart,
+    phoneDictation.readyRef,
     reportDictationFailure,
     setShowDictationSetup,
     showNativeChat
@@ -232,6 +238,7 @@ export function useMobileSessionNativeChatDictation(
   const dictationSettingsReadRef = useRef(0)
   const refreshDictationMode = useCallback(async () => {
     const read = ++dictationSettingsReadRef.current
+    void phoneDictation.refresh()
     if (!client || connState !== 'connected') {
       return
     }
@@ -245,7 +252,7 @@ export function useMobileSessionNativeChatDictation(
     } catch {
       // Keep the last settings when an older host cannot report them.
     }
-  }, [client, connState, setDictationEnabled, setDictationMode])
+  }, [client, connState, phoneDictation.refresh, setDictationEnabled, setDictationMode])
 
   // The sheet may have changed host setup: let the host judge taps until the fresh read lands.
   const closeDictationSetup = useCallback(() => {

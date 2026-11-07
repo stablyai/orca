@@ -10,7 +10,7 @@ import {
 } from '../../emulation/terminal-capability-replies'
 import { resolveTerminalInlineImagesEnabled } from '../../../../../../shared/terminal/images/terminal-inline-images-settings'
 import { PROGRAM_STATUS_RUNTIME_CAPABILITY } from '../../../../../../shared/program-status/protocol'
-import { readCachedRuntimeEnvironmentCapability } from '../../../../runtime/runtime-rpc-client'
+import { readCachedRuntimeEnvironmentCapability } from '../../../../runtime/rpc/compatibility/runtime-compatibility-cache'
 
 export function bindDesktopCapabilityReplyGate(session: ConnectPanePtySession): void {
   session.canSendDesktopQueryReply = (): boolean => {

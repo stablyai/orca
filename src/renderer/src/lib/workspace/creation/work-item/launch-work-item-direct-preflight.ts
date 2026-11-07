@@ -34,7 +34,7 @@ import {
   getRepoExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { GitHubPrStartPoint } from '../../../../../../shared/worktree/types'
 import type {

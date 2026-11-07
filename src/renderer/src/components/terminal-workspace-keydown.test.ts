@@ -89,7 +89,7 @@ vi.mock('./terminal/terminal-tab-actions', () => ({ closeTerminalTab: mocks.clos
 vi.mock('@/runtime/structured-agent-session-close', () => ({
   closeStructuredAgentSession: mocks.closeStructuredAgentSession
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 vi.mock('@/lib/agent-session/launch/structured-agent-session-launch', () => ({
   cancelStructuredAgentLaunch: mocks.cancelStructuredAgentLaunch
 }))
@@ -396,6 +396,13 @@ describe('shared tab navigation routing', () => {
     dispatchWorkspaceTabCommand({ type: 'switch', direction: 1, scope: 'all-types' })
     expect(switchFloatingWorkspaceTab).toHaveBeenCalledTimes(2)
     expect(switchFloatingWorkspaceTab).toHaveBeenLastCalledWith(mocks.state, 1, 'all-types')
+    expect(handleSwitchTabAcrossAllTypes).not.toHaveBeenCalled()
+  })
+
+  it('routes a tab chord to the floating panel when its event target is inside it', () => {
+    mocks.targetInsideFloatingPanel = true
+    nextTab()
+    expect(switchFloatingWorkspaceTab).toHaveBeenCalledWith(mocks.state, 1, 'all-types')
     expect(handleSwitchTabAcrossAllTypes).not.toHaveBeenCalled()
   })
 })

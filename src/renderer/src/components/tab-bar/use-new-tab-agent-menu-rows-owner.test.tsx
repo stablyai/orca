@@ -18,7 +18,7 @@ import {
   TEST_REPO
 } from '@/store/slices/worktrees-slice-test-fixtures'
 import { makeProjectGroup } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platform'
 import type { Project } from '../../../../shared/project-types'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -41,7 +41,7 @@ import { useMemo } from 'react'
 import {
   connectedRuntimeStatus,
   publicRuntimeEnvironment
-} from '@/runtime/paired-runtime-environment-test-fixture'
+} from '@/runtime/rpc/testing/paired-runtime-environment-test-fixture'
 import { runtimeEnvironmentStatusFromSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
 const initial = useAppStore.getState()

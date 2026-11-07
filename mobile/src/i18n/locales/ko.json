@@ -1467,7 +1467,9 @@
       "microphoneInitFailed": "마이크를 초기화하지 못했습니다.",
       "microphoneInterrupted": "마이크 사용이 중단되어 음성 받아쓰기가 멈췄습니다. 다시 시도하세요.",
       "microphonePermissionDenied": "마이크 권한이 거부되었습니다.",
-      "noSpeech": "음성이 감지되지 않았습니다."
+      "noSpeech": "음성이 감지되지 않았습니다.",
+      "phoneUnavailable": "이 휴대폰의 받아쓰기가 준비되지 않았습니다. 음성 설정에서 다운로드하거나 자동을 선택하세요.",
+      "phoneFailed": "이 휴대폰의 받아쓰기가 중단되었습니다. 다시 시도하세요."
     }
   },
   "host": {
@@ -2822,6 +2824,19 @@
     },
     "agents": {
       "permissionOwnAll": "에이전트 자체 설정"
+    },
+    "voiceTranscribeOn": {
+      "heading": "받아쓰기 위치",
+      "description": "이 휴대폰이 들은 음성은 휴대폰 밖으로 나가지 않습니다. 자동은 이 휴대폰이 받아쓸 수 없을 때 컴퓨터를 사용합니다.",
+      "automatic": "자동",
+      "phone": "이 휴대폰",
+      "computer": "컴퓨터",
+      "phoneReady": "이 휴대폰에서 사용 가능",
+      "phoneNeedsDownload": "언어 다운로드 필요",
+      "phoneDownloading": "다운로드 중… {{progress}}%",
+      "phoneUnsupported": "이 휴대폰에서는 사용할 수 없음",
+      "download": "이 휴대폰에 다운로드",
+      "downloadSize": "약 {{size}}MB"
     }
   },
   "sourceControl": {

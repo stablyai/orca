@@ -27,9 +27,7 @@ vi.mock('../../../terminal/running-terminal-close-guard', () => ({
 }))
 vi.mock('../../../terminal/pty-running-work-probe', () => ({ probePtyRunningWork: vi.fn() }))
 vi.mock('../detach/terminal-pane-tab-detach', () => ({
-  detachTerminalPaneToTab: vi.fn(),
-  isTerminalTabStripDropTarget: vi.fn(),
-  resolveTerminalTabStripDropTarget: vi.fn()
+  detachTerminalPaneToTab: vi.fn()
 }))
 vi.mock('./terminal-pane-close-identity', () => ({
   resolveTabTitleAfterPaneClose: vi.fn(),

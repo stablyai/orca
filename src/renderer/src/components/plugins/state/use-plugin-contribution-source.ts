@@ -42,6 +42,7 @@ function useInstalledPluginContributionSource(
       themes: ours(appThemes),
       terminalThemes: ours(terminalThemes),
       iconThemes: ours(iconThemes),
+      fonts: plugin.fonts?.map((font) => font.family) ?? [],
       syntaxes: ours(syntaxes).map((syntax) => ({
         ...syntax,
         failed: Boolean(failures[pluginSyntaxRevisionKey(syntax)])

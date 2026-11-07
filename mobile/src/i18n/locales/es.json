@@ -1510,7 +1510,9 @@
       "microphoneInitFailed": "No se pudo inicializar el micrófono",
       "microphoneInterrupted": "El dictado de voz se detuvo porque se interrumpió el uso del micrófono. Vuelve a intentarlo.",
       "microphonePermissionDenied": "Permiso de acceso al micrófono denegado",
-      "noSpeech": "No se detectó ninguna voz."
+      "noSpeech": "No se detectó ninguna voz.",
+      "phoneUnavailable": "El dictado en este teléfono no está listo. Descárgalo en Ajustes de voz o elige Automático.",
+      "phoneFailed": "El dictado en este teléfono dejó de funcionar. Inténtalo de nuevo."
     }
   },
   "host": {
@@ -2898,6 +2900,19 @@
     },
     "agents": {
       "permissionOwnAll": "Configuración propia de los agentes"
+    },
+    "voiceTranscribeOn": {
+      "heading": "TRANSCRIBIR EN",
+      "description": "Lo que escucha este teléfono se queda en él. Automático usa tu ordenador cuando este teléfono no puede transcribir.",
+      "automatic": "Automático",
+      "phone": "Este teléfono",
+      "computer": "Ordenador",
+      "phoneReady": "Listo en este teléfono",
+      "phoneNeedsDownload": "Necesita descargar el idioma",
+      "phoneDownloading": "Descargando… {{progress}} %",
+      "phoneUnsupported": "No disponible en este teléfono",
+      "download": "Descargar para este teléfono",
+      "downloadSize": "Unos {{size}} MB"
     }
   },
   "sourceControl": {

@@ -5,7 +5,7 @@ import type {
   GitHubPRRefreshReason
 } from '../../../../../shared/github/pull-request-refresh-types'
 import type { Repo } from '../../../../../shared/repo-types'
-import { runtimeTargetForOwnerEnvironment } from '../../../runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '../../../runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { hasUniqueIndexedRepositoryHost } from '@/lib/repository-owner-index'
 import { getGitHubRepoLookupIndex } from './github-repo-lookup-index'

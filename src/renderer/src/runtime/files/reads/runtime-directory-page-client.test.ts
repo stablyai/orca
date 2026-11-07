@@ -5,7 +5,7 @@ const callRuntimeRpc = vi.fn()
 const readRuntimeDirectory = vi.fn()
 let statuses = new Map<string, unknown>()
 
-vi.mock('../../runtime-rpc-client', () => ({
+vi.mock('../../rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: (...args: unknown[]) => callRuntimeRpc(...args)
 }))
 vi.mock('./runtime-directory-read', () => ({

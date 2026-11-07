@@ -20,7 +20,7 @@ import {
   WT,
   makeSnapshot,
   resetWebSessionTabsSyncTestState
-} from './web-session-tabs-sync-test-harness'
+} from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 const notesPath = '/repo/NOTES.md'
 const clientDraft = '# unsaved client edits'

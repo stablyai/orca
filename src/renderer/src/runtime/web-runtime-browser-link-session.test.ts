@@ -17,7 +17,7 @@ import {
   WT,
   NOW,
   makeSnapshot
-} from './web-session-tabs-sync-test-harness'
+} from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 import {
   seedPairedWorktree,
   installRuntimeTransport,

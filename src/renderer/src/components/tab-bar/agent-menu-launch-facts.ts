@@ -20,7 +20,7 @@ import {
   isRuntimeHostContactRevokedVerdict,
   runtimeHostContactForEntry
 } from '../../../../shared/remote-runtime/host-status/runtime-host-contact'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 
 /** Identity facts for the picker's owner and acquisition keys; readiness stays out of them. */
 export function readAgentMenuLaunchFacts(

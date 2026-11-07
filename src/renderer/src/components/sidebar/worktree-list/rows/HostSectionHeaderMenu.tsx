@@ -32,8 +32,8 @@ import { runtimePairingRepairRoute } from '../../../../../../shared/remote-runti
 
 import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
 import { startWslHostAndReloadProjects } from '@/lib/wsl-host-user-start'
-import { clearRuntimeCompatibilityCache } from '@/runtime/runtime-rpc-client'
-import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
+import { clearRuntimeCompatibilityCache } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
+import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
 import type { HostHeaderRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import { buildHostHeaderMenuModel } from '../../host-header-menu-items'

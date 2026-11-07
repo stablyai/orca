@@ -8346,7 +8346,8 @@
           "diagnosticsCopyFailed": "Tanılama bilgileri kopyalanamadı",
           "5e2c7a1f84": "Telefonunuzda terminal kullanırken Orca, terminali telefon ekranına sığacak şekilde küçültür. Uygulamayı kapattığınızda veya başka bir uygulamaya geçtiğinizde bu ayar, terminalin telefon boyutunda kalmasını (etkileşimli CLI araçlarının düzeninin değişmemesi için) ya da masaüstü boyutuna geri dönmesini belirler. Boyutu elle değiştirmek için bildirim çubuğundaki Geri yükle veya Tümünü geri yükle seçeneklerini her zaman kullanabilirsiniz.",
           "codeRefreshesAutomatically": "Kod otomatik olarak yenilenir. Kopyalanan kod en fazla 10 dakika çalışır.",
-          "legacyEncryption": "Eski şifreleme kullanıyor. Bu cihazdaki Orca uygulamasını güncelleyin."
+          "legacyEncryption": "Eski şifreleme kullanıyor. Bu cihazdaki Orca uygulamasını güncelleyin.",
+          "olderPairingMethod": "Eski bir eşleştirme yöntemi kullanıyor. Bu telefondaki Orca uygulamasını güncelleyin."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -8753,6 +8754,7 @@
           "6f6d5188ed": "{{value0}} öğesini iptal et",
           "434e4a6af6": "Geçerli bağlantı",
           "df142657a5": "Henüz kullanılmadı",
+          "olderPairingMethod": "Eski bir eşleştirme yöntemi kullanıyor. Bu bağlantıyı kullanan cihazda Orca'yı güncelleyin.",
           "b18d1764ef": "Son kullanım: {{value0}}",
           "linkName": "Bağlantı · {{value0}}",
           "activeLinks": "Etkin bağlantılar",

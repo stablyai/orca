@@ -1,10 +1,10 @@
+import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 /** Cleanup must delete the confirmed host’s same-ID workspace (STA-4343). Transport fakes delete real per-host directories; assert one survives and one is gone across local/SSH/runtime and active-host controls so inert or indiscriminate deletion cannot pass. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
 
 const NOW = 1_700_000_000_000
 const HOST_A_HOST_ID: ExecutionHostId = 'local'
@@ -38,8 +38,8 @@ globalThis.window = { api: mockApi }
 
 const runtimeRpc = vi.hoisted(() => ({ callRuntimeRpc: vi.fn() }))
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof RuntimeRpcClientModule>()),
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeRpcCallModule>()),
   callRuntimeRpc: runtimeRpc.callRuntimeRpc
 }))
 

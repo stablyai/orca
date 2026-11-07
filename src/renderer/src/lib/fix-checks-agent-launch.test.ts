@@ -2,7 +2,7 @@ import { resolveAgentStartupPlanInputs } from '../../../shared/agent-launch/star
 import { buildAgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
 import type { LaunchAgentInNewTabArgs } from './agent-session/launch/new-tab/launch-agent-in-new-tab-args'
 import { getDefaultSettings } from '../../../shared/constants'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { projectAgentLaunchSettings } from '../../../shared/agent-launch/choices/agent-launch-settings'
 import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -10,8 +10,10 @@ import type * as ExecutionHostFactsModule from '@/lib/execution-host-facts'
 import type * as HostChatProgramAcquisitionModule from './host-chat-program-acquisition'
 
 const hostRpc = vi.hoisted(() => vi.fn())
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: hostRpc,
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: hostRpc
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: async () => true
 }))
 afterEach(clearHostAgentMenuSettingsForTests)

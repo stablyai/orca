@@ -3,8 +3,8 @@ import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-t
 import { validateFileRangeRequest } from '../../../../../shared/file-range-read'
 import type { RuntimeFileReadArgs } from '../runtime-file-client-types'
 import { assertExternalSshReadOwnership, canReadRelativeRuntimeFile } from '../runtime-file-routing'
-import { callRuntimeRpc } from '../../runtime-rpc-client'
-import { RuntimeRpcCallError } from '../../runtime-rpc-result'
+import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
+import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
 import { decodeBase64Bytes } from '@/lib/base64-bytes'
 import {

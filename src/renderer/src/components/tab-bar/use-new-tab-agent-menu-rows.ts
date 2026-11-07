@@ -34,7 +34,7 @@ import { hostChatAnswer } from '@/lib/new-tab-agent-menu-rows'
 import {
   readLocalRuntimeCapabilityObservation,
   subscribeLocalRuntimeCapabilityObservation
-} from '@/runtime/local-runtime-capabilities'
+} from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { useDetectedAgents, type AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import { readDetectedAgentsForTarget } from '@/lib/agent-detection-target-inventory'
 import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'

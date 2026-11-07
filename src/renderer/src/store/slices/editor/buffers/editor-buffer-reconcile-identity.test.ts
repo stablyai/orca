@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { assertEditorBufferInvariant } from '../../../editor-buffer-record-lifecycle'
 
 import type { OpenFile } from '../types/open-file'

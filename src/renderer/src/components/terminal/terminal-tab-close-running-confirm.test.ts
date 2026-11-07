@@ -25,7 +25,7 @@ vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
   activateWebRuntimeSessionTab: vi.fn(),
   closeWebRuntimeSessionTab: closeWebRuntimeSessionTabMock
 }))
-vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: vi.fn()
 }))
 vi.mock('@/runtime/web-runtime-session-environment', () => ({
@@ -43,7 +43,7 @@ vi.mock('@/runtime/web-session-tabs-sync/tracking-mappings', () => ({
   resolveHostSessionTabIdForWebSessionTab: resolveHostSessionTabIdForWebSessionTabMock
 }))
 
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+vi.mock('@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection', () => ({
   inspectRuntimeTerminalProcess: inspectRuntimeTerminalProcessMock
 }))
 

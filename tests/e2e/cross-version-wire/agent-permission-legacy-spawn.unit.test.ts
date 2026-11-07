@@ -21,7 +21,7 @@ import { YOLO_TUI_AGENT_ENV } from '../../../src/shared/agent-launch/permissions
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { launchAgentInWebHostTab } from '../../../src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
 import { buildAgentStartupPlan } from '../../../src/shared/agent-launch/startup/tui-agent-startup'
-import { createWebRuntimeSessionTerminal } from '../../../src/renderer/src/runtime/web-runtime-terminal-creation'
+import { createWebRuntimeSessionTerminal } from '../../../src/renderer/src/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
 import { resetWebSessionCloseIntentForTests } from '../../../src/renderer/src/runtime/web-session-close-intent'
 import {
   ENVIRONMENT_ID,
@@ -29,8 +29,8 @@ import {
   makeSnapshot,
   resetTerminalCreateEnvironment,
   stubTerminalCreateEnvironment
-} from '../../../src/renderer/src/runtime/web-runtime-session-test-harness'
-import { stubRuntimeEnvironmentBridge } from '../../../src/renderer/src/runtime/runtime-environment-bridge-fixture'
+} from '../../../src/renderer/src/runtime/hosted-terminals/creation/testing/web-runtime-terminal-create.test-fixture'
+import { stubRuntimeEnvironmentBridge } from '../../../src/renderer/src/runtime/rpc/testing/runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),

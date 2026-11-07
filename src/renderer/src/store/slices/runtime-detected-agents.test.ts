@@ -7,8 +7,8 @@ import {
   PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../../shared/protocol-version'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
-import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
+import { stubRuntimeEnvironmentBridge } from '../../runtime/rpc/testing/runtime-environment-bridge-fixture'
 
 const runtimeEnvironmentCall = vi.fn()
 

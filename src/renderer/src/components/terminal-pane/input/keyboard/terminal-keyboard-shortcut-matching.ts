@@ -1,7 +1,6 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import { safeFind } from '../../../terminal-search-safe-find'
 import { buildTerminalSearchOptions } from '../../../terminal-search-options'
-import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
 import '../../../../../../shared/keybindings'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
 import type {
@@ -10,50 +9,6 @@ import type {
   TerminalShortcutPolicy
 } from '../../../../../../shared/keybindings/types'
 import { isFindQueryTooLarge } from '@/lib/find-query-bounds'
-import { recordCreatedTerminalPaneSplit } from '../../layout/split/terminal-pane-split-completion'
-
-export function resolveTerminalKeyboardShortcutAction(
-  event: Parameters<typeof resolveTerminalShortcutAction>[0],
-  isMac: Parameters<typeof resolveTerminalShortcutAction>[1],
-  macOptionAsAlt: Parameters<typeof resolveTerminalShortcutAction>[2],
-  optionKeyLocations: Parameters<typeof resolveTerminalShortcutAction>[3],
-  isWindows: Parameters<typeof resolveTerminalShortcutAction>[4],
-  keybindings: Parameters<typeof resolveTerminalShortcutAction>[5],
-  isLocalWindowsConptyPane: Parameters<typeof resolveTerminalShortcutAction>[6],
-  getKittyKeyboardFlagsActivePane: Parameters<typeof resolveTerminalShortcutAction>[7],
-  layoutCharacterForCode: Parameters<typeof resolveTerminalShortcutAction>[8],
-  getWindowsShiftEnterEncoding: Parameters<typeof resolveTerminalShortcutAction>[9],
-  isWindowsTerminalHost: NonNullable<Parameters<typeof resolveTerminalShortcutAction>[10]>,
-  terminalShortcutPolicy: Parameters<typeof resolveTerminalShortcutAction>[11] = 'orca-first',
-  hasCtrlEnterCsiUAuthority?: Parameters<typeof resolveTerminalShortcutAction>[12],
-  getModifyOtherKeysActivePane?: Parameters<typeof resolveTerminalShortcutAction>[13],
-  isActivePaneNonAgentFullScreen?: Parameters<typeof resolveTerminalShortcutAction>[14]
-): ReturnType<typeof resolveTerminalShortcutAction> {
-  return resolveTerminalShortcutAction(
-    event,
-    isMac,
-    macOptionAsAlt,
-    optionKeyLocations,
-    isWindows,
-    keybindings,
-    isLocalWindowsConptyPane,
-    getKittyKeyboardFlagsActivePane,
-    layoutCharacterForCode,
-    getWindowsShiftEnterEncoding,
-    isWindowsTerminalHost,
-    terminalShortcutPolicy,
-    hasCtrlEnterCsiUAuthority,
-    getModifyOtherKeysActivePane,
-    isActivePaneNonAgentFullScreen
-  )
-}
-
-export function recordKeyboardCreatedTerminalPaneSplit(
-  createdPane: unknown,
-  args: { source: 'contextual_tour' | 'keyboard'; direction: 'vertical' | 'horizontal' }
-): boolean {
-  return recordCreatedTerminalPaneSplit(createdPane, args)
-}
 
 export function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {

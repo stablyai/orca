@@ -37,7 +37,7 @@ vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi
 vi.mock('@/runtime/web-runtime-browser-creation', () => ({
   createWebRuntimeSessionBrowserTab: vi.fn()
 }))
-vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: vi.fn()
 }))
 vi.mock('@/runtime/web-runtime-session-environment', () => ({

@@ -1,7 +1,7 @@
+import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspacePathStatus } from '../../../../shared/folder-workspaces/folder-workspace-path-status'
 
-import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
 import './folder-path-status'
 import '../../../../shared/project-groups'
 import { makeFolderWorkspace } from '@/components/worktree-jump/worktree-jump-palette-test-fixtures'
@@ -9,9 +9,12 @@ import { createTestStore } from '../slices/store-test-helpers'
 
 const mocks = vi.hoisted(() => ({ getPathStatus: vi.fn(), callRuntimeRpc: vi.fn() }))
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
-  const original = await importOriginal<typeof RuntimeRpcClient>()
-  return { ...original, callRuntimeRpc: mocks.callRuntimeRpc }
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
+  const original = await importOriginal<typeof RuntimeRpcCallModule>()
+  return {
+    ...original,
+    callRuntimeRpc: mocks.callRuntimeRpc
+  }
 })
 
 const owners = [

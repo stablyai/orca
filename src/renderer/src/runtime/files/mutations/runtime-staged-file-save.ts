@@ -15,8 +15,8 @@ import {
   STAGED_FILE_SAVE_RUNTIME_CAPABILITY
 } from '../../../../../shared/staged-file-save'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'
-import { callRuntimeRpc } from '../../runtime-rpc-client'
-import { captureRuntimeEnvironmentRequestRevision } from '../../runtime-environment-revision'
+import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
+import { captureRuntimeEnvironmentRequestRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
 import {
   callRuntimeFileMutationWithCapabilities,
   RuntimeConnectionChangedError

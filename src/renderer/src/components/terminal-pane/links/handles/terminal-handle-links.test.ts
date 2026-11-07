@@ -1,7 +1,9 @@
 import type { ILink } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
-import { markRuntimeEnvironmentCompatible } from '@/runtime/runtime-compatibility-cache'
+import {
+  clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests,
+  markRuntimeEnvironmentCompatible
+} from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import {
   createTerminalHandleLinkProvider,
   extractTerminalHandleLinks,

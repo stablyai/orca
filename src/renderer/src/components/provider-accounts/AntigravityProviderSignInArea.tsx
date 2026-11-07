@@ -1,7 +1,7 @@
 import { AntigravityChatAuthForm } from './AntigravityChatAuthForm'
 import { Check, Copy } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import type { ManagedRuntimeInstallObservation } from '@/runtime/use-managed-runtime-install'
+import type { ManagedRuntimeInstallObservation } from '@/runtime/hosts/installation/use-managed-runtime-install'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { LoadingSpinner } from '../LoadingSpinner'
 import { Button } from '../ui/button'

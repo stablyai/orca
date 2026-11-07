@@ -14,7 +14,7 @@ import {
 } from '../../../shared/endpoint-catalog-adoption'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { WorktreeSortOrderUpdate } from '../../../shared/worktree/sort-order-update'
-import { getRuntimeTargetHostId } from '../runtime/runtime-client-target'
+import { getRuntimeTargetHostId } from '../runtime/rpc/targets/runtime-client-target'
 
 export type FetchedRepo = { kind: 'repo'; row: Repo }
 export type FetchedProjectGroup = { kind: 'projectGroup'; row: ProjectGroup }

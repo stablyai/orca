@@ -1,6 +1,6 @@
 import { presentAgentLaunchTab } from '@/lib/agent-session/launch/pane/agent-launch-tab-presentation'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
-import { hasRegisteredRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
+import { hasRegisteredRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { planMobileTerminalTabMount } from '@/lib/mobile-terminal-tab-mount'
 import { resolveTerminalTabPtyOwnership } from '@/lib/terminal-tab-for-pty-id'
 import { SPLIT_TERMINAL_PANE_EVENT } from '@/constants/terminal'

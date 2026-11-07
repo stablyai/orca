@@ -3,6 +3,9 @@ import type { MessagePortMain } from 'electron'
 import type { WorkerRequestTransport } from '../worker-threads/worker-thread-transport'
 import type { RecognizerConfigInput } from './stt-worker-model-config'
 
+/** Electron reports it as the utility process's name when it exits. */
+export const STT_UTILITY_PROCESS_NAME = 'Orca Speech'
+
 export const STT_WORKER_EXITED_ERROR = 'The speech engine stopped unexpectedly. Try again.'
 export const STT_WORKER_HUNG_ERROR = 'The speech engine stopped responding. Try again.'
 

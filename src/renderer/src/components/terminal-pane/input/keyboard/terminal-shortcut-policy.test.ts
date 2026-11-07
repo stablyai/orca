@@ -42,9 +42,7 @@ describe('resolveTerminalShortcutAction', () => {
     })
     expect(
       resolveTerminalShortcutAction(event({ key: 'k', code: 'KeyK', metaKey: true }), true)
-    ).toEqual({
-      type: 'clearActivePane'
-    })
+    ).toBeNull()
     expect(
       resolveTerminalShortcutAction(event({ key: 'w', code: 'KeyW', metaKey: true }), true)
     ).toEqual({
