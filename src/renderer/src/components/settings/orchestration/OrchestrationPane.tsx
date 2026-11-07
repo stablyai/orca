@@ -12,6 +12,7 @@ import {
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '../../../store/index'
 import { getOrchestrationPaneSearchEntries } from './orchestration-search'
@@ -96,7 +97,19 @@ export function OrchestrationPane({
   }
 
   return (
-    <div className="space-y-8">
+    <SearchableSetting
+      title={translate(
+        'auto.components.settings.OrchestrationPane.191ac34567',
+        'Agent Orchestration'
+      )}
+      description={translate(
+        'auto.components.settings.OrchestrationPane.2aacdb0517',
+        'Coordinate coding agents across handoffs, worktree handovers, and child-agent work.'
+      )}
+      keywords={searchEntries[0].keywords}
+      forceVisible
+      className="space-y-8"
+    >
       <SettingsGroup>
         <div className="py-4">
           <AgentSkillSetupPanel
@@ -184,6 +197,6 @@ export function OrchestrationPane({
         resolveIcon={resolveOrchestrationExampleIcon}
         slashCommand={`/${ORCHESTRATION_SKILL_NAME}`}
       />
-    </div>
+    </SearchableSetting>
   )
 }

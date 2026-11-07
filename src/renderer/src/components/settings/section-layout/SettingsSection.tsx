@@ -90,7 +90,7 @@ export function SettingsSection({
       <div
         className={cn(
           'rounded-xl border border-border/50 bg-card/50 px-7 py-6 shadow-xs',
-          'has-[[data-settings-group]]:space-y-8 has-[[data-settings-group]]:rounded-none has-[[data-settings-group]]:border-0 has-[[data-settings-group]]:bg-transparent has-[[data-settings-group]]:p-0 has-[[data-settings-group]]:shadow-none',
+          'has-[[data-settings-group]]:flex has-[[data-settings-group]]:flex-col has-[[data-settings-group]]:gap-8 has-[[data-settings-group]]:rounded-none has-[[data-settings-group]]:border-0 has-[[data-settings-group]]:bg-transparent has-[[data-settings-group]]:p-0 has-[[data-settings-group]]:shadow-none',
           bodyClassName
         )}
       >
