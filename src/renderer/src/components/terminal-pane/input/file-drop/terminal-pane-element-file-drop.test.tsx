@@ -73,7 +73,6 @@ vi.mock('@/components/agent-session-continuation/AgentSessionContinuationDialog'
 vi.mock('../../layout/close/CloseTerminalDialog', () => ({ default: () => null }))
 vi.mock('../../context-menu/TerminalContextMenu', () => ({ default: () => null }))
 vi.mock('../../errors/TerminalErrorToast', () => ({
-  isPaneOwnerUnverifiedError: () => false,
   TerminalErrorToast: () => null
 }))
 vi.mock('../../render-health/recovery/terminal-pane-recovery', () => ({
