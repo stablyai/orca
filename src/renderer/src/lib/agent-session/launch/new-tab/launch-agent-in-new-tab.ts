@@ -32,11 +32,8 @@ import {
 import { launchStructuredAgentFromNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-structured-route'
 import '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../../../shared/workspace-launch-kind'
-import {
-  launchOnceHostAnswered,
-  routeNewTabLaunch,
-  type AgentTabLaunchOutcome
-} from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
+import { launchOnceHostAnswered, routeNewTabLaunch } from './launch-agent-in-new-tab-host-agents'
+import type { AgentTabLaunchOutcome } from './launch-agent-in-new-tab-host-agents'
 
 /**
  * Create a new terminal tab and queue the agent's launch command, optionally
@@ -330,6 +327,4 @@ function openAgentInNewTab(
   }
 }
 
-export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): AgentTabLaunchOutcome {
-  return launchAgentInNewTabWithOutcome(args)
-}
+export const launchAgentInNewTab = launchAgentInNewTabWithOutcome
