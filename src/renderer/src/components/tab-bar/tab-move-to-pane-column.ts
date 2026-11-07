@@ -16,9 +16,13 @@ type TabMovePaneColumnState = Pick<
 function canMoveTabToNewPaneColumnFromState(
   state: TabMovePaneColumnState,
   unifiedTabId: string,
-  groupId: string
+  groupId: string,
+  knownWorktreeId?: string
 ): boolean {
-  for (const [worktreeId, tabs] of Object.entries(state.unifiedTabsByWorktree)) {
+  const workspaces = knownWorktreeId
+    ? [[knownWorktreeId, state.unifiedTabsByWorktree[knownWorktreeId] ?? []] as const]
+    : Object.entries(state.unifiedTabsByWorktree)
+  for (const [worktreeId, tabs] of workspaces) {
     const tab = tabs.find((candidate) => candidate.id === unifiedTabId)
     if (!tab || tab.groupId !== groupId) {
       continue
@@ -43,17 +47,24 @@ export function canMoveTabToNewPaneColumn(unifiedTabId: string, groupId: string)
 }
 
 export function moveTabToNewPaneColumn(args: {
+  /** The tab's workspace, when the caller knows it. */
+  worktreeId?: string
   unifiedTabId: string
   groupId: string
   direction: TabSplitDirection
 }): boolean {
   const state = useAppStore.getState()
-  const worktreeId = Object.entries(state.unifiedTabsByWorktree).find(([, tabs]) =>
-    tabs.some(
-      (candidate) => candidate.id === args.unifiedTabId && candidate.groupId === args.groupId
-    )
-  )?.[0]
-  if (!worktreeId || !canMoveTabToNewPaneColumnFromState(state, args.unifiedTabId, args.groupId)) {
+  const worktreeId =
+    args.worktreeId ??
+    Object.entries(state.unifiedTabsByWorktree).find(([, tabs]) =>
+      tabs.some(
+        (candidate) => candidate.id === args.unifiedTabId && candidate.groupId === args.groupId
+      )
+    )?.[0]
+  if (
+    !worktreeId ||
+    !canMoveTabToNewPaneColumnFromState(state, args.unifiedTabId, args.groupId, worktreeId)
+  ) {
     return false
   }
   if (

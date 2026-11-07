@@ -4,11 +4,7 @@ import { findSiblingGroupId } from '@/store/slices/tabs'
 import { tabSelectionKey } from '@/store/slices/tabs/moved-tab-selection'
 import { findStructuredLaunchTab } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { afterPendingTab } from '@/runtime/layout-owner-pending-tabs'
-import {
-  canMoveTabToNewPaneColumn,
-  moveTabToGroup,
-  moveTabToNewPaneColumn
-} from '../tab-bar/tab-move-to-pane-column'
+import { moveTabToGroup, moveTabToNewPaneColumn } from '../tab-bar/tab-move-to-pane-column'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 // Moving a late tab would yank a pane the user may already be reading.
@@ -69,8 +65,13 @@ export function beginNativeChatSideChatPlacement(
     const sibling = layout ? findSiblingGroupId(layout, sourceGroupId) : null
     if (sibling) {
       moveTabToGroup({ worktreeId, unifiedTabId: tabId, groupId: sibling })
-    } else if (canMoveTabToNewPaneColumn(tabId, sourceGroupId)) {
-      moveTabToNewPaneColumn({ unifiedTabId: tabId, groupId: sourceGroupId, direction: 'right' })
+    } else {
+      moveTabToNewPaneColumn({
+        worktreeId,
+        unifiedTabId: tabId,
+        groupId: sourceGroupId,
+        direction: 'right'
+      })
     }
   }
   const lookUp = (): void => {
@@ -99,7 +100,7 @@ export function beginNativeChatSideChatPlacement(
     }
   }
   const unsubscribe = useAppStore.subscribe(onChange)
-  const expiry = setTimeout(retire, SIDE_CHAT_WATCH_MS)
+  let expiry: ReturnType<typeof setTimeout> | undefined
   return {
     settle: (next) => {
       if (retired || chat || !next) {
@@ -108,6 +109,8 @@ export function beginNativeChatSideChatPlacement(
       }
       chat = next
       settledAt = Date.now()
+      // However long the fork took to open, its tab gets the same time to be drawn.
+      expiry = setTimeout(retire, SIDE_CHAT_WATCH_MS)
       lookingUp = true
       lookUp()
     }

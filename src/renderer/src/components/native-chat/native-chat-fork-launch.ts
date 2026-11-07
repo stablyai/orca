@@ -93,10 +93,9 @@ export async function launchNativeChatFork(
     (error: unknown) => ({ error })
   )
   // A question sent after create can still be refused once the chat exists.
-  const sent = launch.promptDeliveryResult
+  const delivery = launch.promptDeliveryResult
     ? await sideQuestionDelivery(launch.promptDeliveryResult)
     : undefined
-  const delivery = sent?.delivery
   const chat = forkChat(launch)
   if (delivery === 'unconfirmed') {
     reportSideQuestion(request.agent, delivery)
@@ -107,7 +106,8 @@ export async function launchNativeChatFork(
     reportNativeChatForkFailure(request.agent, failure.error, unconfirmed)
     return { ...(unconfirmed ? { chat } : {}), ...(delivery ? { question: delivery } : {}) }
   }
-  if (delivery === 'failed' && !sent?.notified) {
+  // The fork may have said so too, but it stays in the background.
+  if (delivery === 'failed') {
     reportSideQuestion(request.agent, delivery)
   }
   return { ...(failure ? {} : { chat }), ...(delivery ? { question: delivery } : {}) }
@@ -117,18 +117,17 @@ function forkChat(launch: ReturnType<typeof startStructuredAgentLaunch>) {
   return { sessionId: launch.sessionId, executionHostId: launch.executionHostId }
 }
 
-/** `notified`: the new chat already said why it never went. */
 function sideQuestionDelivery(
   result: Promise<StructuredPromptDeliveryResult>
-): Promise<{ delivery: NativeChatSideQuestionDelivery; notified?: boolean }> {
+): Promise<NativeChatSideQuestionDelivery> {
   return result.then(
     (outcome) =>
       outcome.delivered || outcome.inComposer || outcome.recipientOwned
-        ? { delivery: 'sent' }
+        ? 'sent'
         : outcome.unconfirmed
-          ? { delivery: 'unconfirmed' }
-          : { delivery: 'failed', notified: outcome.failureNotified },
-    () => ({ delivery: 'failed' })
+          ? 'unconfirmed'
+          : 'failed',
+    () => 'failed'
   )
 }
 

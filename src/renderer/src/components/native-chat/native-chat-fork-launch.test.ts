@@ -48,13 +48,6 @@ it('keeps the question with the caller and says once that it never went', async 
   expect(mocks.toastError).toHaveBeenCalledTimes(1)
 })
 
-it('does not repeat a failure the new chat already reported', async () => {
-  const outcome = await askAside({ delivered: false, failureNotified: true })
-
-  expect(outcome.question).toBe('failed')
-  expect(mocks.toastError).not.toHaveBeenCalled()
-})
-
 it('tells the user to check the side chat when delivery is unconfirmed', async () => {
   const outcome = await askAside({ delivered: false, failureNotified: false, unconfirmed: true })
 

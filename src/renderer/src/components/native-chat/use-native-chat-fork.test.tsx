@@ -2,12 +2,17 @@
 import { renderHook } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { useNativeChatFork } from './use-native-chat-fork'
+import { launchNativeChatFork } from './native-chat-fork-launch'
 
 vi.mock('@/runtime/structured-agent-session-host-capability', () => ({
   useStructuredAgentSessionHostCapabilityState: () => 'supported'
 }))
 vi.mock('@/runtime/use-host-structured-agent', () => ({
   useHostStructuredAgent: () => ({ agent: 'opencode', capabilities: { fork: 'tip' } })
+}))
+const settle = vi.hoisted(() => vi.fn())
+vi.mock('./native-chat-side-chat-placement', () => ({
+  beginNativeChatSideChatPlacement: () => ({ settle })
 }))
 vi.mock('./native-chat-fork-launch', () => ({
   launchNativeChatFork: vi.fn(),
@@ -35,4 +40,20 @@ it('takes the chat options verdict on its installed agent', () => {
   expect(forkFor('unknown')?.support).toEqual({ kind: 'unknown' })
   expect(forkFor(undefined)?.support).toEqual({ kind: 'unknown' })
   expect(forkFor('supported')?.support).toEqual({ kind: 'known', fork: 'tip' })
+})
+
+it.each([
+  ['sent', { sessionId: 'side', executionHostId: 'local' }],
+  ['unconfirmed', { sessionId: 'side', executionHostId: 'local' }],
+  ['failed', undefined]
+] as const)('places a side chat whose question was %s: %o', async (question, placed) => {
+  vi.mocked(launchNativeChatFork).mockResolvedValue({
+    chat: { sessionId: 'side', executionHostId: 'local' },
+    question
+  })
+  settle.mockClear()
+
+  await forkFor('supported')?.request('reply-1', { question: 'why?' })
+
+  expect(settle).toHaveBeenCalledWith(placed)
 })

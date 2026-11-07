@@ -14,10 +14,21 @@ export function nativeChatSideChatForkPoint(
   working: boolean,
   chat: Parameters<typeof nativeChatRowOffersFork>[1]
 ): NativeChatSideChatForkPoint {
+  const tipOnly = chat.support.kind === 'known' && chat.support.fork === 'tip'
   for (let index = slots.length - 1; index >= 0; index--) {
     const slot = slots[index]
+    if (slot.kind !== 'message') {
+      continue
+    }
+    const sequence = slot.message.journalPosition?.sequence
+    // Older rows are above a /clear or, at a tip-only agent, outside the newest turn: none can fork.
     if (
-      slot.kind === 'message' &&
+      (sequence !== undefined && sequence <= chat.contextFloorSequence) ||
+      (tipOnly && slot.turnKey !== undefined && slot.turnKey !== latestTurnKey)
+    ) {
+      break
+    }
+    if (
       nativeChatRowOffersFork(
         {
           message: slot.message,
