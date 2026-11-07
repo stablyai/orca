@@ -27,6 +27,7 @@ import { CustomAgentCommandField } from './CustomAgentCommandField'
 import { Label } from '../../ui/label'
 import { Switch } from '../../ui/switch'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { SourceControlAiActionRecipeDefaults } from './SourceControlAiActionRecipeDefaults'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { getSettingOwnershipSummary } from '../page/setting-ownership'
@@ -182,7 +183,7 @@ export function CommitMessageAiPane({
           'Adds action recipes for Source Control commit, pull request, branch-name, and fix actions.'
         )}
         keywords={['ai', 'commit', 'message', 'generate', 'agent', 'enabled']}
-        className="flex items-center justify-between gap-4 py-2"
+        className="flex items-center justify-between gap-4 py-3"
       >
         <div className="space-y-1">
           <Label>
@@ -256,7 +257,7 @@ export function CommitMessageAiPane({
           'Command line Orca runs when a text recipe uses Custom command.'
         )}
         keywords={['custom', 'command', 'cli', 'binary', 'prompt', 'placeholder']}
-        className="space-y-2 py-2"
+        className="space-y-2 py-3"
       >
         <CustomAgentCommandField
           id="source-control-ai-custom-command"
@@ -301,21 +302,16 @@ export function CommitMessageAiPane({
   }
 
   return (
-    <div
-      id="source-control-ai-settings"
-      data-settings-section="source-control-ai-settings"
-      className="space-y-4 border-t border-border/40 pt-4"
-    >
-      <div className="space-y-0.5">
-        <h3 className="text-sm font-semibold">
-          {translate(
-            'auto.components.settings.CommitMessageAiPane.ad66ff886d',
-            'Source Control AI defaults'
-          )}
-        </h3>
-        <p className="text-xs text-muted-foreground">{ownership.description}</p>
-      </div>
-      {sections}
+    <div id="source-control-ai-settings" data-settings-section="source-control-ai-settings">
+      <SettingsGroup
+        title={translate(
+          'auto.components.settings.CommitMessageAiPane.ad66ff886d',
+          'Source Control AI defaults'
+        )}
+        description={ownership.description}
+      >
+        {sections}
+      </SettingsGroup>
     </div>
   )
 }

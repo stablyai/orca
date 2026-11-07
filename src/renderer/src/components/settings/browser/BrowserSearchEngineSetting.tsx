@@ -34,7 +34,7 @@ export function BrowserSearchEngineSetting({
         'token',
         'omnibox'
       ]}
-      className="flex items-start justify-between gap-4 py-2"
+      className="flex items-start justify-between gap-4 py-3"
     >
       <div className="space-y-0.5">
         <Label>

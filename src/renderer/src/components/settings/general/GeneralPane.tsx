@@ -19,10 +19,11 @@ import { RecentTabOrderControl } from '../appearance/RecentTabOrderControl'
 import { SettingsSectionStack } from '../section-layout/SettingsSectionStack'
 import { matchesSettingsSearch, type SettingsSearchEntry } from '../search/settings-search'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { SettingsSubsectionHeader, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
+import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { DefaultWindowsProjectRuntimeSetting } from './project-runtime/DefaultWindowsProjectRuntimeSetting'
 import { defaultScopeHost } from '@/lib/default-creation-host'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 type GeneralSearchEntry = ReturnType<typeof getGeneralNavigationSearchEntries>[number]
 
@@ -109,10 +110,10 @@ export function GeneralPane({
 
   const visibleSections = [
     matchesSettingsSearch(searchQuery, generalNavigationSearchEntries) ? (
-      <section key="navigation" className="space-y-4">
-        <SettingsSubsectionHeader
-          title={translate('auto.components.settings.GeneralPane.d58fccfd84', 'Navigation')}
-        />
+      <SettingsGroup
+        key="navigation"
+        title={translate('auto.components.settings.GeneralPane.d58fccfd84', 'Navigation')}
+      >
         <RecentTabOrderControl
           ctrlTabOrderMode={settings.ctrlTabOrderMode ?? 'mru'}
           keywords={tabOrderKeywords}
@@ -201,7 +202,7 @@ export function GeneralPane({
             }
           />
         </SearchableSetting>
-      </section>
+      </SettingsGroup>
     ) : null,
     matchesSettingsSearch(searchQuery, getGeneralWorkspaceSearchEntries()) ? (
       <GeneralWorkspaceSettingsSection
@@ -218,17 +219,14 @@ export function GeneralPane({
       searchQuery,
       projectRuntimeSearchEntries
     ) ? (
-      <section key="project-runtime" className="space-y-4">
-        <SettingsSubsectionHeader
-          title={translate(
-            'auto.components.settings.GeneralPane.projectRuntime',
-            'Project Runtime'
-          )}
-          description={translate(
-            'auto.components.settings.GeneralPane.projectRuntimeDescription',
-            'Default runtime for local Windows projects that do not override it.'
-          )}
-        />
+      <SettingsGroup
+        key="project-runtime"
+        title={translate('auto.components.settings.GeneralPane.projectRuntime', 'Project Runtime')}
+        description={translate(
+          'auto.components.settings.GeneralPane.projectRuntimeDescription',
+          'Default runtime for local Windows projects that do not override it.'
+        )}
+      >
         <DefaultWindowsProjectRuntimeSetting
           settings={settings}
           updateSettings={updateSettings}
@@ -237,7 +235,7 @@ export function GeneralPane({
           wslDistros={wslDistros}
           wslCapabilitiesLoading={Boolean(wslCapabilitiesLoading)}
         />
-      </section>
+      </SettingsGroup>
     ) : null,
     matchesSettingsSearch(searchQuery, getGeneralEditorSearchEntries()) ? (
       <GeneralEditorSettingsSection
@@ -266,7 +264,7 @@ export function GeneralPane({
 
   return (
     <div className="space-y-6">
-      <SettingsSectionStack sections={visibleSections} spacing="section" />
+      <SettingsSectionStack sections={visibleSections} />
       {matchesSettingsSearch(searchQuery, getGeneralSupportSearchEntries()) ? (
         <GeneralSupportSection
           hasPrecedingSections={visibleSections.some((section) => section !== null)}

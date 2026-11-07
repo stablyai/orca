@@ -2,11 +2,12 @@ import type React from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { OpenInMenuSetting } from './OpenInMenuSetting'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { SettingsSubsectionHeader, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
+import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { WorkspaceDirectorySetting } from './WorkspaceDirectorySetting'
 import { translate } from '@/i18n/i18n'
 import { GlobalWorktreeVisibilitySourcesSetting } from './GlobalWorktreeVisibilitySourcesSetting'
 import { GLOBAL_WORKTREE_VISIBILITY_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 type GeneralWorkspaceSettingsSectionProps = {
   settings: GlobalSettings
@@ -24,18 +25,17 @@ export function GeneralWorkspaceSettingsSection({
   sourceDefaultsSupported = true
 }: GeneralWorkspaceSettingsSectionProps): React.JSX.Element {
   return (
-    <section key="workspace" className="space-y-4">
-      <SettingsSubsectionHeader
-        title={translate(
-          'auto.components.settings.GeneralWorkspaceSettingsSection.7511097c5d',
-          'Workspace'
-        )}
-        description={translate(
-          'auto.components.settings.GeneralWorkspaceSettingsSection.e2955d9ccb',
-          'Configure where new workspaces are created.'
-        )}
-      />
-
+    <SettingsGroup
+      key="workspace"
+      title={translate(
+        'auto.components.settings.GeneralWorkspaceSettingsSection.7511097c5d',
+        'Workspace'
+      )}
+      description={translate(
+        'auto.components.settings.GeneralWorkspaceSettingsSection.e2955d9ccb',
+        'Configure where new workspaces are created.'
+      )}
+    >
       <WorkspaceDirectorySetting settings={settings} updateSettings={updateSettings} />
 
       <div
@@ -52,6 +52,7 @@ export function GeneralWorkspaceSettingsSection({
             'auto.components.settings.GeneralWorkspaceSettingsSection.externalWorktreesDescription',
             'Choose which worktrees created outside Orca appear by default on this host.'
           )}
+          className="py-3"
           keywords={[
             'external',
             'non-Orca',
@@ -225,7 +226,7 @@ export function GeneralWorkspaceSettingsSection({
             'finder',
             'file explorer'
           ]}
-          className="space-y-3"
+          className="space-y-3 py-3"
         >
           <OpenInMenuSetting
             applications={settings.openInApplications}
@@ -233,6 +234,6 @@ export function GeneralWorkspaceSettingsSection({
           />
         </SearchableSetting>
       </div>
-    </section>
+    </SettingsGroup>
   )
 }

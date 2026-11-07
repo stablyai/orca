@@ -50,7 +50,7 @@ function serverDetailLabel(server: LoadedMcpConfigInspection['servers'][number])
 
 export function McpConfigFileRow({ config, onOpen }: McpConfigFileRowProps): React.JSX.Element {
   return (
-    <div className="space-y-2 px-3 py-2.5">
+    <div data-settings-row="" className="space-y-2 py-3">
       <div className="flex items-center gap-2">
         {config.status === 'valid' && !config.readError ? (
           <CheckCircle2 className="size-3.5 shrink-0 text-muted-foreground" />

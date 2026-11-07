@@ -44,6 +44,7 @@ import {
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 type McpConfigSectionProps = {
   repo: Repo
@@ -297,28 +298,26 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
   }
 
   return (
-    <section className="space-y-4">
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <h3 className="text-sm font-semibold">
-            {translate('auto.components.settings.McpConfigSection.55eea3ef47', 'MCP Configs')}
-          </h3>
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.McpConfigSection.96f5609b04',
-              'Inspect MCP server definitions that agents can use while working in this repo.'
-            )}
-          </p>
+    <SettingsGroup
+      title={translate('auto.components.settings.McpConfigSection.55eea3ef47', 'MCP Configs')}
+      description={
+        <>
+          {translate(
+            'auto.components.settings.McpConfigSection.96f5609b04',
+            'Inspect MCP server definitions that agents can use while working in this repo.'
+          )}
           {connectionId ? (
-            <p className="text-xs text-muted-foreground">
+            <span className="block">
               {translate(
                 'auto.components.settings.McpConfigSection.6bac9ddfc6',
                 'SSH repos are read through the remote filesystem. Starter creation is limited to the workspace root config.'
               )}
-            </p>
+            </span>
           ) : null}
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
+        </>
+      }
+      action={
+        <div className="flex items-center gap-2">
           <Button
             variant="ghost"
             size="icon-sm"
@@ -354,47 +353,47 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
             </Button>
           ) : null}
         </div>
+      }
+    >
+      <div
+        data-settings-row=""
+        className="flex items-center justify-between py-3 text-xs text-muted-foreground"
+      >
+        <span>{formatMcpConfigSummary(configs)}</span>
+        {loading ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
       </div>
-
-      <div className="rounded-md border border-border/50 bg-muted/20">
-        <div className="flex items-center justify-between border-b border-border/50 px-3 py-2 text-xs text-muted-foreground">
-          <span>{formatMcpConfigSummary(configs)}</span>
-          {loading ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
-        </div>
-        <div>
-          {visibleConfigs.length === 0 ? (
-            <div className="flex items-start gap-2 px-3 py-2.5 text-xs text-muted-foreground">
-              {inspectionUnavailable ? (
-                <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
-              ) : (
-                <FileCode2 className="mt-0.5 size-3.5 shrink-0" />
-              )}
-              {inspectionUnavailable ? (
-                <span>{inspectionUnavailableMessage}</span>
-              ) : (
-                <span>
-                  {translate(
-                    'auto.components.settings.McpConfigSection.b900cd6282',
-                    'No MCP config found. Add an empty workspace config when you want this repo to define its own MCP servers.'
-                  )}
-                </span>
-              )}
-            </div>
+      {visibleConfigs.length === 0 ? (
+        <div
+          data-settings-row=""
+          className="flex items-start gap-2 py-3 text-xs text-muted-foreground"
+        >
+          {inspectionUnavailable ? (
+            <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
           ) : (
-            <div className="divide-y divide-border/50">
-              {visibleConfigs.map((config) => (
-                <McpConfigFileRow
-                  key={config.candidate.relativePath}
-                  config={config}
-                  onOpen={handleOpen}
-                />
-              ))}
-            </div>
+            <FileCode2 className="mt-0.5 size-3.5 shrink-0" />
           )}
-
-          {!inspectionUnavailable ? <McpMissingConfigList missingConfigs={missingConfigs} /> : null}
+          {inspectionUnavailable ? (
+            <span>{inspectionUnavailableMessage}</span>
+          ) : (
+            <span>
+              {translate(
+                'auto.components.settings.McpConfigSection.b900cd6282',
+                'No MCP config found. Add an empty workspace config when you want this repo to define its own MCP servers.'
+              )}
+            </span>
+          )}
         </div>
-      </div>
-    </section>
+      ) : (
+        visibleConfigs.map((config) => (
+          <McpConfigFileRow
+            key={config.candidate.relativePath}
+            config={config}
+            onOpen={handleOpen}
+          />
+        ))
+      )}
+
+      {!inspectionUnavailable ? <McpMissingConfigList missingConfigs={missingConfigs} /> : null}
+    </SettingsGroup>
   )
 }

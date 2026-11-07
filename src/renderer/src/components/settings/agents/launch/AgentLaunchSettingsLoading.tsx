@@ -15,12 +15,14 @@ export function AgentLaunchSettingsLoading(): React.JSX.Element {
           'Defaults for new agents on the selected host.'
         )}
         onSetDefault={() => {}}
-      />
-      <AllAgentsPermissionSetting
-        choice={null}
-        withoutAutoChoice={null}
-        onChange={() => {}}
-        onChangeWithoutAuto={() => {}}
+        permissions={
+          <AllAgentsPermissionSetting
+            choice={null}
+            withoutAutoChoice={null}
+            onChange={() => {}}
+            onChangeWithoutAuto={() => {}}
+          />
+        }
       />
     </fieldset>
   )

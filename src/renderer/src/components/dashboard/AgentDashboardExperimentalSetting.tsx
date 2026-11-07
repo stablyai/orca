@@ -32,7 +32,7 @@ export function AgentDashboardExperimentalSetting({
         'Kanban board for monitoring agents across worktrees, in-window or as a pop-out.'
       )}
       keywords={getExperimentalSearchEntry().agentDashboard.keywords}
-      className="space-y-3 py-2"
+      className="space-y-3 py-3"
       id="experimental-agent-dashboard"
     >
       <div className="flex items-start justify-between gap-4">

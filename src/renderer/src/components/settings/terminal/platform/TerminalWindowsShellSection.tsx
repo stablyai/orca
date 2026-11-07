@@ -1,13 +1,10 @@
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../../../shared/windows-terminal-shell'
-import {
-  SettingsRow,
-  SettingsSegmentedControl,
-  SettingsSubsectionHeader
-} from '../../form-controls/SettingsFormControls'
+import { SettingsRow, SettingsSegmentedControl } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { translate } from '@/i18n/i18n'
 import { ShellIcon } from '../../../tab-bar/shell-icons'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 type TerminalWindowsShellSectionProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
@@ -34,120 +31,111 @@ export function TerminalWindowsShellSection({
   const showWslOption = windowsShell === 'wsl.exe'
 
   return (
-    <section key="windows-shell" className="space-y-3">
-      <SettingsSubsectionHeader
-        title={translate('auto.components.settings.TerminalPane.87e678a8af', 'Windows Shell')}
+    <SettingsGroup
+      key="windows-shell"
+      title={translate('auto.components.settings.TerminalPane.87e678a8af', 'Windows Shell')}
+      description={translate(
+        'auto.components.settings.TerminalPane.a55eee649f',
+        'Default shell for new terminal panes on Windows.'
+      )}
+    >
+      <SearchableSetting
+        className="@container"
+        title={translate('auto.components.settings.TerminalPane.27e301f22c', 'Default Shell')}
         description={translate(
-          'auto.components.settings.TerminalPane.a55eee649f',
-          'Default shell for new terminal panes on Windows.'
+          'auto.components.settings.TerminalPane.bd68f3170d',
+          'Choose the default shell for new terminal panes on Windows.'
         )}
-      />
-
-      <div className="divide-y divide-border/40">
-        <SearchableSetting
-          className="@container"
-          title={translate('auto.components.settings.TerminalPane.27e301f22c', 'Default Shell')}
+        keywords={[
+          'terminal',
+          'windows',
+          'shell',
+          'powershell',
+          'cmd',
+          'command prompt',
+          'git bash',
+          'bash.exe',
+          'default'
+        ]}
+      >
+        <SettingsRow
+          className="flex-col items-stretch @lg:flex-row @lg:items-center"
+          label={translate('auto.components.settings.TerminalPane.27e301f22c', 'Default Shell')}
           description={translate(
-            'auto.components.settings.TerminalPane.bd68f3170d',
-            'Choose the default shell for new terminal panes on Windows.'
+            'auto.components.settings.TerminalPane.09bf02de9a',
+            'Shell used when opening a new terminal pane. Takes effect for new terminals.'
           )}
-          keywords={[
-            'terminal',
-            'windows',
-            'shell',
-            'powershell',
-            'cmd',
-            'command prompt',
-            'git bash',
-            'bash.exe',
-            'default'
-          ]}
-        >
-          <SettingsRow
-            className="flex-col items-stretch @lg:flex-row @lg:items-center"
-            label={translate('auto.components.settings.TerminalPane.27e301f22c', 'Default Shell')}
-            description={translate(
-              'auto.components.settings.TerminalPane.09bf02de9a',
-              'Shell used when opening a new terminal pane. Takes effect for new terminals.'
-            )}
-            control={
-              <SettingsSegmentedControl
-                size="sm"
-                equalWidth
-                wrap
-                ariaLabel={translate(
-                  'auto.components.settings.TerminalPane.27e301f22c',
-                  'Default Shell'
-                )}
-                value={windowsShell}
-                onChange={(value) => updateSettings({ terminalWindowsShell: value })}
-                options={[
-                  {
-                    value: 'powershell.exe',
-                    label: windowsShellLabel(
-                      'powershell.exe',
-                      translate('auto.components.settings.TerminalPane.eb7fc4d98a', 'PowerShell')
-                    ),
-                    ariaLabel: translate(
-                      'auto.components.settings.TerminalPane.eb7fc4d98a',
-                      'PowerShell'
-                    )
-                  },
-                  {
-                    value: 'cmd.exe',
-                    label: windowsShellLabel(
-                      'cmd.exe',
-                      translate(
-                        'auto.components.settings.TerminalPane.0f1b8669e6',
-                        'Command Prompt'
-                      )
-                    ),
-                    ariaLabel: translate(
-                      'auto.components.settings.TerminalPane.0f1b8669e6',
-                      'Command Prompt'
-                    )
-                  },
-                  ...(showGitBashOption
-                    ? [
-                        {
-                          value: WINDOWS_GIT_BASH_SHELL,
-                          label: windowsShellLabel(
-                            WINDOWS_GIT_BASH_SHELL,
-                            translate(
-                              'auto.components.settings.TerminalPane.f61ac77f16',
-                              'Git Bash'
-                            )
-                          ),
-                          ariaLabel: translate(
-                            'auto.components.settings.TerminalPane.f61ac77f16',
-                            'Git Bash'
-                          ),
-                          disabled: !gitBashAvailable
-                        }
-                      ]
-                    : []),
-                  ...(showWslOption
-                    ? [
-                        {
-                          value: 'wsl.exe',
-                          label: windowsShellLabel(
-                            'wsl.exe',
-                            translate('auto.components.settings.TerminalPane.b637dd57a7', 'WSL')
-                          ),
-                          ariaLabel: translate(
-                            'auto.components.settings.TerminalPane.b637dd57a7',
-                            'WSL'
-                          ),
-                          disabled: true
-                        }
-                      ]
-                    : [])
-                ]}
-              />
-            }
-          />
-        </SearchableSetting>
-      </div>
-    </section>
+          control={
+            <SettingsSegmentedControl
+              size="sm"
+              equalWidth
+              wrap
+              ariaLabel={translate(
+                'auto.components.settings.TerminalPane.27e301f22c',
+                'Default Shell'
+              )}
+              value={windowsShell}
+              onChange={(value) => updateSettings({ terminalWindowsShell: value })}
+              options={[
+                {
+                  value: 'powershell.exe',
+                  label: windowsShellLabel(
+                    'powershell.exe',
+                    translate('auto.components.settings.TerminalPane.eb7fc4d98a', 'PowerShell')
+                  ),
+                  ariaLabel: translate(
+                    'auto.components.settings.TerminalPane.eb7fc4d98a',
+                    'PowerShell'
+                  )
+                },
+                {
+                  value: 'cmd.exe',
+                  label: windowsShellLabel(
+                    'cmd.exe',
+                    translate('auto.components.settings.TerminalPane.0f1b8669e6', 'Command Prompt')
+                  ),
+                  ariaLabel: translate(
+                    'auto.components.settings.TerminalPane.0f1b8669e6',
+                    'Command Prompt'
+                  )
+                },
+                ...(showGitBashOption
+                  ? [
+                      {
+                        value: WINDOWS_GIT_BASH_SHELL,
+                        label: windowsShellLabel(
+                          WINDOWS_GIT_BASH_SHELL,
+                          translate('auto.components.settings.TerminalPane.f61ac77f16', 'Git Bash')
+                        ),
+                        ariaLabel: translate(
+                          'auto.components.settings.TerminalPane.f61ac77f16',
+                          'Git Bash'
+                        ),
+                        disabled: !gitBashAvailable
+                      }
+                    ]
+                  : []),
+                ...(showWslOption
+                  ? [
+                      {
+                        value: 'wsl.exe',
+                        label: windowsShellLabel(
+                          'wsl.exe',
+                          translate('auto.components.settings.TerminalPane.b637dd57a7', 'WSL')
+                        ),
+                        ariaLabel: translate(
+                          'auto.components.settings.TerminalPane.b637dd57a7',
+                          'WSL'
+                        ),
+                        disabled: true
+                      }
+                    ]
+                  : [])
+              ]}
+            />
+          }
+        />
+      </SearchableSetting>
+    </SettingsGroup>
   )
 }
