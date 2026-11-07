@@ -11,11 +11,14 @@ export type CodexStateDbBackfillStatus =
   | { kind: 'not-tracked'; stateDbPath: string }
   | { kind: 'unreadable'; stateDbPath: string; error: string }
 
-export function findNewestCodexStateDbPath(codexHomePath: string): string | null {
+export function findNewestCodexStateDbPath(codexHomePath: string, strict = false): string | null {
   let entries: string[]
   try {
     entries = readdirSync(codexHomePath)
-  } catch {
+  } catch (error) {
+    if (strict) {
+      throw error
+    }
     return null
   }
   let newest: { version: number; name: string } | null = null
@@ -95,6 +98,32 @@ export function readIndexedCodexThreadIds(codexHomePath: string): Set<string> | 
     } catch {
       // A close failure cannot change the read-only result already collected.
     }
+  }
+}
+
+/** An absent index may use rollout metadata; an unreadable index must not certify a resume. */
+export function readIndexedCodexThreadProvider(
+  codexHomePath: string,
+  sessionId: string
+): string | null {
+  const stateDbPath = findNewestCodexStateDbPath(codexHomePath, true)
+  if (!stateDbPath) {
+    return null
+  }
+  const db = new SyncDatabase(stateDbPath, { readonly: true, fileMustExist: true, timeout: 100 })
+  try {
+    const row = db
+      .prepare('SELECT model_provider FROM threads WHERE id = ?')
+      .get(sessionId.toLowerCase())
+    if (!row) {
+      return null
+    }
+    if (typeof row.model_provider !== 'string' || !row.model_provider) {
+      throw new Error('Codex session index has no verifiable model provider')
+    }
+    return row.model_provider
+  } finally {
+    db.close()
   }
 }
 
