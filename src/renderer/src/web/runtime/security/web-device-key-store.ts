@@ -26,7 +26,9 @@ export function webDeviceKeyId(hostPublicKeyB64: string, environmentId: string):
   return `${hostPublicKeyB64}|${environmentId}`
 }
 
-export function createIndexedDbWebDeviceKeyStore(factory: IDBFactory): WebDeviceKeyStore {
+export function createIndexedDbWebDeviceKeyStore(
+  factory: Pick<IDBFactory, 'open'>
+): WebDeviceKeyStore {
   requestPersistentWebStorage()
   let opened: Promise<IDBDatabase> | null = null
   const database = (): Promise<IDBDatabase> => {

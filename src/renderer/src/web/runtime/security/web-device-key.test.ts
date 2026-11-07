@@ -56,8 +56,7 @@ describe('browser device keys', () => {
   it('asks the browser not to evict the storage that holds device keys', () => {
     const persist = vi.fn(() => Promise.resolve(true))
     vi.stubGlobal('navigator', { storage: { persist } })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the store opens IndexedDB lazily, so the factory is never touched here.
-    createIndexedDbWebDeviceKeyStore({} as IDBFactory)
+    createIndexedDbWebDeviceKeyStore({ open: vi.fn() })
     expect(persist).toHaveBeenCalledTimes(1)
   })
 })
