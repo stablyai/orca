@@ -1,15 +1,5 @@
 import { ipcMain } from 'electron'
-import type { ClaudeUsageStore } from '../claude-usage/store'
-import type { CodexUsageStore } from '../codex-usage/store'
-import type { OpenCodeUsageStore } from '../opencode-usage/store'
-import type { MuseUsageStore } from '../muse-usage/store'
-
-type UsageProviderStores = {
-  claudeUsage: ClaudeUsageStore
-  codexUsage: CodexUsageStore
-  openCodeUsage: OpenCodeUsageStore
-  museUsage: MuseUsageStore
-}
+import type { UsageProviderStores } from '../usage/usage-provider-facade'
 
 type UsageProviderChannelPrefix = keyof UsageProviderStores
 
@@ -18,7 +8,7 @@ type UsageProviderHandlerStore<Scope, Range, BreakdownKind> = {
   getScanState: () => unknown
   setEnabled: (enabled: boolean) => unknown
   refresh: (force?: boolean) => unknown
-  getSnapshot: (scope: Scope, range: Range, limit?: number) => unknown
+  getSnapshot: (scope: Scope, range: Range, limit?: number, includeHistory?: boolean) => unknown
   getSummary: (scope: Scope, range: Range) => unknown
   getDaily: (scope: Scope, range: Range) => unknown
   getBreakdown: (scope: Scope, range: Range, kind: BreakdownKind) => unknown
@@ -47,9 +37,14 @@ function registerProviderHandlers<Scope, Range, BreakdownKind>(
   )
   ipcMain.handle(
     `${prefix}:getSnapshot`,
-    async (_event, args: UsageRangeArgs<Scope, Range> & { limit?: number }) => {
+    async (
+      _event,
+      args: UsageRangeArgs<Scope, Range> & { limit?: number; includeHistory?: boolean }
+    ) => {
       await usage.whenLoaded()
-      return usage.getSnapshot(args.scope, args.range, args.limit)
+      return args.includeHistory === true
+        ? usage.getSnapshot(args.scope, args.range, args.limit, true)
+        : usage.getSnapshot(args.scope, args.range, args.limit)
     }
   )
   ipcMain.handle(`${prefix}:getSummary`, (_event, args: UsageRangeArgs<Scope, Range>) =>

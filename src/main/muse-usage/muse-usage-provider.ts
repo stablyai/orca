@@ -3,7 +3,8 @@ import { scanMuseUsageFilesViaWorker } from '../usage/usage-scan-worker-spawn'
 import type { MuseUsageDailyAggregate, MuseUsageSession } from './types'
 
 // Event-key ordinals require invalidating older caches.
-export const MUSE_USAGE_SCHEMA_VERSION = 2
+// Retain session identity in daily rows for period-correct drilldowns.
+export const MUSE_USAGE_SCHEMA_VERSION = 3
 
 export const museUsageProvider = {
   id: 'muse',

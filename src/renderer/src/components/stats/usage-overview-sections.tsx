@@ -2,6 +2,7 @@ import { AlertCircle } from 'lucide-react'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { formatUsageCost, formatUsageTokens } from './usage-overview-model'
+import { formatUsageDayLabel } from './usage-formatters'
 import type {
   UsageOverviewDailyPoint,
   UsageOverviewModel,
@@ -59,17 +60,6 @@ function providerSessionsSummary(provider: UsageProviderOverview): string {
     '{{sessions}} - {{activity}}',
     { sessions: sessionCountLabel(provider.sessions), activity: activityCountLabel(provider) }
   )
-}
-
-function formatDayLabel(day: string): string {
-  const parsed = new Date(`${day}T12:00:00`)
-  if (Number.isNaN(parsed.getTime())) {
-    return day
-  }
-  return parsed.toLocaleDateString(getIntlLocale(), {
-    month: 'short',
-    day: 'numeric'
-  })
 }
 
 export function TokenMixBar({ overview }: { overview: UsageOverviewModel }): React.JSX.Element {
@@ -189,7 +179,7 @@ export function DailyIntensityGrid({
         {bestDay && bestDay.totalTokens > 0 ? (
           <Badge variant="outline" className="shrink-0">
             {translate('auto.components.stats.usage.overview.sections.c424eb3f8e', 'Best:')}
-            {formatDayLabel(bestDay.day)}
+            {formatUsageDayLabel(bestDay.day)}
           </Badge>
         ) : null}
       </div>
@@ -215,7 +205,7 @@ export function DailyIntensityGrid({
       </div>
 
       <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-        <span>{formatDayLabel(days[0]?.day ?? '')}</span>
+        <span>{formatUsageDayLabel(days[0]?.day ?? '')}</span>
         <span>{translate('auto.components.stats.usage.overview.sections.1dd166c920', 'Less')}</span>
         <div className="flex items-center gap-1" aria-hidden>
           {[0, 1, 2, 3, 4].map((intensity) => (
@@ -226,7 +216,7 @@ export function DailyIntensityGrid({
           ))}
         </div>
         <span>{translate('auto.components.stats.usage.overview.sections.f6df0d7d6d', 'More')}</span>
-        <span>{formatDayLabel(days.at(-1)?.day ?? '')}</span>
+        <span>{formatUsageDayLabel(days.at(-1)?.day ?? '')}</span>
       </div>
     </section>
   )

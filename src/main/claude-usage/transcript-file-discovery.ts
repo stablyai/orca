@@ -1,4 +1,9 @@
-import { claudeProfileHistoryDirs } from '../claude-accounts/claude-profile-installed-router'
+import {
+  claudeProfileHistoryDirs,
+  claudeAccountHistoryRoots
+} from '../claude-accounts/claude-profile-installed-router'
+import { isDirectory } from '../claude-accounts/claude-profile-homes'
+import type { UsageAccountRoot } from '../usage/usage-account-attribution'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { readdir } from 'node:fs/promises'
@@ -40,6 +45,15 @@ function appendDiscoveredFiles(target: string[], source: readonly string[]): voi
 /** Resolved by the host process: a scan worker has no account router of its own. */
 export function claudeProfileTranscriptDirs(): string[] {
   return [...claudeProfileHistoryDirs('projects'), ...claudeProfileHistoryDirs('transcripts')]
+}
+
+export function claudeProfileTranscriptSources(): UsageAccountRoot[] {
+  return claudeAccountHistoryRoots().flatMap((root) =>
+    ['projects', 'transcripts'].flatMap((surface) => {
+      const path = join(root.path, surface)
+      return isDirectory(path) ? [{ path, accountId: root.accountId }] : []
+    })
+  )
 }
 
 export async function listClaudeTranscriptFiles(

@@ -72,6 +72,8 @@ export type OpenCodeUsageSession = {
 }
 
 export type OpenCodeUsageDailyAggregate = {
+  accountId?: string | null
+  sessionId?: string
   day: string
   model: string | null
   projectKey: string
@@ -89,6 +91,7 @@ export type OpenCodeUsageDailyAggregate = {
 }
 
 export type OpenCodeUsagePersistedDatabase = OpenCodeUsageProcessedDatabase & {
+  ownedAccountIds?: (string | null)[]
   sessions: OpenCodeUsageSession[]
   dailyAggregates: OpenCodeUsageDailyAggregate[]
   /** Persist ownership so sibling backups cannot double-count sessions across scans. */
@@ -126,6 +129,7 @@ export type OpenCodeUsageParsedEvent = {
 }
 
 export type OpenCodeUsageAttributedEvent = OpenCodeUsageParsedEvent & {
+  accountId?: string | null
   day: string
   projectKey: string
   projectLabel: string

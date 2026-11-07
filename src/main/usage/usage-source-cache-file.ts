@@ -1,6 +1,7 @@
 import { mkdir, readFile } from 'node:fs/promises'
 import { dirname, join, parse } from 'node:path'
 import { threadId } from 'node:worker_threads'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import {
   durableWriteTempPath,
   removeStaleDurableWriteTempFiles,
@@ -15,6 +16,7 @@ export type UsageSourceCacheRef = {
   schemaVersion: number
   worktreeFingerprint: string | null
   reuse: boolean
+  hadPreviousHistory?: boolean
 }
 
 export type UsageCacheSplitRequest = { cacheFile: string; sourceKey: string; providerId?: 'claude' }
@@ -44,6 +46,31 @@ export async function readUsageSourceCache<T>(ref: UsageSourceCacheRef): Promise
       : []
   } catch {
     return []
+  }
+}
+
+/** Keep event ownership through project changes; stale project/token projections must reparse. */
+export async function readUsageSourceCacheForScan<T>(ref: UsageSourceCacheRef): Promise<{
+  sources: T[]
+  reuseProjections: boolean
+  accountAttributionAvailable: boolean
+}> {
+  try {
+    const parsed = JSON.parse(await readFile(ref.path, 'utf-8'))
+    if (parsed?.schemaVersion !== ref.schemaVersion || !Array.isArray(parsed.sources)) {
+      return { sources: [], reuseProjections: false, accountAttributionAvailable: false }
+    }
+    return {
+      sources: parsed.sources,
+      reuseProjections: ref.reuse && parsed.worktreeFingerprint === ref.worktreeFingerprint,
+      accountAttributionAvailable: parsed.sources.length > 0 || ref.hadPreviousHistory !== true
+    }
+  } catch (error) {
+    return {
+      sources: [],
+      reuseProjections: false,
+      accountAttributionAvailable: isDefinitiveAbsence(error) && ref.hadPreviousHistory !== true
+    }
   }
 }
 
