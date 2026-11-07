@@ -2,39 +2,16 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { readIpcErrorDetail } from '@/lib/ipc-error'
 import { getRepoWorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
-import { searchRuntimeRepoBaseRefs } from '@/runtime/runtime-repo-client'
+import { runtimeTargetSupportsCapability } from '@/runtime/rpc/compatibility/runtime-target-capability'
+import { runtimeRpcTargetForAuthorityKey } from '@/runtime/rpc/targets/runtime-client-target'
 import { useAppStore } from '@/store'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { WORKTREE_CREATE_EXACT_NAME_TAKEN_CODE } from '../../../../shared/new-workspace/worktree-create-collision'
+import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-code'
+import { WORKTREE_CREATE_EXACT_NAME_RUNTIME_CAPABILITY } from '../../../../shared/worktree-runtime-capabilities'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-
-/** The branch name main derives from a worktree name, without its configured prefix. */
-function branchLeafOf(name: string): string {
-  return name
-    .trim()
-    .replace(/[^\p{L}\p{N}._-]+/gu, '-')
-    .replace(/-+/g, '-')
-    .replace(/^[.-]+|[.-]+$/g, '')
-}
-
-/** Unknown counts as taken: main would silently rename a clash to name-2. */
-async function mayHaveBranch(
-  hostId: ExecutionHostId,
-  repoId: string,
-  leaf: string
-): Promise<boolean> {
-  if (!leaf) {
-    return true
-  }
-  try {
-    const refs = await searchRuntimeRepoBaseRefs(hostId, repoId, leaf, 50)
-    const wanted = leaf.toLowerCase()
-    return refs.some((ref) => ref.split('/').at(-1)?.toLowerCase() === wanted)
-  } catch {
-    return true
-  }
-}
 
 const SETUP_DECISION_REQUIRED = 'Setup decision required for this repository'
 
@@ -105,7 +82,11 @@ async function createWhileStillInFolder(
       state.activeWorkspaceExecutionHostId === folderHostId
     )
   }
-  const taken = await mayHaveBranch(hostId, repo.id, branchLeafOf(name))
+  // The same target createWorktree resolves for this host; only that host can promise an exact name.
+  const supported = await runtimeTargetSupportsCapability(
+    runtimeRpcTargetForAuthorityKey(hostId) ?? { kind: 'local' },
+    WORKTREE_CREATE_EXACT_NAME_RUNTIME_CAPABILITY
+  )
   if (!stillInFolder()) {
     return
   }
@@ -121,7 +102,7 @@ async function createWhileStillInFolder(
       telemetrySource: 'sidebar'
     })
   }
-  if (taken) {
+  if (!supported) {
     openComposer()
     return
   }
@@ -152,7 +133,7 @@ async function createWhileStillInFolder(
       undefined,
       undefined,
       undefined,
-      { executionHostId: hostId }
+      { executionHostId: hostId, branchIntent: 'create-exact' }
     )
     toast.success(
       translate(
@@ -162,9 +143,12 @@ async function createWhileStillInFolder(
       )
     )
   } catch (error) {
-    // Main refuses before creating anything; the composer is where the user picks run or skip.
+    // Both refusals come before anything is created; the composer lets the user pick a name or run/skip.
     // Local IPC wraps the message ("Error invoking remote method …"); RPC delivers it bare.
-    if (readIpcErrorDetail(error) === SETUP_DECISION_REQUIRED) {
+    if (
+      hasRuntimeRpcErrorCode(error, WORKTREE_CREATE_EXACT_NAME_TAKEN_CODE) ||
+      readIpcErrorDetail(error) === SETUP_DECISION_REQUIRED
+    ) {
       openComposer()
       return
     }

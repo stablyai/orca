@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeFolderWorkspace } from '../sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import type { Repo } from '../../../../shared/repo-types'
 
-const { storeState, searchRefs, toastSuccess, toastError } = vi.hoisted(() => {
+const { storeState, supportsExact, toastSuccess, toastError } = vi.hoisted(() => {
   const storeState: {
     activeWorkspaceKey: string | null
     activeWorkspaceExecutionHostId: string | null
@@ -18,13 +18,15 @@ const { storeState, searchRefs, toastSuccess, toastError } = vi.hoisted(() => {
   }
   return {
     storeState,
-    searchRefs: vi.fn<() => Promise<string[]>>(),
+    supportsExact: vi.fn<() => Promise<boolean>>(),
     toastSuccess: vi.fn(),
     toastError: vi.fn()
   }
 })
 vi.mock('@/store', () => ({ useAppStore: { getState: () => storeState } }))
-vi.mock('@/runtime/runtime-repo-client', () => ({ searchRuntimeRepoBaseRefs: searchRefs }))
+vi.mock('@/runtime/rpc/compatibility/runtime-target-capability', () => ({
+  runtimeTargetSupportsCapability: supportsExact
+}))
 vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }))
 
 import { createFolderRepoWorktree } from './folder-workspace-repo-worktree-create'
@@ -44,22 +46,25 @@ describe('createFolderRepoWorktree', () => {
     storeState.activeWorkspaceExecutionHostId = null
     storeState.createWorktree.mockReset().mockResolvedValue({})
     storeState.openModal.mockReset()
-    searchRefs.mockReset().mockResolvedValue([])
+    supportsExact.mockReset().mockResolvedValue(true)
     toastSuccess.mockReset()
     toastError.mockReset()
   })
 
-  it('creates the worktree in place when no branch has its name', async () => {
-    searchRefs.mockResolvedValue(['origin/main', 'origin/Login-fix-old'])
-
+  it('asks the host for exactly the folder name, in place', async () => {
     await createFolderRepoWorktree(folder, repo)
 
-    expect(storeState.createWorktree.mock.calls[0]?.slice(0, 2)).toEqual(['repo-api', 'Login fix'])
+    const call = storeState.createWorktree.mock.calls[0] ?? []
+    expect([call[0], call[1], call.at(-1)]).toEqual([
+      'repo-api',
+      'Login fix',
+      { executionHostId: 'local', branchIntent: 'create-exact' }
+    ])
     expect(storeState.openModal).not.toHaveBeenCalled()
   })
 
-  it('opens the composer on the clicked host when the branch exists', async () => {
-    searchRefs.mockResolvedValue(['origin/main', 'brennan/Login-fix'])
+  it('opens the composer on the clicked host and creates nothing when the host predates exact names', async () => {
+    supportsExact.mockResolvedValue(false)
 
     await createFolderRepoWorktree(folder, repo)
 
@@ -72,6 +77,41 @@ describe('createFolderRepoWorktree', () => {
         prefilledName: 'Login fix'
       })
     )
+  })
+
+  it.each([
+    [
+      'Electron IPC',
+      new Error(
+        'Error invoking remote method \'worktrees:create\': WorktreeCreateExactNameTakenError: "Login fix" is already taken on this host. Nothing was created.\nworktree_create_exact_name_taken'
+      )
+    ],
+    [
+      'runtime RPC',
+      Object.assign(new Error('"Login fix" is already taken on this host.'), {
+        code: 'worktree_create_exact_name_taken'
+      })
+    ]
+  ])('opens the composer when the name is taken (%s)', async (_, error) => {
+    storeState.createWorktree.mockRejectedValue(error)
+
+    await createFolderRepoWorktree(folder, repo)
+
+    expect(storeState.openModal).toHaveBeenCalledWith(
+      'new-workspace-composer',
+      expect.objectContaining({ initialRepoId: 'repo-api', prefilledName: 'Login fix' })
+    )
+    expect(toastError).not.toHaveBeenCalled()
+  })
+
+  it('shows a timeout as an error and does not create again', async () => {
+    storeState.createWorktree.mockRejectedValue(new Error('git timed out.'))
+
+    await createFolderRepoWorktree(folder, repo)
+
+    expect(toastError).toHaveBeenCalledWith('git timed out.')
+    expect(storeState.createWorktree.mock.calls).toHaveLength(1)
+    expect(storeState.openModal).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -91,24 +131,30 @@ describe('createFolderRepoWorktree', () => {
     expect(toastError).not.toHaveBeenCalled()
   })
 
-  it('opens nothing when the setup refusal arrives after the user left the folder', async () => {
-    storeState.createWorktree.mockImplementation(async () => {
-      storeState.activeWorkspaceKey = 'folder:other'
-      throw new Error('Setup decision required for this repository')
-    })
+  it.each([
+    ['setup', 'Setup decision required for this repository'],
+    ['exact-name', '"Login fix" is already taken.\nworktree_create_exact_name_taken']
+  ])(
+    'opens nothing when the %s refusal arrives after the user left the folder',
+    async (_, message) => {
+      storeState.createWorktree.mockImplementation(async () => {
+        storeState.activeWorkspaceKey = 'folder:other'
+        throw new Error(message)
+      })
 
-    await createFolderRepoWorktree(folder, repo)
+      await createFolderRepoWorktree(folder, repo)
 
-    expect(storeState.openModal).not.toHaveBeenCalled()
-  })
+      expect(storeState.openModal).not.toHaveBeenCalled()
+    }
+  )
 
   it.each([
     ['another folder', { activeWorkspaceKey: 'folder:other' }],
     ['the same folder id on another host', { activeWorkspaceExecutionHostId: 'runtime:env-b' }]
-  ])('creates nothing when the user moved to %s during the branch check', async (_, moved) => {
-    searchRefs.mockImplementation(async () => {
+  ])('creates nothing when the user moved to %s during the host check', async (_, moved) => {
+    supportsExact.mockImplementation(async () => {
       Object.assign(storeState, moved)
-      return []
+      return true
     })
 
     await createFolderRepoWorktree(folder, repo)
@@ -118,12 +164,12 @@ describe('createFolderRepoWorktree', () => {
   })
 
   it('starts one create when a second panel asks for the same repository mid-create', async () => {
-    let finishSearch: (refs: string[]) => void = () => {}
-    searchRefs.mockImplementation(() => new Promise((resolve) => (finishSearch = resolve)))
+    let finishCheck: (supported: boolean) => void = () => {}
+    supportsExact.mockImplementation(() => new Promise((resolve) => (finishCheck = resolve)))
 
     const first = createFolderRepoWorktree(folder, repo)
     const second = createFolderRepoWorktree(folder, repo)
-    finishSearch([])
+    finishCheck(true)
     await Promise.all([first, second])
 
     expect(storeState.createWorktree.mock.calls).toHaveLength(1)
