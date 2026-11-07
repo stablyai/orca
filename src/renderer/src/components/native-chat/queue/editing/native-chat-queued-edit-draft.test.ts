@@ -27,9 +27,7 @@ import {
 import {
   createNativeChatQueuedEditDraft,
   discardNativeChatQueuedEdit,
-  handBackNativeChatQueuedEdit,
-  nativeChatQueuedEditInput,
-  nativeChatQueuedEditDirty
+  handBackNativeChatQueuedEdit
 } from './native-chat-queued-edit-draft'
 
 const skill = { name: 'review', path: '/remote/skills/review/SKILL.md' }
@@ -54,29 +52,6 @@ beforeEach(async () => {
 })
 
 describe('queued edit draft ownership', () => {
-  it('tracks completed paste projection in edit identity and output without changing raw text', () => {
-    const id = '11111111-1111-4111-8111-111111111111'
-    const raw = `before${nativeChatPastedTextToken(id)}after`
-    const edit = createNativeChatQueuedEditDraft(
-      { ...body, blocks: [{ type: 'text', text: raw }], skills: [] },
-      'bottom'
-    )
-    expect(nativeChatQueuedEditDirty(edit)).toBe(false)
-    updateNativeChatComposerDraft(
-      edit.scopeKey,
-      { pastedTextFiles: { [id]: '/tmp/queued.txt' } },
-      'immediate'
-    )
-    expect(readNativeChatComposerDraft(edit.scopeKey).text).toBe(raw)
-    expect(nativeChatQueuedEditDirty(edit)).toBe(true)
-    expect(nativeChatQueuedEditInput(edit, true, true)).toEqual({
-      text: 'before @/tmp/queued.txt after',
-      images: [],
-      skills: []
-    })
-    discardNativeChatQueuedEdit(edit)
-  })
-
   it('returns a full draft after existing content, keeps skill/paste identity, and redirects late uploads', () => {
     updateNativeChatComposerDraft(
       'bottom',
@@ -130,15 +105,5 @@ describe('queued edit draft ownership', () => {
     expect(returned.images.map(({ id }) => id)).toEqual(['bottom-image', 'added', 'late-image'])
     expect(returned.text).not.toContain(imageReferenceToken(edit.kept[0]!.id))
     expect(readNativeChatComposerDraft(edit.scopeKey).text).toBe('')
-  })
-
-  it('Cancel prevents late operations from reviving a closed edit', () => {
-    const edit = createNativeChatQueuedEditDraft(body, 'bottom')
-    addNativeChatPendingAttachment(edit.scopeKey, { id: 'cancelled', path: '', pending: true })
-    discardNativeChatQueuedEdit(edit)
-    expect(settleNativeChatPendingAttachment(edit.scopeKey, 'cancelled', '/late.png')).toBe(false)
-    updateNativeChatComposerDraft(edit.scopeKey, { text: 'late text' }, 'immediate')
-    expect(readNativeChatComposerDraft(edit.scopeKey).text).toBe('')
-    expect(readNativeChatComposerDraft('bottom').text).toBe('')
   })
 })

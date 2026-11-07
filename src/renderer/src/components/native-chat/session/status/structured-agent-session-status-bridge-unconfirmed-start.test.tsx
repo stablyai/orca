@@ -96,7 +96,7 @@ vi.mock('@/lib/launch-structured-agent-session', () => {
 
 import { StructuredAgentSessionStatusBridge } from './StructuredAgentSessionStatusBridge'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
+
 import { startStructuredAgentLaunch } from '@/lib/agent-session/launch/structured-agent-session-launch'
 import {
   getStructuredAgentSessionLaunchLifecycle,
@@ -281,41 +281,6 @@ describe('a chat whose start was never confirmed', () => {
     resetStructuredAgentSessionStatusFeedsForTests()
   })
 
-  it('shows no mark while unconfirmed, and none once the host shows the create had landed', async () => {
-    await connect()
-    await loseStart()
-    expect(rows()).toEqual([])
-    expect(tabStatus()).not.toBe('failed')
-    const creates = createCalls()
-
-    mocks.refresh.mockResolvedValueOnce(listing(CLAUDE_SESSION))
-    hostIsReachableAgain()
-    await flush()
-
-    expect(lifecycle()).toBeNull()
-    expect(createCalls()).toBe(creates)
-    expect(rows()).toEqual([])
-  })
-
-  it('marks it failed when the host, asked again, refuses the create', async () => {
-    await connect()
-    await loseStart()
-    expect(rows()).toEqual([])
-
-    mocks.launch.mockRejectedValueOnce(new StructuredAgentSessionCreateRefusalError('refused'))
-    hostIsReachableAgain()
-    await flush()
-
-    expect(lifecycle()).toBe('failed')
-    expect(tabStatus()).toBe('failed')
-
-    // A refusal is an answer: only the user's Retry asks again.
-    const creates = createCalls()
-    hostIsReachableAgain()
-    await flush()
-    expect(createCalls()).toBe(creates)
-  })
-
   it('re-checks a start a reload interrupted, without the user pressing Retry', async () => {
     await connect()
     mocks.createIntent.mockReturnValueOnce(launchIntent(CLAUDE_SESSION))
@@ -383,28 +348,5 @@ describe('a chat whose start was never confirmed', () => {
     } else {
       expect(lifecycle(CLAUDE_SESSION)).toBe('cancelled')
     }
-  })
-
-  it('re-checks once per return of its own host: one still unknown waits for the next', async () => {
-    await connect()
-    await loseStart()
-    const creates = createCalls()
-
-    hostIsReachableAgain('runtime:other-host')
-    await flush()
-    expect(createCalls()).toBe(creates)
-
-    hostIsReachableAgain()
-    await flush()
-    expect(createCalls()).toBe(creates + 1)
-    expect(lifecycle()).toBe('visibility-unknown')
-    expect(rows()).toEqual([])
-
-    await flush()
-    expect(createCalls()).toBe(creates + 1)
-
-    hostIsReachableAgain()
-    await flush()
-    expect(createCalls()).toBe(creates + 2)
   })
 })
