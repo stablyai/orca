@@ -7,7 +7,7 @@ import {
   runtimeRpcTargetForAuthorityKey,
   runtimeTargetEnvironmentId,
   runtimeTargetForOwnerEnvironment
-} from './runtime-client-target'
+} from './rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
   accountOwnerFor,

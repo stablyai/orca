@@ -103,14 +103,13 @@ function failedCompare(err: unknown): BranchCompareOutcome {
 
 export function nextBranchCompareState(
   outcome: BranchCompareOutcome,
-  previous: MobileBranchCompareState,
-  preserveReadyOnFailure: boolean
+  previous: MobileBranchCompareState
 ): MobileBranchCompareState {
   if (outcome.kind === 'ready') {
     return { kind: 'ready', result: outcome.result }
   }
   // Clearing ready state to idle would claim No Changes despite retained branch commits.
-  if (preserveReadyOnFailure && previous.kind === 'ready') {
+  if (previous.kind === 'ready') {
     return previous
   }
   return outcome.kind === 'unavailable'

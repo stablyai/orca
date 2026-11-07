@@ -8,6 +8,7 @@ import { AppearanceSection } from './AppearanceSection'
 import { AppearanceInterfaceSection } from './AppearanceInterfaceSection'
 import { AppearanceWindowSidebarSection } from './AppearanceWindowSidebarSection'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from '../search/settings-search'
 import { useAppStore } from '../../../store/index'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
@@ -269,24 +270,26 @@ export function AppearancePane({
 
       {/* Keep the App Icon easter egg at the bottom instead of inside Interface advanced. */}
       {appIconMatches ? (
-        <SearchableSetting
-          title={translate('auto.components.settings.AppearancePane.ca1590d42f', 'App Icon')}
-          description={translate(
-            'auto.components.settings.AppearancePane.0cd9b8228f',
-            'Choose the app icon shown in the Dock and window switcher.'
-          )}
-          keywords={getAppIconEntries().flatMap((entry) => [
-            entry.title,
-            entry.description ?? '',
-            ...(entry.keywords ?? [])
-          ])}
-          className="max-w-none px-1 pt-2"
-        >
-          <AppIconSelector
-            value={normalizeAppIconId(settings.appIcon)}
-            onChange={(appIcon) => updateSettings({ appIcon })}
-          />
-        </SearchableSetting>
+        <SettingsGroup>
+          <SearchableSetting
+            title={translate('auto.components.settings.AppearancePane.ca1590d42f', 'App Icon')}
+            description={translate(
+              'auto.components.settings.AppearancePane.0cd9b8228f',
+              'Choose the app icon shown in the Dock and window switcher.'
+            )}
+            keywords={getAppIconEntries().flatMap((entry) => [
+              entry.title,
+              entry.description ?? '',
+              ...(entry.keywords ?? [])
+            ])}
+            className="py-4"
+          >
+            <AppIconSelector
+              value={normalizeAppIconId(settings.appIcon)}
+              onChange={(appIcon) => updateSettings({ appIcon })}
+            />
+          </SearchableSetting>
+        </SettingsGroup>
       ) : null}
     </div>
   )

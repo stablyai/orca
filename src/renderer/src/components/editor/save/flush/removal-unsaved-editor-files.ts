@@ -4,7 +4,7 @@ import {
   editorBufferIdOfView,
   editorBufferSiblingViewIds
 } from '@/store/slices/editor/buffers/editor-buffer-views'
-import type { WorktreePurgeTarget } from '@/store/slices/worktree-purge-target'
+import type { WorktreePurgeTarget } from '@/store/slices/worktrees/teardown/worktree-purge-target'
 import { worktreePurgeClosedFileIds } from '@/store/slices/worktrees/teardown/worktree-purge-closed-files'
 import { canAutoSaveOpenFile } from '../../autosave/editor-autosave'
 import { flushClosingEditorBuffers } from './editor-pending-flush'

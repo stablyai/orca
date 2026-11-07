@@ -1,3 +1,5 @@
+import { finishTestJournalHistoricalInputs } from '../replay/journal-historical-inputs.test-support'
+import { openTestJournalHostDatabase } from '../store-lifecycle/journal-host-database-test-support'
 import type { createFixture } from './queued-message-pause-contract-test-fixture'
 import { describe, expect, it } from 'vitest'
 import { QueuedMessageNotConsumableError } from './queued-message-consume-error'
@@ -67,5 +69,106 @@ export function registerQueuedMessageStopPauseTests(
       await journal.replaceEpochItems('handle_forked', 0, [])
       expect(fixture.reason(journal)).toBeNull()
     })
+  })
+  it('mail does not lift Stop, while personal acceptance survives transcript removal and restore', async () => {
+    let journal = await fixture.open()
+    finishTestJournalHistoricalInputs(journal)
+    await journal.queuedMessages.insert({
+      messageId: 'P',
+      body: fixture.message('P'),
+      unattended: false,
+      deliveryMode: 'queue'
+    })
+    await fixture.userStop(journal)
+    await journal.appendSubmission({
+      clientMessageId: 'mail',
+      body: fixture.message('mail'),
+      payloadFingerprint: 'mail',
+      source: { kind: 'agent' },
+      origin: 'host',
+      handoverRecorded: true,
+      fence: 0
+    })
+    await journal.resolveDispatch({
+      clientMessageId: 'mail',
+      state: 'accepted',
+      providerIdentity: null,
+      fence: 0
+    })
+    expect(journal.queuedMessages.nextInputCard()).toBeNull()
+    expect(fixture.reason(journal)).toBe('stopped')
+    await fixture.turn(journal, 'person')
+    await journal.replaceEpochItems('handle_forked', 0, [])
+    await journal.close()
+    journal = await fixture.open()
+    expect(journal.queuedMessages.nextInputCard()?.messageId).toBe('P')
+    expect(fixture.reason(journal)).toBeNull()
+  })
+
+  it('clear restatement retains personal members after unattended acceptance releases the others', async () => {
+    let journal = await fixture.open()
+    finishTestJournalHistoricalInputs(journal)
+    for (const [messageId, unattended] of [
+      ['P', false],
+      ['A', true],
+      ['L', undefined]
+    ] as const) {
+      await journal.queuedMessages.insert({
+        messageId,
+        body: fixture.message(messageId),
+        ...(unattended === undefined ? {} : { unattended })
+      })
+    }
+    await fixture.clearContext(journal)
+    await journal.appendSubmission({
+      clientMessageId: 'mail',
+      body: fixture.message('mail'),
+      payloadFingerprint: 'mail',
+      source: { kind: 'agent' },
+      handoverRecorded: true,
+      fence: 0
+    })
+    await journal.resolveDispatch({
+      clientMessageId: 'mail',
+      state: 'accepted',
+      providerIdentity: null,
+      fence: 0
+    })
+    expect(fixture.held(journal)).toEqual([
+      ['P', true],
+      ['A', false],
+      ['L', false]
+    ])
+    await journal.replaceEpochItems('handle_forked', 0, [])
+    await journal.close()
+    journal = await fixture.open()
+    expect(
+      journal.queuedMessages.pauses().find((pause) => pause.reason === 'cleared')?.messageIds
+    ).toEqual(['P'])
+    await fixture.turn(journal, 'person')
+    expect(fixture.held(journal)).toEqual([
+      ['P', false],
+      ['A', false],
+      ['L', false]
+    ])
+  })
+
+  it('a retired accepted outcome still proves a later personal turn lifted Stop', async () => {
+    const journal = await fixture.open()
+    finishTestJournalHistoricalInputs(journal)
+    await fixture.queueDraft(journal, 'W')
+    await fixture.userStop(journal)
+    await fixture.turn(journal, 'retired-person')
+    await journal.close()
+    const db = openTestJournalHostDatabase(fixture.root).db
+    const source = db.prepare('SELECT generation,through_seq FROM journal_outcome_epochs').get()!
+    db.prepare(
+      "INSERT INTO journal_outcomes (generation,seq,field,entry_key,format,ordinal,value_json,deleted) VALUES (?,?,'submissions',?,2,'s0000000000000001:0000000000000001','null',1)"
+    ).run(source.generation, Number(source.through_seq) + 1, JSON.stringify('retired-person'))
+    db.prepare('UPDATE journal_outcome_epochs SET through_seq=through_seq+1').run()
+    const restored = await fixture.open()
+    expect(restored.submission('retired-person')).toBeUndefined()
+    expect(restored.queuedMessages.nextInputCard()?.messageId).toBe('W')
+    expect(fixture.reason(restored)).toBeNull()
   })
 }

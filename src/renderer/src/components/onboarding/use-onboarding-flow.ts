@@ -16,7 +16,7 @@ import { persistStep, useCloseWith, usePersistCurrentStep } from './use-onboardi
 import { resolveOnboardingSettingsHydration } from './onboarding-settings-hydration'
 import { translate } from '@/i18n/i18n'
 import { useOnboardingYoloPermissions } from './use-onboarding-yolo-permissions'
-import { isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
+import { isWindowsUserAgent } from '@/lib/user-agent-platform'
 import {
   isSkippedStepIndex,
   remapOpenOnboardingLastCompletedStep,
@@ -24,7 +24,6 @@ import {
   shouldSkipIntegrationsStep,
   shouldSkipWindowsTerminalStep
 } from './onboarding-flow-state'
-
 import { useOnboardingFlowActions } from './use-onboarding-flow-actions'
 import { useOnboardingFlowTelemetry } from './use-onboarding-flow-telemetry'
 
@@ -168,7 +167,7 @@ export function useOnboardingFlow(
   useEffect(() => {
     paintedThemeRef.current = paintedTheme
   }, [paintedTheme])
-  // Why per entry: "Skip to project setup" keeps the look the user arrived with, and each pick
+  // Why per entry: "Set up later" keeps the look the user arrived with, and each pick
   // replaces only its own mode's slot from here.
   const [themeLookBaseline, setThemeLookBaseline] = useState<GlobalSettings | null>(null)
   if (currentStep.id !== 'theme' && themeLookBaseline) {
@@ -273,7 +272,7 @@ export function useOnboardingFlow(
     setError
   })
 
-  const { next, skipToRepo, dismissOnboarding, back, jumpToStep } = useOnboardingFlowActions({
+  const { next, setUpLater, dismissOnboarding, back, jumpToStep } = useOnboardingFlowActions({
     busyLabel,
     setBusyLabel,
     setError,
@@ -320,9 +319,8 @@ export function useOnboardingFlow(
     hasSelectedWorkspace: selectedWorkspaceId !== null,
     detectedSet,
     isDetectingAgents,
-    refreshDetectedAgents,
     next,
-    skipToRepo,
+    setUpLater,
     dismissOnboarding,
     back,
     jumpToStep,

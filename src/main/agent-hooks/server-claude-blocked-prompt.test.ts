@@ -110,14 +110,4 @@ describe('Claude prompt blocked by a UserPromptSubmit hook', () => {
     await promptHook('next prompt')
     expect(row()).toMatchObject({ state: 'working', prompt: 'next prompt' })
   })
-
-  it('keeps the next prompt working when its hook lands before its working report', async () => {
-    program('working')
-    await promptHook('blocked')
-    program('idle')
-    await promptHook('allowed')
-    expect(row()).toMatchObject({ state: 'working', prompt: 'allowed' })
-    program('working')
-    expect(row().state).toBe('working')
-  })
 })

@@ -73,7 +73,8 @@ export type BridgeHostOptions = {
   // Grant only this route’s implemented capabilities plus protocol fault; another route’s clipboard grant must not widen this session.
   routeGrants: readonly string[]
   ownsHostArea?: boolean
-  /** The status the shell's gate proved, read at each `init`; null while it has none. */
+  /** The status this connection's verdict proved for the document, read at each frame; null holds
+   *  desktop-bound requests and subscriptions and reports `handshaking` until it opens. */
   readHostStatus?: () => HostStatusReply | null
   // Inherit handshake state on client-driven rebuild: the session id/page do not change, so no new ready or BridgeShellReplaced arrives.
   sessionEstablished: boolean
@@ -143,6 +144,8 @@ export type BridgeHostOptions = {
 
 export type BridgeHost = {
   publishStorage: () => void
+  /** Re-sends `init` when the verdict opens or closes, so the page reads `connected` and the proven status. */
+  publishHostStatus: () => void
   receive: (json: string) => void
   // Hold same-screen param updates even when posting fails; repair from the next ready without delivery tracking. Different pathnames require remount; the page clears consumed params (rulings 33.1/34).
   publishRoute: (next: BridgeInitRoute) => void

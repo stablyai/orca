@@ -25,7 +25,7 @@ import { withRemoteRuntimeTailscaleHint } from '../../../../../../shared/remote-
 import type { PtyTransportRecoveryState } from '../pty-transport-types'
 import './recovery/remote-runtime-pty-recovery-state'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './recovery/remote-runtime-pty-recovery-limits'
-import { stubRuntimeEnvironmentBridge } from '../../../../runtime/runtime-environment-bridge-fixture'
+import { stubRuntimeEnvironmentBridge } from '../../../../runtime/rpc/testing/runtime-environment-bridge-fixture'
 
 const ELECTRON_IPC_PREFIX = "Error invoking remote method 'runtimeEnvironments:call': "
 
@@ -162,7 +162,9 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
 
   beforeEach(() => {
     vi.resetModules()
-    vi.doUnmock('../../../../runtime/remote-runtime-terminal-multiplexer')
+    vi.doUnmock(
+      '../../../../runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry'
+    )
     vi.doMock('@/runtime/web-runtime-session-snapshot', () => ({
       refreshWebRuntimeSessionTabsSnapshot: refreshSessionTabsSnapshot
     }))
@@ -249,7 +251,7 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
     const { retryAllRemoteRuntimePtyRecoveriesNow } =
       await import('./recovery/remote-runtime-pty-recovery-state')
     const { updateTerminalRemoteRuntimeRecoveryUiState } =
-      await import('../../terminal-remote-runtime-recovery-ui-state')
+      await import('./recovery/terminal-remote-runtime-recovery-ui-state')
     const onError = vi.fn()
     let bannerUiState: Parameters<typeof updateTerminalRemoteRuntimeRecoveryUiState>[0] = {}
     const transport = createRemoteRuntimePtyTransport('env-1', {

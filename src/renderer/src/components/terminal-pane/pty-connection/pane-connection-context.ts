@@ -1,11 +1,11 @@
-import { resolveTerminalPaneOwnerContext } from '../terminal-pane-owner-context'
+import { resolveTerminalPaneOwnerContext } from '../host-state/terminal-pane-owner-context'
 import { useAppStore } from '@/store'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../../shared/ephemeral-setup-terminal-worktree-id'
 import { isLocalExecutionHost } from '../../../../../shared/execution-host'
-import { settleTerminalPaneRecovery } from '../terminal-pane-recovery'
+import { settleTerminalPaneRecovery } from '../render-health/recovery/terminal-pane-recovery'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 export function initializePaneConnectionContext(session: ConnectPanePtySession): void {

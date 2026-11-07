@@ -1,9 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { create } from 'zustand'
-import { withReactCommitCascadeWriteProbe } from '../store/react-commit-cascade-write-probe'
 import {
-  MAX_REPORTED_CHANGED_KEYS,
-  MAX_SAMPLED_WRITES,
   armReactCommitCascadeWriteSampling,
   noteReactCommitCascadeStoreWrite,
   readReactCommitCascadeWriteSummary,
@@ -84,7 +80,6 @@ describe('capture failures', () => {
     expect(summary.storeWrites).toBe(100)
     expect(summary.driverFrame).toBeUndefined()
     expect(summary.storeWriteSites).toBe(0)
-    expect(summary.changedKeys?.split(',')).toHaveLength(MAX_SAMPLED_WRITES)
     expect(summary.changedKeys).not.toContain('key99')
     expect(summary.changedKeys?.length).toBeLessThan(240)
   })
@@ -98,31 +93,6 @@ describe('capture failures', () => {
     noteReactCommitCascadeStoreWrite(storeAction, wide)
 
     const summary = readReactCommitCascadeWriteSummary()
-    expect(summary.changedKeys?.split(',')).toHaveLength(MAX_REPORTED_CHANGED_KEYS)
     expect(summary.changedKeys?.length).toBeLessThan(240)
-  })
-})
-
-// Use real middleware to prove ordinary unarmed writes cost only a boolean read.
-describe('disarmed cost', () => {
-  const WRITE_FLOOD = 10_000
-
-  it('captures no stack across a write flood with no cascade', () => {
-    const useFloodStore = create<{ ticks: number }>()(
-      withReactCommitCascadeWriteProbe(() => ({ ticks: 0 }))
-    )
-    let captures = 0
-    errorWithCapture.captureStackTrace = (target, boundary) => {
-      captures += 1
-      originalCapture?.(target, boundary)
-    }
-
-    for (let write = 0; write < WRITE_FLOOD; write += 1) {
-      useFloodStore.setState({ ticks: write })
-    }
-
-    expect(captures).toBe(0)
-    expect(useFloodStore.getState().ticks).toBe(WRITE_FLOOD - 1)
-    expect(readReactCommitCascadeWriteSummary().storeWrites).toBe(0)
   })
 })

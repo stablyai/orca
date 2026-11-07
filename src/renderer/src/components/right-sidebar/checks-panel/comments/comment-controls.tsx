@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store/index'
-import { isReviewThreadResolutionInFlight } from '@/store/github/review-thread-resolution-in-flight'
+import { isReviewThreadResolutionInFlight } from '@/store/github/review-threads/review-thread-resolution-in-flight'
 import { basename } from '@/lib/path'
 import { isBotPRComment } from '../../../../../../shared/source-control/review-comments/pr-comment-audience'
 import { setPRBotAuthorOverride } from '@/lib/pr-bot-author-overrides'

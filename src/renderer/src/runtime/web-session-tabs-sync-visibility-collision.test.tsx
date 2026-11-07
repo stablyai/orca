@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { resetStaleDocumentVisibilityForTesting } from '@/components/terminal-pane/stale-document-visibility'
-import type * as WebRuntimeTerminalCreationModule from './web-runtime-terminal-creation'
+import { resetStaleDocumentVisibilityForTesting } from '@/components/terminal-pane/viewport/visibility/stale-document-visibility'
+import type * as WebRuntimeTerminalCreationModule from './hosted-terminals/creation/web-runtime-terminal-creation'
 
 const mocks = vi.hoisted(() => ({
   createTerminal: vi.fn(),
@@ -27,20 +27,23 @@ vi.mock('./web-session-tabs-sync/mirrored-workspace-owner', () => ({
     workspaceId ? (mocks.ownerEnvironmentIdForWorkspace(state, workspaceId) ?? null) : null
 }))
 
-vi.mock('./web-session-terminal-orphan-recovery', () => ({
+vi.mock('./hosted-terminals/recovery/web-session-terminal-orphan-recovery', () => ({
   recoverWebSessionTerminalOrphansBeforeApply: mocks.recoverSnapshot
 }))
 
-vi.mock('./web-runtime-terminal-creation', async (importOriginal) => {
+vi.mock('./hosted-terminals/creation/web-runtime-terminal-creation', async (importOriginal) => {
   const actual = await importOriginal<typeof WebRuntimeTerminalCreationModule>()
-  return { ...actual, createWebRuntimeSessionTerminal: mocks.createTerminal }
+  return {
+    ...actual,
+    createWebRuntimeSessionTerminal: mocks.createTerminal
+  }
 })
 
 import { useAppStore } from '@/store'
 import { buildOwnedEditorFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
-import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from './rpc/environment-revisions/runtime-environment-revision'
 import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
-import './web-session-terminal-handle-events'
+import './web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events'
 import {
   _getWebSessionTabsReceiptTrackingCountsForTest,
   _getWebSessionTabsTrackingCountsForTest,
@@ -48,11 +51,11 @@ import {
 } from './web-session-tabs-sync/tracking-lifecycle'
 import { useWebSessionTabsSync } from './web-session-tabs-sync/use-web-session-tabs-sync'
 import { WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS } from './web-session-tabs-sync/state'
-import { WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS } from './window-visibility-subscription-parking'
+import { WINDOW_HIDE_PARK_GRACE_MS as WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS } from '../lib/window-park-visibility'
 import {
   connectedRuntimeStatus,
   publicRuntimeEnvironment
-} from './paired-runtime-environment-test-fixture'
+} from './rpc/testing/paired-runtime-environment-test-fixture'
 
 const ENV_A = 'env-a'
 const ENV_B = 'env-b'

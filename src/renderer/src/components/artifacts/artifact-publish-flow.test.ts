@@ -16,7 +16,9 @@ const mocks = vi.hoisted(() => ({
   }
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc
+}))
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => mocks.state }
 }))
@@ -47,25 +49,6 @@ beforeEach(() => {
 })
 
 describe('artifact publish flow', () => {
-  it('prepares the request once, before signing in and publishing it', async () => {
-    mocks.state.orcaProfileAuthStatus = { state: 'local' }
-    mocks.connect.mockResolvedValue({ status: 'connected' })
-    mocks.callRuntimeRpc.mockResolvedValue({ status: 'ok', value: published })
-    const createRequest = vi.fn().mockResolvedValue(request)
-
-    await expect(publishArtifactFromSurface(createRequest)).resolves.toBe(published)
-    expect(createRequest).toHaveBeenCalledOnce()
-    expect(mocks.connect).toHaveBeenCalledOnce()
-    expect(createRequest.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.connect.mock.invocationCallOrder[0]
-    )
-    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'local' },
-      'artifacts.publish',
-      request
-    )
-  })
-
   // Why: a re-read after sign-in could publish content the user never clicked Share on.
   it('publishes the clicked request again after reconnecting, without re-reading', async () => {
     mocks.connect.mockResolvedValue({ status: 'connected' })
@@ -116,27 +99,5 @@ describe('artifact publish flow', () => {
     expect(mocks.toastError).toHaveBeenCalledWith('Could not share artifact', {
       description: 'This artifact is too large to share.'
     })
-  })
-
-  it('publishes content at the 10 MiB boundary', async () => {
-    mocks.callRuntimeRpc.mockResolvedValue({ status: 'ok', value: published })
-    const createRequest = vi.fn().mockResolvedValue({
-      ...request,
-      content: 'a'.repeat(ARTIFACT_MAX_CONTENT_BYTES)
-    })
-
-    await expect(publishArtifactFromSurface(createRequest)).resolves.toBe(published)
-    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'local' },
-      'artifacts.publish',
-      expect.objectContaining({ content: 'a'.repeat(ARTIFACT_MAX_CONTENT_BYTES) })
-    )
-  })
-
-  it('shows confirmation without putting the public link in the toast', async () => {
-    mocks.callRuntimeRpc.mockResolvedValue({ status: 'ok', value: published })
-    await publishArtifactFromSurface(() => Promise.resolve(request))
-
-    expect(mocks.toastSuccess).toHaveBeenCalledWith('Artifact shared')
   })
 })

@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({ subscribe: vi.fn(), supports: vi.fn() }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   subscribeStructuredAgentSessionStatus: mocks.subscribe
 }))
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   runtimeEnvironmentSupportsCapability: mocks.supports
 }))

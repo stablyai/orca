@@ -115,15 +115,7 @@ vi.mock('./use-mobile-agent-history-state', () => ({
     scope: 'workspace',
     screenState: { kind: 'ready', sessions: [state.session], issues: [] },
     refreshing: false,
-    hostStatusResult:
-      state.generation === 1
-        ? {
-            hostPlatform: 'darwin',
-            capabilities: state.legacy ? [] : ['aiVault.v1', 'session.tabs.qoderOwnedCreate.v1']
-          }
-        : state.completedBoundary
-          ? { hostPlatform: 'darwin', capabilities: [] }
-          : null,
+    revalidating: false,
     activeWorktreePath: '/owned/workspace',
     scopeFilterPaths: ['/owned/workspace'],
     onSelectScope: vi.fn(),
@@ -152,6 +144,15 @@ afterEach(async () => {
   mobileI18n.removeResourceBundle('fr', 'translation')
   await activateMobileUiLocale('en')
 })
+
+// A reconnect lands on a host without the owned-create capability.
+function hostStatus() {
+  const current = state.generation === 1 && !state.legacy
+  return {
+    hostPlatform: 'darwin',
+    capabilities: current ? ['aiVault.v1', 'session.tabs.qoderOwnedCreate.v1'] : []
+  }
+}
 
 function ownedSession(): AiVaultSession {
   return {
@@ -237,6 +238,9 @@ it.each([
   const sendRequest: RpcClient['sendRequest'] = vi.fn<RpcClient['sendRequest']>(
     async (method, params) => {
       calls.push({ method, params, generation: state.generation })
+      if (method === 'status.get') {
+        return { id: 'owned-reply', ok: true, result: hostStatus() }
+      }
       if (method === 'repo.list') {
         return {
           id: 'owned-reply',
@@ -435,7 +439,8 @@ it('resuming into the session it was opened from shows the resumed terminal ther
     'settings.get': {},
     'session.tabs.createTerminal': {
       tab: { type: 'terminal', id: 'owned-tab', terminal: 'owned-pty', title: 'Terminal' }
-    }
+    },
+    'status.get': hostStatus()
   }
   state.client = {
     ...createFakeRpcClient({ getGeneration: () => state.generation }),
@@ -579,7 +584,8 @@ it.each([
         'session.tabs.createTerminal': {
           tab: { type: 'terminal', id: 'fallback-tab', terminal: 'fallback-pty', title: 'Terminal' }
         },
-        'terminal.send': { send: { accepted: true } }
+        'terminal.send': { send: { accepted: true } },
+        'status.get': hostStatus()
       }
       return { id: 'reply', ok: true, result: results[method] }
     })

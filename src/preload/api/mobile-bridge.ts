@@ -59,7 +59,14 @@ export const mobileApi = {
   > => ipcRenderer.invoke('mobile:getRuntimePairingUrl', args),
 
   listDevices: (): Promise<{
-    devices: { deviceId: string; name: string; pairedAt: number; lastSeenAt: number }[]
+    devices: {
+      deviceId: string
+      name: string
+      pairedAt: number
+      lastSeenAt: number
+      usesLegacyEncryption?: boolean
+      olderPairingMethod?: true
+    }[]
   }> => ipcRenderer.invoke('mobile:listDevices'),
 
   revokeDevice: (args: { deviceId: string }): Promise<{ revoked: boolean }> =>

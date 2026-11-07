@@ -24,6 +24,7 @@ export function pinTestJournalInputMode(journal: AgentSessionJournal): void {
   if (historicalWriters.has(journal) || (epoch && journalOutcomeSource(db, sessionId, epoch))) {
     return
   }
+  journal.inputOrder.beginReconstruction()
   historicalWriters.set(journal, () => {
     projection.prepare = prepare
     historicalWriters.set(journal, null)

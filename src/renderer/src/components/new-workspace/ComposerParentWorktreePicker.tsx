@@ -12,7 +12,7 @@ import {
   getIndexedAllWorktrees,
   getIndexedWorktreeById,
   getIndexedWorktreeMap
-} from '@/store/worktree-repo-index'
+} from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
 import '@/components/sidebar/workspace-card/activity/worktree-card-empty-inputs'
 import { branchDisplayName } from '@/components/sidebar/workspace-card/identity/worktree-branch-display'
@@ -43,8 +43,8 @@ import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { useRepoMap } from '@/store/selectors'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { useRepoMap } from '@/store/repos/use-repository-catalog'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { isCrossStoreCreateParent } from '@/components/sidebar/workspace-actions/parenting/worktree-parent-candidates'
 import { ParentMachineBadge } from '@/components/sidebar/workspace-actions/parenting/ParentMachineBadge'
 import {

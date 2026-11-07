@@ -13,7 +13,7 @@ import {
   useLocalWindowsTerminalCapabilities,
   useWindowsTerminalCapabilities
 } from './windows-terminal-capabilities'
-import { stubRuntimeEnvironmentBridge } from '../runtime/runtime-environment-bridge-fixture'
+import { stubRuntimeEnvironmentBridge } from '../runtime/rpc/testing/runtime-environment-bridge-fixture'
 
 function stubTerminalCapabilityApi(args: {
   wslAvailable: boolean

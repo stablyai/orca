@@ -35,7 +35,7 @@ const panelRows = vi.hoisted(
   (): { session: AiVaultSession; resume: AiVaultResumeInChatEligibility }[] => []
 )
 
-vi.mock('@/runtime/local-runtime-capabilities', async (importOriginal) => ({
+vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readLocalRuntimeCapabilitiesOrUnknown: () => [
     STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,

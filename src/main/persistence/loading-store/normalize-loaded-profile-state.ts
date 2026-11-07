@@ -14,6 +14,7 @@ import {
   normalizeSshTarget
 } from '../leasing-ssh-ptys/ssh-normalization'
 import { migrateExistingHostsRemoteCliControl } from '../leasing-ssh-ptys/ssh-remote-cli-control-migration'
+import { migrateExistingReposAgentWorkspaceTrust } from '../tracking-repos/agent-workspace-trust-existing-repos-migration'
 import {
   normalizeLegacyPaneKeyAliasEntries,
   normalizeMigrationUnsupportedPtyEntries
@@ -56,7 +57,11 @@ export function normalizeLoadedProfileState(
       parsed.featureInteractionTelemetryBuckets
     ),
     projectGroups: normalizedProjectGroups,
-    repos: migratedExternalVisibility.repos,
+    repos: migrateExistingReposAgentWorkspaceTrust(
+      migratedExternalVisibility.repos,
+      parsed.settings,
+      markNeedsSave
+    ),
     projects: projectCatalog.projects,
     projectHostSetups: projectCatalog.projectHostSetups,
     folderWorkspaces: normalizeFolderWorkspaces(parsed.folderWorkspaces, normalizedProjectGroups),

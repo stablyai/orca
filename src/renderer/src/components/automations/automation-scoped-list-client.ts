@@ -1,6 +1,6 @@
 /** Pin runtime pairing revisions and SSH registration generations to captured owners. Validate responses: an old host may ignore selectors and return other hosts’ rows. */
 
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type {
   Automation,

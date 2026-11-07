@@ -1,5 +1,6 @@
 import { useAppStore } from '../../../store/index'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { GitHubRateLimitPanel } from '../../github/github-rate-limit-display'
 import { GitLabRateLimitPanel } from '../../gitlab/gitlab-rate-limit-display'
@@ -42,7 +43,7 @@ export function GitProviderApiBudgetPane({
           'Current GitHub CLI REST, Search, and GraphQL rate limits.'
         )}
         keywords={['github', 'gh', 'graphql', 'rate limit', 'api budget']}
-        className="space-y-3"
+        className="space-y-3 py-3"
       >
         <GitHubRateLimitPanel target={target} />
       </SearchableSetting>
@@ -68,7 +69,7 @@ export function GitProviderApiBudgetPane({
           'Current GitLab CLI REST rate-limit headers when available.'
         )}
         keywords={['gitlab', 'glab', 'rate limit', 'api budget']}
-        className="space-y-3"
+        className="space-y-3 py-3"
       >
         <GitLabRateLimitPanel target={target} />
       </SearchableSetting>
@@ -80,5 +81,5 @@ export function GitProviderApiBudgetPane({
   }
 
   // Put diagnostic budgets after everyday Git/AI controls.
-  return <div className="space-y-4 border-t border-border/40 pt-4">{visibleSections}</div>
+  return <SettingsGroup>{visibleSections}</SettingsGroup>
 }

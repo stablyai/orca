@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { markRestoredStaleCodexSessionsForRestart } from './agent-session/accounts/codex/codex-session-restart'
 
 // One login can produce separate ChatGPT-workspace accounts with the same email label.

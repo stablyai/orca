@@ -9,7 +9,7 @@ import { createLegacyRelayBridgeTransport } from '../../pty-transport/legacy-rel
 import {
   legacyRelayBridgePtyIdForPane,
   releaseLegacyRelayBridgePaneClaim
-} from '../../legacy-relay-bridge-panes'
+} from '../../pty-transport/legacy-relay/legacy-relay-bridge-panes'
 
 /** Inert: the reconnect overlay and the host's conversion own this pane, so input never remounts it. */
 function createUnservedSshPaneTransport(): PtyTransport {

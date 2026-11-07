@@ -1,7 +1,7 @@
 // A slept workspace's pane: main resumes its agent, and this window only attaches to that terminal.
 
 import { useAppStore } from '@/store/index'
-import { hasWorktreeTeardownStarted } from '@/store/slices/worktree-delete-state-types'
+import { hasWorktreeTeardownStarted } from '@/store/slices/worktrees/teardown/worktree-delete-state-types'
 import { readTerminalSpawnDeferral } from '../../../../../../shared/host-spawn-admission'
 import { releaseDeferredCwdFence } from './fresh-spawn-start'
 import { findTerminalTabForPane } from '../terminal-tab-id'

@@ -1,4 +1,4 @@
-import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/structured-agent-session-tabs'
+import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { parseAgentStatusPaneIdentity } from '../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import { freshActivityLiveAgentState } from './activity-event-state'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'

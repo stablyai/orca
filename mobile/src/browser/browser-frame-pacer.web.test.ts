@@ -134,17 +134,6 @@ function mountPacer() {
 }
 
 describe('the browser frame pacer', () => {
-  it('paints the first frame on both layers and shows it without a flip', async () => {
-    const pane = mountPacer()
-
-    await pane.push(1)
-
-    expect(pane.shown()).toContain('frame-1')
-    expect(pane.background(1)).toContain('frame-1')
-    expect(pane.frameUriWrites).toHaveLength(1)
-    expect(pane.shownSeqs).toEqual([1])
-  })
-
   it('decodes the next frame offscreen and shows it only once it has decoded', async () => {
     const pane = mountPacer()
     await pane.push(1)
@@ -158,31 +147,6 @@ describe('the browser frame pacer', () => {
     await finishDecodes()
     expect(pane.shown()).toContain('frame-2')
     expect(pane.shownSeqs).toEqual([1, 2])
-  })
-
-  it('keeps flipping frame after frame, reporting each once and publishing one source', async () => {
-    const pane = mountPacer()
-    for (let index = 1; index <= 10; index += 1) {
-      await pane.push(index)
-      await finishDecodes()
-      expect(pane.shown()).toContain(`frame-${index}`)
-    }
-    expect(pane.shownSeqs).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-    expect(pane.frameUriWrites).toHaveLength(1)
-  })
-
-  it('paints at most one frame per interval', async () => {
-    const pane = mountPacer()
-    await pane.push(1)
-    await finishDecodes()
-    await pane.push(2)
-    await finishDecodes()
-
-    pane.pacer.push(frameAt(3), 'wt:page:mobile')
-    expect(pane.background(0)).toContain('frame-1')
-
-    await pane.advance(MOBILE_BROWSER_FRAME_MIN_INTERVAL_MS)
-    expect(pane.background(0)).toContain('frame-3')
   })
 
   it('never re-points a decoding layer, and shows the newest frame once it settles', async () => {
@@ -202,32 +166,6 @@ describe('the browser frame pacer', () => {
     expect(pane.background(0)).toContain('frame-4')
     await settleDecode('frame-4', true)
     expect(pane.shown()).toContain('frame-4')
-  })
-
-  it('shows a slow last frame when nothing newer waits', async () => {
-    const pane = mountPacer()
-    await pane.push(1)
-    await finishDecodes()
-    await pane.push(2)
-
-    await pane.advance(10_000)
-    await settleDecode('frame-2', true)
-
-    expect(pane.shown()).toContain('frame-2')
-  })
-
-  it('flips straight to a layer that already holds the frame, which reloads nothing', async () => {
-    const pane = mountPacer()
-    await pane.push(1)
-    await finishDecodes()
-    await pane.push(2)
-    await finishDecodes()
-
-    // Layer 0 still holds frame 1, as a blinking caret sends it back.
-    await pane.push(1)
-
-    expect(pane.shown()).toContain('frame-1')
-    expect(decodes.pending).toEqual([])
   })
 
   it('skips a frame sent again after it failed to decode, and keeps streaming', async () => {

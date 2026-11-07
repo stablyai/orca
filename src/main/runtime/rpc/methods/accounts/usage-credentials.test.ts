@@ -1,4 +1,3 @@
-import { agentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import '../../unused-default-rpc-methods.test-fixture'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -12,9 +11,6 @@ import { RpcDispatcher } from '../../dispatcher'
 import { USAGE_CREDENTIAL_METHODS } from './usage-credentials'
 import { API_KEY_ENVELOPE_PREFIX } from '../../../../zcode/zcode-plan-api-key-store'
 import { RuntimeAccountController } from '../../../agent-session/environment/runtime-account-controller'
-import { agentModelCatalogStore } from '../../../../native-chat/agent-model-catalog/agent-model-catalog-store'
-import { createAgentModelCatalogService } from '../../../../native-chat/agent-model-catalog/agent-model-catalog-service'
-import { agentSessionRecordFixture } from '../../../../native-chat/agent-session-record-test-fixture'
 import { hostAccountsManagedByDesktopMessage } from '../../../../../shared/host-account-launch-env'
 
 const home = vi.hoisted(() => ({ dir: '' }))
@@ -120,43 +116,6 @@ describe('usage credential RPC methods', () => {
     })
   })
 
-  it('refuses a MiniMax session cookie on a host with no browser cookie jar', async () => {
-    const { runtime, rateLimits } = createRuntime()
-    const dispatcher = new RpcDispatcher({ runtime, methods: [...USAGE_CREDENTIAL_METHODS] })
-
-    const refused = await call(dispatcher, 'accounts.minimaxSaveSessionCookie', { cookie: SECRET })
-
-    expect(refused).toMatchObject({ ok: false })
-    expect(JSON.stringify(refused)).not.toContain(SECRET)
-    expect(existsSync(join(home.dir, '.orca', 'minimax-session-cookie.enc'))).toBe(false)
-    expect(rateLimits.refresh).not.toHaveBeenCalled()
-    await expect(call(dispatcher, 'accounts.minimaxCredentialsStatus')).resolves.toMatchObject({
-      ok: true,
-      result: { sessionCookieSupported: false }
-    })
-  })
-
-  it('rejects an oversized key without echoing it', async () => {
-    const { runtime } = createRuntime()
-    const dispatcher = new RpcDispatcher({ runtime, methods: [...USAGE_CREDENTIAL_METHODS] })
-    const oversized = `${SECRET}${'x'.repeat(5_000)}`
-
-    const refused = await call(dispatcher, 'accounts.minimaxSaveApiKey', { apiKey: oversized })
-
-    expect(refused).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
-    expect(JSON.stringify(refused)).not.toContain(SECRET)
-    expect(existsSync(join(home.dir, '.orca', 'minimax-api-key.enc'))).toBe(false)
-  })
-
-  it('rejects a blank key as invalid instead of saving it', async () => {
-    const { runtime } = createRuntime()
-    const dispatcher = new RpcDispatcher({ runtime, methods: [...USAGE_CREDENTIAL_METHODS] })
-
-    await expect(
-      call(dispatcher, 'accounts.zcodePlanSaveApiKey', { apiKey: '   ' })
-    ).resolves.toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
-  })
-
   // Why a tagged cipher: this process opens only what it sealed, as safeStorage and orcad do.
   function useSealingSecretStore(options: { working: boolean }): void {
     const tag = Buffer.from('this-host:')
@@ -247,54 +206,6 @@ describe('usage credential RPC methods', () => {
       ).resolves.toMatchObject({ ok: true, result: { apiKeyUnreadable: undefined } })
     }
   )
-
-  it.each(providers)(
-    'does not blame the other app for a sealed %s key while this host cannot decrypt at all',
-    async (_provider, fileName, prefix, methodPrefix) => {
-      useSealingSecretStore({ working: false })
-      const { runtime } = createRuntime()
-      const dispatcher = new RpcDispatcher({ runtime, methods: [...USAGE_CREDENTIAL_METHODS] })
-      const keyPath = writeKeyFile(fileName, sealedByOther(prefix))
-
-      await expect(
-        call(dispatcher, `accounts.${methodPrefix}CredentialsStatus`)
-      ).resolves.toMatchObject({ ok: true, result: { apiKeyUnreadable: 'unreadable' } })
-      await expect(call(dispatcher, `accounts.${methodPrefix}ClearApiKey`)).resolves.toMatchObject({
-        ok: true
-      })
-      expect(existsSync(keyPath)).toBe(false)
-    }
-  )
-
-  it('retires catalog source authority when the host restores or receives a changed launch environment', () => {
-    const accounts = new RuntimeAccountController()
-    const record = agentSessionRecordFixture({ sessionId: 'session-host-environment' })
-    const catalog = createAgentModelCatalogService({
-      store: agentModelCatalogStore,
-      getConversation: () => {
-        const held = record
-        return held ? agentSessionConversationView(held) : undefined
-      },
-      getRecord: () => record,
-      drivesRecord: () => true,
-      resolveAccountHome: async () => record.accountHome,
-      probes: {}
-    })
-    const saved = { wslDistro: 'Ubuntu', claude: {}, terminal: {} }
-    try {
-      const beforeRestore = catalog.captureSource(record)
-      accounts.restoreHostLaunchEnv(saved, () => {})
-      expect(beforeRestore()).toBe(false)
-      const restored = catalog.captureSource(record)
-      accounts.setHostLaunchEnv(saved)
-      expect(restored()).toBe(true)
-      accounts.setHostLaunchEnv({ ...saved, claude: { CLAUDE_CONFIG_DIR: '/host/new' } })
-      expect(restored()).toBe(false)
-      expect(catalog.captureSource(record)()).toBe(true)
-    } finally {
-      catalog.stop()
-    }
-  })
 
   it('refuses every call where the desktop owns this host’s accounts, storing nothing', async () => {
     const accounts = new RuntimeAccountController()

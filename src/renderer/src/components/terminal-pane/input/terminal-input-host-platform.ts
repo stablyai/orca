@@ -6,7 +6,7 @@ import {
   getExecutionHostIdForWorktree,
   runtimeEnvironmentIdOrLocalUnlessTwin
 } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
+import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
 import type { AppState } from '@/store/types'
 import type { PtyTransport } from '../pty-transport/pty-transport-types'
 import { isWslShellOverride } from './paste/terminal-paste-runtime'

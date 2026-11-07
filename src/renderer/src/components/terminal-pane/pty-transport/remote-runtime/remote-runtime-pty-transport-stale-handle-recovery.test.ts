@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createRemoteRuntimeTransportMocks,
   readyHostSessionInventoryResponse
-} from '../../remote-runtime-pty-transport-test-harness'
-import type { MultiplexSubscriptionCallbacks } from '../../remote-runtime-pty-transport-stream-fixtures'
+} from '../remote/remote-runtime-pty-transport-test-harness'
+import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pty-transport-stream-fixtures'
 import './recovery/remote-runtime-pty-recovery-state'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './recovery/remote-runtime-pty-recovery-limits'
 
@@ -375,7 +375,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(transport.getPtyId()).toBe('remote:env-1@@terminal-old')
       expect(transport.isConnected()).toBe(false)
 
-      const handleEvents = await import('../../../../runtime/web-session-terminal-handle-events')
+      const handleEvents =
+        await import('../../../../runtime/web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events')
       handleEvents.queueAcceptedWebSessionTerminalSnapshot(
         {
           worktree: 'wt-1',

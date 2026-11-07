@@ -1,7 +1,7 @@
 import { useQuickOpenInteraction } from './use-quick-open-interaction'
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
-import { useActiveWorktree } from '@/store/selectors'
+import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
 import {
   CommandDialog,

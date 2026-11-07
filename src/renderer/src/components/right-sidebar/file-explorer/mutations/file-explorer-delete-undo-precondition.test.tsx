@@ -3,7 +3,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import {
   FILE_ALREADY_EXISTS_DIFFERENTLY_MESSAGE,
   missingOrIdenticalPrecondition
@@ -29,11 +29,11 @@ vi.mock('@/components/editor/autosave/editor-autosave', () => ({
   requestEditorFileSave: vi.fn().mockResolvedValue(undefined),
   requestEditorSaveQuiesce: vi.fn().mockResolvedValue(undefined)
 }))
-vi.mock('@/runtime/runtime-file-mutation-client', () => ({
+vi.mock('@/runtime/files/mutations/runtime-file-mutation-client', () => ({
   deleteRuntimePath: mocks.remove,
   writeRuntimeFile: mocks.write
 }))
-vi.mock('@/runtime/runtime-file-read-client', () => ({
+vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({
   readRuntimeFileContent: vi.fn().mockResolvedValue({ content: 'deleted body', isBinary: false })
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))

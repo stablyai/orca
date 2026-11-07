@@ -1,12 +1,9 @@
 import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
-import {
-  TEST_REPO,
-  makeTabGroup,
-  makeUnifiedTab,
-  makeWorktree
-} from '@/store/slices/store-test-helpers'
+import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import {
   createBrowserLinkTestStore,
   WORKSPACE,
@@ -24,7 +21,7 @@ import { openResolvedHtmlFileInBrowser } from '@/components/terminal-pane/links/
 import {
   detectedListingFixture,
   terminalTabFixture
-} from '@/components/native-chat/native-chat-workspace-test-fixtures'
+} from '@/components/native-chat/surfaces/integration/native-chat-workspace-test-fixtures'
 import { openPlannedFileBrowserLink } from './file-preview-link-open'
 
 const mocks = vi.hoisted(() => ({ getState: vi.fn(), mint: vi.fn(), revoke: vi.fn() }))

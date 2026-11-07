@@ -5,12 +5,13 @@ import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { AppState } from '../store/types'
-import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'
+import { createTestStore, seedStore } from '../store/testing/app-store-test-fixture'
+import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
 import {
   markRendererOwnedAgentStatusWrite,
   registerRendererOwnedAgentStatusPane,
   resetRendererOwnedAgentStatusPanesForTests
-} from '../components/terminal-pane/renderer-owned-agent-status-registry'
+} from '../components/terminal-pane/agent-status/renderer-owned-agent-status-registry'
 import { applyFreshWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 import { buildWorktreeAgentRows } from '../components/sidebar/workspace-card/activity/worktree-agent-rows'

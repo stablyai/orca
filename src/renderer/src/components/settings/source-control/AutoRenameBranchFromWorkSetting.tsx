@@ -139,7 +139,7 @@ export function AutoRenameBranchFromWorkSetting({
         'slug'
       ]}
       forceVisible={forceVisible || branchNamePromptDirty || advancedSearchOpen}
-      className="space-y-3 py-2"
+      className="space-y-3 py-3"
     >
       <div ref={setSettingRootRef} className="flex items-center justify-between gap-4">
         <div className="space-y-0.5">

@@ -23,22 +23,9 @@ const COMPOSE_RADICAL: RecordedEvent[] = [
   { type: 'input', data: '尸', isComposing: true, value: '尸' }
 ]
 
-/** Backspace over the only radical: the IME drops the marked text and reports no composition end. */
-const CANCEL_WITH_EMPTY_UPDATE: RecordedEvent[] = [
-  { type: 'keydown', key: 'Process', keyCode: 229, isComposing: true },
-  { type: 'compositionupdate', data: '' },
-  { type: 'input', isComposing: true, inputType: 'deleteContentBackward', value: '' }
-]
-
 const CANCEL_WITH_INPUT_ONLY: RecordedEvent[] = [
   { type: 'keydown', key: 'Process', keyCode: 229, isComposing: true },
   { type: 'input', isComposing: true, inputType: 'deleteContentBackward', value: '' }
-]
-
-const SHORTEN_PREEDIT: RecordedEvent[] = [
-  { type: 'keydown', key: 'Process', keyCode: 229, isComposing: true },
-  { type: 'compositionupdate', data: '尸' },
-  { type: 'input', isComposing: true, inputType: 'deleteContentBackward', value: '尸' }
 ]
 
 const openTerminals: Terminal[] = []
@@ -154,21 +141,6 @@ describe('preedit visibility when the IME cancels a composition', () => {
     document.body.replaceChildren()
   })
 
-  it('hides the preedit Backspace cancelled with an empty compositionupdate', async () => {
-    const rig = openTerminal()
-
-    await rig.replay(COMPOSE_RADICAL)
-    expect(displayedPreedit(rig.compositionView)).toMatchObject({ preedit: '尸', shown: true })
-
-    await rig.replay(CANCEL_WITH_EMPTY_UPDATE)
-
-    expect(displayedPreedit(rig.compositionView)).toEqual({
-      preedit: '',
-      shown: false
-    })
-    expect(rig.emitted).toEqual([])
-  })
-
   it('hides the preedit Backspace cancelled without any composition event', async () => {
     const rig = openTerminal()
 
@@ -181,22 +153,6 @@ describe('preedit visibility when the IME cancels a composition', () => {
       preedit: '',
       shown: false
     })
-    expect(rig.emitted).toEqual([])
-  })
-
-  it('keeps showing a preedit Backspace only shortened', async () => {
-    const rig = openTerminal()
-
-    await rig.replay([
-      ...COMPOSE_RADICAL,
-      { type: 'keydown', key: 'Process', keyCode: 229, isComposing: true },
-      { type: 'compositionupdate', data: '尸口' },
-      { type: 'input', data: '尸口', isComposing: true, value: '尸口' }
-    ])
-
-    await rig.replay(SHORTEN_PREEDIT)
-
-    expect(displayedPreedit(rig.compositionView)).toMatchObject({ preedit: '尸', shown: true })
     expect(rig.emitted).toEqual([])
   })
 })

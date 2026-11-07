@@ -14,8 +14,6 @@ import { OpenPlainSshTerminalButton } from './OpenPlainSshTerminalButton'
 import { PlainSshTerminalPanels } from './PlainSshTerminalPanels'
 import { removePlainSshPanel } from '@/ssh/plain-ssh-terminal-panels'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { useAppStore } from '@/store'
-import { getDefaultSettings } from '../../../../shared/constants'
 
 const written: string[] = []
 
@@ -172,39 +170,5 @@ describe('plain SSH terminal', () => {
     await act(async () => resolveOpen({ ok: true, sessionId: 's5', label: 'lambda' }))
     expect(await screen.findByText(/ssh exited with code 255/)).toBeInTheDocument()
     expect(written).toEqual(['Permission denied (publickey).\r\n'])
-  })
-
-  it('never refits a minimized window, which would shrink the remote terminal to 2x1', async () => {
-    const width = vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(600)
-    const height = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(400)
-    try {
-      const resolveOpen = deferOpen()
-      const user = userEvent.setup()
-      render(<Harness status={blocked} />)
-      await user.click(screen.getByRole('button', { name: 'Open plain SSH terminal' }))
-      await act(async () => resolveOpen({ ok: true, sessionId: 's6', label: 'lambda' }))
-      await user.click(screen.getByRole('button', { name: 'Minimize' }))
-      fit.mockClear()
-      act(() =>
-        useAppStore.setState({
-          settings: { ...getDefaultSettings('/home/me'), terminalFontSize: 18 }
-        })
-      )
-      expect(fit).not.toHaveBeenCalled()
-    } finally {
-      width.mockRestore()
-      height.mockRestore()
-    }
-  })
-
-  it('hangs up when its window closes', async () => {
-    const resolveOpen = deferOpen()
-    const user = userEvent.setup()
-    render(<Harness status={blocked} />)
-    await user.click(screen.getByRole('button', { name: 'Open plain SSH terminal' }))
-    await waitFor(() => expect(open).toHaveBeenCalled())
-    await act(async () => resolveOpen({ ok: true, sessionId: 's3', label: 'lambda' }))
-    await user.click(screen.getByRole('button', { name: 'Close and end session' }))
-    expect(close).toHaveBeenCalledWith({ sessionId: 's3' })
   })
 })

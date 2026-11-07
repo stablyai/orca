@@ -100,6 +100,11 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     }
   }
 
+  /** A reloading graph keeps main-created tabs; only an unavailable one cannot hold a run terminal. */
+  canOpenRunTerminals(): boolean {
+    return this.graphStatus !== 'unavailable'
+  }
+
   assertGraphReady(): void {
     if (this.graphStatus !== 'ready') {
       throw new Error('runtime_unavailable')

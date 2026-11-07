@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { requestTerminalPaneRecovery } from '../../terminal-pane-recovery'
+import { requestTerminalPaneRecovery } from '../../render-health/recovery/terminal-pane-recovery'
 import { settleSpawnThatLeftPaneUnbound } from './unbound-pane-spawn-recovery'
 
-vi.mock('../../terminal-pane-recovery', () => ({
+vi.mock('../../render-health/recovery/terminal-pane-recovery', () => ({
   requestTerminalPaneRecovery: vi.fn()
 }))
 

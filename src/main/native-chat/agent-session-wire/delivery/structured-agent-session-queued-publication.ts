@@ -135,8 +135,12 @@ export function readQueuePublication(
   const input = gate(journal)
   const pause =
     resumable &&
-    !queuePauseLiftOnItsWay(resumable, journal.inputOrder.sendingSubmissions(), (submission) =>
-      input.work.owesSend(submission)
+    !queuePauseLiftOnItsWay(
+      resumable,
+      journal.inputOrder.sendingSubmissions(),
+      (submission) =>
+        input.work.owesSend(submission) &&
+        (resumable.reason !== 'stopped' || journal.inputOrder.personalSubmission(submission))
     )
       ? resumable
       : null

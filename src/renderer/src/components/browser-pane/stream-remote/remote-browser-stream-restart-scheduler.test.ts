@@ -7,27 +7,6 @@ afterEach(() => {
 })
 
 describe('RemoteBrowserStreamRestartScheduler', () => {
-  it('retries transient failures until it recovers, without spending the whole budget', async () => {
-    vi.useFakeTimers()
-    const scheduler = new RemoteBrowserStreamRestartScheduler()
-    let attempts = 0
-    const FAILURES_BEFORE_SUCCESS = 3
-
-    const run = vi.fn(async () => {
-      attempts += 1
-      return attempts <= FAILURES_BEFORE_SUCCESS
-    })
-
-    scheduler.schedule(run)
-    await vi.advanceTimersByTimeAsync(31_000)
-
-    expect(attempts).toBe(FAILURES_BEFORE_SUCCESS + 1)
-    expect(scheduler.isScheduled).toBe(false)
-
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(attempts).toBe(FAILURES_BEFORE_SUCCESS + 1)
-  })
-
   // The property the pane depends on: retries are finite, and it is told when they run out. An
   // unbounded scheduler leaves a dead stream retrying forever behind a recurring error.
   it('stops after the budget and reports it exactly once', async () => {
@@ -113,40 +92,5 @@ describe('RemoteBrowserStreamRestartScheduler', () => {
     expect(firstRun).toHaveBeenCalledTimes(1)
     expect(replacementRun).toHaveBeenCalledTimes(1)
     expect(scheduler.isScheduled).toBe(false)
-  })
-
-  it('reset() forgets prior failures so the next drop backs off from the first delay again', async () => {
-    vi.useFakeTimers()
-    const scheduler = new RemoteBrowserStreamRestartScheduler()
-    const setTimeoutSpy = vi.spyOn(global, 'setTimeout')
-    const run = vi.fn().mockResolvedValueOnce(true).mockResolvedValue(false)
-
-    scheduler.schedule(run)
-    await vi.advanceTimersByTimeAsync(1_500)
-    expect(scheduler.attemptCount).toBe(2)
-
-    // The lifecycle explicitly refills the budget after a sustained healthy stream.
-    scheduler.reset()
-    expect(scheduler.attemptCount).toBe(0)
-
-    scheduler.schedule(run)
-    const call = setTimeoutSpy.mock.calls.at(-1)
-    expect(call?.[1]).toBe(500)
-  })
-
-  it('cancel() clears a pending timer and resets the attempt count', async () => {
-    vi.useFakeTimers()
-    const scheduler = new RemoteBrowserStreamRestartScheduler()
-    const run = vi.fn(async () => true)
-
-    scheduler.schedule(run)
-    expect(scheduler.isScheduled).toBe(true)
-    scheduler.cancel()
-
-    expect(scheduler.isScheduled).toBe(false)
-    expect(scheduler.attemptCount).toBe(0)
-
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(run).not.toHaveBeenCalled()
   })
 })

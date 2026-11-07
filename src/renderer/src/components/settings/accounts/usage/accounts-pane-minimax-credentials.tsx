@@ -145,7 +145,7 @@ export function MiniMaxCredentials({
           'Paste your MiniMax session cookie for local rate-limit fetching.'
         )}
         keywords={['minimax', 'cookie', 'session', 'rate limit', 'status bar']}
-        className="space-y-2"
+        className="space-y-2 py-3"
       >
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
@@ -277,7 +277,7 @@ export function MiniMaxCredentials({
               )
         }
         keywords={['minimax', 'api', 'key', 'cn', 'china', 'bearer', 'rate limit']}
-        className="space-y-2"
+        className="space-y-2 py-3"
       >
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">

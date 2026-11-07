@@ -4,8 +4,10 @@ import {
   notifyManager,
   queryOptions,
   skipToken,
+  useQueries,
   useQuery,
   type QueryClient,
+  type StaleTimeFunction,
   type UseQueryOptions,
   type UseQueryResult
 } from '@tanstack/react-query'
@@ -28,7 +30,7 @@ export type HostQuery<TInput extends HostQueryParams, TData> = {
     input: TInput,
     previous: TData | undefined
   ) => Promise<TData>
-  staleTime?: number
+  staleTime?: StaleTimeFunction<TData, Error, TData, HostQueryKey>
   gcTime?: number
   // Only for families the desktop sends no change signal for.
   refetchOnWindowFocus?: boolean
@@ -85,6 +87,33 @@ export async function readHostQueryLive<TInput extends HostQueryParams, TData>(
   return data
 }
 
+// A read ahead of the user: skipped while the key holds current data, joins a read already out.
+export function prefetchHostQuery<TInput extends HostQueryParams, TData>(
+  queryClient: QueryClient,
+  query: HostQuery<TInput, TData>,
+  host: { hostId: string; client: RpcClient },
+  target: HostQueryTarget,
+  input: TInput
+): Promise<void> {
+  return queryClient.prefetchQuery({
+    ...hostQueryOptions(query, host.client, host.hostId, target, input),
+    staleTime: Infinity
+  })
+}
+
+// Without a client the observer still reads the cached entry, but never fetches.
+function observerOptions<TInput extends HostQueryParams, TData>(
+  query: HostQuery<TInput, TData>,
+  client: RpcClient | null,
+  hostId: string,
+  target: HostQueryTarget,
+  input: TInput
+): UseQueryOptions<TData, Error, TData, HostQueryKey> {
+  return client
+    ? hostQueryOptions(query, client, hostId, target, input)
+    : { queryKey: hostQueryKey(hostId, query.family, target, input), queryFn: skipToken }
+}
+
 export function useHostQuery<TInput extends HostQueryParams, TData>(
   query: HostQuery<TInput, TData>,
   host: { hostId: string; client: RpcClient | null },
@@ -98,11 +127,26 @@ export function useHostQuery<TInput extends HostQueryParams, TData>(
   // Same options object while nothing changed (target and input count by value), so TanStack's per-render setOptions is a no-op.
   const keyHash = hashKey([target, input])
   const queryOptions = useMemo((): UseQueryOptions<TData, Error, TData, HostQueryKey> => {
-    if (!client) {
-      return { queryKey: hostQueryKey(hostId, query.family, target, input), queryFn: skipToken }
-    }
-    const fetchOptions = hostQueryOptions(query, client, hostId, target, input)
-    return enabled ? fetchOptions : { ...fetchOptions, queryFn: skipToken }
+    const observer = observerOptions(query, client, hostId, target, input)
+    return enabled ? observer : { ...observer, queryFn: skipToken }
   }, [query, client, hostId, keyHash, enabled])
   return useQuery({ ...queryOptions, subscribed: options?.subscribed })
+}
+
+// One query per input (e.g. one per open folder), combined into one value; keep `combine` stable so the value is memoized.
+export function useHostQueries<TInput extends HostQueryParams, TData, TCombined>(
+  query: HostQuery<TInput, TData>,
+  host: { hostId: string; client: RpcClient | null },
+  target: HostQueryTarget,
+  inputs: readonly TInput[],
+  combine: (results: UseQueryResult<TData>[]) => TCombined
+): TCombined {
+  const { hostId, client } = host
+  useHostConnectionInvalidation(hostId, client)
+  const keyHash = hashKey([target, inputs])
+  const queries = useMemo(
+    () => inputs.map((input) => observerOptions(query, client, hostId, target, input)),
+    [query, client, hostId, keyHash]
+  )
+  return useQueries({ queries, combine })
 }

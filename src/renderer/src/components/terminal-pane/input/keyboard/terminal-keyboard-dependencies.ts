@@ -7,7 +7,7 @@ import type {
   KeybindingOverrides,
   TerminalShortcutPolicy
 } from '../../../../../../shared/keybindings/types'
-import type { PaneCwdMap } from '../../resolve-split-cwd'
+import type { PaneCwdMap } from '../../layout/split/resolve-split-cwd'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import type { SearchState } from './terminal-keyboard-shortcut-matching'
 

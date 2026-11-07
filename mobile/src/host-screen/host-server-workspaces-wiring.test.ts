@@ -2,6 +2,7 @@ import { createElement, useState } from 'react'
 
 import { normalizeVisibleExecutionHostIds } from '../../../src/shared/execution-host'
 import { act, create } from 'react-test-renderer'
+import { documentQueryClient } from '../test-support/rpc-recording/hook-mount'
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
@@ -169,7 +170,7 @@ async function mountScreen(first: RpcClient, hostCapabilities: string[]): Promis
     return null
   }
   await act(async () => {
-    create(createElement(Probe))
+    create(documentQueryClient().wrap(createElement(Probe)))
   })
   const poll = async (): Promise<void> => {
     await act(async () => {

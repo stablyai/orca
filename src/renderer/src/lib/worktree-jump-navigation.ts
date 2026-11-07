@@ -7,7 +7,7 @@ import { worktreePassesSidebarFilters } from '@/components/sidebar/worktree-list
 import { sidebarHasActiveFilters } from '@/components/sidebar/worktree-list/controls/sidebar-filter-actions'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { normalizeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 function wasHiddenBySidebarFilters(worktreeId: string, executionHostId?: ExecutionHostId): boolean {
   const state = useAppStore.getState()

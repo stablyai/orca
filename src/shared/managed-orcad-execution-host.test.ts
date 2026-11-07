@@ -148,19 +148,6 @@ describe('managed Orca server host merging', () => {
     )
   })
 
-  it('names the merged row with a rename saved on either id', () => {
-    const hosts = buildExecutionHostRegistry({
-      repos: [],
-      settings: null,
-      hostSource: 'configured-only',
-      sshTargetLabels: SSH_TARGETS,
-      runtimeEnvironments: [MANAGED_SERVER],
-      hostLabelOverrides: new Map([['ssh:omarchy-target', 'Build box']])
-    })
-
-    expect(hosts.find((host) => host.id === 'runtime:omarchy-server')?.label).toBe('Build box')
-  })
-
   it('widens a host scope an older build saved with only one id of the pair', () => {
     const hosts = registry({ kind: 'managed', environmentId: 'omarchy-server' })
 

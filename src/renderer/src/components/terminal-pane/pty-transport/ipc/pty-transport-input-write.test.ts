@@ -19,7 +19,7 @@ import {
   installIpcPtyWindow,
   restorePtySpecWindow,
   type PtyExitPayload
-} from '../../pty-transport-test-harness'
+} from './pty-transport-test-harness'
 
 describe('createIpcPtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window

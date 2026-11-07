@@ -10,7 +10,7 @@ import {
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
 import { RepoIconGlyph, getRepoLucideIconOptions } from '../../../repo/repo-icon'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId
@@ -23,7 +23,7 @@ import {
   resolveRepositoryGitHubAvatar,
   resolveRepositoryUpstreamLive
 } from '../../../../runtime/repository-github/repository-icon-github'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function RepositoryIconPicker({
   repo,
@@ -32,6 +32,7 @@ export function RepositoryIconPicker({
   repo: Repo
   updateRepo: (repoId: string, updates: Partial<Repo>) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [loadingGitHub, setLoadingGitHub] = useState(false)
   const [resetting, setResetting] = useState(false)
   const mountedRef = useMountedRef()
@@ -90,7 +91,7 @@ export function RepositoryIconPicker({
       }
       if (!resolution.repoIcon) {
         toast.error(
-          translate(
+          t(
             'auto.components.settings.RepositoryIconPicker.f79972271a',
             'No GitHub remote found for this repo.'
           )
@@ -104,7 +105,7 @@ export function RepositoryIconPicker({
     } catch {
       if (mountedRef.current) {
         toast.error(
-          translate(
+          t(
             'auto.components.settings.RepositoryIconPicker.d71df44587',
             'Failed to resolve the GitHub repo.'
           )
@@ -181,7 +182,7 @@ export function RepositoryIconPicker({
         />
         <div className="min-w-0 flex-1">
           <Label className="text-sm font-semibold">
-            {translate('auto.components.settings.RepositoryIconPicker.4e2a14f967', 'Repo Icon')}
+            {t('auto.components.settings.RepositoryIconPicker.4e2a14f967', 'Repo Icon')}
           </Label>
           <div className="mt-1 truncate text-xs text-muted-foreground">{currentIconLabel}</div>
         </div>
@@ -194,7 +195,7 @@ export function RepositoryIconPicker({
           onClick={() => void handleResetToDefault()}
         >
           <RotateCcw className="size-3.5" />
-          {translate('auto.components.settings.RepositoryIconPicker.549d126081', 'Reset')}
+          {t('auto.components.settings.RepositoryIconPicker.549d126081', 'Reset')}
         </Button>
       </div>
 

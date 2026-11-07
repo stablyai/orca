@@ -58,7 +58,11 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     <>
       <div
         ref={setSourceControlRoot}
-        className="relative flex h-full flex-col overflow-hidden"
+        className={
+          model.scope
+            ? 'relative flex flex-col overflow-hidden'
+            : 'relative flex h-full flex-col overflow-hidden'
+        }
         onKeyDown={handleSourceControlKeyDown}
       >
         <SourceControlHeaderToolbar
