@@ -112,6 +112,9 @@ describe('rate-limit probe and the gh semaphore', () => {
     for (; held > 0; held--) {
       release()
     }
+    for (const bucket of ['core', 'search', 'graphql'] as GhRateLimitBucket[]) {
+      clearGhRateLimitBlock(bucket)
+    }
     _resetRateLimitCache()
   })
 
@@ -139,28 +142,50 @@ describe('rate-limit probe and the gh semaphore', () => {
 
   // A 403 forces a probe; joining one that started before the 403 would clear the new block.
   it('answers a forced probe with quota read after the call', async () => {
-    let finishEarlierProbe: (value: { stdout: string }) => void = () => undefined
-    ghExecFileAsyncMock
-      .mockReturnValueOnce(
-        new Promise((resolve) => {
-          finishEarlierProbe = resolve
-        })
-      )
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify({
-          resources: { core: { limit: 5000, remaining: 0, reset: 2_000_000_000 } }
-        })
-      })
-
-    const earlier = getRateLimit()
-    const forced = getRateLimit({ force: true })
-    finishEarlierProbe({
+    const coreResponse = (remaining: number) => ({
       stdout: JSON.stringify({
-        resources: { core: { limit: 5000, remaining: 4000, reset: 2_000_000_000 } }
+        resources: { core: { limit: 5000, remaining, reset: 2_000_000_000 } }
       })
     })
+    const first = Promise.withResolvers<{ stdout: string }>()
+    const firstStarted = Promise.withResolvers<void>()
+    let afterBlock: Promise<unknown> | undefined
+    let phase: 'first' | 'second' | 'exhausted' = 'first'
+    ghExecFileAsyncMock.mockImplementation(() => {
+      if (phase === 'first') {
+        phase = 'second'
+        firstStarted.resolve()
+        return first.promise
+      }
+      if (phase === 'second') {
+        phase = 'exhausted'
+        // This read happens before the 403 and the forced call that follows it.
+        const observed = coreResponse(4000)
+        notifyGhPrimaryRateLimit('core')
+        afterBlock = getRateLimit({ force: true })
+        return Promise.resolve(observed)
+      }
+      return Promise.resolve(coreResponse(0))
+    })
+    for (let i = 0; i < 4; i++) {
+      await acquire()
+      held++
+    }
+
+    const earlier = getRateLimit()
+    const sharer = getRateLimit()
+    const forcedDuringEarlier = getRateLimit({ force: true })
+    await firstStarted.promise
+    // Promise ordering delivers this forced call while the first probe is settling.
+    const forcedDuringSettlement = first.promise
+      .then(() => undefined)
+      .then(() => undefined)
+      .then(() => getRateLimit({ force: true }))
+    first.resolve(coreResponse(4000))
 
     expect(await earlier).toMatchObject({ ok: true, snapshot: { core: { remaining: 4000 } } })
-    expect(await forced).toMatchObject({ ok: true, snapshot: { core: { remaining: 0 } } })
+    expect(await sharer).toMatchObject({ ok: true, snapshot: { core: { remaining: 4000 } } })
+    await Promise.all([forcedDuringEarlier, forcedDuringSettlement])
+    expect(await afterBlock).toMatchObject({ ok: true, snapshot: { core: { remaining: 0 } } })
   })
 })

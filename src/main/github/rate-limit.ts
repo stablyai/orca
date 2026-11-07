@@ -74,6 +74,8 @@ function parseBucket(
 export function _resetRateLimitCache(): void {
   cached = null
   probeFailure = null
+  probeInFlight = null
+  forcedFollowUp = null
   scopeProbeFailureAtMs.clear()
   scopeRefinementInFlight.clear()
 }
@@ -265,14 +267,16 @@ registerGhRateLimitResetProbe((_bucket, scope) => refineBreakerForScope(scope))
 
 // Share cold probes; TTL caching cannot dedupe calls before the first result.
 let probeInFlight: Promise<GetRateLimitResult> | null = null
-// Forced callers must see quota read after their call, so they share one probe queued behind the running one.
-let forcedFollowUp: Promise<GetRateLimitResult> | null = null
+// Forced callers must see quota read after their call, so they share one probe that starts when the running one settles.
+let forcedFollowUp: PromiseWithResolvers<GetRateLimitResult> | null = null
 
 function startProbe(): Promise<GetRateLimitResult> {
-  const probe: Promise<GetRateLimitResult> = fetchRateLimitSnapshot().finally(() => {
-    if (probeInFlight === probe) {
-      probeInFlight = null
-    }
+  const probe = fetchRateLimitSnapshot().finally(() => {
+    // Hand off synchronously so no caller can join a follow-up after its probe has started.
+    const next = forcedFollowUp
+    forcedFollowUp = null
+    probeInFlight = null
+    next?.resolve(startProbe())
   })
   probeInFlight = probe
   return probe
@@ -291,12 +295,8 @@ export async function getRateLimit(options?: { force?: boolean }): Promise<GetRa
   if (!options?.force) {
     return probeInFlight
   }
-  forcedFollowUp ??= probeInFlight.then(() => {
-    forcedFollowUp = null
-    // Any probe running now started after this forced call.
-    return probeInFlight ?? startProbe()
-  })
-  return forcedFollowUp
+  forcedFollowUp ??= Promise.withResolvers<GetRateLimitResult>()
+  return forcedFollowUp.promise
 }
 
 async function fetchRateLimitSnapshot(): Promise<GetRateLimitResult> {
