@@ -705,6 +705,9 @@ importers:
       '@transcribe-cpp/darwin-arm64-metal':
         specifier: 0.4.1
         version: 0.4.1
+      '@transcribe-cpp/darwin-x64-cpu':
+        specifier: 0.4.1
+        version: 0.4.1
       '@transcribe-cpp/linux-arm64-cpu-vulkan':
         specifier: 0.4.1
         version: 0.4.1

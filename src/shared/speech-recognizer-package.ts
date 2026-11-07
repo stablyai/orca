@@ -14,7 +14,7 @@ export function speechRecognizerPackageName(platform: string, arch: string): str
     : `sherpa-onnx-${platform}-${arch}`
 }
 
-// Intel Macs stay on sherpa: transcribe-cpp's darwin-x64 build is SSE-only with no GPU. Packaging reads the same table.
+// Packaging reads the same table. Intel Macs run transcribe-cpp on the CPU (its x64 build has no GPU backend).
 const TRANSCRIBE_CPP_PACKAGES: Record<string, string> = transcribeCppPackages
 
 /** Whether `nodeModulesDir` holds a loadable copy of `engine` for this host. */

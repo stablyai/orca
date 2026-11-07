@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { compactIpcErrorMessage } from '@/lib/ipc-error'
 import { hostDictationErrorMessage } from '../../../../shared/host-dictation-error-messages'
+import { SPEECH_MODEL_NEEDS_UPDATE_ERROR } from '../../../../shared/speech-model-retirement'
 
 function openVoiceSettingsAction(): { label: string; onClick: () => void } {
   return {
@@ -75,6 +76,14 @@ export function showDictationStartErrorToast(message: string): void {
         'auto.components.dictation.DictationController.2d5b9fabf9',
         'Microphone access denied. Grant access in system settings, then restart Orca.'
       )
+    )
+  } else if (message.includes(SPEECH_MODEL_NEEDS_UPDATE_ERROR)) {
+    toast(
+      translate(
+        'auto.components.dictation.DictationController.modelNeedsUpdate',
+        'Your speech model needs an update to keep working. Update it to the faster version in Settings > Voice.'
+      ),
+      { action: openVoiceSettingsAction() }
     )
   } else if (message.includes('not ready') || detail.startsWith('voice_model_not_ready')) {
     toast(
