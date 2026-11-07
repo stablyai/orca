@@ -74,7 +74,7 @@ export type InternalTextGenerationResult =
     } & TextGenerationFailureFields)
 
 export type GenerateBranchNameResult =
-  | { success: true; slug: string; agentLabel?: string }
+  | { success: true; slug: string; displayName?: string; agentLabel?: string }
   | {
       success: false
       error: string

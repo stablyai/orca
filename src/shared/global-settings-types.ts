@@ -43,6 +43,7 @@ import type {
   TaskViewPresetId
 } from './ui-chrome-types'
 import type { WorktreeVisibilityDefaults } from './repo-types'
+import type { WorkspaceTitleLanguage } from './workspace-title-language'
 
 export type { WorktreeVisibilityDefaults } from './repo-types'
 
@@ -62,6 +63,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   localBaseRefSuggestionDismissed: boolean
   /** Rename generated creature branches from first-prompt work; users can disable this in global Git settings. */
   autoRenameBranchFromWork: boolean
+  /** Absent follows the branch; localized titles are generated separately from the Git slug. */
+  workspaceTitleLanguage?: WorkspaceTitleLanguage
   /** One-shot migration guard for the default-on rollout. Existing profiles
    *  without the guard are flipped on once; later explicit opt-outs stick. */
   autoRenameBranchFromWorkDefaultedOn?: boolean

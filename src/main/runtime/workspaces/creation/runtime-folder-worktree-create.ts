@@ -1,3 +1,4 @@
+import { shouldAutoRenameWorkspaceTitle } from '../../../../shared/workspace-title-language'
 import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { readableWslDistroHoldText } from '../../../../shared/wsl-distro-stopped-hold'
 import { RuntimeLineageError } from '../lineage/runtime-worktree-lineage-resolution'
@@ -97,6 +98,7 @@ export async function createRuntimeFolderWorktree(args: {
     ...(displayNameRequest.kind === 'user' && resolvedFolderDisplayName
       ? { displayNameIsPinned: true }
       : {}),
+    ...(shouldAutoRenameWorkspaceTitle(settings) ? { pendingFirstAgentMessageRename: true } : {}),
     lastActivityAt: now,
     createdAt: now,
     orcaCreatedAt: now,

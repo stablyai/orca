@@ -11,7 +11,8 @@ import {
 } from '../../shared/source-control/ai/generation/pull-request-generation'
 import {
   buildBranchNamePrompt,
-  sanitizeBranchSlug,
+  buildLocalizedWorkspaceNamePrompt,
+  parseGeneratedBranchName,
   type BranchNameWorkContext
 } from '../../shared/source-control/ai/naming/branch-name-from-work'
 import {
@@ -216,7 +217,7 @@ export async function generateBranchName(input: {
 }): Promise<GenerateBranchNameResult> {
   const { context, params } = input
   const basePrompt = buildBranchNamePrompt(context)
-  const prompt =
+  const branchPrompt =
     params.commandInputTemplate !== undefined
       ? renderSourceControlActionCommandTemplate(params.commandInputTemplate, {
           basePrompt,
@@ -224,6 +225,9 @@ export async function generateBranchName(input: {
           assistantMessage: context.assistantMessage ?? ''
         })
       : buildBranchNamePrompt(context, params.customPrompt ?? '')
+  const prompt = context.workspaceTitleLanguage
+    ? buildLocalizedWorkspaceNamePrompt(branchPrompt, context.workspaceTitleLanguage)
+    : branchPrompt
   const result = await runGenerationRequest({
     ...input,
     prompt,
@@ -232,18 +236,28 @@ export async function generateBranchName(input: {
   if (!result.success) {
     return result
   }
-  const slug = sanitizeBranchSlug(result.rawOutput)
-  return slug
-    ? { success: true, slug, agentLabel: result.agentLabel }
-    : {
-        success: false,
-        error: 'Generated branch name was empty after sanitization.',
-        failureOutput:
-          captureAgentGenerationFailureOutput(
-            result.agentLabel ?? params.agentId,
-            0,
-            result.rawOutput,
-            ''
-          ) ?? undefined
-      }
+  let error = 'Generated branch name was empty after sanitization.'
+  try {
+    const name = parseGeneratedBranchName(
+      result.rawOutput,
+      Boolean(context.workspaceTitleLanguage),
+      context.workspaceTitleOnly
+    )
+    if (name.slug || (context.workspaceTitleOnly && name.displayName)) {
+      return { success: true, ...name, agentLabel: result.agentLabel }
+    }
+  } catch {
+    error = 'Generated workspace name must be a JSON object with branch and title fields.'
+  }
+  return {
+    success: false,
+    error,
+    failureOutput:
+      captureAgentGenerationFailureOutput(
+        result.agentLabel ?? params.agentId,
+        0,
+        result.rawOutput,
+        ''
+      ) ?? undefined
+  }
 }

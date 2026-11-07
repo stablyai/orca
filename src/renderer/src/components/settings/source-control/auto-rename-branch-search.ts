@@ -3,6 +3,23 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
+export const getWorkspaceTitleLanguageSearchEntry = createLocalizedCatalog(
+  (): SettingsSearchEntry => ({
+    title: translate(
+      'settings.sourceControl.workspaceTitleLanguage.title',
+      'Workspace title language'
+    ),
+    description: translate(
+      'settings.sourceControl.workspaceTitleLanguage.description',
+      'Choose the language for new automatic workspace titles. Git branch names stay in English. Existing and manually edited titles are kept.'
+    ),
+    keywords: translateSearchKeyword(
+      'settings.sourceControl.workspaceTitleLanguage.keywords',
+      'workspace title language Chinese'
+    )
+  })
+)
+
 export const getAutoRenameBranchParentSearchEntry = createLocalizedCatalog(
   (): SettingsSearchEntry => ({
     title: translate(
@@ -108,6 +125,7 @@ export const getAutoRenameBranchAdvancedSearchEntries = createLocalizedCatalog((
 export const getAutoRenameBranchSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
     getAutoRenameBranchParentSearchEntry(),
+    getWorkspaceTitleLanguageSearchEntry(),
     ...getAutoRenameBranchAdvancedSearchEntries()
   ]
 )

@@ -19,11 +19,15 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../ui/co
 import { Label } from '../../ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover'
 import { Switch } from '../../ui/switch'
-import { getAutoRenameBranchAdvancedSearchEntries } from './auto-rename-branch-search'
+import {
+  getAutoRenameBranchAdvancedSearchEntries,
+  getWorkspaceTitleLanguageSearchEntry
+} from './auto-rename-branch-search'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from '../search/settings-search'
 import { Trans } from 'react-i18next'
 import { i18n, translate } from '@/i18n/i18n'
+import { WorkspaceTitleLanguageSetting } from './WorkspaceTitleLanguageSetting'
 
 type AutoRenameBranchFromWorkSettingProps = {
   settings: GlobalSettings
@@ -136,7 +140,8 @@ export function AutoRenameBranchFromWorkSetting({
         'command',
         'template',
         'worktree',
-        'slug'
+        'slug',
+        ...(getWorkspaceTitleLanguageSearchEntry().keywords ?? [])
       ]}
       forceVisible={forceVisible || branchNamePromptDirty || advancedSearchOpen}
       className="space-y-3 py-2"
@@ -179,6 +184,8 @@ export function AutoRenameBranchFromWorkSetting({
           }
         />
       </div>
+
+      <WorkspaceTitleLanguageSetting settings={settings} updateSettings={updateSettings} />
 
       <Collapsible open={advancedOpen} onOpenChange={setOptionsOpen}>
         <CollapsibleTrigger asChild>

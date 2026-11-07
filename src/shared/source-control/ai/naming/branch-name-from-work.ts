@@ -1,4 +1,6 @@
 import { MARINE_CREATURES } from '../../../marine-creatures'
+import { assertJsonTextStructureWithinLimits } from '../../../json-text-structure-limit'
+import { sanitizeGeneratedConversationName } from '../generation/conversation-name-generation'
 
 // Bound generated leaves after generation; leave prompts general so user naming instructions own style.
 export const MAX_BRANCH_NAME_WORDS = 4
@@ -73,6 +75,48 @@ export type BranchNameWorkContext = {
   /** The agent's first response, when it has already arrived. Optional because
    *  the rename fires as soon as work begins, before a reply may exist. */
   assistantMessage?: string
+  workspaceTitleLanguage?: string
+  workspaceTitleOnly?: boolean
+}
+
+export function buildLocalizedWorkspaceNamePrompt(prompt: string, language: string): string {
+  return [
+    prompt,
+    '',
+    'For this naming request, replace the single-line output format above with ONLY a JSON object:',
+    '{"branch":"short-english-branch-name","title":"localized workspace title"}',
+    'branch: a short English git branch name, using lowercase letters, digits and hyphens.',
+    `title: a short, specific workspace title in ${language}, at most 48 characters.`,
+    'Do not include a branch prefix, code fences, explanations, or additional fields.'
+  ].join('\n')
+}
+
+export function parseGeneratedBranchName(
+  raw: string,
+  localized: boolean,
+  titleOnly = false
+): { slug: string; displayName?: string } {
+  if (!localized) {
+    return { slug: sanitizeBranchSlug(raw) }
+  }
+  assertJsonTextStructureWithinLimits(raw, { structuralTokens: 16, nestingDepth: 2 })
+  const parsed: unknown = JSON.parse(raw)
+  if (
+    !parsed ||
+    typeof parsed !== 'object' ||
+    !('title' in parsed) ||
+    (!titleOnly && !('branch' in parsed))
+  ) {
+    throw new Error('Expected branch and title fields.')
+  }
+  const slug =
+    'branch' in parsed && typeof parsed.branch === 'string' ? sanitizeBranchSlug(parsed.branch) : ''
+  const displayName =
+    typeof parsed.title === 'string' ? sanitizeGeneratedConversationName(parsed.title) : null
+  if (!displayName) {
+    throw new Error('Expected a nonempty workspace title.')
+  }
+  return { slug, displayName }
 }
 
 /** Share naming prompts across local/SSH. Keep defaults general for user Source Control AI/template guidance; enforce Git safety/length after generation via sanitizeBranchSlug. */

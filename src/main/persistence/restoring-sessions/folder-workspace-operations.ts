@@ -1,3 +1,4 @@
+import { shouldAutoRenameWorkspaceTitle } from '../../../shared/workspace-title-language'
 import { randomUUID } from 'node:crypto'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -112,7 +113,8 @@ export class FolderWorkspacePersistenceOperations {
       isPinned: false,
       sortOrder: now,
       ...(input.createdWithAgent ? { createdWithAgent: input.createdWithAgent } : {}),
-      ...(input.pendingFirstAgentMessageRename === true && input.createdWithAgent
+      ...(shouldAutoRenameWorkspaceTitle(this.state.settings) ||
+      (input.pendingFirstAgentMessageRename === true && input.createdWithAgent)
         ? { pendingFirstAgentMessageRename: true }
         : {}),
       // Workspace creation establishes its first Recent stamp.
@@ -182,7 +184,11 @@ export class FolderWorkspacePersistenceOperations {
       updates = { ...updates, linkedTaskSourceContext: linkedUpdates.linkedTaskSourceContext }
     }
     if (updates.name !== undefined) {
-      workspace.name = normalizeFolderWorkspaceName(updates.name, workspace.name)
+      const name = normalizeFolderWorkspaceName(updates.name, workspace.name)
+      if (name !== workspace.name) {
+        workspace.pendingFirstAgentMessageRename = false
+      }
+      workspace.name = name
     }
     if (typeof updates.folderPath === 'string' && updates.folderPath.trim().length > 0) {
       const previous = workspace.folderPath

@@ -1,3 +1,4 @@
+import { shouldAutoRenameWorkspaceTitle } from '../../../../shared/workspace-title-language'
 import type { LocalGitExecOptions } from '../../../git/repo-default-base-ref'
 import { randomUUID } from 'node:crypto'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
@@ -129,7 +130,8 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
         ? { linkedTaskSourceContext: request.linkedTaskSourceContext }
         : {}),
       ...(effectiveCreatedWithAgent ? { createdWithAgent: effectiveCreatedWithAgent } : {}),
-      ...(request.pendingFirstAgentMessageRename === true && effectiveCreatedWithAgent
+      ...(shouldAutoRenameWorkspaceTitle(store.getSettings()) ||
+      (request.pendingFirstAgentMessageRename === true && effectiveCreatedWithAgent)
         ? { pendingFirstAgentMessageRename: true }
         : {}),
       ...(request.automationProvenance
