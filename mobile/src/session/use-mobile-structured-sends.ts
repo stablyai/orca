@@ -10,7 +10,18 @@ import {
 import { mergeSentImagePreviews } from './native-chat/composer/mobile-native-chat-draft-reconcile'
 import type { AgentSessionQueuedMessage } from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import type { MobileNativeChatSendErrorReporter } from './native-chat/use-mobile-native-chat-send-error'
-import { UNCONFIRMED_SEND_DEADLINE_MS } from './native-chat/use-mobile-native-chat-unconfirmed-sends'
+import {
+  UNCONFIRMED_SEND_DEADLINE_MS,
+  UNCONFIRMED_SEND_RESTORED_MESSAGE
+} from './native-chat/use-mobile-native-chat-unconfirmed-sends'
+import { returnMobileNativeChatInFlightSend } from './native-chat/composer/mobile-native-chat-draft-store'
+import {
+  claimMobileNativeChatInFlightSends,
+  mobileNativeChatInFlightSendIds,
+  releaseMobileNativeChatInFlightSends,
+  settleMobileNativeChatInFlightSend,
+  useMobileNativeChatSavedInFlightVersion
+} from './native-chat/composer/mobile-native-chat-in-flight-sends'
 // Ordinary in-memory input outlives its request; exact host IDs retire it, and a lost reply hands it back at the deadline.
 
 type MobileStructuredSend = StructuredAgentSessionOptimisticMessage
@@ -27,14 +38,27 @@ export type MobileStructuredSends = {
   holdUnconfirmed: (clientMessageId: string, onUnconfirmed: () => void) => void
 }
 
+// A held send's deadline runs only while connected: the journal cannot record anything while the host is out.
+type Hold = { timer: ReturnType<typeof setTimeout> | null; fire: () => void }
+
 export function useMobileStructuredSends(args: {
   sessionKey: string
+  sessionId?: string | null
+  connected?: boolean
   cursor?: AgentJournalCursor | null
   submissions: readonly AgentJournalSubmission[]
   queuedMessages: readonly AgentSessionQueuedMessage[] | null
   onSendError: MobileNativeChatSendErrorReporter
 }): MobileStructuredSends {
-  const { cursor, queuedMessages, sessionKey, submissions } = args
+  const {
+    connected = true,
+    cursor,
+    onSendError,
+    queuedMessages,
+    sessionId = null,
+    sessionKey,
+    submissions
+  } = args
   const [sendsBySession, setSendsBySession] = useState<
     Record<string, readonly MobileStructuredSend[]>
   >({})
@@ -46,7 +70,12 @@ export function useMobileStructuredSends(args: {
   useLayoutEffect(() => {
     sendsBySessionRef.current = sendsBySession
   }, [sendsBySession])
-  const deadlinesRef = useRef(new Map<string, ReturnType<typeof setTimeout>>())
+  const holdsRef = useRef(new Map<string, Hold>())
+  const connectedRef = useRef(connected)
+  useLayoutEffect(() => {
+    connectedRef.current = connected
+  }, [connected])
+  const savedInFlightVersion = useMobileNativeChatSavedInFlightVersion()
 
   // Capture chat ownership before asynchronous replies can cross a tab switch.
   const keep = useCallback(
@@ -123,65 +152,118 @@ export function useMobileStructuredSends(args: {
       ),
     [sessionKey]
   )
+  const hold = useCallback((clientMessageId: string, fire: () => void) => {
+    const entry: Hold = { timer: null, fire }
+    if (connectedRef.current) {
+      entry.timer = setTimeout(fire, UNCONFIRMED_SEND_DEADLINE_MS)
+    }
+    holdsRef.current.set(clientMessageId, entry)
+  }, [])
   const holdUnconfirmed = useCallback(
     (clientMessageId: string, onUnconfirmed: () => void) => {
       if (!mountedRef.current) {
         return
       }
-      const deadlines = deadlinesRef.current
-      deadlines.set(
-        clientMessageId,
-        setTimeout(() => {
-          deadlines.delete(clientMessageId)
-          // The host's record can arrive before the lost reply settles, so read what is still unrecorded now.
-          if (isHeld(clientMessageId)) {
-            forget(new Set([clientMessageId]))
-            onUnconfirmed()
-          }
-        }, UNCONFIRMED_SEND_DEADLINE_MS)
-      )
+      hold(clientMessageId, () => {
+        holdsRef.current.delete(clientMessageId)
+        // The host's record can arrive before the lost reply settles, so read what is still unrecorded now.
+        if (isHeld(clientMessageId)) {
+          forget(new Set([clientMessageId]))
+          onUnconfirmed()
+        }
+      })
     },
-    [forget, isHeld]
+    [forget, hold, isHeld]
   )
+
+  useEffect(() => {
+    for (const entry of holdsRef.current.values()) {
+      if (!connected) {
+        clearTimeout(entry.timer ?? undefined)
+        entry.timer = null
+      } else if (entry.timer === null) {
+        entry.timer = setTimeout(entry.fire, UNCONFIRMED_SEND_DEADLINE_MS)
+      }
+    }
+  }, [connected])
+
+  // The journal records a send under its id: once it does, the saved copy goes.
+  const recorded = useCallback(
+    (ids: readonly string[]): Set<string> => {
+      const { cards, recorded } = structuredAgentSessionSettledSends(
+        submissions,
+        (queuedMessages ?? []).map((message) => message.messageId)
+      )
+      return new Set(ids.filter((id) => cards.has(id) || recorded.has(id)))
+    },
+    [queuedMessages, submissions]
+  )
+
+  // Sends saved before the page last closed wait like live ones once their chat opens.
+  useEffect(() => {
+    if (sessionId === null) {
+      return
+    }
+    for (const send of claimMobileNativeChatInFlightSends(
+      (_scope, saved) => saved.kind === 'structured' && saved.sessionId === sessionId
+    )) {
+      const clientMessageId = send.clientMessageId
+      if (clientMessageId === undefined || !recorded([clientMessageId]).has(clientMessageId)) {
+        const handBack = () => {
+          holdsRef.current.delete(clientMessageId ?? send.id)
+          returnMobileNativeChatInFlightSend(send.id)
+          onSendError(UNCONFIRMED_SEND_RESTORED_MESSAGE)
+        }
+        // Never minted means never sent.
+        if (clientMessageId === undefined) {
+          handBack()
+        } else {
+          hold(clientMessageId, handBack)
+        }
+      } else {
+        settleMobileNativeChatInFlightSend(send.id)
+      }
+    }
+  }, [hold, onSendError, recorded, savedInFlightVersion, sessionId])
 
   const sends = sendsBySession[sessionKey] ?? NO_SENDS
   useEffect(() => {
-    if (sends.length === 0) {
+    const held = [...holdsRef.current.keys()]
+    if (sends.length === 0 && held.length === 0) {
       return
     }
-    const { cards, recorded } = structuredAgentSessionSettledSends(
-      submissions,
-      (queuedMessages ?? []).map((message) => message.messageId)
-    )
-    const settled = new Set(
-      sends
-        .filter(
-          (send) =>
-            cards.has(send.clientMessageId) ||
-            recorded.has(send.clientMessageId) ||
-            structuredAgentSessionReadCoversSend(cursor, send.recordedCursor)
-        )
-        .map((send) => send.clientMessageId)
-    )
+    const settled = recorded([...sends.map((send) => send.clientMessageId), ...held])
+    for (const send of sends) {
+      if (structuredAgentSessionReadCoversSend(cursor, send.recordedCursor)) {
+        settled.add(send.clientMessageId)
+      }
+    }
     if (settled.size === 0) {
       return
     }
     for (const id of settled) {
-      clearTimeout(deadlinesRef.current.get(id))
-      deadlinesRef.current.delete(id)
+      clearTimeout(holdsRef.current.get(id)?.timer ?? undefined)
+      holdsRef.current.delete(id)
     }
-    forget(settled)
-  }, [cursor, forget, queuedMessages, sends, submissions])
+    for (const id of mobileNativeChatInFlightSendIds(settled)) {
+      settleMobileNativeChatInFlightSend(id)
+    }
+    if (sends.some((send) => settled.has(send.clientMessageId))) {
+      forget(settled)
+    }
+  }, [cursor, forget, recorded, sends])
 
   useEffect(() => {
     mountedRef.current = true
-    const deadlines = deadlinesRef.current
+    const holds = holdsRef.current
     return () => {
       mountedRef.current = false
-      for (const deadline of deadlines.values()) {
-        clearTimeout(deadline)
+      for (const entry of holds.values()) {
+        clearTimeout(entry.timer ?? undefined)
       }
-      deadlines.clear()
+      // A send still unconfirmed stays saved; the chat's next open waits on it again.
+      releaseMobileNativeChatInFlightSends(mobileNativeChatInFlightSendIds(new Set(holds.keys())))
+      holds.clear()
     }
   }, [])
 

@@ -6,66 +6,143 @@ import {
   findLandedUnconfirmedSends,
   type UnconfirmedSend
 } from './composer/mobile-native-chat-draft-reconcile'
+import { returnMobileNativeChatInFlightSend } from './composer/mobile-native-chat-draft-store'
+import {
+  claimMobileNativeChatInFlightSends,
+  releaseMobileNativeChatInFlightSends,
+  settleMobileNativeChatInFlightSend,
+  useMobileNativeChatSavedInFlightVersion
+} from './composer/mobile-native-chat-in-flight-sends'
 import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
 
 export const UNCONFIRMED_SEND_DEADLINE_MS = 20_000
 export const UNCONFIRMED_SEND_MESSAGE = 'Delivery unconfirmed — check chat before retrying'
 export const UNCONFIRMED_SEND_RESTORED_MESSAGE = 'Not confirmed. Restored to the box.'
 
+type HeldSend = UnconfirmedSend & { inFlightId: string | null; onUnconfirmed: () => void }
+
 export function useMobileNativeChatUnconfirmedSends(args: {
   draftKey: string | null
   pendingKey: string | null
   messages: readonly NativeChatMessage[]
+  // The deadline runs only while connected: the transcript cannot confirm anything while the host is out.
+  connected: boolean
+  onSendError: (message: string) => void
 }): {
   holdUnconfirmedSend: (
     origin: MobileNativeChatSendOrigin,
     text: string,
-    onUnconfirmed: () => void
+    onUnconfirmed: () => void,
+    inFlightId?: string | null
   ) => void
 } {
-  const { draftKey, pendingKey, messages } = args
+  const { draftKey, pendingKey, messages, connected, onSendError } = args
   const messagesRef = useRef(messages)
   const activeDraftKeyRef = useRef(draftKey)
   const activePendingKeyRef = useRef(pendingKey)
+  const connectedRef = useRef(connected)
   // Read only by the post-send hold, which runs after the commit that set them.
   useLayoutEffect(() => {
     messagesRef.current = messages
     activeDraftKeyRef.current = draftKey
     activePendingKeyRef.current = pendingKey
-  }, [draftKey, messages, pendingKey])
+    connectedRef.current = connected
+  }, [connected, draftKey, messages, pendingKey])
   const mountedRef = useRef(false)
-  const unconfirmedRef = useRef<UnconfirmedSend[]>([])
-  const holdUnconfirmedSend = useCallback(
-    (origin: MobileNativeChatSendOrigin, text: string, onUnconfirmed: () => void) => {
-      if (!mountedRef.current) {
+  const unconfirmedRef = useRef<HeldSend[]>([])
+  const savedInFlightVersion = useMobileNativeChatSavedInFlightVersion()
+
+  const startDeadline = useCallback((entry: HeldSend) => {
+    entry.deadline = setTimeout(() => {
+      unconfirmedRef.current = unconfirmedRef.current.filter((held) => held !== entry)
+      entry.onUnconfirmed()
+      settleMobileNativeChatInFlightSend(entry.inFlightId)
+    }, UNCONFIRMED_SEND_DEADLINE_MS)
+  }, [])
+
+  const hold = useCallback(
+    (entry: HeldSend) => {
+      // The confirming transcript event can arrive before the lost-ack RPC settles.
+      const isActiveTranscript =
+        activeDraftKeyRef.current === entry.draftKey &&
+        (entry.pendingKey === null || activePendingKeyRef.current === entry.pendingKey)
+      if (
+        isActiveTranscript &&
+        findLandedUnconfirmedSends(messagesRef.current, [entry]).length > 0
+      ) {
+        settleMobileNativeChatInFlightSend(entry.inFlightId)
         return
       }
-      const isActiveTranscript =
-        activeDraftKeyRef.current === origin.draftKey &&
-        (origin.pendingKey === null || activePendingKeyRef.current === origin.pendingKey)
-      const entry: UnconfirmedSend = {
+      if (connectedRef.current) {
+        startDeadline(entry)
+      }
+      unconfirmedRef.current = [...unconfirmedRef.current, entry]
+    },
+    [startDeadline]
+  )
+
+  const holdUnconfirmedSend = useCallback(
+    (
+      origin: MobileNativeChatSendOrigin,
+      text: string,
+      onUnconfirmed: () => void,
+      inFlightId: string | null = null
+    ) => {
+      if (!mountedRef.current) {
+        releaseMobileNativeChatInFlightSends(inFlightId ? [inFlightId] : [])
+        return
+      }
+      hold({
         draftKey: origin.draftKey,
         pendingKey: origin.pendingKey,
         text,
         normalizedText: origin.normalizedText,
         baselineTailMessageId: origin.boundary.afterMessageId ?? null,
-        deadline: null
-      }
-      // The confirming transcript event can arrive before the lost-ack RPC settles.
-      if (
-        isActiveTranscript &&
-        findLandedUnconfirmedSends(messagesRef.current, [entry]).length > 0
-      ) {
-        return
-      }
-      entry.deadline = setTimeout(() => {
-        unconfirmedRef.current = unconfirmedRef.current.filter((held) => held !== entry)
-        onUnconfirmed()
-      }, UNCONFIRMED_SEND_DEADLINE_MS)
-      unconfirmedRef.current = [...unconfirmedRef.current, entry]
+        deadline: null,
+        inFlightId,
+        onUnconfirmed
+      })
     },
-    []
+    [hold]
   )
+
+  // Sends saved before the page last closed wait here like live ones once their chat opens.
+  useEffect(() => {
+    if (!draftKey) {
+      return
+    }
+    for (const send of claimMobileNativeChatInFlightSends(
+      (scope, saved) => scope === draftKey && saved.kind === 'terminal'
+    )) {
+      hold({
+        draftKey,
+        pendingKey: send.sessionId === null ? null : `${draftKey}\0${send.sessionId}`,
+        text: send.text,
+        normalizedText: send.normalizedText,
+        baselineTailMessageId: send.baselineTailMessageId,
+        deadline: null,
+        inFlightId: send.id,
+        // A TUI holds a mid-turn send with no transcript row until the turn ends, so its absence proves nothing.
+        onUnconfirmed: send.queuedDuringWork
+          ? () => onSendError(UNCONFIRMED_SEND_MESSAGE)
+          : () => {
+              returnMobileNativeChatInFlightSend(send.id)
+              onSendError(UNCONFIRMED_SEND_RESTORED_MESSAGE)
+            }
+      })
+    }
+  }, [draftKey, hold, onSendError, savedInFlightVersion])
+
+  useEffect(() => {
+    for (const entry of unconfirmedRef.current) {
+      if (!connected) {
+        clearTimeout(entry.deadline ?? undefined)
+        entry.deadline = null
+      } else if (entry.deadline === null) {
+        startDeadline(entry)
+      }
+    }
+  }, [connected, startDeadline])
 
   useEffect(() => {
     if (!draftKey || unconfirmedRef.current.length === 0) {
@@ -80,11 +157,14 @@ export function useMobileNativeChatUnconfirmedSends(args: {
     if (landed.length === 0) {
       return
     }
-    const landedSet = new Set(landed)
-    unconfirmedRef.current = unconfirmedRef.current.filter((entry) => !landedSet.has(entry))
-    for (const entry of landed) {
-      clearTimeout(entry.deadline ?? undefined)
+    const landedSet = new Set<UnconfirmedSend>(landed)
+    for (const entry of unconfirmedRef.current) {
+      if (landedSet.has(entry)) {
+        clearTimeout(entry.deadline ?? undefined)
+        settleMobileNativeChatInFlightSend(entry.inFlightId)
+      }
     }
+    unconfirmedRef.current = unconfirmedRef.current.filter((entry) => !landedSet.has(entry))
   }, [messages, draftKey, pendingKey])
 
   useEffect(() => {
@@ -94,6 +174,10 @@ export function useMobileNativeChatUnconfirmedSends(args: {
       for (const entry of unconfirmedRef.current) {
         clearTimeout(entry.deadline ?? undefined)
       }
+      // A send still unconfirmed stays saved; the chat's next open waits on it again.
+      releaseMobileNativeChatInFlightSends(
+        unconfirmedRef.current.flatMap((entry) => (entry.inFlightId ? [entry.inFlightId] : []))
+      )
       unconfirmedRef.current = []
     }
   }, [])

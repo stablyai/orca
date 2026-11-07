@@ -120,7 +120,7 @@ export function useMobileStructuredAgentSession(
   })
 
   const sends = useMobileStructuredSends({
-    sessionKey,
+    ...stateArgs,
     cursor: state.cursor,
     submissions: state.submissions,
     queuedMessages,
