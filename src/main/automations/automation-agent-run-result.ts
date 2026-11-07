@@ -5,7 +5,7 @@ import type { AutomationChatAgentLaunch } from './automation-chat-agent-launch'
 import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent-display-names'
 import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { readAutomationRunReceipt } from './automation-run-receipt'
-import { AutomationRunLaunchError } from './headless-dispatch'
+import { AutomationRunLaunchError } from './automation-launch'
 
 export function publishedLaunchTarget(
   runtime: Pick<OrcaRuntimeService, 'getTerminalPaneKey' | 'getTerminalPtyIdForHandle'>,

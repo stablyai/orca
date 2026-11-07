@@ -4,13 +4,13 @@ import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { AiVaultListResult } from '../../shared/ai-vault/contracts/ai-vault-types'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
-import { createJournalTablesSql } from '../native-chat/agent-session-journal/journal-database-schema'
+import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { createJournalTablesSql } from '../native-chat/agent-session-journal/database/journal-database-schema'
 import {
   insertJournalRow,
   publishJournalSessionEpoch
-} from '../native-chat/agent-session-journal/journal-row-table'
-import type { JournalRow } from '../native-chat/agent-session-journal/journal-row-schema'
+} from '../native-chat/agent-session-journal/durable-rows/journal-row-table'
+import type { JournalRow } from '../native-chat/agent-session-journal/durable-rows/journal-row-schema'
 import Database from '../sqlite/sync-database'
 import {
   projectStructuredAiVaultSessions,

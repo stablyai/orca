@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../../../core'
-import type { OrchestrationDb, RunRow } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import type { RunRow, DispatchContextRow } from '../../../../orchestration/db/orchestration-records'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { DispatchContextRow } from '../../../../orchestration/types'
+
 import {
   createRootDispatch,
   reattachDispatchConsumer

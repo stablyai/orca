@@ -20,7 +20,7 @@ import { createBridgeNotifyForwarder } from './bridge-host-notify'
 import { createBridgeHostRoute } from './bridge-host-route'
 import { pageStorageForReader } from './page-storage-keys'
 import { BRIDGE_TERMINAL_KEY_FRAME } from './bridge/bridge-terminal-key'
-import { readBridgeConnectionSnapshot } from './bridge/bridge-connection-snapshot'
+import { createBridgeVerdictHold, isDesktopBound } from './bridge-host-verdict-hold'
 import type { BridgeHost, BridgeHostOptions } from './bridge-host-contract'
 
 export type { BridgeHost, BridgeHostDiagnostic, BridgeHostOptions } from './bridge-host-contract'
@@ -87,8 +87,9 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     terminalTimers: options.terminalTimers
   })
 
+  const verdict = createBridgeVerdictHold(options.readHostStatus, sendError)
   // Use the event’s state; listeners can run before the mirrored getter updates.
-  const snapshot = (state?: ConnectionState) => readBridgeConnectionSnapshot(client, state)
+  const snapshot = (state?: ConnectionState) => verdict.snapshot(client, state)
 
   /**
    * Posts `init`, and answers nothing (ruling 34).
@@ -112,6 +113,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       return
     }
     initSent = true
+    verdict.noteInit()
     void postJson(
       JSON.stringify(
         createBridgeInitFrame({
@@ -148,7 +150,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       return
     }
     for (const frame of split.frames) {
-      send(frame)
+      sendJson(frame)
     }
   }
 
@@ -204,6 +206,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   function settleAll(notify: boolean): void {
     requests.closeAll(notify)
     subscriptions.closeAll(notify ? 'closed' : null)
+    verdict.settle(notify)
   }
 
   function dispose(): void {
@@ -237,9 +240,12 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       return
     }
     // A session with no handshake has no grants/caps; refuse requests and streams too. Inherited handshake state keeps client-rebuilt hosts serving live pages.
-    if (!initSent && (message.type === 'request' || message.type === 'subscribe')) {
+    if (!initSent && isDesktopBound(message)) {
       options.onDiagnostic?.({ kind: 'notify-refused', name: message.method, why: 'before-ready' })
       sendError(message.id, new BridgeCapExceededError('before-ready'))
+      return
+    }
+    if (!verdict.admit(message)) {
       return
     }
     switch (message.type) {
@@ -310,6 +316,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     },
     publishKeyboardInset: (next) => routes.publishKeyboardInset(next, deliverable()),
     publishStorage: () => sendInit(true),
+    publishHostStatus: () => verdict.publish(() => deliverable() && sendInit(), dispatch),
     publishPageGeometry: (next) => routes.publishPageGeometry(next, deliverable()),
     publishFoldDivision: (next) => routes.publishFoldDivision(next, deliverable()),
     publishTerminalKeyRail: (next) => routes.publishTerminalKeyRail(next, deliverable()),

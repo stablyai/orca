@@ -1,3 +1,4 @@
+import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
 import { useState } from 'react'
 import {
   ChevronDown,
@@ -48,6 +49,8 @@ export type CreateHostedReviewComposerPrimaryAction = {
 }
 
 export type CreateHostedReviewComposerProps = {
+  imageUpload?: GitHubImageIntake
+  imageUploadPending?: boolean
   className?: string
   provider: HostedReviewProvider
   branch: string
@@ -85,6 +88,8 @@ export type CreateHostedReviewComposerProps = {
 }
 
 export function CreateHostedReviewComposer({
+  imageUpload,
+  imageUploadPending,
   className,
   provider,
   branch,
@@ -142,6 +147,7 @@ export function CreateHostedReviewComposer({
   const strippedBranch = stripBaseRef(branch)
   const baseSameAsBranch = normalizedBase.toLowerCase() === strippedBranch.toLowerCase()
   const createDisabled =
+    imageUploadPending ||
     primaryAction.disabled ||
     generating ||
     title.trim().length === 0 ||
@@ -250,6 +256,7 @@ export function CreateHostedReviewComposer({
         </div>
 
         <CreateHostedReviewComposerFields
+          imageUpload={imageUpload}
           copy={copy}
           base={base}
           setBase={setBase}

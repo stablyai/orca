@@ -6,7 +6,9 @@ vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
 
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({}))
+
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension', () => ({
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: vi.fn()
 }))
@@ -30,10 +32,8 @@ const mockApi = {
 globalThis.window = { api: mockApi }
 
 import { createTestStore, seedStore, makeWorktree } from './store-test-helpers'
-import {
-  getPullRequestGenerationRecordKey,
-  type PullRequestGenerationRecord
-} from './pull-request-generation'
+import { getPullRequestGenerationRecordKey } from './hosted-review/generation/pull-request-generation'
+import type { PullRequestGenerationRecord } from './hosted-review/generation/pull-request-generation-state'
 import {
   getCommitMessageGenerationRecordKey,
   type CommitMessageGenerationRecord

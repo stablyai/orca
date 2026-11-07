@@ -34,7 +34,7 @@ import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import {
   lookupGitHubWorkItemByOwnerRepoForSource,
   lookupGitHubWorkItemForSource
-} from '@/lib/github-work-item-source-lookup'
+} from '@/lib/work-items/github/github-work-item-source-lookup'
 
 export function useLinkedItemLookupEffects(input: LinkedItemLookupEffectsInput) {
   const {

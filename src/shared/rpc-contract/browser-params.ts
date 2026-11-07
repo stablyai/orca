@@ -59,7 +59,9 @@ export const Screencast = BrowserTarget.extend({
   deviceScaleFactor: OptionalFiniteNumber,
   mobile: OptionalBoolean,
   everyNthFrame: OptionalFiniteNumber,
-  minFrameIntervalMs: OptionalFiniteNumber
+  minFrameIntervalMs: OptionalFiniteNumber,
+  // Ask for frame credit; the host echoes `frameAck: true` in `ready`. Old hosts strip it.
+  frameAck: z.literal(1).optional()
 })
 
 export const FullScreenshot = BrowserTarget.extend({

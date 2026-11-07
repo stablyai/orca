@@ -1,6 +1,6 @@
 /** Commit only while request, authority-catalog and connection generations match. This rejects stale answers after re-pair, re-registration or host changes; removal tombstones advance the same catalog fence. */
 
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { hostStableKey } from '../../../../shared/automation-owner-key'
 import type {
   StableAutomationAuthorityRef,

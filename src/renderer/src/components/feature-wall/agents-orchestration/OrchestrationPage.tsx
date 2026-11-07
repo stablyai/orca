@@ -20,6 +20,7 @@ import {
 import { arrowPathFromCoordTo, bubblePathBetweenRows } from './orchestration-bubble-path'
 import { AgentRow, WorkspaceCard } from './orchestration-cards'
 import { translate } from '@/i18n/i18n'
+import { forceLayoutReflow } from '@/lib/force-layout-reflow'
 
 const INITIAL_CHILD_PENDING: RowPending = {
   'child-codex': true,
@@ -181,7 +182,7 @@ export function OrchestrationPage(props: {
         '<rect x="3" y="5" width="18" height="14" rx="2"/>' +
         '<path d="M3 7l9 6 9-6"/></svg>'
       layer.appendChild(bubble)
-      void bubble.offsetWidth
+      forceLayoutReflow(bubble)
       nextFrame(() => bubble.classList.add('in-flight'))
 
       later(() => {

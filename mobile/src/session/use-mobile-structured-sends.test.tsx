@@ -1,6 +1,7 @@
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import type {
@@ -19,9 +20,19 @@ import {
 } from './use-mobile-structured-agent-session-queued.test-fixture'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 import { useMobileStructuredSends } from './use-mobile-structured-sends'
+import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
+import { useMobileNativeChatDrafts } from './native-chat/composer/use-mobile-native-chat-drafts'
+import {
+  resetMobileNativeChatDraftStoreForTests,
+  useMobileNativeChatDraft
+} from './native-chat/composer/mobile-native-chat-draft-store'
 // Settle local echoes by the host’s submission id, never by matching text.
 
-const asyncStorage = vi.hoisted(() => ({ getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn() }))
+const asyncStorage = vi.hoisted(() => ({
+  getItem: vi.fn(async () => null),
+  setItem: vi.fn(async () => {}),
+  removeItem: vi.fn(async () => {})
+}))
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
 
 function recorded(
@@ -54,6 +65,11 @@ function journal(items: AgentJournalRenderItem[], submissions: AgentJournalSubmi
 describe('a structured send in the open chat', () => {
   let renderer: ReactTestRenderer | null = null
   let hook: ReturnType<typeof useMobileStructuredAgentSession> | null = null
+  let composer: {
+    text: string
+    edit: (text: string) => void
+    send: ReturnType<typeof useMobileStructuredNativeChatSendBridge>['sendWithOutcome']
+  } | null = null
   let listener: ((value: unknown) => void) | null = null
   let answer: (id: string) => unknown = () => null
   const onSendError = vi.fn()
@@ -87,12 +103,32 @@ describe('a structured send in the open chat', () => {
       hostSupport: null,
       onSendError
     })
+    const drafts = useMobileNativeChatDrafts({
+      hostId: 'host-a',
+      worktreeId: 'workspace-a',
+      tabId: 'tab-1',
+      sessionId: 'session-1',
+      messages: [],
+      transcriptSettled: true
+    })
+    const bridge = useMobileStructuredNativeChatSendBridge({
+      ...drafts,
+      agent: 'codex',
+      sendStructured: hook.sendWithOutcome,
+      holdUnconfirmed: hook.holdUnconfirmed,
+      onSendError
+    })
+    composer = {
+      text: useMobileNativeChatDraft(drafts.draftKey),
+      edit: drafts.setComposerText,
+      send: bridge.sendWithOutcome
+    }
     return null
   }
 
   async function mount(): Promise<void> {
     act(() => {
-      renderer = create(createElement(Harness))
+      renderer = createWithQueryClient(createElement(Harness))
     })
     await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
     act(() => listener?.(snapshotEvent()))
@@ -143,7 +179,10 @@ describe('a structured send in the open chat', () => {
     act(() => renderer?.unmount())
     renderer = null
     hook = null
+    composer = null
     listener = null
+    resetMobileNativeChatDraftStoreForTests()
+    vi.useRealTimers()
   })
 
   it.each([false, true])(
@@ -235,6 +274,35 @@ describe('a structured send in the open chat', () => {
     expect(shown()).toEqual([[row.id, 'Full original prose']])
     expect(onSendError).not.toHaveBeenCalled()
   })
+
+  it('hands back only the lost-reply sends the journal never recorded', async () => {
+    await mount()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const ids: string[] = []
+    sendRequest.mockImplementation(async (method, params) => {
+      if (method !== 'agentSession.send') {
+        return ok({ models: [], current: {} })
+      }
+      ids.push(String(fieldsOf(fieldsOf(params).envelope).clientOperationId))
+      throw markRpcDeliveryUnknown(new Error('connection lost'))
+    })
+    for (const text of ['landed text', 'lost text']) {
+      act(() => composer!.edit(text))
+      await act(async () => {
+        expect(await composer!.send(text)).toBe('unknown')
+      })
+    }
+    expect(composer!.text).toBe('')
+    act(() => listener?.(journal([userRow(ids[0]!, 'landed text', 1)], [recorded(ids[0]!)])))
+    act(() => composer!.edit('typed meanwhile'))
+    act(() => {
+      vi.advanceTimersByTime(20_000)
+    })
+    expect(composer!.text).toBe('typed meanwhile\n\nlost text')
+    expect(shown()).toEqual([[agentJournalSubmissionKey(ids[0]!), 'landed text']])
+    expect(onSendError).toHaveBeenCalledTimes(1)
+    expect(onSendError).toHaveBeenCalledWith('Not confirmed. Restored to the box.')
+  })
 })
 
 describe('a structured send whose answer was lost', () => {
@@ -261,7 +329,7 @@ describe('a structured send whose answer was lost', () => {
       if (renderer) {
         renderer.update(createElement(Harness, props))
       } else {
-        renderer = create(createElement(Harness, props))
+        renderer = createWithQueryClient(createElement(Harness, props))
       }
     })
   }
@@ -272,8 +340,13 @@ describe('a structured send whose answer was lost', () => {
     queuedAt: 1
   })
 
+  const handedBack = vi.fn()
+
   function hold(clientMessageId: string): void {
-    act(() => sends!.accept(message(clientMessageId)))
+    act(() => {
+      sends!.accept(message(clientMessageId))
+      sends!.holdUnconfirmed(clientMessageId, () => handedBack(clientMessageId))
+    })
   }
 
   const drawn = () => sends!.optimistic.map((send) => send.clientMessageId)
@@ -317,7 +390,7 @@ describe('a structured send whose answer was lost', () => {
     console.info('DL1 retained-input ID reads N/10N:', work)
   })
 
-  it('retains ordinary input after the operation deadline, independently of newer sends', () => {
+  it('hands back an unrecorded lost send at the deadline, independently of newer sends', () => {
     render({ sessionKey: 'a' })
     hold('lost')
     expect(drawn()).toEqual(['lost'])
@@ -325,13 +398,13 @@ describe('a structured send whose answer was lost', () => {
     render({ sessionKey: 'a', submissions: [recorded('other')] })
     expect(drawn()).toEqual(['lost', 'next'])
     act(() => {
-      vi.advanceTimersByTime(30_000)
+      vi.advanceTimersByTime(20_000)
     })
-    expect(drawn()).toEqual(['lost', 'next'])
-    expect(onSendError).not.toHaveBeenCalled()
+    expect(drawn()).toEqual(['next'])
+    expect(handedBack.mock.calls).toEqual([['lost']])
   })
 
-  it('keeps its ordinary input while another chat is open, and settles it back in its own', () => {
+  it('keeps a lost send the journal recorded while another chat was open', () => {
     render({ sessionKey: 'a' })
     hold('lost')
     render({ sessionKey: 'b', submissions: [recorded('other')] })
@@ -342,7 +415,7 @@ describe('a structured send whose answer was lost', () => {
     act(() => {
       vi.advanceTimersByTime(30_000)
     })
-    expect(onSendError).not.toHaveBeenCalled()
+    expect(handedBack).not.toHaveBeenCalled()
   })
 
   it('releases its view-owned memory when the chat screen goes away', () => {
@@ -354,6 +427,6 @@ describe('a structured send whose answer was lost', () => {
     act(() => {
       vi.advanceTimersByTime(30_000)
     })
-    expect(onSendError).not.toHaveBeenCalled()
+    expect(handedBack).not.toHaveBeenCalled()
   })
 })

@@ -3,8 +3,8 @@ import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-sou
 import type { SetupScriptImportCandidate } from '../../../shared/workspace-setup/setup-script-imports'
 import type { RepoHookSettings } from '../../../shared/orca-yaml-hook-types'
 import type { Repo } from '../../../shared/repo-types'
-import type { HookCheckResult } from '@/runtime/runtime-hooks-client'
-import { isRuntimeScopeForbiddenError } from '@/runtime/runtime-rpc-result'
+import type { HookCheckResult } from '@/runtime/repo-hooks/runtime-hooks-client'
+import { isRuntimeScopeForbiddenError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { hasEffectiveSetupCommand } from './setup-script-status'
 import { translate } from '@/i18n/i18n'
 
@@ -198,6 +198,33 @@ export function buildImportedHookSettings(
       archive: candidate.archive ?? current?.scripts?.archive ?? defaults.scripts.archive
     }
   }
+}
+
+export type DetectedSetupPreviewContent = {
+  setup: string
+  archive: string | null
+  editable: boolean
+}
+
+// Mirrors what buildImportedHookSettings saves; only package-manager guesses are editable before saving.
+export function getDetectedSetupPreviewContent(
+  candidate: SetupScriptImportCandidate,
+  packageManagerSetupDraft: string
+): DetectedSetupPreviewContent {
+  const editable = candidate.provider === 'package-manager'
+  return {
+    setup: editable ? packageManagerSetupDraft : candidate.setup,
+    archive: candidate.archive ?? null,
+    editable
+  }
+}
+
+export function getSetupScriptFirstLine(setup: string): { firstLine: string; hasMore: boolean } {
+  const lines = setup
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+  return { firstLine: lines[0] ?? '', hasMore: lines.length > 1 }
 }
 
 // Product names stay as detected; descriptive labels translate by provider.

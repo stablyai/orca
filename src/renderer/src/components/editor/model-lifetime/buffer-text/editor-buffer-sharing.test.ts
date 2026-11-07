@@ -27,7 +27,7 @@ import { editorTabModelUri } from '../../save/queue/editor-save-disk-preconditio
 import { mayPushTabTextIntoModel, isStaleCachedEditorText } from './editor-stale-mount-guard'
 import { registerPendingEditorFlush } from '../../save/flush/editor-pending-flush'
 import { isDetachedEditorBufferId } from '@/store/slices/editor/buffers/editor-buffer-views'
-import { buildHydratedEditorSessionState } from '@/store/slices/editor/actions/hydrated-editor-session-state'
+import { buildHydratedEditorSessionState } from '@/store/slices/editor/hydration/hydrated-editor-session-state'
 import { stampCleanTabDiskBaseline } from '../../external-changes/editor-clean-tab-disk-baseline'
 import { withRecordDiskText } from './editor-buffer-adapter'
 import { ExternalFileChangeBanner } from '../../external-changes/ExternalFileChangeBanner'

@@ -5,7 +5,8 @@ import {
   structuredAgentSessionTabId
 } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import {
-  loadMobileNewTabAgentOptions,
+  loadMobileAgentLaunchContext,
+  newTabAgentOptionsFrom,
   hostRefusesOtherRuntimeWorkspace
 } from '../session/mobile-new-tab-agent-loader'
 import {
@@ -175,7 +176,7 @@ export function useConversationActions(
       if (!supportsMobileExistingAgentLaunch(capabilities)) {
         throw new Error(copy.update)
       }
-      const inventory = await loadMobileNewTabAgentOptions({
+      const inventory = await loadMobileAgentLaunchContext({
         client: rowClient(workspace),
         worktreeId: workspace.worktreeId,
         hostRefusesOtherRuntime: hostRefusesOtherRuntimeWorkspace(capabilities)
@@ -183,11 +184,12 @@ export function useConversationActions(
       if (!current()) {
         return
       }
-      if (inventory.options.length === 0) {
+      const options = newTabAgentOptionsFrom(inventory.settings, inventory.detectedAgents)
+      if (options.length === 0) {
         setError(copy.noAgents)
         return
       }
-      setChatChoice({ client, hostId, generation, project, workspace, agents: inventory.options })
+      setChatChoice({ client, hostId, generation, project, workspace, agents: options })
     })
   }
 

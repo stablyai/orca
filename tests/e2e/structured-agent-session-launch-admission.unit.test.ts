@@ -8,7 +8,8 @@ import { normalizeLoadedGlobalSettings } from '../../src/main/persistence/loadin
 import { prepareLoadedTerminalSettings } from '../../src/main/persistence/loading-store/prepare-loaded-terminal-settings'
 import { prepareLoadedProfileSettings } from '../../src/main/persistence/loading-store/prepare-loaded-profile-settings'
 import { useNativeChatHostPermissionGate } from '@/components/native-chat/use-native-chat-host-permission-gate'
-import * as runtimeRpc from '@/runtime/runtime-rpc-client'
+import * as runtimeRpcCapability from '@/runtime/rpc/compatibility/runtime-capability-proof'
+import * as runtimeRpcCall from '@/runtime/rpc/calls/runtime-rpc-call'
 import type * as HostPermission from '@/runtime/structured-chat-host-permission'
 import type { Worktree } from '../../src/shared/worktree/types'
 
@@ -22,10 +23,10 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('sonner', () => ({ toast: { info: mocks.toastInfo, error: mocks.toastError } }))
-vi.mock('@/lib/launch-agent-in-new-tab', () => ({
+vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
   launchAgentInNewTabWithOutcome: mocks.launchAgentInNewTab
 }))
-vi.mock('@/lib/ai-vault-session-resume-preparation', () => ({
+vi.mock('@/lib/agent-session/resume/history/ai-vault-session-resume-preparation', () => ({
   prepareAiVaultSessionForResume: async () => ({ sessionId: 'provider-1' })
 }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
@@ -44,7 +45,7 @@ vi.mock('@/runtime/structured-chat-host-permission', async (importOriginal) => (
   readStructuredChatHostPermissionVerdict: mocks.hostPermission
 }))
 // Switch-on, main opens this machine's chats and its frames draw them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
@@ -56,14 +57,14 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
 )
 
 import { useAppStore } from '@/store'
-import { adoptAgentSessionLaunchVerdict } from '../../src/renderer/src/lib/agent-session-launch-plan'
+import { adoptAgentSessionLaunchVerdict } from '../../src/renderer/src/lib/agent-session/launch/routing/agent-session-launch-plan'
 import { beginStructuredAgentSessionProvisionalLaunch } from '../../src/renderer/src/lib/agent-session/structured-agent-session-provisional-tab'
-import { beginDirectWorkItemStructuredLaunch } from '../../src/renderer/src/lib/launch-work-item-direct-agent-routing'
+import { beginDirectWorkItemStructuredLaunch } from '../../src/renderer/src/lib/workspace/creation/work-item/launch-work-item-direct-agent-routing'
 import { getStructuredAgentLaunchStatus } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-launch-status'
 import { getStructuredAgentSessionLaunchSelection } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-launch-options'
 import { peekWebSessionFocusIntent } from '@/runtime/web-session-focus-intent'
 import { LOCAL_ADMISSION_WAIT_MS } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-host-admission'
-import { launchStructuredAgentFromNewTab } from '../../src/renderer/src/lib/launch-agent-in-new-tab-structured-route'
+import { launchStructuredAgentFromNewTab } from '../../src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-structured-route'
 import { structuredAgentSessionFocusOwner } from '@/runtime/structured-agent-session-owner'
 import {
   readNativeChatComposerDraft,
@@ -438,7 +439,7 @@ describe('a structured chat launch on a paired server', () => {
         answerCapability = resolve
       })
       const capabilityRead = vi
-        .spyOn(runtimeRpc, 'runtimeEnvironmentSupportsCapability')
+        .spyOn(runtimeRpcCapability, 'runtimeEnvironmentSupportsCapability')
         .mockReturnValue(capability)
       let answerSettings: (value: {
         settings: { agentDefaultArgs: Record<string, string> }
@@ -448,7 +449,7 @@ describe('a structured chat launch on a paired server', () => {
           answerSettings = resolve
         }
       )
-      const settingsRead = vi.spyOn(runtimeRpc, 'callRuntimeRpc').mockReturnValue(hostSettings)
+      const settingsRead = vi.spyOn(runtimeRpcCall, 'callRuntimeRpc').mockReturnValue(hostSettings)
       mocks.createSupport.mockResolvedValue({ supported: true })
       const mounted = renderHook(() =>
         useNativeChatHostPermissionGate(

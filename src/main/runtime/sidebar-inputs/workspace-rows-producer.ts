@@ -179,7 +179,8 @@ export class WorkspaceRowsProducer {
       folderWorkspaces: runtimeVisibleFolderWorkspaces(store),
       repos: store.getRepos(),
       lineageById: store.getAllWorktreeLineage?.() ?? {},
-      crossStoreLineageByChildKey: store.getAllCrossStoreWorkspaceLineage?.()
+      crossStoreLineageByChildKey: store.getAllCrossStoreWorkspaceLineage?.(),
+      workspaceLineageByChildKey: store.getAllWorkspaceLineage?.()
     })
     for (const row of rows.values()) {
       const terminalPlatform = row.kind === 'git' ? platformByRepoId.get(row.repoId) : undefined

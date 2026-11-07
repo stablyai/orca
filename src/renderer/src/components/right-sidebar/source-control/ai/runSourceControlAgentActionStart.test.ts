@@ -1,7 +1,13 @@
 import { sourceControlActionRecipeEntry } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import type { SourceControlActionRecipe } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
-import type * as RuntimeGitStatusClientModule from '@/runtime/runtime-git-status-client'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as RuntimeGitStatusClientModule from '@/runtime/source-control/git/runtime-git-status-client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
+import {
+  makeFolderWorkspace,
+  makeWorktree,
+  TEST_REPO
+} from '@/store/slices/worktrees-slice-test-fixtures'
 
 const mocks = vi.hoisted(() => ({
   focusTerminalTabSurface: vi.fn(),
@@ -11,9 +17,11 @@ const mocks = vi.hoisted(() => ({
   onSaveAgentDefault: vi.fn(),
   onStart: vi.fn(),
   toastError: vi.fn(),
+  toastSuccess: vi.fn(),
+  navigate: vi.fn(),
   mutationInFlight: vi.fn()
 }))
-vi.mock('@/runtime/runtime-git-status-client', async (importOriginal) => ({
+vi.mock('@/runtime/source-control/git/runtime-git-status-client', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeGitStatusClientModule>()),
   getRuntimeGitMutationInFlight: mocks.mutationInFlight
 }))
@@ -22,12 +30,25 @@ vi.mock('@/lib/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: mocks.focusTerminalTabSurface
 }))
 
-vi.mock('@/lib/launch-agent-in-new-tab', () => ({
+vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
   launchAgentInNewTab: mocks.launchAgentInNewTab
 }))
 
 vi.mock('sonner', () => ({
-  toast: { error: mocks.toastError }
+  toast: { error: mocks.toastError, success: mocks.toastSuccess }
+}))
+
+vi.mock('@/lib/workspace-navigation-toast-action', () => ({
+  workspaceNavigationToastAction: ({
+    workspaceId,
+    executionHostId
+  }: {
+    workspaceId: string
+    executionHostId?: string
+  }) => ({
+    label: 'Go to workspace',
+    onClick: () => mocks.navigate(workspaceId, executionHostId)
+  })
 }))
 
 import { runSourceControlAgentActionStart } from './runSourceControlAgentActionStart'
@@ -44,7 +65,6 @@ function buildArgs(
     saveTargetValue: 'none',
     actionId: 'resolveComments',
     repoId: null,
-    settings: null,
     repo: null,
     worktreeId: 'wt-1',
     groupId: 'group-1',
@@ -66,10 +86,118 @@ function buildArgs(
   }
 }
 
+const initialState = useAppStore.getState()
+afterEach(() => useAppStore.setState(initialState, true))
+
 describe('runSourceControlAgentActionStart', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    useAppStore.setState({
+      repos: [{ ...TEST_REPO, connectionId: 'box' }],
+      worktreesByRepo: {
+        [TEST_REPO.id]: [makeWorktree({ id: 'child', repoId: TEST_REPO.id, hostId: 'ssh:box' })]
+      },
+      folderWorkspaces: [makeFolderWorkspace({ id: 'feature', executionHostId: 'ssh:box' })]
+    })
     mocks.mutationInFlight.mockResolvedValue({ inFlight: false })
+  })
+
+  it.each(['resolveConflicts', 'fixCommitFailure', 'fixPushFailure'] as const)(
+    'keeps %s in the folder group with the child cwd and recovery scope',
+    async (actionId) => {
+      mocks.launchAgentInNewTab.mockReturnValue({
+        surface: { kind: 'local-terminal', tabId: 'agent' }
+      })
+      const recoveryContext = {
+        target: { kind: 'local' as const },
+        worktreeId: 'child',
+        worktreePath: '/folder/repo',
+        connectionId: 'box'
+      }
+      await expect(
+        runSourceControlAgentActionStart(
+          buildArgs({
+            actionId,
+            worktreeId: 'child',
+            groupId: 'folder-group',
+            placementWorkspaceId: 'folder:feature',
+            initialCwd: '/folder/repo',
+            recoveryContext,
+            recipe: { agentId: 'codex', surface: 'chat', agentArgs: '--model gpt-5' },
+            launchChoice: {
+              agent: 'codex',
+              route: 'structured-native-chat',
+              requestedSurface: 'chat',
+              executionHostId: 'ssh:box'
+            }
+          })
+        )
+      ).resolves.toBe(true)
+      expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith(
+        expect.objectContaining({
+          worktreeId: 'folder:feature',
+          groupId: 'folder-group',
+          initialCwd: '/folder/repo',
+          trustWorktreeId: 'child',
+          selectedExecutionHostId: 'ssh:box',
+          requestedSurface: 'terminal',
+          agentArgs: '--model gpt-5'
+        })
+      )
+      expect(mocks.mutationInFlight).toHaveBeenCalledWith(recoveryContext)
+    }
+  )
+
+  it('keeps a cross-host section launch child-owned instead of executing its path in the folder', async () => {
+    useAppStore.setState({
+      folderWorkspaces: [makeFolderWorkspace({ id: 'feature', executionHostId: 'local' })],
+      activeGroupIdByWorktree: { child: 'child-group' },
+      activeWorktreeId: 'folder:feature',
+      activeWorkspaceKey: 'folder:feature',
+      activeWorkspaceExecutionHostId: 'local',
+      worktreesByRepo: {
+        ...useAppStore.getState().worktreesByRepo,
+        local: [
+          makeWorktree({ id: 'local::/tmp/wt', repoId: 'local', path: '/tmp/wt', hostId: 'local' })
+        ]
+      }
+    })
+    mocks.launchAgentInNewTab.mockReturnValue({ surface: { kind: 'host-published' } })
+    await expect(
+      runSourceControlAgentActionStart(
+        buildArgs({
+          worktreeId: 'child',
+          placementWorkspaceId: 'folder:feature',
+          groupId: 'folder-group',
+          initialCwd: '/tmp/wt',
+          recipe: { agentId: 'codex', surface: 'chat' },
+          launchChoice: {
+            agent: 'codex',
+            route: 'structured-native-chat',
+            requestedSurface: 'chat',
+            executionHostId: 'ssh:box'
+          }
+        })
+      )
+    ).resolves.toBe(true)
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeId: 'child',
+        groupId: 'child-group',
+        activate: false,
+        requestedSurface: 'terminal',
+        selectedExecutionHostId: 'ssh:box'
+      })
+    )
+    expect(mocks.launchAgentInNewTab.mock.calls[0]?.[0]).not.toHaveProperty('initialCwd')
+    expect(mocks.launchAgentInNewTab.mock.calls[0]?.[0]).not.toHaveProperty('trustWorktreeId')
+    expect(useAppStore.getState().activeWorktreeId).toBe('folder:feature')
+    expect(mocks.focusTerminalTabSurface).not.toHaveBeenCalled()
+    expect(mocks.toastSuccess).toHaveBeenCalledOnce()
+    expect(mocks.onLaunched).toHaveBeenCalledWith('child')
+    expect(mocks.navigate).not.toHaveBeenCalled()
+    mocks.toastSuccess.mock.calls[0]?.[1].action.onClick()
+    expect(mocks.navigate).toHaveBeenCalledWith('child', 'ssh:box')
   })
 
   it('notifies onLaunchAccepted as soon as the agent tab is created, before prompt delivery', async () => {
@@ -122,8 +250,8 @@ describe('runSourceControlAgentActionStart', () => {
       surface: { kind: 'local-terminal', tabId: 'tab-1' },
       promptDeliveryResult
     })
+    useAppStore.setState({ settings: getDefaultSettings('/tmp') })
     const args = buildArgs({
-      settings: getDefaultSettings('/tmp'),
       saveTargetValue: 'global',
       onSaveAgentDefault,
       onLaunchAccepted,

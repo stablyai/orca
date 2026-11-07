@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { create } from 'zustand'
 import { ensurePluginAutoUpdatesWatched } from './plugin-auto-updates'
 import type { PluginHostListEntry, PluginHostPanel } from '../../../preload/api-types'
+import { disambiguatedPluginNames } from '../components/plugins/presentation/plugin-name-disambiguation'
 
 /** A panel contribution from an enabled plugin, flattened for sidebar use. */
 export type ActivePluginPanel = PluginHostPanel & {
@@ -152,22 +153,52 @@ export function isLivePlugin(plugin: PluginHostListEntry): boolean {
   return plugin.status === 'running' || plugin.status === 'restarting' || plugin.status === 'idle'
 }
 
+const displayNamesByList = new WeakMap<
+  readonly PluginHostListEntry[],
+  ReadonlyMap<string, string>
+>()
+
+/** Installed plugins' names as shown: one sharing a name, unless official, adds its publisher. */
+export function installedPluginDisplayNames(
+  plugins: readonly PluginHostListEntry[]
+): ReadonlyMap<string, string> {
+  let names = displayNamesByList.get(plugins)
+  if (!names) {
+    names = disambiguatedPluginNames(
+      plugins.map((plugin) => ({
+        key: plugin.pluginKey,
+        name: plugin.name,
+        publisher: plugin.publisher || null,
+        official: plugin.official
+      }))
+    )
+    displayNamesByList.set(plugins, names)
+  }
+  return names
+}
+
 /** A contribution tagged with the plugin it came from. */
 export function fromPlugin<T>(
   plugin: PluginHostListEntry,
-  contribution: T
+  contribution: T,
+  names?: ReadonlyMap<string, string>
 ): T & { pluginKey: string; pluginName: string } {
-  return { ...contribution, pluginKey: plugin.pluginKey, pluginName: plugin.name }
+  return {
+    ...contribution,
+    pluginKey: plugin.pluginKey,
+    pluginName: names?.get(plugin.pluginKey) ?? plugin.name
+  }
 }
 
 /** A contribution keyed across plugins, with its own icon or else the plugin's. */
 export function keyedPluginContribution<T extends { id: string; icon?: string }>(
   plugin: PluginHostListEntry,
-  contribution: T
+  contribution: T,
+  names?: ReadonlyMap<string, string>
 ): T & { key: string; pluginKey: string; pluginName: string; iconUrl?: string } {
   const iconUrl = contribution.icon ?? plugin.images?.icon?.url
   return {
-    ...fromPlugin(plugin, contribution),
+    ...fromPlugin(plugin, contribution, names),
     key: `${plugin.pluginKey}/${contribution.id}`,
     ...(iconUrl ? { iconUrl } : {})
   }
@@ -189,7 +220,9 @@ export function collectActivePluginPanels(
 ): ActivePluginPanel[] {
   return plugins
     .filter(isLivePlugin)
-    .flatMap((plugin) => plugin.panels.map((panel) => fromPlugin(plugin, panel)))
+    .flatMap((plugin) =>
+      plugin.panels.map((panel) => fromPlugin(plugin, panel, installedPluginDisplayNames(plugins)))
+    )
 }
 
 /** Installed keys normalize persisted routes: remove uninstalled panels, retain merely disabled ones. */
@@ -204,7 +237,11 @@ export function collectActivePluginCommands(
 ): ActivePluginCommand[] {
   return plugins
     .filter(isLivePlugin)
-    .flatMap((plugin) => plugin.commands.map((command) => fromPlugin(plugin, command)))
+    .flatMap((plugin) =>
+      plugin.commands.map((command) =>
+        fromPlugin(plugin, command, installedPluginDisplayNames(plugins))
+      )
+    )
 }
 
 export function collectEditablePluginCommands(
@@ -212,7 +249,11 @@ export function collectEditablePluginCommands(
 ): ActivePluginCommand[] {
   return plugins
     .filter((plugin) => isLivePlugin(plugin) || plugin.status === 'errored')
-    .flatMap((plugin) => plugin.commands.map((command) => fromPlugin(plugin, command)))
+    .flatMap((plugin) =>
+      plugin.commands.map((command) =>
+        fromPlugin(plugin, command, installedPluginDisplayNames(plugins))
+      )
+    )
 }
 
 /** Panel contributions of enabled plugins, loading the list on first use. */

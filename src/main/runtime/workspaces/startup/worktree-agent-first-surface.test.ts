@@ -11,7 +11,7 @@ const createStructured = vi.hoisted(() =>
     value: { sessionId: args.envelope.sessionId }
   }))
 )
-vi.mock('../../rpc/methods/structured-agent-session-create', () => ({
+vi.mock('../../rpc/methods/structured-sessions/creation/structured-agent-session-create', () => ({
   createStructuredAgentSessionForWorktree: createStructured
 }))
 
@@ -160,7 +160,7 @@ describe('host-created workspaces awaiting their agent chat', () => {
       wait: false,
       nativeChat: true
     })
-    const { AGENT_LAUNCH_METHODS } = await import('../../rpc/methods/agent-launch')
+    const { AGENT_LAUNCH_METHODS } = await import('../../rpc/methods/agent-launch/agent-launch')
     const method = AGENT_LAUNCH_METHODS.find((entry) => entry.name === 'agent.launch')
     if (!method) {
       throw new Error('missing agent.launch')

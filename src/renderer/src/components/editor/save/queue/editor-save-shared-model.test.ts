@@ -21,7 +21,7 @@ vi.mock('@/store/index', () => ({ useAppStore: { getState: () => storeRef.curren
 vi.mock('@/lib/file-owner-runtime-target', () => ({
   getRuntimeTargetForFileOwner: () => ({ kind: 'local' })
 }))
-vi.mock('@/runtime/runtime-file-read-client', async (importOriginal) => ({
+vi.mock('@/runtime/files/reads/runtime-file-read-client', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   readRuntimeFileContent: mocks.readRuntimeFileContent
 }))

@@ -1,3 +1,4 @@
+import { useAppStateValue } from '@/store/app-state-view'
 import { AgentLaunchChoiceEditor } from '../../../agent/launch-settings/AgentLaunchChoiceEditor'
 import { agentChatPermissionModes } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { savedChatPermissionMode } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
@@ -44,7 +45,6 @@ import {
   readChatProgram,
   resolveChatProgramContext
 } from '@/lib/host-chat-program'
-import { useAppStore } from '@/store/index'
 import { readNativeDetectedAgents } from '@/store/slices/local-detected-agent-store-state'
 import { useDetectedAgents, type AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import { AgentDefaultSetting } from './AgentDefaultSetting'
@@ -53,7 +53,10 @@ import type { AgentCatalogRowProps } from './AgentCatalogRow'
 import { HostAgentEnvironmentEditor } from './HostAgentEnvironmentEditor'
 import { buildCodexSessionSourceHomeControl } from '../../../agent/launch-settings/codex-session-source-home-control'
 import { buildAgentOpensAs } from '../../../../lib/agent-session/launch/native-chat-provider-choice'
-import { AgentChatRuntimeArea } from '../../../agent/launch-settings/AgentChatChoiceControls'
+import {
+  AgentChatRuntimeArea,
+  chatUnavailableOnThisDesktop
+} from '../../../agent/launch-settings/AgentChatChoiceControls'
 import { chatProviderAgents, useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
 import { readHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
@@ -98,7 +101,7 @@ export function AgentLaunchSettingsCatalog({
   } = useDetectedAgents(detectionTarget, 'all')
   const detectedIds = useMemo(() => (detected ? new Set(detected) : null), [detected])
   useHostStructuredAgentsVersion()
-  const installedHere = useAppStore(readNativeDetectedAgents)
+  const installedHere = useAppStateValue(readNativeDetectedAgents)
   const workspace =
     detectionTarget.kind === 'runtime'
       ? { kind: 'git-worktree' as const, runtimeEnvironmentId: detectionTarget.environmentId }
@@ -106,7 +109,7 @@ export function AgentLaunchSettingsCatalog({
   useChatProgramFacts(workspace, detectionTarget.kind !== 'ssh')
   const chosen = settings.defaultTuiAgent
   // The saved default reads as available where it opens as a chat without its CLI.
-  const defaultOpensAsChat = useAppStore((state) =>
+  const defaultOpensAsChat = useAppStateValue((state) =>
     chosen && chosen !== 'blank' && detectionTarget.kind !== 'ssh'
       ? agentChoiceOpensAsChat(state, chosen, workspace, detected)
       : false
@@ -119,7 +122,7 @@ export function AgentLaunchSettingsCatalog({
       .map((row) => row.agent)
   )
   // Agents whose chat program is here without their CLI, like a downloaded chat runtime, are installed for chat.
-  const chatOnlyKey = useAppStore((state) => {
+  const chatOnlyKey = useAppStateValue((state) => {
     if (detectionTarget.kind === 'ssh') {
       return ''
     }
@@ -226,7 +229,7 @@ export function AgentLaunchSettingsCatalog({
     isDetected,
     isEnabled: isTuiAgentEnabled(agent.id, settings.disabledTuiAgents),
     isDefault: isDetected && settings.defaultTuiAgent === agent.id,
-    cmdOverride: isDetected ? settings.agentCmdOverrides[agent.id] : undefined,
+    cmdOverride: settings.agentCmdOverrides[agent.id],
     argsOverride:
       choicesSupported && settings.agentChoices
         ? (settings.agentChoices.userArgs[agent.id] ?? '')
@@ -264,7 +267,14 @@ export function AgentLaunchSettingsCatalog({
         agent: settings.defaultTuiAgent === agent.id ? 'blank' : agent.id
       }),
     onSetEnabled: (enabled) => save({ type: 'availability', agent: agent.id, enabled }),
-    onSaveOverride: (value) => mutate({ type: 'command', agent: agent.id, value }),
+    onSaveOverride: async (value) => {
+      const changed = value !== (settings.agentCmdOverrides[agent.id] ?? '')
+      await mutate({ type: 'command', agent: agent.id, value })
+      // Detection probes the override; local inventories reset on the settings change, a host's need a refresh.
+      if (changed && !local) {
+        void refresh()
+      }
+    },
     onSaveArgs: (value) =>
       typed
         ? saveUserArgs(agent.id, agent.label, value)
@@ -305,7 +315,7 @@ export function AgentLaunchSettingsCatalog({
         : undefined,
       chatRuntime:
         chatAgents.includes(agent.id) &&
-        managedChatAgents.has(agent.id) &&
+        (managedChatAgents.has(agent.id) || chatUnavailableOnThisDesktop(agent.id)) &&
         isTuiAgentEnabled(agent.id, settings.disabledTuiAgents) ? (
           <AgentChatRuntimeArea agent={agent.id} label={agent.label} />
         ) : undefined

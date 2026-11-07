@@ -1,3 +1,5 @@
+import { withoutGitGraph } from '../../../shared/workspace-layout/workspace-layout-client-visibility'
+import type { LayoutEffects } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -179,4 +181,73 @@ describe('Store.applyLayoutCommand (layout.apply)', () => {
     expect(leafIds(root)).toHaveLength(2)
     expect(store.getWorkspaceSession()).toEqual(local)
   })
+})
+
+it('admits competing initial requests against visible tabs inside the durable mutation', async () => {
+  const { store } = await storeWithOneTab()
+  await store.applyLayoutCommand({
+    type: 'closeTabs',
+    workspace: WORKTREE,
+    tabIds: [TAB],
+    force: true
+  })
+  await store.applyLayoutCommand({
+    type: 'openEditorTab',
+    workspace: WORKTREE,
+    tabId: 'graph',
+    fileId: 'graph',
+    contentType: 'git-graph',
+    view: {
+      view: { mode: 'git-graph' },
+      file: { filePath: 'graph', relativePath: 'graph', language: 'plaintext' }
+    },
+    groupId: 'hidden'
+  })
+  const effects: LayoutEffects[] = []
+  const run = {
+    visibility: withoutGitGraph,
+    onEffects: (effect: LayoutEffects) => effects.push(effect)
+  }
+  await expect(
+    store.applyLayoutCommand(
+      { type: 'createTerminalTab', workspace: WORKTREE, tabId: 'restored', initial: 'restore' },
+      ['local'],
+      run
+    )
+  ).resolves.toEqual({ ok: true, result: {} })
+  const replies = await Promise.all([
+    store.applyLayoutCommand(
+      {
+        type: 'createTerminalTab',
+        workspace: WORKTREE,
+        tabId: 'first',
+        leafId: LEAF,
+        groupId: 'old-root',
+        initial: 'activation'
+      },
+      ['local'],
+      run
+    ),
+    store.applyLayoutCommand(
+      {
+        type: 'openAgentSessionTab',
+        workspace: WORKTREE,
+        tabId: 'second',
+        sessionId: 'session',
+        agent: 'codex',
+        initial: 'activation'
+      },
+      ['local'],
+      run
+    )
+  ])
+  expect(replies).toMatchObject([
+    { ok: true, result: { tabId: 'first' } },
+    { ok: true, result: {} }
+  ])
+  expect(
+    store.getWorkspaceSession().tabGroups?.[WORKTREE]?.map(({ id, tabOrder }) => ({ id, tabOrder }))
+  ).toEqual([{ id: 'hidden', tabOrder: ['graph', 'first'] }])
+  expect(effects.flatMap((effect) => effect.startPaneKeys)).toEqual([`first:${LEAF}`])
+  expect(effects.flatMap((effect) => effect.stopPtyIds)).toEqual([])
 })

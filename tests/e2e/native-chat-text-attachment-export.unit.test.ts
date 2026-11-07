@@ -26,7 +26,9 @@ vi.mock('electron', () => ({
       mocks.handlers.set(name, handler)
   }
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.rpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.rpc
+}))
 vi.mock('sonner', () => ({ toast: { success: vi.fn() } }))
 afterEach(cleanup)
 

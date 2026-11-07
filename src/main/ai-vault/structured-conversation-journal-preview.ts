@@ -2,13 +2,13 @@ import { z } from 'zod'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { AiVaultSession } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { firstStructuredAgentSessionPrompt } from '../../shared/agent-session/requests/structured-agent-session-first-prompt'
-import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
+import type { JournalHostDatabase } from '../native-chat/agent-session-journal/database/journal-host-database'
 import {
   applyJournalRow,
   createJournalReducerState,
   renderJournalState
-} from '../native-chat/agent-session-journal/journal-reducer'
-import { parseJournalRow } from '../native-chat/agent-session-journal/journal-row-schema'
+} from '../native-chat/agent-session-journal/projection/journal-reducer'
+import { parseJournalRow } from '../native-chat/agent-session-journal/durable-rows/journal-row-schema'
 
 const ROW_LIMIT = 41
 const ROW_TEXT_LIMIT = 65_536

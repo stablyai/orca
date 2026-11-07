@@ -100,19 +100,19 @@ vi.mock(import('@/lib/pane-manager/pane-terminal-options'), async (importOrigina
   ...(await importOriginal()),
   buildDefaultTerminalOptions: () => ({})
 }))
-vi.mock('@/components/terminal-pane/terminal-user-input-signal', () => ({
+vi.mock('@/components/terminal-pane/input/terminal-user-input-signal', () => ({
   subscribeToTerminalUserInput: (_terminal: unknown, listener: () => void) => {
     terminalHarness.userInputListener = listener
     return { dispose: terminalHarness.userInputDispose }
   }
 }))
-vi.mock('@/components/terminal-pane/use-system-prefers-dark', () => ({
+vi.mock('@/hooks/theme/use-system-prefers-dark', () => ({
   useSystemPrefersDark: () => false
 }))
 vi.mock('@/lib/shortcut-platform', () => ({
   getShortcutPlatform: () => platformState.value
 }))
-vi.mock('@/components/terminal-pane/terminal-ime-native-text-forwarder', () => ({
+vi.mock('@/components/terminal-pane/input/ime/terminal-ime-native-text-forwarder', () => ({
   installTerminalImeNativeTextForwarder: (args: {
     sendInput: (data: string) => void
     getKittyKeyboardFlags?: () => number
@@ -128,7 +128,7 @@ vi.mock('@/components/terminal-pane/terminal-ime-native-text-forwarder', () => (
     return forwarder
   }
 }))
-vi.mock('@/components/terminal-pane/terminal-ime-composition-tracker', () => ({
+vi.mock('@/components/terminal-pane/input/ime/terminal-ime-composition-tracker', () => ({
   installTerminalImeCompositionTracker: () => {
     const tracker = { isActive: () => false, dispose: vi.fn() }
     imeHarness.trackers.push(tracker)
@@ -153,21 +153,24 @@ const multiplexerHarness = vi.hoisted(() => {
   const subscriptions: RemotePreviewSubscription[] = []
   return { environments, subscriptions, sendInput: vi.fn(() => true), close: vi.fn() }
 })
-vi.mock('@/runtime/remote-runtime-terminal-multiplexer', () => ({
-  getRemoteRuntimeTerminalMultiplexer: (environmentId: string) => {
-    multiplexerHarness.environments.push(environmentId)
-    return {
-      subscribeTerminal: async (args: RemotePreviewSubscription) => {
-        multiplexerHarness.subscriptions.push(args)
-        return {
-          sendInput: multiplexerHarness.sendInput,
-          claimViewport: vi.fn(() => true),
-          close: multiplexerHarness.close
+vi.mock(
+  '@/runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry',
+  () => ({
+    getRemoteRuntimeTerminalMultiplexer: (environmentId: string) => {
+      multiplexerHarness.environments.push(environmentId)
+      return {
+        subscribeTerminal: async (args: RemotePreviewSubscription) => {
+          multiplexerHarness.subscriptions.push(args)
+          return {
+            sendInput: multiplexerHarness.sendInput,
+            claimViewport: vi.fn(() => true),
+            close: multiplexerHarness.close
+          }
         }
       }
     }
-  }
-}))
+  })
+)
 
 import { AgentTerminalPreview } from './AgentTerminalPreview'
 import { resetRemoteRuntimeTerminalPreviewSessionsForTests } from './remote-runtime-terminal-preview-api'

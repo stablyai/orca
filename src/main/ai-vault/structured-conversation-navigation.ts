@@ -1,7 +1,7 @@
 import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { isGenericConversationTitle } from '../../shared/project-conversation-list'
 import { conversationNameSeed } from '../../shared/source-control/ai/generation/conversation-name-generation'
-import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
+import type { JournalHostDatabase } from '../native-chat/agent-session-journal/database/journal-host-database'
 import { structuredConversationJournalPreview } from './structured-conversation-journal-preview'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { defaultAgentChatLabel } from '../../shared/agent-session/agent-session-chat-label'
@@ -16,9 +16,9 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { structuredAgentRuntimeMetadata } from '../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import type { StructuredChatOpener } from './structured-session-ownership'
-import type { OrchestrationDb } from '../runtime/orchestration/db'
+import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { z } from 'zod'
-import { clearedInto } from '../runtime/orchestration/structured-session-lineage'
+import { clearedInto } from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
 
 /** Project the existing record catalog; provider files remain optional evidence, never identity. */
 export function projectDurableAiVaultConversations(

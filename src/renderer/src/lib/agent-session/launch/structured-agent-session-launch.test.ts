@@ -7,7 +7,7 @@ import {
   sends,
   composerDraft,
   flushLaunchSettlement
-} from '../../structured-agent-session-launch.test-fixture'
+} from './structured-agent-session-launch.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
@@ -44,12 +44,14 @@ describe('startStructuredAgentLaunch', () => {
       undefined,
       undefined,
       undefined,
+      undefined,
       undefined
     )
     expect(mocks.createIntent).toHaveBeenNthCalledWith(
       2,
       worktreeId,
       'codex',
+      undefined,
       undefined,
       undefined,
       undefined,

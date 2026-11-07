@@ -8,18 +8,18 @@ import {
   liveTestJournalRows,
   openTestJournalHostDatabase,
   type TrackedJournalOpener
-} from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import { restoreJournal } from '../../../src/main/native-chat/agent-session-journal/journal-open'
-import { JOURNAL_PREFIX_ORDINAL } from '../../../src/main/native-chat/agent-session-journal/journal-outcome-codec'
-import { journalOutcomeSource } from '../../../src/main/native-chat/agent-session-journal/journal-outcome-format'
+} from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { restoreJournal } from '../../../src/main/native-chat/agent-session-journal/replay/journal-open'
+import { JOURNAL_PREFIX_ORDINAL } from '../../../src/main/native-chat/agent-session-journal/outcomes/journal-outcome-codec'
+import { journalOutcomeSource } from '../../../src/main/native-chat/agent-session-journal/outcomes/journal-outcome-format'
 import type { AgentJournalSnapshot } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
-import { parseJournalRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-schema'
+import { parseJournalRow } from '../../../src/main/native-chat/agent-session-journal/durable-rows/journal-row-schema'
 import {
   readJournalSessionEpoch,
   type JournalStoredRow
-} from '../../../src/main/native-chat/agent-session-journal/journal-row-table'
-import { JournalWriteProjection } from '../../../src/main/native-chat/agent-session-journal/journal-write-projection'
-import { readPublishedQueuedMessages } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-queued-publication'
+} from '../../../src/main/native-chat/agent-session-journal/durable-rows/journal-row-table'
+import { JournalWriteProjection } from '../../../src/main/native-chat/agent-session-journal/writing/journal-write-projection'
+import { readPublishedQueuedMessages } from '../../../src/main/native-chat/agent-session-wire/delivery/structured-agent-session-queued-publication'
 import { resolveBaselineReleaseRef } from './release-checkout'
 import {
   editReleasedCard,

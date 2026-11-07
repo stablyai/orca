@@ -25,13 +25,16 @@ import {
   requestEditorSaveQuiesce
 } from '@/components/editor/autosave/editor-autosave'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
-import { deleteRuntimePath, writeRuntimeFile } from '@/runtime/runtime-file-mutation-client'
+import {
+  deleteRuntimePath,
+  writeRuntimeFile
+} from '@/runtime/files/mutations/runtime-file-mutation-client'
 import {
   assertFileWriteApplied,
   missingOrIdenticalPrecondition
 } from '../../../../../../shared/file-write-disk-precondition'
 import { deleteWithPermanentFallback } from './file-explorer-trash-fallback'
-import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
+import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
 import { translate } from '@/i18n/i18n'
 
 type UseFileDeletionParams = {

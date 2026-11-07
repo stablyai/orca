@@ -50,7 +50,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 
 type Call = { command: AppliedLayoutCommand; answer: (reply: LayoutApplyReply) => void }
 const rpc = vi.hoisted((): { calls: Call[] } => ({ calls: [] }))
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   callRuntimeRpc: (_target: unknown, _method: string, params: { command: AppliedLayoutCommand }) =>
     new Promise<LayoutApplyReply>((answer) => rpc.calls.push({ command: params.command, answer }))

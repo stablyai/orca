@@ -2,7 +2,7 @@ import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import type { OrchestrationWorkerLaunchReceipt } from './worker-launch-preferences'
 import type { WorkerStartInput } from './worker-start-schema'
-import type { RunRow } from '../../../../orchestration/types'
+import type { RunRow } from '../../../../orchestration/db/orchestration-records'
 import type { startLocalWorker } from './local-worker-start'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
 

@@ -250,3 +250,25 @@ export function shouldShowChecksPanelPublishBranchAction(input: {
   const blockedReason = input.hostedReviewBlockedReason
   return input.hasUpstream === false || blockedReason === 'no_upstream'
 }
+
+export function checksPanelOperationLabel(operation: string): string | null {
+  switch (operation) {
+    case 'rebase':
+      return translate(
+        'auto.components.right.sidebar.checks.panel.content.operation.rebase',
+        'Rebase'
+      )
+    case 'merge':
+      return translate(
+        'auto.components.right.sidebar.checks.panel.content.operation.merge',
+        'Merge'
+      )
+    case 'cherry-pick':
+      return translate(
+        'auto.components.right.sidebar.checks.panel.content.operation.cherryPick',
+        'Cherry-pick'
+      )
+    default:
+      return null
+  }
+}

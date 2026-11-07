@@ -1,11 +1,11 @@
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import { useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type {
   AgentSessionAccountUsage,
   AgentSessionUsageAccount
@@ -186,9 +186,11 @@ function ChatUsageReset({
     if (busy || !result.reset) {
       return
     }
-    attempt.current ??= {
-      idempotencyKey: createBrowserUuid(),
-      expectedScope: result.reset.expectedScope
+    if (attempt.current == null) {
+      attempt.current = {
+        idempotencyKey: createBrowserUuid(),
+        expectedScope: result.reset.expectedScope
+      }
     }
     setBusy(true)
     setFailed(false)

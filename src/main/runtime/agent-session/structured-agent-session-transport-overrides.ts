@@ -4,7 +4,7 @@ import type { AcpStructuredLaunchPartDeps } from '../../acp/acp-structured-launc
 import type { ClaudeStructuredSessionAdapterDeps } from '../../claude/structured/claude-structured-session-state'
 import type { CodexStructuredSessionAdapterDeps } from '../../codex/structured/session-lifecycle/codex-structured-session-state'
 import type { AgentCliVersionReader } from '../../agent-launch/preflight/agent-cli-version-probe'
-import type { StructuredAgentSessionStartupLimits } from '../../native-chat/agent-session-wire/structured-agent-session-startup-attempt-contract'
+import type { StructuredAgentSessionStartupLimits } from '../../native-chat/agent-session-wire/startup/structured-agent-session-startup-attempt-contract'
 import type { PiRpcSessionDeps } from '../../pi/rpc-session'
 import type { PiRpcSessionAdapterDeps } from '../../pi/rpc-session-adapter'
 

@@ -1,9 +1,9 @@
 import type {
   StructuredAgentSessionAcquireInput,
   StructuredAgentSessionAdapter
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { AgentSessionStartEndings } from '../native-chat/agent-session-wire/structured-agent-session-start-failure'
-import type { StructuredAgentSessionProviderOpenInput } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
+} from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { AgentSessionStartEndings } from '../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
+import type { StructuredAgentSessionProviderOpenInput } from '../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import { JsonlRpcAgentExitError } from '../jsonl-rpc/agent-connection'
 import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
 import type { PiRpcSession } from './rpc-session'
