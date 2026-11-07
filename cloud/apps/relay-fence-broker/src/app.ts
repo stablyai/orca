@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { bodyLimit } from 'hono/body-limit'
 import { z } from 'zod'
 import type { RelayFenceBrokerConfig } from './config.js'
 import {
@@ -78,6 +79,13 @@ export function createApp(
   dependencies: AppDependencies = {}
 ): Hono {
   const app = new Hono()
+  app.use(
+    '/v1/*',
+    bodyLimit({
+      maxSize: 16 * 1024,
+      onError: (context) => context.json({ error: 'request_too_large' }, 413)
+    })
+  )
   const lease =
     dependencies.lease ??
     new GoogleStorageMutationLease(
