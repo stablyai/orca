@@ -79,9 +79,8 @@ export async function startSttDictation(
   state.sessions.set(owner, session)
   try {
     if (config) {
-      const engine = await acquireSttEngine(state, session, config, manifest)
       // Audio fed while the model loads queues in the process behind init.
-      session.engine = engine
+      const engine = await acquireSttEngine(state, session, config, manifest)
       await engine.ready
       if (state.engine !== engine) {
         throw new Error(STT_WORKER_EXITED_ERROR)
@@ -146,12 +145,15 @@ async function acquireSttEngine(
       continue
     }
     const current = state.engine
+    // Bound in the same step it is chosen, so an idle teardown never sees it unused.
     if (current && sameSttRecognizerConfig(current, config)) {
       clearSttIdleTeardownTimer(state)
+      session.engine = current
       return current
     }
     if (!current) {
-      return spawnSttEngine(state, config, manifest)
+      session.engine = spawnSttEngine(state, config, manifest)
+      return session.engine
     }
     // No session uses a recognizer with another config, so it is idle.
     await teardownSttEngine(state, current)
