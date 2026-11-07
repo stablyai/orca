@@ -22,10 +22,6 @@ import {
 import { translate } from '../i18n/mobile-i18n'
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionState } from '../../../src/shared/agent-session/structured-agent-session-reducer'
-import {
-  structuredAgentSessionFollowUpsQueue,
-  structuredAgentSessionQueueEnabled
-} from '../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import type { RpcClient } from '../transport/rpc-client'
 import type {
   MobileNativeChatSendIntent,
@@ -33,7 +29,10 @@ import type {
 } from './native-chat/mobile-native-chat-send'
 import { dispatchMobileStructuredCommand } from './mobile-structured-composer-command'
 import type { MobileNativeChatSendErrorReporter } from './native-chat/use-mobile-native-chat-send-error'
-import { sendMobileStructuredAgentSessionMessage } from './mobile-structured-agent-session-send'
+import {
+  sendMobileStructuredAgentSessionMessage,
+  mobileStructuredSendQueues
+} from './mobile-structured-agent-session-send'
 import type { MobileStructuredSends } from './use-mobile-structured-sends'
 import type { MobileStructuredSendsOut } from './use-mobile-structured-stop-offer'
 import { structuredSessionOperationId } from './structured-session-operation-id'
@@ -44,25 +43,9 @@ import {
   actionableStructuredQuestion
 } from './mobile-structured-actionable-prompt'
 
-/** The desktop's rule: the alternate flips the setting first, then the queue's own rules decide. */
-export function mobileStructuredSendQueues(
-  queueCapable: boolean,
-  queueFollowUps: boolean,
-  state: Pick<StructuredAgentSessionState, 'items' | 'currentRequests' | 'queuedMessages'>,
-  send: { alternate?: boolean; isWorking: boolean; stopping: boolean } = {
-    isWorking: false,
-    stopping: false
-  }
-): boolean {
-  return (
-    queueCapable &&
-    structuredAgentSessionQueueEnabled(
-      structuredAgentSessionFollowUpsQueue(queueFollowUps, send),
-      state,
-      selectAgentSessionCurrentRequests(state)
-    )
-  )
-}
+export { mobileStructuredSendQueues } from './mobile-structured-agent-session-send'
+
+export type StructuredMobileSendRequest = MobileNativeChatSendIntent
 
 export type StructuredMobileSendAttachment =
   | (StructuredAgentSessionAttachment & { kind?: 'image'; id?: string })
@@ -74,6 +57,7 @@ export function useMobileStructuredSendWithOutcome(args: {
   sessionId: string | null
   enabled: boolean
   queueCapable: boolean
+  steerCapable?: boolean
   queueFollowUps: boolean
   commandsWait: boolean
   stateRef: { readonly current: StructuredAgentSessionState }
@@ -123,6 +107,7 @@ export function useMobileStructuredSendWithOutcome(args: {
     reject,
     onSendError,
     queueCapable,
+    steerCapable = false,
     queueFollowUps,
     queueSendsNext,
     sendOptions,
@@ -155,6 +140,11 @@ export function useMobileStructuredSendWithOutcome(args: {
       }
       if (attachments === undefined && images !== undefined && images.length > 0) {
         onSendError('Message not sent')
+        return 'rejected'
+      }
+      const immediate = intent?.delivery === 'immediate'
+      if (immediate && queueCapable && !steerCapable) {
+        onSendError('Update Orca on this host to answer while the agent works.')
         return 'rejected'
       }
       const captured = sendSelection?.() ?? { options: sendOptions?.() }
@@ -260,9 +250,11 @@ export function useMobileStructuredSendWithOutcome(args: {
         expectedRuntimeFence: currentFence,
         text: wireText,
         attachments: imageAttachments,
+        ...(immediate && steerCapable ? { steer: true as const } : {}),
         skills,
         // Resolved from the chat as it is now: a hold-menu choice made mid-turn may land after it.
-        ...(mobileStructuredSendQueues(queueCapable, queueFollowUps, stateRef.current, {
+        ...(!immediate &&
+        mobileStructuredSendQueues(queueCapable, queueFollowUps, stateRef.current, {
           alternate: intent?.alternate,
           isWorking: mobileStructuredAgentSessionWorking(stateRef.current) || queueSendsNext,
           stopping
@@ -295,6 +287,7 @@ export function useMobileStructuredSendWithOutcome(args: {
       reject,
       onSendError,
       queueCapable,
+      steerCapable,
       queueFollowUps,
       queueSendsNext,
       sendOptions,

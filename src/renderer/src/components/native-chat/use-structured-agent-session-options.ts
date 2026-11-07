@@ -1,4 +1,5 @@
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { StructuredAgentSessionOptionsArgs } from './structured-agent-session-options-contract'
 import { toast } from 'sonner'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
@@ -67,14 +68,24 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
 
   const acceptsPicks = (!transportEnabled || fence !== null) && launch?.seedPending !== true
 
-  const interactionReadyRef = useRef(acceptsPicks)
+  const acceptsTurnPicks =
+    acceptsPicks && (!(args.isWorking ?? turnId !== null) || takesSendOptions || takesSelection)
+  const interactionReadyRef = useRef(acceptsTurnPicks)
   const lockSnapshotRef = useRef(
     (snapshot: ReturnType<typeof structuredAgentSessionOptionSnapshot>) => snapshot
   )
   const lockSnapshot = (snapshot: ReturnType<typeof structuredAgentSessionOptionSnapshot>) =>
-    !acceptsPicks ? lockedStructuredAgentSessionOptionSnapshot(snapshot) : snapshot
+    !acceptsPicks
+      ? lockedStructuredAgentSessionOptionSnapshot(snapshot)
+      : !acceptsTurnPicks
+        ? snapshot.map((descriptor) =>
+            descriptor.id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID
+              ? descriptor
+              : { ...descriptor, settable: false, disabledReason: 'host-update-required' as const }
+          )
+        : snapshot
   useLayoutEffect(() => {
-    interactionReadyRef.current = acceptsPicks
+    interactionReadyRef.current = acceptsTurnPicks
     lockSnapshotRef.current = lockSnapshot
   })
   const renderedView = optionView(optionState, launchSeedOptions, launch?.explicitOptions)
@@ -114,7 +125,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
       record: optionStateRef.current.record,
       view,
       snapshot: lockSnapshotRef.current(structuredAgentSessionOptionSnapshot(view)),
-      ready: acceptsPicks && interactionReadyRef.current,
+      ready: acceptsTurnPicks && interactionReadyRef.current,
       providerStarting,
       existingChat: !newLaunch || args.hasTurn === true,
       isCurrentContext,
@@ -191,7 +202,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     optionSnapshot,
     optionSurface,
     setStructuredOption,
-    sendSource: { optionStateRef, optionView, takesSendOptions, takesSelection },
+    sendSource: { optionStateRef, optionView, controller, takesSendOptions, takesSelection },
     unavailable: hostCatalog.unavailable
   }
 }
