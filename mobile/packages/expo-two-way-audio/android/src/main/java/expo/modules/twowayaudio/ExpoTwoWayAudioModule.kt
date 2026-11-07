@@ -17,7 +17,11 @@ class ExpoTwoWayAudioModule : Module() {
         var audioEngine: AudioEngine? = null
     }
 
-    private val speech by lazy { OnDeviceSpeech { name, body -> sendEvent(name, body) } }
+    private val speech by lazy {
+        OnDeviceSpeech(requireNotNull(appContext.reactContext).applicationContext) { name, body ->
+            sendEvent(name, body)
+        }
+    }
 
     override fun definition() = ModuleDefinition {
         Name("ExpoTwoWayAudio")

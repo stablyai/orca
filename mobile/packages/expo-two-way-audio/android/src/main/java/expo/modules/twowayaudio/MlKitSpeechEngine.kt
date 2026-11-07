@@ -45,6 +45,7 @@ internal class MlKitSpeechEngine : OnDeviceSpeechEngine {
           is DownloadStatus.DownloadStarted -> total = status.bytesToDownload
           is DownloadStatus.DownloadProgress ->
             if (total > 0) onProgress((status.totalBytesDownloaded.toDouble() / total).coerceIn(0.0, 1.0))
+          else -> Unit
         }
         status is DownloadStatus.DownloadCompleted || status is DownloadStatus.DownloadFailed
       }

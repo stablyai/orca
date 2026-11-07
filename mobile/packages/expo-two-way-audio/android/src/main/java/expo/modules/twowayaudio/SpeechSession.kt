@@ -37,6 +37,9 @@ internal interface OnDeviceSpeechEngine {
   suspend fun recognize(target: SpeechTarget, audio: PcmQueue, onText: (String, String) -> Unit): String
 
   fun failureCode(error: Throwable): String
+
+  // Releases anything the engine keeps between sessions.
+  fun close() = Unit
 }
 
 // Microphone PCM fed from JS before and while the recognizer reads it. Never blocks the feeding thread.
@@ -60,7 +63,7 @@ internal class PcmQueue {
 
 internal class SpeechSession(
   scope: CoroutineScope,
-  engine: OnDeviceSpeechEngine,
+  val engine: OnDeviceSpeechEngine,
   target: SpeechTarget,
   onText: (Int, String, String) -> Unit
 ) {
