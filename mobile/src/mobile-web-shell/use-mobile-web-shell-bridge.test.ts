@@ -133,6 +133,8 @@ function Harness(props: {
     session: props.session,
     sessionEstablished: props.sessionEstablished ?? (sessionId !== null && handshook === sessionId),
     route: { pathname: '/h/host-1' },
+    // This connection's verdict is open, so desktop-bound frames pass.
+    hostStatus: { protocolVersion: 1 },
     safeAreaInsets: { top: 0, right: 0, bottom: 0, left: 0 },
     keyboardInset: 0,
     foldDivision: null,
@@ -195,7 +197,13 @@ function readyState(sessionId: string): MobileWebShellSessionState {
     sessionId,
     buildId: 'build-a',
     totalBytes: 4096,
-    elapsedMs: 11
+    elapsedMs: 11,
+    compat: {
+      schemaVersion: 1,
+      runtimeProtocolVersion: 1,
+      minCompatibleRuntimeProtocolVersion: 1,
+      pageVersion: 1
+    }
   }
 }
 
