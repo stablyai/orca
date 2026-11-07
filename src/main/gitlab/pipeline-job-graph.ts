@@ -41,6 +41,7 @@ type GitLabRawBridge = {
   } | null
 }
 
+/** Maps one raw GitLab job; keeps `allow_failure` so Checks can show allowed failures. */
 function mapPipelineJob(raw: GitLabRawJob, pipelineId: number): GitLabPipelineJob {
   return {
     id: raw.id ?? 0,
@@ -55,6 +56,7 @@ function mapPipelineJob(raw: GitLabRawJob, pipelineId: number): GitLabPipelineJo
   }
 }
 
+/** Maps a trigger (bridge) job as a row that stands for its downstream pipeline. */
 function mapBridgeAsJob(raw: GitLabRawBridge, pipelineId: number): GitLabPipelineJob {
   const childStatus = raw.downstream_pipeline?.status
   return {

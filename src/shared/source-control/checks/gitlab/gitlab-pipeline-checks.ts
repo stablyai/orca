@@ -21,6 +21,7 @@ export function mapGitLabPipelineJobStatusToCheckStatus(status: string): PRCheck
   return 'completed'
 }
 
+/** GitLab job status to check conclusion; a failed `allow_failure` job is `allowed_failure`. */
 export function mapGitLabPipelineJobStatusToConclusion(
   status: string,
   allowFailure = false
@@ -108,6 +109,7 @@ export function getGitLabPipelineNotLatestCommitSha(
   return pipeline.sha.toLowerCase() === mrHeadSha.toLowerCase() ? undefined : pipeline.sha
 }
 
+/** Turns GitLab pipeline jobs into provider-neutral Checks rows. */
 export function gitLabPipelineJobsToPRChecks(jobs: GitLabPipelineJob[]): PRCheckDetail[] {
   return jobs.map((job) => ({
     name: job.stage ? `${job.stage}: ${job.name}` : job.name,

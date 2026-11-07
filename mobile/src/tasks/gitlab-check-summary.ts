@@ -9,6 +9,7 @@ import type { GitLabPipeline } from '../../../src/shared/gitlab-types'
 
 type GitLabPipelineJobLike = { status: string; allowFailure?: boolean }
 
+/** Checks summary for a GitLab item: the pipeline verdict when known, else a job rollup. */
 export function buildGitLabCheckSummary(
   jobs: GitLabPipelineJobLike[],
   pipeline?: GitLabPipeline
