@@ -183,16 +183,12 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
       if (disposed) {
         return
       }
-      await ensureSessionTabs().catch(() => null)
-      if (disposed) {
-        return
-      }
+      // Both join the focus refresh's in-flight reads; its 2 s tick re-lists while the tab stream is unconfirmed or a handle is pending.
+      void ensureSessionTabs().catch(() => null)
       await fetchTerminals({ allowEmptyLoaded: false })
       if (disposed) {
         return
       }
-      addTimer(() => void fetchTerminals({ allowEmptyLoaded: false }), 750)
-      addTimer(() => void fetchTerminals({ allowEmptyLoaded: true }), 1500)
       if (client && created === '1' && !isFloatingWorkspaceRoute) {
         addTimer(() => {
           if (activeHandleRef.current) {

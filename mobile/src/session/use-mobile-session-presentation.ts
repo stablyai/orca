@@ -38,7 +38,9 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     visibleTabs,
     forceReconnectHost
   } = scope
-  const showLoadingState = connState === 'connected' && !terminalsLoaded && visibleTabs.length === 0
+  // A cached strip has no active tab until the host's tabs land, so its body loads instead of drawing an empty frame.
+  const showLoadingState =
+    connState === 'connected' && !terminalsLoaded && scope.activeSessionTab === null
   const showEmptyState =
     connState === 'connected' && terminalsLoaded && visibleTabs.length === 0 && !activeHandle
 
@@ -72,7 +74,7 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
   const showOfflineState = presentedConnState !== 'connected' && visibleTabs.length === 0
   const terminalSummary =
     presentedConnState === 'connected'
-      ? showLoadingState
+      ? showLoadingState && visibleTabs.length === 0
         ? t('session.presentation.loadingTabs', 'Loading tabs')
         : visibleTabs.length === 1
           ? t('session.presentation.oneTab', '1 tab')
