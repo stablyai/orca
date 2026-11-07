@@ -80,9 +80,40 @@ describe('Orca shortcuts while a plugin guest has focus', () => {
     expect(send).toHaveBeenCalledWith('ui:closeActiveTab')
   })
 
+  it.each([false, true])('forwards the left sidebar toggle with browserPage=%s', (browserPage) => {
+    const { send, press } = pluginGuestHarness(browserPage)
+    const consumed = press(keyDown('b', 'KeyB'))
+    expect(send).toHaveBeenCalledWith('ui:toggleLeftSidebar')
+    expect(consumed).toHaveBeenCalled()
+  })
+
+  it('forwards the right sidebar toggle from a plugin frame', () => {
+    const { send, press } = pluginGuestHarness()
+    const consumed = press(keyDown('l', 'KeyL'))
+    expect(send).toHaveBeenCalledWith('ui:toggleRightSidebar')
+    expect(consumed).toHaveBeenCalled()
+  })
+
+  it('keeps the browser address-bar chord ahead of the right sidebar toggle', () => {
+    const { send, press } = pluginGuestHarness(true)
+    const consumed = press(keyDown('l', 'KeyL'))
+    expect(send).toHaveBeenCalledWith('ui:focusBrowserAddressBar', {
+      browserPageId: 'plugin-frame:7'
+    })
+    expect(consumed).toHaveBeenCalled()
+  })
+
+  it('leaves keys without an Orca chord with the guest', () => {
+    const { send, press } = pluginGuestHarness()
+    const bare = { ...keyDown('q', 'KeyQ'), meta: false, control: false }
+    expect(press(bare)).not.toHaveBeenCalled()
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it('leaves browser-page chords and the editor save chord to the guest', () => {
     const { send, press } = pluginGuestHarness()
-    // Mod+F would open browser find; Mod+S rides editor.keydown, so it must not double-fire.
+    // Mod+R would reload and Mod+F would open browser find; Mod+S rides editor.keydown, so they must not double-fire.
+    expect(press(keyDown('r', 'KeyR'))).not.toHaveBeenCalled()
     expect(press(keyDown('s', 'KeyS'))).not.toHaveBeenCalled()
     expect(press(keyDown('f', 'KeyF'))).not.toHaveBeenCalled()
     expect(send).not.toHaveBeenCalled()
