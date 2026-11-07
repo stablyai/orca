@@ -13,8 +13,8 @@ type UsageSnapshotStore = {
   ) => unknown
 }
 
-// Why: the stores scan transcripts on this Mac's disk (~/.claude/projects is 20+ GB), so the phone
-// can only read the aggregates the desktop already built. Startup hands them over in register-core-handlers.
+// Why: the stores scan transcripts on this Mac's disk (transcript folders can run to tens of GB), so the phone
+// can only read the aggregates the desktop already built. registerUsageProviderHandlers (ipc/usage-provider-handlers.ts) hands them over at startup.
 let usageStores: Record<UsageSnapshotProvider, UsageSnapshotStore> | null = null
 
 export function setUsageSnapshotStores(
