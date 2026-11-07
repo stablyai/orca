@@ -69,9 +69,9 @@ export function createCodexModelCatalogProbe(
     })
     assertStructuredAgentResolutionCurrent(operation)
     // Every listing runs in `cwd` with the user's command line, as other Codex hosts list from their
-    // own folder: a repo's project config never reaches the account's list, and relative paths in
-    // user arguments are not resolved against the chat's folder. With no root markers Codex reads
-    // project config only from `cwd` itself, never from a repo above Orca's folder.
+    // own folder, so the chat's repo never picks the list; relative paths in user arguments are not
+    // resolved against the chat's folder. No root markers keep Codex from reading a repo above
+    // Orca's folder too, unless an administrator's managed config sets its own.
     const args = [
       ...prefixArgs,
       ...(cwd ? codexStructuredLaunchArgs((await deps.resolveLaunchArgs?.()) ?? []) : []),

@@ -23,7 +23,7 @@ describe('codex model catalog probe', () => {
   ])(
     "lists a command line with arguments %j from Orca's folder for every chat",
     async (prefixArgs) => {
-      // A repo's own config never reaches the account's list, so no listing runs in a chat's folder.
+      // The chat's repo never picks the list, so no listing runs in a chat's folder.
       const invocations: CodexAppServerInvocation[] = []
       const configReads: unknown[] = []
       const probe = createCodexModelCatalogProbe({
