@@ -10,6 +10,7 @@ import { ORCHESTRATION_MESSAGE_METHODS } from './messaging/message-methods'
 import { ORCHESTRATION_DISPATCH_METHODS } from './runs/dispatch-methods'
 import { ORCHESTRATION_ASK_METHODS } from './messaging/ask-methods'
 import { ORCHESTRATION_GATE_METHODS } from './gates/gates'
+import { ORCHESTRATION_LOCK_METHODS } from './locks/locks'
 import { ORCHESTRATION_RESET_METHODS } from './runs/reset-methods'
 import { ORCHESTRATION_CALLER_METHODS } from './caller-show'
 
@@ -26,6 +27,7 @@ export const ORCHESTRATION_METHODS = requiringOrcadFeature('orchestration', [
   ...ORCHESTRATION_DISPATCH_METHODS,
   ...ORCHESTRATION_ASK_METHODS,
   ...ORCHESTRATION_GATE_METHODS,
+  ...ORCHESTRATION_LOCK_METHODS,
   ...ORCHESTRATION_RESET_METHODS,
   ...ORCHESTRATION_CALLER_METHODS
 ])
