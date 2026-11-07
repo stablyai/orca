@@ -62,32 +62,7 @@ export type AgentModelCatalogConfiguredDefault = {
   at: number
 }
 
-/** Report defaults only for config-resolved launches; undefined is unknown, null is unlisted. */
-export function unpickedSessionConfiguredChoice(session: {
-  resolvesConfig: boolean
-  picked?: ReadonlySet<string>
-  models: readonly { id: string }[]
-  current: { model?: string; effort?: string }
-}): AgentModelCatalogConfiguredChoice | null | undefined {
-  const { models, current } = session
-  // Empty/signed-out listings cannot establish catalog membership.
-  if (
-    !session.resolvesConfig ||
-    session.picked?.has('model') ||
-    !current.model ||
-    models.length === 0
-  ) {
-    return undefined
-  }
-  if (!models.some((model) => model.id === current.model)) {
-    return null
-  }
-  return {
-    modelId: current.model,
-    // Session effort picks do not establish configured defaults.
-    ...(session.picked?.has('effort') ? {} : { effort: current.effort ?? null })
-  }
-}
+export { unpickedSessionConfiguredChoice } from './agent-model-catalog-models'
 
 export function withLiveCatalogListing<
   T extends Pick<AgentModelCatalogLiveListing, 'models' | 'fastModeSupport'>
@@ -131,7 +106,15 @@ export function agentModelCatalogResultFromEntry(
     models: models.map((model) => (namesDefault ? { ...model } : { ...model, isDefault: false })),
     ...(entry.fastModeSupport ? { fastModeSupport: entry.fastModeSupport } : {}),
     fetchedAt: entry.fetchedAt,
-    listingNamesConfiguredModel: namesDefault && namesConfigured
+    listingNamesConfiguredModel: namesDefault && namesConfigured,
+    ...(namesDefault && useConfigured && entry.configured
+      ? {
+          defaultModelOptions: {
+            model: entry.configured.modelId,
+            ...(entry.configured.effort ? { effort: entry.configured.effort } : {})
+          }
+        }
+      : {})
   }
 }
 

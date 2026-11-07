@@ -100,7 +100,7 @@ export function createAgentModelCatalogService(
       live.providerStarted(record, source)
     },
     async read(params) {
-      const waits = !params.savedOnly && params.waitForListing
+      const waits = !params.savedOnly && (params.waitForListing || params.requireConfiguredDefault)
       const deadline = params.deadline ?? Date.now() + AGENT_MODEL_CATALOG_PICKER_WAIT_MS
       if (waits) {
         const operation = params.operation ?? captureRead({ ...params, deadline })

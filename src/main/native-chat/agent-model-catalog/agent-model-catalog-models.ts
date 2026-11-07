@@ -104,3 +104,25 @@ export function configuredDeclarationModels(
   })
   return changed ? observed : models
 }
+
+/** Report defaults only for config-resolved launches; undefined is unknown, null is unlisted. */
+export function unpickedSessionConfiguredChoice(session: {
+  resolvesConfig: boolean
+  picked?: ReadonlySet<string>
+  models: readonly { id: string }[]
+  current: { model?: string; effort?: string }
+}): AgentModelCatalogConfiguredChoice | null | undefined {
+  const { models, current, resolvesConfig, picked } = session
+  // Empty/signed-out listings cannot establish catalog membership.
+  if (!resolvesConfig || picked?.has('model') || !current.model || models.length === 0) {
+    return undefined
+  }
+  if (!models.some((model) => model.id === current.model)) {
+    return null
+  }
+  return {
+    modelId: current.model,
+    // Session effort picks do not establish configured defaults.
+    ...(session.picked?.has('effort') ? {} : { effort: current.effort ?? null })
+  }
+}

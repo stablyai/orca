@@ -86,6 +86,7 @@ export function structuredAgentSessionOptionStamp(
         | 'fastMode'
         | 'serviceTier'
         | 'interactionMode'
+        | 'modelDefault'
       >
     | undefined
 ): string {
@@ -96,7 +97,8 @@ export function structuredAgentSessionOptionStamp(
     summary?.effort,
     summary?.fastMode,
     summary?.serviceTier,
-    summary?.interactionMode
+    summary?.interactionMode,
+    summary?.modelDefault === true
   ]
     .map((value) => value ?? '')
     .join('|')
