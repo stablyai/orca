@@ -9,6 +9,7 @@ import type {
 } from './native-chat-composer-types'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import type { useStructuredAgentSession } from './session/structured/use-structured-agent-session'
+import type { NativeChatForkSurface } from './use-native-chat-fork'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/agent-session-thread-goal-wire'
 import { translate } from '@/i18n/i18n'
@@ -29,9 +30,40 @@ function nativeChatSessionAttachmentNotReadyNotice(agent: AgentType, starting: b
       )
 }
 
+function nativeChatForkCommand(
+  fork: NativeChatForkSurface | undefined,
+  isWorking: boolean
+): NativeChatStructuredComposerTransport['fork'] {
+  // Offered once the host and agent confirm they can fork, as the response action is enabled.
+  if (fork?.support.kind !== 'known') {
+    return undefined
+  }
+  return {
+    run: () => {
+      if (isWorking) {
+        return translate(
+          'components.native-chat.fork.commandWorking',
+          'Wait for the response to finish, then fork.'
+        )
+      }
+      const outcome = fork.forkLatest()
+      return outcome === 'none'
+        ? translate(
+            'components.native-chat.fork.commandNothing',
+            'There’s no response to fork yet.'
+          )
+        : outcome === 'pending'
+          ? translate('components.native-chat.fork.pending', 'Forking this chat…')
+          : null
+    }
+  }
+}
+
 export function useNativeChatStructuredComposerTransport(args: {
   props: Pick<NativeChatStructuredViewProps, 'agent' | 'sessionId' | 'target'>
   controller: ReturnType<typeof useStructuredAgentSession>
+  /** The session's fork, run by `/fork`. */
+  fork: NativeChatForkSurface | undefined
   /** Sends now, restarts a failed start with the message, or refuses while the chat starts. */
   sendThroughLaunch: (
     text: string,
@@ -48,7 +80,8 @@ export function useNativeChatStructuredComposerTransport(args: {
   /** Host reason for refusing turns and holding Send. */
   sendBlockedReason?: string | null
 }): NativeChatStructuredComposerTransport {
-  const { props, controller, sendThroughLaunch, starting, worktreeId, optionPickerRequest } = args
+  const { props, controller, fork, sendThroughLaunch, starting, worktreeId, optionPickerRequest } =
+    args
   const { setOptionPickerRequest, onError } = args
   const { revealLatest: onSubmitted, captureRevealLatest: captureAdmittedReveal } = args.reveal
   const { transportEnabled } = args
@@ -80,6 +113,7 @@ export function useNativeChatStructuredComposerTransport(args: {
                 })
             }
           : undefined,
+      fork: nativeChatForkCommand(fork, controller.isWorking),
       capturePresentation: controller.capturePresentation,
       send: (text, attachments, ...request) =>
         sendBlockedReason === null &&
@@ -152,6 +186,7 @@ export function useNativeChatStructuredComposerTransport(args: {
   }, [
     acceptsImages,
     controller,
+    fork,
     worktreeId,
     onError,
     onSubmitted,
