@@ -1,5 +1,7 @@
 import { normalizeMobileSessionTabSelection } from './mobile-session-tab-selection'
 import { RuntimeHeadlessTabProperties } from './headless-tab-properties'
+import type { AiVaultSessionOpenTab } from '../../../shared/ai-vault-types'
+import { resolveOpenTabForSessionId } from '../workspaces/workspace-session-open-tab-resolution'
 import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabMove,
@@ -209,6 +211,22 @@ export abstract class RuntimeHeadlessTabGroups extends RuntimeHeadlessTabPropert
         }))
       },
       ...(layout ? { tabGroupLayouts: { ...session.tabGroupLayouts, [worktreeId]: layout } } : {})
+    })
+  }
+
+  resolveOpenTabForSession(sessionId: string): AiVaultSessionOpenTab | null {
+    if (!sessionId) {
+      return null
+    }
+    return resolveOpenTabForSessionId({
+      sessionId,
+      mobileSessionTabsByWorktree: this.mobileSessionTabsByWorktree,
+      leaves: this.leaves,
+      tabs: this.tabs,
+      ptysById: this.ptysById,
+      statusRows:
+        this.getAgentProviderSessionSnapshotFn?.() ?? this.getAgentStatusSnapshotFn?.() ?? [],
+      session: this.store?.getWorkspaceSession?.()
     })
   }
 }
