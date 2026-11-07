@@ -18,11 +18,14 @@ export type OpenedRelayLink = {
   host: MobileDesktopRelayHost
 }
 
+/** A phone, or a paired desktop/web client relayed under runtime.client-relay.v1; the server sees both as phones. */
 export type RelayedPhone = {
   connectionId: string
   deviceId: string
   deviceToken: string
   clientCapabilities: () => readonly RuntimeCapability[]
+  /** Runs once the target names a configured server, before its sync asks for this caller's grant. */
+  onServerResolved?: (environmentId: string) => void
   reply: (frame: string) => void
   sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
 }
@@ -83,7 +86,17 @@ export class RelayLink {
       throw unavailable('The server was disconnected on this computer.')
     }
     this.paired = true
+    if (host) {
+      this.phone.onServerResolved?.(this.environmentId)
+    }
     return host
+  }
+
+  deliverText(plaintext: string, hostToken: string): void {
+    const frame = this.replies.text(plaintext)
+    if (frame !== null) {
+      this.phone.reply(withCallerToken(frame, hostToken, this.phone.deviceToken))
+    }
   }
 
   /** Whether this link may carry a request. One that opens a workspace while the recipe VM behind
@@ -158,4 +171,9 @@ export function relaySetupDeadline(budgetMs: number): {
       }
     }
   }
+}
+
+// A server echoing its caller (e.g. a driver's clientId) names the child; the caller only knows itself.
+export function withCallerToken(frame: string, hostToken: string, callerToken: string): string {
+  return frame.includes(hostToken) ? frame.split(hostToken).join(callerToken) : frame
 }
