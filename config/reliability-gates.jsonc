@@ -10917,7 +10917,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/input/ime/terminal-ime-linux-fcitx4-trace-replay.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/input/ime/terminal-ime-xterm-midline-preedit-tail.test.ts src/renderer/src/components/terminal-pane/input/ime/terminal-ime-xterm-resumed-preedit-visibility.test.ts src/renderer/src/components/terminal-pane/input/ime/terminal-ime-xterm-trailing-preedit-occlusion.test.ts src/renderer/src/lib/pane-manager/terminal-ime-candidate-anchor.test.ts src/renderer/src/components/terminal-pane/input/ime/terminal-ime-composer-placeholder-mask.test.ts src/shared/terminal/input/terminal-composer-draft.test.ts src/main/daemon/emulation/testing/terminal-cursor-line-context.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/dashboard-popout/preview-terminal-ime-bridge-kitty-bytes.test.ts src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx src/shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker.test.ts src/main/ipc/terminal-preview-output-stream.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/input/keyboard/terminal-kitty-csi-u-encoding.test.ts src/renderer/src/components/terminal-pane/input/keyboard/terminal-shortcut-option-compose.test.ts src/renderer/src/components/terminal-pane/input/keyboard/terminal-option-kitty-release.test.ts src/renderer/src/lib/keyboard-layout/layout-base-character.test.ts src/main/ipc/macos-keyboard-layout-snapshot.test.ts src/main/ipc/macos-keyboard-layout-change-notifications.test.ts src/preload/app-restart-checkpoint-routing.test.ts src/renderer/src/web/web-preload-api-ui.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/input/keyboard/terminal-kitty-csi-u-encoding.test.ts src/renderer/src/components/terminal-pane/input/keyboard/terminal-shortcut-option-compose.test.ts src/renderer/src/components/terminal-pane/input/keyboard/terminal-option-kitty-release.test.ts src/renderer/src/lib/keyboard-layout/layout-base-character.test.ts src/main/ipc/macos-keyboard-layout-change-notifications.test.ts src/preload/app-restart-checkpoint-routing.test.ts src/renderer/src/web/web-preload-api-ui.test.ts",
         "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts",
         "pnpm run test:e2e -- tests/e2e/terminal-korean-endofrow-preedit-cell-span.spec.ts tests/e2e/terminal-korean-midline-preedit-occlusion.spec.ts",
         "pnpm run test:e2e -- tests/e2e/terminal-option-composed-ascii.spec.ts"
@@ -10943,7 +10943,6 @@
         "src/renderer/src/components/terminal-pane/input/keyboard/terminal-shortcut-option-compose.test.ts",
         "src/renderer/src/components/terminal-pane/input/keyboard/terminal-option-kitty-release.test.ts",
         "src/renderer/src/lib/keyboard-layout/layout-base-character.test.ts",
-        "src/main/ipc/macos-keyboard-layout-snapshot.test.ts",
         "src/main/ipc/macos-keyboard-layout-change-notifications.test.ts",
         "src/preload/app-restart-checkpoint-routing.test.ts",
         "src/renderer/src/web/web-preload-api-ui.test.ts",
@@ -11052,18 +11051,9 @@
           ]
         },
         {
-          "file": "src/main/ipc/macos-keyboard-layout-snapshot.test.ts",
-          "assertions": [
-            "the native snapshot parser preserves input/layout identities and both modifier layers"
-          ]
-        },
-        {
           "file": "src/main/ipc/macos-keyboard-layout-change-notifications.test.ts",
           "assertions": [
-            "the distributed input-source notification invalidates every live window before waiting out the old helper read",
-            "rapid input-source changes coalesce to one latest-generation refresh signal",
-            "destroyed windows and teardown races cannot crash the main process, and will-quit unsubscribes exactly once",
-            "non-macOS processes install no native subscription"
+            "rapid input-source changes coalesce to one latest-generation refresh signal"
           ]
         },
         {
@@ -11102,7 +11092,8 @@
         {
           "file": "src/main/ipc/terminal-preview-output-stream.test.ts",
           "assertions": [
-            "fully covered chunks are dropped, a sliced or strictly newer sequenced suffix gets live mode semantics, and an unsliceable or metadata-less overlap gets replay semantics"
+            "a partially covered sequenced chunk retains exactly its unseen suffix in live mode",
+            "a transformed overlap remains unsliced in replay mode"
           ]
         },
         {
@@ -11227,7 +11218,8 @@
         "Audit1391: src/renderer/src/lib/pane-manager/terminal-ime-candidate-anchor.test.ts reduced. Lose explicit one-read/unchanged-style work budget across 30 syllables and single-timer burst alarm. Synthetic screen bounds/terminal cursor bound retained proof to DOM anchor updates, not actual OS IME placement. src/renderer/src/components/terminal-pane/terminal-kitty-csi-u-encoding.test.ts reduced. Lose explicit PC-101 alternate omission, multi-codepoint/control associated text filtering, lock modifier integer, shifted punctuation, standalone separator and printable nonfunctional keypad fallbacks. Retained pure encoding is a wire-contract check without host input delivery. No equivalent replacement coverage is claimed. Historical removed assertion inventory: [{\"file\":\"src/renderer/src/lib/pane-manager/terminal-ime-candidate-anchor.test.ts\",\"assertions\":[\"keeps forced layout at one read per composition across a Hangul burst\",\"coalesces the deferred Cursor Agent re-apply to one timer per burst\",\"keeps typed follow-ups anchored after recognizing the initial Cursor Agent screen\",\"refreshes the deferred metrics and anchor after a refit\"]},{\"file\":\"src/renderer/src/components/terminal-pane/terminal-kitty-csi-u-encoding.test.ts\",\"assertions\":[\"report-all Option events encode exact alternate, repeat, release, and associated-text fields\",\"report-all native commits preserve unresolved layout characters and distinguish functional from printable numpad identities\",\"associated text omits forbidden control codepoints\",\"release events omit associated text and sparse PC-101 alternates retain their parameter position\",\"CapsLock and NumLock occupy their protocol modifier bits\"]}]",
         "Audit1396: src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts reduced. Lose standalone handled Ctrl, Shift+Space, shifted non-ASCII keydown and active-composition backspace/arrow/text/Process suppression alarms. No actual IME/PTY encoding occurs. No equivalent replacement coverage is claimed. Historical removed assertion inventory: [{\"file\":\"src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts\",\"assertions\":[\"macOS standalone Process key behavior and composition-owned key suppression stay intact\"]}]",
         "Audit1402: src/renderer/src/lib/keyboard-layout/option-as-alt-probe.test.ts removed. Intentionally loses invalidation, focus/manual refresh gating and stale/newest generation settlement outcomes, including direct stale category suppression. No equivalent replacement or default preload input-source delivery claim. src/renderer/src/components/terminal-pane/terminal-ime-substituted-text-commit.test.ts removed. Intentionally loses substituted sentence punctuation, shifted/backslash/multi-unit/full-width/letter input and Kitty flag/release/report encoding alarms across14 authored registrations. No equivalent replacement or real pane/browser input delivery claim. No equivalent replacement coverage is claimed. Historical removed assertion inventory: [{\"file\":\"src/renderer/src/components/terminal-pane/terminal-ime-substituted-text-commit.test.ts\",\"assertions\":[\"synthetic and native input-source paths are classified for covered fixtures\",\"report-all commits retain the unshifted physical key while associated text carries the committed substitution\"]},{\"file\":\"src/renderer/src/lib/keyboard-layout/option-as-alt-probe.test.ts\",\"assertions\":[\"a stale asynchronous input-source probe cannot overwrite the newest classification\",\"an input-source notification changes the classification to unknown synchronously before refreshing\"]}]",
-        "Audit1417 intentionally reduces src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts: Loses direct timestamp-formula assertion; no useful independent alarm in removed registration. No equivalent replacement coverage or fresh result is claimed."
+        "Audit1417 intentionally reduces src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts: Loses direct timestamp-formula assertion; no useful independent alarm in removed registration. No equivalent replacement coverage or fresh result is claimed.",
+        "Audit1876 removes the standalone native keyboard snapshot parser suite, direct input-source invalidation/fanout, quit/native teardown and non-macOS subscription examples, and preview-output fully covered/newer/missing-metadata/unsequenced examples. Those direct alarms are intentionally lost without equivalent replacement coverage. Retained notification cases exercise latest-generation coalescing; retained preview cases exercise only partial sequenced suffix slicing and transformed-overlap replay. Existing native/E2E/trace receipts keep their original commands, results and counts; focused survivor runs do not validate the broad IME selector or physical native/platform behavior."
       ],
       "demotionRule": "Cannot promote if success is based only on DOM text without PTY byte/cell evidence."
     },
