@@ -52,7 +52,7 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/components/terminal-pane/notifications/use-notification-dispatch', () => ({
+vi.mock('@/components/terminal-pane/notifications/dispatch-terminal-notification', () => ({
   dispatchTerminalNotification
 }))
 

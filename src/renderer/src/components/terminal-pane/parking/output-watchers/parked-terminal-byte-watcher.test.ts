@@ -39,7 +39,7 @@ type MockStoreState = {
 const dispatchTerminalNotification = vi.fn()
 let mockStoreState: MockStoreState
 
-vi.mock('../../notifications/use-notification-dispatch', () => ({
+vi.mock('../../notifications/dispatch-terminal-notification', () => ({
   dispatchTerminalNotification
 }))
 
