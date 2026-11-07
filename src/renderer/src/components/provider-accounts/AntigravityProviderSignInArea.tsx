@@ -1,6 +1,6 @@
 import { AntigravityChatAuthForm } from './AntigravityChatAuthForm'
 import { Check, Copy } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { ManagedRuntimeInstallObservation } from '@/runtime/use-managed-runtime-install'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { LoadingSpinner } from '../LoadingSpinner'
@@ -30,14 +30,15 @@ export function AntigravityProviderSignInArea(props: {
   label: string
   install: ActiveInstall
 }): React.JSX.Element {
+  const t = useTranslate()
   const signIn = useAntigravityChatSignInControls({
     owner: props.owner,
     label: props.label,
-    signedOut: translate(
+    signedOut: t(
       'settings.chat.providers.antigravityNotSignedIn',
       'Not signed in. Chats need an Antigravity sign-in, separate from your agy terminal account.'
     ),
-    unanswered: translate(
+    unanswered: t(
       'settings.chat.providers.antigravitySignInNeeded',
       'Chats need an Antigravity sign-in, separate from your agy terminal account.'
     ),
@@ -55,10 +56,10 @@ export function AntigravityProviderSignInArea(props: {
         heading={
           <div>
             <p className="text-xs font-medium leading-none">
-              {translate('settings.chat.providers.antigravityAccount', 'Account')}
+              {t('settings.chat.providers.antigravityAccount', 'Account')}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'settings.chat.providers.antigravitySignInNeeded',
                 'Chats need an Antigravity sign-in, separate from your agy terminal account.'
               )}
@@ -95,7 +96,7 @@ export function AntigravityProviderSignInArea(props: {
                   </Button>
                 )}
                 <Button size="xs" variant="ghost" disabled={signIn.pending} onClick={signIn.cancel}>
-                  {translate('accounts.antigravity.chatCancel', 'Cancel')}
+                  {t('accounts.antigravity.chatCancel', 'Cancel')}
                 </Button>
               </div>
             ) : (

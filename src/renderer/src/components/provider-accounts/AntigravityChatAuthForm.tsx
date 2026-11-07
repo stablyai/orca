@@ -6,6 +6,7 @@ import {
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { callAntigravityChatAuthConfig } from '@/runtime/runtime-antigravity-accounts-client'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/structured-agent-session-host-capability'
 import { ANTIGRAVITY_CHAT_AUTH_CONFIG_RUNTIME_CAPABILITY } from '../../../../shared/account-runtime-capabilities'
@@ -91,6 +92,7 @@ function AuthForm({
   signInError,
   children
 }: AuthFormProps & { supported: boolean }): React.JSX.Element {
+  const t = useTranslate()
   const id = useId()
   const edited = useRef(false)
   const reads = useRef(0)
@@ -227,7 +229,7 @@ function AuthForm({
         if (mounted.current) {
           reads.current++
           setError({
-            message: translate(
+            message: t(
               'accounts.antigravity.settingsSaveFailed',
               "Orca couldn't save your Antigravity sign-in settings. Try again."
             ),
@@ -292,7 +294,7 @@ function AuthForm({
         {!unavailable && (
           <div className="space-y-1">
             <Label htmlFor={`${id}-method`} variant="settings">
-              {translate('accounts.antigravity.authMethod', 'Sign in with')}
+              {t('accounts.antigravity.authMethod', 'Sign in with')}
             </Label>
             <Select
               value={method}
@@ -308,10 +310,10 @@ function AuthForm({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="oauth-personal">
-                  {translate('accounts.antigravity.personal', 'Google account')}
+                  {t('accounts.antigravity.personal', 'Google account')}
                 </SelectItem>
                 <SelectItem value="oauth-business">
-                  {translate('accounts.antigravity.enterprise', 'Gemini Enterprise')}
+                  {t('accounts.antigravity.enterprise', 'Gemini Enterprise')}
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -321,14 +323,14 @@ function AuthForm({
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label htmlFor={`${id}-project`} variant="settings">
-                {translate('accounts.antigravity.gcpProject', 'Google Cloud project')}
+                {t('accounts.antigravity.gcpProject', 'Google Cloud project')}
               </Label>
               <Input
                 id={`${id}-project`}
                 density="compact"
                 value={project}
                 disabled={blocked}
-                placeholder={translate('accounts.antigravity.projectPlaceholder', 'my-project-id')}
+                placeholder={t('accounts.antigravity.projectPlaceholder', 'my-project-id')}
                 onChange={(event) => {
                   edited.current = true
                   setProject(event.target.value)
@@ -340,14 +342,14 @@ function AuthForm({
             </div>
             <div className="space-y-1">
               <Label htmlFor={`${id}-location`} variant="settings">
-                {translate('accounts.antigravity.gcpLocation', 'Google Cloud location')}
+                {t('accounts.antigravity.gcpLocation', 'Google Cloud location')}
               </Label>
               <Input
                 id={`${id}-location`}
                 density="compact"
                 value={location}
                 disabled={blocked}
-                placeholder={translate('accounts.antigravity.locationPlaceholder', 'us-central1')}
+                placeholder={t('accounts.antigravity.locationPlaceholder', 'us-central1')}
                 onChange={(event) => {
                   edited.current = true
                   setLocation(event.target.value)
@@ -375,27 +377,19 @@ function AuthForm({
           unavailable || !loaded || (method !== 'oauth-business' && method !== 'oauth-personal')
             ? null
             : authenticatedMethod !== null && authenticatedMethod !== method
-              ? translate(
-                  'accounts.antigravity.signInAgainWith',
-                  'Sign in again to use {{method}}.',
-                  {
-                    method:
-                      method === 'oauth-business'
-                        ? translate('accounts.antigravity.enterprise', 'Gemini Enterprise')
-                        : translate('accounts.antigravity.personal', 'Google account')
-                  }
-                )
-              : translate(
-                  'accounts.antigravity.signInWith',
-                  'Signs in with {{method}} on {{host}}.',
-                  {
-                    host: hostLabel,
-                    method:
-                      method === 'oauth-business'
-                        ? translate('accounts.antigravity.enterprise', 'Gemini Enterprise')
-                        : translate('accounts.antigravity.personal', 'Google account')
-                  }
-                )
+              ? t('accounts.antigravity.signInAgainWith', 'Sign in again to use {{method}}.', {
+                  method:
+                    method === 'oauth-business'
+                      ? t('accounts.antigravity.enterprise', 'Gemini Enterprise')
+                      : t('accounts.antigravity.personal', 'Google account')
+                })
+              : t('accounts.antigravity.signInWith', 'Signs in with {{method}} on {{host}}.', {
+                  host: hostLabel,
+                  method:
+                    method === 'oauth-business'
+                      ? t('accounts.antigravity.enterprise', 'Gemini Enterprise')
+                      : t('accounts.antigravity.personal', 'Google account')
+                })
       })}
     </>
   )

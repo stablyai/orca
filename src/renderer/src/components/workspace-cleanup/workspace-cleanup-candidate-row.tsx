@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {
   canQueueWorkspaceCleanupCandidate,
@@ -114,24 +114,25 @@ export const CandidateRow = React.memo(function CandidateRow({
   onToggleSelected,
   onView
 }: CandidateRowProps): React.JSX.Element {
+  const t = useTranslate()
   useUiLanguageRevision()
   const deleting = deletionPhase !== undefined
   // Queued/deleting state must disable row actions even when removing was omitted.
   const queueable = canQueueWorkspaceCleanupCandidate(candidate)
   const selectable = queueable && !removing && !deleting
   const blockers = getWorkspaceCleanupBlockerLabels(candidate)
-  const contextDetails = formatContextDetails(candidate)
-  const branchSafetyDetails = formatBranchSafetyDetails(candidate)
-  const facts = getCandidateFactStatuses(candidate)
+  const contextDetails = formatContextDetails(candidate, t)
+  const branchSafetyDetails = formatBranchSafetyDetails(candidate, t)
+  const facts = getCandidateFactStatuses(candidate, t)
   const gitStatuses = facts.filter((fact) => fact.git)
   const flags = facts.filter((fact) => !fact.git).map((fact) => fact.label)
   // Clean is the default, so only non-clean git states get a chip. Main/folder/disconnected
   // rows are never queued and git is not read for them; "unknown" would be a false alarm.
   const showGitChip = queueable && gitStatuses.length === 0
-  const dirtyLabel = getDirtyGitLabel(candidate)
+  const dirtyLabel = getDirtyGitLabel(candidate, t)
   const contextCount = getContextCount(candidate)
-  const candidateAccessibleName = getWorkspaceCleanupCandidateAccessibleName(candidate)
-  const hostLabel = getWorkspaceCleanupCandidateHostLabel(candidate)
+  const candidateAccessibleName = getWorkspaceCleanupCandidateAccessibleName(candidate, t)
+  const hostLabel = getWorkspaceCleanupCandidateHostLabel(candidate, t)
   const hasExpandableDetails =
     blockers.length > 0 ||
     candidate.path.length > 0 ||
@@ -171,7 +172,7 @@ export const CandidateRow = React.memo(function CandidateRow({
           {selectable ? (
             <Checkbox
               checked={selected}
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.workspace.cleanup.WorkspaceCleanupDialog.bbb1ab6a6f',
                 'Select {{value0}}',
                 { value0: candidateAccessibleName }
@@ -196,7 +197,7 @@ export const CandidateRow = React.memo(function CandidateRow({
             </span>
             <span
               className="inline-flex min-w-0 max-w-48 shrink-[4] items-center gap-1 text-xs text-muted-foreground"
-              aria-label={translate(
+              aria-label={t(
                 'components.workspace.cleanup.browse.projectNamed',
                 'Project: {{value0}}',
                 { value0: candidate.repoName }
@@ -213,7 +214,7 @@ export const CandidateRow = React.memo(function CandidateRow({
             {showHostLabel ? (
               <WorkspaceCleanupMetadataText
                 icon={Monitor}
-                label={translate('components.workspace.cleanup.host.label', 'Host: {{value0}}', {
+                label={t('components.workspace.cleanup.host.label', 'Host: {{value0}}', {
                   value0: hostLabel
                 })}
                 value={hostLabel}
@@ -226,11 +227,11 @@ export const CandidateRow = React.memo(function CandidateRow({
             {deletionPhase ? (
               <StatusPill tone="destructive">
                 {deletionPhase === 'queued'
-                  ? translate(
+                  ? t(
                       'auto.components.workspace.cleanup.workspace.cleanup.candidate.row.e1135728e3',
                       'Queued for deletion'
                     )
-                  : translate(
+                  : t(
                       'auto.components.workspace.cleanup.workspace.cleanup.candidate.row.b5d2b33e47',
                       'Deleting…'
                     )}
@@ -251,10 +252,7 @@ export const CandidateRow = React.memo(function CandidateRow({
                   className="size-3 animate-spin motion-reduce:animate-none"
                   aria-hidden="true"
                 />
-                {translate(
-                  'components.workspace.cleanup.browse.checkingGitRow',
-                  'Checking git status'
-                )}
+                {t('components.workspace.cleanup.browse.checkingGitRow', 'Checking git status')}
               </span>
             ) : showGitChip && dirtyLabel ? (
               <WorkspaceCleanupMetadataChip
@@ -272,7 +270,7 @@ export const CandidateRow = React.memo(function CandidateRow({
                     variant="link"
                     size="inline"
                     aria-expanded={expanded}
-                    aria-label={translate(
+                    aria-label={t(
                       'components.workspace.cleanup.browse.moreFlags',
                       'Show {{value0}} more flags',
                       { value0: hiddenFlagCount }
@@ -287,7 +285,7 @@ export const CandidateRow = React.memo(function CandidateRow({
             {workspaceStatusLabel ? (
               <WorkspaceCleanupMetadataText
                 icon={CircleDot}
-                label={translate(
+                label={t(
                   'components.workspace.cleanup.browse.workspaceStatus',
                   'Workspace status: {{value0}}',
                   { value0: workspaceStatusLabel }
@@ -323,7 +321,7 @@ export const CandidateRow = React.memo(function CandidateRow({
                   className="h-auto px-1 text-destructive"
                   onClick={() => onDeleteAnyway(candidate)}
                 >
-                  {translate('components.workspace.cleanup.browse.deleteAnyway', 'Delete anyway')}
+                  {t('components.workspace.cleanup.browse.deleteAnyway', 'Delete anyway')}
                 </Button>
               ) : null}
             </div>
