@@ -1693,6 +1693,7 @@
         "byteCount_other": "{{count}} bytes"
       },
       "queuedMessages": {
+        "behindReturnedHold": "Waiting — a message ahead needs attention",
         "editChanged": "This message changed while you were editing. Your edit is in the chat box.",
         "editChangedNotSaved": "This message changed while you were editing. Your edit wasn't saved.",
         "editChangedPrompt": "This message changed while you were editing. Your edit will be in the chat box after you answer the agent.",
