@@ -7025,6 +7025,8 @@
           "c2aee76420": "从本机 Gemini CLI 提取 OAuth 凭据，供 {{value0}} Google 登录，可能随 CLI 更新失效",
           "96f3649526": "使用 Gemini CLI 凭据(实验)",
           "d676c41fc6": "从本机 Gemini CLI 提取 Google OAuth 凭据，可能随 CLI 更新失效",
+          "73f26694ad": "用登录信息获取 Claude 用量",
+          "688fd1f924": "允许 Orca 读取你的 Claude Code 登录信息，并调用 Anthropic 的用量接口供状态栏显示。关闭后，用量只来自运行中的 Claude Code 会话，Orca 不读取你的登录信息",
           "0c7f915b01": "使用 Gemini CLI 凭据",
           "973741a871": "配置 Gemini 提供商设置",
           "0c64dc2a64": "Gemini CLI（旧版）",

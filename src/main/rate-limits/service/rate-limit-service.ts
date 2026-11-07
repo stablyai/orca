@@ -19,6 +19,7 @@ import type {
   OpenCodeGoRateLimitConfig,
   MiniMaxRateLimitConfig,
   AntigravityUsageEnabledResolver,
+  ClaudeOAuthUsageEnabledResolver,
   MuseUsageEnabledResolver,
   ZcodePlanRateLimitConfig,
   GeminiCliOAuthEnabledResolver,
@@ -71,6 +72,10 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
 
   setGeminiCliOAuthEnabledResolver(resolver: GeminiCliOAuthEnabledResolver): void {
     this.geminiCliOAuthEnabledResolver = resolver
+  }
+
+  setClaudeOAuthUsageEnabledResolver(resolver: ClaudeOAuthUsageEnabledResolver): void {
+    this.claudeOAuthUsageEnabledResolver = resolver
   }
 
   setAntigravityUsageEnabledResolver(resolver: AntigravityUsageEnabledResolver): void {

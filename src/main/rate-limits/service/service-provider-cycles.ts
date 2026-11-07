@@ -97,6 +97,11 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
       return
     }
     this.rememberClaudeAuthSnapshot(claudeAuthPreparation, claudeGeneration, claudeTarget)
+    // After the snapshot: statusLine posts are dropped until one names the selected account.
+    if (!this.isClaudeOAuthUsageEnabled()) {
+      this.updateState({ ...this.state, claude: this.claudeUsageWithoutOAuth(this.state.claude) })
+      return
+    }
     const claudeProvenance = claudeAuthPreparation?.provenance ?? 'system'
     const previousState = this.state
 

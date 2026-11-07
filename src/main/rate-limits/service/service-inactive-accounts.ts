@@ -6,6 +6,9 @@ import { delayUnlessAborted } from '../../../shared/abort-aware-delay'
 
 export abstract class RateLimitServiceInactiveAccounts extends RateLimitServicePolling {
   async fetchInactiveClaudeAccountsOnOpen(): Promise<void> {
+    if (!this.isClaudeOAuthUsageEnabled()) {
+      return
+    }
     if (Date.now() - this.lastInactiveClaudeFetchAt < INACTIVE_FETCH_DEBOUNCE_MS) {
       return
     }

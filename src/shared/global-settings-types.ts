@@ -373,6 +373,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   zcodePlanSite?: ZcodePlanSite
   /** Extract OAuth credentials from the local Gemini CLI for rate-limit fetching. Off by default (explicit opt-in). */
   geminiCliOAuthEnabled: boolean
+  /** Off: Orca never reads Claude credentials for usage or calls the usage endpoint; the meter shows only statusLine-fed numbers. */
+  claudeOAuthUsageEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
   /** Off keeps each Codex home's history to itself: Orca links no sessions between accounts or

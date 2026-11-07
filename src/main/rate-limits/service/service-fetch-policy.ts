@@ -15,10 +15,20 @@ import {
   isStaleClaudeUsageWindow,
   mapClaudeUsageWindow
 } from '../providers/claude/claude-usage-window'
+import { claudeOAuthUsageDisabledResult } from '../providers/claude/claude-usage-result'
 import { readUserClaudeConfigDir } from '../../claude-accounts/claude-profile-paths'
 import { getClaudeProfileRouter } from '../../claude-accounts/claude-profile-installed-router'
 
 export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchTargets {
+  protected isClaudeOAuthUsageEnabled(): boolean {
+    return this.claudeOAuthUsageEnabledResolver?.() ?? true
+  }
+
+  // Keep statusLine-fed numbers; an old failure or in-flight chip has nothing left to settle it.
+  protected claudeUsageWithoutOAuth(limits: ProviderRateLimits | null): ProviderRateLimits {
+    return limits?.status === 'ok' ? limits : claudeOAuthUsageDisabledResult()
+  }
+
   protected getMiniMaxCredentialError(message: string): ProviderRateLimits {
     return {
       provider: 'minimax',
@@ -42,6 +52,12 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
       status: 'error',
       usageMetadata: { failureKind: 'keychain-unavailable', source: 'web' }
     }
+  }
+
+  protected claudeStateAtCycleStart(limits: ProviderRateLimits | null): ProviderRateLimits {
+    return this.isClaudeOAuthUsageEnabled()
+      ? this.withFetchingStatus(limits, 'claude')
+      : this.claudeUsageWithoutOAuth(limits)
   }
 
   // Retry-After remains binding even when live posts restore ok display; early polls waste budget and prolong 429s.
