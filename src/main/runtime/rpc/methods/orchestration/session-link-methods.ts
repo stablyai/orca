@@ -26,7 +26,7 @@ import { SessionLinkStore } from '../../../orchestration/session-links/session-l
 import { sessionLinkCandidates } from '../../../orchestration/session-links/session-link-participants'
 import { redriveSessionLinks } from '../../../orchestration/session-links/session-link-delivery'
 import { stopSessionLinkTurns } from '../../../orchestration/session-links/session-link-stop'
-import { canonicalOrcaSessionId } from '../../../orchestration/canonical-orca-session-id'
+import { canonicalOrcaSessionId } from '../../../orchestration/addressing/session-lineage/canonical-orca-session-id'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
 
 function linkWrite<T>(action: () => T): T {

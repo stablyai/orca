@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import { OrchestrationDb } from '../db'
+import { OrchestrationDb } from '../db/orchestration-db'
 import { SessionLinkStore } from './session-link-store'
 import { pauseSessionLinkForSession } from './session-link-lifecycle'
 class RuntimeWithRestore extends OrcaRuntimeService {

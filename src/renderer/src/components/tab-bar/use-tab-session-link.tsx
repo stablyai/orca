@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import {
   readLocalRuntimeCapabilityObservation,
   subscribeLocalRuntimeCapabilityObservation
-} from '@/runtime/local-runtime-capabilities'
+} from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
 import { SESSION_LINK_CAPABILITY } from '../../../../shared/session-link'
 import { SessionLinkControl } from '../native-chat/SessionLinkControl'

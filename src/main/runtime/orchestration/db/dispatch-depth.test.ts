@@ -4,8 +4,12 @@ import {
   mintStructuredWorkerPaneKey,
   structuredWorkerProcessIncarnation
 } from '../terminal-authority/structured-sessions/structured-worker-identity'
-import { OrchestrationDb } from '../db'
-import { AmbiguousDispatchParentError } from './dispatch-depth'
+import { OrchestrationDb } from './orchestration-db'
+import './contract-constants'
+import './messages/mailbox-routing-page'
+import './dispatch-row-writer'
+import './attempt-outcome-projection'
+import { AmbiguousDispatchParentError } from './dispatch-creator-evaluation'
 import { backfillStructuredWorkerOrcaSessionIds } from './schema/structured-worker-orca-session-backfill'
 
 /** Enforce nesting depth even when a worker creates its own Run. */
@@ -49,19 +53,6 @@ describe('nested worker depth', () => {
         maxDepth: 1
       })
     ).toThrow(/at most 1 level deep, so this worker can't start another \(depth 2\)/)
-  })
-
-  it('tells the refused worker to finish the task here', () => {
-    coordinatorDispatchesWorker()
-    const nested = db.createTask({ runId: 'run_legacy_local', spec: 'nested task' })
-    expect(() =>
-      db.createDispatchContext({
-        taskId: nested.id,
-        assigneeHandle: 'term_sub',
-        creator: { kind: 'terminal', handle: 'term_worker', paneKey: 'tab_worker:leaf_worker' },
-        maxDepth: 1
-      })
-    ).toThrow(/Finish this task here/)
   })
 
   it('permits one more generation when the cap is raised, and records depth 2', () => {

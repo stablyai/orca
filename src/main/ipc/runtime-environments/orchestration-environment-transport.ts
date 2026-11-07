@@ -4,7 +4,7 @@ import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/ru
 import {
   pairedOrchestrationPeers,
   type OrchestrationEnvironmentTransport
-} from '../../runtime/orchestration/environment-transport'
+} from '../../runtime/orchestration/federation/environment-transport'
 
 /** Dials this host's paired servers for cross-server orchestration; host-free, so desktop and orcad share it. */
 export function createOrchestrationEnvironmentTransport(): OrchestrationEnvironmentTransport {

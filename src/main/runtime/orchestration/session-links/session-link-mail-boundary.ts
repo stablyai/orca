@@ -1,8 +1,8 @@
 import { isOrcaSessionId } from '../../../../shared/orca-session-address'
-import type { OrchestrationDb } from '../db'
+import type { OrchestrationDb } from '../db/orchestration-db'
 import { currentRunCoordinatorOrcaSessionId } from '../db/runs/run-coordinator-orca-session'
-import { canonicalOrcaSessionId } from '../canonical-orca-session-id'
-import { resolveOrchestrationParty } from '../orchestration-party'
+import { canonicalOrcaSessionId } from '../addressing/session-lineage/canonical-orca-session-id'
+import { resolveOrchestrationParty } from '../addressing/orchestration-party'
 import { OrchestrationError } from '../orchestration-error'
 import { SessionLinkStore } from './session-link-store'
 

@@ -1,6 +1,6 @@
-import { isUnsettledQueuedMessage } from '../agent-session-journal/queued-message-table'
-import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
-import type { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
+import { isUnsettledQueuedMessage } from '../agent-session-journal/queued-messages/queued-message-table'
+import type { StructuredAgentSessionHostSession } from './host/structured-agent-session-host-types'
+import type { StructuredAgentSessionClientDelivery } from './publication/subscribers/structured-agent-session-client-delivery'
 
 export function backgroundAdmission(
   readSessions: () => ReadonlyMap<string, StructuredAgentSessionHostSession>,

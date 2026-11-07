@@ -1,4 +1,4 @@
-import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { useAppStore } from '@/store'
 import { StrictMode, Suspense, startTransition, useState } from 'react'
 // @vitest-environment happy-dom
@@ -7,7 +7,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { TaskPageJiraCreationMetadataModel } from '../jira/use-task-page-jira-creation-metadata'
 import { GITHUB_COMPLETE_PR_CHECK_OBSERVATION_CAPABILITY as capability } from '../../../../../shared/source-control/runtime/source-control-runtime-capabilities'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { useTaskPageGitHubListProjection } from './use-task-page-github-list-projection'
 
 const { lookup } = vi.hoisted(() => ({ lookup: vi.fn() }))
@@ -21,7 +21,7 @@ vi.mock('@/hooks/useGitHubTaskItems', () => ({
 vi.mock('./use-task-page-github-list-pending', () => ({
   useTaskPageGitHubListPending: () => false
 }))
-vi.mock('@/lib/github-work-item-source-lookup', () => ({
+vi.mock('@/lib/work-items/github/github-work-item-source-lookup', () => ({
   lookupGitHubWorkItemByOwnerRepoForSource: lookup
 }))
 const repo = {

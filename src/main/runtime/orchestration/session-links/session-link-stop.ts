@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { mintAgentSessionOperationId } from '../structured-pointer-operation-id'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { mintAgentSessionOperationId } from '../mailbox/structured-pointer/structured-pointer-operation-id'
 import type { SessionLinkStore } from './session-link-store'
 
 export type SessionLinkControlTurn = { sessionId: string; operationId: string }

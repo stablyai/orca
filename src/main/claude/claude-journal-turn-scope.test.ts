@@ -4,7 +4,7 @@ import type { AgentJournalItemIdentity } from '../../shared/agent-session/journa
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionItemAppendOptions
-} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+} from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 
 function recorder() {

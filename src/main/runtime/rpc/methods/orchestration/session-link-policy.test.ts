@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { eraseRpcMethods, type RpcContext } from '../../core'
-import { OrchestrationDb } from '../../../orchestration/db'
+import { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import { SessionLinkStore } from '../../../orchestration/session-links/session-link-store'
 import { sessionLinkTestParticipants as participants } from '../../../orchestration/session-links/session-link-test-fixture'

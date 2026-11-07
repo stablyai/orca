@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RuntimeFileMutationClient from '@/runtime/runtime-file-mutation-client'
+import type * as RuntimeFileMutationClient from '@/runtime/files/mutations/runtime-file-mutation-client'
 import type * as EditorAutosave from '@/components/editor/autosave/editor-autosave'
 
 const mocks = vi.hoisted(() => ({ renameRuntimePath: vi.fn(), writeRuntimeFile: vi.fn() }))
-vi.mock('@/runtime/runtime-file-mutation-client', async (importOriginal) => {
+vi.mock('@/runtime/files/mutations/runtime-file-mutation-client', async (importOriginal) => {
   const actual = await importOriginal<typeof RuntimeFileMutationClient>()
   return {
     ...actual,
@@ -12,7 +12,7 @@ vi.mock('@/runtime/runtime-file-mutation-client', async (importOriginal) => {
   }
 })
 // Switch on: main renames the tabs, and its frame rekeys the content (T1 transport, apply mode).
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

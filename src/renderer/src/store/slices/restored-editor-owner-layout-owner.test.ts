@@ -11,7 +11,7 @@ import type { LayoutCommand } from '../../../../shared/workspace-layout/workspac
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 import { contentRekeyOutcome } from '@/runtime/layout-owner-content-rekeys'
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

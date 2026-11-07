@@ -1,6 +1,6 @@
 import { isOrcaSessionId } from '../../../../shared/orca-session-address'
-import type { OrchestrationDb } from '../db'
-import { canonicalOrcaSessionId } from '../canonical-orca-session-id'
+import type { OrchestrationDb } from '../db/orchestration-db'
+import { canonicalOrcaSessionId } from '../addressing/session-lineage/canonical-orca-session-id'
 import { SessionLinkStore } from './session-link-store'
 
 export function pauseSessionLinkForSession(

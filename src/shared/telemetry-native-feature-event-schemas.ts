@@ -22,10 +22,21 @@ export const nativeChatToggledSchema = z
 // unknown means runtime was unresolved at send time.
 export const nativeChatRuntimeSchema = z.enum(['local', 'remote', 'unknown'])
 export type NativeChatRuntime = z.infer<typeof nativeChatRuntimeSchema>
+// Which device the person typed on; the host emits phone sends, the desktop renderer its own.
+export const nativeChatClientSchema = z.enum(['desktop', 'mobile'])
 export const nativeChatMessageSentSchema = z
   .object({
     agent_kind: agentKindSchema,
-    runtime: nativeChatRuntimeSchema
+    runtime: nativeChatRuntimeSchema,
+    client: nativeChatClientSchema
+  })
+  .strict()
+// A phone opening a chat transcript or a full terminal stream, once per phone, view, surface and
+// UTC day; agent_kind is absent for a plain shell.
+export const mobileSessionOpenedSchema = z
+  .object({
+    surface: nativeChatViewModeSchema,
+    agent_kind: agentKindSchema.optional()
   })
   .strict()
 export const nativeChatPickerOpenedSchema = z

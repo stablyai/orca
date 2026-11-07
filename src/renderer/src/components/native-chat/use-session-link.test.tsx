@@ -2,7 +2,7 @@
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SessionLinkSnapshot, LinkCreateParams } from '../../../../shared/session-link'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { useSessionLink } from './use-session-link'
 
 const rpc = vi.hoisted(() => ({ call: vi.fn(), supports: vi.fn(async () => true) }))

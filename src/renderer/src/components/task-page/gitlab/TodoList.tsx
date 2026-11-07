@@ -1,7 +1,7 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { ExternalLink } from 'lucide-react'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function TaskPageGitLabTodoList({
   model
 }: {

@@ -1,5 +1,5 @@
 import { expect, vi } from 'vitest'
-import type { StructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/structured-agent-session-host'
+import type { StructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { waitForStructuredAgentSessionRecovery } from '../../../agent-session/structured-agent-session-runtime'
 

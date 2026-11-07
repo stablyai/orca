@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { OrchestrationDb } from '../db'
+import { OrchestrationDb } from '../db/orchestration-db'
 import { SessionLinkStore } from './session-link-store'
 import { SessionLinkParticipant } from '../../../../shared/session-link'
 

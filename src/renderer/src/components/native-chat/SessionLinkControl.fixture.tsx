@@ -8,7 +8,7 @@ import {
   SESSION_LINK_POLICY_CAPABILITY,
   SESSION_LINK_CAPABILITY
 } from '../../../../shared/session-link'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { SessionLinkOwnerQuestion } from './SessionLinkOwnerQuestion'
 import { SessionLinkControl } from './SessionLinkControl'
 

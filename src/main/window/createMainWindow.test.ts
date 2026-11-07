@@ -450,9 +450,10 @@ describe('createMainWindow', () => {
 
     expect(webContents.setBackgroundThrottling).toHaveBeenCalledWith(true)
     expect(webContents.setBackgroundThrottling).not.toHaveBeenCalledWith(false)
-    expect(windowHandlers.get('restore')).toHaveLength(1)
-    expect(windowHandlers.get('show')).toHaveLength(1)
-    expect(windowHandlers.get('focus')).toHaveLength(1)
+    // Each: the repaint listener, then the window-activity relay (main-window-activity.ts).
+    expect(windowHandlers.get('restore')).toHaveLength(2)
+    expect(windowHandlers.get('show')).toHaveLength(2)
+    expect(windowHandlers.get('focus')).toHaveLength(2)
 
     windowHandlers.get('show')?.[0]?.()
     windowHandlers.get('restore')?.[0]?.()

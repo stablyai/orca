@@ -33,6 +33,6 @@ it('closes the renamed file, prompting when it is dirty, after the frame flush',
   answer(true)
   await drainMicrotasks()
 
-  expect(requestEditorFileClose).toHaveBeenCalledWith('new', undefined)
+  expect(requestEditorFileClose).toHaveBeenCalledWith('new', { tabId: 'tab' })
   expect(useAppStore.getState().unifiedTabsByWorktree[worktreeId]).toHaveLength(1)
 })

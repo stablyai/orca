@@ -1,11 +1,11 @@
 import { sessionLinkNextMessage } from '../../../../shared/session-link-wait'
 import { sessionLinkMessageBody } from './session-link-message'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { sendAgentTurn } from '../send-agent-turn'
-import type { OrchestrationDb } from '../db'
-import { conversationRecordReader } from '../structured-session-lineage'
-import { structuredSessionMailReach } from '../structured-session-mail-address'
-import { structuredSessionGateFacts } from '../structured-session-pointer-delivery'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { sendAgentTurn } from '../turn-delivery/send-agent-turn'
+import type { OrchestrationDb } from '../db/orchestration-db'
+import { conversationRecordReader } from '../addressing/session-lineage/structured-session-lineage'
+import { structuredSessionMailReach } from '../mailbox/routing/structured-session-mail-address'
+import { structuredSessionGateFacts } from '../mailbox/structured-pointer/structured-session-pointer-delivery'
 import { SessionLinkStore } from './session-link-store'
 
 const flights = new WeakMap<OrchestrationDb, { running: Set<string>; dirty: Set<string> }>()

@@ -37,7 +37,7 @@ vi.mock('@/components/ui/dropdown-menu', () => {
     }
   }
 })
-vi.mock('@/runtime/runtime-linear-client', () => ({
+vi.mock('@/runtime/linear/runtime-linear-client', () => ({
   linearStatus: vi.fn(async () => ({ connected: false, viewer: null }))
 }))
 import WorktreeMetaDialog from './WorktreeMetaDialog'

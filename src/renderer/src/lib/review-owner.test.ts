@@ -3,7 +3,7 @@ import type { Repo } from '../../../shared/repo-types'
 import { resolveReviewRepository } from './review-owner'
 import { resolveExactWorktreeRoute } from './worktree-owner-route'
 import '../runtime/forge-credential-target'
-import '../store/github/repository-routing'
+import '../store/github/repositories/repository-routing'
 
 const proxy: Repo = {
   id: 'project',

@@ -242,6 +242,7 @@ export class E2EEChannel {
     const authentication = authenticateMobileE2EE({
       plaintext,
       v2Session: this.v2Session,
+      v2TokenCapabilities: this.transportContext.transport === 'direct',
       resolveDevice: this.resolvers.resolveAuthenticatedDevice,
       resolveDeviceKey: this.resolvers.resolveAuthenticatedDeviceKey
     })
@@ -257,11 +258,8 @@ export class E2EEChannel {
     this.deviceToken = authenticatedDevice.deviceToken ?? null
     this.authenticatedDevice = authenticatedDevice
     this.state = 'ready'
-
-    if (this.handshakeTimer) {
-      clearTimeout(this.handshakeTimer)
-      this.handshakeTimer = null
-    }
+    clearTimeout(this.handshakeTimer ?? undefined)
+    this.handshakeTimer = null
 
     // Complete transport identity checks before auth success; relay resolvers also bind immutable relayDeviceId.
     this.onReady(this, authenticatedDevice)

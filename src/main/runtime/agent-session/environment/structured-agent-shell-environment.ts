@@ -1,6 +1,6 @@
 import { agentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { resolveLoginShellEnvironment } from '../../../startup/login-shell-environment'
-import { refreshAtRestCommandContext } from '../../../native-chat/agent-session-wire/at-rest-command-context'
+import { refreshAtRestCommandContext } from '../../../native-chat/agent-session-wire/options/at-rest-command-context'
 import {
   cachedPersistedWindowsPathSegments,
   mergePersistedWindowsPathAsync,

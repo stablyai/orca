@@ -1,12 +1,15 @@
-import { resolveOrcaSessionParty } from '../orchestration-party'
+import { resolveOrcaSessionParty } from '../addressing/orchestration-party'
 import { isOrcaSessionId } from '../../../../shared/orca-session-address'
 import { SessionLinkParticipant } from '../../../../shared/session-link'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { isNativeLocalLocation } from '../../../../shared/execution-host'
-import { canonicalOrcaSessionId } from '../canonical-orca-session-id'
-import { conversationRecordReader, clearedInto } from '../structured-session-lineage'
-import { structuredSessionMailReach } from '../structured-session-mail-address'
+import { canonicalOrcaSessionId } from '../addressing/session-lineage/canonical-orca-session-id'
+import {
+  conversationRecordReader,
+  clearedInto
+} from '../addressing/session-lineage/structured-session-lineage'
+import { structuredSessionMailReach } from '../mailbox/routing/structured-session-mail-address'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId

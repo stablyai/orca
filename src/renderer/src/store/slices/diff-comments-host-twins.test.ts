@@ -1,5 +1,6 @@
-import type * as RuntimeRpcClient from '../../runtime/runtime-rpc-client'
-import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import type * as RuntimeRpcCallModule from '../../runtime/rpc/calls/runtime-rpc-call'
+
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import {
   diffCommentSendKey,
   holdNotesForSend,
@@ -21,8 +22,8 @@ import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { createTestStore } from './store-test-helpers'
 import { selectWorktreeDiffCommentsOrEmpty } from '../worktree-diff-comments-selector'
 
-vi.mock('../../runtime/runtime-rpc-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof RuntimeRpcClient>()),
+vi.mock('../../runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeRpcCallModule>()),
   callRuntimeRpc: vi.fn().mockResolvedValue({ ok: true })
 }))
 

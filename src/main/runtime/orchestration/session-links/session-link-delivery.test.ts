@@ -2,24 +2,24 @@ import { resolveUnknownSessionLinkDelivery } from './session-link-resolution'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { OrchestrationDb } from '../db'
+import { OrchestrationDb } from '../db/orchestration-db'
 import { SessionLinkParticipant } from '../../../../shared/session-link'
 import { SessionLinkStore } from './session-link-store'
 import { redriveSessionLinks } from './session-link-delivery'
 import { stopSessionLinkTurns } from './session-link-stop'
 import { sessionLinkMessageBody } from './session-link-message'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   attach,
   hostTestState,
   seedApproval
-} from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
 import {
   hostTestSendParams,
   HOST_TEST_SESSION as SESSION
-} from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 
-vi.mock('../../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: vi.fn()
 }))
 

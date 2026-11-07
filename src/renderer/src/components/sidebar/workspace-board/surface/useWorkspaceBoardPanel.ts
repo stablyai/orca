@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { isEditableTarget } from '@/lib/editable-target'
 import { useAppStore } from '@/store'
-import { isXtermHelperTextarea } from '../../../terminal-pane/regular-terminal-focus-ownership'
+import { isXtermHelperTextarea } from '../../../terminal-pane/input/focus/regular-terminal-focus-ownership'
 
 const WORKSPACE_BOARD_SHEET_SELECTOR = '[data-workspace-board-sheet]'
 

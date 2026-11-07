@@ -1,5 +1,5 @@
 import { diffCommentOwnerKey, type DiffCommentOwner } from '@/store/diff-comment-owner'
-import { useSyncExternalStore } from 'react'
+import { useAppViewExternalStore } from '@/store/app-state-view'
 import type { DiffCommentDeliverySnapshot } from '@/store/slices/diffComments'
 
 // Hold submitted notes out of later sends until delivery settles; restore on failure and let the owner remove delivered notes.
@@ -70,7 +70,7 @@ function getVersion(): number {
 }
 
 export function useNotesInFlightVersion(): number {
-  return useSyncExternalStore(subscribe, getVersion, getVersion)
+  return useAppViewExternalStore(subscribe, getVersion, getVersion)
 }
 
 /** A note's identity for delivery: an edit makes it a new pending note, as for its removal. */

@@ -128,7 +128,7 @@ function makeTerminalText(codeUnits, sampleId) {
   const lines = [
     '[35m✻ Thinking…[0m\r\n',
     '  ⏺ Running tests… 42 passed, 0 failed\r\n',
-    '│ src/main/runtime/rpc/methods/terminal.ts  │\r\n',
+    '│ src/main/runtime/rpc/methods/terminal/terminal.ts  │\r\n',
     '  ✅ build succeeded in 12.4s — café naïve\r\n',
     '[32m+ added line[0m\r\n'
   ]

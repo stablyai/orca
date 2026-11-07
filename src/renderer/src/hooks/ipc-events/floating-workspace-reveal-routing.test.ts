@@ -3,7 +3,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../s
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { createTestStore, makeWorktree, seedStore } from '../../store/slices/store-test-helpers'
 import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
-import type * as MountedTerminalTabRegistry from '@/runtime/mounted-terminal-tab-registry'
+import type * as MountedTerminalTabRegistry from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { drawTabsFromMain } from '../../store/slices/tabs-drawn-from-main.test-fixture'
 
 const mocks = vi.hoisted(() => {
@@ -22,7 +22,7 @@ function testStore(): ReturnType<typeof createTestStore> {
   return mocks.store.current
 }
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
@@ -41,10 +41,13 @@ vi.mock('../../store', () => ({
     subscribe: () => () => {}
   }
 }))
-vi.mock('@/runtime/mounted-terminal-tab-registry', async (importOriginal) => ({
-  ...(await importOriginal<typeof MountedTerminalTabRegistry>()),
-  focusRuntimeTerminalSurface: mocks.focusRuntimeTerminalSurface
-}))
+vi.mock(
+  '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof MountedTerminalTabRegistry>()),
+    focusRuntimeTerminalSurface: mocks.focusRuntimeTerminalSurface
+  })
+)
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: mocks.focusTerminalTabSurface
 }))

@@ -1,4 +1,4 @@
-import { mintAgentSessionOperationId } from '../structured-pointer-operation-id'
+import { mintAgentSessionOperationId } from '../mailbox/structured-pointer/structured-pointer-operation-id'
 import {
   SESSION_LINK_MESSAGE_BYTES,
   SESSION_LINK_MESSAGE_LIMIT,

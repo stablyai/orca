@@ -183,7 +183,7 @@ export default function SortableTab({
   })
   const sessionLink = useTabSessionLink(tab.worktreeId, unifiedTabId, menuOpen)
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
-  const slotProps = useTabStripSlotProps(tab.id, isActive)
+  const slotProps = useTabStripSlotProps(tab.id, isActive, 'terminal')
   const tabTitle = tab.customTitle ?? tab.title
   const tabRoot = (
     <div
@@ -263,9 +263,7 @@ export default function SortableTab({
           onMouseDown={(event) => {
             // Why: stopPropagation avoids outer tab activation/drag; preventDefault on middle-click blocks Linux X11 paste.
             event.stopPropagation()
-            if (event.button === 1) {
-              event.preventDefault()
-            }
+            preventMiddleButtonDefault(event)
           }}
           onClick={(event) => event.stopPropagation()}
           onDoubleClick={(event) => event.stopPropagation()}

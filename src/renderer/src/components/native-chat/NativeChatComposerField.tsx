@@ -1,7 +1,6 @@
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import { notifyNativeChatComposerState } from './native-chat-composer-mount'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
-import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import type { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
@@ -22,14 +21,17 @@ import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
 } from '../../../../shared/native-chat/input/native-chat-session-options'
-import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
+import type {
+  NativeChatOptionPickerRequest,
+  NativeChatComposerImageAttachment
+} from './native-chat-composer-types'
 import { NativeChatImageAttachmentPreview } from './NativeChatImageAttachmentPreview'
 import type { NativeChatComposerGoalMode } from './use-native-chat-composer-submit'
 import { translate } from '@/i18n/i18n'
 import { useNativeChatComposerDraftUnsaved } from './use-native-chat-draft-unsaved'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { NativeChatFollowUpBehavior } from '../../../../shared/native-chat/input/native-chat-follow-up-behavior'
-import type { NativeChatSteerChordPreview } from './use-native-chat-steer-chord-preview'
+import type { NativeChatSteerChordPreview } from '../../../../shared/native-chat/input/use-native-chat-steer-chord-preview'
 
 function noop(): void {}
 
@@ -38,7 +40,7 @@ export type NativeChatComposerFieldProps = {
   /** Own draft persistence and native-drop routing by this pane so drops cannot land in another composer. */
   draftScopeKey: string
   positionTarget?: string
-  textareaRef: RefObject<NativeChatComposerInput | null>
+  textareaRef: React.RefObject<NativeChatComposerInput | null>
   draft: string
   disabled: boolean
   hasPty: boolean
@@ -72,9 +74,9 @@ export type NativeChatComposerFieldProps = {
   imeEnterGesture: ReturnType<typeof useImeEnterGestureOwnership>
   onDraftChange: (value: string, element: NativeChatComposerInput) => void
   onTextareaSelect: (element: NativeChatComposerInput) => void
-  onKeyDown: KeyboardEventHandler<HTMLElement>
+  onKeyDown: React.KeyboardEventHandler<HTMLElement>
   onImeSettled: (element: NativeChatComposerInput) => void
-  onPaste: ClipboardEventHandler<HTMLElement>
+  onPaste: React.ClipboardEventHandler<HTMLElement>
   pickerListboxId: string
   onChoosePickerItem: (item: NativeChatPickerItem) => void
   onRetrySkills: () => void
@@ -96,22 +98,10 @@ export type NativeChatComposerFieldProps = {
   goalMode?: NativeChatComposerGoalMode
   agent?: string
   launchPrompt?: { placeholder: string }
+  workspaceFooter?: React.ReactNode
 }
 
-export type NativeChatComposerImageAttachment = {
-  id: string
-  /** Empty while `pending`: the clipboard image has no agent-readable path yet. */
-  path: string
-  connectionId?: string
-  /** Show clipboard thumbnails immediately, without waiting for disk/upload completion. */
-  previewUrl?: string
-  /** True while the pasted image is still being written to disk or uploaded. */
-  pending?: boolean
-  /** The file's name while it uploads: a dropped or picked file, not a pasted image. */
-  pendingName?: string
-  /** Set on an image the draft names but can't send: the file to attach again. */
-  unavailableName?: string
-}
+export type { NativeChatComposerImageAttachment } from './native-chat-composer-types'
 
 /** After a clear suppressed by IME, preserve only the composed segment; compare both ends because the caret need not be at the end. */
 function imeComposedSegment(base: string, settled: string): string {
@@ -183,7 +173,8 @@ export function NativeChatComposerField({
   sessionOptionsPickerRequest,
   goalMode,
   agent,
-  launchPrompt
+  launchPrompt,
+  workspaceFooter
 }: NativeChatComposerFieldProps): React.JSX.Element {
   const draftNotSaved = useNativeChatComposerDraftUnsaved(draftScopeKey)
   const optionCount =
@@ -279,8 +270,11 @@ export function NativeChatComposerField({
   const launch = launchPrompt !== undefined
 
   return (
-    <div className={launch ? undefined : 'shrink-0 bg-chat-pane'}>
-      <div className={launch ? undefined : 'px-3 pt-2 pb-4 sm:px-4'}>
+    <div
+      data-composer-field={launch ? undefined : ''}
+      className={launch ? undefined : '@container/composer-field shrink-0 bg-chat-pane'}
+    >
+      <div className={launch ? undefined : 'native-chat-composer-gutter pt-2 pb-4'}>
         <div
           className={cn('relative w-full', !launch && 'mx-auto max-w-(--chat-content-max-width)')}
         >
@@ -320,6 +314,7 @@ export function NativeChatComposerField({
             className={cn(
               // Use a constant container border so focus changes cannot flash it.
               'group/composer rounded-xl border p-1.5 shadow-xs',
+              !launch && 'native-chat-composer-card',
               launch
                 ? 'border-foreground/10 bg-background dark:bg-foreground/[0.04]'
                 : 'border-chat-composer-border bg-chat-composer-surface',
@@ -432,6 +427,7 @@ export function NativeChatComposerField({
               />
             </div>
           </div>
+          {workspaceFooter}
         </div>
       </div>
     </div>

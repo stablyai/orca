@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { useContext, useState, useMemo } from 'react'
 import { toast } from 'sonner'
 import { i18n } from '@/i18n/i18n'
@@ -13,7 +13,7 @@ import {
 import { NativeChatTextAttachmentPreview } from './NativeChatTextAttachmentPreview'
 import { AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { NativeChatMarkdownImageOwnerContext } from './native-chat-markdown-image-owner'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 
 const mocks = vi.hoisted(() => {
   const routing: { context: RuntimeFileOperationArgs | null; web: boolean } = {
@@ -30,7 +30,9 @@ const mocks = vi.hoisted(() => {
     cancel: vi.fn()
   }
 })
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.rpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.rpc
+}))
 vi.mock('@/lib/web-client-location', () => ({ isWebClientLocation: () => mocks.web }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn() } }))
 const path =

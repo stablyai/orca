@@ -9,7 +9,8 @@ import {
   resetMobileNativeChatDraftInputsForTests
 } from './native-chat/composer/mobile-native-chat-draft-inputs'
 import { createElement, type ReactNode } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import type {
   AgentSessionQueuedMessage,
@@ -229,7 +230,9 @@ export function mobileQueuedEditHarness() {
         : readOrHoldReply(method, params)
     )
     await act(async () => {
-      state.renderer = create(createElement(Harness, { editSupport, agent, sessionId }))
+      state.renderer = createWithQueryClient(
+        createElement(Harness, { editSupport, agent, sessionId })
+      )
     })
     const snapshot = snapshotEvent({ queuedMessages: [message], runningTurn: true })
     act(() => state.listener?.({ ...snapshot, sessionId, page: { ...snapshot.page, sessionId } }))

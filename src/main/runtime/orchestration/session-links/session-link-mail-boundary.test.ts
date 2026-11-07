@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { OrchestrationDb } from '../db'
+import { OrchestrationDb } from '../db/orchestration-db'
 import { SessionLinkParticipant } from '../../../../shared/session-link'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
-import { resolveOrchestrationParty } from '../orchestration-party'
+import { resolveOrchestrationParty } from '../addressing/orchestration-party'
 import { SessionLinkStore } from './session-link-store'
 import { assertSessionLinkMailBoundary } from './session-link-mail-boundary'
 
-vi.mock('../orchestration-party', () => ({ resolveOrchestrationParty: vi.fn() }))
+vi.mock('../addressing/orchestration-party', () => ({ resolveOrchestrationParty: vi.fn() }))
 const sender = testOrcaSessionId('codex-work')
 const recipient = testOrcaSessionId('claude-review')
 

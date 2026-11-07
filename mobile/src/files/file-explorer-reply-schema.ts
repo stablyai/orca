@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 
 // Require an array because the cache sorts/walks it unguarded. Drop rows without name or isDirectory; salvage decorative isSymlink.

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import type { ListDetectedWorktreesArgs } from '../../../../shared/detected-worktree-provider-contract'
-import { clearHugeRepoWarningDismissalsForTests } from '@/lib/source-control-huge-repo-warning-dismissals'
+import { clearHugeRepoWarningDismissalsForTests } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
 import {
   TEST_SSH_AUTHORITY,
   makeDetectedResult,

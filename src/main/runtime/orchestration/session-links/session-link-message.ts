@@ -7,7 +7,7 @@ import {
   type SessionLinkParticipant
 } from '../../../../shared/session-link'
 import { sessionLinkPolicyInstructions } from './session-link-policy-instructions'
-import { localOrchestrationCliCommand } from '../cli-command'
+import { localOrchestrationCliCommand } from '../workers/launch/orchestration-cli-command'
 
 export function sessionLinkMessageBody(
   link: SessionLink,

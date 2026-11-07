@@ -10,8 +10,8 @@ import {
   SESSION
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { structuredAgentSessionCommandTurn } from '../../shared/agent-session/view/structured-agent-session-command-turn-identity'
-import type { StructuredAgentSessionCommandRun } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { StructuredAgentRegistry } from '../native-chat/agent-session-wire/structured-agent-registry'
+import type { StructuredAgentSessionCommandRun } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { StructuredAgentRegistry } from '../native-chat/agent-session-wire/providers/structured-agent-registry'
 import { acpLaunchSpecFor, type AcpLaunchSpec } from './acp-launch-specs'
 import { acpStructuredAgentDefinition } from './acp-structured-agent-definitions'
 import { GrokFixtureReplay } from './acp-structured-fixture-replay.test-support'
@@ -267,6 +267,24 @@ describe('ACP compaction settlement', () => {
     }
     expect((await ended(rig, command)).inside).toEqual(original.inside)
     expect((await rig.rig.rows()).filter((row) => row.body.kind === 'status')).toHaveLength(1)
+  })
+
+  it('says OMP has no model selected, as a send does', async () => {
+    // OMP says this both signed out and for a launch selector it never resolved.
+    const { rig, command, prompt } = await compact(OMP)
+    rig.child().agent.fail(prompt, -32603, 'Internal error', {
+      details: 'No model selected.\n\nUse /login to sign in.'
+    })
+    const { turn, inside } = await ended(rig, command)
+    expect(turn).toMatchObject({ state: 'completed', outcome: 'failure' })
+    expect(inside).toEqual([
+      expect.objectContaining({
+        tone: 'error',
+        failure: expect.objectContaining({ kind: 'modelNotSelected' })
+      })
+    ])
+    // The agent's own failure, so cards waiting behind the compaction stay held.
+    expect(rig.rig.journal.inputOrder.newestTurn.failure()).toBeGreaterThan(0)
   })
 
   it('ends a stopped compaction as cancelled, with no result row', async () => {

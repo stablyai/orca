@@ -8,7 +8,9 @@ vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
 
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({}))
+
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension', () => ({
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: vi.fn()
 }))
@@ -19,7 +21,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 })
 
 // Main answers the window's chat-tab commands and its frames draw them (switch-on builds).
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

@@ -1,4 +1,4 @@
-import type { LoadedMcpConfigInspection } from '../../../../runtime/mcp-config-inspection'
+import type { LoadedMcpConfigInspection } from '../../../../runtime/mcp/configuration/mcp-config-inspection'
 import { translate } from '@/i18n/i18n'
 
 export function McpMissingConfigList({

@@ -1,5 +1,5 @@
 import { appendSessionLinkMessage, type SessionLinkAppend } from './session-link-message-store'
-import { mintAgentSessionOperationId } from '../structured-pointer-operation-id'
+import { mintAgentSessionOperationId } from '../mailbox/structured-pointer/structured-pointer-operation-id'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import {
@@ -7,7 +7,7 @@ import {
   SessionLinkEvent,
   SESSION_LINK_TURN_LIMIT
 } from '../../../../shared/session-link'
-import type { OrchestrationDb } from '../db'
+import type { OrchestrationDb } from '../db/orchestration-db'
 import { runLifecycleWriteTransaction } from '../db/lifecycle-write-transaction-runner'
 
 const storedDocument = z.object({ document: z.string() })

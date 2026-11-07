@@ -1,4 +1,4 @@
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useAppStore } from '@/store'
 import { shouldShutdownSimulatorForPaneUnmountFromTabs } from './simulator-tab-shutdown'
 

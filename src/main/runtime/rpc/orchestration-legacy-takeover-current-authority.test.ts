@@ -12,7 +12,7 @@ import {
   CURRENT_COORDINATOR_PANE,
   request
 } from './orchestration-legacy-compatibility-dispatcher-test-fixture'
-import { ORCHESTRATION_METHODS } from './methods/orchestration'
+import { ORCHESTRATION_METHODS } from './methods/orchestration/orchestration'
 
 afterEach(() => {
   cleanupLegacyCompatibilityDispatcherHarnesses()

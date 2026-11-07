@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import 'sonner'
-import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
-import { createCompatibleRuntimeStatusResponse } from '../../runtime/runtime-compatibility-test-fixture'
+import type { RuntimeEnvironmentCallRequest } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { createCompatibleRuntimeStatusResponse } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY } from '../../../../shared/worktree-runtime-capabilities'
-import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
+import { getHostedReviewCacheKey } from './hosted-review/hosted-review-cache-identity'
 import {
   getGitHubPRCacheKey,
   getLegacyGitHubPRCacheKey

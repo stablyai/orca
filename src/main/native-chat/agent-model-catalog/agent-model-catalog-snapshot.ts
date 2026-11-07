@@ -2,12 +2,12 @@ import {
   agentModelCatalogReadRecords,
   agentModelCatalogScopedRecord
 } from './agent-model-catalog-read-scope'
-import { onLiveAccount } from './agent-model-catalog-running-account'
 import { agentModelCatalogFingerprintForRecord } from './agent-model-catalog-fingerprint'
 import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session/records/agent-session-record-launch-directory'
 import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
 import { agentModelCatalogResultFromEntry } from './agent-model-catalog-entry'
+import { agentModelCatalogDefaultFollowsAccount } from './agent-model-catalog-workspace'
 import {
   independentAgentModelCatalog,
   usesModelSpecificAcpEfforts
@@ -17,12 +17,15 @@ import type {
   AgentModelCatalogServiceDeps
 } from './agent-model-catalog-service-contract'
 
+/** A request's resolved scope: lookup and projection data that owns no work. */
 export type AgentModelCatalogBinding = {
   identity: string
-  params: AgentModelCatalogReadParams
+  agent: string
+  legacy?: boolean
+  /** Whether the chat it was resolved for runs on this machine (or it had none). */
+  local: boolean
   workspaceId?: string
   current: () => boolean
-  cancel: () => void
   fingerprint: string
   base: string
   exact: boolean
@@ -76,7 +79,6 @@ export function agentModelCatalogRequestKey(
   const record = agentModelCatalogScopedRecord(deps, params)
   const inWorkspace =
     record &&
-    !params.workspace &&
     params.workspacePath === undefined &&
     (params.inSessionWorkspace ||
       deps.listsInChatFolder?.has(params.agent) ||
@@ -93,7 +95,6 @@ export function agentModelCatalogRequestKey(
       deps.drivesRecord(record)
     ],
     released: agentModelCatalogReleasedOwner(record),
-    selector: params.workspace?.selector,
     workspacePath: params.workspacePath,
     inSessionWorkspace:
       inWorkspace && record ? [record.location.workspaceId, record.launchDirectory] : undefined,
@@ -107,7 +108,6 @@ export function agentModelCatalogScopeIdentity(
 ): string {
   return JSON.stringify([
     deps.store.retirementRevision(params.agent),
-    params.workspace?.identity(),
     agentModelCatalogRequestKey(deps, params)
   ])
 }
@@ -130,22 +130,19 @@ export function agentModelCatalogMemoryBinding(
     return
   }
   // Pinned native account and cwd can reuse a scope another caller already proved.
-  const cwd = params.workspace
-    ? undefined
-    : params.workspacePath === undefined
+  const cwd =
+    params.workspacePath === undefined
       ? agentSessionPinnedLaunchDirectory(record)
       : params.workspacePath
   if (cwd && record.location.executionHostId === 'local' && record.location.wslDistro === null) {
     for (const bound of bindings.values()) {
       if (
-        bound.params.agent === params.agent &&
-        !!bound.params.legacy === !!params.legacy &&
-        (bound.cwd ?? bound.folder ?? bound.workspacePath) === cwd &&
-        (!bound.params.sessionId ||
-          deps.getConversation(bound.params.sessionId)?.location.executionHostId === 'local') &&
+        bound.agent === params.agent &&
+        !!bound.legacy === !!params.legacy &&
+        (bound.workspacePath ?? bound.folder ?? bound.cwd) === cwd &&
+        bound.local &&
         bound.base === agentModelCatalogFingerprintForRecord(record, bound.folder) &&
-        bound.current() &&
-        bound.identity === capture(bound.params)
+        bound.current()
       ) {
         return bound
       }
@@ -153,7 +150,6 @@ export function agentModelCatalogMemoryBinding(
   }
   if (
     deps.listsInChatFolder?.has(params.agent) ||
-    params.workspace ||
     (params.workspacePath !== null &&
       (independentAgentModelCatalog(params.agent) ||
         (deps.agentReadsProjectModelConfig?.(params.agent) === true && !params.legacy)))
@@ -163,13 +159,15 @@ export function agentModelCatalogMemoryBinding(
   const fingerprint = agentModelCatalogFingerprintForRecord(record)
   return {
     identity: capture(params),
-    params,
+    agent: params.agent,
+    legacy: params.legacy,
+    local: true,
     current: () => true,
-    cancel: () => {},
     fingerprint,
     base: fingerprint,
     exact: false,
     keepDefault:
+      agentModelCatalogDefaultFollowsAccount(params.agent) ||
       (!params.inSessionWorkspace && params.workspacePath === undefined) ||
       params.legacyOptionsDisplay === true ||
       deps.agentReadsProjectModelConfig?.(params.agent) === false
@@ -251,60 +249,14 @@ export function projectAgentModelCatalogSnapshot(
   }
 }
 
-export function retireAgentModelCatalogRequests(
-  deps: AgentModelCatalogServiceDeps,
+/** Drops resolved scopes its agent retired, and (named) a workspace's; no work ends with them. */
+export function retireAgentModelCatalogBindings(
   bindings: Map<string, AgentModelCatalogBinding>,
-  claims: Map<
-    string,
-    {
-      identity: string
-      params: AgentModelCatalogReadParams
-      controller: AbortController
-      current?: () => boolean
-    }
-  >,
   workspaceId?: string
 ): void {
-  for (const [key, claim] of claims) {
-    if (
-      !(
-        claim.current?.() ?? claim.identity === agentModelCatalogScopeIdentity(deps, claim.params)
-      ) ||
-      (workspaceId !== undefined &&
-        claim.params.sessionId !== undefined &&
-        deps.getConversation(claim.params.sessionId)?.location.workspaceId === workspaceId)
-    ) {
-      claim.controller.abort()
-      claims.delete(key)
-    }
-  }
   for (const [key, bound] of bindings) {
-    if (
-      !bound.current() ||
-      bound.identity !== agentModelCatalogScopeIdentity(deps, bound.params) ||
-      (workspaceId !== undefined && bound.workspaceId === workspaceId)
-    ) {
-      bound.cancel()
+    if (!bound.current() || (workspaceId !== undefined && bound.workspaceId === workspaceId)) {
       bindings.delete(key)
     }
-  }
-}
-
-export function agentModelCatalogSessionPeek(
-  deps: AgentModelCatalogServiceDeps,
-  binding: (params: AgentModelCatalogReadParams) => AgentModelCatalogBinding | undefined
-) {
-  return (sessionId: string, verifiedOnly?: boolean) => {
-    const record = deps.getConversation(sessionId)
-    const bound =
-      record &&
-      binding({
-        agent: record.provider,
-        sessionId,
-        inSessionWorkspace: true,
-        records: { record, scoped: onLiveAccount(deps, record), savedOnly: false }
-      })
-    const entry = bound ? deps.store.observation(bound.fingerprint) : null
-    return entry && (!verifiedOnly || deps.store.verified(entry)) ? entry : null
   }
 }

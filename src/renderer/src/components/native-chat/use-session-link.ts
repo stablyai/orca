@@ -1,4 +1,4 @@
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
 import {
@@ -10,7 +10,7 @@ import {
 } from '../../../../shared/session-link'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { translate as t } from '@/i18n/i18n'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import {
   callStructuredAgentSession,
   structuredAgentSessionHostSupports

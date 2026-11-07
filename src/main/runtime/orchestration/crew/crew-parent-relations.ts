@@ -4,7 +4,7 @@ import { maximalCrewClaims } from './crew-claim-reduction'
 import { isEquivalentPaneKey } from '../db/pane-key-match'
 import type { CrewParentClaim, CrewParentInputs } from './crew-parent-inputs'
 import type { createCrewPartyRegistry, Party } from './crew-parties'
-import type { CrewReadDependencies } from './crew-read-model'
+import type { CrewReadDependencies } from './crew-read-dependencies'
 
 type Registry = ReturnType<typeof createCrewPartyRegistry>
 export type CrewParentRelation = {
