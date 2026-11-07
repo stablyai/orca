@@ -108,6 +108,29 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
     ]
   ),
   featureRoute(
+    'feature.agent-descendant-kill',
+    ['agent-descendant-process-kill'],
+    [
+      'src/main/pty/process-retirement/pty-descendant-',
+      'src/main/daemon/sessions/terminal-descendant-shutdown.ts',
+      'src/main/daemon/terminal-host/terminal-session-teardown.ts',
+      'src/main/providers/local-pty/local-pty-termination.ts',
+      // Claude launch flags shift the stand-in agent's argv.
+      'src/main/claude/agent-view/'
+    ]
+  ),
+  featureRoute(
+    'feature.agent-permission-settings',
+    ['agent-auto-permissions'],
+    [
+      `${COMPONENTS}settings/agents/permissions/`,
+      `${COMPONENTS}agent/launch-settings/AgentPermission`,
+      'src/shared/agent-launch/permissions/tui-agent-permission-choice.ts',
+      'src/shared/agent-launch/permissions/tui-agent-permission-lift.ts',
+      'src/shared/agent-launch/choices/agent-launch-permission-updates.ts'
+    ]
+  ),
+  featureRoute(
     'feature.project-groups',
     ['project-group-creation-visibility', 'project-group-manual-sort'],
     ['src/main/project-groups/', 'src/renderer/src/store/project-groups/']
@@ -131,6 +154,18 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
       'src/shared/remote-runtime/host-store/runtime-environment-pairing-replace-guards.ts',
       'src/shared/remote-runtime/host-store/runtime-environment-store.ts',
       `${COMPONENTS}sidebar/workspace-card/identity/worktree-card-header-items.tsx`
+    ]
+  ),
+  featureRoute(
+    'feature.startup-exec-readiness',
+    ['paired-startup-exec-readiness'],
+    [
+      'src/main/daemon/sessions/session-shell-ready-barrier.ts',
+      'src/main/daemon/shell-readiness/',
+      'src/main/pty/shell-startup/shell-prompt-readiness-probe.ts',
+      'src/main/pty/shell-startup/shell-startup-output-scanner.ts',
+      'src/main/pty/shell-startup/shell-templates.ts',
+      'tests/e2e/helpers/startup-exec-readiness-oracle.ts'
     ]
   )
 ]

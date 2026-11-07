@@ -14,16 +14,19 @@ export function mintTokenDevice(
   name: string,
   scope: DeviceScope,
   pairingReach: RuntimePairingReach,
-  grants: readonly RuntimeDeviceGrant[]
+  grants: readonly RuntimeDeviceGrant[],
+  offerTtlMs?: number
 ): TokenDeviceEntry {
   const validatedGrants = validGrants(grants, scope)
+  const pairedAt = Date.now()
   return {
     ...mintDeviceCredential(),
     name,
     scope,
-    pairedAt: Date.now(),
+    pairedAt,
     lastSeenAt: 0,
     pairingReach,
-    ...(validatedGrants ? { grants: validatedGrants } : {})
+    ...(validatedGrants ? { grants: validatedGrants } : {}),
+    ...(offerTtlMs !== undefined ? { offerExpiresAt: pairedAt + offerTtlMs } : {})
   }
 }

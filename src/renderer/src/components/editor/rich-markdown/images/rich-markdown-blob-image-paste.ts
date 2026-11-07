@@ -77,7 +77,9 @@ export function scheduleRichMarkdownBlobImageImport({
         if (!response.ok) {
           throw new Error(`Failed to read ${src}`)
         }
-        const png = await convertImageBlobToPng(await response.blob())
+        const png = await convertImageBlobToPng(await response.blob(), {
+          downscaleToFit: true
+        })
         const contentBase64 = await blobToBase64(png)
         assertClipboardImageBase64LengthWithinLimit(contentBase64.length)
         // Skip the write when the paste was transformed (e.g. to plain text) or the image was removed.

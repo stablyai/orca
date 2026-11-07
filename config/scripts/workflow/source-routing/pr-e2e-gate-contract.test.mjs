@@ -174,3 +174,52 @@ describe('runtime host status E2E routing', () => {
     ).not.toContain(spec)
   })
 })
+
+describe('startup exec readiness E2E routing', () => {
+  const spec = 'tests/e2e/paired-startup-exec-readiness.spec.ts'
+  it.each([
+    'src/main/daemon/sessions/session-shell-ready-barrier.ts',
+    'src/main/daemon/shell-readiness/post-ready-flush-gate.ts',
+    'src/main/pty/shell-startup/shell-templates.ts',
+    'tests/e2e/helpers/startup-exec-readiness-oracle.ts'
+  ])('routes %s', (path) => {
+    expect(selectPrE2eSpecs([path])).toContain(spec)
+  })
+  it('does not route unit tests of those sources', () => {
+    expect(
+      selectPrE2eSpecs(['src/main/daemon/shell-readiness/testing/shell-ready.test.ts'])
+    ).not.toContain(spec)
+  })
+})
+
+describe('agent descendant kill E2E routing', () => {
+  const spec = 'tests/e2e/agent-descendant-process-kill.spec.ts'
+  it.each([
+    'src/main/pty/process-retirement/pty-descendant-termination.ts',
+    'src/main/daemon/sessions/terminal-descendant-shutdown.ts',
+    'src/main/claude/agent-view/agent-view-service.ts'
+  ])('routes %s', (file) => {
+    expect(selectPrE2eSpecs([file])).toContain(spec)
+  })
+  it('skips unit tests', () => {
+    expect(
+      selectPrE2eSpecs(['src/main/pty/process-retirement/pty-descendant-termination.test.ts'])
+    ).not.toContain(spec)
+  })
+})
+
+describe('agent permission settings E2E routing', () => {
+  const spec = 'tests/e2e/agent-auto-permissions.spec.ts'
+  it.each([
+    'src/renderer/src/components/agent/launch-settings/AgentPermissionChoiceControls.tsx',
+    'src/renderer/src/components/settings/agents/permissions/AgentPermissionModeMenu.tsx',
+    'src/shared/agent-launch/permissions/tui-agent-permission-choice.ts'
+  ])('routes %s', (file) => {
+    expect(selectPrE2eSpecs([file])).toContain(spec)
+  })
+  it('skips unit tests', () => {
+    expect(
+      selectPrE2eSpecs(['src/shared/agent-launch/permissions/tui-agent-permission-choice.test.ts'])
+    ).not.toContain(spec)
+  })
+})

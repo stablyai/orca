@@ -16,6 +16,7 @@ export type SttSessionState = {
   modelManager: ModelManager
   activeModelId: string | null
   activeHotwordsFilePath: string | undefined
+  activeLanguage: string | undefined
   activeOwner: string | null
   startingOwner: string | null
   startingModelId: string | null
@@ -36,6 +37,7 @@ export function createSttSessionState(modelManager: ModelManager): SttSessionSta
     modelManager,
     activeModelId: null,
     activeHotwordsFilePath: undefined,
+    activeLanguage: undefined,
     activeOwner: null,
     startingOwner: null,
     startingModelId: null,

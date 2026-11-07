@@ -83,7 +83,7 @@ export function installBrowserLinkMaterializationProbe() {
         enabled: false,
         sttModel: '',
         modelsDir: '',
-        language: 'en',
+        dictationLanguage: 'auto',
         dictationMode: 'hold',
         terminalConfirmBeforeInsert: true,
         userModels: [],

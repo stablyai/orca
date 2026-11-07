@@ -92,7 +92,9 @@ export function PluginDetailPage({
   const palettes = usePluginArtPalettes(entry.pluginKey, listing?.release?.themePreview)
   const tooNew = needsNewerOrca(entry.minimumOrca, orcaVersion) !== null
   // Why: a fetched manifest names the plugin exactly; older catalogs only give its key.
-  const name = plugin?.name ?? preview?.manifest.name ?? entry.name
+  const name = entry.nameShowsPublisher
+    ? entry.name
+    : (plugin?.name ?? preview?.manifest.name ?? entry.name)
   const action = usePluginPageAction({
     entry,
     name,

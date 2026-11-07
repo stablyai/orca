@@ -101,7 +101,7 @@ export function usePluginPageAction({
             size="sm"
             className="w-36"
             disabled={busy}
-            aria-label={`${enableLabel}: ${plugin.name}`}
+            aria-label={`${enableLabel}: ${name}`}
             onClick={() => decide('approve')}
           >
             {busy ? <Loader2 className="animate-spin" /> : null}

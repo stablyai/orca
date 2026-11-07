@@ -3,6 +3,7 @@ import type {
   BrowserAgentCursorEvent,
   BrowserAgentViewportEvent
 } from '../../../shared/browser-agent-activity-contract'
+import type { DesktopBrowserBridgeHostNotice } from '../../../shared/desktop-browser-bridge-host-control-contract'
 
 /** window.api.browser members through which main shows an agent driving a page. */
 export type BrowserAgentPresenceApi = {
@@ -18,4 +19,12 @@ export type BrowserAgentPresenceApi = {
   agentCursorArrived: (sequence: number) => void
   /** The pane sizes its page box to an agent's viewport, as a preset does. */
   onAgentViewportApplied?: (callback: (data: BrowserAgentViewportEvent) => void) => () => void
+  /** Main says, once per SSH host, that the host started controlling a browser tab. */
+  onRemoteHostControlNotice?: (
+    callback: (notice: DesktopBrowserBridgeHostNotice) => void
+  ) => () => void
+  /** Detaches the host from desktop browser tabs until Orca restarts or the host is re-enabled. */
+  stopRemoteHostControl?: (targetId: string) => Promise<void>
+  /** Turns the host's browser-control setting off; false when the host's settings are Orca's own. */
+  disallowRemoteHostControl?: (targetId: string) => Promise<boolean>
 }
