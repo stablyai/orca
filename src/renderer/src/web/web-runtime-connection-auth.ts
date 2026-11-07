@@ -1,9 +1,7 @@
-import {
-  createPairedE2EEClientHandshake,
-  type PairedE2EEAuthReply,
-  type PairedE2EEClientHandshake
+import type {
+  PairedE2EEAuthReply,
+  PairedE2EEClientHandshake
 } from '../../../shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
-import type { PairedE2EEFramingPolicy } from '../../../shared/remote-runtime/e2ee/paired-e2ee-framing-policy'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { resolveWebRuntimeAuthRejection } from './web-runtime-auth-verdict'
 import {
@@ -25,7 +23,7 @@ import {
   type WebRuntimeCredentialSource
 } from './web-runtime-credential-source'
 import { migrateWebRuntimeToDeviceKey } from './web-runtime-device-key-migration'
-import { isWebHostLatchedToE2EEV2, webE2EEFramingPolicy } from './web-e2ee-v2-host-latch'
+import { WebTokenFraming } from './web-token-framing'
 
 const UNSUPPORTED_HELLO_CLOSE_CODE = 4001
 
@@ -43,17 +41,12 @@ export type WebRuntimeConnectionLifecycle = {
 export class WebRuntimeConnectionAuth {
   plan: WebRuntimeAuthPlan | null = null
   private readyAccepted = false
-  // This socket sends the token over v2; an older host may refuse it, then the token goes legacy.
-  private tokenOverV2 = false
   private failureReason: WebRuntimeAuthFailureReason = 'unauthorized'
 
   private readonly credential: WebRuntimeCredentialSource
   private readonly allowKeyMigration: boolean
   private readonly retryLater: () => void
-  private readonly hostPublicKeyB64: string
-  private readonly framingPolicy: PairedE2EEFramingPolicy
-  // Only a reconnecting socket can absorb an older host refusing a v2 attempt.
-  private readonly mayTryV2Token: boolean
+  private readonly tokenFraming: WebTokenFraming
 
   constructor(
     connection: PairedRuntimeConnection,
@@ -69,12 +62,12 @@ export class WebRuntimeConnectionAuth {
     // Absent: the pairing token over legacy framing, as before device keys.
     this.credential = options.credential ?? tokenOnlyCredentialSource(deviceToken)
     this.allowKeyMigration = options.allowKeyMigration === true
-    this.hostPublicKeyB64 = connection.hostPublicKeyB64
-    this.framingPolicy = webE2EEFramingPolicy(connection.hostPublicKeyB64)
-    this.mayTryV2Token =
+    this.tokenFraming = new WebTokenFraming(
+      connection.hostPublicKeyB64,
       this.credential.tryV2Token === true &&
-      options.reconnect !== false &&
-      options.crewAttempt !== true
+        options.reconnect !== false &&
+        options.crewAttempt !== true
+    )
   }
 
   /** Resolves the next plan, then opens; synchronous for a token-only source. */
@@ -91,34 +84,15 @@ export class WebRuntimeConnectionAuth {
     )
   }
 
-  /** Keys and migrations are v2; the token is v2 for hosts known to take it, else tried when a refusal can be absorbed. */
   createHandshake(plan: WebRuntimeAuthPlan): PairedE2EEClientHandshake {
-    this.tokenOverV2 =
-      plan.kind === 'legacy-token' &&
-      (isWebHostLatchedToE2EEV2(this.hostPublicKeyB64) ||
-        (this.mayTryV2Token && this.framingPolicy.framingForNextDial() === 'v2'))
-    const handshake = createPairedE2EEClientHandshake({
-      primitives: WEB_PAIRED_E2EE_PRIMITIVES,
-      hostPublicKeyB64: this.hostPublicKeyB64,
-      framing: plan.kind !== 'legacy-token' || this.tokenOverV2 ? 'v2' : 'legacy',
-      transport: 'direct',
-      legacyGate: this.framingPolicy,
-      // Why token sockets only: a migration's token auth stays the shape older key hosts accept.
-      v2TokenCapabilities: this.tokenOverV2
-    })
-    if (!this.tokenOverV2) {
-      return handshake
-    }
-    return {
-      ...handshake,
-      classifyAuthReply: (plaintext) => {
-        const reply = handshake.classifyAuthReply(plaintext)
-        if (reply.kind === 'authenticated') {
-          this.framingPolicy.noteV2Authenticated()
-        }
-        return reply
-      }
-    }
+    return this.tokenFraming.createHandshake(plan)
+  }
+
+  /** True when this socket only checks a latched host's status, then reconnects. */
+  checkLatchedHostIfPlanned(
+    args: Parameters<WebTokenFraming['checkLatchedHostIfPlanned']>[0]
+  ): boolean {
+    return this.tokenFraming.checkLatchedHostIfPlanned(args)
   }
 
   async sendAuth(args: {
@@ -174,7 +148,11 @@ export class WebRuntimeConnectionAuth {
     reply: Extract<PairedE2EEAuthReply, { kind: 'rejected' }>
   ): Promise<{ kind: 'retry' } | { kind: 'failed'; error: WebRuntimeClientError }> {
     // Hosts that predate capabilities on v2 token auth answer bad_auth; reconnect with legacy.
-    if (reply.errorCode === 'bad_auth' && this.tokenOverV2 && this.noteOlderHostRefusedV2()) {
+    if (
+      reply.errorCode === 'bad_auth' &&
+      this.tokenFraming.sentTokenOverV2 &&
+      this.tokenFraming.noteV2Refused()
+    ) {
       return { kind: 'retry' }
     }
     const outcome = await resolveWebRuntimeAuthRejection(this.plan, reply, this.credential)
@@ -190,20 +168,10 @@ export class WebRuntimeConnectionAuth {
     if (this.plan?.kind === 'migrate' && !this.readyAccepted) {
       this.credential.migrationUnavailable()
     }
-    const v2Hello = this.tokenOverV2 || this.plan?.kind === 'migrate'
+    const v2Hello = this.tokenFraming.sentTokenOverV2 || this.plan?.kind === 'migrate'
     if (v2Hello && !this.readyAccepted && closeCode === UNSUPPORTED_HELLO_CLOSE_CODE) {
-      this.noteOlderHostRefusedV2()
+      this.tokenFraming.noteV2Refused()
     }
-  }
-
-  private noteOlderHostRefusedV2(): boolean {
-    // Why: a host that took v2 token auth before is never downgraded; its refusal is a failure.
-    if (this.framingPolicy.helloRefusalIsAuthFailure()) {
-      return false
-    }
-    this.tokenOverV2 = false
-    this.framingPolicy.noteV2HelloRefused()
-    return true
   }
 }
 

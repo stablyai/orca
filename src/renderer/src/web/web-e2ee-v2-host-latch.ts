@@ -61,6 +61,17 @@ export function isWebHostLatchedToE2EEV2(hostPublicKeyB64: string): boolean {
   return webLatchStore.isLatched(hostPublicKeyB64) === true
 }
 
+/** Only after the host itself, over a channel keyed to its pinned key, shows it predates v2 token auth. */
+export function unlatchWebHostFromE2EEV2(hostPublicKeyB64: string): void {
+  latched = new Set([...(latched ?? []), ...readLatchedHosts()])
+  latched.delete(hostPublicKeyB64)
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify([...latched]))
+  } catch {
+    // The in-memory change still applies for this page.
+  }
+}
+
 export function resetWebE2EEV2HostLatchForTests(): void {
   latched = null
   policies.clear()
