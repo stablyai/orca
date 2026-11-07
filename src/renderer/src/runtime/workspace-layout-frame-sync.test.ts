@@ -14,8 +14,8 @@ import {
 } from '../../../shared/workspace-layout/workspace-layout-session.test-fixture'
 import '../store/slices/editor/file-ids/editor-file-ids'
 import { bootWindowFromPartitions } from '../app-shell/startup-window-view.test-fixture'
-import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
-import { createTestStore } from '../store/slices/store-test-helpers'
+import { createStoreSessionMockApi } from '../store/app-store-session-api.test-fixture'
+import { createTestStore } from '../store/app-store-test-fixture'
 import type { LayoutFrameSlices } from '../store/workspace-layout-frame-slices'
 import {
   afterLayoutFrame,

@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-li
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { sourceControlActionRecipeEntry } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import { useAppStore } from '@/store/index'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import * as preparation from './launch-work-item-direct-route-preparation'
 import * as preflight from './launch-work-item-direct-preflight'
 import { adoptAgentSessionLaunchVerdict } from '../../../agent-session/launch/routing/agent-session-launch-plan'

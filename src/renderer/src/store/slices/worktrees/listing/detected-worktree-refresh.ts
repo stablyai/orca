@@ -3,7 +3,7 @@ import { getRuntimeEnvironmentConnectionGeneration } from '../../runtime-status/
 import {
   createDetectedWorktreeRefreshLeaseRegistry,
   type DetectedWorktreeRefreshLease
-} from '../../detected-worktree-refresh-leases'
+} from './detected-worktree-refresh-leases'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,

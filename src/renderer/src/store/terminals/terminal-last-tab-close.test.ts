@@ -1,9 +1,10 @@
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import { createTestStore, seedStore } from '../slices/store-test-helpers'
-import { makeTab, makeTabGroup, makeUnifiedTab } from '../slices/store-session-test-harness'
-import { makeWorktree } from '../slices/worktrees-slice-test-fixtures'
-import { createStoreCascadesMockApi } from '../slices/store-cascades-test-harness'
+import { createTestStore, seedStore } from '../app-store-test-fixture'
+import { makeTab } from './terminal-tab.test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '../slices/tabs/tab-group.test-fixture'
+import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
+import { createStoreCascadesMockApi } from '../app-store-cascade-api.test-fixture'
 import type { TabsDrawnFromMain } from '../slices/tabs/tabs-drawn-from-main.test-fixture'
 
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))

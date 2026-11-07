@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createEditorTabsStore } from '../editor-slice-test-harness'
-import { makeWorktree, TEST_REPO } from '../../worktrees-slice-test-fixtures'
+import { makeWorktree } from '../../worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../../../repos/repo.test-fixture'
 import { drawTabsFromMain } from '../../tabs/tabs-drawn-from-main.test-fixture'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'

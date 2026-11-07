@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createTestStore, seedStore } from '../../store-test-helpers'
-import { makeOpenFile, makeTabGroup, makeUnifiedTab } from '../../store-session-test-harness'
-import { makeWorktree } from '../../worktrees-slice-test-fixtures'
+import { createTestStore, seedStore } from '../../../app-store-test-fixture'
+import { makeOpenFile } from '../types/open-file.test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '../../tabs/tab-group.test-fixture'
+import { makeWorktree } from '../../worktrees/worktree.test-fixture'
 import { drawTabsFromMain } from '../../tabs/tabs-drawn-from-main.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 

@@ -6,15 +6,12 @@ import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/l
 import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import {
-  createTestStore,
-  makeOpenFile,
-  makeTab,
-  makeTabGroup,
-  makeUnifiedTab,
-  makeWorktree
-} from './slices/store-test-helpers'
-import { makeFolderWorkspace } from './slices/worktrees-slice-test-fixtures'
+import { createTestStore } from './app-store-test-fixture'
+import { makeOpenFile } from './slices/editor/types/open-file.test-fixture'
+import { makeTab } from './terminals/terminal-tab.test-fixture'
+import { makeTabGroup, makeUnifiedTab } from './slices/tabs/tab-group.test-fixture'
+import { makeWorktree } from './slices/worktrees/worktree.test-fixture'
+import { makeFolderWorkspace } from './folder-workspaces/folder-workspace.test-fixture'
 import { updateNativeChatComposerDraft } from '@/components/native-chat/native-chat-composer-draft-store'
 import { markWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import {

@@ -1,12 +1,10 @@
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  createTestStore,
-  makeTab,
-  makeUnifiedTab,
-  makeWorktree,
-  TEST_REPO
-} from '../store/slices/store-test-helpers'
+import { createTestStore } from '../store/app-store-test-fixture'
+import { makeTab } from '../store/terminals/terminal-tab.test-fixture'
+import { makeUnifiedTab } from '../store/slices/tabs/tab-group.test-fixture'
+import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../store/repos/repo.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { layoutApplyTestDouble } from '@/runtime/layout-apply-test-double'
 import type { AppState } from '../store/types'

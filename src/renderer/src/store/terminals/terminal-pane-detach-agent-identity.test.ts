@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { resolveWindowsShiftEnterEncodingForPane } from '@/components/terminal-pane/input/keyboard/terminal-windows-shift-enter'
-import { createTestStore, seedStore } from '../slices/store-test-helpers'
-import { makeTab } from '../slices/store-session-test-harness'
-import { makeWorktree } from '../slices/worktrees-slice-test-fixtures'
+import { createTestStore, seedStore } from '../app-store-test-fixture'
+import { makeTab } from './terminal-tab.test-fixture'
+import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 
 describe('syncPaneDetachPtyOwnership agent identity', () => {
   it('moves process, hook, launch, and resume authority to the detached leaf', () => {

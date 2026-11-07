@@ -5,7 +5,7 @@ import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/con
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 
 vi.mock('@/store', async () => {
-  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { createTestStore } = await import('@/store/app-store-test-fixture')
   return { useAppStore: createTestStore() }
 })
 

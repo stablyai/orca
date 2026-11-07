@@ -14,7 +14,7 @@ import {
 
 import { GUARDED_PATH, openGuardedFile, stubGuardedDisk } from './editor-save-guarded-disk-fixture'
 
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 
 const mocks = vi.hoisted(() => ({
   getConnectionIdForFile: vi.fn(),

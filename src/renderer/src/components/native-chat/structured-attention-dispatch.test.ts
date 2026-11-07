@@ -10,13 +10,10 @@ import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
 } from '../../../../shared/agent-session/view/structured-agent-session-projection'
-import {
-  createTestStore,
-  makeTabGroup,
-  makeUnifiedTab,
-  makeWorktree,
-  TEST_REPO
-} from '@/store/slices/store-test-helpers'
+import { createTestStore } from '@/store/app-store-test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import type { NotificationDispatchRequest } from '../../../../shared/notification-settings-types'
 import type { StructuredTab } from './structured-agent-session-tabs'
 import { isStructuredTab } from '../../../../shared/agent-session/view/structured-agent-session-tab'

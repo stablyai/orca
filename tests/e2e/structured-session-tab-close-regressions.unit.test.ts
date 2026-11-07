@@ -32,7 +32,7 @@ import {
 } from '../../src/renderer/src/runtime/web-session-close-intent'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../src/shared/layout-owner-switch'
 import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'
-import { makeWorktree } from '../../src/renderer/src/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '../../src/renderer/src/store/slices/worktrees/worktree.test-fixture'
 import { layoutApplyTestTransport } from '../../src/renderer/src/runtime/layout-apply-test-transport.test-fixture'
 import {
   drawTabsFromMain,

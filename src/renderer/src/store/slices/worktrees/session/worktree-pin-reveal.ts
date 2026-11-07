@@ -1,4 +1,5 @@
-import type { WorktreeMetaBatchUpdate, WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreeMetaBatchUpdate } from '../metadata/worktree-meta-update-options'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import {
   getActiveSidebarWorkspaceId,

@@ -309,12 +309,11 @@
 1 src/renderer/src/store/slices/runtime-status/create-runtime-status-slice.ts
 2 src/renderer/src/store/slices/settings/settings-owner-hydration-publication.ts
 5 src/renderer/src/store/slices/settings/create-settings-slice.ts
-8 src/renderer/src/store/slices/store-test-helpers.ts
 1 src/renderer/src/store/terminals/terminal-tab-retirement.ts
-3 src/renderer/src/store/slices/workspace-attention/workspace-unread-characterization-fixture.ts
+2 src/renderer/src/store/slices/workspace-attention/workspace-unread-characterization-fixture.ts
 1 src/renderer/src/store/slices/settings/worktree-visibility-owner-settings.ts
 3 src/renderer/src/store/slices/settings/worktree-visibility-settings-write.ts
-5 src/renderer/src/store/slices/worktrees.ts
+5 src/renderer/src/store/slices/worktrees/create-worktree-slice.ts
 1 src/renderer/src/store/slices/worktrees/create/create-worktree.ts
 1 src/renderer/src/store/slices/worktrees/create/created-worktree-state-merge.ts
 2 src/renderer/src/store/slices/worktrees/listing/fetch-detected-worktrees.ts

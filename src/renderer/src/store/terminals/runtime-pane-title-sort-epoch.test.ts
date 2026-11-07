@@ -19,9 +19,9 @@ vi.mock('@/components/terminal-pane/snapshots/shutdown-buffer-captures', () => (
 // @ts-expect-error -- minimal preload API stub for the slice's IPC writes
 globalThis.window = { api: {} }
 
-import { createTestStore, seedStore } from '../slices/store-test-helpers'
-import { makeTab } from '../slices/store-session-test-harness'
-import { makeWorktree } from '../slices/worktrees-slice-test-fixtures'
+import { createTestStore, seedStore } from '../app-store-test-fixture'
+import { makeTab } from './terminal-tab.test-fixture'
+import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 
 describe('runtimePaneTitle → sortEpoch', () => {
   it('retains the visible title across a decorative spinner frame', () => {

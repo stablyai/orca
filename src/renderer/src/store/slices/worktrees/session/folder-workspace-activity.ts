@@ -1,4 +1,4 @@
-import { FolderWorkspaceActivityPersistence } from '../../folder-workspace-activity-persistence'
+import { FolderWorkspaceActivityPersistence } from './folder-workspace-activity-persistence'
 import { FOLDER_WORKSPACE_ACTIVITY_PERSIST_INTERVAL_MS } from '../listing/worktree-slice-constants'
 import type { WorktreeSliceGet } from '../listing/worktree-slice-types'
 import { selectFolderWorkspaces } from '../../../workspace-record-selectors'

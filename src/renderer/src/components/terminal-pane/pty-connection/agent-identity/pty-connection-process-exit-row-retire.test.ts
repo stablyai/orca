@@ -185,7 +185,7 @@ async function seedHookRow(
   state: 'working' | 'done' = 'done'
 ): Promise<AgentStatusEntry> {
   // Why the real slice: the row must carry the acceptedStatusSeq a real accepted hook stamps.
-  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { createTestStore } = await import('@/store/app-store-test-fixture')
   const realStore = createTestStore(
     (await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')).isClaudeAgent
   )

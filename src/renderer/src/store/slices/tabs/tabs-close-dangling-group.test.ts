@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
-import { createTestStore } from '../store-test-helpers'
+import { createTestStore } from '../../app-store-test-fixture'
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>

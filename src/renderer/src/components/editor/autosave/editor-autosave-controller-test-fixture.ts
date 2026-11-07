@@ -5,7 +5,7 @@ import { createStore, type StoreApi } from 'zustand/vanilla'
 import { createEditorSlice } from '@/store/slices/editor/create-editor-slice'
 import { withEditorBufferRecords } from '@/store/editor-buffer-record-lifecycle'
 import type { AppState } from '@/store/types'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { emptyTabLayoutState } from '@/store/slices/editor/editor-slice-test-harness'
 import { getDiskBaselineSignature } from '../../../../../shared/disk-baseline-signature'
 import {

@@ -8,7 +8,8 @@ import { openWorkspaceBrowserTabForLink } from '../lib/browser/workspace/workspa
 import { selectBrowserLinkDestination } from '../lib/browser/navigation/browser-link-destination'
 import { workspaceBrowserLinkDestination } from '../lib/browser/workspace/workspace-browser-link-open'
 import { captureLinkOpenIntent } from '../lib/link-open-intent'
-import { makeWorktree, TEST_REPO } from '../store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../store/repos/repo.test-fixture'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import type * as SnapshotModule from './web-runtime-session-snapshot'
 import {

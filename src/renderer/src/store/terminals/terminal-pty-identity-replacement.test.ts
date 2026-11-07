@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createTestStore, seedStore } from '../slices/store-test-helpers'
-import { makeTab } from '../slices/store-session-test-harness'
+import { createTestStore, seedStore } from '../app-store-test-fixture'
+import { makeTab } from './terminal-tab.test-fixture'
 
 {
   describe('terminal PTY identity replacement', () => {

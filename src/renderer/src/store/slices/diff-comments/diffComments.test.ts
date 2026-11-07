@@ -105,7 +105,7 @@ const mockApi = {
 // @ts-expect-error -- mock
 globalThis.window = { api: mockApi }
 
-import { createTestStore } from '../store-test-helpers'
+import { createTestStore } from '../../app-store-test-fixture'
 
 const REPO = 'repo1'
 const WT = 'repo1::/path/wt'

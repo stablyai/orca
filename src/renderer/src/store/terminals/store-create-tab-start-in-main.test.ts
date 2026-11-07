@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import { createTestStore, seedStore } from '../slices/store-test-helpers'
-import { makeWorktree } from '../slices/worktrees-slice-test-fixtures'
-import { createStoreCascadesMockApi } from '../slices/store-cascades-test-harness'
+import { createTestStore, seedStore } from '../app-store-test-fixture'
+import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
+import { createStoreCascadesMockApi } from '../app-store-cascade-api.test-fixture'
 import { provideLayoutFrameTerminalPanes } from '@/runtime/layout-frame-terminal-panes'
 
 type HeldCreate = { resolve: (value: unknown) => void; reject: (error: Error) => void }

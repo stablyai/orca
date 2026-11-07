@@ -2,7 +2,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { detectLanguage } from '@/lib/language-detect'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { translate } from '@/i18n/i18n'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
@@ -13,7 +13,7 @@ import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace
 type AiVaultLogSession = Pick<AiVaultSession, 'agent' | 'filePath' | 'executionHostId'>
 
 function worktreeStillExists(state: AppState, worktreeId: string): boolean {
-  if (findWorktreeById(selectWorktreesByRepo(state) ?? {}, worktreeId)) {
+  if (findFirstIndexedWorktree(selectWorktreesByRepo(state) ?? {}, worktreeId)) {
     return true
   }
   // Folder workspace IDs use a different key format from repo worktrees.

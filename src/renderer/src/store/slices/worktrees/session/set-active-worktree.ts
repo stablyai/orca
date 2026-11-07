@@ -1,5 +1,5 @@
 import { cancelActiveWorktreeRemoval } from '@/store/active-worktree-deselection-intent'
-import type { WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { projectWorktreeTabModelReconciliation } from '../../tabs/tabs-reconciliation'
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from '../../../../components/browser-pane/host-guest/webview-registry'

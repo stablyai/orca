@@ -8,9 +8,9 @@ import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-t
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import '@/lib/workspace/persistence/workspace-session'
-import { createTestStore, seedStore } from '../slices/store-test-helpers'
-import { makeLayout, makeTab } from '../slices/store-session-test-harness'
-import { makeWorktree } from '../slices/worktrees-slice-test-fixtures'
+import { createTestStore, seedStore } from '../app-store-test-fixture'
+import { makeLayout, makeTab } from './terminal-tab.test-fixture'
+import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/runtime/sync-runtime-graph', () => ({

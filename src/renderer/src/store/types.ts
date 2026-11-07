@@ -1,6 +1,6 @@
 import type { RepoSlice } from './repos/repo-state'
-import type { SparsePresetsSlice } from './slices/sparse-presets'
-import type { WorktreeSlice } from './slices/worktree-helpers'
+import type { SparsePresetsSlice } from './slices/worktrees/create/sparse-presets'
+import type { WorktreeSlice } from './slices/worktrees/worktree-slice-contract'
 import type { TerminalSlice } from './terminals/terminal-state'
 import type { TabsSlice } from './slices/tabs/tabs-slice-contract'
 import type { UISlice } from './slices/ui/ui-slice-contract'

@@ -17,7 +17,8 @@ import {
   isFloatingWorkspaceId
 } from '../../../../../../shared/floating-workspace-worktree'
 import { findIndexedDetectedWorktrees } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
-import { findWorktreeById, withoutErasedRequiredWorktreeFields } from '../../worktree-helpers'
+import { findFirstIndexedWorktree } from '../../../../lib/workspace/ownership/worktree-runtime-owner-index'
+import { withoutErasedRequiredWorktreeFields } from '../metadata/worktree-meta-update-application'
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import {
   type WorkspaceRecordState,
@@ -119,7 +120,7 @@ export function findKnownWorktreeById(
         state,
         hostWorktreeTarget({ id: worktreeId, hostId: executionHostId })
       )
-    : findWorktreeById(selectWorktreesByRepo(state), worktreeId)
+    : findFirstIndexedWorktree(selectWorktreesByRepo(state), worktreeId)
   if (visible) {
     return visible
   }

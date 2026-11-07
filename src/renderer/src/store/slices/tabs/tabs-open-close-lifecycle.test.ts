@@ -4,15 +4,11 @@ import '../../../../../shared/constants'
 import { buildMobileSessionTabSnapshots } from '../../../runtime/sync-runtime-graph/mobile-session-snapshots'
 import { closeMobileSessionTabInStore } from '../../../runtime/mobile-session-tab-close'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
-import { createTestStore } from '../store-test-helpers'
-import {
-  makeLayout,
-  makeOpenFile,
-  makeTab,
-  makeTabGroup,
-  makeUnifiedTab,
-  makeBrowserTab
-} from '../store-session-test-harness'
+import { createTestStore } from '../../app-store-test-fixture'
+import { makeLayout, makeTab } from '../../terminals/terminal-tab.test-fixture'
+import { makeOpenFile } from '../editor/types/open-file.test-fixture'
+import { makeTabGroup, makeUnifiedTab } from './tab-group.test-fixture'
+import { makeBrowserTab } from '../browser/browser-tab.test-fixture'
 
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 

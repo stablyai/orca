@@ -6,7 +6,7 @@ import {
   getRuntimeEnvironmentRevision,
   resolveContinuedRuntimeEnvironmentRevision
 } from '../runtime/rpc/environment-revisions/runtime-environment-revision'
-import { isRemovedRuntimeHostId } from './slices/stale-runtime-host-rows'
+import { isRemovedRuntimeHostId } from './host-catalog/removed-runtime-host-rows'
 import {
   getEnvironmentSshStateGeneration,
   getEnvironmentSshTargetConnectionGeneration

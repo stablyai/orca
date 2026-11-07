@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
-import { findWorktreeById } from '../worktree-helpers'
+import { findFirstIndexedWorktree } from '../../../lib/workspace/ownership/worktree-runtime-owner-index'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { JiraIssue } from '../../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
@@ -144,7 +144,7 @@ function isLiveEntry(entry: WorktreeNavHistoryEntry, state: AppState): boolean {
       (workspace) => workspace.id === workspaceScope.folderWorkspaceId
     )
   }
-  return findWorktreeById(selectWorktreesByRepo(state), entry) !== undefined
+  return findFirstIndexedWorktree(selectWorktreesByRepo(state), entry) !== undefined
 }
 
 export function appendHistoryEntry(
