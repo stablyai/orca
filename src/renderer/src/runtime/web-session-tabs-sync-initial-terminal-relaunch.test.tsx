@@ -286,6 +286,47 @@ describe('useWebSessionTabsSync initial-terminal bootstrap across an effect re-r
     hook.unmount()
   })
 
+  it('fills the workspace with the waiting landings when another client empties it', async () => {
+    const leaf = (groupId: string) => ({ type: 'leaf' as const, groupId })
+    const group = (id: string, tabOrder: string[]) => ({
+      id,
+      worktreeId: WORKTREE,
+      activeTabId: tabOrder[0] ?? null,
+      tabOrder
+    })
+    useAppStore.setState({
+      groupsByWorktree: {
+        [WORKTREE]: [group('chat', ['closed-elsewhere']), group('l1', []), group('l2', [])]
+      },
+      layoutByWorktree: {
+        [WORKTREE]: {
+          type: 'split',
+          direction: 'horizontal',
+          first: leaf('chat'),
+          second: { type: 'split', direction: 'vertical', first: leaf('l1'), second: leaf('l2') }
+        }
+      },
+      activeGroupIdByWorktree: { [WORKTREE]: 'l2' },
+      splitLandingGroupIds: { l1: WORKTREE, l2: WORKTREE }
+    })
+
+    const hook = renderHook(() => useWebSessionTabsSync())
+    await act(settle)
+    await publish(findActiveSubscription(0), { type: 'snapshot', ...emptyActiveSnapshot(1) })
+
+    const state = useAppStore.getState()
+    expect(state.groupsByWorktree[WORKTREE].map((kept) => kept.id)).toEqual(['l1', 'l2'])
+    expect(state.layoutByWorktree[WORKTREE]).toEqual({
+      type: 'split',
+      direction: 'vertical',
+      first: leaf('l1'),
+      second: leaf('l2')
+    })
+    expect(state.activeGroupIdByWorktree[WORKTREE]).toBe('l2')
+    expect(mocks.createTerminal).not.toHaveBeenCalled()
+    hook.unmount()
+  })
+
   // Success without publication cannot hold forever: next accepted frame releases awaiting-mirror without seeding, then a later confirmed empty frame may retry.
   it('retries after a successful create that never mirrored a row, once the mirror has answered', async () => {
     mocks.createTerminal.mockResolvedValue({ status: 'created' })
