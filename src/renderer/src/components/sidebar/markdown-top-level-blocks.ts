@@ -34,6 +34,22 @@ const UNSETTLED_BLOCKS = 2
 const blockParser = unified().use(remarkParse).use(remarkGfm)
 const mathBlockParser = blockParser().use(remarkChatMath)
 
+/** The 0-based lines remark reads as code blocks, at any depth. */
+export function markdownCodeLines(source: string): Set<number> {
+  const lines = new Set<number>()
+  const visit = (node: Nodes): void => {
+    if (node.type === 'code' && node.position) {
+      for (let line = node.position.start.line; line <= node.position.end.line; line += 1) {
+        lines.add(line - 1)
+      }
+    } else if ('children' in node) {
+      node.children.forEach(visit)
+    }
+  }
+  visit(blockParser.parse(source))
+  return lines
+}
+
 /** Tags that cannot hold anything, so cannot hold a later block. */
 const VOID_TAG_PATTERN = /^<(?:br|hr|wbr|img)\b[^>]*>$/i
 

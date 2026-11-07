@@ -2,7 +2,9 @@ import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
+import { bareGitHubReferenceRepoForChat } from '../../../../src/shared/github/github-reference-links'
 import { MobileMarkdown } from '../../components/MobileMarkdown'
+import { mobileMarkdownDrawnCodeLines } from '../../components/mobile-markdown-drawn-code-lines'
 import {
   MobileMarkdownLinksContext,
   type MobileMarkdownLinks
@@ -92,4 +94,75 @@ it('links only workspace paths the host confirms, asking once for the whole repl
   expect(linked(tree).map(label)).toEqual(['src/app.ts:12', '/work/src/app.ts', '/tmp/run.json'])
   act(() => linked(tree)[0]?.props.onPress())
   expect(onOpenFile).toHaveBeenCalledWith('src/app.ts:12')
+})
+
+it('only yields bare refs to a named repo in chat, not on PR surfaces', async () => {
+  const content = 'Fixes #12, unlike vercel/next.js#42.'
+  const githubRepo = { owner: 'stablyai', repo: 'orca' }
+
+  const prTree = await renderChat(content, { fileLinks: null, githubRepo })
+  expect(linked(prTree).map(label)).toEqual(['#12', 'vercel/next.js#42'])
+  act(() => renderer?.unmount())
+
+  const chatTree = await renderChat(content, {
+    fileLinks: null,
+    githubRepo,
+    chatGitHubReferences: true
+  })
+  expect(linked(chatTree).map(label)).toEqual(['vercel/next.js#42'])
+})
+
+it.each([
+  '```json\n{ "url": "https://github.com/other/repo" }\n```\n\nFixes #42.',
+  '> ```text\n> https://github.com/other/repo\n> ```\n\nFixes #42.',
+  '- ```text\n  other/repo#3\n\n  https://github.com/other/repo\n  ```\n\nFixes #42.',
+  'Fixes #42.\n\n    https://github.com/other/repo',
+  '<div>\n```text\nhttps://github.com/other/repo\n```\n</div>\n\nFixes #42.'
+])('keeps the workspace repo when another repo is only in code: %j', async (content) => {
+  const tree = await renderChat(content, {
+    fileLinks: null,
+    githubRepo: { owner: 'stablyai', repo: 'orca' },
+    chatGitHubReferences: true
+  })
+  expect(linked(tree).map(label)).toEqual(['#42'])
+})
+
+it('keeps the workspace repo when another repo is only in code inside <details>', () => {
+  const githubRepo = { owner: 'stablyai', repo: 'orca' }
+  const content =
+    '<details>\n<summary>Example</summary>\n```text\nhttps://github.com/other/repo\n```\n</details>\n\nFixes #42.'
+  expect(bareGitHubReferenceRepoForChat(content, githubRepo, mobileMarkdownDrawnCodeLines)).toBe(
+    githubRepo
+  )
+})
+
+it('yields when a line in an HTML block is both prose and code', () => {
+  const content =
+    '<div>\nhttps://github.com/other/repo/pull/42\n```text\nhttps://github.com/other/repo/pull/42\n```\n</div>\n\nFixes #42.'
+  expect(
+    bareGitHubReferenceRepoForChat(
+      content,
+      { owner: 'stablyai', repo: 'orca' },
+      mobileMarkdownDrawnCodeLines
+    )
+  ).toBeNull()
+})
+
+it.each([
+  '```\nclosed\n```\nSee other/repo#3 and #42.',
+  '- ```sh\n  echo hello\n  ```\n\nSee other/repo#3 and #42.',
+  '> ```sh\n> echo hello\n\nSee other/repo#3 and #42.',
+  '- Example:\n\n  ```sh\n  echo hello\n\nSee other/repo#3 and #42.',
+  '```markdown\n> ```js\n> echo hello\n> ```\n```\n\nSee other/repo#3 and #42.',
+  '<div>\nSee other/repo#3 and #42.\n</div>',
+  'See `other/repo#3` and #42.'
+])('yields when another repo is outside code blocks: %j', async (content) => {
+  const tree = await renderChat(content, {
+    fileLinks: null,
+    githubRepo: { owner: 'stablyai', repo: 'orca' },
+    chatGitHubReferences: true
+  })
+  expect(linked(tree).map(label)).toEqual(
+    content.includes('`other/repo#3`') ? [] : ['other/repo#3']
+  )
 })

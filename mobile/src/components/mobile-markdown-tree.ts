@@ -240,7 +240,7 @@ function toTree(tokens: readonly Token[], source: string, env: MathEnv): Root {
 
 // Clean only parser HTML nodes, never code: blocks become preview Markdown, inline tags become remaining text; nested leftover block HTML stays text.
 /** Comments go before images are cut out, so an `<img>` in one stays hidden. */
-const withoutComments = (html: string): string =>
+export const withoutComments = (html: string): string =>
   html.replace(/<!--(?:(?!-->)[\s\S])*(?:-->|$)/g, '')
 
 function withoutHtml(parent: Parent, nested: boolean, env: MathEnv): void {

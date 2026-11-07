@@ -160,5 +160,8 @@ export function useMobileNativeChatMarkdownLinks({
     }
   }, [client, asksGithub, worktreeId])
 
-  return useMemo(() => ({ fileLinks, githubRepo }), [fileLinks, githubRepo])
+  return useMemo(
+    () => ({ fileLinks, githubRepo, chatGitHubReferences: true }),
+    [fileLinks, githubRepo]
+  )
 }

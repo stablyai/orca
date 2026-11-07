@@ -19,7 +19,7 @@ const DETAILS_TAG = /<\/?(?:details|summary)[\s/>]/i
 const DETAILS_CLOSE = /^<\/details\s*>$/i
 
 /** One HTML block cut around its `<details>` markup. */
-function detailsPieces(html: string): DetailsPiece[] {
+export function detailsPieces(html: string): DetailsPiece[] {
   if (!DETAILS_TAG.test(html)) {
     return [{ kind: 'html', value: html }]
   }
