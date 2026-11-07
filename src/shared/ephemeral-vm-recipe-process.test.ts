@@ -144,18 +144,31 @@ describe('runRecipeCommand', () => {
           "const { spawn } = require('node:child_process')",
           `const child = spawn(process.execPath, [${JSON.stringify(sleeperPath)}], { stdio: 'ignore' })`,
           `require('node:fs').writeFileSync(${JSON.stringify(pidPath)}, String(child.pid))`,
+          "process.stderr.write('ready\\n')",
           'setInterval(() => {}, 1000)'
         ].join('\n')
       )
+      // Fake only the deadline timers so the timeout fires after the grandchild exists, even under load.
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      const ready = Promise.withResolvers<void>()
 
-      const result = await runRecipeCommand({
+      const resultPromise = runRecipeCommand({
         command: nodeCommand(spawnerPath),
         repoPath,
         mode: 'create',
         resultSchemaVersion: 1,
         context: { recipeId: 'cloud-sandbox', repoPath },
-        timeoutMs: 1_000
+        timeoutMs: 1_000,
+        onStderr: (chunk) => {
+          if (chunk.includes('ready')) {
+            ready.resolve()
+          }
+        }
       })
+      await ready.promise
+      await vi.advanceTimersByTimeAsync(1_000)
+      const result = await resultPromise
+      vi.useRealTimers()
 
       expect(result).toMatchObject({ timedOut: true })
       expect(result).not.toHaveProperty('aborted')
