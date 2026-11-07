@@ -482,7 +482,7 @@ export async function mobileWebAppModuleClosure(entryModules, { absWorkingDir } 
 // One lazily imported chunk per UI language; the page fetches only the active one after init.
 const LOCALE_CATALOG_INPUT = /(^|\/)src\/i18n\/locales\/[^/]+\.json$/
 
-function localeCatalogOutputs(metafile) {
+export function localeCatalogOutputs(metafile) {
   return new Set(
     Object.entries(metafile.outputs)
       .filter(([, output]) => {

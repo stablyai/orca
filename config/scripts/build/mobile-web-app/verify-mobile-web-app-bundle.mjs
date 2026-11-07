@@ -52,7 +52,7 @@ export function mobileWebAppBundleBudgetBytes(manifest) {
 }
 
 // Measure sorted route prefixes with routes.slice(0,n), excluding locale catalogs: distinct importer sets determine chunks, not route count.
-// Re-measure table when routes change; it is envelope’s only input, and pins must fail rather than permit arbitrary ceiling bumps.
+// Re-measure table (`node config/scripts/build/mobile-web-app/measure-mobile-web-app-chunk-sweep.mjs`) when routes change; it is envelope’s only input, and pins must fail rather than permit arbitrary ceiling bumps.
 export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
   ['./_layout.tsx', 4],
   ['./h/[hostId]/[...page].tsx', 6],
@@ -210,7 +210,8 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
   if (first.chunkCount > maxChunks) {
     fail(
       `bundle is cut into ${String(first.chunkCount)} chunks, over the Phase C budget of ` +
-        `${String(maxChunks)} for ${String(first.routeKeys.length)} route(s)`
+        `${String(maxChunks)} for ${String(first.routeKeys.length)} route(s); ` +
+        'measure-mobile-web-app-chunk-sweep.mjs re-measures MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP'
     )
   }
   if (first.entryStaticBytes > MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES) {
