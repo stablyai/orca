@@ -20,6 +20,9 @@ type EditorPanelActionsMenuProps = {
   /** Diff-only whitespace preference; ignored for normal file tabs. */
   diffShowWhitespace: boolean
   editorWordWrap: boolean
+  editorLineNumbers: boolean
+  canToggleLineNumbers?: boolean
+  isLineNumbersDisabled?: boolean
   shouldShowMarkdownExportAction: boolean
   canExportMarkdownToPdf: boolean
   canShowMarkdownFrontmatterToggle: boolean
@@ -27,6 +30,7 @@ type EditorPanelActionsMenuProps = {
   onToggleDiffWordWrap: () => void
   onToggleDiffWhitespace: () => void
   onToggleEditorWordWrap: () => void
+  onToggleEditorLineNumbers: () => void
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
 }
@@ -37,6 +41,9 @@ export function EditorPanelActionsMenu({
   diffWordWrap,
   diffShowWhitespace,
   editorWordWrap,
+  editorLineNumbers,
+  canToggleLineNumbers,
+  isLineNumbersDisabled,
   shouldShowMarkdownExportAction,
   canExportMarkdownToPdf,
   canShowMarkdownFrontmatterToggle,
@@ -44,6 +51,7 @@ export function EditorPanelActionsMenu({
   onToggleDiffWordWrap,
   onToggleDiffWhitespace,
   onToggleEditorWordWrap,
+  onToggleEditorLineNumbers,
   onToggleMarkdownFrontmatter,
   onExportMarkdownToPdf
 }: EditorPanelActionsMenuProps): React.JSX.Element {
@@ -80,6 +88,15 @@ export function EditorPanelActionsMenu({
             'Word Wrap'
           )}
         </DropdownMenuCheckboxItem>
+        {canToggleLineNumbers !== false ? (
+          <DropdownMenuCheckboxItem
+            checked={editorLineNumbers}
+            disabled={isLineNumbersDisabled}
+            onCheckedChange={onToggleEditorLineNumbers}
+          >
+            {translate('auto.components.editor.EditorPanelActionsMenu.lineNumbers', 'Line Numbers')}
+          </DropdownMenuCheckboxItem>
+        ) : null}
         {isDiffSurface ? (
           <DropdownMenuCheckboxItem
             checked={diffShowWhitespace}
