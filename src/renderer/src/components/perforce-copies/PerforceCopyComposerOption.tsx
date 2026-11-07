@@ -12,7 +12,7 @@ import {
 } from './perforce-copy-composer-choice'
 import { PerforceCopyRequirement } from './PerforceCopyRequirement'
 import { PerforceStreamPicker } from './PerforceStreamPicker'
-import { findRepoForHost } from '@/store/slices/repo-host-identity'
+import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 function gb(bytes: number): string {

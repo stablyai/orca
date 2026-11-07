@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { MODAL_DISMISSED_KEY } from '@/store/slices/modal-slot-dismissal'
+import { MODAL_DISMISSED_KEY } from '@/store/slices/ui/modal-slot-dismissal'
 import {
   alwaysOpenForEdit,
   answerOpenForEditPrompt,

@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { normalizePerforceSettings } from '../../../shared/perforce/perforce-settings'
-import type * as RuntimeRpcClient from './runtime-rpc-client'
 import {
   generatePerforceDescription,
   runPerforceCopyOperation,
@@ -13,9 +12,8 @@ const rpc = vi.hoisted(() => ({
   assertRuntimeEnvironmentCapability: vi.fn()
 }))
 
-vi.mock('./runtime-rpc-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof RuntimeRpcClient>()),
-  callRuntimeRpc: rpc.callRuntimeRpc,
+vi.mock('./rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: rpc.callRuntimeRpc }))
+vi.mock('./rpc/compatibility/runtime-capability-proof', () => ({
   assertRuntimeEnvironmentCapability: rpc.assertRuntimeEnvironmentCapability
 }))
 

@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { MODAL_DISMISSED_KEY } from '@/store/slices/modal-slot-dismissal'
+import { MODAL_DISMISSED_KEY } from '@/store/slices/ui/modal-slot-dismissal'
 import { normalizePerforceSettings } from '../../../shared/perforce/perforce-settings'
 
 type PendingPrompt = {

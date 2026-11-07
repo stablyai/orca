@@ -27,8 +27,9 @@ import {
   getRuntimeGitScope,
   resolveLocalWorktreePath,
   type RuntimeGitContext
-} from './runtime-git-client-context'
-import { assertRuntimeEnvironmentCapability, callRuntimeRpc } from './runtime-rpc-client'
+} from './source-control/git/runtime-git-client-context'
+import { callRuntimeRpc } from './rpc/calls/runtime-rpc-call'
+import { assertRuntimeEnvironmentCapability } from './rpc/compatibility/runtime-capability-proof'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import type { ExecutionHostId } from '../../../shared/execution-host'
