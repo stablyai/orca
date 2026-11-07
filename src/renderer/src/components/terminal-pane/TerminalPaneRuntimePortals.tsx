@@ -11,11 +11,13 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
 import { TerminalProcessExitOverlay } from './TerminalProcessExitOverlay'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
+import { RemoteViewportHeldChip, shouldShowRemoteViewportHeldChip } from './RemoteViewportHeldChip'
 import { getDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import { shouldShowMobileDriverOverlay } from './mobile-driver-overlay-visibility'
 import { shouldChatTakeOverMobileSurface } from '../native-chat/native-chat-send-eligibility'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
+import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 
 export { TerminalPaneRecoveryPortals } from './TerminalPaneRecoveryPortals'
 
@@ -192,12 +194,14 @@ export function TerminalPaneMobileDriverPortals({
   controller: TerminalPaneController
 }): React.JSX.Element {
   const {
+    activePane,
     chatLeafId,
     effectiveChatViewMode,
     managedPanes,
     paneTransportsRef,
     restoreAllTerminalFits,
-    restorePaneTerminalFit
+    restorePaneTerminalFit,
+    searchOpen
   } = controller
   return (
     <>
@@ -207,13 +211,36 @@ export function TerminalPaneMobileDriverPortals({
           return null
         }
         const driver = getDriverForPty(ptyId)
-        const fitMode = getFitOverrideForPty(ptyId)?.mode ?? null
+        const fitOverride = getFitOverrideForPty(ptyId)
+        const fitMode = fitOverride?.mode ?? null
         const hasFitOverride = fitMode === 'mobile-fit'
-        if (!shouldShowMobileDriverOverlay(driver.kind, fitMode)) {
-          return null
-        }
         const paneSurface =
           effectiveChatViewMode && pane.leafId === chatLeafId ? 'chat' : 'terminal'
+        if (!shouldShowMobileDriverOverlay(driver.kind, fitMode)) {
+          // Measure only held terminal panes, and yield the corner to an open find bar.
+          if (
+            fitMode !== 'remote-desktop-fit' ||
+            paneSurface !== 'terminal' ||
+            (searchOpen && activePane?.id === pane.id) ||
+            !shouldShowRemoteViewportHeldChip(fitMode, fitOverride ?? null, proposePaneGrid(pane))
+          ) {
+            return null
+          }
+          return createPortal(
+            <RemoteViewportHeldChip
+              key={`remote-viewport-held-${pane.id}-${ptyId}`}
+              onFitHere={() => {
+                const grid = proposePaneGrid(pane)
+                if (grid) {
+                  paneTransportsRef.current.get(pane.id)?.claimViewport?.(grid.cols, grid.rows)
+                }
+                pane.terminal.focus()
+              }}
+            />,
+            pane.container,
+            `remote-viewport-held-${pane.id}`
+          )
+        }
         if (shouldChatTakeOverMobileSurface(paneSurface)) {
           return null
         }
@@ -232,4 +259,13 @@ export function TerminalPaneMobileDriverPortals({
       })}
     </>
   )
+}
+
+function proposePaneGrid(pane: ManagedPane): { cols: number; rows: number } | null {
+  try {
+    const proposed = pane.fitAddon.proposeDimensions()
+    return proposed && proposed.cols > 0 && proposed.rows > 0 ? proposed : null
+  } catch {
+    return null
+  }
 }

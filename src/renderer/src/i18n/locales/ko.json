@@ -3675,6 +3675,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "켜기"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "다른 창에 맞춘 크기",
+            "fitHere": "여기에 맞추기"
           }
         }
       },

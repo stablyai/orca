@@ -4130,6 +4130,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "開啟"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "已依其他視窗調整大小",
+            "fitHere": "在此調整"
           }
         }
       },

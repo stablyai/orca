@@ -4213,6 +4213,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "Aktivieren"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "Für ein anderes Fenster angepasst",
+            "fitHere": "Hier anpassen"
           }
         }
       },

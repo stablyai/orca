@@ -3675,6 +3675,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "オンにする"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "別のウィンドウに合わせたサイズ",
+            "fitHere": "ここに合わせる"
           }
         }
       },
