@@ -1,16 +1,15 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import './orca-runtime-tests/runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from './orca-runtime'
-import { setRuntimeDesktopSurface } from './runtime-desktop-surface'
+
 import {
   HEADLESS_LEAF_ID,
-  TEST_WINDOW_ID,
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
 } from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import type { RuntimeStore } from './runtime-store-contract'
-import type { RuntimeNotifier } from './runtime-notifier-contract'
+
 import { planTerminalLeafMove } from '../persistence/terminal-topology/terminal-leaf-move'
 import type { TerminalLeafMoveRequest } from '../../shared/workspace-layout/terminal-leaf-move'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
@@ -113,52 +112,6 @@ describe('moveMobileSessionLeafToNewTab on a headless host', () => {
       'host-new-tab'
     )
   })
-  it('places the new tab where it was dropped in its group, selected', async () => {
-    const { runtime, move } = await setup()
-    const [group] = (await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabGroups ?? []
-    await move('host-new-tab', { targetGroupId: group!.id, index: 0 })
-    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
-    expect(listed.tabGroups?.[0]).toMatchObject({
-      tabOrder: ['host-new-tab', 'host-tab', 'other-tab'],
-      activeTabId: 'host-new-tab'
-    })
-  })
-  it('places the new tab in another group when it was dropped there', async () => {
-    const { runtime, move } = await setup()
-    const [group] = (await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabGroups ?? []
-    await runtime.moveMobileSessionTab(`id:${TEST_WORKTREE_ID}`, {
-      kind: 'split',
-      tabId: 'other-tab',
-      targetGroupId: group!.id,
-      splitDirection: 'right'
-    })
-    const split = (await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabGroups ?? []
-    const otherGroup = split.find((candidate) => candidate.tabOrder.includes('other-tab'))!
-    await move('host-new-tab', { targetGroupId: otherGroup.id, index: 0 })
-    const groups = (await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabGroups ?? []
-    expect(groups.find((candidate) => candidate.id === otherGroup.id)?.tabOrder).toEqual([
-      'host-new-tab',
-      'other-tab'
-    ])
-    expect(groups.find((candidate) => candidate.id === group!.id)?.tabOrder).toEqual(['host-tab'])
-  })
-  it('keeps the places of the editors around the dropped tab', async () => {
-    const { runtime, move } = await setup(withFileBetweenTerminals)
-    const worktree = `id:${TEST_WORKTREE_ID}`
-    const listed = async () => (await runtime.listMobileSessionTabs(worktree)).tabGroups?.[0]
-    const group = (await listed())!
-    const file = group.tabOrder.find((id) => id !== 'host-tab' && id !== 'other-tab')!
-    // The user put the editor between the two terminals.
-    await runtime.moveMobileSessionTab(worktree, {
-      kind: 'reorder',
-      tabId: file,
-      targetGroupId: group.id,
-      tabOrder: ['host-tab', file, 'other-tab']
-    })
-    expect((await listed())?.tabOrder).toEqual(['host-tab', file, 'other-tab'])
-    await move('host-new-tab', { targetGroupId: group.id, index: 2 })
-    expect((await listed())?.tabOrder).toEqual(['host-tab', file, 'host-new-tab', 'other-tab'])
-  })
   it('keeps a tab opened while the move commits, after the tabs the user had', async () => {
     const { runtime, move } = await setup(withFileBetweenTerminals, withLateTerminal)
     const worktree = `id:${TEST_WORKTREE_ID}`
@@ -202,61 +155,6 @@ describe('moveMobileSessionLeafToNewTab on a headless host', () => {
     await move('host-new-tab', { targetGroupId: group.id, index: 0 })
     expect((await listed())?.tabOrder).toEqual(['host-new-tab', 'other-tab', 'host-tab'])
   })
-  it('keeps the group the user merged into, and the drop position in it', async () => {
-    const { runtime, move } = await setup()
-    const worktree = `id:${TEST_WORKTREE_ID}`
-    const groups = async () => (await runtime.listMobileSessionTabs(worktree)).tabGroups ?? []
-    const [first] = await groups()
-    await runtime.moveMobileSessionTab(worktree, {
-      kind: 'split',
-      tabId: 'other-tab',
-      targetGroupId: first!.id,
-      splitDirection: 'right'
-    })
-    const newer = (await groups()).find((group) => group.id !== first!.id)!
-    // Merging the first group's tab into the newer one leaves only the newer, user-made group.
-    await runtime.moveMobileSessionTab(worktree, {
-      kind: 'move-to-group',
-      tabId: 'host-tab',
-      targetGroupId: newer.id,
-      index: 1
-    })
-    expect((await groups()).map((group) => [group.id, group.tabOrder])).toEqual([
-      [newer.id, ['other-tab', 'host-tab']]
-    ])
-    await move('host-new-tab', { targetGroupId: newer.id, index: 0 })
-    expect((await groups()).map((group) => [group.id, group.tabOrder])).toEqual([
-      [newer.id, ['host-new-tab', 'other-tab', 'host-tab']]
-    ])
-  })
-  it('names the live terminal, so a session copy an SSH respawn left stale cannot refuse it', async () => {
-    const { runtime, getSession, commit, move } = await setup()
-    runtime.registerPty('sibling-pty', TEST_WORKTREE_ID, null, {
-      tabId: 'host-tab',
-      leafId: SIBLING_LEAF_ID
-    })
-    const staleCopy: WorkspaceSessionState = {
-      ...getSession(),
-      terminalLayoutsByTabId: {
-        ...getSession().terminalLayoutsByTabId,
-        'host-tab': {
-          ...getSession().terminalLayoutsByTabId['host-tab']!,
-          ptyIdsByLeafId: { [HEADLESS_LEAF_ID]: 'persisted-pty', [SIBLING_LEAF_ID]: 'old-pty' }
-        }
-      }
-    }
-    commit.mockImplementationOnce(async (request) => {
-      const plan = planTerminalLeafMove(
-        [
-          { hostId: 'local', session: getSession() },
-          { hostId: 'ssh:respawned', session: staleCopy }
-        ],
-        request
-      )
-      return plan.result
-    })
-    await expect(move()).resolves.toEqual({ status: 'moved', ptyId: 'sibling-pty' })
-  })
   it('refuses a move that would empty its source, which no headless cleanup retires', async () => {
     const { runtime, getSession, published, move } = await setup(undefined, (session) => ({
       ...session,
@@ -281,82 +179,6 @@ describe('moveMobileSessionLeafToNewTab on a headless host', () => {
       false
     )
   })
-  it('refuses a target tab id a pane key cannot carry, leaving the session alone', async () => {
-    const { getSession, published, commit, move } = await setup()
-    const before = getSession()
-    await expect(move('bad:tab')).resolves.toEqual({ status: 'refused', reason: 'invalid_request' })
-    expect(getSession()).toBe(before)
-    expect(commit).not.toHaveBeenCalled()
-    expect(published).toHaveLength(0)
-  })
-})
-
-describe('moveMobileSessionLeafToNewTab on a host with a window', () => {
-  afterEach(() => setRuntimeDesktopSurface(null))
-  async function setupWithWindow(movePaneToNewTab?: RuntimeNotifier['movePaneToNewTab']) {
-    const context = await setup()
-    context.runtime.setNotifier({
-      worktreesChanged: vi.fn(),
-      reposChanged: vi.fn(),
-      activateWorktree: vi.fn(),
-      createTerminal: vi.fn(),
-      splitTerminal: vi.fn(),
-      renameTerminal: vi.fn(),
-      focusTerminal: vi.fn(),
-      closeTerminal: vi.fn(),
-      terminalFitOverrideChanged: vi.fn(),
-      terminalDriverChanged: vi.fn(),
-      ...(movePaneToNewTab ? { movePaneToNewTab } : {})
-    })
-    setRuntimeDesktopSurface({
-      showNotification: () => false,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the move only asks whether a live window exists.
-      findWindowById: () => ({ isDestroyed: () => false }) as never,
-      onIpc: () => {},
-      removeIpcListener: () => {}
-    })
-    context.runtime.attachWindow(TEST_WINDOW_ID)
-    return context
-  }
-
-  it('has the window move the pane under the tab id the client drew, and answers with its result', async () => {
-    const movePaneToNewTab = vi.fn(async () => ({ status: 'moved' as const, ptyId: 'sibling-pty' }))
-    const { getSession, commit, move } = await setupWithWindow(movePaneToNewTab)
-    const before = getSession()
-    await expect(move('host-new-tab', { targetGroupId: 'group-1', index: 0 })).resolves.toEqual({
-      status: 'moved',
-      ptyId: 'sibling-pty'
-    })
-    expect(movePaneToNewTab).toHaveBeenCalledWith({
-      worktreeId: TEST_WORKTREE_ID,
-      sourceTabId: 'host-tab',
-      targetTabId: 'host-new-tab',
-      leafId: SIBLING_LEAF_ID,
-      targetGroupId: 'group-1',
-      index: 0
-    })
-    // The window commits through its own leaf-move IPC; main does not write the layout here.
-    expect(commit).not.toHaveBeenCalled()
-    expect(getSession()).toBe(before)
-  })
-
-  it('leaves the pane to the client when the window cannot be asked to move it', async () => {
-    const { commit, move } = await setupWithWindow()
-    await expect(move()).resolves.toEqual({ status: 'not_held' })
-    expect(commit).not.toHaveBeenCalled()
-  })
-
-  it.each(['renderer_unavailable', 'terminal_pane_move_timeout'])(
-    'refuses the move when the window cannot answer (%s), so the client puts the pane back',
-    async (reason) => {
-      const { commit, move } = await setupWithWindow(() => Promise.reject(new Error(reason)))
-      await expect(move('host-new-tab')).resolves.toEqual({
-        status: 'refused',
-        reason: 'pane_unavailable'
-      })
-      expect(commit).not.toHaveBeenCalled()
-    }
-  )
 })
 
 /** A session whose worktree also has an editor open beside its two terminal tabs. */

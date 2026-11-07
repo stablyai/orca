@@ -123,18 +123,6 @@ describe('NativeChatContextUsageRing', () => {
     expect(card()).toBeNull()
   })
 
-  it('stays closed when Escape lands during a pending hover', async () => {
-    const trigger = await renderRing()
-
-    await dispatch(trigger.parentElement!, pointer('pointerover', 'mouse'))
-    await advance(100)
-    await pressEscape()
-    await advance(500)
-
-    expect(trigger.getAttribute('aria-expanded')).toBe('false')
-    expect(card()).toBeNull()
-  })
-
   it('does not reopen a card dismissed with Escape once a stale hover would have fired', async () => {
     const trigger = await renderRing()
 

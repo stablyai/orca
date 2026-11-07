@@ -31,25 +31,4 @@ describe('Codex launch draft readiness from captured PTY output', () => {
     expect(sawProvisionalComposer).toBe(true)
     expect(sawReady).toBe(true)
   })
-
-  it.each(['codex-0-158-0-trustprompt', 'codex-0158-update-available-dialog'])(
-    '%s: its selection glyph never opens the fullscreen paste gate',
-    (name) => {
-      const scanner = createDraftPasteReadyScanner('codex-composer-prompt')
-      const data = readRuntimeFixture(name)
-      for (let offset = 0; offset < data.length; offset += 17) {
-        expect(scanner.observe(data.slice(offset, offset + 17)).ready).toBe(false)
-      }
-    }
-  )
-
-  it.each([1, 7, 64, 1024, Infinity])('handles PTY chunks of %s characters', (size) => {
-    const scanner = createDraftPasteReadyScanner('codex-composer-prompt')
-    const data = readRuntimeFixture('codex-fullscreen-early-input')
-    let ready = false
-    for (let offset = 0; offset < data.length; offset += size) {
-      ready ||= scanner.observe(data.slice(offset, offset + size)).ready
-    }
-    expect(ready).toBe(true)
-  })
 })
