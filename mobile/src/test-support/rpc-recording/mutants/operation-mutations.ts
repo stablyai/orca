@@ -238,7 +238,7 @@ export const OPERATION_MUTATIONS = {
   // Let tab-load refusal abort terminal loading/refresh timers; this scenario has no created activation timer.
   'startup-tab-load-rejects-sequence': {
     file: 'use-mobile-session-startup.ts',
-    before: '      await ensureSessionTabs().catch(() => null)',
+    before: '      void ensureSessionTabs().catch(() => null)',
     after: '      await ensureSessionTabs()'
   },
   // Accept null Linear status; only result-null reaches the resulting connected property-read failure.

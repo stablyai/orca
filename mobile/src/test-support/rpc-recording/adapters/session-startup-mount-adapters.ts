@@ -1,6 +1,7 @@
 import { hookMount } from '../hook-mount'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { MobileSessionTab } from '../../../session/mobile-session-route-types'
+import type * as MobileSessionLastTabsModule from '../../../session/mobile-session-last-tabs'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
 
@@ -8,7 +9,7 @@ const HOST_ID = 'host-1'
 
 // Record callback effects and flags; scenario-declared tab-load rejection tests whether later terminal loads survive.
 // Consume created on the same mount to reach both mutually exclusive activation sites through the real effect rerun.
-// `host-tabs` stands in for an accepted host snapshot (revision bump, then the strip); `leave` keeps the document's cache for a reopen.
+// `host-tabs` stands in for an accepted host snapshot (remembered as the screen's controller does, then drawn); `leave` keeps the document's cache for a reopen.
 export function sessionStartupMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -17,6 +18,9 @@ export function sessionStartupMountAdapters(
       const useStartup = modules.load<typeof import('../../../session/use-mobile-session-startup')>(
         'mobile/src/session/use-mobile-session-startup.ts'
       ).useMobileSessionStartup
+      const useLastTabs = modules.load<typeof MobileSessionLastTabsModule>(
+        'mobile/src/session/mobile-session-last-tabs.ts'
+      ).useMobileSessionLastTabs
 
       let created: string | undefined
       let worktreeId = 'wt-1'
@@ -32,7 +36,7 @@ export function sessionStartupMountAdapters(
       const terminalGestureInputInFlightRef = { current: new Set<string>() }
       const sessionTabActionSheetRequestSeqRef = { current: 0 }
       let sessionTabs: MobileSessionTab[] = []
-      const appliedSessionTabsRevisionRef = { current: 0 }
+      let lastTabs: ReturnType<typeof useLastTabs> | undefined
       // Stable like the screen's own callbacks, so an update reruns the route reset only when the route changes.
       const routeResetDeps = {
         setSplitTerminalHandles: () => {},
@@ -43,6 +47,7 @@ export function sessionStartupMountAdapters(
       }
 
       const hook = hookMount(() => {
+        lastTabs = useLastTabs(HOST_ID, worktreeId)
         useStartup(
           mountFixture<Parameters<typeof useStartup>[0]>({
             ...routeResetDeps,
@@ -54,11 +59,10 @@ export function sessionStartupMountAdapters(
             client,
             setTerminals: () => {},
             terminalsRef: { current: [] },
-            sessionTabs,
             setSessionTabs: (update) => {
               sessionTabs = typeof update === 'function' ? update(sessionTabs) : update
             },
-            appliedSessionTabsRevisionRef,
+            readLastSessionTabs: lastTabs.readLastSessionTabs,
             appliedSnapshotMarkerRef,
             closedTabTombstonesRef,
             setTerminalsLoaded: (value: boolean) => {
@@ -119,7 +123,6 @@ export function sessionStartupMountAdapters(
           }
           if (name === 'host-tabs') {
             const ids = Array.isArray(args.tabs) ? args.tabs.map(String) : []
-            appliedSessionTabsRevisionRef.current += 1
             sessionTabs = ids.map((id) =>
               mountFixture<Extract<MobileSessionTab, { type: 'terminal' }>>({
                 id,
@@ -128,6 +131,7 @@ export function sessionStartupMountAdapters(
                 terminal: id
               })
             )
+            lastTabs?.rememberLastSessionTabs(sessionTabs)
             return hook.update()
           }
           if (name === 'switch-worktree') {
