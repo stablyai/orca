@@ -275,22 +275,28 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     const interrupted = () => {
       if (statusRef.current === 'recording') {
         void finishDictation(dictationSessionErrorMessage('interrupted'))
+      } else if (audioPhaseRef.current === 'holding') {
+        // The mic is live while the host start is pending: keep what it heard, as a stop would.
+        void stop()
       } else if (statusRef.current === 'starting') {
         void abandonDictation(dictationSessionErrorMessage('interrupted'))
       }
     }
     const sub = capture.onInterruption(interrupted)
-    // A backgrounded app loses the microphone, so leaving finishes. Not while starting: Android's permission prompt reports background.
+    // A backgrounded app loses the microphone, so leaving finishes. Not before the mic opens: Android's permission prompt reports background.
     const appState = AppState.addEventListener('change', (state) => {
-      if (state === 'background' && statusRef.current === 'recording') {
-        void finishDictation(dictationSessionErrorMessage('interrupted'))
+      if (
+        state === 'background' &&
+        (statusRef.current === 'recording' || audioPhaseRef.current === 'holding')
+      ) {
+        interrupted()
       }
     })
     return () => {
       sub.remove()
       appState.remove()
     }
-  }, [abandonDictation, capture, finishDictation])
+  }, [abandonDictation, capture, finishDictation, stop])
 
   useEffect(() => {
     if (!enabled) {

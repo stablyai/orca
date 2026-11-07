@@ -61,38 +61,66 @@ function dictation(): UseMobileDictationResult {
   return current
 }
 
+function mount(rpc: FakeRpcClient, transcripts: string[]): void {
+  function Probe(): null {
+    held.dictation = useMobileDictation({
+      client: rpc,
+      enabled: true,
+      onTranscript: (text) => transcripts.push(text)
+    })
+    return null
+  }
+  act(() => {
+    create(createElement(Probe))
+  })
+}
+
+function leave(state: string): void {
+  appState.handlers.forEach((handler) => handler(state))
+}
+
 describe('leaving the app while dictating', () => {
   it('finishes and inserts what was heard, but a permission prompt or brief inactive state does not', async () => {
     const rpc = createFakeRpcClient()
     const transcripts: string[] = []
-    function Probe(): null {
-      held.dictation = useMobileDictation({
-        client: rpc,
-        enabled: true,
-        onTranscript: (text) => transcripts.push(text)
-      })
-      return null
-    }
-    act(() => {
-      create(createElement(Probe))
-    })
+    mount(rpc, transcripts)
     await act(async () => {
       const started = dictation().start()
       // Android's permission prompt reports background while the start is still open.
-      appState.handlers.forEach((handler) => handler('background'))
+      leave('background')
       await pump(rpc)
       await started
     })
     expect(dictation().status).toBe('recording')
 
     await act(async () => {
-      appState.handlers.forEach((handler) => handler('inactive'))
+      leave('inactive')
       await pump(rpc)
     })
     expect(dictation().status).toBe('recording')
 
     await act(async () => {
-      appState.handlers.forEach((handler) => handler('background'))
+      leave('background')
+      await pump(rpc)
+    })
+    expect(transcripts).toEqual(['what was heard'])
+    expect(dictation().status).toBe('idle')
+  })
+
+  it('keeps what the open mic heard while the computer is still starting', async () => {
+    const rpc = createFakeRpcClient()
+    const transcripts: string[] = []
+    mount(rpc, transcripts)
+    await act(async () => {
+      void dictation().start()
+      for (let turn = 0; turn < 20 && rpc.requests.length === 0; turn += 1) {
+        await Promise.resolve()
+      }
+    })
+    expect(dictation().status).toBe('starting')
+
+    await act(async () => {
+      leave('background')
       await pump(rpc)
     })
     expect(transcripts).toEqual(['what was heard'])
