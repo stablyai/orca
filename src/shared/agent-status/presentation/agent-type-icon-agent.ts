@@ -39,6 +39,7 @@ const ICONABLE_AGENT_TYPES: Record<TerminalAgent, true> = {
   rovo: true,
   hermes: true,
   openclaw: true,
+  zeroclaw: true,
   copilot: true,
   grok: true,
   devin: true,

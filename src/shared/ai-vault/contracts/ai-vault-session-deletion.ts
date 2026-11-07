@@ -34,7 +34,8 @@ export const AI_VAULT_DELETABLE_AGENTS = [
   'codebuddy',
   'rovo',
   'grok',
-  'cline'
+  'cline',
+  'zeroclaw'
 ] as const satisfies readonly AiVaultAgent[]
 
 export type AiVaultDeletableAgent = (typeof AI_VAULT_DELETABLE_AGENTS)[number]

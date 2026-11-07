@@ -129,6 +129,24 @@ export async function writeLogAgentFixtures(
     ])
   )
 
+  await mkdir(join(roots.zeroclawStateDir, 'sessions'), { recursive: true })
+  await writeFile(
+    join(roots.zeroclawStateDir, 'sessions', 'zeroclaw-session.jsonl'),
+    jsonlBody([
+      {
+        type: 'session',
+        id: 'zeroclaw-session',
+        timestamp: '2026-05-01T10:07:30.000Z',
+        cwd: '/tmp/zeroclaw'
+      },
+      {
+        type: 'message',
+        timestamp: '2026-05-01T10:07:31.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'ZeroClaw title' }] }
+      }
+    ])
+  )
+
   await mkdir(roots.piSessionsDir, { recursive: true })
   await writeFile(
     join(roots.piSessionsDir, 'pi-session.jsonl'),
