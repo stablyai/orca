@@ -187,6 +187,7 @@
       "sendMessage": "メッセージを送信",
       "sendQueue": "キューに入れる",
       "sendSteer": "今すぐ送信",
+      "sendSteerQueued": "次を今すぐ送信",
       "sendQueueHint": "現在のターンの後に実行します",
       "sendSteerHint": "Agent が今行っている作業に加えます"
     },

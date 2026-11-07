@@ -187,6 +187,7 @@
       "sendMessage": "傳送訊息",
       "sendQueue": "加入佇列",
       "sendSteer": "引導",
+      "sendSteerQueued": "引導下一則",
       "sendQueueHint": "在目前回合結束後執行",
       "sendSteerHint": "加入代理程式目前正在進行的工作"
     },

@@ -208,7 +208,7 @@ export function MobileNativeChatView({
   permission,
   promptKey,
   onRespondPermission,
-  composerTray: { content: trayContent, composerInputRef: inputRef } = NO_COMPOSER_TRAY,
+  composerTray: { content: trayContent, composerInputRef: inputRef, steerHead } = NO_COMPOSER_TRAY,
   onOpenFile,
   keyboardInset = 0
 }: Props): React.JSX.Element {
@@ -357,7 +357,8 @@ export function MobileNativeChatView({
             getSendCompletionGeneration,
             getComposerEditGeneration,
             inputRef,
-            sendFollowUp
+            sendFollowUp,
+            steerHead
           }}
           {...{ agent, sessionOptions, contextUsage }}
           {...{ onAttachImage, onPasteImages, attachments, onRemoveAttachment }}
