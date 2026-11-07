@@ -12,6 +12,7 @@ import {
 import {
   readMobileNativeChatPickedSkills,
   readMobileNativeChatSkillOrigin,
+  recordMobileNativeChatSkillPick,
   restoreMobileNativeChatPickedSkills,
   setMobileNativeChatDraftText
 } from './mobile-native-chat-draft-store'
@@ -49,15 +50,15 @@ export function useMobileNativeChatOfflineQueue(args: {
   scope: string | null
   /** The input lock as the chat reports it; the queue settles it for the composer too. */
   inputLockReason: MobileNativeChatInputLockReason | null
-  /** A terminal chat's agent waits on a prompt (shown or folded away): queued text would answer it. */
-  promptPending: boolean
+  /** Not yet: a structured chat hasn't loaded its session (no fence to send with), or a terminal agent waits on a prompt, shown or folded away, that queued text would answer. */
+  held: boolean
   send: Send
 }): MobileNativeChatOfflineQueue {
-  const { scope, inputLockReason, promptPending, send } = args
+  const { scope, inputLockReason, held, send } = args
   const lockReason = useSettledMobileNativeChatInputLock(inputLockReason)
   const offline = inputLockReason === 'disconnected'
   // Wait out the settle too, so a connection that blinks back doesn't send into a stale chat.
-  const ready = inputLockReason === null && lockReason === null && !promptPending
+  const ready = inputLockReason === null && lockReason === null && !held
   const sends = useMobileNativeChatOfflineSends(scope)
   const sendRef = useRef(send)
   sendRef.current = send
@@ -164,15 +165,23 @@ export function useMobileNativeChatOfflineQueue(args: {
         return false
       }
       removeMobileNativeChatOfflineSends(scope, [id])
-      setMobileNativeChatDraftText(scope, (current) =>
-        appendReturnedDraftText(current, queued.text)
-      )
+      let restored = ''
+      setMobileNativeChatDraftText(scope, (current) => {
+        restored = appendReturnedDraftText(current, queued.text)
+        return restored
+      })
       returnMobileNativeChatDraftAttachments(
         mobileNativeChatDraftDestination(scope),
         queued.images,
         queued.files
       )
       restoreMobileNativeChatPickedSkills(scope, queued.skills)
+      // A picked skill leading the text still reads as chat, as it did when queued.
+      const origin = queued.skillOrigin
+      if (origin && restored.split(/\s/, 1)[0] === origin) {
+        const path = queued.skills.find((skill) => skill.name === origin.slice(1))?.path
+        recordMobileNativeChatSkillPick(scope, { token: origin, ...(path ? { path } : {}) })
+      }
       return true
     },
     [scope]

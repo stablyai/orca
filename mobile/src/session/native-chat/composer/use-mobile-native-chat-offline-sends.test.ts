@@ -33,7 +33,7 @@ describe('useMobileNativeChatOfflineQueue', () => {
     queue = useMobileNativeChatOfflineQueue({
       scope: SCOPE,
       inputLockReason: lock,
-      promptPending: false,
+      held: false,
       send
     })
     return null
