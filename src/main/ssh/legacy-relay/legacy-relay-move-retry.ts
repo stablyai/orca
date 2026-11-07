@@ -30,7 +30,7 @@ export type BridgedMoveRetryDeps = {
   /** Connected, and unmoved only because the bridge served relay terminals. */
   waitingOnBridgedTerminals: (targetId: string) => boolean
   connectInFlight: (targetId: string) => Promise<unknown> | undefined
-  /** An automatic connect: refuses a host the user disconnected. */
+  /** A quiet automatic connect: refuses a disconnected host, keeps the host on refusal. */
   connect: (targetId: string) => Promise<unknown>
 }
 

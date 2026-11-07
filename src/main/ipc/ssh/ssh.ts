@@ -55,7 +55,11 @@ import { registerSshPortForwardHandlers } from './ssh-port-forward-handlers'
 import { persistPortForwards } from './ssh-port-forward-persistence'
 import { recordForwardFailure } from './ssh-port-forward-unrestored'
 import { restoreManagedHostPortForwards } from './ssh-managed-port-forward-restore'
-import { getSshHostServerStatus, setSshHostServedListener } from '../../ssh/ssh-host-server-status'
+import {
+  getSshHostServerStatus,
+  isSshHostKeptForBridgedTerminals,
+  setSshHostServedListener
+} from '../../ssh/ssh-host-server-status'
 import { broadcastPortForwards } from './ssh-renderer-broadcast'
 import { resetSshShutdownDrain } from './ssh-shutdown-drain'
 import { registerSshTargetCrudHandlers } from './ssh-target-crud-handlers'
@@ -172,16 +176,11 @@ export function registerSshHandlers(
   onLastBridgedTerminalExit(
     (targetId) =>
       void retryMoveAfterLastBridgedExit(targetId, {
-        waitingOnBridgedTerminals: (id) => {
-          const status = getSshHostServerStatus(id)
-          return (
-            connectionManager?.getState(id)?.status === 'connected' &&
-            status?.kind === 'relay' &&
-            status.bridged === true
-          )
-        },
+        waitingOnBridgedTerminals: (id) =>
+          connectionManager?.getState(id)?.status === 'connected' &&
+          isSshHostKeptForBridgedTerminals(getSshHostServerStatus(id)),
         connectInFlight: (id) => connectInFlight.get(id)?.promise,
-        connect: (id) => connectTarget(id, { automatic: true })
+        connect: (id) => connectTarget(id, { quiet: true })
       })
   )
 

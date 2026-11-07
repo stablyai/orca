@@ -174,7 +174,8 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
       ),
     progress: (target, phase) => {
       // Cancelled decisions keep running; their progress must not revive connection status.
-      if (!connectInFlight.has(target.id)) {
+      const attempt = connectInFlight.get(target.id)
+      if (!attempt || attempt.quiet) {
         return
       }
       setSshHostServerStatus(target.id, { kind: 'setting-up', phase })

@@ -2,6 +2,7 @@ import { getAppEnvironment } from '../../../shared/app-environment'
 import type {
   SshConnectionState,
   SshManagedServerLinkedProject,
+  SshManagedServerStatus,
   SshManagedServerServingNote,
   SshManagedServerUpdateNote,
   SshTarget
@@ -102,17 +103,24 @@ export function publishBridgedUnservedHostServer(
   target: SshTarget,
   decision: Extract<HostServerOnConnectResult, { route: 'unserved' }>
 ): SshConnectionState {
-  const managedServer = unservedServerStatus(decision)
-  setSshHostServerStatus(target.id, managedServer)
+  return publishKeptHostServer(target.id, unservedServerStatus(decision))
+}
+
+/** Publish the host connected with this status; a refused automatic retry restores its own. */
+export function publishKeptHostServer(
+  targetId: string,
+  managedServer: SshManagedServerStatus
+): SshConnectionState {
+  setSshHostServerStatus(targetId, managedServer)
   const state: SshConnectionState = {
-    ...(connectionManager!.getState(target.id) ?? { targetId: target.id, reconnectAttempt: 0 }),
-    targetId: target.id,
+    ...(connectionManager!.getState(targetId) ?? { targetId, reconnectAttempt: 0 }),
+    targetId,
     status: 'connected',
     error: null,
     managedServer
   }
-  broadcastSshState(getCurrentMainWindow, target.id, state)
-  return getPublicSshState(target.id) ?? state
+  broadcastSshState(getCurrentMainWindow, targetId, state)
+  return getPublicSshState(targetId) ?? state
 }
 
 /** Publish the unserved status for renderer translation and fail the connect without a fallback. */

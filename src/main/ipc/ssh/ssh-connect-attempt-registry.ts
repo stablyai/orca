@@ -13,6 +13,8 @@ export const credentialRequestedForTarget = new Set<string>()
 export type ConnectAttempt = {
   authority: DirectSshAuthority
   promise: Promise<SshConnectionState>
+  /** A retry no user asked for: it shows no setup progress and keeps the host on refusal. */
+  quiet?: true
 }
 
 export const connectInFlight = new Map<string, ConnectAttempt>()
