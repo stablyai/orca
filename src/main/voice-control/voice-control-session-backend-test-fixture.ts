@@ -1,4 +1,4 @@
-import type { MessageRow } from '../runtime/orchestration/types'
+import type { MessageRow } from '../runtime/orchestration/db/orchestration-records'
 import { MessageWake, type MessageWaitResult } from '../runtime/runtime-message-waiters'
 import type { AgentStatusState } from '../../shared/agent-status/contracts/agent-status-types'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'

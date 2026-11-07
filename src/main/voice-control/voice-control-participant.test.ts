@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { OrchestrationDb } from '../runtime/orchestration/db'
+import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { openVoiceControlRun, VOICE_CONTROL_HANDLE } from './voice-control-participant'
 
 describe('openVoiceControlRun', () => {
