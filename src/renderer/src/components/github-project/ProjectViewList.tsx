@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, ArrowUpDown, Columns3 } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
@@ -8,6 +8,7 @@ import ProjectRow from './ProjectRow'
 import { ProjectItemsEmptyState } from './ProjectViewStates'
 import { groupRows, sortRows } from '../../../../shared/github/project-group-sort'
 import { getAvailableColumns, loadHiddenColumns, saveHiddenColumns } from './columns'
+import { loadCollapsedGroups, saveCollapsedGroups } from './collapsed-groups'
 import {
   ACTION_COLUMN_WIDTH,
   loadColumnWidths,
@@ -72,7 +73,6 @@ export default function ProjectViewList({
   onOpenInBrowser,
   sourceTarget
 }: Props): React.JSX.Element {
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set())
   // Keep header sorting local; null restores the view’s saved GitHub sort order.
   const [sortOverride, setSortOverride] = useState<SortOverride | null>(null)
 
@@ -98,6 +98,35 @@ export default function ProjectViewList({
     Readonly<Record<string, Readonly<Record<string, number>> | undefined>>
   >({})
   const widths = widthsByScope[scopeKey] ?? persistedWidths
+
+  const persistedCollapsed = useMemo(() => loadCollapsedGroups(scopeKey), [scopeKey])
+  const [collapsedByScope, setCollapsedByScope] = useState<
+    Readonly<Record<string, ReadonlySet<string> | undefined>>
+  >({})
+  const collapsed = collapsedByScope[scopeKey] ?? persistedCollapsed
+
+  useEffect(() => {
+    const current = collapsedByScope[scopeKey]
+    if (current !== undefined) {
+      saveCollapsedGroups(scopeKey, current)
+    }
+  }, [collapsedByScope, scopeKey])
+
+  const toggleGroup = useCallback(
+    (groupKey: string): void => {
+      setCollapsedByScope((prev) => {
+        const currentCollapsed = prev[scopeKey] ?? persistedCollapsed
+        const next = new Set(currentCollapsed)
+        if (next.has(groupKey)) {
+          next.delete(groupKey)
+        } else {
+          next.add(groupKey)
+        }
+        return { ...prev, [scopeKey]: next }
+      })
+    },
+    [persistedCollapsed, scopeKey]
+  )
 
   const setColumnPair = useCallback(
     (fieldId: string, width: number, nextFieldId: string, nextWidth: number): void => {
@@ -212,17 +241,7 @@ export default function ProjectViewList({
                 group={g}
                 groupFieldName={table.selectedView.groupByFields[0].name}
                 expanded={expanded}
-                onToggle={() => {
-                  setCollapsed((prev) => {
-                    const next = new Set(prev)
-                    if (next.has(g.key)) {
-                      next.delete(g.key)
-                    } else {
-                      next.add(g.key)
-                    }
-                    return next
-                  })
-                }}
+                onToggle={() => toggleGroup(g.key)}
               />
             ) : null}
             {expanded
