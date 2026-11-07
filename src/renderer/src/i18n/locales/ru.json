@@ -20300,7 +20300,12 @@
         "runLiveTool_one": "Использует {{count}} инструмент",
         "runLiveTool_few": "Использует {{count}} инструмента",
         "runLiveTool_many": "Использует {{count}} инструментов",
-        "runLiveTool_other": "Использует {{count}} инструмента"
+        "runLiveTool_other": "Использует {{count}} инструмента",
+        "input": "Входные данные",
+        "output": "Результат",
+        "copyInput": "Копировать входные данные",
+        "showFullInput": "Показать входные данные целиком",
+        "inputUnavailable": "В этой переписке входные данные недоступны."
       },
       "providerFrame": {
         "byteCount_one": "{{count}} байт",
