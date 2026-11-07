@@ -229,6 +229,61 @@ describe('parseOrcaYaml', () => {
     })
   })
 
+  it('parses recipe timeoutSeconds as one limit or a per-step map', () => {
+    const yaml = [
+      'environmentRecipes:',
+      '  - id: all-steps',
+      '    name: All Steps',
+      '    create: ./create.sh',
+      '    timeoutSeconds: 120',
+      '  - id: per-step',
+      '    name: Per Step',
+      '    create: ./create.sh',
+      '    timeoutSeconds:',
+      '      create: 1800',
+      '      destroy: 60'
+    ].join('\n')
+
+    expect(parseOrcaYaml(yaml)?.environmentRecipes).toEqual([
+      {
+        id: 'all-steps',
+        name: 'All Steps',
+        create: './create.sh',
+        timeoutSeconds: { create: 120, suspend: 120, resume: 120, destroy: 120 }
+      },
+      {
+        id: 'per-step',
+        name: 'Per Step',
+        create: './create.sh',
+        timeoutSeconds: { create: 1800, destroy: 60 }
+      }
+    ])
+  })
+
+  it('keeps a recipe with an invalid timeoutSeconds without limits and reports it', () => {
+    const yaml = [
+      'environmentRecipes:',
+      '  - id: cloud-sandbox',
+      '    name: Cloud Sandbox',
+      '    create: ./create.sh',
+      '    timeoutSeconds:',
+      '      boot: 60'
+    ].join('\n')
+
+    expect(parseOrcaYaml(yaml)).toEqual({
+      scripts: {},
+      environmentRecipes: [{ id: 'cloud-sandbox', name: 'Cloud Sandbox', create: './create.sh' }],
+      environmentRecipeDiagnostics: [
+        {
+          index: 0,
+          field: 'timeoutSeconds',
+          message:
+            'Recipe "cloud-sandbox" timeoutSeconds.boot is not a lifecycle step; use create, suspend, resume, or destroy. Steps keep no time limit.'
+        }
+      ]
+    })
+  })
+
   it('parses legacy environmentRecipes command and cleanup aliases', () => {
     const yaml = [
       'environmentRecipes:',

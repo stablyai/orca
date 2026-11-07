@@ -24107,7 +24107,12 @@
       "cleanupInterrupted": "Cleanup was interrupted. Retry cleanup to continue.",
       "sshTargetRemoveFailed": "Failed to remove the hidden SSH target.",
       "recipeExitedWithoutCode": "Recipe exited with code unknown.",
-      "destroyExitedWithoutCode": "Destroy exited with code unknown."
+      "destroyExitedWithoutCode": "Destroy exited with code unknown.",
+      "suspendExited": "Suspend exited with code {{exitCode}}.",
+      "suspendExitedWithoutCode": "Suspend exited with code unknown.",
+      "resumeExited": "Resume exited with code {{exitCode}}.",
+      "resumeExitedWithoutCode": "Resume exited with code unknown.",
+      "recipeTimedOut": "The recipe {{mode}} step did not finish within {{timeout}}, so Orca stopped it. Check the recipe output, or raise timeoutSeconds in orca.yaml if it needs longer."
     }
   },
   "installDirAcl": {
