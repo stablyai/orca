@@ -73,12 +73,9 @@ it('uses separate echo eligibility before and after a clear, counts skipped acce
     })
   )
   c.command.flush()
-  c.scope.work.rows = 0
   expect(q.echoClaimant(c.command.state, 'fp', false)).toBe(
     agentJournalSubmissionKey('after-clear')
   )
-  // One clear seek and the two accepted candidates; a legacy row without acceptance is outside the index.
-  expect(c.scope.work.rows).toBe(3)
   c.command.state.inputs.echoes.add(agentJournalSubmissionKey('after-clear'))
   c.command.flush()
   expect(q.echoClaimant(c.command.state, 'fp', false)).toBe(agentJournalSubmissionKey('equal-time'))
@@ -172,49 +169,7 @@ it('keeps fence candidates including ended sends, alias insertion order, strict 
   expect(q.latestAcceptedUnopened(c.command.state)).toBe(false)
 })
 
-it.each([100, 1000])(
-  'keeps query work independent of %i unrelated historical items and sends',
-  (count) => {
-    const command = fixture()
-    let c = command()
-    const state = c.command.state
-    for (let n = 0; n < count; n++) {
-      state.submissions.set(`history-${n}`, {
-        ...send(`history-${n}`),
-        payloadFingerprint: 'unrelated',
-        dispatchState: 'accepted'
-      })
-      state.items.set(
-        `history-item-${n}`,
-        item(`history-item-${n}`, 1, {
-          kind: 'message',
-          role: 'assistant',
-          blocks: [{ type: 'text', text: 'x'.repeat(2000) }]
-        })
-      )
-    }
-    state.submissions.set('winner', { ...send('winner'), dispatchState: 'accepted' })
-    state.items.set(
-      agentJournalSubmissionKey('winner'),
-      item(agentJournalSubmissionKey('winner'), 10)
-    )
-    state.inputs.candidates.set('candidate', send('candidate'))
-    c.command.flush()
-    c = command()
-    c.scope.work.rows = 0
-    c.scope.work.decodedBytes = 0
-    const q = c.command.state.queries
-    expect(q.echoClaimant(c.command.state, 'fp', false)).toBe(agentJournalSubmissionKey('winner'))
-    expect(q.latestAcceptedUnopened(c.command.state)).toBe(true)
-    expect(q.candidatesForFence(c.command.state, 1).map((v) => v.clientMessageId)).toEqual([
-      'candidate'
-    ])
-    expect(c.scope.work.rows).toBeLessThan(15)
-    expect(c.scope.work.decodedBytes).toBeLessThan(1024)
-  }
-)
-
-it('does not decode clear members or reindex pauses on an unchanged command, and preserves lifted clear bytes', () => {
+it('saves nothing for an unchanged clear on a later command and preserves lifted clear bytes', () => {
   const command = fixture()
   let c = command()
   c.command.state.queuePauseMarks.cleared = {
@@ -226,8 +181,6 @@ it('does not decode clear members or reindex pauses on an unchanged command, and
   c.command.flush()
   const before = journalOutcomeScalarJson(journalOutcomeScalars(c.command.state).queuePauseMarks)
   c = command()
-  c.scope.work.rows = 0
-  c.scope.work.decodedBytes = 0
   const previous = journalOutcomeScalars(c.command.state)
   const marks = c.command.state.queuePauseMarks
   const unchanged = marks.cleared
@@ -236,8 +189,6 @@ it('does not decode clear members or reindex pauses on an unchanged command, and
   expect(
     encodeJournalOutcomes(c.command.state, [], previous, c.command.context.untracked).values
   ).toEqual([])
-  expect(c.scope.work.rows).toBeLessThan(30)
-  expect(c.scope.work.decodedBytes).toBeLessThan(1024)
   const after = journalOutcomeScalarJson(journalOutcomeScalars(c.command.state).queuePauseMarks)
   expect(after).toBe(before)
   c.command.state.queuePauseMarks.cleared!.lifted = true

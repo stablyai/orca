@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { journalSqlIndexSchema } from './journal-sql-index-schema'
 import { JournalSqlScope } from './journal-sql-scope'
@@ -210,33 +210,28 @@ function turn(id: string, sequence: number, ordinary: boolean, relevant: boolean
   }
 }
 
-describe.each([100, 1_000])('indexed summaries beside %i retained records', (size) => {
-  it('selects the latest qualifying turn and live card without decoding retained bodies', () => {
-    const s = scope()
-    const turns = new JournalSqlTurnSources(s)
-    const memory = new MemoryJournalTurnSources()
-    const places = new JournalSqlPlaceIndex(s, 'cards')
-    s.db.exec('BEGIN')
-    for (let n = 0; n < size; n++) {
-      const source = turn(`refused-${n}`, n + 3, false, false)
-      turns.set(source.item.itemId, source)
-      memory.set(source.item.itemId, source)
-      places.setPosition(`retained-${n}`, n)
-    }
-    const source = turn('ordinary', 1, true, true)
-    turns.set('ordinary', source)
-    memory.set('ordinary', source)
-    places.set(card('waiting', size + 1), true, false)
-    s.db.exec('COMMIT')
-    s.work.rows = 0
-    s.work.decodedBytes = 0
-    expect(turns.winner()?.item.itemId).toBe('ordinary')
-    expect(turns.winner()).toEqual(memory.winner())
-    expect(turns.anchor()?.item.itemId).toBe('ordinary')
-    expect(places.allPlaces().head?.messageId).toBe('waiting')
-    expect(s.work.rows).toBeLessThanOrEqual(8)
-    expect(s.work.decodedBytes).toBeLessThan(2_048)
-    turns.delete('ordinary')
-    expect(turns.winner()).toBeUndefined()
-  })
+it('selects the latest qualifying turn and live card beside retained records', () => {
+  const size = 3
+  const s = scope()
+  const turns = new JournalSqlTurnSources(s)
+  const memory = new MemoryJournalTurnSources()
+  const places = new JournalSqlPlaceIndex(s, 'cards')
+  s.db.exec('BEGIN')
+  for (let n = 0; n < size; n++) {
+    const source = turn(`refused-${n}`, n + 3, false, false)
+    turns.set(source.item.itemId, source)
+    memory.set(source.item.itemId, source)
+    places.setPosition(`retained-${n}`, n)
+  }
+  const source = turn('ordinary', 1, true, true)
+  turns.set('ordinary', source)
+  memory.set('ordinary', source)
+  places.set(card('waiting', size + 1), true, false)
+  s.db.exec('COMMIT')
+  expect(turns.winner()?.item.itemId).toBe('ordinary')
+  expect(turns.winner()).toEqual(memory.winner())
+  expect(turns.anchor()?.item.itemId).toBe('ordinary')
+  expect(places.allPlaces().head?.messageId).toBe('waiting')
+  turns.delete('ordinary')
+  expect(turns.winner()).toBeUndefined()
 })

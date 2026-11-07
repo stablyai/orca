@@ -64,7 +64,7 @@ export class JournalSqlCommand {
     return {
       ...commit,
       effects,
-      ...(value === undefined ? {} : { value }),
+      ...(value === undefined ? {} : { value: plainAnswer(value) }),
       ...(command.facts?.goals ? { goals } : {})
     }
   }
@@ -100,4 +100,18 @@ function unidentified(sessionId: string): AgentSessionJournalIdentity {
       return missing()
     }
   }
+}
+
+/** Answers leave the worker by structured clone, which refuses the command's tracked proxies. */
+function plainAnswer(value: unknown): unknown {
+  if (typeof value !== 'object' || value === null) {
+    return value
+  }
+  if (Array.isArray(value)) {
+    return value.map(plainAnswer)
+  }
+  if (Object.getPrototypeOf(value) !== Object.prototype) {
+    return value
+  }
+  return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, plainAnswer(child)]))
 }

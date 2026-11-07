@@ -142,3 +142,23 @@ it('rechecks a swept attachment inside the worker transaction and leaves the nex
   ).rejects.toBeInstanceOf(AgentSessionAttachmentExpiredError)
   expect((await owner.write(write('survived'))).cursor.sequence).toBe(2)
 })
+
+it('answers a queued card across the worker boundary', async () => {
+  const { owner } = await fixture()
+  const body = {
+    kind: 'message' as const,
+    role: 'user' as const,
+    blocks: [{ type: 'text' as const, text: 'queued' }]
+  }
+  const target = write('unused').target
+  const inserted = await owner.write({
+    target,
+    operation: { kind: 'queue-insert', input: { messageId: 'queued', body } }
+  })
+  expect(inserted.value).toMatchObject({ messageId: 'queued', body, state: 'waiting' })
+  const withdrawn = await owner.write({
+    target,
+    operation: { kind: 'queue-withdraw', messageIds: ['queued'] }
+  })
+  expect(withdrawn.value).toMatchObject([{ messageId: 'queued', body }])
+})
