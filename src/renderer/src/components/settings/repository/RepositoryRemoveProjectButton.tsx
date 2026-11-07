@@ -56,7 +56,7 @@ export function RepositoryRemoveProjectButton({
       title={translate('auto.components.settings.RepositoryPane.0909e5d650', 'Remove Project')}
       description={getRemoveProjectDescription(removalScope)}
       keywords={[repo.displayName, 'delete', 'project', 'repository']}
-      className="absolute top-0 right-0 z-10 w-auto max-w-none"
+      className="w-auto"
       forceVisible={forceVisible}
     >
       <Tooltip>

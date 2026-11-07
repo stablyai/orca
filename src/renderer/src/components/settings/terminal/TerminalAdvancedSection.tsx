@@ -12,11 +12,7 @@ import {
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { ToggleGroup, ToggleGroupItem } from '../../ui/toggle-group'
-import {
-  SettingsRow,
-  SettingsSegmentedControl,
-  SettingsSubsectionHeader
-} from '../form-controls/SettingsFormControls'
+import { SettingsRow, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { matchesSettingsSearch } from '../search/settings-search'
@@ -24,6 +20,7 @@ import { getTerminalWindowsPowershellImplementationSearchEntry } from './platfor
 import { TerminalMacKeyboardSection } from './platform/TerminalMacKeyboardSection'
 import { translate } from '@/i18n/i18n'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 type TerminalAdvancedSectionProps = {
   hostScope?: SettingsHostScope
@@ -100,16 +97,15 @@ export function TerminalAdvancedSection({
   }
 
   return (
-    <section key="advanced" className="space-y-3">
-      <SettingsSubsectionHeader
-        title={translate('auto.components.settings.TerminalPane.5e5f06c82c', 'Advanced')}
-        description={translate(
-          'auto.components.settings.TerminalPane.267d020745',
-          'Scrollback, word boundaries, and platform-specific terminal behaviors.'
-        )}
-      />
-
-      <div className="divide-y divide-border/40">
+    <SettingsGroup
+      key="advanced"
+      title={translate('auto.components.settings.TerminalPane.5e5f06c82c', 'Advanced')}
+      description={translate(
+        'auto.components.settings.TerminalPane.267d020745',
+        'Scrollback, word boundaries, and platform-specific terminal behaviors.'
+      )}
+    >
+      <div>
         <SearchableSetting
           title={translate('auto.components.settings.TerminalPane.9df53f7c14', 'Scrollback Rows')}
           description={translate(
@@ -350,6 +346,6 @@ export function TerminalAdvancedSection({
           <TerminalMacKeyboardSection settings={settings} updateSettings={updateSettings} />
         ) : null}
       </div>
-    </section>
+    </SettingsGroup>
   )
 }

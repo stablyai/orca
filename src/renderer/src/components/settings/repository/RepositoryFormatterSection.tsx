@@ -10,7 +10,7 @@ import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
 import { Textarea } from '../../ui/textarea'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { SettingsSubsectionHeader } from '../form-controls/SettingsFormControls'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 export function getRepositoryFormatterSearchEntry() {
   return {
@@ -83,10 +83,9 @@ export function RepositoryFormatterSection({
 
   return (
     <SearchableSetting {...entry} forceVisible={forceVisible}>
-      <section className="space-y-4">
-        <SettingsSubsectionHeader title={entry.title} description={entry.description} />
+      <SettingsGroup title={entry.title} description={entry.description}>
         <form
-          className="space-y-4"
+          className="space-y-4 py-4"
           onSubmit={(event) => {
             event.preventDefault()
             void save()
@@ -145,7 +144,7 @@ export function RepositoryFormatterSection({
               : translate('settings.repositoryFormatter.save', 'Save formatter')}
           </Button>
         </form>
-      </section>
+      </SettingsGroup>
     </SearchableSetting>
   )
 }

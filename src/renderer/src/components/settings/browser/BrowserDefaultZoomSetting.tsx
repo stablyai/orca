@@ -30,7 +30,7 @@ export function BrowserDefaultZoomSetting({
         "Zoom for sites you haven't zoomed."
       )}
       keywords={['browser', 'zoom', 'scale', 'default', 'page zoom', 'site', 'percentage']}
-      className="flex items-center justify-between gap-4 py-2"
+      className="flex items-center justify-between gap-4 py-3"
     >
       <div className="space-y-0.5">
         <Label>

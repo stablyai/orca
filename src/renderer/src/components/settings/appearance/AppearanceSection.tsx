@@ -26,7 +26,9 @@ export function AppearanceSection({
 }: AppearanceSectionProps): React.JSX.Element {
   const contentId = `appearance-section-${id}`
   return (
+    // Counts as a settings group so the pane drops its outer card around these accordions.
     <div
+      data-settings-group=""
       className={cn(
         'overflow-hidden rounded-xl border border-border/50 bg-card transition-colors',
         open && 'border-ring/40'

@@ -1,11 +1,11 @@
-import { Fragment } from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../../../ui/button'
 import { AgentCatalogRow, type AgentCatalogRowProps } from './AgentCatalogRow'
-import { SettingsBadge, SettingsSubsectionHeader } from '../../form-controls/SettingsFormControls'
+import { SettingsBadge } from '../../form-controls/SettingsFormControls'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { AGENTS_INSTALLED_SECTION_ID } from '../agents-search'
 
 export function AgentDetectionCatalog({
@@ -44,99 +44,86 @@ export function AgentDetectionCatalog({
       )}
 
       {/* Focusable so "Choose per agent" can move focus here. */}
-      <section id={AGENTS_INSTALLED_SECTION_ID} tabIndex={-1} className="scroll-mt-8 outline-none">
-        {[
-          ...detectedAgents.map((agent) => ({ agent, installed: true })),
-          ...undetectedAgents.map((agent) => ({ agent, installed: false }))
-        ].map(({ agent, installed }, index) => {
-          const firstInSection = index === 0 || index === detectedAgents.length
-          return (
-            <Fragment key={agent.id}>
-              {firstInSection ? (
-                <div className={cn('mb-3', index > 0 && 'mt-8')}>
-                  {installed ? (
-                    <SettingsSubsectionHeader
-                      title={
-                        <span className="flex items-center gap-2">
-                          {translate('auto.components.settings.AgentsPane.02e0143be5', 'Installed')}
-                          <SettingsBadge tone="accent">
-                            {detectedAgents.length}{' '}
-                            {translate(
-                              'auto.components.settings.AgentsPane.ed3e110e61',
-                              'detected'
-                            )}
-                          </SettingsBadge>
-                          {activeServerName ? (
-                            <SettingsBadge tone="muted">
-                              {translate(
-                                'auto.components.settings.AgentsPane.03e1a5081a',
-                                'on {{value0}}',
-                                {
-                                  value0: activeServerName
-                                }
-                              )}
-                            </SettingsBadge>
-                          ) : null}
-                        </span>
-                      }
-                      action={
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="xs"
-                          onClick={onRefresh}
-                          disabled={isRefreshing}
-                          title={
-                            activeServerEnvironmentId
-                              ? translate(
-                                  'auto.components.settings.AgentsPane.25a41a9aad',
-                                  'Re-detect agents installed on this server'
-                                )
-                              : translate(
-                                  'auto.components.settings.AgentsPane.13647f9f80',
-                                  'Re-read your shell PATH and re-detect installed agents'
-                                )
-                          }
-                          className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                        >
-                          <RefreshCw className={cn('size-3', isRefreshing && 'animate-spin')} />
-                          {isRefreshing
-                            ? translate(
-                                'auto.components.settings.AgentsPane.c9b33eb5c0',
-                                'Refreshing…'
-                              )
-                            : translate(
-                                'auto.components.settings.AgentsPane.0d9e293a02',
-                                'Refresh'
-                              )}
-                        </Button>
-                      }
-                    />
-                  ) : (
-                    <SettingsSubsectionHeader
-                      title={
-                        <span className="flex items-center gap-2 text-muted-foreground">
-                          {translate(
-                            'auto.components.settings.AgentsPane.e8da2af684',
-                            'Available to install'
-                          )}
-                          <SettingsBadge tone="muted">
-                            {undetectedAgents.length}{' '}
-                            {translate('auto.components.settings.AgentsPane.024bd95089', 'agents')}
-                          </SettingsBadge>
-                        </span>
-                      }
-                    />
-                  )}
-                </div>
-              ) : null}
-              <div className={cn(!firstInSection && 'border-t border-border/40')}>
-                <AgentCatalogRow {...getRowProps(agent, installed)} />
+      <div
+        id={AGENTS_INSTALLED_SECTION_ID}
+        tabIndex={-1}
+        className="scroll-mt-8 space-y-8 outline-none"
+      >
+        {detectedAgents.length > 0 ? (
+          <SettingsGroup
+            title={
+              <span className="flex items-center gap-2">
+                {translate('auto.components.settings.AgentsPane.02e0143be5', 'Installed')}
+                <SettingsBadge tone="accent">
+                  {detectedAgents.length}{' '}
+                  {translate('auto.components.settings.AgentsPane.ed3e110e61', 'detected')}
+                </SettingsBadge>
+                {activeServerName ? (
+                  <SettingsBadge tone="muted">
+                    {translate('auto.components.settings.AgentsPane.03e1a5081a', 'on {{value0}}', {
+                      value0: activeServerName
+                    })}
+                  </SettingsBadge>
+                ) : null}
+              </span>
+            }
+            action={
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                onClick={onRefresh}
+                disabled={isRefreshing}
+                title={
+                  activeServerEnvironmentId
+                    ? translate(
+                        'auto.components.settings.AgentsPane.25a41a9aad',
+                        'Re-detect agents installed on this server'
+                      )
+                    : translate(
+                        'auto.components.settings.AgentsPane.13647f9f80',
+                        'Re-read your shell PATH and re-detect installed agents'
+                      )
+                }
+                className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <RefreshCw className={cn('size-3', isRefreshing && 'animate-spin')} />
+                {isRefreshing
+                  ? translate('auto.components.settings.AgentsPane.c9b33eb5c0', 'Refreshing…')
+                  : translate('auto.components.settings.AgentsPane.0d9e293a02', 'Refresh')}
+              </Button>
+            }
+          >
+            {detectedAgents.map((agent) => (
+              <div key={agent.id} data-settings-row="">
+                <AgentCatalogRow {...getRowProps(agent, true)} />
               </div>
-            </Fragment>
-          )
-        })}
-      </section>
+            ))}
+          </SettingsGroup>
+        ) : null}
+        {undetectedAgents.length > 0 ? (
+          <SettingsGroup
+            title={
+              <span className="flex items-center gap-2 text-muted-foreground">
+                {translate(
+                  'auto.components.settings.AgentsPane.e8da2af684',
+                  'Available to install'
+                )}
+                <SettingsBadge tone="muted">
+                  {undetectedAgents.length}{' '}
+                  {translate('auto.components.settings.AgentsPane.024bd95089', 'agents')}
+                </SettingsBadge>
+              </span>
+            }
+          >
+            {undetectedAgents.map((agent) => (
+              <div key={agent.id} data-settings-row="">
+                <AgentCatalogRow {...getRowProps(agent, false)} />
+              </div>
+            ))}
+          </SettingsGroup>
+        ) : null}
+      </div>
 
       {detectionPending && !detectionFailed && (
         <div className="flex items-center justify-center rounded-md border border-dashed border-border/50 py-6 text-sm text-muted-foreground">
