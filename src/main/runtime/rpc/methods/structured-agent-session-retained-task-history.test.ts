@@ -1,3 +1,7 @@
+import {
+  SESSION,
+  STRUCTURED_CLIENT
+} from './structured-sessions/protocol/structured-agent-session-rpc-client.test-fixture'
 import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionBackgroundTaskState } from '../../../../shared/agent-session/agent-session-background-task-wire'
@@ -5,15 +9,13 @@ import type { AgentChildWorkView } from '../../../../shared/agent-status/child-w
 import { AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from '../../../../shared/agent-session/agent-session-background-task-child-views-capability'
 import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime/remote-runtime-client-capabilities'
-import type { AgentSessionSubscribeInput } from '../../../native-chat/agent-session-wire/structured-agent-session-subscribers'
+import type { AgentSessionSubscribeInput } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-subscribe-input'
 import {
   call,
   clearStructuredHostStub,
   hostCalls,
-  installStructuredHostStub,
-  SESSION,
-  STRUCTURED_CLIENT
-} from './structured-agent-session-rpc.test-fixture'
+  installStructuredHostStub
+} from './structured-sessions/protocol/structured-agent-session-rpc.test-fixture'
 
 beforeEach(installStructuredHostStub)
 afterEach(clearStructuredHostStub)

@@ -17,6 +17,16 @@ export function getRenderRowOptionId(
   if (!row) {
     return undefined
   }
+  if (row.type === 'lineage-group' && row.folder) {
+    const childOption = getRenderRowOptionId(
+      { ...row, folder: undefined },
+      worktreeId,
+      executionHostId
+    )
+    return row.rows.some((item) => item.worktree.id === worktreeId)
+      ? childOption
+      : getRenderRowOptionId(row.folder, worktreeId, executionHostId)
+  }
   if (row.type === 'lineage-group') {
     // Hostless legacy state cannot disambiguate, but an aria pointer should still target a row.
     const targetRow = worktreeId

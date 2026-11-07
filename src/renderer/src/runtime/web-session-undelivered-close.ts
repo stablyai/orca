@@ -1,5 +1,5 @@
 // Hold undelivered paired-tab closes for replay.
-import { RuntimeRpcCallError } from './runtime-rpc-result'
+import { RuntimeRpcCallError } from './rpc/calls/runtime-rpc-result'
 import { holdWebSessionCloseForReplay } from './web-session-close-replay'
 import { appPairedTerminalTabCloseIntentStore } from './paired-terminal-tab-close-intent-store'
 import type { WebSessionIntentOwner } from './web-session-intent-owner'

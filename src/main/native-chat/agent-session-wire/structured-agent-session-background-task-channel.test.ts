@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentChildWorkView } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
-import { StructuredAgentSessionBackgroundTaskChannel } from './structured-agent-session-background-task-channel'
-import { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
+import { StructuredAgentSessionBackgroundTaskChannel } from './publication/subscribers/structured-agent-session-background-task-channel'
+import { StructuredAgentSessionConversations } from './host/structured-agent-session-conversations'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
-} from './structured-agent-session-host-types'
-import type { AgentSessionSubscribers } from './structured-agent-session-subscribers'
-import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+} from './host/structured-agent-session-host-types'
+import type { AgentSessionSubscribers } from './publication/subscribers/structured-agent-session-subscribers'
+import { recordingStructuredAgentSessionLogger } from './host/testing/structured-agent-session-logger-test-support'
 
 const child: AgentChildWorkView = {
   id: 'child-1',

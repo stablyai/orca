@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
+import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
 import { resolvePaintedDark } from '@/lib/terminal-app-theme'
 import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
 

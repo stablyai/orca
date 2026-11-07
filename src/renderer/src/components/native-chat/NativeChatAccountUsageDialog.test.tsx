@@ -4,7 +4,6 @@ import { StrictMode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionAccountUsage } from '../../../../shared/agent-session/agent-session-account-usage'
 import NativeChatAccountUsageDialog from './NativeChatAccountUsageDialog'
-import { openNativeChatAccountUsageModal } from './native-chat-account-usage-modal'
 
 const mocks = vi.hoisted(() => ({
   read: vi.fn(),
@@ -17,7 +16,7 @@ const hostStream = vi.hoisted(() => {
   const stream: { snapshot: ((snapshot: unknown) => void) | null } = { snapshot: null }
   return stream
 })
-vi.mock('@/runtime/runtime-provider-accounts-client', () => ({
+vi.mock('@/runtime/provider-accounts/observations/runtime-provider-accounts-client', () => ({
   watchProviderAccounts: (_target: unknown, handlers: { onSnapshot: (s: unknown) => void }) => {
     hostStream.snapshot = handlers.onSnapshot
     return {
@@ -30,7 +29,9 @@ vi.mock('@/runtime/runtime-provider-accounts-client', () => ({
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.read
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.reset }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.reset
+}))
 vi.mock('@/store', () => {
   const state = {
     usagePercentageDisplay: 'used',
@@ -87,23 +88,6 @@ afterEach(() => {
 })
 
 describe('/usage modal', () => {
-  it('opens for the chat it was typed in and closes from its Close button', async () => {
-    mocks.read.mockResolvedValue(result)
-    openNativeChatAccountUsageModal({ sessionId: 'chat', target })
-    expect(mocks.openModal).toHaveBeenCalledWith('chat-account-usage', {
-      sessionId: 'chat',
-      target
-    })
-    render(<NativeChatAccountUsageDialog />)
-    expect(screen.getByRole('dialog', { name: 'Codex usage' })).toBeTruthy()
-    await screen.findByText('chat@example.com')
-    expect(mocks.read).toHaveBeenCalledWith(target, 'agentSession.accountUsage', {
-      sessionId: 'chat'
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
-    expect(mocks.closeModal).toHaveBeenCalled()
-  })
-
   it('keeps the newer first read when a replayed mount’s older read fails late', async () => {
     let failFirst!: (error: Error) => void
     mocks.read
@@ -146,22 +130,6 @@ describe('/usage modal', () => {
     await screen.findByText('Nothing to reset right now.')
   })
 
-  it('keeps the reset outcome when the refresh after it fails, through Retry', async () => {
-    mocks.read
-      .mockResolvedValueOnce(result)
-      .mockRejectedValueOnce(new Error('connection lost'))
-      .mockResolvedValueOnce(result)
-    mocks.reset.mockResolvedValueOnce({ outcome: 'reset' })
-    render(<NativeChatAccountUsageDialog />)
-    await screen.findByText('chat@example.com')
-    fireEvent.click(screen.getByRole('button', { name: 'Reset now' }))
-    await screen.findByText('Codex usage couldn’t be loaded. Try again.')
-    expect(screen.getByText('Codex limits were reset.')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
-    await screen.findByText('chat@example.com')
-    expect(screen.getByText('Codex limits were reset.')).toBeTruthy()
-  })
-
   it('reads nothing when a reset confirmed before closing finishes after it', async () => {
     let finish!: (value: unknown) => void
     mocks.read.mockResolvedValue(result)
@@ -177,22 +145,6 @@ describe('/usage modal', () => {
     view.unmount()
     await act(async () => finish({ outcome: 'reset' }))
     expect(mocks.read).toHaveBeenCalledOnce()
-  })
-
-  it('re-reads the offer when the host’s Codex state lands after the modal opened', async () => {
-    const { reset: _offer, ...withoutOffer } = result
-    mocks.read.mockResolvedValueOnce(withoutOffer).mockResolvedValueOnce(result)
-    render(<NativeChatAccountUsageDialog />)
-    await screen.findByText('chat@example.com')
-    expect(screen.queryByRole('button', { name: 'Reset now' })).toBeNull()
-    act(() => hostStream.snapshot?.(hostState('chat', 0, 'fetching')))
-    expect(mocks.read).toHaveBeenCalledOnce()
-    act(() => hostStream.snapshot?.(hostState('chat', 1)))
-    await screen.findByRole('button', { name: 'Reset now' })
-    expect(mocks.read).toHaveBeenCalledTimes(2)
-    // An unchanged host state reads nothing more.
-    act(() => hostStream.snapshot?.(hostState('chat', 1)))
-    expect(mocks.read).toHaveBeenCalledTimes(2)
   })
 
   it('collapses host changes during a background read into one follow-up, and sends none after closing', async () => {

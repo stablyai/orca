@@ -4,9 +4,9 @@ import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import { NativeChatUsageLimitActionsProvider } from './NativeChatUsageLimitActions'
 import type { ComponentProps, ReactNode, Ref } from 'react'
 import { NativeChatMessageList } from './NativeChatMessageList'
-import { NativeChatRewindContext } from './native-chat-rewind-context'
-import { NativeChatClaudeSignInContext } from './native-chat-claude-sign-in'
-import type { useNativeChatClaudeSignIn } from './native-chat-claude-sign-in'
+import { NativeChatRowActionsProvider } from './NativeChatRowActionsProvider'
+import { NativeChatSignInContext } from './native-chat-sign-in'
+import type { useNativeChatSignIn } from './native-chat-sign-in'
 import type { useNativeChatInterruptedContinuation } from './NativeChatInterruptedContinue'
 import type { useStructuredAgentSession } from './use-structured-agent-session'
 import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
@@ -16,7 +16,7 @@ export function NativeChatStructuredTranscript({
   directory,
   controller,
   continuation,
-  claudeSignIn,
+  signIn,
   messageListRef,
   ...props
 }: Omit<
@@ -38,11 +38,11 @@ export function NativeChatStructuredTranscript({
   directory: ComponentProps<typeof NativeChatUsageLimitActionsProvider>['directory']
   controller: ReturnType<typeof useStructuredAgentSession>
   continuation: ReturnType<typeof useNativeChatInterruptedContinuation>['view']
-  claudeSignIn: ReturnType<typeof useNativeChatClaudeSignIn>
+  signIn: ReturnType<typeof useNativeChatSignIn>
   messageListRef: Ref<NativeChatMessageListHandle>
 }): React.JSX.Element {
   return (
-    <NativeChatRewindContext.Provider value={controller.rewind.surface}>
+    <NativeChatRowActionsProvider pane={pane} chat={controller}>
       <NativeChatUsageLimitActionsProvider
         recovery={controller}
         pane={pane}
@@ -50,7 +50,7 @@ export function NativeChatStructuredTranscript({
         messages={controller.messages}
         view={continuation}
       >
-        <NativeChatClaudeSignInContext.Provider value={claudeSignIn}>
+        <NativeChatSignInContext.Provider value={signIn}>
           <NativeChatMessageList
             {...props}
             structuredAttachments
@@ -68,9 +68,9 @@ export function NativeChatStructuredTranscript({
             settledTurns={controller.settledTurns}
             turnActivity={controller.turnActivity}
           />
-        </NativeChatClaudeSignInContext.Provider>
+        </NativeChatSignInContext.Provider>
       </NativeChatUsageLimitActionsProvider>
-    </NativeChatRewindContext.Provider>
+    </NativeChatRowActionsProvider>
   )
 }
 

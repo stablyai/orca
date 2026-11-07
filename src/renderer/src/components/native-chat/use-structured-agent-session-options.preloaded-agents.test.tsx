@@ -15,7 +15,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call
 }))
 vi.mock('@/runtime/local-structured-chats', () => ({ localStructuredChatsInUse: async () => true }))
-vi.mock('@/runtime/local-runtime-capabilities', () => ({
+vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', () => ({
   subscribeLocalRuntimeCapabilityObservation: () => () => {},
   subscribeLocalRuntimeCapabilitiesKnown: () => () => {},
   ensureLocalRuntimeCapabilities: async () => ['agent-session.model-catalog.saved-only.v1'],

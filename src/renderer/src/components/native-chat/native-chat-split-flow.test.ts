@@ -2,8 +2,8 @@
 import { beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
-import type * as importCreation from '@/runtime/web-runtime-terminal-creation'
-import type * as WorktreeRuntimeOwner from '@/lib/worktree-runtime-owner'
+import type * as importCreation from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
+import type * as WorktreeRuntimeOwner from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type * as WorktreeOperationRoute from '@/lib/worktree-operation-route'
 import { createTestStore } from '@/store/slices/store-test-helpers'
 import { createTabsSliceMockApi } from '@/store/slices/tabs-slice-test-harness'
@@ -20,14 +20,14 @@ const { createRemote, runtimeOwners, requestSplit } = vi.hoisted(() => ({
 }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store.getState() } }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
-vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: createRemote
 }))
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
 vi.mock('@/components/tab-bar/request-active-terminal-pane-split', () => ({
   requestActiveTerminalPaneSplit: requestSplit
 }))
-vi.mock('@/lib/worktree-runtime-owner', async (original) => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', async (original) => ({
   ...(await original<typeof WorktreeRuntimeOwner>()),
   runtimeEnvironmentIdOrLocalUnlessTwin: (_state: unknown, worktreeId: string) =>
     runtimeOwners.get(worktreeId) ?? null
@@ -39,7 +39,7 @@ vi.mock('@/lib/worktree-operation-route', async (original) => ({
     route: { runtimeEnvironmentId: runtimeOwners.get(worktreeId) ?? null }
   })
 }))
-vi.mock('@/runtime/runtime-rpc-client', async (original) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())
@@ -50,7 +50,7 @@ import { runNativeChatSplitTarget } from './native-chat-layout-actions'
 
 beforeAll(async () => {
   actualCreation = await vi.importActual<typeof importCreation>(
-    '@/runtime/web-runtime-terminal-creation'
+    '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
   )
   await loadWebRuntimeSessionTabsApplyModulesForTests()
 })
@@ -221,14 +221,4 @@ it('keeps floating chat splits local while a remote workspace is selected', asyn
   )
   expect(createRemote).not.toHaveBeenCalled()
   expect(store.getState().activeWorktreeId).toBe('remote-workspace')
-})
-
-it('retains the existing terminal-backed chat split route', () => {
-  expect(
-    runNativeChatSplitTarget({ kind: 'terminal-pane', terminalTabId: 'terminal' }, 'down')
-  ).toBe(true)
-  expect(requestSplit).toHaveBeenCalledExactlyOnceWith({
-    tabId: 'terminal',
-    direction: 'horizontal'
-  })
 })

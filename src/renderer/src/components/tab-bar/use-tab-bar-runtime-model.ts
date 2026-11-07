@@ -11,8 +11,8 @@ import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTar
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { isNativeChatTranscriptLocalReadable } from '../../../../shared/native-chat/transcript/native-chat-transcript-readability'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { useOptionalShortcutLabel, useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
   getWindowsTerminalCapabilityOwnerKey,

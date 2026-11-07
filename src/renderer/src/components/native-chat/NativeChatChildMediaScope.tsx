@@ -1,7 +1,7 @@
 import { useMemo, type ReactNode } from 'react'
 import { useAppStore } from '@/store'
 import { resolveWorkspaceDirectory } from '@/lib/workspace-directory'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { NativeChatMarkdownImageOwnerContext } from './native-chat-markdown-image-owner'

@@ -37,8 +37,8 @@ import {
 import { NativeChatPaneMenuItems } from './NativeChatPaneMenuItems'
 import { NativeChatStructuredPaneMenuItems } from './NativeChatStructuredPaneMenuItems'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
-import { AgentSessionContinuationMenuItem } from '@/components/terminal-pane/AgentSessionContinuationMenuItem'
-import { AgentSessionContextCopyMenuItem } from '@/components/terminal-pane/AgentSessionContextCopyMenuItem'
+import { AgentSessionContinuationMenuItem } from '@/components/agent-session-continuation/AgentSessionContinuationMenuItem'
+import { AgentSessionContextCopyMenuItem } from '@/components/terminal-pane/clipboard/AgentSessionContextCopyMenuItem'
 import {
   noNativeChatContextMenuTarget,
   readNativeChatContextMenuTarget,

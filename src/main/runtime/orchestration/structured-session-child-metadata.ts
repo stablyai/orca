@@ -11,8 +11,12 @@ import {
   readWorkerTerminalHostScope,
   type WorkerTerminalHostScopeRead
 } from '../../../shared/worker-terminal-host-scope'
-import type { DispatchContextRow, FederatedDispatchRow, WorkerDispatchRow } from './types'
-import type { WorkerTerminalResourceRow } from './worker-terminal-ownership'
+import type {
+  DispatchContextRow,
+  FederatedDispatchRow,
+  WorkerDispatchRow
+} from './db/orchestration-records'
+import type { WorkerTerminalResourceRow } from './terminal-authority/release/worker-terminal-ownership'
 
 const launchAgent = FederationAttachStartParams.pick({ agent: true })
 

@@ -1,5 +1,6 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
@@ -91,7 +92,7 @@ it('continues an Orca-stopped turn, shows a refusal, and drops it once another c
     return null
   }
   act(() => {
-    renderer = create(createElement(Harness))
+    renderer = createWithQueryClient(createElement(Harness))
   })
   await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
   act(() => listener?.(snapshotEvent({ items: CUT })))

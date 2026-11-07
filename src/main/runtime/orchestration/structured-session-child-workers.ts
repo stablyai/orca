@@ -5,16 +5,16 @@ import type {
   OrchestrationSessionChildren
 } from '../../../shared/orchestration-session-children'
 import type { NativeChatSubagentState } from '../../../shared/native-chat/native-chat-types'
-import { canonicalOrcaSessionId } from './canonical-orca-session-id'
-import type { OrchestrationDb } from './db'
-import type { DispatchContextRow, FederatedDispatchRow } from './types'
-import type { WorkerTerminalResourceRow } from './worker-terminal-ownership'
+import { canonicalOrcaSessionId } from './addressing/session-lineage/canonical-orca-session-id'
+import type { OrchestrationDb } from './db/orchestration-db'
+import type { DispatchContextRow, FederatedDispatchRow } from './db/orchestration-records'
+import type { WorkerTerminalResourceRow } from './terminal-authority/release/worker-terminal-ownership'
 import { OrchestrationError } from './orchestration-error'
 import {
   resolveLineageRunningSession,
   type AgentSessionRecordReader,
   type LineageRunningSession
-} from './structured-session-lineage'
+} from './addressing/session-lineage/structured-session-lineage'
 import {
   sessionIdFromStructuredWorkerIncarnation,
   structuredWorkerHostScope

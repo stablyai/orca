@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { ExecutionHostHealth } from '../../../src/shared/execution-host-health'
 import type { MobileRelayHost } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'

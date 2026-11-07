@@ -18,7 +18,7 @@ import { useStructuredAgentSessionRead } from './use-structured-agent-session-re
 import { useStructuredAgentSessionMessages } from './use-structured-agent-session-messages'
 import { useStructuredAgentSessionTransportState } from './use-structured-agent-session-transport-state'
 import type { NativeChatLiveSession } from './native-chat-live-session-contract'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { nativeChatChildTranscript } from './native-chat-child-transcript'
 
 export function NativeChatStructuredChildTranscript(

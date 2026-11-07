@@ -3,6 +3,7 @@ import { ipcRenderer } from 'electron'
 import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
+  ShellOpenFileResult,
   ShellOpenLocalPathResult
 } from '../../shared/shell/opening/shell-open-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
@@ -29,7 +30,7 @@ export const shellApi = {
   openFilePath: (path: string, ownerHostId: ExecutionHostId): Promise<boolean> =>
     ipcRenderer.invoke('shell:openFilePath', path, ownerHostId),
 
-  openFileUri: (uri: string, ownerHostId: ExecutionHostId): Promise<void> =>
+  openFileUri: (uri: string, ownerHostId: ExecutionHostId): Promise<ShellOpenFileResult> =>
     ipcRenderer.invoke('shell:openFileUri', uri, ownerHostId),
 
   pathsExist: (paths: string[]): Promise<ShellPathExistence[]> =>

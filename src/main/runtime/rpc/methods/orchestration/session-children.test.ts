@@ -11,14 +11,14 @@ import {
   hostTestAttachParams,
   hostTestMessage,
   hostTestOperationId
-} from '../../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/structured-agent-session-registry'
+} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   createRestTestRig,
   REST_TEST_CALLER,
   type RestTestRig
-} from '../../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
-import { OrchestrationDb } from '../../../orchestration/db'
+} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+import { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   mintStructuredWorkerHandle,
@@ -28,7 +28,7 @@ import {
 import { RpcDispatcher } from '../../dispatcher'
 import type { RpcResponse } from '../../core'
 import { ORCHESTRATION_SESSION_CHILDREN_METHODS } from './session-children'
-import { STRUCTURED_AGENT_SESSION_METHODS } from '../structured-agent-session'
+import { STRUCTURED_AGENT_SESSION_METHODS } from '../structured-sessions/structured-agent-session'
 
 const PARENT = testOrcaSessionId('4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37')
 const WORKER = testOrcaSessionId('7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64')

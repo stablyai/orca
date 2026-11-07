@@ -11,7 +11,7 @@ import type {
   GitLabWorkItem,
   MRComment
 } from '../../../shared/gitlab-types'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export type JobTraceState = {
   loading: boolean

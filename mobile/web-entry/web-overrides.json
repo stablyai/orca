@@ -2,12 +2,20 @@
   "$comment": "Every .web.* sibling the Route A web build resolves ahead of its native file. One entry per documented React Native Web gap; config/scripts/mobile-web-app-web-overrides.test.mjs fails on an unlisted one, a listed file that is gone, or one with no native sibling.",
   "overrides": [
     {
+      "file": "src/session/native-chat/composer/MobileNativeChatComposerAllocation.web.tsx",
+      "reason": "The shipping host page measures the active editor's real chrome and menu reservation against the lower chat allocation, preserving native field sizing outside that DOM layout. Geometry consumers stay isolated from menu and queue rows."
+    },
+    {
+      "file": "src/session/native-chat/composer/MobileNativeChatComposerMenuLayer.web.tsx",
+      "reason": "The phone session renders in the host-served page. Suggestions must escape the queued editor’s scrolling clip while staying inside the chat’s stacking and visibility ancestry. DOM geometry and ancestor scroll/resize events anchor that portal; the native fallback retains its existing inline rendering."
+    },
+    {
       "file": "src/transport/client-context.web.tsx",
       "reason": "The page has no websocket transport and no pairing keychain. This is the single transport substitution point: it serves the BridgeRpcClient the entry built, for every hostId, because the bridge protocol names no host. The entry mounts nothing until init lands, so this provider never holds a client that cannot answer."
     },
     {
       "file": "packages/expo-two-way-audio/src/ExpoTwoWayAudioModule.web.ts",
-      "reason": "Vendored with the module, not added for Route A. Nothing on the page reaches it any more: dictation's capture went behind src/platform/dictation-capture.web.ts, which asks the shell for the microphone, so the only importer of @orca/expo-two-way-audio is the native half of that seam. The file stays because it ships with the vendored module, and it answers denied microphone permission and no playback, which is what a browser outside the shell can honestly say."
+      "reason": "Vendored with the module, not added for Route A. Nothing on the page reaches it any more: dictation's capture went behind src/platform/dictation-capture.web.ts, which asks the shell for the microphone, so the only importer of @orca/expo-two-way-audio is the native half of that seam. The file stays because it ships with the vendored module, and it answers denied microphone permission, which is what a browser outside the shell can honestly say."
     },
     {
       "file": "src/navigation/use-back-claim.web.ts",
@@ -138,6 +146,14 @@
       "reason": "Dictation's capture seam. The native file holds the microphone through @orca/expo-two-way-audio, which a browser does not have; this one asks the shell for it over native.audio.start|read|stop, draining the shell's ring on a timer and raising each reply as the events the engine emits directly, and taking the utterance's tail off the stop's own reply. The screen an open microphone holds awake is not in this seam at all: the device module that opens the mic takes it and gives it back on both hosts. The flow above the seam is one file on both hosts."
     },
     {
+      "file": "src/platform/on-device-speech.web.ts",
+      "reason": "Dictation's on-device recognizer. Native screens never dictate on the phone, so the native file answers null; the session page asks the shell over native.speech.act, whose recognizer hears the microphone the shell already captures, and answers null on shells that do not grant the verb so dictation goes to the computer as before."
+    },
+    {
+      "file": "src/platform/on-device-speech-locale.web.ts",
+      "reason": "The language the phone's recognizer is asked about. The native file reads the device's language list through expo-localization, which the page does not load; the WebView's navigator.languages is that same list, so the shell's Voice settings and the session page ask about one locale."
+    },
+    {
       "file": "src/platform/pdf-opener.web.ts",
       "reason": "Native file routes never render a preview themselves: they mount this page, which cannot show a PDF because the shell's CSP refuses frames and objects. This one asks the shell through native.pdf.view, which downloads the file and shows it in Quick Look or the Android PDF viewer, cancels that download when the preview is left, and returns null on shells that do not grant the verb so the preview asks for an app update."
     },
@@ -216,6 +232,10 @@
     {
       "file": "src/components/mobile-markdown-math-typesetter.web.ts",
       "reason": "KaTeX draws a formula as HTML and CSS with its own fonts, which only a document can show. The native file leaves formulas as their source, so the native bundle never carries KaTeX; this one loads KaTeX with the first formula the page draws and adds its stylesheet."
+    },
+    {
+      "file": "src/session/native-chat/MobileNativeChatLowerRegion.web.tsx",
+      "reason": "The shipping web session owns DOM scroll anchoring and reveals focused lower controls inside the keyboard-safe viewport. Native rendering keeps its existing scroll behavior."
     }
   ]
 }

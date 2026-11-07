@@ -7,7 +7,7 @@ import {
 } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import type { OrcaSessionId } from '../../../shared/orca-session-address'
-import { OrchestrationDb } from './db'
+import { OrchestrationDb } from './db/orchestration-db'
 import { structuredSessionChildWorkers } from './structured-session-child-workers'
 import {
   mintStructuredWorkerHandle,

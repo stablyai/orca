@@ -10,7 +10,7 @@ import {
 import { createStableLogicalRpcClient } from '@orca/test-mobile/transport/stable-logical-rpc-client'
 import type { HostConnectionInputs } from '@orca/test-mobile/transport/client-context-connection-metrics'
 import { RuntimeGitHubRepositoryQueryCommands } from '@orca/test-host/main/runtime/integrations/github/runtime-github-repository-query-commands'
-import { GITHUB_REPO_WORK_ITEM_METHODS } from '@orca/test-host/main/runtime/rpc/methods/github-repo-work-item-methods'
+import { GITHUB_REPO_WORK_ITEM_METHODS } from '@orca/test-host/main/runtime/rpc/methods/source-control/github/github-repo-work-item-methods'
 import type { OrcaRuntimeService } from '@orca/test-host/main/runtime/orca-runtime'
 import { eraseRpcMethods } from '@orca/test-host/main/runtime/rpc/core'
 import type { GitHubWorkItemDetails } from '@orca/test-host/shared/github/work-item-types'

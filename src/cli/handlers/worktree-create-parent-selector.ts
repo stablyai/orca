@@ -2,6 +2,7 @@ import { isWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-sco
 import { getOptionalStringFlag } from '../flags'
 import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
 import { getOptionalWorktreeSelector } from '../selectors'
+import { getOptionalParentSelector } from '../caller-folder-workspace'
 import { callerOrcaClient } from './worktree-parent-fields'
 
 export type CreateParentSelector = {
@@ -59,12 +60,12 @@ export async function resolveCreateParentSelector(
     )
     return { parentWorktree: callerParent, onCallerMachine: true }
   }
-  const parentWorktree = await getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client)
+  const parentWorktree = await getOptionalParentSelector(flags, cwd, client)
   const resolvedParentWorkspace = parentWorktree
     ? getWorkspaceKeyParentSelector(parentWorktree)
     : undefined
   if (resolvedParentWorkspace) {
-    // active/current can resolve to a folder workspace pseudo-worktree id.
+    // active/current can resolve to a folder workspace.
     return { parentWorkspace: resolvedParentWorkspace }
   }
 

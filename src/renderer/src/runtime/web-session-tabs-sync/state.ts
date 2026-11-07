@@ -20,7 +20,7 @@ import type {
   TerminalLayoutSnapshot,
   TerminalTab
 } from '../../../../shared/workspace-layout/terminal-tab-types'
-import type { OpenFile } from '../../store/slices/editor'
+import type { OpenFile } from '../../store/slices/editor/types/open-file'
 import type { RuntimeBrowserPlacement } from '../../../../shared/runtime-browser-placement'
 
 export const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'

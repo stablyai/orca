@@ -26,7 +26,7 @@ vi.mock('./NativeChatComposer', async () => {
     }
   }
 })
-vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
+vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: ptyInput.verified
 }))
 

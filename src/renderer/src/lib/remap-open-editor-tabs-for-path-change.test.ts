@@ -20,7 +20,7 @@ function ownedEditorFileId(
 }
 
 // Switch on: main renames the tabs, and its frame rekeys the content (T1 transport, apply mode).
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

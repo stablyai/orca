@@ -4,14 +4,15 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
-import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
+import '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
 import {
   makeFolderWorkspace,
   makeWorktree,
   TEST_REPO
 } from '@/store/slices/worktrees-slice-test-fixtures'
 import { makeProjectGroup } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { AppState } from '@/store/types'
 import {

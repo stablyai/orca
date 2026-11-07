@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { resolveOrcaManagedCodexHomePath } from '../codex/configuration/homes/codex-home-paths'
 import { redactForTransport } from '../../shared/ai-vault/search/ai-vault-search-transport'
-import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   assertLegacyAiVaultResumeCommandAllowed,
   OPENS_EVERY_STRUCTURED_CHAT,

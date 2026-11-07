@@ -153,5 +153,7 @@ export abstract class OrcaRuntimeWithOnClientDisconnected extends OrcaRuntimeWit
       const rows = override.previousRows ?? fallback.rows
       void this.enqueueLayout(ptyId, { kind: 'desktop', cols, rows })
     }
+    // Last: the device's streams and phone presence are released above.
+    this.reportFocusLostForDepartedDevice(clientId)
   }
 }

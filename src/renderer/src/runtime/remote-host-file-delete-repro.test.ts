@@ -10,7 +10,7 @@ import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { useFileDeletion } from '@/components/right-sidebar/file-explorer/mutations/useFileDeletion'
 import { getFileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
 import type { TreeNode } from '@/components/right-sidebar/file-explorer/tree/file-explorer-types'
-import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
+import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 
 const { confirm, toastError } = vi.hoisted(() => ({
   confirm: vi.fn(),

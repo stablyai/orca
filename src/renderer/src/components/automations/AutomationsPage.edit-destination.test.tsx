@@ -8,11 +8,10 @@ import {
   mocks,
   renderPage,
   runtimeHost,
-  RUNTIME_REPO_ID,
-  RUNTIME_WORKSPACE_ID,
   scopedList,
   settleHostQueries
 } from './automations-page-test-harness'
+import { RUNTIME_REPO_ID, RUNTIME_WORKSPACE_ID } from './automations-page-runtime-fixtures'
 import {
   CHAT_CAPABILITIES,
   createRpcCalls,
@@ -51,7 +50,7 @@ describe('AutomationsPage edit fencing', () => {
     const automation = makeAutomation({ id: 'a-1' })
     mocks.state.settings = { ...getDefaultSettings('/tmp'), nativeChatProviders: EVERY_AGENT_CHAT }
     const { setLocalRuntimeCapabilitiesForTests } =
-      await import('@/runtime/local-runtime-capabilities')
+      await import('@/runtime/hosts/capabilities/local-runtime-capabilities')
     setLocalRuntimeCapabilitiesForTests(null)
     api.automations.list.mockResolvedValue([])
     scopedList([automation])

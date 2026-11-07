@@ -10,8 +10,8 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
-} from '../../runtime/runtime-compatibility-test-fixture'
-import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
+} from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
 import { createTestStore } from './store-test-helpers'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))

@@ -11,11 +11,14 @@ import { OrcaRuntimeWithWindowlessTerminalActivity } from './orca-runtime-window
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 import type { AgentStatusStoreView } from './sidebar-inputs/workspace-activity-facts-producer'
 import { subscribeHookStatusTitles } from './terminal/layout/hook-status-title-subscription'
-import { TerminalWorkerTurnStops } from './orchestration/terminal-worker-turn-stops'
-import type { WorkerTerminalResourceRow } from './orchestration/worker-terminal-ownership'
+import { TerminalWorkerTurnStops } from './orchestration/workers/turn-stops/terminal-worker-turn-stops'
+import type { WorkerTerminalResourceRow } from './orchestration/terminal-authority/release/worker-terminal-ownership'
 import { resolveStructuredWorkerIdentity } from './orchestration/terminal-authority/structured-sessions/structured-worker-authority'
-import { chatStatusInTurn, terminalPhaseInTurn } from './orchestration/worker-auto-release-activity'
-import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import {
+  chatStatusInTurn,
+  terminalPhaseInTurn
+} from './orchestration/terminal-authority/release/worker-auto-release-activity'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   TerminalAgentPhonePush,
   type TerminalAgentWorkspaceLabels

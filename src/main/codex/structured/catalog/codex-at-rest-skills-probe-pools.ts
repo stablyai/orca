@@ -1,5 +1,5 @@
 import { PrioritySemaphore } from '../../../../shared/priority-semaphore'
-import type { AtRestCommandScan } from '../../../native-chat/agent-session-wire/at-rest-command-catalog'
+import type { AtRestCommandScan } from '../../../native-chat/agent-session-wire/options/at-rest-command-catalog'
 import type * as Source from './codex-at-rest-skills-probe'
 
 const MAX_PROBE_PROCESSES = 2

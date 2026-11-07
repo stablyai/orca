@@ -1,0 +1,202 @@
+import type { IDisposable } from '@xterm/xterm'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import type { PaneManagerOptions } from '@/lib/pane-manager/pane-manager-types'
+import { useAppStore } from '@/store/index'
+import { resolveTerminalLigaturesEnabled } from '../../../../../shared/terminal/appearance/terminal-ligatures'
+import { resolveTerminalFontWeights } from '../../../../../shared/terminal/appearance/terminal-fonts'
+import { normalizeTerminalLineHeight } from '../../../../../shared/terminal/appearance/terminal-line-height-settings'
+import { normalizeDesktopTerminalScrollbackRows } from '../../../../../shared/terminal/replay/terminal-scrollback-policy'
+import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-tui-wheel-reports'
+import {
+  normalizeTerminalFastScrollSensitivity,
+  normalizeTerminalScrollSensitivity,
+  resolveTerminalCursorInactiveStyle,
+  resolveTerminalScrollOnUserInput
+} from '@/lib/pane-manager/pane-terminal-options'
+import { buildFontFamily } from '@/lib/monospace-font-family'
+import { pluginFontFamilyWhenLoaded } from '@/store/plugin-fonts'
+import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
+import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-keyboard-protocol'
+import { resolvePaneKeyboardProtocolAgent } from '../input/keyboard/terminal-keyboard-protocol-pane-agent'
+import { UNRESOLVED_OWNER_HOST_ID } from '../../../../../shared/execution-host'
+import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
+import { acquireWebviewsDragPassthrough } from '../../browser-pane/host-guest/webview-drag-passthrough'
+import { handleTerminalWebLinkClick } from '../links/http/terminal-web-link-click'
+import { createTerminalPaneCreatedHandler } from './terminal-pane-created-handler'
+import { createTerminalPaneClosedHandler } from './terminal-pane-closed-handler'
+import { formatTerminalUrlTooltip } from '../links/terminal-url-tooltip'
+import { reportActiveRendererPtyForPane } from '../pty-transport/renderer-active-pty'
+import { resolveTerminalLayoutActiveLeafId } from '../layout/ownership/terminal-layout-active-leaf'
+import type { TerminalPaneManagerOptionsContext } from './terminal-pane-mount-context'
+import { resolveTerminalInlineImagesEnabled } from '../../../../../shared/terminal/images/terminal-inline-images-settings'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { layoutOwnerPaneGestures } from '../layout/ownership/terminal-pane-layout-owner-gestures'
+
+export function createTerminalPaneManagerOptions(
+  context: TerminalPaneManagerOptionsContext
+): PaneManagerOptions {
+  const { deps, ptyDeps } = context
+  const {
+    tabId,
+    worktreeId,
+    settingsRef,
+    managerRef,
+    paneTransportsRef,
+    panePtyBindingsRef,
+    isVisibleRef,
+    requestOpenLinksInAppPreference,
+    resolveExternalPaneDropTarget,
+    onExternalPaneDrop
+  } = deps
+  return {
+    onPaneCreated: createTerminalPaneCreatedHandler(context),
+    onPaneClosed: createTerminalPaneClosedHandler(context),
+    onActivePaneChange: (pane) => {
+      const layout = useAppStore.getState().terminalLayoutsByTabId[tabId]
+      const ptyIdsByLeafId = layout?.ptyIdsByLeafId ?? {}
+      if (Object.keys(ptyIdsByLeafId).length > 0 && !ptyIdsByLeafId[pane.leafId]) {
+        const fallbackLeafId = resolveTerminalLayoutActiveLeafId({
+          root: layout?.root,
+          activeLeafId: pane.leafId,
+          ptyIdsByLeafId
+        })
+        const fallbackPaneId = fallbackLeafId
+          ? (managerRef.current?.getNumericIdForLeaf(fallbackLeafId) ?? null)
+          : null
+        if (fallbackPaneId != null && fallbackPaneId !== pane.id) {
+          managerRef.current?.setActivePane(fallbackPaneId, { focus: true })
+          return
+        }
+      }
+      scheduleRuntimeGraphSync()
+      context.syncPaneLayoutRevision()
+      if (context.shouldPersistLayout()) {
+        context.deps.persistLayoutSnapshot()
+      }
+      reportActiveRendererPtyForPane(paneTransportsRef.current, pane.id)
+      const focusedBinding = panePtyBindingsRef.current.get(pane.id) as
+        | (IDisposable & { sampleForegroundAgentOnFocus?: () => void })
+        | undefined
+      focusedBinding?.sampleForegroundAgentOnFocus?.()
+      const paneTitle = useAppStore.getState().runtimePaneTitlesByTabId[tabId]?.[pane.id]
+      if (paneTitle) {
+        context.deps.updateTabTitle(tabId, paneTitle)
+      }
+    },
+    onLayoutChanged: () => {
+      scheduleRuntimeGraphSync()
+      context.deps.syncExpandedLayout()
+      context.syncCanExpandState()
+      context.syncPaneCount()
+      context.syncPaneLayoutRevision()
+      context.queueResizeAll(false)
+      if (context.shouldPersistLayout()) {
+        context.deps.persistLayoutSnapshot()
+      }
+    },
+    onPaneDragActiveChange: (active) => {
+      if (active) {
+        context.releaseWebviewDragPassthrough.current?.()
+        context.releaseWebviewDragPassthrough.current = acquireWebviewsDragPassthrough()
+        return
+      }
+      context.releaseWebviewDragPassthrough.current?.()
+      context.releaseWebviewDragPassthrough.current = null
+    },
+    resolveExternalPaneDropTarget,
+    onExternalPaneDrop,
+    ...(ORCA_LAYOUT_OWNER_IS_MAIN
+      ? layoutOwnerPaneGestures({
+          worktreeId,
+          tabId,
+          managerRef,
+          shouldPersistLayout: context.shouldPersistLayout
+        })
+      : {}),
+    terminalLigaturesEnabled: () =>
+      resolveTerminalLigaturesEnabled(
+        settingsRef.current?.terminalLigatures,
+        settingsRef.current?.terminalFontFamily
+      ),
+    terminalInlineImagesEnabled: () =>
+      resolveTerminalInlineImagesEnabled(settingsRef.current?.terminalInlineImages),
+    terminalOptions: (paneId) => {
+      const currentSettings = settingsRef.current
+      const terminalFontWeights = resolveTerminalFontWeights(
+        currentSettings?.terminalFontWeight,
+        currentSettings?.terminalFontWeightBold
+      )
+      const cursorStyle = currentSettings?.terminalCursorStyle ?? 'block'
+      const storeState = useAppStore.getState()
+      const currentTab = storeState.tabsByWorktree[worktreeId]?.find(
+        (candidate) => candidate.id === tabId
+      )
+      const platformInfo = window.api.platform?.get?.()
+      const knownTuiAgent = resolvePaneKeyboardProtocolAgent(
+        ptyDeps.startup,
+        currentTab?.launchAgent
+      )
+      const owner = panePtyBindingsRef.current.get(paneId)?.getOwnerContext?.()
+      const ptyBackendContext = {
+        userAgent: navigator.userAgent,
+        osRelease: platformInfo?.osRelease,
+        connectionId: owner?.connectionId,
+        cwd: context.startupCwd,
+        shellOverride: currentTab?.shellOverride,
+        executionHostId: owner?.executionHostId ?? UNRESOLVED_OWNER_HOST_ID,
+        tuiAgent: knownTuiAgent
+      }
+      return {
+        ...buildWindowsPtyCompatibilityOptions(ptyBackendContext),
+        ...buildTerminalKeyboardProtocolOptions(ptyBackendContext),
+        fontSize: currentSettings?.terminalFontSize ?? 14,
+        fontFamily: buildFontFamily(
+          pluginFontFamilyWhenLoaded(currentSettings?.terminalFontFamily ?? '')
+        ),
+        fontWeight: terminalFontWeights.fontWeight,
+        fontWeightBold: terminalFontWeights.fontWeightBold,
+        scrollback: normalizeDesktopTerminalScrollbackRows(currentSettings?.terminalScrollbackRows),
+        cursorStyle,
+        cursorInactiveStyle: resolveTerminalCursorInactiveStyle(cursorStyle),
+        cursorBlink: currentSettings?.terminalCursorBlink ?? true,
+        scrollSensitivity: normalizeTerminalScrollSensitivity(
+          currentSettings?.terminalScrollSensitivity
+        ),
+        fastScrollSensitivity: normalizeTerminalFastScrollSensitivity(
+          currentSettings?.terminalFastScrollSensitivity
+        ),
+        scrollOnUserInput: resolveTerminalScrollOnUserInput(
+          currentSettings?.terminalScrollOnUserInput
+        ),
+        macOptionIsMeta: context.deps.effectiveMacOptionAsAltRef.current === 'true',
+        lineHeight: normalizeTerminalLineHeight(currentSettings?.terminalLineHeight),
+        wordSeparator: currentSettings?.terminalWordSeparator
+      }
+    },
+    terminalTuiScrollSensitivity: () =>
+      normalizeTerminalTuiMouseWheelMultiplier(settingsRef.current?.terminalTuiScrollSensitivity),
+    onLinkClick: (paneId, event, url) => {
+      const activePane = managerRef.current?.getPanes().find((candidate) => candidate.id === paneId)
+      handleTerminalWebLinkClick(url, event, {
+        ...context.linkDeps,
+        terminal: activePane?.terminal ?? null,
+        startupCwd: activePane ? context.getPaneLinkCwd(paneId) : context.startupCwd,
+        runtimeEnvironmentId: activePane
+          ? (context.linkDeps.getRuntimeEnvironmentIdForPane?.(paneId) ?? null)
+          : null,
+        sourceOwner: activePane ? context.getHttpLinkSourceOwnerForPane(paneId) : { kind: 'local' },
+        requestOpenLinksInAppPreference,
+        linkActionContext: context.getLinkActionContext(paneId),
+        actionDestinations: context.getHttpLinkActionDestinations(paneId)
+      })
+    },
+    linkOpenHint: context.getUrlOpenLinkHint,
+    formatLinkTooltip: (paneId, url, hint) =>
+      formatTerminalUrlTooltip(url, hint, context.getHttpLinkSourceOwnerForPane(paneId)),
+    initialRenderingSuspended: !isVisibleRef.current,
+    // Reopening the floating panel must rebuild silently corrupted glyph atlases.
+    retainHiddenWebgl: worktreeId !== FLOATING_TERMINAL_WORKTREE_ID,
+    terminalGpuAcceleration: settingsRef.current?.terminalGpuAcceleration ?? 'auto',
+    debugLabel: `tab:${tabId}/wt:${worktreeId}`
+  }
+}

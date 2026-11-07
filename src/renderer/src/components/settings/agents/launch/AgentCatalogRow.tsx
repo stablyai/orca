@@ -29,7 +29,7 @@ import {
   AgentPermissionMenu,
   type AgentPermissionChoiceRow
 } from '../../../agent/launch-settings/AgentPermissionChoiceControls'
-import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
+import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import type { AgentOpensAs } from '../../../../lib/agent-session/launch/native-chat-provider-choice'
 import { AgentOpensAsControl } from '../../../agent/launch-settings/AgentChatChoiceControls'
 
@@ -158,13 +158,6 @@ export function AgentCatalogRow({
       )?.focus()
     })
   }
-  const expandable =
-    isDetected ||
-    permission !== undefined ||
-    permissionChoice !== undefined ||
-    chatRuntime !== undefined ||
-    launchChoiceEditor !== undefined
-
   return (
     <div className={cn('py-3', !isDetected && !opensAs?.cliMissing && 'opacity-70')}>
       <div className="flex flex-wrap items-start gap-3">
@@ -262,33 +255,28 @@ export function AgentCatalogRow({
               <ExternalLink className="size-3.5" />
             </a>
             <div className="flex size-7 items-center justify-center">
-              {expandable && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => setCmdOpen((previous) => !previous)}
-                  aria-label={
-                    cmdOpen
-                      ? translate(
-                          'settings.agents.collapseAgentSettings',
-                          'Collapse agent settings'
-                        )
-                      : translate('settings.agents.expandAgentSettings', 'Expand agent settings')
-                  }
-                  className="size-7 text-muted-foreground hover:text-foreground"
-                >
-                  <ChevronDown
-                    className={cn('size-3.5 transition-transform', cmdOpen && 'rotate-180')}
-                  />
-                </Button>
-              )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setCmdOpen((previous) => !previous)}
+                aria-label={
+                  cmdOpen
+                    ? translate('settings.agents.collapseAgentSettings', 'Collapse agent settings')
+                    : translate('settings.agents.expandAgentSettings', 'Expand agent settings')
+                }
+                className="size-7 text-muted-foreground hover:text-foreground"
+              >
+                <ChevronDown
+                  className={cn('size-3.5 transition-transform', cmdOpen && 'rotate-180')}
+                />
+              </Button>
             </div>
           </div>
         </div>
       </div>
 
-      {expandable && cmdOpen && (
+      {cmdOpen && (
         <div className="mt-3 space-y-3 pl-10">
           {chatRuntime}
           {!launchChoiceEditor && permissionChoice && (
@@ -304,6 +292,23 @@ export function AgentCatalogRow({
             />
           )}
           {!isDetected && launchChoiceEditor?.(permissionRef)}
+          {!isDetected && (
+            <div>
+              <AgentCommandOverrideInput
+                key={cmdOverride ?? defaultCmd}
+                defaultCmd={defaultCmd}
+                cmdOverride={cmdOverride}
+                onSaveOverride={onSaveOverride}
+              />
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                {translate(
+                  'settings.agents.undetectedCommandHint',
+                  'If the {{agent}} CLI is installed outside PATH, enter the full path to its executable on this host.',
+                  { agent: label }
+                )}
+              </p>
+            </div>
+          )}
           {isDetected && (
             <div>
               <AgentCommandOverrideInput

@@ -10,7 +10,7 @@ import type { LinearConnectionStatus } from '../../../../shared/linear/workspace
 import { useLinearSourceConnection } from './use-linear-source-connection'
 
 const mocks = vi.hoisted(() => ({ linearStatus: vi.fn() }))
-vi.mock('@/runtime/runtime-linear-client', () => mocks)
+vi.mock('@/runtime/linear/runtime-linear-client', () => mocks)
 type ConnectionState = {
   runtimeStatusByEnvironmentId: Map<
     string,

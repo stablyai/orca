@@ -9,6 +9,7 @@ import { useNativeChatDraft } from './use-native-chat-draft'
 import { useNativeChatDraftEvents } from './use-native-chat-draft-events'
 import { useNativeChatComposerRecall } from './use-native-chat-composer-recall'
 import { useNativeChatLaunchDraftAdoption } from './use-native-chat-launch-draft-adoption'
+import { NativeChatComposerWorkspace } from './NativeChatComposerWorkspace'
 import { NativeChatComposerField } from './NativeChatComposerField'
 import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
 import { nativeChatComposerSendState } from './native-chat-composer-send-state'
@@ -17,9 +18,8 @@ import { useNativeChatComposerHandle } from './use-native-chat-composer-handle'
 import { useNativeChatFileDrops } from './use-native-chat-file-drops'
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
 import { useNativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
-import { useNativeChatSessionOptions } from './use-native-chat-session-options'
+import { useNativeChatComposerSessionOptions } from './use-native-chat-composer-session-options'
 import { useNativeChatDictation } from './use-native-chat-dictation'
-import { useNativeChatSessionOptionCommand } from './use-native-chat-session-option-command'
 import { useNativeChatPtyComposerSend } from './use-native-chat-pty-composer-send'
 import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
 import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
@@ -67,10 +67,8 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
   ): React.JSX.Element {
     // Own drafts and attachments by pane/conversation so reconnect PTY replacement and UI mode changes cannot discard unsent input.
     const imeEnterGesture = useImeEnterGestureOwnership()
-    const { draft, setDraft, flushDraftAppends } = useNativeChatDraft(
-      draftScopeKey,
-      imeEnterGesture.isComposing
-    )
+    const draftState = useNativeChatDraft(draftScopeKey, imeEnterGesture.isComposing)
+    const { draft, setDraft, flushDraftAppends } = draftState
     const [caret, setCaret] = useState(draft.length)
     useNativeChatLaunchDraftAdoption({
       terminalTabId,
@@ -206,28 +204,20 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     })
 
     const dictation = useNativeChatDictation(textareaRef, disabled)
-    const { dispatch: dispatchSessionOptionCommand, isDispatching: isDispatchingSessionOption } =
-      useNativeChatSessionOptionCommand({
-        agent,
-        disabled,
-        onSlashCommand,
-        onSubmitted,
-        resolveTarget
-      })
-
-    const { surface: ptySessionOptionsSurface, snapshot: ptySessionOptionsSnapshot } =
-      useNativeChatSessionOptions({
-        agent,
-        terminalTabId,
-        targetPtyId,
-        dispatchCommand: dispatchSessionOptionCommand,
-        onAgentPicker: onSwitchToTerminal,
-        readTerminalScreen,
-        paneKey
-      })
-    const sessionOptionsSurface = structuredTransport?.optionsSurface ?? ptySessionOptionsSurface
+    const sessionOptions = useNativeChatComposerSessionOptions({
+      agent,
+      disabled,
+      onSlashCommand,
+      onSubmitted,
+      resolveTarget,
+      terminalTabId,
+      targetPtyId,
+      onSwitchToTerminal,
+      readTerminalScreen,
+      paneKey,
+      structuredTransport
+    })
     const contextUsageSummary = useNativeChatContextUsageSummary(structuredTransport)
-    const sessionOptionsSnapshot = structuredTransport?.optionSnapshot ?? ptySessionOptionsSnapshot
 
     const sendStructured = useNativeChatStructuredComposerSend({
       agent,
@@ -243,12 +233,12 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     const ptyCommandRouting = {
       agent,
       disabled,
-      isDispatchingSessionOption,
+      isDispatchingSessionOption: sessionOptions.isDispatching,
       resolveTarget,
       onSlashCommand,
       onSubmitted,
       answerCommandLocally,
-      sessionOptionsSurface: ptySessionOptionsSurface,
+      sessionOptionsSurface: sessionOptions.pty.surface,
       trackPendingSend,
       setDraft,
       setCaret,
@@ -270,6 +260,8 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       terminalTabId
     })
     const submission = useNativeChatComposerSubmit({
+      agent,
+      textareaRef,
       structuredTransport,
       draftScopeKey,
       draft,
@@ -287,6 +279,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
 
     const { goalMode } = submission
     const { sendHeld, ...sendButton } = nativeChatComposerSendState({
+      agent,
       draft,
       messageDelivery: submission.messageDelivery,
       imageAttachments,
@@ -406,12 +399,20 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
           steerPreview={steerChord.preview}
           onSteerPreview={steerChord.runPreview}
           onStop={interrupt}
-          sessionOptionsSurface={sessionOptionsSurface}
-          sessionOptionsSnapshot={sessionOptionsSnapshot}
+          sessionOptionsSurface={sessionOptions.surface}
+          sessionOptionsSnapshot={sessionOptions.snapshot}
           contextUsage={contextUsageSummary}
           sessionOptionsPickerRequest={structuredTransport?.optionPickerRequest ?? null}
           agent={agent}
           launchPrompt={launchPrompt}
+          workspaceFooter={
+            !editSession && !launchPrompt ? (
+              <NativeChatComposerWorkspace
+                terminalTabId={terminalTabId}
+                structuredTransport={structuredTransport}
+              />
+            ) : undefined
+          }
           {...fieldOverrides}
         />
       </div>

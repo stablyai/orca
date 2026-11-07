@@ -14,8 +14,10 @@ import { clearNativeChatVisualCacheForTests } from './native-chat-visual-read-cl
 import type { NativeChatChildTranscriptProps } from './NativeChatChildTranscript'
 
 const reads = vi.hoisted(() => ({ image: vi.fn(), visual: vi.fn() }))
-vi.mock('@/runtime/runtime-file-read-client', () => ({ readRuntimeFilePreview: reads.image }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: reads.visual }))
+vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({
+  readRuntimeFilePreview: reads.image
+}))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: reads.visual }))
 vi.mock('./NativeChatSessionChildren', () => ({ NativeChatSessionChildren: () => null }))
 vi.mock('./NativeChatTranscriptChrome', () => ({
   observeTranscriptVisibility: (_element: Element, onChange: (visible: boolean) => void) => {

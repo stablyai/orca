@@ -1,4 +1,5 @@
-import { useMemo, useSyncExternalStore } from 'react'
+import { useAppViewExternalStore } from '@/store/app-state-view'
+import { useMemo } from 'react'
 import { shallow } from 'zustand/shallow'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { useAppStore } from '@/store'
@@ -189,7 +190,7 @@ export function useWorktreeStructuredChatTabNames(
   tabsKey: unknown,
   enabled: boolean
 ): StructuredChatTabNames {
-  const signature = useSyncExternalStore(
+  const signature = useAppViewExternalStore(
     enabled && worktree ? subscribeStructuredChatTabNames : subscribeNothing,
     () =>
       enabled && worktree
@@ -209,7 +210,7 @@ export function useWorktreeStructuredChatTabNames(
 }
 
 export function useStructuredChatTabNames(): StructuredChatTabNames {
-  return useSyncExternalStore(
+  return useAppViewExternalStore(
     subscribeStructuredChatTabNames,
     getStructuredChatTabNames,
     getStructuredChatTabNames

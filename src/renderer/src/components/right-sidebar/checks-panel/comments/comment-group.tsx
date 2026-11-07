@@ -1,3 +1,4 @@
+import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
 import React from 'react'
 import { Sparkles } from 'lucide-react'
 import {
@@ -25,7 +26,7 @@ import {
   getPRCommentGroupId,
   type PRCommentGroup
 } from '../../../../../../shared/source-control/review-comments/pr-comment-groups'
-import type { PRCommentGroupActionState } from '@/lib/pr-comment-action-state'
+import type { PRCommentGroupActionState } from '@/lib/source-control/review/comments/pr-comment-action-state'
 import {
   RightPanelCommentComposer,
   type RightPanelCommentSubmitResult
@@ -34,6 +35,8 @@ import { CommentRow } from './comment-row'
 import { translate } from '@/i18n/i18n'
 
 export function PRCommentGroupView({
+  imageUploadAddress,
+  editImageUploadAddress,
   group,
   botAuthorOverrides,
   replyingCommentId,
@@ -54,6 +57,8 @@ export function PRCommentGroupView({
   onQueueForAgent,
   onOpenLocation
 }: {
+  imageUploadAddress?: GitHubImageIntake['address']
+  editImageUploadAddress?: GitHubImageIntake['address']
   group: PRCommentGroup
   botAuthorOverrides: ReadonlySet<string>
   replyingCommentId: number | null
@@ -89,6 +94,7 @@ export function PRCommentGroupView({
         )}
       >
         <RightPanelCommentComposer
+          imageUploadAddress={imageUploadAddress}
           placeholder={translate(
             'auto.components.right.sidebar.checks.panel.content.ba20d1a896',
             'Reply to {{value0}}',
@@ -114,6 +120,7 @@ export function PRCommentGroupView({
     group.kind === 'standalone' ? presentation.groupStandalone : presentation.groupThread
   )
   const sharedRowProps = {
+    imageUploadAddress: editImageUploadAddress,
     botAuthorOverrides,
     actionState,
     isQueued,
@@ -198,6 +205,8 @@ export function PRCommentGroupView({
 }
 
 export function ResolvedCommentGroupsSection({
+  imageUploadAddress,
+  editImageUploadAddress,
   groups,
   botAuthorOverrides,
   replyingCommentId,
@@ -214,6 +223,8 @@ export function ResolvedCommentGroupsSection({
   onSetReaction,
   onOpenLocation
 }: {
+  imageUploadAddress?: GitHubImageIntake['address']
+  editImageUploadAddress?: GitHubImageIntake['address']
   groups: PRCommentGroup[]
   botAuthorOverrides: ReadonlySet<string>
   replyingCommentId: number | null
@@ -253,6 +264,8 @@ export function ResolvedCommentGroupsSection({
           <AccordionContent className={presentation.resolvedSectionContent}>
             {groups.map((group) => (
               <PRCommentGroupView
+                imageUploadAddress={imageUploadAddress}
+                editImageUploadAddress={editImageUploadAddress}
                 key={getPRCommentGroupId(group)}
                 group={group}
                 botAuthorOverrides={botAuthorOverrides}

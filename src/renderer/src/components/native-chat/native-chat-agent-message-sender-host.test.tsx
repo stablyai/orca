@@ -54,13 +54,13 @@ vi.mock('./NativeChatPaneFileDropSurface', async (original) => ({
 vi.mock('../tab-group/RetainedPaneHost', () => ({
   RetainedPaneHost: ({ children }: { children: ReactNode }) => children
 }))
-vi.mock('@/components/terminal-pane/terminal-handle-links', async (original) => ({
+vi.mock('@/components/terminal-pane/links/handles/terminal-handle-links', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   focusRendererTerminalHandle: transport.focusRenderer
 }))
 
 import StructuredAgentSessionPaneOverlayLayer from './StructuredAgentSessionPaneOverlayLayer'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import {
   getStructuredAgentSessionStatusFeed,
   resetStructuredAgentSessionStatusFeedsForTests

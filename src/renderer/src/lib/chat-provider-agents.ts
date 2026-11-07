@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { useAppViewExternalStore } from '@/store/app-state-view'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import {
@@ -25,7 +25,7 @@ export function chatProviderAgents(
 }
 
 export function useHostStructuredAgentsVersion(): number {
-  return useSyncExternalStore(
+  return useAppViewExternalStore(
     subscribeHostStructuredAgents,
     hostStructuredAgentsVersion,
     hostStructuredAgentsVersion

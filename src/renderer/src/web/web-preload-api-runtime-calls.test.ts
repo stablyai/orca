@@ -79,7 +79,7 @@ describe('web preload runtime calls', () => {
     writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
     const { installWebPreloadApi } = await import('./web-preload-api')
     const { callAbortableRuntimeEnvironment } =
-      await import('@/runtime/abortable-runtime-environment-call')
+      await import('@/runtime/rpc/calls/abortable-runtime-environment-call')
     const { webRuntimeState } = await import('./preload-api/web-runtime-session')
     installWebPreloadApi()
     const environment = webRuntimeState.activeEnvironment!
