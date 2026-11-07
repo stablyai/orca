@@ -127,6 +127,9 @@ function spawnDetached(command: string, args: string[], options: SpawnOptions): 
 }
 
 export function serveOrcaApp(args: ServeOrcaAppArgs = {}): Promise<number> {
+  if (shouldRedactSupervisedStdout(args.supervise === true)) {
+    args = { ...args, noPairing: true }
+  }
   // Install the PID 1 reaper before spawning so orphaned descendants are collected.
   reexecThisServeUnderInitReaper()
   noteServeSupervisorStart()
