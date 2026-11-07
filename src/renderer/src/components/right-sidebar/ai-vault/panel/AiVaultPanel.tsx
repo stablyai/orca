@@ -5,6 +5,7 @@ import { useAppStore } from '@/store/index'
 import { useAllWorktrees, useProjectHostSetupProjection, useRepos } from '@/store/selectors'
 import { useAiVaultPanelSessions } from '../session-list/ai-vault-session-filters'
 import {
+  aiVaultScopeListsOnlyItself,
   deriveAiVaultScopeSessionPaths,
   deriveAiVaultWorkspaceScopePaths
 } from '../../../../../../shared/ai-vault/scanning/ai-vault-scope-paths'
@@ -146,6 +147,7 @@ export default function AiVaultPanel({
       }),
     [activeProjectKey, activeWorktree, allWorktrees, projectHostSetupProjection, scope]
   )
+  const scopeOnly = aiVaultScopeListsOnlyItself(scope)
   const {
     error,
     loading,
@@ -154,7 +156,7 @@ export default function AiVaultPanel({
     scanResult,
     sessions: history,
     loadedSessionLimit
-  } = useAiVaultSessionRefresh(scopePaths, executionHostScope, sessionLimit)
+  } = useAiVaultSessionRefresh(scopePaths, executionHostScope, sessionLimit, scopeOnly)
   // Send scope identity: the host owns project worktree enumeration, and hundreds of paths cannot fit a request.
   const searchWithin = useMemo(
     () =>
@@ -174,6 +176,7 @@ export default function AiVaultPanel({
   const sessions = searching ? searchSessions : history
   const requestedScanKey = aiVaultLocalScanKey({
     scopePaths,
+    scopeOnly,
     includeAntigravityIdeSessions: true,
     limit: sessionLimit === 'unlimited' ? undefined : sessionLimit,
     unlimited: sessionLimit === 'unlimited'

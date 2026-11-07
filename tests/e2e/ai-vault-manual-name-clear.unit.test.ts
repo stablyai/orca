@@ -83,7 +83,7 @@ function HistoryRow({ session }: { session: AiVaultSession }) {
   )
 }
 function History() {
-  const { sessions } = useAiVaultSessionRefresh(PATHS, 'local', 250)
+  const { sessions } = useAiVaultSessionRefresh(PATHS, 'local', 250, false)
   return createElement(
     Fragment,
     null,

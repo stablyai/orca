@@ -106,7 +106,7 @@ function Probe({
   showList?: boolean
   noAgentsSelected?: boolean
 }): React.JSX.Element | null {
-  latest = useAiVaultSessionRefresh(paths, host, limit)
+  latest = useAiVaultSessionRefresh(paths, host, limit, false)
   if (!showList) {
     return null
   }

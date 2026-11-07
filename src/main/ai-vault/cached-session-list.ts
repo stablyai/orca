@@ -1,5 +1,7 @@
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { join } from 'node:path'
+import { BoundedMap } from '../../shared/bounded-map'
+import { scopeOnlyScan } from './session-scope-cwd'
 import { claudeProfileHistoryDirs } from '../claude-accounts/claude-profile-installed-router'
 import {
   clearAiVaultBackgroundRestartCircuit,
@@ -49,6 +51,8 @@ import {
 
 // Desktop and runtime RPC share this cache to avoid duplicate scans when mobile and desktop open together.
 const AI_VAULT_CACHE_TTL_MS = 60_000
+// One entry per scope, so switching Workspace, Project and All within the TTL never rescans.
+const MAX_CACHED_AI_VAULT_SCOPES = 8
 
 export class AiVaultLocalScanError extends Error {
   constructor(
@@ -65,17 +69,21 @@ export type AiVaultSessionSources = {
 }
 
 type CachedAiVaultList = {
-  key: string
+  scopeOnly: boolean
   depth: AiVaultSessionDepth
   result: AiVaultListResult
   expiresAt: number
 }
 
-let cachedList: CachedAiVaultList | null = null
+const cachedLists = new BoundedMap<string, CachedAiVaultList>({
+  maxEntries: MAX_CACHED_AI_VAULT_SCOPES
+})
 let scanCoordinator = new AiVaultScanCoordinator()
 let sources: AiVaultSessionSources = {}
 // Reject cache writes from scans that began before invalidation, or late results can resurrect deleted sessions.
 let cacheGeneration = 0
+// Forced scans also fence writes, but keep the coordinator key so they still join or preempt running scans.
+let cacheWriteEpoch = 0
 
 export function configureAiVaultSessionSources(next: AiVaultSessionSources): void {
   sources = next
@@ -144,17 +152,27 @@ export async function listAiVaultSessions(
   const now = Date.now()
   if (args?.force === true) {
     clearAiVaultBackgroundRestartCircuit()
+    // A forced scan means history changed: every scope's entry is stale, and so is any scan still running.
+    cacheWriteEpoch++
+    cachedLists.clear()
   }
+  // Expire on every read, not only the same scope's, so idle scopes free their rows.
+  for (const [cachedKey, entry] of cachedLists.entries()) {
+    if (entry.expiresAt <= now) {
+      cachedLists.delete(cachedKey)
+    }
+  }
+  const cached = cachedLists.get(key)
   if (
     args?.force !== true &&
-    cachedList?.key === key &&
-    cachedList.expiresAt > now &&
-    aiVaultCachedDepthServes(cachedList.depth, depth, args?.scopePaths)
+    cached &&
+    aiVaultCachedDepthServes(cached.depth, depth, args?.scopePaths)
   ) {
-    return truncateAiVaultListResult(cachedList.result, depth, args?.scopePaths)
+    return truncateAiVaultListResult(cached.result, depth, args?.scopePaths)
   }
   // Capture before the coordinator's start microtask so intervening invalidation still rejects the result.
   const startGeneration = cacheGeneration
+  const startWriteEpoch = cacheWriteEpoch
   let progress: LocalAiVaultScanProgressHandle | null = null
   return scanCoordinator.run({
     // Isolate invalidated scans without changing the key used by progress readers.
@@ -180,6 +198,7 @@ export async function listAiVaultSessions(
           limit: args?.limit,
           unlimited: args?.unlimited,
           scopePaths: args?.scopePaths ? scope.scanScopePaths : undefined,
+          scopeOnly: args?.scopeOnly,
           ...roots
         },
         scanSignal,
@@ -191,20 +210,34 @@ export async function listAiVaultSessions(
         wslConfirmed
       )
       // Return pre-invalidation results to their caller, but never repopulate the cache with them.
-      if (!scanSignal.aborted && startGeneration === cacheGeneration) {
-        const current = cachedList
+      if (
+        !scanSignal.aborted &&
+        startGeneration === cacheGeneration &&
+        startWriteEpoch === cacheWriteEpoch
+      ) {
+        const current = cachedLists.peek(key)
         if (
           args?.force === true ||
-          current?.key !== key ||
+          !current ||
           current.expiresAt <= Date.now() ||
           !aiVaultCachedDepthServes(current.depth, depth, args?.scopePaths)
         ) {
-          cachedList = {
-            key,
+          const scopeOnly = scopeOnlyScan({
+            scopePaths: args?.scopePaths,
+            scopeOnly: args?.scopeOnly
+          })
+          // Keep one global list, as before per-scope entries; scope-only lists are bounded by their scope.
+          for (const [cachedKey, entry] of cachedLists.entries()) {
+            if (!scopeOnly && !entry.scopeOnly && cachedKey !== key) {
+              cachedLists.delete(cachedKey)
+            }
+          }
+          cachedLists.set(key, {
+            scopeOnly,
             depth,
             result,
             expiresAt: Date.now() + AI_VAULT_CACHE_TTL_MS
-          }
+          })
         }
       }
       return result
@@ -249,7 +282,7 @@ export function aiVaultSessionListCacheGeneration(): number {
 // Invalidate cached results and disarm in-flight cache writes after deletion.
 export function invalidateAiVaultSessionListCache(): void {
   cacheGeneration++
-  cachedList = null
+  cachedLists.clear()
   // A deleted WSL session must not come back as a carried-over row.
   resetAiVaultWslSessionCarryover()
 }

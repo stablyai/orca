@@ -5,16 +5,17 @@ import {
   wslGatedReaddir,
   wslGatedStat
 } from '../native-chat/wsl-transcript-fs-access'
-import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import type { createAiVaultScopeCwdMatcher } from '../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 import type { CwdBucketLayout } from './session-cwd-bucket-layouts'
 import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
-import { parseWslUncPath } from '../../shared/wsl-paths'
+import { parseWslUncPath, toWindowsWslUncPath } from '../../shared/wsl-paths'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { yieldToEventLoop } from '../../shared/event-loop-yield'
 import type { FileWithMtime } from './session-scanner-types'
 import { extractString, parseJsonObject } from './session-scanner-values'
 import { scanIssueTextFromError } from './session-scan-issues'
+import { noteAiVaultScanFileFound } from './ai-vault-scan-progress'
+import { isMissingTranscriptPathError } from './session-scanner-discovery'
 
 // Limit representative probing when a bucket contains transcripts without cwd records.
 const REPRESENTATIVE_CWD_LINE_LIMIT = 200
@@ -30,14 +31,14 @@ export function resetProjectDirCwdCacheForTests(): void {
   projectDirCwdCache.clear()
 }
 
-// Report WSL refusal so an unreachable root is not mistaken for an empty one.
+// Report refusals (WSL, permissions) so an unreadable folder or transcript is not mistaken for an empty one.
 export function recordRefusal(
   issues: IssueSink,
   path: string,
   error: unknown,
   agent: AiVaultAgent
 ): void {
-  if (error instanceof WslTranscriptFsError) {
+  if (!isMissingTranscriptPathError(error)) {
     issues({ agent, path, ...scanIssueTextFromError(error) })
   }
 }
@@ -76,16 +77,26 @@ export function cwdBucketScopePrefixes(
   for (const scopePath of scopePaths) {
     for (const candidate of scopePathCandidates(scopePath)) {
       for (const prefix of layout.encodeScopePrefixes(candidate)) {
-        prefixes.add(prefix)
+        prefixes.add(prefix.toLowerCase())
       }
     }
   }
   return prefixes
 }
 
+// A WSL share has two UNC spellings, and a transcript may record either one.
 function scopePathCandidates(scopePath: string): string[] {
-  const wslScopePath = parseWslUncPath(scopePath)
-  return wslScopePath ? [scopePath, wslScopePath.linuxPath] : [scopePath]
+  const wsl = parseWslUncPath(scopePath)
+  if (!wsl) {
+    return [scopePath]
+  }
+  const localhostSpelling = toWindowsWslUncPath(wsl.linuxPath, wsl.distro)
+  return [
+    scopePath,
+    wsl.linuxPath,
+    localhostSpelling,
+    localhostSpelling.replace(/^\\\\wsl\.localhost\\/, '\\\\wsl$\\')
+  ]
 }
 
 export async function listProjectDirs(
@@ -106,9 +117,15 @@ export async function listProjectDirs(
     recordRefusal(issues, rootDir, err, layout.agent)
     return []
   }
-  return entries
-    .filter((entry) => entry.isDirectory() && layout.isDirInScope(entry.name, scopeProjectPrefixes))
-    .map((entry) => join(rootDir, entry.name))
+  return (
+    entries
+      // Case-folded: Windows cwds differ in case, and each bucket's cwd is still checked afterwards.
+      .filter(
+        (entry) =>
+          entry.isDirectory() && layout.isDirInScope(entry.name.toLowerCase(), scopeProjectPrefixes)
+      )
+      .map((entry) => join(rootDir, entry.name))
+  )
 }
 
 async function readProjectDirCwd(
@@ -225,6 +242,12 @@ export async function collectBucketFiles(args: {
       }
       const fileStat = await wslGatedStat(path, 'scan', args.signal)
       throwIfAiVaultScanCancelled(args.signal)
+      // Scope-only scans skip recursive discovery, so the scanned-files count comes from here.
+      noteAiVaultScanFileFound(args.signal, args.agent, {
+        path,
+        dev: fileStat.dev,
+        ino: fileStat.ino
+      })
       addBoundedFile(args.collected, args.limit, {
         path,
         mtimeMs: fileStat.mtimeMs,

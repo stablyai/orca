@@ -14885,7 +14885,8 @@
           "params": {
             "force": false,
             "limit": 500,
-            "scopePaths": ["/repo/feature"]
+            "scopePaths": ["/repo/feature"],
+            "scopeOnly": true
           },
           "reply": {
             "ok": true,
@@ -14984,7 +14985,8 @@
           "params": {
             "force": false,
             "limit": 500,
-            "scopePaths": ["/repo/feature"]
+            "scopePaths": ["/repo/feature"],
+            "scopeOnly": true
           },
           "reply": {
             "ok": true,
@@ -20362,7 +20364,8 @@
           "params": {
             "force": false,
             "limit": 500,
-            "scopePaths": ["/repo/feature"]
+            "scopePaths": ["/repo/feature"],
+            "scopeOnly": true
           },
           "reply": {
             "ok": true,

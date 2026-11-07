@@ -4,7 +4,7 @@ import { discoverFiles } from '../../../session-scanner-discovery'
 import { splitOpenCodeSqliteCandidate } from '../../../../../shared/opencode-sqlite-session-path'
 import { listOpenCodeSqliteSessionsViaWorker } from '../reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import type { FileWithMtime, SessionFileDiscovery } from '../../../session-scanner-types'
-import { scopeWalksAgentFiles } from '../../../session-scope-cwd'
+import { scopeOnlyScan, scopeWalksAgentFiles } from '../../../session-scope-cwd'
 
 function sessionIdFromLegacyFilePath(filePath: string): string {
   return basename(filePath, extname(filePath))
@@ -17,6 +17,7 @@ export async function discoverOpenCodeSessions(args: {
   limitPerAgent: number
   issues: AiVaultScanIssue[]
   scopePaths?: readonly string[]
+  scopeOnly?: boolean
   signal?: AbortSignal
 }): Promise<SessionFileDiscovery> {
   const walksScope = scopeWalksAgentFiles('opencode', args.scopePaths)
@@ -60,7 +61,11 @@ export async function discoverOpenCodeSessions(args: {
   return {
     agent: 'opencode' as const,
     rootDir: fileDiscovery.rootDir,
-    files: [...withoutSqliteDuplicates(fileDiscovery.files), ...sqliteFiles],
+    // A scope-only scan keeps the recency rows only to suppress stale legacy copies, never to parse.
+    files: [
+      ...withoutSqliteDuplicates(fileDiscovery.files),
+      ...(scopeOnlyScan(args) ? [] : sqliteFiles)
+    ],
     ...(scopeFiles ? { scopeFiles } : {})
   }
 }

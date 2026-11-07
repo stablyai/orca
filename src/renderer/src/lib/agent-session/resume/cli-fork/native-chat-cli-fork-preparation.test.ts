@@ -16,7 +16,12 @@ const subject: NativeChatCliForkSubject = {
   kind: 'chat',
   sessionId: 'chat-1',
   workspaceId: 'workspace-1',
-  request: { executionHostScope: 'runtime:peer', scopePaths: ['/host/repo'], sessionLimit: 250 }
+  request: {
+    executionHostScope: 'runtime:peer',
+    scopePaths: ['/host/repo'],
+    scopeOnly: true,
+    sessionLimit: 250
+  }
 }
 const source = {
   agent: 'claude',

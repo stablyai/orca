@@ -80,7 +80,12 @@ it('offers chat actions without a duplicate close button and targets Resume at t
     expect.objectContaining({
       subject: expect.objectContaining({
         sessionId: source.entityId,
-        request: { scopePaths: ['/repo'], executionHostScope: 'local', sessionLimit: 250 }
+        request: {
+          scopePaths: ['/repo'],
+          scopeOnly: true,
+          executionHostScope: 'local',
+          sessionLimit: 250
+        }
       }),
       tab: { id: source.id, worktreeId: source.worktreeId },
       agent: 'codex'
