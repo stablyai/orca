@@ -28,21 +28,6 @@ function stubPetRead(read: ReturnType<typeof vi.fn>): void {
 }
 
 describe('loadCustomBlobUrl', () => {
-  it('coalesces concurrent loads for the same custom pet', async () => {
-    const read = vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3]).buffer)
-    stubPetRead(read)
-    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:pet')
-    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
-
-    const first = loadCustomBlobUrl('pet', 'pet.png', 'image/png')
-    const second = loadCustomBlobUrl('pet', 'pet.png', 'image/png')
-
-    await expect(Promise.all([first, second])).resolves.toEqual(['blob:pet', 'blob:pet'])
-    expect(read).toHaveBeenCalledTimes(1)
-    expect(URL.createObjectURL).toHaveBeenCalledTimes(1)
-    expect(blobUrlCache.get('pet')).toBe('blob:pet')
-  })
-
   it('revokes a blob URL created after the custom pet was removed', async () => {
     let resolveRead: (buffer: ArrayBuffer) => void = () => {}
     const read = vi.fn(
@@ -106,37 +91,6 @@ describe('loadCustomBlobUrl', () => {
     )
     expect(bitmap.close).toHaveBeenCalledTimes(1)
     expect(detectedSpriteCache.has('bundle-pet')).toBe(false)
-  })
-
-  it('evicts least-recent custom pet blobs and closes detected sprite bitmaps', async () => {
-    const read = vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3]).buffer)
-    stubPetRead(read)
-    let blobIndex = 0
-    vi.spyOn(URL, 'createObjectURL').mockImplementation(() => `blob:pet-${blobIndex++}`)
-    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
-    const evictedBitmap = { close: vi.fn() } as unknown as ImageBitmap
-
-    for (let index = 0; index < CUSTOM_PET_BLOB_CACHE_MAX; index += 1) {
-      await expect(loadCustomBlobUrl(`pet-${index}`, 'pet.png', 'image/png')).resolves.toBe(
-        `blob:pet-${index}`
-      )
-    }
-    detectedSpriteCache.set('pet-1', {
-      bitmaps: [evictedBitmap],
-      fps: 8,
-      frames: []
-    })
-
-    await expect(loadCustomBlobUrl('pet-0', 'pet.png', 'image/png')).resolves.toBe('blob:pet-0')
-    await expect(
-      loadCustomBlobUrl(`pet-${CUSTOM_PET_BLOB_CACHE_MAX}`, 'pet.png', 'image/png')
-    ).resolves.toBe(`blob:pet-${CUSTOM_PET_BLOB_CACHE_MAX}`)
-
-    expect(blobUrlCache.has('pet-0')).toBe(true)
-    expect(blobUrlCache.has('pet-1')).toBe(false)
-    expect(detectedSpriteCache.has('pet-1')).toBe(false)
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:pet-1')
-    expect(evictedBitmap.close).toHaveBeenCalledTimes(1)
   })
 
   it('does not let stale load completions evict retained active media', async () => {

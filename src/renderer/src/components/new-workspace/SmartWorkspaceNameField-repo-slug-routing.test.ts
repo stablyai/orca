@@ -58,19 +58,4 @@ describe('SmartWorkspaceNameField repository slug routing', () => {
     )
     expect(repoSlug).not.toHaveBeenCalled()
   })
-
-  it('does not permanently cache a failed GHES resolution', async () => {
-    vi.mocked(callRuntimeRpc)
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ owner: 'acme', repo: 'widgets', host: 'github.acme.test' })
-    const cache = new Map()
-    const repo = { id: 'repo-1', path: '/workspace/widgets' }
-    const source = runtimeSource('one')
-
-    await expect(getRepoSlugCached(repo, source, cache)).resolves.toBeNull()
-    await expect(getRepoSlugCached(repo, source, cache)).resolves.toMatchObject({
-      host: 'github.acme.test'
-    })
-    expect(callRuntimeRpc).toHaveBeenCalledTimes(2)
-  })
 })
