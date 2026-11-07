@@ -60,7 +60,7 @@ type SpeechNativeModule = {
   speechCancel?: () => void
 }
 
-const speech = ExpoTwoWayAudioModule as SpeechNativeModule
+const speech: SpeechNativeModule = ExpoTwoWayAudioModule
 
 // A shell from before this contract lacks every function; partial builds are treated the same way.
 export function hasNativeSpeech(): boolean {

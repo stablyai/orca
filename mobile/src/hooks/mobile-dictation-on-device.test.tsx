@@ -2,6 +2,7 @@
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import * as z from 'zod'
 import {
   createFakeRpcClient,
   type FakeRpcClient,
@@ -127,12 +128,14 @@ async function pump(rpc: FakeRpcClient, sent: SentRequest[]): Promise<void> {
   }
 }
 
+const chunkParamsSchema = z.object({ seq: z.number(), audioBase64: z.string() })
+
 function chunkAudio(sent: SentRequest[]): [number, string][] {
   return sent
     .filter((request) => request.method === 'speech.dictation.chunk')
-    .map((request) => {
-      const params = request.args[1] as { audioBase64: string; seq: number }
-      return [params.seq, params.audioBase64] as [number, string]
+    .map((request): [number, string] => {
+      const params = chunkParamsSchema.parse(request.args[1])
+      return [params.seq, params.audioBase64]
     })
 }
 
