@@ -57,7 +57,9 @@ internal class OnDeviceSpeech(
   }
 
   suspend fun start(locale: String, sampleRate: Int): Map<String, Any?> {
-    val startGeneration = synchronized(lock) { endSession() }
+    val (previous, startGeneration) = synchronized(lock) { endSession() to generation }
+    // Its teardown releases the recognizer this session may reuse; let it land first.
+    previous?.result?.join()
     if (sampleRate != SPEECH_SAMPLE_RATE) return notStarted(SpeechStatus.UNSUPPORTED.wire)
     val (speech, target) = resolve(locale) ?: return notStarted(SpeechStatus.UNSUPPORTED.wire)
     if (target.status != SpeechStatus.READY) return notStarted(SpeechStatus.NEEDS_DOWNLOAD.wire)
@@ -70,12 +72,13 @@ internal class OnDeviceSpeech(
           SPEECH_TEXT_EVENT to mapOf("revision" to revision, "committed" to committed, "tentative" to tentative)
         }
       }
+      session = next
+      // Registered after the session is current, so a failure that already happened is still reported.
       next.result.invokeOnCompletion { error ->
         if (error == null || error is CancellationException) return@invokeOnCompletion
         Log.w(TAG, "On-device speech failed", error)
         emitIfCurrent(next) { SPEECH_ERROR_EVENT to mapOf("code" to speech.failureCode(error)) }
       }
-      session = next
     }
     return mapOf("started" to true, "locale" to target.locale.toLanguageTag())
   }
@@ -114,10 +117,12 @@ internal class OnDeviceSpeech(
     sendEvent(name, body)
   }
 
-  private fun endSession(): Int {
-    session?.cancel()
+  private fun endSession(): SpeechSession? {
+    val ended = session
+    ended?.cancel()
     session = null
-    return ++generation
+    generation += 1
+    return ended
   }
 
   // A ready engine wins over a better one that still needs a download.

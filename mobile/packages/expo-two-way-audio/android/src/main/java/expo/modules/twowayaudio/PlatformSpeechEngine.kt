@@ -74,15 +74,16 @@ internal class PlatformSpeechEngine(private val context: Context) : OnDeviceSpee
     onText: (String, String) -> Unit
   ): String = PacedPcmPipe().use { pipe ->
     val events = Channel<RecognitionEvent>(Channel.UNLIMITED)
-    // Not cancellable: a session cancelled mid-setup must still reach the finally that cancels it.
-    val recognizer = withContext(NonCancellable + Dispatchers.Main) {
-      recognizer().apply {
-        setRecognitionListener(EventListener(events))
-        startListening(recognizeIntent(target.locale).withAudioSource(pipe))
-      }
-    }
+    var listening: SpeechRecognizer? = null
     var ended = false
     try {
+      // Not cancellable, and inside the try: a session cancelled mid-setup must still be cancelled below.
+      withContext(NonCancellable + Dispatchers.Main) {
+        listening = recognizer().apply {
+          setRecognitionListener(EventListener(events))
+          startListening(recognizeIntent(target.locale).withAudioSource(pipe))
+        }
+      }
       coroutineScope {
         val writer = launch { pipe.pump(audio) }
         val committed = StringBuilder()
@@ -96,7 +97,7 @@ internal class PlatformSpeechEngine(private val context: Context) : OnDeviceSpee
             }
             is RecognitionEvent.Failed -> {
               if (event.error == SpeechRecognizer.ERROR_SERVER_DISCONNECTED) {
-                withContext(Dispatchers.Main) { drop(recognizer) }
+                withContext(Dispatchers.Main) { shared?.let(::drop) }
               }
               throw SpeechFailure(failureCode(event.error), "Recognizer error ${event.error}")
             }
@@ -113,7 +114,10 @@ internal class PlatformSpeechEngine(private val context: Context) : OnDeviceSpee
         committed.toString()
       }
     } finally {
-      if (!ended) withContext(NonCancellable + Dispatchers.Main) { runCatching { recognizer.cancel() } }
+      val started = listening
+      if (!ended && started != null) {
+        withContext(NonCancellable + Dispatchers.Main) { runCatching { started.cancel() } }
+      }
     }
   }
 
