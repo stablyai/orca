@@ -27,6 +27,7 @@ export type RawIssue = {
   project?: RawNamedEntity | null
   cycle?: RawNamedEntity | null
   assignee?: RawUser | null
+  creator?: RawUser | null
   labels?: { nodes?: RawNamedEntity[]; pageInfo?: RawPageInfo } | null
 }
 
@@ -133,6 +134,7 @@ const ISSUE_CORE_FIELDS = `
 
 const ISSUE_AGENT_FIELDS = `
   createdAt
+  creator { id displayName avatarUrl }
   state { id }
   team { color }
   cycle { id name }
@@ -267,6 +269,7 @@ export function mapIssue(issue: RawIssue): LinearIssueSummary {
     project: issue.project ?? null,
     cycle: issue.cycle ?? null,
     assignee: issue.assignee ?? null,
+    creator: issue.creator ?? null,
     labels: issue.labels?.nodes ?? [],
     priority: issue.priority,
     priorityLabel: linearPriorityLabel(issue.priority),

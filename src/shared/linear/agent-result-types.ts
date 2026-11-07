@@ -20,6 +20,8 @@ export type LinearIssueSummary = {
   project?: LinearNamedEntity | null
   cycle?: LinearNamedEntity | null
   assignee?: LinearUserSummary | null
+  // Older hosts omit creator; absence means unknown, null means Linear has no creator.
+  creator?: LinearUserSummary | null
   labels: LinearNamedEntity[]
   priority?: number | null
   priorityLabel?: LinearPriorityLabel
