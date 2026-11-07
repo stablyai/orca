@@ -9,7 +9,7 @@ import {
   WT,
   ENV,
   NOW
-} from './web-session-tabs-sync-test-harness'
+} from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 beforeEach(resetWebSessionTabsSyncTestState)
 

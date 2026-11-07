@@ -3,7 +3,8 @@ import type { SourceControlScope } from '../panel/worktree-scope'
 import { sourceControlFileWatchRuntimeEnvironmentId } from './worktree-git-owner-target'
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store/index'
-import { useRepoById, useWorktreeById } from '@/store/selectors'
+import { useRepoById } from '@/store/repos/use-repository-catalog'
+import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { refreshGitStatusForWorktree } from './git-status-refresh'
@@ -26,8 +27,6 @@ import {
   type GitStatusRefreshReason,
   type GitStatusRefreshScheduler
 } from './git-status-refresh-scheduler'
-
-export { admissionTierForGitStatusRefreshReason } from './git-status-refresh-scheduler'
 
 const NO_OWNER_FILES: OpenFile[] = []
 

@@ -37,7 +37,7 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     scope: 'global',
     searchKeywords: ['shortcut', 'global', 'worktree', 'switch', 'jump'],
     defaultBindings: {
-      darwin: ['Mod+J'],
+      darwin: ['Mod+K'],
       linux: ['Mod+Shift+J'],
       win32: ['Mod+Shift+J']
     }

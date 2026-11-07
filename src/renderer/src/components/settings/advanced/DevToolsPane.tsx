@@ -2,7 +2,7 @@ import { toast } from 'sonner'
 import { Bell, Info, OctagonX, Sparkles, Trash2 } from 'lucide-react'
 import { Button } from '../../ui/button'
 import { Badge } from '../../ui/badge'
-import { SettingsSubsectionHeader } from '../form-controls/SettingsFormControls'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { showDeleteWorktreeFailureToast } from '../../sidebar/workspace-actions/deletion/delete-worktree-failure-toast'
 import { showLocalBaseRefUpdateSuggestionToast } from '../../sidebar/workspace-creation/base-ref-update/local-base-ref-suggestion-toast'
 import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
@@ -145,20 +145,19 @@ function OrcaCloudDevSubsection(): React.JSX.Element {
   useOrcaProfileAuthStatusRefresh()
 
   return (
-    <section className="space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <SettingsSubsectionHeader
-          title={translate('auto.components.settings.DevToolsPane.orcaCloud', 'Orca Cloud')}
-          description={translate(
-            'auto.components.settings.DevToolsPane.orcaCloudDescription',
-            'Dev-only preview of first-party cloud sign-in. Hidden in production; in dev it also appears in the sidebar account switcher once ORCA_CLOUD_API_URL and ORCA_CLOUD_CLIENT_ID are set.'
-          )}
-        />
-        <Badge variant="outline" className="mt-0.5">
+    <SettingsGroup
+      title={translate('auto.components.settings.DevToolsPane.orcaCloud', 'Orca Cloud')}
+      description={translate(
+        'auto.components.settings.DevToolsPane.orcaCloudDescription',
+        'Dev-only preview of first-party cloud sign-in. Hidden in production; in dev it also appears in the sidebar account switcher once ORCA_CLOUD_API_URL and ORCA_CLOUD_CLIENT_ID are set.'
+      )}
+      action={
+        <Badge variant="outline">
           {translate('auto.components.settings.DevToolsPane.devOnly', 'Dev only')}
         </Badge>
-      </div>
-
+      }
+      bodyClassName="py-4"
+    >
       {configured ? (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground">
@@ -196,7 +195,7 @@ function OrcaCloudDevSubsection(): React.JSX.Element {
             )}
         </p>
       )}
-    </section>
+    </SettingsGroup>
   )
 }
 
@@ -298,29 +297,28 @@ export function DevToolsPane(): React.JSX.Element {
 
   return (
     <div className="space-y-8">
-      <section className="space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <SettingsSubsectionHeader
-            title={translate(
-              'auto.components.settings.DevToolsPane.notificationPlayground',
-              'Notification playground'
-            )}
-            description={translate(
-              'auto.components.settings.DevToolsPane.notificationPlaygroundDescription',
-              'Dev-only triggers for checking toast layout, recovery actions, and long-copy wrapping.'
-            )}
-          />
-          <Badge variant="outline" className="mt-0.5">
+      <SettingsGroup
+        title={translate(
+          'auto.components.settings.DevToolsPane.notificationPlayground',
+          'Notification playground'
+        )}
+        description={translate(
+          'auto.components.settings.DevToolsPane.notificationPlaygroundDescription',
+          'Dev-only triggers for checking toast layout, recovery actions, and long-copy wrapping.'
+        )}
+        action={
+          <Badge variant="outline">
             {translate('auto.components.settings.DevToolsPane.devOnly', 'Dev only')}
           </Badge>
-        </div>
-
+        }
+        bodyClassName="py-4"
+      >
         <div className="grid gap-2 sm:grid-cols-2">
           {actions.map((action) => (
             <DevToastActionButton key={action.title} action={action} />
           ))}
         </div>
-      </section>
+      </SettingsGroup>
 
       <OrcaCloudDevSubsection />
     </div>

@@ -2,7 +2,7 @@ import { AI_VAULT_SESSION_TITLE_REFRESH_RUNTIME_CAPABILITY } from '../../../../.
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { getDecorativeAgentTitleSignature } from '../../../../../../shared/agent-status/title/agent-decorative-title-signature'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
-import { findRegisteredTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
+import { findRegisteredTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { isAiVaultTitleAgent } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-title'
 import type { AppState } from '@/store/types'
 import {
@@ -21,13 +21,37 @@ export function supportsSessionTitleRefresh(
   const host = request.executionHostId
   return (
     host === 'local' ||
-    (host.startsWith('runtime:') &&
-      Boolean(
-        lastVerifiedRuntimeStatus(
-          state.runtimeStatusByEnvironmentId?.get(host.slice(8))
-        )?.capabilities?.includes(AI_VAULT_SESSION_TITLE_REFRESH_RUNTIME_CAPABILITY)
-      ))
+    (host.startsWith('runtime:') && runtimeSupportsSessionTitleRefresh(state, host.slice(8)))
   )
+}
+
+function runtimeSupportsSessionTitleRefresh(state: AppState, environmentId: string): boolean {
+  return Boolean(
+    lastVerifiedRuntimeStatus(
+      state.runtimeStatusByEnvironmentId?.get(environmentId)
+    )?.capabilities?.includes(AI_VAULT_SESSION_TITLE_REFRESH_RUNTIME_CAPABILITY)
+  )
+}
+
+/** Execution hosts whose title-refresh support flipped. Host-status pings arrive constantly, so callers check this
+ * before paying for a full tab/conversation catalog walk. */
+export function changedTitleRefreshHosts(state: AppState, previous: AppState): Set<string> {
+  const changed = new Set<string>()
+  const current = state.runtimeStatusByEnvironmentId
+  const prior = previous.runtimeStatusByEnvironmentId
+  if (current === prior) {
+    return changed
+  }
+  for (const environmentId of new Set([...(current?.keys() ?? []), ...(prior?.keys() ?? [])])) {
+    if (
+      current?.get(environmentId) !== prior?.get(environmentId) &&
+      runtimeSupportsSessionTitleRefresh(state, environmentId) !==
+        runtimeSupportsSessionTitleRefresh(previous, environmentId)
+    ) {
+      changed.add(`runtime:${environmentId}`)
+    }
+  }
+  return changed
 }
 
 export function titleRefreshInterval(state: AppState, request: AiVaultTitleRequest): number {

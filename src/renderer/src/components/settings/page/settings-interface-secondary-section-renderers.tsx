@@ -13,6 +13,7 @@ export function renderAppearanceSettingsSection(context: SettingsRenderContext):
   return (
     <SettingsSection
       id="appearance"
+      grouped
       title={translate('auto.components.settings.Settings.2b4474780a', 'Appearance')}
       description={translate(
         'auto.components.settings.Settings.6d1a27e193',

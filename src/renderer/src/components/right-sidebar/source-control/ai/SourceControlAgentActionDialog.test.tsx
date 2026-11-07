@@ -63,11 +63,12 @@ vi.mock('@/lib/source-control/ai/source-control-agent-action-launch-check', () =
 vi.mock('sonner', () => ({
   toast: { error: mocks.toastError }
 }))
-import { useAppStore, type AppState } from '@/store/index'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { useAppStore } from '@/store/index'
+import type { AppState } from '@/store/types'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { SourceControlAgentActionDialog } from './SourceControlAgentActionDialog'
 
-import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
+import { getRuntimeAgentInventoryKey } from '@/store/slices/agent-inventory/runtime-agent-inventory-key'
 import { deferred } from '../panel/source-control-hook-test-harness'
 const recoveryContext = {
   target: { kind: 'local' as const },

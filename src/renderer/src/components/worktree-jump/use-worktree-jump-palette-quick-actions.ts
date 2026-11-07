@@ -11,7 +11,7 @@ import { buildCmdJQuickActionContext } from '@/components/cmd-j/quick-action-con
 import { rankCmdJMiddleResults } from '@/components/cmd-j/palette-results'
 import { buildCmdJBrowserNavigationAction } from '@/components/cmd-j/browser-navigation-action'
 import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'
-import { findGroupAndWorktree } from '@/store/slices/tab-group-state'
+import { findGroupAndWorktree } from '@/store/slices/tabs/tab-group-state'
 import {
   getComposerEligibleRepos,
   resolveComposerActiveRepoId,
@@ -23,6 +23,7 @@ import type { WorktreeJumpPaletteOpenTabs } from './use-worktree-jump-palette-op
 import type { WorktreeJumpPaletteProjectTargets } from './use-worktree-jump-palette-project-targets'
 import type { WorktreeJumpPaletteStoreState } from './use-worktree-jump-palette-store-state'
 import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-worktrees'
+import { recomputeOn } from '@/lib/recompute-on'
 
 function getComposerPrefetchRepoId(
   state: ReturnType<typeof useAppStore.getState>,
@@ -163,59 +164,67 @@ export function useWorktreeJumpPaletteQuickActions({
     ]
   )
   // Availability reads store state imperatively; these values supply its real memo dependencies, including managed-browser runtime status.
-  const availableActions = useMemo(() => {
-    void activeView
-    void activeWorktreeId
-    void worktreesByRepo
-    void repos
-    void sshConnectionStates
-    void activeGroupIdByWorktree
-    void groupsByWorktree
-    void unifiedTabsByWorktree
-    void isLoading
-    void settings?.activeRuntimeEnvironmentId
-    void runtimeStatusByEnvironmentId
-    const context = buildQuickActionContext()
-    return {
-      context,
-      actionResults: actionResults
-        .filter(
-          (action) =>
-            (action.id === 'git-graph' &&
-              context.activeWorktree &&
-              repos.find((repo) => repo.id === context.activeWorktree?.repoId)?.kind !==
-                'folder') ||
-            action.isAvailable(context).available
-        )
-        .map((action) =>
-          action.id === 'git-graph'
-            ? {
-                ...action,
-                disabled: graphSupport !== true,
-                description:
-                  graphSupport === false && activeWorktreeId
-                    ? gitGraphUpdateMessage(activeWorktreeId)
-                    : ''
-              }
-            : action
-        )
-    }
-  }, [
-    graphSupport,
-    actionResults,
-    buildQuickActionContext,
-    activeView,
-    activeWorktreeId,
-    worktreesByRepo,
-    repos,
-    sshConnectionStates,
-    activeGroupIdByWorktree,
-    groupsByWorktree,
-    unifiedTabsByWorktree,
-    isLoading,
-    settings?.activeRuntimeEnvironmentId,
-    runtimeStatusByEnvironmentId
-  ])
+  const availableActions = useMemo(
+    () =>
+      recomputeOn(
+        [
+          activeView,
+          activeWorktreeId,
+          worktreesByRepo,
+          repos,
+          sshConnectionStates,
+          activeGroupIdByWorktree,
+          groupsByWorktree,
+          unifiedTabsByWorktree,
+          isLoading,
+          settings?.activeRuntimeEnvironmentId,
+          runtimeStatusByEnvironmentId
+        ],
+        () => {
+          const context = buildQuickActionContext()
+          return {
+            context,
+            actionResults: actionResults
+              .filter(
+                (action) =>
+                  (action.id === 'git-graph' &&
+                    context.activeWorktree &&
+                    repos.find((repo) => repo.id === context.activeWorktree?.repoId)?.kind !==
+                      'folder') ||
+                  action.isAvailable(context).available
+              )
+              .map((action) =>
+                action.id === 'git-graph'
+                  ? {
+                      ...action,
+                      disabled: graphSupport !== true,
+                      description:
+                        graphSupport === false && activeWorktreeId
+                          ? gitGraphUpdateMessage(activeWorktreeId)
+                          : ''
+                    }
+                  : action
+              )
+          }
+        }
+      ),
+    [
+      graphSupport,
+      actionResults,
+      buildQuickActionContext,
+      activeView,
+      activeWorktreeId,
+      worktreesByRepo,
+      repos,
+      sshConnectionStates,
+      activeGroupIdByWorktree,
+      groupsByWorktree,
+      unifiedTabsByWorktree,
+      isLoading,
+      settings?.activeRuntimeEnvironmentId,
+      runtimeStatusByEnvironmentId
+    ]
+  )
   const middleItems = useMemo<(SettingsPaletteItem | QuickActionPaletteItem)[]>(() => {
     const results = rankCmdJMiddleResults({
       query: deferredQuery,

@@ -1,4 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it } from 'vitest'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
+import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import {
   createQueuedMessageTestRig,
   QUEUED_RIG_CALLER as CALLER,
@@ -28,25 +32,43 @@ afterEach(async () => {
     await currentRig?.dispose()
   })
 })
-const drafts: QueuedMessageTestRig['drafts'] = (...args) => rig.drafts(...args)
-
-describe('/clear', () => {
-  function clear(clientOperationId: string) {
-    const fields = { command: 'clear' as const }
-    return host.conversationCommand(CALLER, {
-      envelope: rig.envelope(fields, 'agentSession.conversationCommand', clientOperationId),
+it('a steer send waiting on approval joins the running turn when approval clears', async () => {
+  const opener = await rig.workingSend()
+  await rig.settleAccepted(opener, 'opening')
+  await openRigTurnFor(rig, opener)
+  const identity = { provider: 'orca' as const, clientMessageId: 'approval' }
+  rig.providerEvents().appendItem(
+    identity,
+    {
+      kind: 'approval',
+      title: 'Run command',
+      detail: null,
+      subject: { kind: 'plan', text: 'Run the command' },
+      options: [{ id: 'allow', label: 'Allow' }],
+      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+    },
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  )
+  await host.flushStreamedEvents(SESSION)
+  const queueOnly = rig.send('after the turn', 'queue-if-active')
+  expect(await queueOnly.result).toMatchObject({
+    ok: true,
+    value: { queued: { messageId: queueOnly.id } }
+  })
+  const steer = rig.send('also do this')
+  expect(await steer.result).toMatchObject({ ok: true, value: { queued: { messageId: steer.id } } })
+  expect(await rig.handoff(steer.id)).toBeUndefined()
+  const itemId = agentJournalItemKey(identity)
+  const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
+  const prompt = journal.item(itemId)!
+  const fields = { itemId, expectedRevision: prompt.revision, optionId: 'allow' }
+  expect(
+    await host.respondToPrompt(CALLER, {
+      envelope: rig.envelope(fields, 'agentSession.respondTo:approval', hostTestOperationId()),
+      kind: 'approval',
       ...fields
     })
-  }
-
-  it('a clear with no drafts keeps the existing conversation open', async () => {
-    const cleared = await clear(hostTestOperationId())
-    expect(cleared).toMatchObject({ ok: true, value: { command: 'clear', state: 'completed' } })
-    const replacementId = cleared.ok ? SESSION : undefined
-    if (!replacementId) {
-      throw new Error('expected clear to succeed')
-    }
-    expect(host.hasSession(replacementId)).toBe(true)
-    expect(await drafts(replacementId)).toHaveLength(0)
-  })
+  ).toMatchObject({ ok: true })
+  await eventually(async () => expect((await rig.handoff(steer.id))?.handedOverAt).toBeDefined())
+  expect(await rig.handoff(queueOnly.id)).toBeUndefined()
 })

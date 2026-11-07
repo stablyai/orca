@@ -2,7 +2,7 @@ import React from 'react'
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { HostRowIcon } from '../../../host-row-icon'
-import { useRuntimeHostDisconnected } from '@/store/use-runtime-status-view'
+import { useRuntimeHostDisconnected } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 

@@ -141,6 +141,8 @@ export type AcpLaunchSpec = {
   /** Agent-enforced modes; Orca does not answer its permission requests. */
   permissionModeConfig?: {
     values: { ask: string } & Partial<Record<AgentChatPermissionMode, string>>
+    /** `args` grants full access; its session mode can equal another mode's. */
+    fullAccessAtLaunch?: true
   }
   /** Enables /compact as a prompt command. */
   compaction?: true

@@ -1510,7 +1510,10 @@
       "microphoneInitFailed": "Impossible d'initialiser le microphone",
       "microphoneInterrupted": "La dictée vocale s'est arrêtée car l'accès au microphone a été interrompu. Réessayez.",
       "microphonePermissionDenied": "Accès au microphone refusé",
-      "noSpeech": "Aucune parole détectée."
+      "noSpeech": "Aucune parole détectée.",
+      "phoneUnavailable": "La dictée sur ce téléphone n’est pas prête. Téléchargez-la dans les réglages Voix ou choisissez Automatique.",
+      "phoneFailed": "La dictée sur ce téléphone a cessé de fonctionner. Réessayez.",
+      "phoneBusy": "La dictée sur ce téléphone démarre encore. Réessayez dans un instant."
     }
   },
   "host": {
@@ -2898,6 +2901,20 @@
     },
     "agents": {
       "permissionOwnAll": "Paramètres propres aux agents"
+    },
+    "voiceTranscribeOn": {
+      "heading": "TRANSCRIRE SUR",
+      "description": "Ce que ce téléphone entend reste sur ce téléphone. Automatique utilise votre ordinateur quand ce téléphone ne peut pas transcrire.",
+      "automatic": "Automatique",
+      "phone": "Ce téléphone",
+      "computer": "Ordinateur",
+      "phoneReady": "Prêt sur ce téléphone",
+      "phoneNeedsDownload": "Téléchargement de la langue requis",
+      "phoneDownloading": "Téléchargement… {{progress}} %",
+      "phoneUnsupported": "Indisponible sur ce téléphone",
+      "download": "Télécharger pour ce téléphone",
+      "downloadSize": "Environ {{size}} Mo",
+      "phoneChecking": "Vérification…"
     }
   },
   "sourceControl": {

@@ -3,13 +3,13 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { buildExecutionHostRegistry } from '../../../../shared/execution-host-registry'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
-import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { tagRuntimeSubscriptionReplayResponse } from '../../../../shared/runtime-subscription-replay'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { WorktreeEventRuntime } from './worktree-event-runtime'
 import { registerRuntimeClientIpcBridge } from './runtime-client-ipc-bridge'
-import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
+import { stubRuntimeEnvironmentBridge } from '../../runtime/rpc/testing/runtime-environment-bridge-fixture'
 
 vi.mock('sonner', () => ({
   toast: Object.assign(vi.fn(), {

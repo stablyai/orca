@@ -13,7 +13,7 @@ export function MobileAutoRestoreFitSection({
   onAutoRestoreFitChange
 }: MobileAutoRestoreFitSectionProps): React.JSX.Element {
   return (
-    <div className="rounded-lg border border-border/60 p-4">
+    <div>
       <div className="mb-3 flex items-center gap-2">
         <Smartphone className="size-4 text-muted-foreground" />
         <span className="text-sm font-medium">

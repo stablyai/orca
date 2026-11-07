@@ -1,6 +1,9 @@
 import type { IBufferLine, IDisposable, Terminal } from '@xterm/xterm'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
-import { isTerminalHttpLinkActivation } from '../gestures/terminal-http-link-activation'
+import {
+  isTerminalLinkDirectActivation as isTerminalHttpLinkActivation,
+  isTerminalOwnedLinkGesture
+} from '../gestures/terminal-link-activation'
 import {
   installTerminalLinkPtyMouseSuppression,
   type TerminalLinkPtyMouseSuppression
@@ -16,7 +19,6 @@ import {
   type HttpLinkDestination,
   type HttpLinkRoutingPreferenceRequester
 } from '@/lib/browser/navigation/http-link-destinations'
-import { isTerminalOwnedLinkGesture } from '../gestures/terminal-link-activation'
 import {
   requestTerminalLinkAction,
   type TerminalLinkActionContext

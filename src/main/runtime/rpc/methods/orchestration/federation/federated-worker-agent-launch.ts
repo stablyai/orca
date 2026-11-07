@@ -14,7 +14,7 @@ import {
   appendFederationTerminalEffects,
   type FederationEffect
 } from './federation-effects'
-import type { FederationAttachStartInput } from './federation-start-schema'
+import type { FederationAttachStartInput } from '../../../../../../shared/rpc-contract/orchestration-federation-start-params'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 
 const TERMINAL_ONLY_MESSAGE = 'A federated worker starts a terminal agent only.'

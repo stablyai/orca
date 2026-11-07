@@ -1,4 +1,4 @@
-import type { TabSplitTarget } from '../slices/tabs'
+import type { TabSplitTarget } from '../slices/tabs/tabs-slice-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
@@ -57,7 +57,7 @@ export async function openNewTerminalTabInWorkspace(
     }
     try {
       const { createWebRuntimeSessionTerminal } =
-        await import('@/runtime/web-runtime-terminal-creation')
+        await import('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation')
       await createWebRuntimeSessionTerminal(
         {
           worktreeId,

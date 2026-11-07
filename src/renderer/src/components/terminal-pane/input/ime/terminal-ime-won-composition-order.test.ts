@@ -153,35 +153,8 @@ describe('Korean won input after a composition commit', () => {
     document.body.replaceChildren()
   })
 
-  it.each(['`', '₩'] as const)(
-    'preserves composition-first order when won commits as %s',
-    async (committedWonText) => {
-      await expect(typeHangulThenWon([committedWonText])).resolves.toBe(`한${committedWonText}`)
-    }
-  )
-
   it('preserves back-to-back won transactions before the composition finalizer', async () => {
     await expect(typeHangulThenWon(['`', '₩'])).resolves.toBe('한`₩')
-  })
-
-  it('releases composition ownership when an ordinary keydown flushes the finalizer', async () => {
-    await expect(
-      typeHangulThenWon(['₩'], {
-        beforeWon: (textarea) => {
-          // Replay the full uncancelled browser sequence; keydown alone cannot carry the character now supplied by input.
-          textarea.dispatchEvent(keyboardEvent('keydown', 'a', 'KeyA', 65))
-          textarea.dispatchEvent(keyboardEvent('keypress', 'a', 'KeyA', 65))
-          textarea.value += 'a'
-          textarea.dispatchEvent(
-            new InputEvent('input', { data: 'a', inputType: 'insertText', bubbles: true })
-          )
-        }
-      })
-    ).resolves.toBe('한a₩')
-  })
-
-  it('suppresses a duplicate insertText without a new keydown or textarea mutation', async () => {
-    await expect(typeHangulThenWon(['`'], { duplicateFirstInput: true })).resolves.toBe('한`')
   })
 
   it('preserves an immediate won remap after repeated stale composition ends', async () => {

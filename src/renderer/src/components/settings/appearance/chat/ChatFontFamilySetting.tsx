@@ -5,7 +5,7 @@ import { translate } from '@/i18n/i18n'
 import {
   NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
   useNativeChatAppearanceStyle
-} from '../../../native-chat/native-chat-appearance-style'
+} from '../../../native-chat/appearance/native-chat-appearance-style'
 import { FontAutocomplete } from '../fonts/FontAutocomplete'
 import { SettingsRow } from '../../form-controls/SettingsFormControls'
 import { SettingsDisabledControlTooltip } from '../../form-controls/SettingsDisabledControlTooltip'

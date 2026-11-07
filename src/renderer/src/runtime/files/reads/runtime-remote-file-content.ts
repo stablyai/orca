@@ -10,8 +10,8 @@ import {
   readRemoteBinaryFile,
   readRemoteFileInChunks
 } from './runtime-paged-file-read'
-import { callRuntimeRpc } from '../../runtime-rpc-client'
-import { RuntimeRpcCallError } from '../../runtime-rpc-result'
+import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
+import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 
 function isRpcRefusal(error: unknown, message: string): boolean {
   return error instanceof RuntimeRpcCallError && error.message === message

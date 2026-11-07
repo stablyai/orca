@@ -73,7 +73,7 @@ export function BrowserSessionCookiesSection({
         'arc',
         'profile'
       ]}
-      className="space-y-3 py-2"
+      className="space-y-3 py-3"
     >
       <div className="flex items-center justify-between gap-3">
         <div className="space-y-0.5">

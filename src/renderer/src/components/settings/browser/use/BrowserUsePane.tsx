@@ -86,7 +86,7 @@ export function BrowserUseSetup({
 
   if (!browserUseEnabled) {
     return (
-      <div className="flex items-center justify-between gap-4 py-2">
+      <div className="flex items-center justify-between gap-4 py-3">
         <div className="space-y-0.5">
           <p className="text-sm font-medium">
             {translate('auto.components.settings.BrowserUsePane.b8a1f2d84d', 'Agent Browser Use')}
@@ -107,7 +107,7 @@ export function BrowserUseSetup({
   }
 
   return (
-    <div className="space-y-3 rounded-2xl border border-border/60 bg-card/30 p-4">
+    <div className="space-y-3 py-4">
       <div className="flex items-center justify-between gap-3">
         <div className="space-y-0.5">
           <p className="text-sm font-semibold">

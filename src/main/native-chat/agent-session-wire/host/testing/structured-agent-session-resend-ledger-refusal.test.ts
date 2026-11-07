@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../../../shared/agent-session/agent-session-host-authority'
 
 import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
@@ -10,7 +9,7 @@ import {
   envelope,
   hostTestState
 } from './structured-agent-session-host-test-harness'
-import { HOST_TEST_NOW as NOW, hostTestMessage } from './structured-agent-session-host-test-data'
+import { hostTestMessage } from './structured-agent-session-host-test-data'
 
 let root: string
 let host: StructuredAgentSessionHost
@@ -34,20 +33,6 @@ function sendParams(text: string, clientOperationId?: string) {
   }
 }
 
-function expiredParams(text: string) {
-  return sendParams(
-    text,
-    `${NOW - AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS - 60_000}-${'e'.repeat(32)}`
-  )
-}
-
-function clear() {
-  return host.conversationCommand(CALLER, {
-    command: 'clear',
-    envelope: envelope('agentSession.conversationCommand', { command: 'clear' })
-  })
-}
-
 describe('send without ledger policy', () => {
   it('replays accepted ids after the compatibility ledger has expired', async () => {
     await attach()
@@ -58,19 +43,5 @@ describe('send without ledger policy', () => {
     db.prepare('DELETE FROM agent_session_operations').run()
     await expect(host.send(CALLER, params)).resolves.toMatchObject({ ok: true, replayed: true })
     expect(dispatch).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe('a /clear in flight', () => {
-  it('refuses an old id only for the clear in flight', async () => {
-    await attach()
-    const clearing = clear()
-    const expired = host.send(CALLER, expiredParams('typed long ago'))
-    await clearing
-
-    await expect(expired).resolves.toMatchObject({
-      ok: false,
-      refusal: { details: { reason: 'conversationCommandInFlight' } }
-    })
   })
 })

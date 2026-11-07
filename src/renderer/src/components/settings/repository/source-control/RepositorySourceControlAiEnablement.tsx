@@ -32,7 +32,10 @@ export function RepositorySourceControlAiEnablement({
   onChange
 }: RepositorySourceControlAiEnablementProps): React.JSX.Element {
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-border px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <div
+      data-settings-row=""
+      className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between"
+    >
       <div className="min-w-0 space-y-0.5">
         <Label className="text-xs font-medium">
           {translate(

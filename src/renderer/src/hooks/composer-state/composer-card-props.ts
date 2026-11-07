@@ -7,7 +7,7 @@ import type { ComposerCardActionProps, ComposerCardSourceProps } from './compose
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { worktreeOwnerHostIds } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useAppStore } from '@/store'
 
 export function buildComposerCardProps(state: ComposerModel) {

@@ -24,7 +24,7 @@ import { projectRemovalTargets } from './workspace-actions/deletion/removal-unsa
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 // NUL cannot occur in project names, so translated name-token splitting is unambiguous.
 const NAME_TOKEN = '\u0000'

@@ -2,7 +2,7 @@ import {
   useAppStateViewActive,
   useAppViewExternalStore,
   useAppStateValue
-} from '@/store/app-state-view'
+} from '@/store/retained-views/app-state-view'
 import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-permission-modes-capability'
 import type { StructuredAgentSessionHostCapabilityState } from '../../../shared/agent-session/structured-agent-session-host-capability'
 import { useEffect, useState } from 'react'
@@ -22,9 +22,9 @@ import {
   ensureLocalRuntimeCapabilities,
   readLocalRuntimeCapabilitiesOrUnknown,
   subscribeLocalRuntimeCapabilityObservation
-} from './local-runtime-capabilities'
-import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
-import { subscribeRuntimeHostContactRegained } from './runtime-host-contact-regained'
+} from './hosts/capabilities/local-runtime-capabilities'
+import { runtimeEnvironmentSupportsCapability } from './rpc/compatibility/runtime-capability-proof'
+import { subscribeRuntimeHostContactRegained } from './hosts/connections/runtime-host-contact-regained'
 import {
   isRuntimeHostContactRevoked,
   lastVerifiedRuntimeStatus

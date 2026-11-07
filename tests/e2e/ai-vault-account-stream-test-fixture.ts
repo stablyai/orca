@@ -24,7 +24,7 @@ import type {
 import {
   emptyClaudeAccountsState,
   emptyCodexAccountsState
-} from '@/runtime/runtime-provider-accounts-client'
+} from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 
 type StreamServicePorts = {
   claudeAccounts: Pick<RuntimeAccountServices['claudeAccounts'], 'listAccounts'>

@@ -1,6 +1,7 @@
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
-import { getWorktreeMapFromState } from '@/store/selectors'
+import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import type { AppState } from '@/store/types'
 
 export function selectMarkdownDocumentWorktreePath(
@@ -19,5 +20,5 @@ export function selectMarkdownDocumentWorktreePath(
         ?.folderPath ?? null
     )
   }
-  return getWorktreeMapFromState(state).get(worktreeId)?.path ?? null
+  return getIndexedWorktreeMap(selectWorktreesByRepo(state)).get(worktreeId)?.path ?? null
 }

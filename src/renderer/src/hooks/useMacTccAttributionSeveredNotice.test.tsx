@@ -7,7 +7,7 @@ import { MacosTccPromptNoticeHost } from './MacosTccPromptNoticeHost'
 import {
   useMacFolderAccessFixStore,
   type FolderAccessNoticePhase
-} from '@/store/mac-folder-access-fix'
+} from '@/store/terminals/folder-access/mac-folder-access-fix'
 
 type FolderAccessMismatch = {
   daemonScope: string
@@ -65,7 +65,7 @@ vi.mock('@/store', () => ({
     })
 }))
 
-vi.mock('@/store/plugin-language-packs', () => ({
+vi.mock('@/store/plugins/localization/plugin-language-packs', () => ({
   usePluginLanguagePackStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({ entries: [], loaded: true }),
   usePluginLanguagePacks: () => []

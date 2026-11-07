@@ -16,7 +16,7 @@ import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 import { editorShortcutMatches } from '../../editor-shortcuts'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { IpynbCellToolbar, IpynbToolbarButton } from '../cells/IpynbCellToolbar'
 import { IpynbCellSource } from '../cells/IpynbCellEditor'
 import { IpynbCellRunOutputs, IpynbCellRunPrompt } from '../outputs/IpynbCellRun'
@@ -27,7 +27,7 @@ import { getIpynbCellKey } from './ipynb-source-drafts'
 import { useIpynbCellExecution } from '../kernel/useIpynbCellExecution'
 import { resolveNotebookExecutionHost } from '../kernel/ipynb-execution-host'
 import { useIpynbScrollRestoration } from './useIpynbScrollRestoration'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type IpynbViewerProps = {
   content: string
@@ -52,7 +52,7 @@ export default function IpynbViewer({
 }: IpynbViewerProps): React.JSX.Element {
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const rootPath = useAppStore(
-    (s) => findWorktreeById(selectWorktreesByRepo(s), worktreeId)?.path ?? null
+    (s) => findFirstIndexedWorktree(selectWorktreesByRepo(s), worktreeId)?.path ?? null
   )
   const executionHost = useAppStore((s) => resolveNotebookExecutionHost(s, worktreeId))
   const [editingCellKey, setEditingCellKey] = useState<string | null>(null)

@@ -9,11 +9,9 @@ import {
 } from './editor-external-watch-scope'
 import { getWorktreeVisitKey } from '@/lib/worktree-visit-recency'
 import { getDefaultSettings } from '../../../shared/constants'
-import {
-  makeFolderWorkspace,
-  makeWorktree,
-  TEST_REPO
-} from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 
 vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn() } }))
 

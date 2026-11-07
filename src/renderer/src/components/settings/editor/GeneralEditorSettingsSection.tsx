@@ -11,11 +11,7 @@ import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { CollapseUnchangedRegionsSetting } from './CollapseUnchangedRegionsSetting'
-import {
-  SettingsSegmentedControl,
-  SettingsSubsectionHeader,
-  SettingsSwitchRow
-} from '../form-controls/SettingsFormControls'
+import { SettingsSegmentedControl, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { RichMarkdownSpellcheckSetting } from './RichMarkdownSpellcheckSetting'
 import { MarkdownDefaultViewSetting } from './MarkdownDefaultViewSetting'
@@ -30,6 +26,7 @@ import {
   resolveAutoSaveDelayDraftState,
   updateAutoSaveDelayDraftState
 } from './auto-save-delay-draft'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 type GeneralEditorSettingsSectionProps = {
   settings: GlobalSettings
@@ -89,18 +86,17 @@ export function GeneralEditorSettingsSection({
   }
 
   return (
-    <section key="editor" className="space-y-4">
-      <SettingsSubsectionHeader
-        title={translate(
-          'auto.components.settings.GeneralEditorSettingsSection.45c6e85c4d',
-          'Editor'
-        )}
-        description={translate(
-          'auto.components.settings.GeneralEditorSettingsSection.d21136d9ef',
-          'Configure how Orca persists file edits.'
-        )}
-      />
-
+    <SettingsGroup
+      key="editor"
+      title={translate(
+        'auto.components.settings.GeneralEditorSettingsSection.45c6e85c4d',
+        'Editor'
+      )}
+      description={translate(
+        'auto.components.settings.GeneralEditorSettingsSection.d21136d9ef',
+        'Configure how Orca persists file edits.'
+      )}
+    >
       <EditorFormatOnSaveSetting settings={settings} updateSettings={updateSettings} />
       <EditorInsertFinalNewlineSetting settings={settings} updateSettings={updateSettings} />
 
@@ -139,7 +135,7 @@ export function GeneralEditorSettingsSection({
           'How long Orca waits after your last edit before saving automatically.'
         )}
         keywords={['autosave', 'delay', 'milliseconds']}
-        className="flex items-center justify-between gap-4 py-2"
+        className="flex items-center justify-between gap-4 py-3"
       >
         <div className="min-w-0 flex-1 space-y-0.5">
           <Label>
@@ -193,7 +189,7 @@ export function GeneralEditorSettingsSection({
           'Preferred presentation format for showing git diffs by default.'
         )}
         keywords={['diff', 'view', 'inline', 'side-by-side', 'split']}
-        className="flex items-center justify-between gap-4 py-2"
+        className="flex items-center justify-between gap-4 py-3"
       >
         <div className="min-w-0 flex-1 space-y-0.5">
           <Label>
@@ -260,7 +256,7 @@ export function GeneralEditorSettingsSection({
           'Wrap long lines in diff editors instead of requiring horizontal scrolling.'
         )}
         keywords={['diff', 'word wrap', 'wrap', 'markdown', 'long lines']}
-        className="flex items-center justify-between gap-4 py-2"
+        className="flex items-center justify-between gap-4 py-3"
       >
         <div className="min-w-0 flex-1 space-y-0.5">
           <Label>
@@ -312,7 +308,7 @@ export function GeneralEditorSettingsSection({
           'Show or hide the file tree when opening combined diff views.'
         )}
         keywords={['diff', 'tree', 'file tree', 'combined diff', 'sidebar']}
-        className="flex items-center justify-between gap-4 py-2"
+        className="flex items-center justify-between gap-4 py-3"
       >
         <div className="min-w-0 flex-1 space-y-0.5">
           <Label>
@@ -411,6 +407,6 @@ export function GeneralEditorSettingsSection({
           }
         />
       </SearchableSetting>
-    </section>
+    </SettingsGroup>
   )
 }

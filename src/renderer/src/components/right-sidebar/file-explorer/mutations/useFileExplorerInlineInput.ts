@@ -17,7 +17,7 @@ import {
   captureFileExplorerOperationGuard,
   getFileExplorerOperationOwner
 } from '../navigation/file-explorer-operation-owner'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 
 type UseFileExplorerInlineInputParams = {
   activeWorktreeId: string | null

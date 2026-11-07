@@ -166,6 +166,10 @@ function BundledAgentSkillSetupPanel({
     </div>
   )
 
+  // A footer render prop can return nothing; skip the ruled block so it leaves no empty band.
+  const footerContent =
+    typeof footer === 'function' ? footer('plan' in action ? action.plan : undefined) : footer
+
   return (
     <div
       className={cn(
@@ -253,12 +257,8 @@ function BundledAgentSkillSetupPanel({
           />
           {actionHint ? <div className="mt-2">{actionHint}</div> : null}
         </div>
-        {footer ? (
-          <div className="mt-5 border-t border-border/60 pt-5">
-            {typeof footer === 'function'
-              ? footer('plan' in action ? action.plan : undefined)
-              : footer}
-          </div>
+        {footerContent ? (
+          <div className="mt-5 border-t border-border/60 pt-5">{footerContent}</div>
         ) : null}
       </div>
     </div>

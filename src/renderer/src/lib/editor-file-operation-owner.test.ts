@@ -31,7 +31,8 @@ import { ORCA_EDITOR_FILE_SAVED_EVENT } from '@/components/editor/autosave/edito
 import { createEditorSaveQueue } from '@/components/editor/save/queue/editor-save-queue'
 import type * as RuntimeFileMutationClient from '@/runtime/files/mutations/runtime-file-mutation-client'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import type { FileWriteResult } from '../../../shared/file-write-disk-precondition'
 
 const { writeRuntimeFile } = vi.hoisted(() => ({ writeRuntimeFile: vi.fn() }))

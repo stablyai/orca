@@ -1,4 +1,4 @@
-import type { LoadedMcpConfigInspection } from '../../../../runtime/mcp-config-inspection'
+import type { LoadedMcpConfigInspection } from '../../../../runtime/mcp/configuration/mcp-config-inspection'
 import { translate } from '@/i18n/i18n'
 
 export function McpMissingConfigList({
@@ -11,7 +11,7 @@ export function McpMissingConfigList({
   }
 
   return (
-    <div className="space-y-1.5 border-t border-border/50 px-3 py-2">
+    <div data-settings-row="" className="space-y-1.5 py-3">
       <p className="text-[11px] text-muted-foreground">
         {translate('auto.components.settings.McpConfigSection.4d16a0d9ac', 'Checked')}
       </p>

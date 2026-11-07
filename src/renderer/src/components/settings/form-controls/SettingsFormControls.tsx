@@ -55,6 +55,7 @@ export function SettingsRow({
 }: SettingsRowProps): React.JSX.Element {
   return (
     <div
+      data-settings-row=""
       className={cn(
         'flex gap-4',
         description ? 'py-3' : 'py-2',

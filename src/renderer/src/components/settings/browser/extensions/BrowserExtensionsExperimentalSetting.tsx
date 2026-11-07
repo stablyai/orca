@@ -22,7 +22,7 @@ export function BrowserExtensionsExperimentalSetting({
       title={entry.title}
       description={entry.description}
       keywords={entry.keywords}
-      className="space-y-3 py-2"
+      className="space-y-3 py-3"
       id="experimental-browser-extensions"
     >
       <div className="flex items-start justify-between gap-4">

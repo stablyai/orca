@@ -6,8 +6,9 @@ import { Label } from '../../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { getAgentCacheTimerSearchEntries } from './agent-cache-timer-search'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { SettingsSubsectionHeader, SettingsSwitch } from '../../form-controls/SettingsFormControls'
+import { SettingsSwitch } from '../../form-controls/SettingsFormControls'
 import { translate } from '@/i18n/i18n'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 type AgentCacheTimerSectionProps = {
   settings: GlobalSettings
@@ -19,18 +20,16 @@ export function AgentCacheTimerSection({
   updateSettings
 }: AgentCacheTimerSectionProps): React.JSX.Element {
   return (
-    <section className="space-y-4">
-      <SettingsSubsectionHeader
-        title={translate(
-          'auto.components.settings.AgentCacheTimerSection.a137f8854d',
-          'Prompt Cache Timer'
-        )}
-        description={translate(
-          'auto.components.settings.AgentCacheTimerSection.fe590653c1',
-          'Claude caches your conversation to reduce costs. When idle too long the cache expires and the next message resends full context at higher cost. This shows a countdown so you know when to resume.'
-        )}
-      />
-
+    <SettingsGroup
+      title={translate(
+        'auto.components.settings.AgentCacheTimerSection.a137f8854d',
+        'Prompt Cache Timer'
+      )}
+      description={translate(
+        'auto.components.settings.AgentCacheTimerSection.fe590653c1',
+        'Claude caches your conversation to reduce costs. When idle too long the cache expires and the next message resends full context at higher cost. This shows a countdown so you know when to resume.'
+      )}
+    >
       <SearchableSetting
         title={translate(
           'auto.components.settings.AgentCacheTimerSection.b4e7302944',
@@ -45,7 +44,7 @@ export function AgentCacheTimerSection({
           entry.description ?? '',
           ...(entry.keywords ?? [])
         ])}
-        className="flex items-center justify-between gap-4 py-2"
+        className="flex items-center justify-between gap-4 py-3"
       >
         <div className="min-w-0 flex-1 space-y-0.5">
           <div className="flex items-center gap-2">
@@ -91,7 +90,7 @@ export function AgentCacheTimerSection({
             "Match this to your provider's cache TTL."
           )}
           keywords={['cache', 'timer', 'duration', 'ttl']}
-          className="flex items-center justify-between gap-4 py-2 pl-7"
+          className="flex items-center justify-between gap-4 py-3 pl-7"
         >
           <div className="min-w-0 flex-1 space-y-0.5">
             <Label>
@@ -128,6 +127,6 @@ export function AgentCacheTimerSection({
           </Select>
         </SearchableSetting>
       )}
-    </section>
+    </SettingsGroup>
   )
 }

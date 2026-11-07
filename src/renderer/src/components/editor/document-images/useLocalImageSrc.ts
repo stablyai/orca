@@ -13,7 +13,7 @@ import {
 } from './local-image-src-cache'
 import { pinLocalImageCacheKey as pinLocalImageCache } from './local-image-cache-pinning'
 import { readBrowserAttachmentFile } from '@/lib/browser-attachment-files'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 
 export function getLocalImageCacheKey(
   absolutePath: string,

@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, vi } from 'vitest'
 import type { Mock } from 'vitest'
+import type { Repo } from '../../../../../../shared/repo-types'
 import type * as TuiAgentSelectionModule from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type * as TuiAgentStartupModule from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
 import type * as DirectAgentRoutingModule from '@/lib/workspace/creation/work-item/launch-work-item-direct-agent-routing'
-import type * as RuntimeRpcSubscribeModule from '@/runtime/runtime-rpc-subscribe'
+import type * as RuntimeRpcSubscribeModule from '@/runtime/rpc/subscriptions/runtime-rpc-subscribe'
 import type * as LaunchAgentKindModule from '../../../../../../shared/agent-kind'
 import type * as WorkspaceNameModule from '../../../../../../shared/workspace-name'
 import type * as WorkspaceSourceModule from '../../../../../../shared/new-workspace/workspace-source'
@@ -26,7 +27,7 @@ type DirectLaunchMocks = DirectLaunchStoreActions & {
   openModalFallback: Mock
   resolvePrBase: Mock
   getConnectionId: Mock
-  store: Record<string, unknown> & DirectLaunchStoreActions
+  store: Record<string, unknown> & DirectLaunchStoreActions & { repos?: Partial<Repo>[] }
 }
 
 type HostMocks = {
@@ -101,15 +102,24 @@ const hostMocks: HostMocks = vi.hoisted(() => ({
   subscribe: vi.fn<typeof RuntimeRpcSubscribeModule.subscribeRuntimeRpc>()
 }))
 
-vi.mock('@/runtime/runtime-hooks-client', () => ({
+vi.mock('@/runtime/repo-hooks/runtime-hooks-client', () => ({
   checkRuntimeHooks: hostMocks.checkRuntimeHooks
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: hostMocks.callRuntimeRpc,
-  runtimeEnvironmentSupportsCapability: hostMocks.supports
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: hostMocks.callRuntimeRpc
 }))
-vi.mock('@/runtime/runtime-rpc-subscribe', () => ({ subscribeRuntimeRpc: hostMocks.subscribe }))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
+  runtimeEnvironmentSupportsCapability: hostMocks.supports,
+  runtimeEnvironmentSupportsCapabilities: async (_host: string, capabilities: string[]) =>
+    Promise.all(capabilities.map((capability) => hostMocks.supports(_host, capability)))
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
+  getRuntimeEnvironmentStatus: async () => null
+}))
+vi.mock('@/runtime/rpc/subscriptions/runtime-rpc-subscribe', () => ({
+  subscribeRuntimeRpc: hostMocks.subscribe
+}))
 
 vi.mock('@/lib/new-workspace', () => ({
   CLIENT_PLATFORM: 'win32',
@@ -216,7 +226,11 @@ beforeEach(() => {
     setup: undefined
   })
   mocks.updateWorktreeMeta.mockResolvedValue(undefined)
-  mocks.activateAndRevealWorktree.mockReturnValue({ primaryTabId: 'tab-1' })
+  mocks.activateAndRevealWorktree.mockImplementation(() =>
+    mocks.store.repos?.some((repo) => repo.executionHostId?.startsWith('runtime:'))
+      ? { primaryTabId: null, startupAccepted: true }
+      : { primaryTabId: 'tab-1' }
+  )
   mocks.pasteDraftWhenAgentReady.mockResolvedValue(true)
   mocks.store = {
     repos: [

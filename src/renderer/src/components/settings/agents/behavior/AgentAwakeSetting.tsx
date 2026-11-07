@@ -34,39 +34,37 @@ export function AgentAwakeSetting({
   }
 
   return (
-    <section className="space-y-3">
-      <SearchableSetting
-        title={title}
-        description={description}
-        keywords={getAgentAwakeSearchKeywords()}
-      >
-        <div className="flex items-start justify-between gap-4 py-2">
-          <div className="min-w-0 flex-1 space-y-0.5">
-            <Label>{title}</Label>
-            <p className="text-xs text-muted-foreground">{description}</p>
-          </div>
-          <SettingsSegmentedControl
-            value={mode}
-            onChange={setMode}
-            ariaLabel={title}
-            size="sm"
-            options={[
-              {
-                value: 'on',
-                label: getAgentAwakeModeLabel('on')
-              },
-              {
-                value: 'auto',
-                label: getAgentAwakeModeLabel('auto')
-              },
-              {
-                value: 'off',
-                label: getAgentAwakeModeLabel('off')
-              }
-            ]}
-          />
+    <SearchableSetting
+      title={title}
+      description={description}
+      keywords={getAgentAwakeSearchKeywords()}
+    >
+      <div className="flex items-start justify-between gap-4 py-3">
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <Label>{title}</Label>
+          <p className="text-xs text-muted-foreground">{description}</p>
         </div>
-      </SearchableSetting>
-    </section>
+        <SettingsSegmentedControl
+          value={mode}
+          onChange={setMode}
+          ariaLabel={title}
+          size="sm"
+          options={[
+            {
+              value: 'on',
+              label: getAgentAwakeModeLabel('on')
+            },
+            {
+              value: 'auto',
+              label: getAgentAwakeModeLabel('auto')
+            },
+            {
+              value: 'off',
+              label: getAgentAwakeModeLabel('off')
+            }
+          ]}
+        />
+      </div>
+    </SearchableSetting>
   )
 }

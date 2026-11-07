@@ -29,7 +29,7 @@ export function BrowserHomePageSetting({
         'URL opened when creating a new browser tab. Leave empty to open a blank tab.'
       )}
       keywords={['browser', 'home', 'homepage', 'default', 'url', 'new tab', 'blank']}
-      className="flex items-start justify-between gap-4 py-2"
+      className="flex items-start justify-between gap-4 py-3"
     >
       <div className="min-w-0 shrink space-y-0.5">
         <Label>

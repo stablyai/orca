@@ -65,7 +65,7 @@ export function OpenCodeGoCredentials({ onSaved }: { onSaved: () => void }): Rea
         'Optional override. Orca otherwise uses the key OpenCode saved when you ran /connect, then OPENCODE_API_KEY.'
       )}
       keywords={['opencode', 'go', 'api', 'key', 'connect', 'rate limit', 'status bar']}
-      className="space-y-2"
+      className="space-y-2 py-3"
     >
       <div className="flex items-center gap-2">
         <Label htmlFor="opencode-go-api-key">

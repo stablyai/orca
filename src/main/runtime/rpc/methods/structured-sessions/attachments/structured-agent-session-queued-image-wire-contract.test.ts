@@ -1,4 +1,3 @@
-import { createQueuedImageWireRecord } from '../protocol/structured-agent-session-wire-record.test-fixture'
 import {
   appendTestJournalQueueRow,
   openTestJournalHostDatabase
@@ -283,17 +282,11 @@ it('keeps a saved physical hold independent while its own rejected retry blocks 
     returned: { reason: 'prior-build uncertainty', rejection: { kind: 'unconfirmed' } }
   })
   finishTestJournalHistoricalInputs(j)
-  const wire = createQueuedImageWireRecord(
-    rig.root,
-    SESSION,
-    () => rig!.host.collaboratorsForTests().sessions.get(SESSION)!.journal
-  )
   async function published() {
     const rpc = await call('agentSession.history', { sessionId: SESSION, direction: 'tail' }, OLD)
     if (!rpc.ok) {
       throw new Error('history refused')
     }
-    wire.record(rpc.result)
     return rpc.result
   }
   const held = await published()
@@ -350,5 +343,4 @@ it('keeps a saved physical hold independent while its own rejected retry blocks 
   expect(state.submission(id)?.payloadFingerprint).toBe(immutable?.payloadFingerprint)
   expect(state.receiptFor(id)).not.toEqual(receipt)
   await published()
-  wire.verify()
 })

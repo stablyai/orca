@@ -41,9 +41,6 @@ let storeSubscribers: ((state: MutableState) => void)[] = []
 let transportFactoryQueue: unknown[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
-vi.mock('../../render-health/terminal-webgl-atlas-recovery', () => ({
-  scheduleTerminalWebglAtlasRecovery: vi.fn()
-}))
 vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
   notifyCodexPaneBoundForStaleSweep: vi.fn()
 }))

@@ -7,8 +7,9 @@ import type { PersistedState } from '../../src/shared/persisted-state-types'
 import { normalizeLoadedGlobalSettings } from '../../src/main/persistence/loading-store/normalize-loaded-global-settings'
 import { prepareLoadedTerminalSettings } from '../../src/main/persistence/loading-store/prepare-loaded-terminal-settings'
 import { prepareLoadedProfileSettings } from '../../src/main/persistence/loading-store/prepare-loaded-profile-settings'
-import { useNativeChatHostPermissionGate } from '@/components/native-chat/use-native-chat-host-permission-gate'
-import * as runtimeRpc from '@/runtime/runtime-rpc-client'
+import { useNativeChatHostPermissionGate } from '@/components/native-chat/host-access/use-native-chat-host-permission-gate'
+import * as runtimeRpcCapability from '@/runtime/rpc/compatibility/runtime-capability-proof'
+import * as runtimeRpcCall from '@/runtime/rpc/calls/runtime-rpc-call'
 import type * as HostPermission from '@/runtime/structured-chat-host-permission'
 import type { Worktree } from '../../src/shared/worktree/types'
 
@@ -44,7 +45,7 @@ vi.mock('@/runtime/structured-chat-host-permission', async (importOriginal) => (
   readStructuredChatHostPermissionVerdict: mocks.hostPermission
 }))
 // Switch-on, main opens this machine's chats and its frames draw them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
@@ -65,14 +66,12 @@ import { peekWebSessionFocusIntent } from '@/runtime/web-session-focus-intent'
 import { LOCAL_ADMISSION_WAIT_MS } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-host-admission'
 import { launchStructuredAgentFromNewTab } from '../../src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-structured-route'
 import { structuredAgentSessionFocusOwner } from '@/runtime/structured-agent-session-owner'
-import {
-  readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey
-} from '@/components/native-chat/native-chat-composer-draft-store'
+import { readNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
 const WORKTREE = 'repo-1::/srv/app'
 const INITIAL_SETTINGS = useAppStore.getState().settings
@@ -438,7 +437,7 @@ describe('a structured chat launch on a paired server', () => {
         answerCapability = resolve
       })
       const capabilityRead = vi
-        .spyOn(runtimeRpc, 'runtimeEnvironmentSupportsCapability')
+        .spyOn(runtimeRpcCapability, 'runtimeEnvironmentSupportsCapability')
         .mockReturnValue(capability)
       let answerSettings: (value: {
         settings: { agentDefaultArgs: Record<string, string> }
@@ -448,7 +447,7 @@ describe('a structured chat launch on a paired server', () => {
           answerSettings = resolve
         }
       )
-      const settingsRead = vi.spyOn(runtimeRpc, 'callRuntimeRpc').mockReturnValue(hostSettings)
+      const settingsRead = vi.spyOn(runtimeRpcCall, 'callRuntimeRpc').mockReturnValue(hostSettings)
       mocks.createSupport.mockResolvedValue({ supported: true })
       const mounted = renderHook(() =>
         useNativeChatHostPermissionGate(

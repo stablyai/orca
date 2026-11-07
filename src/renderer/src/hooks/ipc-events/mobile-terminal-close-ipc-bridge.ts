@@ -7,7 +7,7 @@ import { createProjectMovePauseFollower } from '@/components/sidebar/project-mov
 import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
 import { persistWorkspaceSessionByHost } from '@/lib/workspace/persistence/workspace-session-host-persistence'
 import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
-import { selectFloatingWorkspacePanelVisible } from '@/store/floating-workspace-panel-selector'
+import { selectFloatingWorkspacePanelVisible } from '@/store/workspaces/floating/floating-workspace-panel-selector'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 import { useAppStore } from '../../store'
 import { afterLayoutFrame, layoutFramesFlowing } from '@/runtime/layout-frame-position'

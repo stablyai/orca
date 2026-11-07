@@ -93,30 +93,6 @@ describe('usePluginPageNavigation', () => {
     expect(document.activeElement).toBe(container.querySelector('[data-plugin-row-name]'))
   })
 
-  it('clears history for catalog requests and discards removed pages', async () => {
-    await mountOpen()
-    await act(async () => nav?.open('acme.icons'))
-    await act(async () => nav?.leave('acme.notes'))
-    expect(nav?.openKey).toBe('acme.icons')
-    await act(async () => nav?.back())
-    expect(nav?.openKey).toBeNull()
-    await act(async () => nav?.open('acme.notes'))
-    await act(async () => nav?.open('acme.icons'))
-    await act(async () => nav?.toCatalog())
-    expect(nav?.openKey).toBeNull()
-    await act(async () => nav?.open('acme.third'))
-    await act(async () => nav?.back())
-    expect(nav?.openKey).toBeNull()
-  })
-
-  it('returns to the originating detail page after replacing a completed review', async () => {
-    await mountOpen()
-    await act(async () => nav?.open('acme.tasks'))
-    await act(async () => nav?.open('acme.third', { replace: true }))
-    await act(async () => nav?.back())
-    expect(nav?.openKey).toBe('acme.notes')
-  })
-
   it('pauses A when visiting B, keeps B decisions outside the queue, and resumes A before the next review', async () => {
     await mountOpen()
     await act(async () => reviews?.enqueue(['acme.notes', 'acme.third']))

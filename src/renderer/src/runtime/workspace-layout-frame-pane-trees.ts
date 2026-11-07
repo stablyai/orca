@@ -1,7 +1,7 @@
 // Compare frame pane trees against current store: local held commands can lag subsequent frame drawings; only still-held tabs wait.
 
 import type { AppState } from '@/store/types'
-import type { WorkspaceLayoutCache } from '@/store/workspace-layout-cache'
+import type { WorkspaceLayoutCache } from '@/store/workspace-layout/workspace-layout-cache'
 import { stableJson } from '../../../shared/workspace-layout/workspace-layout-load-report'
 import { isTabPaneTreeHeld } from './layout-owner-pane-intents'
 

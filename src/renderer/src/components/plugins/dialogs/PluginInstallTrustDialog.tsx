@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 import {
   settlePluginInstallTrust,
   usePluginInstallTrustStore
-} from '@/store/plugin-install-trust-request'
+} from '@/store/plugins/installation/plugin-install-trust-request'
 import { Button } from '../../ui/button'
 import {
   Dialog,

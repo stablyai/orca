@@ -2,13 +2,13 @@ import React, { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
-import { formatBytes } from '../status-bar/workspace-space-format'
+import { formatBytes } from '../../../../shared/format-bytes'
 import { CandidateRow, type WorkspaceCleanupDeletionPhase } from './workspace-cleanup-candidate-row'
 import { WorkspaceCleanupCandidateList } from './workspace-cleanup-candidate-list'
 import { WorkspaceCleanupEmptyState } from './workspace-cleanup-dialog-notices'
 import type { WorkspaceCleanupFacets } from './workspace-cleanup-facets'
 import { formatWorkspaceCleanupRelativeTime } from './workspace-cleanup-relative-time'
-import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup'
+import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup/workspace-cleanup-removal'
 import {
   findWorkspaceCleanupCandidateRepo,
   groupWorkspaceCleanupReposById
