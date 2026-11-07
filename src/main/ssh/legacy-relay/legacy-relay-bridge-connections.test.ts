@@ -38,9 +38,11 @@ function fakeConnection(
         close: () => channel.emit('close')
       })
       channels.push(channel)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pool only listens for 'close' and calls close().
       return channel as unknown as ClientChannel
     })
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pool calls only the methods this fake defines.
   return { conn, channels, asConnection: conn as unknown as SshConnection }
 }
 
