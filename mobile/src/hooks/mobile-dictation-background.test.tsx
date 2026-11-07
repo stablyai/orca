@@ -1,8 +1,12 @@
-// Backgrounding takes the microphone on both phones (Android pauses it, iOS suspends the app); dictation must finish with what was heard rather than resume later with a silent gap.
+// Leaving the app takes the microphone on both phones; dictation finishes with what was heard instead of resuming later with a silent gap.
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
-import { createFakeRpcClient, type FakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
+import {
+  createFakeRpcClient,
+  rpcSuccess,
+  type FakeRpcClient
+} from '../mobile-web-shell/bridge-host-test-fakes'
 import type { DictationCapture } from '../platform/dictation-capture-contract'
 
 const appState = vi.hoisted(() => ({ handlers: new Set<(state: string) => void>() }))
@@ -35,11 +39,12 @@ import { useMobileDictation, type UseMobileDictationResult } from './use-mobile-
 async function pump(rpc: FakeRpcClient): Promise<void> {
   for (let round = 0; round < 8; round += 1) {
     for (const request of rpc.requests.splice(0)) {
-      request.resolve({
-        id: 'desktop',
-        ok: true,
-        result: request.method === 'speech.dictation.finish' ? { text: 'what was heard' } : {}
-      })
+      request.resolve(
+        rpcSuccess(
+          'desktop',
+          request.method === 'speech.dictation.finish' ? { text: 'what was heard' } : {}
+        )
+      )
     }
     await Promise.resolve()
     await Promise.resolve()

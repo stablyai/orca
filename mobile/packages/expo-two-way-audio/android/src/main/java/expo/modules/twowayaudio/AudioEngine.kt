@@ -40,7 +40,7 @@ class AudioEngine (context: Context) {
     private var micEvents = 0
     private var micBytes = 0L
 
-    // Written from the main thread on focus loss and pause, and from the JS thread on start/stop.
+    // Read by the mic tap loop; written on the main (focus loss, pause), JS and tap threads.
     @Volatile
     var isRecording = false
 
@@ -306,11 +306,11 @@ class AudioEngine (context: Context) {
     }
 
     // Recording in the background is not supported, so leaving the app interrupts it.
-    fun pauseRecording() {
+    fun endRecordingForPause() {
         endRecordingForInterruption("began")
     }
 
-    fun resumeRecording() {
+    fun regainAudioFocus() {
         requestAudioFocus()
     }
 

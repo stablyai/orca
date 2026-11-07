@@ -283,7 +283,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     // A backgrounded app loses the microphone, so leaving finishes. Not while starting: Android's permission prompt reports background.
     const appState = AppState.addEventListener('change', (state) => {
       if (state === 'background' && statusRef.current === 'recording') {
-        interrupted()
+        void finishDictation(dictationSessionErrorMessage('interrupted'))
       }
     })
     return () => {
