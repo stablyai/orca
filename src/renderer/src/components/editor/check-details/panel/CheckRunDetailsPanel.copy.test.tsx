@@ -7,7 +7,7 @@ import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../../shared/
 import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
 
 import { useAppStore } from '@/store/index'
-import { createEditorTabsStore } from '@/store/slices/editor-slice-test-harness'
+import { createEditorTabsStore } from '@/store/slices/editor/editor-slice-test-harness'
 import { scrollTopCache } from '@/lib/scroll-cache'
 import { readingCheck, readingDetails } from '../reading/check-details-reading-fixture'
 import { StrictMode } from 'react'

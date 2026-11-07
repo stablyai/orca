@@ -19,7 +19,7 @@ import {
   type DeferredSplitPaneHandoffHandle
 } from '../layout/split/deferred-split-pane-handoff'
 import { guardParserHandler } from '../emulation/terminal-parser-handler-guard'
-import { isPaneReplaying } from '../replay-guard'
+import { isPaneReplaying } from '../snapshots/replay-guard'
 import { connectPanePty } from '../pty-connection/connect-pane-pty'
 import { completePaneSpawnPlacement } from '../layout/split/terminal-pane-spawn-placement'
 import { createQueuedStartupConsumer } from './queued-pane-startup'

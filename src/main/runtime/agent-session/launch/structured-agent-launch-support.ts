@@ -33,11 +33,11 @@ import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import { structuredChatUnavailableOnPlatform } from '../../../../shared/agent-session/structured-chat-platform-support'
 
-type LaunchEnvironmentSettings = Pick<
+export type LaunchEnvironmentSettings = Pick<
   GlobalSettings,
   'agentDefaultEnv' | 'nativeChatInheritShellEnvironment' | 'nativeChatShellEnvironmentVariables'
 > &
-  Partial<Pick<GlobalSettings, 'agentCmdOverrides'>> &
+  Partial<Pick<GlobalSettings, 'agentCmdOverrides' | 'antigravityChatAuth'>> &
   AgentLaunchProfileSettings
 
 /** What the check reads from the runtime asking it. */

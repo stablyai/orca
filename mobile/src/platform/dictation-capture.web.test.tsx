@@ -42,6 +42,7 @@ function createAudioShell(
     open: async (sampleRate) => ({ opened: options.opens !== false, sampleRate }),
     begin: () => true,
     end: () => {},
+    feedSpeech: () => {},
     onMicrophoneData: (handler) => {
       microphone = handler
       return {
@@ -238,7 +239,8 @@ describe('draining the shell ring', () => {
     const tail = pcm(12_288, 11)
     shell.speak(tail)
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(400)
+      // Short of the next drain, so only the stop can bring this audio.
+      await vi.advanceTimersByTimeAsync(DICTATION_CAPTURE_DRAIN_INTERVAL_MS - 50)
       await pair.flush()
     })
     expect(chunks).toEqual([])

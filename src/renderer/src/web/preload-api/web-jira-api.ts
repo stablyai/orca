@@ -1,6 +1,6 @@
 import type { PreloadApi } from '../../../../preload/api-types'
 import { translate } from '@/i18n/i18n'
-import { readRuntimeJiraPayload } from '../../runtime/runtime-jira-payload-stream'
+import { readRuntimeJiraPayload } from '../../runtime/jira/runtime-jira-payload-stream'
 import { RuntimeRpcCallError } from '../../runtime/runtime-rpc-result'
 import { callRuntimeResult } from './web-runtime-calls'
 import { requireActiveEnvironment } from './web-runtime-session'

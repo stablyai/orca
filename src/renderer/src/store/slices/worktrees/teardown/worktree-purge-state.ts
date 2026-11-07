@@ -197,6 +197,7 @@ export function buildFullWorktreePurgeState(
     gitStatusReadErrorByWorktree: omitByWorktree(s.gitStatusReadErrorByWorktree),
     explorerDisplayRootByWorktree: omitByWorktree(s.explorerDisplayRootByWorktree),
     showDotfilesByWorktree: omitByWorktree(s.showDotfilesByWorktree),
+    gitGraphFiltersByWorktree: omitByWorktree(s.gitGraphFiltersByWorktree ?? {}),
     expandedDirs: omitByWorktree(s.expandedDirs),
     recentlyClosedEditorTabsByWorktree: omitByWorktree(s.recentlyClosedEditorTabsByWorktree),
     recentlyClosedTerminalTabsByWorktree: omitByWorktree(s.recentlyClosedTerminalTabsByWorktree),

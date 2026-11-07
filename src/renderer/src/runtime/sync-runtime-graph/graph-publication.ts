@@ -1,5 +1,5 @@
 import { getEagerPtyBufferHandle } from '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher'
-import { warnTerminalLifecycleAnomaly } from '@/components/terminal-pane/terminal-lifecycle-diagnostics'
+import { warnTerminalLifecycleAnomaly } from '@/components/terminal-pane/layout/reconciliation/terminal-lifecycle-diagnostics'
 import {
   collectParkedTerminalWatcherPtyIds,
   getParkedTerminalWatcherPaneIdsByPtyId

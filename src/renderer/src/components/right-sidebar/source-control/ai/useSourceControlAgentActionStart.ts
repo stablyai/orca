@@ -3,7 +3,7 @@ import { projectSelectedSourceControlActionLaunch } from '../../../../../../shar
 import type { SelectedSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
+import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import type { LaunchSource } from '../../../../../../shared/telemetry-events'
 import type {
   SourceControlLaunchActionId,

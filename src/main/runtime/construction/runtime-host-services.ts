@@ -130,10 +130,6 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
     return confirmRunTerminalShellAlone(this.ptyController, ptyId)
   }
 
-  getTerminalPtyIdForHandle(handle: string): string | null {
-    return this.getLivePtyForHandle(handle)?.pty.ptyId ?? null
-  }
-
   /** Includes resume-identity-only provider rows. */
   getAgentProviderSessionRows(tabId?: string): AgentStatusIpcPayload[] {
     return this.getAgentProviderSessionSnapshotFn?.(tabId) ?? []

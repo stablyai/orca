@@ -29,7 +29,8 @@ function headlessRuntime() {
     readTerminal: vi.fn(async () => ({ tail: ['done'] })),
     getTerminalHandleForPaneKey: vi.fn(() => null),
     getAgentStatusRowsForPane: vi.fn(() => []),
-    subscribeAgentStatusRowChanges: vi.fn(() => () => {})
+    subscribeAgentStatusRowChanges: vi.fn(() => () => {}),
+    canOpenRunTerminals: () => true
   }
   return { runtime, service: () => bound }
 }

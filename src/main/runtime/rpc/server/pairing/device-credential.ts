@@ -25,6 +25,8 @@ export function mintTokenDevice(
     scope,
     pairedAt,
     lastSeenAt: 0,
+    // Every new offer can be exchanged for a client-held credential; legacy clients ignore this.
+    ticket: true,
     pairingReach,
     ...(validatedGrants ? { grants: validatedGrants } : {}),
     ...(offerTtlMs !== undefined ? { offerExpiresAt: pairedAt + offerTtlMs } : {})

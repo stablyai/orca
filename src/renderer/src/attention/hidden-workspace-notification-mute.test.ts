@@ -4,7 +4,7 @@ import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-w
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { getDefaultNotificationSettings } from '../../../shared/notification-settings-defaults'
 import { resolveAgentAttention } from '@/attention/agent-attention-policy'
-import { createTerminalAttentionSurface } from '@/components/terminal-pane/terminal-attention-surface'
+import { createTerminalAttentionSurface } from '@/components/terminal-pane/notifications/terminal-attention-surface'
 import { createStructuredAttentionSurface } from '@/components/native-chat/structured-attention-surface'
 import { createTabsSliceMockApi } from '../store/slices/tabs-slice-test-harness'
 import { createTestStore, makeWorktree, TEST_REPO } from '../store/slices/store-test-helpers'

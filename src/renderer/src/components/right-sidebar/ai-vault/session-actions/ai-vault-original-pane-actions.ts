@@ -11,7 +11,7 @@ import {
 } from '@/lib/activate-ai-vault-structured-session'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import { findStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
-import { flashFocusedPaneRim } from '@/components/terminal-pane/focused-pane-rim-flash'
+import { flashFocusedPaneRim } from '@/components/terminal-pane/input/focus/focused-pane-rim-flash'
 import type { AgentDotState } from '@/components/AgentStateDot'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { translate } from '@/i18n/i18n'

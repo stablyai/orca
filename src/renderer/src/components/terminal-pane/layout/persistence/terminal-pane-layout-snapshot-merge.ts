@@ -1,5 +1,5 @@
 import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import { mergeCapturedLeafState } from '../../merge-captured-leaf-state'
+import { mergeCapturedLeafState } from '../../snapshots/merge-captured-leaf-state'
 
 /** Carries the saved scrollback of `leafIds` into a freshly serialized layout. */
 export function retainLayoutScrollback(

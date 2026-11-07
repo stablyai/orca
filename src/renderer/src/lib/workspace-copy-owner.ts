@@ -23,7 +23,7 @@ import {
   selectFolderWorkspaceCopies,
   selectWorktreesByRepo
 } from '@/store/workspace-record-selectors'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { focusFreeRouteStateOf } from './editor-file-operation-provenance'
 import { namedHostForOwnerRef, resolveOwner, resolveOwnerOfRoute } from './resolve-owner'
 import { resolveUnstampedRecordHost } from './worktree-operation-catalog-route'

@@ -3,7 +3,8 @@ import type { useMobileStructuredAgentSession } from './use-mobile-structured-ag
 import { useMobileNativeChatSessionLane } from './native-chat/use-mobile-native-chat-session-lane'
 import type { RpcClient } from '../transport/rpc-client'
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionSendBodyFingerprint } from '../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import '../../../src/shared/queued-message-edit'
@@ -638,7 +639,7 @@ describe('mobile queued Edit captured origin', () => {
         : readOrHoldReply(method, params)
     )
     await act(async () => {
-      renderer = create(createElement(Harness, { editSupport }))
+      renderer = createWithQueryClient(createElement(Harness, { editSupport }))
     })
     act(() => listener?.(snapshotEvent({ queuedMessages: [message], runningTurn: true })))
     if (editSupport !== null) {

@@ -10,7 +10,7 @@ import {
   desktopStructuredSessionOpenDeps,
   type StructuredSessionOpenAdapterDeps
 } from './open-existing-structured-session'
-import { showAgentPaneUnavailable } from '@/components/terminal-pane/stale-agent-row'
+import { showAgentPaneUnavailable } from '@/components/terminal-pane/agent-status/stale-agent-row'
 import { translate } from '@/i18n/i18n'
 import { toast } from 'sonner'
 import { showStructuredChatWorkspace } from './structured-chat-workspace-navigation'

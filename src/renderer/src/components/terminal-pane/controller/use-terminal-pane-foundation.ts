@@ -8,23 +8,23 @@ import type { TerminalKittyKeyboardModeTracker } from '../../../../../shared/ter
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from '../pty-transport/pty-transport-types'
 import type { SearchState } from '../input/keyboard/terminal-keyboard-shortcut-matching'
-import type { CloseTerminalDialogCopyKind } from '../CloseTerminalDialog'
+import type { CloseTerminalDialogCopyKind } from '../layout/close/CloseTerminalDialog'
 
 import {
   type TerminalLinkActionRequest,
   closeTerminalLinkActionRequest
 } from '../links/terminal-link-action-request'
-import type { PreparedAgentSessionFork } from '../terminal-agent-session-fork'
+import type { PreparedAgentSessionFork } from '../session-fork/terminal-agent-session-fork'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { createTerminalQuickCommandDraft } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
 import { useDaemonActions } from '@/components/shared/useDaemonActions'
-import { useMobileOverlayTicks } from '../use-mobile-overlay-ticks'
+import { useMobileOverlayTicks } from '../mobile-driver/use-mobile-overlay-ticks'
 import type { TerminalPaneProps } from './terminal-pane-types'
-import { useVisibleTerminalTabClaim } from '../use-visible-terminal-tab-claim'
-import type { VisiblePtyRecoveryState } from '../terminal-remote-runtime-recovery-ui-state'
-import type { PaneProcessExit } from '../pty-connection-types'
+import { useVisibleTerminalTabClaim } from '../viewport/visibility/use-visible-terminal-tab-claim'
+import type { VisiblePtyRecoveryState } from '../pty-transport/remote-runtime/recovery/terminal-remote-runtime-recovery-ui-state'
+import type { PaneProcessExit } from '../process-exit/pane-process-exit'
 import type { PaneCwdMap } from '../layout/split/resolve-split-cwd'
-import type { TerminalErrorsByPaneId } from '../terminal-error-accumulation'
+import type { TerminalErrorsByPaneId } from '../errors/terminal-error-accumulation'
 import { selectTerminalPaneHostState } from '../host-state/terminal-pane-host-state'
 
 export function useTerminalPaneFoundation(props: TerminalPaneProps) {

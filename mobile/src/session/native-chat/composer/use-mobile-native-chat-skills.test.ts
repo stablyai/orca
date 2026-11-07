@@ -1,5 +1,6 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../../../test-support/query-client-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../../../transport/rpc-client'
 import { useMobileNativeChatSkills } from './use-mobile-native-chat-skills'
@@ -43,9 +44,18 @@ const reply = {
   _meta: { runtimeId: 'runtime-1' }
 }
 
-function fakeClient(sendRequest: unknown): RpcClient {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The hook calls `sendRequest` and `getGeneration` and nothing else on the client; every other member is unreachable from it.
-  return { sendRequest } as RpcClient
+function fakeClient(sendRequest: RpcClient['sendRequest']): RpcClient {
+  return {
+    sendRequest,
+    subscribe: () => () => {},
+    updateTerminalSubscriptionViewport: () => {},
+    getState: () => 'connected',
+    getReconnectAttempt: () => 0,
+    getLastConnectedAt: () => null,
+    onStateChange: () => () => {},
+    notifyForeground: () => {},
+    close: () => {}
+  }
 }
 
 describe('useMobileNativeChatSkills', () => {
@@ -54,11 +64,17 @@ describe('useMobileNativeChatSkills', () => {
 
   async function mount(client: RpcClient, supported: boolean): Promise<void> {
     function Harness(): null {
-      state = useMobileNativeChatSkills({ client, worktreeId: 'wt-1', agent: 'codex', supported })
+      state = useMobileNativeChatSkills({
+        hostId: 'host-1',
+        client,
+        worktreeId: 'wt-1',
+        agent: 'codex',
+        supported
+      })
       return null
     }
     await act(async () => {
-      renderer = create(createElement(Harness))
+      renderer = createWithQueryClient(createElement(Harness))
     })
   }
 
@@ -74,7 +90,11 @@ describe('useMobileNativeChatSkills', () => {
     await act(async () => state?.loadNativeChatSkills())
     await act(async () => state?.loadNativeChatSkills())
 
-    expect(sendRequest).toHaveBeenCalledExactlyOnceWith('skills.discover', { worktreeId: 'wt-1' })
+    expect(sendRequest).toHaveBeenCalledExactlyOnceWith(
+      'skills.discover',
+      { worktreeId: 'wt-1' },
+      { failWhenDisconnected: true }
+    )
     expect(state?.nativeChatSkills.skills.map((entry) => entry.name)).toEqual(['shared'])
   })
 })

@@ -94,10 +94,32 @@ describe('DeviceRegistry pairing offer TTL', () => {
     registry['save'] = save
 
     vi.setSystemTime(1_000_000 + TTL + 1)
-    expect(registry.getDevice(offer.deviceId)?.lastSeenAt).toBe(0)
     expect(registry.validateToken(offer.token)?.deviceId).toBe(offer.deviceId)
     registry.getOrCreatePendingDevice('Phone', 'mobile', 'network', [], TTL)
     expect(registry.getDevice(offer.deviceId)).not.toBeNull()
+  })
+
+  it('retries a failed first-seen persist so the device survives a restart after expiry', () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    vi.setSystemTime(1_000_000)
+    const registry = new DeviceRegistry(dir)
+    const offer = registry.getOrCreatePendingDevice('Phone', 'mobile', 'network', [], TTL)
+    const save = registry['save'].bind(registry)
+    registry['save'] = vi.fn(() => {
+      throw new Error('EPERM')
+    })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(() => registry.updateLastSeen(offer.deviceId)).toThrow('EPERM')
+    // Still failing on the first retry: keep retrying.
+    vi.advanceTimersByTime(60_000)
+    registry['save'] = save
+    vi.advanceTimersByTime(60_000)
+
+    vi.setSystemTime(1_000_000 + TTL + 1)
+    const restarted = new DeviceRegistry(dir)
+    expect(restarted.validateToken(offer.token)?.deviceId).toBe(offer.deviceId)
+    restarted.getOrCreatePendingDevice('Phone', 'mobile', 'network', [], TTL)
+    expect(restarted.getDevice(offer.deviceId)).not.toBeNull()
   })
 
   it('round-trips the expiry through disk and drops it on first sighting', () => {

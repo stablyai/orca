@@ -2,7 +2,7 @@ import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/re
 import { safeFitAndThen } from '@/lib/pane-manager/pane-fit'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
-import { getAppliedSizeReadE2eDelayMs } from '../../pty-applied-size-read-e2e-delay'
+import { getAppliedSizeReadE2eDelayMs } from './pty-applied-size-read-e2e-delay'
 import { createPtySizeReassertion } from '../../viewport/pty-size-reassertion'
 import {
   PANE_PTY_RESIZE_HOLD_FLUSH_EVENT,

@@ -8,6 +8,7 @@ export const AUTOMATION_RUN_FAILURE_COPY = {
     "This automation's project is moving to its WSL host, so Orca skipped this run. Runs resume when the move finishes.",
   wslMoveOwnedByHost:
     "This automation's project now runs on its WSL host, which runs this automation there. Orca no longer runs this local copy.",
+  managedHostServer: 'Needs migration to {{host}}',
   missedGraceWindow: 'This run was past its missed-run grace window when Orca next checked.',
   targetMissing:
     'The automation host is no longer registered, so this automation has nowhere to run.',
@@ -49,7 +50,10 @@ export type AutomationRunFailureCodeFields = {
 export type AutomationRunFailure = { error: string } & AutomationRunFailureCodeFields
 
 export function automationRunFailure(
-  errorCode: Exclude<AutomationRunFailureCode, 'projectSetupNotReady' | 'wslDistroStopped'>
+  errorCode: Exclude<
+    AutomationRunFailureCode,
+    'projectSetupNotReady' | 'wslDistroStopped' | 'managedHostServer'
+  >
 ): AutomationRunFailure
 export function automationRunFailure(
   errorCode: 'projectSetupNotReady',
@@ -58,6 +62,10 @@ export function automationRunFailure(
 export function automationRunFailure(
   errorCode: 'wslDistroStopped',
   params: { distro: string }
+): AutomationRunFailure
+export function automationRunFailure(
+  errorCode: 'managedHostServer',
+  params: { host: string }
 ): AutomationRunFailure
 export function automationRunFailure(
   errorCode: AutomationRunFailureCode,

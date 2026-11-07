@@ -6,8 +6,8 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type * as WorktreeGitCopy from '@/lib/worktree-git-copy'
-import type * as GitStatusClient from '@/runtime/runtime-git-status-client'
-import type * as GitDiffClient from '@/runtime/runtime-git-diff-client'
+import type * as GitStatusClient from '@/runtime/source-control/git/runtime-git-status-client'
+import type * as GitDiffClient from '@/runtime/source-control/git/runtime-git-diff-client'
 import type * as PanelModule from './source-control/panel/panel'
 import type * as RepoClient from '@/runtime/runtime-repo-client'
 import { useAppStore } from '@/store'
@@ -17,7 +17,7 @@ import FolderWorkspaceSourceControlPanel from './FolderWorkspaceSourceControlPan
 import { SourceControlPanel } from './source-control/panel/panel'
 import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
 import { createRunningCommitMessageGenerationRecord } from '@/store/slices/commit-message-generation'
-import type { PullRequestGenerationRecord } from '@/store/slices/pull-request-generation-state'
+import type { PullRequestGenerationRecord } from '@/store/slices/hosted-review/generation/pull-request-generation-state'
 
 const probes = vi.hoisted(() => ({
   status: vi.fn(),
@@ -75,7 +75,7 @@ vi.mock('@/lib/worktree-git-copy', async (original) => ({
     transport: { kind: 'local' }
   })
 }))
-vi.mock('@/runtime/runtime-git-status-client', async (original) => ({
+vi.mock('@/runtime/source-control/git/runtime-git-status-client', async (original) => ({
   ...(await original<typeof GitStatusClient>()),
   setRuntimeGitStatusUpstreamRefWatch: async (context: { worktreeId: string }) =>
     probes.upstreamRef(context.worktreeId),
@@ -88,7 +88,7 @@ vi.mock('@/runtime/runtime-git-status-client', async (original) => ({
     return pending()
   }
 }))
-vi.mock('@/runtime/runtime-git-diff-client', async (original) => ({
+vi.mock('@/runtime/source-control/git/runtime-git-diff-client', async (original) => ({
   ...(await original<typeof GitDiffClient>()),
   getRuntimeGitBranchCompare: async (context: { worktreeId: string }, baseRef: string) => {
     probes.compare(context.worktreeId)

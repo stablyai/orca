@@ -21,8 +21,8 @@ import {
   cancelRuntimeFileList,
   listRuntimeFiles,
   searchRuntimeFilePaths
-} from '@/runtime/runtime-file-search-client'
-import { debounceRuntimeFileRequest } from '@/runtime/runtime-file-request-debounce'
+} from '@/runtime/files/search/runtime-file-search-client'
+import { debounceRuntimeFileRequest } from '@/runtime/files/runtime-file-request-debounce'
 import { splitFileNameFilterTokens } from '../../../shared/file-name-filter-tokens'
 import {
   nextCappedLocalListing,

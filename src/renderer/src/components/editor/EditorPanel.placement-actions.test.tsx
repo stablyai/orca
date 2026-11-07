@@ -8,7 +8,7 @@ import {
   EDITOR_PLACEMENT,
   seedEditorPlacementConsumers,
   drawEditorPlacementConsumers
-} from '@/store/slices/editor-placement-consumers.test-fixture'
+} from '@/store/slices/editor/tabs/editor-placement-consumers.test-fixture'
 import type { EditorToggleValue } from './view-mode/EditorViewToggle'
 
 vi.mock('@/runtime/runtime-rpc-client', async (original) =>

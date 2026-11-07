@@ -35,7 +35,8 @@ import { findPendingWorktreeCreationId } from '../creation/pending-worktree-crea
 import {
   buildActivationStateTransition,
   markVisited,
-  readPreviousActive
+  readPreviousActive,
+  recordShownTabFocus
 } from './worktree-activation-visit'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
@@ -145,6 +146,7 @@ export function activateAndRevealFolderWorkspaceWithOutcome(
       agent: opts?.agent
     })
   }
+  recordShownTabFocus(useAppStore.getState(), workspaceKey)
 
   return { opened: { primaryTabId } }
 }
@@ -275,6 +277,7 @@ export function activateAndRevealWorktreeWithOutcome(
       agent: opts?.agent
     })
   }
+  recordShownTabFocus(useAppStore.getState(), worktreeId)
 
   return { opened: { primaryTabId } }
 }

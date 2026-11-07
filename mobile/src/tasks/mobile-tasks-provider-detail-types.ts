@@ -178,6 +178,8 @@ export type DetailComment = {
   authorAvatarUrl?: string
   user?: { displayName?: string }
   isBot?: boolean
+  // Set only by hosts that read GitHub GraphQL; GitLab, REST fallbacks and older hosts never send it.
+  viewerDidAuthor?: boolean
   body: string
   createdAt?: string
   url?: string

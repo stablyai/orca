@@ -1,5 +1,5 @@
 import { captureNotificationTransportOwner } from '@/attention/notification-subject-owner'
-import { AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS } from '../../agent-task-complete-policy'
+import { AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS } from '../../notifications/agent-task-complete-policy'
 import { hasPendingHookLaneCompletion } from '@/hooks/agent-hook-completion-notifications'
 import {
   isAgentTaskCompleteNotificationEnabled,
