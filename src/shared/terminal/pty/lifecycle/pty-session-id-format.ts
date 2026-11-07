@@ -28,3 +28,20 @@ export function isPtySessionIdOwnedByWorktree(sessionId: string, worktreeId: str
   const separatorIdx = sessionId.lastIndexOf(PTY_SESSION_ID_SEPARATOR)
   return separatorIdx === -1 || sessionId.slice(0, separatorIdx) === worktreeId
 }
+
+const SERVE_PTY_SESSION_TAG = 'serve-'
+
+/** Serve ids carry their workspace like daemon-minted ids so inventory never re-files them by cwd (#36716). */
+export function mintServePtySessionId(worktreeId: string, uuid: string): string {
+  return `${worktreeId}${PTY_SESSION_ID_SEPARATOR}${SERVE_PTY_SESSION_TAG}${uuid}`
+}
+
+/** Accepts the workspace-less `serve-<uuid>` ids that older hosts minted and still restore. */
+export function isServeMintedPtySessionId(sessionId: string): boolean {
+  const separatorIdx = sessionId.lastIndexOf(PTY_SESSION_ID_SEPARATOR)
+  const tag =
+    separatorIdx === -1
+      ? sessionId
+      : sessionId.slice(separatorIdx + PTY_SESSION_ID_SEPARATOR.length)
+  return tag.startsWith(SERVE_PTY_SESSION_TAG)
+}

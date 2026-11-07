@@ -16,7 +16,7 @@ import {
   type AgentLaunchRouteStore,
   type ProspectiveWorkspace,
   worktreeLaunchWorkspace
-} from '@/lib/agent-launch-route-input'
+} from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { agentChoiceMayOpenAsChat } from '@/lib/host-chat-program'
 import { readAgentLaunchPreferencesForWorktree } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 

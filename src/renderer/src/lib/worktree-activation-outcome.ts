@@ -2,8 +2,8 @@ import { toast } from 'sonner'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
-import type { WorktreeStartupPayload } from './worktree-startup-payload'
-import type { WorktreeActivationSurfaceSelection } from './worktree-activation-surface-selection'
+import type { WorktreeStartupPayload } from './workspace/creation/worktree-startup-payload'
+import type { WorktreeActivationSurfaceSelection } from './workspace/activation/worktree-activation-surface-selection'
 import { agentLaunchPaneNoticeText } from '@/components/terminal-pane/agent-launch-pane-notice-text'
 
 export type ActivateAndRevealResult = { primaryTabId: string | null }

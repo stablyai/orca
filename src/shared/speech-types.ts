@@ -30,6 +30,8 @@ export type SpeechModelManifest = {
   streaming: boolean
   modelingUnit?: ModelingUnit
   recommended?: boolean
+  /** Retired: never offered for selection, and a saved selection moves to this model on load. */
+  replacedBy?: string
 }
 
 export type SpeechModelStatus = 'not-downloaded' | 'downloading' | 'extracting' | 'ready' | 'error'

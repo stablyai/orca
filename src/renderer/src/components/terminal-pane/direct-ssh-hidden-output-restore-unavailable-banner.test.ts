@@ -1,24 +1,27 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createDeferred, flushAsyncTicks } from './pty-connection-test-async'
+import {
+  createDeferred,
+  flushAsyncTicks
+} from './pty-connection/test-fixtures/pty-connection-test-async'
 import {
   createManager,
   createMockTransport,
   createPane,
   type ConnectCallbacks,
   type MockTransport
-} from './pty-connection-test-pane-fixtures'
+} from './pty-connection/test-fixtures/pty-connection-test-pane-fixtures'
 import {
   buildPaneConnectionDeps,
   type PtyConnectionAgentTitleMocks,
   bindPaneAgentTitleMocks
-} from './pty-connection-test-deps'
-import { createInitialStoreState } from './pty-connection-test-store-fixtures'
-import type { StoreState } from './pty-connection-test-store-state'
+} from './pty-connection/test-fixtures/pty-connection-test-deps'
+import { createInitialStoreState } from './pty-connection/test-fixtures/pty-connection-test-store-fixtures'
+import type { StoreState } from './pty-connection/test-fixtures/pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
-} from './pty-connection-test-environment'
+} from './pty-connection/test-fixtures/pty-connection-test-environment'
 
 // Direct-SSH null snapshots are unverifiable, not lost output; exercise main-buffer recovery with bounded retries like remote-runtime panes.
 
@@ -49,7 +52,8 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
-  const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+  const { buildAgentStatusModuleMock } =
+    await import('./pty-connection/test-fixtures/pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -63,7 +67,7 @@ vi.mock('sonner', () => ({
   }
 }))
 
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({
+vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
   notifyCodexPaneBoundForStaleSweep
 }))
 
@@ -75,7 +79,7 @@ vi.mock('react', async (importOriginal) => {
   }
 })
 
-vi.mock('./pty-transport', () => ({
+vi.mock('./pty-transport/ipc/pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
@@ -86,7 +90,7 @@ vi.mock('./pty-transport', () => ({
   })
 }))
 
-vi.mock('./remote-runtime-pty-transport', () => ({
+vi.mock('./pty-transport/remote-runtime/remote-runtime-pty-transport', () => ({
   createRemoteRuntimePtyTransport: vi.fn(
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
@@ -99,7 +103,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
   )
 }))
 
-vi.mock('./pty-dispatcher', async (importOriginal) => {
+vi.mock('./pty-transport/delivery/pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
@@ -142,7 +146,7 @@ function stubMainBufferSnapshot(
 }
 
 async function connectHiddenDirectSshPane(): Promise<SshPaneDrive> {
-  const { connectPanePty } = await import('./pty-connection')
+  const { connectPanePty } = await import('./pty-connection/connect-pane-pty')
   const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
   const transport = createMockTransport(SSH_PTY_ID)
   const capturedDataCallback: {

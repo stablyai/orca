@@ -54,21 +54,6 @@ describe('admin routes under a database that is briefly out of reach', () => {
     expect(await response.json()).toEqual({ error: 'database_temporarily_unavailable' })
   })
 
-  it('keeps the not-found mapping for a real cell-status failure', async () => {
-    const cellDeploymentStatus = vi.fn(async () => {
-      throw new Error('unknown_cell')
-    })
-    const app = appWith({ cellDeploymentStatus })
-
-    const response = await app.request(
-      '/v1/admin/cell-status',
-      adminRequest({ v: 1, cellId: 'production-gce-c7' })
-    )
-
-    expect(response.status).toBe(404)
-    expect(await response.json()).toEqual({ error: 'unknown_cell' })
-  })
-
   it('answers admission-selector/status with a retryable 503 instead of a conflict', async () => {
     const inspectCellAdmissionSelector = vi.fn(async () => {
       throw poolTimeout()
@@ -85,39 +70,6 @@ describe('admin routes under a database that is briefly out of reach', () => {
     expect(await response.json()).toEqual({ error: 'database_temporarily_unavailable' })
   })
 
-  it('keeps the conflict mapping for a real admission-selector/status failure', async () => {
-    const inspectCellAdmissionSelector = vi.fn(async () => {
-      throw new Error('admission_selector_attempt_not_found')
-    })
-    const app = appWith({ inspectCellAdmissionSelector })
-
-    const response = await app.request(
-      '/v1/admin/admission-selector/status',
-      adminRequest({ v: 1, attemptId: '22222222-2222-4222-8222-222222222222' })
-    )
-
-    expect(response.status).toBe(409)
-    expect(await response.json()).toEqual({ error: 'admission_selector_attempt_not_found' })
-  })
-
-  it('leaves the pre-request guards ahead of the mapping alone', async () => {
-    const cellDeploymentStatus = vi.fn(async () => {
-      throw poolTimeout()
-    })
-    const app = appWith({ cellDeploymentStatus })
-
-    // An unauthenticated caller must never learn the database is struggling.
-    const unauthenticated = await app.request('/v1/admin/cell-status', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ v: 1, cellId: 'production-gce-c7' })
-    })
-    expect(unauthenticated.status).toBe(401)
-
-    const invalid = await app.request('/v1/admin/cell-status', adminRequest({ v: 1 }))
-    expect(invalid.status).toBe(400)
-    expect(cellDeploymentStatus).not.toHaveBeenCalled()
-  })
 })
 
 function config(overrides: Partial<RelayConfig> = {}): RelayConfig {

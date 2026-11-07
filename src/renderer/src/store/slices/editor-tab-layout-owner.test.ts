@@ -4,7 +4,7 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { Tab } from '../../../../shared/tab-types'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
-import '@/lib/workspace-session'
+import '@/lib/workspace/persistence/workspace-session'
 
 import './editor/tabs/editor-tab-layout-owner'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'

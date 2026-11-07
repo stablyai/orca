@@ -5,7 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import { GITHUB_REACTION_ORDER } from '@/lib/pr-comment-reactions'
+import { GITHUB_REACTION_ORDER } from '@/lib/source-control/review/comments/pr-comment-reactions'
 import type { GitHubReaction, GitHubReactionContent } from '../../../../shared/github/comment-types'
 
 const REACTION_EMOJI: Record<GitHubReaction['content'], string> = {

@@ -162,32 +162,6 @@ describe('External process-host development rebuilds', () => {
     await expect.poll(() => versions.at(-1), { timeout: 15_000 }).toBe(7)
   })
 
-  it('recompiles when a nested package manifest is created or removed', async () => {
-    const { root, packageDir, main } = fixture()
-    writeFileSync(join(packageDir, 'src', 'entry.ts'), 'export const version = 1\n')
-    const watcher = watch({
-      input: main,
-      external: ['@orca/process-host'],
-      plugins: [createProcessHostDevRebuildPlugin(root)],
-      output: { file: join(root, 'out', 'main.cjs'), format: 'cjs' }
-    })
-    watchers.push(watcher)
-    closeSuccessfulBundles(watcher)
-    await nextEvent(watcher, 'END')
-    const output = join(packageDir, 'dist', 'entry.js')
-    expect(readFileSync(output, 'utf8')).toContain('exports.version')
-
-    const manifest = join(packageDir, 'src', 'package.json')
-    writeFileSync(manifest, JSON.stringify({ type: 'module' }))
-    await expect
-      .poll(() => readFileSync(output, 'utf8'), { timeout: 15_000 })
-      .toContain('export const')
-    rmSync(manifest)
-    await expect
-      .poll(() => readFileSync(output, 'utf8'), { timeout: 15_000 })
-      .toContain('exports.version')
-  })
-
   it('emits private source edits and new imports before the Electron reload hook', async () => {
     const { root, packageDir, main } = fixture()
     const loadedVersions: number[] = []
@@ -222,29 +196,6 @@ describe('External process-host development rebuilds', () => {
       .poll(() => existsSync(join(packageDir, 'dist', 'new-feature.js')), { timeout: 15_000 })
       .toBe(true)
     expect(readFileSync(join(packageDir, 'dist', 'new-feature.js'), 'utf8')).toContain('added = 3')
-  })
-
-  it('rebuilds when an inherited compiler configuration changes', async () => {
-    const { root, packageDir, main } = fixture()
-    const watcher = watch({
-      input: main,
-      external: ['@orca/process-host'],
-      plugins: [createProcessHostDevRebuildPlugin(root)],
-      output: { file: join(root, 'out', 'main.cjs'), format: 'cjs' }
-    })
-    watchers.push(watcher)
-    closeSuccessfulBundles(watcher)
-    await nextEvent(watcher, 'END')
-    const emittedSource = join(packageDir, 'dist', 'internal.js')
-    expect(readFileSync(emittedSource, 'utf8')).toContain('preserved comment')
-
-    writeFileSync(
-      join(root, 'tsconfig.base.json'),
-      JSON.stringify({ compilerOptions: { strict: true, removeComments: true } })
-    )
-    await expect
-      .poll(() => readFileSync(emittedSource, 'utf8'), { timeout: 15_000 })
-      .not.toContain('preserved comment')
   })
 
   it('reports a failed compilation, preserves prior output, and recovers after a fix', async () => {

@@ -1,12 +1,12 @@
+import type { PtyControllerInventory } from './runtime-pty-controller-contract'
 import type { RuntimeLegacyWorkerTerminalRecoveryController } from './runtime-legacy-worker-terminal-recovery-controller'
 import type {
   LegacyWorkerRecoveryCandidate,
-  LegacyWorkerRecoveryInventory,
   LegacyWorkerRecoveryOptions,
   LegacyWorkerRecoveryPorts,
   LegacyWorkerRecoveryResolution,
   LegacyWorkerRecoveryWorkspace
-} from './runtime-legacy-worker-terminal-recovery-types'
+} from './orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 
 export async function isAbsentLegacyWorkerTerminalProvenExited(
   ports: LegacyWorkerRecoveryPorts,
@@ -31,7 +31,7 @@ export async function reconcileLegacyWorkerCandidate(args: {
   candidate: LegacyWorkerRecoveryCandidate
   workspace: LegacyWorkerRecoveryWorkspace
   resolvedWorktrees: LegacyWorkerRecoveryWorkspace['resolved'][]
-  inventory: LegacyWorkerRecoveryInventory
+  inventory: PtyControllerInventory
   deferredDispatchIds: Set<string>
   pendingResolutions: LegacyWorkerRecoveryResolution[]
 }): Promise<void> {

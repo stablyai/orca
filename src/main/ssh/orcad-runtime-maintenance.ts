@@ -157,13 +157,15 @@ export async function runManagedOrcadUpdate(
     }
     // Policy refusal is final for this host, not a transient update to retry.
     if (result.code !== ORCAD_ACTIVATION_POLICY_REFUSED_CODE) {
-      recordManagedOrcadUpdateDeferral(environment.id, deferral)
+      recordManagedOrcadUpdateDeferral(environment.id, deferral, context.activationRecord)
     }
     await pruneSupersededOrcadCandidates(slot, context.serverTarget, result.fullVersion)
     return deferral
   }
   clearManagedOrcadUpdateDeferral(environment.id)
-  const started = result.outcome === 'already-active' && (await wakeAlreadyActiveOrcad(slot))
+  const alreadyActive = result.outcome === 'already-active'
+  const managed = { environmentId: environment.id, hostLabel: context.target.label }
+  const started = alreadyActive && (await wakeAlreadyActiveOrcad(slot, managed))
   const readiness = await probeManagedOrcadReadiness(
     context,
     localOrcadDir,

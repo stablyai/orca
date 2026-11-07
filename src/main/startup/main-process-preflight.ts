@@ -1,5 +1,5 @@
 import { antigravityHookService } from '../antigravity/hook-service'
-import { getRelocatedDaemonHost } from '../daemon/daemon-host-relocation'
+import { getRelocatedDaemonHost } from '../daemon/executable-host/windows/daemon-host-relocation'
 import { app, ipcMain, powerMonitor, session } from 'electron'
 import os from 'node:os'
 import { join } from 'node:path'

@@ -836,7 +836,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}} ayarladığınız gibi sohbet olarak kalıyor.",
       "defaultSurfaceSetAllChat": "Tümünü Sohbet yap",
       "defaultSurfaceSetAllTerminal": "Tümünü Terminal yap",
-      "sameAsChoice": "{{agent}} ile aynı · {{choice}}"
+      "sameAsChoice": "{{agent}} ile aynı · {{choice}}",
+      "chatUnavailableOnWindows": "{{value0}} Chat henüz Windows'ta kullanılamıyor, bu nedenle {{value0}} bu ana makinede bir terminalde açılır. macOS veya Linux ana makinesindeki sohbetler çalışmaya devam eder."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "sembolik bağlantı",
@@ -931,7 +932,7 @@
         "parakeetV2": "Yalnızca İngilizce. Benzer doğrulukla v3'ten daha hızlı. Noktalama ve büyük/küçük harf kullanımı.",
         "zipformerBilingual": "Dil geçişleriyle Çince + İngilizce. Düşük gecikmeli gerçek zamanlı akış.",
         "paraformerBilingual": "Çince (Mandarin + lehçeler) + İngilizce. Aksanlı ve bölgesel Çince konuşmalarda güçlü.",
-        "zipformerStreamingEn": "Yalnızca İngilizce. Hız ve boyut arasında iyi denge sunan, 20 milyon parametreli hafif model.",
+        "zipformerStreamingEnRetired": "Artık sunulmuyor: cümlelerin başını atlıyor. Yer açmak için silin.",
         "zipformerStreamingZh": "Yalnızca Çince. Kaynakları kısıtlı cihazlar için ideal, 14 milyon parametreli çok hafif model.",
         "zipformerStreamingKo": "Yalnızca Korece. Düşük gecikmeli gerçek zamanlı akış.",
         "parakeetJa": "Yalnızca Japonca. 35 bini aşkın saatlik doğal konuşmayla eğitildi. Noktalama dâhil.",
@@ -1138,7 +1139,9 @@
         "cb4d287238": "Sunucu adı",
         "3affe7de3a": "Bu tarayıcının ulaşabildiği bir Orca sunucusundan eşleştirme URL'si yapıştırın.",
         "e3bcd082ac": "Orca'ya Bağlan",
-        "mobileScopeRejected": "Bu QR kodu sınırlı (mobil) erişim sağlar. Tam web uygulamasını kullanmak için Ayarlar → Çalışma Zamanı Ortamları → Bu Orca Sunucusunu Paylaş → Yeni Bağlantı üzerinden tarayıcı erişim bağlantısını açın."
+        "mobileScopeRejected": "Bu QR kodu sınırlı (mobil) erişim sağlar. Tam web uygulamasını kullanmak için Ayarlar → Çalışma Zamanı Ortamları → Bu Orca Sunucusunu Paylaş → Yeni Bağlantı üzerinden tarayıcı erişim bağlantısını açın.",
+        "replaceSavedServer": "Bu bağlantı \"{{name}}\" ({{endpoint}}) dışında farklı bir sunucuya bağlanır. Yalnızca aşağıdaki uç noktaya güveniyorsanız bağlanın.",
+        "keepSavedServer": "Kayıtlı sunucuyu koru"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "Bu çalıştırma sunucusu için Ajan Oturum Geçmişi kullanılamıyor.",
@@ -2296,6 +2299,7 @@
         "cb55b0390f": "Yönet",
         "4f9313984d": "İnceleyenler",
         "02cbe2de44": "Pipeline",
+        "itemLoadFailed": "Bu öğe yüklenemedi. Tekrar denemek için yenileyin.",
         "be3d291837": "Dosyalar",
         "c996e2962c": "Görüşme",
         "b3c156dd51": "Yenile",
@@ -3012,7 +3016,6 @@
         "9cd11ba218": "Jira",
         "11a828abf8": "GitLab",
         "acef77f7ca": "GitHub",
-        "524f095d55": "İnceleme gerekiyor",
         "7698af5263": "Benimkiler",
         "94f0339621": "Bana atananlar",
         "c2268a9982": "Tümü",
@@ -3108,6 +3111,8 @@
         "loadGitHubWorkFailed": "GitHub işleri yüklenemedi.",
         "gitlabViewIssues": "Sorunlar",
         "gitlabViewMrs": "MR'ler",
+        "gitlabInvolvementEveryone": "Herkes",
+        "gitlabInvolvementReviewing": "İncelemelerim",
         "gitlabViewTodos": "Yapılacaklarım",
         "startWorkspaceFromMr": "MR {{number}} üzerinden çalışma alanı başlat",
         "startWorkspaceFromIssue": "Sorun {{number}} üzerinden çalışma alanı başlat",
@@ -4240,7 +4245,8 @@
             "chatUnavailableAfterSelection": "{{value0}} sohbeti başlatılamadı.",
             "startChat": "{{value0}} ile sohbet başlat",
             "cliTag": "(CLI)",
-            "agentsLoading": "Ajanlar yükleniyor"
+            "agentsLoading": "Ajanlar yükleniyor",
+            "chatNotOnWindows": "Windows'ta henüz sohbet yok"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Sekme Değiştir",
@@ -6142,7 +6148,6 @@
           "savedInProjectSettings": "Bu <settings>projenin ayarlarında</settings> kayıtlı"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "Yerel kurulumu kaydet",
           "3933401d28": "Yapılandır",
           "31b8b01a45": "Ayarlar",
           "4a98f907ae": "Yeniden dene",
@@ -6157,7 +6162,15 @@
           "5bfd5c8779": "Kurulum betiklerini kapat",
           "detectedFromSource": "<source>{{source}}</source> kaynağından algılandı",
           "ignoresSharedSetup": "Bu repo, paylaşılan <yaml>orca.yaml</yaml> kurulum betiklerini yok sayıyor. Yerel bir komut ekleyin veya Ayarlar bölümünde kaynağı değiştirin.",
-          "foundSetupCommandIn": "<source>{{source}}</source> içinde bir kurulum komutu bulundu. Yeni worktree'lerde çalıştırmak için kaydedin."
+          "foundSetupCommandIn": "<source>{{source}}</source> içinde bir kurulum komutu bulundu. Yeni worktree'lerde çalıştırmak için kaydedin.",
+          "reviewSetupScript": "Kurulum betiğini incele"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "Kurulum betiğini incele",
+          "description": "Kaydedildiğinde, Orca {{repo}} için her worktree oluşturduğunda bu çalışır.",
+          "setupScript": "Kurulum betiği",
+          "archiveScript": "Arşiv betiği",
+          "save": "Yerel kurulumu kaydet"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "İptal",
@@ -8277,7 +8290,6 @@
         "MobileEmulatorSettingsPane": {
           "19d39113b6": "Kodlama ajanlarının Orca CLI komutlarıyla etkin mobil emülatörü kontrol etmesine izin verin.",
           "f2f8d97bb6": "Ajan Mobil Emülatör Kontrolü",
-          "143961d031": "Varsayılan Cihaz",
           "8aec2f99a0": "Emülatör kullanılabilirliğini yenile",
           "ae1612c58c": "Kullanılabilirlik",
           "f9af91ea26": "Yeni Mobil Emülatör eylemini gösterir ve ajanların etkin emülatöre bağlanmasına izin verir.",
@@ -8290,9 +8302,7 @@
           "d704fb5023": "Kurulum gerekli",
           "06b06429c6": "Android SDK ve iOS Simulator desteği kontrol ediliyor.",
           "6d1483d4a0": "1 emülatör cihazı algılandı.",
-          "0a452d4d3b": "{{value0}} emülatör cihazı algılandı.",
-          "f62a1bb759": "Orca, cihazlar algılandıktan sonra otomatik olarak bir emülatör cihazı seçecektir.",
-          "b2fd62ea75": "Yeni emülatör sekmeleri ve ajan bağlanma komutları için varsayılan cihaz. Otomatik seçim, zaten çalışmakta olan bir cihazı tercih eder."
+          "0a452d4d3b": "{{value0}} emülatör cihazı algılandı."
         },
         "MobileNetworkInterfaceSection": {
           "b2c384cfd6": "Arayüz bulunamadı"
@@ -9117,8 +9127,8 @@
           "proxyConnectionReuseHelp": "Yavaş ProxyCommand veya ProxyJump sunucuları üzerinden daha hızlı bağlantı sağlar. Yalnızca ssh_config yapılandırmanız sunucuya özgü Match veya %h kurallarına dayanmıyorsa etkinleştirin.",
           "reconnectOnLaunch": "Açılışta yeniden bağlan",
           "reconnectOnLaunchHelp": "Kapalıyken Orca, siz bağlanana kadar bu sunucuya ve onun üzerinden erişilen Orca sunucularına açılışta bağlanmaz.",
-          "allowRemoteCliControl": "Bu sunucudaki orca CLI aracının Orca'yı kontrol etmesine izin ver",
-          "allowRemoteCliControlHelp": "Yeni sunucular için varsayılan olarak açıktır. Bu sunucuda çalıştırılan orca komutlarının, yalnızca bu sunucunun çalışma alanlarında ve yalnızca sunucu bağlıyken bu masaüstündeki Orca tarayıcı sekmelerini açmasına ve yönetmesine izin verir. Ayrıca bu sunucuda eski bir Orca sürümü tarafından başlatılan terminallerin kendi gözetimli işleri için orkestrasyon komutlarını (check, inbox, send, ask, reply) çalıştırmasına izin verir. Dosyalarınızı, panonuzu veya çerezlerinizi okuyamazlar. Kapalı olduğunda yalnızca bu sunucunun kendi Orca sunucusuna erişirler.",
+          "allowRemoteCliControl": "Bu sunucunun kendi çalışma alanlarındaki Orca tarayıcı sekmelerini kontrol etmesine izin ver",
+          "allowRemoteCliControlHelp": "Yeni sunucular için varsayılan olarak açıktır. Bu sunucudaki ajanlar ve orca komutları, yalnızca bu sunucunun çalışma alanlarında ve yalnızca sunucu bağlıyken bu masaüstündeki Orca tarayıcı sekmelerini açabilir, okuyabilir ve kullanabilir. Kontrol ettiği sekmeler adını gösterir. Bu sunucuda eski bir Orca sürümü tarafından başlatılan terminallerin orca orkestrasyon komutlarını çalıştırması için de bu ayarın açık olması gerekir. Dosyalarınızı, panonuzu veya çerezlerinizi okuyamaz.",
           "editTitle": "SSH sunucusunu düzenle",
           "addTitle": "SSH sunucusu ekle",
           "editDescription": "Bu makine için bağlantı bilgilerini güncelleyin. Değişiklikler bir sonraki bağlantıda uygulanır.",
@@ -11894,7 +11904,7 @@
             "terminalRun": "Terminallerinizde komut çalıştırma (SSH dahil)"
           },
           "decisionFailed": "İzin kararı kaydedilemedi. Tekrar deneyin.",
-          "fullAccessWarning": "Tam erişim: normal bir program gibi çalışır; dosyalarınızı okuyabilir, ağı kullanabilir ve başka programlar çalıştırabilir.",
+          "fullAccessWarning": "Tam erişim: normal bir program gibi çalışır; dosyalarınızı okuyabilir, ağı kullanabilir, başka programlar çalıştırabilir ve terminalleriniz ile ajanlarınız dahil Orca'yı kontrol edebilir.",
           "uiWarning": "Görünümünü çizmek için yayımcının kodunu Orca içinde çalıştırır. Orca neye erişebildiğini gösterir ve etkinleştirmeden önce sorar."
         },
         "PluginConsentProvenance": {
@@ -13254,7 +13264,8 @@
           "oneDescription": "Yayıncı: {{value0}}. Siz inceleyene kadar güncellenmeyecek.",
           "manyDescription": "Siz inceleyene kadar güncellenmeyecekler.",
           "review": "İncele",
-          "dismiss": "Kapat"
+          "dismiss": "Kapat",
+          "movedInstalled": "Siz inceleyene kadar kapalı kalır."
         },
         "PluginThemeUseNow": {
           "assignedLight": "{{value0}} açık temanız olarak ayarlandı",
@@ -15899,7 +15910,6 @@
                 "06e10d7356": "Emülatörü kapat",
                 "e7a0d1897e": "Ana Ekran",
                 "6bd8dff42a": "Döndür",
-                "3d836b879c": "Emülatör seç",
                 "81b3571a07": "Bağlan",
                 "868c0f2938": "Çalışıyor…"
               }
@@ -17130,6 +17140,8 @@
               "25349b66fc": "Yeni Markdown Dosyası",
               "784812ca24": "Aktif çalışma alanında bir tarayıcı sekmesi açın.",
               "892bfa9339": "Yeni Tarayıcı Sekmesi",
+              "splitChatRight": "Sohbeti Sağa Böl",
+              "splitChatDown": "Sohbeti Aşağı Böl",
               "verbs": {
                 "newBrowser": "yeni tarayıcı",
                 "newBrowserTab": "yeni tarayıcı sekmesi",
@@ -17143,6 +17155,10 @@
                 "newTerminal": "yeni terminal",
                 "newTerminalTab": "yeni terminal sekmesi",
                 "newShell": "yeni shell",
+                "splitChatRight": "sohbeti sağa böl",
+                "splitChatDown": "sohbeti aşağı böl",
+                "chatPaneRight": "sohbet paneli sağda",
+                "chatPaneBelow": "sohbet paneli altta",
                 "terminalTab": "terminal sekmesi",
                 "createWorktree": "worktree oluştur",
                 "addWorktree": "worktree ekle",
@@ -17152,18 +17168,8 @@
                 "removeWorktree": "worktree kaldır",
                 "trashWorktree": "worktree'yi çöpe at",
                 "addQuickCommand": "hızlı komut ekle",
-                "newQuickCommand": "yeni hızlı komut",
-                "splitChatRight": "sohbeti sağa böl",
-                "newChatRight": "sağda yeni sohbet",
-                "chatPaneRight": "sohbet paneli sağda",
-                "splitChatDown": "sohbeti aşağı böl",
-                "newChatBelow": "altta yeni sohbet",
-                "chatPaneBelow": "sohbet paneli altta"
-              },
-              "splitChatRight": "Sohbeti Sağa Böl",
-              "splitChatRightDescription": "Sağda ayrı bir bölmede yeni bir sohbet açın.",
-              "splitChatDown": "Sohbeti Aşağı Böl",
-              "splitChatDownDescription": "Altta ayrı bir bölmede yeni bir sohbet açın."
+                "newQuickCommand": "yeni hızlı komut"
+              }
             }
           },
           "palette": {
@@ -17619,6 +17625,8 @@
           "noRunUsageYet": "Henüz çalıştırma kullanımı yok",
           "noWorkspace": "Çalışma alanı yok",
           "latestSavedOutput": "En son kaydedilen çıktı",
+          "fullOutputUnavailable": "Çıktının tamamı yüklenemedi.",
+          "retryFullOutput": "Yeniden dene",
           "backToList": "Tüm otomasyonlar",
           "tableName": "Ad",
           "tableProject": "Proje",
@@ -18903,6 +18911,9 @@
           "cancel": "İptal",
           "add": "Katalog ekle",
           "body": "Bir bağlantı bu katalogdan {{value0}} öğesini göstermek istedi. Yalnızca güvendiğiniz kişilerin kataloglarını ekleyin."
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}} ({{value1}})"
         }
       }
     },
@@ -19352,8 +19363,12 @@
         "truncatedResponse": "Sağlayıcı yanıtı kısaltıldı (özgün boyut: {{bytes}} bayt)."
       },
       "composer": {
+        "planMode": "Planla",
         "send": "Gönder",
         "alternateSteerHint": "Yönlendirmek için {{shortcut}}",
+        "previewQueue": "Sıraya al",
+        "previewSteer": "Yönlendir",
+        "previewSteerQueued": "Sıradakini yönlendir",
         "alternateQueueHint": "Sıraya almak için {{shortcut}}",
         "noPty": "Canlı terminal yok, yeniden bağlanmak için geri geçin.",
         "locked": "Giriş başka bir cihaz tarafından tutuluyor.",
@@ -20070,7 +20085,15 @@
         "hostUnavailable": "Ekin ana bilgisayarı kullanılamıyor. Yeniden bağlanıp tekrar deneyin.",
         "connectionChanged": "Bağlantı değişti. Bu eki kapatıp yeniden açın.",
         "readFailed": "Bu ek ana bilgisayarında okunamıyor. Yeniden bağlanıp tekrar deneyin. Dosya silinmiş veya değiştirilmiş olabilir."
-      }
+      },
+      "composerWorkspace": {
+        "copyFailed": "Kopyalanamadı",
+        "copyIdentity": "{{value0}} kopyala",
+        "folder": "Klasör",
+        "mainCheckout": "Ana çalışma kopyası",
+        "worktree": "Worktree"
+      },
+      "explicitChatWindows": "Bu ajanın sohbeti henüz Windows'ta kullanılamıyor. Bunun yerine bir terminalde açın."
     },
     "tab": {
       "bar": {
@@ -20619,7 +20642,10 @@
       "workerAutoClose": {
         "running": "Geçici orkestrasyon çalışanı · Tamamlandıktan 2 dakika sonra kapanır",
         "finished": "Geçici orkestrasyon çalışanı tamamlandı · {{countdown}} içinde kapanır",
-        "keepOpen": "Açık tut"
+        "keepOpen": "Açık tut",
+        "bannerRunning": "Orkestrasyon çalışanı · Tamamlandıktan 2 dakika sonra kapanır",
+        "bannerFinished": "Orkestrasyon çalışanı tamamlandı · {{countdown}} içinde kapanır",
+        "temporaryBadge": "Geçici"
       }
     },
     "wslHostMark": {
@@ -22219,7 +22245,8 @@
     }
   },
   "browserTab": {
-    "agentDriving": "Bir ajan bu sayfayı kullanıyor"
+    "agentDriving": "Bir ajan bu sayfayı kullanıyor",
+    "controlledByHost": "{{host}} tarafından kontrol ediliyor"
   },
   "nativeChat": {
     "math": {
@@ -23200,5 +23227,14 @@
     "sameAsTextDefault": "Varsayılanla aynı · {{value0}}",
     "chatChoicesNote": "CLI bayrağı olmayan {{agent}} modeli veya çaba seçimleri sohbetlere uygulanır.",
     "composedChoicesNote": "{{agent}} için çaba ve hız seçimleri model argümanına dahil edilir."
+  },
+  "remoteHostBrowserControl": {
+    "title": "{{host}} bir tarayıcı sekmesini kontrol ediyor",
+    "description": "Bu SSH sunucusundaki ajanlar, sunucunun çalışma alanlarındaki Orca tarayıcı sekmelerini açıp kullanabilir. Kontrol ettiği sekmeler adını gösterir. Bunu Ayarlar > SSH bölümünden değiştirebilirsiniz.",
+    "stop": "Durdur",
+    "disallow": "İzin verme",
+    "stopped": "{{host}}, Orca yeniden başlatılana kadar tarayıcı sekmelerini kontrol etmeyecek.",
+    "disallowed": "{{host}} artık tarayıcı sekmelerini kontrol edemez. Ayarlar > SSH bölümünden yeniden açabilirsiniz.",
+    "failed": "{{host}} durdurulamadı. Tarayıcı kontrolünü Ayarlar > SSH bölümünden kapatın."
   }
 }

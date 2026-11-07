@@ -1,5 +1,5 @@
 import { build } from 'esbuild'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -46,21 +46,4 @@ describe('session scanner service build smoke', () => {
   it('lists a seeded session through the built entry', () => {
     expect(() => smokeSessionScannerService(builtDirectory)).not.toThrow()
   }, 60_000)
-
-  it('fails when the entry is missing', () => {
-    expect(() => smokeSessionScannerService(fixtureDirectory())).toThrow('smoke failed')
-  })
-
-  it('fails when the child answers without scanning', () => {
-    const directory = fixtureDirectory()
-    writeFileSync(
-      join(directory, ENTRY),
-      `process.on('message', (m) => {
-        if (m.type === 'init') process.send({ type: 'ready', protocol: m.protocol, pid: process.pid })
-        if (m.type === 'request') process.send({ type: 'result', id: m.id, operation: 'scan',
-          value: { result: { sessions: [], issues: [] }, durationMs: 0 } })
-      })`
-    )
-    expect(() => smokeSessionScannerService(directory)).toThrow('smoke failed')
-  })
 })

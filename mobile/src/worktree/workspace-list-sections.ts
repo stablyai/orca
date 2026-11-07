@@ -174,7 +174,8 @@ export function buildMobileWorkspacePlan(
   workspaceStatuses: readonly WorkspaceStatusDefinition[] = DEFAULT_WORKSPACE_STATUSES,
   _collapsedGroups: ReadonlySet<string> = new Set(),
   showPinnedInGroups = false,
-  repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId> = new Map()
+  repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId> = new Map(),
+  lineageStores?: Parameters<typeof getMobileWorkspaceLineageChildren>[1]
 ) {
   const groupLabels = {
     pinned: translate('worktree.workspaceListSections.pinned', 'Pinned'),
@@ -187,9 +188,9 @@ export function buildMobileWorkspacePlan(
   const filtered = filterWorktrees(worktrees, filters, search, repoHostIdByRepoId)
   const sorted = sortWorktrees(filtered, sortMode, Date.now(), hostSortsByStamps(worktrees))
   const childrenByParentIdentity = getMobileWorkspaceLineageChildren(
-    filters.filterRepoIds.length > 0
-      ? worktrees.filter((w) => filters.filterRepoIds.includes(w.repoId))
-      : worktrees
+    worktrees,
+    lineageStores,
+    filters.filterRepoIds
   )
   const repoMap = buildSectionRepoMap(projectCatalog.repos, worktrees)
   const projectIndex = buildProjectGroupingIndex(projectCatalog.grouping ?? undefined)

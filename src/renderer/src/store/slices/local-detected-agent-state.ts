@@ -20,6 +20,17 @@ import {
 } from './local-detected-agent-store-state'
 import { readLocalAgentInventoryOutcome } from './local-agent-inventory-outcome'
 
+function haveSameCommandOverrides(
+  a: Partial<Record<string, string>> | undefined,
+  b: Partial<Record<string, string>> | undefined
+): boolean {
+  if (a === b) {
+    return true
+  }
+  const keys = new Set([...Object.keys(a ?? {}), ...Object.keys(b ?? {})])
+  return [...keys].every((key) => (a?.[key]?.trim() ?? '') === (b?.[key]?.trim() ?? ''))
+}
+
 type LocalDetectedAgentStateCreator = StateCreator<AppState, [], [], LocalDetectedAgentState>
 
 export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (set, get, store) => {
@@ -256,10 +267,22 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
     }
   }
   store.subscribe((state, previous) => {
-    if (state.settings?.disabledTuiAgents === previous.settings?.disabledTuiAgents) {
+    // Settings hydration is not an edit; detection already ran with the persisted overrides.
+    const overridesChanged =
+      previous.settings != null &&
+      !haveSameCommandOverrides(
+        state.settings?.agentCmdOverrides,
+        previous.settings?.agentCmdOverrides
+      )
+    if (
+      !overridesChanged &&
+      state.settings?.disabledTuiAgents === previous.settings?.disabledTuiAgents
+    ) {
       return
     }
+    // Detection probes command overrides, so a changed override invalidates every local inventory.
     if (
+      overridesChanged ||
       !haveSameDisabledTuiAgents(
         state.settings?.disabledTuiAgents,
         previous.settings?.disabledTuiAgents

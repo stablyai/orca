@@ -11,6 +11,7 @@ import type { RpcResponse } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { hostStatusProbe } from '../transport/host-status-probe-operations'
 import { subscribeConnectionRevival } from '../transport/connection-revival-signal'
+import { subscribeSharedClientEvents } from '../transport/shared-client-events'
 import { automationListRead } from './automation-operations'
 import { automationOutcomeUnknownMessage, automationErrorMessage } from './automation-error'
 import type { MobileAutomationRow } from './automation-reply-schema'
@@ -167,23 +168,15 @@ export function useAutomationCatalog(client: RpcClient | null, server: boolean) 
     if (!client || server) {
       return
     }
-    const stopEvents = client.subscribe(
-      'runtime.clientEvents.subscribe',
-      null,
-      (event: unknown) => {
-        if (!event || typeof event !== 'object' || !('type' in event)) {
-          return
-        }
-        if (event.type === 'end' || event.type === 'error') {
-          streamReady.current = false
-        }
-        if (event.type === 'ready' || event.type === 'automationsChanged') {
-          streamReady.current = true
-          void refresh()
-        }
+    return subscribeSharedClientEvents(client, (event) => {
+      if (event.type === 'end' || event.type === 'error') {
+        streamReady.current = false
       }
-    )
-    return stopEvents
+      if (event.type === 'ready' || event.type === 'automationsChanged') {
+        streamReady.current = true
+        void refresh()
+      }
+    })
   }, [client, server, refresh])
 
   useEffect(() => {

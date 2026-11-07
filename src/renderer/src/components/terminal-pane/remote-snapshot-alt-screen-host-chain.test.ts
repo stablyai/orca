@@ -7,7 +7,10 @@ import {
   decodeTerminalStreamJson,
   encodeTerminalStreamFrame
 } from '../../../../shared/terminal/stream/terminal-stream-protocol'
-import { flushAsyncTicks, writeHeadlessTerminal } from './pty-connection-test-async'
+import {
+  flushAsyncTicks,
+  writeHeadlessTerminal
+} from './pty-connection/test-fixtures/pty-connection-test-async'
 import {
   terminalWriteText,
   createMockTransport,
@@ -15,21 +18,21 @@ import {
   createManager,
   type ConnectCallbacks,
   type MockTransport
-} from './pty-connection-test-pane-fixtures'
+} from './pty-connection/test-fixtures/pty-connection-test-pane-fixtures'
 
-import type { PtyReplayDataMeta } from './pty-transport-types'
+import type { PtyReplayDataMeta } from './pty-transport/pty-transport-types'
 import {
   buildPaneConnectionDeps,
   type PtyConnectionAgentTitleMocks,
   bindPaneAgentTitleMocks
-} from './pty-connection-test-deps'
-import { createInitialStoreState } from './pty-connection-test-store-fixtures'
-import type { StoreState } from './pty-connection-test-store-state'
+} from './pty-connection/test-fixtures/pty-connection-test-deps'
+import { createInitialStoreState } from './pty-connection/test-fixtures/pty-connection-test-store-fixtures'
+import type { StoreState } from './pty-connection/test-fixtures/pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
-} from './pty-connection-test-environment'
-import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
+} from './pty-connection/test-fixtures/pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection/test-fixtures/pty-connection-test-connect-mock-pane'
 
 // Drive host model/ownership, ACK recovery, codec, multiplexer and transport together; only the final pane callback is test-wired so impossible handcrafted metadata cannot pass.
 
@@ -60,7 +63,8 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
-  const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+  const { buildAgentStatusModuleMock } =
+    await import('./pty-connection/test-fixtures/pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -76,7 +80,7 @@ vi.mock('react', async (importOriginal) => {
   }
 })
 
-vi.mock('./pty-transport', async (importOriginal) => ({
+vi.mock('./pty-transport/ipc/pty-transport', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   createIpcPtyTransport: vi.fn(() => {
     const nextTransport = transportFactoryQueue.shift()
@@ -252,7 +256,8 @@ async function publishHostRecovery(
     runtimeEnvironments: { call: runtimeCall, subscribe: runtimeSubscribe }
   })
 
-  const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+  const { createRemoteRuntimePtyTransport } =
+    await import('./pty-transport/remote-runtime/remote-runtime-pty-transport')
   const transport = createRemoteRuntimePtyTransport('env-1', {
     worktreeId: 'wt-1',
     tabId: 'tab-1',
@@ -356,7 +361,7 @@ describe('host-published recovery snapshot onto a live alt screen', () => {
     data: string,
     meta: PtyReplayDataMeta
   ): Promise<PaneEvent[]> {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = await import('./pty-connection/connect-pane-pty')
     const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const transport = createMockTransport('agent-pty')
     const replay: { current: ConnectCallbacks['onReplayData'] | null } = { current: null }

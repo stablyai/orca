@@ -3,11 +3,11 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { cancelledJournalPromptBody } from '../agent-session-journal/journal-prompt-body-bounds'
-import { requiresTerminalSettlement } from '../agent-session-journal/journal-terminal-settlement'
-import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/structured-agent-session-event-sink-estimate'
-import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/structured-agent-session-transition'
-import { unhandledProviderFrameJournalItem } from '../agent-session-wire/unhandled-provider-frame'
+import { cancelledJournalPromptBody } from '../agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
+import { requiresTerminalSettlement } from '../agent-session-journal/item-lifecycle/journal-terminal-settlement'
+import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'
+import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/journal-ingress/structured-agent-session-transition'
+import { unhandledProviderFrameJournalItem } from '../agent-session-wire/providers/unhandled-provider-frame'
 import { relightsProviderTimelineBackgroundTask } from './provider-timeline-background-tasks'
 import { providerTimelinePlacement } from './provider-timeline-context'
 import type {
@@ -128,7 +128,8 @@ export function decideRequest(
   const opened: ProviderTimelineOpenItem = {
     kind: 'request',
     row: null,
-    turnItemId: turn
+    turnItemId: turn,
+    ...(event.outlivesTurn ? { outlivesTurn: true as const } : {})
   }
   return {
     writes: [
@@ -143,7 +144,12 @@ export function decideRequest(
           // Reused request IDs need new incarnations; never overwrite existing rows.
           const row = context.rows.nextRequest(event.request, at)
           opened.row = row
-          if (turn !== null && providerTimelineTurnRowState(at, turn) === 'settled') {
+          // A live request outliving its turn still needs its card.
+          if (
+            turn !== null &&
+            !event.outlivesTurn &&
+            providerTimelineTurnRowState(at, turn) === 'settled'
+          ) {
             return null
           }
           return { identity: row.identity, body: event.body }

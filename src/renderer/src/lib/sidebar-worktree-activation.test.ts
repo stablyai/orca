@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   activateAndRevealWorktree: vi.fn()
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace,
   activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))

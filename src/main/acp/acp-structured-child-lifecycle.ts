@@ -1,7 +1,6 @@
-import {
-  type StructuredAgentSessionAdapter,
-  AgentSessionAcquisitionRootExitObservedError
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
 import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisition-starts'
 import { isAcpReadySession, type AcpStructuredChild } from './acp-structured-child'
 import type { AcpStructuredConnection } from './acp-structured-connection'
@@ -12,7 +11,7 @@ import {
   type SubmissionRejectionFact
 } from '../../shared/agent-session/failures/agent-session-failure'
 import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
-import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import { providerStartupFailureFact } from '../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import {
   ACP_STOP_GRACE_MS,
   type AcpStructuredSessionAdapterDeps
@@ -20,10 +19,10 @@ import {
 import {
   createStructuredAgentSessionLogger,
   neverThrowingStructuredAgentSessionLogger
-} from '../native-chat/agent-session-wire/structured-agent-session-logger'
+} from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { windDownAcpTurn } from './acp-structured-stop'
 import { AcpAgentExitedError } from './acp-errors'
-import { AgentSessionStartEndings } from '../native-chat/agent-session-wire/structured-agent-session-start-failure'
+import { AgentSessionStartEndings } from '../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 import { acpRefusedStart, acpStartFailure } from './acp-startup-outcome'
 
 /** An agent that never ran names its missing CLI or folder; any other end while starting is its exit. */

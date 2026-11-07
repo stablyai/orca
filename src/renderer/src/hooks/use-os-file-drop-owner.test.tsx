@@ -25,7 +25,11 @@ type DropHandler<Destination = undefined> = (
 ) => void | Promise<void>
 
 const uuid = vi.hoisted(() => ({ next: 0 }))
-vi.mock('@/lib/browser-uuid', () => ({ createBrowserUuid: () => `uuid-${++uuid.next}` }))
+
+const mockLaunchUuid = vi.hoisted(() => () => `uuid-${++uuid.next}`)
+vi.mock('../../../shared/non-secure-context-uuid', () => ({
+  createNonSecureContextUuid: mockLaunchUuid
+}))
 
 const getPathForFile = vi.fn((file: File) => `/dropped/${file.name}`)
 const prepareDroppedPaths = vi.fn(

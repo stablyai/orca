@@ -1,5 +1,8 @@
 import { openPlannedFileBrowserLink, type FileBrowserLinkTarget } from './file-preview-link-open'
-import type { BrowserLinkOpenContext, BrowserOpenOutcome } from './browser-link-destination'
+import type {
+  BrowserLinkOpenContext,
+  BrowserOpenOutcome
+} from './browser/navigation/browser-link-destination'
 import { toast } from 'sonner'
 import { absolutePathToFileUri } from '@/components/editor/markdown/link-routing/markdown-internal-links'
 import { getWorkspaceClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
@@ -8,8 +11,8 @@ import { useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { basename } from '@/lib/path'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
-import { activateBrowserWorkspaceTab } from '@/lib/browser-workspace-tab-activation'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { activateBrowserWorkspaceTab } from '@/lib/browser/workspace/browser-workspace-tab-activation'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { isTwinWorkspace } from '@/lib/resolve-owner'
 import {
   REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE,

@@ -1,9 +1,11 @@
+import type { AntigravityChatAuthConfig } from '../../../shared/antigravity-chat-auth-config'
 import type {
   AntigravityAccountState,
   AntigravityAccountTarget
 } from '../../../shared/antigravity-account-types'
 import {
   ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY,
+  ANTIGRAVITY_CHAT_AUTH_CONFIG_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CHAT_SIGN_IN_RUNTIME_CAPABILITY
 } from '../../../shared/account-runtime-capabilities'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
@@ -59,4 +61,23 @@ export async function subscribeAntigravityChatSignIn(
 ): Promise<{ unsubscribe: () => void }> {
   await assertChatSignInHost(owner)
   return subscribeRuntimeRpc(owner, 'accounts.antigravityChatSignInSubscribe', null, handlers)
+}
+
+export async function callAntigravityChatAuthConfig(
+  owner: RuntimeClientTarget,
+  config?: AntigravityChatAuthConfig
+): Promise<AntigravityChatAuthConfig | null> {
+  if (owner.kind === 'environment') {
+    await assertRuntimeEnvironmentCapability(
+      owner.environmentId,
+      ANTIGRAVITY_CHAT_AUTH_CONFIG_RUNTIME_CAPABILITY,
+      'Update Orca on this host to configure Gemini Enterprise for Antigravity chats.'
+    )
+  }
+  return callRuntimeRpc(
+    owner,
+    config ? 'accounts.antigravityChatAuthApply' : 'accounts.antigravityChatAuthGet',
+    config,
+    { timeoutMs: 20_000 }
+  )
 }

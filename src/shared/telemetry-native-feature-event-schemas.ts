@@ -22,10 +22,21 @@ export const nativeChatToggledSchema = z
 // unknown means runtime was unresolved at send time.
 export const nativeChatRuntimeSchema = z.enum(['local', 'remote', 'unknown'])
 export type NativeChatRuntime = z.infer<typeof nativeChatRuntimeSchema>
+// Which device the person typed on; the host emits phone sends, the desktop renderer its own.
+export const nativeChatClientSchema = z.enum(['desktop', 'mobile'])
 export const nativeChatMessageSentSchema = z
   .object({
     agent_kind: agentKindSchema,
-    runtime: nativeChatRuntimeSchema
+    runtime: nativeChatRuntimeSchema,
+    client: nativeChatClientSchema
+  })
+  .strict()
+// A phone opening a chat transcript or a full terminal stream, once per phone, view, surface and
+// UTC day; agent_kind is absent for a plain shell.
+export const mobileSessionOpenedSchema = z
+  .object({
+    surface: nativeChatViewModeSchema,
+    agent_kind: agentKindSchema.optional()
   })
   .strict()
 export const nativeChatPickerOpenedSchema = z
@@ -83,7 +94,9 @@ export const cmdJPaletteFeatureTipAcknowledgedSchema = z
   .strict()
 
 // Missing versions identify events emitted before the corner-card rollout.
-const chatUiLaunchTipExperimentVersionSchema = z.literal('corner-card-v2').optional()
+const chatUiLaunchTipExperimentVersionSchema = z
+  .enum(['corner-card-v2', 'corner-card-v3'])
+  .optional()
 const chatUiFeatureTipVariantSchema = z.enum(['chat_ui_off', 'chat_ui_on'])
 export const chatUiFeatureTipShownSchema = z
   .object({
@@ -131,7 +144,7 @@ export const agentDefaultSurfaceChangedSchema = z
     from_mode: nativeChatViewModeSchema,
     to_mode: nativeChatViewModeSchema,
     source: z.enum(['launch_card', 'settings']),
-    launch_tip_shown: z.boolean(),
+    launch_tip_shown: z.boolean().optional(),
     nth_repo_added: nthRepoAddedSchema
   })
   .strict()

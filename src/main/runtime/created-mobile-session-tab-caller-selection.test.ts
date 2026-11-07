@@ -2,19 +2,23 @@
 import { expect, it, vi } from 'vitest'
 import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
+import { getDefaultWorkspaceSession } from '../../shared/constants'
 
 // Preserve side-effect order: mocks, lifecycle, fixtures.
-const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
-const { store, TEST_WORKTREE_ID } = await import('./orca-runtime-test-fixtures.spec')
-await import('./orca-runtime-test-scenario-builders.spec')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('./orca-runtime')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+const { makeRuntimeStoreWithWorkspaceSession, TEST_WORKTREE_ID } =
+  await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
+await import('./orca-runtime-tests/orca-runtime-test-scenario-builders.spec')
 
 const WT = TEST_WORKTREE_ID
 
 function pairedRuntime(clientKind?: 'mobile' | 'runtime') {
   let next = 0
   const spawn = vi.fn(async () => ({ id: `pty-${++next}` }))
-  const runtime = new OrcaRuntimeService(store)
+  const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
+  const runtime = new OrcaRuntimeService(runtimeStore)
   runtime.setPtyController({
     spawn,
     write: () => true,

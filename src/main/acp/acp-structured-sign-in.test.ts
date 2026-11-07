@@ -133,9 +133,10 @@ it.each([
     'No API key found for anthropic.\n\nUse /login, set an API key environment variable, or create /host/agent.db',
     'notSignedIn'
   ],
+  // OMP says this for an unresolved launch selector as well as when signed out.
   [
     'No model selected.\n\nUse /login, set an API key environment variable, or create /host/agent.db\n\nThen use /model to select a model.',
-    'notSignedIn'
+    'modelNotSelected'
   ],
   ['No model selected', undefined],
   ['Rate limit exceeded', undefined],
@@ -160,5 +161,9 @@ it.each([
     ({ body }) => body.kind === 'status' && body.tone === 'error'
   )
   expect(row?.body.kind === 'status' ? row.body.failure?.kind : undefined).toBe(kind)
-  expect(row?.body.kind === 'status' ? row.body.text : '').toContain(detail)
+  expect(row?.body.kind === 'status' ? row.body.text : '').toContain(
+    kind === 'modelNotSelected'
+      ? 'OMP has no model selected. Check your model selection and OMP sign-in, then send again.'
+      : detail
+  )
 })

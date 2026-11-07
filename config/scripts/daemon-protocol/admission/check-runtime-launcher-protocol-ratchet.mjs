@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { readDaemonProtocolRevisionFacts } from '../schema-facts/daemon-protocol-revision-facts.mjs'
 import {
   DAEMON_PROTOCOL_SOURCE_PATH,
   parseDaemonProtocolFacts
@@ -27,11 +28,11 @@ export const RUNTIME_LAUNCHER_PATHS = [
   // Remote slot runtime selection.
   'src/main/managed-server/install/orcad-remote-runtime.ts',
   // Terminal daemon host launch: which executable the daemon child is forked from.
-  'src/main/daemon/daemon-launched-child.ts',
-  'src/main/daemon/daemon-launched-child-spawn.ts',
-  'src/main/daemon/daemon-out-of-process-launcher.ts',
-  'src/main/daemon/daemon-host-relocation.ts',
-  'src/main/daemon/daemon-host-manifest.ts'
+  'src/main/daemon/launch/daemon-launched-child.ts',
+  'src/main/daemon/launch/daemon-launched-child-spawn.ts',
+  'src/main/daemon/launch/daemon-out-of-process-launcher.ts',
+  'src/main/daemon/executable-host/windows/daemon-host-relocation.ts',
+  'src/main/daemon/executable-host/windows/daemon-host-manifest.ts'
 ]
 
 export const RUNTIME_PROTOCOL_OVERRIDE_ENV = 'ORCA_ALLOW_RUNTIME_LAUNCHER_PROTOCOL_BUMP'
@@ -89,10 +90,7 @@ export function checkRuntimeLauncherProtocolRatchet({ repoRoot, base, env = proc
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
-  const baseFacts = parseDaemonProtocolFacts(
-    git(repoRoot, ['show', `${base}:${DAEMON_PROTOCOL_SOURCE_PATH}`]),
-    `${base}:${DAEMON_PROTOCOL_SOURCE_PATH}`
-  )
+  const baseFacts = readDaemonProtocolRevisionFacts(repoRoot, base)
   const candidateFacts = parseDaemonProtocolFacts(
     readFileSync(join(repoRoot, DAEMON_PROTOCOL_SOURCE_PATH), 'utf8'),
     DAEMON_PROTOCOL_SOURCE_PATH

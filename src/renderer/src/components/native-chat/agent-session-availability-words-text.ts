@@ -20,6 +20,8 @@ type AvailabilityCopyId = Extract<
   | 'cliMissingInWslDistro'
   | 'cliTooOld'
   | 'modelUnavailable'
+  | 'modelUnavailableUpdate'
+  | 'modelNotSelected'
 >
 
 export const AVAILABILITY_PIECES: Record<
@@ -80,6 +82,18 @@ export const AVAILABILITY_PIECES: Record<
     translate(
       'components.native-chat.failureWords.modelUnavailable',
       COPY.modelUnavailable,
+      values
+    ),
+  modelNotSelected: (values) =>
+    translate(
+      'components.native-chat.failureWords.modelNotSelected',
+      COPY.modelNotSelected,
+      values
+    ),
+  modelUnavailableUpdate: (values) =>
+    translate(
+      'components.native-chat.failureWords.modelUnavailableUpdate',
+      COPY.modelUnavailableUpdate,
       values
     ),
   cliMissing: (values) =>

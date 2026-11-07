@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { chmod, lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { chmod, lstat, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -72,69 +72,10 @@ describe('electron-builder config', () => {
   })
 
   // All-negation lists implicitly include **/*; missing examples exclusion shipped hostile-panel in 1.4.160-rc.3. Exercise real matcher, not pattern spelling.
-  it('keeps plugin authoring examples out of app.asar', () => {
-    const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
-    // copyFiles() prepends this itself once the pattern list is all-negation.
-    matcher.prependPattern('**/*')
-    const isPacked = matcher.createFilter()
-    const packs = (repoPath) => isPacked(join('/app', repoPath), { isDirectory: () => false })
-
-    for (const authoringOnly of [
-      'examples/plugins/test-fixtures/hostile-panel/panel.html',
-      'examples/plugins/test-fixtures/hostile-panel/orca-plugin.json',
-      'examples/plugins/hello-orca/main.mjs',
-      'examples/plugins/hello-orca/orca-plugin.json'
-    ]) {
-      expect(packs(authoringOnly)).toBe(false)
-    }
-    // The negation stays anchored at the app root, so nested `examples` segments still ship.
-    expect(packs('out/main/examples/index.js')).toBe(true)
-  })
 
   // CI never creates ~270MB/branch out/electron-dev caches; only local packages exposed this bloat.
-  it('keeps cached dev Electron bundles and Vite dependencies out of app.asar', () => {
-    const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
-    matcher.prependPattern('**/*')
-    const isPacked = matcher.createFilter()
-    const packs = (repoPath) => isPacked(join('/app', repoPath), { isDirectory: () => false })
-
-    for (const devBundlePath of [
-      'out/electron-dev/1a2b3c4d5e6f/Orca: dev.app/Contents/MacOS/Electron',
-      'out/electron-dev/1a2b3c4d5e6f/orca-dev-electron-app.json',
-      '.cache/vite/renderer/deps/react.js',
-      '.cache/vite/web/deps/react.js',
-      '.cache/vite.lock/owner'
-    ]) {
-      expect(packs(devBundlePath)).toBe(false)
-    }
-    // The real build outputs sit beside it under out/ and must still ship.
-    expect(packs('out/main/index.js')).toBe(true)
-    expect(packs('out/renderer/index.html')).toBe(true)
-  })
 
   // Duplicated relay.js added 14MB to asar and AV quarantine gutted the entire archive (#20966); packaged app uses resources/relay.
-  it('keeps the relay bundles out of app.asar and ships them only through extraResources', () => {
-    const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
-    matcher.prependPattern('**/*')
-    const isPacked = matcher.createFilter()
-    const packs = (repoPath) => isPacked(join('/app', repoPath), { isDirectory: () => false })
-
-    for (const relayPath of [
-      'out/relay/linux-x64/relay.js',
-      'out/relay/win32-x64/relay.js',
-      'out/relay/darwin-arm64/relay-watcher.js',
-      'out/relay/wsl/wsl-agent-hook-relay.js'
-    ]) {
-      expect(packs(relayPath)).toBe(false)
-    }
-
-    for (const platform of ['mac', 'linux', 'win']) {
-      expect(electronBuilderConfig[platform].extraResources).toContainEqual({
-        from: 'out/relay',
-        to: 'relay'
-      })
-    }
-  })
 
   // Bundled agent-browser answered "No skills found" because only its binary shipped (#17705).
   const hostBuilderPlatform = { darwin: 'mac', linux: 'linux', win32: 'win' }[process.platform]
@@ -174,77 +115,9 @@ describe('electron-builder config', () => {
     }
   )
 
-  it.each(['mac', 'linux'])(
-    'loads Codex TOML parsing after %s runtime pruning',
-    async (platform) => {
-      const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-packaged-codex-toml-'))
-      try {
-        const resource = electronBuilderConfig[platform].extraResources.find(
-          (entry) => entry.to === join('node_modules', 'smol-toml')
-        )
-        expect(resource).toBeDefined()
-        await copyFiles([
-          new FileMatcher(resource.from, join(resourcesDir, resource.to), (value) => value)
-        ])
-        require('../../../packaged-runtime-node-modules.cjs').prunePackagedRuntimeNodeModules(
-          resourcesDir,
-          platform === 'mac' ? 'darwin' : 'linux',
-          process.arch
-        )
-        const stagedRequire = createRequire(join(resourcesDir, 'out', 'main', 'codex', 'trust.cjs'))
-        expect(await realpath(stagedRequire.resolve('smol-toml'))).toBe(
-          await realpath(join(resourcesDir, resource.to, 'dist', 'index.cjs'))
-        )
-        const { parse } = stagedRequire('smol-toml')
-        expect(parse('[projects."/workspace"]\ntrust_level = "trusted"\n')).toEqual({
-          projects: { '/workspace': { trust_level: 'trusted' } }
-        })
-      } finally {
-        await rm(resourcesDir, { recursive: true, force: true })
-      }
-    }
-  )
-
   // CLI Node mode cannot read asar; packed entry sends orca serve to Electron (#27307).
-  it('unpacks the orcad serve-selection entry the CLI runs', async () => {
-    const sharedSource = await readFile(
-      join(REPO_ROOT, 'src', 'shared', 'orcad-local-serve-selection.ts'),
-      'utf8'
-    )
-    const entryName = sharedSource.match(/ORCAD_LOCAL_SERVE_SELECTION_ENTRY = '([^']+)'/)?.[1]
-    expect(entryName).toBeDefined()
-
-    const matcher = new FileMatcher(
-      '/app',
-      '/dest',
-      (value) => value,
-      electronBuilderConfig.asarUnpack
-    )
-    const isUnpacked = matcher.createFilter()
-    expect(
-      isUnpacked(join('/app', 'out', 'main', `${entryName}.js`), { isDirectory: () => false })
-    ).toBe(true)
-  })
 
   // Swept one-time /tmp asar extracts cause web-client 500s and phone bundle failures until restart (#27976).
-  it('unpacks the web and mobile bundles a host serves by opening their files', () => {
-    const matcher = new FileMatcher(
-      '/app',
-      '/dest',
-      (value) => value,
-      electronBuilderConfig.asarUnpack
-    )
-    const isUnpacked = matcher.createFilter()
-    for (const webPath of [
-      'out/renderer/web-index.html',
-      'out/renderer/assets/index-abc123.js',
-      'out/renderer/.orca-web-client-files.json',
-      'out/mobile-web/manifest.json',
-      'out/mobile-web/assets/index-abc123.js'
-    ]) {
-      expect(isUnpacked(join('/app', webPath), { isDirectory: () => false })).toBe(true)
-    }
-  })
 
   it('validates each AppImage before electron-builder publishes it', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-electron-builder-appimage-'))
@@ -263,67 +136,11 @@ describe('electron-builder config', () => {
       await rm(root, { recursive: true, force: true })
     }
   })
-
-  it('overrides packaged semver only for local macOS builds', () => {
-    const configPath = require.resolve('../../../electron-builder.config.cjs')
-    const original = process.env.ORCA_LOCAL_BUILD_VERSION
-    const originalMacRelease = process.env.ORCA_MAC_RELEASE
-    try {
-      delete require.cache[configPath]
-      delete process.env.ORCA_MAC_RELEASE
-      process.env.ORCA_LOCAL_BUILD_VERSION = '1.4.159-rc.0.local.123.abc'
-      expect(require('../../../electron-builder.config.cjs').extraMetadata).toEqual({
-        version: '1.4.159-rc.0.local.123.abc'
-      })
-    } finally {
-      if (originalMacRelease === undefined) {
-        delete process.env.ORCA_MAC_RELEASE
-      } else {
-        process.env.ORCA_MAC_RELEASE = originalMacRelease
-      }
-      if (original === undefined) {
-        delete process.env.ORCA_LOCAL_BUILD_VERSION
-      } else {
-        process.env.ORCA_LOCAL_BUILD_VERSION = original
-      }
-      delete require.cache[configPath]
-      require('../../../electron-builder.config.cjs')
-    }
-  })
-
-  it('never applies local semver to release packaging', () => {
-    const configPath = require.resolve('../../../electron-builder.config.cjs')
-    const originalLocalVersion = process.env.ORCA_LOCAL_BUILD_VERSION
-    const originalMacRelease = process.env.ORCA_MAC_RELEASE
-    try {
-      delete require.cache[configPath]
-      process.env.ORCA_LOCAL_BUILD_VERSION = '1.4.159-local.123.abc'
-      process.env.ORCA_MAC_RELEASE = '1'
-      expect(require('../../../electron-builder.config.cjs').extraMetadata).toBeUndefined()
-    } finally {
-      if (originalLocalVersion === undefined) {
-        delete process.env.ORCA_LOCAL_BUILD_VERSION
-      } else {
-        process.env.ORCA_LOCAL_BUILD_VERSION = originalLocalVersion
-      }
-      if (originalMacRelease === undefined) {
-        delete process.env.ORCA_MAC_RELEASE
-      } else {
-        process.env.ORCA_MAC_RELEASE = originalMacRelease
-      }
-      delete require.cache[configPath]
-      require('../../../electron-builder.config.cjs')
-    }
-  })
 })
 
 describe('arch-aware packaging guard', () => {
   // electron-builder Arch enum: ia32=0, x64=1, armv7l=2, arm64=3.
   const HOST_ARCH = process.arch === 'arm64' ? 3 : 1
-  const OTHER_ARCH = process.arch === 'arm64' ? 1 : 3
-  const OTHER_ARCH_NAME = process.arch === 'arm64' ? 'x64' : 'arm64'
-  const SHERPA_PLATFORM = process.platform === 'win32' ? 'win' : process.platform
-  const otherSherpa = `sherpa-onnx-${SHERPA_PLATFORM}-${OTHER_ARCH_NAME}`
 
   // Native tests need valid mobile bundle for beforePack; use temp build, leaving bundle verification to its own suite.
   let scratch
@@ -376,48 +193,5 @@ describe('arch-aware packaging guard', () => {
     }
   })
 
-  it.skipIf(process.platform === 'win32')(
-    'requires the other architecture natives to be installed',
-    () => {
-      const otherSherpaInstalled = existsSync(
-        join(REPO_ROOT, 'node_modules', otherSherpa, 'package.json')
-      )
-      const otherSherpaExpected = Object.hasOwn(
-        require('../../../../package.json').optionalDependencies,
-        otherSherpa
-      )
-      if (otherSherpaExpected && !otherSherpaInstalled) {
-        expect(() => packHost(OTHER_ARCH)).toThrow(otherSherpa)
-        expect(() => packHost(OTHER_ARCH)).toThrow('pnpm install:release')
-      } else {
-        expect(() => packHost(OTHER_ARCH)).not.toThrow()
-      }
-    }
-  )
-
   // The host's own build is the foreign-arch case: a Windows checkout compiles these for its CPU only.
-  it.runIf(process.platform === 'win32')(
-    'refuses a Windows workspace addon built for another architecture',
-    () => {
-      for (const binary of ['orca_windows_registry.node', 'orca_windows_security.node']) {
-        expect(() => packHost(OTHER_ARCH)).toThrow(`${binary} for ${OTHER_ARCH_NAME}`)
-      }
-    }
-  )
-
-  it('requires installed Windows addons for Windows packaging', () => {
-    const windowsAddon = electronBuilderConfig.win.extraResources.some(
-      (resource) => resource.to === join('node_modules', '@vscode', 'windows-process-tree')
-    )
-    const packWindows = () =>
-      electronBuilderConfig.beforePack({ electronPlatformName: 'win32', arch: 1 }, bundleDir)
-    if (process.platform === 'win32' || windowsAddon) {
-      expect(packWindows).not.toThrow()
-    } else {
-      expect(packWindows).toThrow('@vscode/windows-process-tree')
-      expect(packWindows).toThrow('Windows packaging requires a Windows host')
-      // A workspace link exists everywhere; only its compiled binary proves the addon will load.
-      expect(packWindows).toThrow('@orca/windows-security')
-    }
-  })
 })

@@ -5,7 +5,8 @@ import { performance } from 'node:perf_hooks'
 import { build } from 'esbuild'
 import { buildCounterbalancedSchedule } from '../measurement/counterbalanced-benchmark-schedule.mjs'
 
-const modulePath = 'src/main/daemon/terminal-history-legacy-scrollback-restore.ts'
+const modulePath =
+  'src/main/daemon/history/restoration/terminal-history-legacy-scrollback-restore.ts'
 const baselineSource = readFileSync(0, 'utf8')
 assert.ok(
   baselineSource.includes('function truncateAltScreen'),

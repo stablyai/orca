@@ -14,7 +14,7 @@ import {
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { StructuredAgentSessionLogger } from './agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionLogger } from './agent-session-wire/host/structured-agent-session-logger'
 import { nativeChatScratchFolderFor, nativeChatScratchRootFor } from './native-chat-scratch-folder'
 import {
   scheduleNativeChatVisualsSweep,

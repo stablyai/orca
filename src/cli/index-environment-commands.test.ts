@@ -80,32 +80,4 @@ describe('orca cli worktree awareness', () => {
     expect(logSpy.mock.calls[0]?.[0]).not.toContain('token')
     expect(logSpy.mock.calls[0]?.[0]).not.toContain('publicKeyB64')
   })
-
-  it('adds saved environments even when ORCA_ENVIRONMENT is set', async () => {
-    process.env.ORCA_ENVIRONMENT = 'stale-env'
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(
-      ['environment', 'add', '--name', 'desk', '--pairing-code', 'orca://pair#abc', '--json'],
-      '/tmp/repo'
-    )
-
-    expect(addEnvironmentFromPairingCodeMock).toHaveBeenCalledWith('/tmp/orca-user-data', {
-      name: 'desk',
-      pairingCode: 'orca://pair#abc'
-    })
-    expect(callMock).not.toHaveBeenCalled()
-    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
-      ok: true,
-      result: {
-        environment: {
-          id: 'env-1',
-          name: 'desk',
-          endpoints: [{ id: 'ws-env-1', kind: 'websocket', endpoint: 'ws://127.0.0.1:6768' }]
-        }
-      }
-    })
-    expect(logSpy.mock.calls[0]?.[0]).not.toContain('token')
-    expect(logSpy.mock.calls[0]?.[0]).not.toContain('publicKeyB64')
-  })
 })

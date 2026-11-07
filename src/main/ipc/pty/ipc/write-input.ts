@@ -1,4 +1,4 @@
-import { isTerminalInputPaused } from '../../../runtime/terminal-input-admission'
+import { isTerminalInputPaused } from '../../../runtime/terminal/input/terminal-input-admission'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import type { PtyRendererDelivery } from '../session'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'

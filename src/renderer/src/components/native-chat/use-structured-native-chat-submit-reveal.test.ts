@@ -79,7 +79,7 @@ it('sends no queued card and retries no start on a host held for its permission 
   })
   await act(() => result.current.queuedMessages.resume())
   await act(() => result.current.queuedMessages.steer('m1'))
-  expect(result.current.queuedMessages.steerHead()).toBe(false)
+  expect(result.current.queuedMessages.steerHead).toBeUndefined()
   expect(queuedMessages.resume).not.toHaveBeenCalled()
   expect(queuedMessages.steer).not.toHaveBeenCalled()
   expect(queuedMessages.steerHead).not.toHaveBeenCalled()

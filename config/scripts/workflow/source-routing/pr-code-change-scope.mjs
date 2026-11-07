@@ -198,12 +198,14 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   // The R1 daemon protocol crossing gate runs in this job.
   'config/scripts/daemon-protocol-facts',
   'config/scripts/daemon-protocol/schema-facts/daemon-protocol-facts',
+  'config/scripts/daemon-protocol/schema-facts/daemon-protocol-revision-facts',
+  'config/scripts/runtime-verification/daemon-lifecycle/git-baseline-sources',
   'config/scripts/check-daemon-protocol-crossing',
   'config/scripts/daemon-protocol/admission/check-daemon-protocol-crossing',
   // R3 runtime launcher protocol ratchet; a bump always routes here via the protocol file.
   'config/scripts/check-runtime-launcher-protocol-ratchet',
   'config/scripts/daemon-protocol/admission/check-runtime-launcher-protocol-ratchet',
-  'src/main/daemon/daemon-protocol-version.ts',
+  'src/main/daemon/protocol/daemon-protocol-version.ts',
   'src/shared/protocol-version',
   'src/shared/terminal/stream/terminal-stream-protocol',
   'src/shared/browser/client-hosting/browser-client-host-protocol',
@@ -263,14 +265,20 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/runtime/rpc/orchestration-legacy-compatibility.ts',
   'src/main/runtime/rpc/orchestration-mutation-executor.ts',
   'src/shared/orchestration-rpc-contract.ts',
-  'src/main/runtime/rpc/methods/agent-launch',
-  'src/main/runtime/rpc/methods/ai-vault.ts',
+  'src/main/runtime/rpc/methods/agent-launch/agent-launch',
+  'src/main/runtime/rpc/methods/history/ai-vault.ts',
   'src/shared/rpc-contract/browser-tab-create-params',
-  'src/main/runtime/rpc/methods/session-tabs.ts',
-  'src/main/runtime/rpc/methods/structured-agent-session',
-  'src/main/runtime/rpc/methods/terminal',
+  'src/main/runtime/rpc/methods/session-tabs/session-tabs.ts',
+  'src/main/runtime/rpc/methods/structured-sessions/',
+  'src/shared/rpc-contract/structured-agent-session-params.ts',
+  'src/shared/rpc-contract/structured-agent-session-continue-params.ts',
+  'src/shared/rpc-contract/structured-agent-session-rename-params.ts',
+  'src/shared/rpc-contract/structured-agent-session-queued-edit-params.ts',
+  'src/main/runtime/rpc/methods/terminal/',
   'src/main/runtime/runtime-worktree-agent-',
-  'src/main/runtime/runtime-worktree-pty-agent-sources',
+  'src/main/runtime/workspaces/process-listing/runtime-worktree-agent-',
+  'src/main/runtime/workspaces/startup/runtime-worktree-agent-startup',
+  'src/main/runtime/workspaces/process-listing/runtime-worktree-pty-agent-sources',
   'src/shared/runtime-worktree-contracts',
   'src/renderer/src/runtime/remote-runtime-terminal-multiplexer',
   // Turn-end status a newer host publishes and an older desktop reads (cross-version-host-observed-turn-end).
@@ -284,14 +292,13 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/workspace-session/workspace-session-sleeping-agents',
   // A current desktop's launch route against a released server's capabilities (cross-version-paired-structured-launch).
   'src/shared/structured-native-chat-launch-route.ts',
-  'src/renderer/src/lib/agent-launch-routing.ts',
+  'src/renderer/src/lib/agent-session/launch/routing/agent-launch-routing.ts',
   'src/renderer/src/runtime/paired-host-client-capabilities.ts',
   'src/shared/electron-remote-runtime-client-capabilities.ts',
   'src/shared/remote-runtime/remote-runtime-client-capabilities.ts',
   // An older app opening a newer orchestration database (orchestration-delivery-downgrade).
-  'src/main/runtime/orchestration/db.ts',
   'src/main/runtime/orchestration/db/',
-  'src/main/runtime/orchestration/orchestration-schema-version-skew'
+  'src/main/runtime/orchestration/db/schema/orchestration-schema-version-skew'
 ]
 
 const MANAGED_HOOK_PREFIXES = [
@@ -437,11 +444,11 @@ export function needsMobileDependencies(changedFiles) {
   return changedFiles.length === 0 || changedFiles.some((file) => file.startsWith('mobile/'))
 }
 
-export const DAEMON_INIT_TEST_SUPPORT = 'src/main/daemon/daemon-init-dependency-mocks.ts'
+export const DAEMON_INIT_TEST_SUPPORT =
+  'src/main/daemon/providers/lifecycle/testing/daemon-init-dependency-mocks.ts'
 
 const DAEMON_INIT_TEST_SCOPE = new Set([
   DAEMON_INIT_TEST_SUPPORT,
-  'src/main/native-chat/agent-session-wire/structured-agent-session-claude-queued-stop.test.ts',
   'config/scripts/desktop-distribution/runtime-verification/process-host-build-dist.test.mjs'
 ])
 

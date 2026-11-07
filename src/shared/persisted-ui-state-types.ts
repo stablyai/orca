@@ -156,6 +156,8 @@ export type PersistedUIState = {
   notificationPermissionRequested?: boolean
   /** Once the "your sessions won't be interrupted" reassurance card is seen, never show it again. */
   updateReassuranceSeen?: boolean
+  /** macOS major whose update-requirement notice was seen; a later requirement shows it again. */
+  seenMacosUpdateRequirement?: string | null
   /** Renderer ui:set acknowledgments by pane/turn timestamp; persist so seen rows stay read after restart. */
   acknowledgedAgentsByPaneKey?: Record<string, number>
   /** Renderer ui:set cutoffs hide events at/before the timestamp; persist so cleared rows stay hidden after restart. */
