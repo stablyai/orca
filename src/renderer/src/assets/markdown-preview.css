@@ -1040,3 +1040,103 @@
 .markdown-preview table[data-preview-table-end='false'] {
   margin-bottom: 0;
 }
+
+/* ─── Obsidian & GitHub Callouts ───────────────────────────────── */
+.markdown-body .markdown-callout {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border-left: 4px solid var(--callout-border);
+  border-radius: 6px;
+  background-color: var(--callout-bg);
+}
+
+.markdown-body .markdown-callout-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 0.95em;
+  color: var(--callout-title);
+  margin-bottom: 0.35rem;
+}
+
+.markdown-body summary.markdown-callout-header {
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.markdown-body details.markdown-callout:not([open]) > summary.markdown-callout-header {
+  margin-bottom: 0;
+}
+
+.markdown-body .markdown-callout-icon {
+  flex-shrink: 0;
+}
+
+.markdown-body .markdown-callout-content {
+  font-size: 0.95em;
+  line-height: 1.5;
+}
+
+.markdown-body .markdown-callout-content > :first-child {
+  margin-top: 0;
+}
+
+.markdown-body .markdown-callout-content > :last-child {
+  margin-bottom: 0;
+}
+
+/* Light theme colors */
+.markdown-light .markdown-callout-note {
+  --callout-border: #0969da;
+  --callout-title: #0969da;
+  --callout-bg: rgba(9, 105, 218, 0.08);
+}
+.markdown-light .markdown-callout-tip {
+  --callout-border: #1a7f37;
+  --callout-title: #1a7f37;
+  --callout-bg: rgba(26, 127, 55, 0.08);
+}
+.markdown-light .markdown-callout-important {
+  --callout-border: #8250df;
+  --callout-title: #8250df;
+  --callout-bg: rgba(130, 80, 223, 0.08);
+}
+.markdown-light .markdown-callout-warning {
+  --callout-border: #9a6700;
+  --callout-title: #9a6700;
+  --callout-bg: rgba(154, 103, 0, 0.08);
+}
+.markdown-light .markdown-callout-caution {
+  --callout-border: #cf222e;
+  --callout-title: #cf222e;
+  --callout-bg: rgba(207, 34, 46, 0.08);
+}
+
+/* Dark theme colors */
+.markdown-dark .markdown-callout-note {
+  --callout-border: #58a6ff;
+  --callout-title: #58a6ff;
+  --callout-bg: rgba(88, 166, 255, 0.12);
+}
+.markdown-dark .markdown-callout-tip {
+  --callout-border: #3fb950;
+  --callout-title: #3fb950;
+  --callout-bg: rgba(63, 185, 80, 0.12);
+}
+.markdown-dark .markdown-callout-important {
+  --callout-border: #a371f7;
+  --callout-title: #a371f7;
+  --callout-bg: rgba(163, 113, 247, 0.12);
+}
+.markdown-dark .markdown-callout-warning {
+  --callout-border: #d29922;
+  --callout-title: #d29922;
+  --callout-bg: rgba(210, 153, 34, 0.12);
+}
+.markdown-dark .markdown-callout-caution {
+  --callout-border: #f85149;
+  --callout-title: #f85149;
+  --callout-bg: rgba(248, 81, 73, 0.12);
+}

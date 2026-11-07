@@ -141,4 +141,37 @@ describe('Markdown listing with bundled ripgrep', () => {
   it('rejects a missing root rather than treating it as an empty folder', async () => {
     await expect(listMarkdownDocuments(join(root, 'missing'))).rejects.toThrow()
   })
+
+  it('populates frontmatter aliases when present on Markdown documents', async () => {
+    await put(
+      'docs/decisions/AgDR-0027-platform-companies.md',
+      '---\ntitle: Platform Companies\naliases:\n  - Operator Gate\n  - "Platform Companies"\n---\n# Body\n'
+    )
+    await put('docs/inline.md', '---\naliases: [First Alias, "Second Alias"]\n---\n# Inline\n')
+    await put('docs/plain.md', '# Plain\n')
+
+    const docs = await listMarkdownDocuments(root)
+    expect(docs).toEqual([
+      {
+        filePath: join(root, 'docs/decisions/AgDR-0027-platform-companies.md'),
+        relativePath: 'docs/decisions/AgDR-0027-platform-companies.md',
+        basename: 'AgDR-0027-platform-companies.md',
+        name: 'AgDR-0027-platform-companies',
+        aliases: ['Operator Gate', 'Platform Companies']
+      },
+      {
+        filePath: join(root, 'docs/inline.md'),
+        relativePath: 'docs/inline.md',
+        basename: 'inline.md',
+        name: 'inline',
+        aliases: ['First Alias', 'Second Alias']
+      },
+      {
+        filePath: join(root, 'docs/plain.md'),
+        relativePath: 'docs/plain.md',
+        basename: 'plain.md',
+        name: 'plain'
+      }
+    ])
+  })
 })

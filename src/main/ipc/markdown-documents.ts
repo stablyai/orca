@@ -1,6 +1,7 @@
 import { spawnBundledRipgrep } from '../ripgrep/bundled-ripgrep-spawn'
 import { stopBundledRipgrep } from '../ripgrep/bundled-ripgrep-stop'
 import { resolveBundledRipgrepWslRouting } from '../ripgrep/bundled-ripgrep-wsl-routing'
+import { populateMarkdownDocumentAliases } from '../../shared/markdown-frontmatter-aliases'
 import {
   collectMarkdownDocuments,
   MARKDOWN_DOCUMENT_LISTING_ARGS
@@ -22,8 +23,18 @@ export async function listMarkdownDocuments(
     wslDistroForOutput: distro,
     stdio: ['ignore', 'pipe', 'pipe']
   })
-  return collectMarkdownDocuments(child, rootPath, Boolean(distro), options.signal, {
-    allowPartialListing: true,
-    stopProcess: () => stopBundledRipgrep(child, Boolean(distro))
-  })
+  const documents = await collectMarkdownDocuments(
+    child,
+    rootPath,
+    Boolean(distro),
+    options.signal,
+    {
+      allowPartialListing: true,
+      stopProcess: () => stopBundledRipgrep(child, Boolean(distro))
+    }
+  )
+  if (distro) {
+    return documents
+  }
+  return populateMarkdownDocumentAliases(documents, options.signal)
 }
