@@ -11286,7 +11286,11 @@
               "micDefault": "sistem varsayılanı",
               "dictationLanguageTitle": "Dikte dili",
               "dictationLanguageDescription": "Konuşma modeline hangi dili konuştuğunuzu söyleyin.",
-              "dictationLanguageKeyword": "dil"
+              "dictationLanguageKeyword": "dil",
+              "modelUnloadTitle": "Konuşma modelini bellekten kaldır",
+              "modelUnloadDescription": "Yerel konuşma modelinin bellekten ne zaman kaldırılacağını seçin.",
+              "modelUnloadKeyword": "kaldır",
+              "modelMemoryKeyword": "bellek"
             }
           }
         },
@@ -20633,6 +20637,13 @@
           "description": "Konuştuğunuz dil. Otomatik algılama seçiliyse model dili her seferinde kendisi belirler.",
           "title": "Dikte dili",
           "auto": "Otomatik algıla"
+        },
+        "modelUnload": {
+          "title": "Konuşma modelini bellekten kaldır",
+          "description": "Ses açıkken Orca yerel modeli yüklü tutar, böylece dikte hemen başlar. Dikteyi bitirdikten sonra belleğin ne zaman boşaltılacağını seçin.",
+          "cloud": "Bulut modelleri sağlayıcının sunucularında çalışır, bu yüzden burada hiçbir şey yüklü kalmaz.",
+          "never": "Asla",
+          "immediately": "Hemen"
         }
       }
     },

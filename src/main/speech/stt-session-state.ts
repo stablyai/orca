@@ -1,3 +1,4 @@
+import { voiceModelUnloadDelayMs } from '../../shared/voice-model-unload'
 import type { ModelManager } from './model-manager'
 import type { OpenAiTranscriptionSession } from './openai-transcription-client'
 import type { SttEventSink } from './stt-service'
@@ -39,6 +40,10 @@ export type SttSessionState = {
   sessions: Map<string, SttSession>
   nextStreamId: number
   idleTeardownTimer: NodeJS.Timeout | null
+  /** null keeps an idle recognizer loaded; 0 unloads it as soon as its last dictation ends. */
+  idleUnloadMs: number | null
+  /** Pre-warm skips a model that failed to load until a dictation loads it, so focus does not retry it forever. */
+  prewarmFailedModelId: string | null
 }
 
 export function createSttSessionState(
@@ -51,7 +56,9 @@ export function createSttSessionState(
     engine: null,
     sessions: new Map(),
     nextStreamId: 0,
-    idleTeardownTimer: null
+    idleTeardownTimer: null,
+    idleUnloadMs: voiceModelUnloadDelayMs(undefined),
+    prewarmFailedModelId: null
   }
 }
 

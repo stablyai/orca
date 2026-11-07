@@ -11601,7 +11601,11 @@
               "micDefault": "system default",
               "dictationLanguageTitle": "Dictation Language",
               "dictationLanguageDescription": "Tell the speech model which language you speak.",
-              "dictationLanguageKeyword": "language"
+              "dictationLanguageKeyword": "language",
+              "modelUnloadTitle": "Unload Speech Model",
+              "modelUnloadDescription": "Choose when the on-device speech model is unloaded from memory.",
+              "modelUnloadKeyword": "unload",
+              "modelMemoryKeyword": "memory"
             }
           }
         },
@@ -21235,6 +21239,13 @@
           "description": "The language you speak. Auto-detect lets the model work it out each time.",
           "title": "Dictation Language",
           "auto": "Auto-detect"
+        },
+        "modelUnload": {
+          "title": "Unload Speech Model",
+          "description": "Orca loads the on-device model while voice is on, so dictation starts at once. Choose when to free its memory after you stop dictating.",
+          "cloud": "Cloud models run on the provider’s servers, so nothing stays loaded here.",
+          "never": "Never",
+          "immediately": "Immediately"
         }
       }
     },

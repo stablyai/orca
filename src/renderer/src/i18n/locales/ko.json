@@ -10610,7 +10610,11 @@
               "micDefault": "시스템 기본값",
               "dictationLanguageTitle": "받아쓰기 언어",
               "dictationLanguageDescription": "음성 모델에 말하는 언어를 알려 줍니다.",
-              "dictationLanguageKeyword": "언어"
+              "dictationLanguageKeyword": "언어",
+              "modelUnloadTitle": "음성 모델 언로드",
+              "modelUnloadDescription": "로컬 음성 모델을 메모리에서 언로드할 시점을 선택합니다.",
+              "modelUnloadKeyword": "언로드",
+              "modelMemoryKeyword": "메모리"
             }
           }
         },
@@ -19950,6 +19954,13 @@
           "description": "말하는 언어입니다. 자동 감지를 선택하면 모델이 매번 언어를 판단합니다.",
           "title": "받아쓰기 언어",
           "auto": "자동 감지"
+        },
+        "modelUnload": {
+          "title": "음성 모델 언로드",
+          "description": "음성이 켜져 있는 동안 Orca가 로컬 모델을 불러와 두므로 받아쓰기가 바로 시작됩니다. 받아쓰기를 마친 뒤 메모리를 언제 비울지 선택하세요.",
+          "cloud": "클라우드 모델은 제공업체 서버에서 실행되므로 여기에는 아무것도 로드되지 않습니다.",
+          "never": "안 함",
+          "immediately": "즉시"
         }
       }
     },
