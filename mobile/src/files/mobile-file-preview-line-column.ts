@@ -42,6 +42,43 @@ export function scrollOffsetForPreviewLine(line: number): number {
   return Math.max(0, line - 1) * MOBILE_FILE_PREVIEW_TEXT_LINE_HEIGHT
 }
 
+export function estimateScrollOffsetForLine(
+  linesOrContent:
+    | ReadonlyArray<ReadonlyArray<{ text: string }>>
+    | readonly string[]
+    | string
+    | null
+    | undefined,
+  targetLine: number,
+  charsPerLine = 40
+): number {
+  if (targetLine <= 1) {
+    return 0
+  }
+  if (!linesOrContent) {
+    return scrollOffsetForPreviewLine(targetLine)
+  }
+  if (typeof linesOrContent === 'string') {
+    return estimateScrollOffsetForLine(linesOrContent.split('\n'), targetLine, charsPerLine)
+  }
+  let visualLines = 0
+  const maxLineIndex = Math.min(targetLine - 1, linesOrContent.length)
+  for (let i = 0; i < maxLineIndex; i++) {
+    const lineItem = linesOrContent[i]
+    let lineLength = 0
+    if (typeof lineItem === 'string') {
+      lineLength = lineItem.length
+    } else if (Array.isArray(lineItem)) {
+      for (let j = 0; j < lineItem.length; j++) {
+        lineLength += lineItem[j].text.length
+      }
+    }
+    const wraps = Math.max(1, Math.ceil(lineLength / charsPerLine))
+    visualLines += wraps
+  }
+  return visualLines * MOBILE_FILE_PREVIEW_TEXT_LINE_HEIGHT
+}
+
 function parsePositiveInteger(value: string | undefined): number | null {
   if (!value || !/^\d+$/.test(value)) {
     return null

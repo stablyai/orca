@@ -106,6 +106,10 @@ export const mobileSessionReviewCommentStyles = themedStyleSheet(() => ({
     backgroundColor: colors.bgRaised,
     borderWidth: 0
   },
+  markdownFloatingButtonActive: {
+    backgroundColor: colors.bgRaised,
+    borderColor: colors.accentBlue
+  },
   markdownKeyboardDismissButton: {
     width: 34,
     justifyContent: 'center',

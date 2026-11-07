@@ -8,6 +8,7 @@ import { MobileFileMarkdownPreview } from './MobileFileMarkdownPreview'
 import type { MarkdownPreviewMode } from './MobileMarkdownPreviewModeBar'
 import { MobileFilePreviewEditableSource } from './MobileFilePreviewEditableSource'
 import { MobileFilePreviewSourceText } from './MobileFilePreviewSourceText'
+import { MobileFileAddressToolbar } from '../components/MobileFileAddressToolbar'
 import type { MobileFilePreviewLineColumn } from './mobile-file-preview-line-column'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 import { MobilePanZoomImage } from '../components/MobilePanZoomImage'
@@ -32,6 +33,11 @@ type Props = {
   draftContent: string
   saveError: string
   lineColumn: MobileFilePreviewLineColumn | null
+  initialLineSeq?: number
+  imageWidth: number
+  imageHeight: number
+  showLineNumbers?: boolean
+  onToggleLineNumbers?: () => void
   onDraftChange: (content: string) => void
   onImageError: () => void
   onOpenFile?: (pathText: string) => void
@@ -55,7 +61,17 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
     return options.editable ? (
       <EditablePreviewSource {...options} />
     ) : (
-      <MobileStateView icon={FileText} title={t('files.filePreviewBody.emptyFile', 'Empty file')} />
+      <View style={styles.codeContainer}>
+        <MobileFileAddressToolbar
+          path={options.relativePath || options.title}
+          showLineNumbers={options.showLineNumbers}
+          onToggleLineNumbers={options.onToggleLineNumbers}
+          content=""
+          truncated={false}
+          copyAccessibilityLabel={t('files.filePreviewBody.copyContent', 'Copy file content')}
+        />
+        <MobileStateView icon={FileText} title={t('files.filePreviewBody.emptyFile', 'Empty file')} />
+      </View>
     )
   }
   if (preview.kind === 'media') {
@@ -93,6 +109,9 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
         truncated={preview.truncated}
         byteLength={preview.byteLength}
         initialLine={options.lineColumn?.line}
+        initialLineSeq={options.initialLineSeq}
+        showLineNumbers={options.showLineNumbers}
+        onToggleLineNumbers={options.onToggleLineNumbers}
         onOpenFile={options.onOpenFile}
       />
     )
@@ -107,13 +126,25 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
       options.editable ? (
         <EditablePreviewSource {...options} />
       ) : (
-        <MobileFilePreviewSourceText
-          relativePath={options.relativePath}
-          content={preview.content}
-          truncated={false}
-          byteLength={preview.byteLength}
-          initialLine={options.lineColumn?.line}
-        />
+        <View style={styles.codeContainer}>
+          <MobileFileAddressToolbar
+            path={options.relativePath || options.title}
+            showLineNumbers={options.showLineNumbers}
+            onToggleLineNumbers={options.onToggleLineNumbers}
+            content={preview.content}
+            truncated={false}
+            copyAccessibilityLabel={t('files.filePreviewBody.copyContent', 'Copy file content')}
+          />
+          <MobileFilePreviewSourceText
+            relativePath={options.relativePath}
+            content={preview.content}
+            truncated={false}
+            byteLength={preview.byteLength}
+            initialLine={options.lineColumn?.line}
+            initialLineSeq={options.initialLineSeq}
+            showLineNumbers={options.showLineNumbers}
+          />
+        </View>
       )
 
     return preview.kind === 'svg' ? (
@@ -136,13 +167,25 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
     return <EditablePreviewSource {...options} />
   }
   return (
-    <MobileFilePreviewSourceText
-      relativePath={options.relativePath}
-      content={preview.content}
-      truncated={preview.truncated}
-      byteLength={preview.byteLength}
-      initialLine={options.lineColumn?.line}
-    />
+    <View style={styles.codeContainer}>
+      <MobileFileAddressToolbar
+        path={options.relativePath || options.title}
+        showLineNumbers={options.showLineNumbers}
+        onToggleLineNumbers={options.onToggleLineNumbers}
+        content={preview.content}
+        truncated={preview.truncated}
+        copyAccessibilityLabel="Copy file content"
+      />
+      <MobileFilePreviewSourceText
+        relativePath={options.relativePath}
+        content={preview.content}
+        truncated={preview.truncated}
+        byteLength={preview.byteLength}
+        initialLine={options.lineColumn?.line}
+        initialLineSeq={options.initialLineSeq}
+        showLineNumbers={options.showLineNumbers}
+      />
+    </View>
   )
 }
 
