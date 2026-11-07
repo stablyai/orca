@@ -30,6 +30,7 @@ export const mobileApi = {
         endpoint: string | null
         deviceId: string
         connectionMode: MobilePairingConnectionMode
+        expiresAt: number | null
       }
   > => ipcRenderer.invoke('mobile:getPairingQR', args),
 
@@ -53,6 +54,7 @@ export const mobileApi = {
         webClientUrl: string | null
         endpoint: string
         deviceId: string
+        expiresAt: number | null
       }
   > => ipcRenderer.invoke('mobile:getRuntimePairingUrl', args),
 

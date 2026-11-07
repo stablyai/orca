@@ -110,7 +110,8 @@
       "pastePairingCode": "Veya eşleştirme kodunu yapıştır",
       "scanCodeStep": "QR kodunu tarayın",
       "title": "Masaüstüyle eşleştir",
-      "tryAgain": "Tekrar Dene"
+      "tryAgain": "Tekrar Dene",
+      "codeExpiredOrReplaced": "Bu eşleştirme kodunun süresi doldu veya kod değiştirildi. Bilgisayarınızda yeni bir kod gösterip tekrar tarayın."
     },
     "terminalSettings": {
       "defaultText": "Varsayılan (%100)",

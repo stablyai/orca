@@ -747,7 +747,8 @@
       "runtimeAuth": {
         "insecureOrigin": "Orca가 이 페이지에서의 페어링을 거부했습니다. 이 페이지는 다른 컴퓨터에 있고 일반 http이므로 네트워크 경로에 있는 누구나 이 페이지를 대체하여 페어링 코드를 가져갈 수 있습니다. https로, 이 컴퓨터의 localhost에서, 또는 SSH 터널을 통해 웹 클라이언트를 여세요. 그래도 허용하려면 서버 운영자가 ORCA_ALLOW_INSECURE_WEB_PAIRING=1로 Orca를 다시 시작할 수 있습니다.",
         "deviceDowngraded": "이 Orca 서버는 더 이상 이 브라우저의 로그인 키를 지원하지 않습니다(다운그레이드되었을 수 있음). 서버를 업데이트하거나 이 브라우저를 다시 페어링하세요.",
-        "unauthorized": "권한이 없습니다. 이 웹 클라이언트를 다시 페어링하세요."
+        "unauthorized": "권한이 없습니다. 이 웹 클라이언트를 다시 페어링하세요.",
+        "unauthorizedNewLink": "권한이 없습니다. 새 페어링 링크를 요청하세요."
       }
     },
     "store": {
@@ -7664,7 +7665,8 @@
           "copyPairingCode": "페어링 코드 복사",
           "diagnosticsCopied": "진단이 복사되었습니다.",
           "diagnosticsCopyFailed": "진단을 복사하지 못했습니다.",
-          "5e2c7a1f84": "휴대폰에서 터미널을 사용하는 동안 Orca는 휴대폰 화면에 맞게 터미널을 축소합니다. 앱을 닫거나 다른 앱으로 전환할 때, 휴대폰 화면 크기를 유지할지(대화형 CLI 도구의 레이아웃 재배치 방지) 아니면 데스크톱 크기로 다시 조정할지 제어합니다. 배너에서 언제든지 '복원' 또는 '모두 복원'을 사용해 수동으로 크기를 조정할 수 있습니다."
+          "5e2c7a1f84": "휴대폰에서 터미널을 사용하는 동안 Orca는 휴대폰 화면에 맞게 터미널을 축소합니다. 앱을 닫거나 다른 앱으로 전환할 때, 휴대폰 화면 크기를 유지할지(대화형 CLI 도구의 레이아웃 재배치 방지) 아니면 데스크톱 크기로 다시 조정할지 제어합니다. 배너에서 언제든지 '복원' 또는 '모두 복원'을 사용해 수동으로 크기를 조정할 수 있습니다.",
+          "codeRefreshesAutomatically": "코드는 자동으로 새로 고쳐집니다. 복사한 코드는 최대 10분 동안 사용할 수 있습니다."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "앱스토어",
@@ -8172,7 +8174,9 @@
           "browserLinkLabel": "브라우저 링크",
           "accessLinkLabel": "액세스 링크",
           "accessLinkHelp": "다른 Orca의 '서버 추가'에 붙여 넣으세요.",
-          "staleAddressCreate": "연결 주소가 바뀌었습니다. {{address}}용 새 링크를 만드세요."
+          "staleAddressCreate": "연결 주소가 바뀌었습니다. {{address}}용 새 링크를 만드세요.",
+          "linkExpired": "링크가 만료되었습니다",
+          "unusedLinkExpires": "사용하지 않은 링크는 {{time}}에 만료됩니다"
         },
         "Settings": {
           "3bf149e873": "프로젝트 설정 > {{value0}}",

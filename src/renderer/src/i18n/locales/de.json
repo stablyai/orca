@@ -1202,7 +1202,8 @@
       "runtimeAuth": {
         "insecureOrigin": "Orca hat die Kopplung von dieser Seite abgelehnt: Die Seite wird über unverschlüsseltes http auf einem anderen Computer bereitgestellt. Dadurch könnte jeder auf dem Netzwerkpfad die Seite ersetzen und den Kopplungscode abfangen. Den Web-Client über https, über localhost auf diesem Computer oder über einen SSH-Tunnel öffnen. Um dies dennoch zuzulassen, kann der Serverbetreiber Orca mit ORCA_ALLOW_INSECURE_WEB_PAIRING=1 neu starten.",
         "deviceDowngraded": "Dieser Orca-Server unterstützt den Anmeldeschlüssel dieses Browsers nicht mehr (möglicherweise wurde eine ältere Serverversion installiert). Den Server aktualisieren oder diesen Browser erneut koppeln.",
-        "unauthorized": "Nicht autorisiert. Diesen Web-Client erneut koppeln."
+        "unauthorized": "Nicht autorisiert. Diesen Web-Client erneut koppeln.",
+        "unauthorizedNewLink": "Nicht autorisiert. Fordere einen neuen Kopplungslink an."
       }
     },
     "store": {
@@ -8347,7 +8348,8 @@
           "copyPairingCode": "Kopplungscode kopieren",
           "diagnosticsCopied": "Diagnosedaten kopiert",
           "diagnosticsCopyFailed": "Diagnosedaten konnten nicht kopiert werden",
-          "5e2c7a1f84": "Während ein Terminal auf dem Smartphone verwendet wird, verkleinert Orca es auf die Bildschirmgröße des Smartphones. Diese Einstellung legt fest, ob es beim Schließen oder Verlassen der App in Smartphone-Größe bleibt (damit interaktive CLI-Tools ihr Layout beibehalten) oder wieder an den Desktop angepasst wird. Über „Wiederherstellen“ oder „Alle wiederherstellen“ im Banner lässt sich die Größe jederzeit manuell anpassen."
+          "5e2c7a1f84": "Während ein Terminal auf dem Smartphone verwendet wird, verkleinert Orca es auf die Bildschirmgröße des Smartphones. Diese Einstellung legt fest, ob es beim Schließen oder Verlassen der App in Smartphone-Größe bleibt (damit interaktive CLI-Tools ihr Layout beibehalten) oder wieder an den Desktop angepasst wird. Über „Wiederherstellen“ oder „Alle wiederherstellen“ im Banner lässt sich die Größe jederzeit manuell anpassen.",
+          "codeRefreshesAutomatically": "Der Code wird automatisch erneuert. Ein kopierter Code funktioniert bis zu 10 Minuten."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -8861,7 +8863,9 @@
           "browserLinkLabel": "Browserlink",
           "accessLinkLabel": "Zugriffslink",
           "accessLinkHelp": "Diesen Link in der anderen Orca-Instanz unter „Server hinzufügen“ einfügen.",
-          "staleAddressCreate": "Die Verbindungsadresse hat sich geändert. Einen neuen Link für {{address}} erstellen."
+          "staleAddressCreate": "Die Verbindungsadresse hat sich geändert. Einen neuen Link für {{address}} erstellen.",
+          "linkExpired": "Link abgelaufen",
+          "unusedLinkExpires": "Unbenutzter Link läuft um {{time}} ab"
         },
         "Settings": {
           "3bf149e873": "Projekteinstellungen > {{value0}}",

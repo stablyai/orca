@@ -1841,7 +1841,8 @@
       "runtimeAuth": {
         "insecureOrigin": "O Orca recusou o pareamento nesta página: ela usa http sem criptografia em outra máquina, então qualquer pessoa no caminho da rede poderia substituí-la e obter o código de pareamento. Abra o cliente web por https, em localhost neste computador ou por um túnel SSH. Para permitir mesmo assim, o operador do servidor pode reiniciar o Orca com ORCA_ALLOW_INSECURE_WEB_PAIRING=1.",
         "deviceDowngraded": "Este servidor Orca não oferece mais suporte à chave de login deste navegador (ele pode ter voltado a uma versão anterior). Atualize o servidor ou pareie este navegador novamente.",
-        "unauthorized": "Não autorizado. Pareie este cliente web novamente."
+        "unauthorized": "Não autorizado. Pareie este cliente web novamente.",
+        "unauthorizedNewLink": "Não autorizado. Peça um novo link de pareamento."
       }
     },
     "i18n": {
@@ -5743,7 +5744,9 @@
           "browserLinkLabel": "Link do navegador",
           "accessLinkLabel": "Link de acesso",
           "accessLinkHelp": "Cole isto em Adicionar servidor no outro Orca.",
-          "staleAddressCreate": "O endereço de conexão mudou. Crie um novo link para {{address}}."
+          "staleAddressCreate": "O endereço de conexão mudou. Crie um novo link para {{address}}.",
+          "linkExpired": "Link expirado",
+          "unusedLinkExpires": "O link não usado expira às {{time}}"
         },
         "shareSkills": {
           "title": "Compartilhar Skills",
@@ -6963,7 +6966,8 @@
           "copyPairingCode": "Copiar código de pareamento",
           "diagnosticsCopied": "Diagnósticos copiados",
           "diagnosticsCopyFailed": "Falha ao copiar diagnósticos",
-          "5e2c7a1f84": "Enquanto você usa um terminal no celular, o Orca o reduz para caber na tela. Ao fechar o aplicativo ou trocar para outro, isto controla se ele mantém o tamanho do celular (para que ferramentas interativas de CLI não reorganizem o conteúdo) ou volta ao tamanho do computador. Você sempre pode usar Restaurar ou Restaurar todos no aviso para redimensionar manualmente."
+          "5e2c7a1f84": "Enquanto você usa um terminal no celular, o Orca o reduz para caber na tela. Ao fechar o aplicativo ou trocar para outro, isto controla se ele mantém o tamanho do celular (para que ferramentas interativas de CLI não reorganizem o conteúdo) ou volta ao tamanho do computador. Você sempre pode usar Restaurar ou Restaurar todos no aviso para redimensionar manualmente.",
+          "codeRefreshesAutomatically": "O código é atualizado automaticamente. Um código copiado funciona por até 10 minutos."
         },
         "SshPane": {
           "c0f1c80166": "Nenhum destino SSH configurado.",

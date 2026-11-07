@@ -1152,7 +1152,8 @@
       "runtimeAuth": {
         "insecureOrigin": "Orca 拒絕從此頁面配對：它是另一臺機器上的純 http 頁面，因此網路路徑上的任何人都可以替換它並取走配對碼。請透過 https、本機的 localhost 或 SSH 隧道開啟網頁用戶端。如仍要允許，伺服器操作員可以使用 ORCA_ALLOW_INSECURE_WEB_PAIRING=1 重新啟動 Orca。",
         "deviceDowngraded": "此 Orca 伺服器不再支援此瀏覽器的登入金鑰（可能已被降級）。請更新伺服器，或重新配對此瀏覽器。",
-        "unauthorized": "未授權。請重新配對此網頁用戶端。"
+        "unauthorized": "未授權。請重新配對此網頁用戶端。",
+        "unauthorizedNewLink": "未授權。請索取新的配對連結。"
       }
     },
     "store": {
@@ -8170,7 +8171,8 @@
           "copyPairingCode": "複製配對碼",
           "diagnosticsCopied": "已複製診斷訊息",
           "diagnosticsCopyFailed": "無法複製診斷訊息",
-          "5e2c7a1f84": "當您在手機上使用終端機時，Orca 會將其縮小以適合您的手機螢幕。當您關閉應用程式或切換離開時，此設定可控制終端機要保持手機尺寸（讓互動式 CLI 工具不會重新排版），還是調整回桌面尺寸。您隨時可以使用橫幅上的「還原」或「全部還原」來手動調整大小。"
+          "5e2c7a1f84": "當您在手機上使用終端機時，Orca 會將其縮小以適合您的手機螢幕。當您關閉應用程式或切換離開時，此設定可控制終端機要保持手機尺寸（讓互動式 CLI 工具不會重新排版），還是調整回桌面尺寸。您隨時可以使用橫幅上的「還原」或「全部還原」來手動調整大小。",
+          "codeRefreshesAutomatically": "配對碼會自動重新整理。複製的配對碼最多可使用 10 分鐘。"
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -8684,7 +8686,9 @@
           "browserLinkLabel": "瀏覽器連結",
           "accessLinkLabel": "存取連結",
           "accessLinkHelp": "將此連結貼到另一個 Orca 的「新增伺服器」中。",
-          "staleAddressCreate": "連線位址已變更。請為 {{address}} 建立新連結。"
+          "staleAddressCreate": "連線位址已變更。請為 {{address}} 建立新連結。",
+          "linkExpired": "連結已過期",
+          "unusedLinkExpires": "未使用的連結將於 {{time}} 過期"
         },
         "Settings": {
           "3bf149e873": "專案設定 > {{value0}}",
