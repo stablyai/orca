@@ -1,8 +1,7 @@
 import { memo, useMemo, useSyncExternalStore } from 'react'
 import { FolderGit2, LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
-import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { findIndexedProjectGroupOwner } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import {
@@ -33,8 +32,7 @@ export const FolderWorkspaceEmptyState = memo(function FolderWorkspaceEmptyState
   copy,
   showRepoActions = true
 }: FolderWorkspaceEmptyStateProps): React.JSX.Element {
-  // memo would otherwise keep the button label in the previous language.
-  useUiLanguageRevision()
+  const t = useTranslate()
   const repos = useAppStore((s) => s.repos)
   const projectGroups = useAppStore((s) => s.projectGroups)
   useSyncExternalStore(subscribeFolderRepoCreates, getFolderRepoCreatesVersion)
@@ -83,7 +81,7 @@ export const FolderWorkspaceEmptyState = memo(function FolderWorkspaceEmptyState
                     onClick={() => void createFolderRepoWorktree(folder, repo)}
                   >
                     {creating ? <LoaderCircle className="animate-spin" /> : null}
-                    {translate(
+                    {t(
                       'auto.components.rightSidebar.FolderWorkspaceEmptyState.createWorktree',
                       'Create worktree'
                     )}
