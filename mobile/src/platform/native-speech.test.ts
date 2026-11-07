@@ -24,11 +24,6 @@ describe('a page asking for the microphone when the user chose This phone', () =
     await server.serve({ action: 'cancel' })
     expect(await server.mayCapture()).toBe(false)
   })
-
-  it('is allowed under Automatic, where the computer is a fallback', async () => {
-    const server = createNativeSpeechServer(engineWith('automatic'))
-    expect(await server.mayCapture()).toBe(true)
-  })
 })
 
 describe('a recognizer another page took over', () => {

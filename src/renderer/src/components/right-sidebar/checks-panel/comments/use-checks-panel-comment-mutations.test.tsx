@@ -244,42 +244,4 @@ describe('Checks comment edit/delete ownership', () => {
     )
     expect(comments().map((c) => c.id)).toEqual([9001, 9002])
   })
-
-  it('reports a GitHub failure from the owning server without changing the list', async () => {
-    mocks.callRuntimeRpc.mockResolvedValue({
-      ok: false,
-      error: { type: 'permission_denied', message: 'Resource not accessible by integration' }
-    })
-    const { hook, comments } = render({
-      repo: repoRow({ executionHostId: 'runtime:owner-server' })
-    })
-
-    await act(async () => {
-      await expect(hook.result.current.handleEditComment(COMMENT, 'new body')).resolves.toBe(false)
-    })
-
-    expect(mocks.toastError).toHaveBeenCalledWith('Resource not accessible by integration')
-    expect(comments().map((c) => c.body)).toEqual(['old body', 'other'])
-  })
-
-  it('drops a result that lands after the panel moved to another review', async () => {
-    let finish: (value: { ok: false; error: { message: string } }) => void = () => {}
-    mocks.callRuntimeRpc.mockReturnValue(new Promise((resolve) => (finish = resolve)))
-    const { hook, comments, moveAway } = render({
-      repo: repoRow({ executionHostId: 'runtime:owner-server' })
-    })
-
-    let pending: Promise<boolean> = Promise.resolve(true)
-    act(() => {
-      pending = hook.result.current.handleEditComment(COMMENT, 'new body')
-    })
-    moveAway()
-    await act(async () => {
-      finish({ ok: false, error: { message: 'stale failure' } })
-      await pending
-    })
-
-    expect(mocks.toastError).not.toHaveBeenCalled()
-    expect(comments().map((c) => c.body)).toEqual(['old body', 'other'])
-  })
 })

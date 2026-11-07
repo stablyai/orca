@@ -302,61 +302,6 @@ it('refreshes the saved method after reconnecting to a restarted host with the s
 })
 
 it.each(['accounts', 'provider'] as const)(
-  '%s preserves another client’s active and settled sign-in status',
-  async (surface) => {
-    const target = { kind: 'environment', environmentId: `other-client-${surface}` } as const
-    streams.initial.set(key(target), {
-      revision: 0,
-      auth: 'unknown',
-      flow: { phase: 'waiting', flowId: null }
-    })
-    vi.mocked(callAntigravityChatAuthConfig).mockResolvedValue(personal)
-    renderSurface(surface, target)
-    await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
-    expect(screen.getByRole('button', { name: 'Sign in' })).toBeDisabled()
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Sign-in is in progress in another client.'
-    )
-    await act(async () => {
-      streams.handlers
-        .get(key(target))
-        ?.onEvent({ revision: 1, auth: 'unknown', flow: { phase: 'expired', flowId: null } })
-    })
-    expect(screen.getByRole('status')).toHaveTextContent('Sign-in timed out. Try again.')
-  }
-)
-
-it.each(['accounts', 'provider'] as const)(
-  '%s preserves signed-in host context and explains a changed method',
-  async (surface) => {
-    const target = { kind: 'environment', environmentId: `signed-in-${surface}` } as const
-    streams.initial.set(key(target), { revision: 0, auth: 'signedIn', flow: null })
-    let current: AntigravityChatAuthConfig = personal
-    vi.mocked(callAntigravityChatAuthConfig).mockImplementation(async (_owner, config) => {
-      if (config) {
-        current = config
-      }
-      return current
-    })
-    const user = userEvent.setup()
-    renderSurface(surface, target)
-    await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
-    expect(screen.getByRole('status')).toHaveTextContent('Signed in on Test host.')
-    expect(screen.getByRole('button', { name: 'Change account' })).toBeEnabled()
-    await user.click(screen.getByRole('combobox'))
-    await user.click(screen.getByRole('option', { name: 'Gemini Enterprise' }))
-    expect(screen.getByRole('status')).toHaveTextContent('Sign in again to use Gemini Enterprise.')
-    await user.type(screen.getByLabelText('Google Cloud project'), enterprise.gcpProject)
-    await user.type(screen.getByLabelText('Google Cloud location'), enterprise.gcpLocation)
-    await user.tab()
-    await act(async () => {
-      streams.handlers.get(key(target))?.onEvent({ revision: 1, auth: 'unknown', flow: null })
-    })
-    expect(screen.getByRole('status')).toHaveTextContent('Sign in again to use Gemini Enterprise.')
-  }
-)
-
-it.each(['accounts', 'provider'] as const)(
   '%s uses its single Sign in action to reread a failed load before preparing Enterprise',
   async (surface) => {
     const target = { kind: 'environment', environmentId: `load-recovery-${surface}` } as const

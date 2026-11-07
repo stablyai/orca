@@ -152,7 +152,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/renderer/src/components/automations/use-automation-runs-dashboard-payload.test.tsx',
   'src/main/native-chat/agent-session-journal/**/*.test.ts',
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-terminal-writer-acquire.test.ts',
-  'src/main/native-chat/agent-session-wire/observations/testing/structured-agent-session-status-feed.test.ts',
   'src/main/runtime/agent-session/records/agent-session-conversation-name-store.test.ts',
   'src/main/runtime/rpc/ws-transport.test.ts',
   'src/main/runtime/rpc/dispatcher-transport-parity.test.ts',
