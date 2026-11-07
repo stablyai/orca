@@ -8,7 +8,6 @@ import { getFolderWorkspaceHostIdentity } from '../../folder-workspaces/folder-w
 import { getWorktreeLineageGroupKey } from './group-keys'
 import {
   getExpandedWorktreeOccurrences,
-  type WorktreeOccurrence,
   type WorktreeOccurrencePlan
 } from '../../worktree-occurrence-plan'
 import type { NoticeHostContext } from '../hosts/host-labels'
@@ -68,23 +67,6 @@ export function buildNewExternalWorktreesInboxRow(
   }
 }
 
-/** Pre-order occurrences: a parent's descendants are the run after it that is deeper. */
-function descendantIdentities(
-  occurrences: readonly WorktreeOccurrence<Worktree>[],
-  start: number
-): HostScopedWorktreeKey[] {
-  const parentDepth = occurrences[start]!.depth
-  const identities: HostScopedWorktreeKey[] = []
-  for (let index = start + 1; index < occurrences.length; index++) {
-    const occurrence = occurrences[index]!
-    if (occurrence.depth <= parentDepth) {
-      break
-    }
-    identities.push(getWorktreeHostIdentity(occurrence.row))
-  }
-  return identities
-}
-
 export function appendWorktreeRows(
   result: Row[],
   repoOf: RepoOfWorktree,
@@ -102,9 +84,7 @@ export function appendWorktreeRows(
   const sectionOccurrences = plan.bySection.get(options.sectionKey) ?? []
   const childIdsByParent = new Map<string, string[]>()
   const childIdentitiesByParent = new Map<string, HostScopedWorktreeKey[]>()
-  const indexByKey = new Map<string, number>()
-  sectionOccurrences.forEach((occurrence, index) => {
-    indexByKey.set(occurrence.key, index)
+  sectionOccurrences.forEach((occurrence) => {
     if (occurrence.parent) {
       const children = childIdsByParent.get(occurrence.parent.key) ?? []
       children.push(occurrence.row.id)
@@ -152,11 +132,7 @@ export function appendWorktreeRows(
       ...(occurrence.childCount > 0
         ? {
             lineageGroupKey: getWorktreeLineageGroupKey(worktree),
-            lineageCollapsed: options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree)),
-            lineageDescendantIdentities: descendantIdentities(
-              sectionOccurrences,
-              indexByKey.get(occurrence.key)!
-            )
+            lineageCollapsed: options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree))
           }
         : {})
     })

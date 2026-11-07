@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { translate } from '@/i18n/i18n'
-import { viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
+import { viewClaudeAgentFromRow } from '@/lib/agent-session/navigation/claude-agent-row-view'
 import { useWorktreeAgentListModel } from './workspace-card/activity/use-worktree-agent-list-model'
 import { ChildAgentsWithIdleGroup } from './workspace-card/activity/worktree-card-idle-child-agents'
 import type { SlotAgentSignals } from './worktree-card-slot-agent-signals'

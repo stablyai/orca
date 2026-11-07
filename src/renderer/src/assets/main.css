@@ -1783,34 +1783,15 @@ html.native-shell .app-layout {
   --border: color-mix(in oklab, var(--worktree-sidebar-foreground) 5%, var(--worktree-sidebar));
 }
 
-/* Experimental 2.0 lineage guide, painted in the children's original 14px offset; a tick reaches each child. */
-.worktree-card-slot-lineage {
-  --worktree-card-slot-guide: color-mix(
-    in srgb,
-    var(--worktree-sidebar-foreground) 16%,
-    transparent
-  );
-  position: relative;
-}
-
-.worktree-card-slot-lineage::before {
-  content: '';
-  position: absolute;
-  left: -9px;
-  /* Reach up through the margin so the open parent's thread runs straight into its children. */
-  top: -9px;
-  bottom: 8px;
-  width: 1px;
-  background: var(--worktree-card-slot-guide);
-  pointer-events: none;
-}
-
-.worktree-card-slot-lineage > * {
-  position: relative;
+/* The family already sits in the parent's active frame, so an active child is a wash, not a second box. */
+.worktree-card-slot-lineage [data-worktree-card-surface][data-worktree-card-active] {
+  border-color: transparent;
+  box-shadow: none;
 }
 
 /* 2.0 leading icon: the latest tab in front, older tabs peeking above it as narrower, dimmer cards.
-   The box is the front tile only, so it centers on the title; layers overflow upward. */
+   The box is the front tile only, so it centers on the title; layers overflow upward, staying
+   within the card's 6px top padding because the card surface clips. */
 .worktree-card-leading-icon {
   position: relative;
   display: inline-block;
@@ -1831,11 +1812,8 @@ html.native-shell .app-layout {
   border-radius: 5px;
   transform-origin: 50% 0;
   background: color-mix(in srgb, var(--worktree-sidebar-foreground) 10%, var(--worktree-sidebar));
-  /* Top highlight and a hairline rim, then the shadow this card casts on the one behind it. */
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.18),
-    inset 0 0 0 1px color-mix(in srgb, var(--worktree-sidebar-foreground) 12%, transparent),
-    0 -1px 2px rgb(0 0 0 / 0.5);
+  /* The shadow this card casts on the one behind it; the rim lives on ::after, above the fill. */
+  box-shadow: 0 -1px 2px rgb(0 0 0 / 0.5);
 }
 
 .worktree-card-leading-tint {
@@ -1864,13 +1842,16 @@ html.native-shell .app-layout {
   transform: translate(-50%, -50%);
 }
 
-/* Soft gloss across the top half, like an app icon. */
+/* Gloss, top highlight and a hairline rim, painted over the fill so same-color stacks keep their edges. */
 .worktree-card-leading-tile::after {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
   background: linear-gradient(to bottom, rgb(255 255 255 / 0.16), transparent 60%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.28),
+    inset 0 0 0 1px color-mix(in srgb, var(--worktree-sidebar-foreground) 24%, transparent);
   pointer-events: none;
 }
 
@@ -1892,28 +1873,26 @@ html.native-shell .app-layout {
   z-index: 4;
   color: var(--worktree-sidebar-foreground);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.18),
-    inset 0 0 0 1px color-mix(in srgb, var(--worktree-sidebar-foreground) 12%, transparent),
     0 -1.5px 2.5px rgb(0 0 0 / 0.55),
     0 1px 2px rgb(0 0 0 / 0.3);
 }
 
 .worktree-card-leading-tile[data-layer='l1'] {
   z-index: 3;
-  transform: translateY(-3.5px) scale(0.88);
-  filter: brightness(0.92);
+  transform: translateY(-3px) scale(0.9);
+  filter: brightness(0.82);
 }
 
 .worktree-card-leading-tile[data-layer='l2'] {
   z-index: 2;
-  transform: translateY(-6.5px) scale(0.76);
-  filter: brightness(0.82);
+  transform: translateY(-4.75px) scale(0.8);
+  filter: brightness(0.7);
 }
 
 .worktree-card-leading-tile[data-layer='l3'] {
   z-index: 1;
-  transform: translateY(-9px) scale(0.64);
-  filter: brightness(0.72);
+  transform: translateY(-6px) scale(0.7);
+  filter: brightness(0.6);
 }
 
 .worktree-card-leading-icon-offline .worktree-card-leading-tile {
@@ -1930,6 +1909,19 @@ html.native-shell .app-layout {
   place-items: center;
   width: 11px;
   height: 11px;
+  border-radius: 999px;
+  background: var(--worktree-sidebar);
+}
+
+/* An agent line's unread/working badge, on the agent icon's corner like the card's leading icon. */
+.worktree-agent-line-badge {
+  position: absolute;
+  right: -4px;
+  bottom: -3px;
+  display: grid;
+  place-items: center;
+  width: 9px;
+  height: 9px;
   border-radius: 999px;
   background: var(--worktree-sidebar);
 }
@@ -1964,57 +1956,53 @@ html.native-shell .app-layout {
   box-shadow: 0 0 0 1.5px var(--worktree-sidebar);
 }
 
-/* A hidden subtree trails a short hooked line under the icon. */
+/* A closed card with child workspaces trails a hooked line and three dots under its icon; the
+   button covers that area so a click opens the card. Geometry from the design mockup, anchored to
+   the 22x18 icon: center x = 11px, bottom y = 19px of the title row. */
 .worktree-card-thread-stub {
-  position: relative;
+  position: absolute;
+  left: 4px;
+  top: 19px;
+  width: 36px;
+  height: 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  outline: none;
+}
+
+.worktree-card-thread-stub:hover {
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 6%, transparent);
+}
+
+.worktree-card-thread-stub:focus-visible {
+  box-shadow: 0 0 0 1px var(--ring);
 }
 
 .worktree-card-thread-stub::after {
   content: '';
   position: absolute;
-  left: 11px;
-  top: 19px;
-  width: 8px;
-  height: 7px;
-  border-left: 1px solid
-    var(
-      --worktree-card-slot-guide,
-      color-mix(in srgb, var(--worktree-sidebar-foreground) 22%, transparent)
-    );
-  border-bottom: 1px solid
-    var(
-      --worktree-card-slot-guide,
-      color-mix(in srgb, var(--worktree-sidebar-foreground) 22%, transparent)
-    );
+  left: 7px;
+  top: 2px;
+  width: 9px;
+  height: 9px;
+  border-left: 1px solid color-mix(in srgb, var(--worktree-sidebar-foreground) 22%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--worktree-sidebar-foreground) 22%, transparent);
   border-bottom-left-radius: 4px;
   pointer-events: none;
 }
 
-/* An open 2.0 card hangs a line from its title through the rows it owns. */
-.worktree-card-slot-thread {
-  position: relative;
-}
-
-.worktree-card-slot-thread::before {
+.worktree-card-thread-stub::before {
   content: '';
   position: absolute;
-  /* Under the leading icon's center. */
-  left: 11px;
-  top: 22px;
-  bottom: 3px;
-  width: 1px;
-  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 16%, transparent);
-  pointer-events: none;
-}
-
-.worktree-card-slot-lineage > *::before {
-  content: '';
-  position: absolute;
-  left: -9px;
-  top: 15px;
-  width: 12px;
-  height: 1px;
-  background: var(--worktree-card-slot-guide);
+  left: 17.5px;
+  top: 9.5px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 30%, transparent);
+  box-shadow:
+    5px 0 0 color-mix(in srgb, var(--worktree-sidebar-foreground) 30%, transparent),
+    10px 0 0 color-mix(in srgb, var(--worktree-sidebar-foreground) 30%, transparent);
   pointer-events: none;
 }
 

@@ -1,3 +1,4 @@
+import type { WorktreeLineageSource } from '../../../../shared/sidebar-list/worktree-lineage-range'
 import React from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -33,21 +34,24 @@ function countLabel(kind: keyof LineageChildCounts, count: number): string {
   }
 }
 
-/** "6 children", then only the children that need attention, so a quiet subtree stays short. */
+/** "6 children", then, while collapsed, only the children that need attention, so a quiet subtree stays short. */
 export function WorktreeCardChildrenChip({
   childIdentities = EMPTY_CHILDREN,
+  lineageSource,
   collapsed,
   label,
   ariaLabel,
   onToggle
 }: {
   childIdentities?: readonly HostScopedWorktreeKey[]
+  lineageSource?: WorktreeLineageSource
   collapsed: boolean
   label: string
   ariaLabel: string
   onToggle?: React.MouseEventHandler<HTMLButtonElement>
 }): React.JSX.Element {
-  const counts = useLineageChildCounts(childIdentities)
+  // Expanded children show their own status, so the chip only speaks for them while collapsed.
+  const counts = useLineageChildCounts(collapsed ? childIdentities : EMPTY_CHILDREN, lineageSource)
   const shown = ORDER.filter((kind) => counts[kind] > 0)
   return (
     <span className="inline-flex h-4 max-w-full min-w-0 items-center rounded border border-border bg-background text-[10px] leading-none text-muted-foreground shadow-xs dark:border-input dark:bg-input/30">
@@ -73,7 +77,12 @@ export function WorktreeCardChildrenChip({
               key={kind}
               label={countLabel(kind, counts[kind])}
               resolveTargets={() =>
-                collectLineageChildTargetsOfKind(useAppStore.getState(), childIdentities, kind)
+                collectLineageChildTargetsOfKind(
+                  useAppStore.getState(),
+                  childIdentities,
+                  kind,
+                  lineageSource
+                )
               }
               className="inline-flex h-full items-center gap-0.5 rounded-[3px] px-1 tabular-nums"
             >

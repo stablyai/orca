@@ -1,3 +1,5 @@
+import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import { setWorktreeCardDisclosure, useCardDisclosures } from '../surface/worktree-card-open-state'
 import { useCallback, useEffect, useState } from 'react'
 
 export type WorktreeAgentExpansionState = {
@@ -175,6 +177,7 @@ export function useWorktreeAgentExpansionState(worktreeId: string): WorktreeAgen
 
 export function clearWorktreeAgentExpansionStateForTests(): void {
   expansionByWorktreeId.clear()
+  useCardDisclosures.setState({ cards: new Map() })
 }
 
 export function getWorktreeAgentExpansionCountForTests(): number {
@@ -186,4 +189,8 @@ export function seedWorktreeAgentExpansionStateForTests(
   state: WorktreeAgentExpansionState
 ): void {
   persistExpansionState(worktreeId, state)
+  setWorktreeCardDisclosure(composeWorktreeHostIdentity(undefined, worktreeId), {
+    open: state.cardOpen,
+    closedOver: null
+  })
 }

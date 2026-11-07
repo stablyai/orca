@@ -1,18 +1,25 @@
-import React, { createElement, useCallback } from 'react'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { getIndexedRepoMap } from '@/store/worktree-repo-index'
+import { createHostScopedRepoOf } from '../../../../shared/sidebar-list/sidebar-feed-index'
+import React, { createElement, useMemo } from 'react'
 import { getReviewStateIcon } from '@/components/github/review-state-presentation'
 import { cn } from '@/lib/utils'
 import { useShallow } from 'zustand/react/shallow'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { getIndexedRepoMap } from '@/store/worktree-repo-index'
-import type { HostScopedWorktreeKey } from '../../../../shared/worktree/host-qualified-identity'
+import {
+  isLineageRange,
+  lineageIdentities,
+  type WorktreeLineageSource,
+  type WorktreeLineageTree
+} from '../../../../shared/sidebar-list/worktree-lineage-range'
 import type { HostedReviewState } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { selectWorktreeCardPrDisplay } from './workspace-card/review/worktree-card-pr-derivation'
 import type { WorktreeCardPrDisplay } from './workspace-card/review/worktree-card-pr-display'
 import { getReviewStateTone } from './workspace-card/review/worktree-review-presentation'
 import { PullRequestIcon } from './workspace-card/identity/worktree-card-glyphs'
-import { splitIdentities, worktreeForIdentity } from './worktree-card-slot-rollup'
+import { worktreeForIdentity } from './worktree-card-slot-rollup'
 
 /** Most actionable first; every state with a PR gets its own icon so mixed states are never merged. */
 const STATE_ORDER: readonly HostedReviewState[] = ['open', 'draft', 'merged', 'closed']
@@ -21,20 +28,64 @@ type PrStateCounts = Record<HostedReviewState, number>
 
 const NO_COUNTS: PrStateCounts = { open: 0, draft: 0, merged: 0, closed: 0 }
 
-function selectHiddenPrCounts(state: AppState, descendantKey: string): PrStateCounts {
-  if (!descendantKey) {
-    return NO_COUNTS
+const treeCounts = new WeakMap<
+  WorktreeLineageTree,
+  { inputs: readonly unknown[]; counts: PrStateCounts[] }
+>()
+function reviewInputs(state: AppState): readonly unknown[] {
+  return [
+    selectWorktreesByRepo(state),
+    state.repos,
+    state.settings,
+    state.prCache,
+    state.hostedReviewCache
+  ]
+}
+const repoReaders = new WeakMap<AppState['repos'], ReturnType<typeof createHostScopedRepoOf>>()
+function ownPrCounts(
+  state: AppState,
+  worktree: NonNullable<ReturnType<typeof worktreeForIdentity>>
+): PrStateCounts {
+  let repoOf = repoReaders.get(state.repos)
+  if (!repoOf) {
+    repoOf = createHostScopedRepoOf(state.repos, getIndexedRepoMap(state.repos))
+    repoReaders.set(state.repos, repoOf)
+  }
+  const repo = repoOf(worktree)
+  const review = selectWorktreeCardPrDisplay(state, worktree, repo)
+  return { ...NO_COUNTS, ...(review?.state ? { [review.state]: 1 } : {}) }
+}
+function selectHiddenPrCounts(state: AppState, source: WorktreeLineageSource): PrStateCounts {
+  if (isLineageRange(source)) {
+    const { tree } = source
+    const inputs = reviewInputs(state)
+    const cached = treeCounts.get(tree)
+    if (cached && inputs.every((value, index) => value === cached.inputs[index])) {
+      return cached.counts[source.index]!
+    }
+    const own = tree.identities.map((identity, index) =>
+      ownPrCounts(state, worktreeForIdentity(state, identity) ?? tree.worktrees[index]!)
+    )
+    const counts = own.map(() => ({ ...NO_COUNTS }))
+    for (let i = own.length - 1; i >= 0; i--) {
+      const parent = tree.parents[i]!
+      if (parent >= 0) {
+        for (const key of STATE_ORDER) {
+          counts[parent]![key] += own[i]![key] + counts[i]![key]
+        }
+      }
+    }
+    treeCounts.set(tree, { inputs, counts })
+    return counts[source.index]!
   }
   const counts = { ...NO_COUNTS }
-  for (const identity of splitIdentities(descendantKey)) {
+  for (const identity of lineageIdentities(source)) {
     const worktree = worktreeForIdentity(state, identity)
-    if (!worktree) {
-      continue
-    }
-    const repo = getIndexedRepoMap(state.repos).get(worktree.repoId)
-    const review = selectWorktreeCardPrDisplay(state, worktree, repo)
-    if (review?.state) {
-      counts[review.state] += 1
+    if (worktree) {
+      const own = ownPrCounts(state, worktree)
+      for (const key of STATE_ORDER) {
+        counts[key] += own[key]
+      }
     }
   }
   return counts
@@ -62,14 +113,22 @@ export function WorktreeCardPrRollup({
   hiddenDescendants
 }: {
   own: WorktreeCardPrDisplay | null
-  hiddenDescendants: readonly HostScopedWorktreeKey[]
+  hiddenDescendants: WorktreeLineageSource
 }): React.JSX.Element | null {
-  const descendantKey = hiddenDescendants.join('\n')
-  const hidden = useAppStore(
-    useShallow(
-      useCallback((state: AppState) => selectHiddenPrCounts(state, descendantKey), [descendantKey])
-    )
-  )
+  const select = useMemo(() => {
+    let inputs: readonly unknown[] = []
+    let counts = NO_COUNTS
+    return (state: AppState) => {
+      const next = reviewInputs(state)
+      if (next.every((value, index) => value === inputs[index])) {
+        return counts
+      }
+      inputs = next
+      counts = selectHiddenPrCounts(state, hiddenDescendants)
+      return counts
+    }
+  }, [hiddenDescendants])
+  const hidden = useAppStore(useShallow(select))
   const counts = { ...hidden }
   if (own?.state) {
     counts[own.state] += 1

@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
@@ -11,7 +12,12 @@ import { stablePaneHasLivePty } from '@/lib/agent-session/resume/sleeping-agent-
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { getPtyExecutionHost } from '../../../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 
-export function activateRetainedAgentRow(worktreeId: string, tabId: string, paneKey: string): void {
+export function activateRetainedAgentRow(
+  worktreeId: string,
+  tabId: string,
+  paneKey: string,
+  executionHostId?: ExecutionHostId
+): void {
   const parsed = parsePaneKey(paneKey)
   if (!parsed || parsed.tabId !== tabId) {
     return
@@ -31,12 +37,18 @@ export function activateRetainedAgentRow(worktreeId: string, tabId: string, pane
     : getPtyExecutionHost(
         layout?.ptyIdsByLeafId?.[parsed.leafId] ?? state.ptyIdsByTabId[tabId]?.[0]
       )
-  if ((nativeTab ? !target : !hasLiveTerminal) || owner === 'foreign') {
+  if (
+    (nativeTab ? !target : !hasLiveTerminal) ||
+    owner === 'foreign' ||
+    (executionHostId && owner && owner !== executionHostId)
+  ) {
     return
   }
   // Verify an existing destination before workspace activation can resume sleeping panes.
   if (
-    activateAndRevealWorkspace(worktreeId, owner ? { executionHostId: owner } : undefined) === false
+    activateAndRevealWorkspace(worktreeId, {
+      executionHostId: executionHostId ?? owner ?? undefined
+    }) === false
   ) {
     return
   }
