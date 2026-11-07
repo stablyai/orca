@@ -56,13 +56,15 @@ vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-data-sidecar-subs
     return () => renderer.watchers.delete(id)
   }
 }))
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+vi.mock('@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection', () => ({
   inspectRuntimeTerminalProcess: async () => null
 }))
-vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
+vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: renderer.writes
 }))
-vi.mock('@/runtime/runtime-terminal-stream', () => ({ subscribeToRuntimeTerminalData: vi.fn() }))
+vi.mock('@/runtime/hosted-terminals/streams/runtime-terminal-data-subscription', () => ({
+  subscribeToRuntimeTerminalData: vi.fn()
+}))
 vi.mock('@/lib/agent-ready-wait', () => ({ waitForAgentReady: async () => ({ ready: false }) }))
 vi.mock('@/lib/telemetry', () => ({ track: vi.fn(), tuiAgentToAgentKind: mockLaunchAgentKind }))
 const mockLaunchAgentKind = vi.hoisted(() => () => 'claude')

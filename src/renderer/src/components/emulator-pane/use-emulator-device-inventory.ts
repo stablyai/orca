@@ -6,7 +6,7 @@ import {
   type Dispatch,
   type SetStateAction
 } from 'react'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { toSimulatorDeviceRows, type RawEmulatorDevice } from './emulator-device-row-mapping'
 import { markSimulatorDeviceBooted } from './emulator-device-state'
 import { emulatorListDevicesErrorText } from './emulator-pane-error-copy'

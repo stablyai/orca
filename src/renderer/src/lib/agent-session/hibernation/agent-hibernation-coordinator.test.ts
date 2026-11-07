@@ -13,7 +13,7 @@ import {
   setForegroundTerminalTabIds
 } from '../../foreground-terminal-tabs'
 import { recordAgentHibernationPaneOutput } from './agent-hibernation-output-activity'
-import { createCompatibleRuntimeStatusResponseIfNeeded } from '../../../runtime/runtime-compatibility-test-fixture'
+import { createCompatibleRuntimeStatusResponseIfNeeded } from '../../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import {
   deferred,
   entry,

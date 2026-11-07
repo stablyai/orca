@@ -1,0 +1,84 @@
+import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
+/** Only tombstoned catalog.hostId values block late merges (#8881); an unhydrated saved list or serving-local runtime stamps cannot prove removal. */
+import { describe, it, expect, vi } from 'vitest'
+
+import type { Repo } from '../../../../shared/repo-types'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
+
+vi.mock('sonner', () => ({
+  toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
+}))
+
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({}))
+
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension', () => ({
+  restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
+  unregisterPtyDataHandlers: vi.fn()
+}))
+
+// All RPCs share this fixture shape; compatibility probes read projects/setups while repo.list reads repos.
+const rpcResult = vi.hoisted(() => ({ current: { repos: [] as Repo[], projects: [], setups: [] } }))
+
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeRpcCallModule>()
+  return {
+    ...actual,
+    callRuntimeRpc: vi.fn(async () => rpcResult.current)
+  }
+})
+
+const localReposList = vi.fn<() => Promise<Repo[]>>()
+
+// @ts-expect-error -- minimal window.api stub for the store under test
+globalThis.window = { api: { repos: { list: localReposList } } }
+
+import { createTestStore, seedStore } from '../slices/store-test-helpers'
+import { TEST_REPO } from '../slices/worktrees-slice-test-fixtures'
+
+function env(id: string): PublicKnownRuntimeEnvironment {
+  return { id } as unknown as PublicKnownRuntimeEnvironment
+}
+
+function repo(id: string, extra: Partial<Repo> = {}): Repo {
+  return {
+    id,
+    path: `/${id}`,
+    displayName: id,
+    badgeColor: '#000',
+    addedAt: 0,
+    ...extra
+  } as Repo
+}
+
+describe('environment-catalog merge guard drops catalogs for a removed env', () => {
+  it('fetchRuntimeEnvironmentRepos skips the merge when the catalog env was removed (tombstoned)', async () => {
+    const store = createTestStore()
+    seedStore(store, {
+      repos: [TEST_REPO],
+      runtimeEnvironments: [env('env-gone'), env('env-b')]
+    })
+    // Tombstone env-gone before its in-flight fetch returns.
+    store.getState().setRuntimeEnvironments([env('env-b')])
+    rpcResult.current = { repos: [repo('ghost')], projects: [], setups: [] }
+
+    await store.getState().fetchRuntimeEnvironmentRepos('env-gone')
+
+    expect(store.getState().repos.map((r) => r.id)).toEqual(['repo1'])
+  })
+
+  it('fetchRuntimeEnvironmentRepos merges a catalog whose env is absent but not tombstoned (not yet hydrated)', async () => {
+    // On boot, disk catalogs may arrive before the saved list; absence alone cannot block merging.
+    const store = createTestStore()
+    seedStore(store, { repos: [TEST_REPO], runtimeEnvironments: [] })
+    rpcResult.current = { repos: [repo('fresh')], projects: [], setups: [] }
+
+    await store.getState().fetchRuntimeEnvironmentRepos('env-hydrating')
+
+    expect(
+      store
+        .getState()
+        .repos.map((r) => r.id)
+        .sort()
+    ).toEqual(['fresh', 'repo1'])
+  })
+})

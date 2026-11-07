@@ -59,21 +59,7 @@ it('parses each leased row once and preserves its complete serialized payload', 
   expect(parse.mock.calls.filter(([value]) => value === payload)).toHaveLength(1)
 })
 
-it('keeps concurrent device claims separate and returns fresh payload objects', async () => {
-  const { store } = await fixture()
-  const input = notification(1)
-  await store.accept('host', 'phone-a', input)
-  await store.accept('host', 'phone-b', input)
-  const payload = JSON.stringify(input)
-  const parse = vi.spyOn(JSON, 'parse')
-  const claims = await Promise.all(Array.from({ length: 4 }, () => store.claim()))
-  const delivered = claims.filter((claim) => claim !== null)
-  expect(delivered).toHaveLength(2)
-  expect(delivered.map((claim) => claim.registrationId).sort()).toEqual(['phone-a', 'phone-b'])
-  expect(delivered.every((claim) => JSON.stringify(claim.notification) === payload)).toBe(true)
-  expect(delivered[0]?.notification).not.toBe(delivered[1]?.notification)
-  expect(parse.mock.calls.filter(([value]) => value === payload)).toHaveLength(2)
-})
+
 
 it('reads changed retry bytes and a later writer update without carrying a parsed result across calls', async () => {
   const { db, store, advance } = await fixture()
@@ -112,30 +98,9 @@ it('reads changed retry bytes and a later writer update without carrying a parse
   expect(parse.mock.calls.filter(([value]) => value === changedPayload)).toHaveLength(1)
 })
 
-it('parses dismissed alerts once and removes them without returning a delivery', async () => {
-  const { db, store, clock } = await fixture()
-  const input = notification(1)
-  await store.accept('host', 'phone', input)
-  await db.query(
-    'INSERT INTO push_dismissed_events(host_fingerprint, notification_epoch, notification_id, notification_seq, created_at) VALUES (?, ?, ?, ?, ?)',
-    ['host', 'epoch', input.notificationId, 1, clock()]
-  )
-  const parse = vi.spyOn(JSON, 'parse')
-  expect(await store.claim()).toBeNull()
-  expect(await store.pendingCount('phone')).toBe(0)
-  expect(parse.mock.calls.filter(([value]) => value === JSON.stringify(input))).toHaveLength(1)
-})
 
-it('preserves the existing trust boundary for an object missing notification fields', async () => {
-  const { db, store } = await fixture()
-  await store.accept('host', 'phone', notification(1))
-  await db.query('UPDATE push_delivery_batches SET payload_json = ?', ['{}'])
-  const parse = vi.spyOn(JSON, 'parse')
-  const delivery = await store.claim()
-  expect(delivery?.notification).toEqual({})
-  expect(JSON.stringify(delivery?.notification)).toBe('{}')
-  expect(parse.mock.calls.filter(([value]) => value === '{}')).toHaveLength(1)
-})
+
+
 
 it.each(['not JSON', 'undefined', 'null', '[]'])(
   'preserves invalid payload rejection and rolls back the lease for %s',

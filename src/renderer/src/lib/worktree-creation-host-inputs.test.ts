@@ -9,12 +9,14 @@ import type { WorktreeCreateRequest } from '@/store/slices/worktrees/create/work
 import { prepareQuickComposerStartup } from '@/hooks/composer-state/quick-startup-plan'
 import { worktreeCreationAgentLaunchOptions } from '@/lib/workspace/creation/worktree-creation-host-agent-launch'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn(), supports: vi.fn(), cached: vi.fn() }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: mocks.call,
-  runtimeEnvironmentSupportsCapability: mocks.supports,
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: mocks.call }))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
+  runtimeEnvironmentSupportsCapability: mocks.supports
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-cache', () => ({
   readCachedRuntimeEnvironmentCapability: mocks.cached
 }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))

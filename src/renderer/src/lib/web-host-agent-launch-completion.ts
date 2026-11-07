@@ -1,9 +1,9 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import type { WebRuntimeTerminalCreateOutcome } from '@/runtime/web-runtime-session-types'
+import type { WebRuntimeTerminalCreateOutcome } from '@/runtime/hosted-terminals/creation/terminal-create-contracts'
 import type { AgentTerminalLaunchCompletion } from './agent-session/launch/structured-agent-session-launch-admission'
-import { webTerminalPlacementParentTabId } from '@/runtime/web-session-terminal-placement'
+import { webTerminalPlacementParentTabId } from '@/runtime/hosted-terminals/placement/web-session-terminal-placement'
 import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { notifyAgentLaunchPromptNotSent } from './agent-launch-prompt-failure-notice'
 

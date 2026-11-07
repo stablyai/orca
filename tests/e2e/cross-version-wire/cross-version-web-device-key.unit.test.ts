@@ -232,8 +232,10 @@ describe('a browser moving from its pairing code to a device key', () => {
     expect(
       await browser.store.get(`${Buffer.from(desktop.publicKey).toString('base64')}|env-1`)
     ).toMatchObject({ state: 'active', deviceId: keyed.device.deviceId })
-    // The token row stays for every other holder of the same code.
-    expect(currentHost.registry.validateToken(paired.token)?.deviceId).toBe(paired.deviceId)
+    // A fresh link that paired this browser is single use: its code no longer signs in, and the
+    // row stays only as the key's anchor.
+    expect(currentHost.registry.validateToken(paired.token)).toBeNull()
+    expect(currentHost.registry.getDevice(paired.deviceId)).not.toBeNull()
 
     // Every socket the web bundle opens carries the marker hosts use to tell it from a phone.
     expect(dialedUrls.length).toBeGreaterThan(1)

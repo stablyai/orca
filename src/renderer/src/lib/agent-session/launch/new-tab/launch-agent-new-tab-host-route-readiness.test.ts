@@ -42,7 +42,7 @@ vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-data-sidecar-subs
     return () => testState.ptyWatchers.delete(ptyId)
   }
 }))
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+vi.mock('@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection', () => ({
   inspectRuntimeTerminalProcess: vi.fn(async () => null)
 }))
 vi.mock(
@@ -52,13 +52,15 @@ vi.mock(
     isRemoteRuntimePtyId: () => false
   })
 )
-vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
+vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: async (ptyId: string, data: string) => {
     testState.writes.push({ at: Date.now(), ...(ptyId === 'pty-1' ? {} : { ptyId }), data })
     return true
   }
 }))
-vi.mock('@/runtime/runtime-terminal-stream', () => ({ subscribeToRuntimeTerminalData: vi.fn() }))
+vi.mock('@/runtime/hosted-terminals/streams/runtime-terminal-data-subscription', () => ({
+  subscribeToRuntimeTerminalData: vi.fn()
+}))
 vi.mock('../../../agent-ready-wait', () => ({
   waitForAgentReady: vi.fn(async () => ({ ready: false }))
 }))

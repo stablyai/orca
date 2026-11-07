@@ -101,7 +101,9 @@ export function useGitStatusPushSignalRefresh({
       fetchStatus
     }
     observers.add(observer)
-    disposeSignals ??= subscribeSignals()
+    if (disposeSignals == null) {
+      disposeSignals = subscribeSignals()
+    }
     return () => {
       observers.delete(observer)
       if (observers.size === 0) {

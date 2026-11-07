@@ -1,11 +1,9 @@
-import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
-import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
-import {
-  WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY,
-  WORKTREE_CLIENT_AUTOMATION_PROVENANCE_RUNTIME_CAPABILITY
-} from '../../../../../../shared/worktree-runtime-capabilities'
+import { WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY } from '../../../../../../shared/worktree-runtime-capabilities'
 import type { CreateWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import type { ClientWorktreeCreateSettings } from './client-worktree-create-settings'
 import {
@@ -23,16 +21,6 @@ export async function createWorktreeOnRuntimeHost(
   attempt: WorktreeCreateAttempt,
   clientCreateSettings: ClientWorktreeCreateSettings
 ): Promise<CreatedWorktreeResult> {
-  const clientAutomationProvenance = request.options?.clientAutomationProvenance
-  // Why: only a capable host accepts the field; older ones create the same plain workspace as before.
-  const provenanceParams =
-    clientAutomationProvenance &&
-    (await hostSupportsCapability(
-      environmentId,
-      WORKTREE_CLIENT_AUTOMATION_PROVENANCE_RUNTIME_CAPABILITY
-    ))
-      ? { clientAutomationProvenance }
-      : {}
   const call = (
     launch?: HostAgentLaunch,
     creationLaunch?: NonNullable<WorktreeCreateRequest['options']>['creationAgentLaunch']
@@ -42,7 +30,6 @@ export async function createWorktreeOnRuntimeHost(
       'worktree.create',
       {
         ...buildRuntimeWorktreeCreateParams(request, attempt, launch, creationLaunch),
-        ...provenanceParams,
         // Why: the host's own store defaults would otherwise override the user's choices.
         ...clientCreateSettings
       },

@@ -13,8 +13,8 @@ import {
   makeCreatedAgentWorktree,
   seedEmptyActivatableWorktree
 } from './worktree-activation-created-agent.test-fixture'
-import { resetWebRuntimeWakeTerminalRespawnForTests } from '@/runtime/web-runtime-wake-terminal-respawn'
-import '../../../runtime/runtime-environment-bridge-fixture'
+import { resetWebRuntimeWakeTerminalRespawnForTests } from '@/runtime/hosted-terminals/restoration/web-runtime-wake-terminal-respawn'
+import '../../../runtime/rpc/testing/runtime-environment-bridge-fixture'
 import '@/runtime/web-session-tabs-sync/host-terminal-count-fixture'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'

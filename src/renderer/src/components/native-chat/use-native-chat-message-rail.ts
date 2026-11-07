@@ -92,7 +92,9 @@ export function useNativeChatMessageRail({
       const slotIndex = previousItemsRef.current.find((item) => item.id === clicked.id)?.slotIndex
       const row = virtualItemsRef.current.find((item) => item.index === slotIndex)
       if (row && row.end > top && row.start < top + element.clientHeight) {
-        clicked.offset ??= row.start - top
+        if (clicked.offset == null) {
+          clicked.offset = row.start - top
+        }
         if (Math.abs(row.start - top - clicked.offset) <= ALIGN_ARRIVED_PX) {
           return
         }

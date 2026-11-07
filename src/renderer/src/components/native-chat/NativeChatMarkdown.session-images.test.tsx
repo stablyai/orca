@@ -1,10 +1,11 @@
+import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ComponentProps } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
+
 import type * as TerminalFileOpenRouting from '@/components/terminal-pane/links/files/terminal-file-open-routing'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import '@/components/editor/document-images/useLocalImageSrc'
@@ -19,11 +20,11 @@ const mocks = vi.hoisted(() => ({
   readRuntimeFilePreview: vi.fn(),
   openDetectedFilePath: vi.fn()
 }))
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof RuntimeRpcClient>()),
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeRpcCallModule>()),
   callRuntimeRpc: mocks.callRuntimeRpc
 }))
-vi.mock('@/runtime/runtime-file-read-client', () => ({
+vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({
   readRuntimeFilePreview: mocks.readRuntimeFilePreview
 }))
 vi.mock(

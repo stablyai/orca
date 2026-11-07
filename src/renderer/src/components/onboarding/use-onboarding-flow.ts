@@ -319,7 +319,6 @@ export function useOnboardingFlow(
     hasSelectedWorkspace: selectedWorkspaceId !== null,
     detectedSet,
     isDetectingAgents,
-    refreshDetectedAgents,
     next,
     setUpLater,
     dismissOnboarding,

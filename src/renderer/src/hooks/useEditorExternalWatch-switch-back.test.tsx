@@ -40,7 +40,7 @@ vi.mock('./editor-external-watch-targets', async (importOriginal) => ({
   }),
   getEditorExternalWatchTargetKey: harness.keyOf
 }))
-vi.mock('@/runtime/runtime-file-read-client', () => ({
+vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({
   readRuntimeFileContent: harness.readRuntimeFileContent
 }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))

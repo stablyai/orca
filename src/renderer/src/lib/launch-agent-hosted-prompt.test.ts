@@ -1,8 +1,8 @@
-import type * as CreateRequest from '@/runtime/agent-session-create-request'
+import type * as CreateRequest from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-create-request'
 import type * as HostSettings from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
 // @vitest-environment happy-dom
 import { beforeEach, expect, it, vi } from 'vitest'
-import type { createWebRuntimeSessionTerminalResult } from '@/runtime/web-runtime-terminal-create-operation'
+import type { createWebRuntimeSessionTerminalResult } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation'
 import type { readHostAgentStartupSettings } from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
 import { launchAgentInWebHostTab } from '@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
 
@@ -24,15 +24,18 @@ vi.mock('@/store', () => ({
   }
 }))
 vi.mock('sonner', () => ({ toast: { error: mocks.error } }))
-vi.mock('@/runtime/agent-session-create-request', async (original) => ({
-  ...(await original<typeof CreateRequest>()),
-  agentSessionCreateCapabilities: async () => ({ capable: false, complete: false })
-}))
+vi.mock(
+  '@/runtime/hosted-terminals/creation/agent-launch/agent-session-create-request',
+  async (original) => ({
+    ...(await original<typeof CreateRequest>()),
+    agentSessionCreateCapabilities: async () => ({ capable: false, complete: false })
+  })
+)
 vi.mock('@/runtime/agent-launch-settings/agent-launch-settings-transport', async (original) => ({
   ...(await original<typeof HostSettings>()),
   readHostAgentStartupSettings: mocks.settings
 }))
-vi.mock('@/runtime/web-runtime-terminal-create-operation', () => ({
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation', () => ({
   createWebRuntimeSessionTerminalResult: mocks.create
 }))
 vi.mock('@/lib/agent-paste-draft', () => ({ pasteDraftWhenAgentReady: mocks.paste }))

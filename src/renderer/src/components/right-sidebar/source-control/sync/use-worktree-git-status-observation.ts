@@ -1,4 +1,4 @@
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { SourceControlScope } from '../panel/worktree-scope'
 import { sourceControlFileWatchRuntimeEnvironmentId } from './worktree-git-owner-target'
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'

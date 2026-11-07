@@ -10,17 +10,17 @@ import type { AgentLaunchChoices } from '../../../../../../shared/agent-launch/c
 import { structuredAgentLabel } from '../structured-agent-session-launch-label'
 import type { SessionOptionValue } from '../../../../../../shared/native-chat/input/native-chat-session-options'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
-import { agentSessionCreateCapabilities } from '@/runtime/agent-session-create-request'
+import { agentSessionCreateCapabilities } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-create-request'
 import { AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
-import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { pairedAgentLaunchInputs } from '../../../paired-agent-launch-inputs'
-import { createWebRuntimeSessionTerminalResult } from '@/runtime/web-runtime-terminal-create-operation'
+import { createWebRuntimeSessionTerminalResult } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { completeWebHostAgentLaunch } from '@/lib/web-host-agent-launch-completion'
-import { deliverCreatedWebRuntimeAgentSessionPrompt } from '@/runtime/web-runtime-terminal-creation'
-import type { CreateWebRuntimeSessionTerminalOnHostArgs } from '@/runtime/web-runtime-session-types'
+import { deliverCreatedWebRuntimeAgentSessionPrompt } from '@/runtime/hosted-terminals/creation/web-runtime-created-agent-prompt-delivery'
+import type { CreateWebRuntimeSessionTerminalOnHostArgs } from '@/runtime/hosted-terminals/creation/terminal-create-contracts'
 import {
   planLaunchAgentStartupPrompt,
   planHostedAgentPrompt,

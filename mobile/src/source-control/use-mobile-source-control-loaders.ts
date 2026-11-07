@@ -103,16 +103,9 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
         setActionError(null)
       }
       refocusRef.current = true
-      return () => {
-        setFocused(false)
-        // Screens above can write (Review stages files), so coming back always revalidates.
-        void queryClient.invalidateQueries({
-          queryKey: statusKey,
-          exact: true,
-          refetchType: 'none'
-        })
-      }
-    }, [queryClient, setActionError, statusKey])
+      // Review reads and writes this same status entry, so coming back shows what it staged without another read.
+      return () => setFocused(false)
+    }, [setActionError])
   )
   const statusQuery = useHostQuery(gitStatusQuery, { hostId, client }, target, NO_INPUT, {
     enabled: statusEnabled,
@@ -128,6 +121,8 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
   ).current
   // Reset on identity change during render so retained ready state cannot expose another host/worktree for a frame.
   const lastResetIdentityRef = useRef(statusIdentityKey)
+  // The status read the compare last ran for; Review's reads wait until Changes is back on top.
+  const comparedReadRef = useRef<string | null>(null)
   if (lastResetIdentityRef.current !== statusIdentityKey) {
     lastResetIdentityRef.current = statusIdentityKey
     // Retire before fresh status arrives; otherwise the old compare can publish into the new worktree.
@@ -188,9 +183,18 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
   )
 
   // Each status read that lands, and a new compare setting, refreshes the compare; a read in flight brings its own.
+  // Review shares the status entry, so its reads wait until Changes is back on top and then compare once.
   const { data: statusRead, error: statusError, isFetching: statusFetching } = statusQuery
   const compareShownStatus = useEffectEvent(() => {
-    if (statusRead?.kind === 'ready' && !statusFetching && statusQuery.status === 'success') {
+    const read = `${statusIdentityKey}\0${statusQuery.dataUpdatedAt}\0${compareAgainstUpstream}`
+    if (
+      focused &&
+      comparedReadRef.current !== read &&
+      statusRead?.kind === 'ready' &&
+      !statusFetching &&
+      statusQuery.status === 'success'
+    ) {
+      comparedReadRef.current = read
       void loadBranchCompare({
         preserveReadyOnFailure: true,
         upstreamName: statusRead.status.upstreamStatus?.upstreamName
@@ -199,7 +203,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
   })
   useEffect(() => {
     compareShownStatus()
-  }, [statusKey, statusQuery.dataUpdatedAt, statusFetching, compareAgainstUpstream])
+  }, [statusKey, statusQuery.dataUpdatedAt, statusFetching, compareAgainstUpstream, focused])
 
   const loadStatus = useCallback(
     async (options?: LoadStatusOptions) => {

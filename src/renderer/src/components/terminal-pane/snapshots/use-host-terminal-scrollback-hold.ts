@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   HOST_TERMINAL_SCROLLBACK_HOLD_MS,
   startHostTerminalScrollbackHydration
-} from '@/runtime/host-terminal-scrollback-hydration'
+} from '@/runtime/hosted-terminals/hydration/host-terminal-scrollback-hydration'
 
 /**
  * True while this tab's scrollback is being read from its host. The pane mounts once, and mount

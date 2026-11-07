@@ -1,13 +1,13 @@
 import { createHostSessionLaunchRuntimeFixture } from './remote-runtime-host-session-launch-test-fixture'
 import { ExplicitEnsure } from '../../../../../../shared/rpc-contract/agent-session-params'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { deliverCreatedWebRuntimeAgentSessionPrompt } from '@/runtime/web-runtime-terminal-creation'
+import type { deliverCreatedWebRuntimeAgentSessionPrompt } from '@/runtime/hosted-terminals/creation/web-runtime-created-agent-prompt-delivery'
 const promptFailure = vi.hoisted(() => ({ error: vi.fn(), copy: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: promptFailure.error } }))
 const delivery = vi.hoisted(() =>
   vi.fn<typeof deliverCreatedWebRuntimeAgentSessionPrompt>(async () => true)
 )
-vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-created-agent-prompt-delivery', () => ({
   deliverCreatedWebRuntimeAgentSessionPrompt: delivery
 }))
 const appStore = vi.hoisted(() => {

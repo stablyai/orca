@@ -15,8 +15,11 @@ import type {
 import {
   getRuntimeTargetHostId,
   runtimeTargetForOwnerEnvironment
-} from '../../runtime/runtime-client-target'
-import { catalogOwnsHost, getProjectGroupHostId } from '../slices/project-group-owner-routing'
+} from '../../runtime/rpc/targets/runtime-client-target'
+import {
+  catalogOwnsHost,
+  getProjectGroupHostId
+} from '../project-groups/project-group-owner-routing'
 import '../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'
 import { selectFolderWorkspaces } from '../workspace-record-selectors'

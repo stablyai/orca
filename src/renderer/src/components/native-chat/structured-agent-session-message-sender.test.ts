@@ -32,7 +32,7 @@ import { noteStructuredAgentSessionFence } from './structured-agent-session-send
 import { runtimes } from './structured-agent-session-send-runtime'
 import { getStructuredAgentSessionReadOwner } from './structured-agent-session-read-owner'
 import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 
 describe('structured agent session message sender', () => {
   beforeEach(() => {

@@ -35,7 +35,9 @@ vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
 vi.mock('@/lib/terminal-tab-owner-activation', () => ({
   activateTerminalTabOnOwner: mocks.activateTerminalTabOnOwner
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc
+}))
 vi.mock('@/components/native-chat/use-native-chat-composer-reveal-focus', () => ({
   requestNativeChatComposerFocus: mocks.requestNativeChatComposerFocus
 }))

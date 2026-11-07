@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
-import { mergePRCommentIntoList } from '@/store/github/pr-comment-cache'
+import { mergePRCommentIntoList } from '@/store/github/comments/pr-comment-cache'
 import {
   acknowledgePRCommentsAfterAiLaunch,
   attachPRReviewReplyParent,

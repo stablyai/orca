@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('@/runtime/web-runtime-split-source-pty', () => ({
+vi.mock('@/runtime/hosted-terminals/actions/web-runtime-split-source-pty', () => ({
   readHostPublishedSplitSourcePtyId: mocks.readHostPublishedSplitSourcePtyId,
   isHostTabPane: mocks.isHostTabPane,
   notifyHostTabSplitRefused: mocks.notifyHostTabSplitRefused
@@ -39,7 +39,7 @@ vi.mock('./terminal-pane-split-in-main', async (importOriginal) => ({
   splitServerPane: mocks.splitServerPane
 }))
 
-vi.mock('@/runtime/web-runtime-terminal-actions', () => ({
+vi.mock('@/runtime/hosted-terminals/actions/web-runtime-terminal-split', () => ({
   splitWebRuntimeTerminal: mocks.splitWebRuntimeTerminal
 }))
 

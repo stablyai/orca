@@ -4,7 +4,10 @@ import { toast } from 'sonner'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
 import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
-import { abortRuntimeGitMerge, abortRuntimeGitRebase } from '@/runtime/runtime-git-sync-client'
+import {
+  abortRuntimeGitMerge,
+  abortRuntimeGitRebase
+} from '@/runtime/source-control/git/runtime-git-sync-client'
 import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
 import type { AbortConflictOperation } from '../listing/operation-target'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'

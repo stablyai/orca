@@ -1,4 +1,6 @@
-import type * as RuntimeRpc from '@/runtime/runtime-rpc-client'
+import type * as RuntimeCapabilityProofModule from '@/runtime/rpc/compatibility/runtime-capability-proof'
+import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
+
 import type * as Telemetry from '@/lib/telemetry'
 import { afterEach, beforeAll, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
@@ -10,19 +12,22 @@ import { getDefaultOnboardingState } from '../../../shared/onboarding-defaults'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { projectAgentLaunchSettings } from '../../../shared/agent-launch/choices/agent-launch-settings'
 import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
-import { stubRuntimeEnvironmentBridge } from '@/runtime/runtime-environment-bridge-fixture'
+import { stubRuntimeEnvironmentBridge } from '@/runtime/rpc/testing/runtime-environment-bridge-fixture'
 import { rememberEmptyHostAnswerForTests } from '@/runtime/web-session-tabs-sync/host-terminal-count-fixture'
 import { loadWebRuntimeSessionTabsApplyModulesForTests } from '@/runtime/web-runtime-session-snapshot'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
 import {
   shouldSkipWebRuntimeWakeTerminalRespawn,
   resetWebRuntimeWakeTerminalRespawnForTests
-} from '@/runtime/web-runtime-wake-terminal-respawn'
+} from '@/runtime/hosted-terminals/restoration/web-runtime-wake-terminal-respawn'
 
 const rpc = vi.hoisted(() => vi.fn())
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof RuntimeRpc>()),
-  runtimeEnvironmentSupportsCapability: vi.fn(async () => true),
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeCapabilityProofModule>()),
+  runtimeEnvironmentSupportsCapability: vi.fn(async () => true)
+}))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeRpcCallModule>()),
   callRuntimeRpc: rpc
 }))
 vi.mock('sonner', () => ({

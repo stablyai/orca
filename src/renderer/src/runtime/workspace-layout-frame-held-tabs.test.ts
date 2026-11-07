@@ -58,7 +58,7 @@ vi.mock('@/components/native-chat/telemetry/native-chat-telemetry', async (impor
 }))
 
 const rpc = vi.hoisted((): { calls: Call[] } => ({ calls: [] }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: (_target: unknown, _method: string, params: { command: { type: string } }) =>
     new Promise<LayoutApplyReply>((answer, fail) =>
       rpc.calls.push({ command: params.command, answer, fail })

@@ -8,7 +8,7 @@ import type {
   BrowserCertificateProceedResult,
   BrowserPage as BrowserPageState
 } from '../../../../../shared/browser-workspace-types'
-import type { RemoteBrowserPageHandle } from '@/store/slices/browser'
+import type { RemoteBrowserPageHandle } from '@/store/slices/browser/browser-slice-contract'
 import { resolveRemoteFailureExternalUrl } from '../../../../../shared/browser-url'
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
 import { getRemoteBrowserFrameStyle } from './remote-browser-frame-style'
@@ -22,7 +22,7 @@ import {
   canReconnectRemoteBrowserStream,
   type RemoteBrowserStreamStatus
 } from './remote-browser-stream-status'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RemoteBrowserRuntimeTarget } from './remote-browser-page-input-model'
 
 export function RemoteBrowserPageViewport({

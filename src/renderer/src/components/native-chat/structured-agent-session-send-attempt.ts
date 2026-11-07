@@ -19,10 +19,10 @@ import {
   type StructuredAgentSessionSendAnswer,
   type StructuredAgentSessionSendEvidence
 } from '../../../../shared/agent-session/requests/structured-agent-session-send-evidence'
-import { ensureRuntimeEnvironmentCompatible } from '@/runtime/runtime-rpc-client'
+import { ensureRuntimeEnvironmentCompatible } from '@/runtime/rpc/compatibility/runtime-compatibility-probe'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
-import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
+import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
 import {
   agentSessionThrownFailure,
   readAgentSessionErrorRefusal,

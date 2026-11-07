@@ -32,17 +32,17 @@ import { McpMissingConfigList } from './McpMissingConfigList'
 import {
   type LoadedMcpConfigInspection,
   loadMcpConfigInspections
-} from '../../../../runtime/mcp-config-inspection'
+} from '../../../../runtime/mcp/configuration/mcp-config-inspection'
 import { formatMcpConfigSummary } from './mcp-config-summary'
 import { translate } from '@/i18n/i18n'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
-import { writeRuntimeFile } from '@/runtime/runtime-file-mutation-client'
+import { writeRuntimeFile } from '@/runtime/files/mutations/runtime-file-mutation-client'
 import {
   assertFileWriteApplied,
   missingOrIdenticalPrecondition
 } from '../../../../../../shared/file-write-disk-precondition'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type McpConfigSectionProps = {

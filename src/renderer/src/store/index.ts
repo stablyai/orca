@@ -2,20 +2,20 @@ import { registerStructuredSelectionCatalogStore } from '@/lib/agent-session/opt
 import { canOfferHttpLinkGroupAction } from '@/lib/browser/navigation/http-link-in-group-availability'
 import { create, type StateCreator } from 'zustand'
 import type { AppState } from './types'
-import { createRepoSlice } from './slices/repos'
+import { createRepoSlice } from './repos/create-repo-slice'
 import { createSparsePresetsSlice } from './slices/sparse-presets'
 import { createWorktreeSlice } from './slices/worktrees'
 import { createTerminalSlice } from './slices/terminals'
 import { createTabsSlice } from './slices/tabs'
-import { createUISlice } from './slices/ui'
-import { createSettingsSlice } from './slices/settings'
+import { createUISlice } from './slices/ui/create-ui-slice'
+import { createSettingsSlice } from './slices/settings/create-settings-slice'
 import { createKeybindingsSlice } from './slices/keybindings'
-import { createGitHubSlice } from './slices/github'
-import { createHostedReviewSlice } from './slices/hosted-review'
-import { createLinearSlice } from './slices/linear'
+import { createGitHubSlice } from './github/github'
+import { createHostedReviewSlice } from './slices/hosted-review/hosted-review'
+import { createLinearSlice } from './slices/linear/linear'
 import { createPreflightSlice } from './slices/preflight'
-import { createJiraSlice } from './slices/jira'
-import { createEditorSlice } from './slices/editor'
+import { createJiraSlice } from './slices/jira/jira'
+import { createEditorSlice } from './slices/editor/create-editor-slice'
 import { createStatsSlice } from './slices/stats'
 import { createMemorySlice } from './slices/memory'
 import { createWorkspaceSpaceSlice } from './slices/workspace-space'
@@ -25,26 +25,26 @@ import {
   createMuseUsageSlice,
   createOpenCodeUsageSlice
 } from './slices/usage-provider-slices'
-import { createBrowserSlice } from './slices/browser'
+import { createBrowserSlice } from './slices/browser/create-browser-slice'
 import { createRateLimitSlice } from './slices/rate-limits'
 import { createSshSlice } from './slices/ssh'
 import { createRuntimeEnvironmentSshSlice } from './slices/runtime-environment-ssh'
 import { createWslHostsSlice } from './slices/wsl-hosts'
 import { createAgentStatusSlice } from './slices/agent-status/agent-status'
 import { createPaneForegroundAgentSlice } from './slices/pane-foreground-agent'
-import { createDiffCommentsSlice } from './slices/diffComments'
+import { createDiffCommentsSlice } from './slices/diff-comments/create-diff-comments-slice'
 import { createDetectedAgentsSlice } from './slices/detected-agents'
 import { createRuntimeDetectedAgentsSlice } from './slices/runtime-detected-agents'
 import { createWorktreeNavHistorySlice } from './slices/worktree-nav-history'
 import { createDictationSlice } from './slices/dictation'
-import { createWorkspaceCleanupSlice } from './slices/workspace-cleanup'
-import { createWorkspaceCleanupBrowseSlice } from './slices/workspace-cleanup-browse'
+import { createWorkspaceCleanupSlice } from './slices/workspace-cleanup/create-workspace-cleanup-slice'
+import { createWorkspaceCleanupBrowseSlice } from './slices/workspace-cleanup/workspace-cleanup-browse'
 import { createRuntimeStatusSlice } from './slices/runtime-status'
-import { createPullRequestGenerationSlice } from './slices/pull-request-generation'
+import { createPullRequestGenerationSlice } from './slices/hosted-review/generation/pull-request-generation'
 import { createCommitMessageGenerationSlice } from './slices/commit-message-generation'
 import { createPinnedTabCloseConfirmSlice } from './slices/pinned-tab-close-confirm'
 import { createRecentlyClosedTabsSlice } from './slices/recently-closed-tabs'
-import { createOrcaProfilesSlice } from './slices/orca-profiles'
+import { createOrcaProfilesSlice } from './slices/orca-profiles/create-orca-profiles-slice'
 import { createNewIssueDraftSlice } from './slices/new-issue-draft'
 import { createFeedbackDraftSlice } from './slices/feedback-draft'
 import { createTaskCreationDraftsSlice } from './slices/task-creation-drafts'
@@ -54,7 +54,7 @@ import { createStructuredSessionLaunchDirectorySlice } from './slices/structured
 import { createStructuredChatSleptAtSlice } from './slices/structured-chat-slept-at'
 import { createWorkspaceAttentionSlice } from './slices/workspace-attention/workspace-attention-slice'
 import { e2eConfig } from '@/lib/e2e-config'
-import type { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
+import type { createWebRuntimeSessionTerminal } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
 import {
   registerHttpLinkStoreAccessor,
   registerHttpLinkGroupActionAvailability,
@@ -214,9 +214,9 @@ if ((import.meta.env.DEV || e2eConfig.exposeStore) && typeof window !== 'undefin
   if (e2eConfig.exposeStore) {
     testWindow.__webRuntimeSessionE2E = {
       createTerminal: async (args: Parameters<typeof createWebRuntimeSessionTerminal>[0]) =>
-        (await import('@/runtime/web-runtime-terminal-creation')).createWebRuntimeSessionTerminal(
-          args
-        )
+        (
+          await import('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation')
+        ).createWebRuntimeSessionTerminal(args)
     }
   }
 }

@@ -3,7 +3,7 @@ import type React from 'react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import { joinPath } from '@/lib/path'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { DiffSection } from '../../diff/sections/diff-section-types'
 import { getLargeDiffRenderLimit } from '../../../../../../shared/large-diff-render-limit'
 import {

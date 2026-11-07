@@ -15,7 +15,7 @@ import { useLinearIssueWorkspaceDetail } from '../../linear-issue-workspace-deta
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import { expect, it, vi } from 'vitest'
 import { act, renderHook, waitFor, render, screen } from '@testing-library/react'
-import { deferred } from '../../../store/slices/linear-slice-test-harness'
+import { deferred } from '../../../store/slices/linear/linear-slice-test-harness'
 
 // The navigation snapshot predates the save; no second writer supplies a missing enrollment edge.
 it.each(['workspace', 'drawer'] as const)(

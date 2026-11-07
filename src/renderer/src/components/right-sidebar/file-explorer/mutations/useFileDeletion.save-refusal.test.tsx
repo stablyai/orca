@@ -28,7 +28,7 @@ vi.mock('@/components/editor/autosave/editor-autosave', () => ({
   requestEditorFileSave: mocks.requestEditorFileSave,
   requestEditorSaveQuiesce: vi.fn(async () => undefined)
 }))
-vi.mock('@/runtime/runtime-file-mutation-client', () => ({
+vi.mock('@/runtime/files/mutations/runtime-file-mutation-client', () => ({
   deleteRuntimePath: mocks.deleteRuntimePath,
   writeRuntimeFile: vi.fn()
 }))

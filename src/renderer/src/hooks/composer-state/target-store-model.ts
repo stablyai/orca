@@ -4,7 +4,7 @@ import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import type { UISlice } from '../../store/slices/ui'
+import type { UISlice } from '../../store/slices/ui/ui-slice-contract'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition,

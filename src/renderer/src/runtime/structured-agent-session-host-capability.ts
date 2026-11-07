@@ -22,9 +22,9 @@ import {
   ensureLocalRuntimeCapabilities,
   readLocalRuntimeCapabilitiesOrUnknown,
   subscribeLocalRuntimeCapabilityObservation
-} from './local-runtime-capabilities'
-import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
-import { subscribeRuntimeHostContactRegained } from './runtime-host-contact-regained'
+} from './hosts/capabilities/local-runtime-capabilities'
+import { runtimeEnvironmentSupportsCapability } from './rpc/compatibility/runtime-capability-proof'
+import { subscribeRuntimeHostContactRegained } from './hosts/connections/runtime-host-contact-regained'
 import {
   isRuntimeHostContactRevoked,
   lastVerifiedRuntimeStatus

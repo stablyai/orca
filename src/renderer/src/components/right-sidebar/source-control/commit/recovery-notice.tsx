@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -59,17 +59,6 @@ function getRecoveryDialogKey(
   worktreeId: string | null | undefined
 ): string {
   return `${recoveryKind}:${worktreeId ?? 'no-worktree'}`
-}
-
-function syncRecoveryDialogState(
-  state: RecoveryDialogState,
-  worktreeKey: string,
-  hasDetails: boolean
-): RecoveryDialogState {
-  if (state.worktreeKey === worktreeKey && hasDetails) {
-    return state
-  }
-  return { worktreeKey, open: false }
 }
 
 function shouldShowRecoveryDialog(
@@ -204,6 +193,10 @@ export function SourceControlRecoveryNotice({
     worktreeKey,
     open: false
   })
+  // Close on switch or lost details during render so returning cannot reopen a stale dialog.
+  if (dialogState.worktreeKey !== worktreeKey || (!hasDetails && dialogState.open)) {
+    setDialogState({ worktreeKey, open: false })
+  }
   const dialogOpen = shouldShowRecoveryDialog(dialogState, worktreeKey, hasDetails)
   const setDialogOpen = useCallback(
     (open: boolean) => {
@@ -226,10 +219,6 @@ export function SourceControlRecoveryNotice({
   const handlePromptDelivered = useCallback(() => {
     setDialogOpen(false)
   }, [setDialogOpen])
-
-  useEffect(() => {
-    setDialogState((current) => syncRecoveryDialogState(current, worktreeKey, hasDetails))
-  }, [hasDetails, worktreeKey])
 
   const splitButtonProps = {
     actionId,

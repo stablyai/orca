@@ -377,8 +377,8 @@ import * as hostPreferences from '@/runtime/agent-launch-settings/use-host-agent
 import * as launchSettings from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
 import * as webEnvironment from '@/runtime/web-runtime-session-environment'
 import * as worktreeHost from '@/lib/workspace/ownership/worktree-runtime-owner'
-import * as terminalCreate from '@/runtime/web-runtime-terminal-create-operation'
-import * as runtimeRpc from '@/runtime/runtime-rpc-client'
+import * as terminalCreate from '@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation'
+import * as runtimeRpc from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
 
 it.each([

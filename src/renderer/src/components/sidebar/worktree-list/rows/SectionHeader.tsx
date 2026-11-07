@@ -13,7 +13,7 @@ import {
 } from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { getProjectGroupHostId } from '@/store/slices/project-group-owner-routing'
+import { getProjectGroupHostId } from '@/store/project-groups/project-group-owner-routing'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition

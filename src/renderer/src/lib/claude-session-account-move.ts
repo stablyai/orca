@@ -4,7 +4,7 @@ import { type AppState, useAppStore } from '@/store'
 import {
   confirmRuntimeTerminalForegroundProcess,
   inspectRuntimeTerminalProcess
-} from '@/runtime/runtime-terminal-inspection'
+} from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
 
 import {
   isAgentForegroundWrapperProcess,

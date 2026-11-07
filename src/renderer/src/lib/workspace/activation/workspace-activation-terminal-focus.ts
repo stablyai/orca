@@ -1,6 +1,6 @@
 import { shouldPreserveEditableFocus } from '@/lib/editable-focus-preservation'
 import { useAppStore } from '@/store/index'
-import { focusRuntimeTerminalSurface } from '@/runtime/mounted-terminal-tab-registry'
+import { focusRuntimeTerminalSurface } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import type { ActivateAndRevealResult } from '@/lib/worktree-activation-outcome'
 
 let cancelPendingFocus: (() => void) | null = null

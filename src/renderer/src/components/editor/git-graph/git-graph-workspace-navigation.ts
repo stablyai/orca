@@ -6,7 +6,7 @@ import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owne
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { useAppStore } from '@/store'
 import { gitGraphScope } from '@/lib/git-graph-tab'
-import { getRuntimeGitRefs } from '@/runtime/runtime-git-status-client'
+import { getRuntimeGitRefs } from '@/runtime/source-control/git/runtime-git-status-client'
 
 export const gitGraphOwnerKey = (scope: ReturnType<typeof gitGraphScope>) =>
   JSON.stringify([scope?.route, scope?.worktree.path])

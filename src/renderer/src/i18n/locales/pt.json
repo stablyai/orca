@@ -1848,7 +1848,7 @@
         "insecureOrigin": "O Orca recusou o pareamento nesta página: ela usa http sem criptografia em outra máquina, então qualquer pessoa no caminho da rede poderia substituí-la e obter o código de pareamento. Abra o cliente web por https, em localhost neste computador ou por um túnel SSH. Para permitir mesmo assim, o operador do servidor pode reiniciar o Orca com ORCA_ALLOW_INSECURE_WEB_PAIRING=1.",
         "deviceDowngraded": "Este servidor Orca não oferece mais suporte à chave de login deste navegador (ele pode ter voltado a uma versão anterior). Atualize o servidor ou pareie este navegador novamente.",
         "unauthorized": "Não autorizado. Pareie este cliente web novamente.",
-        "unauthorizedNewLink": "Não autorizado. Peça um novo link de pareamento."
+        "unauthorizedLinkUsedOrExpired": "Não autorizado. Este link de pareamento pode ter expirado ou já ter sido usado. Crie um novo link de pareamento no Orca e abra-o."
       }
     },
     "i18n": {
@@ -2153,13 +2153,6 @@
       }
     },
     "hooks": {
-      "useAutomationDispatchEvents": {
-        "59718b120b": "O espaço de trabalho de destino não está mais disponível.",
-        "16a21d6413": "A reconexão SSH requer credenciais interativas.",
-        "386db94f3e": "O projeto de destino não está mais disponível.",
-        "3ad7d77f57": "O espaço de trabalho de destino está em um host diferente do destino de execução desta automação.",
-        "workspaceHostUnresolved": "O espaço de trabalho de destino abrange mais de um host, então esta execução não tem um único host para usar."
-      },
       "useComposerState": {
         "b2ead86962": "Falha ao resolver a base do PR.",
         "3db83fc58a": "Nenhum caminho de projeto está disponível neste host para anexos.",
@@ -6585,7 +6578,11 @@
               "micDefault": "padrão do sistema",
               "dictationLanguageTitle": "Idioma do ditado",
               "dictationLanguageDescription": "Informe ao modelo de voz qual idioma você fala.",
-              "dictationLanguageKeyword": "idioma"
+              "dictationLanguageKeyword": "idioma",
+              "modelUnloadTitle": "Descarregar modelo de voz",
+              "modelUnloadDescription": "Escolha quando o modelo de voz local é descarregado da memória.",
+              "modelUnloadKeyword": "descarregar",
+              "modelMemoryKeyword": "memória"
             }
           }
         },
@@ -6985,7 +6982,8 @@
           "diagnosticsCopyFailed": "Falha ao copiar diagnósticos",
           "5e2c7a1f84": "Enquanto você usa um terminal no celular, o Orca o reduz para caber na tela. Ao fechar o aplicativo ou trocar para outro, isto controla se ele mantém o tamanho do celular (para que ferramentas interativas de CLI não reorganizem o conteúdo) ou volta ao tamanho do computador. Você sempre pode usar Restaurar ou Restaurar todos no aviso para redimensionar manualmente.",
           "codeRefreshesAutomatically": "O código é atualizado automaticamente. Um código copiado funciona por até 10 minutos.",
-          "legacyEncryption": "Usa uma criptografia mais antiga. Atualize o app Orca neste dispositivo."
+          "legacyEncryption": "Usa uma criptografia mais antiga. Atualize o app Orca neste dispositivo.",
+          "olderPairingMethod": "Usa um método de pareamento antigo. Atualize o app Orca neste telefone."
         },
         "SshPane": {
           "c0f1c80166": "Nenhum destino SSH configurado.",
@@ -8105,6 +8103,7 @@
           "6f6d5188ed": "Revogar {{value0}}",
           "434e4a6af6": "Link atual",
           "df142657a5": "Ainda não usado",
+          "olderPairingMethod": "Usa um método de pareamento antigo. Atualize o Orca no dispositivo que usa este link.",
           "b18d1764ef": "Usado por último em {{value0}}",
           "sshAccessCaveat": "Revogar aqui não impede que alguém com acesso SSH a este computador pareie novamente. Para impedir o acesso, remova o acesso SSH dessa pessoa.",
           "linkName": "Link · {{value0}}",
@@ -10718,6 +10717,7 @@
             "openLog": "Abrir Registro",
             "revealLog": "Mostrar Registro",
             "openWorkingDirectory": "Abrir Diretório de Trabalho",
+            "revealArtifactsFolder": "Mostrar Pasta de Artefatos",
             "copySessionId": "Copiar ID da Sessão",
             "copyLogPath": "Copiar Caminho do Registro",
             "messageCount": "{{value0}} msgs",
@@ -14393,7 +14393,10 @@
           "reuseLiveSession": "Reutilizar sessão ativa",
           "freshEachRun": "Nova a cada execução",
           "precheckEnabled": "Ativada, {{timeout}}",
-          "precheckNone": "Nenhuma"
+          "precheckNone": "Nenhuma",
+          "migrate": "Migrar",
+          "migrateNotice": "{{host}} foi atualizado para um novo host remoto. Migre esta automação para que ela continue em execução.",
+          "needsMigration": "Requer migração"
         },
         "ExternalAutomationManagers": {
           "e02f970595": "Nenhum gerenciador de automação externa encontrado.",
@@ -20104,17 +20107,6 @@
           "reviewStatus": "Veja o estado da issue, o status de revisão e as verificações de CI em cada worktree",
           "managePullRequests": "Leia, comente e faça merge de pull requests sem sair do Orca"
         }
-      },
-      "agyInstall": {
-        "open": "Instalar",
-        "thisDevice": "Este dispositivo",
-        "title": "Instalar Antigravity",
-        "description": "Pressione Enter no terminal para executar o instalador oficial. Fechar este terminal interrompe qualquer comando ainda em execução.",
-        "target": "Local de instalação: {{location}}",
-        "terminal": "Instalador do Antigravity",
-        "detected": "O Antigravity foi detectado no PATH. Feche o terminal quando o instalador terminar.",
-        "close": "Fechar terminal",
-        "recheck": "Verificar agentes novamente"
       }
     },
     "jiraUserPicker": {
@@ -21624,6 +21616,13 @@
           "description": "O idioma que você fala. Com Detectar automaticamente, o modelo o identifica a cada vez.",
           "title": "Idioma do ditado",
           "auto": "Detectar automaticamente"
+        },
+        "modelUnload": {
+          "title": "Descarregar modelo de voz",
+          "description": "Quanto tempo o modelo local fica na memória depois que você para de ditar. Enquanto está carregado, o ditado começa na hora; “Imediatamente” libera a memória, então cada ditado espera o modelo carregar.",
+          "cloud": "Modelos na nuvem rodam nos servidores do provedor, então nada fica carregado aqui.",
+          "never": "Nunca",
+          "immediately": "Imediatamente"
         }
       }
     },
@@ -23438,6 +23437,7 @@
       "noRunnableHost": "Esta automação não tem host onde ser executada.",
       "wslMoveInProgress": "O projeto desta automação está sendo movido para seu host WSL, por isso o Orca ignorou esta execução. As execuções serão retomadas quando a movimentação terminar.",
       "wslMoveOwnedByHost": "O projeto desta automação agora é executado em seu host WSL, que também executa esta automação. O Orca não executa mais esta cópia local.",
+      "managedHostServer": "Requer migração para {{host}}",
       "missedGraceWindow": "Quando o Orca verificou novamente, o período de tolerância para recuperar esta execução perdida já havia expirado.",
       "targetMissing": "O host da automação não está mais registrado, então esta automação não tem onde ser executada.",
       "targetReplaced": "O host da automação foi removido e registrado novamente, então esta automação precisa ser vinculada novamente antes de poder ser executada.",
@@ -23479,6 +23479,17 @@
         "effortRepeated": "Os argumentos extras definem o esforço mais de uma vez."
       },
       "hostUpdateRequired": "Atualize o Orca neste host para usar argumentos extras."
+    },
+    "setupTrust": {
+      "reviewTitle": "Aprovar os novos comandos de configuração desta automação?",
+      "reviewBody": "Uma execução pulou a configuração porque os comandos de configuração no <code>orca.yaml</code> da branch mudaram. Ao aprovar, as próximas execuções usarão esses comandos. Aprove apenas se você confia em <repo/>.",
+      "approve": "Aprovar",
+      "approved": "Configuração aprovada. As próximas execuções desta automação vão executá-la.",
+      "skippedSinceApproved": "A configuração não foi executada nesta execução porque os comandos de configuração no orca.yaml da branch mudaram. Eles já foram aprovados, então as próximas execuções vão executá-los.",
+      "skippedReview": "A configuração não foi executada: a branch desta execução tem comandos de configuração no orca.yaml diferentes dos aprovados para esta automação. Revise-os para que as próximas execuções executem a configuração.",
+      "reviewAction": "Revisar e aprovar a configuração",
+      "listSkipped": "Configuração pulada",
+      "listSkippedTitle": "A última execução pulou a configuração porque os comandos de configuração no orca.yaml da branch mudaram. Revise-os no menu de ações."
     }
   },
   "codeHost": {
