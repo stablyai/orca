@@ -2,7 +2,7 @@ import type { JSX } from 'react'
 import { Moon } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type WorkspaceSleepMenuItemsProps = {
   isMultiContext: boolean
@@ -23,6 +23,7 @@ export function WorkspaceSleepMenuItems({
   onSleep,
   onSleepSubtree
 }: WorkspaceSleepMenuItemsProps): JSX.Element {
+  const t = useTranslate()
   return (
     <>
       <Tooltip>
@@ -34,11 +35,11 @@ export function WorkspaceSleepMenuItems({
         </TooltipTrigger>
         <TooltipContent side="right" sideOffset={8} className="max-w-[200px] text-pretty">
           {isMultiContext
-            ? translate(
+            ? t(
                 'auto.components.sidebar.WorktreeContextMenu.7d190f7d2b',
                 'Close all active panels in the selected workspaces to free up memory and CPU.'
               )
-            : translate(
+            : t(
                 'auto.components.sidebar.WorktreeContextMenu.0918b35e4f',
                 'Close all active panels in this workspace to free up memory and CPU.'
               )}
@@ -49,7 +50,7 @@ export function WorkspaceSleepMenuItems({
           <TooltipTrigger asChild>
             <DropdownMenuItem onSelect={onSleepSubtree} disabled={subtreeSleepDisabled}>
               <Moon className="size-3.5" />
-              {translate(
+              {t(
                 'auto.components.sidebar.WorktreeContextMenu.sleepWithDescendants',
                 'Sleep with Descendants ({{value0}})',
                 { value0: descendantCount }
@@ -57,7 +58,7 @@ export function WorkspaceSleepMenuItems({
             </DropdownMenuItem>
           </TooltipTrigger>
           <TooltipContent side="right" sideOffset={8} className="max-w-[220px] text-pretty">
-            {translate(
+            {t(
               'auto.components.sidebar.WorktreeContextMenu.sleepWithDescendantsDescription',
               'Close active panels in this workspace and every nested descendant to free up memory and CPU.'
             )}

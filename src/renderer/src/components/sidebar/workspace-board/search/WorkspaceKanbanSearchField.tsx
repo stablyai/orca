@@ -3,6 +3,7 @@ import { Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const ANNOUNCE_DEBOUNCE_MS = 400
 // Reserve counter width in ch units so multi-digit overlays cannot collide with input text across fonts/platforms.
@@ -60,19 +61,20 @@ export default function WorkspaceKanbanSearchField({
   onClear,
   onClose
 }: WorkspaceKanbanSearchFieldProps): React.JSX.Element {
+  const t = useTranslate()
   const hasText = query !== ''
   const counterText = isFiltering ? `${matchCount} / ${totalCount}` : null
   const inputRef = useRef<HTMLInputElement>(null)
   const [announcement, setAnnouncement] = useState('')
 
   const tooLargeMessage = isTooLarge
-    ? translate(
+    ? t(
         'auto.components.sidebar.WorkspaceKanbanSearchField.7f1c2e94a5',
         'Search text is too long — the board is unfiltered'
       )
     : null
   const tooLargeLabel = isTooLarge
-    ? translate('auto.components.sidebar.WorkspaceKanbanSearchField.9a4d0f6b21', 'Too long')
+    ? t('auto.components.sidebar.WorkspaceKanbanSearchField.9a4d0f6b21', 'Too long')
     : null
   const badgeText = tooLargeLabel ?? counterText
 
@@ -99,11 +101,11 @@ export default function WorkspaceKanbanSearchField({
       <Input
         ref={inputRef}
         value={query}
-        aria-label={translate(
+        aria-label={t(
           'auto.components.sidebar.WorkspaceKanbanSearchField.c0cd6bdf6c',
           'Search workspaces'
         )}
-        placeholder={translate(
+        placeholder={t(
           'auto.components.sidebar.WorkspaceKanbanSearchField.c0cd6bdf6c',
           'Search workspaces'
         )}
@@ -144,7 +146,7 @@ export default function WorkspaceKanbanSearchField({
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.sidebar.WorkspaceKanbanSearchField.3b7ea51793',
               'Clear search'
             )}

@@ -86,8 +86,8 @@ export function getWslHostsPausedLabel(t: Translate = translate): string {
   )
 }
 
-export function getWslHostsPausedShortLabel(): string {
-  return translate(
+export function getWslHostsPausedShortLabel(t: Translate = translate): string {
+  return t(
     'auto.components.sidebar.wslHostRowStatus.pausedShort',
     'Adding WSL distros is paused in this build.'
   )
