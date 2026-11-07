@@ -1,3 +1,4 @@
+import type { NativeChatTurnFoldHistory } from '../../../../shared/native-chat/transcript/native-chat-turn-fold'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatTurnStatus } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
 import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat/native-chat-resolution-receipt'
@@ -25,6 +26,7 @@ export type NativeChatTranscriptSlotsInput = {
   openedPullRequests?: ReadonlyMap<string, readonly NativeChatOpenedPullRequest[]>
   /** Turns the reader opened. Everything else with a duration stays folded. */
   expandedTurnKeys: ReadonlySet<string>
+  turnFold?: NativeChatTurnFoldHistory
   isWorking: boolean
   /** Session-level lifecycle, which outlives a transcript that never said "done". */
   lifecycleWorking: boolean

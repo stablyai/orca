@@ -288,7 +288,6 @@ function Chat(props: {
     ref: null,
     rows: turns.listMessages,
     rowKeys: keys,
-    runs: turns.presentation.workRuns.heads,
     isFollowing: () => props.following,
     onEndDistance: () => {},
     renderItem: ({ item, index }) => {
@@ -498,9 +497,10 @@ it('draws a run once when an older page brings in its start while the reader mov
   const chat0 = mount([thought, call('b'), ...later], { following: false, live: false, runs: true })
   chat0.scroller.showFrom(40)
   chat0.scrolled()
+  const moving = chat0.rows()
   chat0.show([say('u', 'user', 'go'), call('a'), thought, call('b'), ...later])
   const once = ['u', 'a', 'm0'].map(mobileNativeChatRowId)
-  expect(chat0.rows().slice(0, 3)).toEqual(once)
+  expect(chat0.rows()).toEqual(moving)
   expect(chat0.drawn('chat-member:run')).toBe(1)
   chat0.rest()
   expect(chat0.rows().slice(0, 3)).toEqual(once)
