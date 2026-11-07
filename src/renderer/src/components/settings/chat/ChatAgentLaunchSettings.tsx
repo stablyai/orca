@@ -12,6 +12,7 @@ import { AgentOpensAsControl } from '../../agent/launch-settings/AgentChatChoice
 import { buildAgentOpensAs } from '../../../lib/agent-session/launch/native-chat-provider-choice'
 import { SettingsSubsectionHeader } from '../form-controls/SettingsFormControls'
 import { getChatLaunchEntriesByKey } from './chat-launch-search'
+import { useTranslate } from '@/i18n/use-translate'
 
 const WORKSPACE = { kind: 'floating' } as const
 
@@ -22,6 +23,7 @@ export function ChatAgentLaunchSettings({
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
   useHostStructuredAgentsVersion()
   useChatProgramFacts(WORKSPACE)
   useEffect(() => {
@@ -39,7 +41,7 @@ export function ChatAgentLaunchSettings({
       .join(' ')
   })
   const chatOnly = new Set(chatOnlyKey.split(' '))
-  const entry = getChatLaunchEntriesByKey().agents
+  const entry = getChatLaunchEntriesByKey(t).agents
   return (
     <section className="space-y-3">
       <SettingsSubsectionHeader title={entry.title} description={entry.description} />

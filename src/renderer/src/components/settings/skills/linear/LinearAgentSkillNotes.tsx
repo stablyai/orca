@@ -1,17 +1,18 @@
 import { getLinearGuideNotes } from './linear-agent-skill-guide-content'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function LinearAgentSkillNotes(): React.JSX.Element {
-  const notes = getLinearGuideNotes()
+  const t = useTranslate()
+  const notes = getLinearGuideNotes(t)
 
   return (
     <section className="space-y-3 border-t border-border/60 pt-6">
       <div className="space-y-1">
         <h3 className="text-sm font-semibold text-foreground">
-          {translate('auto.components.settings.LinearAgentSkillGuide.notesTitle', 'Good to know')}
+          {t('auto.components.settings.LinearAgentSkillGuide.notesTitle', 'Good to know')}
         </h3>
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.LinearAgentSkillGuide.notesIntro',
             'Quick reminders once Linear is connected and the skill is installed.'
           )}

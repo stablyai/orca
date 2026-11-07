@@ -120,10 +120,10 @@ export function getChatAppearanceEntriesByKey(
   }
 }
 
-export function getChatAppearanceSearchEntries(): SettingsSearchEntry[] {
+export function getChatAppearanceSearchEntries(t: Translate = translate): SettingsSearchEntry[] {
   return [
-    { title: translate('auto.components.settings.Settings.2b4474780a', 'Appearance') },
-    ...Object.values(getChatAppearanceEntriesByKey()),
+    { title: t('auto.components.settings.Settings.2b4474780a', 'Appearance') },
+    ...Object.values(getChatAppearanceEntriesByKey(undefined, t)),
     ...getChatContrastSearchEntries()
   ]
 }

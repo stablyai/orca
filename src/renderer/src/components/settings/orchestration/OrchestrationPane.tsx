@@ -19,7 +19,7 @@ import { getOrchestrationPaneSearchEntries } from './orchestration-search'
 import { AgentSkillSetupPanel } from '../../skills/setup/AgentSkillSetupPanel'
 import { OrchestrationSkillAgentCoverage } from './OrchestrationSkillAgentCoverage'
 import { SkillUsageExamplesSection } from '../../skills/examples/SkillUsageExamplesSection'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { resolveNestedWorkerMaxDepth } from '../../../../../shared/nested-worker-depth'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
@@ -51,6 +51,7 @@ export function OrchestrationPane({
   settings,
   updateSettings
 }: OrchestrationPaneProps): React.JSX.Element {
+  const t = useTranslate()
   const [skillPromptOpen, setSkillPromptOpen] = useState(false)
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const showLocalRuntimeSettings = !isPairedWebClientWindow()
@@ -97,11 +98,8 @@ export function OrchestrationPane({
 
   return (
     <SearchableSetting
-      title={translate(
-        'auto.components.settings.OrchestrationPane.191ac34567',
-        'Agent Orchestration'
-      )}
-      description={translate(
+      title={t('auto.components.settings.OrchestrationPane.191ac34567', 'Agent Orchestration')}
+      description={t(
         'auto.components.settings.OrchestrationPane.2aacdb0517',
         'Coordinate coding agents across handoffs, worktree handovers, and child-agent work.'
       )}
@@ -110,11 +108,8 @@ export function OrchestrationPane({
       className="space-y-5 py-2"
     >
       <AgentSkillSetupPanel
-        title={translate(
-          'auto.components.settings.OrchestrationPane.07641b9768',
-          'Orchestration skill'
-        )}
-        description={translate(
+        title={t('auto.components.settings.OrchestrationPane.07641b9768', 'Orchestration skill')}
+        description={t(
           'auto.components.settings.OrchestrationPane.9bedd2a6e5',
           'Enables agents to hand off context and coordinate work through Orca.'
         )}
@@ -135,10 +130,7 @@ export function OrchestrationPane({
               className="text-xs text-muted-foreground underline-offset-2 hover:underline"
               onClick={() => setSkillPromptOpen(true)}
             >
-              {translate(
-                'auto.components.settings.OrchestrationPane.7bc082f4de',
-                'Copy install command'
-              )}
+              {t('auto.components.settings.OrchestrationPane.7bc082f4de', 'Copy install command')}
             </button>
           ) : undefined
         }
@@ -151,8 +143,8 @@ export function OrchestrationPane({
 
       {showLocalRuntimeSettings ? (
         <NumberField
-          label={getNestedWorkerDepthTitle()}
-          description={getNestedWorkerDepthDescription()}
+          label={getNestedWorkerDepthTitle(t)}
+          description={getNestedWorkerDepthDescription(t)}
           value={resolveNestedWorkerMaxDepth(settings)}
           min={1}
           integer
@@ -180,11 +172,8 @@ export function OrchestrationPane({
         />
       ) : null}
       <SkillUsageExamplesSection
-        heading={translate(
-          'auto.components.settings.OrchestrationPane.ae79504732',
-          'How to use it'
-        )}
-        description={translate(
+        heading={t('auto.components.settings.OrchestrationPane.ae79504732', 'How to use it')}
+        description={t(
           'auto.components.settings.OrchestrationPane.52e0634e2c',
           'Ask a coordinator agent to use orchestration for handoffs, worktree handovers, and sequential or parallel child agents.'
         )}

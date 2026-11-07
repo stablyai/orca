@@ -9,6 +9,7 @@ import {
   getChatTurnActivityEntriesByKey,
   getChatTurnActivityTitle
 } from './chat-turn-activity-search'
+import { useTranslate } from '../../../i18n/use-translate'
 
 /** What a turn did, shown under its reply: each switch also has a Hide on its card. */
 export function ChatTurnActivitySetting({
@@ -20,6 +21,7 @@ export function ChatTurnActivitySetting({
   updateSettings: (updates: Partial<GlobalSettings>) => void
   forceVisible?: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const query = useAppStore((state) => state.settingsSearchQuery)
   const entries = getChatTurnActivityEntriesByKey()
   if (!forceVisible && !matchesSettingsSearch(query, Object.values(entries))) {
@@ -29,7 +31,7 @@ export function ChatTurnActivitySetting({
   const openedPullRequestsShown = settings.nativeChatOpenedPullRequests !== false
   return (
     <section id="chat-turn-activity" className="space-y-3">
-      <SettingsSubsectionHeader title={getChatTurnActivityTitle()} />
+      <SettingsSubsectionHeader title={getChatTurnActivityTitle(t)} />
       <Card>
         <CardContent>
           <div className="divide-y divide-border/40">

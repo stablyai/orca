@@ -1,7 +1,7 @@
 import { ArrowRight, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { useAppStore } from '@/store/index'
 import { SettingsSwitchRow } from '../../form-controls/SettingsFormControls'
@@ -10,6 +10,7 @@ import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../../OrcaSignInProgr
 type HowToStep = { key: string; title: string; description: string }
 
 export function ShareSkillsSettingsPane(): React.JSX.Element {
+  const t = useTranslate()
   const openSkillsPage = useAppStore((state) => state.openSkillsPage)
   const openSkillsSharedLinks = useAppStore((state) => state.openSkillsSharedLinks)
   const settings = useAppStore((state) => state.settings)
@@ -24,38 +25,32 @@ export function ShareSkillsSettingsPane(): React.JSX.Element {
   const steps: HowToStep[] = [
     {
       key: 'select',
-      title: translate(
-        'auto.components.settings.shareSkills.selectTitle',
-        'Select one or more skills'
-      ),
-      description: translate(
+      title: t('auto.components.settings.shareSkills.selectTitle', 'Select one or more skills'),
+      description: t(
         'auto.components.settings.shareSkills.selectDescription',
         'Open Skills, choose Share skills, and select the skills to bundle behind one link.'
       )
     },
     {
       key: 'review',
-      title: translate('auto.components.settings.shareSkills.reviewTitle', 'Review and publish'),
-      description: translate(
+      title: t('auto.components.settings.shareSkills.reviewTitle', 'Review and publish'),
+      description: t(
         'auto.components.settings.shareSkills.reviewDescription',
         'Review included files, scripts, and executables before uploading the immutable bundle.'
       )
     },
     {
       key: 'share',
-      title: translate('auto.components.settings.shareSkills.copyTitle', 'Copy the unlisted link'),
-      description: translate(
+      title: t('auto.components.settings.shareSkills.copyTitle', 'Copy the unlisted link'),
+      description: t(
         'auto.components.settings.shareSkills.copyDescription',
         'Anyone with the link can inspect and install all or selected skills without signing in.'
       )
     },
     {
       key: 'manage',
-      title: translate(
-        'auto.components.settings.shareSkills.manageTitle',
-        'Manage or revoke links'
-      ),
-      description: translate(
+      title: t('auto.components.settings.shareSkills.manageTitle', 'Manage or revoke links'),
+      description: t(
         'auto.components.settings.shareSkills.manageDescription',
         'Revoking blocks future access. Skills already installed on another machine remain there.'
       )
@@ -66,10 +61,10 @@ export function ShareSkillsSettingsPane(): React.JSX.Element {
     <div className="divide-y divide-border">
       <section className="space-y-2 py-5 first:pt-0">
         <h3 className="text-sm font-medium">
-          {translate('auto.components.settings.shareSkills.linkTitle', 'Unlisted skill links')}
+          {t('auto.components.settings.shareSkills.linkTitle', 'Unlisted skill links')}
         </h3>
         <p className="text-xs leading-relaxed text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.shareSkills.linkDescription',
             'Shared bundles are not searchable or listed in Orca. The link is the credential, so send it only to people you trust.'
           )}
@@ -77,17 +72,17 @@ export function ShareSkillsSettingsPane(): React.JSX.Element {
       </section>
 
       <SettingsSwitchRow
-        label={translate(
+        label={t(
           'auto.components.settings.shareSkills.allowAgentPublishing',
           'Allow agents and the Orca CLI to publish skill links'
         )}
         description={
           isWebClient
-            ? translate(
+            ? t(
                 'auto.components.settings.shareSkills.allowAgentPublishingWebDescription',
                 'Desktop only. Open Settings → Share Skills on the host device to change this setting.'
               )
-            : translate(
+            : t(
                 'auto.components.settings.shareSkills.allowAgentPublishingDescription',
                 'Let commands publish explicitly named installed skills. Skill folders can contain scripts, configuration, or secrets, so this is off by default.'
               )
@@ -99,8 +94,8 @@ export function ShareSkillsSettingsPane(): React.JSX.Element {
 
       {!isWebClient ? (
         <SettingsSwitchRow
-          label={translate('auto.components.settings.shareSkills.showButton', 'Show Skills button')}
-          description={translate(
+          label={t('auto.components.settings.shareSkills.showButton', 'Show Skills button')}
+          description={t(
             'auto.components.settings.shareSkills.showButtonDescription',
             'Show the Skills shortcut in the sidebar.'
           )}
@@ -113,18 +108,15 @@ export function ShareSkillsSettingsPane(): React.JSX.Element {
         <section className="flex flex-wrap items-center gap-4 py-5">
           <div className="min-w-0 flex-1 space-y-1">
             <h3 className="text-sm font-medium">
-              {translate(
-                'auto.components.settings.shareSkills.signInTitle',
-                'Sign in to share skills'
-              )}
+              {t('auto.components.settings.shareSkills.signInTitle', 'Sign in to share skills')}
             </h3>
             <p className="text-xs leading-relaxed text-muted-foreground">
               {isWebClient
-                ? translate(
+                ? t(
                     'auto.components.settings.shareSkills.signInWebDescription',
                     'Publishing and link management are available in the Orca desktop app.'
                   )
-                : translate(
+                : t(
                     'auto.components.settings.shareSkills.signInDescription',
                     'Use your Orca account to publish bundles and manage their links. Recipients do not need an account.'
                   )}
@@ -133,8 +125,8 @@ export function ShareSkillsSettingsPane(): React.JSX.Element {
           {!isWebClient ? (
             <OrcaSignInButton size="sm" disabled={authStatus?.configured !== true}>
               {authStatus?.state === 'reconnect-required'
-                ? translate('auto.components.settings.shareSkills.signInAgain', 'Sign in again')
-                : translate('auto.components.settings.shareSkills.signIn', 'Sign in to Orca')}
+                ? t('auto.components.settings.shareSkills.signInAgain', 'Sign in again')
+                : t('auto.components.settings.shareSkills.signIn', 'Sign in to Orca')}
             </OrcaSignInButton>
           ) : null}
           {!isWebClient ? <OrcaSignInWaitNotice className="basis-full" /> : null}
@@ -146,17 +138,17 @@ export function ShareSkillsSettingsPane(): React.JSX.Element {
         <section className="flex flex-wrap items-center gap-4 py-5">
           <div className="min-w-0 flex-1 space-y-1">
             <h3 className="text-sm font-medium">
-              {translate('auto.components.settings.shareSkills.activeLinks', 'Active shared links')}
+              {t('auto.components.settings.shareSkills.activeLinks', 'Active shared links')}
             </h3>
             <p className="text-xs leading-relaxed text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.settings.shareSkills.activeLinksDescription',
                 'Only people with a link can open it. Unshare a link to block future inspection and installs.'
               )}
             </p>
           </div>
           <Button type="button" variant="outline" size="sm" onClick={openSkillsSharedLinks}>
-            {translate('auto.components.settings.shareSkills.manageInSkills', 'Manage in Skills')}
+            {t('auto.components.settings.shareSkills.manageInSkills', 'Manage in Skills')}
             <ArrowRight className="size-3.5" />
           </Button>
         </section>
@@ -165,10 +157,10 @@ export function ShareSkillsSettingsPane(): React.JSX.Element {
       <section className="space-y-4 py-5">
         <div className="space-y-1">
           <h3 className="text-sm font-medium">
-            {translate('auto.components.settings.shareSkills.howToTitle', 'How to share skills')}
+            {t('auto.components.settings.shareSkills.howToTitle', 'How to share skills')}
           </h3>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.shareSkills.howToDescription',
               'Publish one skill or a bundle such as a collection of 30 skills behind one link.'
             )}
@@ -201,10 +193,10 @@ export function ShareSkillsSettingsPane(): React.JSX.Element {
             </span>
             <span className="min-w-0 flex-1 space-y-0.5">
               <span className="block text-sm font-medium text-foreground">
-                {translate('auto.components.settings.shareSkills.openSkills', 'Open Skills')}
+                {t('auto.components.settings.shareSkills.openSkills', 'Open Skills')}
               </span>
               <span className="block text-xs font-normal text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.shareSkills.openSkillsDescription',
                   'Publish a bundle, install from a link, or manage installed and shared skills.'
                 )}
