@@ -210,7 +210,6 @@
     },
     "composerPlaceholder": {
       "prompt": "Enviar uma mensagem…",
-      "reconnecting": "Reconectando…",
       "waitingForTerminal": "Aguardando o terminal…"
     },
     "diffCard": {
@@ -357,6 +356,11 @@
       "resume": "Retomar",
       "resumeSending": "Retomar o envio das mensagens na fila",
       "title": "Mensagens na fila"
+    },
+    "offlineQueue": {
+      "failed": "Não foi possível enviar — toque em Enviar para tentar de novo",
+      "waitingFor": "Será enviada quando {{host}} voltar",
+      "waiting": "Será enviada quando o computador voltar"
     },
     "receipt": {
       "cancelled": "Cancelado",

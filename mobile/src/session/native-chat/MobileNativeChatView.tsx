@@ -64,6 +64,8 @@ import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 import type { OlderPagePhase } from '../use-mobile-older-page-loader'
 import { MobileNativeChatOpenFileContext } from './mobile-native-chat-open-file-context'
 import { MobileNativeChatLowerRegion } from './MobileNativeChatLowerRegion'
+import { MobileNativeChatOfflineQueue } from './input/MobileNativeChatOfflineQueue'
+import { useMobileNativeChatOfflineQueue } from './composer/use-mobile-native-chat-offline-sends'
 
 export type MobileNativeChatInputLockReason = 'disconnected' | 'waiting'
 
@@ -225,18 +227,28 @@ export function MobileNativeChatView({
   const tail = useMobileNativeChatTailFollow({ hasItems: data.length > 0, scopeKey: sendSurfaceId })
   const { jumpToTail, recordScrollMetrics, scrollMayLoadEarlier } = tail
 
+  const lockReason = useSettledMobileNativeChatInputLock(inputLockReason)
+  // Lock only terminal-backed Send: it can answer an agent prompt, while drafting is harmless and structured sends queue.
+  const promptShown = !collapsedPrompt && (ask ?? permission ?? question) != null
+  const expandedPromptOwnsSend = !structuredActivityUi && promptShown
+  const offlineQueue = useMobileNativeChatOfflineQueue({
+    scope: draftKey,
+    lock: { raw: inputLockReason ?? null, settled: lockReason },
+    promptOwnsSend: expandedPromptOwnsSend,
+    send: onSend
+  })
   const handleSend = useCallback(
     async (...send: Parameters<typeof onSend>): Promise<boolean> => {
       // Retire the previous notice before this action can report a new one.
       onClearSendError?.()
-      const accepted = await onSend(...send)
+      const accepted = await offlineQueue.send(...send)
       if (!accepted) {
         return false
       }
       jumpToTail()
       return true
     },
-    [onSend, onClearSendError, jumpToTail]
+    [offlineQueue.send, onClearSendError, jumpToTail]
   )
 
   const loadEarlier = useCallback(() => onLoadEarlier?.(), [onLoadEarlier])
@@ -304,14 +316,10 @@ export function MobileNativeChatView({
   const footer = mobileNativeChatListFooter(liveStatus, turns.waitingRows, renderItem)
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error, sessionLive)
 
-  const lockReason = useSettledMobileNativeChatInputLock(inputLockReason)
   const composerPlaceholder = mobileNativeChatComposerPlaceholder(
     lockReason,
     turnIndicator?.afterStop
   )
-  // Lock only terminal-backed Send: it can answer an agent prompt, while drafting is harmless and structured sends queue.
-  const promptShown = !collapsedPrompt && (ask ?? permission ?? question) != null
-  const expandedPromptOwnsSend = !structuredActivityUi && promptShown
   const promptOwnsInput = useMobileNativeChatPromptInputOwner(
     { promptShown, ask, askRequiresTerminal, permission, micActive, micProcessing },
     inputRef
@@ -345,6 +353,7 @@ export function MobileNativeChatView({
       />
       <MobileNativeChatSendErrorBanner message={sendErrorMessage} onDismiss={onDismissSendError} />
       {trayContent}
+      <MobileNativeChatOfflineQueue queue={offlineQueue} />
       <View style={promptOwnsInput ? styles.hidden : undefined}>
         <MobileNativeChatDraftComposer
           draftScopeKey={composerScopeKey}
@@ -364,7 +373,7 @@ export function MobileNativeChatView({
           {...{ onAttachImage, onPasteImages, attachments, onRemoveAttachment }}
           {...{ isAttaching, onMicPress, micActive, micStarting, micProcessing }}
           {...{ dictationMode, onMicPressIn, onMicPressOut }}
-          disabled={lockReason !== null}
+          {...offlineQueue.composerLock}
           sendDisabled={expandedPromptOwnsSend}
           placeholder={composerPlaceholder}
           {...{ filePaths, onNeedFiles, skillDiscovery, onNeedSkills }}

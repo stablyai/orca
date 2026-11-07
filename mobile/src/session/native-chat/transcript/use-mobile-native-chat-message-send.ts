@@ -123,7 +123,10 @@ export function useMobileNativeChatMessageSend(args: {
         return 'rejected'
       }
       // A picked skill leading the draft is chat, as on desktop; read it before the clear forgets it.
-      const skillOrigin = readMobileNativeChatSkillOrigin(origin.draftKey)
+      const queued = intent?.queued
+      const skillOrigin = queued
+        ? queued.skillOrigin
+        : readMobileNativeChatSkillOrigin(origin.draftKey)
       // Clear optimistically before slow/lost acknowledgements; only definite rejection restores the draft.
       if (syncComposer) {
         clearDraftForSend(origin, draftText)
@@ -131,12 +134,14 @@ export function useMobileNativeChatMessageSend(args: {
       const seededLaunchDraft = readSeededLaunchDraftSeed()
       const classification = classifyMobileNativeChatSend(agent, text, skillOrigin)
       // Saved in the same write as the clear, so a kill before the outcome cannot lose the text.
-      const inFlightId = syncComposer
-        ? beginMobileNativeChatInFlightSend(origin, 'terminal', draftText, {
-            command: classification !== 'chat',
-            carried: intent?.carried
-          })
-        : null
+      const inFlightId =
+        syncComposer || queued
+          ? beginMobileNativeChatInFlightSend(origin, 'terminal', draftText, {
+              command: classification !== 'chat',
+              carried: queued ?? intent?.carried,
+              ...(queued ? { skills: queued.skills } : {})
+            })
+          : null
       const typesCodexCommand =
         agent === 'codex' &&
         classification !== 'chat' &&
@@ -199,11 +204,16 @@ export function useMobileNativeChatMessageSend(args: {
             text,
             () => {
               // A TUI holds a mid-turn send with no transcript row until the turn ends, so its absence proves nothing.
-              if (!syncComposer || origin.queuedDuringWorkingEpoch !== undefined) {
+              if (
+                (!syncComposer && !intent?.onHandBack) ||
+                origin.queuedDuringWorkingEpoch !== undefined
+              ) {
                 onSendError(UNCONFIRMED_SEND_MESSAGE)
                 return
               }
-              restoreRejectedDraft(origin, draftText)
+              if (syncComposer) {
+                restoreRejectedDraft(origin, draftText)
+              }
               intent?.onHandBack?.()
               onSendError(UNCONFIRMED_SEND_RESTORED_MESSAGE)
             },
@@ -212,6 +222,8 @@ export function useMobileNativeChatMessageSend(args: {
         } else {
           if (syncComposer) {
             restoreRejectedDraft(origin, draftText, { preserveConversationCommands: true })
+          } else {
+            intent?.onHandBack?.()
           }
           settleMobileNativeChatInFlightSend(inFlightId, 'sent')
           onSendError(UNCONFIRMED_SEND_MESSAGE)
@@ -260,7 +272,9 @@ export function useMobileNativeChatMessageSend(args: {
       _attachments?: readonly unknown[],
       sentAt?: number,
       intent?: MobileNativeChatSendIntent
-    ) => sendMessage(text, images, true, true, deadline, sentAt, intent),
+    ) =>
+      // A queued message never sat in the composer, so its send leaves the composer alone.
+      sendMessage(text, images, !intent?.queued, true, deadline, sentAt, intent),
     [sendMessage]
   )
 

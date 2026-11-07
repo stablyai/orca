@@ -206,7 +206,6 @@
     },
     "composerPlaceholder": {
       "prompt": "무엇이든 물어보세요. @로 파일 참조, /로 명령어 실행",
-      "reconnecting": "다시 연결 중…",
       "waitingForTerminal": "터미널 대기 중…"
     },
     "diffCard": {
@@ -353,6 +352,11 @@
       "resume": "재개",
       "resumeSending": "대기 중인 메시지 전송 재개",
       "title": "대기 중인 메시지"
+    },
+    "offlineQueue": {
+      "failed": "보내지 못했습니다 — 보내기를 탭해 다시 시도하세요",
+      "waitingFor": "{{host}}에 다시 연결되면 보냅니다",
+      "waiting": "데스크톱에 다시 연결되면 보냅니다"
     },
     "receipt": {
       "cancelled": "취소",

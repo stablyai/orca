@@ -206,7 +206,6 @@
     },
     "composerPlaceholder": {
       "prompt": "随心输入，@ 引用文件，/ 使用命令",
-      "reconnecting": "正在重新连接…",
       "waitingForTerminal": "等待终端…"
     },
     "diffCard": {
@@ -353,6 +352,11 @@
       "resume": "继续",
       "resumeSending": "继续发送排队的消息",
       "title": "排队的消息"
+    },
+    "offlineQueue": {
+      "failed": "无法发送 — 点按“发送”重试",
+      "waitingFor": "{{host}} 恢复连接后发送",
+      "waiting": "桌面端恢复连接后发送"
     },
     "receipt": {
       "cancelled": "取消",

@@ -206,7 +206,6 @@
     },
     "composerPlaceholder": {
       "prompt": "隨心輸入，@ 引用檔案，/ 使用命令",
-      "reconnecting": "正在重新連線…",
       "waitingForTerminal": "等待終端機…"
     },
     "diffCard": {
@@ -353,6 +352,11 @@
       "resume": "繼續",
       "resumeSending": "繼續傳送排隊的訊息",
       "title": "排隊的訊息"
+    },
+    "offlineQueue": {
+      "failed": "無法傳送 — 點按「傳送」重試",
+      "waitingFor": "{{host}} 恢復連線後傳送",
+      "waiting": "桌面端恢復連線後傳送"
     },
     "receipt": {
       "cancelled": "已取消",

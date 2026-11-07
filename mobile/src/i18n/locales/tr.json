@@ -206,7 +206,6 @@
     },
     "composerPlaceholder": {
       "prompt": "Bir şey sorun; dosyalara başvurmak için @, komutlar için / kullanın",
-      "reconnecting": "Yeniden bağlanılıyor…",
       "waitingForTerminal": "Terminal bekleniyor…"
     },
     "diffCard": {
@@ -353,6 +352,11 @@
       "resume": "Devam ettir",
       "resumeSending": "Kuyruktaki mesajları göndermeye devam et",
       "title": "Kuyruktaki mesajlar"
+    },
+    "offlineQueue": {
+      "failed": "Gönderilemedi — yeniden denemek için Gönder'e dokunun",
+      "waitingFor": "{{host}} geri geldiğinde gönderilecek",
+      "waiting": "Masaüstü geri geldiğinde gönderilecek"
     },
     "receipt": {
       "cancelled": "İptal edildi",

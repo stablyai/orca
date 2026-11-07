@@ -210,7 +210,6 @@
     },
     "composerPlaceholder": {
       "prompt": "Posez votre question, @ pour référencer des fichiers, / pour les commandes",
-      "reconnecting": "Reconnexion…",
       "waitingForTerminal": "En attente du terminal…"
     },
     "diffCard": {
@@ -357,6 +356,11 @@
       "resume": "Reprendre",
       "resumeSending": "Reprendre l'envoi des messages en file d'attente",
       "title": "Messages en file d'attente"
+    },
+    "offlineQueue": {
+      "failed": "Échec de l'envoi — touchez Envoyer pour réessayer",
+      "waitingFor": "Sera envoyé au retour de {{host}}",
+      "waiting": "Sera envoyé au retour de l'ordinateur"
     },
     "receipt": {
       "cancelled": "Annulé",
