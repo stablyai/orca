@@ -1,11 +1,10 @@
+import { workspaceId, local, repo } from './git-graph-workspace.test-fixtures'
 // @vitest-environment happy-dom
 import { useAppStore } from '@/store'
-import { gitGraphHistoryForTab, disposeGitGraphHistory } from './git-graph-history-controller'
+import { gitGraphHistoryForTab, disposeGitGraphHistory } from './git-graph-tab-controllers'
 import { attachClosedEditorTabCleanup } from '../model-lifetime/retention/closed-editor-tab-controller'
 import { gitGraphScope } from '@/lib/git-graph-tab'
 import { captureWorktreeOperationGenerationSnapshot } from '@/lib/worktree-operation-generation'
-import type { Worktree } from '../../../../../shared/worktree/types'
-import type { Repo } from '../../../../../shared/repo-types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -46,35 +45,6 @@ const container = document.createElement('div')
 document.body.appendChild(container)
 let root = createRoot(container)
 const initialState = useAppStore.getState()
-const workspaceId = 'r::/repo'
-const local: Worktree = {
-  id: workspaceId,
-  repoId: 'r',
-  path: '/repo',
-  branch: 'refs/heads/main',
-  hostId: 'local',
-  head: 'a',
-  isBare: false,
-  isMainWorktree: true,
-  displayName: 'repo',
-  comment: '',
-  linkedIssue: null,
-  linkedPR: null,
-  linkedLinearIssue: null,
-  isArchived: false,
-  isUnread: false,
-  isPinned: false,
-  sortOrder: 0,
-  lastActivityAt: 0
-}
-const repo: Repo = {
-  id: 'r',
-  path: '/repo',
-  displayName: 'repo',
-  badgeColor: '',
-  addedAt: 0,
-  executionHostId: 'local'
-}
 beforeEach(() => {
   useAppStore.setState({
     repos: [repo],
@@ -693,4 +663,34 @@ it('applies checkbox choices once on picker close, with no choices returning to 
   expect(onChange).toHaveBeenCalledTimes(2)
   await openPicker()
   expect(document.querySelector('[role="checkbox"]')?.getAttribute('aria-checked')).toBe('false')
+})
+
+it('keeps the confirm strip across tab switches, discarding it on navigation, filter change and close', async () => {
+  getHistory.mockResolvedValue(result)
+  const render = () => (
+    <TooltipProvider>
+      <GitGraphTab worktreeId={workspaceId} />
+    </TooltipProvider>
+  )
+  await act(async () => root.render(render()))
+  const controller = gitGraphHistoryForTab(workspaceId)
+  await act(async () => controller.actions.request('revert', result.items[0]!))
+  expect(container.textContent).toContain('Revert a?')
+  await act(async () => root.render(<div>Another tab</div>))
+  await act(async () => root.render(render()))
+  expect(container.textContent).toContain('Revert a?')
+  await act(async () => controller.select('a'))
+  expect(container.textContent).not.toContain('Revert a?')
+  await act(async () => controller.actions.request('revert', result.items[0]!))
+  await act(async () =>
+    useAppStore.setState({ gitGraphFiltersByWorktree: { [workspaceId]: 'head' } })
+  )
+  expect(container.textContent).not.toContain('Revert a?')
+  await act(async () => controller.actions.request('revert', result.items[0]!))
+  await act(async () => {
+    disposeGitGraphHistory(`${workspaceId}::git-graph`)
+    root.render(<div>Closed</div>)
+  })
+  await act(async () => root.render(render()))
+  expect(container.textContent).not.toContain('Revert a?')
 })

@@ -1,4 +1,8 @@
 import type {
+  GitCommitAction,
+  GitCommitActionResult
+} from '../../shared/git/commands/git-commit-action'
+import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
   GitDiffResult
@@ -39,6 +43,16 @@ export type IGitProvider = {
   getHistoryRefs(worktreePath: string, query?: string): Promise<GitHistoryItemRef[]>
   getHistory(worktreePath: string, options?: GitHistoryOptions): Promise<GitHistoryResult>
   commit(worktreePath: string, message: string): Promise<{ success: boolean; error?: string }>
+  applyCommit(
+    worktreePath: string,
+    operation: GitCommitAction,
+    commitId: string
+  ): Promise<GitCommitActionResult>
+  recoverSequencer(
+    worktreePath: string,
+    operation: GitCommitAction,
+    action: 'abort' | 'continue'
+  ): Promise<GitCommitActionResult | void>
   completeMerge(worktreePath: string): Promise<{ success: boolean; error?: string }>
   getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null>
   getDiff(
@@ -67,7 +81,11 @@ export type IGitProvider = {
   abortMerge(worktreePath: string): Promise<void>
   abortRebase(worktreePath: string): Promise<void>
   /** `skippedPaths`: files git could not replace (held open on Windows) though the switch landed. */
-  checkoutBranch(worktreePath: string, branch: string): Promise<{ skippedPaths: string[] }>
+  checkoutBranch(
+    worktreePath: string,
+    branch: string,
+    detached?: boolean
+  ): Promise<{ skippedPaths: string[] }>
   listLocalBranches(worktreePath: string): Promise<{ current: string | null; branches: string[] }>
   getBranchCompare(
     worktreePath: string,

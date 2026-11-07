@@ -1,4 +1,8 @@
 import type {
+  GitCommitAction,
+  GitCommitActionResult
+} from '../../shared/git/commands/git-commit-action'
+import type {
   GitForkSyncExpectedUpstream,
   GitForkSyncResult
 } from '../../shared/git/remotes/git-fork-sync'
@@ -52,6 +56,26 @@ export type GitOperationApi = {
     message: string
     connectionId?: string
   }) => Promise<{ success: boolean; error?: string }>
+  cherryPick: (args: {
+    worktreePath: string
+    commitId: string
+    connectionId?: string
+  }) => Promise<GitCommitActionResult>
+  revert: (args: {
+    worktreePath: string
+    commitId: string
+    connectionId?: string
+  }) => Promise<GitCommitActionResult>
+  sequencerAbort: (args: {
+    worktreePath: string
+    operation: GitCommitAction
+    connectionId?: string
+  }) => Promise<void>
+  sequencerContinue: (args: {
+    worktreePath: string
+    operation: GitCommitAction
+    connectionId?: string
+  }) => Promise<GitCommitActionResult | void>
   completeMerge: (args: {
     worktreePath: string
     connectionId?: string

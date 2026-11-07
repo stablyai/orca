@@ -101,14 +101,16 @@ export class RuntimeGitStatusCommands {
 
   async checkoutRuntimeGitBranch(
     worktreeSelector: string,
-    branch: string
+    branch: string,
+    detached = false
   ): Promise<RuntimeGitCheckoutResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
     const worktreePath = target.worktree.path
+    const checkoutTarget = detached ? branch.toLowerCase() : branch
     const result = await switchBranchGuarded(
       worktreePath,
-      branch,
+      detached ? { commitId: checkoutTarget } : checkoutTarget,
       localGitOptionsForTarget(target),
       {
         getStatus: () =>
@@ -116,9 +118,9 @@ export class RuntimeGitStatusCommands {
             admissionTier: 'interactive',
             includeLineStats: false
           }),
-        checkout: () => provider.checkoutBranch(worktreePath, branch),
+        checkout: () => provider.checkoutBranch(worktreePath, checkoutTarget, detached),
         getAgentBlocker: async () => this.host.getAgentSwitchBlocker?.(worktreePath) ?? null,
-        onSwitched: () => this.host.recordBranchSwitched?.(target.worktree)
+        onSwitched: () => this.host.recordBranchSwitched?.(target.worktree, detached)
       }
     )
     return { ok: true, branch: result.branch }

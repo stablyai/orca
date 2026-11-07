@@ -1,0 +1,184 @@
+import { createStore } from 'zustand/vanilla'
+import { toast } from 'sonner'
+import { useAppStore } from '@/store'
+import { gitGraphScope } from '@/lib/git-graph-tab'
+import { gitGraphOwnerKey } from './git-graph-workspace-navigation'
+import { gitCommitActionsSupported } from '@/runtime/git-commit-actions-capability'
+import { cherryPickRuntimeGit, revertRuntimeGit } from '@/runtime/runtime-git-commit-actions-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { translate } from '@/i18n/i18n'
+import type { GitGraphHistoryController } from './git-graph-history-controller'
+import type { GitHistoryItem } from '../../../../../shared/git/history/git-history-types'
+import type { GitCommitActionResult } from '../../../../../shared/git/commands/git-commit-action'
+import {
+  gitGraphActionOutcome,
+  gitGraphActionMessage,
+  type GitGraphCommitAction
+} from './git-graph-commit-action-copy'
+
+type PendingCommitAction = {
+  action: GitGraphCommitAction
+  item: GitHistoryItem
+  scope: NonNullable<ReturnType<typeof gitGraphScope>>
+}
+export class GitGraphCommitActionsController {
+  readonly view = createStore<{ pending?: PendingCommitAction; running: boolean }>(() => ({
+    running: false
+  }))
+  constructor(private readonly history: GitGraphHistoryController) {}
+  cancel = () => {
+    this.view.setState({ pending: undefined })
+  }
+  request = (action: GitGraphCommitAction, item: GitHistoryItem) => {
+    const scope = this.history.actionScope
+    if (!scope || this.view.getState().running) {
+      return
+    }
+    this.history.select(item.id)
+    this.view.setState({ pending: { action, item, scope } })
+  }
+  private owns(scope: PendingCommitAction['scope']): boolean {
+    return (
+      gitGraphOwnerKey(scope) ===
+      gitGraphOwnerKey(
+        gitGraphScope(
+          this.history.worktreeId,
+          useAppStore.getState(),
+          scope.route.executionHostId ?? undefined
+        )
+      )
+    )
+  }
+  confirm = async (): Promise<void> => {
+    const pending = this.view.getState().pending
+    if (!pending || this.view.getState().running) {
+      return
+    }
+    const { scope, item, action } = pending
+    const current = this.history.captureActionView()
+    this.view.setState({ pending: undefined, running: true })
+    const checkOwner = () => {
+      if (!this.owns(scope)) {
+        throw new Error(
+          translate(
+            'gitGraph.ownerChanged',
+            'The workspace host changed. Reopen the Git Graph and try again.'
+          )
+        )
+      }
+    }
+    let result: GitCommitActionResult
+    try {
+      if (!(await gitCommitActionsSupported(scope.target)) || !current() || !this.owns(scope)) {
+        throw new Error(
+          translate(
+            'gitGraph.actionUnavailable',
+            'This workspace is no longer available for the action. Reopen the Git Graph and try again.'
+          )
+        )
+      }
+      if (action === 'checkout') {
+        await callRuntimeRpc(
+          scope.target,
+          'git.checkout',
+          {
+            worktree: toRuntimeWorktreeSelector(this.history.worktreeId),
+            branch: item.id,
+            detached: true
+          },
+          {
+            timeoutMs: 30_000,
+            beforeSend: checkOwner
+          }
+        )
+        result = { outcome: 'landed', commitId: item.id }
+      } else {
+        result = await (action === 'cherry-pick' ? cherryPickRuntimeGit : revertRuntimeGit)(
+          {
+            target: scope.target,
+            worktreeId: this.history.worktreeId,
+            worktreePath: scope.worktree.path,
+            connectionId: scope.connectionId ?? undefined
+          },
+          item.id,
+          checkOwner
+        )
+      }
+    } catch (error) {
+      const data = error instanceof RuntimeRpcCallError ? error.response.error.data : undefined
+      const landed =
+        data !== null &&
+        typeof data === 'object' &&
+        'outcome' in data &&
+        data.outcome === 'landed-with-warning'
+      result = {
+        outcome: landed ? 'landed-with-warning' : 'refused',
+        ...(landed ? { commitId: item.id } : {}),
+        message: error instanceof Error ? error.message : String(error)
+      }
+    }
+    // Only the follow-up view is fenced; the user always hears what the confirmed action did.
+    let outside = false
+    if (this.owns(scope)) {
+      const selectResult = current()
+      const refreshing = this.history.refresh()
+      const afterRefresh = this.history.captureActionView()
+      const refreshed = await refreshing
+      if (selectResult && afterRefresh() && this.owns(scope) && result.commitId) {
+        outside = !refreshed?.items.some((commit) => commit.id === result.commitId)
+        if (!outside && this.owns(scope)) {
+          this.history.select(result.commitId)
+        }
+      }
+    }
+    this.view.setState({ running: false })
+    const description = [
+      result.outcome === 'landed-with-warning'
+        ? gitGraphActionOutcome({ ...result, outcome: 'landed' })
+        : '',
+      result.outcome === 'empty' ? '' : gitGraphActionMessage(result)
+    ]
+      .filter(Boolean)
+      .join('\n')
+    toast.message(gitGraphActionOutcome(result), {
+      description,
+      ...(outside && result.commitId
+        ? {
+            action: {
+              label: translate('gitGraph.showAllBranches', 'Show all branches'),
+              onClick: () => {
+                if (this.owns(scope) && this.history.captureActionView()()) {
+                  void this.showAll(result)
+                }
+              }
+            }
+          }
+        : {})
+    })
+  }
+  private async showAll(outcome: GitCommitActionResult): Promise<void> {
+    const commitId = outcome.commitId
+    if (!commitId) {
+      return
+    }
+    useAppStore.setState((state) => ({
+      gitGraphFiltersByWorktree: {
+        ...state.gitGraphFiltersByWorktree,
+        [this.history.worktreeId]: 'all'
+      }
+    }))
+    const refreshing = this.history.settledResult()
+    const current = this.history.captureActionView()
+    let result = await refreshing
+    if (current() && !result?.items.some((item) => item.id === commitId) && result?.hasMore) {
+      result = await this.history.loadMore()
+    }
+    if (current() && result?.items.some((item) => item.id === commitId)) {
+      this.history.select(commitId)
+    } else if (current()) {
+      toast.message(gitGraphActionOutcome(outcome))
+    }
+  }
+}
