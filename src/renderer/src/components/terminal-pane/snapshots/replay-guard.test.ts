@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
-import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
+import type { ManagedPane, ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
 import { disposePane } from '@/lib/pane-manager/pane-lifecycle'
 import {
   isPaneReplaying,
