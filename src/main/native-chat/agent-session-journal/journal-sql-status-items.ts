@@ -17,6 +17,10 @@ export function* sqlJournalStatusItems(
   let single = false
   let unordered = false
   switch (selection.kind) {
+    case 'clear':
+      predicates.push('context_clear=1')
+      single = true
+      break
     case 'boundary':
       predicates.push('(turn_id IS NOT NULL OR context_clear=1)')
       single = true

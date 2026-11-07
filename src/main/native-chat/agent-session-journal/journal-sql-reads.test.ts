@@ -59,7 +59,8 @@ it('answers every database-shaped read exactly as the in-memory chat does', asyn
         reads.pendingSubmissions(),
         reads.newestTurn(),
         reads.usageLimitCut(),
-        reads.orcaStopCut()
+        reads.orcaStopCut(),
+        reads.statusState(1)
       ])
     const expected = await answers(memory)
     // Spans more than one reader page.

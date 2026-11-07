@@ -9,6 +9,7 @@ import type { JournalSqlValueContext } from './journal-sql-value-context'
 import type { JournalSqlQueryFacts } from './journal-sql-query-facts'
 import { journalSqlOrderedValues } from './journal-sql-keyed-values'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
+import { sqlHasStatusRequestItem, sqlFailedStatusItems } from './journal-sql-status-request-items'
 import { sqlJournalStatusItems } from './journal-sql-status-items'
 
 export function sqlJournalStateQueries(
@@ -45,6 +46,18 @@ export function sqlJournalStateQueries(
     return Number(row?.sequence ?? 0)
   }
   return {
+    hasStatusRequestItem() {
+      facts.flush()
+      return sqlHasStatusRequestItem(scope)
+    },
+    failedStatusItems(_state, floor) {
+      facts.flush()
+      return sqlFailedStatusItems(
+        scope,
+        (id) => context.read<AgentJournalRenderItem>('items', JSON.stringify(id)),
+        floor
+      )
+    },
     statusItems(_state, selection) {
       facts.flush()
       return sqlJournalStatusItems(

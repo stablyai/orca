@@ -7,9 +7,12 @@ import { memoryLatestAcceptedSendUnopened } from './context-epochs/journal-stop-
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
 import { journalInputPresentationMember } from './input-order/journal-input-obligations'
+import { memoryHasStatusRequestItem, memoryFailedStatusItems } from './journal-status-request-items'
 import { memoryJournalStatusItems } from './journal-status-items'
 
 export const memoryJournalStateQueries: JournalStateQueries = {
+  hasStatusRequestItem: memoryHasStatusRequestItem,
+  failedStatusItems: memoryFailedStatusItems,
   statusItems: memoryJournalStatusItems,
   latestContextClearSequence(state) {
     return latestAgentSessionContextClearSequence(memoryJournalMap(state.items).values())

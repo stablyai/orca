@@ -121,5 +121,16 @@ export function nativeChatStatusTurnOutcome(
     : null
   const stop =
     verdict === 'interruption' ? latestNativeChatOrcaStopCut(items, submissions, bodyOf) : null
-  return stop && stop.cause !== 'crash' ? 'cancellation' : verdict
+  return nativeChatStatusRequestOutcome(request, stop)
+}
+
+/** Named database readers supply the same selected cut without rendering the chat. */
+export function nativeChatStatusRequestOutcome(
+  request: StructuredAgentSessionLatestRequest | null,
+  stop: NativeChatOrcaStopCut | null
+): AgentTurnOutcome | null {
+  const verdict = request
+    ? agentTurnVerdict({ state: request.turnState, outcome: request.outcome })
+    : null
+  return verdict === 'interruption' && stop && stop.cause !== 'crash' ? 'cancellation' : verdict
 }

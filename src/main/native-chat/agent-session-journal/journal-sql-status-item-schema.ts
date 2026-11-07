@@ -8,6 +8,9 @@ CREATE INDEX IF NOT EXISTS journal_proj_items_visible_clear
 CREATE INDEX IF NOT EXISTS journal_proj_items_visible_turn
   ON journal_proj_items(session_id, epoch, root, sequence, sequence_index, ordinal)
   WHERE hidden=0 AND turn_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS journal_proj_items_visible_turn_position
+  ON journal_proj_items(session_id, epoch, sequence, sequence_index, ordinal)
+  WHERE hidden=0 AND turn_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS journal_proj_items_user
   ON journal_proj_items(session_id, epoch, sequence, sequence_index, ordinal)
   WHERE hidden=0 AND root=1 AND message_role='user' AND command_entry=0;
@@ -17,8 +20,8 @@ CREATE INDEX IF NOT EXISTS journal_proj_items_unknown_user
 CREATE INDEX IF NOT EXISTS journal_proj_items_prose
   ON journal_proj_items(session_id, epoch, sequence, sequence_index, ordinal)
   WHERE hidden=0 AND root=1 AND message_role='assistant' AND command_entry=0 AND assistant_prose=1;
-CREATE INDEX IF NOT EXISTS journal_proj_items_assistant
-  ON journal_proj_items(session_id, epoch) WHERE hidden=0 AND message_role='assistant';
+CREATE INDEX IF NOT EXISTS journal_proj_items_visible_role
+  ON journal_proj_items(session_id, epoch, message_role, entry_key) WHERE hidden=0;
 CREATE INDEX IF NOT EXISTS journal_proj_items_pending_prompt
   ON journal_proj_items(session_id, epoch, sequence, sequence_index, ordinal)
   WHERE hidden=0 AND kind IN ('approval','question') AND lifecycle_state='pending';

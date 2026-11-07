@@ -11,6 +11,7 @@ export type JournalStatusPosition = { sequence: number; sequenceIndex: number; o
 export type JournalStatusItem = { item: AgentJournalRenderItem; position: JournalStatusPosition }
 export type JournalStatusItemSelection =
   | { kind: 'boundary'; raw?: true }
+  | { kind: 'clear' }
   | { kind: 'turns'; root?: true; floor?: number; direction?: 'asc' | 'desc' }
   | { kind: 'users'; floor?: number; unknown?: true }
   | { kind: 'assistant-prose'; floor?: number }
@@ -52,6 +53,9 @@ export function* memoryJournalStatusItems(
       root && body.kind === 'message' && body.role === 'user' && body.command === undefined
     let matches: boolean
     switch (selection.kind) {
+      case 'clear':
+        matches = isAgentSessionContextClear(body)
+        break
       case 'boundary':
         matches = readAgentJournalTurn(body) !== null || isAgentSessionContextClear(body)
         break
@@ -114,6 +118,7 @@ export function* memoryJournalStatusItems(
   })
   const single =
     selection.kind === 'boundary' ||
+    selection.kind === 'clear' ||
     selection.kind === 'prompt' ||
     selection.kind === 'tools' ||
     selection.kind === 'assistant-exists'

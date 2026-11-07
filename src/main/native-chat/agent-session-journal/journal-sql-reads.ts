@@ -49,6 +49,8 @@ export function journalSqlReads(
   const provenance = async (itemId: string) =>
     (await read({ kind: 'item-provenance', itemId })).provenance
   return {
+    statusState: async (currentFence) =>
+      (await read({ kind: 'status-state', currentFence })).status,
     input,
     usageLimitCut: async () => (await read({ kind: 'usage-limit-cut' })).cut,
     orcaStopCut: async () => (await read({ kind: 'orca-stop-cut' })).cut,
