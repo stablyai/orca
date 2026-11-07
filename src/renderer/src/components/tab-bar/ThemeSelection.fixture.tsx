@@ -169,7 +169,11 @@ export const selected = defineFixture({
       return [r, g, b, a / 255]
     }
     const surface = color(token('--sidebar'))
-    for (const button of scope.querySelectorAll('button[aria-pressed="true"]')) {
+    const activeTools = scope.querySelectorAll('button[aria-pressed="true"]')
+    if (activeTools.length !== 2) {
+      throw new Error('Both active tool layouts must expose their pressed state')
+    }
+    for (const button of activeTools) {
       const icon = getComputedStyle(button).color
       const indicator = button.querySelector('div')
       if (contrastRatio(color(icon), surface) < 3) {
