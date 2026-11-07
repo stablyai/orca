@@ -27,6 +27,7 @@ internal data class MobileWebShellLoadEmission(
 internal class MobileWebShellLoadStateMachine {
   private var terminal = false
   private var last: MobileWebShellLoadEmission? = null
+  private var rendererLoss: Pair<Boolean, Boolean>? = null
 
   /** Which load this machine is reporting on. Read before deferring work, checked on delivery. */
   @Volatile
@@ -74,6 +75,15 @@ internal class MobileWebShellLoadStateMachine {
     documentEnded()
     return emission
   }
+
+  /** A renderer loss, remembered across reset(): a prop update on the dead view reports the same loss, not a crash. */
+  fun rendererGone(background: Boolean, crashed: Boolean): MobileWebShellLoadEmission? {
+    rendererLoss = background to crashed
+    return failed(MobileWebShellFailureReason.RENDER_PROCESS_GONE, background, crashed)
+  }
+
+  fun rendererStillGone(): MobileWebShellLoadEmission? =
+    failed(MobileWebShellFailureReason.RENDER_PROCESS_GONE, rendererLoss?.first, rendererLoss?.second)
 
   /** Deferred failures belong to their original load; a prop update may replace it before delivery. */
   fun failedDuring(epoch: Int, reason: MobileWebShellFailureReason): MobileWebShellLoadEmission? =
