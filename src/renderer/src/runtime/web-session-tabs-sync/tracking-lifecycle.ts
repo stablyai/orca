@@ -18,7 +18,8 @@ import {
   hostSessionTabIdByLocalKey,
   hostSessionTabMappingKeysByEnvironmentAndWorktree,
   hostWorkingClientBoundaryByPaneKey,
-  resetReceivedSessionTabsFrameSequence
+  resetReceivedSessionTabsFrameSequence,
+  sessionTabsFreshnessKey
 } from './state'
 import {
   clearWebRuntimeWakeTerminalRespawnForWorktree,
@@ -55,7 +56,7 @@ import { clearHostSessionMirrorHydration } from './hydration/host-session-mirror
 import { clearHostMirrorHandleGapVerdictsForEnvironment } from '@/lib/host-mirror-handle-gap-wait'
 import { createBoundedGenerationMap } from '@/lib/bounded-generation-map'
 import { clearHostSessionTabIdMappings } from './tracking-mappings'
-import { sessionTabsFreshnessKey } from './state'
+
 import { untrackWebSessionTabsWorktree, removeWebSessionTabsEnvironment } from './tracking'
 
 const sessionTabsTrackingGenerations = createBoundedGenerationMap(512)

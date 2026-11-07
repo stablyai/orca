@@ -3,20 +3,26 @@ import {
   advancesSessionTabsFreshness,
   shouldApplyRecoveredWebSessionTabsSnapshot
 } from './tracking'
-import { sessionTabsFreshnessKey } from './state'
-import { latestSessionTabsSnapshotByWorktree, sessionTabsEnvironmentsByWorktree } from './state'
+import {
+  sessionTabsFreshnessKey,
+  latestSessionTabsSnapshotByWorktree,
+  sessionTabsEnvironmentsByWorktree,
+  acceptReplayedWebSessionTabsSnapshot,
+  type VisibilityResumeOmission
+} from './state'
+
 import {
   isCurrentSessionTabsRuntimeId,
   isRetiredSessionTabsRuntimeId
 } from './publisher-identity-fences'
-import { acceptReplayedWebSessionTabsSnapshot } from './state'
+
 import type { WebSessionTabsSnapshotOperation } from './snapshot-api'
 import { applyVisibilityResumeRepairs } from './visibility-resume-repair'
 import {
   recordVisibilityResumeInventory,
   recordVisibilityResumeInventoryReceipt
 } from './visibility-resume-inventory'
-import type { VisibilityResumeOmission } from './state'
+
 import type {
   MirroredRuntimeEnvironment,
   VisibilityResumeBatch,

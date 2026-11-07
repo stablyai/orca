@@ -14,6 +14,7 @@ function makeMountedState(tabIdPrefix: string): {
   mountedTabId: string
 } {
   const mountedTabId = `${tabIdPrefix}-term-0`
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: snapshot publication reads only this fixture's populated state fields.
   const state = {
     tabsByWorktree: {
       [MOUNTED_WT]: [
@@ -69,6 +70,7 @@ function makeLiveSurface(tabId: string): {
     getNumericIdForLeaf: (leafId: string) =>
       panes.find((pane) => pane.leafId === leafId)?.id ?? null
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this surface supplies the manager and PTY readers used by snapshot publication.
   const registration = {
     tabId,
     worktreeId: MOUNTED_WT,

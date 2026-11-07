@@ -9,13 +9,13 @@ import {
 } from '../closing/web-session-close-intent'
 import { recordWebSessionReorderIntent } from './web-session-reorder-intent'
 
-import { acceptReplayedWebSessionTabsSnapshot } from '../state'
+import { acceptReplayedWebSessionTabsSnapshot, type WebSessionTabsSyncState } from '../state'
 import { applyFreshWebSessionTabsSnapshot, applyWebSessionTabsSnapshot } from '../snapshot-api'
 import '../tracking-mappings'
 import '../tracking-decisions'
 import '../tracking'
 import '../state'
-import type { WebSessionTabsSyncState } from '../state'
+
 import {
   ENV,
   HOST_SURFACE_ID,

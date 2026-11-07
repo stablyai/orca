@@ -7,9 +7,9 @@ import {
   VISIBILITY_INVENTORY_REMOVAL_EPOCH,
   latestSessionTabsSnapshotByWorktree,
   sessionTabsInventoryOmissionsByWorktree,
-  type TrackedWebSessionTabsWorktree
+  type TrackedWebSessionTabsWorktree,
+  sessionTabsFreshnessKey
 } from './state'
-import { sessionTabsFreshnessKey } from './state'
 
 function omissionKey(environmentId: string, worktreeId: string): string {
   return `${environmentId}:${worktreeId}`

@@ -1,10 +1,12 @@
-import { _resetLayoutOwnerPaneTreeHoldsForTests } from '../intents/layout-owner-pane-tree-holds'
+import {
+  _resetLayoutOwnerPaneTreeHoldsForTests,
+  isTabPaneTreeHeld
+} from '../intents/layout-owner-pane-tree-holds'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import '../server/server-layout-apply-routes'
 import { endLayoutFramePositions, noteLayoutFramePosition } from '../frames/layout-frame-position'
 import { sendLayoutCommandToOwner } from './layout-owner-command'
 import { _resetLayoutOwnerPaneIntentsForTests } from '../intents/layout-owner-pane-intents'
-import { isTabPaneTreeHeld } from '../intents/layout-owner-pane-tree-holds'
 
 const mocks = vi.hoisted(
   (): {

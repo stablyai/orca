@@ -3,7 +3,8 @@ import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-
 import {
   latestSessionTabsSnapshotByWorktree,
   replayableSessionTabsSnapshotByWorktree,
-  type SessionTabsStreamEvent
+  type SessionTabsStreamEvent,
+  sessionTabsFreshnessKey
 } from './state'
 import {
   acceptSessionTabsRuntimeId,
@@ -12,7 +13,7 @@ import {
   noteSessionTabsPublicationEpoch,
   sameSessionTabsPublicationLineage
 } from './publisher-identity-fences'
-import { sessionTabsFreshnessKey } from './state'
+
 import {
   rememberHostTerminalTabCount,
   trackWebSessionTabsWorktree,
