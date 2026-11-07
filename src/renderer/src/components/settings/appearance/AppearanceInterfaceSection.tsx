@@ -4,6 +4,8 @@ import type { GlobalSettings } from '../../../../../shared/settings/global-setti
 import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { ReduceVisualEffectsSetting } from './ReduceVisualEffectsSetting'
+import { WindowTitleSetting } from './WindowTitleSetting'
+import { getWindowTitleEntries } from './appearance-window-title-search'
 import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
 import { SettingsGroupDisclosure } from '../section-layout/SettingsGroupDisclosure'
 import { SettingsSearchableSelect } from '../form-controls/SettingsSearchableSelect'
@@ -105,6 +107,7 @@ export function AppearanceInterfaceSection({
   const reduceVisualEffectsEntry = getReduceVisualEffectsEntries()[0]
   const advancedEntries = [
     ...getTitlebarEntries(),
+    ...getWindowTitleEntries(),
     ...getReduceVisualEffectsEntries(),
     ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
     ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
@@ -307,6 +310,7 @@ export function AppearanceInterfaceSection({
               }
             />
           </SearchableSetting>
+          <WindowTitleSetting settings={settings} updateSettings={updateSettings} />
 
           <ReduceVisualEffectsSetting
             entry={reduceVisualEffectsEntry}
