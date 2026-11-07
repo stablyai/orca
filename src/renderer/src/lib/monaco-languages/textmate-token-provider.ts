@@ -15,6 +15,8 @@ export type TextMateGrammarLoader = () => Promise<LanguageRegistration>
 
 export type TextMateTokensProviderOptions = {
   loadGrammar: TextMateGrammarLoader
+  /** Grammars the main one includes by scope; a missing include is skipped by TextMate. */
+  loadDependencies?: () => Promise<LanguageRegistration[]>
   mapTokenScopes?: (scopes: readonly string[]) => string
 }
 
@@ -98,6 +100,10 @@ export async function createTextMateTokensProvider(
   options: TextMateTokensProviderOptions
 ): Promise<TextMateTokensProvider> {
   const [editorCore, registration] = await Promise.all([loadEditorCore(), options.loadGrammar()])
+  if (options.loadDependencies) {
+    // Shiki rejects a grammar whose includes are unresolved, so dependencies load first.
+    await editorCore.core.loadLanguage(...(await options.loadDependencies()))
+  }
   await editorCore.core.loadLanguage(registration)
   return createTokensProvider(
     editorCore,

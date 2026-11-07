@@ -57,7 +57,9 @@ const LANGUAGE_ALIASES = new Map([
   // lowlight has no dotenv grammar; ini covers KEY=value and # comments.
   ['dotenv', 'ini'],
   // HCL assignments, strings and comments use the bundled ini grammar on mobile.
-  ['hcl', 'ini']
+  ['hcl', 'ini'],
+  // lowlight has no just grammar; recipe bodies are shell.
+  ['just', 'bash']
 ])
 
 export function resolveMobileSyntaxLanguage(filePath: string, preferredLanguage?: string): string {

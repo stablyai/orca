@@ -81,4 +81,14 @@ describe('detectLanguage', () => {
     expect(detectLanguage('Makefile', '#!/usr/bin/env python3')).toBe('makefile')
     expect(detectLanguage('notes.txt', '#!/usr/bin/env python3')).toBe('plaintext')
   })
+
+  it.each([
+    ['Justfile', 'just'],
+    ['justfile', 'just'],
+    ['.justfile', 'just'],
+    ['.just', 'just'],
+    ['C:\\repo\\sub\\JUSTFILE', 'just']
+  ])('detects %s as just', (filePath, expected) => {
+    expect(detectLanguage(filePath)).toBe(expected)
+  })
 })

@@ -3,6 +3,7 @@ import type {
   createTextMateTokensProvider as createTextMateTokensProviderType,
   TextMateGrammarLoader
 } from './textmate-token-provider'
+import type { LanguageRegistration } from 'shiki/core'
 
 type MonacoModule = Pick<typeof Monaco, 'languages'>
 type TextMateTokensProvider = Monaco.languages.TokensProvider
@@ -14,6 +15,7 @@ export type TextMateLanguageRegistration = {
   language: Monaco.languages.ILanguageExtensionPoint
   configuration?: Monaco.languages.LanguageConfiguration
   loadGrammar: TextMateGrammarLoader
+  loadDependencies?: () => Promise<LanguageRegistration[]>
   mapTokenScopes?: (scopes: readonly string[]) => string
   loadProviderModule?: () => Promise<TextMateTokenProviderModule>
 }
@@ -47,6 +49,9 @@ export function registerTextMateLanguage(
       )().then(({ createTextMateTokensProvider }) =>
         createTextMateTokensProvider({
           loadGrammar: registration.loadGrammar,
+          ...(registration.loadDependencies
+            ? { loadDependencies: registration.loadDependencies }
+            : {}),
           ...(registration.mapTokenScopes ? { mapTokenScopes: registration.mapTokenScopes } : {})
         })
       )
