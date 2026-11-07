@@ -21,6 +21,7 @@ import { getDefaultNotificationSettings } from './notification-settings-defaults
 import { getDefaultOnboardingState } from './onboarding-defaults'
 import {
   defaultTerminalFontFamily,
+  defaultTerminalFontWeight,
   getDefaultPrimarySelectionMiddleClickPaste,
   getDefaultTerminalRightClickToPaste
 } from './terminal/appearance/terminal-platform-defaults'
@@ -100,6 +101,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     primarySelectionDefaultedForLinux:
       typeof process !== 'undefined' && process.platform === 'linux',
     terminalFontFamily: defaultTerminalFontFamily(),
+    terminalFontWeight: defaultTerminalFontWeight(),
     terminalInactivePaneOpacity: DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY,
     terminalRightClickToPaste: getDefaultTerminalRightClickToPaste(),
     notifications: getDefaultNotificationSettings(),

@@ -1,6 +1,5 @@
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import {
-  DEFAULT_TERMINAL_FONT_WEIGHT,
   DEFAULT_TERMINAL_FONT_WEIGHT_BOLD,
   TERMINAL_FONT_WEIGHT_MAX,
   TERMINAL_FONT_WEIGHT_MIN,
@@ -20,7 +19,12 @@ import {
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { clampNumber } from '@/lib/terminal-theme'
 import { translate } from '@/i18n/i18n'
-import { getTerminalAdvancedTypographySearchEntries } from './terminal-typography-search'
+import { defaultTerminalFontWeight } from '../../../../../../shared/terminal/appearance/terminal-platform-defaults'
+import { isWindowsDesktopClient } from '@/lib/windows-path-access'
+import {
+  getTerminalAdvancedTypographySearchEntries,
+  TERMINAL_FONT_WEIGHT_SETTING_ID
+} from './terminal-typography-search'
 
 type TerminalAdvancedTypographyControlsProps = {
   settings: GlobalSettings
@@ -37,6 +41,7 @@ export function TerminalAdvancedTypographyControls({
   return (
     <div className="divide-y divide-border/40">
       <SearchableSetting
+        id={TERMINAL_FONT_WEIGHT_SETTING_ID}
         title={translate(
           'auto.components.settings.TerminalAppearanceSection.4aae5db258',
           'Font Weight'
@@ -51,7 +56,7 @@ export function TerminalAdvancedTypographyControls({
           )}
           description=""
           value={normalizeTerminalFontWeight(settings.terminalFontWeight)}
-          defaultValue={DEFAULT_TERMINAL_FONT_WEIGHT}
+          defaultValue={defaultTerminalFontWeight(isWindowsDesktopClient() ? 'win32' : '')}
           min={TERMINAL_FONT_WEIGHT_MIN}
           max={TERMINAL_FONT_WEIGHT_MAX}
           step={TERMINAL_FONT_WEIGHT_STEP}

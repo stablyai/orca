@@ -1,6 +1,7 @@
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
+import { TERMINAL_FONT_WEIGHT_SETTING_ID } from '../terminal/appearance/terminal-typography-search'
 
 /** Stable Settings deep-link / scroll target for the Used/Remaining control. */
 export const USAGE_PERCENTAGE_DISPLAY_SETTING_ID = 'usage-percentage-display'
@@ -14,6 +15,9 @@ export function resolveAppearanceAccordionDeepLink(
 ): AppearanceAccordionSection | null {
   if (sectionId === USAGE_PERCENTAGE_DISPLAY_SETTING_ID) {
     return 'window'
+  }
+  if (sectionId === TERMINAL_FONT_WEIGHT_SETTING_ID) {
+    return 'terminal'
   }
   return null
 }

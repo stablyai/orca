@@ -57,6 +57,9 @@ export function createUiSettingsActions(set: UISliceSet, get: UISliceGet): Parti
       }),
     appearanceAccordionDeepLink: null,
     setAppearanceAccordionDeepLink: (section) => set({ appearanceAccordionDeepLink: section }),
-    clearAppearanceAccordionDeepLink: () => set({ appearanceAccordionDeepLink: null })
+    clearAppearanceAccordionDeepLink: () => set({ appearanceAccordionDeepLink: null }),
+    appearanceAdvancedDeepLinkTarget: null,
+    setAppearanceAdvancedDeepLinkTarget: (targetId) =>
+      set({ appearanceAdvancedDeepLinkTarget: targetId })
   }
 }

@@ -12,7 +12,8 @@ import { useAppStore } from '../../../../store/index'
 import {
   getTerminalAdvancedTypographySearchEntries,
   getTerminalCursorSearchEntries,
-  getTerminalTypographySearchEntries
+  getTerminalTypographySearchEntries,
+  TERMINAL_FONT_WEIGHT_SETTING_ID
 } from './terminal-typography-search'
 import {
   getTerminalDarkThemeSearchEntries,
@@ -42,6 +43,8 @@ import type { UseWarpThemeImportReturn } from '../themes/useWarpThemeImport'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import ghosttyIcon from '../../../../../../../resources/ghostty.svg'
 import { translate } from '@/i18n/i18n'
+
+const ADVANCED_TYPOGRAPHY_DEEP_LINK_IDS = [TERMINAL_FONT_WEIGHT_SETTING_ID]
 
 type TerminalAppearanceSectionProps = {
   settings: GlobalSettings
@@ -264,7 +267,11 @@ export function TerminalAppearanceSection({
 
           {showTypographyAdvancedDisclosure ? (
             <div className="ml-4">
-              <AppearanceAdvancedDisclosure showTopBorder={false} contentClassName="ml-4">
+              <AppearanceAdvancedDisclosure
+                showTopBorder={false}
+                contentClassName="ml-4"
+                revealTargetIds={ADVANCED_TYPOGRAPHY_DEEP_LINK_IDS}
+              >
                 <TerminalAdvancedTypographyControls
                   settings={settings}
                   updateSettings={updateSettings}

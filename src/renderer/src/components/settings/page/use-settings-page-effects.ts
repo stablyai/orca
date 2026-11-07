@@ -207,6 +207,9 @@ export function useSettingsPageEffects(
       if (accordion) {
         useAppStore.getState().setAppearanceAccordionDeepLink(accordion)
       }
+      useAppStore
+        .getState()
+        .setAppearanceAdvancedDeepLinkTarget(settingsNavigationTarget.sectionId ?? null)
     }
     if (settingsNavigationTarget.intent === 'add-quick-command') {
       setQuickCommandAddIntentSignal((signal) => signal + 1)
