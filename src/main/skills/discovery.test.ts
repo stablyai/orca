@@ -316,7 +316,18 @@ describe('skill discovery', () => {
     const pluginSource = result.sources.find(
       (source) => source.path === join(projectInstall, 'skills')
     )
-    expect(pluginSource).toMatchObject({ sourceKind: 'plugin', owner: 'claude', exists: true })
+    // The structured plugin identity rides both the root and the scanned skill,
+    // so consumers can namespace invocations without parsing the display label.
+    expect(pluginSource).toMatchObject({
+      sourceKind: 'plugin',
+      owner: 'claude',
+      exists: true,
+      plugin: 'compound-engineering'
+    })
+    expect(result.skills.find((skill) => skill.name === 'ce-plan')).toMatchObject({
+      sourceKind: 'plugin',
+      plugin: 'compound-engineering'
+    })
   })
 
   it('skips Claude plugin discovery when no explicit cwd targets the scan (Settings shape)', async () => {
