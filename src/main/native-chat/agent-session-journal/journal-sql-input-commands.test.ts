@@ -307,6 +307,68 @@ it('hands over a card and settles sends with the same validation and records', a
   })
 })
 
+it('claims stopped history at handover and releases it after a proven unwritten refusal', async () => {
+  const side = await sides()
+  const submit = async (id: string) => {
+    const input = {
+      clientMessageId: id,
+      payloadFingerprint: id,
+      body: text(id),
+      fence: 1,
+      origin: 'client' as const,
+      source: { kind: 'user' as const },
+      handoverRecorded: true as const
+    }
+    await both(side, (j) => j.submissionWriter.append(input), { kind: 'submission', input })
+  }
+  const handover = (id: string) => {
+    const input = {
+      clientMessageId: id,
+      fence: 1,
+      turnScope: { kind: 'thread' as const },
+      body: text(id)
+    }
+    return both(side, (j) => j.submissionWriter.prepareHandover(input), {
+      kind: 'handover',
+      input
+    })
+  }
+  const refuse = (id: string) => {
+    const input = {
+      clientMessageId: id,
+      state: 'rejected' as const,
+      fence: 1,
+      ...agentSessionFailureWords(
+        agentSessionFailureFact('cancelled', { neverReachedAgent: true }),
+        { surface: 'rejection' }
+      )
+    }
+    return both(side, (j) => j.submissionWriter.resolveDispatch(input), {
+      kind: 'dispatch',
+      input
+    })
+  }
+  await submit('owed')
+  await handover('owed')
+  await refuse('owed')
+  await submit('carrier-a')
+  await submit('carrier-b')
+  expect(await handover('carrier-a')).toEqual({
+    value: { messages: [{ clientMessageId: 'owed', words: 'owed' }], covers: ['owed'] }
+  })
+  expect(await handover('carrier-b')).toEqual({ value: null })
+  await refuse('carrier-a')
+  expect(await handover('carrier-b')).toEqual({
+    value: {
+      messages: [
+        { clientMessageId: 'owed', words: 'owed' },
+        { clientMessageId: 'carrier-a', words: 'carrier-a' }
+      ],
+      covers: ['owed', 'carrier-a']
+    }
+  })
+})
+
 it('asks the host for mail availability and handover answers instead of calling back', async () => {
   const side = await sides()
   const from: AgentMessageSource = {

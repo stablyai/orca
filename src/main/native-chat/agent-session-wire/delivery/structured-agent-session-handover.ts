@@ -24,7 +24,7 @@ import {
   handOverStructuredAgentSessionCommand,
   structuredAgentSessionHandoverOrigin
 } from '../operations/structured-agent-session-command-turn'
-import { carriedStoppedHistory } from '../termination/structured-agent-session-stopped-history-selection'
+import type { StoppedHistoryDelivery } from '../../../../shared/agent-session/lifecycle/agent-session-stopped-history'
 import { withStoppedHistory } from '../../../../shared/agent-session/lifecycle/agent-session-stopped-history'
 import {
   markStructuredAgentSessionInputUnadmitted,
@@ -67,7 +67,7 @@ export async function beginSubmissionHandover(
   }
   // Join only current turns; persist stopped-history carry before writing to the provider.
   const turnScope = contextStructuredAgentSessionCurrentWork(ctx).turnScope()
-  let carried = carriedStoppedHistory(ctx, turnScope, submission, body)
+  let carried: StoppedHistoryDelivery | null = null
   let ownsChild = stillCurrent
   let closing: UnsentSendHold['cause'] | undefined
   let unwritten = false
@@ -86,12 +86,11 @@ export async function beginSubmissionHandover(
   const attempt = ctx.acquireAborts?.begin(ctx.sessionId, true, false, isBound)
   const queued = submission.queuedMessageId !== undefined
   try {
-    await ctx.journal.resolveDispatch({
+    carried = await ctx.journal.prepareHandover({
       clientMessageId,
-      state: 'pending',
       fence: ctx.fence,
       turnScope,
-      ...(carried ? { carries: carried.covers } : {})
+      body
     })
   } catch (error) {
     attempt?.end()
@@ -101,13 +100,11 @@ export async function beginSubmissionHandover(
   }
   const prepareFresh = async (fence: number): Promise<AgentJournalMessageItem> => {
     ctx.fence = fence
-    carried = carriedStoppedHistory(ctx, AGENT_JOURNAL_THREAD_SCOPE, submission, body)
-    await ctx.journal.resolveDispatch({
+    carried = await ctx.journal.prepareHandover({
       clientMessageId,
-      state: 'pending',
       fence,
       turnScope: AGENT_JOURNAL_THREAD_SCOPE,
-      carries: carried?.covers ?? []
+      body
     })
     return carried ? withStoppedHistory(body, carried.messages) : body
   }

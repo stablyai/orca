@@ -19,8 +19,10 @@ import type {
   JournalLateDispatchInput,
   JournalShutdownCutInput,
   JournalCommandSettlementInput,
-  JournalCommandOpenInput
+  JournalCommandOpenInput,
+  JournalHandoverInput
 } from './journal-store-contracts'
+import type { StoppedHistoryDelivery } from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
 import type { JournalWriterSettled } from './journal-writer-operations'
 import type { JournalCommandOpenResult } from './writing/journal-command-open'
 import { restoreJournalSqlFailure } from './journal-sql-failure'
@@ -40,6 +42,7 @@ export type JournalSqlStoreOperation =
           | 'shutdown-cut'
           | 'command-settle'
           | 'command-open'
+          | 'handover'
           | 'stop'
           | 'context-clear'
           | 'context-rewind'
@@ -178,6 +181,11 @@ export class SqlAgentSessionJournal {
 
   async appendShutdownCut(input: JournalShutdownCutInput): Promise<void> {
     await this.write({ kind: 'shutdown-cut', input })
+  }
+
+  async prepareHandover(input: JournalHandoverInput): Promise<StoppedHistoryDelivery | null> {
+    const { value } = await this.write({ kind: 'handover', input })
+    return value as StoppedHistoryDelivery | null
   }
 
   async openCommand(input: JournalCommandOpenInput): Promise<JournalCommandOpenResult> {

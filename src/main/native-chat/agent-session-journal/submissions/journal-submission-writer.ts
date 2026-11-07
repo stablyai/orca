@@ -23,11 +23,13 @@ import type {
   JournalLateDispatchInput,
   JournalCommandSettlementInput,
   JournalCommandOpenInput,
+  JournalHandoverInput,
   ResolveDispatchInput
 } from '../journal-store-contracts'
 import { openJournalCommand } from '../writing/journal-command-open'
 import { settleJournalCommand } from '../writing/journal-command-settlement'
 import type { JournalLifecycleBatchAppender } from '../writing/journal-lifecycle-batch-appender'
+import { prepareJournalHandover } from './journal-handover-history'
 
 export type JournalSubmissionWriterDeps = {
   state: () => JournalReducerState
@@ -42,6 +44,8 @@ export type JournalSubmissionWriterDeps = {
 
 export class JournalSubmissionWriter {
   constructor(private readonly deps: JournalSubmissionWriterDeps) {}
+
+  prepareHandover = (input: JournalHandoverInput) => prepareJournalHandover(this.deps, input)
 
   openCommand = (input: JournalCommandOpenInput) =>
     openJournalCommand({ ...this.deps, writer: this.deps.rowWriter }, input)

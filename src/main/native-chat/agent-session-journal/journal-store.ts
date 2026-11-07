@@ -202,12 +202,7 @@ export class AgentSessionJournal {
     visit: (itemId: string, sequence: number, body: journal.AgentJournalItemBody) => void
   ): void => this.visitItemsWithLinkage(visit)
 
-  /** One reduced item's body by its journal key, for a writer revising a row it can name. */
   itemBody = (itemId: string) => this.item(itemId)?.body ?? null
-
-  /** Host-only stopped-history IDs carried by each send. */
-  stoppedHistoryCarried = (): ReadonlyMap<string, readonly string[]> =>
-    memoryMap(this.state.stoppedHistoryCarried)
 
   submissionBody = (clientMessageId: string): journal.AgentJournalMessageItem | null =>
     journalInputSourceBody(this.state.inputs.sources.get(clientMessageId))
@@ -225,7 +220,7 @@ export class AgentSessionJournal {
     this.state.items.has(itemId) || this.state.tombstones.has(itemId)
 
   /** Read the journal's running turn without allocating a snapshot; host projection decides current work. */
-  runningTurn = (): { item: journal.AgentJournalRenderItem; turnId: string } | null =>
+  runningTurn = () =>
     runningStructuredAgentSessionTurnItemBySequence(memoryMap(this.state.items).values())
 
   newestTurn = () => readAgentJournalTurn(journalInputOrder(this.state).newestTurn.read()?.body)
@@ -235,7 +230,6 @@ export class AgentSessionJournal {
   /** Read across the journal, beyond any client's loaded page. */
   threadGoal = () => this.threadGoalSource().goal
 
-  /** Read across the journal, beyond any client's loaded page. */
   contextUsage = (): AgentSessionContextUsage =>
     latestStructuredAgentContextFacts(memoryMap(this.state.items).values())
 
@@ -298,6 +292,9 @@ export class AgentSessionJournal {
 
   openCommand = (input: contracts.JournalCommandOpenInput) =>
     this.submissionWriter.openCommand(input)
+
+  prepareHandover = (input: contracts.JournalHandoverInput) =>
+    this.submissionWriter.prepareHandover(input)
 
   settleCommand = (input: contracts.JournalCommandSettlementInput) =>
     this.submissionWriter.settleCommand(input)

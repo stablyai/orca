@@ -20,6 +20,7 @@ import type {
   JournalShutdownCutInput,
   JournalCommandSettlementInput,
   JournalCommandOpenInput,
+  JournalHandoverInput,
   JournalSubmissionConsume,
   JournalSubmissionInput,
   ResolveDispatchInput
@@ -63,6 +64,7 @@ export type JournalWriterInputOperation =
   | { kind: 'shutdown-cut'; input: JournalShutdownCutInput }
   | { kind: 'command-settle'; input: JournalCommandSettlementInput }
   | { kind: 'command-open'; input: JournalCommandOpenInput }
+  | { kind: 'handover'; input: JournalHandoverInput }
   | {
       kind: 'queue-insert'
       input: {
@@ -142,6 +144,8 @@ export async function runJournalWriterOperation(
       return collaborators.itemAppender.appendShutdownCut(operation.input)
     case 'command-open':
       return settled(submissionWriter.openCommand(operation.input))
+    case 'handover':
+      return submissionWriter.prepareHandover(operation.input)
     case 'command-settle':
       return settled(submissionWriter.settleCommand(operation.input))
     case 'queue-insert':
