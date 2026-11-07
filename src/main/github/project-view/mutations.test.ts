@@ -47,6 +47,8 @@ vi.mock('./internals', () => ({
 }))
 
 import { updateIssueBySlug } from './mutations'
+import { updatePullRequestBySlug } from './pull-request-mutation'
+import { addIssueCommentBySlug } from './issue-comment-mutations'
 
 describe('updateIssueBySlug', () => {
   beforeEach(() => {
@@ -57,6 +59,51 @@ describe('updateIssueBySlug', () => {
     repositoryRateLimitGuardMock.mockReset().mockReturnValue({ blocked: false })
     releaseMock.mockReset()
     runRestMock.mockReset().mockResolvedValue({ ok: true, data: {} })
+  })
+
+  it.each([updateIssueBySlug, updatePullRequestBySlug])(
+    'returns paired image sources after a body edit',
+    async (update) => {
+      const body =
+        '![shot](https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488)'
+      runRestMock.mockResolvedValueOnce({
+        ok: true,
+        data: {
+          body,
+          body_html:
+            '<img src="https://private-user-images.githubusercontent.com/1/ce11040a-fb66-4289-927f-547b16dfc488.png?jwt=TEST">'
+        }
+      })
+      const result = await update({ owner: 'acme', repo: 'widgets', number: 12, updates: { body } })
+      expect(result).toEqual({
+        ok: true,
+        bodyImageUrls: {
+          'https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488':
+            'https://private-user-images.githubusercontent.com/1/ce11040a-fb66-4289-927f-547b16dfc488.png?jwt=TEST'
+        }
+      })
+      expect(runRestMock.mock.calls[0][0]).toContain(`body=${body}`)
+      expect(runRestMock.mock.calls[0][0]).toContain('Accept: application/vnd.github.full+json')
+    }
+  )
+
+  it('returns the paired source for a newly posted Project comment', async () => {
+    const body =
+      '![shot](https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488)'
+    runRestMock.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        id: 1,
+        body,
+        body_html:
+          '<img src="https://private-user-images.githubusercontent.com/1/ce11040a-fb66-4289-927f-547b16dfc488.png?jwt=TEST">'
+      }
+    })
+    const result = await addIssueCommentBySlug({ owner: 'acme', repo: 'widgets', number: 12, body })
+    expect(result.ok && result.comment.bodyImageUrls).toEqual({
+      'https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488':
+        'https://private-user-images.githubusercontent.com/1/ce11040a-fb66-4289-927f-547b16dfc488.png?jwt=TEST'
+    })
   })
 
   it('closes slug-addressed issues with completed and not planned reasons via gh issue close', async () => {

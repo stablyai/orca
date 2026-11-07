@@ -542,7 +542,39 @@ it('publishes through the actual Tasks PR page and Project dialog using one acce
       comments: [{ body: 'fork conversation' }]
     })
   }
+  const key = page.detailsCacheKey!
+  const entry = workItemDetailsCache.get(key)!
+  await act(async () =>
+    touchWorkItemDetailsCache(key, {
+      ...entry,
+      details: {
+        ...entry.details!,
+        bodyImageUrls: {
+          'https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488':
+            'https://private-user-images.githubusercontent.com/1/old.png?jwt=OLD'
+        }
+      }
+    })
+  )
   await act(async () => patchCachedWorkItemBody(page.detailsCacheKey!, 'saved body'))
+  expect(published.get('page')?.details?.bodyImageUrls).toEqual({
+    'https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488':
+      'https://private-user-images.githubusercontent.com/1/old.png?jwt=OLD'
+  })
+  await act(async () => patchCachedWorkItemBody(key, 'saved body', { bodyImageUrls: undefined }))
+  expect(published.get('page')?.details?.bodyImageUrls).toBeUndefined()
+  await act(async () =>
+    patchCachedWorkItemBody(key, 'saved body', {
+      bodyImageUrls: {
+        'https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc489':
+          'https://private-user-images.githubusercontent.com/1/new.png?jwt=NEW'
+      }
+    })
+  )
+  expect(published.get('dialog')?.details?.bodyImageUrls).toEqual({
+    'https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc489':
+      'https://private-user-images.githubusercontent.com/1/new.png?jwt=NEW'
+  })
   expect(published.get('page')?.body).toBe('saved body')
   expect(published.get('dialog')?.body).toBe('saved body')
 })

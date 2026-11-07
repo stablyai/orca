@@ -38,6 +38,7 @@ vi.mock('./github-api-repository', async (importOriginal) =>
 )
 
 import { getPRComments } from './client/fetch/get-pr-comments'
+import { enrichGitHubBodyImages } from './body-image-enrichment'
 import { resetGraphQLRateLimitGuardMocks } from './client-test-harness'
 
 const { ghExecFileAsyncMock, rateLimitGuardMock } = clientMocks
@@ -122,5 +123,148 @@ describe('PR conversation request reuse', () => {
       { id: 11, body: 'Recovered review' }
     ])
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(3)
+  })
+  it.each([100, 1000])(
+    'enriches only candidate bodies in bounded batches (%s bodies)',
+    async (n) => {
+      const body =
+        '![shot](https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488)'
+      const imageComments = Array.from({ length: n }, (_, i) => ({
+        ...comment,
+        id: `IMAGE_${i}`,
+        databaseId: i,
+        body,
+        path: 'file.ts'
+      }))
+      const threads = Array.from({ length: n / 100 }, (_, i) => ({
+        id: `THREAD_${i}`,
+        isResolved: false,
+        line: 1,
+        startLine: null,
+        originalLine: 1,
+        originalStartLine: null,
+        comments: { nodes: imageComments.slice(i * 100, (i + 1) * 100) }
+      }))
+      ghExecFileAsyncMock.mockResolvedValueOnce(
+        response({
+          comments: { nodes: [comment] },
+          reviews: { nodes: [] },
+          reviewThreads: { nodes: threads }
+        })
+      )
+      const selected: string[] = []
+      ghExecFileAsyncMock.mockImplementation(async (_args, opts) => {
+        const ids: string[] = JSON.parse(opts.stdin).variables.ids
+        expect(ids.length).toBeLessThanOrEqual(100)
+        selected.push(...ids)
+        return {
+          stdout: JSON.stringify({
+            data: {
+              nodes: ids.map((id) => ({
+                id,
+                body,
+                bodyHTML:
+                  '<img src="https://private-user-images.githubusercontent.com/1/ce11040a-fb66-4289-927f-547b16dfc488.png?jwt=TEST">'
+              }))
+            }
+          })
+        }
+      })
+      const result = await getPRComments('/repo', 7, { ...options, noCache: true })
+      expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1 + n / 100)
+      expect(selected).toEqual(imageComments.map((c) => c.id))
+      expect(result.filter((c) => c.path === 'file.ts')).toHaveLength(n)
+      expect(result.find((c) => c.id === 0)?.bodyImageUrls).toEqual({
+        'https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488':
+          'https://private-user-images.githubusercontent.com/1/ce11040a-fb66-4289-927f-547b16dfc488.png?jwt=TEST'
+      })
+      expect(result.find((c) => c.id === 0)?.body).toBe(body)
+    }
+  )
+
+  it('retains raw review threads when optional HTML overflows or fails', async () => {
+    const body =
+      '![shot](https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488)'
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce(
+        response({
+          comments: { nodes: [] },
+          reviews: { nodes: [] },
+          reviewThreads: {
+            nodes: [
+              {
+                id: 'THREAD',
+                isResolved: false,
+                line: 1,
+                startLine: null,
+                originalLine: 1,
+                originalStartLine: null,
+                comments: { nodes: [{ ...comment, body, path: 'file.ts' }] }
+              }
+            ]
+          }
+        })
+      )
+      .mockRejectedValueOnce(Object.assign(new Error('output limit'), { stdout: '{' }))
+    const result = await getPRComments('/repo', 7, { ...options, noCache: true })
+    expect(result).toMatchObject([
+      {
+        body: '![shot](https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488)',
+        path: 'file.ts',
+        threadId: 'THREAD'
+      }
+    ])
+    expect(result[0].bodyImageUrls).toBeUndefined()
+  })
+  it('deduplicates sparse IDs and accepts only matching bodies from partial enrichment', async () => {
+    const body =
+      '![shot](https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488)'
+    const a: { body: string; bodyImageUrls?: Record<string, string> } = { body }
+    const duplicate = { body }
+    const edited: { body: string; bodyImageUrls?: Record<string, string> } = { body }
+    ghExecFileAsyncMock.mockRejectedValueOnce(
+      Object.assign(new Error('partial'), {
+        stdout: JSON.stringify({
+          data: {
+            nodes: [
+              {
+                id: 'A',
+                body,
+                bodyHTML:
+                  '<img src="https://private-user-images.githubusercontent.com/1/ce11040a-fb66-4289-927f-547b16dfc488.png?jwt=TEST">'
+              },
+              {
+                id: 'B',
+                body: 'Changed in GitHub',
+                bodyHTML:
+                  '<img src="https://private-user-images.githubusercontent.com/1/ce11040a-fb66-4289-927f-547b16dfc488.png?jwt=TEST">'
+              },
+              null
+            ]
+          },
+          errors: [{ message: 'one unavailable' }]
+        })
+      })
+    )
+    await enrichGitHubBodyImages(
+      [
+        { nodeId: 'A', target: a },
+        { nodeId: 'A', target: duplicate },
+        { nodeId: 'B', target: edited },
+        { nodeId: 'PLAIN', target: { body: 'Plain text' } },
+        { target: { body } }
+      ],
+      repository,
+      {}
+    )
+    expect(JSON.parse(ghExecFileAsyncMock.mock.calls[0][1].stdin).variables.ids).toEqual(['A', 'B'])
+    expect(a.bodyImageUrls).toEqual({
+      'https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488':
+        'https://private-user-images.githubusercontent.com/1/ce11040a-fb66-4289-927f-547b16dfc488.png?jwt=TEST'
+    })
+    expect(duplicate).toEqual(a)
+    expect(edited).toEqual({
+      body: '![shot](https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488)'
+    })
   })
 })

@@ -58,6 +58,7 @@ export function ConversationTab({
   repoId,
   sourceContext,
   body,
+  bodyImageUrls,
   comments,
   files,
   headSha,
@@ -80,6 +81,7 @@ export function ConversationTab({
   repoId: string | null
   sourceContext?: TaskSourceContext | null
   body: string
+  bodyImageUrls?: Record<string, string>
   comments: PRComment[]
   files: GitHubPRFile[]
   headSha: string | undefined
@@ -93,7 +95,7 @@ export function ConversationTab({
   projectOrigin: PullRequestPageProjectOrigin | undefined
   onMutated: () => void
   onChecksUpdated: (checks: PRCheckDetail[]) => void
-  onBodyUpdated: (body: string) => void
+  onBodyUpdated: (body: string, representation?: { bodyImageUrls?: Record<string, string> }) => void
   onCommentAdded: (comment: PRComment) => void
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
 }): React.JSX.Element {
@@ -186,7 +188,7 @@ export function ConversationTab({
     }
     setBodySaving(true)
     try {
-      await runWorkItemBodyUpdate({
+      const representation = await runWorkItemBodyUpdate({
         item,
         repoPath,
         sourceContext,
@@ -194,7 +196,7 @@ export function ConversationTab({
         body: resolvedBodyDraft,
         parsedSlug: bodySlug
       })
-      onBodyUpdated(resolvedBodyDraft)
+      onBodyUpdated(resolvedBodyDraft, representation)
       setBodyEditing(false)
       toast.success(translate('auto.components.PullRequestPage.9b4190dc98', 'Description updated.'))
     } catch (err) {
@@ -315,6 +317,7 @@ export function ConversationTab({
           bodySaving={bodySaving}
           bodyChanged={bodyChanged}
           body={body}
+          bodyImageUrls={bodyImageUrls}
           resolvedBodyDraft={resolvedBodyDraft}
           bodyTextareaRef={bodyTextareaRef}
           mentionOptions={mentionOptions}
