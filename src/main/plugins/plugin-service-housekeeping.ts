@@ -1,11 +1,16 @@
+import { resolve } from 'node:path'
 import { PluginDevWatcher } from './plugin-dev-watcher'
 
+type DevRootWatch = {
+  watcher: PluginDevWatcher
+  retry: 'maintenance' | 'refresh' | null
+  bindingCheck: Promise<boolean | null> | null
+}
+
 export class PluginServiceHousekeeping {
-  private readonly devWatcher = new PluginDevWatcher()
+  private readonly devWatchers = new Map<string, DevRootWatch>()
   private reapTimer: ReturnType<typeof setInterval> | null = null
-  private watchedPathsKey: string | null = null
   private retryRefresh: (() => void) | null = null
-  private bindingCheck: Promise<boolean | null> | null = null
 
   sync(options: {
     enabled: boolean
@@ -25,16 +30,22 @@ export class PluginServiceHousekeeping {
       }, 60_000)
       this.reapTimer.unref?.()
     }
-    const pathsKey = JSON.stringify(options.devPaths)
-    if (pathsKey !== this.watchedPathsKey) {
-      this.bindingCheck = null
-      this.watchedPathsKey = pathsKey
-      this.devWatcher.start(options.devPaths, options.refresh, (retry = true) => {
-        // Retry failed registration even when the configured paths are unchanged.
-        if (retry) {
-          this.watchedPathsKey = null
-        }
-      })
+    const roots = new Set(options.devPaths.map((path) => resolve(path)))
+    for (const [root, watch] of this.devWatchers) {
+      if (!roots.has(root)) {
+        watch.watcher.dispose()
+        this.devWatchers.delete(root)
+      }
+    }
+    for (const root of roots) {
+      let watch = this.devWatchers.get(root)
+      if (!watch) {
+        watch = { watcher: new PluginDevWatcher(), retry: null, bindingCheck: null }
+        this.devWatchers.set(root, watch)
+        this.startWatcher(root, watch)
+      } else if (watch.retry === 'refresh') {
+        this.startWatcher(root, watch)
+      }
     }
   }
 
@@ -43,36 +54,53 @@ export class PluginServiceHousekeeping {
   }
 
   private checkBindings(): void {
-    if (this.bindingCheck) {
-      return
+    for (const [root, watch] of this.devWatchers) {
+      if (watch.bindingCheck) {
+        continue
+      }
+      const check = watch.watcher.checkRootBindings()
+      watch.bindingCheck = check
+      void check.then((changed) => {
+        if (this.devWatchers.get(root) !== watch || watch.bindingCheck !== check) {
+          return
+        }
+        watch.bindingCheck = null
+        if (changed !== null && (changed || watch.retry)) {
+          this.startWatcher(root, watch)
+          // Why only on a new binding: a retry that subscribes refreshes itself, and one that keeps
+          // failing (an unreachable share) must not rediscover every plugin each tick.
+          if (changed) {
+            this.retryRefresh?.()
+          }
+        }
+      })
     }
-    const check = this.devWatcher.checkRootBindings()
-    this.bindingCheck = check
-    void check.then((changed) => {
-      if (this.bindingCheck !== check) {
-        return
+  }
+
+  private startWatcher(root: string, watch: DevRootWatch): void {
+    watch.retry = null
+    watch.bindingCheck = null
+    watch.watcher.start(
+      [root],
+      () => this.retryRefresh?.(),
+      (retry = true, recovery) => {
+        if (retry) {
+          // Terminal failures wait for maintenance; a known delivery gap recovers on refresh.
+          watch.retry = recovery ? 'refresh' : (watch.retry ?? 'maintenance')
+        }
       }
-      this.bindingCheck = null
-      if (changed === null) {
-        return
-      }
-      if (changed) {
-        this.watchedPathsKey = null
-      }
-      if (this.watchedPathsKey === null) {
-        this.retryRefresh?.()
-      }
-    })
+    )
   }
 
   private stop(): void {
-    this.bindingCheck = null
     if (this.reapTimer) {
       clearInterval(this.reapTimer)
       this.reapTimer = null
     }
-    this.devWatcher.dispose()
-    this.watchedPathsKey = null
+    for (const watch of this.devWatchers.values()) {
+      watch.watcher.dispose()
+    }
+    this.devWatchers.clear()
     this.retryRefresh = null
   }
 }
