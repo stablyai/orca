@@ -96,22 +96,23 @@ export function sealRemoteRuntimeRequest(
   text: string,
   assertInTime: (() => void) | undefined
 ): { frame: string } | { expired: unknown } {
-  let refusal: { error: unknown } | null = null
+  const admission: { refused: boolean; error?: unknown } = { refused: false }
   const admit =
     assertInTime &&
     (() => {
       try {
         assertInTime()
       } catch (error) {
-        refusal = { error }
+        admission.refused = true
+        admission.error = error
         throw error
       }
     })
   try {
     return { frame: channel.sealText(text, admit) }
   } catch (error) {
-    if (refusal) {
-      return { expired: refusal.error }
+    if (admission.refused) {
+      return { expired: admission.error }
     }
     throw error
   }
