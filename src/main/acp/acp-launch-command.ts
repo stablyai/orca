@@ -15,7 +15,7 @@ import {
   resolveInstalledRuntimeRelease
 } from '../node-runtime/managed-runtime-release'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/agent-session/environment/structured-session-child-env'
-import type { AcpLaunchSpec } from './acp-launch-specs'
+import type { AcpHostBackendSettings, AcpLaunchSpec } from './acp-launch-specs'
 
 /** Prefer explicit commands, then managed releases, then complete pinned copies on PATH. */
 export function resolveAcpLaunchCommand(
@@ -71,6 +71,7 @@ export async function selectAcpHostAccountHome(
   spec: AcpLaunchSpec,
   shellEnv: Readonly<Record<string, string>>,
   stateDirectory: string,
+  settings: AcpHostBackendSettings,
   inherited: NodeJS.ProcessEnv = process.env
 ): Promise<AgentSessionAccountHome | null> {
   const backend = spec.hostBackend
@@ -86,6 +87,6 @@ export async function selectAcpHostAccountHome(
   const homePath = env.HOME ?? env.USERPROFILE ?? homedir()
   const { command } = resolveAcpLaunchCommand(backend.spec, env, { homePath, dataDirectory: null })
   return isAbsolute(command)
-    ? backend.select({ command, env, envToDelete, homePath, stateDirectory })
+    ? backend.select({ command, env, envToDelete, homePath, stateDirectory, settings })
     : null
 }

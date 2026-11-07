@@ -10,7 +10,8 @@ import { onManagedRuntimeReleasesChanged } from '../../../node-runtime/managed-r
 import { onAgentsRefreshedOnHost } from '../../../preflight/workspace-agent-detection'
 import {
   observeStructuredAgentLaunch,
-  resolveHostStructuredAgentLaunchEnvironment
+  resolveHostStructuredAgentLaunchEnvironment,
+  type LaunchEnvironmentSettings
 } from './structured-agent-launch-support'
 import {
   STRUCTURED_AGENT_RUNTIME_METADATA,
@@ -33,6 +34,8 @@ const HEALTH_SETTINGS = [
   'agentDefaultEnv',
   'nativeChatInheritShellEnvironment',
   'nativeChatShellEnvironmentVariables',
+  // Why: a saved Gemini Enterprise choice keeps chats off the host's agy (hostAlternative).
+  'antigravityChatAuth',
   ...SHELL_SETTINGS
 ] as const satisfies readonly (keyof GlobalSettings)[]
 
@@ -80,8 +83,9 @@ async function observeChatProgram(
     return 'unknown'
   }
   let shellEnv: Record<string, string>
+  let settings: LaunchEnvironmentSettings
   try {
-    const settings = runtime.requireStore().getSettings()
+    settings = runtime.requireStore().getSettings()
     shellEnv = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
     const { command, env } = chatProgram.resolve(shellEnv, settings)
     if (isAbsolute(command)) {
@@ -94,7 +98,10 @@ async function observeChatProgram(
   } catch {
     return 'unknown'
   }
-  if (supportsLocation(HOST_LOCATION) && (await chatProgram.hostAlternative?.(shellEnv))) {
+  if (
+    supportsLocation(HOST_LOCATION) &&
+    (await chatProgram.hostAlternative?.(shellEnv, settings))
+  ) {
     return 'available'
   }
   return chatProgram.installable?.() ? 'installable' : 'missing'

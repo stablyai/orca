@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { selectAcpHostAccountHome } from '../acp/acp-launch-command'
+import type { AcpHostBackendSettings } from '../acp/acp-launch-specs'
 import { resolveAcpLaunchInvocation } from '../acp/acp-structured-launch-resolution'
 import { ANTIGRAVITY_LAUNCH_SPEC } from './antigravity-acp-launch-spec'
 
@@ -67,7 +68,8 @@ it.skipIf(process.platform === 'win32')(
       selectAcpHostAccountHome(
         ANTIGRAVITY_LAUNCH_SPEC,
         { PATH: await fakeAgy(result), HOME: '/home/user' },
-        stateDirectory
+        stateDirectory,
+        {}
       )
     await expect(select(HOST_INITIALIZE)).resolves.toEqual({
       variable: 'GEMINI_HOME',
@@ -84,7 +86,8 @@ it.skipIf(process.platform === 'win32')(
       selectAcpHostAccountHome(
         ANTIGRAVITY_LAUNCH_SPEC,
         { PATH: '', HOME: '/nowhere' },
-        stateDirectory
+        stateDirectory,
+        {}
       )
     ).resolves.toBeNull()
 
@@ -98,6 +101,30 @@ it.skipIf(process.platform === 'win32')(
     await expect(select(HOST_INITIALIZE)).resolves.not.toBeNull()
     await writeFile(join(managedAcp, 'antigravity-oauth-token'), '{}')
     await expect(select(HOST_INITIALIZE)).resolves.toBeNull()
+  }
+)
+
+it.skipIf(process.platform === 'win32')(
+  "a saved Gemini Enterprise choice keeps new chats on Orca's runtime",
+  async () => {
+    vi.stubEnv('ELECTRON_RUN_AS_NODE', '1')
+    const stateDirectory = await mkdtemp(join(tmpdir(), 'orca-agy-state-test-'))
+    folders.push(stateDirectory)
+    const shellEnv = { PATH: await fakeAgy(HOST_INITIALIZE), HOME: '/home/user' }
+    const select = (settings: AcpHostBackendSettings) =>
+      selectAcpHostAccountHome(ANTIGRAVITY_LAUNCH_SPEC, shellEnv, stateDirectory, settings)
+    await expect(
+      select({ antigravityChatAuth: { method: 'oauth-personal' } })
+    ).resolves.not.toBeNull()
+    await expect(
+      select({
+        antigravityChatAuth: { method: 'oauth-business', gcpProject: 'acme', gcpLocation: 'us' }
+      })
+    ).resolves.toBeNull()
+    // A saved file can hold an incomplete choice the types rule out.
+    await expect(
+      select(JSON.parse('{"antigravityChatAuth":{"method":"oauth-business"}}'))
+    ).resolves.toBeNull()
   }
 )
 

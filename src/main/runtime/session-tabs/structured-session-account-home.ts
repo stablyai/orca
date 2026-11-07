@@ -48,7 +48,8 @@ export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRu
           // The chat host's own state root (ensureStructuredAgentSessionHost).
           stateDirectory: getProfileUserDataPath(),
           hostLaunchEnvironment: (agent) =>
-            resolveHostStructuredAgentLaunchEnvironment(agent, this.requireStore().getSettings())
+            resolveHostStructuredAgentLaunchEnvironment(agent, this.requireStore().getSettings()),
+          hostSettings: () => this.requireStore().getSettings()
         }
       )
   }
