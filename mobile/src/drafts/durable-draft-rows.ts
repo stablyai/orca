@@ -2,7 +2,7 @@ import type { PageDeviceStore } from '../mobile-web-shell/bridge/page-device-sto
 import {
   decodeDeviceStoreValue,
   encodeDeviceStoreValue
-} from '../device-store/persisted-query-codec'
+} from '../device-store/device-store-value-codec'
 
 // Typed text outlives the page: each owner keeps one row, saved after typing settles and at once when emptied.
 const SAVE_DEBOUNCE_MS = 250

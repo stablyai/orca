@@ -10,7 +10,7 @@ import {
 import {
   decodeDeviceStoreValue,
   encodeDeviceStoreValue
-} from '../../../device-store/persisted-query-codec'
+} from '../../../device-store/device-store-value-codec'
 import { acceptedSubmission } from '../../use-mobile-structured-agent-session-queued.test-fixture'
 import { useMobileStructuredSends } from '../../use-mobile-structured-sends'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'

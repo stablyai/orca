@@ -23,7 +23,9 @@ export function createUnconfirmedSendDeadlines<Key>(): UnconfirmedSendDeadlines<
     }
   }
   return {
+    // Holding a key again replaces its deadline, so a later owner's hand-back wins.
     hold: (key, fire) => {
+      clearTimeout(held.get(key)?.timer ?? undefined)
       held.set(key, { timer: null, fire })
       if (connected) {
         start(key)
