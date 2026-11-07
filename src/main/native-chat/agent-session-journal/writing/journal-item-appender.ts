@@ -6,7 +6,17 @@ import type {
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { journalItemRowBuilder } from './journal-row-builders'
 import type { JournalReducerState } from '../projection/journal-reducer'
-import type { JournalAppendResult, JournalItemAppendOptions } from '../journal-store-contracts'
+import type {
+  JournalAppendResult,
+  JournalItemAppendOptions,
+  JournalShutdownCutInput
+} from '../journal-store-contracts'
+import {
+  readAgentJournalTurn,
+  readAgentJournalTurnOutcome
+} from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { agentTurnVerdict } from '../../../../shared/agent-status/lifecycle/agent-turn-outcome'
+import { readJournalInputItem } from '../input-order/journal-input-obligations'
 import type { JournalRow } from '../durable-rows/journal-row-schema'
 import type { JournalOperationReceipt, JournalRowWriter } from './journal-row-writer'
 import type {
@@ -67,6 +77,23 @@ export class JournalItemAppender {
         committed: () => committed?.()
       })
       .then((row) => appendResult(row, agentJournalItemKey(identity)))
+  }
+
+  /** Quit explains only an interrupted turn; earlier settlement/replay is read at this write. */
+  appendShutdownCut(input: JournalShutdownCutInput): Promise<JournalAppendResult | null> {
+    return this.appendResolved(
+      () => {
+        const state = this.deps.state()
+        const turn = readAgentJournalTurn(readJournalInputItem(state, input.turnItemId)?.body)
+        return readJournalInputItem(state, agentJournalItemKey(input.identity)) ||
+          !turn ||
+          agentTurnVerdict({ state: turn.state, outcome: readAgentJournalTurnOutcome(turn) }) !==
+            'interruption'
+          ? null
+          : { identity: input.identity, body: input.body }
+      },
+      { fence: input.fence, turnScope: { kind: 'turn', turnItemId: input.turnItemId } }
+    )
   }
 
   /** Resolve against preceding queued writes; null appends nothing. */

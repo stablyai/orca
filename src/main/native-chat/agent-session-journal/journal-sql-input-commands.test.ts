@@ -546,3 +546,52 @@ it('binds Stop notes to the provider-named turn at their write position', async 
     kind: 'thread'
   })
 })
+
+it('records a shutdown cut only for an interrupted turn and does not duplicate it', async () => {
+  const side = await sides()
+  const identity = { provider: 'orca' as const, clientMessageId: 'quit-cut' }
+  const input = {
+    identity,
+    body: { kind: 'status' as const, text: 'Orca quit', orcaStop: { cause: 'quit' as const } },
+    turnItemId: 'orca:quit-turn',
+    fence: 1
+  }
+  const cut = () =>
+    both(side, (j) => j.itemAppender.appendShutdownCut(input), {
+      kind: 'shutdown-cut',
+      input
+    })
+  await cut()
+  expect(side.memory.state().items.has('orca:quit-cut')).toBe(false)
+  const turnIdentity = { provider: 'orca' as const, clientMessageId: 'quit-turn' }
+  const options = { fence: 1, turnScope: { kind: 'thread' as const } }
+  const finished = {
+    kind: 'turn' as const,
+    turnId: 'turn',
+    state: 'completed' as const,
+    outcome: 'success' as const
+  }
+  await both(side, (j) => j.itemAppender.append(turnIdentity, finished, options), {
+    kind: 'item',
+    identity: turnIdentity,
+    body: finished,
+    options
+  })
+  await cut()
+  expect(side.memory.state().items.has('orca:quit-cut')).toBe(false)
+  const interrupted = { ...finished, state: 'interrupted' as const, outcome: undefined }
+  await both(side, (j) => j.itemAppender.append(turnIdentity, interrupted, options), {
+    kind: 'item',
+    identity: turnIdentity,
+    body: interrupted,
+    options
+  })
+  await cut()
+  expect(side.memory.state().items.get('orca:quit-cut')?.body).toMatchObject({
+    kind: 'status',
+    orcaStop: { cause: 'quit' }
+  })
+  const cursor = side.memory.cursor()
+  await cut()
+  expect(side.memory.cursor()).toEqual(cursor)
+})

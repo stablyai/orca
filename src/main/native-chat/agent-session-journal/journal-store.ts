@@ -49,10 +49,7 @@ import {
   journalItemProvenance
 } from './projection/journal-item-provenance'
 import { createJournalStoreCollaborators } from './store-lifecycle/journal-store-collaborators'
-import {
-  journalThreadGoalSource,
-  type JournalThreadGoalSource
-} from './projection/journal-thread-goal-source'
+import { journalThreadGoalSource } from './projection/journal-thread-goal-source'
 // Each session owns its fold and queue; all statements use the host's shared database connection.
 
 import * as journalInput from './input-order/journal-input-obligations'
@@ -236,8 +233,7 @@ export class AgentSessionJournal {
 
   newestTurn = () => readAgentJournalTurn(journalInputOrder(this.state).newestTurn.read()?.body)
 
-  threadGoalSource = (): JournalThreadGoalSource =>
-    journalThreadGoalSource(memoryMap(this.state.items).values())
+  threadGoalSource = () => journalThreadGoalSource(memoryMap(this.state.items).values())
 
   /** Read across the journal, beyond any client's loaded page. */
   threadGoal = () => this.threadGoalSource().goal
@@ -298,6 +294,9 @@ export class AgentSessionJournal {
   /** Resolve on the write lane; null appends nothing. */
   appendResolvedItem: typeof this.itemAppender.appendResolved = (resolve, options) =>
     this.itemAppender.appendResolved(resolve, options)
+
+  appendShutdownCut = (input: contracts.JournalShutdownCutInput) =>
+    this.itemAppender.appendShutdownCut(input)
 
   appendTombstone(
     identity: AgentJournalItemIdentity,

@@ -8,22 +8,14 @@ import {
   agentSessionFailureWords,
   type AgentSessionFailureWordsContext
 } from '../../../../shared/agent-session/failures/agent-session-failure-words'
-import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalStatusItem
-} from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import {
-  readAgentJournalTurn,
-  readAgentJournalTurnOutcome
-} from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { agentTurnVerdict } from '../../../../shared/agent-status/lifecycle/agent-turn-outcome'
+import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { orcaShutdownRowClientMessageId } from '../../../../shared/native-chat/native-chat-orca-stop-cut'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 
-type OrcaStopRowJournal = Pick<AgentSessionJournal, 'itemsRead' | 'appendItem'>
+type OrcaStopRowJournal = Pick<AgentSessionJournal, 'appendShutdownCut'>
 
 /** Keep legacy stop wording/tone alongside the cause that newer clients render muted. */
 export function orcaStopRowBody(
@@ -56,15 +48,6 @@ export function runningRootTurnItemId(
   )
 }
 
-function cutByNobody(item: AgentJournalRenderItem | undefined): boolean {
-  const turn = item ? readAgentJournalTurn(item.body) : null
-  return (
-    turn !== null &&
-    agentTurnVerdict({ state: turn.state, outcome: readAgentJournalTurnOutcome(turn) }) ===
-      'interruption'
-  )
-}
-
 /** Explain quit-cut turns after settlement, excluding completed/personal stops; never block quit on failure. */
 export async function recordStructuredAgentSessionShutdownCut(input: {
   journal: OrcaStopRowJournal
@@ -89,19 +72,12 @@ export async function recordStructuredAgentSessionShutdownCut(input: {
       input.fence,
       input.generation
     )
-    const items = input.journal.itemsRead().items
-    const written = items.some((item) => {
-      const identity = parseAgentJournalItemKey(item.itemId)
-      return identity?.provider === 'orca' && identity.clientMessageId === clientMessageId
+    await input.journal.appendShutdownCut({
+      identity: { provider: 'orca', clientMessageId },
+      body: orcaStopRowBody(input.failureTextContext, input.trigger),
+      fence: input.rowFence,
+      turnItemId
     })
-    if (written || !cutByNobody(items.find((item) => item.itemId === turnItemId))) {
-      return
-    }
-    await input.journal.appendItem(
-      { provider: 'orca', clientMessageId },
-      orcaStopRowBody(input.failureTextContext, input.trigger),
-      { fence: input.rowFence, turnScope: { kind: 'turn', turnItemId } }
-    )
   } catch (error) {
     input.logger.warn('recording why a quit cut a reply failed', {
       scope: 'shutdown-cut-row',

@@ -162,6 +162,13 @@ export type JournalItemAppendInput = {
   options: JournalItemAppendOptions
 }
 
+export type JournalShutdownCutInput = {
+  identity: AgentJournalItemIdentity
+  body: Extract<AgentJournalItemBody, { kind: 'status' }>
+  turnItemId: string
+  fence: number
+}
+
 export type JournalQueuedMessagesDeps = {
   sessionId: string
   serialize: <T>(run: JournalWriteBody<T>) => Promise<T>

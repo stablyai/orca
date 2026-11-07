@@ -15,7 +15,7 @@ import type {
   JournalStagedReceipt
 } from './writing/journal-row-writer'
 import { AgentSessionJournalError } from './writing/journal-write-guards'
-import type { JournalLateDispatchInput } from './journal-store-contracts'
+import type { JournalLateDispatchInput, JournalShutdownCutInput } from './journal-store-contracts'
 
 /** Queue commands join this surface after their ordered-list owner has landed. */
 export type JournalSqlStoreOperation =
@@ -29,6 +29,7 @@ export type JournalSqlStoreOperation =
           | 'goal-withdraw'
           | 'dispatch'
           | 'late-dispatch'
+          | 'shutdown-cut'
           | 'stop'
           | 'context-clear'
           | 'context-rewind'
@@ -163,6 +164,10 @@ export class SqlAgentSessionJournal {
   /** Queue ownership is selected in the writer, after every earlier admitted command. */
   async settleLateDispatch(input: JournalLateDispatchInput): Promise<void> {
     await this.write({ kind: 'late-dispatch', input })
+  }
+
+  async appendShutdownCut(input: JournalShutdownCutInput): Promise<void> {
+    await this.write({ kind: 'shutdown-cut', input })
   }
 
   /** Pure readers can join preceding commands without allowing another command between reads. */
