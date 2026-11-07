@@ -1,3 +1,4 @@
+import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
 import { normalizeExecutionHostId } from '../shared/execution-host'
 import type { Project, ProjectHostSetup } from '../shared/project-types'
 import { normalizeTypedName } from './host-selector-alternatives'
@@ -17,6 +18,14 @@ export async function findProjectSetups(
   setups: readonly ProjectHostSetup[],
   projectSelector: string
 ): Promise<ProjectHostSetup[]> {
+  const byPath = setups.filter(
+    (candidate) =>
+      normalizeRuntimePathForComparison(candidate.path) ===
+      normalizeRuntimePathForComparison(projectSelector)
+  )
+  if (byPath.length > 0) {
+    return byPath
+  }
   const byId = setups.filter((candidate) => candidate.projectId === projectSelector)
   if (byId.length > 0) {
     return byId

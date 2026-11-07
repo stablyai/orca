@@ -27,9 +27,11 @@ import { translate } from '@/i18n/i18n'
 
 export function RepositoryIconPicker({
   repo,
+  websiteInput,
   updateRepo
 }: {
   repo: Repo
+  websiteInput?: { website: string; setWebsite: (value: string) => void }
   updateRepo: (repoId: string, updates: Partial<Repo>) => void
 }): React.JSX.Element {
   const [loadingGitHub, setLoadingGitHub] = useState(false)
@@ -201,6 +203,7 @@ export function RepositoryIconPicker({
       <RepositoryIconColorSection badgeColor={repo.badgeColor} onBadgeColorChange={setBadgeColor} />
 
       <RepositoryIconTabs
+        websiteInput={websiteInput}
         initialTab={initialTab}
         selectedLucideName={selectedLucideName}
         selectedEmoji={selectedEmoji}

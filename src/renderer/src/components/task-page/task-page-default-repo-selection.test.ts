@@ -1,3 +1,4 @@
+import { taskRepoSelectionRawId } from '../../../../shared/task-repo-selection'
 import { describe, expect, it } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import {
@@ -129,7 +130,7 @@ describe('getDefaultTaskRepoSelection', () => {
       })
     ])
 
-    expect([...selection].sort()).toEqual(['local-orca', 'other'])
+    expect([...selection].map(taskRepoSelectionRawId).sort()).toEqual(['local-orca', 'other'])
   })
 
   it('keeps GitHub grouping intact while a pending-identity repo joins as its own project', () => {
@@ -145,7 +146,10 @@ describe('getDefaultTaskRepoSelection', () => {
       ])
     )
 
-    expect([...selection].sort()).toEqual(['local-orca', 'ssh-gitlab-pending'])
+    expect([...selection].map(taskRepoSelectionRawId).sort()).toEqual([
+      'local-orca',
+      'ssh-gitlab-pending'
+    ])
   })
 
   it('prefers local checkout over a remote checkout for the same project', () => {
@@ -163,7 +167,7 @@ describe('getDefaultTaskRepoSelection', () => {
       })
     ])
 
-    expect([...selection]).toEqual(['local-orca'])
+    expect([...selection].map(taskRepoSelectionRawId)).toEqual(['local-orca'])
   })
 
   it('keeps same-named folders separate when provider identity is missing', () => {
@@ -172,7 +176,7 @@ describe('getDefaultTaskRepoSelection', () => {
       repo({ id: 'ssh-app', displayName: 'app', connectionId: 'builder' })
     ])
 
-    expect([...selection].sort()).toEqual(['local-app', 'ssh-app'])
+    expect([...selection].map(taskRepoSelectionRawId).sort()).toEqual(['local-app', 'ssh-app'])
   })
 
   it('uses GitHub repo icon metadata to identify legacy duplicate projects', () => {
@@ -200,7 +204,7 @@ describe('getDefaultTaskRepoSelection', () => {
       })
     ])
 
-    expect([...selection]).toEqual(['local-claude-swap'])
+    expect([...selection].map(taskRepoSelectionRawId)).toEqual(['local-claude-swap'])
   })
 })
 
@@ -224,12 +228,12 @@ describe('getTaskProjectPickerGroups', () => {
 
     expect(groups).toHaveLength(2)
     expect(groups[0]).toMatchObject({
-      projectKey: 'github:stablyai/orca',
+      projectKey: 'project:github:stablyai/orca',
       repo: { id: 'local-orca' }
     })
     expect(groups[0]?.sources.map((source) => source.id)).toEqual(['local-orca', 'ssh-orca'])
     expect(groups[1]).toMatchObject({
-      projectKey: 'github:stablyai/docs',
+      projectKey: 'project:github:stablyai/docs',
       repo: { id: 'docs' }
     })
   })
@@ -272,7 +276,7 @@ describe('normalizeTaskRepoSelection', () => {
       new Set(['local-orca', 'ssh-orca'])
     )
 
-    expect([...selection]).toEqual(['local-orca'])
+    expect([...selection].map(taskRepoSelectionRawId)).toEqual(['local-orca'])
   })
 
   it('preserves a single explicit remote source selection', () => {
@@ -291,7 +295,7 @@ describe('normalizeTaskRepoSelection', () => {
       new Set(['ssh-orca'])
     )
 
-    expect([...selection]).toEqual(['ssh-orca'])
+    expect([...selection].map(taskRepoSelectionRawId)).toEqual(['ssh-orca'])
   })
 
   it('normalizes raw all-host selection to one source per logical project', () => {
@@ -314,6 +318,6 @@ describe('normalizeTaskRepoSelection', () => {
       new Set(['local-orca', 'ssh-orca', 'docs'])
     )
 
-    expect([...selection].sort()).toEqual(['docs', 'local-orca'])
+    expect([...selection].map(taskRepoSelectionRawId).sort()).toEqual(['docs', 'local-orca'])
   })
 })

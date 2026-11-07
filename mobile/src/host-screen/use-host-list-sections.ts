@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import type { ProjectSectionModel } from '../../../src/shared/project-section-grouping'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import { buildSidebarFeedRows } from '../../../src/shared/sidebar-list/sidebar-feed-rows'
 import { repoIconFeedKey } from '../../../src/shared/sidebar-list/repo-icon-data-urls-contract'
@@ -20,6 +21,7 @@ import type { HostSidebarFeed } from './use-host-sidebar-feed'
 import type { HostScreenState } from './use-host-screen-state'
 
 export type HostListSectionsInputs = {
+  exactProjectRepoFilters?: boolean
   client: RpcClient | null
   hostId: string | undefined
   /** Null in a build that lists without the feed. */
@@ -48,11 +50,12 @@ function useCollapsedGroups(state: HostScreenState): Set<string> {
 
 function useFilterRepos(
   catalogRepos: readonly SectionRepo[],
-  displayWorktrees: Worktree[]
+  displayWorktrees: Worktree[],
+  grouping?: ProjectSectionModel | null
 ): WorkspaceSectionRepo[] {
   return useMemo(
-    () => buildFilterRepos(catalogRepos, displayWorktrees),
-    [catalogRepos, displayWorktrees]
+    () => buildFilterRepos(catalogRepos, displayWorktrees, grouping),
+    [catalogRepos, displayWorktrees, grouping]
   )
 }
 
@@ -60,7 +63,8 @@ function useLegacyHostListSections({
   displayWorktrees,
   hostContextOf,
   hostInstallationId,
-  state
+  state,
+  exactProjectRepoFilters
 }: HostListSectionsInputs): HostListSections {
   const projectCatalog = useMemo(
     () =>
@@ -97,6 +101,7 @@ function useLegacyHostListSections({
     collapsedGroups,
     workspaceStatuses: state.view.workspaceStatuses,
     repoHostIdByRepoId: state.repoHostIdByRepoId,
+    exactProjectRepoFilters,
     lineageStores
   })
   return { ...sectionsResult, collapsedGroups, projectOrderBy: projectCatalog.projectOrderBy }
@@ -112,17 +117,22 @@ function useFeedHostListSections({
   displayWorktrees,
   hostContextOf,
   hostPlatform,
-  state
+  state,
+  exactProjectRepoFilters
 }: HostListSectionsInputs): HostListSections {
   const collapsedGroups = useCollapsedGroups(state)
   const domains = feed?.kind === 'ready' ? feed.domains : null
   // The catalog installed with the rows; a desktop that predates it answers mobileRelay.projectSections.
   const served = domains?.projectCatalog ?? state.servedProjectSections
-  const uniqueRepos = useFilterRepos(served?.repos ?? state.desktopRepos, displayWorktrees)
   const projectOrderBy = state.view.projectOrderBy ?? served?.projectOrderBy ?? 'manual'
   const catalog = useMemo(
     () => buildSidebarFeedCatalog(served, state.desktopRepos, state.hostProjectGroups),
     [served, state.desktopRepos, state.hostProjectGroups]
+  )
+  const uniqueRepos = useFilterRepos(
+    served?.repos ?? state.desktopRepos,
+    displayWorktrees,
+    served && exactProjectRepoFilters ? catalog.projectGrouping : null
   )
   const view = useMemo(
     () =>

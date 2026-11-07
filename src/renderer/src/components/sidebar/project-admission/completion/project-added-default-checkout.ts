@@ -1,3 +1,4 @@
+import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
 import { useAppStore } from '@/store/index'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { track } from '@/lib/telemetry'
@@ -182,7 +183,11 @@ export async function openProjectDefaultCheckout({
     result: 'revealed_project',
     reason
   })
-  finalizeImportedRepoAfterSkip(useAppStore.getState(), repoId)
+  finalizeImportedRepoAfterSkip(
+    useAppStore.getState(),
+    repoId,
+    getProjectGroupingIndexFromState(useAppStore.getState())
+  )
 }
 
 export async function finishProjectAddWithDefaultCheckout({

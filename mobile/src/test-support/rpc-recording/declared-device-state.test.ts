@@ -36,19 +36,24 @@ function lastCheckpoint(recording: Recording): {
   return { sender: observation.sender, effects: observation.effects, state: observation.state }
 }
 
-function sentParams(recording: Recording, index = 0): unknown {
+function sentParams(recording: Recording, index: number | string = 0): unknown {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a recorded sender entry has three positional argument slots.
   const sender = lastCheckpoint(recording).sender as {
     name: string
     args: { name: string; value: unknown }[]
   }[]
-  return { name: sender[index]?.name, params: sender[index]?.args[1]?.value }
+  const entry =
+    typeof index === 'number' ? sender[index] : sender.find((entry) => entry.name === index)
+  return { name: entry?.name, params: entry?.args[1]?.value }
 }
 
 describe('a scenario that declares its device', () => {
   it('backs a recorded read: the declared last-visited repo is the one the dialog selects', async () => {
     const recording = await record('new-workspace-repositories-fulfilled')
-    expect(sentParams(recording)).toEqual({ name: 'repo.list#1', params: { $rpc: 'absent' } })
+    expect(sentParams(recording, 'repo.list#1')).toEqual({
+      name: 'repo.list#1',
+      params: { $rpc: 'absent' }
+    })
     // repo-a is the first eligible repo, so repo-b can only come from the declared entry.
     expect(lastCheckpoint(recording).state).toMatchObject({ selected: 'repo-b' })
   })

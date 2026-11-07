@@ -1,3 +1,5 @@
+import type { ProjectGroupingIndex } from '../../../../../../shared/project-section-grouping'
+import { getProjectRepoFilterHost } from '../../../../../../shared/project-repo-filter-selection'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { isDefaultBranchWorkspace } from '../../../../../../shared/worktree/workspace-kinds'
@@ -12,7 +14,7 @@ export type AddRepoSkipFinalizationState = ProjectFilterRevealState & {
   hideDefaultBranchWorkspace: boolean
   showSleepingWorkspaces: boolean
   alwaysShowDefaultBranchWorkspace: boolean
-  repos: readonly Pick<Repo, 'id' | 'kind'>[]
+  repos: readonly (Pick<Repo, 'id' | 'kind'> & Partial<Repo>)[]
   worktreesByRepo: Record<string, Worktree[]>
   setActiveRepo: (repoId: string | null) => void
   setShowActiveOnly: (value: boolean) => void
@@ -22,7 +24,8 @@ export type AddRepoSkipFinalizationState = ProjectFilterRevealState & {
 
 export function finalizeImportedRepoAfterSkip(
   state: AddRepoSkipFinalizationState,
-  importedRepoId: string
+  importedRepoId: string,
+  grouping?: ProjectGroupingIndex
 ): void {
   const importedWorktrees = (state.worktreesByRepo[importedRepoId] ?? []).filter(
     (worktree) => !worktree.isArchived
@@ -33,7 +36,12 @@ export function finalizeImportedRepoAfterSkip(
   if (state.activeRepoId !== importedRepoId) {
     state.setActiveRepo(importedRepoId)
   }
-  revealRepoInProjectFilter(state, importedRepoId)
+  revealRepoInProjectFilter(
+    state,
+    importedRepoId,
+    importedRepo ? getProjectRepoFilterHost(importedRepo) : 'local',
+    grouping
+  )
   if (state.showActiveOnly) {
     state.setShowActiveOnly(false)
   }

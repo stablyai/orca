@@ -238,6 +238,7 @@ export async function syncRuntimeBackedSettings(
             : await callRuntimeResult<SettingsResult>('settings.update', runtimeUpdates, 15_000)
         chatSettings.publish(requestedEnvironment, result.settings)
         const runtimeSettings = stripRetiredWebChatSettings(result.settings)
+        delete runtimeSettings.defaultRepoSelection
         delete runtimeSettings.nativeChatAutoContinueAfterUsageLimit
         delete runtimeSettings.agentDefaultSurface
         delete runtimeSettings.nativeChatProviders

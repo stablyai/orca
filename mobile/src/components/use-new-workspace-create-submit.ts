@@ -197,7 +197,6 @@ export function useNewWorkspaceCreateSubmit(args: {
         return
       }
       triggerSuccess()
-      args.onClose()
       args.onCreated(result.worktreeId, result.name, result.warning)
     } catch (error) {
       triggerError()

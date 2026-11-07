@@ -1,3 +1,4 @@
+import { registerProjectGroupingPersistenceTests } from './project-grouping-persistence.spec'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -86,6 +87,8 @@ describe('Store', () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
+
+  registerProjectGroupingPersistenceTests(createStore)
 
   // Paired-client updates omit local ordering fields; omission must preserve the desktop’s own values.
 

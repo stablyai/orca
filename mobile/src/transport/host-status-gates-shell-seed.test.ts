@@ -6,6 +6,10 @@ import { FakeSession } from './mobile-endpoint-supervisor-test-fakes'
 import type { RpcResponse } from './types'
 import { RUNTIME_PROTOCOL_VERSION } from '../../../src/shared/protocol-version'
 
+vi.mock('react-native', () => ({
+  AppState: { addEventListener: () => ({ remove: () => {} }) }
+}))
+
 const SHELL_STATUS = {
   protocolVersion: RUNTIME_PROTOCOL_VERSION,
   capabilities: ['from-shell'],

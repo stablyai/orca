@@ -45,6 +45,8 @@ async function fetchWith(fail: boolean) {
       connState: 'connected',
       embedded: true,
       fetchRepoMetadata: async () => {},
+      fetchLifecycleRepoMetadata: async () => {},
+      pollProjectSections: async () => {},
       hostCapabilities: [],
       hostId: 'host-1',
       sidebarFeed: null,

@@ -112,6 +112,8 @@ export function buildDefaultSettings(args: {
     localAccountRuntime: 'auto',
     localAccountRuntimeDefaultedToAutoForAllUsers: true,
     localAccountWslDistro: null,
+    projectGroupingMode: 'repository',
+    projectGroupingOverrides: {},
     localWindowsRuntimeDefault: { kind: 'windows-host' },
     // Why: prefer modern PowerShell when installed, falling back to inbox Windows PowerShell.
     terminalWindowsPowerShellImplementation: 'auto',

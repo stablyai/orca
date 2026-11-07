@@ -7,10 +7,7 @@ import type { ExecutionHostRegistryEntry } from '../../../../shared/execution-ho
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
-import {
-  buildProjectHostSetupOptions,
-  type NeedsSetupProjectHostOption
-} from '@/lib/project-host-setup-options'
+import type { NeedsSetupProjectHostOption } from '@/lib/project-host-setup-options'
 import { useTargetChangeActions } from '@/hooks/composer-state/target-change-actions'
 import * as decisions from '@/hooks/composer-state/composer-decisions'
 import { SetProjectLocationDialog } from './SetProjectLocationDialog'
@@ -89,14 +86,7 @@ function createInput(): Parameters<typeof useTargetChangeActions>[0] {
       jiraIdentifier: 'APP-1',
       url: 'https://jira.example.invalid/browse/APP-1'
     },
-    projectHostSetupOptions: buildProjectHostSetupOptions({
-      projectId: option.projectId,
-      projectHostSetups: localProjection.setups,
-      eligibleRepos: [localRepo],
-      hosts: [hosts[0]]
-    }),
     repoId: localRepo.id,
-    selectedRepoProjectId: option.projectId,
     setBaseBranch: vi.fn(),
     setBranchNameOverride: vi.fn(),
     setBranchNameOverridePreservesNameEdits: vi.fn(),

@@ -155,13 +155,14 @@ export type WorkspaceViewOptionContext = {
   /** Any host besides this machine; the host picker has nothing to choose otherwise. */
   hasRemoteHosts: boolean
   projectCount: number
+  hasProjectFilter?: boolean
   /** Paired servers exist, or might: other-client workspaces only come from shared servers. */
   mayHaveServerHosts: boolean
 }
 
 const SHOWN: Record<WorkspaceViewOptionKey, (context: WorkspaceViewOptionContext) => boolean> = {
   hosts: (context) => context.hasRemoteHosts,
-  projects: (context) => context.projectCount > 1,
+  projects: (context) => context.projectCount > 1 || context.hasProjectFilter === true,
   groupBy: () => true,
   sortBy: () => true,
   projectOrderBy: (context) => context.groupBy === 'repo',

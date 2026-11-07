@@ -567,7 +567,7 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/transport/mobile-relay-rpc-session.ts",
+    "filePath": "mobile/src/transport/relay-connection-log.ts",
     "kind": "object-property:message",
     "text": "Relay health check failed",
     "dynamic": false,

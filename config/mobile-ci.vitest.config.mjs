@@ -3,6 +3,8 @@ import original from '../mobile/vitest.config.ts'
 
 // Keep real process, native, and runtime-specific contracts on Node.
 const nodeFiles = [
+  'src/mobile-web-shell/mobile-web-shell-project-controls.test.ts',
+  'src/mobile-web-shell/mobile-web-shell-nested-project-filter.test.ts',
   'src/components/WorktreeAgentList.runtime-lineage.test.tsx',
   'scripts/check-tests-typecheck-incremental-cache.test.ts',
   'src/tasks/mobile-agent-launch-architecture.test.ts',

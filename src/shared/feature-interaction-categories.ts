@@ -20,6 +20,7 @@ export const FEATURE_INTERACTION_CATEGORIES = [
 export type FeatureInteractionCategory = (typeof FEATURE_INTERACTION_CATEGORIES)[number]
 
 export const FEATURE_INTERACTION_CATEGORY_BY_ID = {
+  'project-grouping-upgrade': 'settings',
   'workspace-board': 'workspace',
   'workspace-agent-sessions': 'workspace',
   'workspace-board-actions': 'workspace',

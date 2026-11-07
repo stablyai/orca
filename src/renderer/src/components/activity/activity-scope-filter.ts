@@ -1,5 +1,9 @@
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { getWorktreeExecutionHostId } from '../../../../shared/execution-host'
+import { projectRepoFilterMatcher } from '../../../../shared/project-grouping'
+import {
+  getRepoExecutionHostId,
+  getWorktreeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import {
   isAutomationGeneratedWorkspace,
@@ -35,7 +39,7 @@ export function resolveActivityScopeRepoIds(
   filterRepoIds: readonly string[],
   repoMap: ReadonlyMap<string, Repo>
 ): string[] {
-  return filterRepoIds.filter((repoId) => repoMap.has(repoId))
+  return filterRepoIds.filter((id) => repoMap.has(id.slice(id.indexOf('\0') + 1)))
 }
 
 /** Preserve the input array identity when scope hides nothing so downstream memos can reuse results. */
@@ -56,8 +60,9 @@ export function filterThreadsByActivityScope(args: {
   }
   const matchingThreads: AgentPaneThread[] = []
   const visibleThreads: AgentPaneThread[] = []
+  const matches = createActivityScopeMatcher(scope)
   for (const thread of threads) {
-    if (threadMatchesActivityScope(thread, scope)) {
+    if (matches(thread)) {
       matchingThreads.push(thread)
       visibleThreads.push(thread)
     } else if (thread.paneKey === exemptPaneKey) {
@@ -75,34 +80,50 @@ export function threadMatchesActivityScope(
   thread: AgentPaneThread,
   scope: ActivityScopeFilter
 ): boolean {
-  if (scope.visibleHostIds) {
-    const hostId = getWorktreeExecutionHostId(
-      thread.worktree,
-      thread.repo ?? undefined,
-      scope.defaultHostId
-    )
-    if (!scope.visibleHostIds.includes(hostId)) {
+  return createActivityScopeMatcher(scope)(thread)
+}
+
+function createActivityScopeMatcher(
+  scope: ActivityScopeFilter
+): (thread: AgentPaneThread) => boolean {
+  const matchesRepo = projectRepoFilterMatcher(scope.filterRepoIds)
+  const visibleHosts = scope.visibleHostIds ? new Set(scope.visibleHostIds) : null
+  return (thread) => {
+    if (visibleHosts) {
+      const hostId = getWorktreeExecutionHostId(
+        thread.worktree,
+        thread.repo ?? undefined,
+        scope.defaultHostId
+      )
+      if (!visibleHosts.has(hostId)) {
+        return false
+      }
+    }
+    // Why: repo-less terminal buckets have no project, so a project scope hides them.
+    if (scope.filterRepoIds.length > 0) {
+      if (
+        !thread.repo ||
+        !matchesRepo(thread.repo.id, thread.worktree.hostId ?? getRepoExecutionHostId(thread.repo))
+      ) {
+        return false
+      }
+    }
+    // Synthetic floating/standalone worktrees carry no provenance, so these never hide them.
+    if (
+      scope.hideAutomationGeneratedWorkspaces &&
+      isAutomationGeneratedWorkspace(thread.worktree)
+    ) {
       return false
     }
-  }
-  // Why: repo-less terminal buckets have no project, so a project scope hides them.
-  if (scope.filterRepoIds.length > 0) {
-    if (!thread.repo || !scope.filterRepoIds.includes(thread.repo.id)) {
+    if (scope.hideCliCreatedWorkspaces && isCliCreatedWorkspace(thread.worktree)) {
       return false
     }
+    if (
+      scope.hideWorkspacesFromOtherDevices &&
+      isWorkspaceOwnedBySomeoneElse(thread.worktree, scope.pairedDeviceIdsByEnvironment)
+    ) {
+      return false
+    }
+    return true
   }
-  // Synthetic floating/standalone worktrees carry no provenance, so these never hide them.
-  if (scope.hideAutomationGeneratedWorkspaces && isAutomationGeneratedWorkspace(thread.worktree)) {
-    return false
-  }
-  if (scope.hideCliCreatedWorkspaces && isCliCreatedWorkspace(thread.worktree)) {
-    return false
-  }
-  if (
-    scope.hideWorkspacesFromOtherDevices &&
-    isWorkspaceOwnedBySomeoneElse(thread.worktree, scope.pairedDeviceIdsByEnvironment)
-  ) {
-    return false
-  }
-  return true
 }

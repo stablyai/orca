@@ -109,6 +109,7 @@ export function startOwnerWorktreeVisibilityDefaultsHydration(args: {
   if (args.deferPublication) {
     args.set((state) => ({
       settings: args.settings,
+      projectGroupingSettingsHydrated: true,
       worktreeVisibilityDefaultsByHost: args.settings.worktreeVisibilityDefaults
         ? {
             ...state.worktreeVisibilityDefaultsByHost,
@@ -127,6 +128,7 @@ export function startOwnerWorktreeVisibilityDefaultsHydration(args: {
         return
       }
       args.set((state) => ({
+        projectGroupingSettingsHydrated: true,
         settings:
           state.settings === settingsAtHydrationStart
             ? hydrated.settings

@@ -22,6 +22,7 @@ const RepositoryIconEmojiPicker = lazyWithRetry(
 )
 
 type RepositoryIconTabsProps = {
+  websiteInput?: { website: string; setWebsite: (value: string) => void }
   initialTab: 'avatar' | 'icon' | 'emoji'
   selectedLucideName: string | null
   selectedEmoji: string
@@ -30,15 +31,29 @@ type RepositoryIconTabsProps = {
   onUseGitHubAvatar: () => void
 }
 
-export function RepositoryIconTabs({
+export function RepositoryIconTabs(props: RepositoryIconTabsProps): React.JSX.Element {
+  return props.websiteInput ? (
+    <RepositoryIconTabsView {...props} websiteInput={props.websiteInput} />
+  ) : (
+    <LocalRepositoryIconTabs {...props} />
+  )
+}
+function LocalRepositoryIconTabs(props: RepositoryIconTabsProps): React.JSX.Element {
+  const [website, setWebsite] = useState('')
+  return <RepositoryIconTabsView {...props} websiteInput={{ website, setWebsite }} />
+}
+function RepositoryIconTabsView({
+  websiteInput,
   initialTab,
   selectedLucideName,
   selectedEmoji,
   loadingGitHub,
   onSetIcon,
   onUseGitHubAvatar
-}: RepositoryIconTabsProps): React.JSX.Element {
-  const [website, setWebsite] = useState('')
+}: RepositoryIconTabsProps & {
+  websiteInput: NonNullable<RepositoryIconTabsProps['websiteInput']>
+}): React.JSX.Element {
+  const { website, setWebsite } = websiteInput
   const mountedRef = useMountedRef()
 
   const handleUploadImage = async () => {

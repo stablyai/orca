@@ -165,6 +165,7 @@ export type RuntimeCatalogFetchOptions = {
 }
 
 export type RepoSlice = {
+  localRepoCatalogHydrated: boolean
   repos: readonly Repo[]
   projects: readonly Project[]
   projectHostSetups: readonly ProjectHostSetup[]

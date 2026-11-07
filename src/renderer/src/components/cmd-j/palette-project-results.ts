@@ -1,3 +1,6 @@
+import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import type { ProjectGroupingSettings } from '../../../../shared/project-grouping'
 import { isCmdJPaletteQueryTooLarge } from './palette-results'
 import {
   cmdJPaletteTokenScore,
@@ -13,8 +16,12 @@ import type { Repo } from '../../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 import { getProjectGroupHeaderKey } from '../../../../shared/sidebar-list/group-keys'
 import { getDistinctProjectGroups } from '../../../../shared/project-groups'
-import { getProjectHeaderRevealTarget } from '../../../../shared/project-section-grouping'
-import type { ProjectGroupingModel } from '../../../../shared/project-section-grouping'
+import {
+  buildProjectGroupingIndex,
+  getProjectGroupingForRepo,
+  getProjectSectionRepoLookup,
+  type ProjectGroupingIndex
+} from '../../../../shared/project-section-grouping'
 
 export type CmdJProjectGroupResult = {
   id: string
@@ -66,16 +73,21 @@ function buildCmdJProjectSearchCandidates({
   repos,
   projects,
   projectHostSetups,
+  settings,
+  projectIndex,
   renderableRepoIds
 }: {
   projectGroups: readonly ProjectGroup[]
   repos: readonly Repo[]
   projects: readonly Project[]
   projectHostSetups: readonly ProjectHostSetup[]
+  settings?: ProjectGroupingSettings | null
+  projectIndex?: ProjectGroupingIndex
   renderableRepoIds?: ReadonlySet<string>
 }): CmdJProjectSearchResult[] {
-  const projectGrouping: ProjectGroupingModel = { projects, projectHostSetups }
+  const index = projectIndex ?? buildProjectGroupingIndex({ projects, projectHostSetups, settings })
   const repoMap = new Map(repos.map((repo) => [repo.id, repo]))
+  const repoByHost = getProjectSectionRepoLookup(repos)
   const candidates: CmdJProjectSearchResult[] = []
 
   getDistinctProjectGroups(projectGroups).forEach((group, order) => {
@@ -95,10 +107,20 @@ function buildCmdJProjectSearchCandidates({
 
   const seenRowKeys = new Set<string>()
   repos.forEach((repo, repoIndex) => {
-    if (renderableRepoIds && !renderableRepoIds.has(repo.id)) {
+    if (
+      renderableRepoIds &&
+      !renderableRepoIds.has(repo.id) &&
+      !renderableRepoIds.has(getRepoHostIdentity(repo))
+    ) {
       return
     }
-    const target = getProjectHeaderRevealTarget(repo.id, repoMap, projectGrouping)
+    const target = getProjectGroupingForRepo(
+      repo.id,
+      repoMap,
+      index,
+      getRepoExecutionHostId(repo),
+      repoByHost
+    )
     if (!target.repo || seenRowKeys.has(target.key)) {
       return
     }
@@ -127,12 +149,16 @@ export function hasCmdJProjectSearchCandidates({
   repos,
   projects,
   projectHostSetups,
+  settings,
+  projectIndex,
   renderableRepoIds
 }: {
   projectGroups: readonly ProjectGroup[]
   repos: readonly Repo[]
   projects: readonly Project[]
   projectHostSetups: readonly ProjectHostSetup[]
+  settings?: ProjectGroupingSettings | null
+  projectIndex?: ProjectGroupingIndex
   renderableRepoIds?: ReadonlySet<string>
 }): boolean {
   return (
@@ -141,6 +167,8 @@ export function hasCmdJProjectSearchCandidates({
       repos,
       projects,
       projectHostSetups,
+      settings,
+      projectIndex,
       renderableRepoIds
     }).length > 0
   )
@@ -188,6 +216,8 @@ export function searchCmdJProjectResults({
   repos,
   projects,
   projectHostSetups,
+  settings,
+  projectIndex,
   renderableRepoIds
 }: {
   query: string
@@ -195,6 +225,8 @@ export function searchCmdJProjectResults({
   repos: readonly Repo[]
   projects: readonly Project[]
   projectHostSetups: readonly ProjectHostSetup[]
+  settings?: ProjectGroupingSettings | null
+  projectIndex?: ProjectGroupingIndex
   renderableRepoIds?: ReadonlySet<string>
 }): CmdJRankedProjectSearchResult[] {
   // Bound pasted queries before scanning potentially private project, repo or group names.
@@ -212,6 +244,8 @@ export function searchCmdJProjectResults({
     repos,
     projects,
     projectHostSetups,
+    settings,
+    projectIndex,
     renderableRepoIds
   })
     .map((candidate) => projectRankingForCandidate(normalizedQuery, queryTokens, candidate))

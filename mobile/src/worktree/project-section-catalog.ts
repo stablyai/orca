@@ -1,3 +1,4 @@
+import { withLegacyProjectGroupKeys } from '../../../src/shared/project-section-legacy-grouping'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../src/shared/execution-host'
 import { getLogicalRepoOrderRankById } from '../../../src/shared/project-section-order'
 import type { ProjectOrderBy } from '../../../src/shared/ui-chrome-types'
@@ -13,10 +14,9 @@ export function buildProjectSectionCatalog(
   visibleHostIds: readonly ExecutionHostId[] | null,
   projectOrderBy: ProjectOrderBy | null
 ): ProjectSectionCatalog {
+  const visible = visibleHostIds === null ? null : new Set(visibleHostIds)
   const shown = (repos: readonly SectionRepo[]) =>
-    visibleHostIds
-      ? repos.filter((repo) => visibleHostIds.includes(getRepoExecutionHostId(repo)))
-      : repos
+    visible ? repos.filter((repo) => visible.has(getRepoExecutionHostId(repo))) : repos
   if (!served) {
     return {
       ...NO_PROJECT_SECTION_CATALOG,
@@ -33,7 +33,10 @@ export function buildProjectSectionCatalog(
   })
   return {
     repos: shown(repos),
-    grouping: { projects: served.projects, projectHostSetups: served.setups },
+    grouping: {
+      projects: served.projects,
+      projectHostSetups: withLegacyProjectGroupKeys(served.setups)
+    },
     // Why: served repos come in the sidebar's header order, cross-host manual order included.
     repoOrder: getLogicalRepoOrderRankById(served.repos.map((repo) => repo.id)),
     projectOrderBy: projectOrderBy ?? served.projectOrderBy

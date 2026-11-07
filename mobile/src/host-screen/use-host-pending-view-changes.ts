@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import type { RpcClient } from '../transport/rpc-client'
 import type { MobileViewPatch, WorkspaceViewSettings } from '../worktree/workspace-view-settings'
@@ -20,7 +20,11 @@ export type PendingViewStatus = {
 }
 
 export type PendingViewControls = {
-  sendView: (patch: MobileViewPatch, payload: WorkspaceViewSettings) => Promise<PendingViewOutcome>
+  sendView: (
+    patch: MobileViewPatch,
+    payload: WorkspaceViewSettings,
+    filterRepoIdsMode?: 'exact'
+  ) => Promise<PendingViewOutcome>
   /** `unavailable`: the host has no ui.setCollapsed. */
   sendCollapse: (key: string, collapsed: boolean) => Promise<PendingViewOutcome>
   lastOpId: () => number
@@ -36,7 +40,23 @@ type OwnedChanges = { client: RpcClient | null; pending: readonly PendingViewCha
 
 const NO_CHANGES: readonly PendingViewChange[] = []
 
-function useHostPendingViewChanges(client: RpcClient | null): HostPendingViewChanges {
+export function useHostPendingViewChanges(
+  client: RpcClient | null,
+  support?: 'unknown' | 'legacy' | 'exact',
+  supportGeneration?: number
+): HostPendingViewChanges {
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
+  const live = useRef({ client, support, supportGeneration })
+  useLayoutEffect(() => {
+    live.current = { client, support, supportGeneration }
+  }, [client, support, supportGeneration])
+  const inFlight = useRef(new Set<number>())
   const [owned, setOwned] = useState<OwnedChanges>({ client, pending: NO_CHANGES })
   const ownedRef = useRef(owned)
   const seqRef = useRef(0)
@@ -48,11 +68,17 @@ function useHostPendingViewChanges(client: RpcClient | null): HostPendingViewCha
   const [stale, setStale] = useState(false)
 
   const current = useCallback(
-    () => (ownedRef.current.client === client ? ownedRef.current.pending : NO_CHANGES),
+    () =>
+      mounted.current && live.current.client === client && ownedRef.current.client === client
+        ? ownedRef.current.pending
+        : NO_CHANGES,
     [client]
   )
   const write = useCallback(
     (next: readonly PendingViewChange[]) => {
+      if (!mounted.current) {
+        return
+      }
       ownedRef.current = { client, pending: next }
       setOwned(ownedRef.current)
     },
@@ -61,13 +87,45 @@ function useHostPendingViewChanges(client: RpcClient | null): HostPendingViewCha
 
   const send = useCallback(
     async (change: PendingViewChange): Promise<PendingViewOutcome> => {
-      if (!client) {
+      if (
+        !mounted.current ||
+        !client ||
+        live.current.client !== client ||
+        inFlight.current.has(change.opId)
+      ) {
         return 'waiting'
+      }
+      const ownedChange = current().find((candidate) => candidate.opId === change.opId)
+      if (!ownedChange) {
+        return 'waiting'
+      }
+      change = ownedChange
+      if (
+        change.kind === 'view' &&
+        change.filterRepoIdsMode === 'exact' &&
+        (live.current.support !== 'exact' ||
+          live.current.supportGeneration !== client.getGeneration?.())
+      ) {
+        return 'waiting'
+      }
+      const generation = client.getGeneration?.()
+      inFlight.current.add(change.opId)
+      if (change.kind === 'view' && !change.dispatched) {
+        change = { ...change, dispatched: true }
+        const dispatched = change
+        write(
+          current().map((candidate) =>
+            candidate.opId === dispatched.opId ? dispatched : candidate
+          )
+        )
       }
       let outcome: PendingViewOutcome
       try {
         if (change.kind === 'view') {
-          const reply = await hostViewSettingsWrite.request(client, change.payload)
+          const reply = await hostViewSettingsWrite.request(client, {
+            ...change.payload,
+            ...(change.filterRepoIdsMode ? { filterRepoIdsMode: change.filterRepoIdsMode } : {})
+          })
           outcome = reply.ok ? 'settled' : 'refused'
         } else {
           const reply = await setCollapsedWrite.request(client, {
@@ -80,6 +138,29 @@ function useHostPendingViewChanges(client: RpcClient | null): HostPendingViewCha
           outcome = unavailable ? 'unavailable' : reply.ok ? 'settled' : 'refused'
         }
       } catch {
+        return 'waiting'
+      } finally {
+        inFlight.current.delete(change.opId)
+        if (
+          mounted.current &&
+          live.current.client === client &&
+          generation !== client.getGeneration?.() &&
+          live.current.support === 'exact'
+        ) {
+          const retired = change
+          queueMicrotask(() => {
+            const waiting = current().find((candidate) => candidate.opId === retired.opId)
+            if (waiting) {
+              void send(waiting)
+            }
+          })
+        }
+      }
+      if (
+        !mounted.current ||
+        live.current.client !== client ||
+        client.getGeneration?.() !== generation
+      ) {
         return 'waiting'
       }
       // A change a later one superseded is no longer the user's to hear about.
@@ -94,10 +175,20 @@ function useHostPendingViewChanges(client: RpcClient | null): HostPendingViewCha
 
   const add = useCallback(
     (change: PendingViewChange) => {
-      write(addPendingViewChange(current(), change))
+      if (live.current.client !== client) {
+        return Promise.resolve('waiting' as const)
+      }
+      const previous = new Map(current().map((candidate) => [candidate.opId, candidate]))
+      const next = addPendingViewChange(current(), change)
+      write(next)
+      for (const survivor of next) {
+        if (survivor.opId !== change.opId && survivor !== previous.get(survivor.opId)) {
+          void send(survivor)
+        }
+      }
       return send(change)
     },
-    [current, write, send]
+    [client, current, write, send]
   )
   const nextOp = (): { opId: number; sentAt: number } => {
     seqRef.current += 1
@@ -105,8 +196,8 @@ function useHostPendingViewChanges(client: RpcClient | null): HostPendingViewCha
   }
 
   const sendView = useCallback(
-    (patch: MobileViewPatch, payload: WorkspaceViewSettings) =>
-      add({ ...nextOp(), kind: 'view', patch, payload }),
+    (patch: MobileViewPatch, payload: WorkspaceViewSettings, filterRepoIdsMode?: 'exact') =>
+      add({ ...nextOp(), filterRepoIdsMode, kind: 'view', patch, payload }),
     [add]
   )
   const sendCollapse = useCallback(
@@ -128,6 +219,16 @@ function useHostPendingViewChanges(client: RpcClient | null): HostPendingViewCha
     },
     [current, write, send]
   )
+
+  useEffect(() => {
+    if (support === 'exact') {
+      current().forEach((change) => {
+        if (change.kind === 'view' && change.filterRepoIdsMode === 'exact') {
+          void send(change)
+        }
+      })
+    }
+  }, [client, support, supportGeneration, current, send])
 
   useEffect(() => {
     const oldest = pending[0]

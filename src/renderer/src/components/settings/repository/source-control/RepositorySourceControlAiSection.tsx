@@ -1,5 +1,5 @@
 import { useShallow } from 'zustand/react/shallow'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type React from 'react'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { normalizeSourceControlAiSettings } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings'
@@ -23,12 +23,15 @@ type RepositorySourceControlAiSectionProps = {
   writeSourceControlAiSettings?: (patch: SourceControlAiSettingsPatch) => Promise<void>
 }
 
-/** Persist simple controls immediately; draft CLI args/templates until per-action Save, matching global recipes. */
-export function RepositorySourceControlAiSection({
+export function useRepositorySourceControlAiSession({
   repo,
-  updateRepo,
-  writeSourceControlAiSettings
-}: RepositorySourceControlAiSectionProps): React.JSX.Element {
+  repoId,
+  updateRepo
+}: {
+  repo: Repo | undefined
+  repoId: string
+  updateRepo: RepositorySourceControlAiSectionProps['updateRepo']
+}) {
   const settings = useAppStore(
     useShallow(
       (state) =>
@@ -39,17 +42,54 @@ export function RepositorySourceControlAiSection({
         }
     )
   )
-  const ownership = getSettingOwnershipSummary('repositorySourceControlAi')
   const source = useMemo(
     () => normalizeSourceControlAiSettings(settings?.sourceControlAi, settings?.commitMessageAi),
     [settings?.sourceControlAi, settings?.commitMessageAi]
   )
+  const hasCurrentRepo = repo !== undefined
+  const publishedRepoAi = repo?.sourceControlAi
   const persistedRepoAi = useMemo(
-    () => normalizeRepoAiDraft(repo.sourceControlAi),
-    [repo.sourceControlAi]
+    () => (hasCurrentRepo ? normalizeRepoAiDraft(publishedRepoAi) : null),
+    [publishedRepoAi, hasCurrentRepo]
   )
+  const controller = useRepositorySourceControlAiGlobalUx({
+    repoId,
+    persistedRepoAi,
+    settings,
+    source,
+    updateRepo
+  })
+
+  const [forceRepoMode, setForceRepoMode] = useState(false)
+  return { ...controller, source, settings, forceRepoMode, setForceRepoMode }
+}
+
+type AiSession = ReturnType<typeof useRepositorySourceControlAiSession>
+export function RepositorySourceControlAiSection(
+  props: RepositorySourceControlAiSectionProps & { controller?: AiSession }
+): React.JSX.Element {
+  return props.controller ? (
+    <RepositorySourceControlAiView {...props} controller={props.controller} />
+  ) : (
+    <LocalRepositorySourceControlAi {...props} />
+  )
+}
+function LocalRepositorySourceControlAi(
+  props: RepositorySourceControlAiSectionProps
+): React.JSX.Element {
+  const controller = useRepositorySourceControlAiSession({ ...props, repoId: props.repo.id })
+  return <RepositorySourceControlAiView {...props} controller={controller} />
+}
+function RepositorySourceControlAiView({
+  repo,
+  controller,
+  writeSourceControlAiSettings
+}: RepositorySourceControlAiSectionProps & { controller: AiSession }): React.JSX.Element {
+  const ownership = getSettingOwnershipSummary('repositorySourceControlAi')
   const {
     displayRepoAi,
+    source,
+    settings,
     actionTextDrafts,
     saveError,
     actionDirtyById,
@@ -67,14 +107,7 @@ export function RepositorySourceControlAiSection({
     saveActionRecipeText,
     discardActionRecipeText,
     commitCustomCommand
-  } = useRepositorySourceControlAiGlobalUx({
-    repoId: repo.id,
-    persistedRepoAi,
-    settings,
-    source,
-    updateRepo
-  })
-
+  } = controller
   return (
     <section
       id={getRepositorySourceControlAiSectionId(repo.id)}
@@ -98,12 +131,14 @@ export function RepositorySourceControlAiSection({
         onChange={updateEnablement}
       />
       <RepositorySourceControlAiCustomCommand
+        modeIntent={controller}
         value={displayRepoAi.customAgentCommand}
         source={source}
         onChange={updateCustomCommand}
         onCommit={commitCustomCommand}
       />
       <RepositorySourceControlAiActionRows
+        repo={repo}
         repoId={repo.id}
         repoAi={displayRepoAi}
         actionTextDrafts={actionTextDrafts}

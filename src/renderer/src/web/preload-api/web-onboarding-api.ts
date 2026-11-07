@@ -54,6 +54,9 @@ export function createWebOnboardingApi(): Partial<PreloadApi> {
         writeJson(ONBOARDING_STORAGE_KEY, next)
         return next
       },
+      // Why: the browser client has no local profile from before the upgrade, so it is never in the audience.
+      getProjectGroupingUpgradeTipAudience: () =>
+        Promise.resolve({ version: 1, membership: 'excluded' }),
       // Why: the browser client has no profile from before Chat UI left Experimental.
       getChatUiLaunchTipVariant: () => Promise.resolve('none')
     }

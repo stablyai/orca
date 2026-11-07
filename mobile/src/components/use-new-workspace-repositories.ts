@@ -1,3 +1,6 @@
+import { useOwnerProjectSections } from '../worktree/use-owner-project-sections'
+import { buildNewWorkspaceGrouping } from './new-workspace-project-targets'
+import type { ProjectGroupingIndex } from '../../../src/shared/project-section-grouping'
 import { useEffect, useMemo, useState } from 'react'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { RpcClient } from '../transport/rpc-client'
@@ -26,6 +29,7 @@ export function useNewWorkspaceRepositories(args: {
   selectedRepo: MobileWorkspaceRepo | null
   setSelectedRepo: (repo: MobileWorkspaceRepo | null) => void
   loading: boolean
+  grouping: ProjectGroupingIndex | null
   /** Set when the project list failed to load and nothing is cached to show. */
   loadError: string | null
   retryLoad: () => void
@@ -35,6 +39,7 @@ export function useNewWorkspaceRepositories(args: {
     hostId ? (getCachedRepos(hostId) as MobileWorkspaceRepo[] | null) : null
   )
   const [desktopRepos, setDesktopRepos] = useState<MobileWorkspaceRepo[]>(initialRepos ?? [])
+  const { answer: ownerCatalog } = useOwnerProjectSections(client, visible)
   const serverRepos = useServerRepos<MobileWorkspaceRepo>(serverClients, visible)
   const [pickedRepo, setSelectedRepo] = useState<MobileWorkspaceRepo | null>(null)
   const [loading, setLoading] = useState(initialRepos == null)
@@ -57,6 +62,13 @@ export function useNewWorkspaceRepositories(args: {
     [pickedRepo, repos]
   )
 
+  const grouping = useMemo(
+    () =>
+      ownerCatalog.kind === 'answered'
+        ? buildNewWorkspaceGrouping(allRepos, ownerCatalog.value)
+        : null,
+    [allRepos, client, ownerCatalog]
+  )
   useEffect(() => {
     if (!visible || !lastVisitedRepo.loaded || selectedRepo || repos.length === 0) {
       return
@@ -112,6 +124,7 @@ export function useNewWorkspaceRepositories(args: {
     allRepos,
     selectedRepo,
     setSelectedRepo,
+    grouping,
     loading: loading && repos.length === 0,
     // Cached rows stay usable, so a failed refresh only matters when there is nothing to pick.
     loadError: repos.length === 0 ? loadError : null,

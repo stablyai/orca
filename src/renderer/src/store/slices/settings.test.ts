@@ -1,6 +1,8 @@
+import { registerSettingsGroupingPreferenceTests } from './settings-grouping-preferences.spec'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import type { AppState } from '../types'
+import { getDefaultSettings } from '../../../../shared/constants'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { toast } from 'sonner'
@@ -177,6 +179,89 @@ beforeEach(() => {
       },
       worktrees: { listDetected: worktreesListDetected }
     }
+  })
+})
+
+describe('createSettingsSlice checked persistence', () => {
+  registerSettingsGroupingPreferenceTests(settingsSet, settingsGet)
+
+  it('stores the authoritative settings after a successful checked update', async () => {
+    const authoritativeSettings: NonNullable<AppState['settings']> = {
+      ...getDefaultSettings('/tmp'),
+      pluginSystemEnabled: true
+    }
+    settingsSet.mockResolvedValueOnce(authoritativeSettings)
+    const store = createTestStore()
+    store.setState({
+      settings: {
+        ...getDefaultSettings('/tmp'),
+        pluginSystemEnabled: false
+      }
+    })
+
+    await expect(
+      store.getState().updateSettingsOrThrow({ pluginSystemEnabled: true })
+    ).resolves.toBeUndefined()
+
+    expect(settingsSet).toHaveBeenCalledWith({ pluginSystemEnabled: true })
+    expect(store.getState().settings).toBe(authoritativeSettings)
+  })
+
+  it('rejects a failed checked update without changing local settings', async () => {
+    const persistenceError = new Error('settings IPC failed')
+    const currentSettings: NonNullable<AppState['settings']> = {
+      ...getDefaultSettings('/tmp'),
+      pluginSystemEnabled: false
+    }
+    settingsSet.mockRejectedValueOnce(persistenceError)
+    const store = createTestStore()
+    store.setState({ settings: currentSettings })
+
+    await expect(
+      store.getState().updateSettingsOrThrow({ pluginSystemEnabled: true })
+    ).rejects.toBe(persistenceError)
+
+    expect(store.getState().settings).toBe(currentSettings)
+  })
+
+  it('keeps the existing update action best-effort and logs persistence failures', async () => {
+    const persistenceError = new Error('settings IPC failed')
+    const currentSettings: NonNullable<AppState['settings']> = {
+      ...getDefaultSettings('/tmp'),
+      pluginSystemEnabled: false
+    }
+    settingsSet.mockRejectedValueOnce(persistenceError)
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const store = createTestStore()
+    store.setState({ settings: currentSettings })
+
+    try {
+      await expect(
+        store.getState().updateSettings({ pluginSystemEnabled: true })
+      ).resolves.toBeUndefined()
+
+      expect(consoleError).toHaveBeenCalledWith('Failed to update settings:', persistenceError)
+      expect(store.getState().settings).toBe(currentSettings)
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
+  it('normalizes malformed mobile pairing addresses before renderer IPC', async () => {
+    const store = createTestStore()
+    store.setState({
+      settings: getDefaultSettings('/tmp')
+    })
+
+    await store.getState().updateSettingsOrThrow({
+      mobilePairingCustomAddress: 'host:99999',
+      mobilePairingCustomAddresses: [' first.example:6768 ', 'host:99999', 'first.example:6768']
+    })
+
+    expect(settingsSet).toHaveBeenCalledWith({
+      mobilePairingCustomAddress: null,
+      mobilePairingCustomAddresses: ['first.example:6768']
+    })
   })
 })
 

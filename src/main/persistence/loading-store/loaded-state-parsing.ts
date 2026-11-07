@@ -286,6 +286,10 @@ export class LoadedStateParsingOperations {
         parsed,
         audience
       ),
+      projectGroupingUpgradeTipAudience: this.cohorts.captureProjectGroupingUpgradeTipAudience(
+        parsed,
+        result.repos
+      ),
       chatUiLaunchTipAudience: audience
     }
 

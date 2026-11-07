@@ -1,5 +1,6 @@
 import type { ProjectHostSetup } from '../../../../../../shared/project-types'
 import type { Repo } from '../../../../../../shared/repo-types'
+import type { GroupHeaderRow } from '../../../../../../shared/sidebar-list/row-types'
 import {
   getRepoHostIdentity,
   getRepoRegistrationHostIds
@@ -30,9 +31,20 @@ export function getHeaderCreateWorkspaceTarget(
     : {}
 }
 
-/** A project header's Create: the composer seeded with its repo, pinned to its host when its rows all sit there. */
-export function openHeaderCreateComposer(repo: Repo, { pinHost }: { pinHost: boolean }): void {
+/** A project header's Create: an unpinned project opens its group chooser; otherwise the composer
+ * is seeded with its repo, pinned to that repo's host when `pinHost`. */
+export function openHeaderCreateComposer(
+  repo: Repo,
+  { pinHost, projectScope }: { pinHost: boolean; projectScope?: GroupHeaderRow['projectScope'] }
+): void {
   const { repos, projectHostSetups, openModal } = useAppStore.getState()
+  if (!pinHost && projectScope) {
+    openModal('new-workspace-composer', {
+      initialProjectScope: projectScope,
+      telemetrySource: 'sidebar'
+    })
+    return
+  }
   openModal('new-workspace-composer', {
     initialRepoId: repo.id,
     ...(pinHost ? getHeaderCreateWorkspaceTarget(repo, repos, projectHostSetups) : {}),

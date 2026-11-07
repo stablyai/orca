@@ -74,7 +74,8 @@ function showNativeActionToast(): void {
 }
 
 function showBehindBaseRefToast(): void {
-  let enabled = false
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This disposable toast reads only refreshLocalBaseRefOnWorktreeCreate; patches stay local.
+  let settings = { refreshLocalBaseRefOnWorktreeCreate: false } as NonNullable<AppState['settings']>
   showLocalBaseRefUpdateSuggestionToast(
     {
       baseRef: 'origin/canary',
@@ -82,13 +83,11 @@ function showBehindBaseRefToast(): void {
       behind: 2
     },
     {
-      updateSettings: async (updates) => {
-        enabled = updates.refreshLocalBaseRefOnWorktreeCreate === true
+      updateSettings: async (update) => {
+        const updates = typeof update === 'function' ? update(settings) : update
+        settings = { ...settings, ...updates }
       },
-      getSettings: () =>
-        ({
-          refreshLocalBaseRefOnWorktreeCreate: enabled
-        }) as AppState['settings'],
+      getSettings: () => settings,
       openSettingsPage: () => {},
       openSettingsTarget: () => {}
     }

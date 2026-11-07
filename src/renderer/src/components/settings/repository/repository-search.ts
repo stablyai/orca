@@ -6,11 +6,25 @@ import {
 } from '../../../../../shared/execution-host'
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { translate } from '@/i18n/i18n'
-import { translateSearchKeyword } from '../search/settings-search-keywords'
+import {
+  translateSearchKeyword,
+  projectGroupingSearchKeywords
+} from '../search/settings-search-keywords'
 import { getRepositoryGitAuthorSearchEntries } from './repository-git-author-search-entries'
 import { getRepositoryGitHooksSearchEntries } from './execution/repository-git-hooks-search-entries'
 import { getRepositoryGitWorktreeSearchEntries } from './execution/repository-git-worktree-search-entries'
 import { getRepositoryFormatterSearchEntry } from './RepositoryFormatterSection'
+
+export function projectGroupingSearchEntry(displayName: string): SettingsSearchEntry {
+  return {
+    title: translate('settings.projectGrouping.label', 'Group checkouts'),
+    description: translate(
+      'settings.projectGrouping.overrideDescription',
+      'Overrides the default in General for every checkout of this repository.'
+    ),
+    keywords: [displayName, ...projectGroupingSearchKeywords()]
+  }
+}
 
 type RepositoryPaneSearchOptions = {
   isLocalWindowsProject?: boolean
@@ -27,6 +41,7 @@ export function getRepositoryPaneSearchEntries(
     (Boolean(options.windowsRuntimeSupported) &&
       getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID)
   return [
+    ...(!isFolder ? [projectGroupingSearchEntry(repo.displayName)] : []),
     getRepositoryFormatterSearchEntry(),
     {
       title: translate('components.RepositoryJiraProjectSection.title', 'Default Jira project'),

@@ -458,15 +458,17 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
   })
 
   it('maps a runtime-owned active repo to its eligible project sibling', async () => {
-    const unrelatedRepo = { ...makeRepo(), id: 'unrelated-repo' }
+    const unrelatedRepo = { ...makeRepo(), id: 'unrelated-repo', path: '/repos/unrelated' }
     const localSibling = {
       ...makeRepo(),
       id: 'local-sibling',
+      path: '/repos/local-sibling',
       upstream: { owner: 'stablyai', repo: 'orca' }
     }
     const runtimeOwnedRepo = {
       ...makeRepo(),
       id: 'runtime-owned',
+      path: '/repos/runtime-owned',
       connectionId: 'runtime-ssh-workspace-1',
       upstream: { owner: 'stablyai', repo: 'orca' }
     }

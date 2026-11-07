@@ -14,6 +14,7 @@ type SharedProbe = {
   epoch: string
   listeners: Set<ProbeListener>
   retryNow: () => void
+  wake: () => void
   stop: () => void
 }
 type EpochStatus = { epoch: string; status: HostStatusReply | null }
@@ -61,10 +62,11 @@ export function startRuntimeStatusProbe(
   client: ProbeClient,
   onStatus: (status: HostStatusReply | null) => void,
   onAttemptFailed?: () => void
-): () => void {
+): (() => void) & { wake: () => void } {
   const epoch = connectionEpoch(client)
   if (epoch === null) {
-    return runProbe(client, { onStatus, onAttemptFailed }).stop
+    const probe = runProbe(client, { onStatus, onAttemptFailed })
+    return Object.assign(probe.stop, { wake: probe.wake })
   }
   // Join a read already in flight; a new start after one landed reads again, since capabilities like
   // screencast follow the desktop's window and settings, not the connection.
@@ -76,15 +78,24 @@ export function startRuntimeStatusProbe(
   }
   const listener: ProbeListener = { onStatus, onAttemptFailed }
   joined.listeners.add(listener)
-  return () => {
-    if (!joined.listeners.delete(listener) || joined.listeners.size > 0) {
-      return
+  return Object.assign(
+    () => {
+      if (!joined.listeners.delete(listener) || joined.listeners.size > 0) {
+        return
+      }
+      joined.stop()
+      if (sharedProbes.get(client) === joined) {
+        sharedProbes.delete(client)
+      }
+    },
+    {
+      wake: () => {
+        if (joined.listeners.has(listener)) {
+          joined.wake()
+        }
+      }
     }
-    joined.stop()
-    if (sharedProbes.get(client) === joined) {
-      sharedProbes.delete(client)
-    }
-  }
+  )
 }
 
 function startSharedProbe(client: ProbeClient, epoch: string): SharedProbe {
@@ -110,16 +121,27 @@ function startSharedProbe(client: ProbeClient, epoch: string): SharedProbe {
 function runProbe(
   client: ProbeClient,
   listener: ProbeListener
-): { retryNow: () => void; stop: () => void } {
-  const epoch = runtimeStatusProbeEpoch(client)
+): { retryNow: () => void; wake: () => void; stop: () => void } {
   let cancelled = false
   let retryTimer: ReturnType<typeof setTimeout> | null = null
   let failureRetries = 0
+  let inFlight = false
+  let dirty = false
 
   function attempt(): void {
     retryTimer = null
+    if (cancelled) {
+      return
+    }
+    if (inFlight) {
+      dirty = true
+      return
+    }
+    inFlight = true
+    const epoch = runtimeStatusProbeEpoch(client)
     void hostStatusProbe.request(client).then(
       (reply) => {
+        inFlight = false
         if (cancelled) {
           return
         }
@@ -134,8 +156,13 @@ function runProbe(
           probed.set(client, entry)
         }
         listener.onStatus(landed.status)
+        if (dirty) {
+          dirty = false
+          attempt()
+        }
       },
       (error: unknown) => {
+        inFlight = false
         if (cancelled) {
           return
         }
@@ -149,6 +176,7 @@ function runProbe(
     const delay = cutover
       ? CUTOVER_RETRY_DELAY_MS
       : Math.min(FAILURE_RETRY_BASE_DELAY_MS * 2 ** failureRetries++, FAILURE_RETRY_MAX_DELAY_MS)
+    dirty = false
     retryTimer = setTimeout(attempt, delay)
     listener.onAttemptFailed?.()
   }
@@ -160,6 +188,13 @@ function runProbe(
         clearTimeout(retryTimer)
         attempt()
       }
+    },
+    wake: () => {
+      if (retryTimer) {
+        clearTimeout(retryTimer)
+        retryTimer = null
+      }
+      attempt()
     },
     stop: () => {
       cancelled = true

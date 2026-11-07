@@ -79,6 +79,8 @@ async function mountScreen(client: FakeSession) {
       connState,
       embedded: true,
       fetchRepoMetadata,
+      fetchLifecycleRepoMetadata: fetchRepoMetadata,
+      pollProjectSections: fetchRepoMetadata,
       hostCapabilities: NO_CAPABILITIES,
       hostId: 'host-1',
       sidebarFeed: SIDEBAR_FEED,

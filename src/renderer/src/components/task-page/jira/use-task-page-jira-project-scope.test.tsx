@@ -205,7 +205,7 @@ describe('repository-scoped Jira Tasks', () => {
     expect(result.current.jiraProjectFilter).toBeNull()
   })
 
-  it('keeps duplicate execution owners ambiguous through the actual Tasks list-state pipeline', () => {
+  it('uses the retained local default for a bare preselection through the actual Tasks list-state pipeline', () => {
     const localGitRepo: Repo = { ...repo, kind: 'git' }
     const sshGitRepo: Repo = { ...sshRepo, kind: 'git' }
     useAppStore.setState({
@@ -217,9 +217,9 @@ describe('repository-scoped Jira Tasks', () => {
       jiraStatusContextKey: getProviderRuntimeContextKey(null)
     })
     const { result } = renderHook(useComposedJiraListState)
-    expect(result.current.selectedRepos).toEqual([localGitRepo, sshGitRepo])
+    expect(result.current.selectedRepos).toEqual([localGitRepo])
     expect(result.current.accountBackedTaskSourceHostId).toBe('local')
-    expect(result.current.jiraProjectFilter).toBeNull()
+    expect(result.current.jiraProjectFilter).toEqual(project)
   })
 
   it('keeps linked mode, saved filters, and the project override in the composed list state', async () => {

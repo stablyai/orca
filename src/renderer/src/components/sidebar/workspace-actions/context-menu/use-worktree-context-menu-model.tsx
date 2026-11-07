@@ -1,3 +1,4 @@
+import type { WorktreeContextMenuProps } from '../../worktree-context-menu-props'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
@@ -26,6 +27,11 @@ import {
   selectMenuScopedMap,
   shouldRemoveProjectFromContextMenu
 } from './worktree-context-menu-policy'
+import {
+  useProjectGroupOperation,
+  useProjectGroupOperationOwner,
+  type ProjectGroupAttempt
+} from '../../use-project-group-operation'
 import { useWorktreeContextMenuCommands } from './use-worktree-context-menu-commands'
 import {
   useWorktreeParentPickerTransition,
@@ -35,16 +41,7 @@ import { useWorktreeContextMenuSecondaryActions } from './use-worktree-context-m
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import { getWorktreeContextMenuBatchLabels } from './workspace-batch-action-labels'
 
-export type WorktreeContextMenuProps = {
-  worktree: Worktree
-  children: React.ReactNode
-  contentClassName?: string
-  selectedWorktrees?: readonly Worktree[]
-  onContextMenuSelect?: (event: React.MouseEvent<HTMLElement>) => readonly Worktree[]
-  onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: string) => void
-  onOpenChange?: (open: boolean) => void
-  onLifecycleComplete?: () => void
-}
+export type { WorktreeContextMenuProps } from '../../worktree-context-menu-props'
 
 export function useWorktreeContextMenuModel({
   worktree,
@@ -62,9 +59,6 @@ export function useWorktreeContextMenuModel({
   const setWorkspaceUnreadByUser = useAppStore((s) => s.setWorkspaceUnreadByUser)
   const setWorktreesPinnedAndReveal = useAppStore((s) => s.setWorktreesPinnedAndReveal)
   const openModal = useAppStore((s) => s.openModal)
-  const projectGroups = useAppStore((s) => s.projectGroups)
-  const createProjectGroup = useAppStore((s) => s.createProjectGroup)
-  const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
   const repo = useRepoById(worktree.repoId)
   const deleteState = useAppStore((s) =>
     getDeleteStateForWorktreeHost(worktree, s.deleteStateByWorktreeId)
@@ -76,7 +70,19 @@ export function useWorktreeContextMenuModel({
   const [contextWorktrees, setContextWorktrees] = useState<readonly Worktree[]>(
     effectiveSelectedWorktrees
   )
-  const [createGroupDialogOpen, setCreateGroupDialogOpen] = useState(false)
+  const operationOwner = useProjectGroupOperationOwner()
+  const entrance = useMemo(() => ({ kind: 'worktree' as const, worktree }), [worktree])
+  const groupOperation = useProjectGroupOperation(menuOpen, entrance)
+  const [createGroupAttempt, setCreateGroupAttempt] = useState<ProjectGroupAttempt | null>(null)
+  const createGroupDialogOpen = createGroupAttempt !== null
+  useEffect(
+    () => () => {
+      if (createGroupAttempt) {
+        operationOwner.cancel(createGroupAttempt)
+      }
+    },
+    [createGroupAttempt, operationOwner]
+  )
   const createGroupDialogActiveRef = useRef(false)
   const [parentPicker, setParentPicker] = useState<PendingParentPicker | null>(null)
   const [parentPickerOpen, setParentPickerOpen] = useState(false)
@@ -271,15 +277,16 @@ export function useWorktreeContextMenuModel({
     activeContextWorktrees,
     batchDeleteWorktrees,
     createGroupDialogActiveRef,
-    createProjectGroup,
+    operationOwner,
+    groupOperation,
+    createGroupAttempt,
     folderWorkspaceId,
     isMultiContext,
-    moveProjectToGroup,
     onAssignWorkspaceStatus,
     openModal,
     repo,
     scopeRef,
-    setCreateGroupDialogOpen,
+    setCreateGroupAttempt,
     setMenuOpenState,
     setWorkspaceUnreadByUser,
     setWorktreesPinnedAndReveal,
@@ -357,7 +364,8 @@ export function useWorktreeContextMenuModel({
     onContextMenuSelect,
     parentPicker,
     parentPickerOpen,
-    projectGroups,
+    groupOperation,
+    createGroupAttempt,
     ptyIdsByTabId,
     removesProject,
     repo,

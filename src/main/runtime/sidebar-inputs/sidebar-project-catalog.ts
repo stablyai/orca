@@ -15,7 +15,7 @@ export type SidebarProjectCatalogStore = Pick<
   RuntimeStore,
   'getRepos' | 'getProjectGroups' | 'getFolderWorkspaces' | 'getSshTargets' | 'getProjectHostSetups'
 > &
-  Partial<Pick<RuntimeStore, 'getProjects'>> & {
+  Partial<Pick<RuntimeStore, 'getProjects' | 'getSettings'>> & {
     getUI?: () => Pick<PersistedUIState, 'manualRepoOrder' | 'projectOrderBy'>
   }
 
@@ -32,6 +32,7 @@ export function readSidebarProjectCatalog(
       setups: runtimeVisibleProjectHostSetups(store)
     },
     servers,
-    store.getUI?.()
+    store.getUI?.(),
+    store.getSettings?.()
   )
 }

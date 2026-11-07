@@ -7,6 +7,10 @@ import type {
 } from '../../shared/rich-markdown-context-menu'
 
 export type UiWindowApi = {
+  onExportPdfRequested: (callback: () => void) => () => void
+  onAppMenuPaste: (callback: () => void) => () => void
+  onAppMenuSelectionAction: (callback: (action: 'copy' | 'select-all') => void) => () => void
+  onEditableContextPaste: (callback: (data: { plainTextOnly: boolean }) => void) => () => void
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
   readSelectionClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
   saveClipboardImageAsTempFile: (args?: {

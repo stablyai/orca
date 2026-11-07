@@ -1,3 +1,4 @@
+import { carryFetchedProjectGroupingOverrides } from './project-grouping-preferences'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -46,6 +47,7 @@ export function createRuntimeRepoCatalogActions(
         if (!isHostCatalogFenceCurrent(get, fence)) {
           return []
         }
+        const previousProjects = get().projects
         let finalizedHostRepos: Repo[] = []
         set((s) => {
           if (!isHostCatalogFenceCurrent(get, fence)) {
@@ -55,7 +57,7 @@ export function createRuntimeRepoCatalogActions(
           if (isRemovedRuntimeHostId(catalog.hostId, s.removedRuntimeEnvironmentIds)) {
             return s
           }
-          const result = mergeFetchedRepoCatalog(catalog, s.repos)
+          const result = mergeFetchedRepoCatalog(catalog, s.repos, s.settings, s)
           const reconciliation = reconcileSupersededSshRepos(result.repos, s)
           const finalizedRepos = applyManualRepoOrder(reconciliation.repos, s.manualRepoOrder)
           const validRepoIds = new Set(finalizedRepos.map((repo) => repo.id))
@@ -133,6 +135,7 @@ export function createRuntimeRepoCatalogActions(
             )
           }
         })
+        carryFetchedProjectGroupingOverrides(get, previousProjects)
         noteLiveRepoCatalogApplied(get, targetHostId)
         scheduleSafeAutoForkSync(finalizedHostRepos)
         return finalizedHostRepos

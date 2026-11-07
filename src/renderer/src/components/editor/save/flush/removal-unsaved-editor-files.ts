@@ -13,7 +13,7 @@ import { editorModelRegistry } from '@/lib/editor-model-registry'
 
 /** Prompt once per writable dirty record only when every view of it is closing. */
 export function lastViewUnsavedFiles(state: AppState, closedIds: ReadonlySet<string>): OpenFile[] {
-  const seenRecords = new Set<string>()
+  const decidedRecords = new Set<string>()
   const result: OpenFile[] = []
   for (const file of state.openFiles ?? []) {
     const unsaved = file.isDirty || state.editorDrafts?.[file.id] !== undefined
@@ -21,9 +21,12 @@ export function lastViewUnsavedFiles(state: AppState, closedIds: ReadonlySet<str
       continue
     }
     const recordId = editorBufferIdOfView(state, file.id)
+    if (decidedRecords.has(recordId)) {
+      continue
+    }
+    decidedRecords.add(recordId)
     const viewIds = editorBufferSiblingViewIds(state, file.id)
-    if (viewIds.every((id) => closedIds.has(id)) && !seenRecords.has(recordId)) {
-      seenRecords.add(recordId)
+    if (viewIds.every((id) => closedIds.has(id))) {
       result.push(file)
     }
   }

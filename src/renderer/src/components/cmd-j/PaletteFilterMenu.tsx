@@ -8,6 +8,7 @@ import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { PaletteFilterModel } from './palette-filter-options'
 import {
   addPaletteFilterValues,
+  getPaletteProjectSelection,
   clearPaletteFilterField,
   EMPTY_PALETTE_FILTER,
   getPaletteFilterSelectionCount,
@@ -77,10 +78,14 @@ export default function PaletteFilterMenu({
   const [activeField, setActiveField] = useState<PaletteFilterField | null>(null)
   const [optionQuery, setOptionQuery] = useState('')
 
+  const projectSelection = useMemo(
+    () => getPaletteProjectSelection(model, filter.repoIds),
+    [model, filter.repoIds]
+  )
   const groups = useMemo<PaletteFilterGroup[]>(() => {
     const entries: PaletteFilterGroup[] = []
     // Hide single-choice axes; their checkboxes cannot disambiguate anything.
-    if (model.hosts.length > 1) {
+    if (model.hosts.length > 1 || filter.hostIds.length > 0) {
       entries.push({
         field: 'host',
         heading: translate('worktreeJumpPalette.filter.hosts', 'Hosts'),
@@ -88,23 +93,32 @@ export default function PaletteFilterMenu({
         selected: filter.hostIds
       })
     }
-    if (model.repositories.length > 1) {
+    if (model.repositories.length > 1 || filter.repoIds.length > 0) {
       entries.push({
         field: 'repository',
         // "Projects" is the user-facing term for repository-granular choices; see filter.emptySubtitle.
         heading: translate('worktreeJumpPalette.filter.projects', 'Projects'),
         options: model.repositories,
-        selected: filter.repoIds
+        selected: [...projectSelection.matching, ...projectSelection.unresolved],
+        partial: projectSelection.partial,
+        full: projectSelection.full
       })
     }
     return entries
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
-  }, [filter.hostIds, filter.repoIds, model.hosts, model.repositories, languageRevision])
+  }, [
+    filter.hostIds,
+    filter.repoIds,
+    model.hosts,
+    model.repositories,
+    projectSelection,
+    languageRevision
+  ])
 
   const activeGroup =
     activeField == null ? null : (groups.find((group) => group.field === activeField) ?? null)
 
-  const selectionCount = getPaletteFilterSelectionCount(filter)
+  const selectionCount = getPaletteFilterSelectionCount(filter, model)
   const active = isPaletteFilterActive(filter)
 
   const resetMenuState = useCallback(() => {
@@ -196,13 +210,13 @@ export default function PaletteFilterMenu({
               onOptionQueryChange={setOptionQuery}
               onBack={goBackToRoot}
               onToggle={(id) =>
-                onFilterChange(togglePaletteFilterValue(filter, activeGroup.field, id))
+                onFilterChange(togglePaletteFilterValue(filter, activeGroup.field, id, model))
               }
               onClearField={() =>
                 onFilterChange(clearPaletteFilterField(filter, activeGroup.field))
               }
               onSelectAllMatching={(ids) =>
-                onFilterChange(addPaletteFilterValues(filter, activeGroup.field, ids))
+                onFilterChange(addPaletteFilterValues(filter, activeGroup.field, ids, model))
               }
             />
           )}

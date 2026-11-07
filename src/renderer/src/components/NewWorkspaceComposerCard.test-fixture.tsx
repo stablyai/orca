@@ -49,11 +49,14 @@ export const hostOptions: ProjectHostSetupOption[] = [
 ]
 
 export async function renderCard(
-  overrides: Partial<React.ComponentProps<typeof NewWorkspaceComposerCard>> = {}
+  overrides: Partial<React.ComponentProps<typeof NewWorkspaceComposerCard>> = {},
+  existingContainer?: HTMLDivElement
 ): Promise<HTMLDivElement> {
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  const root = createRoot(container)
+  const container = existingContainer ?? document.createElement('div')
+  if (!existingContainer) {
+    document.body.appendChild(container)
+  }
+  const root = cardRoots.get(container) ?? createRoot(container)
   cardRoots.set(container, root)
   act(() => {
     root.render(

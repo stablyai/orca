@@ -2,6 +2,7 @@ import { createElement, useEffect, type ComponentProps } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
+import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import { HostProtocolGate } from './HostProtocolGate'
 import { useHostProtocolGates } from './host-protocol-gates-context'
 import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
@@ -11,7 +12,20 @@ const nativeTestState = vi.hoisted(() => ({
   platform: { OS: 'ios' as 'ios' | 'android' }
 }))
 
+const appStateListeners = vi.hoisted(() => new Set<(state: string) => void>())
+
 vi.mock('react-native', () => ({
+  AppState: {
+    currentState: 'active',
+    addEventListener: (_type: string, listener: (state: string) => void) => {
+      appStateListeners.add(listener)
+      return {
+        remove: () => {
+          appStateListeners.delete(listener)
+        }
+      }
+    }
+  },
   ActivityIndicator: 'ActivityIndicator',
   Linking: { openURL: nativeTestState.openUrl },
   Platform: nativeTestState.platform,
@@ -44,8 +58,16 @@ vi.mock('../transport/host-descriptor-recorder', () => ({
   recordHostDescriptorFromStatus: vi.fn()
 }))
 
-function clientWithStatus(result: Record<string, unknown>): RpcClient {
-  return { sendRequest: vi.fn().mockResolvedValue({ ok: true, result }) } as unknown as RpcClient
+function withLifecycle(overrides: Pick<RpcClient, 'sendRequest'>): FakeSession {
+  return Object.assign(new FakeSession('connected'), overrides)
+}
+
+function clientWithStatus(result: Record<string, unknown>): FakeSession {
+  return withLifecycle({
+    sendRequest: vi
+      .fn<RpcClient['sendRequest']>()
+      .mockResolvedValue({ id: 'status', ok: true, result })
+  })
 }
 
 function GateConsumer() {
@@ -100,6 +122,7 @@ describe('HostProtocolGate', () => {
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+    expect(appStateListeners.size).toBe(0)
     vi.restoreAllMocks()
   })
 
@@ -176,9 +199,9 @@ describe('HostProtocolGate', () => {
   })
 
   it('does not mount host routes before a connected host passes the compatibility probe', async () => {
-    const client = {
-      sendRequest: vi.fn().mockReturnValue(new Promise(() => {}))
-    } as unknown as RpcClient
+    const client = withLifecycle({
+      sendRequest: vi.fn<RpcClient['sendRequest']>().mockReturnValue(new Promise(() => {}))
+    })
     hostClient.current = { client, state: 'connected' }
     renderer = await renderGate()
     const output = renderedText(renderer)
@@ -194,9 +217,9 @@ describe('HostProtocolGate', () => {
     expect(renderedText(renderer)).toContain('HostContent')
     expect(probeMounts.count).toBe(1)
 
-    const client = {
-      sendRequest: vi.fn().mockReturnValue(new Promise(() => {}))
-    } as unknown as RpcClient
+    const client = withLifecycle({
+      sendRequest: vi.fn<RpcClient['sendRequest']>().mockReturnValue(new Promise(() => {}))
+    })
     await act(async () => {
       hostClient.current = { client, state: 'connected' }
       renderer?.update(gateElement())
@@ -235,24 +258,27 @@ describe('HostProtocolGate', () => {
   })
 
   it('keeps an already-validated host route mounted while reconnect status is pending', async () => {
-    const client = {
+    const client = withLifecycle({
       sendRequest: vi
-        .fn()
+        .fn<RpcClient['sendRequest']>()
         .mockResolvedValueOnce({
+          id: 'status',
           ok: true,
           result: { protocolVersion: 5, minCompatibleMobileVersion: 0 }
         })
         .mockReturnValueOnce(new Promise(() => {}))
-    } as unknown as RpcClient
+    })
     hostClient.current = { client, state: 'connected' }
     renderer = await renderGate()
 
     await act(async () => {
       hostClient.current = { client, state: 'disconnected' }
+      client.publishState('disconnected')
       renderer?.update(gateElement())
     })
     await act(async () => {
       hostClient.current = { client, state: 'connected' }
+      client.publishState('connected')
       renderer?.update(gateElement())
       await Promise.resolve()
     })
@@ -266,9 +292,13 @@ describe('HostProtocolGate', () => {
 
   it('fails open when a connected host cannot answer the status probe', async () => {
     hostClient.current = {
-      client: {
-        sendRequest: vi.fn().mockResolvedValue({ ok: false, error: { message: 'unavailable' } })
-      } as unknown as RpcClient,
+      client: withLifecycle({
+        sendRequest: vi.fn<RpcClient['sendRequest']>().mockResolvedValue({
+          id: 'status',
+          ok: false,
+          error: { code: 'unavailable', message: 'unavailable' }
+        })
+      }),
       state: 'connected'
     }
     renderer = await renderGate()

@@ -1,3 +1,4 @@
+import type { SettingsUpdate } from '@/store/slices/settings'
 import type React from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { useAppStore } from '../../../store/index'
@@ -63,8 +64,9 @@ export function getTabOrderControlSearchKeywords(
 const EMPTY_WSL_DISTROS: string[] = []
 
 type GeneralPaneProps = {
+  highlightedSettingId?: string | null
   settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void
+  updateSettings: (updates: SettingsUpdate) => void
   updateSettingsOrThrow?: (updates: Partial<GlobalSettings>) => void | Promise<void>
   fontSuggestions: string[]
   onRequestFontSuggestions?: () => void
@@ -75,6 +77,7 @@ type GeneralPaneProps = {
 }
 
 export function GeneralPane({
+  highlightedSettingId,
   settings,
   updateSettings,
   updateSettingsOrThrow,
@@ -206,6 +209,7 @@ export function GeneralPane({
     matchesSettingsSearch(searchQuery, getGeneralWorkspaceSearchEntries()) ? (
       <GeneralWorkspaceSettingsSection
         key="workspace"
+        highlightedSettingId={highlightedSettingId}
         settings={settings}
         updateSettings={updateSettings}
         updateSettingsOrThrow={updateSettingsOrThrow}

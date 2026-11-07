@@ -1,3 +1,4 @@
+import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
 import { useLinearIssueResult } from '@/hooks/linear-issue-committed-state'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import { defaultScopeSource } from '@/lib/default-creation-host'
@@ -43,8 +44,15 @@ export type CmdJGitHubWorkItemPreview = {
 
 function getComposerDefaultWorkspaceTarget(state: ReturnType<typeof useAppStore.getState>) {
   const eligibleRepos = getComposerEligibleRepos(state.repos)
-  const activeRepoId = resolveComposerActiveRepoId(state.repos, eligibleRepos, state.activeRepoId)
+  const activeRepoId = resolveComposerActiveRepoId(
+    state.repos,
+    eligibleRepos,
+    state.activeRepoId,
+    state.settings,
+    getProjectGroupingIndexFromState(state)
+  )
   const resolution = resolveWorkspaceCreationTarget({
+    grouping: getProjectGroupingIndexFromState(state),
     eligibleRepos,
     projects: state.projects,
     projectHostSetups: state.projectHostSetups,

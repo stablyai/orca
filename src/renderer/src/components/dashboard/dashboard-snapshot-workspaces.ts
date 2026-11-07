@@ -1,3 +1,5 @@
+import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
+import { getProjectGroupForRepo } from '../../../../shared/project-section-grouping'
 import type { AppState } from '@/store/types'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import {
@@ -36,7 +38,13 @@ export type DashboardWorkspaceState = Pick<AppState, 'repos' | 'worktreesByRepo'
   Partial<
     Pick<
       AppState,
-      'folderWorkspaces' | 'projectGroups' | 'runtimeEnvironments' | 'settings' | 'sshTargetLabels'
+      | 'folderWorkspaces'
+      | 'projectGroups'
+      | 'runtimeEnvironments'
+      | 'settings'
+      | 'sshTargetLabels'
+      | 'projects'
+      | 'projectHostSetups'
     >
   >
 
@@ -70,6 +78,7 @@ export function collectActiveDashboardWorkspaces(
   state: DashboardWorkspaceState,
   includeMapMetadata = true
 ): ActiveDashboardWorkspace[] {
+  const projectKeys = includeMapMetadata ? getProjectGroupingIndexFromState(state) : null
   const workspaces: ActiveDashboardWorkspace[] = []
   const seenWorkspaceIds = new Set<string>()
   let hostLabels: ReadonlyMap<ExecutionHostId, string> | null = null
@@ -97,7 +106,14 @@ export function collectActiveDashboardWorkspaces(
         ? resolveHostLabel(getWorktreeExecutionHostId(worktree, repo))
         : undefined
       workspaces.push({
-        projectId: repo.id,
+        projectId: includeMapMetadata
+          ? ((projectKeys
+              ? getProjectGroupForRepo(projectKeys, {
+                  ...repo,
+                  executionHostId: getWorktreeExecutionHostId(worktree, repo)
+                })?.key
+              : undefined) ?? `project:repo:${repo.id}`)
+          : repo.id,
         projectName: repo.displayName,
         repo,
         repoIcon: repo.repoIcon ?? null,

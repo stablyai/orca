@@ -1,3 +1,4 @@
+import type { Repo } from '../../../shared/repo-types'
 import type { ComponentType } from 'react'
 import type { LucideProps } from 'lucide-react'
 import type { SettingsSearchEntry } from '@/components/settings/search/settings-search'
@@ -122,6 +123,10 @@ export type SettingsNavSection = {
   icon: SettingsNavIcon
   searchEntries: SettingsSearchEntry[]
   group: string
+  badgeColor?: Repo['badgeColor']
+  repoIcon?: Repo['repoIcon']
+  upstream?: Repo['upstream']
+  isRemote?: boolean
   badge?: string
   installStatus?: SettingsNavInstallStatus
 }

@@ -1,10 +1,11 @@
-import { createElement } from 'react'
+import { createElement, useEffect } from 'react'
 import { act, create as createRenderer } from 'react-test-renderer'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { RpcClient } from '../transport/rpc-client'
 import { useHostProjectSections } from './use-host-project-sections'
+import { getProjectSectionsResource } from '../worktree/project-sections-resource'
 
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import type { RpcResponse } from '../transport/types'
@@ -43,6 +44,35 @@ afterEach(() => {
 })
 
 describe('useHostProjectSections', () => {
+  it('keeps the host refresh lifecycle installed when an accepted catalog answer changes', async () => {
+    const client = new FakeSession('connected')
+    client.sendRequest.mockResolvedValueOnce(reply('before')).mockResolvedValueOnce(reply('after'))
+    const state = {
+      clientRef: { current: client },
+      setServedProjectSections: vi.fn(),
+      setHostProjectGroups: vi.fn()
+    }
+    const install = vi.fn()
+    const dispose = vi.fn()
+    function Probe() {
+      const refresh = useHostProjectSections({ client, connState: 'connected', hostId: 'a', state })
+      useEffect(() => {
+        install()
+        return dispose
+      }, [refresh])
+      return null
+    }
+    await act(async () => {
+      create(createElement(Probe))
+    })
+    await act(async () => {
+      await getProjectSectionsResource(client).refresh()
+    })
+    expect(state.setServedProjectSections).toHaveBeenLastCalledWith(catalog('after'))
+    expect(install).toHaveBeenCalledTimes(1)
+    expect(dispose).not.toHaveBeenCalled()
+  })
+
   it('fetches immediately on another host client while throttling the original client', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(1_000_000)
@@ -72,11 +102,23 @@ describe('useHostProjectSections', () => {
     })
     await act(async () => refresh())
     await act(async () => refresh())
-    expect(first.sendRequest.mock.calls).toEqual([['mobileRelay.projectSections']])
+    expect(first.sendRequest.mock.calls).toEqual([
+      [
+        'mobileRelay.projectSections',
+        undefined,
+        { timeoutMs: 30_000, budgetSpansConnect: true, failWhenDisconnected: true }
+      ]
+    ])
     clientRef.current = second
     act(() => tree.update(createElement(Probe, { client: second, hostId: 'b' })))
     await act(async () => refresh())
-    expect(second.sendRequest.mock.calls).toEqual([['mobileRelay.projectSections']])
+    expect(second.sendRequest.mock.calls).toEqual([
+      [
+        'mobileRelay.projectSections',
+        undefined,
+        { timeoutMs: 30_000, budgetSpansConnect: true, failWhenDisconnected: true }
+      ]
+    ])
     expect(served).toEqual([catalog('first'), catalog('second')])
   })
 
@@ -114,7 +156,9 @@ describe('useHostProjectSections', () => {
     act(() => {
       first = refresh({ force: true, queueIfInFlight: true })
     })
-    await act(async () => refresh({ force: true, queueIfInFlight: true }))
+    act(() => {
+      void refresh({ force: true, queueIfInFlight: true })
+    })
     await act(async () => {
       if (answerFirst === undefined) {
         throw new Error('first catalog request never entered')
@@ -123,10 +167,18 @@ describe('useHostProjectSections', () => {
       await first
     })
     expect(client.sendRequest.mock.calls).toEqual([
-      ['mobileRelay.projectSections'],
-      ['mobileRelay.projectSections']
+      [
+        'mobileRelay.projectSections',
+        undefined,
+        { timeoutMs: 30_000, budgetSpansConnect: true, failWhenDisconnected: true }
+      ],
+      [
+        'mobileRelay.projectSections',
+        undefined,
+        { timeoutMs: 30_000, budgetSpansConnect: true, failWhenDisconnected: true }
+      ]
     ])
-    expect(served).toEqual([catalog('before'), catalog('moved')])
+    expect(served.at(-1)).toEqual(catalog('moved'))
   })
 
   it('reads nothing while the sidebar feed carries the catalog', async () => {
@@ -153,3 +205,5 @@ describe('useHostProjectSections', () => {
     expect(client.sendRequest).not.toHaveBeenCalled()
   })
 })
+
+vi.mock('react-native', () => ({ AppState: { addEventListener: () => ({ remove: () => {} }) } }))

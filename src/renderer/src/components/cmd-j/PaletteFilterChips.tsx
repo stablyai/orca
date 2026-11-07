@@ -6,6 +6,8 @@ import {
   EMPTY_PALETTE_FILTER,
   isPaletteFilterActive,
   togglePaletteFilterValue,
+  getPaletteProjectSelection,
+  editPaletteProjectValues,
   type PaletteFilterField,
   type PaletteFilterState
 } from './palette-filter'
@@ -26,19 +28,22 @@ export default function PaletteFilterChips({
     const repositoryLabels = new Map(
       model.repositories.map((repository) => [repository.id, repository.label])
     )
+    const selection = getPaletteProjectSelection(model, filter.repoIds)
     return [
       ...filter.hostIds.map((id) => ({
         field: 'host' as const,
         id,
         label: hostLabels.get(id) ?? id
       })),
-      ...filter.repoIds.map((id) => ({
+      ...[...selection.matching, ...selection.unresolved].map((id) => ({
         field: 'repository' as const,
         id,
-        label: repositoryLabels.get(id) ?? id
+        label:
+          (repositoryLabels.get(id) ?? id) +
+          (selection.partial.has(id) ? ` · ${translate('projectFilter.partial', 'Partial')}` : '')
       }))
     ]
-  }, [filter.hostIds, filter.repoIds, model.hosts, model.repositories])
+  }, [filter.hostIds, filter.repoIds, model])
 
   if (!isPaletteFilterActive(filter)) {
     return null
@@ -63,7 +68,13 @@ export default function PaletteFilterChips({
             ) : null}
             <button
               type="button"
-              onClick={() => onFilterChange(togglePaletteFilterValue(filter, chip.field, chip.id))}
+              onClick={() =>
+                onFilterChange(
+                  chip.field === 'repository'
+                    ? editPaletteProjectValues(filter, model, [chip.id], 'remove')
+                    : togglePaletteFilterValue(filter, chip.field, chip.id)
+                )
+              }
               aria-label={translate(
                 'worktreeJumpPalette.filter.removeChip',
                 'Remove filter {{value0}}',

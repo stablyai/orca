@@ -3,7 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../../shared/constants'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { SettingsUpdate } from '@/store/slices/settings'
 import type { PluginTerminalThemeRegistration } from '../../../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
 import { useAppStore } from '@/store'
 import { applyPluginThemesNow } from './plugin-theme-apply'
@@ -60,8 +60,9 @@ beforeEach(() => {
   vi.mocked(toast.success).mockClear()
   useAppStore.setState({
     settings: { ...getDefaultSettings('/tmp'), theme: 'light' },
-    updateSettings: async (updates: Partial<GlobalSettings>) => {
+    updateSettings: async (update: SettingsUpdate) => {
       const current = useAppStore.getState().settings ?? getDefaultSettings('/tmp')
+      const updates = typeof update === 'function' ? update(current) : update
       useAppStore.setState({ settings: { ...current, ...updates } })
     }
   })
@@ -77,6 +78,21 @@ const darkTerminal: PluginTerminalThemeRegistration = {
   mode: 'dark',
   terminal: { background: '#181818', foreground: '#eeeeee', red: '#ff0000' }
 }
+
+it('keeps another pack in the other slot so packs mix', async () => {
+  const other = 'plugin:other.dawn/dawn'
+  await useAppStore.getState().updateSettings({ pluginAppThemeLight: other })
+  await useAppStore.getState().updateSettings((current) => ({
+    pluginAppThemeDark: current.pluginAppThemeLight
+  }))
+  expect(useAppStore.getState().settings?.pluginAppThemeDark).toBe(other)
+  installApi({ themes: [appTheme('dusk', 'dark')] })
+  await applyPluginThemesNow(pluginKey)
+  expect(useAppStore.getState().settings).toMatchObject({
+    pluginAppThemeLight: other,
+    pluginAppThemeDark: `plugin:${pluginKey}/dusk`
+  })
+})
 
 it('Switch back restores every slot exactly', async () => {
   const before = {

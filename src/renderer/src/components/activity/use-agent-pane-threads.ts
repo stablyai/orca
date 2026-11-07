@@ -1,3 +1,4 @@
+import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
 import { selectVisibleAgentOrchestration } from '@/runtime/visible-agent-orchestration'
 import { useDeferredValue, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
@@ -82,6 +83,7 @@ export function useAgentPaneThreads(args: {
   visibleThreadGroups: ActivityThreadGroup[]
 } {
   const { query, readFilter, groupBy, selectedPaneKey, showChildAgents = false } = args
+  const grouping = useAppStore(getProjectGroupingIndexFromState)
   const agentsVisibleHostIds = useAppStore((s) => s.agentsVisibleHostIds)
   const agentsFilterRepoIds = useAppStore((s) => s.agentsFilterRepoIds)
   const hideWorkspacesFromOtherDevices = useAppStore((s) => s.agentsHideWorkspacesFromOtherDevices)
@@ -286,8 +288,8 @@ export function useAgentPaneThreads(args: {
   )
 
   const visibleThreadGroups = useMemo(
-    () => buildActivityThreadGroups(visibleThreads, groupBy),
-    [visibleThreads, groupBy]
+    () => buildActivityThreadGroups(visibleThreads, groupBy, undefined, storeData.repos, grouping),
+    [visibleThreads, groupBy, grouping, storeData.repos]
   )
 
   return {

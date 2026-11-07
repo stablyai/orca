@@ -26,6 +26,7 @@ export function NewWorktreeFormSheet(props: {
   visible: boolean
   interactive: boolean
   loading: boolean
+  projectsReady: boolean
   hasRepos: boolean
   loadError: string | null
   onRetryLoad: () => void
@@ -104,6 +105,7 @@ export function NewWorktreeFormSheet(props: {
       ) : (
         <>
           <NewWorktreeProjectTargetFields
+            disabled={!props.projectsReady}
             project={props.project}
             runTarget={props.runTarget}
             projectBadgeColor={props.projectBadgeColor}

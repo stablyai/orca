@@ -116,7 +116,7 @@ describe('RepositoryHostSetupsSection settings entry scope', () => {
     expect(findButton('Add to another host')).toBeUndefined()
   })
 
-  it("stores a host switch under the clone entry's own selection key", () => {
+  it("stores a host switch under the clone entry's own selection key with identical setup IDs on both hosts", () => {
     const setSettingsProjectHostSelection = vi.fn()
     const cloneA = makeRepo({ id: 'clone-a', displayName: 'Orca', path: '/work/orca' })
     const cloneATwin = makeRepo({
@@ -131,7 +131,7 @@ describe('RepositoryHostSetupsSection settings entry scope', () => {
       projectHostSetups: [
         makeSetup({ id: 'clone-a', repoId: 'clone-a', hostId: 'local', path: '/work/orca' }),
         makeSetup({
-          id: 'clone-a-ssh',
+          id: 'clone-a',
           repoId: 'clone-a',
           hostId: sshHostId,
           path: '/home/alice/orca'
@@ -153,6 +153,8 @@ describe('RepositoryHostSetupsSection settings entry scope', () => {
         })
       )
     })
+    expect(container.querySelectorAll('[data-current=true]')).toHaveLength(1)
+    expect(container.querySelector('[data-current=true]')?.textContent).toContain('/work/orca')
     act(() => {
       findButton('Open')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
@@ -160,7 +162,7 @@ describe('RepositoryHostSetupsSection settings entry scope', () => {
     expect(setSettingsProjectHostSelection).toHaveBeenCalledWith(
       `${projectId}::setup:clone-a`,
       sshHostId,
-      'clone-a-ssh'
+      'clone-a'
     )
   })
 })

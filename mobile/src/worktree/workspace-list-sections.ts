@@ -1,3 +1,8 @@
+import { buildSectionRepoMap } from './section-repo-map'
+export { buildSectionRepoMap } from './section-repo-map'
+import { getRepoHostIdentityForParts } from '../../../src/shared/repo-host-identity'
+import { projectRepoFilterMatcher } from '../../../src/shared/project-grouping'
+import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
 import { orderMainWorktreeFirst } from '../../../src/shared/sidebar-list/section-order'
 import { withFolderWorkspacesLast } from './folder-workspace-lane-order'
 import { prGroupOfPsLinkedPR } from '../../../src/shared/sidebar-list/workspace-review-facts'
@@ -34,14 +39,13 @@ import {
   buildProjectGroupingIndex,
   buildProjectSections,
   getProjectGroupingForRepo,
+  getProjectSectionRepoLookup,
   type ProjectSectionModel
 } from '../../../src/shared/project-section-grouping'
 import { withRepoSectionDisplayLabels } from '../../../src/shared/project-section-order'
 import type { ProjectOrderBy } from '../../../src/shared/ui-chrome-types'
-import {
-  filterWorkspaceRows,
-  type WorkspaceRowFactReader
-} from '../../../src/shared/workspace-view/workspace-row-filters'
+import { filterWorktrees } from './workspace-row-filtering'
+export { filterWorktrees, isWorktreeActive } from './workspace-row-filtering'
 import { translate } from '../i18n/mobile-i18n'
 
 export type { FilterState, Section, SectionRepo, Worktree } from './workspace-list-types'
@@ -63,24 +67,6 @@ export const NO_PROJECT_SECTION_CATALOG: ProjectSectionCatalog = {
   projectOrderBy: 'manual'
 }
 
-export function buildSectionRepoMap(
-  catalogRepos: readonly SectionRepo[],
-  worktrees: readonly Worktree[]
-): Map<string, SectionRepo> {
-  const repoMap = new Map(catalogRepos.map((repo) => [repo.id, repo]))
-  for (const w of worktrees) {
-    if (!repoMap.has(w.repoId)) {
-      repoMap.set(w.repoId, {
-        id: w.repoId,
-        displayName: w.repo || translate('common.unknown', 'Unknown'),
-        // Why: labels key on host + path, so a shared '' would let one stand-in rename another.
-        path: w.repoId,
-        executionHostId: w.hostId
-      })
-    }
-  }
-  return repoMap
-}
 export { getWorktreeStatus, sortWorktrees } from './workspace-list-ordering'
 
 // A section before lineage expansion: host rows only, no per-row view yet.
@@ -99,64 +85,6 @@ function makeSection(
     ...(decoration.repo ? { repo: decoration.repo } : {}),
     data: [...data]
   }
-}
-
-// Idle prompts have no recent output; live terminals or unread output still count as active.
-export function isWorktreeActive(
-  w: Pick<Worktree, 'hasHostSidebarActivity' | 'status' | 'liveTerminalCount'> & {
-    unread?: boolean
-  }
-): boolean {
-  return w.hasHostSidebarActivity !== undefined
-    ? w.hasHostSidebarActivity
-    : Boolean(w.unread) || (w.status ? w.status !== 'inactive' : w.liveTerminalCount > 0)
-}
-
-// Older hosts omit the main-worktree flag; use the legacy branch heuristic.
-function guessDefaultBranchWorkspace(w: Worktree): boolean {
-  if (w.isMainWorktree !== undefined) {
-    return w.isMainWorktree && w.branch.trim() !== ''
-  }
-  const branch = w.branch.replace(/^refs\/heads\//, '')
-  return branch === 'main' || branch === 'master'
-}
-
-function phoneRowFacts(
-  repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId>
-): WorkspaceRowFactReader<Worktree> {
-  return {
-    isArchived: (w) => w.isArchived === true,
-    isFolderWorkspace: (w) => w.workspaceKind === 'folder-workspace',
-    repoId: (w) => w.repoId,
-    hostId: (w) => resolveWorktreeHostId(w, repoHostIdByRepoId),
-    isOtherClient: (w) => w.desktopOtherClient === true,
-    isDefaultBranch: (w) => w.defaultBranch ?? guessDefaultBranchWorkspace(w),
-    isAutomationCreated: (w) => w.automationCreated === true,
-    isCliCreated: (w) => w.cliCreated === true,
-    isDetachedHead: (w) => w.detachedHead === true,
-    // Why the guess: #8873's exemption must fail open on hosts that predate isMainWorktree.
-    isMainWorktree: (w) => w.isMainWorktree ?? guessDefaultBranchWorkspace(w),
-    isSleeping: (w) => !isWorktreeActive(w)
-  }
-}
-
-export function filterWorktrees(
-  worktrees: Worktree[],
-  filters: FilterState,
-  search: string,
-  repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId> = new Map()
-): Worktree[] {
-  const result = filterWorkspaceRows(worktrees, filters, phoneRowFacts(repoHostIdByRepoId))
-  const q = search.trim().toLowerCase()
-  if (!q) {
-    return result
-  }
-  return result.filter(
-    (w) =>
-      w.displayName.toLowerCase().includes(q) ||
-      w.branch.toLowerCase().includes(q) ||
-      w.repo.toLowerCase().includes(q)
-  )
 }
 
 export function isWorktreePinned(w: Worktree, localPins: Set<string>): boolean {
@@ -187,12 +115,15 @@ export function buildMobileWorkspacePlan(
   }
   const filtered = filterWorktrees(worktrees, filters, search, repoHostIdByRepoId)
   const sorted = sortWorktrees(filtered, sortMode, Date.now(), hostSortsByStamps(worktrees))
+  const matchesRepo = projectRepoFilterMatcher(filters.filterRepoIds)
+  const hostIdOf = (w: Worktree) => resolveWorktreeHostId(w, repoHostIdByRepoId)
   const childrenByParentIdentity = getMobileWorkspaceLineageChildren(
     worktrees,
     lineageStores,
-    filters.filterRepoIds
+    (w) => matchesRepo(w.repoId, hostIdOf(w))
   )
   const repoMap = buildSectionRepoMap(projectCatalog.repos, worktrees)
+  const repoByHost = getProjectSectionRepoLookup(projectCatalog.repos)
   const projectIndex = buildProjectGroupingIndex(projectCatalog.grouping ?? undefined)
   const occurrencePlan = buildWorktreeOccurrencePlan({
     rows: sorted,
@@ -201,7 +132,13 @@ export function buildMobileWorkspacePlan(
     isPinned: (worktree) => isWorktreePinned(worktree, pinnedIds),
     duplicatePinned: showPinnedInGroups,
     owningSectionOf: (worktree) =>
-      getProjectGroupingForRepo(worktree.repoId, repoMap, projectIndex),
+      getProjectGroupingForRepo(
+        worktree.repoId,
+        repoMap,
+        projectIndex,
+        hostIdOf(worktree),
+        repoByHost
+      ),
     projectIdOf: (worktree) => worktree.repoId,
     sectionsOf: ({ pinned, natural: canonicalGroupWorktrees, displayRootByIdentity }) => {
       const sections: PlannedSection[] = []
@@ -215,24 +152,30 @@ export function buildMobileWorkspacePlan(
           )
         }
       } else if (groupMode === 'repo') {
-        const representedRepoIds = new Set(worktrees.map((w) => w.repoId))
+        const representedRepoIds = new Set(
+          worktrees.map((w) => getRepoHostIdentityForParts(w.repoId, hostIdOf(w)))
+        )
         const query = search.trim().toLowerCase()
         const placeholderRepoIds = projectCatalog.repos
           .filter(
             (repo) =>
-              !representedRepoIds.has(repo.id) &&
-              (filters.filterRepoIds.length === 0 || filters.filterRepoIds.includes(repo.id)) &&
+              !representedRepoIds.has(
+                getRepoHostIdentityForParts(repo.id, getRepoExecutionHostId(repo))
+              ) &&
+              matchesRepo(repo.id, getRepoExecutionHostId(repo)) &&
               (!query || repo.displayName.toLowerCase().includes(query))
           )
-          .map((repo) => repo.id)
+          .map((repo) => getRepoHostIdentityForParts(repo.id, getRepoExecutionHostId(repo)))
         const projectSections = withRepoSectionDisplayLabels(
           buildProjectSections({
             items: canonicalGroupWorktrees,
             repoIdOf: (w) => w.repoId,
+            hostIdOf,
             displayRepoIdOf: (w) =>
               (displayRootByIdentity.get(getWorktreeRowIdentity(w)) ?? w).repoId,
             repoMap,
             projectIndex,
+            repos: projectCatalog.repos,
             placeholderRepoIds,
             repoOrder: projectCatalog.repoOrder,
             projectOrderBy: projectCatalog.projectOrderBy

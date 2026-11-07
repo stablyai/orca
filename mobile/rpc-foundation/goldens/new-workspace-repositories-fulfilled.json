@@ -4,14 +4,9 @@
   "family": "components.new-workspace-repositories",
   "namedDeltas": [],
   "values": {
-    "19b2979d7fc2": {
+    "006a91b993e0": {
       "name": "repo.list#1",
       "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
-    },
-    "35f85fe3b71c": {
-      "name": "repo.list#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -35,9 +30,19 @@
         "startedAt": 0
       }
     },
-    "413e29f6e78e": {
+    "4e8b4e3e814f": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "loading": true,
+      "repos": [],
+      "selected": {
+        "$rpc": "null"
+      }
+    },
+    "6d98d15ed8ec": {
       "name": "repo.list#1",
-      "ordinal": 1,
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -61,7 +66,7 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-1",
+          "id": "frame-2",
           "ok": true,
           "result": {
             "repos": [
@@ -80,15 +85,88 @@
         }
       }
     },
-    "4e8b4e3e814f": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "loading": true,
-      "repos": [],
-      "selected": {
-        "$rpc": "null"
+    "a21d39fc985a": {
+      "name": "mobileRelay.projectSections#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"mobileRelay.projectSections\"}"
+    },
+    "ae7c04eadf0b": {
+      "name": "mobileRelay.projectSections#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "mobileRelay.projectSections"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "failWhenDisconnected": true,
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection closed",
+          "isRpcDeliveryUnknown": true
+        }
       }
+    },
+    "ca3a2a973588": {
+      "name": "mobileRelay.projectSections#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "mobileRelay.projectSections"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "failWhenDisconnected": true,
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "d64700b9de3b": {
+      "name": "repo.list#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "e1883df1f8f5": {
+      "name": "streams-registered-at-teardown",
+      "ordinal": 6,
+      "value": [
+        {
+          "cancelled": true,
+          "method": "runtime.clientEvents.subscribe",
+          "payload": "runtime.clientEvents.subscribe#1"
+        }
+      ]
     },
     "eac6e56c2d2c": {
       "crash": {
@@ -105,6 +183,11 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "eef1ee3c2773": {
+      "name": "runtime.clientEvents.subscribe#1",
+      "ordinal": 1,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.subscribe\",\"params\":null}"
     }
   },
   "recording": {
@@ -113,8 +196,8 @@
       {
         "id": "loading",
         "observation": {
-          "sender": ["35f85fe3b71c"],
-          "payloads": ["19b2979d7fc2"],
+          "sender": ["006a91b993e0", "ca3a2a973588"],
+          "payloads": ["eef1ee3c2773", "d64700b9de3b", "a21d39fc985a"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -125,13 +208,25 @@
       {
         "id": "selected",
         "observation": {
-          "sender": ["413e29f6e78e"],
-          "payloads": ["19b2979d7fc2"],
+          "sender": ["6d98d15ed8ec", "ca3a2a973588"],
+          "payloads": ["eef1ee3c2773", "d64700b9de3b", "a21d39fc985a"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "eac6e56c2d2c",
           "effects": []
+        }
+      },
+      {
+        "id": "cleanup",
+        "observation": {
+          "sender": ["6d98d15ed8ec", "ae7c04eadf0b"],
+          "payloads": ["eef1ee3c2773", "d64700b9de3b", "a21d39fc985a"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "eac6e56c2d2c",
+          "effects": ["e1883df1f8f5"]
         }
       }
     ]

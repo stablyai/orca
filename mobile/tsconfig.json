@@ -4,6 +4,7 @@
     "strict": true,
     "paths": {
       "@/*": ["./src/*"],
+      "@project-grouping-test-host/*": ["../src/*"],
       "@noble/hashes/*": ["./node_modules/@noble/hashes/*"],
       "smol-toml": ["./node_modules/smol-toml"],
       "tweetnacl": ["./node_modules/tweetnacl"],

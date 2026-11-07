@@ -8,6 +8,7 @@ export function WorktreeContextMenuOverlays({ model }: { model: WorktreeContextM
     <>
       <ProjectGroupNameDialog
         open={model.createGroupDialogOpen}
+        sessionKey={model.createGroupAttempt ?? undefined}
         title={translate(
           'auto.components.sidebar.WorktreeContextMenu.6664418e98',
           'New Project Group'
@@ -17,11 +18,11 @@ export function WorktreeContextMenuOverlays({ model }: { model: WorktreeContextM
           'Create a group and move this project into it.'
         )}
         initialName={
-          model.repo
+          model.createGroupAttempt?.operation.members[0]
             ? translate(
                 'auto.components.sidebar.ProjectGroupNameDialog.defaultGroupName',
                 '{{name}} group',
-                { name: model.repo.displayName }
+                { name: model.createGroupAttempt.operation.members[0].displayName }
               )
             : ''
         }

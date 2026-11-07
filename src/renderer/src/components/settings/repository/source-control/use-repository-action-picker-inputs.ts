@@ -10,14 +10,13 @@ import { readNativeDetectedAgents } from '@/store/slices/local-detected-agent-st
 import type { RepositorySourceControlAiActionRowsProps } from './repository-source-control-ai-action-rows-props'
 
 export function useRepositoryActionPickerInputs(props: RepositorySourceControlAiActionRowsProps) {
-  const { repoId } = props
+  const { repoId, repo } = props
   const draftScopes = useMemo(
     () => new Map(SOURCE_CONTROL_ACTION_IDS.map((id) => [id, { repoId }])),
     [repoId]
   )
   useEffect(() => () => draftScopes.forEach(invalidateAgentPickerDrafts), [draftScopes])
   useSourceControlActionAgentInventory()
-  const repo = useAppStore((state) => state.repos.find((repo) => repo.id === repoId) ?? null)
   const rows = sourceControlRepoAgentRows(repo)
   const observation = useAgentMenuObservation(rows.target, true, rows.detectionTarget)
   const canSaveSurface = canSaveSourceControlActionSurface(rows.target)

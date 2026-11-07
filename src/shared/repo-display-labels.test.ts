@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { getRepoDisplayLabelKey, getRepoDisplayLabelsByPath } from './repo-display-labels'
 
 describe('getRepoDisplayLabelsByPath', () => {
@@ -98,3 +98,79 @@ describe('getRepoDisplayLabelsByPath', () => {
     expect(labels.get(getRepoDisplayLabelKey(second))).toBe('Debian/home/user/app')
   })
 })
+
+it.each(['/work', 'C:\\work', '//server/share'])(
+  'retains the real differing leaf for same-name siblings at %s',
+  (root) => {
+    const entries = ['harbor-first', 'harbor-second'].map((leaf) => ({
+      path: `${root}/${leaf}`,
+      displayName: 'Harbor'
+    }))
+    const labels = getRepoDisplayLabelsByPath(entries)
+    expect(entries.map((entry) => labels.get(getRepoDisplayLabelKey(entry)))).toEqual([
+      'harbor-first',
+      'harbor-second'
+    ])
+  }
+)
+
+it.each(['items', 'depth'] as const)(
+  'normalizes each actual label input once and bounds suffix work with independent %s N/10N',
+  (dimension) => {
+    for (const n of [100, 1000]) {
+      const count = dimension === 'items' ? n : 2
+      const depth = dimension === 'depth' ? n : 4
+      const entries = Array.from({ length: count }, (_, i) => ({
+        path: `/${i}/${Array(depth - 2)
+          .fill('shared')
+          .join('/')}/leaf`,
+        displayName: 'Harbor'
+      }))
+      const replace = String.prototype.replace
+      const join = Array.prototype.join
+      let normalizations = 0
+      let suffixes = 0
+      let characters = 0
+      const replaceProbe = vi.spyOn(String.prototype, 'replace').mockImplementation(function (
+        this: string,
+        pattern,
+        replacement
+      ) {
+        if (pattern instanceof RegExp && pattern.source === '\\\\') {
+          normalizations++
+        }
+        return replace.call(this, pattern, replacement)
+      })
+      const joinProbe = vi.spyOn(Array.prototype, 'join').mockImplementation(function (
+        this: string[],
+        separator?: string
+      ) {
+        const value = join.call(this, separator)
+        if (separator === '/') {
+          suffixes++
+          characters += value.length
+        }
+        return value
+      })
+      try {
+        const labels = getRepoDisplayLabelsByPath(entries)
+        expect(new Set(labels.values()).size).toBe(count)
+        expect([...labels.values()][0]).toBe(
+          `0/${Array(depth - 2)
+            .fill('shared')
+            .join('/')}/Harbor`
+        )
+        expect(normalizations).toBe(count)
+        expect(suffixes).toBeGreaterThanOrEqual(count * depth)
+        expect(suffixes).toBeLessThanOrEqual(count * depth + 1)
+        expect(characters).toBeLessThanOrEqual(count * depth * depth * 10)
+        process.stdout.write(
+          `PG8 labels operations ${JSON.stringify({ dimension, n, count, depth, normalizations, suffixes, characters })}\n`
+        )
+      } finally {
+        replaceProbe.mockRestore()
+        joinProbe.mockRestore()
+      }
+    }
+  }
+)

@@ -106,27 +106,12 @@ export const PROJECT_SECTION_PARITY_ROWS: readonly {
   { id: 'wt-m4', repoId: 'm4-orca', lastActivityAt: 10 }
 ]
 
-// Same-host checkouts still need path prefixes; other machines do not.
-const STABLY = {
-  key: 'project:github:stablyai/orca::setup:local-stably',
-  label: 'stably/orca'
-}
-const WORKSPACE = {
-  key: 'project:github:stablyai/orca::setup:local-workspace',
-  label: 'orca/orca'
-}
-// Why 'orca', not the server's 'Orca': the later host's derived project name wins the merge.
-const WINDOWS = { key: 'project:github:stablyai/orca', label: 'orca' }
-const M4 = { key: 'project:github:stablyai/orca::setup:m4-orca', label: 'orca/orca' }
-const M4_TWO = {
-  key: 'project:github:stablyai/orca::setup:m4-orca-two',
-  label: 'orca-two/orca'
-}
+const PROJECT = { key: 'project:github:stablyai/orca', label: 'orca' }
 const ASSETS = { key: 'project:repo:local-assets', label: 'design-assets' }
 
 export const PROJECT_SECTION_PARITY_HEADERS = {
-  recent: [M4_TWO, WINDOWS, WORKSPACE, STABLY, M4, ASSETS],
-  manual: [STABLY, ASSETS, WORKSPACE, WINDOWS, M4, M4_TWO]
+  recent: [PROJECT, ASSETS],
+  manual: [PROJECT, ASSETS]
 } as const
 
 /** What main serves the phone for these answers (the renderer's published catalog). */
@@ -188,6 +173,7 @@ export const PROJECT_SECTION_PARITY_SERVED: MobileProjectSectionCatalog = {
   setups: [
     {
       id: 'local-stably',
+      groupKey: 'project:github:stablyai/orca',
       projectId: 'github:stablyai/orca',
       hostId: 'local',
       repoId: 'local-stably',
@@ -197,6 +183,7 @@ export const PROJECT_SECTION_PARITY_SERVED: MobileProjectSectionCatalog = {
     },
     {
       id: 'local-assets',
+      groupKey: 'project:repo:local-assets',
       projectId: 'repo:local-assets',
       hostId: 'local',
       repoId: 'local-assets',
@@ -206,6 +193,7 @@ export const PROJECT_SECTION_PARITY_SERVED: MobileProjectSectionCatalog = {
     },
     {
       id: 'local-workspace',
+      groupKey: 'project:github:stablyai/orca',
       projectId: 'github:stablyai/orca',
       hostId: 'local',
       repoId: 'local-workspace',
@@ -215,6 +203,7 @@ export const PROJECT_SECTION_PARITY_SERVED: MobileProjectSectionCatalog = {
     },
     {
       id: 'win-setup',
+      groupKey: 'project:github:stablyai/orca',
       projectId: 'github:stablyai/orca',
       hostId: 'runtime:windows2',
       repoId: 'win-orca',
@@ -226,6 +215,7 @@ export const PROJECT_SECTION_PARITY_SERVED: MobileProjectSectionCatalog = {
     },
     {
       id: 'm4-orca',
+      groupKey: 'project:github:stablyai/orca',
       projectId: 'github:stablyai/orca',
       hostId: 'runtime:m4air',
       repoId: 'm4-orca',
@@ -236,6 +226,7 @@ export const PROJECT_SECTION_PARITY_SERVED: MobileProjectSectionCatalog = {
     },
     {
       id: 'm4-orca-two',
+      groupKey: 'project:github:stablyai/orca',
       projectId: 'github:stablyai/orca',
       hostId: 'runtime:m4air',
       repoId: 'm4-orca-two',

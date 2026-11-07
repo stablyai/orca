@@ -8,7 +8,7 @@ import {
   getSettingsFocusedExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
-import { getProjectHostSetupProjectionFromState } from '@/store/project-host-setup-selector'
+import { getProjectGroupingModelFromState } from '@/store/project-host-setup-selector'
 import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-row-plan'
 import { createSidebarPRGroupReader } from '../grouping/pr-group-key'
 import {
@@ -56,7 +56,7 @@ export function computeRenderedSidebarRows(
 ): HostSectionRow[] {
   const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
   const pinnedDisplayPolicy = getPinnedWorktreeDisplayPolicy(state.settings)
-  const projection = getProjectHostSetupProjectionFromState(state)
+  const projectGrouping = getProjectGroupingModelFromState(state)
   const visibleHostIdSet = getVisibleSidebarHostIdSet(
     state.visibleWorkspaceHostIds,
     state.workspaceHostScope
@@ -92,7 +92,7 @@ export function computeRenderedSidebarRows(
     importedWorktreesByRepo: EMPTY_IMPORTED_BY_REPO,
     newExternalWorktreesInboxByRepo: EMPTY_INBOX_BY_REPO,
     pendingCreations: EMPTY_PENDING_CREATIONS,
-    projectGrouping: { projects: projection.projects, projectHostSetups: projection.setups },
+    projectGrouping,
     folderWorkspaces: filterFolderWorkspacesForVisibleHosts(
       selectFolderWorkspaces(state),
       projectGroups,

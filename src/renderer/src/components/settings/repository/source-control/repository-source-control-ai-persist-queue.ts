@@ -5,7 +5,7 @@ import type { SourceControlAiRepoUpdate } from '../../../../../../shared/source-
 
 type PersistQueueOptions = {
   getRepoId: () => string
-  getPersisted: () => RepoSourceControlAiOverrides
+  getPersisted: () => RepoSourceControlAiOverrides | null
   setPersisted: (value: RepoSourceControlAiOverrides) => void
   updateRepo: (repoId: string, updates: SourceControlAiRepoUpdate) => void | Promise<boolean>
   isMounted: () => boolean
@@ -30,8 +30,12 @@ export function createRepoAiPersistQueue(options: PersistQueueOptions) {
         }
         // Catch transform/conversion failures too; fire-and-forget callers rely on onError rather than rejected promises.
         try {
-          const next = transform(options.getPersisted())
-          if (JSON.stringify(next) === JSON.stringify(options.getPersisted())) {
+          const base = options.getPersisted()
+          if (base === null) {
+            return false
+          }
+          const next = transform(base)
+          if (JSON.stringify(next) === JSON.stringify(base)) {
             return true
           }
           const repoUpdate = toSourceControlAiRepoUpdate(next)

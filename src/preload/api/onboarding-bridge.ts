@@ -10,6 +10,8 @@ export const onboardingApi = {
       checklist?: Partial<OnboardingState['checklist']>
     }
   ): Promise<OnboardingState> => ipcRenderer.invoke('onboarding:update', updates),
+  getProjectGroupingUpgradeTipAudience: () =>
+    ipcRenderer.invoke('onboarding:getProjectGroupingUpgradeTipAudience'),
   getChatUiLaunchTipVariant: (): Promise<ChatUiLaunchTipVariant> =>
     ipcRenderer.invoke('onboarding:getChatUiLaunchTipVariant')
 } satisfies PreloadApi['onboarding']

@@ -1,3 +1,4 @@
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../../src/shared/github/work-item-target'
 import { GITHUB_CONNECTION_CHANGED } from '../../transport/github-target-invocation'
 import { resolve } from 'node:path'
@@ -265,6 +266,8 @@ function tally(
 }
 
 const HISTORY = new Set([
+  'new-workspace-repositories-fulfilled',
+  'matrix-components.new-workspace-repositories-repo.list-1',
   ...Object.keys(C5_PAGE_CLOSURE['aiVault.history'] ?? {}),
   ...Object.keys(C5_PAGE_CLOSURE['aiVault.history-screen'] ?? {})
 ])
@@ -288,6 +291,40 @@ async function unchangedVerdict(
     }
     const left = comparison(input.scenarios, expected.recording, run.recording!, scenarios, false)
     const right = comparison(input.scenarios, expected.recording, asIf.recording!, scenarios, true)
+    const destination = process.env.RPC_FOUNDATION_RESIDUAL_CERTIFICATE
+    if (
+      destination &&
+      (id === 'new-workspace-repositories-fulfilled' ||
+        id === 'matrix-components.new-workspace-repositories-repo.list-1')
+    ) {
+      mkdirSync(destination, { recursive: true })
+      const evidence = (candidate: typeof run, view: typeof left) => ({
+        recording: candidate.recording,
+        thrown: candidate.thrown instanceof Error ? candidate.thrown.message : candidate.thrown,
+        differences: candidate.recording
+          ? recordingDifferences(view.expected, view.actual, true)
+          : null,
+        ports: candidate.pairs.map((pair) => ({
+          toShell: pair.toShell,
+          toPage: pair.toPage,
+          diagnostics: pair.diagnostics
+        }))
+      })
+      writeFileSync(
+        resolve(destination, `${id}.json`),
+        JSON.stringify(
+          {
+            id,
+            scenarios,
+            native: expected,
+            bridge: evidence(run, left),
+            replyMeta: evidence(asIf, right)
+          },
+          null,
+          2
+        )
+      )
+    }
     const result = strictReplayVerdict(
       left.expected,
       scenarios,

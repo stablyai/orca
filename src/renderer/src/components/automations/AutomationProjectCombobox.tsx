@@ -1,3 +1,5 @@
+import { getRepoSourceHostCount } from '../task-project-source-combobox-model'
+import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronRight, ChevronsUpDown, FolderPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -7,13 +9,13 @@ import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { useAppStore } from '@/store'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { isRepoSearchQueryTooLarge, searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { projectHostCountLabel } from '@/components/project-host-count-label'
 import type { Repo } from '../../../../shared/repo-types'
 import {
+  filterAutomationProjectGroups,
   getAutomationProjectGroupForRepo,
   getAutomationProjectGroups,
   getAutomationProjectRepoDetail,
@@ -59,7 +61,11 @@ export default function AutomationProjectCombobox({
   const focusFrameRef = useRef<number | null>(null)
   const mountedRef = useMountedRef()
 
-  const groups = useMemo(() => getAutomationProjectGroups(repos, value), [repos, value])
+  const grouping = useAppStore(getProjectGroupingIndexFromState)
+  const groups = useMemo(
+    () => getAutomationProjectGroups(repos, value, undefined, grouping),
+    [repos, value, grouping]
+  )
   const selectedGroup = useMemo(
     () => getAutomationProjectGroupForRepo(groups, value),
     [groups, value]
@@ -72,16 +78,10 @@ export default function AutomationProjectCombobox({
     ? getAutomationProjectSelectedSource(selectedGroup, value)
     : null
   const showHostLabels = useMemo(() => hasMultipleAutomationProjectHosts(repos), [repos])
-  const filteredGroups = useMemo(() => {
-    if (isRepoSearchQueryTooLarge(query)) {
-      return []
-    }
-    const trimmed = query.trim()
-    if (!trimmed) {
-      return groups
-    }
-    return groups.filter((group) => searchRepos(group.sources, trimmed).length > 0)
-  }, [groups, query])
+  const filteredGroups = useMemo(
+    () => filterAutomationProjectGroups(groups, query),
+    [groups, query]
+  )
 
   const cancelFocusFrame = useCallback((): void => {
     if (focusFrameRef.current !== null) {
@@ -262,10 +262,11 @@ export default function AutomationProjectCombobox({
             {filteredGroups.map((group) => {
               const selectedSource = getAutomationProjectSelectedSource(group, value)
               const selectedProject = group.sources.some((source) => source.id === value)
-              const hasHostMenu = hasMultipleAutomationProjectHosts(group.sources)
+              const hostCount = getRepoSourceHostCount(group.sources)
+              const hasHostMenu = hostCount > 1
               const hostLabel = showHostLabels ? getRepoHostLabel?.(selectedSource) : null
               const detail = hasHostMenu
-                ? `${hostLabel?.trim() || getRepoExecutionHostId(selectedSource)} · ${projectHostCountLabel(group.sources.length)}`
+                ? `${hostLabel?.trim() || getRepoExecutionHostId(selectedSource)} · ${projectHostCountLabel(hostCount)}`
                 : getAutomationProjectRepoDetail(selectedSource, hostLabel)
               return (
                 <div

@@ -1,12 +1,10 @@
-import { selectWslHostsServing } from '../../use-wsl-hosts-enabled'
 import { useCallback, useMemo, useState } from 'react'
 import { shallow } from 'zustand/shallow'
 import { persistedUIValuesEqual } from '../../../../../../shared/persisted-ui-equality'
+import { selectWslHostsServing } from '../../use-wsl-hosts-enabled'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
 import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
-import type { AppState } from '@/store/types'
-import type { Repo } from '../../../../../../shared/repo-types'
 import {
   getLocalExecutionHostLabel,
   type ExecutionHostId
@@ -25,6 +23,7 @@ import {
   scopeHostSectionCollapse
 } from '../../../../../../shared/sidebar-list/host-section-collapse'
 import { addHostSectionRows } from '../../../../../../shared/sidebar-list/host-section-rows'
+import { collectHeaderRevealPlacements } from '../../../../../../shared/sidebar-list/header-reveal-placement'
 import { collectRenderedSidebarRowKeys } from './rendered-row-keys'
 import {
   mergeDraggedHostSectionOrder,
@@ -32,40 +31,26 @@ import {
 } from '../../../../../../shared/sidebar-list/host-section-order'
 import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host-registry'
 import {
-  type SidebarHostOption,
+  createSidebarHostLabelsSelector,
   buildSidebarHostOptions,
-  sidebarHostSemantics,
-  createSidebarHostLabelsSelector
+  sidebarHostSemantics
 } from '../controls/sidebar-host-options'
-import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
+import {
+  selectPendingWorktreeCreationKeys,
+  decodePendingWorktreeCreationKeys
+} from './pending-worktree-creation-keys'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 function createSidebarHostOptionsSelector() {
   let inputs: readonly unknown[] = []
-  let result: SidebarHostOption[] = []
+  let result: ReturnType<typeof buildSidebarHostOptions> = []
   return (
-    state: AppState,
-    repos: readonly Repo[],
-    settings: AppState['settings'],
+    state: ReturnType<typeof useAppStore.getState>,
+    repos: SectionRowsArgs['repos'],
+    settings: SectionRowsArgs['settings'],
     hostLabelOverrides: Parameters<typeof buildSidebarHostOptions>[0]['hostLabelOverrides']
-  ): SidebarHostOption[] => {
-    const nextInputs = [
-      repos,
-      state.sshTargetLabels,
-      state.sshConnectionStates,
-      settings,
-      state.runtimeStatusByEnvironmentId,
-      state.runtimeEnvironments,
-      hostLabelOverrides,
-      state.wslHostStatuses,
-      selectWslHostsServing(state),
-      state.wslHostServerFiles === 'missing'
-    ]
-    if (shallow(inputs, nextInputs)) {
-      return result
-    }
-    inputs = nextInputs
-    const next = buildSidebarHostOptions({
+  ): ReturnType<typeof buildSidebarHostOptions> => {
+    const options = {
       repos,
       sshTargetLabels: state.sshTargetLabels,
       sshConnectionStates: state.sshConnectionStates,
@@ -76,7 +61,13 @@ function createSidebarHostOptionsSelector() {
       wslHostStatuses: state.wslHostStatuses,
       wslHostsEnabled: selectWslHostsServing(state),
       wslHostServerFilesMissing: state.wslHostServerFiles === 'missing'
-    })
+    }
+    const nextInputs = Object.values(options)
+    if (shallow(inputs, nextInputs)) {
+      return result
+    }
+    inputs = nextInputs
+    const next = buildSidebarHostOptions(options)
     if (!persistedUIValuesEqual(result.map(sidebarHostSemantics), next.map(sidebarHostSemantics))) {
       result = next
     }
@@ -114,14 +105,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     useShallow((s) => selectPendingWorktreeCreationKeys(s.pendingWorktreeCreations))
   )
   const pendingCreations = useMemo(
-    () =>
-      pendingCreationKeys.map((key) => {
-        const separator = key.indexOf(' ')
-        return {
-          creationId: key.slice(0, separator),
-          repoId: key.slice(separator + 1)
-        }
-      }),
+    () => decodePendingWorktreeCreationKeys(pendingCreationKeys),
     [pendingCreationKeys]
   )
   const hostLabelOverrides = useMemo(
@@ -149,6 +133,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         sortBy: args.sortBy,
         worktrees,
         repoMap,
+        repos,
         repoOfWorktree,
         prGroupOf: createSidebarPRGroupReader(repoMap, args.prCache),
         repoOrder,
@@ -172,6 +157,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       }),
     [
       args.groupBy,
+      repos,
       args.sortBy,
       worktrees,
       repoMap,
@@ -243,6 +229,34 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       ),
     [orderedHostOptions, setWorkspaceHostOrder, workspaceHostOrder]
   )
+  const revealPending = useAppStore((state) =>
+    Boolean(state.pendingRevealSidebarRow || state.pendingRevealWorktree)
+  )
+  const headerRevealPlacements = useMemo(
+    () =>
+      revealPending
+        ? collectHeaderRevealPlacements(
+            addHostSectionRows({
+              rows: rowPlan.render(new Set()),
+              hostOptions: orderedHostOptions,
+              workspaceHostScope: args.workspaceHostScope,
+              visibleWorkspaceHostIds: args.visibleWorkspaceHostIds,
+              defaultHostId,
+              localHostLabel: getLocalExecutionHostLabel(),
+              preferProjectGrouping: true
+            }),
+            rowPlan.headerRevealPaths
+          )
+        : undefined,
+    [
+      revealPending,
+      rowPlan,
+      orderedHostOptions,
+      args.workspaceHostScope,
+      args.visibleWorkspaceHostIds,
+      defaultHostId
+    ]
+  )
   const sectionRows = useMemo(() => {
     const sectioned = addHostSectionRows({
       rows,
@@ -280,6 +294,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
   const headerHostOptions: readonly ExecutionHostRegistryEntry[] = hostOptions
   return {
     occurrencePlan: rowPlan.occurrencePlan,
+    headerRevealPlacements,
     hostOptions: headerHostOptions,
     effectiveCollapsedGroups,
     rows,

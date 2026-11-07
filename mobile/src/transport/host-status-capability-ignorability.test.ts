@@ -19,6 +19,22 @@ import type { RpcClient } from './rpc-client'
 import type { RpcResponse } from './types'
 import { stubRpcClient } from './rpc-client-test-stub'
 
+const appStateListeners = vi.hoisted(() => new Set<(state: string) => void>())
+
+vi.mock('react-native', () => ({
+  AppState: {
+    currentState: 'active',
+    addEventListener: (_type: string, listener: (state: string) => void) => {
+      appStateListeners.add(listener)
+      return {
+        remove: () => {
+          appStateListeners.delete(listener)
+        }
+      }
+    }
+  }
+}))
+
 const recordHostAppVersionMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 
 vi.mock('./host-app-version-store', () => ({
@@ -76,7 +92,8 @@ async function renderGates(client: RpcClient): Promise<HostStatusGates> {
       await Promise.resolve()
     })
   } finally {
-    mount.renderer?.unmount()
+    await act(async () => mount.renderer?.unmount())
+    expect(appStateListeners.size).toBe(0)
   }
   if (!mount.gates) {
     throw new Error('the gate hook never rendered')

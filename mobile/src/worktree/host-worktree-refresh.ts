@@ -19,6 +19,7 @@ type HostWorktreeRefreshArgs = {
   client: SharedClientEventsClient
   fetchWorktrees: (options?: WorktreeRefreshOptions) => Promise<void>
   fetchRepoMetadata: (options?: RepoRefreshOptions) => Promise<void>
+  pollProjectSections?: () => Promise<void>
   /** Re-reads the Workspace options the phone shares with the desktop; `resend` retries unanswered changes. */
   syncViewSettings: (options?: { resend?: boolean }) => Promise<void>
   /** The host's sidebar feed, which replaces the poll: its notices say when anything changed. */
@@ -31,6 +32,7 @@ export function startHostWorktreeRefresh({
   client,
   fetchWorktrees,
   fetchRepoMetadata,
+  pollProjectSections,
   syncViewSettings,
   sidebarFeed,
   appState
@@ -61,6 +63,7 @@ export function startHostWorktreeRefresh({
         void fetchWorktrees()
         // Older hosts emit no reposChanged; retain foreground repo polling, self-throttled to once a minute.
         void fetchRepoMetadata()
+        void pollProjectSections?.()
       }, WORKTREE_REFRESH_MS)
   const unsubscribe = subscribeSharedClientEvents(client, (event) => {
     if (stale) {

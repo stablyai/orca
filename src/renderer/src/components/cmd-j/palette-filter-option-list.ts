@@ -12,6 +12,7 @@ export type FilterOptionRankMode = 'registry' | 'popularity'
 export type RankedPaletteFilterOptions = {
   /** Selected (when not collapsed) then unselected — full list; UI virtualizes. */
   ordered: readonly PaletteFilterOption[]
+  completionIds: readonly string[]
   selectedCount: number
   unselectedCount: number
   /** Unselected match ids in list order — used by "Select all matching". */
@@ -36,21 +37,28 @@ function compareByPopularity(a: PaletteFilterOption, b: PaletteFilterOption): nu
 export function rankPaletteFilterOptions({
   options,
   selectedIds,
+  fullIds = selectedIds,
   query,
   rankMode
 }: {
   options: readonly PaletteFilterOption[]
   selectedIds: ReadonlySet<string>
+  fullIds?: ReadonlySet<string>
   /** Already trimmed + lowercased. */
   query: string
   rankMode: FilterOptionRankMode
 }): RankedPaletteFilterOptions {
   const selected: PaletteFilterOption[] = []
   const unselected: PaletteFilterOption[] = []
+  const completion: PaletteFilterOption[] = []
   for (const option of options) {
+    const matchesQuery = !query || option.searchText.includes(query)
+    if (matchesQuery && !fullIds.has(option.id)) {
+      completion.push(option)
+    }
     const isSelected = selectedIds.has(option.id)
     // Selected rows must stay reachable for unchecking even when they miss the query.
-    if (!isSelected && query && !option.searchText.includes(query)) {
+    if (!isSelected && !matchesQuery) {
       continue
     }
     if (isSelected) {
@@ -61,6 +69,7 @@ export function rankPaletteFilterOptions({
   }
 
   if (rankMode === 'popularity') {
+    completion.sort(compareByPopularity)
     selected.sort(compareByPopularity)
     unselected.sort(compareByPopularity)
   }
@@ -68,6 +77,7 @@ export function rankPaletteFilterOptions({
   const selectedCollapsed = selected.length > FILTER_OPTION_MAX_PINNED_SELECTED
   return {
     ordered: selectedCollapsed || selected.length === 0 ? unselected : [...selected, ...unselected],
+    completionIds: completion.map((option) => option.id),
     selectedCount: selected.length,
     unselectedCount: unselected.length,
     unselectedIds: unselected.map((option) => option.id),
