@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { Pressable, Text } from 'react-native'
 import { CornerDownRight, ListEnd } from 'lucide-react-native'
 import type {
@@ -80,9 +80,6 @@ export function MobileNativeChatSteerPreviewButton({
   const t = useMobileTranslation()
   // A press must leave focus in the field, or its focusout ends the preview before the press lands.
   const keepsField = useKeyboardPersistingTaps('always')
-  // One press per hold, as desktop takes one click: the label can change between a double-click's
-  // presses (Steer, then Steer queued), and the second must not send a card nobody chose.
-  const pressedRef = useRef(false)
   const label =
     preview === 'queue'
       ? t('chat.composer.sendQueue', 'Queue')
@@ -96,9 +93,10 @@ export function MobileNativeChatSteerPreviewButton({
       accessibilityRole="button"
       accessibilityLabel={label}
       style={({ pressed }) => [inputStyles.sendPreviewButton, pressed && inputStyles.pressed]}
-      onPress={() => {
-        if (!pressedRef.current) {
-          pressedRef.current = true
+      onPress={(event) => {
+        // As desktop: the label can change between a double-click's presses (Steer, then Steer queued).
+        const { detail } = event.nativeEvent as { detail?: unknown }
+        if (typeof detail !== 'number' || detail <= 1) {
           onPress()
         }
       }}

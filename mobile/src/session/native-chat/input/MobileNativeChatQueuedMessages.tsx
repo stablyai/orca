@@ -10,6 +10,7 @@ import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useLargeSystemText } from '../../../theme/use-large-system-text'
 import type { MobileQueuedMessageCard } from '../../mobile-structured-queued-message-cards'
+import type { MobileQueuedHeadLight } from './mobile-queued-head-light'
 import { headSteerableQueuedMessageCard } from '../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import type { AgentSessionQueuePause } from '../../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import type { MobileQueuedMessageEdit } from '../../use-mobile-structured-queued-message-controls'
@@ -60,7 +61,7 @@ export type MobileNativeChatQueuedMessagesProps = {
   onResume?: () => Promise<boolean>
   steerHeld?: boolean
   /** Lights the head card while the composer previews sending it (Steer queued). */
-  headLit?: boolean
+  headLight?: MobileQueuedHeadLight
   /** Each change to the cards with an action on its way, so the composer offers no press they'd refuse. */
   onBusyChange?: (ids: ReadonlySet<string>) => void
   /** The agent is working: a steerable card's action reads Steer, otherwise Send. */
@@ -79,7 +80,7 @@ export function MobileNativeChatQueuedMessages({
   pause,
   onResume,
   steerHeld = false,
-  headLit = false,
+  headLight,
   onBusyChange,
   agentWorking = false
 }: MobileNativeChatQueuedMessagesProps): React.JSX.Element | null {
@@ -132,7 +133,7 @@ export function MobileNativeChatQueuedMessages({
     return null
   }
   const queueBusy = busyIds.has(QUEUE_KEY)
-  const litId = headLit ? headSteerableQueuedMessageCard(cards)?.messageId : undefined
+  const headId = headSteerableQueuedMessageCard(cards)?.messageId
   const messageIds = cards.map((card) => card.messageId)
   // Clear all takes every card, so it waits for any card's own action rather than skip that card.
   const clearBusy = queueBusy || messageIds.some((messageId) => busyIds.has(messageId))
@@ -247,7 +248,7 @@ export function MobileNativeChatQueuedMessages({
                   dragHandle={handle}
                   editor={editor?.messageId === card.messageId ? editor : undefined}
                   busy={busyIds.has(card.messageId)}
-                  lit={card.messageId === litId}
+                  headLight={card.messageId === headId ? headLight : undefined}
                   editBlocked={busyIds.has(card.messageId) || editor !== undefined || !onEdit}
                   steerHeld={steerHeld}
                   agentWorking={agentWorking}

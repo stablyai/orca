@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import { Pressable, Text, View, type LayoutRectangle } from 'react-native'
 import {
   AlertCircle,
@@ -17,6 +17,9 @@ import type { MobileQueuedMessageCard } from './mobile-structured-queued-message
 import type { MobileQueuedMessageInlineEditor } from './use-mobile-structured-queued-edit'
 import { MobileQueuedMessageComposer } from './MobileQueuedMessageComposer'
 import { MobileQueuedCardText } from './MobileQueuedCardText'
+import type { MobileQueuedHeadLight } from './native-chat/input/mobile-queued-head-light'
+
+const subscribeNever = () => () => undefined
 import { MobileAgentMessageSenders } from './native-chat/transcript/MobileAgentMessageSenders'
 import { queuedMessageStyles as styles } from './native-chat/input/mobile-native-chat-queued-message-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -26,8 +29,8 @@ type QueuedMessageCardRowProps = {
   card: MobileQueuedMessageCard
   editor?: MobileQueuedMessageInlineEditor
   busy: boolean
-  /** The card the composer's Steer queued preview would send. */
-  lit?: boolean
+  /** Set on the card the composer's Steer queued preview would send. */
+  headLight?: MobileQueuedHeadLight
   editBlocked: boolean
   steerHeld: boolean
   /** Steer only into a running turn; an idle agent's card reads Send. */
@@ -62,7 +65,7 @@ export function MobileQueuedMessageCardRow({
 function QueuedMessageCardContents({
   card,
   busy,
-  lit = false,
+  headLight,
   editBlocked,
   steerHeld,
   agentWorking,
@@ -77,6 +80,10 @@ function QueuedMessageCardContents({
   const returned = card.state === 'returned'
   const steers = agentWorking && queuedMessageCardSteers(card)
   const count = card.images?.length ?? 0
+  const lit = useSyncExternalStore(
+    headLight?.subscribe ?? subscribeNever,
+    () => headLight?.get() === true
+  )
   return (
     <View testID="queued-card-row" style={[styles.card, styles.divided, lit && styles.pressed]}>
       <View style={styles.row}>

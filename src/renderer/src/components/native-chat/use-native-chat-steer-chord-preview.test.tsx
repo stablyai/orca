@@ -1,19 +1,16 @@
 // @vitest-environment happy-dom
 
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
-import { useEffect, useRef, useState } from 'react'
+import { useRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { NativeChatFollowUpBehavior } from './native-chat-follow-up-behavior'
+import type { NativeChatFollowUpBehavior } from '../../../../shared/native-chat/input/native-chat-follow-up-behavior'
 import {
   NATIVE_CHAT_STEER_CHORD_HOLD_MS,
-  createNativeChatSteerChordPreviewHook
+  useNativeChatSteerChordPreview
 } from './use-native-chat-steer-chord-preview'
 
-const useNativeChatSteerChordPreview = createNativeChatSteerChordPreviewHook({
-  useEffect,
-  useState
-})
+vi.mock('./native-chat-shortcut', () => ({ isMacPlatform: () => true }))
 
 type Props = {
   alternateSend: NativeChatFollowUpBehavior | undefined
@@ -32,8 +29,7 @@ function Composer(props: Props): React.JSX.Element {
     { alternateSend, hasDraft, chordSteersHead },
     steerHead,
     send,
-    pickerOpen,
-    'Meta'
+    pickerOpen
   )
   return (
     <div ref={root}>

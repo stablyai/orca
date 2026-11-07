@@ -20,6 +20,7 @@ import {
 } from '../input/MobileNativeChatQueuedMessages'
 import type { MobileStructuredBackgroundTasks } from '../../use-mobile-structured-background-tasks'
 import { useMobileNativeChatQueuedEditFocus } from '../input/use-mobile-native-chat-queued-edit-focus'
+import { createMobileQueuedHeadLight } from '../input/mobile-queued-head-light'
 
 /** The head queued card as an empty Cmd/Ctrl+Enter reaches it. */
 export type MobileNativeChatSteerHead = {
@@ -63,8 +64,9 @@ export function useMobileNativeChatComposerTray({
     []
   )
   // Held here, not in the list, so a chat switch mid-preview mounts the new list already lit.
-  const [headLit, light] = useState(false)
-  const [busy, setBusy] = useState<{ sessionKey: string; ids: ReadonlySet<string> } | null>(null)
+  const [headLight] = useState(createMobileQueuedHeadLight)
+  // Per chat: a chat that settles after a switch must not overwrite the current chat's record.
+  const [busy, setBusy] = useState<ReadonlyMap<string, ReadonlySet<string>>>(() => new Map())
   const {
     cards,
     onSend,
@@ -78,7 +80,7 @@ export function useMobileNativeChatComposerTray({
     steerHeld,
     agentWorking
   } = queued
-  const busyIds = busy?.sessionKey === sessionKey ? busy.ids : undefined
+  const busyIds = busy.get(sessionKey)
   return useMemo(
     () => ({
       content: createElement(
@@ -111,8 +113,17 @@ export function useMobileNativeChatComposerTray({
           pause,
           onResume,
           steerHeld,
-          headLit,
-          onBusyChange: (ids: ReadonlySet<string>) => setBusy({ sessionKey, ids: new Set(ids) }),
+          headLight,
+          onBusyChange: (ids: ReadonlySet<string>) =>
+            setBusy((current) => {
+              const next = new Map(current)
+              if (ids.size > 0) {
+                next.set(sessionKey, new Set(ids))
+              } else {
+                next.delete(sessionKey)
+              }
+              return next
+            }),
           agentWorking
         })
       ),
@@ -127,7 +138,7 @@ export function useMobileNativeChatComposerTray({
           return head !== null && busyIds?.has(head) !== true
         },
         run,
-        light
+        light: headLight.set
       }
     }),
     [
@@ -145,10 +156,9 @@ export function useMobileNativeChatComposerTray({
       pause,
       sessionKey,
       steerHeld,
-      headLit,
+      headLight,
       busyIds,
       run,
-      light,
       agentWorking
     ]
   )
