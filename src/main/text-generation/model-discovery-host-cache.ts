@@ -1,16 +1,13 @@
-import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import {
-  InFlightPromiseDedupe,
-  stableInFlightKey
-} from '../../../../shared/in-flight-promise-dedupe'
-import { setBoundedScopeCacheEntry } from '../../../../shared/native-chat/native-chat-scope-cache'
-import { PRIMARY_AGENT_DIR_ENV_BY_KIND } from '../../../../shared/pi-agent-kind'
-import { onAgentsRefreshedOnHost } from '../../../preflight/workspace-agent-detection'
-import { discoverCommitMessageModelsLocal } from '../../../text-generation/commit-message-text-generation'
-import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from '../../../text-generation/source-control-generation-limits'
-import type { DiscoverCommitMessageModelsResult } from '../../../text-generation/source-control-text-generation-types'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
+import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
+import { setBoundedScopeCacheEntry } from '../../shared/native-chat/native-chat-scope-cache'
+import { PRIMARY_AGENT_DIR_ENV_BY_KIND } from '../../shared/pi-agent-kind'
+import { onAgentsRefreshedOnHost } from '../preflight/agents-refreshed-on-host'
+import type { CommitMessageModelDiscoveryLocalOptions } from './commit-message-model-discovery'
+import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from './source-control-generation-limits'
+import type { DiscoverCommitMessageModelsResult } from './source-control-text-generation-types'
 
-// Phones list these on every chat open; other agents' lists have their own catalog owners.
+// Phone and desktop chat pickers list these on open; other agents' lists have their own catalog owners.
 // Each maps to the config-dir var that picks its login (mirrors prepareShellConfigDirEnv).
 const ACCOUNT_DIR_VAR: Partial<Record<TuiAgent, string>> = {
   omp: PRIMARY_AGENT_DIR_ENV_BY_KIND.omp,
@@ -26,40 +23,35 @@ const inFlight = new InFlightPromiseDedupe<DiscoverCommitMessageModelsResult>(
 )
 let generation = 0
 
-// An agent refresh is how a user says the CLI or its login changed.
 onAgentsRefreshedOnHost(() => {
   generation += 1
   cache.clear()
   inFlight.clear()
 })
 
-export type ModelDiscoveryInput = {
+export type ModelDiscoveryCacheInput = {
   agentId: TuiAgent
   agentCommandOverride: string | undefined
   env: NodeJS.ProcessEnv | undefined
-  wsl: { cwd: string; wslDistro: string } | null
+  options: CommitMessageModelDiscoveryLocalOptions
 }
 
-/** Probes the agent CLI; a probe-confirmed OMP or Grok list is reused for 10 min. */
+/** Runs the probe; a probe-confirmed OMP or Grok list is reused for 10 min. */
 export function discoverModelsWithHostCache(
-  input: ModelDiscoveryInput
+  input: ModelDiscoveryCacheInput,
+  probe: () => Promise<DiscoverCommitMessageModelsResult>
 ): Promise<DiscoverCommitMessageModelsResult> {
-  const probe = (): Promise<DiscoverCommitMessageModelsResult> =>
-    discoverCommitMessageModelsLocal(
-      input.agentId,
-      input.env,
-      input.agentCommandOverride,
-      input.wsl ?? undefined
-    )
   const accountDirVar = ACCOUNT_DIR_VAR[input.agentId]
   if (!accountDirVar) {
     return probe()
   }
+  const { cwd, wslDistro } = input.options
   // Not the whole env: the login-shell capture differs on every read (e.g. STARSHIP_SESSION_KEY).
+  // Native probes ignore cwd, so only a WSL probe keys on it.
   const key = stableInFlightKey([
     input.agentId,
     input.agentCommandOverride ?? null,
-    input.wsl,
+    wslDistro ? { cwd: cwd ?? '', wslDistro } : null,
     input.env?.[accountDirVar] ?? null
   ])
   const cached = cache.get(key)
