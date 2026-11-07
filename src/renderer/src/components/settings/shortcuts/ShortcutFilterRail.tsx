@@ -7,7 +7,13 @@ import { cn } from '../../../lib/utils'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import type { ShortcutTerminalStatus } from './shortcut-terminal-status'
-import { matchesSettingsSearch, type SettingsSearchEntry } from '../search/settings-search'
+import {
+  isSettingsSearchQueryTooLarge,
+  matchesExactSettingsSearchTerm,
+  matchesSettingsSearch,
+  type SettingsSearchEntry
+} from '../search/settings-search'
+import { getShortcutsPaneTitleSearchEntry } from './shortcuts-search'
 import { translate } from '@/i18n/i18n'
 
 export type ShortcutFilter = 'all' | 'modified' | 'unassigned' | 'conflicts'
@@ -63,11 +69,18 @@ export function getShortcutSearchEntry(row: ShortcutRowModel): SettingsSearchEnt
   }
 }
 
-// Title-only sidebar queries can select the pane without matching rows; keep all rows rather than blanking it.
+/** Preserves all rows for exact pane aliases and filters other queries to matching commands. */
 export function buildShortcutGlobalSearchMatcher(
   rows: readonly ShortcutRowModel[],
   searchQuery: string
 ): (row: ShortcutRowModel) => boolean {
+  if (isSettingsSearchQueryTooLarge(searchQuery)) {
+    return () => false
+  }
+  if (matchesExactSettingsSearchTerm(searchQuery, getShortcutsPaneTitleSearchEntry())) {
+    return () => true
+  }
+
   const rowMatches = (row: ShortcutRowModel): boolean =>
     matchesSettingsSearch(searchQuery, getShortcutSearchEntry(row))
   return rows.some(rowMatches) ? rowMatches : () => true
