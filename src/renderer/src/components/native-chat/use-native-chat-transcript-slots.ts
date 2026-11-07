@@ -5,7 +5,8 @@ import {
 } from '../../../../shared/native-chat/transcript/native-chat-live-line'
 import { isNativeChatRowInLiveWorkingTurn } from '../../../../shared/native-chat/transcript/native-chat-live-turn-membership'
 import {
-  buildNativeChatTranscriptSlots,
+  buildNativeChatTranscript,
+  type NativeChatMessageSlot,
   type NativeChatTranscriptSlot
 } from './native-chat-transcript-slots'
 import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-input'
@@ -16,7 +17,11 @@ export function useNativeChatTranscriptSlots({
   ...input
 }: Omit<NativeChatTranscriptSlotsInput, 'liveReasoningId'> & {
   line: { draws: boolean; thinking: boolean; stopping?: boolean; activityText?: string | null }
-}): { slots: NativeChatTranscriptSlot[]; liveLine: NativeChatLiveLine | null } {
+}): {
+  slots: NativeChatTranscriptSlot[]
+  responseGroups: NativeChatMessageSlot[][]
+  liveLine: NativeChatLiveLine | null
+} {
   const {
     messages,
     unresolvedRowIds,
@@ -64,9 +69,9 @@ export function useNativeChatTranscriptSlots({
     ]
   )
   const liveReasoningId = liveLine?.reasoning?.message.id ?? null
-  const slots = useMemo(
+  const { slots, responseGroups } = useMemo(
     () =>
-      buildNativeChatTranscriptSlots({
+      buildNativeChatTranscript({
         messages,
         unresolvedRowIds,
         typography,
@@ -101,5 +106,5 @@ export function useNativeChatTranscriptSlots({
       unresolvedRowIds
     ]
   )
-  return { slots, liveLine }
+  return { slots, responseGroups, liveLine }
 }

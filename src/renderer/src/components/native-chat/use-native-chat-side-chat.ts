@@ -8,7 +8,7 @@ import {
   nativeChatSideChatForkPoint,
   type NativeChatSideChatForkPoint
 } from './native-chat-side-chat-fork-point'
-import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
+import type { NativeChatMessageSlot } from './native-chat-transcript-slots'
 import type { NativeChatForkSurface } from './use-native-chat-fork'
 
 /** `/btw`: fork the chat through its newest finished response and ask there, beside the chat. */
@@ -71,7 +71,7 @@ export function useNativeChatSideChat(
 
 /** Tells `/btw` where the drawn transcript offers Fork, each time that changes. */
 export function useNativeChatSideChatForkPointReport(
-  slots: readonly NativeChatTranscriptSlot[],
+  responseGroups: readonly (readonly NativeChatMessageSlot[])[],
   latestTurnKey: string | undefined,
   working: boolean
 ): void {
@@ -80,9 +80,9 @@ export function useNativeChatSideChatForkPointReport(
   const point = useMemo(
     () =>
       report && fork?.support.kind === 'known'
-        ? nativeChatSideChatForkPoint(slots, latestTurnKey, working, fork)
+        ? nativeChatSideChatForkPoint(responseGroups, latestTurnKey, working, fork)
         : null,
-    [fork, latestTurnKey, report, slots, working]
+    [fork, latestTurnKey, report, responseGroups, working]
   )
   const kind = point?.kind
   const throughItemId = point?.kind === 'ready' ? point.throughItemId : undefined

@@ -82,6 +82,15 @@ export type NativeChatMessageSlot = {
 export function buildNativeChatTranscriptSlots(
   input: NativeChatTranscriptSlotsInput
 ): NativeChatTranscriptSlot[] {
+  return buildNativeChatTranscript(input).slots
+}
+
+/** The transcript's slots, and its root responses grouped by turn in draw order (a row outside any
+ *  turn is its own group), so a reader can step over a whole turn. */
+export function buildNativeChatTranscript(input: NativeChatTranscriptSlotsInput): {
+  slots: NativeChatTranscriptSlot[]
+  responseGroups: NativeChatMessageSlot[][]
+} {
   const {
     messages,
     unresolvedRowIds,
@@ -209,8 +218,23 @@ export function buildNativeChatTranscriptSlots(
   // its last drawn image response. Tools and thoughts never hold them.
   const lastWordsByTurn = new Map<string, NativeChatMessageSlot>()
   const lastImageByTurn = new Map<string, NativeChatMessageSlot>()
+  const responseGroups: NativeChatMessageSlot[][] = []
+  let groupKey: string | undefined
   for (const slot of drawn) {
-    if (slot.kind !== 'message' || slot.depth !== 0 || slot.turnKey === undefined) {
+    if (slot.kind !== 'message' || slot.depth !== 0) {
+      continue
+    }
+    if (slot.message.role === 'assistant') {
+      const key = slot.turnKey ?? slot.message.id
+      const group = responseGroups.at(-1)
+      if (group && key === groupKey) {
+        group.push(slot)
+      } else {
+        responseGroups.push([slot])
+        groupKey = key
+      }
+    }
+    if (slot.turnKey === undefined) {
       continue
     }
     slot.endsResponse = false
@@ -249,7 +273,7 @@ export function buildNativeChatTranscriptSlots(
       slot.continuesTurn = true
     }
   }
-  return drawn
+  return { slots: drawn, responseGroups }
 }
 
 export {

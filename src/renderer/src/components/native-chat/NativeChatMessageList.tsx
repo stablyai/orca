@@ -191,7 +191,11 @@ export function NativeChatMessageList({
   const tailRow = transcriptTailRow(isWorking, awaitingInput)
   const lifecycleWorking = session.transcriptLifecycle?.state === 'working'
   const { measureContent, typography } = useNativeChatRowTypography(contentRef)
-  const { slots: allSlots, liveLine } = useNativeChatTranscriptSlots({
+  const {
+    slots: allSlots,
+    responseGroups,
+    liveLine
+  } = useNativeChatTranscriptSlots({
     typography,
     messages: rows,
     unresolvedRowIds: turnRows.unresolvedRowIds,
@@ -213,7 +217,7 @@ export function NativeChatMessageList({
       activityText: turnActivity?.text
     }
   })
-  useNativeChatSideChatForkPointReport(allSlots, latestTurnKey, isWorking || lifecycleWorking)
+  useNativeChatSideChatForkPointReport(responseGroups, latestTurnKey, isWorking || lifecycleWorking)
   // A message waiting behind the live turn draws after that turn's live activity, not inside it.
   const { slots, waitingSlots } = useMemo(
     () =>
