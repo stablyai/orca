@@ -92,8 +92,17 @@ export async function readPtyTerminalRows(
     return null
   }
   const stdout = await readTerminalPs(
-    // sid groups the rows by session: a Docker container sharing the pts number runs in its own.
-    ['-ww', '-o', 'pid=,ppid=,pgid=,tpgid=,sid=,stat=,command=', '-t', normalized],
+    // sid groups the rows by session on Linux: a Docker container sharing the pts number runs
+    // in its own (#39488). macOS ps has no sid keyword, so the parser treats it as absent.
+    [
+      '-ww',
+      '-o',
+      process.platform === 'darwin'
+        ? 'pid=,ppid=,pgid=,tpgid=,stat=,command='
+        : 'pid=,ppid=,pgid=,tpgid=,sid=,stat=,command=',
+      '-t',
+      normalized
+    ],
     timeoutMs
   )
   try {

@@ -10,12 +10,18 @@ import {
   getStrictProcessTableSnapshotWithAge,
   resetProcessTableSnapshotForTests
 } from './process-table-snapshot-reader'
-import { parseShellForegroundRows, PS_ARGS } from './process-table-snapshot'
+import {
+  parseShellForegroundRows,
+  PS_ARGS,
+  SHELL_FOREGROUND_PS_ARGS
+} from './process-table-snapshot'
 import * as darwinTerminalNames from './darwin-terminal-names'
 
 type Callback = (error: Error | null, result: { stdout: string; stderr: string }) => void
 const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
-const shell = '100 99 100 100 100 Ss+ /bin/zsh -l'
+// The parser handles both shapes: with sid on Linux, without on macOS.
+const shellHasSid = SHELL_FOREGROUND_PS_ARGS[1]?.includes('sid=') ?? false
+const shell = shellHasSid ? '100 99 100 100 100 Ss+ /bin/zsh -l' : '100 99 100 100 Ss+ /bin/zsh -l'
 
 beforeEach(() => {
   Object.defineProperty(process, 'platform', { value: 'darwin' })
@@ -30,7 +36,7 @@ it('answers concurrent shell proofs without waiting for a pending full capture',
     if (args[1]?.includes('tdev=')) {
       finishFull = callback
     } else {
-      expect(args).toEqual(['-axo', 'pid=,ppid=,pgid=,tpgid=,sid=,stat=,command='])
+      expect(args).toEqual(SHELL_FOREGROUND_PS_ARGS)
       callback(null, { stdout: shell, stderr: '' })
     }
   })
@@ -40,7 +46,9 @@ it('answers concurrent shell proofs without waiting for a pending full capture',
     getFreshShellForegroundSnapshot()
   ])
   expect(first).toEqual([
-    { pid: 100, ppid: 99, pgid: 100, tpgid: 100, sid: 100, stat: 'Ss+', command: '/bin/zsh -l' }
+    shellHasSid
+      ? { pid: 100, ppid: 99, pgid: 100, tpgid: 100, sid: 100, stat: 'Ss+', command: '/bin/zsh -l' }
+      : { pid: 100, ppid: 99, pgid: 100, tpgid: 100, stat: 'Ss+', command: '/bin/zsh -l' }
   ])
   expect(second).toBe(first)
   expect(execFileMock).toHaveBeenCalledTimes(2)
@@ -71,15 +79,24 @@ it('requires a new capture after an earlier shell proof has started', async () =
 // With no `tty=` column to absorb them, the shared parser read `python`/`3` as tty/start.
 it('keeps an argv whose second token is numeric', () => {
   expect(parseShellForegroundRows('101 100 101 101 101 S+ /usr/bin/python 3 app.py')).toEqual([
-    {
-      pid: 101,
-      ppid: 100,
-      pgid: 101,
-      tpgid: 101,
-      sid: 101,
-      stat: 'S+',
-      command: '/usr/bin/python 3 app.py'
-    }
+    shellHasSid
+      ? {
+          pid: 101,
+          ppid: 100,
+          pgid: 101,
+          tpgid: 101,
+          sid: 101,
+          stat: 'S+',
+          command: '/usr/bin/python 3 app.py'
+        }
+      : {
+          pid: 101,
+          ppid: 100,
+          pgid: 101,
+          tpgid: 101,
+          stat: 'S+',
+          command: '/usr/bin/python 3 app.py'
+        }
   ])
 })
 

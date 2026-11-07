@@ -34,11 +34,11 @@ export const CHEAP_PS_ARGS = (
 ) as readonly string[]
 
 /** Shell-proof tier keeps job control/argv, dropping costly unused tty/start columns; enough to name foreground processes,
- * never correlate reused PIDs across captures. */
-export const SHELL_FOREGROUND_PS_ARGS = [
-  '-axo',
-  'pid=,ppid=,pgid=,tpgid=,sid=,stat=,command='
-] as readonly string[]
+ * never correlate reused PIDs across captures. Linux adds `sid=` so the session filter can exclude
+ * a Docker container sharing the pts number (#39488); macOS ps has no `sid` keyword. */
+export const SHELL_FOREGROUND_PS_ARGS = HOST_IS_DARWIN
+  ? (['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,command='] as readonly string[])
+  : (['-axo', 'pid=,ppid=,pgid=,tpgid=,sid=,stat=,command='] as readonly string[])
 
 /** The name inside ps's `(comm)`, printed when argv was unreadable (another user's process, an exiting one, or a
  * recovery the fork budget withheld): its identity is unknown, so it never proves which program holds a terminal. */
@@ -60,8 +60,8 @@ export function parseShellForegroundRows(
       .trim()
       .match(
         options?.strict
-          ? /^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\d+)\s+(\S+)(?:\s+(.+))?$/
-          : /^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\d+)\s+(\S+)\s+(.+)$/
+          ? /^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)(?:\s+(\d+))?\s+(\S+)(?:\s+(.+))?$/
+          : /^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)(?:\s+(\d+))?\s+(\S+)\s+(.+)$/
       )
     const pid = match ? Number(match[1]) : 0
     if (
@@ -70,7 +70,7 @@ export function parseShellForegroundRows(
       (!match ||
         !Number.isSafeInteger(pid) ||
         pid <= 0 ||
-        ![2, 3, 4, 5].every((i) => Number.isSafeInteger(Number(match[i]))) ||
+        ![2, 3, 4].every((i) => Number.isSafeInteger(Number(match[i]))) ||
         Number(match[2]) < 0 ||
         Number(match[3]) < 0 ||
         Number(match[4]) < -1)
@@ -83,7 +83,8 @@ export function parseShellForegroundRows(
         ppid: Number(match[2]),
         pgid: Number(match[3]),
         tpgid: Number(match[4]),
-        sid: Number(match[5]),
+        // Group 5 is sid on Linux output; absent on macOS where the regex skips it.
+        ...(match[5] !== undefined ? { sid: Number(match[5]) } : {}),
         stat: match[6],
         command: match[7] ?? ''
       })
