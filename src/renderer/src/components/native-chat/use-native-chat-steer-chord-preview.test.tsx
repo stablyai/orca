@@ -15,7 +15,7 @@ vi.mock('./native-chat-shortcut', () => ({ isMacPlatform: () => true }))
 type Props = {
   alternateSend: NativeChatFollowUpBehavior | undefined
   hasDraft: boolean
-  chordSteersHead: boolean
+  chordSteersQueued: boolean
   steerHead: (() => boolean) | undefined
   send: () => void
   pickerOpen: boolean
@@ -23,10 +23,10 @@ type Props = {
 
 function Composer(props: Props): React.JSX.Element {
   const root = useRef<HTMLDivElement>(null)
-  const { alternateSend, hasDraft, chordSteersHead, steerHead, send, pickerOpen } = props
+  const { alternateSend, hasDraft, chordSteersQueued, steerHead, send, pickerOpen } = props
   const { preview, runPreview } = useNativeChatSteerChordPreview(
     root,
-    { alternateSend, hasDraft, chordSteersHead },
+    { alternateSend, hasDraft, chordSteersQueued },
     steerHead,
     send,
     pickerOpen
@@ -56,7 +56,7 @@ describe('useNativeChatSteerChordPreview', () => {
     const props: Props = {
       alternateSend: 'steer',
       hasDraft: false,
-      chordSteersHead: true,
+      chordSteersQueued: true,
       steerHead: vi.fn(() => true),
       send: vi.fn(),
       pickerOpen: false,

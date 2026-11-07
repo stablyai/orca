@@ -3,7 +3,7 @@ import type { NativeChatFollowUpBehavior } from '../../../../shared/native-chat/
 import type { NativeChatComposerSendIntent } from './native-chat-composer-types'
 import { isMacPlatform } from './native-chat-shortcut'
 
-/** What Cmd/Ctrl+Enter would do now: the typed draft the other way, or the head queued card in. */
+/** What Cmd/Ctrl+Enter would do now: the typed draft the other way, or the last queued card in. */
 export type NativeChatSteerChordPreview = NativeChatFollowUpBehavior | 'steer-queued'
 
 // Long enough that Cmd+C, Cmd+V and other quick chords never flash the button.
@@ -16,15 +16,17 @@ export function useNativeChatSteerChordPreview(
   {
     alternateSend,
     hasDraft,
-    chordSteersHead
+    sendHeld = false,
+    chordSteersQueued
   }: {
     alternateSend?: NativeChatFollowUpBehavior
     hasDraft: boolean
-    /** On an empty composer the chord sends the head card now (the keydown's own flag). */
-    chordSteersHead: boolean
+    sendHeld?: boolean
+    /** On an empty composer the chord sends the last card now (the keydown's own flag). */
+    chordSteersQueued: boolean
   },
-  /** Present only while there is a head card to steer. */
-  steerHead: (() => boolean) | undefined,
+  /** Present only while there is a last card to steer. */
+  steerQueued: (() => boolean) | undefined,
   send: (intent?: NativeChatComposerSendIntent) => void,
   /** An open picker takes Enter, so the chord previews nothing then. */
   pickerOpen: boolean
@@ -32,8 +34,8 @@ export function useNativeChatSteerChordPreview(
   // 'down' while the modifier is pressed alone and the delay runs; 'held' once it has passed.
   const [chord, setChord] = useState<'up' | 'down' | 'held'>('up')
   const held = chord === 'held'
-  const steersHead = chordSteersHead && steerHead !== undefined
-  const enabled = alternateSend !== undefined || steersHead
+  const steersQueued = chordSteersQueued && steerQueued !== undefined
+  const enabled = !sendHeld && (alternateSend !== undefined || steersQueued)
   useEffect(() => {
     const element = root.current
     if (!element || !enabled) {
@@ -104,17 +106,17 @@ export function useNativeChatSteerChordPreview(
   }, [held])
 
   const preview: NativeChatSteerChordPreview | null =
-    !held || pickerOpen
+    !held || !enabled || pickerOpen
       ? null
       : hasDraft
         ? (alternateSend ?? null)
-        : steersHead
+        : steersQueued
           ? 'steer-queued'
           : null
 
   const runPreview = (): void => {
     if (preview === 'steer-queued') {
-      steerHead?.()
+      steerQueued?.()
     } else if (preview) {
       send({ alternate: true })
     }

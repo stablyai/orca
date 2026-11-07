@@ -18,8 +18,8 @@ export type NativeChatComposerSendState = {
   sendButtonDisabled: boolean
   /** While the agent works: what Cmd/Ctrl+Enter would do instead of a plain send, when it differs. */
   alternateSend: NativeChatFollowUpBehavior | undefined
-  /** Cmd/Ctrl+Enter on an empty composer sends the head queued card now: into the running turn, or with none running (a paused queue after Stop), as its own. */
-  chordSteersHead: boolean
+  /** Cmd/Ctrl+Enter on an empty composer sends the last queued card now: into the running turn, or with none running (a paused queue after Stop), as its own. */
+  chordSteersQueued: boolean
 }
 
 /** What the composer's Send/Stop button offers now, and whether it can be pressed. */
@@ -91,7 +91,7 @@ export function nativeChatComposerSendState(input: {
     sendButtonDisabled,
     alternateSend,
     // Never where the chord queues, or a second press would steer the card the first one just queued.
-    chordSteersHead:
+    chordSteersQueued:
       input.messageDelivery && !input.editSession && (alternateSend === 'steer' || !input.isWorking)
   }
 }
