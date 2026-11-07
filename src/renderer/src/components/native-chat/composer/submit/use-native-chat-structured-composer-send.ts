@@ -191,6 +191,9 @@ export function useNativeChatStructuredComposerSend({
         setCaret(composing ? 0 : left.text.length)
         clearSkillOrigin()
       }
+      // A refused command returns only to an empty composer; a lone command typed since would be replaced.
+      const recoversDraft = () =>
+        consumed && (!hostCommand || readNativeChatComposerDraft(draftScopeKey).text.trim() === '')
       const prepareAttachments: StructuredAgentSessionAttachmentPreparation | undefined =
         stagedInput ? (input) => stagedInput.prepare(input, structuredTransport) : undefined
       return dispatchNativeChatStructuredComposerText(
@@ -211,7 +214,7 @@ export function useNativeChatStructuredComposerSend({
             structuredTransport.onError(error, refusedWhile ? { refusedWhile } : undefined)
           }
           if (!accepted) {
-            finishNativeChatComposerSubmission(draftScopeKey, submission, consumed)
+            finishNativeChatComposerSubmission(draftScopeKey, submission, recoversDraft())
             return false
           }
           transferred = true
@@ -224,7 +227,7 @@ export function useNativeChatStructuredComposerSend({
           return true
         })
         .catch((error) => {
-          finishNativeChatComposerSubmission(draftScopeKey, submission, consumed)
+          finishNativeChatComposerSubmission(draftScopeKey, submission, recoversDraft())
           if (hostCommand && !isCurrent()) {
             return false
           }
