@@ -9,6 +9,7 @@ import {
   type RuntimeEnvironmentStore
 } from '../host-catalog/runtime-environments'
 import {
+  getRuntimeEnvironmentSidecarPath,
   overlayRuntimeEnvironmentSidecar,
   readRuntimeEnvironmentSidecar,
   RuntimeEnvironmentSidecarInvalidError
@@ -24,11 +25,13 @@ import {
   warnUnreadableEnvironmentState
 } from './runtime-environment-store-records'
 import {
+  getWslHostDeploymentStorePath,
   overlayWslHostDeployments,
   readWslHostDeployments,
   WslHostDeploymentStoreInvalidError
 } from './wsl-host-deployment-store'
 import { isWslHostsServing } from '../../wsl-host-internal-gate'
+import { createFileSignatureCache } from './runtime-environment-store-read-cache'
 
 /** Readable records only; writeEnvironmentStore preserves unreadable corrupt/newer records verbatim. */
 export function readPersistedEnvironmentStore(
@@ -68,13 +71,35 @@ function readWslHostDeploymentsForRegistry(
   }
 }
 
+type MergedEnvironmentStore = {
+  version: 1
+  environments: KnownRuntimeEnvironment[]
+}
+
+const mergedStoreCache = createFileSignatureCache<MergedEnvironmentStore>()
+
 export function readEnvironmentStore(
   userDataPath: string,
   options: EnvironmentStoreRecordsReadOptions = {}
-): {
-  version: 1
-  environments: KnownRuntimeEnvironment[]
-} {
+): MergedEnvironmentStore {
+  if (options.requireStoreFile || options.recoverBlankStore) {
+    return readEnvironmentStoreUncached(userDataPath, options)
+  }
+  return mergedStoreCache.read(
+    `${userDataPath}\0${isWslHostsServing(process.env)}`,
+    [
+      getEnvironmentStorePath(userDataPath),
+      getRuntimeEnvironmentSidecarPath(userDataPath),
+      getWslHostDeploymentStorePath(userDataPath)
+    ],
+    () => readEnvironmentStoreUncached(userDataPath, options)
+  )
+}
+
+function readEnvironmentStoreUncached(
+  userDataPath: string,
+  options: EnvironmentStoreRecordsReadOptions
+): MergedEnvironmentStore {
   const store = readPersistedEnvironmentStore(userDataPath, options)
   let sidecar: ReturnType<typeof readRuntimeEnvironmentSidecar>
   let wslDeployments: ReturnType<typeof readWslHostDeployments>
