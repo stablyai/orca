@@ -206,7 +206,6 @@
     },
     "composerPlaceholder": {
       "prompt": "Frage stellen, @ für Dateiverweise, / für Befehle",
-      "reconnecting": "Verbindung wird wiederhergestellt…",
       "waitingForTerminal": "Warten auf Terminal…"
     },
     "diffCard": {
@@ -353,6 +352,11 @@
       "resume": "Fortsetzen",
       "resumeSending": "Senden der Nachrichten in der Warteschlange fortsetzen",
       "title": "Nachrichten in der Warteschlange"
+    },
+    "offlineQueue": {
+      "failed": "Nicht gesendet – zum erneuten Versuch auf Senden tippen",
+      "waitingFor": "Wird gesendet, wenn {{host}} wieder erreichbar ist",
+      "waiting": "Wird gesendet, wenn der Desktop wieder erreichbar ist"
     },
     "receipt": {
       "cancelled": "Abgebrochen",

@@ -77,14 +77,19 @@ export function useMobileStructuredNativeChatSendBridge(args: {
         onSendError('Message not sent (disconnected)')
         return 'rejected'
       }
-      const skills = readMobileNativeChatPickedSkills(origin.draftKey)
-      clearDraftForSend(origin, text)
+      // A queued message never sat in the composer, so its send leaves the composer alone.
+      const queued = intent?.queued
+      const skills = queued ? [...queued.skills] : readMobileNativeChatPickedSkills(origin.draftKey)
+      if (!queued) {
+        clearDraftForSend(origin, text)
+      }
       // Saved, journal id included, in the same write as the clear, so a kill mid-send can be checked against the journal.
       const clientMessageId = structuredSessionOperationId()
       const inFlightId = beginMobileNativeChatInFlightSend(origin, 'structured', text, {
         clientMessageId,
         command: intent?.goal === true || isSlashCommandDraft(text),
-        carried: intent?.carried
+        carried: queued ?? intent?.carried,
+        skills
       })
       const created: { clientMessageId?: string } = {}
       const outcome = await sendStructured(text, images, deadline, attachments, skills, {
@@ -96,6 +101,9 @@ export function useMobileStructuredNativeChatSendBridge(args: {
         }
       })
       const handBack = () => {
+        if (queued) {
+          return
+        }
         restoreRejectedDraft(origin, text)
         restoreMobileNativeChatPickedSkills(origin.draftDestination, skills)
       }

@@ -210,7 +210,6 @@
     },
     "composerPlaceholder": {
       "prompt": "Pregunta lo que quieras, @ para referenciar archivos, / para comandos",
-      "reconnecting": "Reconectando…",
       "waitingForTerminal": "Esperando a la terminal…"
     },
     "diffCard": {
@@ -357,6 +356,11 @@
       "resume": "Reanudar",
       "resumeSending": "Reanudar el envío de los mensajes en cola",
       "title": "Mensajes en cola"
+    },
+    "offlineQueue": {
+      "failed": "No se pudo enviar: toca Enviar para reintentar",
+      "waitingFor": "Se enviará cuando {{host}} vuelva",
+      "waiting": "Se enviará cuando el escritorio vuelva"
     },
     "receipt": {
       "cancelled": "Cancelado",

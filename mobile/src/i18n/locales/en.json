@@ -2889,6 +2889,11 @@
       "queuedState": "Queued",
       "editMessage": "Edit message"
     },
+    "offlineQueue": {
+      "failed": "Couldn't send — tap Send to retry",
+      "waitingFor": "Sends when {{host}} is back",
+      "waiting": "Sends when the desktop is back"
+    },
     "sessionOptionPickers": {
       "workingAnnouncement": "Agent is working. Model settings unlock when this turn finishes.",
       "modelFullAccessLabel": "Model, {{value}}, full access",
@@ -3158,7 +3163,6 @@
       "statusWontContinue": "Orca won't continue automatically"
     },
     "composerPlaceholder": {
-      "reconnecting": "Reconnecting…",
       "waitingForTerminal": "Waiting for terminal…",
       "prompt": "Ask anything, @ to mention files, / for commands"
     },

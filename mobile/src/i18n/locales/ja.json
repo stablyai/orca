@@ -206,7 +206,6 @@
     },
     "composerPlaceholder": {
       "prompt": "何でも聞いてください。@ でファイルを参照、/ でコマンドを実行",
-      "reconnecting": "再接続中…",
       "waitingForTerminal": "ターミナルを待っています…"
     },
     "diffCard": {
@@ -353,6 +352,11 @@
       "resume": "再開",
       "resumeSending": "キュー内のメッセージの送信を再開",
       "title": "キュー内のメッセージ"
+    },
+    "offlineQueue": {
+      "failed": "送信できませんでした — 「送信」をタップして再試行",
+      "waitingFor": "{{host}} に再接続すると送信されます",
+      "waiting": "デスクトップに再接続すると送信されます"
     },
     "receipt": {
       "cancelled": "キャンセル",

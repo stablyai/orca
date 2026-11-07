@@ -12,6 +12,7 @@ import {
   buildAgentTuiClearInputForText
 } from '../../../../src/shared/agent-launch/startup/agent-tui-input-clear'
 import { nativeChatTerminalDraftRead } from '../mobile-session-read-operations'
+import type { MobileNativeChatOfflineSend } from './composer/mobile-native-chat-offline-sends'
 
 export type MobileNativeChatRpcSender = Parameters<typeof nativeChatTerminalWrite.request>[0]
 
@@ -51,6 +52,8 @@ export type MobileNativeChatSendIntent = {
     images: readonly PendingNativeChatImage[]
     files: readonly PendingNativeChatFile[]
   }
+  /** A message the phone queued offline: it carries its own inputs and the send never touches the composer. */
+  queued?: Pick<MobileNativeChatOfflineSend, 'images' | 'files' | 'skills' | 'skillOrigin'>
 }
 
 export type MobileNativeChatWriteOutcome = Exclude<MobileNativeChatSendOutcome, 'queued'>

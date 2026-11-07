@@ -7,6 +7,7 @@ import {
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
 import type { MobileNativeChatSendOrigin } from '../mobile-native-chat-pending-echo'
 import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
+import type { AgentJournalSkillRef } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { saveMobileNativeChatDraft } from './mobile-native-chat-draft-persistence'
 import type {
   MobileNativeChatInFlightSend,
@@ -55,6 +56,8 @@ export function beginMobileNativeChatInFlightSend(
     command?: boolean
     // Only the chips this send took, not ones attached while it was on its way.
     carried?: MobileNativeChatSendIntent['carried']
+    // A queued message's own skills; otherwise the composer's.
+    skills?: readonly AgentJournalSkillRef[]
   } = {}
 ): string | null {
   const destination = origin.draftDestination
@@ -74,7 +77,7 @@ export function beginMobileNativeChatInFlightSend(
       id,
       kind,
       text,
-      skills: inputs.skills,
+      skills: extra.skills ?? inputs.skills,
       images: (extra.carried?.images ?? []).map(({ path }) => ({ path })),
       files: savedMobileNativeChatFiles(extra.carried?.files ?? []),
       sessionId: origin.pendingKey?.slice(origin.draftKey.length + 1) ?? null,
