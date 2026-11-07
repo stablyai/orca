@@ -275,3 +275,24 @@ it('keeps previous hits when the query fails or the service is unavailable (#392
   expect(result.current.hits.length).toBe(1)
   unmount()
 })
+
+it('does not retain hits across a host scope change (#39344)', async () => {
+  const request = { query: 'needle' }
+  const first = { ...searchResults(), hits: [{ ...searchHit(), sessionId: 'local-only' }] }
+  searchSessions.mockResolvedValueOnce(first)
+  const { result, rerender, unmount } = renderHook(
+    ({ host }) => useAiVaultSearch(request, host, ''),
+    { initialProps: { host: 'local' as ExecutionHostId } }
+  )
+  await debounce()
+  expect(result.current.hits.map((hit) => hit.sessionId)).toEqual(['local-only'])
+
+  // Switch to a different host: the pending query never resolves, so retained hits would show.
+  searchSessions.mockImplementationOnce(() => new Promise(() => {}))
+  rerender({ host: 'ssh:other' })
+  await debounce()
+  expect(result.current.hits).toEqual([])
+  expect(result.current.loading).toBe(true)
+  expect(result.current.inherited).toBe(false)
+  unmount()
+})
