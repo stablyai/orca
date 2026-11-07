@@ -151,7 +151,9 @@ export function execFileCapture(
     let settled = false
     let terminating = false
     let child: ChildProcess | WorkerThreadChildProcess | null = null
-    const useWorker = options.spawnOnWorkerThread === true && process.platform === 'darwin'
+    const useWorker =
+      options.spawnOnWorkerThread === true &&
+      (process.platform === 'darwin' || process.platform === 'win32')
     let timer: NodeJS.Timeout | null = null
     let terminationReported = false
     const reportChildTerminated = (): void => {

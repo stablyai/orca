@@ -122,7 +122,9 @@ describe('worker-owned Git capture', () => {
   })
 })
 
-describe.skipIf(process.platform !== 'darwin')('macOS worker capture stdin', () => {
+const workerCapturePlatform = process.platform === 'darwin' || process.platform === 'win32'
+
+describe.skipIf(!workerCapturePlatform)('worker capture stdin', () => {
   it.each([undefined, '', 'commit message\nλ\n'.repeat(10_000)])(
     'delivers stdin completely before EOF (%#)',
     async (input) => {
@@ -146,7 +148,7 @@ describe.skipIf(process.platform !== 'darwin')('macOS worker capture stdin', () 
   )
 })
 
-describe.skipIf(process.platform !== 'darwin')('macOS worker capture cancellation', () => {
+describe.skipIf(!workerCapturePlatform)('worker capture cancellation', () => {
   it('does not report a queued child terminated until the worker processes its kill', async () => {
     const gate = new SharedArrayBuffer(4)
     await createHost(gate)
