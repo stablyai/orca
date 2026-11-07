@@ -133,7 +133,14 @@ it('never reports the deleted index while re-enabling a cleared search', async (
     await writeClaudeTranscript(transcriptPath(id), ['searchable conversation'], id)
   }
   const subject = newInstance()
-  await subject.apply({ enabled: true, historyDays: null })
+  const initialEnable = subject.apply({ enabled: true, historyDays: null })
+  expect(await subject.status()).toMatchObject({
+    enabled: true,
+    phase: 'indexing',
+    filesIndexed: 0,
+    messagesIndexed: 0
+  })
+  await initialEnable
   await subject.settled()
   expect(await subject.status()).toMatchObject({ filesIndexed: 2, messagesIndexed: 4 })
 
@@ -161,7 +168,12 @@ it('never reports the deleted index while re-enabling a cleared search', async (
   const enabling = subject.apply({ enabled: true, historyDays: null })
   try {
     await started
-    expect(await subject.status()).toMatchObject({ enabled: true, phase: 'idle', filesIndexed: 0 })
+    expect(await subject.status()).toMatchObject({
+      enabled: true,
+      phase: 'indexing',
+      filesIndexed: 0,
+      messagesIndexed: 0
+    })
   } finally {
     release()
     await enabling

@@ -27,7 +27,7 @@ type LiveIndex = { indexer: SessionSearchIndexer; readers: SessionSearchReaders 
 export class SessionSearchInstance {
   private live: LiveIndex | null = null
   private settings: AiVaultSearchSettings = { enabled: false, historyDays: null }
-  private transition = Promise.resolve()
+  private transition: Promise<void> | null = null
   private readonly onError: (error: unknown) => void
   constructor(private readonly options: SessionSearchInstanceOptions) {
     this.onError = options.onError ?? ((error) => console.warn('[ai-vault-search]', error))
@@ -43,7 +43,16 @@ export class SessionSearchInstance {
     return withinSessionSearchDeadline(this.queue(this.settings, true), signal)
   }
   close(): Promise<void> {
-    return (this.transition = this.transition.then(() => this.closeLive()).catch(this.onError))
+    return this.trackTransition((this.transition ?? Promise.resolve()).then(() => this.closeLive()))
+  }
+  private trackTransition(operation: Promise<void>): Promise<void> {
+    const pending = operation.catch(this.onError).finally(() => {
+      if (this.transition === pending) {
+        this.transition = null
+      }
+    })
+    this.transition = pending
+    return pending
   }
   private queue(settings: AiVaultSearchSettings, clear: boolean): Promise<void> {
     const old = this.live
@@ -52,7 +61,7 @@ export class SessionSearchInstance {
     const retired = old
       ? Promise.all([old.indexer.retired(), old.readers.close()])
       : Promise.resolve()
-    const operation = this.transition.then(async () => {
+    const operation = (this.transition ?? Promise.resolve()).then(async () => {
       await retired
       await this.closeLive()
       if (clear) {
@@ -79,7 +88,7 @@ export class SessionSearchInstance {
       this.live = { indexer, readers }
       void indexer.start().catch(this.onError)
     })
-    this.transition = operation.catch(this.onError)
+    this.trackTransition(operation)
     return operation
   }
   async search(
@@ -100,7 +109,13 @@ export class SessionSearchInstance {
   async status(): Promise<AiVaultSearchStatus> {
     const live = this.live
     if (!this.settings.enabled || !live) {
-      return { ...unavailableSessionSearchStatus(), enabled: this.settings.enabled }
+      return {
+        ...unavailableSessionSearchStatus(),
+        enabled: this.settings.enabled,
+        ...(this.settings.enabled && this.transition
+          ? { phase: 'indexing', messagesIndexed: 0 }
+          : {})
+      }
     }
     return {
       enabled: true,
@@ -110,7 +125,9 @@ export class SessionSearchInstance {
   }
   reconcile(signal?: AbortSignal): Promise<void> {
     return withinSessionSearchDeadline(
-      this.transition.then(() => this.live?.indexer.reconcile({ full: true })),
+      (this.transition ?? Promise.resolve()).then(() =>
+        this.live?.indexer.reconcile({ full: true })
+      ),
       signal
     )
   }
