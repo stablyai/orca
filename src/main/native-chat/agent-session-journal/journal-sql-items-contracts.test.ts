@@ -1,6 +1,10 @@
 import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
 import { afterEach, expect, it } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalItemBody,
+  AgentJournalRenderItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import Database from '../../sqlite/sync-database'
 import { ensureJournalOutcomeTables } from './outcomes/journal-outcome-format'
 import { JournalSqlScope } from './journal-sql-scope'
@@ -156,4 +160,156 @@ it('preserves writes through captured items and captures made after their source
   c = f.command()
   expect(c.items.get('saved')!.revision).toBe(2)
   expect(c.captured.get('live')).toBe(c.items.get('saved'))
+})
+
+function statusColumns(db: Database.Database, itemId: string) {
+  return db
+    .prepare(`SELECT message_role, command_entry, lifecycle_state, assistant_prose, turn_scope_kind
+      FROM journal_proj_items WHERE entry_key=?`)
+    .get(JSON.stringify(itemId))
+}
+
+function row(itemId: string, body: AgentJournalItemBody, turnScope?: AgentJournalTurnScope) {
+  return { itemId, revision: 0, sequence: 2, observedAt: 100, body, turnScope }
+}
+
+it('derives row-local status columns from typed and legacy bodies', () => {
+  const f = fixture()
+  const c = f.command()
+  const rows = [
+    row('command', { kind: 'message', role: 'assistant', blocks: [], command: { name: '' } }),
+    row(
+      'visual',
+      {
+        kind: 'message',
+        role: 'assistant',
+        blocks: [{ type: 'text', text: '::orca-visual{file="usage.html" title="Usage"}' }]
+      },
+      { kind: 'thread' }
+    ),
+    row(
+      'legacy',
+      { kind: 'status', text: 'Working', turnLifecycle: { turnId: 't', state: 'running' } },
+      {
+        kind: 'unknown'
+      }
+    ),
+    row(
+      'turn',
+      { kind: 'turn', turnId: 't', state: 'completed' },
+      { kind: 'turn', turnItemId: 'turn' }
+    ),
+    row('approval', {
+      kind: 'approval',
+      title: 'Run?',
+      detail: null,
+      options: [],
+      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+    }),
+    row('diff', {
+      kind: 'diff',
+      path: 'a.ts',
+      patch: { head: '', byteLength: 0, digest: '', truncated: false }
+    })
+  ]
+  for (const value of rows) {
+    c.items.set(value.itemId, value)
+  }
+  c.items.set('prose', item('prose', 'Done'))
+  c.context.flush()
+  expect(
+    rows.concat(row('prose', item('prose', '').body)).map((r) => statusColumns(f.db, r.itemId))
+  ).toEqual([
+    {
+      message_role: 'assistant',
+      command_entry: 1,
+      lifecycle_state: null,
+      assistant_prose: 0,
+      turn_scope_kind: null
+    },
+    {
+      message_role: 'assistant',
+      command_entry: 0,
+      lifecycle_state: null,
+      assistant_prose: 0,
+      turn_scope_kind: 'thread'
+    },
+    {
+      message_role: null,
+      command_entry: 0,
+      lifecycle_state: 'running',
+      assistant_prose: 0,
+      turn_scope_kind: 'unknown'
+    },
+    {
+      message_role: null,
+      command_entry: 0,
+      lifecycle_state: 'completed',
+      assistant_prose: 0,
+      turn_scope_kind: 'turn'
+    },
+    {
+      message_role: null,
+      command_entry: 0,
+      lifecycle_state: 'pending',
+      assistant_prose: 0,
+      turn_scope_kind: null
+    },
+    {
+      message_role: null,
+      command_entry: 0,
+      lifecycle_state: null,
+      assistant_prose: 0,
+      turn_scope_kind: null
+    },
+    {
+      message_role: 'assistant',
+      command_entry: 0,
+      lifecycle_state: null,
+      assistant_prose: 1,
+      turn_scope_kind: null
+    }
+  ])
+})
+
+it('rewrites status columns only for the current incarnation and rolls them back with it', () => {
+  const f = fixture()
+  const turn = (state: 'running' | 'completed', revision: number) => ({
+    ...row('turn', { kind: 'turn', turnId: 't', state }),
+    revision
+  })
+  let c = f.command()
+  c.items.set('turn', turn('running', 0))
+  f.save(c, 'turn', 2)
+  c = f.command()
+  c.captured.set('old', c.items.get('turn')!)
+  c.items.set('turn', turn('completed', 1))
+  f.save(c, 'turn', 3)
+  c = f.command()
+  Object.assign(c.captured.get('old')!.body, { state: 'interrupted' })
+  c.context.flush()
+  expect(statusColumns(f.db, 'turn')).toMatchObject({ lifecycle_state: 'completed' })
+  c = f.command()
+  c.captured.set('live', c.items.get('turn')!)
+  c.context.flush()
+  c = f.command()
+  Object.assign(c.captured.get('live')!.body, { state: 'unverifiable' })
+  f.save(c, 'turn', 4)
+  expect(statusColumns(f.db, 'turn')).toMatchObject({ lifecycle_state: 'unverifiable' })
+  f.db.exec('SAVEPOINT command')
+  c = f.command()
+  c.items.set('turn', item('turn', 'replaced', 2))
+  f.save(c, 'turn', 5)
+  expect(statusColumns(f.db, 'turn')).toMatchObject({
+    message_role: 'assistant',
+    lifecycle_state: null
+  })
+  f.db.exec('ROLLBACK TO command; RELEASE command')
+  expect(statusColumns(f.db, 'turn')).toEqual({
+    message_role: null,
+    command_entry: 0,
+    lifecycle_state: 'unverifiable',
+    assistant_prose: 0,
+    turn_scope_kind: null
+  })
 })

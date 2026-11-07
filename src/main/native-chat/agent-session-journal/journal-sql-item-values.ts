@@ -10,6 +10,7 @@ import {
   subagentFoldKey,
   subagentItemBlock
 } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
+import { journalItemStatusMetadata } from './journal-item-status-metadata'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type { JournalSqlValueLocation, StoredJournalSqlValue } from './journal-sql-value-codec'
@@ -27,7 +28,8 @@ export function journalSqlItemMetadata(item: AgentJournalRenderItem, bytes: numb
     Number(isRootAgentJournalItem(item)),
     item.agentId ?? null,
     Number(isAgentSessionContextClear(item.body)),
-    bytes
+    bytes,
+    ...journalItemStatusMetadata(item)
   ]
 }
 
@@ -219,15 +221,18 @@ export class JournalSqlItemValues {
       .prepare(`INSERT INTO journal_proj_items
       (session_id, epoch, entry_key, incarnation, ordinal, sequence, sequence_index,
        revision, kind, turn_id, turn_item_id, opener_item_id, root, subagent_id, context_clear, byte_size,
+       message_role, command_entry, lifecycle_state, assistant_prose, turn_scope_kind,
        live_work, subagent_row, subagent_group_key, subagent_names)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(session_id, epoch, entry_key) DO UPDATE SET
       incarnation=excluded.incarnation, ordinal=excluded.ordinal, sequence=excluded.sequence,
       sequence_index=excluded.sequence_index, revision=excluded.revision, kind=excluded.kind,
       turn_id=excluded.turn_id, turn_item_id=excluded.turn_item_id,
       opener_item_id=excluded.opener_item_id, root=excluded.root,
       subagent_id=excluded.subagent_id, context_clear=excluded.context_clear, byte_size=excluded.byte_size,
-      live_work=excluded.live_work, subagent_row=excluded.subagent_row,
+      message_role=excluded.message_role, command_entry=excluded.command_entry,
+      lifecycle_state=excluded.lifecycle_state, assistant_prose=excluded.assistant_prose,
+      turn_scope_kind=excluded.turn_scope_kind, live_work=excluded.live_work, subagent_row=excluded.subagent_row,
       subagent_group_key=excluded.subagent_group_key, subagent_names=excluded.subagent_names`)
       .run(
         ...this.scope.prefix,
