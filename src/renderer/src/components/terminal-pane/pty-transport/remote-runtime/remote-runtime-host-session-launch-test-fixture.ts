@@ -1,9 +1,9 @@
-import { vi } from 'vitest'
+import { vi, type Mock } from 'vitest'
 import { createTerminalStreamFixtures } from '@/components/terminal-pane/pty-transport/remote/remote-runtime-pty-transport-stream-fixtures'
 
 export function createHostSessionLaunchRuntimeFixture() {
-  const runtimeCall = vi.fn()
-  const runtimeSubscribe = vi.fn()
+  const runtimeCall: Mock = vi.fn()
+  const runtimeSubscribe: Mock = vi.fn()
   let subscriptionCallbacks: {
     onResponse: (response: unknown) => void
     onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
