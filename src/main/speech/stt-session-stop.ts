@@ -1,144 +1,153 @@
-import type { SttSessionState } from './stt-session-state'
-import type { SttWorkerProcess } from './stt-worker-process'
+import {
+  sttEngineUsers,
+  type SttEngine,
+  type SttSession,
+  type SttSessionState
+} from './stt-session-state'
 import { waitForSttWorkerStop, type SttWorkerStopOutcome } from './stt-worker-stop'
+import { STT_WORKER_HUNG_ERROR } from './stt-worker-process'
 import { IDLE_WORKER_TEARDOWN_MS } from './stt-session-timeouts'
 
 const STOP_DICTATION_TIMEOUT_MS = 60_000
-// A cancel waits only this long behind a busy decode, then kills the worker.
+// A cancel waits only this long behind a busy decode before giving up on it.
 const DISCARD_DICTATION_TIMEOUT_MS = 2_000
 
-export async function stopSttDictation(
+export function stopSttDictation(
   state: SttSessionState,
   owner = 'desktop',
-  options: { cancelStarting?: boolean; discard?: boolean } = { cancelStarting: true }
+  options: { discard?: boolean } = {}
 ): Promise<void> {
-  if (options.cancelStarting !== false && state.startingOwner === owner) {
-    state.canceledOwners.add(owner)
+  const session = state.sessions.get(owner)
+  if (!session) {
+    return Promise.resolve()
   }
-  if (!state.worker && !state.cloudSession) {
+  if (session.phase === 'starting') {
+    // The start sees this once its model is loaded, then drops the session.
+    session.canceled = true
+    return Promise.resolve()
+  }
+  if (session.phase === 'stopping') {
+    return session.stopPromise ?? Promise.resolve()
+  }
+  session.phase = 'stopping'
+  session.stopPromise = session.cloud
+    ? stopCloudSession(state, session, options.discard === true)
+    : stopLocalSession(state, session, options.discard === true)
+  return session.stopPromise
+}
+
+async function stopCloudSession(
+  state: SttSessionState,
+  session: SttSession,
+  discard: boolean
+): Promise<void> {
+  const cloud = session.cloud!
+  if (discard) {
+    cloud.cancel()
+    releaseSttSession(state, session)
     return
   }
-  const currentOwner = state.activeOwner ?? state.startingOwner
-  if (currentOwner && currentOwner !== owner) {
-    throw new Error('dictation_owner_mismatch')
-  }
-
-  if (state.cloudSession) {
-    const session = state.cloudSession
-    const clearSession = (): void => {
-      state.cloudSession = null
-      state.cloudStopInFlight = null
-      state.activeModelId = null
-      state.activeHotwordsFilePath = undefined
-      state.activeOwner = null
-      state.eventSink = null
-      state.stopping = false
-    }
-    if (options.discard) {
-      session.cancel()
-      clearSession()
-      return
-    }
-    if (state.cloudStopInFlight?.session === session) {
-      return state.cloudStopInFlight.promise
-    }
-    const capturedSink = state.eventSink
-    state.stopping = true
-    const stopPromise = (async (): Promise<void> => {
-      try {
-        const text = await session.finish()
-        if (state.cloudSession === session && text) {
-          capturedSink?.({ type: 'final', text })
-        }
-      } catch (error) {
-        if (state.cloudSession === session) {
-          capturedSink?.({
-            type: 'error',
-            error: error instanceof Error ? error.message : String(error)
-          })
-        }
-      } finally {
-        if (state.cloudSession === session) {
-          clearSession()
-          capturedSink?.({ type: 'stopped' })
-        }
-      }
-    })()
-    state.cloudStopInFlight = { session, promise: stopPromise }
-    return stopPromise
-  }
-
-  const worker = state.worker
-  if (!worker) {
-    return
-  }
-  if (state.stopInFlight?.worker === worker) {
-    if (state.stopInFlight.owner !== owner) {
-      throw new Error('dictation_owner_mismatch')
-    }
-    return state.stopInFlight.promise
-  }
-
-  const capturedSink = state.eventSink
-  let stopPromise!: Promise<void>
-  stopPromise = waitForSttWorkerStop({
-    worker,
-    capturedSink,
-    // A model still loading answers after its load; killing it would strand the pending start.
-    timeoutMs:
-      options.discard && !state.starting ? DISCARD_DICTATION_TIMEOUT_MS : STOP_DICTATION_TIMEOUT_MS,
-    discard: options.discard === true,
-    finish: (outcome) => finishSttWorkerStop(state, worker, outcome)
-  }).finally(() => {
-    if (state.stopInFlight?.worker === worker && state.stopInFlight.promise === stopPromise) {
-      state.stopInFlight = null
-    }
-  })
-  state.stopInFlight = { worker, owner, promise: stopPromise }
-  state.stopping = true
   try {
-    worker.postMessage({ type: options.discard ? 'discard' : 'stop' })
-    await stopPromise
+    const text = await cloud.finish()
+    if (text) {
+      session.sink({ type: 'final', text })
+    }
+  } catch (error) {
+    session.sink({ type: 'error', error: error instanceof Error ? error.message : String(error) })
   } finally {
-    state.stopping = false
+    releaseSttSession(state, session)
+    session.sink({ type: 'stopped' })
   }
 }
 
-function finishSttWorkerStop(
+function stopLocalSession(
   state: SttSessionState,
-  worker: SttWorkerProcess,
-  outcome: SttWorkerStopOutcome
+  session: SttSession,
+  discard: boolean
+): Promise<void> {
+  const engine = session.engine!
+  const stopped = waitForSttWorkerStop({
+    worker: engine.worker,
+    streamId: session.streamId,
+    capturedSink: session.sink,
+    timeoutMs: discard ? DISCARD_DICTATION_TIMEOUT_MS : STOP_DICTATION_TIMEOUT_MS,
+    discard,
+    finish: (outcome) => finishLocalStop(state, session, engine, outcome, discard)
+  })
+  engine.worker.postMessage({ type: discard ? 'discard' : 'stop', streamId: session.streamId })
+  return stopped
+}
+
+function finishLocalStop(
+  state: SttSessionState,
+  session: SttSession,
+  engine: SttEngine,
+  outcome: SttWorkerStopOutcome,
+  discard: boolean
 ): void {
+  releaseSttSession(state, session)
   if (outcome === 'stopped') {
-    if (state.worker === worker) {
-      state.activeOwner = null
-      state.eventSink = null
-      scheduleSttIdleTeardown(state)
-    }
     return
   }
-  cleanupActiveSttWorkerLifecycleListeners(state)
-  worker.removeAllListeners()
-  if (outcome !== 'exit') {
-    void worker.terminate()
+  // A cancel stuck behind another session's decode must not kill that session; the stream dies with the process later.
+  if (outcome === 'timeout' && discard && sttEngineUsers(state, engine).length > 0) {
+    return
   }
-  if (state.worker === worker) {
-    clearSttWorkerState(state)
+  failSttEngine(state, engine, STT_WORKER_HUNG_ERROR)
+}
+
+/** Drops a session; a failed start also frees whatever stream its early audio opened. */
+export function releaseSttSession(state: SttSessionState, session: SttSession): void {
+  if (state.sessions.get(session.owner) === session) {
+    state.sessions.delete(session.owner)
   }
+  const engine = session.engine
+  if (!engine || engine.dead) {
+    return
+  }
+  if (session.phase === 'starting') {
+    engine.worker.postMessage({ type: 'discard', streamId: session.streamId })
+  }
+  if (state.engine === engine && sttEngineUsers(state, engine).length === 0) {
+    scheduleSttIdleTeardown(state)
+  }
+}
+
+/** Ends every live session on a dead or hung process; stopping ones report through their own stop. */
+export function failSttEngine(state: SttSessionState, engine: SttEngine, error: string): void {
+  if (engine.dead) {
+    return
+  }
+  engine.dead = true
+  engine.detach()
+  if (state.engine === engine) {
+    state.engine = null
+    clearSttIdleTeardownTimer(state)
+  }
+  for (const session of sttEngineUsers(state, engine)) {
+    if (session.phase !== 'active') {
+      continue
+    }
+    state.sessions.delete(session.owner)
+    session.sink({ type: 'error', error })
+    session.sink({ type: 'stopped' })
+  }
+  void engine.worker.terminate().catch(() => undefined)
 }
 
 export async function prepareSttModelForDeletion(
   state: SttSessionState,
   modelId: string
 ): Promise<void> {
-  if (state.startingModelId === modelId || (state.activeOwner && state.activeModelId === modelId)) {
+  if ([...state.sessions.values()].some((session) => session.modelId === modelId)) {
     throw new Error('voice_model_in_use')
   }
-  if (state.worker && state.activeModelId === modelId) {
-    await teardownIdleSttWorker(state)
-    if (state.worker && state.activeModelId === modelId) {
-      throw new Error('voice_model_in_use')
-    }
+  const engine = state.engine
+  if (engine?.modelId === modelId) {
+    await teardownSttEngine(state, engine, { ignoreTerminateErrors: false })
+  }
+  if (state.engine?.modelId === modelId) {
+    throw new Error('voice_model_in_use')
   }
 }
 
@@ -152,56 +161,37 @@ export function clearSttIdleTeardownTimer(state: SttSessionState): void {
 function scheduleSttIdleTeardown(state: SttSessionState): void {
   clearSttIdleTeardownTimer(state)
   state.idleTeardownTimer = setTimeout(() => {
-    void teardownIdleSttWorker(state)
+    state.idleTeardownTimer = null
+    const engine = state.engine
+    if (engine && sttEngineUsers(state, engine).length === 0) {
+      void teardownSttEngine(state, engine)
+    }
   }, IDLE_WORKER_TEARDOWN_MS)
   state.idleTeardownTimer.unref?.()
 }
 
-async function teardownIdleSttWorker(state: SttSessionState): Promise<void> {
-  clearSttIdleTeardownTimer(state)
-  if (!state.worker || state.activeOwner || state.startingOwner) {
-    return
-  }
-  await teardownSttWorker(state, state.worker)
-}
-
-export async function teardownSttWorker(
+/** Only for a process no session uses. */
+export async function teardownSttEngine(
   state: SttSessionState,
-  worker: SttWorkerProcess
+  engine: SttEngine,
+  options: { ignoreTerminateErrors?: boolean } = { ignoreTerminateErrors: true }
 ): Promise<void> {
-  clearSttIdleTeardownTimer(state)
-  if (state.stopInFlight?.worker === worker) {
-    await state.stopInFlight.promise
+  if (state.engine === engine) {
+    state.engine = null
+    clearSttIdleTeardownTimer(state)
   }
-  cleanupActiveSttWorkerLifecycleListeners(state)
-  worker.removeAllListeners()
-  // Resolves once the process is gone, so its model files are free to delete.
-  await worker.terminate()
-  if (state.worker === worker) {
-    clearSttWorkerState(state)
+  engine.dead = true
+  engine.detach()
+  try {
+    engine.worker.postMessage({ type: 'teardown' })
+  } catch {
+    // The process may already have exited.
   }
-}
-
-export function handleSttWorkerFailure(state: SttSessionState, error?: Error): void {
-  if (error) {
-    state.eventSink?.({ type: 'error', error: String(error) })
+  try {
+    await engine.worker.terminate()
+  } catch (error) {
+    if (!options.ignoreTerminateErrors) {
+      throw error
+    }
   }
-  cleanupActiveSttWorkerLifecycleListeners(state)
-  clearSttWorkerState(state)
-}
-
-export function cleanupActiveSttWorkerLifecycleListeners(state: SttSessionState): void {
-  const cleanup = state.cleanupWorkerLifecycleListeners
-  state.cleanupWorkerLifecycleListeners = null
-  cleanup?.()
-}
-
-function clearSttWorkerState(state: SttSessionState): void {
-  clearSttIdleTeardownTimer(state)
-  state.worker = null
-  state.activeModelId = null
-  state.activeHotwordsFilePath = undefined
-  state.activeLanguage = undefined
-  state.activeOwner = null
-  state.eventSink = null
 }

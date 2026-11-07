@@ -3,31 +3,44 @@ import type { OpenAiTranscriptionSession } from './openai-transcription-client'
 import type { SttEventSink } from './stt-service'
 import type { SpawnSttWorkerProcess, SttWorkerProcess } from './stt-worker-process'
 
-export type StopInFlight = {
+// Each session holds its own stream on the shared recognizer; this bounds decode load and memory.
+export const MAX_STT_SESSIONS = 4
+
+export type SttRecognizerConfig = {
+  modelId: string
+  hotwordsFilePath: string | undefined
+  language: string | undefined
+}
+
+/** One loaded recognizer process, shared by every local session with the same config. */
+export type SttEngine = SttRecognizerConfig & {
   worker: SttWorkerProcess
+  ready: Promise<void>
+  dead: boolean
+  detach: () => void
+}
+
+export type SttSession = {
   owner: string
-  promise: Promise<void>
+  streamId: string
+  sink: SttEventSink
+  /** null for cloud models, which load no recognizer. */
+  config: SttRecognizerConfig | null
+  modelId: string
+  engine: SttEngine | null
+  cloud: OpenAiTranscriptionSession | null
+  phase: 'starting' | 'active' | 'stopping'
+  canceled: boolean
+  stopPromise: Promise<void> | null
 }
 
 export type SttSessionState = {
   spawnWorker: SpawnSttWorkerProcess
-  worker: SttWorkerProcess | null
-  cloudSession: OpenAiTranscriptionSession | null
-  cloudStopInFlight: { session: OpenAiTranscriptionSession; promise: Promise<void> } | null
   modelManager: ModelManager
-  activeModelId: string | null
-  activeHotwordsFilePath: string | undefined
-  activeLanguage: string | undefined
-  activeOwner: string | null
-  startingOwner: string | null
-  startingModelId: string | null
-  starting: boolean
-  canceledOwners: Set<string>
-  eventSink: SttEventSink | null
+  engine: SttEngine | null
+  sessions: Map<string, SttSession>
+  nextStreamId: number
   idleTeardownTimer: NodeJS.Timeout | null
-  stopInFlight: StopInFlight | null
-  stopping: boolean
-  cleanupWorkerLifecycleListeners: (() => void) | null
 }
 
 export function createSttSessionState(
@@ -36,22 +49,22 @@ export function createSttSessionState(
 ): SttSessionState {
   return {
     spawnWorker,
-    worker: null,
-    cloudSession: null,
-    cloudStopInFlight: null,
     modelManager,
-    activeModelId: null,
-    activeHotwordsFilePath: undefined,
-    activeLanguage: undefined,
-    activeOwner: null,
-    startingOwner: null,
-    startingModelId: null,
-    starting: false,
-    canceledOwners: new Set(),
-    eventSink: null,
-    idleTeardownTimer: null,
-    stopInFlight: null,
-    stopping: false,
-    cleanupWorkerLifecycleListeners: null
+    engine: null,
+    sessions: new Map(),
+    nextStreamId: 0,
+    idleTeardownTimer: null
   }
+}
+
+export function sameSttRecognizerConfig(a: SttRecognizerConfig, b: SttRecognizerConfig): boolean {
+  return (
+    a.modelId === b.modelId &&
+    a.hotwordsFilePath === b.hotwordsFilePath &&
+    a.language === b.language
+  )
+}
+
+export function sttEngineUsers(state: SttSessionState, engine: SttEngine): SttSession[] {
+  return [...state.sessions.values()].filter((session) => session.engine === engine)
 }
