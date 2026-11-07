@@ -74,6 +74,12 @@ function readPaneProviderSession(
   if (!providerSession) {
     return null
   }
+  if (source === 'droid') {
+    const owner = droidPaneOwnerForChild(state, paneKey, providerSession.id, hookPayload)
+    if (owner) {
+      return owner
+    }
+  }
   if (source === 'antigravity') {
     const transcriptPath = readPathFromKeys(hookPayload, ['transcriptPath', 'transcript_path'])
     const origin = transcriptPath ? readFirstTranscriptRecord(transcriptPath) : undefined
@@ -104,6 +110,34 @@ function readPaneProviderSession(
     ...(effort ? { effort } : {}),
     ...(permissionMode ? { permissionMode } : {})
   }
+}
+
+/** Droid workers inherit the pane env, so their hooks reach the orchestrator's pane under their own session id. */
+function droidPaneOwnerForChild(
+  state: HookListenerState,
+  paneKey: string,
+  sessionId: string,
+  hookPayload: Record<string, unknown>
+): AgentProviderSessionMetadata | undefined {
+  const previous = state.lastStatusByPaneKey.get(paneKey)
+  // A retained resume row outlives its process; a session resumed in that pane owns it.
+  const owner =
+    previous?.payload.agentType === 'droid' && !previous.providerSessionOnly
+      ? previous.providerSession
+      : undefined
+  if (!owner || owner.id === sessionId) {
+    return undefined
+  }
+  // Droid marks a sub-session only in its transcript's first record.
+  const transcriptPath = readPathFromKeys(hookPayload, ['transcriptPath', 'transcript_path'])
+  const origin = transcriptPath ? readFirstTranscriptRecord(transcriptPath) : undefined
+  const isChild =
+    typeof origin === 'object' &&
+    origin !== null &&
+    'callingSessionId' in origin &&
+    typeof origin.callingSessionId === 'string' &&
+    origin.callingSessionId.length > 0
+  return isChild ? owner : undefined
 }
 
 /** The pane's previous session when this hook continues it; /clear and compact restart Claude in the same process. */
