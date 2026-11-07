@@ -99,6 +99,7 @@ function writeStatus(error?: string): void {
   renameFileWithWindowsRetry(`${fixtureStatusPath}.next`, fixtureStatusPath)
 }
 
+/** Resolves after the hidden host's partitioned guest is configured and its initial page loads. */
 async function createHost(name: string, partition: string, nativeControl = false): Promise<void> {
   const host = new BrowserWindow({
     show: false,
